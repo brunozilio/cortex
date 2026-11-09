@@ -4,7 +4,7 @@ members = ["crates/*", "xtask"]
 exclude = ["vendor/welding"]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 publish = false
