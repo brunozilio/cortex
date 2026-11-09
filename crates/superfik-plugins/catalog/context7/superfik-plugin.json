@@ -1,0 +1,15 @@
+{
+  "id": "context7",
+  "name": "Context7",
+  "version": "1.0.0",
+  "description": "Current docs for any library.",
+  "icon": "context7",
+  "category": "development",
+  "mcp": [
+    {
+      "transport": "http",
+      "name": "context7",
+      "url": "https://mcp.context7.com/mcp"
+    }
+  ]
+}

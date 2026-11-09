@@ -1,0 +1,87 @@
+<!doctype html><meta charset="utf-8"><title>Native profile acceptance fixture</title>
+<script>
+// Test code only: observe the browser's native APIs without replacing them.
+async function laboratory() {
+  const hash = bytes => { let n = 2166136261; for (const b of bytes) n = Math.imul(n ^ b, 16777619); return n >>> 0; };
+  const canvas = () => {
+    if (typeof document === 'undefined') return new OffscreenCanvas(32, 32);
+    const c = document.createElement('canvas'); c.width = c.height = 32; return c;
+  };
+  const c = canvas(), ctx = c.getContext('2d');
+  ctx.fillStyle = '#66cc99'; ctx.fillRect(0, 0, 32, 32);
+  const pixels = hash(ctx.getImageData(0, 0, 32, 32).data);
+  const blob = c.convertToBlob ? await c.convertToBlob() : await new Promise(resolve => c.toBlob(resolve));
+  const encoded = hash(new Uint8Array(await blob.arrayBuffer()));
+  let dataUrl = null;
+  if (c.toDataURL) dataUrl = hash(Uint8Array.from(atob(c.toDataURL().split(',')[1]), c => c.charCodeAt(0)));
+  const gl = canvas().getContext('webgl');
+  const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+  let glPixels = null;
+  if (gl) {
+    gl.clearColor(.4, .8, .6, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    const bytes = new Uint8Array(32 * 32 * 4);
+    gl.readPixels(0, 0, 32, 32, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+    glPixels = hash(bytes);
+  }
+  let webgpu = null;
+  const gl2 = canvas().getContext('webgl2');
+  let packPixels = null, floatPixels = null;
+  if (gl2) {
+    gl2.clearColor(.4,.8,.6,1); gl2.clear(gl2.COLOR_BUFFER_BIT);
+    const pack = gl2.createBuffer(); gl2.bindBuffer(gl2.PIXEL_PACK_BUFFER,pack);
+    gl2.bufferData(gl2.PIXEL_PACK_BUFFER,32*32*4,gl2.STREAM_READ);
+    gl2.readPixels(0,0,32,32,gl2.RGBA,gl2.UNSIGNED_BYTE,0);
+    const packed = new Uint8Array(32*32*4); gl2.getBufferSubData(gl2.PIXEL_PACK_BUFFER,0,packed);
+    packPixels = hash(packed); gl2.bindBuffer(gl2.PIXEL_PACK_BUFFER,null);
+    if (gl2.getExtension('EXT_color_buffer_float')) {
+      const texture = gl2.createTexture(); gl2.bindTexture(gl2.TEXTURE_2D,texture);
+      gl2.texParameteri(gl2.TEXTURE_2D,gl2.TEXTURE_MIN_FILTER,gl2.NEAREST);
+      gl2.texParameteri(gl2.TEXTURE_2D,gl2.TEXTURE_MAG_FILTER,gl2.NEAREST);
+      gl2.texImage2D(gl2.TEXTURE_2D,0,gl2.RGBA32F,32,32,0,gl2.RGBA,gl2.FLOAT,null);
+      const fbo = gl2.createFramebuffer(); gl2.bindFramebuffer(gl2.FRAMEBUFFER,fbo);
+      gl2.framebufferTexture2D(gl2.FRAMEBUFFER,gl2.COLOR_ATTACHMENT0,gl2.TEXTURE_2D,texture,0);
+      gl2.clearColor(.4,.8,.6,1); gl2.clear(gl2.COLOR_BUFFER_BIT);
+      const floats = new Float32Array(32*32*4);
+      gl2.readPixels(0,0,32,32,gl2.RGBA,gl2.FLOAT,floats);
+      floatPixels = hash(Uint8Array.from(floats,v=>Math.round(v*255)));
+    }
+    if (gl2.getError() !== gl2.NO_ERROR) throw new Error('WebGL2 fixture failed');
+  }
+  if (navigator.gpu) {
+    const adapter = await navigator.gpu.requestAdapter();
+    if (adapter) webgpu = {vendor: adapter.info.vendor, device: adapter.info.device, description: adapter.info.description};
+  }
+  let audio = null, audioCopy = null;
+  if (typeof OfflineAudioContext !== 'undefined') {
+    const offline = new OfflineAudioContext(1, 512, 8000);
+    const oscillator = offline.createOscillator(); oscillator.frequency.value = 237;
+    oscillator.connect(offline.destination); oscillator.start();
+    const buffer = await offline.startRendering();
+    const samples = buffer.getChannelData(0), copy = new Float32Array(samples.length);
+    buffer.copyFromChannel(copy, 0);
+    audio = hash(new Uint8Array(samples.buffer)); audioCopy = hash(new Uint8Array(copy.buffer));
+  }
+  let menlo = null;
+  if (typeof FontFace !== 'undefined') {
+    try { await new FontFace('Probe', 'local("Menlo-Regular")').load(); menlo = true; } catch { menlo = false; }
+  }
+  let rtc = null;
+  if (typeof RTCPeerConnection !== 'undefined') {
+    try { const pc = new RTCPeerConnection(); pc.close(); rtc = true; } catch { rtc = false; }
+  }
+  const display = typeof screen === 'undefined' ? null : [screen.width, screen.height, devicePixelRatio, screen.colorDepth];
+  return {gpu: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null, webgpu, pixels, encoded, dataUrl, glPixels, packPixels, floatPixels, audio, audioCopy, menlo, rtc, display};
+}
+window.result = {page: {cpu: navigator.hardwareConcurrency, memory: navigator.deviceMemory}};
+function ready() { window.result.labReady = !!(result.lab && result.frameLab && result.workerLab && result.hints); }
+laboratory().then(value => { result.lab = value; result.gpu = value.gpu; ready(); }).catch(error => { result.lab = {error: String(error)}; ready(); });
+const code = `${laboratory.toString()}; laboratory().then(lab => postMessage({cpu:navigator.hardwareConcurrency,memory:navigator.deviceMemory,lab})).catch(error => postMessage({lab:{error:String(error)}}));`;
+const worker = new Worker(URL.createObjectURL(new Blob([code], {type:'text/javascript'})));
+worker.onmessage = e => { result.worker = {cpu: e.data.cpu, memory: e.data.memory}; result.workerLab = e.data.lab; ready(); };
+onmessage = e => { result.frame = {cpu: e.data.cpu, memory: e.data.memory}; result.frameLab = e.data.lab; ready(); };
+const frame = document.createElement('iframe');
+frame.srcdoc = `<script>${laboratory.toString()}; laboratory().then(lab => parent.postMessage({cpu:navigator.hardwareConcurrency,memory:navigator.deviceMemory,lab},'*')).catch(error => parent.postMessage({lab:{error:String(error)}},'*'));<\/script>`;
+document.documentElement.appendChild(frame);
+fetch('/hints').then(r=>r.json()).then(data => { result.hints = data; ready(); });
+</script>
+<button style="position:fixed;left:200px;top:100px;width:80px;height:30px;z-index:9999" onclick="window.result.pointer=true">Click</button>

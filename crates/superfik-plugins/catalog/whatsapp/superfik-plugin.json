@@ -1,0 +1,13 @@
+{
+  "id": "whatsapp",
+  "name": "WhatsApp",
+  "version": "1.0.0",
+  "description": "Answer customers on a WhatsApp number linked by QR code.",
+  "icon": "whatsapp",
+  "category": "productivity",
+  "accounts": "many",
+  "auth": {
+    "kind": "qr"
+  },
+  "channel": "whatsapp_web"
+}

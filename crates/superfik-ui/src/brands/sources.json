@@ -1,0 +1,182 @@
+{
+  "github": {
+    "url": "https://github.githubassets.com/assets/app-icon-512-7f9c4ff2e960.png",
+    "page": "https://github.com/manifest.json",
+    "format": "raster",
+    "resolution": "512x512",
+    "sha256": "f304abd26e1a0dbf21be68ced4b9d7bb115c61d39fd0ac4b898b28dc0b760790"
+  },
+  "linear": {
+    "tile": {
+      "background": "#000000"
+    },
+    "url": "https://linear.app/static/favicon.svg?v=2",
+    "page": "https://linear.app",
+    "format": "svg",
+    "resolution": "vector",
+    "sha256": "6d49f8079f8cf91617657bd059ba1e186f2d3ecdcd9a4a366e0a6d5071c558e6"
+  },
+  "notion": {
+    "tile": {
+      "inset": 12
+    },
+    "url": "https://www.notion.com/front-static/logo-ios.png",
+    "page": "https://www.notion.com",
+    "format": "raster",
+    "resolution": "512x512",
+    "sha256": "483846a85e43e22879445047b83b22033e70fcc25ab34809ebadb7f856507ee0"
+  },
+  "sentry": {
+    "tile": {
+      "inset": 17,
+      "background": "#faf9fc"
+    },
+    "url": "https://sentry.io/branding/",
+    "page": "https://sentry.io/branding/",
+    "format": "svg",
+    "inline_viewbox": "0 0 50 44",
+    "color": "#362d59",
+    "resolution": "vector",
+    "sha256": "c8da5f17710f3b549a59a70ff73e65712bd096f0736b37c70ebebcf0d8b41c84"
+  },
+  "stripe": {
+    "tile": {
+      "background": "#533afd"
+    },
+    "url": "https://images.stripeassets.com/fzn2n1nzq965/1hgcBNd12BfT9VLgbId7By/01d91920114b124fb4cf6d448f9f06eb/favicon.svg",
+    "page": "https://stripe.com",
+    "format": "svg",
+    "resolution": "vector",
+    "sha256": "7253e3eb4657773723a696a1f4ad9c8f62794191b9f09c1359db74a51d2d3ae5"
+  },
+  "postgresql": {
+    "tile": {
+      "inset": 12
+    },
+    "url": "https://www.postgresql.org/media/img/about/press/elephant.png",
+    "page": "https://www.postgresql.org/about/press/",
+    "format": "raster",
+    "resolution": "540x557",
+    "sha256": "ff92fb5d12a7fa6b23c2eb403d2edf4fbc58ced802021e1f02c3583cb70957be"
+  },
+  "firecrawl": {
+    "tile": {
+      "inset": 17,
+      "background": "#fff6f0"
+    },
+    "url": "https://raw.githubusercontent.com/firecrawl/firecrawl/main/apps/test-site/src/assets/firecrawl-logo.svg",
+    "page": "https://github.com/firecrawl/firecrawl",
+    "format": "svg",
+    "resolution": "vector",
+    "sha256": "ec18c027f59a50b2fa5da33cf81a32ab8b93f6da1e26b7f50d146a80fa58c1a8"
+  },
+  "playwright": {
+    "tile": {
+      "inset": 7
+    },
+    "url": "https://playwright.dev/img/playwright-logo.svg",
+    "page": "https://playwright.dev",
+    "format": "svg",
+    "resolution": "vector",
+    "sha256": "6b0a4367bdeab10995bc239278f04c68c10e48adbec15e799e01909a0d66dcb9"
+  },
+  "bitwarden": {
+    "url": "https://bitwarden.com/icons/icon-512x512.png",
+    "page": "https://bitwarden.com/manifest.webmanifest",
+    "format": "raster",
+    "resolution": "512x512",
+    "sha256": "a8d0e5a1b0c64eb1c2a0a743c2272fd0b17f617d274679125bd8e4ccb23c1074"
+  },
+  "whatsapp": {
+    "tile": {
+      "inset": 12
+    },
+    "url": "https://static.whatsapp.net/rsrc.php/y1/r/FJbTMJqMap7.svg",
+    "page": "https://www.whatsapp.com",
+    "format": "svg",
+    "resolution": "vector",
+    "sha256": "1ab6db0cc2eb55d911f151b0aa339c55b6b225efcceddb8ff2050cab1410e347"
+  },
+  "claude": {
+    "url": "https://claude.ai/images/claude_app_icon.png",
+    "page": "https://claude.ai/manifest.json",
+    "format": "raster",
+    "resolution": "338x338",
+    "sha256": "c7b5642f810adfba78781592d9dec18d7eb376c7ebf403c4d882fb9d39f65408"
+  },
+  "anthropic": {
+    "url": "https://www.anthropic.com/images/icons/apple-touch-icon.png",
+    "page": "https://www.anthropic.com",
+    "format": "raster",
+    "resolution": "180x180",
+    "sha256": "40e3900fcb3ad237af6869dbd40e77efc8eb23549c478125b40e563ac74423cb"
+  },
+  "openai": {
+    "tile": {
+      "inset": 11
+    },
+    "url": "https://chatgpt.com/cdn/assets/favicon.6a33781f61.svg",
+    "page": "https://chatgpt.com",
+    "format": "svg",
+    "resolution": "vector",
+    "sha256": "2021463df9935dda89cef407aa564bced9d83b4f9b6ae8945d649e56676624f0"
+  },
+  "context7": {
+    "tile": {
+      "background": "#000000"
+    },
+    "url": "https://context7.com/_next/static/immutable/media/context7-logo-light.1irhnfg2jrcmg.svg",
+    "page": "https://context7.com",
+    "format": "svg",
+    "viewbox": "0 0 28 28",
+    "resolution": "vector",
+    "sha256": "b0ef7a93ab2f087bf4be1a397bbccf986434c648e04a8fa7f3c0eb93bf3cfa97"
+  },
+  "atlassian": {
+    "url": "https://www.atlassian.com/apple-touch-icon.png",
+    "page": "https://www.atlassian.com",
+    "format": "raster",
+    "resolution": "180x180",
+    "sha256": "54a4140b008fed64cbe5a054ae08c39ffafe73cad4ce3cfb2b1b78bb08738781"
+  },
+  "intercom": {
+    "viewbox": "0 0.5 36 36",
+    "url": "https://www.intercom.com",
+    "page": "https://www.intercom.com",
+    "format": "svg",
+    "inline_viewbox": "0 0 36 37",
+    "resolution": "vector",
+    "sha256": "7d8b82cf6928491a47b9196247036ee4658d771c5d180cee92b5746fd771dc39"
+  },
+  "instagram": {
+    "url": "https://static.cdninstagram.com/rsrc.php/yA/r/7iktsTA_C-T.webp",
+    "page": "https://www.instagram.com/data/manifest.json",
+    "format": "raster",
+    "resolution": "192x192",
+    "sha256": "ab707bd7f434cad67b96de27dddb1c20436d1038d268c837a3e38c582851abfa"
+  },
+  "x": {
+    "tile": {
+      "background": "#000000"
+    },
+    "url": "https://abs.twimg.com/responsive-web/client-web/icon-default-large.9ab12c3ecc9e8133a.png",
+    "page": "https://x.com/manifest.json",
+    "format": "raster",
+    "resolution": "512x512",
+    "sha256": "65223c2ae6d93e8bef6146b6b336e521b8c3403ddf4cf9e37b9187ad71c4588d"
+  },
+  "linkedin": {
+    "crop": [
+      0,
+      0,
+      540,
+      540
+    ],
+    "url": "https://content.linkedin.com/content/dam/me/business/en-us/amp/xbu/linkedin-revised-brand-guidelines/logos/in-logo.zip",
+    "member": "in-logo/LI-In-Bug.png",
+    "page": "https://brand.linkedin.com/downloads",
+    "format": "raster",
+    "resolution": "540x540",
+    "sha256": "3c0149f26168b5fe0f43e68664abe40341a6443b3cd435d18a73e12f64f8b600"
+  }
+}

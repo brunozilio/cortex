@@ -1,0 +1,7 @@
+[
+  {"ref": 1, "type": "email", "name": "signup_email", "autocomplete": "email", "form": 0, "visible": true},
+  {"ref": 2, "type": "password", "name": "signup_password", "autocomplete": "new-password", "form": 0, "visible": true},
+  {"ref": 3, "type": "password", "name": "signup_confirm", "autocomplete": "new-password", "form": 0, "visible": true},
+  {"ref": 4, "type": "text", "name": "user", "label": "Usuário", "form": 1, "visible": true},
+  {"ref": 5, "type": "password", "name": "pass", "label": "Senha", "form": 1, "visible": true}
+]

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Superfik
+GenericName=AI coding agents
+Comment=A canvas for AI coding agents
+Exec=superfik
+Icon=superfik
+Terminal=false
+Categories=Development;IDE;
+Keywords=AI;agent;code;git;
+StartupWMClass=superfik
+StartupNotify=true

@@ -1,0 +1,4 @@
+[
+  {"ref": 1, "type": "email", "name": "identifier", "id": "identifierId", "autocomplete": "username webauthn", "label": "Email or phone", "form": 0, "visible": true},
+  {"ref": 2, "type": "password", "name": "hiddenPassword", "form": 0, "visible": false}
+]

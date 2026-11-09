@@ -1,0 +1,32 @@
+{
+  "id": "firecrawl",
+  "name": "Firecrawl",
+  "version": "1.0.0",
+  "description": "Turn any website into clean markdown.",
+  "icon": "firecrawl",
+  "category": "web",
+  "auth": {
+    "kind": "api_key",
+    "fields": [
+      {
+        "key": "api_key",
+        "label": "API key",
+        "placeholder": "fc-…"
+      }
+    ]
+  },
+  "mcp": [
+    {
+      "transport": "stdio",
+      "name": "firecrawl",
+      "command": "npx",
+      "args": [
+        "-y",
+        "firecrawl-mcp"
+      ],
+      "env": {
+        "FIRECRAWL_API_KEY": "{{secret.api_key}}"
+      }
+    }
+  ]
+}

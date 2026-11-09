@@ -1,0 +1,31 @@
+{
+  "id": "postgres",
+  "name": "PostgreSQL",
+  "version": "1.0.0",
+  "description": "Query your database, read-only.",
+  "icon": "postgresql",
+  "category": "data",
+  "accounts": "many",
+  "auth": {
+    "kind": "api_key",
+    "fields": [
+      {
+        "key": "url",
+        "label": "Connection URL",
+        "placeholder": "postgresql://user:pass@host:5432/db"
+      }
+    ]
+  },
+  "mcp": [
+    {
+      "transport": "stdio",
+      "name": "postgres",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "{{secret.url}}"
+      ]
+    }
+  ]
+}

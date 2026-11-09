@@ -1,0 +1,266 @@
+//! `MlxRuntime` serves one downloaded model at a time: it installs the
+//! runtime when missing, starts the model's server, waits for it, swaps it
+//! for another model and lets it go when idle.
+
+use std::io;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use superfik_gateway::local::Endpoints;
+use superfik_gateway::mlx::{Clock, IDLE, Launcher, MlxRuntime, Progress, Served};
+use superfik_gateway::server::UpstreamError;
+
+const QWEN: &str = "mlx-community/Qwen3.8-27B-8bit";
+const CODER: &str = "mlx-community/Qwen3-Coder-Next-4bit";
+
+#[derive(Default)]
+struct Log {
+    installs: u32,
+    launched: Vec<PathBuf>,
+    stopped: Vec<String>,
+    downloaded: Vec<(String, PathBuf)>,
+}
+
+#[derive(Default)]
+struct FakeLauncher {
+    installed: AtomicBool,
+    install_fails: bool,
+    slow: u32,
+    log: Arc<Mutex<Log>>,
+    crashed: Arc<AtomicBool>,
+}
+
+struct FakeServed {
+    url: String,
+    checks: u32,
+    slow: u32,
+    log: Arc<Mutex<Log>>,
+    crashed: Arc<AtomicBool>,
+}
+
+impl Launcher for FakeLauncher {
+    fn is_installed(&self) -> bool {
+        self.installed.load(Ordering::SeqCst)
+    }
+
+    fn install(&self) -> Result<(), String> {
+        self.log.lock().expect("log").installs += 1;
+        if self.install_fails {
+            return Err("uv is not installed".into());
+        }
+        self.installed.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn download(&self, id: &str, dest: &Path, tick: &mut dyn FnMut()) -> Result<(), String> {
+        self.log.lock().expect("log").downloaded.push((id.to_owned(), dest.to_path_buf()));
+        std::fs::write(dest.join("model.safetensors"), [0; 600]).expect("first piece");
+        tick();
+        tick();
+        std::fs::write(dest.join("config.json"), [0; 400]).expect("second piece");
+        tick();
+        Ok(())
+    }
+
+    fn size(&self, _id: &str) -> Option<u64> {
+        Some(1000)
+    }
+
+    fn launch(&self, model_dir: &Path) -> io::Result<Box<dyn Served>> {
+        let mut log = self.log.lock().expect("log");
+        log.launched.push(model_dir.to_path_buf());
+        self.crashed.store(false, Ordering::SeqCst);
+        Ok(Box::new(FakeServed {
+            url: format!("http://127.0.0.1:{}", 5000 + log.launched.len()),
+            checks: 0,
+            slow: self.slow,
+            log: self.log.clone(),
+            crashed: self.crashed.clone(),
+        }))
+    }
+}
+
+impl Served for FakeServed {
+    fn base_url(&self) -> String {
+        self.url.clone()
+    }
+
+    fn is_ready(&mut self) -> bool {
+        self.checks += 1;
+        self.checks > self.slow
+    }
+
+    fn is_running(&mut self) -> bool {
+        !self.crashed.load(Ordering::SeqCst)
+    }
+
+    fn stop(&mut self) {
+        self.log.lock().expect("log").stopped.push(self.url.clone());
+    }
+}
+
+#[derive(Default)]
+struct FakeClock(AtomicU64);
+
+impl FakeClock {
+    fn advance(&self, by: Duration) {
+        self.0.fetch_add(by.as_millis() as u64, Ordering::SeqCst);
+    }
+}
+
+impl Clock for FakeClock {
+    fn now(&self) -> Duration {
+        Duration::from_millis(self.0.load(Ordering::SeqCst))
+    }
+
+    fn sleep(&self, by: Duration) {
+        self.advance(by);
+    }
+}
+
+struct Setup {
+    runtime: MlxRuntime,
+    launcher: Arc<FakeLauncher>,
+    clock: Arc<FakeClock>,
+    models: tempfile::TempDir,
+}
+
+fn setup(launcher: FakeLauncher) -> Setup {
+    let models = tempfile::tempdir().expect("models");
+    for model in [QWEN, CODER] {
+        std::fs::create_dir_all(models.path().join(model)).expect("model dir");
+        std::fs::write(models.path().join(model).join("config.json"), "{}").expect("config");
+    }
+    let launcher = Arc::new(launcher);
+    let clock = Arc::new(FakeClock::default());
+    let runtime = MlxRuntime::new(models.path().to_path_buf(), launcher.clone(), clock.clone());
+    Setup { runtime, launcher, clock, models }
+}
+
+fn installed() -> FakeLauncher {
+    FakeLauncher { installed: AtomicBool::new(true), ..FakeLauncher::default() }
+}
+
+#[test]
+fn the_first_request_starts_the_models_server() {
+    let s = setup(installed());
+    let endpoint = s.runtime.endpoint(QWEN).expect("endpoint");
+    assert_eq!(endpoint.base_url, "http://127.0.0.1:5001");
+    let dir = s.models.path().join(QWEN);
+    assert_eq!(endpoint.model, dir.to_string_lossy());
+    assert_eq!(s.launcher.log.lock().expect("log").launched, [dir]);
+}
+
+#[test]
+fn the_same_model_keeps_its_server() {
+    let s = setup(installed());
+    s.runtime.endpoint(QWEN).expect("first");
+    s.runtime.endpoint(QWEN).expect("second");
+    assert_eq!(s.launcher.log.lock().expect("log").launched.len(), 1);
+}
+
+#[test]
+fn another_model_takes_the_place_of_the_first() {
+    let s = setup(installed());
+    s.runtime.endpoint(QWEN).expect("qwen");
+    let coder = s.runtime.endpoint(CODER).expect("coder");
+    let log = s.launcher.log.lock().expect("log");
+    assert_eq!(log.stopped, ["http://127.0.0.1:5001"]);
+    assert_eq!(coder.base_url, "http://127.0.0.1:5002");
+}
+
+#[test]
+fn a_server_that_died_starts_again() {
+    let s = setup(installed());
+    s.runtime.endpoint(QWEN).expect("first");
+    s.launcher.crashed.store(true, Ordering::SeqCst);
+    s.runtime.endpoint(QWEN).expect("again");
+    assert_eq!(s.launcher.log.lock().expect("log").launched.len(), 2);
+}
+
+#[test]
+fn a_model_not_downloaded_is_refused() {
+    let s = setup(installed());
+    let refused = s.runtime.endpoint("mlx-community/Nothing-4bit");
+    assert!(matches!(refused, Err(UpstreamError::Invalid(why)) if why.contains("not downloaded")));
+    assert!(s.launcher.log.lock().expect("log").launched.is_empty());
+}
+
+#[test]
+fn a_model_id_cannot_climb_out_of_the_models_folder() {
+    let s = setup(installed());
+    assert!(matches!(s.runtime.endpoint("../../etc"), Err(UpstreamError::Invalid(_))));
+    assert!(matches!(s.runtime.endpoint("/etc"), Err(UpstreamError::Invalid(_))));
+}
+
+#[test]
+fn the_runtime_is_installed_once_before_the_first_server() {
+    let s = setup(FakeLauncher::default());
+    s.runtime.endpoint(QWEN).expect("first");
+    s.runtime.endpoint(CODER).expect("second");
+    let log = s.launcher.log.lock().expect("log");
+    assert_eq!((log.installs, log.launched.len()), (1, 2));
+}
+
+#[test]
+fn a_failed_install_says_why() {
+    let s = setup(FakeLauncher { install_fails: true, ..FakeLauncher::default() });
+    let failed = s.runtime.endpoint(QWEN);
+    assert!(matches!(failed, Err(UpstreamError::Failed(why)) if why.contains("uv is not installed")));
+}
+
+#[test]
+fn a_server_slow_to_answer_is_unavailable_and_kept() {
+    let s = setup(FakeLauncher { slow: u32::MAX, ..installed() });
+    assert!(matches!(s.runtime.endpoint(QWEN), Err(UpstreamError::Unavailable(_))));
+    assert!(matches!(s.runtime.endpoint(QWEN), Err(UpstreamError::Unavailable(_))));
+    assert_eq!(s.launcher.log.lock().expect("log").launched.len(), 1);
+}
+
+#[test]
+fn an_idle_server_is_let_go() {
+    let s = setup(installed());
+    s.runtime.endpoint(QWEN).expect("endpoint");
+    s.clock.advance(IDLE - Duration::from_secs(1));
+    s.runtime.reap();
+    assert!(s.launcher.log.lock().expect("log").stopped.is_empty());
+    s.clock.advance(Duration::from_secs(2));
+    s.runtime.reap();
+    assert_eq!(s.launcher.log.lock().expect("log").stopped.len(), 1);
+    s.runtime.endpoint(QWEN).expect("again");
+    assert_eq!(s.launcher.log.lock().expect("log").launched.len(), 2);
+}
+
+#[test]
+fn a_model_is_downloaded_into_its_folder_installing_the_runtime_first() {
+    let s = setup(FakeLauncher::default());
+    let fresh = "mlx-community/Qwen3-Coder-30B-4bit";
+    s.runtime.download(fresh, &mut |_| {}).expect("download");
+    let log = s.launcher.log.lock().expect("log");
+    assert_eq!(log.installs, 1, "the runtime comes first");
+    assert_eq!(log.downloaded, vec![(fresh.to_owned(), s.models.path().join(fresh))]);
+    drop(log);
+    s.runtime.download(QWEN, &mut |_| {}).expect("already there");
+    assert_eq!(s.launcher.log.lock().expect("log").downloaded.len(), 1, "a complete model is not fetched again");
+    assert!(s.runtime.download("../outside", &mut |_| {}).is_err(), "ids cannot climb out of the models folder");
+}
+
+#[test]
+fn a_download_reports_preparing_the_runtime_then_the_bytes_fetched() {
+    let s = setup(FakeLauncher::default());
+    let mut seen = Vec::new();
+    s.runtime.download("mlx-community/Fresh-4bit", &mut |progress| seen.push(progress)).expect("download");
+    let fetching = |done| Progress::Fetching { done, total: Some(1000) };
+    assert_eq!(
+        seen,
+        [Progress::Preparing, fetching(0), fetching(600), fetching(1000)],
+        "a tick without news says nothing"
+    );
+
+    let s = setup(installed());
+    let mut seen = Vec::new();
+    s.runtime.download("mlx-community/Fresh-4bit", &mut |progress| seen.push(progress)).expect("download");
+    assert_eq!(seen.first(), Some(&fetching(0)), "an installed runtime needs no preparing");
+}

@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in Superfik is broken
+labels: [bug, needs-triage]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, including any error message.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a repository
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Superfik version
+      description: The release you installed, or the commit you built.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - macOS app
+        - Linux app
+        - Windows (from source)
+        - superfik-server
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and version
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Remove tokens, keys and anything private first.

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Superfik</string>
+  <key>CFBundleDisplayName</key><string>Superfik</string>
+  <key>CFBundleIdentifier</key><string>com.brunozilio.superfik</string>
+  <key>CFBundleExecutable</key><string>superfik</string>
+  <key>CFBundleIconFile</key><string>Superfik</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+  <key>CFBundleVersion</key><string>__VERSION__</string>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+  <key>NSBluetoothAlwaysUsageDescription</key><string>Superfik uses Bluetooth so web pages can reach your security keys and passkeys.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Superfik listens while the voice agent is on, and transcribes on this computer.</string>
+  <key>NSHumanReadableCopyright</key><string>© 2026 Bruno Zilio. Apache License 2.0.</string>
+</dict>
+</plist>

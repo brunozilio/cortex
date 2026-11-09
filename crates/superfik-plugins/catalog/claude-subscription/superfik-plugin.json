@@ -1,0 +1,14 @@
+{
+  "id": "claude-subscription",
+  "name": "Claude Subscription",
+  "version": "0.1.0",
+  "description": "Entre com sua assinatura do Claude.",
+  "icon": "claude",
+  "category": "development",
+  "accounts": "many",
+  "auth": {
+    "kind": "oauth",
+    "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+    "resource": "https://api.anthropic.com"
+  }
+}

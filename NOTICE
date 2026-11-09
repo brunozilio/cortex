@@ -1,0 +1,6 @@
+Superfik
+Copyright 2026 Bruno Zilio
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+Components of other authors keep their own licences; every build ships
+them in THIRD_PARTY_NOTICES.md (`cargo run -p xtask -- notices <out>`).

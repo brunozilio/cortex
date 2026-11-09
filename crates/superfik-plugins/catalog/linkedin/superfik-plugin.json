@@ -1,0 +1,18 @@
+{
+  "id": "linkedin",
+  "name": "LinkedIn",
+  "version": "1.0.0",
+  "description": "Answer comments and publish posts on a LinkedIn company page.",
+  "icon": "linkedin",
+  "category": "productivity",
+  "accounts": "many",
+  "auth": {
+    "kind": "api_key",
+    "fields": [
+      { "key": "organization_id", "label": "Organization ID", "placeholder": "The number in the page's admin URL" },
+      { "key": "access_token", "label": "Access token", "placeholder": "A page admin's, with the Community Management scopes" },
+      { "key": "client_secret", "label": "Client secret", "placeholder": "The app's; signs webhook notifications" }
+    ]
+  },
+  "channel": "linkedin"
+}

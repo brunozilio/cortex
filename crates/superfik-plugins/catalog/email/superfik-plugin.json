@@ -1,0 +1,19 @@
+{
+  "id": "email",
+  "name": "E-mail",
+  "version": "1.0.0",
+  "description": "Answer customers from a mailbox, over IMAP and SMTP.",
+  "icon": "email",
+  "category": "productivity",
+  "accounts": "many",
+  "auth": {
+    "kind": "api_key",
+    "fields": [
+      { "key": "address", "label": "Address", "placeholder": "support@yourproduct.com" },
+      { "key": "password", "label": "App password", "placeholder": "From your provider's security settings" },
+      { "key": "imap_host", "label": "IMAP server", "placeholder": "imap.gmail.com" },
+      { "key": "smtp_host", "label": "SMTP server", "placeholder": "smtp.gmail.com" }
+    ]
+  },
+  "channel": "email"
+}

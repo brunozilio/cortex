@@ -1,0 +1,22 @@
+{
+  "id": "notion",
+  "name": "Notion",
+  "version": "1.0.0",
+  "description": "Search and edit pages and databases.",
+  "icon": "notion",
+  "category": "productivity",
+  "accounts": "many",
+  "auth": {
+    "kind": "oauth"
+  },
+  "mcp": [
+    {
+      "transport": "http",
+      "name": "notion",
+      "url": "https://mcp.notion.com/mcp",
+      "headers": {
+        "Authorization": "Bearer {{secret.access_token}}"
+      }
+    }
+  ]
+}

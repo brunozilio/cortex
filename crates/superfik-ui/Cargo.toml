@@ -1,0 +1,17 @@
+[package]
+name = "superfik-ui"
+description = "Superfik design system: tokens, icons and stateless components painted on the GPU scene."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[dependencies]
+superfik-render.workspace = true
+superfik-motion.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,29 @@
+{
+  "id": "stripe",
+  "name": "Stripe",
+  "version": "1.0.0",
+  "description": "Look up customers, payments and plans.",
+  "icon": "stripe",
+  "category": "data",
+  "accounts": "many",
+  "auth": {
+    "kind": "api_key",
+    "fields": [
+      {
+        "key": "api_key",
+        "label": "Secret or restricted key",
+        "placeholder": "rk_test_…"
+      }
+    ]
+  },
+  "mcp": [
+    {
+      "transport": "http",
+      "name": "stripe",
+      "url": "https://mcp.stripe.com",
+      "headers": {
+        "Authorization": "Bearer {{secret.api_key}}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+//! The native engine through `AgentEngine::start`, as the backend drives it.
+
+mod agents;
+mod runs;
+mod sessions;
+
+use std::sync::mpsc::{Receiver, channel};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use superfik_core::{EngineEvent, EngineKind, ModelOption, PromptRequest, RunId};
+use superfik_engine::AgentEngine;
+use superfik_native::model::scripted::ScriptedModel;
+use superfik_native::model::{ModelApi, ModelError};
+use superfik_native::{ApiSource, NativeEngine};
+
+struct Source(Mutex<Vec<Arc<ScriptedModel>>>);
+
+impl ApiSource for Source {
+    fn api(&self, _request: &PromptRequest) -> Result<Arc<dyn ModelApi>, ModelError> {
+        let mut models = self.0.lock().expect("models");
+        if models.is_empty() {
+            return Err(ModelError::Unauthorized("no account connected".into()));
+        }
+        Ok(models.remove(0))
+    }
+}
+
+fn start(engine: &NativeEngine, request: &PromptRequest) -> Receiver<EngineEvent> {
+    let (send, receive) = channel();
+    let send = Mutex::new(send);
+    let sink = Arc::new(move |_run: RunId, event: EngineEvent| {
+        let _ = send.lock().expect("send").send(event);
+    });
+    engine.start(RunId::new(), request, sink).expect("start");
+    receive
+}
+
+fn finish(events: &Receiver<EngineEvent>) -> Vec<EngineEvent> {
+    let mut seen = Vec::new();
+    while let Ok(event) = events.recv_timeout(Duration::from_secs(10)) {
+        let terminal = event.is_terminal();
+        seen.push(event);
+        if terminal {
+            break;
+        }
+    }
+    seen
+}
+
+fn model() -> ModelOption {
+    ModelOption::new(EngineKind::Native, "claude-opus-5-5", "Opus 5.5")
+}

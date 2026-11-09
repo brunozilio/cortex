@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><clipPath id="tile"><rect width="100" height="100" rx="22.5"/></clipPath></defs><g clip-path="url(#tile)"><rect width="100" height="100" fill="#533afd"/><g transform="translate(0 0) scale(0.1953125)"><svg xmlns="http://www.w3.org/2000/svg" width="512.0" height="512.0" viewBox="0 0 512 512" fill="none" x="0.0" y="0.0" color="#171717" overflow="hidden">
+<g clip-path="url(#clip0_159_20)">
+<rect width="512" height="512" fill="#533AFD" />
+<path fill-rule="evenodd" clip-rule="evenodd" d="M120 392L392 334.317V120L120 178.357V392Z" fill="white" />
+</g>
+<defs>
+<clipPath id="clip0_159_20">
+<rect width="512" height="512" rx="64" fill="white" />
+</clipPath>
+</defs>
+</svg></g></g></svg>

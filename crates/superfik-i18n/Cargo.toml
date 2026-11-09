@@ -1,0 +1,17 @@
+[package]
+name = "superfik-i18n"
+description = "Superfik interface languages: a typed catalog of every UI string, English and Portuguese."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[dependencies]
+superfik-core.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

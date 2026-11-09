@@ -1,0 +1,5 @@
+[
+  {"ref": 1, "type": "tel", "name": "cpf", "label": "CPF", "form": 0, "visible": true},
+  {"ref": 2, "type": "text", "name": "codigo_verificacao", "label": "Código de verificação", "form": 0, "visible": true},
+  {"ref": 3, "type": "password", "name": "senha", "label": "Senha", "form": 0, "visible": true}
+]

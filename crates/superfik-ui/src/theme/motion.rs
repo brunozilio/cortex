@@ -1,0 +1,78 @@
+//! Timing tokens (seconds). Motion is quick and physical: things grow out
+//! of what spawned them and settle without bouncing around.
+
+use superfik_motion::Easing;
+
+pub const POPOVER_OPEN: f32 = 0.52;
+pub const POPOVER_CLOSE: f32 = 0.28;
+pub const FOCUS_IN: f32 = 0.24;
+pub const FOCUS_OUT: f32 = 0.32;
+pub const NODE_ENTER: f32 = 0.55;
+pub const NODE_EXIT: f32 = 0.38;
+pub const MORPH: f32 = 0.32;
+pub const WORD_REVEAL: f32 = 0.42;
+pub const WORD_STAGGER: f32 = 0.028;
+pub const CONTENT_SWAP: f32 = 0.4;
+pub const PAGE_SLIDE: f32 = 0.32;
+pub const SEND_FLY: f32 = 0.45;
+pub const STEP_REVEAL: f32 = 0.32;
+pub const STEP_STAGGER: f32 = 0.035;
+pub const ULTRA_CYCLE: f32 = 6.25;
+pub const EMOTE_MORPH: f32 = 0.45;
+pub const EMOTE_BLINK_PERIOD: f32 = 4.3;
+pub const EMOTE_BLINK: f32 = 0.16;
+pub const EMOTE_DONE_HOLD: f32 = 6.0;
+pub const EMOTE_DOCK_LIVE: f32 = 0.1;
+pub const EMOTE_DOCK_CALM: f32 = 0.25;
+pub const VIEWER_OPEN: f32 = 0.46;
+pub const VIEWER_CLOSE: f32 = 0.3;
+pub const GET_STARTED_DARKEN: f32 = 0.7;
+pub const GET_STARTED_WELCOME_AT: f32 = 0.55;
+pub const GET_STARTED_WORD_STAGGER: f32 = 0.14;
+pub const GET_STARTED_WORD_REVEAL: f32 = 0.6;
+pub const GET_STARTED_CAST_AT: f32 = 1.5;
+pub const GET_STARTED_CAST_STAGGER: f32 = 0.24;
+pub const GET_STARTED_CAST_POP: f32 = 0.55;
+pub const GET_STARTED_TRAIL: f32 = 0.4;
+pub const GET_STARTED_TRAIL_FLOW: f32 = 1.4;
+pub const GET_STARTED_LEAVE_AT: f32 = 3.9;
+pub const GET_STARTED_LEAVE: f32 = 0.55;
+pub const GET_STARTED_LIFT: f32 = 0.7;
+pub const GET_STARTED_FLIGHT: f32 = 0.75;
+pub const GET_STARTED_CARDS_AT: f32 = 4.35;
+pub const GET_STARTED_CARD_STAGGER: f32 = 0.12;
+pub const GET_STARTED_CARD_GROW: f32 = 0.5;
+pub const GET_STARTED_REVEAL: f32 = 0.5;
+pub const GET_STARTED_CLOSE: f32 = 0.32;
+pub const GET_STARTED_OPEN: f32 =
+    GET_STARTED_CARDS_AT + GET_STARTED_CARD_STAGGER * 5.0 + GET_STARTED_CARD_GROW + GET_STARTED_REVEAL;
+pub const HOVER: f32 = 0.12;
+pub const TOOLTIP_DELAY: f64 = 0.5;
+pub const WAKE_IDLE: f64 = 20.0;
+pub const PUSH_TO_TALK_HOLD: f64 = 0.35;
+pub const MEMORY_OPEN: f32 = 0.46;
+pub const MEMORY_CLOSE: f32 = 0.3;
+pub const MEMORY_LEARNED: f64 = 6.0;
+pub const MEMORY_PULSE: f32 = 1.2;
+pub const BLUR: f32 = 4.0;
+pub const IDLE_FRAME: f64 = 1.0 / 8.0;
+pub const TIMELINE_TRAVEL: f32 = 0.38;
+pub const TIMELINE_TRAIL: f32 = 0.5;
+pub const TIMELINE_PULSE: f32 = 1.6;
+pub const HAPTIC_GAP: f64 = 0.05;
+pub const HAPTIC_BURST: f64 = 0.02;
+
+pub const ENTER: Easing = Easing::OUT;
+pub const MORPH_EASE: Easing = Easing::IN_OUT;
+pub const PAGE_SWIPE_REST: f64 = 0.6;
+pub const BROWSER_EXPAND: f32 = 0.42;
+pub const BROWSER_COLLAPSE: f32 = 0.3;
+pub const SPINNER_TURNS: f32 = 1.1;
+pub const PAGE_CROSSFADE: f32 = 0.22;
+pub const STATUS_MORPH: f32 = 0.35;
+pub const SUCCESS_CHECK: f32 = 0.5;
+pub const STATUS_DONE_HOLD: f32 = 3.0;
+pub const STATUS_REVERT: f32 = 0.28;
+pub const SUCCESS_DRAW_DELAY: f32 = 0.08;
+pub const UPDATE_SHIMMER: f32 = 2.2;
+pub const UPDATE_BAR_PASS: f32 = 1.4;

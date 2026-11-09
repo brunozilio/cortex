@@ -1,0 +1,47 @@
+[package]
+name = "superfik-backend"
+description = "Superfik backend: executes client commands against engines and the workspace. In-process today; the same seam serves a remote server later."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[dependencies]
+superfik-private-file.workspace = true
+superfik-core.workspace = true
+superfik-process.workspace = true
+superfik-keychain.workspace = true
+superfik-engine.workspace = true
+superfik-protocol.workspace = true
+superfik-workspace.workspace = true
+superfik-plugins.workspace = true
+superfik-oauth.workspace = true
+crossbeam-channel.workspace = true
+superfik-channels.workspace = true
+superfik-gateway.workspace = true
+superfik-native.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tiny_http = "0.12"
+ureq = { version = "3", features = ["json"] }
+sha2 = "0.10"
+base64 = "0.22"
+p256 = { version = "0.14", features = ["ecdsa", "pkcs8"] }
+chacha20poly1305 = "0.10"
+getrandom = "0.3"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+serde.workspace = true
+uuid.workspace = true
+fastembed = { version = "7", optional = true }
+
+[features]
+default = ["embeddings"]
+embeddings = ["dep:fastembed"]
+
+[dev-dependencies]
+superfik-engine = { workspace = true, features = ["fake"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

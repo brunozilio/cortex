@@ -1,0 +1,16 @@
+[package]
+name = "superfik-private-file"
+description = "Files only the user who runs Superfik can read, on every system."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

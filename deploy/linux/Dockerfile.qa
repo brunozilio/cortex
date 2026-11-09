@@ -1,0 +1,27 @@
+FROM rust:1.99.1-trixie AS toolchain
+
+FROM ubuntu:24.04 AS runtime
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libstdc++6 libasound2t64 libssl3t64 zlib1g libzstd1 \
+    libxkbcommon0 libxkbcommon-x11-0 libx11-6 libx11-xcb1 libxcursor1 \
+    libxrandr2 libxi6 libwayland-client0 libwayland-cursor0 libvulkan1 \
+    libglib2.0-0t64 libnspr4 libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 \
+    libatspi2.0-0t64 libdbus-1-3 libcups2t64 libxcomposite1 libxdamage1 \
+    libxext6 libxfixes3 libgbm1 libexpat1 libxcb1 libcairo2 libpango-1.0-0 \
+    libudev1 mesa-vulkan-drivers xdg-utils xdg-desktop-portal-gtk \
+    dbus-x11 gnome-keyring fonts-dejavu-core git \
+    xvfb xauth xdotool x11-apps python3 python3-pil \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM runtime AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build pkg-config curl file xz-utils bzip2 lsb-release sudo libssl-dev \
+    libasound2-dev libxkbcommon-dev libwayland-dev libx11-dev libdbus-1-dev \
+    libudev-dev libpipewire-0.3-dev libspa-0.2-dev dpkg-dev desktop-file-utils \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=toolchain /usr/local/rustup /usr/local/rustup
+COPY --from=toolchain /usr/local/cargo /usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH CARGO_TARGET_DIR=/target
+WORKDIR /src

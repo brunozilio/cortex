@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquitetura do Superfik</title>
+<style>
+  :root {
+    --bg: #f7f6f3; --surface: #ffffff; --surface-2: #f0eee9; --text: #1d1c1a;
+    --muted: #6b6862; --line: #d9d5cc; --accent: #4a5bd4; --accent-soft: #e6e9fb;
+    --warm: #c2702a; --warm-soft: #fbeee2; --green: #2f8a5b; --green-soft: #e3f3ea;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151514; --surface: #1e1e1c; --surface-2: #262623; --text: #ecebe7;
+      --muted: #9d9a93; --line: #3a3934; --accent: #8b98f0; --accent-soft: #252a4a;
+      --warm: #e39a5b; --warm-soft: #3a2a1c; --green: #6cc697; --green-soft: #1d3328;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151514; --surface: #1e1e1c; --surface-2: #262623; --text: #ecebe7;
+    --muted: #9d9a93; --line: #3a3934; --accent: #8b98f0; --accent-soft: #252a4a;
+    --warm: #e39a5b; --warm-soft: #3a2a1c; --green: #6cc697; --green-soft: #1d3328;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 48px 16px 80px; }
+  h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.35rem; margin: 56px 0 8px; letter-spacing: -0.01em; }
+  p { margin: 0 0 12px; max-width: 70ch; }
+  .lede { color: var(--muted); font-size: 1.1rem; }
+  code { font-family: var(--mono); font-size: 0.88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  figure { margin: 20px 0 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 10px; }
+  svg { display: block; width: 100%; height: auto; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 0; }
+  nav a { color: var(--text); text-decoration: none; font-size: 0.9rem; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+  nav a:hover { border-color: var(--accent); }
+
+  /* Vocabulário dos SVGs */
+  .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+  .group { fill: var(--surface-2); stroke: var(--line); stroke-dasharray: 4 4; }
+  .acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+  .warm { fill: var(--warm-soft); stroke: var(--warm); stroke-width: 1.2; }
+  .ext { fill: var(--green-soft); stroke: var(--green); stroke-width: 1.2; }
+  .t { fill: var(--text); font-size: 14px; font-weight: 600; }
+  .s { fill: var(--muted); font-size: 12px; }
+  .m { font-family: var(--mono); }
+  .gl { fill: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#head); }
+  .arrow.a { stroke: var(--accent); marker-end: url(#head-a); }
+  .life { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 3 4; }
+  .headfill { fill: var(--muted); }
+  .headfill-a { fill: var(--accent); }
+
+  /* Camadas de crates */
+  .layers { display: grid; gap: 8px; }
+  .layer { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: center; }
+  .layer > b { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-family: var(--mono); font-size: 0.8rem; padding: 3px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); }
+  .chip.k { background: var(--accent-soft); border-color: var(--accent); }
+  .chip.d { background: var(--warm-soft); border-color: var(--warm); }
+  .chip.x { background: var(--green-soft); border-color: var(--green); }
+  @media (max-width: 560px) { .layer { grid-template-columns: 1fr; gap: 4px; } }
+
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
+  .rule { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .rule h3 { margin: 0 0 4px; font-size: 1rem; }
+  .rule p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin-top: 12px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .tablewrap { overflow-x: auto; }
+  footer { margin-top: 64px; color: var(--muted); font-size: 0.85rem; }
+
+  h3.sub { font-size: 1.1rem; margin: 36px 0 6px; }
+  .api { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr)); gap: 12px; margin-top: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+  .card h4 { margin: 0; font-size: 0.98rem; font-family: var(--mono); }
+  .card .where { color: var(--muted); font-size: 0.8rem; font-family: var(--mono); margin: 2px 0 8px; }
+  .card p { margin: 8px 0 0; color: var(--muted); font-size: 0.9rem; }
+  pre { margin: 0; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font: 12.5px/1.55 var(--mono); color: var(--text); }
+  pre .k { color: var(--accent); }
+  pre .c { color: var(--muted); }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
+  .steps li { counter-increment: s; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px 12px 52px; position: relative; }
+  .steps li::before { content: counter(s); position: absolute; left: 16px; top: 12px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.85rem; display: grid; place-items: center; }
+  .steps b { display: block; }
+  .steps span { color: var(--muted); font-size: 0.92rem; }
+  td span.s { color: var(--muted); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Arquitetura do Superfik</h1>
+  <p class="lede">Um canvas nativo em Rust para agentes de programação. Um cliente puro, um servidor que executa tudo e um renderizador que desenha cada pixel. Esta página é o complemento visual de <code>docs/architecture.md</code>.</p>
+  <nav>
+    <a href="#visao">Visão geral</a>
+    <a href="#loop">O loop do cliente</a>
+    <a href="#prompt">A vida de um prompt</a>
+    <a href="#interfaces">Interfaces comuns</a>
+    <a href="#estender">Como estender</a>
+    <a href="#crates">Crates</a>
+    <a href="#modos">Local e time</a>
+    <a href="#regras">Regras</a>
+    <a href="#onde">Onde fica cada coisa</a>
+  </nav>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="headfill" d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="head-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="headfill-a" d="M0,0 L10,5 L0,10 z"/></marker>
+    </defs>
+  </svg>
+
+  <!-- 1. Visão geral -->
+  <h2 id="visao">Visão geral</h2>
+  <p>O cliente nunca executa nada (ADR 0010). O app desktop e a aba do navegador usam o mesmo cliente; todo comando atravessa o protocolo até um servidor, embutido no app ou mantido por um time, que cuida das execuções, do git, da memória, dos plugins, dos cofres e dos canais.</p>
+  <figure>
+    <svg viewBox="0 0 960 400" role="img" aria-label="Cliente, protocolo, servidor e sistemas externos">
+      <rect class="group" x="16" y="30" width="304" height="352" rx="14"/>
+      <text class="gl" x="32" y="54">Cliente · desktop ou navegador</text>
+      <rect class="box" x="36" y="68" width="264" height="50" rx="10"/>
+      <text class="t m" x="168" y="90" text-anchor="middle">superfik-app / superfik-web</text>
+      <text class="s" x="168" y="108" text-anchor="middle">janela, entrada, efeitos, dispositivos</text>
+      <rect class="acc" x="36" y="134" width="264" height="96" rx="10"/>
+      <text class="t m" x="168" y="156" text-anchor="middle">superfik-client</text>
+      <text class="s" x="168" y="178" text-anchor="middle">state — o reducer puro</text>
+      <text class="s" x="168" y="196" text-anchor="middle">view — Scene + HitMap</text>
+      <text class="s" x="168" y="214" text-anchor="middle">input — teclas, ponteiro → Action</text>
+      <rect class="box" x="36" y="246" width="264" height="50" rx="10"/>
+      <text class="t m" x="168" y="268" text-anchor="middle">superfik-ui → superfik-render</text>
+      <text class="s" x="168" y="286" text-anchor="middle">componentes sem estado · SDF no wgpu</text>
+      <rect class="warm" x="36" y="312" width="264" height="50" rx="10"/>
+      <text class="t" x="168" y="334" text-anchor="middle">Dispositivos</text>
+      <text class="s" x="168" y="352" text-anchor="middle">som · voz · háptica · páginas CEF</text>
+
+      <text class="t m" x="390" y="118" text-anchor="middle">protocolo</text>
+      <text class="s m" x="390" y="138" text-anchor="middle">Envelope {</text>
+      <text class="s m" x="390" y="154" text-anchor="middle">principal, payload }</text>
+      <path class="arrow a" d="M322 182 H456"/>
+      <text class="s" x="390" y="174" text-anchor="middle">ClientCommand</text>
+      <path class="arrow" d="M456 228 H322"/>
+      <text class="s" x="390" y="246" text-anchor="middle">ServerEvent</text>
+
+      <rect class="group" x="460" y="30" width="304" height="352" rx="14"/>
+      <text class="gl" x="476" y="54">Servidor · embutido ou do time</text>
+      <rect class="box" x="480" y="68" width="264" height="50" rx="10"/>
+      <text class="t m" x="612" y="90" text-anchor="middle">superfik-server</text>
+      <text class="s" x="612" y="108" text-anchor="middle">Hub · conexões · login · workers</text>
+      <rect class="acc" x="480" y="134" width="264" height="70" rx="10"/>
+      <text class="t m" x="612" y="156" text-anchor="middle">superfik-backend</text>
+      <text class="s" x="612" y="174" text-anchor="middle">Authorizer → CommandHandler</text>
+      <text class="s" x="612" y="192" text-anchor="middle">memória · notas · rotinas · cofres</text>
+      <rect class="box" x="480" y="220" width="128" height="62" rx="10"/>
+      <text class="t m" x="544" y="245" text-anchor="middle">native</text>
+      <text class="s" x="544" y="264" text-anchor="middle">loop do agente</text>
+      <rect class="box" x="616" y="220" width="128" height="62" rx="10"/>
+      <text class="t m" x="680" y="245" text-anchor="middle">plugins</text>
+      <text class="s" x="680" y="264" text-anchor="middle">MCP · canais</text>
+      <rect class="box" x="480" y="298" width="128" height="62" rx="10"/>
+      <text class="t m" x="544" y="323" text-anchor="middle">workspace</text>
+      <text class="s" x="544" y="342" text-anchor="middle">git · worktrees</text>
+      <rect class="box" x="616" y="298" width="128" height="62" rx="10"/>
+      <text class="t m" x="680" y="323" text-anchor="middle">identity</text>
+      <text class="s" x="680" y="342" text-anchor="middle">usuários · papéis</text>
+
+      <rect class="ext" x="800" y="68" width="144" height="50" rx="10"/>
+      <text class="t" x="872" y="90" text-anchor="middle">APIs de modelos</text>
+      <text class="s" x="872" y="108" text-anchor="middle">Anthropic · OpenAI</text>
+      <rect class="ext" x="800" y="148" width="144" height="50" rx="10"/>
+      <text class="t" x="872" y="170" text-anchor="middle">MLX</text>
+      <text class="s" x="872" y="188" text-anchor="middle">modelos locais</text>
+      <rect class="ext" x="800" y="228" width="144" height="50" rx="10"/>
+      <text class="t" x="872" y="250" text-anchor="middle">Pessoas</text>
+      <text class="s" x="872" y="268" text-anchor="middle">WhatsApp · e-mail · X</text>
+      <rect class="ext" x="800" y="308" width="144" height="50" rx="10"/>
+      <text class="t" x="872" y="330" text-anchor="middle">git / GitHub</text>
+      <text class="s" x="872" y="348" text-anchor="middle">gh · GitHub App</text>
+
+      <path class="arrow" d="M744 160 C 772 160, 772 93, 798 93"/>
+      <path class="arrow" d="M744 190 C 772 190, 772 173, 798 173"/>
+      <path class="arrow" d="M744 252 H798"/>
+      <path class="arrow" d="M544 360 V372 H776 V333 H798"/>
+    </svg>
+    <figcaption>Todo comando carrega um <code>Principal</code> e passa por um <code>Authorizer</code> antes de rodar. Segredos e chaves dos provedores ficam no servidor.</figcaption>
+  </figure>
+
+  <!-- 2. Loop -->
+  <h2 id="loop">O loop do cliente: state → view → effects</h2>
+  <p>O reducer é puro: <code>Session::apply(Action) -&gt; Vec&lt;Effect&gt;</code>. Toda regra de produto é testada ali. A view nunca altera a sessão, e o shell é o único lugar onde acontece IO.</p>
+  <figure>
+    <svg viewBox="0 0 960 300" role="img" aria-label="Entrada, ação, reducer, efeitos e shell; view e renderizador">
+      <path class="arrow" d="M870 66 V24 H295 V64"/>
+      <text class="s" x="580" y="18" text-anchor="middle">ServerEvent · relato do dispositivo → Action</text>
+
+      <rect class="box" x="20" y="68" width="150" height="64" rx="10"/>
+      <text class="t" x="95" y="96" text-anchor="middle">Entrada</text>
+      <text class="s" x="95" y="116" text-anchor="middle">teclas, ponteiro, roda</text>
+      <path class="arrow" d="M170 100 H218"/>
+      <rect class="box" x="220" y="68" width="150" height="64" rx="10"/>
+      <text class="t m" x="295" y="96" text-anchor="middle">Action</text>
+      <text class="s" x="295" y="116" text-anchor="middle">o que aconteceu</text>
+      <path class="arrow a" d="M370 100 H418"/>
+      <rect class="acc" x="420" y="68" width="190" height="64" rx="10"/>
+      <text class="t m" x="515" y="96" text-anchor="middle">Session::apply</text>
+      <text class="s" x="515" y="116" text-anchor="middle">reducer puro · sem IO, sem relógio</text>
+      <path class="arrow a" d="M610 100 H648"/>
+      <rect class="box" x="650" y="68" width="130" height="64" rx="10"/>
+      <text class="t m" x="715" y="96" text-anchor="middle">Effect[]</text>
+      <text class="s" x="715" y="116" text-anchor="middle">o que fazer</text>
+      <path class="arrow" d="M780 100 H808"/>
+      <rect class="warm" x="810" y="68" width="130" height="64" rx="10"/>
+      <text class="t" x="875" y="96" text-anchor="middle">Shell</text>
+      <text class="s" x="875" y="116" text-anchor="middle">executa o IO</text>
+
+      <path class="arrow" d="M860 132 V198"/>
+      <path class="arrow" d="M900 198 V134"/>
+      <rect class="ext" x="810" y="200" width="130" height="64" rx="10"/>
+      <text class="t" x="875" y="228" text-anchor="middle">Servidor · disp.</text>
+      <text class="s" x="875" y="248" text-anchor="middle">comandos, chamadas</text>
+
+      <path class="arrow" d="M515 132 V198"/>
+      <rect class="box" x="420" y="200" width="190" height="64" rx="10"/>
+      <text class="t m" x="515" y="228" text-anchor="middle">view(session, Motions)</text>
+      <text class="s" x="515" y="248" text-anchor="middle">nunca altera nada</text>
+      <path class="arrow" d="M420 232 H372"/>
+      <rect class="box" x="220" y="200" width="150" height="64" rx="10"/>
+      <text class="t m" x="295" y="228" text-anchor="middle">Scene + HitMap</text>
+      <text class="s" x="295" y="248" text-anchor="middle">primitivas, alvos</text>
+      <path class="arrow" d="M220 232 H172"/>
+      <rect class="box" x="20" y="200" width="150" height="64" rx="10"/>
+      <text class="t" x="95" y="228" text-anchor="middle">Renderizador</text>
+      <text class="s" x="95" y="248" text-anchor="middle">3 passes · wgpu</text>
+      <path class="arrow" d="M250 200 L150 134"/>
+      <text class="s" x="222" y="176">teste de clique</text>
+    </svg>
+    <figcaption>Passes de renderização: o canvas (com pan e zoom da câmera), a barra lateral em coordenadas da janela e, por último, o overlay (visualizador, telas cheias, popovers, bloqueio).</figcaption>
+  </figure>
+
+  <!-- 3. Prompt -->
+  <h2 id="prompt">A vida de um prompt</h2>
+  <p>Uma execução volta em streaming como <code>EngineEvent</code>s marcados com um <code>RunId</code>, então as sessões continuam recebendo em segundo plano enquanto outra está na tela. Exatamente um evento terminal encerra a execução.</p>
+  <figure>
+    <svg viewBox="0 0 960 500" role="img" aria-label="Sequência de um prompt do reducer até o provedor e de volta">
+      <g>
+        <rect class="acc" x="30" y="16" width="130" height="40" rx="9"/><text class="t" x="95" y="41" text-anchor="middle">Reducer</text>
+        <rect class="warm" x="210" y="16" width="130" height="40" rx="9"/><text class="t" x="275" y="41" text-anchor="middle">Shell</text>
+        <rect class="box" x="400" y="16" width="160" height="40" rx="9"/><text class="t" x="480" y="41" text-anchor="middle">Servidor · backend</text>
+        <rect class="box" x="610" y="16" width="140" height="40" rx="9"/><text class="t" x="680" y="41" text-anchor="middle">Engine nativo</text>
+        <rect class="ext" x="800" y="16" width="140" height="40" rx="9"/><text class="t" x="870" y="41" text-anchor="middle">API do provedor</text>
+      </g>
+      <path class="life" d="M95 56 V488"/><path class="life" d="M275 56 V488"/><path class="life" d="M480 56 V488"/><path class="life" d="M680 56 V488"/><path class="life" d="M870 56 V488"/>
+
+      <path class="arrow a" d="M95 88 H273"/><text class="s m" x="185" y="81" text-anchor="middle">Effect · SubmitPrompt</text>
+      <path class="arrow a" d="M275 122 H478"/><text class="s m" x="377" y="115" text-anchor="middle">Envelope { principal, … }</text>
+      <rect class="box" x="490" y="138" width="180" height="50" rx="8"/>
+      <text class="s" x="580" y="158" text-anchor="middle">autoriza · política · orçamento</text>
+      <text class="s" x="580" y="176" text-anchor="middle">lembra memórias · MCP</text>
+      <path class="arrow" d="M480 214 H678"/><text class="s m" x="580" y="207" text-anchor="middle">start(PromptRequest)</text>
+      <path class="arrow" d="M680 248 H868"/><text class="s" x="775" y="241" text-anchor="middle">requisição em stream</text>
+      <path class="arrow" d="M870 282 H682"/><text class="s" x="775" y="275" text-anchor="middle">tokens · chamadas de tool</text>
+      <rect class="box" x="690" y="296" width="170" height="34" rx="8"/>
+      <text class="s" x="775" y="318" text-anchor="middle">tools rodam · loop repete</text>
+      <path class="arrow" d="M680 356 H482"/><text class="s m" x="580" y="349" text-anchor="middle">EngineEvent (TextDelta…)</text>
+      <path class="arrow" d="M480 390 H277"/><text class="s m" x="377" y="383" text-anchor="middle">ServerEvent · RunId</text>
+      <path class="arrow" d="M275 424 H97"/><text class="s m" x="185" y="417" text-anchor="middle">Action → sua conversa</text>
+      <path class="arrow" d="M680 462 H482"/><text class="s m" x="580" y="455" text-anchor="middle">Completed</text>
+      <text class="s" x="470" y="482" text-anchor="end">memória gravada · handoff lido · tokens revogados</text>
+    </svg>
+    <figcaption>Segredos do cofre, chamadas ao navegador e aprovações vão pela mesma execução: um pedido chega como <code>EngineEvent::Asked</code> e a resposta volta com o seu <code>Principal</code>.</figcaption>
+  </figure>
+
+  <!-- Interfaces -->
+  <h2 id="interfaces">Interfaces comuns</h2>
+  <p>Quase tudo que toca o mundo de fora passa por um trait pequeno. A regra fica pura de um lado, o IO do outro, e cada trait tem um substituto para os testes (<code>Recorder</code>, <code>Scripted…</code>, <code>InMemory…</code>). As assinaturas abaixo foram copiadas do código, sem os comentários.</p>
+
+  <h3 class="sub" id="provedores">Provedores de IA</h3>
+  <p>O engine nativo nunca fala com um provedor diretamente: ele pede a um <code>ApiSource</code> a <code>ModelApi</code> certa para a execução. Cada provedor é um plugin (<code>openai</code>, <code>openai-subscription</code>, <code>anthropic</code>, <code>claude-subscription</code>) cujo contrato é puro em <code>superfik_plugins::providers</code>; o IO fica em <code>superfik_native::model</code>.</p>
+  <figure>
+    <svg viewBox="0 0 960 340" role="img" aria-label="Da PromptRequest até as implementações de ModelApi">
+      <rect class="box" x="16" y="128" width="160" height="64" rx="10"/>
+      <text class="t m" x="96" y="154" text-anchor="middle">PromptRequest</text>
+      <text class="s" x="96" y="174" text-anchor="middle">modelo · conta · effort</text>
+      <path class="arrow" d="M176 160 H206"/>
+      <rect class="acc" x="208" y="128" width="170" height="64" rx="10"/>
+      <text class="t m" x="293" y="154" text-anchor="middle">ApiSource::api</text>
+      <text class="s" x="293" y="174" text-anchor="middle">NativeApis escolhe</text>
+      <path class="arrow a" d="M378 160 H410"/>
+      <rect class="acc" x="412" y="128" width="190" height="64" rx="10"/>
+      <text class="t m" x="507" y="154" text-anchor="middle">dyn ModelApi</text>
+      <text class="s m" x="507" y="174" text-anchor="middle">turn(req, on Delta, stop)</text>
+
+      <path class="arrow" d="M458 192 V238"/>
+      <rect class="box" x="412" y="240" width="92" height="60" rx="9"/>
+      <text class="t m" x="458" y="266" text-anchor="middle">KeySource</text>
+      <text class="s" x="458" y="286" text-anchor="middle">chave, token</text>
+      <path class="arrow" d="M556 192 V238"/>
+      <rect class="box" x="510" y="240" width="92" height="60" rx="9"/>
+      <text class="t m" x="556" y="266" text-anchor="middle">Http</text>
+      <text class="s" x="556" y="286" text-anchor="middle">stream</text>
+
+      <rect class="ext" x="660" y="16" width="284" height="60" rx="10"/>
+      <text class="t m" x="802" y="40" text-anchor="middle">ProviderClient</text>
+      <text class="s" x="802" y="60" text-anchor="middle">conta de plugin → Messages ou Responses</text>
+      <rect class="ext" x="660" y="92" width="284" height="60" rx="10"/>
+      <text class="t m" x="802" y="116" text-anchor="middle">anthropic::Messages</text>
+      <text class="s" x="802" y="136" text-anchor="middle">Anthropic API e assinatura Claude</text>
+      <rect class="ext" x="660" y="168" width="284" height="60" rx="10"/>
+      <text class="t m" x="802" y="192" text-anchor="middle">openai::Responses</text>
+      <text class="s" x="802" y="212" text-anchor="middle">OpenAI API e assinatura ChatGPT</text>
+      <rect class="ext" x="660" y="244" width="284" height="60" rx="10"/>
+      <text class="t m" x="802" y="268" text-anchor="middle">chat::Chat</text>
+      <text class="s" x="802" y="288" text-anchor="middle">Chat Completions · MLX local</text>
+      <path class="arrow" d="M602 150 C 630 150, 630 46, 658 46"/>
+      <path class="arrow" d="M602 156 C 630 156, 630 122, 658 122"/>
+      <path class="arrow" d="M602 164 C 630 164, 630 198, 658 198"/>
+      <path class="arrow" d="M602 170 C 630 170, 630 274, 658 274"/>
+    </svg>
+    <figcaption><code>Metered</code> envolve qualquer <code>ModelApi</code> para contar o uso; <code>ScriptedModel</code> responde de um roteiro nos testes, e os clientes HTTP são testados contra streams gravados.</figcaption>
+  </figure>
+  <div class="api">
+    <div class="card">
+      <h4>ModelApi</h4><div class="where">superfik-native · model/mod.rs</div>
+<pre><span class="k">pub trait</span> ModelApi: Send + Sync {
+    <span class="k">fn</span> turn(&amp;self, request: &amp;TurnRequest,
+            on: &amp;mut dyn FnMut(Delta),
+            stop: &amp;AtomicBool)
+        -&gt; Result&lt;Reply, ModelError&gt;;
+}
+<span class="k">pub struct</span> TurnRequest {
+    model, system, messages,
+    tools: Vec&lt;ToolSpec&gt;, effort, max_tokens,
+}
+<span class="k">pub enum</span> Delta { Text(String), Thinking(String) }</pre>
+      <p>Um turno do modelo. O texto e o raciocínio chegam aos poucos por <code>on</code>; o <code>Reply</code> traz a mensagem completa (com as chamadas de tool), o motivo da parada e o uso.</p>
+    </div>
+    <div class="card">
+      <h4>ApiSource · KeySource</h4><div class="where">superfik-native · engine.rs, model/mod.rs</div>
+<pre><span class="k">pub trait</span> ApiSource: Send + Sync {
+    <span class="k">fn</span> api(&amp;self, request: &amp;PromptRequest)
+        -&gt; Result&lt;Arc&lt;dyn ModelApi&gt;, ModelError&gt;;
+}
+<span class="k">pub trait</span> KeySource: Send + Sync {
+    <span class="k">fn</span> key(&amp;self) -&gt; Result&lt;ProviderKey, ModelError&gt;;
+    <span class="k">fn</span> replace(&amp;self, value: &amp;str)
+        -&gt; Result&lt;(), ModelError&gt;;  <span class="c">// token renovado</span>
+}</pre>
+      <p>A chave chega na execução como <code>RunCredentials::model</code>, nunca serializada. Uma conta velha ou de outro dono é recusada, nunca trocada por outra.</p>
+    </div>
+    <div class="card">
+      <h4>ModelProvider · Config</h4><div class="where">superfik-core · model.rs / superfik-plugins · providers</div>
+<pre><span class="k">pub enum</span> ModelProvider {
+    Anthropic, OpenAi,
+    ChatGptSubscription, ClaudeSubscription,
+    Local,
+}
+<span class="k">pub struct</span> Config {      <span class="c">// segredo da conta</span>
+    api_key: String,
+    base_url: String,
+    auth: Option&lt;Tokens&gt;,  <span class="c">// OAuth</span>
+}</pre>
+      <p>Cada <code>ModelOption</code> diz o provedor e a conta que o listou, então duas contas do mesmo provedor aparecem separadas no seletor.</p>
+    </div>
+    <div class="card">
+      <h4>ModelCatalog</h4><div class="where">superfik-backend · plugins/model_providers.rs</div>
+<pre><span class="k">pub trait</span> ModelCatalog: Send + Sync {
+    <span class="k">fn</span> models(&amp;self, provider: ModelProvider,
+              key: ProviderKey)
+        -&gt; Result&lt;Vec&lt;ModelOption&gt;, String&gt;;
+}</pre>
+      <p><code>ListModels</code> pergunta o catálogo de toda conta de IA conectada, fora do loop de comandos, e depois acrescenta os modelos MLX baixados. Nada conectado lista nada.</p>
+    </div>
+  </div>
+
+  <h3 class="sub" id="engines">Engines, tools e eventos</h3>
+  <p>Um engine recebe uma <code>PromptRequest</code> e emite <code>EngineEvent</code>s num <code>EventSink</code>. Hoje só o nativo está registrado; Codex, Kiro e Copilot aparecem como "Em breve" até alguém implementar o trait.</p>
+  <div class="api">
+    <div class="card">
+      <h4>AgentEngine</h4><div class="where">superfik-engine · engine.rs</div>
+<pre><span class="k">pub trait</span> AgentEngine: Send + Sync {
+    <span class="k">fn</span> kind(&amp;self) -&gt; EngineKind;
+    <span class="k">fn</span> models(&amp;self) -&gt; Vec&lt;ModelOption&gt;;
+    <span class="k">fn</span> is_installed(&amp;self) -&gt; bool { true }
+    <span class="k">fn</span> start(&amp;self, run: RunId,
+             request: &amp;PromptRequest,
+             sink: Arc&lt;dyn EventSink&gt;)
+        -&gt; Result&lt;Box&lt;dyn RunHandle&gt;, EngineError&gt;;
+}
+<span class="k">pub trait</span> EventSink: Send + Sync {
+    <span class="k">fn</span> emit(&amp;self, run: RunId, event: EngineEvent);
+}
+<span class="k">pub trait</span> RunHandle: Send {
+    <span class="k">fn</span> cancel(&amp;mut self);
+    <span class="k">fn</span> answer(&amp;mut self, ask: &amp;AskId, d: &amp;Decision) {}
+    <span class="k">fn</span> set_mode(&amp;mut self, mode: PermissionMode) {}
+}</pre>
+      <p>Exatamente um evento terminal (<code>Completed</code>, <code>Failed</code>, <code>Cancelled</code>) encerra uma execução.</p>
+    </div>
+    <div class="card">
+      <h4>Tool</h4><div class="where">superfik-native · tools/mod.rs</div>
+<pre><span class="k">pub trait</span> Tool: Send + Sync {
+    <span class="k">fn</span> spec(&amp;self) -&gt; ToolSpec;
+    <span class="k">fn</span> access(&amp;self) -&gt; Access;
+    <span class="k">fn</span> summary(&amp;self, input: &amp;Value) -&gt; String;
+    <span class="k">fn</span> run(&amp;self, input: &amp;Value,
+           workspace: &amp;Workspace) -&gt; Outcome;
+}
+<span class="k">pub enum</span> Access { Reads, Edits, Executes }
+<span class="k">pub struct</span> Outcome { content, is_error, images }</pre>
+      <p><code>Access</code> decide as permissões: o modo Plan só deixa <code>Reads</code>, e no modo Bypass a checagem de segurança avalia tudo que é <code>Edits</code> ou <code>Executes</code> antes de rodar.</p>
+    </div>
+    <div class="card">
+      <h4>Sessions · mcp::Transport</h4><div class="where">superfik-native · sessions.rs, mcp/mod.rs</div>
+<pre><span class="k">pub trait</span> Sessions: Send + Sync {
+    <span class="k">fn</span> load(&amp;self, id: &amp;SessionId)
+        -&gt; Option&lt;Vec&lt;Message&gt;&gt;;
+    <span class="k">fn</span> save(&amp;self, id: &amp;SessionId,
+            history: &amp;[Message]) -&gt; Result&lt;(), String&gt;;
+    <span class="c">// + variantes por request e worktree</span>
+}
+<span class="k">pub trait</span> Transport: Send + Sync {
+    <span class="k">fn</span> request(&amp;self, m: &amp;Value) -&gt; Result&lt;Value, String&gt;;
+    <span class="k">fn</span> notify(&amp;self, m: &amp;Value) -&gt; Result&lt;(), String&gt;;
+}</pre>
+      <p>O engine guarda o próprio histórico (<code>FileSessions</code>). Servidores MCP, stdio ou HTTP, ficam atrás de <code>Transport</code>.</p>
+    </div>
+    <div class="card">
+      <h4>EngineEvent</h4><div class="where">superfik-core · events.rs</div>
+<pre>SessionStarted · TextDelta · ToolStarted
+ToolFinished · ToolResult · Usage
+AgentSpawned · AgentUpdate · AgentEvent
+Asked · AskWithdrawn · Browse
+ContextMeasured · Compacted · Chore
+Diagnosed · StructuredOutput · ResearchFound
+<span class="c">// … e os terminais</span>
+Completed · Failed · Cancelled</pre>
+      <p>Sub-agentes chegam embrulhados em <code>AgentEvent { index, event }</code> e vão para o card do agente, nunca para a resposta principal.</p>
+    </div>
+  </div>
+
+  <h3 class="sub" id="plugins">Plugins</h3>
+  <p>Um plugin é uma pasta com <code>superfik-plugin.json</code>, mais <code>skills/</code> e <code>agents/</code> opcionais. O catálogo curado vem embutido de <code>crates/superfik-plugins/catalog/&lt;id&gt;/</code>; "Adicionar de pasta…" instala qualquer outro. A mesma forma serve para ferramentas MCP, provedores de IA, cofres e canais: o que muda é o campo que o manifesto preenche.</p>
+  <figure>
+    <svg viewBox="0 0 960 380" role="img" aria-label="Do manifesto do plugin até as ferramentas de uma execução">
+      <rect class="acc" x="16" y="16" width="260" height="348" rx="12"/>
+      <text class="t m" x="146" y="42" text-anchor="middle">superfik-plugin.json</text>
+      <text class="s m" x="36" y="72">id · name · version · icon</text>
+      <text class="s m" x="36" y="96">accounts: one | many</text>
+      <text class="s m" x="36" y="128">auth:</text>
+      <text class="s m" x="52" y="148">none | api_key { fields }</text>
+      <text class="s m" x="52" y="168">oauth | cli { program }</text>
+      <text class="s m" x="36" y="200">mcp: [stdio | http]</text>
+      <text class="s m" x="52" y="220">{{secret.x}} {{account}}</text>
+      <text class="s m" x="36" y="252">instructions · setup</text>
+      <text class="s m" x="36" y="284">vault?   → cofre</text>
+      <text class="s m" x="36" y="308">channel? → canal</text>
+      <text class="s m" x="36" y="336">skills/ · agents/</text>
+
+      <path class="arrow" d="M276 60 H318"/>
+      <rect class="box" x="320" y="24" width="280" height="70" rx="10"/>
+      <text class="t" x="460" y="50" text-anchor="middle">1 · Instalar</text>
+      <text class="s m" x="460" y="72" text-anchor="middle">PluginStore · packages/&lt;id&gt;/</text>
+      <path class="arrow" d="M460 94 V112"/>
+      <rect class="box" x="320" y="114" width="280" height="70" rx="10"/>
+      <text class="t" x="460" y="140" text-anchor="middle">2 · Conectar uma conta</text>
+      <text class="s m" x="460" y="162" text-anchor="middle">OAuthFlow · TokenCommand → SecretStore</text>
+      <path class="arrow" d="M460 184 V202"/>
+      <rect class="box" x="320" y="204" width="280" height="70" rx="10"/>
+      <text class="t" x="460" y="230" text-anchor="middle">3 · Montar a execução</text>
+      <text class="s m" x="460" y="252" text-anchor="middle">Plugins::brief · config MCP 0600</text>
+      <path class="arrow" d="M460 274 V292"/>
+      <rect class="warm" x="320" y="294" width="280" height="70" rx="10"/>
+      <text class="t" x="460" y="320" text-anchor="middle">4 · O agente usa</text>
+      <text class="s m" x="460" y="342" text-anchor="middle">mcp__linear-acme__* · linear:skill</text>
+
+      <rect class="group" x="636" y="16" width="308" height="348" rx="12"/>
+      <text class="gl" x="652" y="40">Campos que viram serviços</text>
+      <rect class="ext" x="656" y="56" width="268" height="62" rx="10"/>
+      <text class="t" x="790" y="80" text-anchor="middle">Provedor de IA</text>
+      <text class="s m" x="790" y="100" text-anchor="middle">ModelCatalog · KeySource</text>
+      <rect class="ext" x="656" y="132" width="268" height="62" rx="10"/>
+      <text class="t" x="790" y="156" text-anchor="middle">Cofre</text>
+      <text class="s m" x="790" y="176" text-anchor="middle">VaultProvider → superfik-vault</text>
+      <rect class="ext" x="656" y="208" width="268" height="62" rx="10"/>
+      <text class="t" x="790" y="232" text-anchor="middle">Canal</text>
+      <text class="s m" x="790" y="252" text-anchor="middle">Opener / Channel → superfik-channels</text>
+      <rect class="ext" x="656" y="284" width="268" height="62" rx="10"/>
+      <text class="t" x="790" y="308" text-anchor="middle">Ferramentas MCP</text>
+      <text class="s" x="790" y="328" text-anchor="middle">um servidor por conta</text>
+    </svg>
+    <figcaption>Os segredos nunca saem do backend: ficam no <code>SecretStore</code> por dono e conexão, os tokens OAuth são renovados antes da execução e a config MCP é apagada no evento terminal.</figcaption>
+  </figure>
+  <div class="api">
+    <div class="card">
+      <h4>Um manifesto real</h4><div class="where">catalog/linear/superfik-plugin.json</div>
+<pre>{
+  "id": "linear",
+  "name": "Linear",
+  "accounts": "many",
+  "auth": { "kind": "oauth" },
+  "mcp": [{
+    "transport": "http",
+    "name": "linear",
+    "url": "https://mcp.linear.app/mcp",
+    "headers": {
+      "Authorization": "Bearer {{secret.access_token}}"
+    }
+  }],
+  "instructions": "Linear workspace {{account}};
+    use the mcp__{{server}}__* tools."
+}</pre>
+      <p>Cada conta ganha um nome de servidor próprio (<code>linear-acme</code>), então duas contas do mesmo plugin nunca se misturam.</p>
+    </div>
+    <div class="card">
+      <h4>SecretStore · OAuthFlow</h4><div class="where">superfik-backend · plugins/</div>
+<pre><span class="k">pub trait</span> SecretStore: Send + Sync {
+    <span class="k">fn</span> get(&amp;self, owner: &amp;Principal,
+           c: ConnectionId) -&gt; Option&lt;Secrets&gt;;
+    <span class="k">fn</span> set(&amp;self, owner: &amp;Principal,
+           c: ConnectionId, s: &amp;Secrets)
+        -&gt; Result&lt;(), String&gt;;
+    <span class="k">fn</span> delete(&amp;self, owner: &amp;Principal,
+              c: ConnectionId);
+}
+<span class="k">pub trait</span> OAuthFlow: Send + Sync {
+    <span class="k">fn</span> sign_in(&amp;self, req: &amp;OAuthRequest,
+               open: &amp;mut dyn FnMut(String))
+        -&gt; Result&lt;Secrets, String&gt;;
+    <span class="k">fn</span> refresh(&amp;self, s: &amp;Secrets)
+        -&gt; Result&lt;Option&lt;Secrets&gt;, String&gt;;
+}</pre>
+      <p><code>KeychainSecretStore</code> no app, <code>InMemorySecretStore</code> nos testes. O OAuth segue a autorização do MCP: metadados do recurso, registro dinâmico de cliente, PKCE e redirect em loopback.</p>
+    </div>
+    <div class="card">
+      <h4>VaultProvider</h4><div class="where">superfik-backend · vault/provider.rs</div>
+<pre><span class="k">pub trait</span> VaultProvider: Send + Sync {
+    <span class="k">fn</span> items(&amp;self, account: &amp;VaultAccount,
+             session: &amp;mut Option&lt;String&gt;)
+        -&gt; Result&lt;Vec&lt;Item&gt;, String&gt;;
+    <span class="c">// opcionais, com padrão:</span>
+    <span class="k">fn</span> logins(…, url: &amp;str) -&gt; …;
+    <span class="k">fn</span> refresh(…) · save(…)
+    <span class="k">fn</span> passkeys(…) · keep_passkey(…)
+}</pre>
+      <p>Hoje é o Bitwarden via <code>bw</code>. Ferramentas, aprovação, execução e redação de saída não mudam ao acrescentar outro cofre.</p>
+    </div>
+    <div class="card">
+      <h4>Opener · Channel</h4><div class="where">superfik-channels · lib.rs</div>
+<pre><span class="k">pub trait</span> Opener: Send + Sync {
+    <span class="k">fn</span> kind(&amp;self) -&gt; ChannelKind;
+    <span class="k">fn</span> open(&amp;self, spec: &amp;LinkSpec, events: Events)
+        -&gt; Result&lt;Arc&lt;dyn Channel&gt;, ChannelError&gt;;
+}
+<span class="k">pub trait</span> Channel: Send + Sync {
+    <span class="k">fn</span> send_text(&amp;self, exchange: &amp;str, text: &amp;str)
+        -&gt; Result&lt;String, ChannelError&gt;;
+    <span class="k">fn</span> send_file(…) -&gt; …;   <span class="c">// padrão: recusa</span>
+    <span class="k">fn</span> typing(&amp;self, exchange: &amp;str) -&gt; …;
+    <span class="k">fn</span> hook(&amp;self, r: &amp;HookRequest) -&gt; HookAnswer;
+    <span class="k">fn</span> close(&amp;self);
+    <span class="k">fn</span> unlink(&amp;self);
+}</pre>
+      <p>Ritmo, limites e pausa quando um membro responde pelo celular são regras puras em <code>superfik_core::channel</code>; o canal só transporta. As APIs oficiais usam o trait <code>Http</code>, com <code>ScriptedHttp</code> nos testes.</p>
+    </div>
+  </div>
+
+  <h3 class="sub" id="costuras">Servidor, armazenamento e dispositivos</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Trait</th><th>O que faz</th><th>Real</th><th>Nos testes</th></tr></thead>
+    <tbody>
+      <tr><td><code>Backend</code><br><span class="s">superfik-protocol</span></td><td><code>send(Envelope&lt;ClientCommand&gt;)</code>, <code>try_recv() -&gt; ServerEvent</code></td><td><code>Connection</code>, <code>RemoteBackend</code></td><td><code>LocalBackend</code></td></tr>
+      <tr><td><code>Authorizer</code></td><td><code>authorize(principal, command)</code> antes de qualquer comando</td><td><code>RoleAuthorizer</code> sobre <code>Roles</code></td><td>só dono local</td></tr>
+      <tr><td><code>Authenticator</code><br><span class="s">superfik-server</span></td><td><code>authenticate(token) -&gt; Principal</code></td><td>usuários do servidor (<code>superfik-identity</code>)</td><td><code>testing::admit</code></td></tr>
+      <tr><td><code>Budget</code></td><td><code>admit</code> antes de uma execução, <code>spend</code> depois</td><td><code>GovernedBudget</code></td><td><code>Unbounded</code></td></tr>
+      <tr><td><code>MemoryStore</code>, <code>NoteStore</code>, <code>SessionStore</code>, <code>RoutineStore</code>, <code>ChannelStore</code>, <code>SettingsStore</code>, <code>PluginStore</code></td><td><code>load</code> / <code>save</code> por dono e projeto</td><td><code>File…Store</code> (JSON)</td><td><code>InMemory…</code></td></tr>
+      <tr><td><code>Embedder</code></td><td>vetores para a busca da memória</td><td>fastembed / ONNX</td><td>sem modelo: só palavras</td></tr>
+      <tr><td><code>GitInspector</code>, <code>BranchPusher</code>, <code>Worktrees</code>, <code>GitHubClient</code></td><td>git e GitHub</td><td><code>git</code> e <code>gh</code> por <code>GitRunner</code></td><td>runners com roteiro</td></tr>
+      <tr><td><code>BrowserHost</code></td><td><code>send(Call)</code>, <code>pump(device, queue)</code>, <code>frame(id)</code></td><td>CEF (<code>welding</code>)</td><td><code>Recorder</code></td></tr>
+      <tr><td><code>VoiceDevice</code></td><td><code>call(VoiceCall)</code>, <code>poll() -&gt; Vec&lt;VoiceEvent&gt;</code></td><td><code>LocalVoice</code></td><td><code>NoVoice</code>, <code>Recorder</code></td></tr>
+      <tr><td><code>Player</code>, <code>Actuator</code></td><td>tocar um clipe; pulsar o trackpad</td><td>rodio; MultitouchSupport</td><td><code>Silent</code>, <code>Still</code>, <code>Recorder</code></td></tr>
+      <tr><td><code>Unlock</code></td><td><code>unlock(reason)</code></td><td>Touch ID, Windows Hello</td><td>stand-in</td></tr>
+      <tr><td><code>Releases</code>, <code>Fetch</code>, <code>Installer</code>, <code>Commands</code></td><td>achar, baixar, preparar e trocar uma versão</td><td>GitHub, <code>ditto</code>, <code>codesign</code>, <code>tar</code></td><td>pastas temporárias</td></tr>
+      <tr><td><code>Catalog</code><br><span class="s">superfik-i18n</span></td><td>uma língua: <code>Text</code> → frase</td><td><code>en.rs</code>, <code>pt_br.rs</code></td><td>o <code>match</code> exaustivo</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <!-- Estender -->
+  <h2 id="estender">Como estender</h2>
+  <ol class="steps">
+    <li><b>Um plugin de ferramentas</b><span>Uma pasta em <code>crates/superfik-plugins/catalog/&lt;id&gt;/</code> com o manifesto (auth e servidores MCP) e, se quiser, <code>skills/</code> e <code>agents/</code>. Nenhum código Rust.</span></li>
+    <li><b>Um provedor de IA</b><span>O contrato puro em <code>superfik_plugins::providers</code> (credencial, catálogo, formato da requisição), uma variante em <code>ModelProvider</code>, um <code>ModelApi</code> em <code>superfik_native::model</code> testado contra streams gravados e a escolha em <code>NativeApis</code>.</span></li>
+    <li><b>Um engine</b><span>Implemente <code>AgentEngine</code> com o IO atrás de costuras e registre em <code>LocalServices::detect</code>. Ele substitui sozinho a linha "Em breve"; UI, protocolo e reducer não mudam.</span></li>
+    <li><b>Um cofre</b><span>Uma variante em <code>VaultKind</code>, um <code>VaultProvider</code> registrado em <code>VaultProviders::system</code> e um manifesto com <code>"vault"</code>.</span></li>
+    <li><b>Um canal</b><span>Um <code>ChannelKind</code> com seus limites, um <code>Opener</code>/<code>Channel</code> (sobre <code>Http</code> se for API oficial) e um manifesto com <code>"channel"</code>.</span></li>
+    <li><b>Um dispositivo</b><span>Uma parte pura, o dispositivo atrás de um trait, <code>Recorder</code> para os testes e o shell executando o <code>Effect</code>.</span></li>
+  </ol>
+
+  <!-- 4. Crates -->
+  <h2 id="crates">Crates, de cima para baixo</h2>
+  <p>As dependências apontam para um só lado: para baixo. Regras de negócio nunca dependem de IO, e componentes de UI nunca dependem de regras de negócio.</p>
+  <figure>
+    <div class="layers">
+      <div class="layer"><b>Shells</b><div class="chips"><span class="chip d">superfik-app</span><span class="chip d">superfik-web</span></div></div>
+      <div class="layer"><b>Cliente</b><div class="chips"><span class="chip k">superfik-client</span></div></div>
+      <div class="layer"><b>Interface</b><div class="chips"><span class="chip">superfik-ui</span><span class="chip">superfik-render</span><span class="chip">superfik-motion</span><span class="chip">superfik-i18n</span></div></div>
+      <div class="layer"><b>Dispositivos</b><div class="chips"><span class="chip d">sound</span><span class="chip d">voice</span><span class="chip d">haptics</span><span class="chip d">dock</span><span class="chip d">menu</span><span class="chip d">unlock</span><span class="chip d">browser</span><span class="chip d">update</span><span class="chip d">keychain</span></div></div>
+      <div class="layer"><b>Servidor</b><div class="chips"><span class="chip">superfik-server</span><span class="chip">superfik-identity</span><span class="chip">superfik-pages</span><span class="chip">superfik-frames</span></div></div>
+      <div class="layer"><b>Backend</b><div class="chips"><span class="chip k">superfik-backend</span></div></div>
+      <div class="layer"><b>Engines e IO</b><div class="chips"><span class="chip x">native</span><span class="chip x">engine</span><span class="chip x">gateway</span><span class="chip x">workspace</span><span class="chip x">plugins</span><span class="chip x">channels</span><span class="chip x">oauth</span><span class="chip x">process</span><span class="chip x">private-file</span></div></div>
+      <div class="layer"><b>Protocolo</b><div class="chips"><span class="chip">superfik-protocol</span></div></div>
+      <div class="layer"><b>Domínio</b><div class="chips"><span class="chip k">superfik-core</span></div></div>
+    </div>
+    <figcaption>Azul: puro e central. Laranja: mexe no dispositivo. Verde: fala com o mundo de fora. Cada crate de dispositivo tem uma parte pura, o dispositivo atrás de um trait e substitutos <code>Recorder</code> para os testes.</figcaption>
+  </figure>
+
+  <!-- 5. Modos -->
+  <h2 id="modos">Local e time</h2>
+  <p>Sozinho, o app conversa com o servidor embutido nele, como dono local. Conectado ao servidor de um time, o mesmo cliente fala com ele como membro; o servidor tem os próprios usuários (ADR 0017) e executa tudo por eles.</p>
+  <figure>
+    <svg viewBox="0 0 960 280" role="img" aria-label="Modo local e modo com servidor do time">
+      <rect class="group" x="16" y="16" width="440" height="248" rx="14"/>
+      <text class="gl" x="32" y="40">Sozinho</text>
+      <rect class="box" x="40" y="58" width="250" height="186" rx="12"/>
+      <text class="t" x="165" y="82" text-anchor="middle">Superfik.app</text>
+      <rect class="acc" x="60" y="98" width="210" height="50" rx="9"/>
+      <text class="t m" x="165" y="120" text-anchor="middle">cliente</text>
+      <text class="s" x="165" y="138" text-anchor="middle">reducer · view · shell</text>
+      <path class="arrow a" d="M165 148 V172"/>
+      <rect class="box" x="60" y="174" width="210" height="52" rx="9"/>
+      <text class="t m" x="165" y="196" text-anchor="middle">servidor embutido</text>
+      <text class="s m" x="165" y="214" text-anchor="middle">Principal::LocalOwner</text>
+      <path class="arrow" d="M290 200 H326"/>
+      <rect class="ext" x="328" y="150" width="112" height="96" rx="10"/>
+      <text class="t" x="384" y="176" text-anchor="middle">Este Mac</text>
+      <text class="s" x="384" y="196" text-anchor="middle">repositórios</text>
+      <text class="s" x="384" y="214" text-anchor="middle">keychain</text>
+      <text class="s" x="384" y="232" text-anchor="middle">modelos</text>
+
+      <rect class="group" x="476" y="16" width="468" height="248" rx="14"/>
+      <text class="gl" x="492" y="40">Servidor do time</text>
+      <rect class="acc" x="496" y="60" width="140" height="50" rx="9"/>
+      <text class="t" x="566" y="82" text-anchor="middle">App desktop</text>
+      <text class="s m" x="566" y="100" text-anchor="middle">RemoteBackend</text>
+      <rect class="acc" x="496" y="130" width="140" height="50" rx="9"/>
+      <text class="t" x="566" y="152" text-anchor="middle">Aba do navegador</text>
+      <text class="s" x="566" y="170" text-anchor="middle">wasm · /ws</text>
+      <path class="arrow a" d="M636 85 C 660 85, 664 120, 686 128"/>
+      <path class="arrow a" d="M636 155 H686"/>
+      <text class="s" x="566" y="204" text-anchor="middle">entra com cookie de sessão</text>
+      <rect class="box" x="688" y="60" width="236" height="184" rx="12"/>
+      <text class="t m" x="806" y="84" text-anchor="middle">superfik-server</text>
+      <text class="s" x="806" y="110" text-anchor="middle">usuários, códigos de acesso, papéis</text>
+      <text class="s" x="806" y="132" text-anchor="middle">Hub: eventos por Recipient</text>
+      <text class="s" x="806" y="154" text-anchor="middle">checkouts · execuções · páginas CEF</text>
+      <text class="s" x="806" y="176" text-anchor="middle">dados de cada membro</text>
+      <text class="s" x="806" y="198" text-anchor="middle">política · orçamentos · biblioteca</text>
+      <text class="s" x="806" y="220" text-anchor="middle">GitHub como o membro</text>
+    </svg>
+    <figcaption>A voz é a exceção: o áudio nunca sai do computador, nem com o servidor de um time.</figcaption>
+  </figure>
+
+  <!-- 6. Regras -->
+  <h2 id="regras">As regras que mantêm esse formato</h2>
+  <div class="rules">
+    <div class="rule"><h3>Reducer puro</h3><p>Regras de domínio ficam em <code>superfik-core</code> ou <code>state/</code>. IO só acontece por <code>Effect</code>s.</p></div>
+    <div class="rule"><h3>Componentes sem estado</h3><p>Recebem props, pintam e devolvem a geometria de clique. Usado duas vezes vira componente.</p></div>
+    <div class="rule"><h3>Só tokens</h3><p>Toda cor, tamanho, fonte e duração vem de <code>superfik-ui/theme</code>.</p></div>
+    <div class="rule"><h3>IO atrás de traits</h3><p>Todo dispositivo e serviço tem uma costura e um substituto, então todo comportamento ganha teste.</p></div>
+    <div class="rule"><h3>Um Principal em tudo</h3><p>Comandos viajam num <code>Envelope</code> e passam por um <code>Authorizer</code>; a costura do backend fica intacta.</p></div>
+    <div class="rule"><h3>Fatos, não frases</h3><p>O core guarda fatos; o <code>superfik-i18n</code> transforma em texto na hora de pintar.</p></div>
+  </div>
+
+  <!-- 7. Onde -->
+  <h2 id="onde">Onde fica cada coisa</h2>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Recurso</th><th>Regras (puras)</th><th>IO / dispositivo</th></tr></thead>
+    <tbody>
+      <tr><td>Sessões e histórico</td><td><code>state/history.rs</code>, <code>SessionRecord</code></td><td><code>FileSessionStore</code></td></tr>
+      <tr><td>Execuções do agente</td><td>eventos do <code>superfik_core</code></td><td><code>superfik-native</code> (<code>ModelApi</code>)</td></tr>
+      <tr><td>Memória</td><td><code>memory::search</code></td><td><code>FileMemoryStore</code>, embeddings</td></tr>
+      <tr><td>Notas</td><td><code>superfik_core::note</code>, <code>state/notes.rs</code></td><td><code>FileNoteStore</code>, MCP de notas</td></tr>
+      <tr><td>Cards de navegador</td><td><code>state::browser</code>, <code>autofill</code></td><td><code>BrowserHost</code> (CEF)</td></tr>
+      <tr><td>Rotinas</td><td><code>superfik_core::routine</code></td><td>relógio de rotinas, worktrees</td></tr>
+      <tr><td>Canais</td><td><code>superfik_core::channel</code></td><td><code>superfik-channels</code></td></tr>
+      <tr><td>Voz</td><td><code>state/voice.rs</code>, <code>wake</code></td><td><code>VoiceDevice</code> (sherpa-onnx)</td></tr>
+      <tr><td>Som e háptica</td><td><code>state::sound</code>, <code>Soundboard</code></td><td><code>Player</code>, <code>Actuator</code></td></tr>
+      <tr><td>Atualizações</td><td><code>state/update.rs</code>, <code>offer</code></td><td><code>Updater</code>, <code>Installer</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <footer>Detalhes: <code>docs/architecture.md</code> · decisões: <code>docs/decisions.md</code> · plataformas: <code>docs/platforms.md</code> · design: <code>docs/design-system.md</code></footer>
+</main>
+</body>
+</html>

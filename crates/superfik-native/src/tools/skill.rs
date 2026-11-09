@@ -1,0 +1,261 @@
+//! Skills: `SKILL.md` instructions the agent loads by name with the `Skill`
+//! tool. Found where coding agents keep them: the project's
+//! (`.superfik/skills`, `.claude/skills`), the user's (`~/.superfik/skills`,
+//! `~/.claude` and its plugins) and the session's installed plugins
+//! (`<plugin>:<name>`). On a clash of names the first found wins.
+
+use std::path::{Path, PathBuf};
+
+use serde_json::{Value, json};
+use superfik_core::PromptRequest;
+use superfik_plugins::ClaudeHome;
+use superfik_plugins::skills::parse_frontmatter;
+
+use super::{Access, Outcome, Tool, Workspace, required};
+use crate::model::ToolSpec;
+
+pub const SKILL_TOOL: &str = "Skill";
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct FoundSkill {
+    pub name: String,
+    pub description: String,
+    pub file: PathBuf,
+    #[serde(default = "invocation_enabled")]
+    pub model_invocation: bool,
+}
+
+fn invocation_enabled() -> bool {
+    true
+}
+pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill> {
+    let cwd = &request.cwd;
+    let mut sources: Vec<(PathBuf, Option<String>)> = Vec::new();
+    for directory in cwd.ancestors() {
+        sources.extend([(directory.join(".superfik/skills"), None), (directory.join(".claude/skills"), None)]);
+    }
+    if let Some(home) = home {
+        sources.push((home.join(".superfik/skills"), None));
+        let claude = ClaudeHome::new(home.join(".claude"));
+        sources.extend(claude.skill_sources(cwd).into_iter().map(|source| (source.dir, source.namespace)));
+    }
+    for dir in request.plugins.iter().flat_map(|plugins| &plugins.plugin_dirs) {
+        sources.push((dir.join("skills"), Some(plugin_name(dir))));
+    }
+    if let Some(builtin) = home.and_then(super::builtin_skills::dir) {
+        sources.push((builtin, None));
+    }
+    let mut found: Vec<FoundSkill> = Vec::new();
+    for (dir, namespace) in sources {
+        for skill in scan(&dir, namespace.as_deref())
+            .into_iter()
+            .chain(scan_commands(&dir.with_file_name("commands"), namespace.as_deref()))
+        {
+            let disabled = request.disabled_skills.contains(&skill.name);
+            if !disabled && !found.iter().any(|known| known.name == skill.name) {
+                found.push(skill);
+            }
+        }
+    }
+    found
+}
+
+pub(crate) fn plugin_name(dir: &Path) -> String {
+    std::fs::read_to_string(dir.join(".claude-plugin/plugin.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .and_then(|manifest| manifest["name"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| dir.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default())
+}
+
+fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut skills: Vec<FoundSkill> = entries
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| {
+            let file = std::fs::read_dir(entry.path()).ok()?.flatten().map(|e| e.path()).find(|path| {
+                path.is_file() && path.file_name().is_some_and(|name| name.eq_ignore_ascii_case("skill.md"))
+            })?;
+            let text = std::fs::read_to_string(&file).ok()?;
+            let (front, body) = parse_frontmatter(&text);
+            let folder = entry.file_name().to_string_lossy().into_owned();
+            let bare = front.get("name").unwrap_or(&folder).trim().to_owned();
+            let description = front.get("description").map(str::to_owned).unwrap_or_else(|| {
+                body.lines().find(|l| !l.trim().is_empty() && !l.starts_with('#')).unwrap_or("").to_owned()
+            });
+            let name = match namespace {
+                Some(namespace) => format!("{namespace}:{bare}"),
+                None => bare,
+            };
+            let model_invocation = front.get("disable-model-invocation").is_none_or(|v| v != "true");
+            Some(FoundSkill { name, description: description.trim().to_owned(), file, model_invocation })
+        })
+        .collect();
+    skills.sort_by(|a, b| a.name.cmp(&b.name));
+    skills
+}
+
+pub fn listing(skills: &[FoundSkill]) -> String {
+    skills
+        .iter()
+        .filter(|skill| skill.model_invocation)
+        .map(|skill| format!("- {}: {}", skill.name, skill.description))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SkillTool {
+    pub skills: Vec<FoundSkill>,
+}
+
+impl Tool for SkillTool {
+    fn spec(&self) -> ToolSpec {
+        ToolSpec {
+            name: SKILL_TOOL.to_owned(),
+            description: "Loads a skill's instructions by its exact name from the list of available skills. When a \
+                          skill covers the task, call this first and follow what it returns."
+                .to_owned(),
+            schema: json!({
+                "type": "object",
+                "properties": {
+                    "skill": { "type": "string", "description": "The skill's name, without a leading slash." },
+                    "args": { "type": "string", "description": "Optional arguments for the skill." },
+                },
+                "required": ["skill"],
+            }),
+        }
+    }
+
+    fn access(&self) -> Access {
+        Access::Reads
+    }
+
+    fn summary(&self, input: &Value) -> String {
+        input["skill"].as_str().unwrap_or_default().trim_start_matches('/').to_owned()
+    }
+
+    fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
+        let name = match required(input, "skill") {
+            Ok(name) => name.trim_start_matches('/'),
+            Err(outcome) => return outcome,
+        };
+        let Some(skill) = self.skills.iter().find(|skill| skill.name == name) else {
+            return Outcome::error(format!("There is no skill named {name}. Use one of the available skills."));
+        };
+        if !skill.model_invocation {
+            return Outcome::error(format!("Skill {name} requires explicit user invocation."));
+        }
+        load(skill, input["args"].as_str().unwrap_or_default(), workspace)
+    }
+}
+
+fn load(skill: &FoundSkill, args: &str, workspace: &Workspace) -> Outcome {
+    let name = &skill.name;
+    let read = if let Some(worker) = &workspace.worker {
+        crate::worker::read_text(worker, &skill.file, workspace)
+    } else {
+        std::fs::read_to_string(&skill.file).map_err(|e| e.to_string())
+    };
+    let Ok(text) = read else {
+        return Outcome::error(format!("The skill {name} could not be read."));
+    };
+    let (_, body) = parse_frontmatter(&text);
+    let base = skill.file.parent().map(|dir| dir.display().to_string()).unwrap_or_default();
+    let mut out =
+        format!("Skill {name} (base directory for its files: {base})\n\n{}", body.trim().replace("$ARGUMENTS", args));
+    if !args.trim().is_empty() {
+        out.push_str(&format!("\n\nArguments: {args}"));
+    }
+    Outcome::ok(out)
+}
+pub fn expand_initial(initial: &str, skills: &[FoundSkill], workspace: &Workspace) -> Result<String, String> {
+    let initial = initial.trim();
+    let Some(command) = initial.strip_prefix('/') else { return Ok(initial.into()) };
+    let (name, args) = command.split_once(char::is_whitespace).unwrap_or((command, ""));
+    let Some(skill) = skills.iter().find(|skill| skill.name == name) else {
+        return Err(format!("Initial command /{name} is not an available skill or custom command"));
+    };
+    let loaded = load(skill, args.trim(), workspace);
+    if loaded.is_error { Err(loaded.content) } else { Ok(loaded.content) }
+}
+fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
+    let mut found = Vec::new();
+    for entry in ignore::WalkBuilder::new(dir).hidden(false).max_depth(Some(8)).build().filter_map(Result::ok) {
+        if !entry.file_type().is_some_and(|t| t.is_file()) || entry.path().extension().is_none_or(|ext| ext != "md") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(entry.path()) else { continue };
+        let (front, body) = parse_frontmatter(&text);
+        let Ok(relative) = entry.path().strip_prefix(dir) else { continue };
+        let bare = relative
+            .with_extension("")
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(":");
+        let name = namespace.map_or_else(|| bare.clone(), |prefix| format!("{prefix}:{bare}"));
+        let description = front
+            .get("description")
+            .map(str::to_owned)
+            .unwrap_or_else(|| body.lines().next().unwrap_or_default().into());
+        found.push(FoundSkill {
+            name,
+            description,
+            file: entry.path().into(),
+            model_invocation: front.get("disable-model-invocation").is_none_or(|value| value != "true"),
+        });
+    }
+    found.sort_by(|a, b| a.name.cmp(&b.name));
+    found
+}
+
+#[cfg(test)]
+mod tests {
+    use superfik_core::{EngineKind, ModelOption, PluginBrief};
+
+    use super::*;
+
+    fn skill(dir: &Path, name: &str, description: &str) {
+        std::fs::create_dir_all(dir.join(name)).expect("dir");
+        let text = format!("---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n\nDo the {name} thing.\n");
+        std::fs::write(dir.join(name).join("SKILL.md"), text).expect("write");
+    }
+
+    #[test]
+    fn finds_the_project_s_the_user_s_and_the_plugins_skills() {
+        let repo = tempfile::tempdir().expect("repo");
+        let home = tempfile::tempdir().expect("home");
+        let plugin = tempfile::tempdir().expect("plugin");
+        skill(&repo.path().join(".superfik/skills"), "release", "Cuts a release.");
+        skill(&repo.path().join(".claude/skills"), "release", "An older copy.");
+        skill(&home.path().join(".superfik/skills"), "morning", "The morning briefing.");
+        skill(&home.path().join(".superfik/skills"), "hidden", "Taken out of the session.");
+        std::fs::create_dir_all(plugin.path().join(".claude-plugin")).expect("dir");
+        std::fs::write(plugin.path().join(".claude-plugin/plugin.json"), r#"{"name":"superfik"}"#).expect("write");
+        skill(&plugin.path().join("skills"), "dataviz", "Charts.");
+        let model = ModelOption::new(EngineKind::Native, "m", "M");
+        let mut request = PromptRequest::plain(repo.path().to_path_buf(), "hi", model);
+        request.plugins =
+            Some(PluginBrief { plugin_dirs: vec![plugin.path().to_path_buf()], ..PluginBrief::default() });
+        request.disabled_skills = vec!["hidden".into()];
+        let found = discover(&request, Some(home.path()));
+        let names: Vec<(&str, &str)> = found.iter().map(|s| (s.name.as_str(), s.description.as_str())).collect();
+        assert_eq!(
+            &names[..3],
+            [("release", "Cuts a release."), ("morning", "The morning briefing."), ("superfik:dataviz", "Charts.")],
+            "the project's, the user's and the plugins' first"
+        );
+        assert!(names[3..].iter().any(|(name, _)| *name == "code-review"), "then Superfik's own");
+        assert_eq!(listing(&found[..1]), "- release: Cuts a release.");
+
+        let tool = SkillTool { skills: found };
+        let loaded = tool.run(&json!({ "skill": "/superfik:dataviz", "args": "bar chart" }), &Workspace::new("/"));
+        assert!(!loaded.is_error);
+        assert!(loaded.content.starts_with("Skill superfik:dataviz (base directory for its files: "));
+        assert!(loaded.content.contains("Do the dataviz thing.") && loaded.content.ends_with("Arguments: bar chart"));
+        assert!(!loaded.content.contains("description:"), "the frontmatter stays behind");
+        assert!(tool.run(&json!({ "skill": "hidden" }), &Workspace::new("/")).is_error);
+    }
+}

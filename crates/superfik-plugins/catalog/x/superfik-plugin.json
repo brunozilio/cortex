@@ -1,0 +1,19 @@
+{
+  "id": "x",
+  "name": "X",
+  "version": "1.0.0",
+  "description": "Answer mentions and direct messages on an X account.",
+  "icon": "x",
+  "category": "productivity",
+  "accounts": "many",
+  "auth": {
+    "kind": "api_key",
+    "fields": [
+      { "key": "api_key", "label": "API key", "placeholder": "Developer portal › Keys and tokens" },
+      { "key": "api_secret", "label": "API key secret", "placeholder": "Also signs webhook calls" },
+      { "key": "access_token", "label": "Access token", "placeholder": "With read, write and direct messages" },
+      { "key": "access_token_secret", "label": "Access token secret", "placeholder": "" }
+    ]
+  },
+  "channel": "x"
+}

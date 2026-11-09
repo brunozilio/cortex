@@ -1,0 +1,222 @@
+//! Sessions: lost, measured, compacted, scoped to owner and directory,
+//! imported from legacy transcripts, and a worktree kept across restarts.
+
+use std::sync::{Arc, Mutex};
+
+use serde_json::json;
+use superfik_core::{EngineEvent, EngineProblem, PromptRequest};
+use superfik_native::NativeEngine;
+use superfik_native::model::scripted::ScriptedModel;
+use superfik_native::sessions::InMemorySessions;
+use superfik_native::transcript::{Block, Message};
+
+use crate::{Source, finish, model, start};
+
+#[test]
+fn a_lost_session_is_diagnosed() {
+    let dir = tempfile::tempdir().expect("dir");
+    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(InMemorySessions::default()));
+    let mut request = PromptRequest::plain(dir.path().into(), "hi", model());
+    request.resume = Some(superfik_core::SessionId("gone".into()));
+    let events = finish(&start(&engine, &request));
+    assert_eq!(events.first(), Some(&EngineEvent::Diagnosed(EngineProblem::SessionNotFound)));
+}
+
+#[test]
+fn measures_and_compacts_a_session() {
+    let dir = tempfile::tempdir().expect("dir");
+    let talk = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hello there.".into())])]));
+    let summary = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("They said hi.".into())])]));
+    let engine = NativeEngine::new(
+        Arc::new(Source(Mutex::new(vec![Arc::clone(&talk), Arc::clone(&summary)]))),
+        Arc::new(InMemorySessions::default()),
+    );
+    let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "hi", model())));
+    let Some(EngineEvent::SessionStarted(session)) = events.first().cloned() else { panic!("{events:?}") };
+
+    let mut measure = PromptRequest::plain(dir.path().into(), "", model());
+    measure.resume = Some(session.clone());
+    measure.command = Some(superfik_core::SessionCommand::MeasureContext);
+    let events = finish(&start(&engine, &measure));
+    let usage =
+        events.iter().find_map(|e| if let EngineEvent::ContextMeasured(u) = e { Some(u.clone()) } else { None });
+    assert!(usage.is_some_and(|u| u.used > 0 && u.window > u.used), "{events:?}");
+    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })));
+
+    let mut compact = measure.clone();
+    compact.command = Some(superfik_core::SessionCommand::Compact);
+    let events = finish(&start(&engine, &compact));
+    assert!(events.iter().any(|e| matches!(e, EngineEvent::Compacted(_))), "{events:?}");
+    assert!(summary.asked()[0].tools.is_empty(), "summarising calls no tools");
+
+    let fresh = PromptRequest {
+        command: Some(superfik_core::SessionCommand::MeasureContext),
+        ..PromptRequest::plain(dir.path().into(), "", model())
+    };
+    assert!(matches!(finish(&start(&engine, &fresh)).last(), Some(EngineEvent::Failed(_))), "no session to measure");
+}
+
+#[test]
+fn sessions_are_bound_to_owner_and_directory_and_owner_cannot_come_from_wire() {
+    use superfik_core::{OrgId, Principal, UserId};
+    use superfik_native::sessions::Sessions;
+    let store = InMemorySessions::default();
+    let dir = tempfile::tempdir().expect("valid test fixture");
+    let mut request = PromptRequest::plain(dir.path().into(), "hello", model());
+    request.credentials.owner = Some(Principal::member(UserId::new(), OrgId::new()));
+    let id = superfik_core::SessionId("private-session".into());
+    store.save_for(&request, &id, &[Message::user("private")]).expect("valid test fixture");
+    assert!(store.load_for(&request, &id).is_some());
+    let mut other = request.clone();
+    other.credentials.owner = Some(Principal::member(UserId::new(), OrgId::new()));
+    assert!(store.load_for(&other, &id).is_none());
+    let mut other = request.clone();
+    other.cwd = dir.path().join("another-project");
+    assert!(store.load_for(&other, &id).is_none());
+    let serialized = serde_json::to_value(&request).expect("valid test fixture");
+    assert!(serialized.get("credentials").is_none());
+    let restored: PromptRequest = serde_json::from_value(serialized).expect("valid test fixture");
+    assert!(restored.credentials.owner.is_none());
+}
+#[test]
+fn imports_only_the_selected_historical_branch_with_tool_results() {
+    let text=[
+        json!({"uuid":"u","parentUuid":null,"type":"user","message":{"content":"original request"}}),
+        json!({"uuid":"a","parentUuid":"u","type":"assistant","message":{"content":[{"type":"text","text":"discarded branch"}]}}),
+        json!({"uuid":"b","parentUuid":"u","type":"assistant","message":{"content":[{"type":"tool_use","id":"read","name":"Read","input":{"file_path":"a"}}]}}),
+        json!({"uuid":"r","parentUuid":"b","type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"read","content":"file"}]}}),
+        json!({"uuid":"c","parentUuid":"r","type":"assistant","message":{"content":[{"type":"text","text":"selected branch"}]}}),
+    ].iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+    let history = superfik_native::sessions::import_jsonl(&text).expect("valid test fixture");
+    assert_eq!(history.len(), 4);
+    assert!(!history.iter().any(|m| m.text().contains("discarded")));
+    assert!(matches!(&history[2].blocks[0],Block::ToolResult {id,content,..} if id=="read" && content=="file"));
+}
+
+#[test]
+fn corrupt_saved_history_fails_without_diagnosing_it_as_a_missing_session() {
+    use superfik_native::sessions::{FileSessions, Sessions};
+    let dir = tempfile::tempdir().expect("valid test fixture");
+    let store = FileSessions::new(dir.path());
+    let request = PromptRequest::plain(dir.path().into(), "hello", model());
+    let id = superfik_core::SessionId("legacy-id".into());
+    std::fs::write(dir.path().join("legacy-id.json"), "{broken").expect("valid test fixture");
+    assert!(store.load_for_checked(&request, &id).is_err());
+    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(store));
+    let events = finish(&start(&engine, &PromptRequest { resume: Some(id), ..request }));
+    assert!(matches!(events.last(),Some(EngineEvent::Failed(message)) if message.contains("restore")));
+    assert!(!events.contains(&EngineEvent::Diagnosed(EngineProblem::SessionNotFound)));
+}
+
+#[test]
+fn a_main_worktree_and_its_uncommitted_files_survive_resume_after_engine_restart() {
+    let dir = tempfile::tempdir().expect("dir");
+    let git = |args: &[&str]| {
+        assert!(
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(dir.path())
+                .args(args)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .expect("git")
+                .success()
+        );
+    };
+    git(&["init", "-b", "main"]);
+    let root = dir.path().join(".superfik");
+    std::fs::create_dir_all(root.join("agents")).expect("agents");
+    std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer"}"#).expect("settings");
+    std::fs::write(root.join("agents/reviewer.md"), "---\nname: reviewer\nisolation: worktree\n---\nReview.")
+        .expect("agent");
+    git(&["add", ".superfik"]);
+    git(&["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "base"]);
+    let first = Arc::new(ScriptedModel::new([
+        ScriptedModel::reply(vec![Block::ToolUse {
+            id: "write".into(),
+            name: "Write".into(),
+            input: json!({"file_path":"work.txt","content":"Persistent work"}),
+        }]),
+        ScriptedModel::reply(vec![Block::Text("Created".into())]),
+    ]));
+    let store = dir.path().join("sessions");
+    let engine = NativeEngine::new(
+        Arc::new(Source(Mutex::new(vec![first.clone()]))),
+        Arc::new(superfik_native::sessions::FileSessions::new(&store)),
+    );
+    let mut request = PromptRequest::plain(dir.path().into(), "Create work", model());
+    request.permission = superfik_core::PermissionMode::Bypass;
+    request.safety_check = false;
+    let events = finish(&start(&engine, &request));
+    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+    let session = events
+        .iter()
+        .find_map(|event| if let EngineEvent::SessionStarted(id) = event { Some(id.clone()) } else { None })
+        .expect("session");
+    drop(engine);
+    let path = std::fs::read_dir(root.join("worktrees")).expect("worktrees").next().expect("one").expect("path").path();
+    assert_eq!(std::fs::read_to_string(path.join("work.txt")).expect("work"), "Persistent work");
+    assert!(!dir.path().join("work.txt").exists());
+    let second = Arc::new(ScriptedModel::new([
+        ScriptedModel::reply(vec![Block::ToolUse {
+            id: "read".into(),
+            name: "Read".into(),
+            input: json!({"file_path":"work.txt"}),
+        }]),
+        ScriptedModel::reply(vec![Block::Text("Resumed".into())]),
+    ]));
+    use superfik_native::sessions::Sessions;
+    struct Store {
+        inner: superfik_native::sessions::FileSessions,
+        fail: Arc<std::sync::atomic::AtomicBool>,
+    }
+    impl Sessions for Store {
+        fn load(&self, id: &superfik_core::SessionId) -> Option<Vec<Message>> {
+            self.inner.load(id)
+        }
+        fn save(&self, id: &superfik_core::SessionId, history: &[Message]) -> Result<(), String> {
+            if self.fail.load(std::sync::atomic::Ordering::Relaxed) {
+                Err("fixture store is read-only".into())
+            } else {
+                self.inner.save(id, history)
+            }
+        }
+        fn load_worktree(
+            &self,
+            r: &PromptRequest,
+            id: &superfik_core::SessionId,
+        ) -> Result<Option<superfik_native::agent_runtime::WorktreeState>, String> {
+            self.inner.load_worktree(r, id)
+        }
+        fn save_worktree(
+            &self,
+            r: &PromptRequest,
+            id: &superfik_core::SessionId,
+            state: &superfik_native::agent_runtime::WorktreeState,
+        ) -> Result<(), String> {
+            if self.fail.load(std::sync::atomic::Ordering::Relaxed) {
+                Err("fixture store is read-only".into())
+            } else {
+                self.inner.save_worktree(r, id, state)
+            }
+        }
+    }
+    let fail = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let engine = NativeEngine::new(
+        Arc::new(Source(Mutex::new(vec![second.clone()]))),
+        Arc::new(Store { inner: superfik_native::sessions::FileSessions::new(&store), fail: fail.clone() }),
+    );
+    request.resume = Some(session);
+    let failed = finish(&start(&engine, &request));
+    assert!(matches!(failed.last(), Some(EngineEvent::Failed { .. })), "{failed:?}");
+    assert!(path.join("work.txt").exists(), "persistence failure must never remove the existing checkout");
+    assert!(second.asked().is_empty());
+    fail.store(false, std::sync::atomic::Ordering::Relaxed);
+    let events = finish(&start(&engine, &request));
+    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+    let worktree = path.file_name().and_then(|name| name.to_str()).expect("worktree name");
+    assert!(second.asked()[0].system.contains(worktree));
+    assert!(format!("{:?}", second.asked()[1].messages).contains("Persistent work"));
+    assert_eq!(std::fs::read_dir(root.join("worktrees")).expect("worktrees").count(), 1);
+}

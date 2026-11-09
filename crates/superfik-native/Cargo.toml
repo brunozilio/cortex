@@ -1,0 +1,41 @@
+[package]
+name = "superfik-native"
+description = "Superfik's native agent engine: the agent loop, its tools and the model providers' APIs, in process."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[dependencies]
+superfik-core.workspace = true
+superfik-private-file.workspace = true
+superfik-engine.workspace = true
+superfik-process.workspace = true
+superfik-plugins.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde-saphyr = { version = "2.1", default-features = false, features = ["deserialize"] }
+thiserror.workspace = true
+tracing.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tokio = { version = "1", features = ["rt", "net", "time", "macros"] }
+ureq = { version = "3", features = ["json"] }
+ignore = "0.4"
+globset = "0.4"
+regex = "1"
+base64 = "0.22"
+sha2 = "0.10"
+jsonschema = { version = "0.33", default-features = false }
+chrono = { version = "0.4", features = ["serde"] }
+url = "2"
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

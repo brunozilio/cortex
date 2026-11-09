@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8"><title>Proxy acceptance</title><script>
+(async () => {
+  const worker = new Worker(URL.createObjectURL(new Blob([
+    `fetch('${location.origin}/worker').then(r=>r.json()).then(value=>postMessage(value)).catch(e=>postMessage({error:String(e)}));`
+  ], {type:'text/javascript'})));
+  const response = await new Promise((resolve, reject) => {
+    worker.onmessage = e => resolve(e.data);
+    worker.onerror = e => reject(new Error(e.message));
+    setTimeout(() => reject(new Error('worker request timed out')), 5000);
+  });
+  const pc = new RTCPeerConnection({iceServers:[{urls:'stun:127.0.0.1:__STUN_PORT__'}]});
+  const candidates = [];
+  pc.onicecandidate = e => { if (e.candidate) candidates.push(e.candidate.candidate); };
+  pc.createDataChannel('test');
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise(resolve => {
+    pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
+    setTimeout(resolve, 1500);
+  });
+  pc.close();
+  window.proxyResult = {via:__VIA__, worker:response.via, candidates};
+})().catch(error => window.proxyResult = {error:String(error)});
+</script>

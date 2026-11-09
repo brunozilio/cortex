@@ -1,0 +1,23 @@
+{
+  "id": "intercom",
+  "name": "Intercom",
+  "version": "1.0.0",
+  "description": "Read customer conversations, contacts and tickets.",
+  "icon": "intercom",
+  "category": "productivity",
+  "accounts": "many",
+  "auth": {
+    "kind": "oauth"
+  },
+  "mcp": [
+    {
+      "transport": "http",
+      "name": "intercom",
+      "url": "https://mcp.intercom.com/mcp",
+      "headers": {
+        "Authorization": "Bearer {{secret.access_token}}"
+      }
+    }
+  ],
+  "instructions": "Intercom workspace {{account}} (US-hosted workspaces); use the mcp__{{server}}__* tools."
+}

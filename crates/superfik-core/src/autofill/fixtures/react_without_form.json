@@ -1,0 +1,5 @@
+[
+  {"ref": 1, "type": "search", "placeholder": "Pesquisar", "visible": true},
+  {"ref": 2, "type": "text", "placeholder": "Seu e-mail", "visible": true},
+  {"ref": 3, "type": "password", "placeholder": "Sua senha", "visible": true}
+]

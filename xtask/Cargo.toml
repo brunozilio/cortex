@@ -1,0 +1,24 @@
+[package]
+name = "xtask"
+description = "Developer tasks for Superfik (asset generation, repo lint, update signing)."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+image = { workspace = true, features = ["ico"] }
+superfik-update.workspace = true
+superfik-private-file.workspace = true
+serde_json.workspace = true
+ed25519-dalek = "2"
+getrandom = "0.3"
+hex = "0.4"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+superfik-browser.workspace = true
+
+[lints]
+workspace = true

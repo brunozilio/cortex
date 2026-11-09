@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Superfik</title>
+<link rel="stylesheet" href="/sign-in.css">
+<script src="/sign-in.js" defer></script>
+</head>
+<body>
+<form id="form">
+  <h1 id="title">Sign in</h1>
+  <p id="caption">With the username and password of this server.</p>
+  <label>Username <input name="name" autocomplete="username" required autofocus></label>
+  <label id="code-row" hidden>First-access code <input name="code" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX"></label>
+  <label><span id="password-label">Password</span> <input name="password" type="password" autocomplete="current-password" required></label>
+  <div class="error" id="error"></div>
+  <button type="submit" id="submit">Sign in</button>
+  <a id="toggle">First access? Use the code you were given</a>
+</form>
+</body>
+</html>

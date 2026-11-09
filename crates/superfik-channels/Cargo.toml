@@ -1,0 +1,47 @@
+[package]
+name = "superfik-channels"
+description = "Channels agents talk to people through (WhatsApp, e-mail), behind a Channel trait."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[features]
+default = ["whatsapp", "email", "official"]
+official = ["dep:ureq", "dep:hmac", "dep:sha2", "dep:sha1", "dep:hex", "dep:base64", "dep:serde_json"]
+email = ["dep:imap", "dep:native-tls", "dep:lettre", "dep:mail-parser"]
+whatsapp = ["dep:whatsapp-rust", "dep:tokio"]
+
+[dependencies]
+superfik-core.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+whatsapp-rust = { version = "0.7", optional = true, default-features = false, features = [
+    "sqlite-storage",
+    "tokio-transport",
+    "tokio-runtime",
+    "tokio-native",
+    "ureq-client",
+] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"], optional = true }
+imap = { version = "2.4", optional = true }
+native-tls = { version = "0.2", optional = true }
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "native-tls", "hostname"], optional = true }
+mail-parser = { version = "1", optional = true }
+ureq = { version = "3", optional = true }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+sha1 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
+base64 = { version = "0.22", optional = true }
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+qrcode = { version = "0.14", default-features = false }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "link"
+required-features = ["whatsapp"]

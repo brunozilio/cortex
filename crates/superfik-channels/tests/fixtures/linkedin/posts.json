@@ -1,0 +1,19 @@
+{
+  "paging": { "start": 0, "count": 10, "links": [] },
+  "elements": [
+    {
+      "id": "urn:li:share:7250000000000000000",
+      "author": "urn:li:organization:2414183",
+      "commentary": "Superfik 1.0 is out.",
+      "lifecycleState": "PUBLISHED",
+      "createdAt": 1793010000000
+    },
+    {
+      "id": "urn:li:ugcPost:7240000000000000000",
+      "author": "urn:li:organization:2414183",
+      "commentary": "We're hiring.",
+      "lifecycleState": "PUBLISHED",
+      "createdAt": 1792000000000
+    }
+  ]
+}

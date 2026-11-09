@@ -1,0 +1,13 @@
+:root { color-scheme: light dark; --bg: #f6f5f3; --card: #fff; --ink: #1d1c1a; --muted: #6f6c66; --line: #e3e0da; --accent: #1d1c1a; --on-accent: #fff; --bad: #b3261e; }
+@media (prefers-color-scheme: dark) { :root { --bg: #151513; --card: #1f1e1c; --ink: #f1efea; --muted: #a29e96; --line: #33312d; --accent: #f1efea; --on-accent: #151513; --bad: #f2b8b5; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--ink); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; padding: 16px; }
+form { width: 100%; max-width: 360px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px; display: grid; gap: 14px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+p { margin: 0; color: var(--muted); }
+label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+input { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+button { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 11px; background: var(--accent); color: var(--on-accent); cursor: pointer; }
+a { color: var(--muted); font-size: 13px; text-align: center; cursor: pointer; }
+.error { color: var(--bad); min-height: 1.2em; font-size: 13px; }
+[hidden] { display: none; }

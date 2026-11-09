@@ -1,0 +1,23 @@
+{
+  "id": "linear",
+  "name": "Linear",
+  "version": "1.0.0",
+  "description": "Track and update issues and projects.",
+  "icon": "linear",
+  "category": "productivity",
+  "accounts": "many",
+  "auth": {
+    "kind": "oauth"
+  },
+  "mcp": [
+    {
+      "transport": "http",
+      "name": "linear",
+      "url": "https://mcp.linear.app/mcp",
+      "headers": {
+        "Authorization": "Bearer {{secret.access_token}}"
+      }
+    }
+  ],
+  "instructions": "Linear workspace {{account}}; use the mcp__{{server}}__* tools."
+}

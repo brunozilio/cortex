@@ -1,0 +1,33 @@
+[package]
+name = "superfik-voice"
+description = "The voice agent: streaming speech recognition (NVIDIA Nemotron) and speech (Kokoro-82M), run on this computer; pure rules plus the device behind a feature."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+native = ["dep:sherpa-onnx", "dep:rodio", "dep:ureq", "dep:tar", "dep:bzip2", "dep:crossbeam-channel"]
+
+[dependencies]
+serde.workspace = true
+tracing.workspace = true
+sherpa-onnx = { version = "2.0.1", optional = true }
+rodio = { version = "0.23", default-features = false, features = ["playback", "recording"], optional = true }
+ureq = { version = "3", optional = true }
+tar = { version = "0.4", optional = true }
+bzip2 = { version = "0.6", optional = true }
+crossbeam-channel = { workspace = true, optional = true }
+
+[[example]]
+name = "talk"
+required-features = ["native"]
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

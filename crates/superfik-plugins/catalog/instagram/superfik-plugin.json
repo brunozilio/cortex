@@ -1,0 +1,19 @@
+{
+  "id": "instagram",
+  "name": "Instagram",
+  "version": "1.0.0",
+  "description": "Answer direct messages and comments on a professional Instagram account.",
+  "icon": "instagram",
+  "category": "productivity",
+  "accounts": "many",
+  "auth": {
+    "kind": "api_key",
+    "fields": [
+      { "key": "page_id", "label": "Facebook Page ID", "placeholder": "The Page the Instagram account is linked to" },
+      { "key": "page_access_token", "label": "Page access token", "placeholder": "With instagram_manage_messages and _comments" },
+      { "key": "app_secret", "label": "App secret", "placeholder": "Meta app › Settings › Basic" },
+      { "key": "verify_token", "label": "Verify token", "placeholder": "Any phrase; type it again in the app's webhook" }
+    ]
+  },
+  "channel": "instagram"
+}

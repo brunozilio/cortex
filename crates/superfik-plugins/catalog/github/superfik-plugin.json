@@ -1,0 +1,26 @@
+{
+  "id": "github",
+  "name": "GitHub",
+  "version": "1.0.0",
+  "description": "Repos, pull requests, issues and reviews.",
+  "icon": "github",
+  "category": "development",
+  "auth": {
+    "kind": "cli",
+    "program": "gh",
+    "args": [
+      "auth",
+      "token"
+    ]
+  },
+  "mcp": [
+    {
+      "transport": "http",
+      "name": "github",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer {{secret.token}}"
+      }
+    }
+  ]
+}
