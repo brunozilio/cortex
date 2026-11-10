@@ -36,7 +36,7 @@ superfik-server = { path = ".", features = ["testing"] }
 superfik-engine = { workspace = true, features = ["fake"] }
 superfik-channels.workspace = true
 http-body-util = "0.1"
-tokio-tungstenite = "0.29"
+tokio-tungstenite = "0.30"
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 tempfile.workspace = true
 
