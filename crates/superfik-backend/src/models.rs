@@ -1,11 +1,11 @@
 //! Local models through MLX on Apple silicon: one runtime, served to the
 //! native engine, its idle model let go in the background.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use superfik_mlx::{MlxRuntime, SystemClock, SystemLauncher};
+use superfik_mlx::{LocalModelError, MlxRuntime, SystemClock, SystemLauncher};
 
 const REAP_EVERY: Duration = Duration::from_secs(60);
 
@@ -15,12 +15,27 @@ pub(crate) struct LocalModels {
     pub folder: Option<PathBuf>,
 }
 
+const APPLE_SILICON: bool = cfg!(target_os = "macos") && cfg!(target_arch = "aarch64");
+
+/// Where downloaded MLX models live: `<local data>/models/mlx`, on Apple
+/// silicon only.
+pub fn local_models_folder() -> Result<PathBuf, LocalModelError> {
+    if !APPLE_SILICON {
+        return Err(LocalModelError::NeedsAppleSilicon);
+    }
+    let root = crate::local_data_dir().ok_or(LocalModelError::NoDataFolder)?;
+    Ok(models_in(&root))
+}
+
+fn models_in(root: &Path) -> PathBuf {
+    root.join("models").join("mlx")
+}
+
 pub(crate) fn system() -> LocalModels {
-    let apple_silicon = cfg!(target_os = "macos") && cfg!(target_arch = "aarch64");
-    let Some(root) = crate::local_data_dir().filter(|_| apple_silicon) else {
+    let Some(root) = crate::local_data_dir().filter(|_| APPLE_SILICON) else {
         return LocalModels::default();
     };
-    let folder = root.join("models").join("mlx");
+    let folder = models_in(&root);
     let launcher = Arc::new(SystemLauncher::new(&root.join("mlx")));
     let runtime = Arc::new(MlxRuntime::new(folder.clone(), launcher, Arc::new(SystemClock::default())));
     reap_while_alive(Arc::downgrade(&runtime));

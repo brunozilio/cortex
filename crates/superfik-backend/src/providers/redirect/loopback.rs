@@ -106,6 +106,13 @@ fn html(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
+/// The status a GET of `url` answers with, as a browser would see it.
+#[cfg(test)]
+fn status(url: String) -> Result<u16, String> {
+    let client = reqwest::blocking::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;
+    client.get(url).send().map(|r| r.status().as_u16()).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,19 +121,19 @@ mod tests {
     fn receives_the_code_for_the_right_state() {
         let loopback = Loopback::bind().expect("bind");
         let uri = loopback.redirect_uri();
-        let hit = std::thread::spawn(move || ureq::get(format!("{uri}?code=c-1&state=s-1")).call().map(|r| r.status()));
+        let hit = std::thread::spawn(move || status(format!("{uri}?code=c-1&state=s-1")));
         assert_eq!(loopback.wait("s-1"), Ok("c-1".to_owned()));
-        assert!(hit.join().expect("join").is_ok());
+        assert_eq!(hit.join().expect("join"), Ok(200));
     }
 
     #[test]
     fn the_whole_query_comes_back_with_the_code() {
         let loopback = Loopback::bind().expect("bind");
         let uri = loopback.redirect_uri();
-        let hit = std::thread::spawn(move || ureq::get(format!("{uri}?login_option=google&code=c&state=s")).call());
+        let hit = std::thread::spawn(move || status(format!("{uri}?login_option=google&code=c&state=s")));
         let (code, query) = loopback.wait_callback("s").expect("callback");
         assert_eq!((code.as_str(), query.as_str()), ("c", "login_option=google&code=c&state=s"));
-        assert!(hit.join().expect("join").is_ok());
+        assert_eq!(hit.join().expect("join"), Ok(200));
     }
 }
 
@@ -139,9 +146,9 @@ mod provider_tests {
         let listener = Loopback::bind_on(0, "/auth/callback", false).expect("bind");
         let redirect = listener.redirect_uri();
         let sender = std::thread::spawn(move || {
-            let wrong = ureq::get(format!("{redirect}extra?code=bad&state=s")).call();
-            assert!(wrong.is_err(), "a prefix match must not accept another path");
-            ureq::get(format!("{redirect}?code=good&state=s")).call().expect("callback");
+            let wrong = status(format!("{redirect}extra?code=bad&state=s"));
+            assert_eq!(wrong, Ok(404), "a prefix match must not accept another path");
+            assert_eq!(status(format!("{redirect}?code=good&state=s")), Ok(200), "callback");
         });
         assert_eq!(listener.wait("s"), Ok("good".into()));
         sender.join().expect("sender");
@@ -152,11 +159,9 @@ mod provider_tests {
         let listener = Loopback::bind().expect("bind");
         let redirect = listener.redirect_uri();
         let sender = std::thread::spawn(move || {
-            let stray = ureq::get(format!("{redirect}?code=evil&state=wrong")).call();
-            assert!(matches!(stray, Err(ureq::Error::StatusCode(400))), "{stray:?}");
-            let denied = ureq::get(format!("{redirect}?error=access_denied")).call();
-            assert!(matches!(denied, Err(ureq::Error::StatusCode(400))), "no state: not ours either");
-            ureq::get(format!("{redirect}?code=good&state=expected")).call().expect("callback");
+            assert_eq!(status(format!("{redirect}?code=evil&state=wrong")), Ok(400));
+            assert_eq!(status(format!("{redirect}?error=access_denied")), Ok(400), "no state: not ours either");
+            assert_eq!(status(format!("{redirect}?code=good&state=expected")), Ok(200), "callback");
         });
         assert_eq!(listener.wait("expected"), Ok("good".into()));
         sender.join().expect("sender");
@@ -166,10 +171,9 @@ mod provider_tests {
     fn an_error_for_this_sign_in_ends_it() {
         let listener = Loopback::bind().expect("bind");
         let redirect = listener.redirect_uri();
-        let sender =
-            std::thread::spawn(move || ureq::get(format!("{redirect}?error=access_denied&state=expected")).call());
+        let sender = std::thread::spawn(move || status(format!("{redirect}?error=access_denied&state=expected")));
         assert_eq!(listener.wait("expected"), Err("access_denied".into()));
-        sender.join().expect("sender").expect("HTTP reply");
+        assert_eq!(sender.join().expect("sender"), Ok(200), "HTTP reply");
     }
 
     #[test]

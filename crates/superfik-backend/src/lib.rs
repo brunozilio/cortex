@@ -38,3 +38,10 @@ pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
 pub use settings::SettingsStore;
 pub use superfik_protocol::{Backend, BackendError, Wake};
+
+/// Local MLX models pulled from Hugging Face and removed again, on this
+/// computer only (Apple silicon).
+pub mod local_models {
+    pub use crate::models::local_models_folder as folder;
+    pub use superfik_mlx::{HfHub, Hub, LocalModelError, PullProgress, Pulled, Removed, pull, remove};
+}

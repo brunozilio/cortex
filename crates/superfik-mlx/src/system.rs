@@ -104,12 +104,10 @@ impl Served for SystemServed {
     }
 
     fn is_ready(&mut self) -> bool {
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(1)))
-            .http_status_as_error(false)
-            .build()
-            .into();
-        agent.get(format!("{}/v1/models", self.base_url)).call().is_ok_and(|r| r.status() == 200)
+        let Ok(client) = reqwest::blocking::Client::builder().timeout(Duration::from_secs(1)).build() else {
+            return false;
+        };
+        client.get(format!("{}/v1/models", self.base_url)).send().is_ok_and(|r| r.status().as_u16() == 200)
     }
 
     fn is_running(&mut self) -> bool {

@@ -37,9 +37,19 @@ fn on_system() -> Option<PathBuf> {
 }
 
 fn fetch(url: &str) -> Result<Vec<u8>, String> {
-    let fail = |error: ureq::Error| format!("Could not download uv: {error}");
-    let mut response = ureq::get(url).call().map_err(fail)?;
-    response.body_mut().with_config().limit(MAX_ARCHIVE).read_to_vec().map_err(fail)
+    use std::io::Read;
+    let fail = |error: &dyn std::fmt::Display| format!("Could not download uv: {error}");
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| fail(&e))?;
+    let response = client.get(url).send().and_then(|r| r.error_for_status()).map_err(|e| fail(&e))?;
+    let mut archive = Vec::new();
+    response.take(MAX_ARCHIVE + 1).read_to_end(&mut archive).map_err(|e| fail(&e))?;
+    if archive.len() as u64 > MAX_ARCHIVE {
+        return Err(fail(&"the archive is too large"));
+    }
+    Ok(archive)
 }
 
 fn unpack(archive: &[u8], expected: &str, tools: &Path) -> Result<(), String> {

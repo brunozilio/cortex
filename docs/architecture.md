@@ -13,11 +13,11 @@ superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfi
 
 | Crate | Responsibility |
 |---|---|
-| `superfik-cli` | The `superfik` binary: a full-screen chat (ratatui) over the SDK, `-p` print mode, `login`, `models`. Presentation only. |
-| `superfik-sdk` | `Superfik::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings. |
+| `superfik-cli` | The `superfik` binary: a full-screen chat (ratatui) over the SDK, `-p` print mode, `login`, `models`, `pull`/`rm`. Presentation only. |
+| `superfik-sdk` | `Superfik::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings; `LocalModels` (pull/remove local MLX models). |
 | `superfik-core` | Domain model: requests, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
 | `superfik-native` | The `AgentEngine` boundary (`models`, `start`) and Superfik's own engine behind it (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
-| `superfik-mlx` | Local MLX models on Apple silicon: which are downloaded, and one `mlx_lm.server` started on demand. |
+| `superfik-mlx` | Local MLX models on Apple silicon: pulled from Hugging Face (`pull`/`remove` behind a `Hub`), which are downloaded, and one `mlx_lm.server` started on demand. |
 | `superfik-protocol` | Serialisable `ClientCommand` / `ServerEvent` in an `Envelope` carrying the `Principal`; the `Backend` trait. |
 | `superfik-backend` | `LocalBackend` (worker threads), `CommandHandler` and the daemon: runs, memory (+ its MCP tool), settings, model providers (and their browser sign-in: PKCE, loopback redirect), secrets, the host's `Extensions`. |
 | `superfik-providers` | LLM provider contracts (ADR 0016): credential config, OAuth shapes, request and catalog shapes. Pure. |
@@ -65,7 +65,14 @@ provider's key (`RunCredentials::model`, never serialized).
 
 Local models (`superfik_mlx`) live in
 `<local data>/models/mlx/<org>/<name>/` on Apple silicon; one
-`mlx_lm.server` runs at a time and stops when idle.
+`mlx_lm.server` runs at a time and stops when idle. `superfik pull` fetches
+only the files `mlx_lm` reads (config, tokenizer, chat template,
+safetensors) from Hugging Face (`HF_TOKEN` for gated repos) into a hidden
+`.<name>.partial` folder renamed into place when complete, so a cancelled
+pull is never listed; `superfik rm` deletes one. They run in the CLI's own
+process through the SDK's `LocalModels` (the backend re-exports
+`superfik_mlx` as `local_models`), not as backend commands: they touch only
+this computer's folder, which `ListModels` reads on every call.
 
 ## Memory
 

@@ -6,12 +6,16 @@ use std::path::Path;
 use std::time::Duration;
 
 mod models;
+mod pull;
 mod runtime;
 mod system;
 mod tethered;
 mod uv;
 
 pub use models::downloaded;
+pub use pull::{
+    DEFAULT_ORG, HfHub, Hub, LocalModelError, PullProgress, Pulled, RemoteFile, Removed, RepoId, pull, remove,
+};
 pub use runtime::{Endpoint, IDLE, MlxError, MlxRuntime, READY_WAIT};
 pub use system::{SystemClock, SystemLauncher};
 

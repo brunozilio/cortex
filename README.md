@@ -13,6 +13,9 @@ superfik login                             # API key, or Claude/ChatGPT/Copilot 
 superfik                                   # chat in the current project
 superfik -p "explain src/main.rs"          # one answer, printed
 superfik models                            # what the connected providers offer
+superfik pull Qwen3-8B-4bit                # a local MLX model (Apple silicon), from mlx-community
+superfik pull org/Some-Model-4bit          # any MLX model on Hugging Face (HF_TOKEN for gated ones)
+superfik rm Qwen3-8B-4bit                  # delete it again
 ```
 
 Every terminal shares one background daemon (local models, embeddings
@@ -67,7 +70,7 @@ rest; see `crates/superfik-sdk/src/lib.rs`.
 | `superfik-backend` | Command handler and daemon: runs, memory, settings, providers, secrets. |
 | `superfik-providers` | LLM providers (Anthropic, OpenAI, Claude, ChatGPT and GitHub Copilot subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
 | `superfik-sdk` | The SDK: sessions and runs, agents, skills, commands, memory, in-process MCP tools, MCP over HTTP/stdio. |
-| `superfik-cli` | The `superfik` binary: terminal chat (ratatui), `-p`, `login`, `models`. |
+| `superfik-cli` | The `superfik` binary: terminal chat (ratatui), `-p`, `login`, `models`, `pull`/`rm`. |
 | `superfik-process`, `-private-file` | Small IO helpers. |
 
 Architecture: [docs/architecture.md](docs/architecture.md). Decisions:

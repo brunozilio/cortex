@@ -4,12 +4,14 @@
 //! - `superfik -p <prompt>` answers once and prints the reply.
 //! - `superfik login` / `logout` connect or forget an LLM provider.
 //! - `superfik models` lists what the connected providers offer.
+//! - `superfik pull <model>` / `rm <model>` download or delete a local MLX model.
 //! - `superfik mcp …` lists, adds, removes and approves MCP servers.
 //!
 //! Every terminal talks to one background daemon per computer (Unix), so
 //! local models, embeddings and memory load once.
 
 mod daemon;
+mod local_models;
 mod login;
 mod mcp;
 mod print;
@@ -53,6 +55,11 @@ enum Action {
     Logout,
     /// List the models the connected providers offer.
     Models,
+    /// Download a local MLX model from Hugging Face (Apple silicon), e.g.
+    /// `mlx-community/Qwen3-8B-4bit`; a bare name means mlx-community's.
+    Pull { model: String },
+    /// Delete a downloaded local MLX model.
+    Rm { model: String },
     /// The MCP servers a session here can use: list, add, remove, approve.
     Mcp {
         #[command(subcommand)]
@@ -106,6 +113,12 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         }
         return Ok(ExitCode::SUCCESS);
     }
+    // Local models are this computer's files: no daemon needed.
+    match &cli.command {
+        Some(Action::Pull { model }) => return local_models::pull(model).map(|()| ExitCode::SUCCESS),
+        Some(Action::Rm { model }) => return local_models::remove(model).map(|()| ExitCode::SUCCESS),
+        _ => {}
+    }
     let (superfik, stale) = daemon::connect()?;
     let prompt = (!cli.prompt.is_empty()).then(|| cli.prompt.join(" "));
     match cli.command {
@@ -121,6 +134,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             mcp::run(&superfik, &cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
         }
         Some(Action::Daemon { .. }) => Err("the daemon needs macOS or Linux".into()),
+        Some(Action::Pull { .. } | Action::Rm { .. }) => Ok(ExitCode::SUCCESS),
         None if cli.print => {
             if let Some(stale) = &stale {
                 eprintln!("superfik: {stale}");

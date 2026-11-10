@@ -29,6 +29,7 @@ mod client;
 #[cfg(unix)]
 pub mod daemon;
 mod extensions;
+mod local_models;
 mod mcp;
 mod mcp_servers;
 mod session;
@@ -41,6 +42,7 @@ use superfik_core::ModelOption;
 
 pub use self::account::ProjectMemory;
 pub use self::extensions::{Agent, Command, Skill};
+pub use self::local_models::{LocalModelError, LocalModels, PullProgress, Pulled, Removed};
 pub use self::mcp::{McpConnection, McpServer};
 pub use self::session::{Run, RunControl, Session};
 use client::Client;

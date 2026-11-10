@@ -26,6 +26,11 @@ Where models come from: an API key or a subscription (Anthropic, OpenAI,
 Claude, ChatGPT, GitHub Copilot, Kiro), or local MLX models.
 _Avoid_: Plugin (for providers)
 
+**Local model**:
+An open model run on this computer by MLX (Apple silicon), named by its
+Hugging Face id (`mlx-community/Qwen3-8B-4bit`). `superfik pull` downloads
+it into `<local data>/models/mlx/<org>/<name>`, `superfik rm` deletes it.
+
 **Extensions**:
 What an SDK host adds to every run: folders of skills, commands and agents,
 and MCP servers (HTTP, stdio or in-process).
