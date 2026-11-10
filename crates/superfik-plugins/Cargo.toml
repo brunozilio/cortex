@@ -4,7 +4,6 @@ description = "Plugins: manifests, the curated catalog, installed plugins and th
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
-repository.workspace = true
 
 [dependencies]
 superfik-core.workspace = true
@@ -12,7 +11,6 @@ serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde_json.workspace = true
-uuid.workspace = true
 base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
 url = "2"

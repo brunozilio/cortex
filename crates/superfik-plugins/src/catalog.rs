@@ -20,30 +20,8 @@ macro_rules! entry {
     };
 }
 
-const ENTRIES: &[Entry] = &[
-    entry!("openai"),
-    entry!("openai-subscription"),
-    entry!("claude-subscription"),
-    entry!("anthropic"),
-    entry!("whatsapp"),
-    entry!("whatsapp-business"),
-    entry!("instagram"),
-    entry!("x"),
-    entry!("linkedin"),
-    entry!("email"),
-    entry!("github"),
-    entry!("linear", "skills/linear-workflow/SKILL.md"),
-    entry!("notion"),
-    entry!("atlassian"),
-    entry!("intercom"),
-    entry!("sentry"),
-    entry!("stripe"),
-    entry!("postgres"),
-    entry!("context7"),
-    entry!("firecrawl"),
-    entry!("playwright"),
-    entry!("bitwarden"),
-];
+const ENTRIES: &[Entry] =
+    &[entry!("openai"), entry!("openai-subscription"), entry!("claude-subscription"), entry!("anthropic")];
 
 pub fn packages() -> Vec<PluginPackage> {
     ENTRIES
@@ -80,17 +58,5 @@ mod tests {
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), packages.len());
-        let linear = packages.iter().find(|p| p.id() == "linear").expect("linear");
-        assert_eq!(linear.skills()[0].name, "linear:linear-workflow");
-    }
-
-    #[test]
-    fn the_summary_says_which_plugins_are_vaults() {
-        let vault_of = |id: &str| {
-            let package = packages().into_iter().find(|p| p.id() == id).expect("in catalog");
-            package.summary(false).vault
-        };
-        assert_eq!(vault_of("bitwarden"), Some(superfik_core::VaultKind::Bitwarden));
-        assert_eq!(vault_of("linear"), None);
     }
 }

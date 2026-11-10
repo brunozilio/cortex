@@ -1,55 +1,34 @@
-<div align="center">
+# Superfik Lite
 
-<img src="docs/assets/icon.png" width="96" alt="">
+Internal. Superfik's agent engine without the desktop app: a terminal chat
+(CLI/TUI) for talking to a coding agent, and an SDK for building on top of it
+(agents, commands, skills, memory, in-process MCP tools, MCP over HTTP and
+stdio).
 
-# Superfik
+Status: cleanup done; the CLI and SDK crates come next.
 
-**A canvas for working with AI coding agents.**
+## Layout
 
-[Download](https://github.com/brunozilio/superfik/releases/latest) · [Run a server for your team](#for-teams) · [Contributing](CONTRIBUTING.md)
+| Crate | What it is |
+|---|---|
+| `superfik-core` | Domain types: requests, turns, engine events, memory, plugins, `Principal`. Pure. |
+| `superfik-engine` | `AgentEngine` trait and registry. |
+| `superfik-native` | The agent loop, tools, permissions, hooks, sub-agents, MCP, sessions, compaction, provider APIs. |
+| `superfik-gateway` | Local MLX runtime and stream utilities. |
+| `superfik-protocol` | `ClientCommand` / `ServerEvent` in an `Envelope`. |
+| `superfik-backend` | Command handler: runs, memory, sessions, settings, plugins, providers. |
+| `superfik-workspace` | git and `gh` behind traits. |
+| `superfik-plugins` | Plugin manifests, skill/agent discovery (Claude Code layout), MCP config, provider contracts. |
+| `superfik-oauth`, `-keychain`, `-process`, `-private-file` | Small IO helpers. |
 
-</div>
+Architecture: [docs/architecture.md](docs/architecture.md). Decisions:
+[docs/decisions.md](docs/decisions.md).
 
-https://github.com/user-attachments/assets/eead8acd-524f-4d91-9771-80865eb7cee9
+## Developing
 
-## What it is
-
-Superfik puts your prompt at the centre of a canvas. The repository, skills and
-references you attach flow into it; the agents' work grows out of it, where
-you can see it.
-
-- **Agents you can watch.** Sub-agents appear beside the conversation as they
-  work, and every step can be opened.
-- **A browser beside the session.** You browse it, and the agent browses it
-  too.
-- **Memory and notes.** Agents remember what each project taught them.
-- **Pull requests.** Review, comment and ask the agent about a line without
-  leaving the app.
-- **Routines.** Agents that work on a schedule and report back; anything they
-  send out waits for your approval.
-- **Voice.** Talk to it, with speech models that run on your computer.
-- **Any model.** Your Claude or ChatGPT subscription, an Anthropic or OpenAI
-  key, or open models running locally.
-
-## Download
-
-Get the latest version for **macOS** or **Windows** from the
-[releases page](https://github.com/brunozilio/superfik/releases/latest).
-Linux is on the way. On Windows the built-in browser comes in a later
-version.
-
-Open the app, connect a model in **Settings › AI**, and open a repository. It
-updates itself.
-
-## For teams
-
-Alone, Superfik needs no account and no server. A team can run its own server
-on a Linux machine with one command and connect everyone to it from
-**Settings › Server**. See [docs/self-hosting.md](docs/self-hosting.md).
-
-## Open source
-
-Superfik is free and open source under the [Apache License 2.0](LICENSE). No
-accounts, licences or payments. Contributions are welcome: start with
-[CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately, as
-[SECURITY.md](SECURITY.md) describes.
+```sh
+export CARGO_TARGET_DIR="$PWD/target/agents/<task>"   # see CLAUDE.md
+cargo nextest run --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo run -q -p xtask -- lint
+```

@@ -1,4 +1,0 @@
-[
-  {"ref": 1, "type": "search", "name": "q", "visible": true},
-  {"ref": 2, "type": "text", "name": "city", "label": "City", "form": 0, "visible": true}
-]

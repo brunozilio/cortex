@@ -48,16 +48,12 @@ done"#,
 }
 #[test]
 fn planning_mode_rejects_builtin_mutations() {
-    use superfik_core::{PermissionMode, browser, channel, memory, note};
+    use superfik_core::{PermissionMode, memory};
     use superfik_native::{
         mcp::builtin_access,
         permission::{Remembered, Verdict, verdict},
     };
-    for (server, tool) in [
-        (note::NOTES_SERVER, note::NOTES_WRITE_TOOL),
-        (channel::CHANNELS_SERVER, channel::CHANNEL_SEND_TOOL),
-        (browser::BROWSER_SERVER, browser::TYPE_TOOL),
-    ] {
+    for (server, tool) in [("linear", "create_issue"), (memory::MEMORY_SERVER, "memory_forget")] {
         assert!(
             matches!(
                 verdict(PermissionMode::Plan, builtin_access(server, tool), tool, "", &Remembered::default()),

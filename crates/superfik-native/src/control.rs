@@ -48,8 +48,7 @@ impl Control {
         let mut child = Self::new(self.mode(), Arc::default());
         child.ceiling = ceiling;
         child.no_prompts = self.no_prompts || no_prompts;
-        *child.mode.get_mut().expect("new mode") =
-            superfik_core::policy::Policy { max_mode: ceiling, ..Default::default() }.cap(self.mode());
+        *child.mode.get_mut().expect("new mode") = self.mode().capped(ceiling);
         *child.remembered.get_mut().expect("new permissions") = self.remembered();
         let child = Arc::new(child);
         children.push(Arc::downgrade(&child));
@@ -95,7 +94,7 @@ impl Control {
 
     pub fn set_mode(&self, mode: PermissionMode) {
         let children = self.children.lock().expect("child controls");
-        let mode = superfik_core::policy::Policy { max_mode: self.ceiling, ..Default::default() }.cap(mode);
+        let mode = mode.capped(self.ceiling);
         if let Ok(mut current) = self.mode.lock() {
             *current = mode;
         }

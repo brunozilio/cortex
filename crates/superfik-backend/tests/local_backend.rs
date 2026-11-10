@@ -88,7 +88,6 @@ fn request(engine: EngineKind) -> PromptRequest {
     PromptRequest {
         connections: Vec::new(),
         plugins: None,
-        browser: None,
         credentials: Default::default(),
         workspace: WorkspaceId::new(),
         cwd: PathBuf::from("/repo"),
@@ -99,10 +98,8 @@ fn request(engine: EngineKind) -> PromptRequest {
         skills: vec![],
         disabled_skills: Vec::new(),
         references: vec![],
-        notes: vec![],
         resume: None,
         command: None,
-        handoff: None,
         memory: None,
         permission: Default::default(),
         output_style: None,

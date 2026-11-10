@@ -44,19 +44,6 @@ fn every_event_round_trips() {
     let run = RunId::new();
     let mut events: Vec<ServerEvent> = run_events().into_iter().map(|event| ServerEvent::Run { run, event }).collect();
     events.push(ServerEvent::Welcome { version: crate::PROTOCOL_VERSION, principal: Principal::LocalOwner });
-    events.push(ServerEvent::Members(vec![Colleague {
-        user: superfik_core::UserId::new(),
-        name: "ana".into(),
-        role: superfik_core::access::OrgRole::Admin,
-        pending: true,
-    }]));
-    events.push(ServerEvent::FirstAccessCode {
-        user: superfik_core::UserId::new(),
-        name: "ana".into(),
-        code: "ABCD-EFGH-JKMN".into(),
-    });
-    events
-        .push(ServerEvent::ServerSettings(crate::carried::ServerSettings { domain: Some("superfik.acme.io".into()) }));
     events.push(ServerEvent::Models(vec![ModelOption::new(EngineKind::Native, "opus", "Opus")]));
     events.push(ServerEvent::Workspace(WorkspaceSnapshot {
         repository: Some(Repository {
@@ -81,30 +68,6 @@ fn every_event_round_trips() {
         slug: "acme/other".into(),
         ..Repository::default()
     }));
-    events.push(ServerEvent::GitHubRepositories {
-        signed_in: true,
-        repositories: vec![GitHubRepository { slug: "acme/rocket".into(), private: false }],
-    });
-    events.push(ServerEvent::RepositoryLocated { slug: "acme/rocket".into(), path: PathBuf::from("/w/rocket") });
-    events.push(ServerEvent::PullRequests(vec![PullRequest {
-        number: 4,
-        title: "Sky".into(),
-        ..PullRequest::default()
-    }]));
-    events.push(ServerEvent::PullRequestCreated(PullRequest { number: 5, ..PullRequest::default() }));
-    events.push(ServerEvent::PullRequestProposed(PullRequestDraft {
-        title: "Sky".into(),
-        ..PullRequestDraft::default()
-    }));
-    events.push(ServerEvent::ReviewSubmitted { number: 5 });
-    events.push(ServerEvent::ReviewDrafted { number: 5, summary: "ok".into(), comments: vec![] });
-    events.push(ServerEvent::ThreadResolved { thread: "T1".into(), resolved: true });
-    events.push(ServerEvent::PullRequestLoaded(Box::new(PullRequestDetail {
-        pull_request: PullRequest { number: 5, ..PullRequest::default() },
-        description: String::new(),
-        files: vec![],
-        comments: vec![],
-    })));
     events.push(ServerEvent::Skills(vec![Skill {
         name: "m".into(),
         title: "M skill".into(),
@@ -119,55 +82,6 @@ fn every_event_round_trips() {
     }]));
     events.push(ServerEvent::Agents(vec![CustomAgent { name: "reviewer".into(), description: "R".into() }]));
     events.push(ServerEvent::Sessions { path: "/repo".into(), sessions: vec![] });
-    let project = superfik_core::project::ProjectRef::Remote("github.com/a/b".into());
-    events.push(ServerEvent::SharedSessions { project, sessions: vec![] });
-    events.push(ServerEvent::Delegated(vec![]));
-    events.push(ServerEvent::Library(vec![]));
-    events.push(ServerEvent::Comments {
-        session: superfik_core::ConversationId::new(),
-        comments: vec![superfik_core::comments::Comment {
-            author: superfik_core::UserId::new(),
-            author_name: "Ana".into(),
-            at_unix: 1,
-            after_turn: 0,
-            text: "Looks good".into(),
-        }],
-    });
-    events.push(ServerEvent::Teams(vec![superfik_core::sharing::Team {
-        id: superfik_core::TeamId::new(),
-        name: "Design".into(),
-        members: vec![superfik_core::UserId::new()],
-    }]));
-    events.push(ServerEvent::Policy(Default::default()));
-    events.push(ServerEvent::Spent { month: "2026-10".into(), usd: 12.5 });
-    events.push(ServerEvent::Usage(vec![MemberUsage {
-        user: superfik_core::UserId::new(),
-        name: "Ana".into(),
-        month: "2026-10".into(),
-        cost_usd: 12.5,
-        runs: 3,
-    }]));
-    let viewer = Viewer {
-        user: superfik_core::UserId::new(),
-        name: "Ana".into(),
-        session: superfik_core::ConversationId::new(),
-    };
-    events.push(ServerEvent::Presence(vec![viewer]));
-    let project = superfik_core::project::ProjectRef::Remote("github.com/a/b".into());
-    events.push(ServerEvent::SharedMemory { project, memories: vec![] });
-    events.push(ServerEvent::Notes {
-        path: "/repo".into(),
-        notes: vec![],
-        by: Some(RunId::new()),
-        created: vec![superfik_core::note::NoteId(1)],
-        refused: vec![],
-    });
-    events.push(ServerEvent::DelegatedAnswered {
-        run: RunId::new(),
-        ask: superfik_core::AskId("p1".into()),
-        decision: superfik_core::Decision::Deny,
-        by: "Bia".into(),
-    });
     events.push(ServerEvent::Plugins { plugins: vec![], connections: vec![] });
     events.push(ServerEvent::AuthorizeAt { plugin: PluginId("linear".into()), url: "https://l".into() });
     events.push(ServerEvent::PluginFailed { plugin: None, message: "bad".into() });
@@ -189,21 +103,9 @@ fn every_event_round_trips() {
         }
         events.push(ServerEvent::Providers(crate::ProviderEvent::Failed { provider, message: "no".into() }));
     }
-    let browser = BrowserId::new();
-    let url = String::from("https://a.com/login");
-    let candidates = vec![Candidate { item: "A".into(), account: "Bitwarden".into(), username: Some("b".into()) }];
-    events.push(ServerEvent::LoginCandidates { browser, url: url.clone(), candidates });
-    let fill = LoginFill { username: None, password: Some("p".into()) };
-    events.push(ServerEvent::LoginSecret { browser, url, fill });
-    events.push(ServerEvent::LoginFailed { browser, message: "locked".into() });
-    events.push(ServerEvent::LoginSaved { browser, account: "Bitwarden".into() });
     events.push(ServerEvent::error("nope"));
-    events.push(ServerEvent::Link(crate::LinkState::Lost));
-    events.push(ServerEvent::GitHubCode { code: "ABCD-1234".into(), url: "https://github.com/login/device".into() });
-    events.push(ServerEvent::GitHubSignedIn { login: Some("olga".into()) });
     events.push(ServerEvent::Settings { settings: Some(serde_json::json!({"theme": "dark"})) });
     events.push(ServerEvent::Settings { settings: None });
-    events.push(ServerEvent::Uploaded { from: "/Users/olga/sky.png".into(), path: "/srv/u/uploads/sky.png".into() });
     for event in &events {
         assert_eq!(&round_trip(event), event);
     }

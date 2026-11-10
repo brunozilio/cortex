@@ -122,7 +122,6 @@ mod tests {
     fn record(started_unix: i64, title: &str) -> SessionRecord {
         SessionRecord {
             connections: Vec::new(),
-            notes: Vec::new(),
             id: ConversationId::new(),
             title: Some(title.into()),
             started_unix,
@@ -137,7 +136,6 @@ mod tests {
             references: Vec::new(),
             agents: Vec::new(),
             research_items: Vec::new(),
-            visibility: Default::default(),
         }
     }
 

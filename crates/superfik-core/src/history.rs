@@ -45,10 +45,6 @@ pub struct SessionRecord {
     pub research_items: Vec<ResearchItem>,
     #[serde(default)]
     pub connections: Vec<Connection>,
-    #[serde(default)]
-    pub notes: Vec<crate::note::NoteId>,
-    #[serde(default)]
-    pub visibility: crate::sharing::Visibility,
 }
 
 impl SessionRecord {
@@ -96,8 +92,6 @@ mod tests {
             agents: vec![agent],
             research_items: Vec::new(),
             connections: Vec::new(),
-            notes: Vec::new(),
-            visibility: Default::default(),
         }
     }
 

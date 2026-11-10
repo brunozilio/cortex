@@ -212,14 +212,7 @@ impl Memories {
             recall(&request.prompt, &book.memories, semantic, budget)
         };
         let output = edits_file(run);
-        let brief = MemoryBrief {
-            recalled,
-            output,
-            origin: brief.origin.clone(),
-            tool,
-            optimizing: false,
-            shared: brief.shared.clone(),
-        };
+        let brief = MemoryBrief { recalled, output, origin: brief.origin.clone(), tool, optimizing: false };
         PromptRequest { memory: Some(brief), ..request.clone() }
     }
 

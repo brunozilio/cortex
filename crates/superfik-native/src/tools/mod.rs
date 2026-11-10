@@ -17,7 +17,6 @@ pub mod structured;
 pub mod subagent;
 pub mod subagent_config;
 pub mod task;
-pub mod visual_guide;
 mod write;
 
 use std::collections::HashSet;
@@ -195,7 +194,6 @@ pub fn standard() -> Vec<Box<dyn Tool>> {
         Box::new(Grep),
         Box::new(Bash),
         Box::new(ask::AskUserQuestion),
-        Box::new(visual_guide::VisualGuide),
     ]
 }
 

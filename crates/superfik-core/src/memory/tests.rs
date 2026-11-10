@@ -116,7 +116,6 @@ fn instructions_list_memories_only_on_a_fresh_session() {
         origin: None,
         tool: None,
         optimizing: false,
-        shared: vec![],
     };
     let fresh = brief.instructions(true).expect("text");
     assert!(fresh.contains("Facts:\n- [0] The renderer") && fresh.contains("Episodes:\n- [2]"));

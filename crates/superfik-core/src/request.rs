@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::approval::PermissionMode;
 use crate::context::{Reference, Skill};
-use crate::handoff::Handoff;
 use crate::ids::{SessionId, WorkspaceId};
 use crate::memory::MemoryBrief;
 use crate::model::{Effort, ModelOption};
@@ -27,13 +26,9 @@ pub struct PromptRequest {
     #[serde(default)]
     pub disabled_skills: Vec<String>,
     pub references: Vec<Reference>,
-    #[serde(default)]
-    pub notes: Vec<crate::note::NoteBrief>,
     pub resume: Option<SessionId>,
     #[serde(default)]
     pub command: Option<SessionCommand>,
-    #[serde(default)]
-    pub handoff: Option<Handoff>,
     #[serde(default)]
     pub memory: Option<MemoryBrief>,
     #[serde(default)]
@@ -46,8 +41,6 @@ pub struct PromptRequest {
     pub connections: Vec<Connection>,
     #[serde(default)]
     pub plugins: Option<PluginBrief>,
-    #[serde(default)]
-    pub browser: Option<crate::browser::BrowserTool>,
     #[serde(skip)]
     pub credentials: crate::credentials::RunCredentials,
 }
@@ -68,17 +61,14 @@ impl PromptRequest {
             skills: Vec::new(),
             disabled_skills: Vec::new(),
             references: Vec::new(),
-            notes: Vec::new(),
             resume: None,
             command: None,
-            handoff: None,
             memory: None,
             permission: PermissionMode::default(),
             output_style: None,
             safety_check: true,
             connections: Vec::new(),
             plugins: None,
-            browser: None,
             credentials: Default::default(),
         }
     }
@@ -96,16 +86,6 @@ impl PromptRequest {
             for reference in &self.references {
                 out.push_str(&format!("\n- {}", reference.path.display()));
             }
-        }
-        if !self.notes.is_empty() {
-            out.push_str("\n\nNotes linked to this session (the user's notes, as they read now; #n is the id the notes tools take):");
-            for note in &self.notes {
-                out.push_str(&format!("\n\n#{} {}\n{}", note.id.0, note.title, note.body.trim_end()));
-            }
-        }
-        if let Some(instructions) = self.handoff.as_ref().and_then(Handoff::instructions) {
-            out.push_str("\n\n");
-            out.push_str(&instructions);
         }
         if let Some(plugins) = self.plugins.as_ref().filter(|p| !p.instructions.is_empty()) {
             out.push_str("\n\nConnected accounts (use only their tools for each account):");
@@ -137,17 +117,14 @@ mod tests {
             skills: vec![],
             disabled_skills: Vec::new(),
             references: vec![],
-            notes: vec![],
             resume: None,
             command: None,
-            handoff: None,
             memory: None,
             permission: Default::default(),
             output_style: None,
             safety_check: true,
             connections: vec![],
             plugins: None,
-            browser: None,
             credentials: Default::default(),
         }
     }
@@ -162,28 +139,6 @@ mod tests {
         assert!(req.compose().ends_with(
             "Connected accounts (use only their tools for each account):\n- Gmail · work: tools mcp__gmail-work__*"
         ));
-    }
-
-    #[test]
-    fn linked_notes_are_listed_with_their_ids_and_text() {
-        let mut req = request();
-        req.notes = vec![crate::note::NoteBrief {
-            id: crate::note::NoteId(3),
-            title: "Release".into(),
-            body: "Release\n- [x] tag\n- [ ] notes\n".into(),
-        }];
-        assert!(req.compose().ends_with("#3 Release\nRelease\n- [x] tag\n- [ ] notes"));
-        assert!(req.compose().contains("Notes linked to this session"));
-    }
-
-    #[test]
-    fn a_handoff_with_a_file_is_spelled_out() {
-        let mut req = request();
-        req.handoff = Some(Handoff::new(crate::HandoffKind::PullRequestDraft));
-        assert!(!req.compose().contains("JSON"), "no file assigned yet");
-        req.handoff =
-            Some(Handoff { output: "/tmp/h.json".into(), ..Handoff::new(crate::HandoffKind::PullRequestDraft) });
-        assert!(req.compose().contains("write a JSON file at /tmp/h.json"));
     }
 
     #[test]
@@ -204,7 +159,6 @@ mod tests {
             origin: None,
             tool: None,
             optimizing: false,
-            shared: vec![],
         });
         assert!(req.compose().contains("- [4] Uses wgpu"));
         req.resume = Some(SessionId("s".into()));

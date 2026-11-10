@@ -4,7 +4,6 @@ description = "Local workspace inspection: git repository facts and attachable f
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
-repository.workspace = true
 
 [dependencies]
 tempfile.workspace = true

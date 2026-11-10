@@ -4,11 +4,7 @@
 
 use serde_json::Value;
 use superfik_core::PromptRequest;
-use superfik_core::browser::BROWSER_SERVER;
-use superfik_core::channel::CHANNELS_SERVER;
 use superfik_core::memory::MEMORY_SERVER;
-use superfik_core::note::NOTES_SERVER;
-use superfik_core::vault::VAULT_SERVER;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ServerSpec {
@@ -51,10 +47,6 @@ pub fn servers(request: &PromptRequest) -> Vec<ServerSpec> {
     let plugins = request.plugins.as_ref();
     let memory = request.memory.as_ref().and_then(|memory| memory.tool.as_ref());
     let mut servers: Vec<ServerSpec> = memory.map(|t| own(MEMORY_SERVER, &t.url, &t.token)).into_iter().collect();
-    servers.extend(plugins.and_then(|p| p.vault.as_ref()).map(|t| own(VAULT_SERVER, &t.url, &t.token)));
-    servers.extend(request.browser.as_ref().map(|t| own(BROWSER_SERVER, &t.url, &t.token)));
-    servers.extend(plugins.and_then(|p| p.notes.as_ref()).map(|t| own(NOTES_SERVER, &t.url, &t.token)));
-    servers.extend(plugins.and_then(|p| p.channels.as_ref()).map(|t| own(CHANNELS_SERVER, &t.url, &t.token)));
     if let Some(path) = plugins.and_then(|p| p.mcp_config.as_ref()) {
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|text| parse_config(&text)) {
             Ok(found) => servers.extend(found.into_iter().filter(|s| !s.name().starts_with("superfik_"))),

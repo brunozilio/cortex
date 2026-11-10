@@ -60,6 +60,23 @@ impl PermissionMode {
             Self::Bypass => "bypassPermissions",
         }
     }
+
+    const fn latitude(self) -> u8 {
+        match self {
+            Self::Plan => 0,
+            Self::Ask => 1,
+            Self::AcceptEdits => 2,
+            Self::Bypass => 3,
+        }
+    }
+
+    /// This mode, or `ceiling` when this one allows more than it.
+    pub fn capped(self, ceiling: Option<PermissionMode>) -> PermissionMode {
+        match ceiling {
+            Some(max) if self.latitude() > max.latitude() => max,
+            _ => self,
+        }
+    }
 }
 
 impl Question {
@@ -71,6 +88,15 @@ impl Question {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_ceiling_caps_only_modes_that_allow_more() {
+        use PermissionMode::*;
+        assert_eq!(Bypass.capped(Some(AcceptEdits)), AcceptEdits);
+        assert_eq!(Ask.capped(Some(AcceptEdits)), Ask);
+        assert_eq!(AcceptEdits.capped(Some(Plan)), Plan);
+        assert_eq!(Bypass.capped(None), Bypass);
+    }
 
     fn question(multi: bool) -> Question {
         let choice = |label: &str| Choice { label: label.into(), description: String::new() };

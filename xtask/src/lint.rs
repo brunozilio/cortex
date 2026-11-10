@@ -6,7 +6,6 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 const MAX_LINES: usize = 300;
-const THEME_DIR: &str = "crates/superfik-ui/src/theme/";
 const BASELINE: &str = "xtask/lint-baseline.txt";
 
 pub fn run(root: &Path, update_baseline: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -43,10 +42,6 @@ fn check(rel: &str, source: &str) -> Vec<String> {
     if source.lines().count() > MAX_LINES {
         out.push(format!("file-too-long {rel}"));
     }
-    let production = source.split("#[cfg(test)]").next().unwrap_or(source);
-    if !rel.starts_with(THEME_DIR) && production.contains("Color::hex(") {
-        out.push(format!("colour-outside-theme {rel}"));
-    }
     out
 }
 
@@ -70,13 +65,5 @@ mod tests {
     fn flags_long_files() {
         let long = "fn f() {}\n".repeat(MAX_LINES + 1);
         assert_eq!(check("crates/a/src/x.rs", &long), ["file-too-long crates/a/src/x.rs"]);
-    }
-
-    #[test]
-    fn flags_colours_outside_theme_but_not_in_tests_or_theme() {
-        let src = "let c = Color::hex(0xffffff);";
-        assert_eq!(check("crates/a/src/x.rs", src).len(), 1);
-        assert!(check("crates/superfik-ui/src/theme/colors.rs", src).is_empty());
-        assert!(check("crates/a/src/x.rs", "#[cfg(test)]\nmod t { Color::hex(1); }").is_empty());
     }
 }

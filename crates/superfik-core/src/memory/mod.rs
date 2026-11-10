@@ -184,7 +184,6 @@ mod brief;
 mod optimize;
 mod recall;
 pub mod search;
-pub mod shared;
 
 pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, MemoryTool, parse_memory_edits};
 pub use optimize::optimize_prompt;

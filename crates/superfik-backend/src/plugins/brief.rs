@@ -46,9 +46,6 @@ impl Plugins {
             mcp_config,
             plugin_dirs: present.iter().map(|p| p.dir.clone()).collect(),
             instructions: plan.instructions,
-            vault: None,
-            notes: None,
-            channels: None,
         };
         Ok(PromptRequest { plugins: (!brief.is_empty()).then_some(brief), ..request.clone() })
     }

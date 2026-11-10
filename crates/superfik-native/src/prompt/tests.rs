@@ -13,14 +13,9 @@ fn environment() -> Environment {
 #[test]
 fn speaks_as_superfik_and_never_as_another_product() {
     let mut everything = environment();
-    everything.tools = ["mcp__superfik_memory__memory_search", "mcp__superfik_browser__browser_click"]
-        .into_iter()
-        .chain(["mcp__superfik_vault__list_secrets", "VisualGuide"])
-        .map(str::to_owned)
-        .collect();
+    everything.tools = vec!["mcp__superfik_memory__memory_search".to_owned()];
     let prompt = system(&everything);
     assert!(prompt.starts_with("You are Superfik, an interactive agent"));
-    assert!(prompt.contains("Superfik is open source"));
     for other in ["Claude", "Anthropic", "claude.ai", "1Password", "CLAUDE.md", "Sofik"] {
         assert!(!prompt.contains(other), "the prompt names {other}");
     }
@@ -28,18 +23,10 @@ fn speaks_as_superfik_and_never_as_another_product() {
 
 #[test]
 fn offers_the_sections_of_the_tools_the_run_has() {
-    let bare = system(&environment());
-    assert!(!bare.contains("# The browser") && !bare.contains("# The Superfik Vault") && !bare.contains("# Memory"));
+    assert!(!system(&environment()).contains("# Memory"));
     let mut granted = environment();
-    granted.tools = vec!["mcp__superfik_browser__browser_snapshot".into(), "mcp__superfik_vault__list_secrets".into()];
-    let prompt = system(&granted);
-    assert!(
-        prompt.contains("# The browser")
-            && prompt.contains("request_credentials")
-            && prompt.contains("autofill_credential")
-    );
-    assert!(prompt.contains("# The Superfik Vault"));
-    assert!(!prompt.contains("# Memory"));
+    granted.tools = vec!["mcp__superfik_memory__memory_search".into()];
+    assert!(system(&granted).contains("# Memory"));
 }
 
 #[test]
@@ -176,13 +163,4 @@ fn the_turn_reminder_guides_planning_and_repeats_the_style() {
     let sub_agent = reminder(PermissionMode::Plan, 1, Some("Be concise."));
     assert!(!sub_agent.contains("Planning mode is on.") && !sub_agent.contains("Be concise."));
     assert!(!reminder(PermissionMode::Ask, 0, None).contains("Planning"));
-}
-
-#[test]
-fn explains_visuals_when_the_run_can_load_their_guide() {
-    assert!(!system(&environment()).contains("# Visuals"));
-    let mut granted = environment();
-    granted.tools = vec!["VisualGuide".into()];
-    let prompt = system(&granted);
-    assert!(prompt.contains("# Visuals") && prompt.contains("```visual") && prompt.contains("viewBox=\"0 0 440 H\""));
 }

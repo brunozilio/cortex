@@ -46,7 +46,6 @@ fn an_agent_searches_and_writes_project_memory() {
     let request = PromptRequest {
         connections: Vec::new(),
         plugins: None,
-        browser: None,
         credentials: Default::default(),
         workspace: WorkspaceId::new(),
         cwd: project.path().to_path_buf(),
@@ -59,10 +58,8 @@ fn an_agent_searches_and_writes_project_memory() {
         skills: vec![],
         disabled_skills: Vec::new(),
         references: vec![],
-        notes: vec![],
         resume: None,
         command: None,
-        handoff: None,
         memory: Some(MemoryBrief::new(Some("Live memory".into()))),
         permission: Default::default(),
         output_style: None,

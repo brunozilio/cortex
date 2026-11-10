@@ -1,6 +1,0 @@
-[
-  {"ref": 1, "type": "text", "name": "q", "placeholder": "Search or jump to…", "visible": true},
-  {"ref": 2, "type": "text", "name": "login", "id": "login_field", "autocomplete": "username", "label": "Username or email address", "form": 0, "visible": true},
-  {"ref": 3, "type": "password", "name": "password", "id": "password", "autocomplete": "current-password", "label": "Password", "form": 0, "visible": true},
-  {"ref": 4, "type": "hidden", "name": "webauthn-support", "form": 0}
-]

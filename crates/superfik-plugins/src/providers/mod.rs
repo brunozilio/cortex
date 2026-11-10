@@ -3,7 +3,6 @@
 //! credential, where it is served, how it signs in and how its requests and
 //! catalogs are shaped. Pure: the native engine does the IO with these.
 
-pub mod audio;
 pub mod catalog;
 pub mod oauth;
 pub mod request;

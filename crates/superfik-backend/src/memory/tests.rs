@@ -6,7 +6,6 @@ fn request(cwd: &Path) -> PromptRequest {
     PromptRequest {
         connections: Vec::new(),
         plugins: None,
-        browser: None,
         credentials: Default::default(),
         workspace: WorkspaceId::new(),
         cwd: cwd.to_path_buf(),
@@ -17,10 +16,8 @@ fn request(cwd: &Path) -> PromptRequest {
         skills: vec![],
         disabled_skills: Vec::new(),
         references: vec![],
-        notes: vec![],
         resume: None,
         command: None,
-        handoff: None,
         memory: Some(MemoryBrief::new(Some("Night sky".into()))),
         permission: Default::default(),
         output_style: None,

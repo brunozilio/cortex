@@ -65,17 +65,8 @@ pub fn system(environment: &Environment) -> String {
         sections.push(text::MEMORY);
     }
     sections.push(text::CONTEXT);
-    if environment.has(crate::tools::visual_guide::VISUAL_GUIDE) {
-        sections.push(text::VISUALS.trim_end());
-    }
     if environment.output_style.as_ref().is_none_or(|style| style.keep_coding) {
         sections.extend([text::DELIVERY, text::WRITING]);
-    }
-    if environment.has("mcp__superfik_browser__") {
-        sections.push(text::BROWSER);
-    }
-    if environment.has("mcp__superfik_vault__") {
-        sections.push(text::VAULT);
     }
     if environment.tools.iter().any(|tool| tool == crate::tools::advisor::ADVISOR_TOOL) {
         sections.push(crate::tools::advisor::GUIDE);

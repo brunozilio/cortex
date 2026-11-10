@@ -28,8 +28,6 @@ pub struct MemoryBrief {
     pub tool: Option<MemoryTool>,
     #[serde(default)]
     pub optimizing: bool,
-    #[serde(default)]
-    pub shared: Vec<super::shared::SharedMemory>,
 }
 
 impl MemoryBrief {
@@ -56,9 +54,6 @@ impl MemoryBrief {
                 }
             }
             out.push(listing);
-        }
-        if fresh && let Some(shared) = super::shared::listing(&self.shared) {
-            out.push(shared);
         }
         if self.tool.is_some() {
             out.push(format!(

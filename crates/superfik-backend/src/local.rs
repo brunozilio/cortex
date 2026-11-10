@@ -16,9 +16,6 @@ use crate::outbox::Outbox;
 use crate::services::LocalServices;
 use superfik_protocol::{Backend, BackendError, Wake};
 
-#[path = "local_hooks.rs"]
-mod hooks;
-
 type Command = Envelope<ClientCommand>;
 
 pub struct LocalBackend {
@@ -57,12 +54,9 @@ pub struct Workers {
     control: Option<Sender<Command>>,
     queries: Option<Sender<Command>>,
     memory: Option<Sender<Command>>,
-    clock: Option<Sender<()>>,
     handler: Arc<CommandHandler>,
     workers: Vec<JoinHandle<()>>,
 }
-
-const ROUTINE_TICK: std::time::Duration = std::time::Duration::from_secs(30);
 
 impl std::fmt::Debug for Workers {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -72,25 +66,16 @@ impl std::fmt::Debug for Workers {
 
 impl Workers {
     pub fn start(services: LocalServices, outbox: Outbox) -> Result<Self, BackendError> {
-        let background = services.background;
-        let (inbound, inbound_rx) = crossbeam_channel::unbounded();
-        services.channels.set_inbound(inbound);
         let handler = Arc::new(CommandHandler::new(services, outbox));
         let (control, control_rx) = crossbeam_channel::unbounded();
         let (queries, queries_rx) = crossbeam_channel::unbounded();
         let (memory, memory_rx) = crossbeam_channel::unbounded();
-        let mut workers = vec![
+        let workers = vec![
             spawn_worker("superfik-backend-control", control_rx, Arc::clone(&handler))?,
             spawn_worker("superfik-backend-queries", queries_rx, Arc::clone(&handler))?,
             spawn_memory_worker(memory_rx, Arc::clone(&handler))?,
         ];
-        let (stop, stopped) = crossbeam_channel::bounded::<()>(0);
-        workers.push(spawn_channel_worker(inbound_rx, stopped.clone(), Arc::clone(&handler))?);
-        if background {
-            workers.push(spawn_routine_clock(stopped, Arc::clone(&handler))?);
-        }
-        let clock = Some(stop);
-        Ok(Self { control: Some(control), queries: Some(queries), memory: Some(memory), clock, handler, workers })
+        Ok(Self { control: Some(control), queries: Some(queries), memory: Some(memory), handler, workers })
     }
 
     pub fn send(&self, command: Command) -> Result<(), BackendError> {
@@ -110,7 +95,6 @@ impl Drop for Workers {
         self.control.take();
         self.queries.take();
         self.memory.take();
-        self.clock.take();
         for worker in self.workers.drain(..) {
             if worker.join().is_err() {
                 tracing::error!("backend worker panicked");
@@ -128,14 +112,6 @@ fn is_query(command: &ClientCommand) -> bool {
             | ClientCommand::SwitchBranch { .. }
             | ClientCommand::ListAgents { .. }
             | ClientCommand::InspectRepository { .. }
-            | ClientCommand::ListGitHubRepositories
-            | ClientCommand::LocateRepository { .. }
-            | ClientCommand::ListPullRequests { .. }
-            | ClientCommand::CheckoutPullRequest { .. }
-            | ClientCommand::CreatePullRequest { .. }
-            | ClientCommand::LoadPullRequest { .. }
-            | ClientCommand::SubmitReview { .. }
-            | ClientCommand::ResolveThread { .. }
     )
 }
 
@@ -196,44 +172,6 @@ fn spawn_worker(
         .map_err(BackendError::Worker)
 }
 
-fn spawn_routine_clock(stop: Receiver<()>, handler: Arc<CommandHandler>) -> Result<JoinHandle<()>, BackendError> {
-    thread::Builder::new()
-        .name("superfik-backend-routines".to_owned())
-        .spawn(move || {
-            handler.wake_routines(crate::memory::now());
-            handler.wake_channels();
-            loop {
-                handler.fire_due_routines(crate::memory::now());
-                match stop.recv_timeout(ROUTINE_TICK) {
-                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
-                    _ => break,
-                }
-            }
-        })
-        .map_err(BackendError::Worker)
-}
-
-fn spawn_channel_worker(
-    inbound: Receiver<crate::channels::Inbound>,
-    stop: Receiver<()>,
-    handler: Arc<CommandHandler>,
-) -> Result<JoinHandle<()>, BackendError> {
-    thread::Builder::new()
-        .name("superfik-backend-channels".to_owned())
-        .spawn(move || {
-            loop {
-                crossbeam_channel::select! {
-                    recv(inbound) -> report => match report {
-                        Ok(report) => handler.channel_report(report),
-                        Err(_) => break,
-                    },
-                    recv(stop) -> _ => break,
-                }
-            }
-        })
-        .map_err(BackendError::Worker)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,7 +184,6 @@ mod tests {
         assert!(is_query(&ClientCommand::SwitchBranch { path: "/".into(), branch }));
         assert!(is_query(&ClientCommand::ListAgents { path: "/".into() }));
         assert!(is_query(&ClientCommand::InspectRepository { path: "/".into() }));
-        assert!(is_query(&ClientCommand::ListGitHubRepositories));
         assert!(!is_query(&ClientCommand::ListModels));
         assert!(is_memory(&ClientCommand::SearchMemory { path: "/".into(), query: "x".into() }));
         assert!(!is_memory(&ClientCommand::ListModels));

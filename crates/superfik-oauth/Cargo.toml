@@ -4,7 +4,6 @@ description = "The app's side of a browser sign-in: PKCE and the loopback redire
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
-repository.workspace = true
 
 [dependencies]
 base64 = "0.23"

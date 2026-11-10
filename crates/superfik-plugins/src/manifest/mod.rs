@@ -12,7 +12,7 @@ pub mod template;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
-use superfik_core::{Accounts, AuthKind, PluginId, SecretField, VaultKind, plugins::slug};
+use superfik_core::{Accounts, AuthKind, PluginId, SecretField, plugins::slug};
 
 use crate::error::PluginError;
 
@@ -39,10 +39,6 @@ pub struct PluginManifest {
     pub instructions: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub setup: Option<SetupCommand>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub vault: Option<VaultKind>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub channel: Option<superfik_core::channel::ChannelKind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -185,12 +181,6 @@ impl PluginManifest {
                 return invalid("cli auth needs a program".into());
             }
             _ => {}
-        }
-        if let Some(vault) = self.vault {
-            let key = vault.unlock_secret();
-            if !matches!(&self.auth, Auth::ApiKey { fields } if fields.iter().any(|field| field.key == key)) {
-                return invalid(format!("a {} vault needs api_key auth with a `{key}` field", vault.name()));
-            }
         }
         let keys = self.auth.secret_keys();
         let texts = self.mcp.iter().flat_map(McpServerSpec::texts).chain(self.instructions.as_deref());

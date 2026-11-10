@@ -100,8 +100,6 @@ impl PluginPackage {
             installed,
             skills: self.skills().iter().map(|s| crate::claude_home::bare_name(&s.name).to_owned()).collect(),
             servers: m.mcp.iter().map(|server| server.name().to_owned()).collect(),
-            vault: m.vault,
-            channel: m.channel,
         }
     }
 }

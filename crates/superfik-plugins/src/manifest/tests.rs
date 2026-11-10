@@ -58,13 +58,3 @@ fn rejects_broken_manifests() {
     let oauth_without_http = r#"{"id":"x","name":"X","version":"1","auth":{"kind":"oauth"}}"#;
     assert!(PluginManifest::parse(oauth_without_http).is_err());
 }
-
-#[test]
-fn a_vault_unlocks_with_a_password_field() {
-    let json = r#"{"id":"bw","name":"Bitwarden","version":"1","vault":"bitwarden",
-        "auth":{"kind":"api_key","fields":[{"key":"password","label":"Master password"}]}}"#;
-    assert_eq!(PluginManifest::parse(json).expect("valid").vault, Some(VaultKind::Bitwarden));
-    assert!(with(json, r#""key":"password""#, r#""key":"pin""#).is_err(), "no password field");
-    let no_auth = r#"{"id":"bw","name":"Bitwarden","version":"1","vault":"bitwarden"}"#;
-    assert!(PluginManifest::parse(no_auth).is_err());
-}

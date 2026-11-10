@@ -2,7 +2,6 @@
 //! token refresh, and audio.
 
 mod accounts;
-mod audio;
 mod catalogs;
 mod turns;
 

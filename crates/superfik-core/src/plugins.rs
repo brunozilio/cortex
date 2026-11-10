@@ -77,10 +77,6 @@ pub struct PluginSummary {
     pub skills: Vec<String>,
     #[serde(default)]
     pub servers: Vec<String>,
-    #[serde(default)]
-    pub vault: Option<crate::vault::VaultKind>,
-    #[serde(default)]
-    pub channel: Option<crate::channel::ChannelKind>,
 }
 
 impl PluginSummary {
@@ -90,10 +86,6 @@ impl PluginSummary {
 
     pub fn is_ai_provider(&self) -> bool {
         crate::ModelProvider::ACCOUNTS.iter().any(|provider| provider.plugin_id() == self.id.as_str())
-    }
-
-    pub fn removable(&self) -> bool {
-        self.vault.is_none()
     }
 }
 
@@ -141,22 +133,11 @@ pub struct PluginBrief {
     pub plugin_dirs: Vec<PathBuf>,
     #[serde(default)]
     pub instructions: Vec<String>,
-    #[serde(default)]
-    pub vault: Option<crate::vault::VaultTool>,
-    #[serde(default)]
-    pub notes: Option<crate::note::NotesTool>,
-    #[serde(default)]
-    pub channels: Option<crate::channel::ChannelTool>,
 }
 
 impl PluginBrief {
     pub fn is_empty(&self) -> bool {
-        self.mcp_config.is_none()
-            && self.plugin_dirs.is_empty()
-            && self.instructions.is_empty()
-            && self.vault.is_none()
-            && self.notes.is_none()
-            && self.channels.is_none()
+        self.mcp_config.is_none() && self.plugin_dirs.is_empty() && self.instructions.is_empty()
     }
 }
 

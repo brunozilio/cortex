@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::block::Block;
 use crate::events::{EngineEvent, ToolCall};
 use crate::failure::FailureKind;
 use crate::ids::TurnId;
@@ -106,10 +105,6 @@ impl TurnResponse {
         self.tools.len() + usize::from(!self.text.is_empty())
     }
 
-    pub fn blocks(&self) -> Vec<Block> {
-        Block::parse(&self.text)
-    }
-
     pub fn apply(&mut self, event: &EngineEvent) -> bool {
         match event {
             EngineEvent::Usage(usage) => self.usage.push(usage.clone()),
@@ -151,8 +146,7 @@ impl TurnResponse {
             | EngineEvent::Compacted(_)
             | EngineEvent::Chore(_)
             | EngineEvent::Asked(_)
-            | EngineEvent::AskWithdrawn(_)
-            | EngineEvent::Browse { .. } => return false,
+            | EngineEvent::AskWithdrawn(_) => return false,
         }
         true
     }

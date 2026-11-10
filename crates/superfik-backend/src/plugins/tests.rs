@@ -110,16 +110,13 @@ fn request(connections: Vec<Connection>) -> PromptRequest {
         skills: vec![],
         disabled_skills: Vec::new(),
         references: vec![],
-        notes: vec![],
         resume: None,
         command: None,
-        handoff: None,
         memory: None,
         permission: Default::default(),
         safety_check: true,
         connections,
         plugins: None,
-        browser: None,
         credentials: Default::default(),
         output_style: None,
     }
@@ -254,30 +251,6 @@ fn a_local_folder_installs_too() {
     let mine = plugins.iter().find(|p| p.id == id("mine")).expect("listed");
     assert_eq!(mine.origin, PluginOrigin::Local(folder.path().to_path_buf()));
     assert!(connections.is_empty(), "no tools: no account to pick");
-}
-
-#[test]
-fn vault_accounts_open_their_label_with_their_password() {
-    let rig = rig(Ok("t".into()));
-    let plugins = rig.plugins.clone().with_catalog(vec![package(
-        r#"{"id":"bw","name":"Bitwarden","version":"1","accounts":"many","vault":"bitwarden",
-        "auth":{"kind":"api_key","fields":[{"key":"password","label":"Master password"}]}}"#,
-        vec![],
-    )]);
-    plugins.install(&OWNER, Some(&id("bw")), None);
-    plugins.connect(&OWNER, &id("bw"), "Work", &[("password".into(), "hunter2".into())], &rig.outbox);
-    plugins.connect(&OWNER, &id("bw"), "", &[("password".into(), "other".into())], &rig.outbox);
-    next(&rig);
-    let accounts = connections(&next(&rig));
-    let vaults = plugins.vaults(&OWNER, &accounts).expect("vaults");
-    let scopes: Vec<(&str, &str)> = vaults.iter().map(|v| (v.scope.as_str(), v.secrets["password"].as_str())).collect();
-    assert_eq!(scopes, [("Work", "hunter2"), ("Superfik", "other")]);
-    assert_eq!(vaults[0].title, "Bitwarden · Work");
-    let brief = plugins.brief(&OWNER, RunId::new(), &request(accounts.clone())).expect("brief");
-    assert!(brief.plugins.and_then(|p| p.mcp_config).is_none(), "a vault brings no MCP server of its own");
-    rig.secrets.delete(&OWNER, accounts[0].id);
-    assert!(plugins.vaults(&OWNER, &accounts).is_err_and(|e| e.contains("signed out")));
-    assert!(plugins.vaults(&OWNER, &[]).expect("none").is_empty());
 }
 
 struct FakeSetup(Result<(), String>, std::sync::Mutex<Vec<String>>);

@@ -3,7 +3,6 @@
 //! [`PluginSummary`]s and [`Connection`]s.
 
 mod brief;
-mod channels;
 mod cli_token;
 pub mod model_providers;
 pub mod oauth;
@@ -11,7 +10,6 @@ mod sealed;
 mod secrets;
 mod setup;
 mod store;
-mod vaults;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -228,31 +226,6 @@ impl Plugins {
             }
             Ok(())
         })
-    }
-
-    pub fn install_library(&self, owner: &Principal, items: &[superfik_core::library::LibraryItem]) -> ServerEvent {
-        let id = PluginId(superfik_core::library::LIBRARY_PLUGIN.to_owned());
-        let dir = self.store.packages(owner).join(id.as_str());
-        let result = if items.is_empty() {
-            self.edit(owner, |book| {
-                if book.is_installed(&id) {
-                    book.uninstall(&id)?;
-                }
-                Ok(())
-            })
-            .map(|()| {
-                let _ = std::fs::remove_dir_all(&dir);
-            })
-        } else {
-            superfik_plugins::library::package(items, &dir).and_then(|package| {
-                materialize(&package, &dir)?;
-                self.edit(owner, |book| match book.is_installed(&id) {
-                    true => Ok(()),
-                    false => book.install(id.clone(), package.origin.clone()),
-                })
-            })
-        };
-        self.answer(owner, Some(id), result)
     }
 
     pub fn uninstall(&self, owner: &Principal, plugin: &PluginId) -> ServerEvent {

@@ -15,7 +15,6 @@ pub mod agents;
 pub mod catalog;
 pub mod claude_home;
 mod error;
-pub mod library;
 pub mod manifest;
 pub mod materialize;
 pub mod mcp_config;

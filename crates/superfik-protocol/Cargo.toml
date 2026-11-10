@@ -4,7 +4,6 @@ description = "Transport-agnostic messages between a Superfik client and backend
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
-repository.workspace = true
 
 [dependencies]
 superfik-core.workspace = true

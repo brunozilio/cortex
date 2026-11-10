@@ -1,14 +1,11 @@
 [workspace]
 resolver = "3"
 members = ["crates/*", "xtask"]
-exclude = ["vendor/welding"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "Apache-2.0"
 publish = false
-repository = "https://github.com/brunozilio/superfik"
 authors = ["Bruno Zilio"]
 rust-version = "1.97"
 
@@ -19,31 +16,12 @@ superfik-protocol = { path = "crates/superfik-protocol" }
 superfik-backend = { path = "crates/superfik-backend" }
 superfik-plugins = { path = "crates/superfik-plugins" }
 superfik-oauth = { path = "crates/superfik-oauth" }
-superfik-unlock = { path = "crates/superfik-unlock" }
 superfik-workspace = { path = "crates/superfik-workspace" }
-superfik-motion = { path = "crates/superfik-motion" }
-superfik-render = { path = "crates/superfik-render" }
-superfik-ui = { path = "crates/superfik-ui" }
-superfik-client = { path = "crates/superfik-client" }
-superfik-sound = { path = "crates/superfik-sound" }
-superfik-voice = { path = "crates/superfik-voice" }
-superfik-haptics = { path = "crates/superfik-haptics" }
-superfik-dock = { path = "crates/superfik-dock" }
 superfik-keychain = { path = "crates/superfik-keychain" }
 superfik-process = { path = "crates/superfik-process" }
 superfik-private-file = { path = "crates/superfik-private-file" }
-superfik-menu = { path = "crates/superfik-menu" }
-superfik-i18n = { path = "crates/superfik-i18n" }
-superfik-frames = { path = "crates/superfik-frames" }
-superfik-pages = { path = "crates/superfik-pages" }
-superfik-browser = { path = "crates/superfik-browser" }
-superfik-server = { path = "crates/superfik-server" }
-superfik-remote = { path = "crates/superfik-remote" }
-superfik-identity = { path = "crates/superfik-identity" }
-superfik-channels = { path = "crates/superfik-channels" }
 superfik-gateway = { path = "crates/superfik-gateway" }
 superfik-native = { path = "crates/superfik-native" }
-superfik-update = { path = "crates/superfik-update" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -51,15 +29,8 @@ thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-crossbeam-channel = "0.5"
-bytemuck = { version = "1", features = ["derive"] }
-wgpu = "30"
-winit = "0.30"
-pollster = "1"
-cosmic-text = "0.19"
-resvg = "0.49"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 tempfile = "3"
+crossbeam-channel = "0.5"
 
 [workspace.lints.rust]
 unsafe_code = "warn"
@@ -73,7 +44,3 @@ unwrap_used = "warn"
 lto = "thin"
 codegen-units = 1
 strip = true
-
-[patch.crates-io]
-welding = { path = "vendor/welding" }
-sherpa-onnx-sys = { path = "vendor/sherpa-onnx-sys" }

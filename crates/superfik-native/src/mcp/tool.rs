@@ -126,31 +126,9 @@ impl Tool for McpTool {
 }
 
 pub fn builtin_access(server: &str, name: &str) -> Access {
-    use superfik_core::{browser, channel, memory, note, vault};
+    use superfik_core::memory;
     match server {
         memory::MEMORY_SERVER if name == memory::MEMORY_SEARCH_TOOL => Access::Reads,
-        note::NOTES_SERVER if matches!(name, note::NOTES_LIST_TOOL | note::NOTES_READ_TOOL) => Access::Reads,
-        note::NOTES_SERVER if matches!(name, note::NOTES_WRITE_TOOL | note::NOTES_CHECK_TOOL) => Access::Edits,
-        channel::CHANNELS_SERVER
-            if matches!(name, channel::CHANNEL_CONVERSATIONS_TOOL | channel::CHANNEL_READ_TOOL) =>
-        {
-            Access::Reads
-        }
-        browser::BROWSER_SERVER
-            if matches!(
-                name,
-                browser::SNAPSHOT_TOOL
-                    | browser::SCREENSHOT_TOOL
-                    | browser::NAVIGATE_TOOL
-                    | browser::BACK_TOOL
-                    | browser::FORWARD_TOOL
-                    | browser::RELOAD_TOOL
-                    | browser::SCROLL_TOOL
-            ) =>
-        {
-            Access::Reads
-        }
-        vault::VAULT_SERVER if matches!(name, vault::LIST_SECRETS_TOOL | vault::LIST_GRANTED_TOOL) => Access::Reads,
         _ => Access::Executes,
     }
 }

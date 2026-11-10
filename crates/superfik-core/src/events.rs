@@ -73,10 +73,6 @@ pub enum EngineEvent {
     Chore(crate::usage::ChoreAnswer),
     Asked(AgentAsk),
     AskWithdrawn(AskId),
-    Browse {
-        id: crate::browser::BrowseId,
-        op: crate::browser::BrowserOp,
-    },
     Completed {
         duration_ms: u64,
         cost_usd: Option<f64>,

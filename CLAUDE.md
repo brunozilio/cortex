@@ -1,15 +1,13 @@
-# Superfik — working agreement
+# Superfik Lite — working agreement
 
-Native Rust (winit + wgpu) desktop canvas for AI coding agents. No Tauri, no
-web views. macOS, Linux and Windows (x64; ADR 0013); per-platform
-building and checks in `docs/platforms.md`.
+Internal Rust workspace: Superfik's agent engine, driven from a terminal
+chat (CLI/TUI) and an SDK (ADR 0018). No GUI.
 
 ## Before changing code
 - Follow the Cargo isolation rules below before running any Cargo command.
-- Read @docs/architecture.md and @docs/design-system.md.
+- Read @docs/architecture.md.
 - Run `cargo nextest run --workspace` (or `cargo test --workspace`) and `cargo clippy --workspace --all-targets -- -D warnings`.
-- Check visuals with `cargo run -p superfik-app -- --snapshot /tmp/s.png --scale 2`.
-- `/verify` runs tests, clippy, `cargo run -p xtask -- lint` and the snapshot; run it before committing. The `arch-guard` agent reviews a diff against these rules.
+- `/verify` runs tests, clippy and `cargo run -p xtask -- lint`; run it before committing. The `arch-guard` agent reviews a diff against these rules.
 
 ## Cargo isolation — keep the user's `cargo run` unblocked
 - The default `target/` build directory is reserved for the user's terminal.
@@ -31,12 +29,9 @@ building and checks in `docs/platforms.md`.
   package cache can still briefly require a lock during dependency downloads.
 
 ## Rules
-- Domain rules live in `superfik-core` or the app reducer (`state/`), never in
-  views or components. The reducer is pure: IO happens through `Effect`s.
-- UI components (`superfik-ui/components`) are stateless: props in, paint,
-  return hit geometry. No business logic. Reused twice → component.
+- Domain rules live in `superfik-core` (pure, no IO), never in the CLI's
+  rendering or the SDK's glue.
 - Files over ~200–300 lines or functions mixing concerns get split.
-- Every colour, size, font and duration comes from `superfik-ui/theme`.
 - Every new behaviour gets a test; IO sits behind traits so logic is testable.
 - Every command carries a `Principal`; keep the backend seam intact for the
   future remote, multi-user server.
@@ -47,4 +42,4 @@ building and checks in `docs/platforms.md`.
 ## Workflow
 Work directly: no specs or tickets unless asked. Plan in the conversation,
 implement, verify. Never commit to `main`
-(any branch name will do). Releases: the `release` skill.
+(any branch name will do).

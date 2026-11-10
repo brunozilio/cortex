@@ -4,18 +4,11 @@ description = "Superfik domain model: sessions, turns, context, agents and engin
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
-repository.workspace = true
 
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
-psl = "2.1.245"
-roxmltree = "0.21"
-sha2 = "0.10"
-base64 = "0.23"
-url = "2.5.8"
-regex = "1.13.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = ["js"] }

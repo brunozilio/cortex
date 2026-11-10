@@ -5,11 +5,10 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Review `git diff` (plus untracked files) against `CLAUDE.md`, `docs/architecture.md` and `docs/design-system.md`. Check only:
+Review `git diff` (plus untracked files) against `CLAUDE.md` and `docs/architecture.md`. Check only:
 
-- domain rules in `superfik-core` / `state/` reducer, none in views or components; reducer stays pure (IO via `Effect`);
-- components stateless: props in, paint, hit geometry out;
-- every colour, size, font, duration from `superfik-ui/theme`;
+- domain rules in `superfik-core`, none in CLI rendering or SDK glue; core stays pure (no IO);
+- crate dependencies stay one-way as in `docs/architecture.md`;
 - every command carries a `Principal`; backend seam intact;
 - new behaviour has a test; no `unwrap()` outside tests; files/functions not mixing concerns or growing past ~300 lines.
 

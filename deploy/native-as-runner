@@ -1,9 +1,0 @@
-#!/bin/sh
-# The native tool worker runs outside the backend identity, as
-# superfik-runner (group superfik-runs). Model credentials never cross this
-# boundary; per-tool input arrives through stdin. sudo allows the service's
-# user exactly this command (/etc/sudoers.d/superfik-runner), by its real
-# path, never a symbolic link.
-set -eu
-umask 002
-exec sudo -n -H -u superfik-runner -g superfik-runs -- /usr/local/lib/superfik-server/superfik-native-worker "$@"

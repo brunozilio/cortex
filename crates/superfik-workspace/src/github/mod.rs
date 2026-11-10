@@ -1,5 +1,5 @@
 //! Optional GitHub facts: the canonical `owner/name` and pull request of a
-//! [`Repository`], the repositories of the signed-in account, and cloning.
+//! [`Repository`].
 //!
 //! [`GitHubClient`] answers `None` whenever GitHub cannot be asked (no `gh`,
 //! not signed in, offline, not a GitHub repository), so callers degrade to
@@ -9,13 +9,9 @@ mod cli;
 mod parse;
 mod process;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use superfik_core::{
-    GitHubRepository, PullRequest, PullRequestDetail, PullRequestDraft, Repository, ReviewCommentDraft, ReviewVerdict,
-};
-
-use crate::error::WorkspaceError;
+use superfik_core::{PullRequest, Repository};
 
 pub use cli::{GhCli, GhRunner, SystemGh};
 
@@ -23,33 +19,6 @@ pub trait GitHubClient: Send + Sync {
     fn repository(&self, root: &Path) -> Option<String>;
 
     fn pull_request(&self, root: &Path) -> Option<PullRequest>;
-
-    fn repositories(&self) -> Option<Vec<GitHubRepository>>;
-
-    fn pull_requests(&self, root: &Path) -> Option<Vec<PullRequest>>;
-
-    fn checkout_pull_request(&self, root: &Path, number: u64) -> Result<(), WorkspaceError>;
-
-    fn create_pull_request(&self, root: &Path, draft: &PullRequestDraft) -> Result<PullRequest, WorkspaceError>;
-
-    fn pull_request_detail(&self, root: &Path, number: u64) -> Result<PullRequestDetail, WorkspaceError>;
-
-    fn submit_review(
-        &self,
-        root: &Path,
-        number: u64,
-        verdict: ReviewVerdict,
-        body: &str,
-        comments: &[ReviewCommentDraft],
-    ) -> Result<(), WorkspaceError>;
-
-    fn resolve_thread(&self, root: &Path, thread: &str, resolved: bool) -> Result<(), WorkspaceError>;
-
-    fn clone_repository(&self, slug: &str, destination: &Path) -> Result<(), WorkspaceError>;
-
-    fn as_user(&self, _token: &str) -> Option<std::sync::Arc<dyn GitHubClient>> {
-        None
-    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -63,49 +32,6 @@ impl GitHubClient for NoGitHub {
     fn pull_request(&self, _root: &Path) -> Option<PullRequest> {
         None
     }
-
-    fn repositories(&self) -> Option<Vec<GitHubRepository>> {
-        None
-    }
-
-    fn pull_requests(&self, _root: &Path) -> Option<Vec<PullRequest>> {
-        None
-    }
-
-    fn checkout_pull_request(&self, _root: &Path, number: u64) -> Result<(), WorkspaceError> {
-        Err(WorkspaceError::GitHubUnavailable(format!("#{number}")))
-    }
-
-    fn create_pull_request(&self, _root: &Path, draft: &PullRequestDraft) -> Result<PullRequest, WorkspaceError> {
-        Err(WorkspaceError::GitHubUnavailable(draft.title.clone()))
-    }
-
-    fn pull_request_detail(&self, _root: &Path, number: u64) -> Result<PullRequestDetail, WorkspaceError> {
-        Err(WorkspaceError::GitHubUnavailable(format!("#{number}")))
-    }
-
-    fn submit_review(
-        &self,
-        _root: &Path,
-        number: u64,
-        _verdict: ReviewVerdict,
-        _body: &str,
-        _comments: &[ReviewCommentDraft],
-    ) -> Result<(), WorkspaceError> {
-        Err(WorkspaceError::GitHubUnavailable(format!("#{number}")))
-    }
-
-    fn resolve_thread(&self, _root: &Path, thread: &str, _resolved: bool) -> Result<(), WorkspaceError> {
-        Err(WorkspaceError::GitHubUnavailable(thread.to_owned()))
-    }
-
-    fn clone_repository(&self, slug: &str, _destination: &Path) -> Result<(), WorkspaceError> {
-        Err(WorkspaceError::GitHubUnavailable(slug.to_owned()))
-    }
-}
-
-pub fn clone_destination(root: &Path, slug: &str) -> PathBuf {
-    root.join(slug.rsplit('/').next().unwrap_or(slug))
 }
 
 pub fn enrich(github: &dyn GitHubClient, repo: &mut Repository) -> bool {
@@ -132,37 +58,6 @@ mod tests {
         fn pull_request(&self, _root: &Path) -> Option<PullRequest> {
             self.1.clone()
         }
-        fn repositories(&self) -> Option<Vec<GitHubRepository>> {
-            None
-        }
-        fn pull_requests(&self, _root: &Path) -> Option<Vec<PullRequest>> {
-            None
-        }
-        fn checkout_pull_request(&self, _root: &Path, number: u64) -> Result<(), WorkspaceError> {
-            Err(WorkspaceError::GitHubUnavailable(format!("#{number}")))
-        }
-        fn create_pull_request(&self, _root: &Path, draft: &PullRequestDraft) -> Result<PullRequest, WorkspaceError> {
-            Err(WorkspaceError::GitHubUnavailable(draft.title.clone()))
-        }
-        fn pull_request_detail(&self, _root: &Path, number: u64) -> Result<PullRequestDetail, WorkspaceError> {
-            Err(WorkspaceError::GitHubUnavailable(format!("#{number}")))
-        }
-        fn submit_review(
-            &self,
-            _root: &Path,
-            number: u64,
-            _verdict: ReviewVerdict,
-            _body: &str,
-            _comments: &[ReviewCommentDraft],
-        ) -> Result<(), WorkspaceError> {
-            Err(WorkspaceError::GitHubUnavailable(format!("#{number}")))
-        }
-        fn resolve_thread(&self, _root: &Path, thread: &str, _resolved: bool) -> Result<(), WorkspaceError> {
-            Err(WorkspaceError::GitHubUnavailable(thread.to_owned()))
-        }
-        fn clone_repository(&self, slug: &str, _destination: &Path) -> Result<(), WorkspaceError> {
-            Err(WorkspaceError::GitHubUnavailable(slug.to_owned()))
-        }
     }
 
     fn repo(slug: &str) -> Repository {
@@ -188,15 +83,6 @@ mod tests {
         assert!(!enrich(&NoGitHub, &mut repository));
         assert!(!enrich(&Fake(None, Some(pr())), &mut repository));
         assert_eq!(repository, repo("acme/name"));
-    }
-
-    #[test]
-    fn clones_land_under_the_repository_name() {
-        assert_eq!(
-            clone_destination(Path::new("/home/me/Superfik"), "acme/rocket"),
-            Path::new("/home/me/Superfik/rocket")
-        );
-        assert_eq!(clone_destination(Path::new("/w"), "rocket"), Path::new("/w/rocket"));
     }
 
     #[test]

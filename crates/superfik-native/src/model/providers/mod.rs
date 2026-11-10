@@ -1,7 +1,6 @@
 //! The provider plugins' accounts as model clients. What each plugin sends
 //! and expects is in `superfik_plugins::providers`; this module does the IO.
 
-mod audio;
 pub mod oauth;
 mod transport;
 
@@ -12,7 +11,6 @@ use std::sync::{Arc, Mutex};
 use superfik_core::{ModelOption, ModelProvider};
 
 pub use superfik_plugins::providers::Config;
-pub use superfik_plugins::providers::audio::{Audio, RealtimeSession};
 pub use superfik_plugins::providers::oauth::Tokens;
 use transport::Transport;
 
