@@ -94,7 +94,7 @@ pub(super) fn bounded<T: Send>(
 }
 
 pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, String> {
-    use crate::model::http::{Http, UreqHttp};
+    use crate::model::http::{Http, NetHttp};
     let url = handler.url.as_deref().ok_or("HTTP hook requires url")?;
     let mut headers = Vec::new();
     let variables =
@@ -113,8 +113,7 @@ pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<C
         headers.push((name.clone(), value));
     }
     bounded(handler.timeout, workspace, |stop| {
-        let mut response =
-            UreqHttp.post_stopped(url, &headers, &input.to_string(), &stop).map_err(|e| e.to_string())?;
+        let mut response = NetHttp.post_stopped(url, &headers, &input.to_string(), &stop).map_err(|e| e.to_string())?;
         let mut bytes = Vec::new();
         let mut buffer = [0; 4096];
         loop {

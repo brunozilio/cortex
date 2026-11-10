@@ -9,7 +9,7 @@ use superfik_core::provider::ProviderKey;
 use superfik_core::{ModelOption, ModelProvider, Principal, PromptRequest};
 use superfik_mlx::{MlxError, MlxRuntime};
 use superfik_native::model::chat::{Chat, Endpoint, Endpoints};
-use superfik_native::model::http::{Http, UreqHttp};
+use superfik_native::model::http::{Http, NetHttp};
 use superfik_native::model::providers::ProviderClient;
 
 use superfik_native::model::{ModelApi, ModelError};
@@ -65,7 +65,7 @@ pub fn key_for(providers: &ModelProviders, owner: &Principal, model: &ModelOptio
 
 pub fn engine(data: &Path, local: Option<Arc<MlxRuntime>>) -> NativeEngine {
     let local = local.map(|runtime| Arc::new(MlxEndpoints(runtime)) as Arc<dyn Endpoints>);
-    let apis = NativeApis::new(Arc::new(UreqHttp), local);
+    let apis = NativeApis::new(Arc::new(NetHttp), local);
     NativeEngine::new(Arc::new(apis), Arc::new(FileSessions::new(data.join("native-sessions"))))
 }
 

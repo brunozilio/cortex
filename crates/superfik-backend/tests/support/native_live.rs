@@ -4,7 +4,7 @@ use std::sync::Arc;
 use superfik_core::{ModelOption, ModelProvider, PromptRequest};
 use superfik_native::{
     ApiSource, NativeEngine,
-    model::{ModelApi, ModelError, http::UreqHttp, providers::ProviderClient},
+    model::{ModelApi, ModelError, http::NetHttp, providers::ProviderClient},
     sessions::InMemorySessions,
 };
 pub fn model() -> ModelOption {
@@ -40,7 +40,7 @@ impl ApiSource for Source {
                 superfik_core::provider::ProviderKey::new(value.trim())
             }
         };
-        Ok(Arc::new(ProviderClient::for_model(request.model.clone(), Arc::new(UreqHttp), Arc::new(key))))
+        Ok(Arc::new(ProviderClient::for_model(request.model.clone(), Arc::new(NetHttp), Arc::new(key))))
     }
 }
 pub fn engine() -> NativeEngine {

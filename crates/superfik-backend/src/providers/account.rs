@@ -8,7 +8,7 @@ use std::sync::Arc;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use superfik_core::provider::ProviderKeyStore;
 use superfik_core::{ModelProvider, Principal, SecretId};
-use superfik_native::model::http::UreqHttp;
+use superfik_native::model::http::NetHttp;
 use superfik_native::model::providers::{copilot, oauth};
 use superfik_providers::Config;
 
@@ -30,7 +30,7 @@ impl SignIn for BrowserSignIn {
     fn sign_in(&self, provider: ModelProvider, open: &mut dyn FnMut(String, Option<String>)) -> Result<Config, String> {
         if provider == ModelProvider::CopilotSubscription {
             let mut show = |url: String, code: String| open(url, Some(code));
-            return copilot::sign_in(&UreqHttp, &mut show, &std::thread::sleep).map_err(|e| e.to_string());
+            return copilot::sign_in(&NetHttp, &mut show, &std::thread::sleep).map_err(|e| e.to_string());
         }
         let (port, path) = superfik_providers::oauth::callback(provider);
         let listener = super::redirect::Loopback::bind_on(port, path, true)?;
@@ -42,7 +42,7 @@ impl SignIn for BrowserSignIn {
         let redirect =
             superfik_providers::oauth::exchange_redirect(provider, &redirect, &query).map_err(|e| e.to_string())?;
         let tokens =
-            oauth::exchange(&UreqHttp, provider, &code, &state, &verifier, &redirect).map_err(|e| e.to_string())?;
+            oauth::exchange(&NetHttp, provider, &code, &state, &verifier, &redirect).map_err(|e| e.to_string())?;
         let config = Config { auth: Some(tokens), ..Config::default() };
         config.validate(provider).map_err(|e| e.to_string())?;
         Ok(config)

@@ -5,7 +5,7 @@ fn cancelling_stdio_mcp_stops_its_process_tree_before_it_can_write() {
     use std::{sync::Arc, time::Duration};
     use superfik_native::{
         mcp::{McpServer, ServerSpec},
-        model::http::{Http, UreqHttp},
+        model::http::{Http, NetHttp},
         tools::{Tool, Workspace},
     };
     let dir = tempfile::tempdir().expect("valid test fixture");
@@ -28,7 +28,7 @@ done"#,
         args: vec!["-c".into(), script],
         env: vec![],
     };
-    let http: Arc<dyn Http> = Arc::new(UreqHttp);
+    let http: Arc<dyn Http> = Arc::new(NetHttp);
     let server = Arc::new(McpServer::open(&spec, &http).expect("valid test fixture"));
     let tool = server.tools().expect("valid test fixture").remove(0);
     let workspace = Arc::new(Workspace::new(dir.path()));

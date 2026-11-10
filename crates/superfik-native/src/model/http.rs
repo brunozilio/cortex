@@ -1,6 +1,6 @@
 //! HTTP behind a trait, so providers are tested against recorded streams.
 
-use std::io::{BufRead, BufReader, Cursor};
+use std::io::{BufRead, Cursor};
 
 pub struct Response {
     pub status: u16,
@@ -17,12 +17,6 @@ impl std::fmt::Debug for Response {
 impl Response {
     pub fn header(&self, name: &str) -> Option<String> {
         self.headers.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)).map(|(_, value)| value.clone())
-    }
-
-    pub fn text(mut self) -> String {
-        let mut text = String::new();
-        let _ = std::io::Read::read_to_string(&mut self.body, &mut text);
-        text
     }
 }
 
@@ -47,19 +41,29 @@ pub trait Http: Send + Sync {
         self.post(url, headers, body).map_err(super::ModelError::Network)
     }
 
-    fn post_bytes(&self, url: &str, headers: &[(String, String)], body: &[u8]) -> Result<Response, String> {
-        let body =
-            std::str::from_utf8(body).map_err(|_| "binary HTTP bodies are unsupported by this transport".to_owned())?;
-        self.post(url, headers, body)
-    }
-
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String>;
 }
 
+/// The network. Model turns stream and stop with the run; short calls
+/// (sign-in, catalogs) are read whole within [`SHORT_TIMEOUT`].
 #[derive(Debug, Default)]
-pub struct UreqHttp;
+pub struct NetHttp;
 
-impl Http for UreqHttp {
+/// How long a sign-in, catalog or other short call may take.
+pub const SHORT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+impl NetHttp {
+    fn short(url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
+        let never = std::sync::atomic::AtomicBool::new(false);
+        let response = super::cancellable_http::send(url, headers, body, &never, SHORT_TIMEOUT)
+            .map_err(|error| error.to_string())?;
+        let (status, headers) = (response.status, response.headers.clone());
+        let text = response.text_stopped(&never).map_err(|error| error.to_string())?;
+        Ok(Response { status, headers, body: Box::new(Cursor::new(text.into_bytes())) })
+    }
+}
+
+impl Http for NetHttp {
     fn post_stopped(
         &self,
         url: &str,
@@ -69,50 +73,13 @@ impl Http for UreqHttp {
     ) -> Result<Response, super::ModelError> {
         super::cancellable_http::post(url, headers, body, stop)
     }
+
     fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Response, String> {
-        let agent = ureq::Agent::config_builder()
-            .http_status_as_error(false)
-            .timeout_global(Some(std::time::Duration::from_secs(15)))
-            .build()
-            .new_agent();
-        let mut request = agent.get(url);
-        for (name, value) in headers {
-            request = request.header(name, value);
-        }
-        let response = request.call().map_err(|error| error.to_string())?;
-        Ok(Response {
-            status: response.status().as_u16(),
-            headers: Vec::new(),
-            body: Box::new(BufReader::new(response.into_body().into_reader())),
-        })
+        Self::short(url, headers, None)
     }
 
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {
-        self.post_bytes(url, headers, body.as_bytes())
-    }
-
-    fn post_bytes(&self, url: &str, headers: &[(String, String)], body: &[u8]) -> Result<Response, String> {
-        let agent = ureq::Agent::config_builder()
-            .http_status_as_error(false)
-            .timeout_global(Some(std::time::Duration::from_secs(15)))
-            .build()
-            .new_agent();
-        let mut request = agent.post(url);
-        if !headers.iter().any(|(name, _)| name.eq_ignore_ascii_case("content-type")) {
-            request = request.header("content-type", "application/json");
-        }
-        for (name, value) in headers {
-            request = request.header(name, value);
-        }
-        let response = request.send(body).map_err(|error| error.to_string())?;
-        let status = response.status().as_u16();
-        let headers = response
-            .headers()
-            .iter()
-            .filter_map(|(name, value)| Some((name.as_str().to_ascii_lowercase(), value.to_str().ok()?.to_owned())))
-            .collect();
-        let reader = response.into_body().into_reader();
-        Ok(Response { status, headers, body: Box::new(BufReader::new(reader)) })
+        Self::short(url, headers, Some(body))
     }
 }
 

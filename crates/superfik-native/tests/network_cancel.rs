@@ -9,7 +9,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use superfik_native::model::http::{Http, UreqHttp, read_line_stopped};
+use superfik_native::model::http::{Http, NetHttp, read_line_stopped};
 #[test]
 fn cancellation_closes_stalled_connections_before_and_after_headers() {
     for headers in [false, true] {
@@ -55,7 +55,7 @@ fn cancellation_closes_stalled_connections_before_and_after_headers() {
         let stop = Arc::new(AtomicBool::new(false));
         let signal = stop.clone();
         let client = std::thread::spawn(move || {
-            let mut response = UreqHttp.post_stopped(&format!("http://{address}"), &[], "{}", &signal)?;
+            let mut response = NetHttp.post_stopped(&format!("http://{address}"), &[], "{}", &signal)?;
             read_line_stopped(response.body.as_mut(), &mut String::new(), &signal).map(|_| ())
         });
         ready_rx.recv_timeout(Duration::from_secs(3)).expect("valid test fixture");

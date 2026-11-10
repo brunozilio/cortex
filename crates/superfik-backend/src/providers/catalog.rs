@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use superfik_core::provider::ProviderKey;
 use superfik_core::{ModelOption, ModelProvider, Principal};
-use superfik_native::model::http::UreqHttp;
+use superfik_native::model::http::NetHttp;
 use superfik_protocol::{ProviderEvent, ServerEvent};
 
 use super::ModelProviders;
@@ -20,7 +20,7 @@ pub struct ProviderCatalog;
 
 impl ModelCatalog for ProviderCatalog {
     fn models(&self, provider: ModelProvider, key: ProviderKey) -> Result<Vec<ModelOption>, String> {
-        superfik_native::model::providers::ProviderClient::new(provider, Arc::new(UreqHttp), Arc::new(key))
+        superfik_native::model::providers::ProviderClient::new(provider, Arc::new(NetHttp), Arc::new(key))
             .models()
             .map_err(|error| error.to_string())
     }

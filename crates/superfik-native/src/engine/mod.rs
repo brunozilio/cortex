@@ -15,7 +15,7 @@ use std::sync::Arc;
 use self::job::Job;
 use crate::boundary::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};
 use crate::control::Control;
-use crate::model::http::{Http, UreqHttp};
+use crate::model::http::{Http, NetHttp};
 use crate::model::{ModelApi, ModelError};
 use crate::sessions::Sessions;
 use crate::tools::Workspace;
@@ -41,7 +41,7 @@ impl std::fmt::Debug for NativeEngine {
 
 impl NativeEngine {
     pub fn new(source: Arc<dyn ApiSource>, sessions: Arc<dyn Sessions>) -> Self {
-        Self { source, sessions, mcp: Arc::new(UreqHttp) }
+        Self { source, sessions, mcp: Arc::new(NetHttp) }
     }
 }
 

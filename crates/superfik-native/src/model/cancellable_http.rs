@@ -1,5 +1,6 @@
 //! Async socket ownership behind the synchronous model interface. Dropping the
 //! body or cancelling a run aborts the request, including a stalled SSE stream.
+//! Every HTTP request the engine makes goes through here.
 use super::{ModelError, http::Response};
 use std::{
     io::{self, BufRead, Read},
@@ -11,7 +12,21 @@ use std::{
     time::Duration,
 };
 const POLL: Duration = Duration::from_millis(25);
+/// How long a model turn may stream.
+pub const STREAM_TIMEOUT: Duration = Duration::from_secs(900);
+
 pub fn post(url: &str, headers: &[(String, String)], body: &str, stop: &AtomicBool) -> Result<Response, ModelError> {
+    send(url, headers, Some(body), stop, STREAM_TIMEOUT)
+}
+
+/// A request that may be stopped; `body` makes it a POST, `None` a GET.
+pub fn send(
+    url: &str,
+    headers: &[(String, String)],
+    body: Option<&str>,
+    stop: &AtomicBool,
+    timeout: Duration,
+) -> Result<Response, ModelError> {
     if stop.load(Ordering::Relaxed) {
         return Err(ModelError::Cancelled);
     }
@@ -21,22 +36,27 @@ pub fn post(url: &str, headers: &[(String, String)], body: &str, stop: &AtomicBo
     let signal = cancelled.clone();
     let url = url.to_owned();
     let headers = headers.to_vec();
-    let body = body.to_owned();
+    let body = body.map(str::to_owned);
     std::thread::spawn(move || {
         let result = (|| -> Result<(), String> {
             let runtime =
                 tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|e| e.to_string())?;
             runtime.block_on(async {
-                let client =
-                    reqwest::Client::builder().timeout(Duration::from_secs(900)).build().map_err(|e| e.to_string())?;
-                let mut request = client.post(url);
-                if !headers.iter().any(|(key, _)| key.eq_ignore_ascii_case("content-type")) {
-                    request = request.header("content-type", "application/json");
-                }
+                let client = reqwest::Client::builder().timeout(timeout).build().map_err(|e| e.to_string())?;
+                let mut request = match body {
+                    Some(body) => {
+                        let mut request = client.post(url).body(body);
+                        if !headers.iter().any(|(key, _)| key.eq_ignore_ascii_case("content-type")) {
+                            request = request.header("content-type", "application/json");
+                        }
+                        request
+                    }
+                    None => client.get(url),
+                };
                 for (key, value) in headers {
                     request = request.header(key, value);
                 }
-                let waiting = request.body(body).send();
+                let waiting = request.send();
                 tokio::pin!(waiting);
                 let mut response = loop {
                     tokio::select! {

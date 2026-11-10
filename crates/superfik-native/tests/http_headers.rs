@@ -1,7 +1,7 @@
-//! What `UreqHttp` puts on the wire, read by a one-shot local server.
+//! What `NetHttp` puts on the wire, read by a one-shot local server.
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
-use superfik_native::model::http::{Http, UreqHttp};
+use superfik_native::model::http::{Http, NetHttp};
 
 fn sent_headers(headers: &[(String, String)]) -> Vec<String> {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -24,7 +24,7 @@ fn sent_headers(headers: &[(String, String)]) -> Vec<String> {
         stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}").expect("answer");
         lines
     });
-    UreqHttp.post(&url, headers, "a=b").expect("posted");
+    NetHttp.post(&url, headers, "a=b").expect("posted");
     server.join().expect("server")
 }
 
