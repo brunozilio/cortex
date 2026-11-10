@@ -38,6 +38,9 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent>
         let claude = ClaudeHome::new(home.join(".claude"));
         sources.extend(claude.agent_sources(cwd).into_iter().map(|source| (source.dir, source.namespace)));
     }
+    for dir in request.plugins.iter().flat_map(|plugins| &plugins.local_dirs) {
+        sources.push((dir.join("agents"), None));
+    }
     for dir in request.plugins.iter().flat_map(|plugins| &plugins.plugin_dirs) {
         sources.push((dir.join("agents"), Some(super::skill::plugin_name(dir))));
     }

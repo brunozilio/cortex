@@ -8,6 +8,8 @@ pub struct RunCredentials {
     pub github: Option<String>,
     pub model: Option<crate::provider::ProviderKey>,
     pub model_guard: Option<ModelGuard>,
+    /// The host's in-process MCP servers (the SDK's tools in code).
+    pub mcp: Vec<crate::mcp::LocalMcp>,
 }
 
 type CheckModel = dyn Fn(&crate::ModelOption) -> Result<(), String> + Send + Sync;
@@ -38,6 +40,7 @@ impl std::fmt::Debug for RunCredentials {
         f.debug_struct("RunCredentials")
             .field("github", &self.github.is_some())
             .field("model", &self.model.is_some())
+            .field("mcp", &self.mcp)
             .finish()
     }
 }

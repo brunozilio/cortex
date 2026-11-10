@@ -66,6 +66,16 @@ fn unique(servers: &Map<String, Value>, name: &str) -> String {
     (2..).map(|n| format!("{name}-{n}")).find(|candidate| !taken(candidate)).unwrap_or_default()
 }
 
+/// A server the host adds to every run, written as given (no templates).
+pub fn plain(spec: &McpServerSpec) -> Value {
+    match spec {
+        McpServerSpec::Stdio { command, args, env, .. } => {
+            json!({ "type": "stdio", "command": command, "args": args, "env": env })
+        }
+        McpServerSpec::Http { url, headers, .. } => json!({ "type": "http", "url": url, "headers": headers }),
+    }
+}
+
 fn server(spec: &McpServerSpec, vars: Vars) -> Result<Value, PluginError> {
     let map = |values: &BTreeMap<String, String>| -> Result<Map<String, Value>, PluginError> {
         values.iter().map(|(key, value)| Ok((key.clone(), Value::String(render(value, vars)?)))).collect()

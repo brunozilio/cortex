@@ -39,6 +39,9 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
         let claude = ClaudeHome::new(home.join(".claude"));
         sources.extend(claude.skill_sources(cwd).into_iter().map(|source| (source.dir, source.namespace)));
     }
+    for dir in request.plugins.iter().flat_map(|plugins| &plugins.local_dirs) {
+        sources.push((dir.join("skills"), None));
+    }
     for dir in request.plugins.iter().flat_map(|plugins| &plugins.plugin_dirs) {
         sources.push((dir.join("skills"), Some(plugin_name(dir))));
     }
@@ -173,12 +176,21 @@ fn load(skill: &FoundSkill, args: &str, workspace: &Workspace) -> Outcome {
 pub fn expand_initial(initial: &str, skills: &[FoundSkill], workspace: &Workspace) -> Result<String, String> {
     let initial = initial.trim();
     let Some(command) = initial.strip_prefix('/') else { return Ok(initial.into()) };
+    expand_command(initial, skills, workspace).unwrap_or_else(|| {
+        let name = command.split_whitespace().next().unwrap_or_default();
+        Err(format!("Initial command /{name} is not an available skill or custom command"))
+    })
+}
+
+/// A prompt typed as `/<skill or command> <arguments>` becomes that skill's
+/// text with `$ARGUMENTS` filled in; `None` when it names none (a path such
+/// as `/etc/hosts` stays as typed).
+pub fn expand_command(prompt: &str, skills: &[FoundSkill], workspace: &Workspace) -> Option<Result<String, String>> {
+    let command = prompt.trim().strip_prefix('/')?;
     let (name, args) = command.split_once(char::is_whitespace).unwrap_or((command, ""));
-    let Some(skill) = skills.iter().find(|skill| skill.name == name) else {
-        return Err(format!("Initial command /{name} is not an available skill or custom command"));
-    };
+    let skill = skills.iter().find(|skill| skill.name == name)?;
     let loaded = load(skill, args.trim(), workspace);
-    if loaded.is_error { Err(loaded.content) } else { Ok(loaded.content) }
+    Some(if loaded.is_error { Err(loaded.content) } else { Ok(loaded.content) })
 }
 fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
     let mut found = Vec::new();

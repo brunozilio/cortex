@@ -45,6 +45,7 @@ impl Plugins {
         let brief = PluginBrief {
             mcp_config,
             plugin_dirs: present.iter().map(|p| p.dir.clone()).collect(),
+            local_dirs: Vec::new(),
             instructions: plan.instructions,
         };
         Ok(PromptRequest { plugins: (!brief.is_empty()).then_some(brief), ..request.clone() })
@@ -86,10 +87,10 @@ pub fn discard(brief: Option<&PluginBrief>) {
     }
 }
 
-fn mcp_path(run: RunId) -> PathBuf {
+pub(crate) fn mcp_path(run: RunId) -> PathBuf {
     std::env::temp_dir().join(format!("superfik-mcp-{run}.json"))
 }
 
-fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
+pub(crate) fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
     superfik_private_file::write(path, text.as_bytes())
 }

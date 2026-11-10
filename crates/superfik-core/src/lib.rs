@@ -20,6 +20,7 @@ pub mod gateway;
 pub mod history;
 pub mod ids;
 pub mod job;
+pub mod mcp;
 pub mod memory;
 pub mod model;
 pub mod output_style;

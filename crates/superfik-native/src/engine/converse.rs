@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use superfik_core::{EngineEvent, FailureKind, SessionCommand, SessionId};
+use superfik_core::{EngineEvent, FailureKind, PromptRequest, SessionCommand, SessionId};
 
 use super::MAX_OUTPUT;
 use super::date::today;
@@ -146,12 +146,12 @@ impl Job {
             Ok(initial) => initial,
             Err(error) => return self.fail(&error, FailureKind::Other),
         };
-        let mut user = Message::user(format!(
-            "{}{}{}",
-            initial,
-            if initial.is_empty() { "" } else { "\n\n" },
-            prompt::user_message(&self.request)
-        ));
+        let typed = match tools::skill::expand_command(&self.request.prompt, &skills, &self.workspace) {
+            Some(Ok(prompt)) => prompt::user_message(&PromptRequest { prompt, ..self.request.clone() }),
+            Some(Err(error)) => return self.fail(&error, FailureKind::Other),
+            None => prompt::user_message(&self.request),
+        };
+        let mut user = Message::user(format!("{}{}{}", initial, if initial.is_empty() { "" } else { "\n\n" }, typed));
         let source = if self.request.resume.is_some() { "resume" } else { "startup" };
         for (event, subject, payload) in [
             (

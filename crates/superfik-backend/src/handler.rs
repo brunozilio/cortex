@@ -73,11 +73,13 @@ impl CommandHandler {
             ClientCommand::ListSkills { path } => {
                 let mut skills = self.services.skills.skills(&path);
                 skills.extend(self.services.plugins.skills(&principal));
+                skills.extend(self.services.extensions.skills());
                 outbox.send(ServerEvent::Skills(skills))
             }
             ClientCommand::ListAgents { path } => {
                 let mut agents = self.services.agents.agents(&path);
                 agents.extend(self.services.plugins.agents(&principal));
+                agents.extend(self.services.extensions.agents());
                 outbox.send(ServerEvent::Agents(agents))
             }
             ClientCommand::InspectRepository { path } => workspace::inspect_repository(&self.services, outbox, &path),
@@ -163,11 +165,13 @@ impl CommandHandler {
                 model,
                 owner: Some(owner.clone()),
                 model_guard: None,
+                mcp: Vec::new(),
             },
             ..request.clone()
         };
         let engine = self.services.engines.require(request.model.engine).map_err(|error| error.to_string())?;
         let request = self.services.plugins.brief(owner, run, request)?;
+        let request = self.services.extensions.brief(run, request)?;
         let tool = request
             .memory
             .as_ref()

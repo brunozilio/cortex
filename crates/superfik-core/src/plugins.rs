@@ -125,13 +125,21 @@ pub struct PluginBrief {
     pub mcp_config: Option<PathBuf>,
     #[serde(default)]
     pub plugin_dirs: Vec<PathBuf>,
+    /// Folders laid out like a plugin whose skills, commands and agents are
+    /// offered under their own names, without a plugin namespace (the
+    /// SDK's).
+    #[serde(default)]
+    pub local_dirs: Vec<PathBuf>,
     #[serde(default)]
     pub instructions: Vec<String>,
 }
 
 impl PluginBrief {
     pub fn is_empty(&self) -> bool {
-        self.mcp_config.is_none() && self.plugin_dirs.is_empty() && self.instructions.is_empty()
+        self.mcp_config.is_none()
+            && self.plugin_dirs.is_empty()
+            && self.local_dirs.is_empty()
+            && self.instructions.is_empty()
     }
 }
 

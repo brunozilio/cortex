@@ -173,3 +173,22 @@ fn the_model_guard_also_checks_the_actual_model_of_a_child() {
     assert_eq!(model_api.asked().len(), 2);
     assert!(format!("{:?}", model_api.asked()[1].messages).contains("child model denied"));
 }
+#[test]
+fn a_typed_slash_command_becomes_its_text_and_a_path_stays_as_typed() {
+    let dir = tempfile::tempdir().expect("dir");
+    let commands = dir.path().join(".claude/commands");
+    std::fs::create_dir_all(&commands).expect("commands");
+    std::fs::write(commands.join("audit.md"), "---\ndescription: Audit\n---\nTYPED_COMMAND_SENTINEL $ARGUMENTS")
+        .expect("command");
+    for (typed, expected) in [("/audit project-C", "TYPED_COMMAND_SENTINEL project-C"), ("/etc/hosts", "/etc/hosts")] {
+        let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done".into())])]));
+        let engine = NativeEngine::new(
+            Arc::new(Source(Mutex::new(vec![model_api.clone()]))),
+            Arc::new(InMemorySessions::default()),
+        );
+        let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), typed, model())));
+        assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+        let sent = model_api.asked()[0].messages.last().expect("user").text();
+        assert!(sent.contains(expected), "{typed}: {sent}");
+    }
+}

@@ -147,3 +147,31 @@ fn embedded_resource_links_and_structured_results_survive_tool_output() {
     }
     assert!(outcome(&json!({"content":[{"type":"audio","data":"not-supported"}]})).is_error);
 }
+
+struct Echo;
+
+impl superfik_core::mcp::McpEndpoint for Echo {
+    fn handle(&self, message: &Value) -> Option<Value> {
+        let id = message.get("id")?.clone();
+        let result = match message["method"].as_str() {
+            Some("tools/list") => json!({ "tools": [{ "name": "echo", "inputSchema": { "type": "object" } }] }),
+            Some("tools/call") => {
+                json!({ "content": [{ "type": "text", "text": message["params"]["arguments"]["say"].clone() }] })
+            }
+            _ => json!({}),
+        };
+        Some(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
+    }
+}
+
+#[test]
+fn an_in_process_server_s_tools_are_called_without_http() {
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new(EngineKind::Native, "m", "M"));
+    request.credentials.mcp = vec![superfik_core::mcp::LocalMcp::new("host", Arc::new(Echo))];
+    let http = Arc::new(ScriptedHttp::new([]));
+    let shared: Arc<dyn Http> = http.clone();
+    let tools = tools(&request, &shared);
+    assert_eq!(tools.iter().map(|t| t.spec().name).collect::<Vec<_>>(), ["mcp__host__echo"]);
+    assert_eq!(tools[0].run(&json!({ "say": "hello" }), &Workspace::new("/repo")), Outcome::ok("hello"));
+    assert!(http.sent().is_empty(), "nothing went over HTTP");
+}

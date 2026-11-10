@@ -18,7 +18,7 @@ use superfik_plugins::materialize::materialize;
 use superfik_plugins::{Auth, Installed, PluginBook, PluginError, PluginPackage};
 use superfik_protocol::ServerEvent;
 
-pub(crate) use self::brief::discard;
+pub(crate) use self::brief::{discard, mcp_path, write_private};
 pub use self::cli_token::{SystemTokenCommand, TokenCommand};
 pub use self::oauth::{McpOAuth, OAuthFlow, OAuthRequest};
 pub use self::sealed::SealedSecretStore;

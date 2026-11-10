@@ -1,8 +1,10 @@
-//! MCP tools for the native engine: the app's own servers (memory, notes,
-//! browser, vault, channels) and the plugins' accounts, over streamable
-//! HTTP or as processes, each tool offered as `mcp__<server>__<tool>`.
+//! MCP tools for the native engine: Superfik's own memory server, the
+//! plugins' and the SDK's servers over streamable HTTP or as processes, and
+//! the host's in-process servers ([`LocalTransport`]); each tool is offered
+//! as `mcp__<server>__<tool>`.
 
 mod http;
+mod local;
 mod servers;
 mod stdio;
 mod tool;
@@ -14,6 +16,7 @@ use serde_json::{Value, json};
 use superfik_core::PromptRequest;
 
 pub use self::http::{HttpTransport, parse};
+pub use self::local::LocalTransport;
 pub use self::servers::{ServerSpec, parse_config, servers};
 pub use self::stdio::StdioTransport;
 use self::tool::outcome;
@@ -175,19 +178,21 @@ pub fn tools_isolated_stopped(
     worker: Option<&std::path::Path>,
     stop: &std::sync::atomic::AtomicBool,
 ) -> Vec<Box<dyn Tool>> {
-    servers(request)
-        .iter()
-        .take_while(|_| !stop.load(Ordering::Relaxed))
-        .flat_map(|spec| {
-            let listed = McpServer::open_stopped(spec, http, worker, stop)
-                .and_then(|server| Arc::new(server).tools_stopped(stop));
-            listed.unwrap_or_else(|error| {
-                tracing::warn!(%error, server = spec.name(), "an MCP server's tools are not available to this run");
-                Vec::new()
-            })
+    let listed = |name: &str, server: Result<McpServer, String>| {
+        server.and_then(|server| Arc::new(server).tools_stopped(stop)).unwrap_or_else(|error| {
+            tracing::warn!(%error, server = name, "an MCP server's tools are not available to this run");
+            Vec::new()
         })
-        .map(|tool| Box::new(tool) as Box<dyn Tool>)
-        .collect()
+    };
+    let local = request.credentials.mcp.iter().take_while(|_| !stop.load(Ordering::Relaxed)).flat_map(|local| {
+        let transport = Box::new(LocalTransport::new(Arc::clone(&local.endpoint)));
+        listed(&local.name, Ok(McpServer::new(local.name.clone(), transport)))
+    });
+    let remote = servers(request)
+        .into_iter()
+        .take_while(|_| !stop.load(Ordering::Relaxed))
+        .flat_map(|spec| listed(spec.name(), McpServer::open_stopped(&spec, http, worker, stop)));
+    local.chain(remote).map(|tool| Box::new(tool) as Box<dyn Tool>).collect()
 }
 
 #[cfg(test)]

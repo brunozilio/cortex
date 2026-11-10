@@ -12,6 +12,7 @@
 
 mod authorizer;
 mod dirs;
+mod extensions;
 mod handler;
 mod history;
 mod local;
@@ -30,6 +31,7 @@ mod workspace;
 
 pub use authorizer::{AuthError, Authorizer, LocalAuthorizer, forbidden};
 pub use dirs::{app_data_dir, local_data_dir};
+pub use extensions::Extensions;
 pub use handler::CommandHandler;
 pub use history::{FileSessionStore, InMemorySessionStore, SessionStore, Sessions};
 pub use local::{LocalBackend, Workers};
