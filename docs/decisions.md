@@ -37,7 +37,8 @@ and for connecting MCP servers over HTTP and stdio.
   (ADR 0021), its plugins (ADR 0019) and the SDK host. No web search or
   fetch tool.
 - One engine, ours. No registry of engines, no tool worker process, no
-  git/workspace inspection, no memory optimizer, no session import.
+  git/workspace inspection, no session import. (The memory optimizer came
+  back in ADR 0022.)
 - A separate product from the desktop Superfik: its own data folder,
   nothing shared, nothing migrated. Secrets sit in a sealed file, never
   the system keychain.
@@ -85,3 +86,31 @@ agents, rules, output styles, settings and MCP servers in the project's
 `disabledMcpServers`. Nothing in `.claude/`, `~/.claude`, `CLAUDE.md` or a
 root `.mcp.json` is read; `AGENTS.md`, which no single tool owns, still is.
 Hooks get `SUPERFIK_PROJECT_DIR`.
+
+## 0022 — Memory is reversible and kept without an LLM
+
+Memory loses nothing at once and needs no model to stay tidy. This
+amends ADR 0018's "no memory optimizer": the optimizer is back.
+
+- A memory book that cannot be read is renamed aside
+  (`.json.corrupt-<secs>`) and never written over; saves are synced before
+  the rename. Without an app data folder memory lasts only for the process,
+  never in a temp folder.
+- Text passes `memory::sanitize` before it is kept: keys, tokens and
+  passwords become `[redacted]`.
+- Forgetting moves a memory to `forgotten`, restorable for 30 days;
+  revising keeps the last five texts. Ids are never reused.
+- Recall weighs episodes by retention: half every 30 days, plus
+  `0.5·ln(1+uses)` fading from the last use. Being recalled or found by
+  `memory_search` is use. Facts and procedures do not fade.
+- With an embedding model, a new memory within cosine 0.92 of an older one
+  of the same kind revises it instead of adding a copy.
+- The optimizer is one agent run over the whole memory (`/memory optimize`,
+  `ProjectMemory::optimize`): no recall, no `memory_search`; its edits can
+  be undone as one (`UndoMemory`) until the next edit.
+
+Rejected: a markdown wiki or SQLite as the store (a book is small; BM25
+plus vectors already serve it), an approximate-nearest-neighbour index
+such as FAISS (brute-force cosine over hundreds of vectors takes under a
+millisecond, and a second index would drift from the book), and LLM
+consolidation running in the background.

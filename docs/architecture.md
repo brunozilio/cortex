@@ -111,6 +111,25 @@ same function serves recall and the `memory_search` MCP tool (in process:
 each run gets a `superfik_memory` server on its credentials, bound to its
 owner and project).
 
+Memory is reversible and kept without an LLM (ADR 0022):
+- **Edits**: every change goes through `Memories::edit` (or the
+  optimizer's apply). Text passes `memory::sanitize`. A remembered memory
+  within cosine 0.92 of an older one of its kind revises it
+  (`MemoryBook::merge_near_duplicates`).
+- **Forgetting and revising**: `Forget` moves a memory to
+  `MemoryBook::forgotten` (`Restore` for 30 days). `Revise` keeps the last
+  five texts in `history`.
+- **Recall**: `recall` weighs episodes by `retention`, so they halve every
+  30 days unless they are used. `brief` and `memory_search` mark what they
+  hand out as used.
+- **Optimizer**: `ClientCommand::OptimizeMemory` is one run over
+  `optimize_prompt`, with no recall and no search tool. `UndoMemory` puts
+  the book back until the next edit. The CLI's `/memory
+  optimize|undo|forgotten|restore <id>`.
+- **Store**: an unreadable book is renamed `.json.corrupt-<secs>`, never
+  overwritten. Saves `fsync` before the rename. Without an app data folder
+  memory lives only in the process.
+
 ## Skills, agents and MCP
 
 The engine reads only Superfik's folders (ADR 0021): skills, commands,
