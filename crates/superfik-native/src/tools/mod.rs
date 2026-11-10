@@ -12,6 +12,7 @@ mod glob;
 mod grep;
 mod lsp;
 mod outside;
+pub mod plan_mode;
 mod read;
 pub mod send_message;
 pub mod shells;
@@ -230,6 +231,8 @@ pub fn standard() -> Vec<Box<dyn Tool>> {
         Box::new(BashOutput),
         Box::new(KillShell),
         Box::new(ask::AskUserQuestion),
+        Box::new(plan_mode::EnterPlanMode),
+        Box::new(plan_mode::ExitPlanMode),
     ]
 }
 

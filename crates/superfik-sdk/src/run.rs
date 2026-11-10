@@ -19,7 +19,9 @@ pub struct Run {
     client: Arc<Client>,
     /// Where a conversation's run records its session id.
     pub(crate) resume: Arc<Mutex<Option<SessionId>>>,
-    /// A planning run's plan, read for its verification criteria.
+    /// The conversation's mode, which the agent changes by leaving or entering plan mode.
+    pub(crate) mode: Arc<Mutex<PermissionMode>>,
+    /// The run's plan, read for its verification criteria.
     pub(crate) plan: Option<PlanWatch>,
     done: bool,
 }
@@ -33,7 +35,15 @@ impl Run {
             client.forget(run);
             return Err(error);
         }
-        Ok(Run { id: run, events, client: Arc::clone(client), resume: Arc::default(), plan: None, done: false })
+        Ok(Run {
+            id: run,
+            events,
+            client: Arc::clone(client),
+            resume: Arc::default(),
+            mode: Arc::default(),
+            plan: None,
+            done: false,
+        })
     }
 
     pub fn id(&self) -> RunId {
@@ -64,6 +74,9 @@ impl Run {
         if let EngineEvent::SessionStarted(id) = event {
             *self.resume.lock().unwrap_or_else(PoisonError::into_inner) = Some(id.clone());
         }
+        if let EngineEvent::ModeChanged(mode) = event {
+            *self.mode.lock().unwrap_or_else(PoisonError::into_inner) = *mode;
+        }
         if let Some(plan) = &mut self.plan {
             plan.observe(event);
         }
@@ -93,14 +106,21 @@ impl Run {
         RunControl { id: self.id, client: Arc::clone(&self.client) }
     }
 
-    /// Runs to the end, denying anything the agent asks, and returns its
+    /// Runs to the end, denying anything the agent asks (a plan it presents
+    /// is kept in the text and planning goes on), and returns its
     /// text. For runs that need answers, iterate instead.
     pub fn text(mut self) -> Result<String, Error> {
         let mut text = String::new();
         while let Some(event) = self.next_event() {
             match event {
                 EngineEvent::TextDelta(delta) => text.push_str(&delta),
-                EngineEvent::Asked(ask) => self.answer(ask.id, Decision::Deny)?,
+                EngineEvent::Asked(ask) => {
+                    if let superfik_core::AskKind::Plan { plan } = &ask.kind {
+                        text.push_str(plan);
+                        text.push_str("\n\n");
+                    }
+                    self.answer(ask.id, Decision::Deny)?;
+                }
                 EngineEvent::Failed(message) => return Err(Error::Run(message)),
                 EngineEvent::Cancelled => return Err(Error::Run("cancelled".into())),
                 _ => {}

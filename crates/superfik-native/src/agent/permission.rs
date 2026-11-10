@@ -23,7 +23,7 @@ impl Agent<'_> {
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind: AskKind::Questions(asked.clone()) }));
         match answer.recv() {
             Ok(Decision::Answer(picks)) => Outcome::ok(ask::answers(&asked, &picks)),
-            Ok(Decision::Allow | Decision::AllowAlways) => Outcome::ok(ask::answers(&asked, &[])),
+            Ok(Decision::Allow | Decision::AllowAlways | Decision::Approve(_)) => Outcome::ok(ask::answers(&asked, &[])),
             Ok(Decision::Deny) => Outcome::error(
                 "The user declined to answer. Do not ask again; go on with your best judgement and say what you assumed.",
             ),
@@ -110,7 +110,7 @@ impl Agent<'_> {
                 let kind = AskKind::Permission { tool: name.clone(), subject: subject.to_owned(), rememberable: true };
                 (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind }));
                 match answer.recv() {
-                    Ok(Decision::Allow | Decision::Answer(_)) => tool.run(input, self.workspace),
+                    Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => tool.run(input, self.workspace),
                     Ok(Decision::AllowAlways) => {
                         self.control.remember(|remembered| remembered.remember(&name, access, subject));
                         tool.run(input, self.workspace)

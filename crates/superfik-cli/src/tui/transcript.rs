@@ -40,6 +40,11 @@ pub enum Entry {
         diff: String,
         untracked: Vec<String>,
     },
+    /// The plan the agent put to the user (`ExitPlanMode`).
+    Plan {
+        plan: String,
+        outcome: super::plan::Outcome,
+    },
     Notice(String),
     Error(String),
 }
@@ -57,6 +62,8 @@ pub struct Transcript {
     pub activity: Option<String>,
     /// Commands the agent left running in the background, by id.
     pub background: Vec<String>,
+    /// The `ExitPlanMode` call waiting on the user, by id.
+    pub(super) plan_call: Option<String>,
 }
 
 fn user_text(entry: &Entry) -> Option<String> {
@@ -97,6 +104,9 @@ impl Transcript {
     /// Folds one event of the running run in. Asks are the chat's to
     /// handle; they leave the transcript as it is.
     pub fn apply(&mut self, event: &EngineEvent) {
+        if self.planned(event) {
+            return;
+        }
         match event {
             EngineEvent::ThinkingDelta(delta) => {
                 match self.entries.last_mut() {

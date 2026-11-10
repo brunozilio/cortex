@@ -56,6 +56,13 @@ provider's key (`RunCredentials::model`, never serialized).
   never (its folder is gone), and only the top-level agent sends them.
 - **Prompt**: planning mode, output styles, tool descriptions carrying the
   working rules; project instructions and rules (`docs/native-engine.md`).
+- **Plan mode** (`agent/plan_mode.rs`): the top-level agent presents its
+  plan with `ExitPlanMode` (`AskKind::Plan`); `Decision::Approve(mode)`
+  switches the run's mode and the agent implements the plan in the same
+  run, `Deny` keeps planning. `EnterPlanMode` turns planning on. Both emit
+  `EngineEvent::ModeChanged`, which the SDK's `Session` follows (later
+  runs keep the mode) and the chat shows; the presented plan's
+  `Verification` section becomes the session's criteria.
 - **Compaction** keeps only the nine-section `<summary>`.
 - **Side calls** (`chores/`): `Title`, `Suggest`, `Recap`, `Side`,
   `HeadsUp`, `Rename`; one model turn without tools, never added to the

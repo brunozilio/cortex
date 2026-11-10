@@ -14,8 +14,18 @@ pub struct AgentAsk {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AskKind {
-    Permission { tool: String, subject: String, rememberable: bool },
+    Permission {
+        tool: String,
+        subject: String,
+        rememberable: bool,
+    },
     Questions(Vec<Question>),
+    /// The agent's plan, put to the user before it leaves plan mode:
+    /// [`Decision::Approve`] names the mode to implement it in, `Deny`
+    /// keeps planning.
+    Plan {
+        plan: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,6 +48,8 @@ pub enum Decision {
     AllowAlways,
     Deny,
     Answer(Vec<Vec<usize>>),
+    /// A plan approved, to be carried out in this mode.
+    Approve(PermissionMode),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]

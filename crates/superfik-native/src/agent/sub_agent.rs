@@ -15,6 +15,11 @@ use crate::tools::subagent::{self, AGENT_TOOL, AgentTool};
 use crate::tools::{Outcome, Workspace};
 use crate::transcript::{Message, Role};
 
+/// Tools only the top-level agent has: starting or messaging agents, and
+/// leaving or entering plan mode.
+const TOP_LEVEL_ONLY: [&str; 4] =
+    [AGENT_TOOL, SEND_MESSAGE_TOOL, crate::tools::plan_mode::EXIT_PLAN_TOOL, crate::tools::plan_mode::ENTER_PLAN_TOOL];
+
 impl Agent<'_> {
     pub(super) fn sub_agent_with(
         &self,
@@ -165,9 +170,7 @@ impl Agent<'_> {
                     .request
                     .tools
                     .iter()
-                    .filter(|spec| {
-                        spec.name != AGENT_TOOL && spec.name != SEND_MESSAGE_TOOL && config.allows(&spec.name)
-                    })
+                    .filter(|spec| !TOP_LEVEL_ONLY.contains(&spec.name.as_str()) && config.allows(&spec.name))
                     .cloned()
                     .collect(),
                 effort: config.effort.unwrap_or(self.request.effort),

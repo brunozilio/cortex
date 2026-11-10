@@ -9,6 +9,7 @@ use super::tasks::Tasks;
 use super::{Agent, Ending, SHOWN_OUTPUT};
 use crate::model::ModelError;
 use crate::tools::ask::ASK_TOOL;
+use crate::tools::plan_mode::{ENTER_PLAN_TOOL, EXIT_PLAN_TOOL};
 use crate::tools::send_message::SEND_MESSAGE_TOOL;
 use crate::tools::subagent::{AGENT_TOOL, AgentTool};
 use crate::tools::{Outcome, clip};
@@ -147,6 +148,8 @@ impl Agent<'_> {
             match tool {
                 None => Outcome::error(format!("There is no tool named {name}.")),
                 Some(_) if name == ASK_TOOL => self.ask_user(id, input),
+                Some(_) if name == EXIT_PLAN_TOOL => self.exit_plan_mode(id, input),
+                Some(_) if name == ENTER_PLAN_TOOL => self.enter_plan_mode(),
                 Some(_) if name == AGENT_TOOL && (AgentTool { agents: self.agents.to_vec() }).background(input) => {
                     self.start_background(input, tasks, parent, spawn)
                 }

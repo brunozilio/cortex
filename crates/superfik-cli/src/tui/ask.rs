@@ -1,7 +1,15 @@
 //! What the agent is asking: permission for a tool, or questions with
 //! choices. Keys pick; a finished pick is a [`Decision`].
 
-use superfik_sdk::{AgentAsk, AskKind, Decision, Question};
+use superfik_sdk::{AgentAsk, AskKind, Decision, PermissionMode, Question};
+
+/// What a plan can be answered with, in order: the mode to carry it out in,
+/// or `None` to keep planning.
+const PLAN_CHOICES: [(&str, Option<PermissionMode>); 3] = [
+    ("Yes, and auto-accept edits", Some(PermissionMode::AcceptEdits)),
+    ("Yes, and manually approve edits", Some(PermissionMode::Ask)),
+    ("No, keep planning", None),
+];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pending {
@@ -31,11 +39,12 @@ impl Pending {
     pub fn questions(&self) -> &[Question] {
         match &self.ask.kind {
             AskKind::Questions(questions) => questions,
-            AskKind::Permission { .. } => &[],
+            AskKind::Permission { .. } | AskKind::Plan { .. } => &[],
         }
     }
 
-    /// The choices of the current question, or Yes / Always / No.
+    /// The choices of the current question, Yes / Always / No, or how to
+    /// carry out a plan.
     pub fn choices(&self) -> Vec<String> {
         match &self.ask.kind {
             AskKind::Permission { rememberable, .. } => {
@@ -50,6 +59,7 @@ impl Pending {
                 .get(self.question)
                 .map(|q| q.options.iter().map(|o| o.label.clone()).collect())
                 .unwrap_or_default(),
+            AskKind::Plan { .. } => PLAN_CHOICES.iter().map(|(label, _)| (*label).to_owned()).collect(),
         }
     }
 
@@ -108,6 +118,12 @@ impl Pending {
                 _ => Decision::Deny,
             });
         }
+        if let AskKind::Plan { .. } = &self.ask.kind {
+            return Some(match PLAN_CHOICES.get(self.cursor) {
+                Some((_, Some(mode))) => Decision::Approve(*mode),
+                _ => Decision::Deny,
+            });
+        }
         if !self.multi() {
             while self.picked.len() <= self.question {
                 self.picked.push(Vec::new());
@@ -156,6 +172,19 @@ mod tests {
         assert_eq!(ask.choices().len(), 2);
         ask.key(Key::Down);
         assert_eq!(ask.key(Key::Enter), Some(Decision::Deny));
+    }
+
+    #[test]
+    fn a_plan_is_approved_in_a_mode_or_kept_planning() {
+        let plan = || Pending::new(AgentAsk { id: AskId("p".into()), kind: AskKind::Plan { plan: "## Plan".into() } });
+        assert_eq!(plan().choices().len(), 3);
+        assert_eq!(plan().key(Key::Enter), Some(Decision::Approve(PermissionMode::AcceptEdits)));
+        assert_eq!(plan().key(Key::Char('2')), Some(Decision::Approve(PermissionMode::Ask)));
+        assert_eq!(plan().key(Key::Char('3')), Some(Decision::Deny));
+        assert_eq!(plan().key(Key::Esc), Some(Decision::Deny), "esc keeps planning");
+        let mut ask = plan();
+        ask.key(Key::Up);
+        assert_eq!(ask.key(Key::Enter), Some(Decision::Deny), "up from the first wraps to keep planning");
     }
 
     #[test]

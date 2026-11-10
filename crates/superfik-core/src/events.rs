@@ -73,6 +73,9 @@ pub enum EngineEvent {
     Rewound(Rewound),
     Asked(AgentAsk),
     AskWithdrawn(AskId),
+    /// The agent left or entered plan mode (`ExitPlanMode` approved,
+    /// `EnterPlanMode`); later runs of the conversation keep this mode.
+    ModeChanged(crate::PermissionMode),
     /// The judge graded the run against its verification criteria.
     Verified(crate::verification::Verdict),
     Completed {

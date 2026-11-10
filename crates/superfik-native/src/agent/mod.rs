@@ -11,6 +11,7 @@
 mod call;
 mod conversations;
 mod permission;
+mod plan_mode;
 mod sub_agent;
 mod tasks;
 mod verify;

@@ -42,6 +42,11 @@ pub fn print(superfik: &Superfik, cwd: PathBuf, wanted: Wanted<'_>, prompt: &str
                 let _ = out.flush();
             }
             EngineEvent::ToolStarted(call) => eprintln!("\x1b[2m● {}({})\x1b[0m", call.name, call.summary),
+            EngineEvent::Asked(superfik_sdk::AgentAsk { id, kind: superfik_sdk::AskKind::Plan { plan } }) => {
+                let _ = writeln!(out, "{plan}");
+                eprintln!("\x1b[2mplan not carried out: run again with --mode edits to implement it\x1b[0m");
+                run.answer(id, Decision::Deny).map_err(|e| e.to_string())?;
+            }
             EngineEvent::Asked(ask) => {
                 eprintln!("\x1b[33mdenied: the agent asked for permission (use --mode)\x1b[0m");
                 run.answer(ask.id, Decision::Deny).map_err(|e| e.to_string())?;

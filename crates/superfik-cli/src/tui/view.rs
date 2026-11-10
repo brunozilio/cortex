@@ -127,6 +127,7 @@ fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
     } else if let Some(pending) = &app.ask {
         let title = match &pending.ask.kind {
             AskKind::Permission { tool, subject, .. } => format!("Allow {tool}: {subject}?"),
+            AskKind::Plan { .. } => "Ready to code? The plan is above. Would you like to proceed?".to_owned(),
             AskKind::Questions(questions) => {
                 questions.get(pending.question).map(|q| q.text.clone()).unwrap_or_default()
             }
@@ -144,6 +145,7 @@ fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
         let hint = match &pending.ask.kind {
             AskKind::Permission { .. } => "y yes · a always · n no · esc denies",
             AskKind::Questions(_) => "number or ↑↓ Enter · space toggles a multiple choice · esc skips",
+            AskKind::Plan { .. } => "number or ↑↓ Enter · esc keeps planning · type after to say what to change",
         };
         lines.push(Line::from(hint).dim());
     } else if let Some(picker) = &app.picker {
