@@ -257,4 +257,6 @@ pub use sanitize::{REDACTED, Sanitized, sanitize};
 pub use search::{Semantic, activate, search};
 
 #[cfg(test)]
+mod lifecycle_tests;
+#[cfg(test)]
 mod tests;
