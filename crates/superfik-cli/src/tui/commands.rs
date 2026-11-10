@@ -139,7 +139,25 @@ pub fn run(app: &mut App, command: Command) {
 pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, String)> {
     let builtin = Command::HELP.iter().map(|(name, about)| ((*name).to_owned(), (*about).to_owned()));
     let skills = skills.iter().map(|(name, about)| (name.clone(), about.clone()));
-    builtin.chain(skills).filter(|(name, _)| name.starts_with(typed)).take(8).collect()
+    builtin.chain(skills).filter(|(name, _)| name.starts_with(typed)).collect()
+}
+
+/// How many `/` suggestions show at once; the arrows scroll the rest.
+pub const SHOWN: usize = 8;
+
+/// The suggestion after (or before) `current` among `len`, wrapping round.
+pub fn step(current: usize, len: usize, forward: bool) -> usize {
+    match len {
+        0 => 0,
+        _ if forward => (current % len + 1) % len,
+        _ => (current % len + len - 1) % len,
+    }
+}
+
+/// Which of `len` suggestions show, scrolled so `chosen` is on screen.
+pub fn shown(len: usize, chosen: usize) -> std::ops::Range<usize> {
+    let start = (chosen + 1).saturating_sub(SHOWN);
+    start..(start + SHOWN).min(len)
 }
 
 #[cfg(test)]
@@ -151,6 +169,22 @@ mod tests {
         let skills = [("memo".to_owned(), "Writes a memo".to_owned()), ("audit".to_owned(), "Audits".to_owned())];
         let names: Vec<String> = suggestions("me", &skills).into_iter().map(|(name, _)| name).collect();
         assert_eq!(names, ["memory", "memo"]);
-        assert_eq!(suggestions("", &skills).len(), 8, "at most eight");
+        assert_eq!(suggestions("", &skills).len(), Command::HELP.len() + 2, "every match, not just a screenful");
+    }
+
+    #[test]
+    fn the_arrows_wrap_around_the_suggestions() {
+        assert_eq!(step(0, 20, false), 19, "up from the first goes to the last");
+        assert_eq!(step(19, 20, true), 0, "down from the last goes to the first");
+        assert_eq!(step(4, 20, true), 5);
+        assert_eq!(step(0, 0, true), 0, "nothing to move through");
+    }
+
+    #[test]
+    fn the_shown_suggestions_follow_the_chosen_one() {
+        assert_eq!(shown(5, 2), 0..5, "a short list shows whole");
+        assert_eq!(shown(20, 3), 0..SHOWN, "the top while the choice is on screen");
+        assert_eq!(shown(20, 12), 12 + 1 - SHOWN..13, "scrolled so the choice is the last row");
+        assert_eq!(shown(20, 19), 20 - SHOWN..20);
     }
 }

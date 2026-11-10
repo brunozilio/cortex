@@ -135,8 +135,8 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
     let alt = event.modifiers.contains(KeyModifiers::ALT);
     let shift = event.modifiers.contains(KeyModifiers::SHIFT);
     let cmd = event.modifiers.intersects(KeyModifiers::SUPER | KeyModifiers::META);
-    let completing =
-        app.input.slash_word().is_some_and(|typed| !super::commands::suggestions(typed, &app.skills).is_empty());
+    let offered = app.input.slash_word().map_or(0, |typed| super::commands::suggestions(typed, &app.skills).len());
+    let completing = offered > 0;
     if event.code != KeyCode::Esc {
         app.clear_armed = None;
     }
@@ -150,8 +150,8 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
         KeyCode::Char('f') if alt => app.input.word_right(),
         KeyCode::Char('d') if alt => app.input.delete_word_forward(),
         KeyCode::Delete if alt || ctrl => app.input.delete_word_forward(),
-        KeyCode::Up if completing => app.suggestion = app.suggestion.wrapping_sub(1),
-        KeyCode::Down if completing => app.suggestion = app.suggestion.wrapping_add(1),
+        KeyCode::Up if completing => app.suggestion = super::commands::step(app.suggestion, offered, false),
+        KeyCode::Down if completing => app.suggestion = super::commands::step(app.suggestion, offered, true),
         KeyCode::Up if app.input.on_first_line() => app.input.older(),
         KeyCode::Down if app.input.on_last_line() => app.input.newer(),
         KeyCode::Up => app.input.line(true),

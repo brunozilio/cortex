@@ -158,11 +158,17 @@ fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
         super::side::lines(side, app.busy(), width, &mut lines);
     } else if let Some(typed) = app.input.slash_word() {
         let found = super::commands::suggestions(typed, &app.skills);
-        let chosen = app.suggestion % found.len().max(1);
-        for (i, (name, about)) in found.into_iter().enumerate() {
+        let total = found.len();
+        let chosen = app.suggestion % total.max(1);
+        let window = super::commands::shown(total, chosen);
+        let more = window.len() < total;
+        for (i, (name, about)) in found.into_iter().enumerate().skip(window.start).take(window.len()) {
             let style = if i == chosen { Style::new().fg(Color::Cyan) } else { Style::new() };
             let about = wrap(&about, width.saturating_sub(24)).into_iter().next().unwrap_or_default();
             lines.push(Line::from(vec![Span::styled(format!("  /{name:<20}"), style), about.dim()]));
+        }
+        if more {
+            lines.push(Line::from(format!("  {}/{total} · ↑↓ for more · tab completes", chosen + 1)).dim());
         }
     }
     lines
