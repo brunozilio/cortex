@@ -44,6 +44,29 @@ fn remembering_numbers_cleans_and_skips_repeats() {
 }
 
 #[test]
+fn secrets_never_reach_a_memory() {
+    let cases = [
+        ("The key is sk-ant-api03-AbCdEf0123456789xyz", "The key is [redacted]"),
+        ("Token ghp_0123456789abcdefABCDEF0123456789abcd works", "Token [redacted] works"),
+        ("Slack bot (xoxb-1234-5678-abcdefgh) posts", "Slack bot ([redacted]) posts"),
+        ("AWS AKIAIOSFODNN7EXAMPLE in CI", "AWS [redacted] in CI"),
+        ("Send Authorization: Bearer abc.def-123", "Send Authorization: Bearer [redacted]"),
+        ("Login with password=hunter2 and API_KEY=xyz", "Login with password=[redacted] and API_KEY=[redacted]"),
+        ("The db password: hunter2 is old", "The db password: [redacted] is old"),
+        ("JWT eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl here", "JWT [redacted] here"),
+        ("Run cargo test --workspace; the task-id is sk-short", "Run cargo test --workspace; the task-id is sk-short"),
+    ];
+    for (written, kept) in cases {
+        let mut book = MemoryBook::default();
+        book.apply(&[remember(MemoryKind::Semantic, written, &[])], &by_agent(1));
+        assert_eq!(book.memories[0].text, kept, "from {written:?}");
+    }
+    let mut book = book();
+    book.apply(&[MemoryEdit::Revise { id: MemoryId(0), text: "Use token=s3cr3t".into() }], &by_agent(2));
+    assert_eq!(book.memories[0].text, "Use token=[redacted]", "revisions are cleaned too");
+}
+
+#[test]
 fn ids_are_never_reused_after_forgetting() {
     let mut book = book();
     book.apply(&[MemoryEdit::Forget { id: MemoryId(3) }], &by_agent(1));

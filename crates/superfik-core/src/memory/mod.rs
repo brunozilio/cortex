@@ -155,7 +155,7 @@ impl MemoryBook {
 }
 
 fn clean_text(text: &str) -> Option<String> {
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let text = sanitize(text).into_inner();
     if text.is_empty() {
         return None;
     }
@@ -182,10 +182,12 @@ fn clean_tags(tags: &[String]) -> Vec<String> {
 
 mod brief;
 mod recall;
+mod sanitize;
 pub mod search;
 
 pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, parse_memory_edits};
 pub use recall::{RecallBudget, links, recall};
+pub use sanitize::{REDACTED, Sanitized, sanitize};
 pub use search::{Semantic, activate, search};
 
 #[cfg(test)]
