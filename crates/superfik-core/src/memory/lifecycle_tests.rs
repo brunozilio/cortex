@@ -61,6 +61,39 @@ fn a_revision_keeps_the_texts_it_replaced() {
 }
 
 #[test]
+fn a_new_memory_that_says_the_same_revises_the_old_one() {
+    let mut book = book();
+    let since = book.next_id();
+    book.apply(
+        &[
+            remember(MemoryKind::Semantic, "Every surface is drawn as an SDF", &["sdf"]),
+            remember(MemoryKind::Procedural, "Run clippy with -D warnings", &[]),
+            remember(MemoryKind::Semantic, "The CLI uses ratatui", &[]),
+        ],
+        &by_agent(500),
+    );
+    for (id, vector) in [(0, [1.0, 0.0, 0.0]), (1, [0.0, 1.0, 0.0]), (2, [1.0, 0.0, 0.0]), (3, [0.0, 0.0, 1.0])] {
+        book.vectors.insert(MemoryId(id), vector.to_vec());
+    }
+    for (id, vector) in [(4, [0.99, 0.05, 0.0]), (5, [1.0, 0.02, 0.0]), (6, [0.5, 0.5, 0.7])] {
+        book.vectors.insert(MemoryId(id), vector.to_vec());
+    }
+
+    let merged = book.merge_near_duplicates(since, 600);
+
+    assert_eq!(merged, vec![(MemoryId(4), MemoryId(0))], "same kind only; the episode 2 and the new ratatui stay");
+    let fact = &book.memories[0];
+    assert_eq!(fact.text, "Every surface is drawn as an SDF", "the newer wording wins");
+    assert_eq!(
+        fact.history.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(),
+        vec!["The renderer draws every surface as a signed distance field"]
+    );
+    assert_eq!(fact.tags, vec!["render".to_owned(), "sdf".to_owned()], "tags join");
+    assert_eq!(book.memories.iter().map(|m| m.id.0).collect::<Vec<_>>(), vec![0, 1, 2, 3, 5, 6]);
+    assert!(!book.vectors.contains_key(&MemoryId(4)) && book.vectors[&MemoryId(0)] == vec![0.99, 0.05, 0.0]);
+}
+
+#[test]
 fn old_episodes_fade_unless_they_keep_being_used() {
     let day = 24 * 60 * 60;
     let now = 200 * day;

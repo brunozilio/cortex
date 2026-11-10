@@ -247,6 +247,7 @@ fn clean_tags(tags: &[String]) -> Vec<String> {
 }
 
 mod brief;
+mod dedup;
 mod recall;
 mod sanitize;
 pub mod search;

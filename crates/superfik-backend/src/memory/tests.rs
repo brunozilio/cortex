@@ -195,6 +195,22 @@ fn search_uses_meaning_once_vectors_exist() {
 }
 
 #[test]
+fn remembering_the_same_meaning_again_revises_instead_of_adding() {
+    let memories = Memories::new(Arc::new(InMemoryStore::default()), Arc::new(Buckets));
+    let owner = Principal::LocalOwner;
+    let project = Path::new("/repo");
+    memories.edit(&owner, project, &[remember("The renderer draws every surface")], by_user());
+    match memories.edit(&owner, project, &[remember("Every renderer draws the surface")], by_user()) {
+        ServerEvent::Memory { memories, .. } => {
+            assert_eq!(memories.len(), 1, "{memories:?}");
+            assert_eq!(memories[0].text, "Every renderer draws the surface");
+            assert_eq!(memories[0].history.len(), 1);
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+#[test]
 fn a_tool_shortens_what_is_recalled() {
     let memories = Memories::plain(Arc::new(InMemoryStore::default()));
     let owner = Principal::LocalOwner;

@@ -100,8 +100,10 @@ impl Memories {
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
         let mut changed = book.clone();
+        let since = changed.next_id();
         changed.apply(edits, &by);
         self.embed_missing(&mut changed);
+        changed.merge_near_duplicates(since, by.now);
         if let Err(error) = self.store.save(owner, project, &changed) {
             tracing::warn!(%error, "could not save memory");
             return ServerEvent::error(format!("could not save memory: {error}"));
