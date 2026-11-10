@@ -113,6 +113,21 @@ impl Plugin {
     }
 }
 
+/// Each plugin's language servers, in order, as a layer over the settings'
+/// (ADR 0023); a plugin whose servers do not parse is left out.
+pub fn lsp_layers(plugins: &[Plugin]) -> Vec<crate::prompt::settings::LspLayer> {
+    plugins
+        .iter()
+        .filter_map(|plugin| match serde_json::from_value(plugin.lsp_servers()?) {
+            Ok(layer) => Some(layer),
+            Err(error) => {
+                tracing::warn!(%error, plugin = %plugin.name, "a plugin's language servers are left out");
+                None
+            }
+        })
+        .collect()
+}
+
 fn subdirs(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     let mut dirs: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).filter(|path| path.is_dir()).collect();
@@ -152,5 +167,30 @@ mod tests {
             [("beta", hosted.path()), ("acme", plugins.join("acme-tools").as_path())],
             "the host's first; a folder's own copy of a name the host has is left out"
         );
+    }
+
+    #[test]
+    fn language_servers_come_from_lsp_json_or_the_manifest_and_a_broken_set_is_left_out() {
+        let write = |path: PathBuf, text: &str| {
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+            std::fs::write(path, text).expect("write");
+        };
+        let (own, manifest, broken) = (
+            tempfile::tempdir().expect("own"),
+            tempfile::tempdir().expect("manifest"),
+            tempfile::tempdir().expect("broken"),
+        );
+        write(own.path().join(".lsp.json"), r#"{"zls": {"command": "zls", "extensionToLanguage": {".zig": "zig"}}}"#);
+        write(
+            manifest.path().join(".superfik-plugin/plugin.json"),
+            r#"{"name": "m", "lspServers": {"gopls": {"args": ["${SUPERFIK_PLUGIN_ROOT}/x"]}}}"#,
+        );
+        write(broken.path().join(".lsp.json"), r#"{"gopls": {"args": "not a list"}}"#);
+        let plugins = [Plugin::at(own.path()), Plugin::at(manifest.path()), Plugin::at(broken.path())];
+        let layers = lsp_layers(&plugins);
+        assert_eq!(layers.len(), 2, "{layers:?}");
+        assert!(layers[0].contains_key("zls"));
+        let args = layers[1]["gopls"].args.clone().expect("args");
+        assert_eq!(args, [format!("{}/x", manifest.path().display())]);
     }
 }

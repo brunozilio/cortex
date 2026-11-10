@@ -140,6 +140,11 @@ The agent asks language servers instead of only searching text.
 A server runs the project's code as its language does (build scripts,
 proc macros), like the hooks in a project's settings.
 
+The pool is single-owner: it is keyed by server and root, not by
+`Principal`, which fits the local daemon (one owner per computer). A
+multi-user server must add the principal to the key, so owners never
+share a process or its open documents.
+
 Rejected: an MCP server for LSP (one more process and protocol between the
 agent and the server, and no way to add diagnostics to an edit), and a
 server per run (rust-analyzer indexing anew on every prompt).

@@ -6,8 +6,8 @@ use serde_json::Value;
 /// How many problems one edit's result lists.
 pub const MAX_PROBLEMS: usize = 20;
 
-/// Errors first, then warnings, by line; hints and information left out.
-/// `None` when nothing is left to report.
+/// Errors first, then warnings, by line, in a `<diagnostics>` block; hints
+/// and information left out. `None` when nothing is left to report.
 pub fn report(file: &str, diagnostics: &[Value]) -> Option<String> {
     let mut problems: Vec<(u64, u64, u64, String)> = diagnostics
         .iter()
@@ -35,7 +35,7 @@ pub fn report(file: &str, diagnostics: &[Value]) -> Option<String> {
     if more > 0 {
         lines.push(format!("… and {more} more"));
     }
-    Some(lines.join("\n"))
+    Some(format!("<diagnostics>\n{}\n</diagnostics>", lines.join("\n")))
 }
 
 #[cfg(test)]
@@ -60,7 +60,10 @@ mod tests {
         ];
         assert_eq!(
             report("src/a.rs", &found).as_deref(),
-            Some("src/a.rs:8:5 error: mismatched types expected `u32`\nsrc/a.rs:2:5 warning: unused variable `x`")
+            Some(
+                "<diagnostics>\nsrc/a.rs:8:5 error: mismatched types expected `u32`\nsrc/a.rs:2:5 warning: unused \
+                 variable `x`\n</diagnostics>"
+            )
         );
         assert_eq!(report("src/a.rs", &[problem(3, 0, "info")]), None);
         assert_eq!(report("src/a.rs", &[]), None);
@@ -70,7 +73,7 @@ mod tests {
     fn a_long_list_is_cut_and_says_how_many_more() {
         let found: Vec<Value> = (0..25).map(|line| problem(1, line, "bad")).collect();
         let text = report("a.rs", &found).expect("report");
-        assert_eq!(text.lines().count(), MAX_PROBLEMS + 1);
-        assert!(text.ends_with("… and 5 more"));
+        assert_eq!(text.lines().count(), MAX_PROBLEMS + 3);
+        assert!(text.ends_with("… and 5 more\n</diagnostics>"));
     }
 }

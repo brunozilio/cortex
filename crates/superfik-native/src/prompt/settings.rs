@@ -135,14 +135,8 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
             Ok(None) => {}
             Err(error) => tracing::warn!(%error, plugin = %plugin.name, "a plugin's hooks are left out"),
         }
-        match plugin.lsp_servers().map(serde_json::from_value::<LspLayer>) {
-            Some(Ok(layer)) => lsp_servers.push(layer),
-            Some(Err(error)) => {
-                tracing::warn!(%error, plugin = %plugin.name, "a plugin's language servers are left out")
-            }
-            None => {}
-        }
     }
+    lsp_servers.extend(crate::plugins::lsp_layers(plugins));
     if ["CLAUDE_CODE_DISABLE_AUTO_MEMORY", "SUPERFIK_DISABLE_AUTO_MEMORY"]
         .iter()
         .any(|key| std::env::var(key).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes")))

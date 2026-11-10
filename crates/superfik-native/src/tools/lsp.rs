@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use superfik_core::lsp::answer::describe;
+use superfik_core::lsp::answer::{describe, explain};
 use superfik_core::lsp::uri::uri_of;
 use superfik_core::lsp::{Operation, Query};
 
@@ -59,10 +59,7 @@ impl Tool for Lsp {
     fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
         match ask(input, workspace) {
             Ok(answer) => Outcome::ok(clip(&answer, OUTPUT)),
-            Err(error) if error.contains("content modified") || error.contains("did not answer") => Outcome::error(
-                format!("{error}. The language server is still indexing the project; try again shortly."),
-            ),
-            Err(error) => Outcome::error(error),
+            Err(error) => Outcome::error(explain(&error)),
         }
     }
 }
@@ -84,8 +81,6 @@ fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
     let mut answer = server.request(method, params, &workspace.stop, ANSWER_WAIT)?;
     if let Some((method, params)) = query.follow_up(&answer) {
         answer = server.request(method, params, &workspace.stop, ANSWER_WAIT)?;
-    } else if matches!(query.operation, Operation::IncomingCalls | Operation::OutgoingCalls) {
-        answer = Value::Null;
     }
     let lines = |path: &Path, number: u32| {
         let read = if path == file { Some(text.clone()) } else { std::fs::read_to_string(path).ok() };

@@ -176,7 +176,7 @@ impl Workspace {
     /// there is no server or nothing wrong.
     pub fn diagnosed(&self, path: &Path, text: &str) -> String {
         let problems = self.lsp.as_ref().and_then(|lsp| lsp.problems(path, text, &self.cwd, &self.stop));
-        problems.map(|problems| format!("\n\n<diagnostics>\n{problems}\n</diagnostics>")).unwrap_or_default()
+        problems.map(|block| format!("\n\n{block}")).unwrap_or_default()
     }
 
     pub fn rule_instructions(&self) -> String {

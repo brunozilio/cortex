@@ -52,6 +52,16 @@ pub fn describe(
 
 const MAX_ENTRIES: usize = 100;
 
+/// A failed question, said so the agent knows whether to ask again: a
+/// server answers "content modified" (or not in time) while it indexes.
+pub fn explain(error: &str) -> String {
+    if error.contains("content modified") || error.contains("did not answer") {
+        format!("{error}. The language server is still indexing the project; try again shortly.")
+    } else {
+        error.to_owned()
+    }
+}
+
 fn nouns(operation: Operation) -> (&'static str, &'static str) {
     match operation {
         Operation::Definition => ("definition", "definitions"),
@@ -220,6 +230,14 @@ mod tests {
         );
         let found = json!([{"name": "Tool", "kind": 11, "location": {"uri": "file:///w/src/tools/mod.rs", "range": range(192, 0)}}]);
         assert_eq!(describe(Operation::WorkspaceSymbol, &found, cwd, lines), "interface Tool src/tools/mod.rs:193:1");
+    }
+
+    #[test]
+    fn a_server_still_indexing_is_told_apart_from_a_failure() {
+        let busy = explain("rust-analyzer: content modified");
+        assert!(busy.starts_with("rust-analyzer: content modified. ") && busy.contains("still indexing"), "{busy}");
+        assert!(explain("rust-analyzer did not answer in 60s").contains("try again shortly"));
+        assert_eq!(explain("gopls stopped"), "gopls stopped");
     }
 
     #[test]
