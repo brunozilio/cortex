@@ -33,11 +33,11 @@ impl SignIn for BrowserSignIn {
             return copilot::sign_in(&UreqHttp, &mut show, &std::thread::sleep).map_err(|e| e.to_string());
         }
         let (port, path) = superfik_providers::oauth::callback(provider);
-        let listener = superfik_oauth::Loopback::bind_on(port, path, true)?;
+        let listener = super::redirect::Loopback::bind_on(port, path, true)?;
         let redirect = listener.redirect_uri();
         let verifier = random(64)?;
         let state = random(superfik_providers::oauth::state_bytes(provider))?;
-        open(oauth::authorize(provider, &superfik_oauth::pkce::challenge(&verifier), &state, &redirect), None);
+        open(oauth::authorize(provider, &super::redirect::pkce::challenge(&verifier), &state, &redirect), None);
         let (code, query) = listener.wait_callback(&state)?;
         let redirect =
             superfik_providers::oauth::exchange_redirect(provider, &redirect, &query).map_err(|e| e.to_string())?;

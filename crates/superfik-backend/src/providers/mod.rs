@@ -7,6 +7,7 @@
 
 mod account;
 mod catalog;
+mod redirect;
 mod store;
 
 use std::collections::HashMap;

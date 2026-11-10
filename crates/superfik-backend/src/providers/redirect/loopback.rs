@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use crate::callback;
+use super::callback;
 
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -25,7 +25,8 @@ impl std::fmt::Debug for Loopback {
 }
 
 impl Loopback {
-    pub fn bind() -> Result<Self, String> {
+    #[cfg(test)]
+    fn bind() -> Result<Self, String> {
         Self::bind_on(0, "/callback", false)
     }
 
@@ -42,17 +43,19 @@ impl Loopback {
         format!("http://{}:{}{}", if self.localhost { "localhost" } else { "127.0.0.1" }, self.port, self.path)
     }
 
-    pub fn wait(&self, state: &str) -> Result<String, String> {
-        self.wait_for(state, SIGN_IN_TIMEOUT)
-    }
-
     /// The code and the whole query of the callback, for providers whose
     /// callback says more than the code (Kiro names the sign-in picked).
     pub fn wait_callback(&self, state: &str) -> Result<(String, String), String> {
         self.wait_query(state, SIGN_IN_TIMEOUT)
     }
 
-    pub fn wait_for(&self, state: &str, timeout: Duration) -> Result<String, String> {
+    #[cfg(test)]
+    fn wait(&self, state: &str) -> Result<String, String> {
+        self.wait_for(state, SIGN_IN_TIMEOUT)
+    }
+
+    #[cfg(test)]
+    fn wait_for(&self, state: &str, timeout: Duration) -> Result<String, String> {
         self.wait_query(state, timeout).map(|(code, _)| code)
     }
 
@@ -88,7 +91,7 @@ impl Loopback {
 }
 
 fn state_of(query: &str) -> Option<String> {
-    query.split('&').find_map(|pair| pair.strip_prefix("state=")).map(crate::decode)
+    query.split('&').find_map(|pair| pair.strip_prefix("state=")).map(super::decode)
 }
 
 fn page(body: String, status: u16) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {

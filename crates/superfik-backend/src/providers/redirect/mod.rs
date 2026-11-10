@@ -1,13 +1,13 @@
-//! The app's side of a browser sign-in (OAuth 2.1 authorization code with
-//! PKCE): the verifier and its challenge, and the loopback listener the
-//! browser is sent back to. Used by the LLM providers' sign-in.
+//! Our side of a browser sign-in (OAuth 2.1 authorization code with PKCE):
+//! the verifier's challenge, and the loopback listener the browser is sent
+//! back to.
 
 mod loopback;
 pub mod pkce;
 
 pub use loopback::Loopback;
 
-pub fn decode(text: &str) -> String {
+fn decode(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -30,7 +30,7 @@ pub fn decode(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-pub fn callback(query: &str) -> Result<(String, String), String> {
+fn callback(query: &str) -> Result<(String, String), String> {
     let mut code = None;
     let mut state = None;
     let mut error = None;

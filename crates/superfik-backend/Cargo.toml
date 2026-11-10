@@ -10,7 +10,6 @@ superfik-private-file.workspace = true
 superfik-core.workspace = true
 superfik-protocol.workspace = true
 superfik-providers.workspace = true
-superfik-oauth.workspace = true
 crossbeam-channel.workspace = true
 superfik-mlx.workspace = true
 superfik-native.workspace = true
@@ -19,6 +18,7 @@ thiserror.workspace = true
 tracing.workspace = true
 tiny_http = "0.12"
 base64 = "0.23"
+sha2 = "0.10"
 chacha20poly1305 = "0.10"
 getrandom = "0.3"
 serde.workspace = true
@@ -32,6 +32,7 @@ embeddings = ["dep:fastembed"]
 [dev-dependencies]
 superfik-native = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
+ureq = "3"
 
 [lints]
 workspace = true

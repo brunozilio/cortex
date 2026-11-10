@@ -68,7 +68,7 @@ rest; see `crates/superfik-sdk/src/lib.rs`.
 | `superfik-providers` | LLM providers (Anthropic, OpenAI, Claude, ChatGPT and GitHub Copilot subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
 | `superfik-sdk` | The SDK: sessions and runs, agents, skills, commands, memory, in-process MCP tools, MCP over HTTP/stdio. |
 | `superfik-cli` | The `superfik` binary: terminal chat (ratatui), `-p`, `login`, `models`. |
-| `superfik-oauth`, `-process`, `-private-file` | Small IO helpers. |
+| `superfik-process`, `-private-file` | Small IO helpers. |
 
 Architecture: [docs/architecture.md](docs/architecture.md). Decisions:
 [docs/decisions.md](docs/decisions.md).
