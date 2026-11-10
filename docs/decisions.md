@@ -138,7 +138,12 @@ The agent asks language servers instead of only searching text.
   nothing wrong leaves the result as it was.
 
 A server runs the project's code as its language does (build scripts,
-proc macros), like the hooks in a project's settings.
+proc macros). What runs is the owner's to say: a checked-in project
+`settings.json` may disable servers and set their languages and root
+markers, but its `command`, `args` and `env` are dropped
+(`ServerConfig::without_commands`). Only the user's settings, the
+project's `settings.local.json` and installed plugins set them, as with
+the approval of a project's MCP servers.
 
 The pool is single-owner: it is keyed by server and root, not by
 `Principal`, which fits the local daemon (one owner per computer). A

@@ -117,9 +117,14 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 hooks.extend(&crate::hooks::Hooks::parse(value)?);
             }
             if let Some(value) = settings.get("lspServers") {
-                let layer = serde_json::from_value(value.clone())
+                let layer: LspLayer = serde_json::from_value(value.clone())
                     .map_err(|e| format!("{}: lspServers: {e}", path.display()))?;
-                lsp_servers.push(layer);
+                let owners = is_user_root(root) || name == "settings.local.json";
+                lsp_servers.push(if owners {
+                    layer
+                } else {
+                    layer.into_iter().map(|(server, config)| (server, config.without_commands())).collect()
+                });
             }
             if let Some(style) = settings["outputStyle"].as_str() {
                 selected = style.to_owned();
@@ -262,29 +267,7 @@ mod tests {
         assert_eq!(groups[0].hooks[0].command, format!("{}/check.sh", good.path().display()));
         assert!(!settings.hooks.0.contains_key("NoSuchEvent"));
     }
-    #[test]
-    fn language_servers_are_set_by_user_then_project_then_plugins() {
-        let home = tempfile::tempdir().expect("home");
-        let repo = tempfile::tempdir().expect("repo");
-        let plugin = tempfile::tempdir().expect("plugin");
-        let write = |path: std::path::PathBuf, text: &str| {
-            std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
-            std::fs::write(path, text).expect("write");
-        };
-        write(home.path().join(".superfik/settings.json"), r#"{"lspServers": {"gopls": {"command": "/opt/gopls"}}}"#);
-        write(repo.path().join(".superfik/settings.json"), r#"{"lspServers": {"gopls": {"disabled": true}}}"#);
-        write(
-            plugin.path().join(".lsp.json"),
-            r#"{"zls": {"command": "${SUPERFIK_PLUGIN_ROOT}/zls", "extensionToLanguage": {".zig": "zig"}}}"#,
-        );
-        let plugins = [crate::plugins::Plugin::at(plugin.path())];
-        let layers = load(repo.path(), Some(home.path()), &plugins).expect("settings").lsp_servers;
-        let specs = superfik_core::lsp::servers(superfik_core::lsp::defaults(), &layers);
-        assert!(!specs.iter().any(|spec| spec.name == "gopls"));
-        let zig = specs.iter().find(|spec| spec.name == "zls").expect("the plugin's server");
-        assert_eq!(zig.command, format!("{}/zls", plugin.path().display()));
-        write(repo.path().join(".superfik/settings.json"), r#"{"lspServers": {"gopls": {"args": "--stdio"}}}"#);
-        let error = load(repo.path(), Some(home.path()), &[]).expect_err("args must be a list");
-        assert!(error.contains("lspServers"), "{error}");
-    }
 }
+#[cfg(test)]
+#[path = "settings_lsp_tests.rs"]
+mod lsp_tests;

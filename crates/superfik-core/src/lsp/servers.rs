@@ -36,6 +36,15 @@ pub struct ServerConfig {
     pub disabled: bool,
 }
 
+impl ServerConfig {
+    /// What a checked-in project file may set: it may choose and disable
+    /// servers, never what they run (`command`, `args`, `env`); only the
+    /// owner's settings and installed plugins may (ADR 0023).
+    pub fn without_commands(self) -> Self {
+        Self { command: None, args: None, env: None, ..self }
+    }
+}
+
 fn built_in(name: &str, command: &str, args: &[&str], languages: &[(&str, &str)], markers: &[&str]) -> ServerSpec {
     let owned = |items: &[&str]| items.iter().map(|item| (*item).to_owned()).collect();
     ServerSpec {
