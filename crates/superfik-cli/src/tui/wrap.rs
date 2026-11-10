@@ -1,6 +1,8 @@
 //! Breaking text into lines that fit a width, by words, counting what a
 //! character takes on screen (wide characters take two columns).
 
+use ratatui::style::Style;
+use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub fn wrap(text: &str, width: usize) -> Vec<String> {
@@ -33,6 +35,54 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
         lines.push(line.trim_end().to_owned());
     }
     lines
+}
+
+/// [`wrap`] for a styled line: words keep their style, the line its own.
+pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
+    let width = width.max(1);
+    let mut rows: Vec<Vec<(String, Style)>> = vec![Vec::new()];
+    let mut used = 0;
+    let push = |rows: &mut Vec<Vec<(String, Style)>>, text: &str, style: Style| {
+        let row = rows.last_mut().expect("rows start with one");
+        match row.last_mut() {
+            Some((last, kept)) if *kept == style => last.push_str(text),
+            _ => row.push((text.to_owned(), style)),
+        }
+    };
+    for span in &line.spans {
+        for word in span.content.split_inclusive(' ') {
+            let size = word.trim_end().width();
+            if used > 0 && used + size > width {
+                rows.push(Vec::new());
+                used = 0;
+            }
+            if size > width {
+                for c in word.chars() {
+                    let w = c.width().unwrap_or(0);
+                    if used + w > width {
+                        rows.push(Vec::new());
+                        used = 0;
+                    }
+                    push(&mut rows, c.encode_utf8(&mut [0; 4]), span.style);
+                    used += w;
+                }
+            } else {
+                push(&mut rows, word, span.style);
+                used += word.width();
+            }
+        }
+    }
+    rows.into_iter()
+        .map(|row| {
+            let mut spans: Vec<Span<'static>> =
+                row.into_iter().map(|(text, style)| Span::styled(text, style)).collect();
+            if let Some(last) = spans.last_mut() {
+                let trimmed = last.content.trim_end().to_owned();
+                last.content = trimmed.into();
+            }
+            Line::from(spans).style(line.style)
+        })
+        .collect()
 }
 
 /// The prompt being typed broken into rows of `width` columns, by
@@ -92,5 +142,23 @@ mod tests {
         assert_eq!(wrap("abcdefghij", 4), ["abcd", "efgh", "ij"]);
         assert_eq!(wrap("one\n\ntwo", 10), ["one", "", "two"]);
         assert_eq!(wrap("日本語の文", 4), ["日本", "語の", "文"], "wide characters take two columns");
+    }
+
+    #[test]
+    fn a_styled_line_wraps_by_words_and_keeps_each_style() {
+        use ratatui::style::Stylize;
+        let line = Line::from(vec!["the ".into(), "quick brown".bold(), " fox".into()]);
+        let rows = wrap_line(line, 9);
+        let shown: Vec<Vec<(String, bool)>> = rows
+            .iter()
+            .map(|row| row.spans.iter().map(|s| (s.content.to_string(), s.style == Style::new().bold())).collect())
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                vec![("the ".into(), false), ("quick".into(), true)],
+                vec![("brown".into(), true), (" fox".into(), false)]
+            ]
+        );
     }
 }
