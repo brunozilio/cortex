@@ -30,11 +30,14 @@ impl App {
             } else if !self.queued.is_empty() {
                 let next = self.queued.remove(0);
                 self.send(next);
+            } else if matches!(event, EngineEvent::Completed { .. }) {
+                self.after_run();
             }
         }
     }
 
     pub(super) fn send(&mut self, text: String) {
+        self.ghost = None;
         let Some(session) = &self.session else {
             self.input.set(&text);
             return self.transcript.error("No model yet: /login connects a provider.");

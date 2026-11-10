@@ -69,6 +69,14 @@ impl Transcript {
         self.entries.push(entry);
     }
 
+    /// What the user first asked in this chat.
+    pub fn first_prompt(&self) -> Option<String> {
+        self.entries.iter().find_map(|entry| match entry {
+            Entry::User(text) => Some(text.clone()),
+            _ => None,
+        })
+    }
+
     pub fn notice(&mut self, text: impl Into<String>) {
         self.push(Entry::Notice(text.into()));
     }

@@ -5,6 +5,7 @@ mod app;
 mod ask;
 mod attach;
 mod choices;
+mod chores;
 mod commands;
 mod diff_model;
 mod diff_view;
@@ -36,7 +37,7 @@ use ratatui::crossterm::event::{
     PushKeyboardEnhancementFlags,
 };
 use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::supports_keyboard_enhancement;
+use ratatui::crossterm::terminal::{SetTitle, supports_keyboard_enhancement};
 use superfik_sdk::{PermissionMode, Superfik};
 
 pub use app::App;
@@ -71,9 +72,16 @@ pub fn run(
         .is_ok();
     let result = (|| -> std::io::Result<()> {
         let mut first = prompt;
+        let mut named: Option<String> = None;
         while !app.quit {
             while let Ok(msg) = app.rx.try_recv() {
                 app.message(msg);
+            }
+            if app.title != named {
+                named.clone_from(&app.title);
+                if let Some(title) = &named {
+                    let _ = execute!(std::io::stdout(), SetTitle(format!("{title} · Superfik")));
+                }
             }
             if app.session.is_some()
                 && let Some(prompt) = first.take()

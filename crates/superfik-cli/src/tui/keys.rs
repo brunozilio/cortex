@@ -158,7 +158,11 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
         KeyCode::Enter if alt || shift => app.input.insert('\n'),
         KeyCode::Char('j') if ctrl => app.input.insert('\n'),
         KeyCode::Enter => app.submit(),
-        KeyCode::Tab => complete(app),
+        KeyCode::Tab => {
+            if !app.take_ghost() {
+                complete(app);
+            }
+        }
         KeyCode::BackTab => app.set_mode(app.mode().next()),
         KeyCode::Esc if app.busy() => app.cancel(),
         KeyCode::Esc if app.input.is_empty() => {}

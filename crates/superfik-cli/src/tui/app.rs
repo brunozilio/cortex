@@ -39,6 +39,8 @@ pub enum Msg {
         question: String,
         answer: Result<String, String>,
     },
+    /// A side call the chat made by itself (`chores`).
+    Chore(Result<Option<superfik_sdk::ChoreAnswer>, String>),
     Notice(String),
     Error(String),
 }
@@ -67,6 +69,10 @@ pub struct App {
     pub picker: Option<Picker>,
     /// A `/btw` question and its answer, shown until dismissed.
     pub side: Option<super::side::Side>,
+    /// The conversation's name, once a side call gave one.
+    pub title: Option<String>,
+    /// The prompt you would likely type next, shown in the empty prompt.
+    pub ghost: Option<String>,
     /// `/diffs`, full screen while open.
     pub diffs: Option<super::diff_view::DiffView>,
     pub scroll: u16,
@@ -109,6 +115,8 @@ impl App {
             skills: Vec::new(),
             picker: None,
             side: None,
+            title: None,
+            ghost: None,
             diffs: None,
             scroll: 0,
             quit: false,
@@ -189,6 +197,7 @@ impl App {
                 }
             }
             Msg::Side { question, answer } => super::side::answered(self, &question, answer),
+            Msg::Chore(answer) => self.chore_answered(answer),
             Msg::Notice(text) => self.transcript.notice(text),
             Msg::Error(text) => self.transcript.error(text),
         }

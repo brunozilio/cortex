@@ -210,10 +210,10 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
         .map(|(i, text)| Line::from(vec![if i == 0 { "> " } else { "  " }.fg(Color::Magenta), text.into()]))
         .collect();
     if app.input.is_empty() && app.ask.is_none() && app.secret.is_none() {
-        let hint = if app.busy() {
-            "Type to queue a message · esc interrupts"
-        } else {
-            "Try \"explain this project\" · / for commands"
+        let hint = match &app.ghost {
+            _ if app.busy() => "Type to queue a message · esc interrupts".to_owned(),
+            Some(ghost) => format!("{ghost}  (tab)"),
+            None => "Try \"explain this project\" · / for commands".to_owned(),
         };
         let placeholder = Line::from(vec!["> ".fg(Color::Magenta), hint.dim()]);
         frame.render_widget(Paragraph::new(placeholder).block(block), area);
@@ -245,13 +245,17 @@ fn status(app: &App) -> Line<'static> {
     if app.clear_armed.is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(2)) {
         return Line::from(" Press Esc again to clear the prompt").fg(Color::Yellow);
     }
-    let mut spans = vec![
+    let mut spans = Vec::new();
+    if let Some(title) = &app.title {
+        spans.extend([format!(" {title}").bold(), " ·".dim()]);
+    }
+    spans.extend([
         format!(" {model}").fg(Color::Magenta),
         " · ".dim(),
         Span::styled(mode_label(app.mode()), Style::new().fg(mode_color).add_modifier(Modifier::BOLD)),
         " · ".dim(),
         app.effort().cli_value().dim(),
-    ];
+    ]);
     if app.transcript.context > 0 {
         spans.push(format!(" · {} context", entries::tokens(app.transcript.context)).dim());
     }

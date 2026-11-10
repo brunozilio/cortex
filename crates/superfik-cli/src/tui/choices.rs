@@ -30,6 +30,9 @@ impl App {
         self.loading = false;
         if self.models.is_empty() && self.session.is_none() {
             self.input.set_history(settings::history(saved, &self.cwd));
+            if let Some(id) = &self.resume {
+                self.title = settings::title(saved, &self.cwd, id);
+            }
         }
         let saved = settings::read(saved);
         if !self.mode_given {
@@ -55,12 +58,16 @@ impl App {
 
     fn start_session(&mut self, model: Model) {
         let mut session = self.superfik.session(self.cwd.clone(), model);
-        if let Some(id) = self.resume.take() {
+        let resumed = self.resume.take();
+        if let Some(id) = resumed.clone() {
             session = session.resume(id);
         }
         session.set_permission(self.mode);
         session.set_effort(self.effort);
         self.session = Some(session);
+        if resumed.is_some() {
+            self.recap();
+        }
     }
 
     pub fn set_mode(&mut self, mode: PermissionMode) {

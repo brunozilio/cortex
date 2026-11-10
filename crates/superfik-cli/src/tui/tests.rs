@@ -215,6 +215,39 @@ fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() 
 }
 
 #[test]
+fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
+    let data = tempfile::tempdir().expect("data");
+    let script = vec![
+        EngineEvent::SessionStarted(SessionId("s".into())),
+        EngineEvent::Chore(ChoreAnswer::Suggestion("run the tests".into())),
+        EngineEvent::Completed { duration_ms: 1, cost_usd: None },
+    ];
+    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
+    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+
+    type_text(&mut app, "fix the login page");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.ghost.is_some());
+    assert!(screen(&app).contains("run the tests  (tab)"), "{}", screen(&app));
+    press(&mut app, KeyCode::Tab);
+    assert_eq!(app.input.text(), "run the tests");
+    assert!(app.ghost.is_none());
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let asked = || engine.requests().iter().filter_map(|r| r.command).collect::<Vec<_>>();
+    while asked().len() < 3 {
+        assert!(Instant::now() < deadline, "{:?}", asked());
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let mut asked = asked();
+    asked.sort_by_key(|c| format!("{c:?}"));
+    assert_eq!(asked, [SessionCommand::HeadsUp, SessionCommand::Suggest, SessionCommand::Title]);
+    let title = engine.requests().into_iter().find(|r| r.command == Some(SessionCommand::Title)).expect("title");
+    assert_eq!(title.prompt, "fix the login page", "named for what was first asked");
+}
+
+#[test]
 fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
     let (data, repo) = (tempfile::tempdir().expect("data"), tempfile::tempdir().expect("repo"));
     let git = |args: &[&str]| {

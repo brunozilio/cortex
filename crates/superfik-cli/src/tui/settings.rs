@@ -26,6 +26,12 @@ pub fn last_session(settings: &serde_json::Value, cwd: &Path) -> Option<SessionI
     settings["sessions"][cwd.to_string_lossy().as_ref()].as_str().map(|id| SessionId(id.to_owned()))
 }
 
+/// The name given to `session`, the last conversation titled in `cwd`.
+pub fn title(settings: &serde_json::Value, cwd: &Path, session: &SessionId) -> Option<String> {
+    let kept = &settings["titles"][cwd.to_string_lossy().as_ref()];
+    (kept["session"].as_str() == Some(session.0.as_str())).then(|| kept["title"].as_str().map(str::to_owned))?
+}
+
 /// Prompts kept per folder for Up and Down.
 const HISTORY: usize = 100;
 
@@ -90,6 +96,17 @@ impl Saver {
             settings["sessions"][cwd] = serde_json::Value::String(session);
         });
     }
+
+    /// Keeps `title` as the name of `session` in `cwd` (one per folder).
+    pub fn remember_title(&self, cwd: &Path, session: &SessionId, title: &str) {
+        let (cwd, session, title) = (cwd.to_string_lossy().into_owned(), session.0.clone(), title.to_owned());
+        self.change(move |settings| {
+            if !settings["titles"].is_object() {
+                settings["titles"] = serde_json::json!({});
+            }
+            settings["titles"][cwd] = serde_json::json!({ "session": session, "title": title });
+        });
+    }
 }
 
 fn add_prompt(settings: &mut serde_json::Value, cwd: &Path, prompt: String) {
@@ -129,6 +146,15 @@ mod tests {
         add_prompt(&mut settings, Path::new("/a"), "two".into());
         assert_eq!(history(&settings, Path::new("/a")), ["one", "two"]);
         assert!(history(&settings, Path::new("/b")).is_empty());
+    }
+
+    #[test]
+    fn a_title_belongs_to_its_session() {
+        let settings = json!({"titles": {"/a": {"session": "s-1", "title": "Login page"}}});
+        let named = |cwd: &str, id: &str| title(&settings, Path::new(cwd), &SessionId(id.into()));
+        assert_eq!(named("/a", "s-1").as_deref(), Some("Login page"));
+        assert_eq!(named("/a", "s-2"), None, "another conversation");
+        assert_eq!(named("/b", "s-1"), None);
     }
 
     #[test]

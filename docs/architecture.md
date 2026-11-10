@@ -53,7 +53,11 @@ provider's key (`RunCredentials::model`, never serialized).
   working rules; project instructions and rules (`docs/native-engine.md`).
 - **Compaction** keeps only the nine-section `<summary>`.
 - **Side calls** (`chores/`): `Title`, `Suggest`, `Recap`, `Side`,
-  `HeadsUp`, `Rename`.
+  `HeadsUp`, `Rename`; one model turn without tools, never added to the
+  conversation. The SDK exposes them on `Session` (`title`, `suggest`,
+  `recap`, `heads_up`, `side`). The chat names a conversation after its
+  first run, offers the next prompt (Tab takes it), shows a heads-up when
+  there is one, recaps on `superfik -c`, and answers `/btw`.
 - **Safety check** (`guard/`): in Bypass, every editing or executing action
   is graded by the run's model before it runs.
 - **Built-in skills** (`crates/superfik-native/skills/`, embedded by
