@@ -27,6 +27,9 @@ struct Cli {
     /// Answer once, print the reply and exit.
     #[arg(short, long)]
     print: bool,
+    /// Continue the last conversation in this folder.
+    #[arg(short = 'c', long = "continue")]
+    resume: bool,
     /// The model (its id or name); the last one used otherwise.
     #[arg(short, long)]
     model: Option<String>,
@@ -116,7 +119,17 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             print::print(&superfik, cwd, cli.model.as_deref(), cli.mode, &prompt)
         }
         None => {
-            tui::run(superfik, cwd, cli.model, cli.mode, prompt, stale).map_err(|e| e.to_string())?;
+            let resume = if cli.resume {
+                let settings = superfik.settings().map_err(|e| e.to_string())?;
+                let last = tui::last_session(&settings, &cwd);
+                if last.is_none() {
+                    eprintln!("superfik: no earlier conversation in this folder; starting a new one");
+                }
+                last
+            } else {
+                None
+            };
+            tui::run(superfik, cwd, cli.model, cli.mode, prompt, stale, resume).map_err(|e| e.to_string())?;
             Ok(ExitCode::SUCCESS)
         }
     }

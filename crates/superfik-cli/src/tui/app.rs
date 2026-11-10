@@ -1,24 +1,25 @@
-//! The chat's state and what it does: send prompts, follow the running
-//! run, run the chat's own `/commands`. Slow calls run on threads and
-//! come back as [`Msg`]s.
+//! The chat's state and what it does: send prompts (queued while the agent
+//! works), follow the running run, run the chat's own `/commands`. Slow
+//! calls run on threads and come back as [`Msg`]s. Choosing the model,
+//! mode and effort is in `choices`, connecting a provider in `login`.
 
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use superfik_core::command::{Command, mode_label};
-use superfik_core::model::choose_model;
-use superfik_sdk::{Effort, EngineEvent, Model, PermissionMode, Run, RunControl, Session, Superfik};
+use superfik_core::command::Command;
+use superfik_sdk::{Effort, EngineEvent, Model, PermissionMode, Run, RunControl, Session, SessionId, Superfik};
 
 use super::ask::Pending;
 use super::input::Input;
-use super::settings;
+use super::login::SecretPrompt;
 use super::transcript::{Entry, Transcript};
 
 pub enum Msg {
     Ready { models: Result<Vec<Model>, String>, settings: serde_json::Value },
     Event(superfik_core::RunId, EngineEvent),
     Skills(Vec<(String, String)>),
+    Connected(String),
     Notice(String),
     Error(String),
 }
@@ -27,6 +28,7 @@ pub enum Msg {
 pub enum PickerKind {
     Model,
     Mode,
+    Login,
 }
 
 #[derive(Debug)]
@@ -37,6 +39,9 @@ pub struct Picker {
     pub cursor: usize,
 }
 
+/// How long a first Ctrl+C waits for the second that quits.
+const QUIT_WINDOW: Duration = Duration::from_secs(2);
+
 pub struct App {
     pub superfik: Superfik,
     pub cwd: PathBuf,
@@ -44,19 +49,23 @@ pub struct App {
     pub transcript: Transcript,
     pub input: Input,
     pub ask: Option<Pending>,
+    pub secret: Option<SecretPrompt>,
     pub run: Option<RunControl>,
     pub started: Option<Instant>,
+    pub queued: Vec<String>,
     pub models: Vec<Model>,
     pub skills: Vec<(String, String)>,
     pub picker: Option<Picker>,
     pub scroll: u16,
     pub quit: bool,
+    pub quit_armed: Option<Instant>,
     pub loading: bool,
-    wanted: Option<String>,
-    mode_given: bool,
-    mode: PermissionMode,
-    effort: Effort,
-    tx: Sender<Msg>,
+    pub(super) wanted: Option<String>,
+    pub(super) resume: Option<SessionId>,
+    pub(super) mode_given: bool,
+    pub(super) mode: PermissionMode,
+    pub(super) effort: Effort,
+    pub(super) tx: Sender<Msg>,
     pub rx: Receiver<Msg>,
 }
 
@@ -70,33 +79,48 @@ impl App {
             transcript: Transcript::default(),
             input: Input::default(),
             ask: None,
+            secret: None,
             run: None,
             started: None,
+            queued: Vec::new(),
             models: Vec::new(),
             skills: Vec::new(),
             picker: None,
             scroll: 0,
             quit: false,
+            quit_armed: None,
             loading: true,
             wanted,
+            resume: None,
             mode_given: mode.is_some(),
             mode: mode.unwrap_or_default(),
             effort: Effort::Medium,
             tx,
             rx,
         };
-        app.load();
+        app.load(true);
         app
     }
 
-    fn load(&mut self) {
+    /// Continues `session` (from `superfik -c`) once a model is chosen.
+    pub fn resuming(mut self, session: Option<SessionId>) -> Self {
+        if session.is_some() {
+            self.transcript.notice("Continuing the last conversation in this folder.");
+        }
+        self.resume = session;
+        self
+    }
+
+    /// Asks for the settings and models (and the skills, at first).
+    pub(super) fn load(&mut self, skills: bool) {
+        self.loading = true;
         let (superfik, tx, cwd) = (self.superfik.clone(), self.tx.clone(), self.cwd.clone());
         std::thread::spawn(move || {
             let settings = superfik.settings().unwrap_or_else(|_| serde_json::json!({}));
             let models = superfik.models().map_err(|error| error.to_string());
             let _ = tx.send(Msg::Ready { models, settings });
-            if let Ok(skills) = superfik.skills(&cwd) {
-                let _ = tx.send(Msg::Skills(skills.into_iter().map(|s| (s.name, s.description)).collect()));
+            if skills && let Ok(found) = superfik.skills(&cwd) {
+                let _ = tx.send(Msg::Skills(found.into_iter().map(|s| (s.name, s.description)).collect()));
             }
         });
     }
@@ -122,36 +146,13 @@ impl App {
             Msg::Ready { models, settings } => self.ready(models, &settings),
             Msg::Event(run, event) => self.event(run, event),
             Msg::Skills(skills) => self.skills = skills,
+            Msg::Connected(provider) => {
+                self.transcript.notice(format!("Connected {provider}."));
+                self.load(false);
+            }
             Msg::Notice(text) => self.transcript.notice(text),
             Msg::Error(text) => self.transcript.error(text),
         }
-    }
-
-    fn ready(&mut self, models: Result<Vec<Model>, String>, settings: &serde_json::Value) {
-        self.loading = false;
-        let saved = settings::read(settings);
-        let wanted = self.wanted.clone().or(saved.model);
-        if !self.mode_given {
-            self.mode = saved.mode.unwrap_or(self.mode);
-        }
-        self.effort = saved.effort.unwrap_or(self.effort);
-        match models {
-            Ok(models) => {
-                self.models = models;
-                match choose_model(&self.models, wanted.as_deref()) {
-                    Some(model) => self.start_session(model),
-                    None => self.transcript.error("No model is available. Run `superfik login` to connect a provider."),
-                }
-            }
-            Err(error) => self.transcript.error(format!("Could not list the models: {error}")),
-        }
-    }
-
-    fn start_session(&mut self, model: Model) {
-        let mut session = self.superfik.session(self.cwd.clone(), model);
-        session.set_permission(self.mode);
-        session.set_effort(self.effort);
-        self.session = Some(session);
     }
 
     fn event(&mut self, run: superfik_core::RunId, event: EngineEvent) {
@@ -161,6 +162,7 @@ impl App {
         match &event {
             EngineEvent::Asked(ask) => self.ask = Some(Pending::new(ask.clone())),
             EngineEvent::AskWithdrawn(id) if self.ask.as_ref().is_some_and(|p| &p.ask.id == id) => self.ask = None,
+            EngineEvent::SessionStarted(id) => super::settings::remember_session(&self.superfik, &self.cwd, id),
             _ => {}
         }
         self.transcript.apply(&event);
@@ -168,36 +170,61 @@ impl App {
             self.run = None;
             self.ask = None;
             self.started = None;
+            if matches!(event, EngineEvent::Cancelled) {
+                self.unqueue();
+            } else if !self.queued.is_empty() {
+                let next = self.queued.remove(0);
+                self.send(next);
+            }
         }
     }
 
-    /// Sends what was typed: a chat command, or a prompt for the agent.
+    /// Sends what was typed: a chat command, or a prompt for the agent
+    /// (queued while it works).
     pub fn submit(&mut self) {
         let text = self.input.text().trim().to_owned();
         if text.is_empty() {
             return;
         }
+        self.input.take();
         if let Some(command) = Command::parse(&text) {
-            self.input.take();
-            return self.command(command);
+            return super::commands::run(self, command);
         }
         if self.busy() {
-            return self.transcript.notice("The agent is still working: Esc interrupts it.");
+            self.queued.push(text);
+            return;
         }
+        self.send(text);
+    }
+
+    fn send(&mut self, text: String) {
         let Some(session) = &self.session else {
-            return self.transcript.error("No model yet. Run `superfik login`, or wait for the models to load.");
+            self.input.set(&text);
+            return self.transcript.error("No model yet: /login connects a provider.");
         };
         let started = session.send(&text);
-        self.input.take();
         self.transcript.push(Entry::User(text));
         self.follow(started);
     }
 
-    fn follow(&mut self, started: Result<Run, superfik_sdk::Error>) {
+    /// Puts what was queued back in the prompt, so an interrupt loses nothing.
+    fn unqueue(&mut self) {
+        if self.queued.is_empty() {
+            return;
+        }
+        let mut text = std::mem::take(&mut self.queued).join("\n\n");
+        if !self.input.is_empty() {
+            text = format!("{text}\n\n{}", self.input.text());
+        }
+        self.input.set(&text);
+    }
+
+    pub(super) fn follow(&mut self, started: Result<Run, superfik_sdk::Error>) {
         match started {
             Ok(run) => {
                 self.run = Some(run.control());
                 self.started = Some(Instant::now());
+                self.transcript.begin();
                 self.scroll = 0;
                 let tx = self.tx.clone();
                 std::thread::spawn(move || {
@@ -221,6 +248,25 @@ impl App {
         }
     }
 
+    /// Ctrl+C: stops the run, else clears the prompt, else quits on a
+    /// second press.
+    pub fn interrupt(&mut self) {
+        if self.busy() {
+            self.cancel();
+        } else if !self.input.is_empty() {
+            self.input.clear();
+        } else if self.quit_armed.is_some_and(|at| at.elapsed() < QUIT_WINDOW) {
+            self.quit = true;
+        } else {
+            self.quit_armed = Some(Instant::now());
+        }
+    }
+
+    /// Whether the status line should say "Ctrl+C again to quit".
+    pub fn quitting(&self) -> bool {
+        self.quit_armed.is_some_and(|at| at.elapsed() < QUIT_WINDOW)
+    }
+
     pub fn answer(&mut self, decision: superfik_sdk::Decision) {
         if let (Some(pending), Some(run)) = (self.ask.take(), &self.run)
             && let Err(error) = run.answer(pending.ask.id, decision)
@@ -229,68 +275,10 @@ impl App {
         }
     }
 
-    pub fn set_mode(&mut self, mode: PermissionMode) {
-        self.mode = mode;
-        if let Some(session) = &mut self.session {
-            session.set_permission(mode);
-        }
-        if let Some(run) = &self.run {
-            let _ = run.set_permission(mode);
-        }
-        settings::remember(&self.superfik, "mode", mode_label(mode));
-    }
-
-    pub fn set_model(&mut self, model: Model) {
-        settings::remember(&self.superfik, "model", &model.id);
-        self.transcript.notice(format!("Model: {}", model.label));
-        match &mut self.session {
-            Some(session) => session.set_model(model),
-            None => self.start_session(model),
-        }
-    }
-
-    fn set_effort(&mut self, effort: Effort) {
-        self.effort = effort;
-        if let Some(session) = &mut self.session {
-            session.set_effort(effort);
-        }
-        settings::remember(&self.superfik, "effort", effort.cli_value());
-        self.transcript.notice(format!("Effort: {}", effort.cli_value()));
-    }
-
-    fn command(&mut self, command: Command) {
-        super::commands::run(self, command);
-    }
-
     pub(super) fn spawn(&self, work: impl FnOnce(&Superfik) -> Msg + Send + 'static) {
         let (superfik, tx) = (self.superfik.clone(), self.tx.clone());
         std::thread::spawn(move || {
             let _ = tx.send(work(&superfik));
         });
-    }
-
-    pub(super) fn new_session(&mut self) {
-        if let Some(model) = self.model().cloned() {
-            self.start_session(model);
-        }
-        self.transcript = Transcript::default();
-        self.scroll = 0;
-    }
-
-    pub(super) fn compact(&mut self) {
-        if self.busy() {
-            return self.transcript.notice("Wait for the agent to finish before compacting.");
-        }
-        let Some(session) = &self.session else { return };
-        let started = session.compact();
-        self.transcript.notice("Compacting the conversation…");
-        self.follow(started);
-    }
-
-    pub(super) fn set_effort_from(&mut self, effort: Option<Effort>) {
-        match effort {
-            Some(effort) => self.set_effort(effort),
-            None => self.transcript.notice(format!("Effort: {}", self.effort.cli_value())),
-        }
     }
 }

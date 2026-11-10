@@ -35,9 +35,56 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
+/// The prompt being typed broken into rows of `width` columns, by
+/// character, and the row and column of the byte offset `cursor`.
+pub fn layout(text: &str, cursor: usize, width: usize) -> (Vec<String>, (usize, usize)) {
+    let width = width.max(1);
+    let mut rows = vec![String::new()];
+    let mut used = 0;
+    let mut at = (0, 0);
+    for (offset, c) in text.char_indices() {
+        if offset == cursor {
+            at = (rows.len() - 1, used);
+        }
+        if c == '\n' {
+            rows.push(String::new());
+            used = 0;
+            continue;
+        }
+        let w = c.width().unwrap_or(0);
+        if used + w > width {
+            rows.push(String::new());
+            used = 0;
+            if offset == cursor {
+                at = (rows.len() - 1, 0);
+            }
+        }
+        if let Some(row) = rows.last_mut() {
+            row.push(c);
+        }
+        used += w;
+    }
+    if cursor >= text.len() {
+        at = if used >= width { (rows.len(), 0) } else { (rows.len() - 1, used) };
+        if used >= width {
+            rows.push(String::new());
+        }
+    }
+    (rows, at)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_long_prompt_wraps_and_the_cursor_follows() {
+        assert_eq!(layout("", 0, 5), (vec![String::new()], (0, 0)));
+        assert_eq!(layout("abcdefg", 7, 5), (vec!["abcde".into(), "fg".into()], (1, 2)));
+        assert_eq!(layout("abcde", 5, 5), (vec!["abcde".into(), String::new()], (1, 0)), "a full row moves on");
+        assert_eq!(layout("ab\ncd", 1, 5), (vec!["ab".into(), "cd".into()], (0, 1)));
+        assert_eq!(layout("abcdefg", 5, 5).1, (1, 0), "on the first character of a wrapped row");
+    }
 
     #[test]
     fn words_move_to_the_next_line_and_long_ones_break() {

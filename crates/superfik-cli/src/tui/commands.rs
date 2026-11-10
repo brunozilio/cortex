@@ -96,6 +96,7 @@ pub fn run(app: &mut App, command: Command) {
             let cost = app.transcript.cost;
             app.transcript.notice(format!("This session cost ${cost:.4} (when the provider prices it)."));
         }
+        Command::Login => app.login(),
         Command::Exit => app.quit = true,
     }
 }

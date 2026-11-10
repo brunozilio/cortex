@@ -36,7 +36,7 @@ pub fn login(superfik: &Superfik) -> Result<(), String> {
             })
             .map_err(|e| e.to_string())?
     } else {
-        let key = ask(&format!("{} API key: ", provider.name()))?;
+        let key = secret(&format!("{} API key (hidden): ", provider.name()))?;
         superfik.connect_provider(provider, &key).map_err(|e| e.to_string())?
     };
     let account = listed.iter().find(|p| p.provider == provider).and_then(|p| p.account.as_ref());
@@ -76,7 +76,42 @@ fn ask(question: &str) -> Result<String, String> {
     Ok(line.trim().to_owned())
 }
 
-fn open(url: &str) {
+/// Reads a line without echoing it (an API key).
+fn secret(question: &str) -> Result<String, String> {
+    use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, read};
+    use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+    eprint!("{question}");
+    let _ = std::io::stderr().flush();
+    enable_raw_mode().map_err(|e| e.to_string())?;
+    let mut text = String::new();
+    let result = loop {
+        match read() {
+            Ok(Event::Key(key)) if key.kind != KeyEventKind::Release => match key.code {
+                KeyCode::Enter => break Ok(()),
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break Err("cancelled".into()),
+                KeyCode::Char(c) => {
+                    text.push(c);
+                    eprint!("•");
+                }
+                KeyCode::Backspace if text.pop().is_some() => eprint!("\u{8} \u{8}"),
+                KeyCode::Esc => break Err("cancelled".into()),
+                _ => {}
+            },
+            Ok(Event::Paste(pasted)) => {
+                eprint!("{}", "•".repeat(pasted.trim().chars().count()));
+                text.push_str(pasted.trim());
+            }
+            Ok(_) => {}
+            Err(error) => break Err(error.to_string()),
+        }
+        let _ = std::io::stderr().flush();
+    };
+    let _ = disable_raw_mode();
+    eprintln!();
+    result.map(|()| text.trim().to_owned())
+}
+
+pub fn open(url: &str) {
     let program = if cfg!(target_os = "macos") {
         "open"
     } else if cfg!(windows) {

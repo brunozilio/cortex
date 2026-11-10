@@ -3,9 +3,13 @@
 
 mod app;
 mod ask;
+mod choices;
 mod commands;
+mod entries;
 mod input;
 mod keys;
+mod login;
+mod markdown;
 mod settings;
 mod transcript;
 mod view;
@@ -22,6 +26,7 @@ use ratatui::crossterm::execute;
 use superfik_sdk::{PermissionMode, Superfik};
 
 pub use app::App;
+pub use settings::last_session;
 
 const FRAME: Duration = Duration::from_millis(80);
 
@@ -32,8 +37,9 @@ pub fn run(
     mode: Option<PermissionMode>,
     prompt: Option<String>,
     notice: Option<String>,
+    resume: Option<superfik_sdk::SessionId>,
 ) -> std::io::Result<()> {
-    let mut app = App::new(superfik, cwd, model, mode);
+    let mut app = App::new(superfik, cwd, model, mode).resuming(resume);
     if let Some(notice) = notice {
         app.transcript.notice(notice);
     }
@@ -65,5 +71,8 @@ pub fn run(
     app.cancel();
     let _ = execute!(std::io::stdout(), DisableBracketedPaste);
     ratatui::restore();
+    if app.session.as_ref().and_then(superfik_sdk::Session::id).is_some() {
+        println!("Continue this conversation with: superfik -c");
+    }
     result
 }

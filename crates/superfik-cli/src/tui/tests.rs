@@ -64,6 +64,7 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
     };
     let script = vec![
         EngineEvent::SessionStarted(SessionId("s".into())),
+        EngineEvent::ThinkingDelta("I should read main first.".into()),
         EngineEvent::ToolStarted(ToolCall::new("t1", "Read", "src/main.rs")),
         EngineEvent::ToolFinished { id: "t1".into() },
         EngineEvent::Asked(ask),
@@ -82,11 +83,13 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
     let asking = screen(&app);
     assert!(asking.contains("Allow Bash: cargo test?"), "{asking}");
     assert!(asking.contains("● Read(src/main.rs)"), "{asking}");
+    assert!(asking.contains("✻ Thought"), "the reasoning shows, folded once a tool runs: {asking}");
+    assert!(asking.contains("Working…") && asking.contains("esc to interrupt"), "{asking}");
     type_text(&mut app, "y");
     until(&mut app, |app| !app.busy());
     let done = screen(&app);
     assert!(done.contains("> run the tests") && done.contains("● All tests pass."), "{done}");
-    assert!(done.contains("$0.5000"), "{done}");
+    assert!(done.contains("$0.50"), "{done}");
     assert_eq!(engine.answers(), [(AskId("a-1".into()), Decision::Allow)]);
 }
 

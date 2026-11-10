@@ -136,6 +136,7 @@ impl TurnResponse {
             EngineEvent::Failed(message) => self.activity = Activity::Failed(message.clone()),
             EngineEvent::Cancelled => self.activity = Activity::Cancelled,
             EngineEvent::SessionStarted(_)
+            | EngineEvent::ThinkingDelta(_)
             | EngineEvent::ToolFinished { .. }
             | EngineEvent::ResearchFound(_)
             | EngineEvent::AgentSpawned { .. }

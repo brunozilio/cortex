@@ -41,6 +41,8 @@ pub enum EngineEvent {
     Usage(crate::billing::ModelUsage),
     StructuredOutput(serde_json::Value),
     TextDelta(String),
+    /// The model's reasoning as it streams (when the provider shows it).
+    ThinkingDelta(String),
     ToolStarted(ToolCall),
     ToolFinished {
         id: String,

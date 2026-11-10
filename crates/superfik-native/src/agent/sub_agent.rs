@@ -134,6 +134,7 @@ impl Agent<'_> {
         (self.emit)(EngineEvent::AgentUpdate { index, status: AgentStatus::Running { progress: 0.0 }, summary: None });
         let relay = |event: EngineEvent| match event {
             EngineEvent::TextDelta(_)
+            | EngineEvent::ThinkingDelta(_)
             | EngineEvent::ToolStarted(_)
             | EngineEvent::ToolFinished { .. }
             | EngineEvent::ToolResult { .. } => {

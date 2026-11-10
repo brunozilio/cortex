@@ -6,6 +6,7 @@ use superfik_sdk::PermissionMode;
 
 use super::app::{App, PickerKind};
 use super::ask;
+use super::login::SecretKey;
 
 pub fn key(app: &mut App, event: KeyEvent) {
     if event.kind == KeyEventKind::Release {
@@ -13,7 +14,10 @@ pub fn key(app: &mut App, event: KeyEvent) {
     }
     let ctrl = event.modifiers.contains(KeyModifiers::CONTROL);
     if ctrl && event.code == KeyCode::Char('c') {
-        return interrupt(app);
+        return app.interrupt();
+    }
+    if app.secret.is_some() {
+        return secret(app, event);
     }
     if app.ask.is_some() {
         return answer(app, event);
@@ -25,20 +29,23 @@ pub fn key(app: &mut App, event: KeyEvent) {
 }
 
 pub fn paste(app: &mut App, text: &str) {
+    if app.secret.is_some() {
+        return app.paste_secret(text);
+    }
     if app.ask.is_none() && app.picker.is_none() {
         app.input.insert_str(&text.replace("\r\n", "\n").replace('\r', "\n"));
     }
 }
 
-/// Ctrl+C: stops the run, else clears the prompt, else quits.
-fn interrupt(app: &mut App) {
-    if app.busy() {
-        app.cancel();
-    } else if !app.input.is_empty() {
-        app.input.clear();
-    } else {
-        app.quit = true;
-    }
+fn secret(app: &mut App, event: KeyEvent) {
+    let key = match event.code {
+        KeyCode::Char(c) => SecretKey::Char(c),
+        KeyCode::Backspace => SecretKey::Backspace,
+        KeyCode::Enter => SecretKey::Enter,
+        KeyCode::Esc => SecretKey::Esc,
+        _ => return,
+    };
+    app.secret_key(key);
 }
 
 fn answer(app: &mut App, event: KeyEvent) {
@@ -73,16 +80,11 @@ fn pick(app: &mut App, event: KeyEvent) {
                     }
                 }
                 PickerKind::Mode => {
-                    let modes = [
-                        PermissionMode::Ask,
-                        PermissionMode::AcceptEdits,
-                        PermissionMode::Plan,
-                        PermissionMode::Bypass,
-                    ];
-                    if let Some(mode) = modes.get(cursor) {
+                    if let Some(mode) = PermissionMode::ALL.get(cursor) {
                         app.set_mode(*mode);
                     }
                 }
+                PickerKind::Login => app.login_picked(cursor),
             }
         }
         _ => {}

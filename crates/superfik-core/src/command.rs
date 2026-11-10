@@ -16,12 +16,13 @@ pub enum Command {
     Skills,
     Agents,
     Cost,
+    Login,
     Exit,
 }
 
 impl Command {
     /// Every command with what it does, for `/help` and completion.
-    pub const HELP: [(&'static str, &'static str); 11] = [
+    pub const HELP: [(&'static str, &'static str); 12] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("model", "Pick the model, or /model <id>"),
@@ -32,6 +33,7 @@ impl Command {
         ("skills", "List skills and commands"),
         ("agents", "List agents"),
         ("cost", "Show this session's cost"),
+        ("login", "Connect a provider (API key or subscription)"),
         ("exit", "Quit (also /quit)"),
     ];
 
@@ -60,6 +62,7 @@ impl Command {
             "skills" | "commands" => bare(Self::Skills),
             "agents" => bare(Self::Agents),
             "cost" => bare(Self::Cost),
+            "login" => bare(Self::Login),
             "exit" | "quit" => bare(Self::Exit),
             _ => None,
         }

@@ -122,10 +122,9 @@ impl Agent<'_> {
                 ),
                 ..self.request.clone()
             };
-            let mut on = |delta: Delta| {
-                if let Delta::Text(text) = delta {
-                    (self.emit)(EngineEvent::TextDelta(text));
-                }
+            let mut on = |delta: Delta| match delta {
+                Delta::Text(text) => (self.emit)(EngineEvent::TextDelta(text)),
+                Delta::Thinking(text) => (self.emit)(EngineEvent::ThinkingDelta(text)),
             };
             let reply = match self.api.turn(&request, &mut on, self.control.stop_flag()) {
                 Ok(reply) => reply,
