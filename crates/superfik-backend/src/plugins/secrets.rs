@@ -16,6 +16,33 @@ pub trait SecretStore: Send + Sync {
     fn delete(&self, owner: &Principal, connection: ConnectionId);
 }
 
+/// This computer's store for keys and tokens: a sealed file in the data
+/// folder (`secrets.json`, its key in `secrets.key`, both `0600`), shared
+/// by everything in the process. The system keychain asks to allow every
+/// new build of a binary that is not signed by the team, which a
+/// `cargo install`ed terminal app never is; set `SUPERFIK_KEYCHAIN=1` to
+/// use it anyway.
+pub fn system_secrets() -> std::sync::Arc<dyn SecretStore> {
+    static STORE: std::sync::OnceLock<std::sync::Arc<dyn SecretStore>> = std::sync::OnceLock::new();
+    std::sync::Arc::clone(STORE.get_or_init(|| {
+        if std::env::var_os("SUPERFIK_KEYCHAIN").is_some() {
+            return std::sync::Arc::new(KeychainSecretStore);
+        }
+        let dir = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
+        let sealed = std::fs::create_dir_all(&dir)
+            .map_err(|error| error.to_string())
+            .and_then(|()| super::SealedSecretStore::key_at(&dir.join("secrets.key")))
+            .and_then(|key| super::SealedSecretStore::open(&dir.join("secrets.json"), key));
+        match sealed {
+            Ok(store) => std::sync::Arc::new(store),
+            Err(error) => {
+                tracing::warn!(%error, "the sealed secrets file is unusable; using the system keychain");
+                std::sync::Arc::new(KeychainSecretStore)
+            }
+        }
+    }))
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct KeychainSecretStore;
 

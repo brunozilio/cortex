@@ -20,7 +20,7 @@ pub use self::account::{BrowserSignIn, SignIn};
 pub use self::catalog::{ModelCatalog, ProviderCatalog};
 pub use self::store::{FileProviderStore, InMemoryProviderStore, ProviderStore};
 use crate::outbox::Outbox;
-use crate::plugins::{KeychainSecretStore, SecretStore};
+use crate::plugins::SecretStore;
 
 pub(crate) const fn secret_id(provider: ModelProvider) -> ConnectionId {
     ConnectionId::from_uuid(uuid::Uuid::from_u128(match provider {
@@ -69,7 +69,7 @@ impl ModelProviders {
     }
 
     pub fn system() -> Self {
-        Self::new(Arc::new(FileProviderStore::system()), Arc::new(KeychainSecretStore))
+        Self::new(Arc::new(FileProviderStore::system()), crate::plugins::system_secrets())
     }
 
     pub fn with_secrets(mut self, secrets: Arc<dyn SecretStore>) -> Self {

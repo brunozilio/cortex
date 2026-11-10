@@ -127,6 +127,15 @@ threads), `Transcript` (events folded into what is shown), `Input`, `ask`,
 `view` (drawing). Its own `/commands` parse in `superfik_core::command`;
 model, mode and effort persist in the owner's settings.
 
+## Secrets
+
+Provider keys, subscription tokens and plugin credentials live in one
+sealed file (`superfik_backend::system_secrets`): `secrets.json`, each
+entry encrypted with XChaCha20-Poly1305 under a key in `secrets.key`
+(both `0600`), re-read on every access so two processes never drop each
+other's entries. The macOS keychain asks to allow each new unsigned build,
+so it is opt-in (`SUPERFIK_KEYCHAIN=1`).
+
 ## Sessions
 
 Sessions survive restarts: `SaveSession` / `LoadSessions`

@@ -60,8 +60,16 @@ impl SealedSecretStore {
         Ok(key)
     }
 
+    /// The entries as the file holds them now (another process, such as a
+    /// terminal running without the daemon, may have written since).
     fn entries(&self) -> MutexGuard<'_, BTreeMap<String, Sealed>> {
-        self.entries.lock().unwrap_or_else(PoisonError::into_inner)
+        let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Ok(json) = std::fs::read_to_string(&self.path)
+            && let Ok(fresh) = serde_json::from_str(&json)
+        {
+            *entries = fresh;
+        }
+        entries
     }
 
     fn save(&self, entries: &BTreeMap<String, Sealed>) -> Result<(), String> {
@@ -128,6 +136,26 @@ fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn two_processes_on_one_file_keep_each_others_secrets() {
+        let dir = tempfile::tempdir().expect("dir");
+        let key = SealedSecretStore::key_at(&dir.path().join("secrets.key")).expect("key");
+        let file = dir.path().join("secrets.json");
+        let (one, two) =
+            (SealedSecretStore::open(&file, key).expect("one"), SealedSecretStore::open(&file, key).expect("two"));
+        let owner = Principal::LocalOwner;
+        let (a, b) = (ConnectionId::new(), ConnectionId::new());
+        one.set(&owner, a, &Secrets::from([("k".into(), "from one".into())])).expect("set a");
+        two.set(&owner, b, &Secrets::from([("k".into(), "from two".into())])).expect("set b");
+        assert_eq!(two.get(&owner, a).and_then(|s| s.get("k").cloned()).as_deref(), Some("from one"));
+        assert_eq!(one.get(&owner, b).and_then(|s| s.get("k").cloned()).as_deref(), Some("from two"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&file).expect("meta").permissions().mode() & 0o777, 0o600);
+        }
+    }
 
     fn secrets() -> Secrets {
         Secrets::from([("api_key".to_owned(), "lin_api_very_secret".to_owned())])

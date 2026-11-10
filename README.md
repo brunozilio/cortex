@@ -20,7 +20,9 @@ and memory load once); it leaves after 30 idle minutes. `superfik daemon
 status|stop` manages it; `SUPERFIK_NO_DAEMON=1` runs everything in the
 terminal's own process. Data lives in `~/Library/Application
 Support/Superfik Lite` (macOS) or `~/.config/superfik-lite`, apart from the
-desktop Superfik.
+desktop Superfik. Keys and tokens are sealed in `secrets.json` there (its key
+in `secrets.key`, both readable only by you), not in the keychain, which
+would ask to allow every new build; `SUPERFIK_KEYCHAIN=1` uses it anyway.
 
 In the chat: Enter sends, Alt+Enter (or Ctrl+J) adds a line, Esc
 interrupts, Shift+Tab cycles ask → edits → plan → bypass, `/help` lists the
