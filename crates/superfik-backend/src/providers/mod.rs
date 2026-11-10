@@ -97,6 +97,13 @@ impl ModelProviders {
         self
     }
 
+    /// The same accounts for another client: its model listings are its
+    /// own, so a newer listing by someone else never swallows its answer.
+    pub(crate) fn for_client(mut self) -> Self {
+        self.generations = Arc::default();
+        self
+    }
+
     pub fn list(&self, owner: &Principal) -> ServerEvent {
         ServerEvent::Providers(ProviderEvent::Listed { providers: self.store.load(owner).summaries() })
     }

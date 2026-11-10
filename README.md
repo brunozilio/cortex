@@ -15,6 +15,13 @@ superfik -p "explain src/main.rs"          # one answer, printed
 superfik models                            # what the connected providers offer
 ```
 
+Every terminal shares one background daemon (local models, embeddings
+and memory load once); it leaves after 30 idle minutes. `superfik daemon
+status|stop` manages it; `SUPERFIK_NO_DAEMON=1` runs everything in the
+terminal's own process. Data lives in `~/Library/Application
+Support/Superfik Lite` (macOS) or `~/.config/superfik-lite`, apart from the
+desktop Superfik.
+
 In the chat: Enter sends, Alt+Enter (or Ctrl+J) adds a line, Esc
 interrupts, Shift+Tab cycles ask → edits → plan → bypass, `/help` lists the
 commands (`/model`, `/mode`, `/effort`, `/compact`, `/memory`, `/skills`,

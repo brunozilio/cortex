@@ -105,6 +105,23 @@ MCP config; in-process servers (`McpServer`, closures behind
 called through `LocalTransport`, never over the wire. A typed
 `/name args` is expanded by the engine when it names a skill or command.
 
+### The daemon
+
+On Unix every `superfik` talks to one background daemon per computer
+(`superfik_backend::daemon`), started on first use (`superfik daemon
+serve`, detached) and gone after 30 idle minutes. It loads the services
+once (MLX servers, the embedding model, memory books) and gives each
+client connection its own `LocalBackend` on clones of them, so a client
+gets only its own runs' events and answers, and its runs end when it
+disconnects. The wire is newline-delimited JSON over `daemon.sock`
+(`0600`, in a `0700` folder): `Envelope<ClientCommand>` in, `ServerEvent`
+out. A lock file keeps one daemon per folder; `daemon.json` holds its pid
+and build so a newer `superfik` can say the daemon is stale (`superfik
+daemon stop`). `SUPERFIK_NO_DAEMON=1` (and Windows) run the backend in
+process. SDK programs embed their own backend by default (their
+in-process tools cannot cross processes); `Superfik::connect_daemon`
+joins the daemon instead.
+
 The CLI is a client of the SDK: `App` (state and effects, slow calls on
 threads), `Transcript` (events folded into what is shown), `Input`, `ask`,
 `view` (drawing). Its own `/commands` parse in `superfik_core::command`;

@@ -4,7 +4,11 @@
 //! - `superfik -p <prompt>` answers once and prints the reply.
 //! - `superfik login` / `logout` connect or forget an LLM provider.
 //! - `superfik models` lists what the connected providers offer.
+//!
+//! Every terminal talks to one background daemon per computer (Unix), so
+//! local models, embeddings and memory load once.
 
+mod daemon;
 mod login;
 mod print;
 mod tui;
@@ -13,7 +17,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use superfik_sdk::{PermissionMode, Superfik};
+use superfik_sdk::PermissionMode;
 
 #[derive(Debug, Parser)]
 #[command(name = "superfik", version, about = "Talk to Superfik's coding agent in your project.")]
@@ -44,6 +48,22 @@ enum Action {
     Logout,
     /// List the models the connected providers offer.
     Models,
+    /// The background daemon every terminal shares.
+    #[command(hide = true)]
+    Daemon {
+        #[command(subcommand)]
+        action: DaemonAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum DaemonAction {
+    /// Serve this computer's terminals until idle.
+    Serve,
+    /// Stop the running daemon (its terminals' runs end).
+    Stop,
+    /// Say whether one is running.
+    Status,
 }
 
 fn parse_mode(text: &str) -> Result<PermissionMode, String> {
@@ -67,7 +87,16 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         None => std::env::current_dir().map_err(|e| e.to_string())?,
     };
     let cwd = std::fs::canonicalize(&cwd).map_err(|e| format!("{}: {e}", cwd.display()))?;
-    let superfik = Superfik::builder().build().map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    if let Some(Action::Daemon { action }) = &cli.command {
+        match action {
+            DaemonAction::Serve => daemon::serve()?,
+            DaemonAction::Stop => daemon::stop()?,
+            DaemonAction::Status => println!("{}", daemon::status()),
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    let (superfik, stale) = daemon::connect()?;
     let prompt = (!cli.prompt.is_empty()).then(|| cli.prompt.join(" "));
     match cli.command {
         Some(Action::Login) => login::login(&superfik).map(|()| ExitCode::SUCCESS),
@@ -78,12 +107,16 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        Some(Action::Daemon { .. }) => Err("the daemon needs macOS or Linux".into()),
         None if cli.print => {
+            if let Some(stale) = &stale {
+                eprintln!("superfik: {stale}");
+            }
             let prompt = prompt.ok_or("--print needs a prompt")?;
             print::print(&superfik, cwd, cli.model.as_deref(), cli.mode, &prompt)
         }
         None => {
-            tui::run(superfik, cwd, cli.model, cli.mode, prompt).map_err(|e| e.to_string())?;
+            tui::run(superfik, cwd, cli.model, cli.mode, prompt, stale).map_err(|e| e.to_string())?;
             Ok(ExitCode::SUCCESS)
         }
     }

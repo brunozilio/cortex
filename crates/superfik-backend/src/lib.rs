@@ -11,6 +11,8 @@
 //! [`ServerEvent`]: superfik_protocol::ServerEvent
 
 mod authorizer;
+#[cfg(unix)]
+pub mod daemon;
 mod dirs;
 mod extensions;
 mod handler;

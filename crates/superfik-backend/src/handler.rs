@@ -24,7 +24,8 @@ pub struct CommandHandler {
 }
 
 impl CommandHandler {
-    pub fn new(services: LocalServices, outbox: Outbox) -> Self {
+    pub fn new(mut services: LocalServices, outbox: Outbox) -> Self {
+        services.providers = services.providers.for_client();
         let memory_tool = services.memory_tool.then(|| McpServer::start(services.memory.clone())).flatten();
         let runs = Arc::new(RunTable::default());
         Self { services, runs, outbox, memory_tool }

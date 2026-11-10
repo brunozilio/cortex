@@ -31,8 +31,12 @@ pub fn run(
     model: Option<String>,
     mode: Option<PermissionMode>,
     prompt: Option<String>,
+    notice: Option<String>,
 ) -> std::io::Result<()> {
     let mut app = App::new(superfik, cwd, model, mode);
+    if let Some(notice) = notice {
+        app.transcript.notice(notice);
+    }
     let mut terminal = ratatui::init();
     let _ = execute!(std::io::stdout(), EnableBracketedPaste);
     let result = (|| -> std::io::Result<()> {
