@@ -63,7 +63,7 @@ impl Job {
         let agents = brief.agents;
         tools.push(Box::new(tools::subagent::AgentTool { agents: agents.clone() }));
         tools.extend(tools::task::tools());
-        tools.extend(crate::mcp::tools_stopped(&self.request, &self.mcp, self.control.stop_flag()));
+        tools.extend(crate::mcp::tools_stopped(&self.request, &brief.plugins, &self.mcp, self.control.stop_flag()));
         let settings = brief.settings;
         let selected = if let Some(name) = &settings.agent {
             match (tools::subagent::AgentTool { agents: agents.clone() })

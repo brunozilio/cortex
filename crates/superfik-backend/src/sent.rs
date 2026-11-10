@@ -19,7 +19,8 @@ mod tests {
     #[test]
     fn a_client_cannot_hand_a_run_its_own_tools_or_files() {
         let mut request = PromptRequest::plain("/srv/u/rocket".into(), "hi", ModelOption::new("m", "M"));
-        request.extensions = Some(Extensions { dirs: vec!["/etc".into()], mcp_config: None });
+        request.extensions =
+            Some(Extensions { dirs: vec!["/etc".into()], plugins: vec!["/tmp/evil".into()], ..Extensions::default() });
         request.memory =
             Some(MemoryBrief { output: "/etc/passwd".into(), origin: Some("Launch".into()), ..MemoryBrief::default() });
         let sent = as_sent(&request);

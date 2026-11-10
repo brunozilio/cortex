@@ -37,7 +37,10 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
     if let Some(home) = home {
         sources.push((home.join(".superfik/skills"), None));
         let claude = ClaudeHome::new(home.join(".claude"));
-        sources.extend(claude.skill_sources(cwd).into_iter().map(|source| (source.dir, source.namespace)));
+        sources.extend(claude.skill_sources().into_iter().map(|source| (source.dir, source.namespace)));
+    }
+    for plugin in crate::plugins::found(request, home) {
+        sources.push((plugin.root.join("skills"), Some(plugin.name)));
     }
     for dir in request.extensions.iter().flat_map(|extensions| &extensions.dirs) {
         sources.push((dir.join("skills"), None));

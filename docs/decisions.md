@@ -44,3 +44,16 @@ and for connecting MCP servers over HTTP and stdio.
 - The `Principal`/`Envelope`/`Authorizer` seam stays so a remote backend
   can come back without reshaping the SDK.
 - Internal software: no license, notices, release pipeline or packaging.
+
+## 0019 — A platform: plugins in Claude Code's layout
+
+Superfik is a general platform; a company's integrations and workflows
+(Jira, GitHub, Sonar, Veracode, Datadog, its own skills) live in plugins
+kept in their own repositories, never in this workspace. A plugin is
+Claude Code's layout (`.claude-plugin/plugin.json`, `skills/`, `agents/`,
+`commands/`, `hooks/hooks.json`, `.mcp.json`) and a catalogue is Claude
+Code's marketplace (`marketplace.json` in a git repo), so the format is
+not ours: this amends ADR 0018's "no plugin system of our own" to "no
+plugin *format* of our own". Superfik reads a plugin whole and will
+install and update them itself; MCP servers also come from the project
+and the user, with OAuth for HTTP servers.

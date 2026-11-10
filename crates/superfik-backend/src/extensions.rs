@@ -40,14 +40,20 @@ pub struct Extensions {
     pub dirs: Vec<PathBuf>,
     pub mcp: Vec<McpServerSpec>,
     pub local: Vec<LocalMcp>,
+    /// Installed plugins' folders (Claude Code's layout, ADR 0019).
+    pub plugins: Vec<PathBuf>,
 }
 
 impl Extensions {
+    fn for_run(&self) -> superfik_core::Extensions {
+        superfik_core::Extensions { dirs: self.dirs.clone(), plugins: self.plugins.clone(), mcp_config: None }
+    }
+
     /// Adds the host's folders and MCP servers to a run and hands it the
     /// in-process servers. The HTTP and stdio servers go in a private
     /// config file the run reads and [`discard`] removes.
     pub(crate) fn brief(&self, run: RunId, request: PromptRequest) -> Result<PromptRequest, String> {
-        let mut extensions = superfik_core::Extensions { dirs: self.dirs.clone(), mcp_config: None };
+        let mut extensions = self.for_run();
         if !self.mcp.is_empty() {
             let servers: serde_json::Map<String, Value> =
                 self.mcp.iter().map(|spec| (spec.name().to_owned(), spec.config())).collect();
@@ -71,7 +77,7 @@ pub(crate) fn discard(extensions: Option<&superfik_core::Extensions>) {
 
 fn session(cwd: &Path, extensions: &Extensions) -> PromptRequest {
     let mut request = PromptRequest::plain(cwd.to_path_buf(), "", ModelOption::new("", ""));
-    request.extensions = Some(superfik_core::Extensions { dirs: extensions.dirs.clone(), mcp_config: None });
+    request.extensions = Some(extensions.for_run());
     request
 }
 
@@ -96,6 +102,17 @@ pub(crate) fn agents(cwd: &Path, extensions: &Extensions) -> Vec<CustomAgent> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_installed_plugin_s_commands_are_offered_under_its_name() {
+        let dir = tempfile::tempdir().expect("dir");
+        let plugin = dir.path().join("acme");
+        std::fs::create_dir_all(plugin.join("commands")).expect("commands");
+        std::fs::write(plugin.join("commands/ship.md"), "---\ndescription: Ships\n---\nShip it.").expect("command");
+        let extensions = Extensions { plugins: vec![plugin], ..Extensions::default() };
+        let names: Vec<String> = skills(dir.path(), &extensions).into_iter().map(|s| s.name).collect();
+        assert!(names.contains(&"acme:ship".into()), "{names:?}");
+    }
 
     #[test]
     fn a_folder_s_skills_commands_and_agents_keep_their_own_names() {
@@ -141,10 +158,12 @@ mod tests {
                 headers: [("Authorization".to_owned(), "Bearer t".to_owned())].into(),
             }],
             local: vec![LocalMcp::new("host", std::sync::Arc::new(Silent))],
+            plugins: vec!["/plugins/acme".into()],
         };
         let briefed = extensions.brief(run, request).expect("brief");
         let added = briefed.extensions.clone().expect("extensions");
         assert_eq!(added.dirs, [PathBuf::from("/sdk")]);
+        assert_eq!(added.plugins, [PathBuf::from("/plugins/acme")]);
         let path = added.mcp_config.clone().expect("config");
         let config: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("json");
         assert_eq!(config["mcpServers"]["docs"]["headers"]["Authorization"], "Bearer t");

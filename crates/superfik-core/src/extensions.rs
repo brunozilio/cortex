@@ -12,10 +12,15 @@ pub struct Extensions {
     pub dirs: Vec<PathBuf>,
     #[serde(default)]
     pub mcp_config: Option<PathBuf>,
+    /// Installed plugins' folders, in Claude Code's plugin layout
+    /// (`.claude-plugin/plugin.json`, `skills/`, `agents/`, `commands/`,
+    /// `hooks/hooks.json`, `.mcp.json`).
+    #[serde(default)]
+    pub plugins: Vec<PathBuf>,
 }
 
 impl Extensions {
     pub fn is_empty(&self) -> bool {
-        self.dirs.is_empty() && self.mcp_config.is_none()
+        self.dirs.is_empty() && self.mcp_config.is_none() && self.plugins.is_empty()
     }
 }

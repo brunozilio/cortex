@@ -5,8 +5,8 @@
 //! - `skills/synced/<bucket>/<name>/SKILL.md`: skills synced from
 //!   claude.ai; Claude Code exposes them as `anthropic-skills:<name>`.
 //! - `plugins/installed_plugins.json`: installed plugins and their
-//!   `installPath`, which holds `skills/` and `agents/`; their items are
-//!   namespaced `<plugin>:<name>`. `plugins/marketplaces/` only holds
+//!   `installPath`, a plugin folder `crate::plugins` reads whole; their
+//!   items are namespaced `<plugin>:<name>`. `plugins/marketplaces/` only holds
 //!   catalogues of plugins that are *available*, so it is not scanned.
 //! - `settings.json` → `enabledPlugins`: a plugin set to `false` is off.
 
@@ -47,28 +47,20 @@ impl ClaudeHome {
         &self.root
     }
 
-    pub fn skill_sources(&self, repo: &Path) -> Vec<Source> {
+    /// The user's own and synced skills; installed plugins' come from
+    /// [`crate::plugins::found`].
+    pub fn skill_sources(&self) -> Vec<Source> {
         let mut sources = vec![Source { dir: self.root.join("skills"), namespace: None }];
         sources.extend(
             subdirs(&self.root.join("skills").join("synced"))
                 .into_iter()
                 .map(|dir| Source { dir, namespace: Some(SYNCED_NAMESPACE.to_owned()) }),
         );
-        sources.extend(self.plugin_sources(repo, "skills"));
         sources
     }
 
-    pub fn agent_sources(&self, repo: &Path) -> Vec<Source> {
-        let mut sources = vec![Source { dir: self.root.join("agents"), namespace: None }];
-        sources.extend(self.plugin_sources(repo, "agents"));
-        sources
-    }
-
-    fn plugin_sources(&self, repo: &Path, kind: &str) -> Vec<Source> {
-        self.installed_plugins(repo)
-            .into_iter()
-            .map(|plugin| Source { dir: plugin.path.join(kind), namespace: Some(plugin.name) })
-            .collect()
+    pub fn agent_sources(&self) -> Vec<Source> {
+        vec![Source { dir: self.root.join("agents"), namespace: None }]
     }
 
     pub fn installed_plugins(&self, repo: &Path) -> Vec<InstalledPlugin> {

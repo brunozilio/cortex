@@ -36,7 +36,10 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent>
     if let Some(home) = home {
         sources.push((home.join(".superfik/agents"), None));
         let claude = ClaudeHome::new(home.join(".claude"));
-        sources.extend(claude.agent_sources(cwd).into_iter().map(|source| (source.dir, source.namespace)));
+        sources.extend(claude.agent_sources().into_iter().map(|source| (source.dir, source.namespace)));
+    }
+    for plugin in crate::plugins::found(request, home) {
+        sources.push((plugin.root.join("agents"), Some(plugin.name)));
     }
     for dir in request.extensions.iter().flat_map(|extensions| &extensions.dirs) {
         sources.push((dir.join("agents"), None));

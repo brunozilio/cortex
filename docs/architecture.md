@@ -81,11 +81,20 @@ bearer token per run).
 ## Skills, agents and MCP
 
 The engine finds skills, commands and agents where Claude Code keeps them
-(the project's `.claude/` and `.superfik/`, `~/.claude` with its installed
-Claude Code plugins) plus the SDK host's folders (`Extensions::dirs`).
+(the project's `.claude/` and `.superfik/`, `~/.claude`) plus the SDK
+host's folders (`Extensions::dirs`).
 MCP servers come from the host: HTTP/stdio servers go in a run's private
 MCP config (`0600`, removed on the terminal event), in-process ones ride on
 the run's credentials.
+
+**Plugins** (ADR 0019) use Claude Code's plugin layout and reach a run
+whole (`superfik_native::plugins`): skills, commands and agents as
+`<plugin>:<name>`, `hooks/hooks.json` joined to the settings' hooks, and
+`.mcp.json` servers as `plugin_<plugin>_<server>`, with
+`${CLAUDE_PLUGIN_ROOT}` filled in. They come from the backend
+(`Extensions::plugins`, never from a client) and from Claude Code's
+installs; a plugin whose hooks or servers do not parse is left out, the
+run goes on.
 
 ## The SDK and the CLI
 

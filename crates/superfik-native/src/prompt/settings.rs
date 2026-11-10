@@ -31,7 +31,7 @@ impl Default for Settings {
 fn enabled() -> bool {
     true
 }
-pub fn load(cwd: &Path, home: Option<&Path>) -> Result<Settings, String> {
+pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin]) -> Result<Settings, String> {
     let mut selected = String::from("Default");
     let mut schema = None;
     let mut agent = None;
@@ -92,6 +92,13 @@ pub fn load(cwd: &Path, home: Option<&Path>) -> Result<Settings, String> {
             }
         }
     }
+    for plugin in plugins {
+        match plugin.hooks().and_then(|events| events.map(|events| crate::hooks::Hooks::parse(&events)).transpose()) {
+            Ok(Some(found)) => hooks.extend(&found),
+            Ok(None) => {}
+            Err(error) => tracing::warn!(%error, plugin = %plugin.name, "a plugin's hooks are left out"),
+        }
+    }
     if ["CLAUDE_CODE_DISABLE_AUTO_MEMORY", "SUPERFIK_DISABLE_AUTO_MEMORY"]
         .iter()
         .any(|key| std::env::var(key).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes")))
@@ -146,7 +153,7 @@ mod tests {
             std::fs::write(root.join("settings.json"), serde_json::json!({"outputStyle":style}).to_string())
                 .expect("valid test fixture");
         }
-        let config = load(repo.path(), Some(home.path())).expect("valid test fixture");
+        let config = load(repo.path(), Some(home.path()), &[]).expect("valid test fixture");
         assert_eq!(config.style.expect("valid test fixture").name, "Concise");
     }
     #[test]
@@ -160,10 +167,32 @@ mod tests {
             "---\nkeep-coding-instructions: false\n---\nReturn review findings.",
         )
         .expect("valid test fixture");
-        let style = load(repo.path(), None).expect("valid test fixture").style.expect("valid test fixture");
+        let style = load(repo.path(), None, &[]).expect("valid test fixture").style.expect("valid test fixture");
         assert!(!style.keep_coding);
         assert_eq!(style.instructions, "Return review findings.");
         std::fs::write(root.join("settings.json"), r#"{"outputStyle":"../private"}"#).expect("valid test fixture");
-        assert!(load(repo.path(), None).is_err());
+        assert!(load(repo.path(), None, &[]).is_err());
+    }
+    #[test]
+    fn an_installed_plugin_adds_its_hooks_and_a_broken_one_is_left_out() {
+        let repo = tempfile::tempdir().expect("repo");
+        let good = tempfile::tempdir().expect("plugin");
+        let broken = tempfile::tempdir().expect("plugin");
+        std::fs::create_dir_all(good.path().join("hooks")).expect("hooks dir");
+        std::fs::write(
+            good.path().join("hooks/hooks.json"),
+            r#"{"description": "Checks", "hooks": {"PreToolUse": [{"matcher": "Bash",
+                "hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/check.sh"}]}]}}"#,
+        )
+        .expect("hooks");
+        std::fs::create_dir_all(broken.path().join("hooks")).expect("hooks dir");
+        std::fs::write(broken.path().join("hooks/hooks.json"), r#"{"hooks": {"NoSuchEvent": []}}"#).expect("hooks");
+        let plugins = [crate::plugins::Plugin::at(good.path()), crate::plugins::Plugin::at(broken.path())];
+        let settings = load(repo.path(), None, &plugins).expect("a broken plugin does not stop the run");
+        let groups = &settings.hooks.0["PreToolUse"];
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].matcher, "Bash");
+        assert_eq!(groups[0].hooks[0].command, format!("{}/check.sh", good.path().display()));
+        assert!(!settings.hooks.0.contains_key("NoSuchEvent"));
     }
 }

@@ -155,12 +155,14 @@ impl McpServer {
     }
 }
 
+/// The run's servers' tools without plugins and without a stop flag (tests).
 pub fn tools(request: &PromptRequest, http: &Arc<dyn Http>) -> Vec<Box<dyn Tool>> {
-    tools_stopped(request, http, &std::sync::atomic::AtomicBool::new(false))
+    tools_stopped(request, &[], http, &std::sync::atomic::AtomicBool::new(false))
 }
 
 pub fn tools_stopped(
     request: &PromptRequest,
+    plugins: &[crate::plugins::Plugin],
     http: &Arc<dyn Http>,
     stop: &std::sync::atomic::AtomicBool,
 ) -> Vec<Box<dyn Tool>> {
@@ -174,7 +176,7 @@ pub fn tools_stopped(
         let transport = Box::new(LocalTransport::new(Arc::clone(&local.endpoint)));
         listed(&local.name, Ok(McpServer::new(local.name.clone(), transport)))
     });
-    let remote = servers(request)
+    let remote = servers(request, plugins)
         .into_iter()
         .take_while(|_| !stop.load(Ordering::Relaxed))
         .flat_map(|spec| listed(spec.name(), McpServer::open_stopped(&spec, http, stop)));

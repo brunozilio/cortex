@@ -19,6 +19,7 @@ pub mod mcp;
 pub mod meter;
 pub mod model;
 pub mod permission;
+pub mod plugins;
 pub mod prompt;
 pub mod sessions;
 pub mod tools;
