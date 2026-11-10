@@ -24,6 +24,7 @@
 //! `Principal`, so the same calls can reach a remote backend later.
 
 mod account;
+mod chores;
 mod client;
 #[cfg(unix)]
 pub mod daemon;
@@ -48,8 +49,8 @@ pub use superfik_core::mcp_config::{McpOrigin, McpServerInfo, McpState};
 pub use superfik_core::memory::{Memory, MemoryEdit, MemoryId, MemoryKind};
 pub use superfik_core::provider::{ModelProvider, ProviderSummary};
 pub use superfik_core::{
-    AgentAsk, AskId, AskKind, Choice, CustomAgent, Decision, Effort, EngineEvent, Image, MAX_IMAGE_BYTES,
-    ModelOption as Model, PermissionMode, Question, SessionId, ToolCall,
+    AgentAsk, AskId, AskKind, Choice, ChoreAnswer, CustomAgent, Decision, Effort, EngineEvent, HeadsUp, Image,
+    MAX_IMAGE_BYTES, ModelOption as Model, PermissionMode, Question, SessionId, ToolCall,
 };
 
 #[derive(Debug, thiserror::Error)]

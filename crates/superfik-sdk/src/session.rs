@@ -117,18 +117,11 @@ impl Session {
         self.start(request)
     }
 
-    /// Asks a side question about the conversation so far: answered without
-    /// tools and not added to the conversation, so it can run beside a run
-    /// in progress (which it sees up to its last finished turn).
-    /// [`Run::side_answer`] waits for the answer.
-    pub fn side(&self, question: &str) -> Result<Run, Error> {
-        let mut request = PromptRequest::plain(self.cwd.clone(), question, self.model.clone());
-        request.resume = Some(self.id().ok_or(Error::NothingToAsk)?);
-        request.command = Some(superfik_core::SessionCommand::Side);
-        self.start(request)
+    pub(crate) fn cwd(&self) -> &std::path::Path {
+        &self.cwd
     }
 
-    fn start(&self, request: PromptRequest) -> Result<Run, Error> {
+    pub(crate) fn start(&self, request: PromptRequest) -> Result<Run, Error> {
         let run = RunId::new();
         let events = self.client.follow(run);
         if let Err(error) = self.client.send(ClientCommand::SubmitPrompt { run, request }) {
@@ -219,21 +212,6 @@ impl Run {
             }
         }
         Ok(text)
-    }
-
-    /// Runs a [`Session::side`] question to the end and returns its answer.
-    pub fn side_answer(mut self) -> Result<String, Error> {
-        let mut answer = None;
-        while let Some(event) = self.next_event() {
-            match event {
-                EngineEvent::Chore(superfik_core::ChoreAnswer::Side(text)) => answer = Some(text),
-                EngineEvent::Asked(ask) => self.answer(ask.id, Decision::Deny)?,
-                EngineEvent::Failed(message) => return Err(Error::Run(message)),
-                EngineEvent::Cancelled => return Err(Error::Run("cancelled".into())),
-                _ => {}
-            }
-        }
-        answer.ok_or_else(|| Error::Run("the side question got no answer".into()))
     }
 }
 

@@ -231,3 +231,33 @@ fn a_side_question_is_answered_from_the_conversation_without_continuing_it() {
     assert_eq!(side.resume, Some(SessionId("s-1".into())), "asked about this conversation");
     assert!(side.memory.is_none(), "a side question recalls no memory");
 }
+
+#[test]
+fn side_calls_name_suggest_recap_and_warn_about_a_conversation() {
+    let data = tempfile::tempdir().expect("data");
+    let answer = EngineEvent::Chore(ChoreAnswer::Suggestion("run the tests".into()));
+    let engine = FakeEngine::new(vec![model()], script(vec![answer]));
+    let superfik = build(&engine, data.path());
+    let session = superfik.session(data.path(), model());
+    assert!(matches!(session.recap(), Err(superfik_sdk::Error::NothingToAsk)));
+    let title = session.title("fix the login page").expect("a title needs no conversation");
+    assert_eq!(title.chore_answer().expect("answer"), Some(ChoreAnswer::Suggestion("run the tests".into())));
+
+    session.send("fix the bug").expect("run").text().expect("text");
+    for run in [session.suggest(), session.recap(), session.heads_up()] {
+        run.expect("run").chore_answer().expect("answer");
+    }
+    let requests = engine.requests();
+    let asked: Vec<_> = requests.iter().map(|r| (r.command, r.resume.is_some())).collect();
+    assert_eq!(
+        asked,
+        [
+            (Some(SessionCommand::Title), false),
+            (None, false),
+            (Some(SessionCommand::Suggest), true),
+            (Some(SessionCommand::Recap), true),
+            (Some(SessionCommand::HeadsUp), true),
+        ]
+    );
+    assert_eq!(requests[0].prompt, "fix the login page");
+}
