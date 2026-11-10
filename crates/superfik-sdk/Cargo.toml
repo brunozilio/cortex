@@ -14,7 +14,7 @@ thiserror.workspace = true
 crossbeam-channel.workspace = true
 
 [dev-dependencies]
-superfik-engine = { workspace = true, features = ["fake"] }
+superfik-native = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 
 [lints]

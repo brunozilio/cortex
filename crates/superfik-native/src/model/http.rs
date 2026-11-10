@@ -1,8 +1,6 @@
 //! HTTP behind a trait, so providers are tested against recorded streams.
 
-use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Cursor};
-use std::sync::Mutex;
 
 pub struct Response {
     pub status: u16,
@@ -145,6 +143,7 @@ impl Response {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sent {
     pub url: String,
@@ -152,15 +151,17 @@ pub struct Sent {
     pub body: String,
 }
 
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Debug, Default)]
 pub struct ScriptedHttp {
-    answers: Mutex<VecDeque<(u16, String)>>,
-    sent: Mutex<Vec<Sent>>,
+    answers: std::sync::Mutex<std::collections::VecDeque<(u16, String)>>,
+    sent: std::sync::Mutex<Vec<Sent>>,
 }
 
+#[cfg(any(test, feature = "test-support"))]
 impl ScriptedHttp {
     pub fn new(answers: impl IntoIterator<Item = (u16, String)>) -> Self {
-        Self { answers: Mutex::new(answers.into_iter().collect()), sent: Mutex::default() }
+        Self { answers: std::sync::Mutex::new(answers.into_iter().collect()), sent: std::sync::Mutex::default() }
     }
 
     pub fn sent(&self) -> Vec<Sent> {
@@ -168,6 +169,7 @@ impl ScriptedHttp {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
 impl Http for ScriptedHttp {
     fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Response, String> {
         self.post(url, headers, "")

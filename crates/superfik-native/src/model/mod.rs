@@ -8,6 +8,7 @@ pub mod http;
 pub mod kiro;
 pub mod openai;
 pub mod providers;
+#[cfg(any(test, feature = "test-support"))]
 pub mod scripted;
 pub mod sse;
 

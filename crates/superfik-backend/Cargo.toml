@@ -8,7 +8,6 @@ publish.workspace = true
 [dependencies]
 superfik-private-file.workspace = true
 superfik-core.workspace = true
-superfik-engine.workspace = true
 superfik-protocol.workspace = true
 superfik-providers.workspace = true
 superfik-oauth.workspace = true
@@ -31,7 +30,7 @@ default = ["embeddings"]
 embeddings = ["dep:fastembed"]
 
 [dev-dependencies]
-superfik-engine = { workspace = true, features = ["fake"] }
+superfik-native = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 
 [lints]

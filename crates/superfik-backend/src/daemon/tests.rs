@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use superfik_core::{EngineEvent, ModelOption, PromptRequest, RunId, SessionId};
-use superfik_engine::fake::FakeEngine;
+use superfik_native::fake::FakeEngine;
 use superfik_protocol::{Backend, ClientCommand, Envelope, ServerEvent};
 
 use super::*;

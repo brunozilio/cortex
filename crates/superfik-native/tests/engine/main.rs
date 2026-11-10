@@ -11,10 +11,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use superfik_core::{EngineEvent, ModelOption, PromptRequest, RunId};
-use superfik_engine::AgentEngine;
 use superfik_native::model::scripted::ScriptedModel;
 use superfik_native::model::{ModelApi, ModelError};
-use superfik_native::{ApiSource, NativeEngine};
+use superfik_native::{AgentEngine, ApiSource, NativeEngine};
 
 struct Source(Mutex<Vec<Arc<ScriptedModel>>>);
 

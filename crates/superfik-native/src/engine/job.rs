@@ -5,15 +5,14 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use superfik_core::{EngineEvent, EngineProblem, FailureKind, PromptRequest, SessionCommand, SessionId};
-use superfik_engine::RunGate;
-
 use super::ApiSource;
 use super::converse::Prepared;
+use crate::RunGate;
 use crate::control::Control;
 use crate::model::http::Http;
 use crate::sessions::Sessions;
 use crate::tools::{self, Workspace};
+use superfik_core::{EngineEvent, EngineProblem, FailureKind, PromptRequest, SessionCommand, SessionId};
 
 pub(super) struct Job {
     pub(super) source: Arc<dyn ApiSource>,

@@ -61,8 +61,7 @@ rest; see `crates/superfik-sdk/src/lib.rs`.
 | Crate | What it is |
 |---|---|
 | `superfik-core` | Domain types: requests, engine events, memory, `Principal`. Pure. |
-| `superfik-engine` | `AgentEngine` trait and a fake engine for tests. |
-| `superfik-native` | The agent loop, tools, permissions, hooks, sub-agents, skill/agent discovery, MCP, sessions, compaction, provider APIs. |
+| `superfik-native` | The `AgentEngine` trait and the engine behind it: the agent loop, tools, permissions, hooks, sub-agents, skill/agent discovery, MCP, sessions, compaction, provider APIs. |
 | `superfik-mlx` | Local MLX models (Apple silicon). |
 | `superfik-protocol` | `ClientCommand` / `ServerEvent` in an `Envelope`. |
 | `superfik-backend` | Command handler and daemon: runs, memory, settings, providers, secrets. |

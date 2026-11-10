@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use superfik_core::{Author, EngineEvent, Principal, PromptRequest, Provenance, RunId};
-use superfik_engine::EventSink;
+use superfik_native::EventSink;
 use superfik_protocol::{ClientCommand, Envelope, ServerEvent};
 
 use crate::memory::mcp::McpServer;

@@ -7,11 +7,14 @@
 
 pub mod agent;
 pub mod agent_runtime;
+mod boundary;
 pub mod brief;
 pub mod chores;
 pub mod claude_home;
 pub mod control;
 mod engine;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fake;
 pub mod frontmatter;
 pub mod guard;
 pub mod hooks;
@@ -26,4 +29,5 @@ pub mod tools;
 pub mod transcript;
 pub mod upkeep;
 
+pub use boundary::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};
 pub use engine::{ApiSource, NativeEngine};

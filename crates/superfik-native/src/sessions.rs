@@ -1,8 +1,10 @@
 //! Conversations the engine can resume: the transcript of each session,
 //! kept between prompts (and, on disk, between launches).
 
+#[cfg(any(test, feature = "test-support"))]
 use std::collections::HashMap;
 use std::path::PathBuf;
+#[cfg(any(test, feature = "test-support"))]
 use std::sync::Mutex;
 
 use sha2::{Digest, Sha256};
@@ -46,12 +48,14 @@ fn scoped_id(request: &PromptRequest, id: &SessionId) -> SessionId {
     SessionId(format!("{:x}", Sha256::digest(bytes)))
 }
 
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Debug, Default)]
 pub struct InMemorySessions {
     kept: Mutex<HashMap<SessionId, Vec<Message>>>,
     worktrees: Mutex<HashMap<SessionId, crate::agent_runtime::WorktreeState>>,
 }
 
+#[cfg(any(test, feature = "test-support"))]
 impl Sessions for InMemorySessions {
     fn load_worktree(
         &self,

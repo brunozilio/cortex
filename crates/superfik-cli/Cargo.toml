@@ -24,7 +24,7 @@ tui-big-text = "0.8.10"
 [dev-dependencies]
 tempfile.workspace = true
 superfik-backend.workspace = true
-superfik-engine = { workspace = true, features = ["fake"] }
+superfik-native = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true

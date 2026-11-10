@@ -12,15 +12,14 @@ mod report;
 
 use std::sync::Arc;
 
-use superfik_core::{Decision, EngineEvent, FailureKind, ModelOption, PermissionMode, PromptRequest, RunId};
-use superfik_engine::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};
-
 use self::job::Job;
+use crate::boundary::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};
 use crate::control::Control;
 use crate::model::http::{Http, UreqHttp};
 use crate::model::{ModelApi, ModelError};
 use crate::sessions::Sessions;
 use crate::tools::Workspace;
+use superfik_core::{Decision, EngineEvent, FailureKind, ModelOption, PermissionMode, PromptRequest, RunId};
 
 const MAX_OUTPUT: u32 = 64_000;
 

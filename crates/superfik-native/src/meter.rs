@@ -1,10 +1,10 @@
 //! Every successful provider call is metered, including compaction and children.
+use crate::RunGate;
 use crate::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use superfik_core::billing::{ModelUsage, PRICE_DATE, rates};
 use superfik_core::{EngineEvent, ModelProvider};
-use superfik_engine::RunGate;
 
 #[derive(Debug, Default)]
 pub struct Ledger {

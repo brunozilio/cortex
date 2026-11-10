@@ -3952,7 +3952,6 @@ dependencies = [
  "serde",
  "serde_json",
  "superfik-core",
- "superfik-engine",
  "superfik-mlx",
  "superfik-native",
  "superfik-oauth",
@@ -3976,7 +3975,7 @@ dependencies = [
  "serde_json",
  "superfik-backend",
  "superfik-core",
- "superfik-engine",
+ "superfik-native",
  "superfik-sdk",
  "tachyonfx",
  "tempfile",
@@ -3993,14 +3992,6 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
-]
-
-[[package]]
-name = "superfik-engine"
-version = "0.2.0"
-dependencies = [
- "superfik-core",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -4034,7 +4025,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "superfik-core",
- "superfik-engine",
+ "superfik-native",
  "superfik-private-file",
  "superfik-process",
  "superfik-providers",
@@ -4106,7 +4097,7 @@ dependencies = [
  "serde_json",
  "superfik-backend",
  "superfik-core",
- "superfik-engine",
+ "superfik-native",
  "superfik-protocol",
  "tempfile",
  "thiserror 2.0.21",

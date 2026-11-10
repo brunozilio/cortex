@@ -9,7 +9,7 @@ use superfik_backend::{Backend, InMemoryStore, LocalBackend, LocalServices, Memo
 use superfik_core::{
     AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, Principal, PromptRequest, RunId, UserId,
 };
-use superfik_engine::fake::FakeEngine;
+use superfik_native::fake::FakeEngine;
 use superfik_protocol::{ClientCommand, Envelope, ServerEvent};
 
 /// A host folder with one skill and one agent, as the SDK would add.

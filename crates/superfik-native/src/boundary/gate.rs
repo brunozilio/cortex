@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use superfik_core::{EngineEvent, RunId};
 
-use crate::engine::EventSink;
+use super::EventSink;
 
 #[derive(Clone)]
 pub struct RunGate {

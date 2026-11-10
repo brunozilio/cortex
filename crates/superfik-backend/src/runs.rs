@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
 use superfik_core::{Principal, RunId};
-use superfik_engine::RunHandle;
+use superfik_native::RunHandle;
 
 enum Slot {
     Active(Principal, Box<dyn RunHandle>),

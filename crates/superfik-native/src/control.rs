@@ -1,6 +1,6 @@
 //! What the user can do to a run while it works: cancel it, answer its
 //! asks, change its permission mode. Shared between the run's thread and
-//! its [`RunHandle`](superfik_engine::RunHandle).
+//! its [`RunHandle`](crate::RunHandle).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use superfik_engine::AgentEngine;
+use superfik_native::AgentEngine;
 
 use crate::authorizer::{Authorizer, LocalAuthorizer};
 use crate::extensions::Extensions;
@@ -75,7 +75,7 @@ impl LocalServices {
 
 #[cfg(test)]
 mod tests {
-    use superfik_engine::fake::FakeEngine;
+    use superfik_native::fake::FakeEngine;
 
     use super::*;
 

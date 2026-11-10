@@ -1,6 +1,14 @@
-//! The engine boundary: what every engine implements and what it talks to.
+//! The engine boundary: an [`AgentEngine`] turns a [`PromptRequest`] into
+//! [`EngineEvent`]s delivered to an [`EventSink`]. [`NativeEngine`] implements
+//! it; `fake` (feature `test-support`) is a scripted one for tests.
+//!
+//! [`NativeEngine`]: crate::NativeEngine
+
+mod gate;
 
 use std::sync::Arc;
+
+pub use self::gate::RunGate;
 
 use superfik_core::{AskId, Decision, EngineEvent, ModelOption, PermissionMode, PromptRequest, RunId};
 

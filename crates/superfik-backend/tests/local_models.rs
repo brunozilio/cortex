@@ -7,7 +7,7 @@ use std::time::Duration;
 use superfik_backend::{CommandHandler, InMemoryProviderStore, LocalServices, ModelProviders, Outbox};
 use superfik_backend::{SecretStore, Secrets};
 use superfik_core::{ModelOption, ModelProvider, Principal, SecretId};
-use superfik_engine::fake::FakeEngine;
+use superfik_native::fake::FakeEngine;
 use superfik_protocol::{ClientCommand, Envelope, ServerEvent};
 
 #[derive(Default)]

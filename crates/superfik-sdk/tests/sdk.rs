@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde_json::json;
 use superfik_backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
 use superfik_core::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId};
-use superfik_engine::fake::FakeEngine;
+use superfik_native::fake::FakeEngine;
 use superfik_sdk::{
     Agent, Command, Decision, EngineEvent, Image, McpConnection, McpServer, MemoryKind, Model, ModelProvider, Skill,
     Superfik,

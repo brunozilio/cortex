@@ -8,7 +8,7 @@ use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use superfik_backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
 use superfik_core::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId, ToolCall};
-use superfik_engine::fake::FakeEngine;
+use superfik_native::fake::FakeEngine;
 use superfik_sdk::{Decision, EngineEvent, Model, PermissionMode, Superfik};
 
 use super::app::App;

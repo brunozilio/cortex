@@ -1,8 +1,8 @@
-//! A scripted engine for demos and tests (feature `fake`).
+//! A scripted engine for tests (feature `test-support`).
 //!
 //! [`FakeEngine`] replays a fixed list of events on a background thread,
 //! optionally pausing between them, and honours cancellation exactly like a
-//! real engine. [`RecordingSink`] collects what an engine emitted.
+//! real engine.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -11,8 +11,7 @@ use std::time::Duration;
 
 use superfik_core::{AskId, Decision, EngineEvent, ModelOption, PromptRequest, RunId};
 
-use crate::engine::{AgentEngine, EngineError, EventSink, RunHandle};
-use crate::gate::RunGate;
+use crate::boundary::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};
 
 #[derive(Debug, Clone)]
 pub struct FakeEngine {
@@ -115,54 +114,44 @@ impl RunHandle for FakeHandle {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct RecordingSink {
-    events: Mutex<Vec<(RunId, EngineEvent)>>,
-}
-
-impl RecordingSink {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
-
-    pub fn events(&self) -> Vec<EngineEvent> {
-        self.entries().into_iter().map(|(_, event)| event).collect()
-    }
-
-    pub fn entries(&self) -> Vec<(RunId, EngineEvent)> {
-        self.events.lock().map(|events| events.clone()).unwrap_or_default()
-    }
-
-    pub fn wait_terminal(&self, timeout: Duration) -> Vec<EngineEvent> {
-        let step = Duration::from_millis(2);
-        let mut waited = Duration::ZERO;
-        while waited < timeout {
-            let events = self.events();
-            if events.iter().any(EngineEvent::is_terminal) {
-                return events;
-            }
-            thread::sleep(step);
-            waited += step;
-        }
-        self.events()
-    }
-}
-
-impl EventSink for RecordingSink {
-    fn emit(&self, run: RunId, event: EngineEvent) {
-        if let Ok(mut events) = self.events.lock() {
-            events.push((run, event));
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
     use super::*;
 
-    pub(crate) fn request() -> PromptRequest {
+    #[derive(Debug, Default)]
+    struct RecordingSink(Mutex<Vec<EngineEvent>>);
+
+    impl RecordingSink {
+        fn new() -> Arc<Self> {
+            Arc::new(Self::default())
+        }
+
+        fn events(&self) -> Vec<EngineEvent> {
+            self.0.lock().map(|events| events.clone()).unwrap_or_default()
+        }
+
+        fn wait_terminal(&self, timeout: Duration) -> Vec<EngineEvent> {
+            let step = Duration::from_millis(2);
+            let mut waited = Duration::ZERO;
+            while waited < timeout && !self.events().iter().any(EngineEvent::is_terminal) {
+                thread::sleep(step);
+                waited += step;
+            }
+            self.events()
+        }
+    }
+
+    impl EventSink for RecordingSink {
+        fn emit(&self, _run: RunId, event: EngineEvent) {
+            if let Ok(mut events) = self.0.lock() {
+                events.push(event);
+            }
+        }
+    }
+
+    fn request() -> PromptRequest {
         PromptRequest::plain(PathBuf::from("/tmp"), "hi", ModelOption::new("claude-opus-5-5", "Opus 5.5"))
     }
 

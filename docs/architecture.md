@@ -6,7 +6,6 @@ dependencies. Business rules never depend on IO. Decisions are in
 
 ```
 superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfik-native ──► (provider APIs)
-                                       │                    ├──► superfik-engine
                                        │                    └──► superfik-providers
                                        ├──► superfik-mlx ─► (mlx_lm.server)
                                        └──► superfik-protocol ─► superfik-core   (everything speaks core)
@@ -17,8 +16,7 @@ superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfi
 | `superfik-cli` | The `superfik` binary: a full-screen chat (ratatui) over the SDK, `-p` print mode, `login`, `models`. Presentation only. |
 | `superfik-sdk` | `Superfik::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings. |
 | `superfik-core` | Domain model: requests, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
-| `superfik-engine` | `AgentEngine` trait (`models`, `start`) and a `fake` engine for tests. |
-| `superfik-native` | Superfik's own engine (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. |
+| `superfik-native` | The `AgentEngine` boundary (`models`, `start`) and Superfik's own engine behind it (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
 | `superfik-mlx` | Local MLX models on Apple silicon: which are downloaded, and one `mlx_lm.server` started on demand. |
 | `superfik-protocol` | Serialisable `ClientCommand` / `ServerEvent` in an `Envelope` carrying the `Principal`; the `Backend` trait. |
 | `superfik-backend` | `LocalBackend` (worker threads), `CommandHandler` and the daemon: runs, memory (+ its MCP tool), settings, model providers, secrets, the host's `Extensions`. |

@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use superfik_core::{ChoreAnswer, EngineEvent, ModelOption, PromptRequest, RunId, SessionCommand};
-use superfik_engine::AgentEngine;
+use superfik_native::AgentEngine;
 use superfik_native::model::scripted::ScriptedModel;
 use superfik_native::model::{ModelApi, ModelError};
 use superfik_native::sessions::{InMemorySessions, Sessions};
