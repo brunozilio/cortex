@@ -114,3 +114,32 @@ plus vectors already serve it), an approximate-nearest-neighbour index
 such as FAISS (brute-force cosine over hundreds of vectors takes under a
 millisecond, and a second index would drift from the book), and LLM
 consolidation running in the background.
+
+## 0023 — Language servers navigate code and check edits
+
+The agent asks language servers instead of only searching text.
+
+- Rules are pure in `superfik_core::lsp`: the servers (a built-in table for
+  rust-analyzer, typescript-language-server, pyright, gopls and clangd,
+  changed by `lspServers` in each settings file, then a plugin's `.lsp.json`,
+  by name and field by field; `disabled` removes one), the server for a
+  file (its extension) and its root (the closest marker, never above the
+  working folder), the questions and how answers read.
+- `superfik_native::lsp`: `LspClient` speaks the protocol to one process;
+  `LspPool` keeps one per server and root for the engine's life (in the
+  daemon, across runs and clients), starts it on first use, restarts it if
+  it ended, ends it after 10 idle minutes and does not retry one that
+  failed to start until then.
+- The `LSP` tool is offered only when one of the run's servers is
+  installed, so it costs no tokens otherwise.
+- After `Edit` or `Write`, the file's server gets the new text and the
+  result carries its errors and warnings in `<diagnostics>` (waiting up to
+  3 s); the diff the user sees does not change. No server, no answer or
+  nothing wrong leaves the result as it was.
+
+A server runs the project's code as its language does (build scripts,
+proc macros), like the hooks in a project's settings.
+
+Rejected: an MCP server for LSP (one more process and protocol between the
+agent and the server, and no way to add diagnostics to an edit), and a
+server per run (rust-analyzer indexing anew on every prompt).

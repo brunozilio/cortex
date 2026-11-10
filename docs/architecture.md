@@ -130,6 +130,21 @@ Memory is reversible and kept without an LLM (ADR 0022):
   overwritten. Saves `fsync` before the rename. Without an app data folder
   memory lives only in the process.
 
+## Language servers
+
+The agent navigates code through language servers (ADR 0023). What they
+mean is pure in `superfik_core::lsp`: the built-in servers and the
+`lspServers` layers (user, project, plugins' `.lsp.json`), the server and
+project root for a file, the `LSP` tool's questions and how answers and
+diagnostics read. `superfik_native::lsp` runs them: `LspClient` (one
+process, `Content-Length` framing, a reader thread routing answers and
+published diagnostics) and `LspPool` (one server per name and root, kept
+by the `NativeEngine` across runs, ended after 10 idle minutes), behind
+`LanguageServers` so tests script them (`lsp::fake`). A run gets
+`Workspace::lsp` and the `LSP` tool only when one of its servers is
+installed; `Edit` and `Write` append the file's errors and warnings as
+`<diagnostics>`. `tests/real_lsp.rs` (ignored) runs against clangd.
+
 ## Skills, agents and MCP
 
 The engine reads only Superfik's folders (ADR 0021): skills, commands,

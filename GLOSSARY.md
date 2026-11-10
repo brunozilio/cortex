@@ -48,3 +48,9 @@ _Avoid_: Eval, test (those are what the judge may run)
 **Verdict**:
 The judge's grade of one attempt: passed, a score from 0 to 1, and one check
 per criterion with its evidence.
+
+**Language server**:
+A process that understands one language (rust-analyzer, clangd…) and
+answers the `LSP` tool's questions and an edit's diagnostics (ADR 0023).
+Kept running per server and project root between runs.
+_Avoid_: LSP (that is the protocol and the tool's name)
