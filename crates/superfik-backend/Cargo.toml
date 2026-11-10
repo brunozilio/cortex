@@ -9,7 +9,6 @@ publish.workspace = true
 superfik-private-file.workspace = true
 superfik-core.workspace = true
 superfik-process.workspace = true
-superfik-keychain.workspace = true
 superfik-engine.workspace = true
 superfik-protocol.workspace = true
 superfik-workspace.workspace = true

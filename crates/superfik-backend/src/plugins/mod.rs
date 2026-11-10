@@ -22,7 +22,7 @@ pub(crate) use self::brief::{discard, mcp_path, write_private};
 pub use self::cli_token::{SystemTokenCommand, TokenCommand};
 pub use self::oauth::{McpOAuth, OAuthFlow, OAuthRequest};
 pub use self::sealed::SealedSecretStore;
-pub use self::secrets::{InMemorySecretStore, KeychainSecretStore, SecretStore, Secrets, system_secrets};
+pub use self::secrets::{InMemorySecretStore, SecretStore, Secrets, system_secrets};
 pub use self::setup::{SetupRunner, SystemSetup};
 pub use self::store::{FilePluginStore, InMemoryPluginStore, PluginStore};
 use crate::outbox::Outbox;

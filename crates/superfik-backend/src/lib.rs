@@ -41,9 +41,8 @@ pub use memory::{Embedder, FileMemoryStore, InMemoryStore, Memories, MemoryStore
 pub use native::engine as native_engine;
 pub use outbox::Outbox;
 pub use plugins::{
-    FilePluginStore, InMemoryPluginStore, InMemorySecretStore, KeychainSecretStore, McpOAuth, OAuthFlow, OAuthRequest,
-    PluginStore, Plugins, SealedSecretStore, SecretStore, Secrets, SetupRunner, SystemSetup, SystemTokenCommand,
-    TokenCommand,
+    FilePluginStore, InMemoryPluginStore, InMemorySecretStore, McpOAuth, OAuthFlow, OAuthRequest, PluginStore, Plugins,
+    SealedSecretStore, SecretStore, Secrets, SetupRunner, SystemSetup, SystemTokenCommand, TokenCommand,
 };
 pub use providers::{
     BrowserSignIn, FileProviderStore, InMemoryProviderStore, ModelCatalog, ModelProviders, ProviderCatalog,

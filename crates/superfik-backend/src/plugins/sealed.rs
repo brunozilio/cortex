@@ -1,5 +1,4 @@
-//! Connection secrets sealed in one file, for servers without a system
-//! keychain (a Linux container's keyring does not survive a restart).
+//! Secrets sealed in one file.
 //! Each connection's secrets are encrypted on their own with
 //! XChaCha20-Poly1305: a fresh random nonce each time, and the
 //! connection's key as associated data, so an entry moved to another

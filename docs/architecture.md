@@ -28,7 +28,6 @@ superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfi
 | `superfik-plugins` | Plugin manifests and packages, skill and agent discovery in Claude Code's layout, MCP config. |
 | `superfik-providers` | LLM provider contracts (ADR 0016): credential config, OAuth shapes, request and catalog shapes. Pure. |
 | `superfik-oauth` | Browser sign-in: PKCE and the loopback redirect. |
-| `superfik-keychain` | Secrets in the system store. |
 | `superfik-process` | Child processes started the same everywhere; `Tree` ends a process with its children. |
 | `superfik-private-file` | Files only the current user can read. |
 
@@ -133,8 +132,8 @@ Provider keys, subscription tokens and plugin credentials live in one
 sealed file (`superfik_backend::system_secrets`): `secrets.json`, each
 entry encrypted with XChaCha20-Poly1305 under a key in `secrets.key`
 (both `0600`), re-read on every access so two processes never drop each
-other's entries. The macOS keychain asks to allow each new unsigned build,
-so it is opt-in (`SUPERFIK_KEYCHAIN=1`).
+other's entries. There is no system keychain: macOS asks to allow each new
+unsigned build of the binary.
 
 ## Sessions
 

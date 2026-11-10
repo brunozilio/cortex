@@ -17,7 +17,6 @@ superfik-backend = { path = "crates/superfik-backend" }
 superfik-plugins = { path = "crates/superfik-plugins" }
 superfik-oauth = { path = "crates/superfik-oauth" }
 superfik-workspace = { path = "crates/superfik-workspace" }
-superfik-keychain = { path = "crates/superfik-keychain" }
 superfik-process = { path = "crates/superfik-process" }
 superfik-private-file = { path = "crates/superfik-private-file" }
 superfik-gateway = { path = "crates/superfik-gateway" }

@@ -21,8 +21,8 @@ status|stop` manages it; `SUPERFIK_NO_DAEMON=1` runs everything in the
 terminal's own process. Data lives in `~/Library/Application
 Support/Superfik Lite` (macOS) or `~/.config/superfik-lite`, apart from the
 desktop Superfik. Keys and tokens are sealed in `secrets.json` there (its key
-in `secrets.key`, both readable only by you), not in the keychain, which
-would ask to allow every new build; `SUPERFIK_KEYCHAIN=1` uses it anyway.
+in `secrets.key`, both readable only by you), not in the system keychain,
+which asks to allow every new unsigned build.
 
 In the chat: Enter sends, Alt+Enter (or Ctrl+J) adds a line, Esc
 interrupts, Shift+Tab cycles ask → edits → plan → bypass, `/help` lists the
@@ -69,7 +69,7 @@ rest; see `crates/superfik-sdk/src/lib.rs`.
 | `superfik-providers` | LLM providers (Anthropic, OpenAI, Claude and ChatGPT subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
 | `superfik-sdk` | The SDK: sessions and runs, agents, skills, commands, memory, in-process MCP tools, MCP over HTTP/stdio. |
 | `superfik-cli` | The `superfik` binary: terminal chat (ratatui), `-p`, `login`, `models`. |
-| `superfik-oauth`, `-keychain`, `-process`, `-private-file` | Small IO helpers. |
+| `superfik-oauth`, `-process`, `-private-file` | Small IO helpers. |
 
 Architecture: [docs/architecture.md](docs/architecture.md). Decisions:
 [docs/decisions.md](docs/decisions.md).
