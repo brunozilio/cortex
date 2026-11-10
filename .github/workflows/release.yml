@@ -64,6 +64,23 @@ jobs:
           git commit -am "chore: update Cargo.lock"
           git push
 
+  # A PR opened or pushed with GITHUB_TOKEN triggers no workflows, but
+  # workflow_dispatch is exempt: run the required checks on the release
+  # branch so its PR can merge.
+  release-pr-checks:
+    needs: [release-please, lockfile]
+    if: needs.release-please.outputs.pr
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+    steps:
+      - run: |
+          gh workflow run ci.yml -R "$GITHUB_REPOSITORY" --ref "$BRANCH"
+          gh workflow run pr-title.yml -R "$GITHUB_REPOSITORY" --ref "$BRANCH"
+
   build:
     needs: release-please
     if: always() && (needs.release-please.outputs.created == 'true' || github.event_name == 'workflow_dispatch')
@@ -72,9 +89,9 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
+            os: ubuntu-24.04
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-22.04-arm
+            os: ubuntu-24.04-arm
           - target: aarch64-apple-darwin
             os: macos-latest
     runs-on: ${{ matrix.os }}
