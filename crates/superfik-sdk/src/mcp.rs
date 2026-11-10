@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use superfik_backend::McpServerSpec;
-use superfik_core::mcp::McpEndpoint;
+use superfik_core::mcp::{McpEndpoint, respond, text_result};
 
 type Handler = dyn Fn(Value) -> Result<Value, String> + Send + Sync;
 
@@ -73,47 +73,26 @@ impl McpServer {
         self
     }
 
-    fn call(&self, params: &Value) -> Value {
-        let name = params["name"].as_str().unwrap_or_default();
+    fn call(&self, name: &str, arguments: &Value) -> Value {
         let Some(tool) = self.tools.iter().find(|tool| tool.name == name) else {
-            return text(format!("no tool named {name}"), true);
+            return text_result(format!("no tool named {name}"), true);
         };
-        let input = if params["arguments"].is_null() { json!({}) } else { params["arguments"].clone() };
+        let input = if arguments.is_null() { json!({}) } else { arguments.clone() };
         match (tool.handler)(input) {
-            Ok(Value::String(output)) => text(output, false),
-            Ok(output) => text(output.to_string(), false),
-            Err(message) => text(message, true),
+            Ok(Value::String(output)) => text_result(output, false),
+            Ok(output) => text_result(output.to_string(), false),
+            Err(message) => text_result(message, true),
         }
     }
 }
 
-fn text(text: String, failed: bool) -> Value {
-    json!({ "content": [{ "type": "text", "text": text }], "isError": failed })
-}
-
 impl McpEndpoint for McpServer {
     fn handle(&self, message: &Value) -> Option<Value> {
-        let id = message.get("id")?.clone();
-        let result = match message["method"].as_str() {
-            Some("initialize") => json!({
-                "protocolVersion": message["params"]["protocolVersion"].as_str().unwrap_or("2025-06-18"),
-                "capabilities": { "tools": {} },
-                "serverInfo": { "name": self.name, "version": env!("CARGO_PKG_VERSION") },
-            }),
-            Some("tools/list") => json!({ "tools": self.tools.iter().map(|tool| json!({
-                "name": tool.name,
-                "description": tool.description,
-                "inputSchema": tool.schema,
-            })).collect::<Vec<_>>() }),
-            Some("tools/call") => self.call(&message["params"]),
-            Some("ping") => json!({}),
-            other => {
-                let method = other.unwrap_or_default();
-                let error = json!({ "code": -32601, "message": format!("unknown method {method}") });
-                return Some(json!({ "jsonrpc": "2.0", "id": id, "error": error }));
-            }
+        let tools = || {
+            let listed = |tool: &Arc<McpTool>| json!({ "name": tool.name, "description": tool.description, "inputSchema": tool.schema });
+            self.tools.iter().map(listed).collect()
         };
-        Some(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
+        respond(message, &self.name, tools, |name, arguments| Ok(self.call(name, arguments)))
     }
 }
 

@@ -110,7 +110,7 @@ fn recall_keeps_facts_and_the_best_episodes() {
 
 #[test]
 fn instructions_list_memories_only_on_a_fresh_session() {
-    let brief = MemoryBrief { recalled: book().memories, output: "/tmp/m.json".into(), origin: None, tool: None };
+    let brief = MemoryBrief { recalled: book().memories, output: "/tmp/m.json".into(), origin: None, tool: false };
     let fresh = brief.instructions(true).expect("text");
     assert!(fresh.contains("Facts:\n- [0] The renderer") && fresh.contains("Episodes:\n- [2]"));
     assert!(fresh.contains("/tmp/m.json"));
@@ -191,10 +191,7 @@ fn vectors_follow_the_model_and_the_text() {
 
 #[test]
 fn a_search_tool_is_announced() {
-    let brief = MemoryBrief {
-        tool: Some(MemoryTool { url: "http://127.0.0.1:1/mcp".into(), token: "t".into() }),
-        ..MemoryBrief::default()
-    };
+    let brief = MemoryBrief { tool: true, ..MemoryBrief::default() };
     assert!(brief.instructions(false).expect("text").contains("`memory_search` tool"));
 }
 

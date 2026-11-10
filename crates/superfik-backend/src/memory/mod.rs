@@ -20,8 +20,8 @@ pub use embedder::{Embedder, ModelChoice, NoEmbedder, Purpose, local};
 pub use store::{FileMemoryStore, InMemoryStore, MemoryStore, app_data_dir, owner_key, project_key};
 use superfik_core::memory::{Semantic, recall, search};
 use superfik_core::{
-    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, MemoryTool, Principal, PromptRequest, Provenance,
-    RecallBudget, RunId,
+    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, Principal, PromptRequest, Provenance, RecallBudget,
+    RunId,
 };
 use superfik_protocol::ServerEvent;
 
@@ -146,15 +146,9 @@ impl Memories {
         self.embedder.embed(&[query.to_owned()], Purpose::Query)?.into_iter().next()
     }
 
-    pub fn brief(
-        &self,
-        owner: &Principal,
-        run: RunId,
-        request: &PromptRequest,
-        tool: Option<MemoryTool>,
-    ) -> PromptRequest {
+    pub fn brief(&self, owner: &Principal, run: RunId, request: &PromptRequest, tool: bool) -> PromptRequest {
         let Some(brief) = &request.memory else { return request.clone() };
-        let budget = if tool.is_some() { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
+        let budget = if tool { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
         let recalled = {
             let mut books = self.lock();
             let book = self.book(&mut books, owner, &request.cwd);

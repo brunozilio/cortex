@@ -59,7 +59,7 @@ fn a_run_is_briefed_and_its_edits_applied_on_completion() {
     let owner = Principal::LocalOwner;
     memories.edit(&owner, dir.path(), &[remember("The renderer uses signed distance fields")], by_user());
 
-    let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), None);
+    let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), false);
     let brief = briefed.memory.clone().expect("brief");
     assert_eq!(brief.recalled.len(), 1);
     assert_eq!(brief.origin.as_deref(), Some("Night sky"));
@@ -83,14 +83,14 @@ fn a_failed_run_changes_nothing() {
     let dir = tempfile::tempdir().expect("tempdir");
     let memories = Memories::plain(Arc::new(InMemoryStore::default()));
     let owner = Principal::LocalOwner;
-    let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), None);
+    let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), false);
     let output = briefed.memory.clone().expect("brief").output;
     std::fs::write(&output, r#"{"remember":[{"kind":"semantic","text":"Half done"}]}"#).expect("write");
     assert_eq!(memories.finish(&owner, &briefed, false), None);
     assert!(!output.exists());
     let mut no_memory = request(dir.path());
     no_memory.memory = None;
-    assert_eq!(memories.brief(&owner, RunId::new(), &no_memory, None), no_memory);
+    assert_eq!(memories.brief(&owner, RunId::new(), &no_memory, false), no_memory);
 }
 
 struct Buckets;
@@ -140,9 +140,8 @@ fn a_tool_shortens_what_is_recalled() {
     let dir = tempfile::tempdir().expect("tempdir");
     let edits: Vec<MemoryEdit> = (0..30).map(|n| remember(&format!("Fact number {n}"))).collect();
     memories.edit(&owner, dir.path(), &edits, by_user());
-    let tool = MemoryTool { url: "http://127.0.0.1:1/mcp".into(), token: "t".into() };
-    let with = memories.brief(&owner, RunId::new(), &request(dir.path()), Some(tool)).memory.expect("brief");
-    let without = memories.brief(&owner, RunId::new(), &request(dir.path()), None).memory.expect("brief");
+    let with = memories.brief(&owner, RunId::new(), &request(dir.path()), true).memory.expect("brief");
+    let without = memories.brief(&owner, RunId::new(), &request(dir.path()), false).memory.expect("brief");
     assert_eq!((with.recalled.len(), without.recalled.len()), (RecallBudget::WITH_TOOL.facts, 30));
-    assert!(with.tool.is_some());
+    assert!(with.tool);
 }

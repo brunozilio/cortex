@@ -7,7 +7,7 @@ use superfik_core::{Author, EngineEvent, Principal, PromptRequest, Provenance, R
 use superfik_native::EventSink;
 use superfik_protocol::{ClientCommand, Envelope, ServerEvent};
 
-use crate::memory::mcp::McpServer;
+use crate::memory::mcp::MemoryEndpoint;
 use crate::memory::{self, Memories};
 use crate::outbox::Outbox;
 use crate::runs::{Reach, RunTable};
@@ -18,7 +18,6 @@ pub struct CommandHandler {
     services: LocalServices,
     runs: Arc<RunTable>,
     outbox: Outbox,
-    memory_tool: Option<McpServer>,
     /// This client's number: its runs' background commands carry it and
     /// stop when it leaves.
     client: u64,
@@ -33,11 +32,10 @@ impl Drop for CommandHandler {
 impl CommandHandler {
     pub fn new(mut services: LocalServices, outbox: Outbox) -> Self {
         services.providers = services.providers.for_client();
-        let memory_tool = services.memory_tool.then(|| McpServer::start(services.memory.clone())).flatten();
         let runs = Arc::new(RunTable::default());
         static CLIENTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let client = CLIENTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        Self { services, runs, outbox, memory_tool, client }
+        Self { services, runs, outbox, client }
     }
 
     pub fn handle(&self, envelope: Envelope<ClientCommand>) {
@@ -150,18 +148,17 @@ impl CommandHandler {
             },
             ..request.clone()
         };
-        let request = self.services.extensions.brief(run, request)?;
-        let tool = request
-            .memory
-            .as_ref()
-            .and(self.memory_tool.as_ref())
-            .map(|server| server.grant(owner, request.cwd.clone()));
+        let mut request = self.services.extensions.brief(run, request)?;
+        let tool = self.services.memory_tool && request.memory.is_some();
+        if tool {
+            let memories = self.services.memory.clone();
+            request.credentials.mcp.push(MemoryEndpoint::for_run(memories, owner.clone(), request.cwd.clone()));
+        }
         let request = self.services.memory.brief(owner, run, &request, tool);
         let sink = Arc::new(RunSink {
             runs: Arc::clone(&self.runs),
             outbox,
             memory: request.memory.is_some().then(|| (self.services.memory.clone(), owner.clone(), request.clone())),
-            memory_tool: self.memory_tool.clone(),
             extensions: request.extensions.clone(),
         });
         match self.services.engine.start(run, &request, sink) {
@@ -171,11 +168,6 @@ impl CommandHandler {
             }
             Err(error) => {
                 crate::extensions::discard(request.extensions.as_ref());
-                if let (Some(server), Some(tool)) =
-                    (&self.memory_tool, request.memory.as_ref().and_then(|m| m.tool.as_ref()))
-                {
-                    server.revoke(&tool.token);
-                }
                 Err(error.to_string())
             }
         }
@@ -202,7 +194,6 @@ struct RunSink {
     runs: Arc<RunTable>,
     outbox: Outbox,
     memory: Option<(Memories, Principal, PromptRequest)>,
-    memory_tool: Option<McpServer>,
     extensions: Option<superfik_core::Extensions>,
 }
 
@@ -211,10 +202,6 @@ impl EventSink for RunSink {
         if event.is_terminal() {
             self.runs.finish(run);
             crate::extensions::discard(self.extensions.as_ref());
-            let token = self.memory.as_ref().and_then(|(_, _, r)| r.memory.as_ref()?.tool.as_ref());
-            if let (Some(server), Some(tool)) = (&self.memory_tool, token) {
-                server.revoke(&tool.token);
-            }
             let completed = matches!(event, EngineEvent::Completed { .. });
             if let Some(memory) =
                 self.memory.as_ref().and_then(|(memories, owner, request)| memories.finish(owner, request, completed))

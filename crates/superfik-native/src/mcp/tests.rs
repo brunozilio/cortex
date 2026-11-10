@@ -1,4 +1,4 @@
-use superfik_core::{MemoryBrief, MemoryTool, ModelOption};
+use superfik_core::{Extensions, ModelOption};
 
 use super::*;
 use crate::model::http::ScriptedHttp;
@@ -12,24 +12,27 @@ fn listed(id: u64) -> String {
     json!({
         "jsonrpc": "2.0", "id": id,
         "result": { "tools": [{
-            "name": "memory_search",
-            "description": "Searches the project's memory.",
+            "name": "search",
+            "description": "Searches the docs.",
             "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } } },
         }] },
     })
     .to_string()
 }
 
-fn memory_request() -> PromptRequest {
-    let model = ModelOption::new("m", "M");
-    let mut request = PromptRequest::plain("/repo".into(), "hi", model);
-    let tool = MemoryTool { url: "http://127.0.0.1:7/mcp".into(), token: "t-1".into() };
-    request.memory = Some(MemoryBrief { tool: Some(tool), ..MemoryBrief::default() });
-    request
+/// A run whose host configured one HTTP server, `docs`, with a token.
+fn docs_request() -> (tempfile::TempDir, PromptRequest) {
+    let dir = tempfile::tempdir().expect("dir");
+    let config = dir.path().join("mcp.json");
+    let server = r#"{"mcpServers": {"docs": {"type": "http", "url": "http://127.0.0.1:7/mcp", "headers": {"authorization": "Bearer t-1"}}}}"#;
+    std::fs::write(&config, server).expect("config");
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
+    request.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
+    (dir, request)
 }
 
 #[test]
-fn a_granted_server_s_tools_are_named_for_it_and_called_with_its_token() {
+fn an_http_server_s_tools_are_named_for_it_and_called_with_its_headers() {
     let initialized = json!({ "jsonrpc": "2.0", "id": 1, "result": { "capabilities": { "tools": {} } } });
     let called =
         json!({ "jsonrpc": "2.0", "id": 3, "result": { "content": [{ "type": "text", "text": "[4] Uses wgpu" }] } });
@@ -40,10 +43,11 @@ fn a_granted_server_s_tools_are_named_for_it_and_called_with_its_token() {
         (200, called.to_string()),
     ]));
     let shared: Arc<dyn Http> = http.clone();
-    let tools = tools(&memory_request(), &shared);
+    let (_dir, request) = docs_request();
+    let tools = tools(&request, &shared);
     assert_eq!(tools.len(), 1);
-    assert_eq!(tools[0].spec().name, "mcp__superfik_memory__memory_search");
-    assert_eq!(tools[0].access(), Access::Reads, "the app's own run without asking");
+    assert_eq!(tools[0].spec().name, "mcp__docs__search");
+    assert_eq!(tools[0].access(), Access::Executes, "another's tools ask first");
     assert_eq!(tools[0].spec().schema["properties"]["query"]["type"], "string");
     let input = json!({ "query": "renderer" });
     assert_eq!(tools[0].summary(&input), "renderer");
@@ -52,27 +56,21 @@ fn a_granted_server_s_tools_are_named_for_it_and_called_with_its_token() {
     assert!(sent.iter().all(|s| s.url == "http://127.0.0.1:7/mcp"));
     assert!(sent.iter().all(|s| s.headers.contains(&("authorization".to_owned(), "Bearer t-1".to_owned()))));
     let call: Value = serde_json::from_str(&sent[3].body).expect("json");
-    assert_eq!((call["method"].as_str(), call["params"]["name"].as_str()), (Some("tools/call"), Some("memory_search")));
+    assert_eq!((call["method"].as_str(), call["params"]["name"].as_str()), (Some("tools/call"), Some("search")));
 }
 
 #[test]
 fn a_failed_call_and_an_unreachable_server_say_so() {
     let failed = json!({ "jsonrpc": "2.0", "id": 1, "result": { "content": [{ "type": "text", "text": "no" }], "isError": true } });
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([(200, failed.to_string()), (401, String::new())]));
-    let spec = servers(&memory_request(), &super::McpSources::default()).remove(0);
+    let (_dir, request) = docs_request();
+    let spec = servers(&request, &super::McpSources::default()).remove(0);
     let server = McpServer::open(&spec, &http).expect("open");
-    assert_eq!(
-        server.call("memory_search", &Value::Null, &std::sync::atomic::AtomicBool::new(false)),
-        Outcome::error("no")
-    );
-    assert!(
-        server
-            .call("memory_search", &Value::Null, &std::sync::atomic::AtomicBool::new(false))
-            .content
-            .contains("HTTP 401")
-    );
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    assert_eq!(server.call("search", &Value::Null, &stop), Outcome::error("no"));
+    assert!(server.call("search", &Value::Null, &stop).content.contains("HTTP 401"));
     let none: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
-    assert!(tools(&memory_request(), &none).is_empty(), "the run goes on without it");
+    assert!(tools(&request, &none).is_empty(), "the run goes on without it");
 }
 
 #[test]
@@ -178,4 +176,29 @@ fn an_in_process_server_s_tools_are_called_without_http() {
     assert_eq!(tools.iter().map(|t| t.spec().name).collect::<Vec<_>>(), ["mcp__host__echo"]);
     assert_eq!(tools[0].run(&json!({ "say": "hello" }), &Workspace::new("/repo")), Outcome::ok("hello"));
     assert!(http.sent().is_empty(), "nothing went over HTTP");
+}
+
+struct Memory;
+
+impl superfik_core::mcp::McpEndpoint for Memory {
+    fn handle(&self, message: &Value) -> Option<Value> {
+        let tools = || vec![json!({ "name": "memory_search", "inputSchema": { "type": "object" } })];
+        superfik_core::mcp::respond(message, "superfik_memory", tools, |_, _| {
+            Ok(superfik_core::mcp::text_result("[4] Uses wgpu", false))
+        })
+    }
+}
+
+#[test]
+fn superfik_s_own_memory_search_runs_without_asking() {
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
+    let memory = superfik_core::mcp::LocalMcp::new(superfik_core::memory::MEMORY_SERVER, Arc::new(Memory));
+    request.credentials.mcp = vec![memory];
+    let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
+    let tools = tools(&request, &http);
+    assert_eq!(tools[0].spec().name, "mcp__superfik_memory__memory_search");
+    assert_eq!(tools[0].access(), Access::Reads);
+    let input = json!({ "query": "renderer" });
+    assert_eq!(tools[0].summary(&input), "renderer");
+    assert_eq!(tools[0].run(&input, &Workspace::new("/repo")), Outcome::ok("[4] Uses wgpu"));
 }

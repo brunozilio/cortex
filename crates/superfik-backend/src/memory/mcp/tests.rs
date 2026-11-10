@@ -1,6 +1,3 @@
-use std::io::{Read, Write};
-use std::net::TcpStream;
-
 use superfik_core::{Author, MemoryEdit, MemoryId, Provenance};
 
 use super::*;
@@ -43,24 +40,8 @@ fn listings_name_ids_kinds_and_sessions() {
     assert_eq!(listing(&[]), "No memory matches.");
 }
 
-fn post(url: &str, token: &str, body: &Value) -> (u16, String) {
-    let address = url.trim_start_matches("http://").trim_end_matches("/mcp");
-    let mut stream = TcpStream::connect(address).expect("connect");
-    let body = body.to_string();
-    let request = format!(
-        "POST /mcp HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    );
-    stream.write_all(request.as_bytes()).expect("write");
-    let mut response = String::new();
-    stream.read_to_string(&mut response).expect("read");
-    let status = response.split_whitespace().nth(1).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let body = response.split("\r\n\r\n").nth(1).unwrap_or_default().to_owned();
-    (status, body)
-}
-
 #[test]
-fn a_run_searches_its_own_memory_until_revoked() {
+fn a_run_searches_only_its_own_project_s_memory() {
     let memories = Memories::plain(Arc::new(InMemoryStore::default()));
     let owner = Principal::LocalOwner;
     let by = Provenance { author: Author::User, now: 1, origin: None };
@@ -70,13 +51,12 @@ fn a_run_searches_its_own_memory_until_revoked() {
         tags: vec![],
     };
     memories.edit(&owner, std::path::Path::new("/repo"), &[edit], by);
-    let server = McpServer::start(memories).expect("server");
-    let tool = server.grant(&owner, "/repo".into());
     let call = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": MEMORY_SEARCH_TOOL, "arguments": { "query": "clippy" } } });
-    let (status, body) = post(&tool.url, &tool.token, &call);
-    assert_eq!(status, 200);
-    assert!(body.contains("[0] procedural: Run clippy before committing"), "{body}");
-    assert_eq!(post(&tool.url, "wrong", &call).0, 401);
-    server.revoke(&tool.token);
-    assert_eq!(post(&tool.url, &tool.token, &call).0, 401);
+    let text = |project: &str| {
+        let server = MemoryEndpoint::for_run(memories.clone(), owner.clone(), project.into());
+        assert_eq!(server.name, MEMORY_SERVER);
+        server.endpoint.handle(&call).expect("answer")["result"]["content"][0]["text"].as_str().map(str::to_owned)
+    };
+    assert_eq!(text("/repo").as_deref(), Some("[0] procedural: Run clippy before committing"));
+    assert_eq!(text("/other").as_deref(), Some("No memory matches."));
 }

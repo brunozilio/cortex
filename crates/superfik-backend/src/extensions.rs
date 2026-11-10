@@ -63,7 +63,8 @@ impl Extensions {
             extensions.mcp_config = Some(path);
         }
         let mut credentials = request.credentials.clone();
-        credentials.mcp.extend(self.local.iter().cloned());
+        // `superfik_…` names are Superfik's own servers (its memory search).
+        credentials.mcp.extend(self.local.iter().filter(|server| !server.name.starts_with("superfik_")).cloned());
         Ok(PromptRequest { extensions: (!extensions.is_empty()).then_some(extensions), credentials, ..request })
     }
 }

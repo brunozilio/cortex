@@ -72,8 +72,9 @@ fresh session gets recalled memories plus instructions to write
 `{remember, forget, revise}` to a temp file, applied on `Completed`.
 Search is BM25 plus embedding similarity (fastembed/ONNX,
 `SUPERFIK_MEMORY_MODEL=minilm|mpnet|off`), fused by reciprocal rank; the
-same function serves recall and the `memory_search` MCP tool (loopback, a
-bearer token per run).
+same function serves recall and the `memory_search` MCP tool (in process:
+each run gets a `superfik_memory` server on its credentials, bound to its
+owner and project).
 
 ## Skills, agents and MCP
 

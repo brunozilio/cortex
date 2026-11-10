@@ -184,7 +184,7 @@ mod brief;
 mod recall;
 pub mod search;
 
-pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, MemoryTool, parse_memory_edits};
+pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, parse_memory_edits};
 pub use recall::{RecallBudget, links, recall};
 pub use search::{Semantic, activate, search};
 

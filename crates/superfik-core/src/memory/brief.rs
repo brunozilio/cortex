@@ -11,12 +11,6 @@ pub const MEMORY_SERVER: &str = "superfik_memory";
 pub const MEMORY_SEARCH_TOOL: &str = "memory_search";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MemoryTool {
-    pub url: String,
-    pub token: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemoryBrief {
     #[serde(default)]
     pub recalled: Vec<Memory>,
@@ -24,8 +18,10 @@ pub struct MemoryBrief {
     pub output: PathBuf,
     #[serde(default)]
     pub origin: Option<String>,
+    /// Whether the run has the `memory_search` tool (served in process as
+    /// [`MEMORY_SERVER`] on the run's credentials).
     #[serde(default)]
-    pub tool: Option<MemoryTool>,
+    pub tool: bool,
 }
 
 impl MemoryBrief {
@@ -53,7 +49,7 @@ impl MemoryBrief {
             }
             out.push(listing);
         }
-        if self.tool.is_some() {
+        if self.tool {
             out.push(format!(
                 "Search this project's memory with the `{MEMORY_SEARCH_TOOL}` tool whenever earlier work, \
                  decisions or conventions might matter; sub-agents can use it too. What is listed above is only \
