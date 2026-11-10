@@ -86,7 +86,7 @@ pub(super) fn outcome(result: &Value) -> Outcome {
             format!("{} image(s) returned", images.len())
         });
     }
-    Outcome { content: text.join("\n\n"), is_error: failed, images }
+    Outcome { content: text.join("\n\n"), is_error: failed, images, shown: None }
 }
 
 pub struct McpTool {

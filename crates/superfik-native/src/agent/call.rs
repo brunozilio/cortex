@@ -197,7 +197,7 @@ impl Agent<'_> {
         (self.emit)(EngineEvent::ToolFinished { id: id.to_owned() });
         (self.emit)(EngineEvent::ToolResult {
             id: id.to_owned(),
-            output: clip(&outcome.content, SHOWN_OUTPUT),
+            output: clip(outcome.shown.as_deref().unwrap_or(&outcome.content), SHOWN_OUTPUT),
             failed: outcome.is_error,
         });
         if outcome.images.is_empty() {

@@ -55,11 +55,13 @@ impl Tool for Write {
             Ok(()) => {
                 workspace.mark_read(&path);
                 let lines = content.lines().count();
-                Outcome::ok(if existed {
+                let said = if existed {
                     format!("Replaced {name} ({lines} lines).")
                 } else {
                     format!("Created {name} ({lines} lines).")
-                })
+                };
+                let heading = if existed { format!("Replaced {name}") } else { format!("Created {name}") };
+                Outcome::ok(said).showing(super::shown_diff::created(&heading, content))
             }
             Err(error) => Outcome::error(format!("Could not write {name}: {error}")),
         }
@@ -75,7 +77,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("dir");
         let workspace = Workspace::new(dir.path());
         let created = Write.run(&json!({"file_path": "deep/new.txt", "content": "a\nb"}), &workspace);
-        assert_eq!(created, Outcome::ok("Created deep/new.txt (2 lines)."));
+        assert_eq!(created.content, "Created deep/new.txt (2 lines).");
 
         std::fs::write(dir.path().join("old.txt"), "keep").expect("write");
         let blind = Write.run(&json!({"file_path": "old.txt", "content": "x"}), &workspace);

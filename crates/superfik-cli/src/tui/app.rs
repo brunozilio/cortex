@@ -59,6 +59,10 @@ pub struct App {
     pub scroll: u16,
     pub quit: bool,
     pub quit_armed: Option<Instant>,
+    /// A first Esc with text typed; the second clears it.
+    pub clear_armed: Option<Instant>,
+    /// The highlighted `/` completion.
+    pub suggestion: usize,
     pub loading: bool,
     pub(super) wanted: Option<String>,
     pub(super) resume: Option<SessionId>,
@@ -66,12 +70,14 @@ pub struct App {
     pub(super) mode: PermissionMode,
     pub(super) effort: Effort,
     pub(super) tx: Sender<Msg>,
+    pub(super) saver: super::settings::Saver,
     pub rx: Receiver<Msg>,
 }
 
 impl App {
     pub fn new(superfik: Superfik, cwd: PathBuf, wanted: Option<String>, mode: Option<PermissionMode>) -> Self {
         let (tx, rx) = crossbeam_channel::unbounded();
+        let saver = super::settings::Saver::start(&superfik);
         let mut app = Self {
             superfik,
             cwd,
@@ -89,12 +95,15 @@ impl App {
             scroll: 0,
             quit: false,
             quit_armed: None,
+            clear_armed: None,
+            suggestion: 0,
             loading: true,
             wanted,
             resume: None,
             mode_given: mode.is_some(),
             mode: mode.unwrap_or_default(),
             effort: Effort::Medium,
+            saver,
             tx,
             rx,
         };
@@ -162,7 +171,7 @@ impl App {
         match &event {
             EngineEvent::Asked(ask) => self.ask = Some(Pending::new(ask.clone())),
             EngineEvent::AskWithdrawn(id) if self.ask.as_ref().is_some_and(|p| &p.ask.id == id) => self.ask = None,
-            EngineEvent::SessionStarted(id) => super::settings::remember_session(&self.superfik, &self.cwd, id),
+            EngineEvent::SessionStarted(id) => self.saver.remember_session(&self.cwd, id),
             _ => {}
         }
         self.transcript.apply(&event);
@@ -187,6 +196,8 @@ impl App {
             return;
         }
         self.input.take();
+        self.suggestion = 0;
+        self.saver.remember_prompt(&self.cwd, &text);
         if let Some(command) = Command::parse(&text) {
             return super::commands::run(self, command);
         }

@@ -17,6 +17,10 @@ const THINKING_LINES: usize = 3;
 const AGENT_STEPS: usize = 3;
 /// Lines of a tool's output shown under it.
 const OUTPUT_LINES: usize = 3;
+/// Lines of a file change shown under it.
+const DIFF_LINES: usize = 20;
+const ADDED: Color = Color::Indexed(22);
+const REMOVED: Color = Color::Indexed(52);
 
 pub fn lines(entry: &Entry, width: usize, out: &mut Vec<Line<'static>>) {
     let dim = Style::new().fg(Color::DarkGray);
@@ -49,6 +53,7 @@ pub fn lines(entry: &Entry, width: usize, out: &mut Vec<Line<'static>>) {
                 }
                 let mut spans = vec![Span::raw(if i == 0 { "● " } else { "  " })];
                 if code {
+                    spans.push(Span::styled("│ ", dim));
                     spans.push(Span::raw(line).fg(Color::Cyan));
                 } else {
                     spans.extend(markdown::line(&line));
@@ -65,8 +70,10 @@ pub fn lines(entry: &Entry, width: usize, out: &mut Vec<Line<'static>>) {
             out.push(Line::from(""));
             let first = wrap(&call(name, summary), width.saturating_sub(2)).into_iter().next().unwrap_or_default();
             out.push(Line::from(vec![mark.fg(color), first.bold()]));
-            match output.as_deref().map(str::trim).filter(|o| !o.is_empty()) {
+            match output.as_deref().map(str::trim_end).filter(|o| !o.trim().is_empty()) {
+                Some(output) if is_diff(output) => diff(output, width, out),
                 Some(output) => {
+                    let output = output.trim();
                     let shown: Vec<&str> = output.lines().take(OUTPUT_LINES).collect();
                     let more = output.lines().count().saturating_sub(shown.len());
                     for (i, line) in shown.iter().enumerate() {
@@ -113,6 +120,44 @@ pub fn lines(entry: &Entry, width: usize, out: &mut Vec<Line<'static>>) {
     }
 }
 
+/// A file change as its tool shows it: a heading, then `   12 + text`.
+fn is_diff(output: &str) -> bool {
+    output.lines().nth(1).is_some_and(|line| {
+        let rest = line.trim_start();
+        let digits = rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+        digits > 0 && matches!(rest[digits..].get(..2), Some(" +" | " -" | "  "))
+    })
+}
+
+fn diff(output: &str, width: usize, out: &mut Vec<Line<'static>>) {
+    let dim = Style::new().fg(Color::DarkGray);
+    let mut lines = output.lines();
+    if let Some(heading) = lines.next() {
+        out.push(Line::styled(format!("  ⎿ {heading}"), dim));
+    }
+    let body: Vec<&str> = lines.collect();
+    for line in body.iter().take(DIFF_LINES) {
+        let rest = line.trim_start();
+        let digits = rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+        let (number, mark, text) =
+            (&rest[..digits], rest[digits..].chars().nth(1).unwrap_or(' '), rest.get(digits + 3..).unwrap_or(""));
+        let style = match mark {
+            '+' => Style::new().bg(ADDED),
+            '-' => Style::new().bg(REMOVED),
+            _ => Style::new(),
+        };
+        let text = wrap(text, width.saturating_sub(12)).into_iter().next().unwrap_or_default();
+        let fill = width.saturating_sub(12 + unicode_width::UnicodeWidthStr::width(text.as_str()));
+        out.push(Line::from(vec![
+            Span::styled(format!("    {number:>5} "), dim),
+            Span::styled(format!("{mark} {text}{}", " ".repeat(fill)), style),
+        ]));
+    }
+    if body.len() > DIFF_LINES {
+        out.push(Line::styled(format!("          … +{} lines", body.len() - DIFF_LINES), dim));
+    }
+}
+
 /// `✻ Read(src/main.rs)… (12s · ↓ 1.2k tokens · esc to interrupt)`
 pub fn working(started: Instant, transcript: &Transcript, width: usize) -> Line<'static> {
     let tick = usize::try_from(started.elapsed().as_millis() / 120).unwrap_or(0);
@@ -141,6 +186,18 @@ pub fn tokens(count: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_file_change_draws_as_a_diff() {
+        let output = "Edited f.rs · Added 1 lines, removed 1\n    3 -     let x = 1;\n    3 +     let x = 2;";
+        assert!(is_diff(output));
+        assert!(!is_diff("Edited f.rs.") && !is_diff("line one\nline two"));
+        let mut lines = Vec::new();
+        diff(output, 60, &mut lines);
+        let text: Vec<String> = lines.iter().map(|l| l.spans.iter().map(|s| s.content.to_string()).collect()).collect();
+        assert!(text[1].contains("3 -     let x = 1;") && text[2].contains("3 +     let x = 2;"), "{text:?}");
+        assert_eq!(lines[2].spans[1].style.bg, Some(ADDED));
+    }
 
     #[test]
     fn token_counts_read_short() {

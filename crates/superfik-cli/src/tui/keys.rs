@@ -91,23 +91,56 @@ fn pick(app: &mut App, event: KeyEvent) {
     }
 }
 
+/// Editing the prompt. Option (Alt) or Ctrl with the arrows jumps words,
+/// Cmd (where the terminal reports it) jumps to the line's ends; Up and
+/// Down move between lines and, from the first or last, through the
+/// prompts sent before (or the `/` completions while they show).
 fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
     let alt = event.modifiers.contains(KeyModifiers::ALT);
     let shift = event.modifiers.contains(KeyModifiers::SHIFT);
+    let cmd = event.modifiers.intersects(KeyModifiers::SUPER | KeyModifiers::META);
+    let completing =
+        app.input.slash_word().is_some_and(|typed| !super::commands::suggestions(typed, &app.skills).is_empty());
+    if event.code != KeyCode::Esc {
+        app.clear_armed = None;
+    }
     match event.code {
+        KeyCode::Left if cmd => app.input.home(),
+        KeyCode::Right if cmd => app.input.end(),
+        KeyCode::Backspace if cmd => app.input.delete_to_line_start(),
+        KeyCode::Left if alt || ctrl => app.input.word_left(),
+        KeyCode::Right if alt || ctrl => app.input.word_right(),
+        KeyCode::Char('b') if alt => app.input.word_left(),
+        KeyCode::Char('f') if alt => app.input.word_right(),
+        KeyCode::Char('d') if alt => app.input.delete_word_forward(),
+        KeyCode::Delete if alt || ctrl => app.input.delete_word_forward(),
+        KeyCode::Up if completing => app.suggestion = app.suggestion.wrapping_sub(1),
+        KeyCode::Down if completing => app.suggestion = app.suggestion.wrapping_add(1),
+        KeyCode::Up if app.input.on_first_line() => app.input.older(),
+        KeyCode::Down if app.input.on_last_line() => app.input.newer(),
+        KeyCode::Up => app.input.line(true),
+        KeyCode::Down => app.input.line(false),
         KeyCode::Enter if alt || shift => app.input.insert('\n'),
         KeyCode::Char('j') if ctrl => app.input.insert('\n'),
         KeyCode::Enter => app.submit(),
         KeyCode::Tab => complete(app),
         KeyCode::BackTab => app.set_mode(app.mode().next()),
         KeyCode::Esc if app.busy() => app.cancel(),
-        KeyCode::Esc => app.input.clear(),
+        KeyCode::Esc if app.input.is_empty() => {}
+        KeyCode::Esc if app.clear_armed.is_some() => {
+            app.input.clear();
+            app.clear_armed = None;
+        }
+        KeyCode::Esc => app.clear_armed = Some(std::time::Instant::now()),
         KeyCode::Char('d') if ctrl && app.input.is_empty() => app.quit = true,
         KeyCode::Char('a') if ctrl => app.input.home(),
         KeyCode::Char('e') if ctrl => app.input.end(),
         KeyCode::Char('u') if ctrl => app.input.clear(),
         KeyCode::Char('w') if ctrl => app.input.delete_word(),
-        KeyCode::Char(c) if !ctrl => app.input.insert(c),
+        KeyCode::Char(c) if !ctrl => {
+            app.input.insert(c);
+            app.suggestion = 0;
+        }
         KeyCode::Backspace if alt => app.input.delete_word(),
         KeyCode::Backspace => app.input.backspace(),
         KeyCode::Delete => app.input.delete(),
@@ -115,8 +148,6 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
         KeyCode::Right => app.input.right(),
         KeyCode::Home => app.input.home(),
         KeyCode::End => app.input.end(),
-        KeyCode::Up if app.input.on_one_line() => app.input.older(),
-        KeyCode::Down if app.input.on_one_line() => app.input.newer(),
         KeyCode::PageUp => app.scroll = app.scroll.saturating_add(10),
         KeyCode::PageDown => app.scroll = app.scroll.saturating_sub(10),
         _ => {}
@@ -125,7 +156,8 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
 
 fn complete(app: &mut App) {
     let Some(typed) = app.input.slash_word() else { return };
-    if let Some((name, _)) = super::commands::suggestions(typed, &app.skills).into_iter().next() {
+    let found = super::commands::suggestions(typed, &app.skills);
+    if let Some((name, _)) = found.get(app.suggestion % found.len().max(1)) {
         app.input.set(&format!("/{name} "));
     }
 }

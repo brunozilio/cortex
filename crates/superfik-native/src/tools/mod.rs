@@ -13,6 +13,7 @@ mod grep;
 mod outside;
 mod read;
 pub mod shells;
+mod shown_diff;
 pub mod skill;
 pub mod structured;
 pub mod subagent;
@@ -50,19 +51,28 @@ pub struct Outcome {
     pub content: String,
     pub is_error: bool,
     pub images: Vec<crate::image::Image>,
+    /// What the user sees instead of `content` (an edit's diff); the model
+    /// never reads it.
+    #[serde(default)]
+    pub shown: Option<String>,
 }
 
 impl Outcome {
     pub fn ok(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: false, images: Vec::new() }
+        Self { content: content.into(), is_error: false, images: Vec::new(), shown: None }
+    }
+
+    pub fn showing(mut self, shown: impl Into<String>) -> Self {
+        self.shown = Some(shown.into());
+        self
     }
 
     pub fn image(image: crate::image::Image) -> Self {
-        Self { content: format!("Image ({})", image.media_type), is_error: false, images: vec![image] }
+        Self { content: format!("Image ({})", image.media_type), is_error: false, images: vec![image], shown: None }
     }
 
     pub fn error(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: true, images: Vec::new() }
+        Self { content: content.into(), is_error: true, images: Vec::new(), shown: None }
     }
 }
 

@@ -72,12 +72,15 @@ impl Tool for Edit {
                 ));
             }
         };
+        let before = text.find(old).map_or("", |at| &text[..at]);
+        let shown = super::shown_diff::edit(&format!("Edited {name}"), before, old, new);
         match std::fs::write(&path, changed) {
             Ok(()) => Outcome::ok(if count == 1 {
                 format!("Edited {name}.")
             } else {
                 format!("Edited {name} ({count} replacements).")
-            }),
+            })
+            .showing(shown),
             Err(error) => Outcome::error(format!("Could not write {name}: {error}")),
         }
     }
@@ -103,7 +106,7 @@ mod tests {
     fn replaces_a_unique_string() {
         let (dir, workspace) = setup("let a = 1;\nlet b = 2;\n");
         let outcome = Edit.run(&json!({"file_path": "f.rs", "old_string": "b = 2", "new_string": "b = 3"}), &workspace);
-        assert_eq!(outcome, Outcome::ok("Edited f.rs."));
+        assert_eq!(outcome.content, "Edited f.rs.");
         assert_eq!(content(&dir), "let a = 1;\nlet b = 3;\n");
     }
 

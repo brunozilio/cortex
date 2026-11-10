@@ -74,6 +74,72 @@ impl Input {
         self.cursor = self.text[self.cursor..].find('\n').map_or(self.text.len(), |at| self.cursor + at);
     }
 
+    /// Moves to the start of this or the previous word (Option+Left).
+    pub fn word_left(&mut self) {
+        let before = &self.text[..self.cursor];
+        let trimmed = before.trim_end_matches(|c: char| !c.is_alphanumeric());
+        self.cursor = trimmed.rfind(|c: char| !c.is_alphanumeric()).map_or(0, |at| at + 1);
+        while !self.text.is_char_boundary(self.cursor) {
+            self.cursor += 1;
+        }
+    }
+
+    /// Moves past the end of this or the next word (Option+Right).
+    pub fn word_right(&mut self) {
+        let after = &self.text[self.cursor..];
+        let skipped = after.len() - after.trim_start_matches(|c: char| !c.is_alphanumeric()).len();
+        let rest = &after[skipped..];
+        let word = rest.find(|c: char| !c.is_alphanumeric()).unwrap_or(rest.len());
+        self.cursor += skipped + word;
+    }
+
+    /// Deletes from the cursor to the end of the next word (Option+Delete).
+    pub fn delete_word_forward(&mut self) {
+        let start = self.cursor;
+        self.word_right();
+        self.text.replace_range(start..self.cursor, "");
+        self.cursor = start;
+    }
+
+    /// Deletes back to the start of the line (Cmd+Backspace).
+    pub fn delete_to_line_start(&mut self) {
+        let start = self.text[..self.cursor].rfind('\n').map_or(0, |at| at + 1);
+        self.text.replace_range(start..self.cursor, "");
+        self.cursor = start;
+    }
+
+    pub fn on_first_line(&self) -> bool {
+        !self.text[..self.cursor].contains('\n')
+    }
+
+    pub fn on_last_line(&self) -> bool {
+        !self.text[self.cursor..].contains('\n')
+    }
+
+    /// Moves to the line above (`up`) or below, at the same column or the
+    /// line's end.
+    pub fn line(&mut self, up: bool) {
+        let start = self.text[..self.cursor].rfind('\n').map_or(0, |at| at + 1);
+        let column = self.text[start..self.cursor].chars().count();
+        let target = if up {
+            let Some(end) = start.checked_sub(1) else { return };
+            self.text[..end].rfind('\n').map_or(0, |at| at + 1)
+        } else {
+            let Some(next) = self.text[self.cursor..].find('\n') else { return };
+            self.cursor + next + 1
+        };
+        let line_end = self.text[target..].find('\n').map_or(self.text.len(), |at| target + at);
+        let line = &self.text[target..line_end];
+        self.cursor = target + line.char_indices().nth(column).map_or(line.len(), |(at, _)| at);
+    }
+
+    /// Prompts sent in earlier chats, oldest first.
+    pub fn set_history(&mut self, history: Vec<String>) {
+        let mut merged = history;
+        merged.append(&mut self.history);
+        self.history = merged;
+    }
+
     /// Deletes back to the start of the previous word (Ctrl+W).
     pub fn delete_word(&mut self) {
         let before = &self.text[..self.cursor];
@@ -98,11 +164,6 @@ impl Input {
         self.text.clear();
         self.cursor = 0;
         self.recalled = None;
-    }
-
-    /// Whether Up and Down move through history rather than lines.
-    pub fn on_one_line(&self) -> bool {
-        !self.text.contains('\n')
     }
 
     pub fn older(&mut self) {
@@ -159,6 +220,45 @@ mod tests {
         input.end();
         input.delete_word();
         assert_eq!(input.text(), "ol ");
+    }
+
+    #[test]
+    fn words_and_lines_are_jumped_over() {
+        let mut input = Input::default();
+        input.set("cargo test --all\nnext line");
+        input.home();
+        input.line(true);
+        input.word_right();
+        assert_eq!(input.cursor(), "cargo".len());
+        input.word_right();
+        input.word_right();
+        assert_eq!(&input.text()[..input.cursor()], "cargo test --all");
+        input.word_left();
+        assert_eq!(&input.text()[..input.cursor()], "cargo test --");
+        input.line(false);
+        assert_eq!(&input.text()[input.cursor()..], "", "a shorter line below: its end");
+        input.line(true);
+        input.home();
+        input.line(false);
+        input.word_right();
+        assert_eq!(&input.text()[input.cursor()..], " line", "same column on the next line");
+        input.delete_to_line_start();
+        assert_eq!(input.text(), "cargo test --all\n line");
+        input.delete_word_forward();
+        assert_eq!(input.text(), "cargo test --all\n");
+        assert!(input.on_last_line() && !input.on_first_line());
+    }
+
+    #[test]
+    fn earlier_chats_history_comes_first() {
+        let mut input = Input::default();
+        input.set("now");
+        input.take();
+        input.set_history(vec!["before".into()]);
+        input.older();
+        assert_eq!(input.text(), "now");
+        input.older();
+        assert_eq!(input.text(), "before");
     }
 
     #[test]

@@ -21,8 +21,12 @@ mod tests;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ratatui::crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste, Event};
+use ratatui::crossterm::event::{
+    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
+};
 use ratatui::crossterm::execute;
+use ratatui::crossterm::terminal::supports_keyboard_enhancement;
 use superfik_sdk::{PermissionMode, Superfik};
 
 pub use app::App;
@@ -45,6 +49,14 @@ pub fn run(
     }
     let mut terminal = ratatui::init();
     let _ = execute!(std::io::stdout(), EnableBracketedPaste);
+    // Terminals that can tell keys apart (kitty, Ghostty, WezTerm, iTerm2)
+    // then report Cmd, so Cmd+arrows reach the prompt.
+    let enhanced = supports_keyboard_enhancement().unwrap_or(false)
+        && execute!(
+            std::io::stdout(),
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+        )
+        .is_ok();
     let result = (|| -> std::io::Result<()> {
         let mut first = prompt;
         while !app.quit {
@@ -69,6 +81,9 @@ pub fn run(
         Ok(())
     })();
     app.cancel();
+    if enhanced {
+        let _ = execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
+    }
     let _ = execute!(std::io::stdout(), DisableBracketedPaste);
     ratatui::restore();
     if app.session.as_ref().and_then(superfik_sdk::Session::id).is_some() {

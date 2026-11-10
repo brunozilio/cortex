@@ -12,6 +12,9 @@ use super::transcript::Transcript;
 impl App {
     pub(super) fn ready(&mut self, models: Result<Vec<Model>, String>, saved: &serde_json::Value) {
         self.loading = false;
+        if self.models.is_empty() && self.session.is_none() {
+            self.input.set_history(settings::history(saved, &self.cwd));
+        }
         let saved = settings::read(saved);
         if !self.mode_given {
             self.mode = saved.mode.unwrap_or(self.mode);
@@ -52,11 +55,11 @@ impl App {
         if let Some(run) = &self.run {
             let _ = run.set_permission(mode);
         }
-        settings::remember(&self.superfik, "mode", mode_label(mode));
+        self.saver.remember("mode", mode_label(mode));
     }
 
     pub fn set_model(&mut self, model: Model) {
-        settings::remember(&self.superfik, "model", &model.id);
+        self.saver.remember("model", &model.id);
         self.transcript.notice(format!("Model: {}", model.label));
         match &mut self.session {
             Some(session) => session.set_model(model),
@@ -72,7 +75,7 @@ impl App {
         if let Some(session) = &mut self.session {
             session.set_effort(effort);
         }
-        settings::remember(&self.superfik, "effort", effort.cli_value());
+        self.saver.remember("effort", effort.cli_value());
         self.transcript.notice(format!("Effort: {}", effort.cli_value()));
     }
 

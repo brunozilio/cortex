@@ -26,34 +26,82 @@ pub fn last_session(settings: &serde_json::Value, cwd: &Path) -> Option<SessionI
     settings["sessions"][cwd.to_string_lossy().as_ref()].as_str().map(|id| SessionId(id.to_owned()))
 }
 
-/// Remembers `session` as the conversation last had in `cwd`.
-pub fn remember_session(superfik: &Superfik, cwd: &Path, session: &SessionId) {
-    let (superfik, cwd, session) = (superfik.clone(), cwd.to_string_lossy().into_owned(), session.0.clone());
-    std::thread::spawn(move || {
-        let mut settings = superfik.settings().unwrap_or_else(|_| serde_json::json!({}));
-        if !settings.is_object() {
-            settings = serde_json::json!({});
-        }
-        if !settings["sessions"].is_object() {
-            settings["sessions"] = serde_json::json!({});
-        }
-        settings["sessions"][cwd] = serde_json::Value::String(session);
-        let _ = superfik.save_settings(settings);
-    });
+/// Prompts kept per folder for Up and Down.
+const HISTORY: usize = 100;
+
+/// The prompts sent in `cwd` before, oldest first.
+pub fn history(settings: &serde_json::Value, cwd: &Path) -> Vec<String> {
+    settings["history"][cwd.to_string_lossy().as_ref()]
+        .as_array()
+        .map(|sent| sent.iter().filter_map(|p| p.as_str().map(str::to_owned)).collect())
+        .unwrap_or_default()
 }
 
-/// Saves one setting off the chat's thread, keeping the others.
-pub fn remember(superfik: &Superfik, key: &str, value: &str) {
-    let superfik = superfik.clone();
-    let (key, value) = (key.to_owned(), value.to_owned());
-    std::thread::spawn(move || {
-        let mut settings = superfik.settings().unwrap_or_else(|_| serde_json::json!({}));
-        if !settings.is_object() {
-            settings = serde_json::json!({});
-        }
-        settings[key] = serde_json::Value::String(value);
-        let _ = superfik.save_settings(settings);
-    });
+type Change = Box<dyn FnOnce(&mut serde_json::Value) + Send>;
+
+/// Writes settings one change at a time, off the chat's thread, so two
+/// quick changes never overwrite each other.
+#[derive(Clone)]
+pub struct Saver(crossbeam_channel::Sender<Change>);
+
+impl Saver {
+    pub fn start(superfik: &Superfik) -> Self {
+        let (tx, rx) = crossbeam_channel::unbounded::<Change>();
+        let superfik = superfik.clone();
+        std::thread::spawn(move || {
+            while let Ok(change) = rx.recv() {
+                let mut settings = superfik.settings().unwrap_or_else(|_| serde_json::json!({}));
+                if !settings.is_object() {
+                    settings = serde_json::json!({});
+                }
+                change(&mut settings);
+                while let Ok(more) = rx.try_recv() {
+                    more(&mut settings);
+                }
+                let _ = superfik.save_settings(settings);
+            }
+        });
+        Self(tx)
+    }
+
+    fn change(&self, change: impl FnOnce(&mut serde_json::Value) + Send + 'static) {
+        let _ = self.0.send(Box::new(change));
+    }
+
+    /// Saves one setting, keeping the others.
+    pub fn remember(&self, key: &str, value: &str) {
+        let (key, value) = (key.to_owned(), value.to_owned());
+        self.change(move |settings| settings[key] = serde_json::Value::String(value));
+    }
+
+    /// Adds `prompt` to what was sent in `cwd`.
+    pub fn remember_prompt(&self, cwd: &Path, prompt: &str) {
+        let (cwd, prompt) = (cwd.to_owned(), prompt.to_owned());
+        self.change(move |settings| add_prompt(settings, &cwd, prompt));
+    }
+
+    /// Remembers `session` as the conversation last had in `cwd`.
+    pub fn remember_session(&self, cwd: &Path, session: &SessionId) {
+        let (cwd, session) = (cwd.to_string_lossy().into_owned(), session.0.clone());
+        self.change(move |settings| {
+            if !settings["sessions"].is_object() {
+                settings["sessions"] = serde_json::json!({});
+            }
+            settings["sessions"][cwd] = serde_json::Value::String(session);
+        });
+    }
+}
+
+fn add_prompt(settings: &mut serde_json::Value, cwd: &Path, prompt: String) {
+    let mut sent = history(settings, cwd);
+    sent.retain(|known| *known != prompt);
+    sent.push(prompt);
+    let drop = sent.len().saturating_sub(HISTORY);
+    sent.drain(..drop);
+    if !settings["history"].is_object() {
+        settings["history"] = serde_json::json!({});
+    }
+    settings["history"][cwd.to_string_lossy().as_ref()] = serde_json::json!(sent);
 }
 
 #[cfg(test)]
@@ -71,6 +119,16 @@ mod tests {
         );
         assert_eq!(read(&json!({"mode": "sideways"})), Saved::default());
         assert_eq!(read(&json!(null)), Saved::default());
+    }
+
+    #[test]
+    fn prompts_are_kept_per_folder_newest_last_without_repeats() {
+        let mut settings = json!({"history": {"/a": ["one", "two"]}});
+        add_prompt(&mut settings, Path::new("/a"), "one".into());
+        assert_eq!(history(&settings, Path::new("/a")), ["two", "one"]);
+        add_prompt(&mut settings, Path::new("/a"), "two".into());
+        assert_eq!(history(&settings, Path::new("/a")), ["one", "two"]);
+        assert!(history(&settings, Path::new("/b")).is_empty());
     }
 
     #[test]
