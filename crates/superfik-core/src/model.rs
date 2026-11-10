@@ -1,32 +1,11 @@
-//! Engines, models and reasoning effort.
+//! Models, who serves them, and reasoning effort.
 
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum EngineKind {
-    Codex,
-    Kiro,
-    Copilot,
-    #[serde(alias = "ClaudeCode")]
-    Native,
-}
-
-impl EngineKind {
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Codex => "Codex",
-            Self::Kiro => "Kiro",
-            Self::Copilot => "Copilot",
-            Self::Native => "Superfik",
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelOption {
     pub id: String,
     pub label: String,
-    pub engine: EngineKind,
     #[serde(default)]
     pub provider: ModelProvider,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -73,11 +52,10 @@ impl ModelOption {
             || self.label.eq_ignore_ascii_case(wanted)
     }
 
-    pub fn new(engine: EngineKind, id: impl Into<String>, label: impl Into<String>) -> Self {
+    pub fn new(id: impl Into<String>, label: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             label: label.into(),
-            engine,
             provider: ModelProvider::Anthropic,
             window: None,
             capabilities: None,
@@ -97,7 +75,6 @@ impl ModelOption {
 pub enum ModelProvider {
     #[default]
     Anthropic,
-    #[serde(alias = "Codex")]
     OpenAi,
     ChatGptSubscription,
     ClaudeSubscription,
@@ -199,7 +176,7 @@ mod tests {
     use super::*;
 
     fn served(id: &str, provider: ModelProvider) -> ModelOption {
-        ModelOption::new(EngineKind::Native, id, id.rsplit(':').next().unwrap_or(id)).served_by(provider)
+        ModelOption::new(id, id.rsplit(':').next().unwrap_or(id)).served_by(provider)
     }
 
     #[test]
@@ -217,20 +194,10 @@ mod tests {
     }
 
     #[test]
-    fn a_model_saved_before_providers_is_served_by_anthropic() {
-        let old = r#"{"id":"claude-opus-5-5","label":"Opus 5.5","engine":"ClaudeCode"}"#;
-        let model: ModelOption = serde_json::from_str(old).expect("old model");
-        assert_eq!(model.provider, ModelProvider::Anthropic);
-        let local = ModelOption::new(EngineKind::Native, "qwen", "Qwen").served_by(ModelProvider::Local);
+    fn a_model_round_trips_with_its_provider() {
+        let local = ModelOption::new("qwen", "Qwen").served_by(ModelProvider::Local);
         let json = serde_json::to_string(&local).expect("serialize");
         assert_eq!(serde_json::from_str::<ModelOption>(&json).expect("round trip"), local);
-    }
-
-    #[test]
-    fn a_codex_model_saved_by_earlier_builds_is_served_by_openai() {
-        let old = r#"{"id":"gpt-codex","label":"Codex","engine":"ClaudeCode","provider":"Codex"}"#;
-        let model: ModelOption = serde_json::from_str(old).expect("old model");
-        assert_eq!(model.provider, ModelProvider::OpenAi);
     }
 
     #[test]

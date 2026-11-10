@@ -81,11 +81,6 @@ impl Tool for Bash {
             .map_or(DEFAULT_TIMEOUT, Duration::from_millis)
             .min(MAX_TIMEOUT);
         let mut shell = shell(command);
-        crate::worker::clean_env(&mut shell);
-        for key in ["GH_TOKEN", "GITHUB_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"] {
-            shell.env_remove(key);
-        }
-        shell.envs(workspace.credentials.env());
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
             return match super::shells::start(workspace.credentials.client, command, &mut shell) {

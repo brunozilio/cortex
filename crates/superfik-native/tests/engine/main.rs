@@ -8,7 +8,7 @@ use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use superfik_core::{EngineEvent, EngineKind, ModelOption, PromptRequest, RunId};
+use superfik_core::{EngineEvent, ModelOption, PromptRequest, RunId};
 use superfik_engine::AgentEngine;
 use superfik_native::model::scripted::ScriptedModel;
 use superfik_native::model::{ModelApi, ModelError};
@@ -49,5 +49,5 @@ fn finish(events: &Receiver<EngineEvent>) -> Vec<EngineEvent> {
 }
 
 fn model() -> ModelOption {
-    ModelOption::new(EngineKind::Native, "claude-opus-5-5", "Opus 5.5")
+    ModelOption::new("claude-opus-5-5", "Opus 5.5")
 }

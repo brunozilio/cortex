@@ -16,7 +16,6 @@ use crate::sessions::Sessions;
 use crate::tools::{self, Workspace};
 
 pub(super) struct Job {
-    pub(super) worker: Option<std::path::PathBuf>,
     pub(super) source: Arc<dyn ApiSource>,
     pub(super) sessions: Arc<dyn Sessions>,
     pub(super) mcp: Arc<dyn Http>,
@@ -50,18 +49,13 @@ impl Job {
             return self.chore(command, &history, started);
         }
         self.gate.emit(EngineEvent::SessionStarted(session.clone()));
-        let brief = match self.worker.as_deref() {
-            Some(worker) => crate::worker::brief(worker, &self.request, self.control.stop_flag()),
-            None => crate::brief::Brief::load(&self.request),
-        };
-        let brief = match brief {
+        let brief = match crate::brief::Brief::load(&self.request) {
             Ok(brief) => brief,
             Err(error) => return self.fail(&error, FailureKind::Other),
         };
         let workspace = Arc::get_mut(&mut self.workspace).expect("workspace is not shared before starting tools");
         workspace.rules = brief.rules;
-        workspace.worker = self.worker.clone();
-        let mut tools = crate::worker::wrap(tools::standard(), self.worker.as_deref());
+        let mut tools = tools::standard();
         let skills = brief.skills;
         if !skills.is_empty() {
             tools.push(Box::new(tools::skill::SkillTool { skills: skills.clone() }));
@@ -69,12 +63,7 @@ impl Job {
         let agents = brief.agents;
         tools.push(Box::new(tools::subagent::AgentTool { agents: agents.clone() }));
         tools.extend(tools::task::tools());
-        tools.extend(crate::mcp::tools_isolated_stopped(
-            &self.request,
-            &self.mcp,
-            self.worker.as_deref(),
-            self.control.stop_flag(),
-        ));
+        tools.extend(crate::mcp::tools_stopped(&self.request, &self.mcp, self.control.stop_flag()));
         let settings = brief.settings;
         let selected = if let Some(name) = &settings.agent {
             match (tools::subagent::AgentTool { agents: agents.clone() })
@@ -135,7 +124,7 @@ impl Job {
             workspace.rules = context.rules.clone();
         }
         let cleanup_workspace = workspace.fork(Arc::default());
-        let mut runtime_guard = crate::agent_runtime::Guard::new(setup, &cleanup_workspace);
+        let mut runtime_guard = crate::agent_runtime::Guard::new(setup);
         if resumed_worktree {
             runtime_guard.retain();
         }
@@ -166,11 +155,6 @@ impl Job {
             Err(error) => return self.fail(&error, FailureKind::Other),
             _ => {}
         }
-        if let Some(guard) = &self.request.credentials.model_guard
-            && let Err(error) = guard.check(&self.request.model)
-        {
-            return self.fail(&error, FailureKind::Other);
-        }
         if let Some(schema) = settings.schema {
             match tools::structured::Structured::new(schema) {
                 Ok(tool) => tools.push(Box::new(tool)),
@@ -189,7 +173,6 @@ impl Job {
             style: settings.style,
             git: brief.git,
             instructions: brief.instructions,
-            images: brief.images,
         };
         self.converse(prepared, &mut runtime_guard, &cleanup_workspace);
     }

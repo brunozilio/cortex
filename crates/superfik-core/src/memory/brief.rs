@@ -26,8 +26,6 @@ pub struct MemoryBrief {
     pub origin: Option<String>,
     #[serde(default)]
     pub tool: Option<MemoryTool>,
-    #[serde(default)]
-    pub optimizing: bool,
 }
 
 impl MemoryBrief {

@@ -108,13 +108,7 @@ pub fn system(environment: &Environment) -> String {
 }
 
 pub fn user_message(request: &PromptRequest) -> String {
-    let mut message = request.compose();
-    if !request.skills.is_empty() {
-        let names: Vec<String> = request.skills.iter().map(|skill| format!("`{}`", skill.name)).collect();
-        message
-            .push_str(&format!("\n\nBefore you start, load these skills with the Skill tool: {}.", names.join(", ")));
-    }
-    message
+    request.compose()
 }
 
 pub fn instructions(cwd: &Path, home: Option<&Path>) -> Vec<Instructions> {

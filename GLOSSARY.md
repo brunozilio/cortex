@@ -6,9 +6,8 @@ A coding agent you talk to in the terminal, and an SDK to build on it.
 Who is acting on a command. Today always the local owner.
 
 **Project**:
-What a set of sessions is about, identified by its git remote, or a folder
-with no repository.
-_Avoid_: Workspace (for the shared thing), repo
+The folder a session works in; memory is kept per project.
+_Avoid_: Workspace, repo
 
 **Session**:
 One conversation with the agent: its turns and context, resumable.
@@ -27,9 +26,7 @@ Where models come from: an API key or a subscription (Anthropic, OpenAI,
 Claude, ChatGPT), or local MLX models.
 _Avoid_: Plugin (for providers)
 
-**Plugin**:
-A folder bringing skills, agents and MCP servers.
-
-**Connection**:
-One signed-in account of a plugin.
-_Avoid_: Integration
+**Extensions**:
+What an SDK host adds to every run: folders of skills, commands and agents,
+and MCP servers (HTTP, stdio or in-process).
+_Avoid_: Plugin

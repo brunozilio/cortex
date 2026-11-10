@@ -1,15 +1,15 @@
 //! Skills: `SKILL.md` instructions the agent loads by name with the `Skill`
 //! tool. Found where coding agents keep them: the project's
 //! (`.superfik/skills`, `.claude/skills`), the user's (`~/.superfik/skills`,
-//! `~/.claude` and its plugins) and the session's installed plugins
-//! (`<plugin>:<name>`). On a clash of names the first found wins.
+//! `~/.claude` and its Claude Code plugins) and the SDK host's folders.
+//! On a clash of names the first found wins.
 
 use std::path::{Path, PathBuf};
 
+use crate::claude_home::ClaudeHome;
+use crate::frontmatter::parse as parse_frontmatter;
 use serde_json::{Value, json};
 use superfik_core::PromptRequest;
-use superfik_plugins::ClaudeHome;
-use superfik_plugins::skills::parse_frontmatter;
 
 use super::{Access, Outcome, Tool, Workspace, required};
 use crate::model::ToolSpec;
@@ -39,11 +39,8 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
         let claude = ClaudeHome::new(home.join(".claude"));
         sources.extend(claude.skill_sources(cwd).into_iter().map(|source| (source.dir, source.namespace)));
     }
-    for dir in request.plugins.iter().flat_map(|plugins| &plugins.local_dirs) {
+    for dir in request.extensions.iter().flat_map(|extensions| &extensions.dirs) {
         sources.push((dir.join("skills"), None));
-    }
-    for dir in request.plugins.iter().flat_map(|plugins| &plugins.plugin_dirs) {
-        sources.push((dir.join("skills"), Some(plugin_name(dir))));
     }
     if let Some(builtin) = home.and_then(super::builtin_skills::dir) {
         sources.push((builtin, None));
@@ -54,23 +51,13 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
             .into_iter()
             .chain(scan_commands(&dir.with_file_name("commands"), namespace.as_deref()))
         {
-            let disabled = request.disabled_skills.contains(&skill.name);
-            if !disabled && !found.iter().any(|known| known.name == skill.name) {
+            if !found.iter().any(|known| known.name == skill.name) {
                 found.push(skill);
             }
         }
     }
     found
 }
-
-pub(crate) fn plugin_name(dir: &Path) -> String {
-    std::fs::read_to_string(dir.join(".claude-plugin/plugin.json"))
-        .ok()
-        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-        .and_then(|manifest| manifest["name"].as_str().map(str::to_owned))
-        .unwrap_or_else(|| dir.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default())
-}
-
 fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     let mut skills: Vec<FoundSkill> = entries
@@ -139,7 +126,7 @@ impl Tool for SkillTool {
         input["skill"].as_str().unwrap_or_default().trim_start_matches('/').to_owned()
     }
 
-    fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
+    fn run(&self, input: &Value, _workspace: &Workspace) -> Outcome {
         let name = match required(input, "skill") {
             Ok(name) => name.trim_start_matches('/'),
             Err(outcome) => return outcome,
@@ -150,18 +137,13 @@ impl Tool for SkillTool {
         if !skill.model_invocation {
             return Outcome::error(format!("Skill {name} requires explicit user invocation."));
         }
-        load(skill, input["args"].as_str().unwrap_or_default(), workspace)
+        load(skill, input["args"].as_str().unwrap_or_default())
     }
 }
 
-fn load(skill: &FoundSkill, args: &str, workspace: &Workspace) -> Outcome {
+fn load(skill: &FoundSkill, args: &str) -> Outcome {
     let name = &skill.name;
-    let read = if let Some(worker) = &workspace.worker {
-        crate::worker::read_text(worker, &skill.file, workspace)
-    } else {
-        std::fs::read_to_string(&skill.file).map_err(|e| e.to_string())
-    };
-    let Ok(text) = read else {
+    let Ok(text) = std::fs::read_to_string(&skill.file) else {
         return Outcome::error(format!("The skill {name} could not be read."));
     };
     let (_, body) = parse_frontmatter(&text);
@@ -173,10 +155,10 @@ fn load(skill: &FoundSkill, args: &str, workspace: &Workspace) -> Outcome {
     }
     Outcome::ok(out)
 }
-pub fn expand_initial(initial: &str, skills: &[FoundSkill], workspace: &Workspace) -> Result<String, String> {
+pub fn expand_initial(initial: &str, skills: &[FoundSkill]) -> Result<String, String> {
     let initial = initial.trim();
     let Some(command) = initial.strip_prefix('/') else { return Ok(initial.into()) };
-    expand_command(initial, skills, workspace).unwrap_or_else(|| {
+    expand_command(initial, skills).unwrap_or_else(|| {
         let name = command.split_whitespace().next().unwrap_or_default();
         Err(format!("Initial command /{name} is not an available skill or custom command"))
     })
@@ -185,11 +167,11 @@ pub fn expand_initial(initial: &str, skills: &[FoundSkill], workspace: &Workspac
 /// A prompt typed as `/<skill or command> <arguments>` becomes that skill's
 /// text with `$ARGUMENTS` filled in; `None` when it names none (a path such
 /// as `/etc/hosts` stays as typed).
-pub fn expand_command(prompt: &str, skills: &[FoundSkill], workspace: &Workspace) -> Option<Result<String, String>> {
+pub fn expand_command(prompt: &str, skills: &[FoundSkill]) -> Option<Result<String, String>> {
     let command = prompt.trim().strip_prefix('/')?;
     let (name, args) = command.split_once(char::is_whitespace).unwrap_or((command, ""));
     let skill = skills.iter().find(|skill| skill.name == name)?;
-    let loaded = load(skill, args.trim(), workspace);
+    let loaded = load(skill, args.trim());
     Some(if loaded.is_error { Err(loaded.content) } else { Ok(loaded.content) })
 }
 fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
@@ -225,7 +207,7 @@ fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
 
 #[cfg(test)]
 mod tests {
-    use superfik_core::{EngineKind, ModelOption, PluginBrief};
+    use superfik_core::{Extensions, ModelOption};
 
     use super::*;
 
@@ -236,38 +218,33 @@ mod tests {
     }
 
     #[test]
-    fn finds_the_project_s_the_user_s_and_the_plugins_skills() {
+    fn finds_the_project_s_the_user_s_and_the_host_s_skills() {
         let repo = tempfile::tempdir().expect("repo");
         let home = tempfile::tempdir().expect("home");
         let plugin = tempfile::tempdir().expect("plugin");
         skill(&repo.path().join(".superfik/skills"), "release", "Cuts a release.");
         skill(&repo.path().join(".claude/skills"), "release", "An older copy.");
         skill(&home.path().join(".superfik/skills"), "morning", "The morning briefing.");
-        skill(&home.path().join(".superfik/skills"), "hidden", "Taken out of the session.");
-        std::fs::create_dir_all(plugin.path().join(".claude-plugin")).expect("dir");
-        std::fs::write(plugin.path().join(".claude-plugin/plugin.json"), r#"{"name":"superfik"}"#).expect("write");
         skill(&plugin.path().join("skills"), "dataviz", "Charts.");
-        let model = ModelOption::new(EngineKind::Native, "m", "M");
+        let model = ModelOption::new("m", "M");
         let mut request = PromptRequest::plain(repo.path().to_path_buf(), "hi", model);
-        request.plugins =
-            Some(PluginBrief { plugin_dirs: vec![plugin.path().to_path_buf()], ..PluginBrief::default() });
-        request.disabled_skills = vec!["hidden".into()];
+        request.extensions = Some(Extensions { dirs: vec![plugin.path().to_path_buf()], ..Extensions::default() });
         let found = discover(&request, Some(home.path()));
         let names: Vec<(&str, &str)> = found.iter().map(|s| (s.name.as_str(), s.description.as_str())).collect();
         assert_eq!(
             &names[..3],
-            [("release", "Cuts a release."), ("morning", "The morning briefing."), ("superfik:dataviz", "Charts.")],
-            "the project's, the user's and the plugins' first"
+            [("release", "Cuts a release."), ("morning", "The morning briefing."), ("dataviz", "Charts.")],
+            "the project's, the user's and the host's first"
         );
         assert!(names[3..].iter().any(|(name, _)| *name == "code-review"), "then Superfik's own");
         assert_eq!(listing(&found[..1]), "- release: Cuts a release.");
 
         let tool = SkillTool { skills: found };
-        let loaded = tool.run(&json!({ "skill": "/superfik:dataviz", "args": "bar chart" }), &Workspace::new("/"));
+        let loaded = tool.run(&json!({ "skill": "/dataviz", "args": "bar chart" }), &Workspace::new("/"));
         assert!(!loaded.is_error);
-        assert!(loaded.content.starts_with("Skill superfik:dataviz (base directory for its files: "));
+        assert!(loaded.content.starts_with("Skill dataviz (base directory for its files: "));
         assert!(loaded.content.contains("Do the dataviz thing.") && loaded.content.ends_with("Arguments: bar chart"));
         assert!(!loaded.content.contains("description:"), "the frontmatter stays behind");
-        assert!(tool.run(&json!({ "skill": "hidden" }), &Workspace::new("/")).is_error);
+        assert!(tool.run(&json!({ "skill": "missing" }), &Workspace::new("/")).is_error);
     }
 }

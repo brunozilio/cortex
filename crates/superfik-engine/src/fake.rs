@@ -9,14 +9,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use superfik_core::{AskId, Decision, EngineEvent, EngineKind, ModelOption, PromptRequest, RunId};
+use superfik_core::{AskId, Decision, EngineEvent, ModelOption, PromptRequest, RunId};
 
 use crate::engine::{AgentEngine, EngineError, EventSink, RunHandle};
 use crate::gate::RunGate;
 
 #[derive(Debug, Clone)]
 pub struct FakeEngine {
-    kind: EngineKind,
     models: Vec<ModelOption>,
     script: Vec<EngineEvent>,
     delay: Duration,
@@ -25,8 +24,8 @@ pub struct FakeEngine {
 }
 
 impl FakeEngine {
-    pub fn new(kind: EngineKind, models: Vec<ModelOption>, script: Vec<EngineEvent>) -> Self {
-        Self { kind, models, script, delay: Duration::ZERO, answers: Arc::default(), requests: Arc::default() }
+    pub fn new(models: Vec<ModelOption>, script: Vec<EngineEvent>) -> Self {
+        Self { models, script, delay: Duration::ZERO, answers: Arc::default(), requests: Arc::default() }
     }
 
     pub fn requests(&self) -> Vec<PromptRequest> {
@@ -43,7 +42,7 @@ impl FakeEngine {
     }
 
     pub fn demo() -> Self {
-        let models = vec![ModelOption::new(EngineKind::Native, "claude-opus-5-5", "Opus 5.5")];
+        let models = vec![ModelOption::new("claude-opus-5-5", "Opus 5.5")];
         let script = vec![
             EngineEvent::SessionStarted(superfik_core::SessionId("demo-session".into())),
             EngineEvent::ToolStarted(superfik_core::ToolCall::new("t1", "Read", "src/main.rs")),
@@ -52,15 +51,11 @@ impl FakeEngine {
             EngineEvent::TextDelta("- One gradient\n- A glowing moon".into()),
             EngineEvent::Completed { duration_ms: 3_000, cost_usd: Some(0.01) },
         ];
-        Self::new(EngineKind::Native, models, script)
+        Self::new(models, script)
     }
 }
 
 impl AgentEngine for FakeEngine {
-    fn kind(&self) -> EngineKind {
-        self.kind
-    }
-
     fn models(&self) -> Vec<ModelOption> {
         self.models.clone()
     }
@@ -165,31 +160,10 @@ impl EventSink for RecordingSink {
 mod tests {
     use std::path::PathBuf;
 
-    use superfik_core::{Effort, WorkspaceId};
-
     use super::*;
 
     pub(crate) fn request() -> PromptRequest {
-        PromptRequest {
-            connections: Vec::new(),
-            plugins: None,
-            credentials: Default::default(),
-            workspace: WorkspaceId::new(),
-            cwd: PathBuf::from("/tmp"),
-            prompt: "hi".into(),
-            model: ModelOption::new(EngineKind::Native, "claude-opus-5-5", "Opus 5.5"),
-            effort: Effort::Medium,
-            repositories: vec![],
-            skills: vec![],
-            disabled_skills: Vec::new(),
-            references: vec![],
-            resume: None,
-            command: None,
-            memory: None,
-            permission: Default::default(),
-            output_style: None,
-            safety_check: true,
-        }
+        PromptRequest::plain(PathBuf::from("/tmp"), "hi", ModelOption::new("claude-opus-5-5", "Opus 5.5"))
     }
 
     #[test]

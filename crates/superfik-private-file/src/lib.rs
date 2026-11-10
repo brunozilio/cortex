@@ -1,5 +1,5 @@
-//! Files only the user running Superfik can read: secrets, tokens, the
-//! cookies of imported logins, MCP configurations (ADR 0013).
+//! Files only the user running Superfik can read: secrets, tokens and
+//! MCP configurations (ADR 0013).
 //!
 //! - Unix: mode `0600`, also on a file that already existed.
 //! - Windows: a protected DACL granting the current user alone, so the

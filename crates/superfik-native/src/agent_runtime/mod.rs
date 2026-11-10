@@ -82,15 +82,7 @@ pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace
     let owner =
         serde_json::to_string(workspace.credentials.owner.as_ref().unwrap_or(&superfik_core::Principal::LocalOwner))
             .map_err(|e| e.to_string())?;
-    match &workspace.worker {
-        Some(program) => crate::worker::operation(
-            program,
-            "AgentResume",
-            &serde_json::json!({"config":config,"name":name,"state":state,"owner":owner}),
-            workspace,
-        ),
-        None => local_resume(config, name, &owner, state, workspace),
-    }
+    local_resume(config, name, &owner, state, workspace)
 }
 pub fn local_prepare(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspace) -> Result<Setup, String> {
     if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || "_-:".contains(c)) {
@@ -201,29 +193,13 @@ pub fn prepare(config: &AgentConfig, name: &str, workspace: &Workspace) -> Resul
     let owner =
         serde_json::to_string(workspace.credentials.owner.as_ref().unwrap_or(&superfik_core::Principal::LocalOwner))
             .map_err(|e| e.to_string())?;
-    match &workspace.worker {
-        Some(program) => crate::worker::operation(
-            program,
-            "AgentPrepare",
-            &serde_json::json!({"config":config,"name":name,"owner":owner}),
-            workspace,
-        ),
-        None => local_prepare(config, name, &owner, workspace),
-    }
+    local_prepare(config, name, &owner, workspace)
 }
-pub fn cleanup(setup: &Setup, workspace: &Workspace) -> Result<Option<PathBuf>, String> {
+pub fn cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
     if setup.worktree_root.is_none() {
         return Ok(None);
     }
-    match &workspace.worker {
-        Some(program) => crate::worker::operation(
-            program,
-            "AgentCleanup",
-            &serde_json::to_value(setup).map_err(|e| e.to_string())?,
-            workspace,
-        ),
-        None => local_cleanup(setup),
-    }
+    local_cleanup(setup)
 }
 
 mod guard;

@@ -32,16 +32,10 @@ pub(super) struct Prepared {
     pub(super) style: Option<prompt::settings::Style>,
     pub(super) git: Option<prompt::GitSnapshot>,
     pub(super) instructions: Vec<prompt::Instructions>,
-    pub(super) images: Vec<crate::image::Image>,
 }
 
 impl Job {
-    pub(super) fn converse(
-        &mut self,
-        prepared: Prepared,
-        runtime_guard: &mut Guard<'_>,
-        cleanup_workspace: &Workspace,
-    ) {
+    pub(super) fn converse(&mut self, prepared: Prepared, runtime_guard: &mut Guard, cleanup_workspace: &Workspace) {
         let Prepared {
             started,
             session,
@@ -54,7 +48,6 @@ impl Job {
             style,
             git,
             instructions,
-            images,
         } = prepared;
         let environment = Environment {
             cwd: self.workspace.cwd.clone(),
@@ -112,7 +105,6 @@ impl Job {
             provider: self.request.model.provider,
             gate: self.gate.clone(),
             model: self.request.model.clone(),
-            guard: self.request.credentials.model_guard.clone(),
         };
         if self.request.command == Some(SessionCommand::Compact) {
             return match upkeep::compact_hooked(&api, &template, &mut history, &self.workspace, "manual") {
@@ -142,11 +134,11 @@ impl Job {
             turn_limit: agent_config.max_turns.unwrap_or(crate::agent::MAX_TURNS),
         };
         let initial = if history.is_empty() { agent_config.initial_prompt.as_deref().unwrap_or_default() } else { "" };
-        let initial = match tools::skill::expand_initial(initial, &skills, &self.workspace) {
+        let initial = match tools::skill::expand_initial(initial, &skills) {
             Ok(initial) => initial,
             Err(error) => return self.fail(&error, FailureKind::Other),
         };
-        let typed = match tools::skill::expand_command(&self.request.prompt, &skills, &self.workspace) {
+        let typed = match tools::skill::expand_command(&self.request.prompt, &skills) {
             Some(Ok(prompt)) => prompt::user_message(&PromptRequest { prompt, ..self.request.clone() }),
             Some(Err(error)) => return self.fail(&error, FailureKind::Other),
             None => prompt::user_message(&self.request),
@@ -177,7 +169,6 @@ impl Job {
                 Err(error) => return self.fail(&error, FailureKind::Other),
             }
         }
-        user.blocks.extend(images.into_iter().map(crate::transcript::Block::Image));
         history.push(user);
         let outcome = agent.run(&mut history);
         let _ =

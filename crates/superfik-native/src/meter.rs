@@ -21,15 +21,9 @@ pub struct Metered {
     pub provider: ModelProvider,
     pub gate: RunGate,
     pub model: superfik_core::ModelOption,
-    pub guard: Option<superfik_core::credentials::ModelGuard>,
 }
 impl ModelApi for Metered {
     fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        if let Some(guard) = &self.guard {
-            let mut model = self.model.clone();
-            model.id = request.model.clone();
-            guard.check(&model).map_err(ModelError::Provider)?;
-        }
         let reply = self.api.turn(request, on, stop)?;
         let u = reply.usage;
         let cost = rates(self.provider, &request.model, u.prompt())

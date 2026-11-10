@@ -4,8 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use serde_json::json;
-use superfik_core::{EngineEvent, EngineKind, EngineProblem, ModelOption, PromptRequest, RunId};
-use superfik_engine::AgentEngine;
+use superfik_core::{EngineEvent, EngineProblem, PromptRequest};
 use superfik_native::model::ModelApi;
 use superfik_native::model::scripted::ScriptedModel;
 use superfik_native::sessions::InMemorySessions;
@@ -60,14 +59,6 @@ fn without_an_account_it_says_so_and_fails() {
 }
 
 #[test]
-fn refuses_another_engines_model() {
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(InMemorySessions::default()));
-    let other = ModelOption::new(EngineKind::Codex, "claude-opus-5-5", "Opus 5.5");
-    let sink = Arc::new(|_run: RunId, _event: EngineEvent| {});
-    assert!(engine.start(RunId::new(), &PromptRequest::plain("/".into(), "hi", other), sink).is_err());
-}
-
-#[test]
 fn provider_failure_during_turn_remains_a_failure_and_is_not_relabelled_cancelled() {
     let dir = tempfile::tempdir().expect("dir");
     let failing = Arc::new(ScriptedModel::new([Err(superfik_native::model::ModelError::Provider(
@@ -115,11 +106,7 @@ fn nested_instruction_is_delivered_before_the_first_matching_tool_batch_executes
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![model.clone()]))), Arc::new(InMemorySessions::default()));
     let events = finish(&start(
         &engine,
-        &PromptRequest::plain(
-            dir.path().into(),
-            "read nested",
-            superfik_core::ModelOption::new(EngineKind::Native, "fixture", "Fixture"),
-        ),
+        &PromptRequest::plain(dir.path().into(), "read nested", superfik_core::ModelOption::new("fixture", "Fixture")),
     ));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let asked = model.asked();

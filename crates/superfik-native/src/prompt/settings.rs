@@ -1,7 +1,7 @@
 //! User/project output settings; native settings override compatibility files.
+use crate::frontmatter::parse as parse_frontmatter;
 use serde_json::Value;
 use std::path::Path;
-use superfik_plugins::skills::parse_frontmatter;
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Style {
     pub name: String,

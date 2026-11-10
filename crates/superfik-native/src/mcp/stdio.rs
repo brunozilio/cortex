@@ -31,66 +31,13 @@ impl std::fmt::Debug for StdioTransport {
 
 impl StdioTransport {
     pub fn spawn(name: &str, command: &str, args: &[String], env: &[(String, String)]) -> Result<Self, String> {
-        Self::spawn_isolated(name, command, args, env, None)
-    }
-    pub fn spawn_isolated(
-        name: &str,
-        command: &str,
-        args: &[String],
-        env: &[(String, String)],
-        worker: Option<&std::path::Path>,
-    ) -> Result<Self, String> {
-        Self::spawn_stopped(name, command, args, env, worker, &std::sync::atomic::AtomicBool::new(false))
-    }
-    pub fn spawn_stopped(
-        name: &str,
-        command: &str,
-        args: &[String],
-        env: &[(String, String)],
-        worker: Option<&std::path::Path>,
-        stop: &std::sync::atomic::AtomicBool,
-    ) -> Result<Self, String> {
-        let mut process = superfik_process::command(worker.unwrap_or_else(|| std::path::Path::new(command)));
-        crate::worker::clean_env(&mut process);
-        if worker.is_some() {
-            process.arg("--mcp");
-        } else {
-            process.args(args).envs(env.iter().cloned());
-        }
+        let mut process = superfik_process::command(command);
+        process.args(args).envs(env.iter().cloned());
         process.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         let mut tree = Tree::spawn(&mut process).map_err(|error| format!("{name} could not start: {error}"))?;
-        let mut input = tree.child().stdin.take().ok_or_else(|| format!("{name} has no input"))?;
+        let input = tree.child().stdin.take().ok_or_else(|| format!("{name} has no input"))?;
         let output = tree.child().stdout.take().ok_or_else(|| format!("{name} has no output"))?;
-        let mut output = BufReader::new(output);
-        if worker.is_some() {
-            let config = serde_json::json!({"command":command,"args":args,"env":env});
-            writeln!(input, "{config}").and_then(|_| input.flush()).map_err(|e| e.to_string())?;
-            let (ready_tx, ready_rx) = channel();
-            std::thread::spawn(move || {
-                let mut ready = String::new();
-                let result = output.read_line(&mut ready);
-                let _ = ready_tx.send((result, ready, output));
-            });
-            let started = std::time::Instant::now();
-            loop {
-                if stop.load(std::sync::atomic::Ordering::Relaxed) || started.elapsed() > Duration::from_secs(15) {
-                    tree.kill();
-                    return Err("MCP worker startup cancelled or timed out".into());
-                }
-                match ready_rx.recv_timeout(Duration::from_millis(25)) {
-                    Ok((result, ready, reader)) => {
-                        result.map_err(|e| e.to_string())?;
-                        if ready.trim() != "superfik-mcp-ready" {
-                            return Err("isolated MCP worker did not become ready".into());
-                        }
-                        output = reader;
-                        break;
-                    }
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Err(_) => return Err("MCP worker stopped".into()),
-                }
-            }
-        }
+        let output = BufReader::new(output);
         let (send, lines) = channel();
         std::thread::Builder::new()
             .name(format!("superfik-mcp-{name}"))

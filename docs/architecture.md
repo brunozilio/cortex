@@ -5,12 +5,10 @@ dependencies. Business rules never depend on IO. Decisions are in
 `docs/decisions.md` (cited as `ADR NNNN`), vocabulary in `GLOSSARY.md`.
 
 ```
-superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfik-native ──► (provider APIs, MLX)
+superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfik-native ──► (provider APIs)
                                        │                    ├──► superfik-engine
-                                       │                    ├──► superfik-plugins
-                                       │                    ├──► superfik-providers
-                                       │                    └──► superfik-gateway (MLX)
-                                       ├──► superfik-workspace ─► (git, gh)
+                                       │                    └──► superfik-providers
+                                       ├──► superfik-mlx ─► (mlx_lm.server)
                                        └──► superfik-protocol ─► superfik-core   (everything speaks core)
 ```
 
@@ -18,14 +16,12 @@ superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfi
 |---|---|
 | `superfik-cli` | The `superfik` binary: a full-screen chat (ratatui) over the SDK, `-p` print mode, `login`, `models`. Presentation only. |
 | `superfik-sdk` | `Superfik::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings. |
-| `superfik-core` | Domain model: requests, turns, context, agents, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
-| `superfik-engine` | `AgentEngine` trait, `EngineRegistry`, a `fake` engine for tests. |
-| `superfik-native` | Superfik's own engine (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; provider APIs behind `ModelApi`. |
-| `superfik-gateway` | Local MLX runtime; SSE and Chat Completions conversion. |
+| `superfik-core` | Domain model: requests, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
+| `superfik-engine` | `AgentEngine` trait (`models`, `start`) and a `fake` engine for tests. |
+| `superfik-native` | Superfik's own engine (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. |
+| `superfik-mlx` | Local MLX models on Apple silicon: which are downloaded, and one `mlx_lm.server` started on demand. |
 | `superfik-protocol` | Serialisable `ClientCommand` / `ServerEvent` in an `Envelope` carrying the `Principal`; the `Backend` trait. |
-| `superfik-backend` | `LocalBackend` (worker threads) and `CommandHandler`: runs, memory (+ its MCP tool), sessions, settings, plugins, model providers. |
-| `superfik-workspace` | Git inspection, branch switching, worktrees; repository slug and current PR through `gh`. |
-| `superfik-plugins` | Plugin manifests and packages, skill and agent discovery in Claude Code's layout, MCP config. |
+| `superfik-backend` | `LocalBackend` (worker threads), `CommandHandler` and the daemon: runs, memory (+ its MCP tool), settings, model providers, secrets, the host's `Extensions`. |
 | `superfik-providers` | LLM provider contracts (ADR 0016): credential config, OAuth shapes, request and catalog shapes. Pure. |
 | `superfik-oauth` | Browser sign-in: PKCE and the loopback redirect. |
 | `superfik-process` | Child processes started the same everywhere; `Tree` ends a process with its children. |
@@ -35,8 +31,8 @@ superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfi
 
 A client sends `Envelope<ClientCommand>` to a `Backend` and polls
 `ServerEvent`s, woken by a `Wake` callback. `LocalBackend` runs everything
-in process on three worker threads (run control, workspace queries,
-memory), so a slow scan never delays a cancel. Every command carries a
+in process on three worker threads (run control, skill and agent
+queries, memory), so a slow scan never delays a cancel. Every command carries a
 `Principal` and passes an `Authorizer` (`LocalAuthorizer` accepts only the
 local owner); this is the seam for a future remote server.
 
@@ -48,7 +44,7 @@ Recognised problems arrive first as `Diagnosed(EngineProblem)`.
 
 The native engine (ADR 0015) runs the loop in process behind `ModelApi`
 (`anthropic::Messages`, `openai::Responses`, `chat::Chat` for local
-servers). Providers are not plugins: `ModelProviders` keeps one account per
+servers). `ModelProviders` keeps one account per
 provider (`ConnectProvider` with an API key or token JSON, `SignInProvider`
 for a subscription's browser sign-in). `ListModels` asks every connected
 provider's catalog and lists downloaded MLX models. A run uses its
@@ -66,7 +62,7 @@ provider's key (`RunCredentials::model`, never serialized).
 - **Built-in skills** (`crates/superfik-native/skills/`, embedded by
   `build.rs`).
 
-Local models (`superfik_gateway::mlx`) live in
+Local models (`superfik_mlx`) live in
 `<local data>/models/mlx/<org>/<name>/` on Apple silicon; one
 `mlx_lm.server` runs at a time and stops when idle.
 
@@ -82,14 +78,14 @@ Search is BM25 plus embedding similarity (fastembed/ONNX,
 same function serves recall and the `memory_search` MCP tool (loopback, a
 bearer token per run).
 
-## Plugins and MCP
+## Skills, agents and MCP
 
-A plugin (`superfik-plugin.json`) brings skills, agents and MCP servers
-(`stdio` or `http`, with `{{secret.<key>}}` templates); "install from
-folder" is the only way in (nothing ships with Superfik). Connections are
-signed-in accounts of a plugin; secrets stay in the backend's
-`SecretStore`, and a run's MCP config is written `0600` and removed on the
-terminal event.
+The engine finds skills, commands and agents where Claude Code keeps them
+(the project's `.claude/` and `.superfik/`, `~/.claude` with its installed
+Claude Code plugins) plus the SDK host's folders (`Extensions::dirs`).
+MCP servers come from the host: HTTP/stdio servers go in a run's private
+MCP config (`0600`, removed on the terminal event), in-process ones ride on
+the run's credentials.
 
 ## The SDK and the CLI
 
@@ -98,7 +94,7 @@ routes run events to their `Run`, other answers to the waiting call), so it
 can move to a remote backend unchanged. What a program adds reaches every
 run through the backend's `Extensions`: its agents, skills and commands are
 written to `<data>/sdk/<name>/` and offered under their own names
-(`PluginBrief::local_dirs`); HTTP/stdio MCP servers join the run's private
+(`Extensions::dirs`); HTTP/stdio MCP servers join the run's private
 MCP config; in-process servers (`McpServer`, closures behind
 `superfik_core::mcp::McpEndpoint`) ride on `RunCredentials::mcp` and are
 called through `LocalTransport`, never over the wire. A typed
@@ -128,15 +124,14 @@ model, mode and effort persist in the owner's settings.
 
 ## Secrets
 
-Provider keys, subscription tokens and plugin credentials live in one
+Provider keys and subscription tokens live in one
 sealed file (`superfik_backend::system_secrets`): `secrets.json`, each
 entry encrypted with XChaCha20-Poly1305 under a key in `secrets.key`
 (both `0600`), re-read on every access so two processes never drop each
-other's entries. There is no system keychain: macOS asks to allow each new
-unsigned build of the binary.
+other's entries. The system keychain is not used: macOS would ask to
+allow each new unsigned build of the binary.
 
 ## Sessions
 
-Sessions survive restarts: `SaveSession` / `LoadSessions`
-(`FileSessionStore`, one JSON per session). The engine keeps its own
-transcript (`FileSessions`) for resuming.
+The engine keeps each session's transcript (`FileSessions`, one JSON per
+owner, folder and session) so `resume` continues it after a restart.

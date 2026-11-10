@@ -1,6 +1,6 @@
 //! The client's boundary with its server: whatever carries commands to
 //! one and events back (in process, or a socket). Here, beside the
-//! messages, so a client depends on nothing of the server (ADR 0010).
+//! messages, so a client depends on nothing of the server.
 
 use std::sync::Arc;
 

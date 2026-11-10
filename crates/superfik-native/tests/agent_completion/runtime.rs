@@ -23,7 +23,6 @@ fn git(cwd: &Path, args: &[&str]) {
 fn memory_persists_across_worker_invocations_and_is_separated_by_owner() {
     let dir = tempfile::tempdir().expect("dir");
     let mut workspace = Workspace::new(dir.path());
-    workspace.worker = Some(Path::new(env!("CARGO_BIN_EXE_superfik-native-worker")).into());
     workspace.credentials.owner = Some(Principal::member(UserId::new(), OrgId::new()));
     let config = AgentConfig::parse(&json!({"memory":"project","tools":["Read"]})).expect("config");
     assert!(config.allows("Write") && config.allows("Edit"));
@@ -44,20 +43,16 @@ fn isolated_worktrees_remove_clean_runs_and_preserve_changed_files() {
     std::fs::write(dir.path().join("base.txt"), "base").expect("base");
     git(dir.path(), &["add", "base.txt"]);
     git(dir.path(), &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "base"]);
-    let mut workspace = Workspace::new(dir.path());
-    workspace.worker = Some(Path::new(env!("CARGO_BIN_EXE_superfik-native-worker")).into());
+    let workspace = Workspace::new(dir.path());
     let config = AgentConfig::parse(&json!({"isolation":"worktree"})).expect("config");
     let clean = superfik_native::agent_runtime::prepare(&config, "reviewer", &workspace).expect("clean setup");
     assert_ne!(clean.cwd, workspace.cwd);
     assert!(clean.cwd.join("base.txt").exists());
-    assert!(superfik_native::agent_runtime::cleanup(&clean, &workspace).expect("clean remove").is_none());
+    assert!(superfik_native::agent_runtime::cleanup(&clean).expect("clean remove").is_none());
     assert!(!clean.cwd.exists());
     let changed = superfik_native::agent_runtime::prepare(&config, "reviewer", &workspace).expect("dirty setup");
     std::fs::write(changed.cwd.join("new.txt"), "worktree change").expect("write");
-    assert_eq!(
-        superfik_native::agent_runtime::cleanup(&changed, &workspace).expect("preserve"),
-        Some(changed.cwd.clone())
-    );
+    assert_eq!(superfik_native::agent_runtime::cleanup(&changed).expect("preserve"), Some(changed.cwd.clone()));
     assert!(!workspace.cwd.join("new.txt").exists());
     assert!(changed.cwd.join("new.txt").exists());
 }
@@ -85,10 +80,7 @@ fn worktree_with_new_commits_is_retained_even_when_status_is_clean() {
             "agent commit",
         ],
     );
-    assert_eq!(
-        superfik_native::agent_runtime::cleanup(&setup, &workspace).expect("preserve commits"),
-        Some(setup.cwd.clone())
-    );
+    assert_eq!(superfik_native::agent_runtime::cleanup(&setup).expect("preserve commits"), Some(setup.cwd.clone()));
     assert!(setup.cwd.exists());
 }
 

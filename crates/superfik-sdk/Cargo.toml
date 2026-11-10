@@ -9,7 +9,6 @@ publish.workspace = true
 superfik-core.workspace = true
 superfik-protocol.workspace = true
 superfik-backend.workspace = true
-superfik-plugins.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 crossbeam-channel.workspace = true

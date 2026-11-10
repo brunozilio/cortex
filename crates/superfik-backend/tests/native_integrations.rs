@@ -10,10 +10,9 @@ use std::{
 };
 use superfik_backend::{Backend, InMemoryStore, LocalBackend, LocalServices, Memories};
 use superfik_core::{
-    Author, EngineEvent, EngineKind, MemoryBrief, MemoryEdit, MemoryKind, ModelOption, ModelProvider, PermissionMode,
-    Principal, PromptRequest, Provenance, RunId,
+    Author, EngineEvent, MemoryBrief, MemoryEdit, MemoryKind, ModelOption, ModelProvider, PermissionMode, Principal,
+    PromptRequest, Provenance, RunId,
 };
-use superfik_engine::EngineRegistry;
 use superfik_native::{
     ApiSource, NativeEngine,
     model::{Delta, ModelApi, ModelError, Reply, TurnRequest, scripted::ScriptedModel},
@@ -81,8 +80,7 @@ impl ModelApi for Model {
 fn native_backend_searches_memory_and_learns() {
     let dir = tempfile::tempdir().expect("valid test fixture");
     let engine = NativeEngine::new(Arc::new(Source), Arc::new(InMemorySessions::default()));
-    let mut services =
-        LocalServices::with_engines(EngineRegistry::new().with(Arc::new(engine))).kept_in(&dir.path().join("data"));
+    let mut services = LocalServices::with_engine(Arc::new(engine)).kept_in(&dir.path().join("data"));
     services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
     services.memory.edit(
         &Principal::LocalOwner,
@@ -94,10 +92,9 @@ fn native_backend_searches_memory_and_learns() {
         }],
         Provenance { author: Author::User, now: 1, origin: None },
     );
-    services.plugins = services.plugins.with_secrets(Arc::new(superfik_backend::InMemorySecretStore::default()));
     services.providers = services.providers.with_store(Arc::new(superfik_backend::InMemoryProviderStore::default()));
     let backend = LocalBackend::new(services, Arc::new(|| {})).expect("valid test fixture");
-    let model = ModelOption::new(EngineKind::Native, "fixture", "Fixture inference").served_by(ModelProvider::Local);
+    let model = ModelOption::new("fixture", "Fixture inference").served_by(ModelProvider::Local);
     let mut request =
         PromptRequest::plain(dir.path().into(), "Find the codename and remember the tabs preference.", model);
     request.permission = PermissionMode::Bypass;
@@ -118,8 +115,8 @@ fn native_backend_searches_memory_and_learns() {
                     break;
                 }
             }
-            Some(ServerEvent::Memory { memories, learned: ids, .. }) => {
-                learned |= memories.iter().any(|m| ids.contains(&m.id) && m.text.contains("prefers tabs"))
+            Some(ServerEvent::Memory { memories, .. }) => {
+                learned |= memories.iter().any(|m| m.text.contains("prefers tabs"))
             }
             Some(_) => {}
             None => std::thread::sleep(Duration::from_millis(5)),

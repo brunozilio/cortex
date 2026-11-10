@@ -5,7 +5,7 @@ Its architecture is in [architecture.md](architecture.md) (Engines).
 
 ## Providers
 
-| Plugin | Id | Sign-in |
+| Provider | Id | Sign-in |
 | --- | --- | --- |
 | OpenAI API | `openai` | API key |
 | ChatGPT Subscription | `openai-subscription` | browser, callback `http://localhost:1455/auth/callback` |
@@ -63,8 +63,8 @@ PostToolUse, PostToolUseFailure, PermissionRequest, Stop, SubagentStart,
 SubagentStop, PreCompact, PostCompact, UserPromptSubmit, SessionStart and
 SessionEnd; anything else is refused. Exit code 2 or a JSON decision
 blocks; PreToolUse may rewrite arguments (checked again); Stop may demand
-more work. Process and HTTP hooks go through the worker with an allowlisted
-environment and limits on time, output and turns.
+more work. Hooks run with the user's environment and limits on time,
+output and turns.
 
 ## Tests against real accounts
 
@@ -77,8 +77,4 @@ SUPERFIK_LIVE_PROVIDER=claude-subscription [SUPERFIK_LIVE_MODEL=…] \
 
 `SUPERFIK_LIVE_CREDENTIAL_FILE` supplies a private credential in isolated
 environments; never put tokens in arguments or logs. These runs cost real
-usage. `SUPERFIK_PROVIDER_SIM_URL=<mock server>` runs
-`superfik-native --test provider_simulation -- --ignored` (listing,
-streaming, 401, 429, malformed catalogs) against a local mock of the four
-providers. `SUPERFIK_LEGACY_AUDIT_DIR=<dir>` runs `legacy_replay`, which only
-reads old JSONL histories and prints counts.
+usage.

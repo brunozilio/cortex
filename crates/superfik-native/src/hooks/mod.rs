@@ -138,17 +138,11 @@ impl Hooks {
                 continue;
             }
             for handler in &group.hooks {
-                let args = json!({"handler":handler,"input":input});
                 let result: CommandOutput = if matches!(handler.kind.as_str(), "command" | "http") {
-                    match &workspace.worker {
-                        Some(program) => crate::worker::operation(program, "HookCommand", &args, workspace)?,
-                        None => {
-                            if handler.kind == "http" {
-                                http(handler, &input, workspace)?
-                            } else {
-                                command(handler, &input, workspace)?
-                            }
-                        }
+                    if handler.kind == "http" {
+                        http(handler, &input, workspace)?
+                    } else {
+                        command(handler, &input, workspace)?
                     }
                 } else {
                     let (api, template) = model.ok_or("model hook requires an active model context")?;

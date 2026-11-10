@@ -1,5 +1,5 @@
-//! Commands for the console tools Superfik starts (`git`, `gh`, `claude`,
-//! `bw`…). Where a tool is found is `superfik_core::executable`; how it is
+//! Commands for the console tools Superfik starts (`uv`, `git`, an MCP
+//! server's command…). Where a tool is found is `superfik_core::executable`; how it is
 //! started is here, so the pure core never touches processes.
 
 mod tree;

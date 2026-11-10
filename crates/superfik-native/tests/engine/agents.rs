@@ -93,8 +93,7 @@ fn initial_prompt_expands_an_explicit_skill_before_the_first_model_call_through_
     .expect("skill");
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Reviewed".into())])]));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()))
-            .with_worker(std::path::Path::new(env!("CARGO_BIN_EXE_superfik-native-worker")).into());
+        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "Review this", model())));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let first = model_api.asked()[0].messages.last().expect("first user").text();
@@ -103,7 +102,7 @@ fn initial_prompt_expands_an_explicit_skill_before_the_first_model_call_through_
     assert!(!model_api.asked()[0].system.contains("- start:"));
 }
 #[test]
-fn initial_prompt_expands_a_legacy_custom_command() {
+fn initial_prompt_expands_a_custom_command() {
     let dir = tempfile::tempdir().expect("dir");
     let root = dir.path().join(".claude");
     std::fs::create_dir_all(root.join("agents")).expect("agents");
@@ -129,50 +128,6 @@ fn initial_prompt_expands_a_legacy_custom_command() {
     );
 }
 
-#[test]
-fn the_backend_model_guard_blocks_a_configured_model_override_before_inference() {
-    let dir = tempfile::tempdir().expect("dir");
-    let root = dir.path().join(".superfik");
-    std::fs::create_dir_all(root.join("agents")).expect("agents");
-    std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer"}"#).expect("settings");
-    std::fs::write(root.join("agents/reviewer.md"), "---\nname: reviewer\nmodel: haiku\n---\nReview.").expect("agent");
-    let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Must not run".into())])]));
-    let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
-    let mut request = PromptRequest::plain(dir.path().into(), "Review", model());
-    request.credentials.model_guard = Some(superfik_core::credentials::ModelGuard::new(|model| {
-        if model.id.contains("haiku") { Err("fixture policy forbids the selected model".into()) } else { Ok(()) }
-    }));
-    let events = finish(&start(&engine, &request));
-    assert!(matches!(events.last(), Some(EngineEvent::Failed { .. })), "{events:?}");
-    assert!(model_api.asked().is_empty(), "policy must reject before a provider call");
-    assert!(!serde_json::to_string(&request).expect("wire").contains("model_guard"));
-}
-#[test]
-fn the_model_guard_also_checks_the_actual_model_of_a_child() {
-    let dir = tempfile::tempdir().expect("dir");
-    let root = dir.path().join(".superfik/agents");
-    std::fs::create_dir_all(&root).expect("agents");
-    std::fs::write(root.join("reviewer.md"), "---\nname: reviewer\nmodel: haiku\n---\nReview.").expect("agent");
-    let model_api = Arc::new(ScriptedModel::new([
-        ScriptedModel::reply(vec![Block::ToolUse {
-            id: "delegate".into(),
-            name: "Agent".into(),
-            input: json!({"description":"Review project","prompt":"Review","subagent_type":"reviewer"}),
-        }]),
-        ScriptedModel::reply(vec![Block::Text("Child was denied".into())]),
-    ]));
-    let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
-    let mut request = PromptRequest::plain(dir.path().into(), "Review", model());
-    request.credentials.model_guard = Some(superfik_core::credentials::ModelGuard::new(|model| {
-        if model.id.contains("haiku") { Err("child model denied".into()) } else { Ok(()) }
-    }));
-    let events = finish(&start(&engine, &request));
-    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
-    assert_eq!(model_api.asked().len(), 2);
-    assert!(format!("{:?}", model_api.asked()[1].messages).contains("child model denied"));
-}
 #[test]
 fn a_typed_slash_command_becomes_its_text_and_a_path_stays_as_typed() {
     let dir = tempfile::tempdir().expect("dir");

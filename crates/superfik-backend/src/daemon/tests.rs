@@ -1,8 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use superfik_core::{EngineEvent, EngineKind, ModelOption, PromptRequest, RunId, SessionId};
-use superfik_engine::EngineRegistry;
+use superfik_core::{EngineEvent, ModelOption, PromptRequest, RunId, SessionId};
 use superfik_engine::fake::FakeEngine;
 use superfik_protocol::{Backend, ClientCommand, Envelope, ServerEvent};
 
@@ -10,11 +9,10 @@ use super::*;
 use crate::{InMemorySecretStore, InMemoryStore, Memories};
 
 fn services(engine: &FakeEngine) -> LocalServices {
-    let mut services = LocalServices::with_engines(EngineRegistry::new().with(Arc::new(engine.clone())));
+    let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
     services.memory_tool = false;
     let secrets = Arc::new(InMemorySecretStore::default());
-    services.plugins = services.plugins.with_secrets(secrets.clone());
     services.providers = services.providers.with_secrets(secrets);
     services
 }
@@ -49,13 +47,13 @@ fn until(backend: &SocketBackend, mut wanted: impl FnMut(&ServerEvent) -> bool) 
 fn clients_share_one_daemon_and_each_sees_only_its_own_runs() {
     let temp = tempfile::tempdir().expect("dir");
     let dir = DaemonDir(temp.path().join("d"));
-    let model = ModelOption::new(EngineKind::Native, "m", "M");
+    let model = ModelOption::new("m", "M");
     let script = vec![
         EngineEvent::SessionStarted(SessionId("s".into())),
         EngineEvent::TextDelta("hi".into()),
         EngineEvent::Completed { duration_ms: 1, cost_usd: None },
     ];
-    let engine = FakeEngine::new(EngineKind::Native, vec![model.clone()], script);
+    let engine = FakeEngine::new(vec![model.clone()], script);
     let daemon = Daemon::start(&dir, services(&engine), options()).expect("start").expect("first daemon");
     assert!(Daemon::start(&dir, services(&engine), options()).expect("second").is_none(), "one per folder");
     assert_eq!(dir.info().map(|(_, build)| build), Some("test-build".into()));
@@ -90,7 +88,7 @@ fn clients_share_one_daemon_and_each_sees_only_its_own_runs() {
 fn a_client_starts_the_daemon_when_none_answers_and_it_leaves_when_idle() {
     let temp = tempfile::tempdir().expect("dir");
     let dir = DaemonDir(temp.path().join("d"));
-    let engine = FakeEngine::new(EngineKind::Native, Vec::new(), Vec::new());
+    let engine = FakeEngine::new(Vec::new(), Vec::new());
     let started = std::sync::Mutex::new(None);
     let backend = connect_or_start(&dir, Arc::new(|| {}), || {
         let options = DaemonOptions { idle: Duration::from_millis(200), build: "b".into() };

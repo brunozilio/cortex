@@ -7,9 +7,9 @@
 use std::path::{Path, PathBuf};
 
 use super::subagent_config::AgentConfig;
+use crate::claude_home::ClaudeHome;
 use serde_json::{Value, json};
 use superfik_core::PromptRequest;
-use superfik_plugins::ClaudeHome;
 
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
@@ -38,11 +38,8 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent>
         let claude = ClaudeHome::new(home.join(".claude"));
         sources.extend(claude.agent_sources(cwd).into_iter().map(|source| (source.dir, source.namespace)));
     }
-    for dir in request.plugins.iter().flat_map(|plugins| &plugins.local_dirs) {
+    for dir in request.extensions.iter().flat_map(|extensions| &extensions.dirs) {
         sources.push((dir.join("agents"), None));
-    }
-    for dir in request.plugins.iter().flat_map(|plugins| &plugins.plugin_dirs) {
-        sources.push((dir.join("agents"), Some(super::skill::plugin_name(dir))));
     }
     let mut found: Vec<FoundAgent> = Vec::new();
     let scanned = sources.into_iter().flat_map(|(dir, namespace)| scan(&dir, namespace.as_deref()));
@@ -205,7 +202,7 @@ pub fn system(parent: &str, agent: Option<&FoundAgent>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use superfik_core::{EngineKind, ModelOption};
+    use superfik_core::ModelOption;
 
     use super::*;
 
@@ -219,7 +216,7 @@ mod tests {
             "---\nname: reviewer\ndescription: Reviews diffs.\n---\n\nBe strict.\n",
         )
         .expect("write");
-        let model = ModelOption::new(EngineKind::Native, "m", "M");
+        let model = ModelOption::new("m", "M");
         let request = PromptRequest::plain(repo.path().to_path_buf(), "hi", model);
         let tool = AgentTool { agents: discover(&request, None) };
         let description = tool.spec().description;

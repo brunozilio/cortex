@@ -1,4 +1,4 @@
-//! The provider plugins' accounts as model clients. What each plugin sends
+//! The LLM providers' accounts as model clients. What each provider sends
 //! and expects is in `superfik_providers`; this module does the IO.
 
 pub mod oauth;

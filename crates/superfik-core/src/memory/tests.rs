@@ -110,13 +110,7 @@ fn recall_keeps_facts_and_the_best_episodes() {
 
 #[test]
 fn instructions_list_memories_only_on_a_fresh_session() {
-    let brief = MemoryBrief {
-        recalled: book().memories,
-        output: "/tmp/m.json".into(),
-        origin: None,
-        tool: None,
-        optimizing: false,
-    };
+    let brief = MemoryBrief { recalled: book().memories, output: "/tmp/m.json".into(), origin: None, tool: None };
     let fresh = brief.instructions(true).expect("text");
     assert!(fresh.contains("Facts:\n- [0] The renderer") && fresh.contains("Episodes:\n- [2]"));
     assert!(fresh.contains("/tmp/m.json"));

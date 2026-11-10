@@ -1,14 +1,39 @@
-//! What the host program adds to every run (the SDK, ADR 0018): folders
-//! laid out like a plugin whose skills, commands and agents keep their own
-//! names, MCP servers over HTTP or stdio, and in-process MCP servers.
+//! What the host program adds to every run (the SDK): folders of skills,
+//! commands and agents that keep their own names,
+//! MCP servers over HTTP or stdio, and in-process MCP servers. Also what a
+//! session in a folder can use, found the way the engine finds it.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use serde_json::{Value, json};
 use superfik_core::mcp::LocalMcp;
-use superfik_core::{CustomAgent, PromptRequest, RunId, Skill};
-use superfik_plugins::McpServerSpec;
-use superfik_plugins::agents::agent_from_markdown;
-use superfik_plugins::skills::skill_from_markdown;
+use superfik_core::{CustomAgent, ModelOption, PromptRequest, RunId, Skill};
+
+/// An MCP server the agent reaches over streamable HTTP or by starting a
+/// process that speaks stdio.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum McpServerSpec {
+    Http { name: String, url: String, headers: BTreeMap<String, String> },
+    Stdio { name: String, command: String, args: Vec<String>, env: BTreeMap<String, String> },
+}
+
+impl McpServerSpec {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Http { name, .. } | Self::Stdio { name, .. } => name,
+        }
+    }
+
+    fn config(&self) -> Value {
+        match self {
+            Self::Http { url, headers, .. } => json!({ "type": "http", "url": url, "headers": headers }),
+            Self::Stdio { command, args, env, .. } => {
+                json!({ "type": "stdio", "command": command, "args": args, "env": env })
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct Extensions {
@@ -18,73 +43,54 @@ pub struct Extensions {
 }
 
 impl Extensions {
-    /// Skills (`skills/<name>/SKILL.md`) and commands (`commands/<name>.md`).
-    pub fn skills(&self) -> Vec<Skill> {
-        let mut skills = Vec::new();
-        for dir in &self.dirs {
-            for (stem, text) in markdown(&dir.join("skills"), true) {
-                skills.push(skill_from_markdown(&stem, &text));
-            }
-            for (stem, text) in markdown(&dir.join("commands"), false) {
-                skills.push(skill_from_markdown(&stem, &text));
-            }
-        }
-        skills
-    }
-
-    /// Adds the host's folders and MCP servers to a run already briefed
-    /// with its plugins, and hands it the in-process servers. The HTTP and
-    /// stdio servers join the run's private MCP config file.
+    /// Adds the host's folders and MCP servers to a run and hands it the
+    /// in-process servers. The HTTP and stdio servers go in a private
+    /// config file the run reads and [`discard`] removes.
     pub(crate) fn brief(&self, run: RunId, request: PromptRequest) -> Result<PromptRequest, String> {
-        let mut brief = request.plugins.clone().unwrap_or_default();
-        brief.local_dirs.extend(self.dirs.iter().cloned());
+        let mut extensions = superfik_core::Extensions { dirs: self.dirs.clone(), mcp_config: None };
         if !self.mcp.is_empty() {
-            let path = brief.mcp_config.clone().unwrap_or_else(|| crate::plugins::mcp_path(run));
-            let mut config = match std::fs::read_to_string(&path) {
-                Ok(text) => serde_json::from_str(&text).map_err(|error| error.to_string())?,
-                Err(_) => serde_json::json!({ "mcpServers": {} }),
-            };
-            for spec in &self.mcp {
-                config["mcpServers"][spec.name()] = superfik_plugins::mcp_config::plain(spec);
-            }
-            crate::plugins::write_private(&path, &config.to_string()).map_err(|error| error.to_string())?;
-            brief.mcp_config = Some(path);
+            let servers: serde_json::Map<String, Value> =
+                self.mcp.iter().map(|spec| (spec.name().to_owned(), spec.config())).collect();
+            let path = std::env::temp_dir().join(format!("superfik-mcp-{run}.json"));
+            let text = json!({ "mcpServers": servers }).to_string();
+            superfik_private_file::write(&path, text.as_bytes()).map_err(|error| error.to_string())?;
+            extensions.mcp_config = Some(path);
         }
         let mut credentials = request.credentials.clone();
         credentials.mcp.extend(self.local.iter().cloned());
-        Ok(PromptRequest { plugins: (!brief.is_empty()).then_some(brief), credentials, ..request })
-    }
-
-    /// Agents (`agents/<name>.md`).
-    pub fn agents(&self) -> Vec<CustomAgent> {
-        self.dirs
-            .iter()
-            .flat_map(|dir| markdown(&dir.join("agents"), false))
-            .filter_map(|(stem, text)| agent_from_markdown(&stem, &text, None))
-            .collect()
+        Ok(PromptRequest { extensions: (!extensions.is_empty()).then_some(extensions), credentials, ..request })
     }
 }
 
-/// `(name, text)` of each `<name>.md`, or of each `<name>/SKILL.md` when
-/// `folders`, sorted by name.
-fn markdown(dir: &Path, folders: bool) -> Vec<(String, String)> {
-    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
-    let mut found: Vec<(String, String)> = entries
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            let (stem, file) = if folders {
-                (path.file_name()?.to_string_lossy().into_owned(), path.join("SKILL.md"))
-            } else if path.extension().is_some_and(|ext| ext == "md") {
-                (path.file_stem()?.to_string_lossy().into_owned(), path)
-            } else {
-                return None;
-            };
-            Some((stem, std::fs::read_to_string(file).ok()?))
-        })
-        .collect();
-    found.sort();
-    found
+/// Removes a finished run's private MCP config.
+pub(crate) fn discard(extensions: Option<&superfik_core::Extensions>) {
+    if let Some(path) = extensions.and_then(|extensions| extensions.mcp_config.as_ref()) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+fn session(cwd: &Path, extensions: &Extensions) -> PromptRequest {
+    let mut request = PromptRequest::plain(cwd.to_path_buf(), "", ModelOption::new("", ""));
+    request.extensions = Some(superfik_core::Extensions { dirs: extensions.dirs.clone(), mcp_config: None });
+    request
+}
+
+/// The skills and commands a session in `cwd` can use.
+pub(crate) fn skills(cwd: &Path, extensions: &Extensions) -> Vec<Skill> {
+    let home = std::env::home_dir();
+    superfik_native::tools::skill::discover(&session(cwd, extensions), home.as_deref())
+        .into_iter()
+        .map(|found| Skill { name: found.name, description: found.description })
+        .collect()
+}
+
+/// The agents a session in `cwd` can hand work to.
+pub(crate) fn agents(cwd: &Path, extensions: &Extensions) -> Vec<CustomAgent> {
+    let home = std::env::home_dir();
+    superfik_native::tools::subagent::discover(&session(cwd, extensions), home.as_deref())
+        .into_iter()
+        .map(|found| CustomAgent { name: found.name, description: found.description })
+        .collect()
 }
 
 #[cfg(test)]
@@ -92,35 +98,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_folder_lists_its_skills_commands_and_agents_under_their_own_names() {
+    fn a_folder_s_skills_commands_and_agents_keep_their_own_names() {
         let dir = tempfile::tempdir().expect("dir");
-        let root = dir.path();
+        let root = dir.path().join("sdk");
         std::fs::create_dir_all(root.join("skills/release")).expect("skills");
         std::fs::create_dir_all(root.join("commands")).expect("commands");
         std::fs::create_dir_all(root.join("agents")).expect("agents");
-        std::fs::write(root.join("skills/release/SKILL.md"), "---\ndescription: Cuts a release\n---\nSteps")
-            .expect("skill");
+        std::fs::write(
+            root.join("skills/release/SKILL.md"),
+            "---\nname: release\ndescription: Cuts a release\n---\nSteps",
+        )
+        .expect("skill");
         std::fs::write(root.join("commands/audit.md"), "---\ndescription: Audits\n---\n$ARGUMENTS").expect("command");
         std::fs::write(root.join("agents/reviewer.md"), "---\nname: reviewer\ndescription: Reviews\n---\nReview.")
             .expect("agent");
-        let extensions = Extensions { dirs: vec![root.to_path_buf()], ..Extensions::default() };
-        let skills: Vec<_> = extensions.skills().into_iter().map(|s| (s.name, s.description)).collect();
-        assert_eq!(skills, [("release".into(), "Cuts a release".into()), ("audit".into(), "Audits".into())]);
-        assert_eq!(extensions.agents().iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), ["reviewer"]);
+        let extensions = Extensions { dirs: vec![root], ..Extensions::default() };
+        let project = dir.path().join("project");
+        std::fs::create_dir_all(&project).expect("project");
+        let names: Vec<String> = skills(&project, &extensions).into_iter().map(|s| s.name).collect();
+        assert!(names.contains(&"release".into()) && names.contains(&"audit".into()), "{names:?}");
+        assert!(agents(&project, &extensions).iter().any(|a| a.name == "reviewer"));
     }
 
     struct Silent;
 
     impl superfik_core::mcp::McpEndpoint for Silent {
-        fn handle(&self, _: &serde_json::Value) -> Option<serde_json::Value> {
+        fn handle(&self, _: &Value) -> Option<Value> {
             None
         }
     }
 
     #[test]
     fn a_run_gets_the_host_s_folders_servers_and_in_process_tools() {
-        let model = superfik_core::ModelOption::new(superfik_core::EngineKind::Native, "m", "M");
-        let request = PromptRequest::plain("/repo".into(), "hi", model);
+        let request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
         let run = RunId::new();
         assert_eq!(Extensions::default().brief(run, request.clone()).expect("brief"), request, "nothing to add");
         let extensions = Extensions {
@@ -128,18 +138,18 @@ mod tests {
             mcp: vec![McpServerSpec::Http {
                 name: "docs".into(),
                 url: "https://docs.test/mcp".into(),
-                headers: [("Authorization".to_owned(), "Bearer {{x}}".to_owned())].into(),
+                headers: [("Authorization".to_owned(), "Bearer t".to_owned())].into(),
             }],
             local: vec![LocalMcp::new("host", std::sync::Arc::new(Silent))],
         };
         let briefed = extensions.brief(run, request).expect("brief");
-        let brief = briefed.plugins.clone().expect("brief");
-        assert_eq!(brief.local_dirs, [PathBuf::from("/sdk")]);
-        let path = brief.mcp_config.clone().expect("config");
-        let config: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("json");
-        assert_eq!(config["mcpServers"]["docs"]["headers"]["Authorization"], "Bearer {{x}}", "written as given");
+        let added = briefed.extensions.clone().expect("extensions");
+        assert_eq!(added.dirs, [PathBuf::from("/sdk")]);
+        let path = added.mcp_config.clone().expect("config");
+        let config: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("json");
+        assert_eq!(config["mcpServers"]["docs"]["headers"]["Authorization"], "Bearer t");
         assert_eq!(briefed.credentials.mcp.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["host"]);
-        crate::plugins::discard(Some(&brief));
+        discard(Some(&added));
+        assert!(!path.exists());
     }
 }

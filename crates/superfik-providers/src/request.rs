@@ -1,4 +1,4 @@
-//! What each provider plugin changes in a streamed request before it is
+//! What each LLM provider changes in a streamed request before it is
 //! sent: the model's name, the system prompt, the limits and the effort.
 use super::ProviderError;
 use super::catalog::REASONING_PREFIXES;
@@ -179,7 +179,6 @@ fn version_digit(rest: &str, range: std::ops::RangeInclusive<char>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use superfik_core::EngineKind;
     use superfik_core::model::ModelCapabilities;
 
     fn shaped(provider: ModelProvider, model: Option<&ModelOption>, body: Value) -> Value {
@@ -189,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn the_plugin_prefix_leaves_the_model_name() {
+    fn the_provider_prefix_leaves_the_model_name() {
         let body = shaped(ModelProvider::OpenAi, None, json!({"model": "openai:gpt-4o"}));
         assert_eq!(body["model"], "gpt-4o");
         assert!(body.get("reasoning").is_none());
@@ -221,7 +220,7 @@ mod tests {
 
     #[test]
     fn anthropic_flattens_the_system_and_thinks_by_capability() {
-        let mut model = ModelOption::new(EngineKind::Native, "anthropic:claude-opus-4-1", "Opus");
+        let mut model = ModelOption::new("anthropic:claude-opus-4-1", "Opus");
         model.capabilities =
             Some(ModelCapabilities { reasoning: true, max_output_tokens: Some(32000), ..ModelCapabilities::default() });
         let body = shaped(
@@ -250,7 +249,7 @@ mod tests {
 
     #[test]
     fn an_effort_outside_the_catalog_is_refused() {
-        let mut model = ModelOption::new(EngineKind::Native, "openai-subscription:gpt-5", "GPT-5");
+        let mut model = ModelOption::new("openai-subscription:gpt-5", "GPT-5");
         model.capabilities = Some(ModelCapabilities {
             reasoning: true,
             reasoning_levels: vec!["low".into()],

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use superfik_core::{AskId, Decision, EngineEvent, EngineKind, ModelOption, PermissionMode, PromptRequest, RunId};
+use superfik_core::{AskId, Decision, EngineEvent, ModelOption, PermissionMode, PromptRequest, RunId};
 
 pub trait EventSink: Send + Sync {
     fn emit(&self, run: RunId, event: EngineEvent);
@@ -26,13 +26,9 @@ pub trait RunHandle: Send {
 }
 
 pub trait AgentEngine: Send + Sync {
-    fn kind(&self) -> EngineKind;
-
+    /// Models the engine serves by itself (the providers' come from their
+    /// catalogs).
     fn models(&self) -> Vec<ModelOption>;
-
-    fn is_installed(&self) -> bool {
-        true
-    }
 
     fn start(
         &self,
@@ -44,10 +40,6 @@ pub trait AgentEngine: Send + Sync {
 
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
-    #[error("no engine registered for {0}")]
-    UnknownEngine(&'static str),
-    #[error("model `{model}` belongs to {expected}, not {actual}")]
-    WrongEngine { model: String, expected: &'static str, actual: &'static str },
     #[error("failed to start {engine}: {source}")]
     Spawn {
         engine: &'static str,
@@ -73,11 +65,5 @@ mod tests {
         });
         sink.emit(RunId::new(), EngineEvent::Cancelled);
         assert_eq!(*seen.lock().expect("lock"), vec![EngineEvent::Cancelled]);
-    }
-
-    #[test]
-    fn wrong_engine_message_is_readable() {
-        let error = EngineError::WrongEngine { model: "gpt".into(), expected: "Codex", actual: "Claude Code" };
-        assert_eq!(error.to_string(), "model `gpt` belongs to Codex, not Claude Code");
     }
 }

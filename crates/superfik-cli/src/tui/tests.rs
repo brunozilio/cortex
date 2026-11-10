@@ -7,8 +7,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use superfik_backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
-use superfik_core::{AgentAsk, AskId, AskKind, EngineKind, SessionId, ToolCall};
-use superfik_engine::EngineRegistry;
+use superfik_core::{AgentAsk, AskId, AskKind, SessionId, ToolCall};
 use superfik_engine::fake::FakeEngine;
 use superfik_sdk::{Decision, EngineEvent, Model, PermissionMode, Superfik};
 
@@ -16,11 +15,10 @@ use super::app::App;
 use super::{keys, view};
 
 fn superfik(engine: &FakeEngine, data: &std::path::Path) -> Superfik {
-    let mut services = LocalServices::with_engines(EngineRegistry::new().with(Arc::new(engine.clone())));
+    let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
     services.memory_tool = false;
     let secrets = Arc::new(InMemorySecretStore::default());
-    services.plugins = services.plugins.with_secrets(secrets.clone());
     services.providers = services.providers.with_secrets(secrets);
     Superfik::builder().data_dir(data).services(services).build().expect("superfik")
 }
@@ -71,8 +69,8 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
         EngineEvent::TextDelta("All tests pass.".into()),
         EngineEvent::Completed { duration_ms: 5, cost_usd: Some(0.5) },
     ];
-    let model = Model::new(EngineKind::Native, "anthropic:scripted", "Scripted");
-    let engine = FakeEngine::new(EngineKind::Native, vec![model], script).with_delay(Duration::from_millis(60));
+    let model = Model::new("anthropic:scripted", "Scripted");
+    let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(60));
     let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     assert!(screen(&app).contains("Scripted · edits"), "{}", screen(&app));
@@ -96,8 +94,8 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
 #[test]
 fn shift_tab_and_commands_change_the_chat_without_the_agent() {
     let data = tempfile::tempdir().expect("data");
-    let model = Model::new(EngineKind::Native, "anthropic:scripted", "Scripted");
-    let engine = FakeEngine::new(EngineKind::Native, vec![model], Vec::new());
+    let model = Model::new("anthropic:scripted", "Scripted");
+    let engine = FakeEngine::new(vec![model], Vec::new());
     let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
     until(&mut app, |app| app.session.is_some());
     press(&mut app, KeyCode::BackTab);
@@ -139,8 +137,8 @@ fn preview() {
         EngineEvent::ToolFinished { id: "t2".into() },
         EngineEvent::Asked(ask),
     ];
-    let model = Model::new(EngineKind::Native, "anthropic:claude-opus-5-5", "Opus 5.5");
-    let engine = FakeEngine::new(EngineKind::Native, vec![model], script).with_delay(Duration::from_millis(5));
+    let model = Model::new("anthropic:claude-opus-5-5", "Opus 5.5");
+    let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(5));
     let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "make the port configurable");

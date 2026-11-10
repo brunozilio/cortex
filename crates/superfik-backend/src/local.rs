@@ -105,23 +105,13 @@ impl Drop for Workers {
 }
 
 fn is_query(command: &ClientCommand) -> bool {
-    matches!(
-        command,
-        ClientCommand::InspectWorkspace { .. }
-            | ClientCommand::ListSkills { .. }
-            | ClientCommand::SwitchBranch { .. }
-            | ClientCommand::ListAgents { .. }
-            | ClientCommand::InspectRepository { .. }
-    )
+    matches!(command, ClientCommand::ListSkills { .. } | ClientCommand::ListAgents { .. })
 }
 
 fn is_memory(command: &ClientCommand) -> bool {
     matches!(
         command,
-        ClientCommand::LoadMemory { .. }
-            | ClientCommand::EditMemory { .. }
-            | ClientCommand::SearchMemory { .. }
-            | ClientCommand::UndoMemory { .. }
+        ClientCommand::LoadMemory { .. } | ClientCommand::EditMemory { .. } | ClientCommand::SearchMemory { .. }
     )
 }
 
@@ -179,11 +169,7 @@ mod tests {
     #[test]
     fn queries_are_routed_apart_from_run_control() {
         assert!(is_query(&ClientCommand::ListSkills { path: "/".into() }));
-        assert!(is_query(&ClientCommand::InspectWorkspace { path: "/".into() }));
-        let branch = superfik_core::BranchRef::local("dev");
-        assert!(is_query(&ClientCommand::SwitchBranch { path: "/".into(), branch }));
         assert!(is_query(&ClientCommand::ListAgents { path: "/".into() }));
-        assert!(is_query(&ClientCommand::InspectRepository { path: "/".into() }));
         assert!(!is_query(&ClientCommand::ListModels));
         assert!(is_memory(&ClientCommand::SearchMemory { path: "/".into(), query: "x".into() }));
         assert!(!is_memory(&ClientCommand::ListModels));

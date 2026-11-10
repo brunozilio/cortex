@@ -43,7 +43,6 @@ impl Workspace {
     pub fn may_read(&self, path: &Path) -> bool {
         let path = settled(&if path.is_absolute() { path.to_path_buf() } else { self.cwd.join(path) });
         path.starts_with(self.project_root())
-            || self.referenced.iter().any(|granted| path.starts_with(settled(granted)))
     }
 
     pub fn outside<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Option<PathBuf> {
@@ -56,21 +55,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_project_and_referenced_files_are_inside_and_the_rest_is_not() {
+    fn the_project_is_inside_and_the_rest_is_not() {
         let home = tempfile::tempdir().expect("dir");
         let project = home.path().join("rocket");
         std::fs::create_dir_all(project.join(".git")).expect("repo");
         std::fs::create_dir_all(project.join("src")).expect("src");
         std::fs::create_dir_all(home.path().join(".ssh")).expect("ssh");
         std::fs::write(home.path().join("notes.md"), "n").expect("notes");
-        let mut workspace = Workspace::new(project.join("src"));
+        let workspace = Workspace::new(project.join("src"));
         assert!(workspace.may_read(Path::new("main.rs")), "relative, not there yet");
         assert!(workspace.may_read(&project.join("Cargo.toml")), "the repository's root");
         assert!(!workspace.may_read(&home.path().join(".ssh/id_ed25519")));
         assert!(!workspace.may_read(Path::new("../../.ssh/id_ed25519")), "no climbing out");
         assert!(!workspace.may_read(&home.path().join("notes.md")));
-        workspace.referenced = vec![home.path().join("notes.md")];
-        assert!(workspace.may_read(&home.path().join("notes.md")), "the user pointed at it");
         let outside = workspace.outside(["main.rs", "/etc/hosts"]);
         #[cfg(unix)]
         assert_eq!(outside, Some(PathBuf::from("/etc/hosts")));

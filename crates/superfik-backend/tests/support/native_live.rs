@@ -1,7 +1,7 @@
 //! Opt-in real provider inference. Auth comes from the platform's request, or
 //! from an explicitly selected private credential file. Never a model CLI.
 use std::sync::Arc;
-use superfik_core::{EngineKind, ModelOption, ModelProvider, PromptRequest};
+use superfik_core::{ModelOption, ModelProvider, PromptRequest};
 use superfik_native::{
     ApiSource, NativeEngine,
     model::{ModelApi, ModelError, http::UreqHttp, providers::ProviderClient},
@@ -13,19 +13,15 @@ pub fn model() -> ModelOption {
         "openai-subscription" => ModelProvider::ChatGptSubscription,
         "claude-subscription" => ModelProvider::ClaudeSubscription,
         "anthropic" => ModelProvider::Anthropic,
-        _ => panic!("SUPERFIK_LIVE_PROVIDER must name one of the four native provider plugins"),
+        _ => panic!("SUPERFIK_LIVE_PROVIDER must name one of the four native providers"),
     };
     let default = if matches!(provider, ModelProvider::OpenAi | ModelProvider::ChatGptSubscription) {
         "gpt-6.1-sol"
     } else {
         "claude-haiku-5-5"
     };
-    ModelOption::new(
-        EngineKind::Native,
-        std::env::var("SUPERFIK_LIVE_MODEL").unwrap_or_else(|_| default.into()),
-        "Live native model",
-    )
-    .served_by(provider)
+    ModelOption::new(std::env::var("SUPERFIK_LIVE_MODEL").unwrap_or_else(|_| default.into()), "Live native model")
+        .served_by(provider)
 }
 struct Source;
 impl ApiSource for Source {

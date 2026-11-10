@@ -1,7 +1,7 @@
 //! Strongly typed identifiers.
 //!
-//! `Id<T>` wraps a UUID with a phantom marker so a `SessionId` can never be
-//! passed where a `WorkspaceId` is expected.
+//! `Id<T>` wraps a UUID with a phantom marker so a `UserId` can never be
+//! passed where an `OrgId` is expected.
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -73,33 +73,16 @@ impl<T> fmt::Display for Id<T> {
 }
 
 #[derive(Debug)]
-pub enum WorkspaceMarker {}
-#[derive(Debug)]
 pub enum UserMarker {}
-#[derive(Debug)]
-pub enum TurnMarker {}
-#[derive(Debug)]
-pub enum AgentMarker {}
-#[derive(Debug)]
-pub enum ConversationMarker {}
-#[derive(Debug)]
-pub enum BrowserMarker {}
 #[derive(Debug)]
 pub enum OrgMarker {}
 #[derive(Debug)]
-pub enum TeamMarker {}
-#[derive(Debug)]
-pub enum ProjectMarker {}
+pub enum SecretMarker {}
 
-pub type WorkspaceId = Id<WorkspaceMarker>;
 pub type UserId = Id<UserMarker>;
-pub type TurnId = Id<TurnMarker>;
-pub type AgentId = Id<AgentMarker>;
-pub type ConversationId = Id<ConversationMarker>;
-pub type BrowserId = Id<BrowserMarker>;
 pub type OrgId = Id<OrgMarker>;
-pub type TeamId = Id<TeamMarker>;
-pub type ProjectId = Id<ProjectMarker>;
+/// Which entry of the secrets store a credential is.
+pub type SecretId = Id<SecretMarker>;
 
 impl OrgId {
     pub const LOCAL: Self = Self::from_uuid(Uuid::nil());
@@ -115,18 +98,18 @@ mod tests {
 
     #[test]
     fn ids_are_unique_and_copy() {
-        let a = WorkspaceId::new();
+        let a = UserId::new();
         let b = a;
         assert_eq!(a, b);
-        assert_ne!(a, WorkspaceId::new());
+        assert_ne!(a, UserId::new());
     }
 
     #[test]
     fn ids_serialize_as_plain_uuid() {
-        let id = TurnId::new();
+        let id = SecretId::new();
         let json = serde_json::to_string(&id).expect("serialize");
         assert_eq!(json, format!("\"{}\"", id.uuid()));
-        let back: TurnId = serde_json::from_str(&json).expect("deserialize");
+        let back: SecretId = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back, id);
     }
 }

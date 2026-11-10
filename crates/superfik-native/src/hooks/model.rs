@@ -33,16 +33,13 @@ pub(super) fn evaluate(
         hook_workspace.hooks = Hooks::default();
         let control = crate::control::Control::new(superfik_core::PermissionMode::Plan, hook_workspace.stop.clone());
 
-        let tools = crate::worker::wrap(
-            crate::tools::standard()
-                .into_iter()
-                .filter(|tool| {
-                    matches!(tool.spec().name.as_str(), "Read" | "Glob" | "Grep")
-                        && template.tools.iter().any(|spec| spec.name == tool.spec().name)
-                })
-                .collect(),
-            workspace.worker.as_deref(),
-        );
+        let tools: Vec<Box<dyn crate::tools::Tool>> = crate::tools::standard()
+            .into_iter()
+            .filter(|tool| {
+                matches!(tool.spec().name.as_str(), "Read" | "Glob" | "Grep")
+                    && template.tools.iter().any(|spec| spec.name == tool.spec().name)
+            })
+            .collect();
         let agent = crate::agent::Agent {
             api,
             tools: &tools,

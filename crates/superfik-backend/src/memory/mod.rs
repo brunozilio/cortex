@@ -20,8 +20,8 @@ pub use embedder::{Embedder, ModelChoice, NoEmbedder, Purpose, local};
 pub use store::{FileMemoryStore, InMemoryStore, MemoryStore, app_data_dir, owner_key, project_key};
 use superfik_core::memory::{Semantic, recall, search};
 use superfik_core::{
-    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, MemoryTool, ModelOption, Principal, PromptRequest,
-    Provenance, RecallBudget, RunId,
+    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, MemoryTool, Principal, PromptRequest, Provenance,
+    RecallBudget, RunId,
 };
 use superfik_protocol::ServerEvent;
 
@@ -32,7 +32,6 @@ pub struct Memories {
     store: Arc<dyn MemoryStore>,
     embedder: Arc<dyn Embedder>,
     books: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
-    before_optimizing: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
 }
 
 impl std::fmt::Debug for Memories {
@@ -43,7 +42,7 @@ impl std::fmt::Debug for Memories {
 
 impl Memories {
     pub fn new(store: Arc<dyn MemoryStore>, embedder: Arc<dyn Embedder>) -> Self {
-        Self { store, embedder, books: Arc::default(), before_optimizing: Arc::default() }
+        Self { store, embedder, books: Arc::default() }
     }
 
     pub fn with_store(&self, store: Arc<dyn MemoryStore>) -> Self {
@@ -92,35 +91,21 @@ impl Memories {
     pub fn load(&self, owner: &Principal, project: &Path) -> ServerEvent {
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
-        ServerEvent::Memory { path: project.to_path_buf(), memories: book.memories.clone(), learned: Vec::new() }
+        ServerEvent::Memory { path: project.to_path_buf(), memories: book.memories.clone() }
     }
 
     pub fn edit(&self, owner: &Principal, project: &Path, edits: &[MemoryEdit], by: Provenance) -> ServerEvent {
-        self.undo_point(owner, project, None);
-        self.apply(owner, project, edits, by)
-    }
-
-    fn undo_point(&self, owner: &Principal, project: &Path, book: Option<MemoryBook>) {
-        let mut points = self.before_optimizing.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let key = (owner.clone(), project.to_path_buf());
-        match book {
-            Some(book) => points.insert(key, book),
-            None => points.remove(&key),
-        };
-    }
-
-    fn apply(&self, owner: &Principal, project: &Path, edits: &[MemoryEdit], by: Provenance) -> ServerEvent {
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
         let mut changed = book.clone();
-        let learned = changed.apply(edits, &by);
+        changed.apply(edits, &by);
         self.embed_missing(&mut changed);
         if let Err(error) = self.store.save(owner, project, &changed) {
             tracing::warn!(%error, "could not save memory");
             return ServerEvent::error(format!("could not save memory: {error}"));
         }
         *book = changed;
-        ServerEvent::Memory { path: project.to_path_buf(), memories: book.memories.clone(), learned }
+        ServerEvent::Memory { path: project.to_path_buf(), memories: book.memories.clone() }
     }
 
     pub fn search(&self, owner: &Principal, project: &Path, query: &str) -> Vec<(MemoryId, f32)> {
@@ -161,30 +146,6 @@ impl Memories {
         self.embedder.embed(&[query.to_owned()], Purpose::Query)?.into_iter().next()
     }
 
-    pub fn optimization(&self, owner: &Principal, project: &Path, model: ModelOption) -> PromptRequest {
-        let memories = {
-            let mut books = self.lock();
-            self.book(&mut books, owner, project).memories.clone()
-        };
-        let prompt = superfik_core::memory::optimize_prompt(&memories);
-        PromptRequest {
-            memory: Some(MemoryBrief { optimizing: true, ..MemoryBrief::default() }),
-            ..PromptRequest::plain(project.to_path_buf(), prompt, model)
-        }
-    }
-
-    pub fn undo(&self, owner: &Principal, project: &Path) -> ServerEvent {
-        let key = (owner.clone(), project.to_path_buf());
-        let point = self.before_optimizing.lock().unwrap_or_else(std::sync::PoisonError::into_inner).remove(&key);
-        let Some(book) = point else { return ServerEvent::error("nothing to undo in the memory") };
-        if let Err(error) = self.store.save(owner, project, &book) {
-            return ServerEvent::error(format!("could not save memory: {error}"));
-        }
-        let memories = book.memories.clone();
-        self.lock().insert(key, book);
-        ServerEvent::Memory { path: project.to_path_buf(), memories, learned: Vec::new() }
-    }
-
     pub fn brief(
         &self,
         owner: &Principal,
@@ -193,15 +154,6 @@ impl Memories {
         tool: Option<MemoryTool>,
     ) -> PromptRequest {
         let Some(brief) = &request.memory else { return request.clone() };
-        if brief.optimizing {
-            let book = {
-                let mut books = self.lock();
-                self.book(&mut books, owner, &request.cwd).clone()
-            };
-            self.undo_point(owner, &request.cwd, Some(book));
-            let output = edits_file(run);
-            return PromptRequest { memory: Some(MemoryBrief { output, ..brief.clone() }), ..request.clone() };
-        }
         let budget = if tool.is_some() { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
         let recalled = {
             let mut books = self.lock();
@@ -212,7 +164,7 @@ impl Memories {
             recall(&request.prompt, &book.memories, semantic, budget)
         };
         let output = edits_file(run);
-        let brief = MemoryBrief { recalled, output, origin: brief.origin.clone(), tool, optimizing: false };
+        let brief = MemoryBrief { recalled, output, origin: brief.origin.clone(), tool };
         PromptRequest { memory: Some(brief), ..request.clone() }
     }
 
@@ -222,17 +174,10 @@ impl Memories {
         let _ = std::fs::remove_file(&brief.output);
         let edits = json.and_then(|json| superfik_core::memory::parse_memory_edits(&json)).unwrap_or_default();
         if edits.is_empty() {
-            if brief.optimizing {
-                self.undo_point(owner, &request.cwd, None);
-            }
             return None;
         }
         let by = Provenance { author: Author::Agent, now: now(), origin: brief.origin.clone() };
-        if brief.optimizing {
-            Some(self.apply(owner, &request.cwd, &edits, by))
-        } else {
-            Some(self.edit(owner, &request.cwd, &edits, by))
-        }
+        Some(self.edit(owner, &request.cwd, &edits, by))
     }
 }
 

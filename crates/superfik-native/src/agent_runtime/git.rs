@@ -18,7 +18,6 @@ fn git_impl(cwd: &Path, args: &[&std::ffi::OsStr], stop: &std::sync::atomic::Ato
         time::{Duration, Instant},
     };
     let mut cmd = superfik_process::command("git");
-    crate::worker::clean_env(&mut cmd);
     cmd.arg("-C").arg(cwd).args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut tree = superfik_process::Tree::spawn(&mut cmd).map_err(|e| e.to_string())?;
     let output = git_reader(tree.child().stdout.take());

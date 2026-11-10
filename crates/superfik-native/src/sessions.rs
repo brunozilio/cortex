@@ -1,9 +1,6 @@
 //! Conversations the engine can resume: the transcript of each session,
 //! kept between prompts (and, on disk, between launches).
 
-mod legacy;
-pub mod migration;
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -11,8 +8,6 @@ use std::sync::Mutex;
 use sha2::{Digest, Sha256};
 use superfik_core::{Principal, PromptRequest, SessionId};
 
-pub use self::legacy::import_jsonl;
-use self::legacy::legacy;
 use crate::transcript::Message;
 
 pub trait Sessions: Send + Sync {
@@ -147,20 +142,7 @@ impl Sessions for FileSessions {
                 Err(e) => Err(format!("the saved conversation could not be read: {e}")),
             }
         };
-        if let Some(history) = read(&scoped_id(request, id))? {
-            return Ok(Some(history));
-        }
-        if !request.credentials.owner.as_ref().unwrap_or(&Principal::LocalOwner).is_local() {
-            return Ok(None);
-        }
-        let history = match read(id)? {
-            Some(history) => Some(history),
-            None => legacy(request, id)?,
-        };
-        if let Some(history) = &history {
-            self.save_for(request, id, history)?;
-        }
-        Ok(history)
+        read(&scoped_id(request, id))
     }
     fn load(&self, id: &SessionId) -> Option<Vec<Message>> {
         let text = std::fs::read_to_string(self.path(id)?).ok()?;

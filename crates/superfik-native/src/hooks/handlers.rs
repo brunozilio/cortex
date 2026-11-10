@@ -21,7 +21,6 @@ pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Resul
         cmd.args(["-c", &handler.command]);
         cmd
     };
-    crate::worker::clean_env(&mut cmd);
     cmd.env("CLAUDE_PROJECT_DIR", &workspace.cwd).env("SUPERFIK_PROJECT_DIR", &workspace.cwd);
     cmd.current_dir(&workspace.cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut tree = superfik_process::Tree::spawn(&mut cmd).map_err(|e| e.to_string())?;

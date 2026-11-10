@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use superfik_core::provider::ProviderKey;
-use superfik_core::{EngineInfo, ModelOption, ModelProvider, Principal};
+use superfik_core::{ModelOption, ModelProvider, Principal};
 use superfik_native::model::http::UreqHttp;
 use superfik_protocol::{ProviderEvent, ServerEvent};
 
@@ -27,15 +27,9 @@ impl ModelCatalog for ProviderCatalog {
 }
 
 impl ModelProviders {
-    /// Publishes [`ServerEvent::Models`] and [`ServerEvent::Engines`] from
-    /// a background thread; only the latest ask per owner is published.
-    pub(crate) fn discover_models(
-        &self,
-        owner: &Principal,
-        local_models: Vec<ModelOption>,
-        engines: Vec<EngineInfo>,
-        outbox: &Outbox,
-    ) {
+    /// Publishes [`ServerEvent::Models`] from a background thread; only the
+    /// latest ask per owner is published.
+    pub(crate) fn discover_models(&self, owner: &Principal, local_models: Vec<ModelOption>, outbox: &Outbox) {
         let owner_key = crate::memory::owner_key(owner);
         let generation = {
             let mut generations = self.generations.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -54,7 +48,7 @@ impl ModelProviders {
             let latest = this.generations.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(&owner_key)
                 == Some(&generation);
             if latest {
-                publish(models, engines, &outbox);
+                outbox.send(ServerEvent::Models(models));
             }
         });
     }
@@ -78,12 +72,4 @@ fn list(catalog: &dyn ModelCatalog, accounts: Vec<(ModelProvider, ProviderKey)>,
         }
     }
     models
-}
-
-fn publish(models: Vec<ModelOption>, mut engines: Vec<EngineInfo>, outbox: &Outbox) {
-    for engine in &mut engines {
-        engine.models = models.iter().filter(|model| model.engine == engine.kind).cloned().collect();
-    }
-    outbox.send(ServerEvent::Models(models));
-    outbox.send(ServerEvent::Engines(engines));
 }

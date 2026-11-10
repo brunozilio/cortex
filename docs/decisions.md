@@ -5,8 +5,7 @@ of decisions dropped with the desktop app are not reused.
 
 ## 0015 — Superfik is the engine
 
-No agent CLI runs underneath. The agent loop is ours (`superfik-native`,
-`EngineKind::Native`): it calls the provider's API itself, runs its tools as
+No agent CLI runs underneath. The agent loop is ours (`superfik-native`): it calls the provider's API itself, runs its tools as
 Rust functions, and emits `EngineEvent`s, so clients are engine-agnostic.
 Providers sit behind `ModelApi`, tested against captured streams; local
 models run on MLX as Chat Completions. The system prompt, tools, sessions
@@ -33,10 +32,15 @@ and MCP. Two crates come on top: a terminal chat (CLI/TUI) and an SDK for
 building agents, commands, skills, memory access and in-process MCP tools,
 and for connecting MCP servers over HTTP and stdio.
 
-- The AI providers are LLM providers, not plugins (`superfik-providers`,
-  `ModelProviders`); nothing ships in a plugin catalog, plugins are
-  installed from a folder and bring only skills, agents and MCP. No web
-  search or fetch tool: the browser card it relied on is gone.
+- The AI providers are LLM providers (`superfik-providers`,
+  `ModelProviders`). There is no plugin system of our own: skills, agents
+  and MCP come from Claude Code's folders and from the SDK host. No web
+  search or fetch tool.
+- One engine, ours. No registry of engines, no tool worker process, no
+  git/workspace inspection, no memory optimizer, no session import.
+- A separate product from the desktop Superfik: its own data folder,
+  nothing shared, nothing migrated. Secrets sit in a sealed file, never
+  the system keychain.
 - The `Principal`/`Envelope`/`Authorizer` seam stays so a remote backend
   can come back without reshaping the SDK.
 - Internal software: no license, notices, release pipeline or packaging.

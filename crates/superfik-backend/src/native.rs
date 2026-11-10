@@ -1,15 +1,13 @@
-//! Superfik's own engine on this server (ADR 0015): which API a run's
-//! model is called through, with the key the server put on the run, and
-//! local models served by MLX.
+//! The native engine as the backend sets it up: which API a run's model is
+//! called through, with the key the backend put on the run, and local
+//! models served by MLX.
 
 use std::path::Path;
 use std::sync::Arc;
 
 use superfik_core::provider::ProviderKey;
-use superfik_core::{EngineKind, ModelOption, ModelProvider, Principal, PromptRequest};
-use superfik_gateway::local::Endpoints as _;
-use superfik_gateway::mlx::MlxRuntime;
-use superfik_gateway::server::UpstreamError;
+use superfik_core::{ModelOption, ModelProvider, Principal, PromptRequest};
+use superfik_mlx::{MlxError, MlxRuntime};
 use superfik_native::model::chat::{Chat, Endpoint, Endpoints};
 use superfik_native::model::http::{Http, UreqHttp};
 use superfik_native::model::providers::ProviderClient;
@@ -53,27 +51,22 @@ pub struct MlxEndpoints(pub Arc<MlxRuntime>);
 impl Endpoints for MlxEndpoints {
     fn endpoint(&self, model: &str) -> Result<Endpoint, ModelError> {
         let served = self.0.endpoint(model).map_err(|error| match error {
-            UpstreamError::Unavailable(why) => ModelError::Overloaded(why),
-            UpstreamError::Unauthorized(why) => ModelError::Unauthorized(why),
-            UpstreamError::Invalid(why) | UpstreamError::Failed(why) => ModelError::Provider(why),
+            MlxError::Starting(why) => ModelError::Overloaded(why),
+            MlxError::NotDownloaded(why) | MlxError::Failed(why) => ModelError::Provider(why),
         })?;
         Ok(Endpoint { base_url: served.base_url, model: served.model })
     }
 }
 
 pub fn key_for(providers: &ModelProviders, owner: &Principal, model: &ModelOption) -> Option<ProviderKey> {
-    let needs = model.engine == EngineKind::Native && model.provider.needs_account();
+    let needs = model.provider.needs_account();
     needs.then(|| providers.key(owner, model.provider).ok()).flatten()
 }
 
 pub fn engine(data: &Path, local: Option<Arc<MlxRuntime>>) -> NativeEngine {
     let local = local.map(|runtime| Arc::new(MlxEndpoints(runtime)) as Arc<dyn Endpoints>);
     let apis = NativeApis::new(Arc::new(UreqHttp), local);
-    let engine = NativeEngine::new(Arc::new(apis), Arc::new(FileSessions::new(data.join("native-sessions"))));
-    match std::env::var_os("SUPERFIK_NATIVE_WORKER") {
-        Some(worker) => engine.with_worker(worker.into()),
-        None => engine,
-    }
+    NativeEngine::new(Arc::new(apis), Arc::new(FileSessions::new(data.join("native-sessions"))))
 }
 
 #[cfg(test)]
@@ -94,7 +87,7 @@ mod tests {
     }
 
     fn request(provider: ModelProvider, key: Option<&str>) -> PromptRequest {
-        let model = ModelOption::new(EngineKind::Native, "m", "M").served_by(provider);
+        let model = ModelOption::new("m", "M").served_by(provider);
         let mut request = PromptRequest::plain("/repo".into(), "hi", model);
         request.credentials.model = key.map(ProviderKey::new);
         request
@@ -130,17 +123,15 @@ mod tests {
     fn only_a_native_run_of_a_connected_provider_carries_a_key() {
         let providers = ModelProviders::new(
             Arc::new(crate::providers::InMemoryProviderStore::default()),
-            Arc::new(crate::plugins::InMemorySecretStore::default()),
+            Arc::new(crate::secrets::InMemorySecretStore::default()),
         );
         let owner = Principal::LocalOwner;
         providers.connect(&owner, ModelProvider::Anthropic, "sk-ant-0123456789abcd");
-        let native = |provider| ModelOption::new(EngineKind::Native, "m", "M").served_by(provider);
+        let native = |provider| ModelOption::new("m", "M").served_by(provider);
         let key = key_for(&providers, &owner, &native(ModelProvider::Anthropic)).expect("key");
         assert!(key.secret().contains("sk-ant-0123456789abcd"), "the provider's credential config");
         assert_eq!(key_for(&providers, &owner, &native(ModelProvider::OpenAi)), None, "not connected");
         assert_eq!(key_for(&providers, &owner, &native(ModelProvider::Local)), None, "no account");
-        let other = ModelOption::new(EngineKind::Codex, "m", "M");
-        assert_eq!(key_for(&providers, &owner, &other), None, "other runtimes do not receive native API credentials");
     }
 
     #[test]

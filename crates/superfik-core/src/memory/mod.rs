@@ -181,12 +181,10 @@ fn clean_tags(tags: &[String]) -> Vec<String> {
 }
 
 mod brief;
-mod optimize;
 mod recall;
 pub mod search;
 
 pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, MemoryTool, parse_memory_edits};
-pub use optimize::optimize_prompt;
 pub use recall::{RecallBudget, links, recall};
 pub use search::{Semantic, activate, search};
 

@@ -109,7 +109,7 @@ impl Transcript {
             EngineEvent::Compacted(compaction) => {
                 self.notice(format!("Compacted the conversation ({} tokens freed)", compaction.freed()));
             }
-            EngineEvent::Diagnosed(problem) => self.error(problem.message(superfik_core::EngineKind::Native)),
+            EngineEvent::Diagnosed(problem) => self.error(problem.message()),
             EngineEvent::Completed { cost_usd, .. } => {
                 self.cost += cost_usd.unwrap_or(0.0);
                 self.settle(ToolState::Done);

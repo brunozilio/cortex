@@ -66,14 +66,14 @@ mod tests {
     use std::sync::atomic::AtomicBool;
 
     use serde_json::json;
-    use superfik_core::{Effort, EngineKind};
+    use superfik_core::Effort;
 
     use super::*;
     use crate::model::TurnRequest;
     use crate::model::scripted::ScriptedModel;
 
     fn model() -> ModelOption {
-        ModelOption::new(EngineKind::Native, "qwen", "Qwen").served_by(ModelProvider::Local)
+        ModelOption::new("qwen", "Qwen").served_by(ModelProvider::Local)
     }
 
     fn template() -> TurnRequest {

@@ -109,19 +109,9 @@ fn lists_the_skills_and_asks_for_the_ones_the_user_picked() {
     );
     assert!(!system(&super::tests::environment()).contains("# Skills"));
 
-    let model = superfik_core::ModelOption::new(superfik_core::EngineKind::Native, "m", "M");
-    let mut request = PromptRequest::plain("/r".into(), "Ship it", model);
+    let model = superfik_core::ModelOption::new("m", "M");
+    let request = PromptRequest::plain("/r".into(), "Ship it", model);
     assert_eq!(user_message(&request), "Ship it");
-    request.skills = vec![superfik_core::Skill {
-        name: "release".into(),
-        title: "Release".into(),
-        description: String::new(),
-        icon: superfik_core::SkillIcon::Cube,
-    }];
-    assert_eq!(
-        user_message(&request),
-        "Ship it\n\nBefore you start, load these skills with the Skill tool: `release`."
-    );
 }
 
 #[test]

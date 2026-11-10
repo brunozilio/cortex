@@ -3,29 +3,31 @@
 use super::*;
 
 #[derive(Debug)]
-pub struct Guard<'a> {
+pub struct Guard {
     pub setup: Setup,
-    workspace: &'a Workspace,
     finished: bool,
     retained: bool,
 }
-impl<'a> Guard<'a> {
-    pub fn new(setup: Setup, workspace: &'a Workspace) -> Self {
-        Self { setup, workspace, finished: false, retained: false }
+
+impl Guard {
+    pub fn new(setup: Setup) -> Self {
+        Self { setup, finished: false, retained: false }
     }
+
     pub fn retain(&mut self) {
         self.retained = true;
     }
+
     pub fn finish(&mut self) -> Result<Option<PathBuf>, String> {
         self.finished = true;
         if self.retained {
             return Ok(Some(self.setup.cwd.clone()));
         }
-        let cleanup_workspace = self.workspace.fork(std::sync::Arc::default());
-        cleanup(&self.setup, &cleanup_workspace)
+        cleanup(&self.setup)
     }
 }
-impl Drop for Guard<'_> {
+
+impl Drop for Guard {
     fn drop(&mut self) {
         if !self.finished {
             let _ = self.finish();

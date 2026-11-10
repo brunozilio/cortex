@@ -3,7 +3,7 @@ use std::sync::Arc;
 use superfik_core::provider::{ModelProvider, ProviderSummary};
 
 use super::*;
-use crate::plugins::InMemorySecretStore;
+use crate::secrets::InMemorySecretStore;
 
 struct Rig {
     providers: ModelProviders,
@@ -166,11 +166,7 @@ impl ModelCatalog for ByKey {
         let api_key = Config::parse(provider, &secret).map_err(|e| e.to_string())?.api_key;
         match api_key.strip_suffix("-0123456789") {
             Some("sk-broken") => Err("401".into()),
-            Some(name) => Ok(vec![superfik_core::ModelOption::new(
-                superfik_core::EngineKind::Native,
-                format!("{}:{name}", provider.id()),
-                name,
-            )]),
+            Some(name) => Ok(vec![superfik_core::ModelOption::new(format!("{}:{name}", provider.id()), name)]),
             None => Err("no key".into()),
         }
     }
@@ -178,7 +174,7 @@ impl ModelCatalog for ByKey {
 
 fn discovered(providers: &ModelProviders, local: Vec<superfik_core::ModelOption>) -> (Vec<String>, Vec<ServerEvent>) {
     let (outbox, rx) = outbox();
-    providers.discover_models(&OWNER, local, Vec::new(), &outbox);
+    providers.discover_models(&OWNER, local, &outbox);
     let mut others = Vec::new();
     loop {
         match next(&rx) {
@@ -194,8 +190,7 @@ fn each_connected_provider_lists_its_models_and_local_ones_come_last() {
     assert!(discovered(&providers, Vec::new()).0.is_empty(), "no fixed list without an account");
     providers.connect(&OWNER, ModelProvider::Anthropic, "sk-ant-0123456789");
     providers.connect(&OWNER, ModelProvider::OpenAi, "sk-broken-0123456789");
-    let qwen = superfik_core::ModelOption::new(superfik_core::EngineKind::Native, "mlx/qwen", "Qwen")
-        .served_by(ModelProvider::Local);
+    let qwen = superfik_core::ModelOption::new("mlx/qwen", "Qwen").served_by(ModelProvider::Local);
     let (models, events) = discovered(&providers, vec![qwen]);
     assert_eq!(models, ["anthropic:sk-ant", "mlx/qwen"]);
     assert!(

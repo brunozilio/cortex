@@ -3814,15 +3814,13 @@ dependencies = [
  "serde_json",
  "superfik-core",
  "superfik-engine",
- "superfik-gateway",
+ "superfik-mlx",
  "superfik-native",
  "superfik-oauth",
- "superfik-plugins",
  "superfik-private-file",
  "superfik-process",
  "superfik-protocol",
  "superfik-providers",
- "superfik-workspace",
  "tempfile",
  "thiserror 2.0.21",
  "tiny_http",
@@ -3865,10 +3863,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "superfik-gateway"
+name = "superfik-mlx"
 version = "0.1.0"
 dependencies = [
- "crossbeam-channel",
  "serde",
  "serde_json",
  "sha2",
@@ -3876,10 +3873,8 @@ dependencies = [
  "superfik-process",
  "tempfile",
  "thiserror 2.0.21",
- "tiny_http",
  "tracing",
  "ureq",
- "uuid",
 ]
 
 [[package]]
@@ -3900,7 +3895,6 @@ dependencies = [
  "sha2",
  "superfik-core",
  "superfik-engine",
- "superfik-plugins",
  "superfik-private-file",
  "superfik-process",
  "superfik-providers",
@@ -3922,18 +3916,6 @@ dependencies = [
  "tiny_http",
  "ureq",
  "uuid",
-]
-
-[[package]]
-name = "superfik-plugins"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "superfik-core",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
 ]
 
 [[package]]
@@ -3985,23 +3967,9 @@ dependencies = [
  "superfik-backend",
  "superfik-core",
  "superfik-engine",
- "superfik-plugins",
  "superfik-protocol",
  "tempfile",
  "thiserror 2.0.21",
-]
-
-[[package]]
-name = "superfik-workspace"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "superfik-core",
- "superfik-process",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
 ]
 
 [[package]]

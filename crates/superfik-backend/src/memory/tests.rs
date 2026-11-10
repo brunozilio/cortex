@@ -1,27 +1,11 @@
-use superfik_core::{Effort, EngineKind, MemoryId, MemoryKind, ModelOption, WorkspaceId};
+use superfik_core::{MemoryKind, ModelOption};
 
 use super::*;
 
 fn request(cwd: &Path) -> PromptRequest {
     PromptRequest {
-        connections: Vec::new(),
-        plugins: None,
-        credentials: Default::default(),
-        workspace: WorkspaceId::new(),
-        cwd: cwd.to_path_buf(),
-        prompt: "Tune the renderer".into(),
-        model: ModelOption::new(EngineKind::Native, "opus", "Opus"),
-        effort: Effort::Medium,
-        repositories: vec![],
-        skills: vec![],
-        disabled_skills: Vec::new(),
-        references: vec![],
-        resume: None,
-        command: None,
         memory: Some(MemoryBrief::new(Some("Night sky".into()))),
-        permission: Default::default(),
-        output_style: None,
-        safety_check: true,
+        ..PromptRequest::plain(cwd.to_path_buf(), "Tune the renderer", ModelOption::new("opus", "Opus"))
     }
 }
 
@@ -60,10 +44,9 @@ fn edits_answer_with_the_whole_memory() {
     let owner = Principal::LocalOwner;
     memories.edit(&owner, Path::new("/repo"), &[remember("Uses wgpu")], by_user());
     match memories.edit(&owner, Path::new("/repo"), &[remember("Inter is the only font")], by_user()) {
-        ServerEvent::Memory { path, memories, learned } => {
+        ServerEvent::Memory { path, memories } => {
             assert_eq!(path, PathBuf::from("/repo"));
             assert_eq!(memories.len(), 2);
-            assert_eq!(learned, vec![MemoryId(1)]);
         }
         other => panic!("unexpected {other:?}"),
     }
@@ -85,11 +68,10 @@ fn a_run_is_briefed_and_its_edits_applied_on_completion() {
     std::fs::write(&brief.output, r#"{"remember":[{"kind":"episodic","text":"Tuned the renderer"}],"forget":[0]}"#)
         .expect("write");
     match memories.finish(&owner, &briefed, true) {
-        Some(ServerEvent::Memory { memories, learned, .. }) => {
+        Some(ServerEvent::Memory { memories, .. }) => {
             assert_eq!(memories.len(), 1);
             assert_eq!((memories[0].kind, memories[0].author), (MemoryKind::Episodic, Author::Agent));
             assert_eq!(memories[0].origin.as_deref(), Some("Night sky"));
-            assert_eq!(learned, vec![MemoryId(1)]);
         }
         other => panic!("unexpected {other:?}"),
     }
@@ -163,38 +145,4 @@ fn a_tool_shortens_what_is_recalled() {
     let without = memories.brief(&owner, RunId::new(), &request(dir.path()), None).memory.expect("brief");
     assert_eq!((with.recalled.len(), without.recalled.len()), (RecallBudget::WITH_TOOL.facts, 30));
     assert!(with.tool.is_some());
-}
-
-#[test]
-fn an_optimisation_can_be_undone_until_the_next_edit() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
-    let owner = Principal::LocalOwner;
-    memories.edit(&owner, dir.path(), &[remember("Uses wgpu"), remember("The renderer uses wgpu")], by_user());
-    let model = ModelOption::new(EngineKind::Native, "opus", "Opus");
-    let request = memories.optimization(&owner, dir.path(), model);
-    assert!(request.prompt.contains("[0] semantic (render): Uses wgpu"));
-    let briefed = memories.brief(&owner, RunId::new(), &request, None);
-    let brief = briefed.memory.clone().expect("brief");
-    assert!(brief.optimizing && brief.recalled.is_empty() && brief.tool.is_none());
-    std::fs::write(&brief.output, r#"{"forget":[0]}"#).expect("write");
-    match memories.finish(&owner, &briefed, true) {
-        Some(ServerEvent::Memory { memories, .. }) => assert_eq!(memories.len(), 1),
-        other => panic!("unexpected {other:?}"),
-    }
-    match memories.undo(&owner, dir.path()) {
-        ServerEvent::Memory { memories, .. } => assert_eq!(memories.len(), 2, "both memories are back"),
-        other => panic!("unexpected {other:?}"),
-    }
-    assert!(matches!(memories.undo(&owner, dir.path()), ServerEvent::Error { .. }), "only once");
-    let briefed = memories.brief(
-        &owner,
-        RunId::new(),
-        &memories.optimization(&owner, dir.path(), ModelOption::new(EngineKind::Native, "o", "O")),
-        None,
-    );
-    std::fs::write(&briefed.memory.clone().expect("brief").output, r#"{"forget":[1]}"#).expect("write");
-    memories.finish(&owner, &briefed, true);
-    memories.edit(&owner, dir.path(), &[remember("New fact")], by_user());
-    assert!(matches!(memories.undo(&owner, dir.path()), ServerEvent::Error { .. }));
 }

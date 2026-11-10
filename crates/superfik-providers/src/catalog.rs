@@ -3,7 +3,7 @@
 use super::ProviderError;
 use serde_json::Value;
 use superfik_core::model::ModelCapabilities;
-use superfik_core::{EngineKind, ModelOption, ModelProvider};
+use superfik_core::{ModelOption, ModelProvider};
 
 pub const MAX_PAGES: usize = 100;
 pub const PAGE_LIMIT: u64 = 8 << 20;
@@ -67,7 +67,7 @@ fn finish(provider: ModelProvider, mut out: Vec<ModelOption>) -> Vec<ModelOption
 }
 
 fn option(provider: ModelProvider, id: &str, label: String) -> ModelOption {
-    ModelOption::new(EngineKind::Native, format!("{}:{id}", provider.id()), label).served_by(provider)
+    ModelOption::new(format!("{}:{id}", provider.id()), label).served_by(provider)
 }
 
 fn model(provider: ModelProvider, item: &Value) -> Option<ModelOption> {

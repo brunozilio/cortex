@@ -5,7 +5,7 @@ use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use superfik_core::{ChoreAnswer, EngineEvent, EngineKind, ModelOption, PromptRequest, RunId, SessionCommand};
+use superfik_core::{ChoreAnswer, EngineEvent, ModelOption, PromptRequest, RunId, SessionCommand};
 use superfik_engine::AgentEngine;
 use superfik_native::model::scripted::ScriptedModel;
 use superfik_native::model::{ModelApi, ModelError};
@@ -44,7 +44,7 @@ fn says(text: &str) -> Arc<ScriptedModel> {
 }
 
 fn model() -> ModelOption {
-    ModelOption::new(EngineKind::Native, "claude-opus-5-5", "Opus 5.5")
+    ModelOption::new("claude-opus-5-5", "Opus 5.5")
 }
 
 #[test]

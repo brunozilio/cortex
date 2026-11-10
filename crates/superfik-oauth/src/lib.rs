@@ -1,6 +1,6 @@
 //! The app's side of a browser sign-in (OAuth 2.1 authorization code with
 //! PKCE): the verifier and its challenge, and the loopback listener the
-//! browser is sent back to. Used by plugins' and providers' OAuth.
+//! browser is sent back to. Used by the LLM providers' sign-in.
 
 mod loopback;
 pub mod pkce;

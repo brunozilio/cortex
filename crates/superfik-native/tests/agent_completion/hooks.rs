@@ -1,8 +1,6 @@
 //! Hooks around a custom agent's work: command, prompt, agent and HTTP
 //! handlers, their decisions, rewritten input and time limits.
 
-use std::path::Path;
-
 use serde_json::json;
 use superfik_core::PermissionMode;
 use superfik_native::{model::scripted::ScriptedModel, tools::Workspace};
@@ -14,7 +12,6 @@ use crate::{call, delegated, done, run};
 fn pre_hook_blocks_mutations_and_post_hook_receives_actual_result() {
     let dir = tempfile::tempdir().expect("dir");
     let mut workspace = Workspace::new(dir.path());
-    workspace.worker = Some(Path::new(env!("CARGO_BIN_EXE_superfik-native-worker")).into());
     let model = ScriptedModel::new([
         delegated(),
         ScriptedModel::reply(vec![call("bad", "Bash", json!({"command":"echo bad > forbidden"}))]),
@@ -161,8 +158,7 @@ fn http_hook_receives_json_and_returns_a_blocking_decision_through_the_worker() 
         write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).expect("reply");
     });
     let dir = tempfile::tempdir().expect("dir");
-    let mut workspace = Workspace::new(dir.path());
-    workspace.worker = Some(Path::new(env!("CARGO_BIN_EXE_superfik-native-worker")).into());
+    let workspace = Workspace::new(dir.path());
     let hooks=superfik_native::hooks::Hooks::parse(&json!({"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"http","url":format!("http://{addr}"),"headers":{"X-Fixture":"hook-value"},"timeout":5}]}]})).expect("hook");
     let decision = hooks.run("PreToolUse", "Bash", json!({"tool_name":"Bash"}), &workspace).expect("HTTP hook");
     assert_eq!(decision.blocked.as_deref(), Some("HTTP policy rejected"));

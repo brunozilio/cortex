@@ -1,5 +1,5 @@
 //! Sessions: lost, measured, compacted, scoped to owner and directory,
-//! imported from legacy transcripts, and a worktree kept across restarts.
+//! and a worktree kept across restarts.
 
 use std::sync::{Arc, Mutex};
 
@@ -79,28 +79,19 @@ fn sessions_are_bound_to_owner_and_directory_and_owner_cannot_come_from_wire() {
     assert!(restored.credentials.owner.is_none());
 }
 #[test]
-fn imports_only_the_selected_historical_branch_with_tool_results() {
-    let text=[
-        json!({"uuid":"u","parentUuid":null,"type":"user","message":{"content":"original request"}}),
-        json!({"uuid":"a","parentUuid":"u","type":"assistant","message":{"content":[{"type":"text","text":"discarded branch"}]}}),
-        json!({"uuid":"b","parentUuid":"u","type":"assistant","message":{"content":[{"type":"tool_use","id":"read","name":"Read","input":{"file_path":"a"}}]}}),
-        json!({"uuid":"r","parentUuid":"b","type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"read","content":"file"}]}}),
-        json!({"uuid":"c","parentUuid":"r","type":"assistant","message":{"content":[{"type":"text","text":"selected branch"}]}}),
-    ].iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
-    let history = superfik_native::sessions::import_jsonl(&text).expect("valid test fixture");
-    assert_eq!(history.len(), 4);
-    assert!(!history.iter().any(|m| m.text().contains("discarded")));
-    assert!(matches!(&history[2].blocks[0],Block::ToolResult {id,content,..} if id=="read" && content=="file"));
-}
-
-#[test]
 fn corrupt_saved_history_fails_without_diagnosing_it_as_a_missing_session() {
     use superfik_native::sessions::{FileSessions, Sessions};
     let dir = tempfile::tempdir().expect("valid test fixture");
     let store = FileSessions::new(dir.path());
     let request = PromptRequest::plain(dir.path().into(), "hello", model());
-    let id = superfik_core::SessionId("legacy-id".into());
-    std::fs::write(dir.path().join("legacy-id.json"), "{broken").expect("valid test fixture");
+    let id = superfik_core::SessionId("broken-id".into());
+    store.save_for(&request, &id, &[]).expect("save");
+    let saved = std::fs::read_dir(dir.path())
+        .expect("dir")
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| p.extension().is_some_and(|ext| ext == "json"));
+    std::fs::write(saved.expect("the saved conversation"), "{broken").expect("corrupt it");
     assert!(store.load_for_checked(&request, &id).is_err());
     let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(store));
     let events = finish(&start(&engine, &PromptRequest { resume: Some(id), ..request }));

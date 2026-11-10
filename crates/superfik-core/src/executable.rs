@@ -1,8 +1,8 @@
 //! Where command-line tools live, for every system (ADR 0013).
 //!
 //! Pure: the system, the environment and the home folder are passed in.
-//! The engines (`claude`, `codex`…) and the workspace's tools (`gh`, `bw`,
-//! `npx`) both search with these.
+//! The tools Superfik starts (`uv`, `npx`, an MCP server's command) are
+//! searched with these.
 //!
 //! On Windows a tool is a file with an extension Windows can start
 //! (`claude.exe`, `npx.cmd`). npm also writes an extensionless shell script

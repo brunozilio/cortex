@@ -1,5 +1,5 @@
 //! MCP tools for the native engine: Superfik's own memory server, the
-//! plugins' and the SDK's servers over streamable HTTP or as processes, and
+//! SDK host's servers over streamable HTTP or as processes, and
 //! the host's in-process servers ([`LocalTransport`]); each tool is offered
 //! as `mcp__<server>__<tool>`.
 
@@ -62,19 +62,12 @@ impl McpServer {
     }
 
     pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>) -> Result<Self, String> {
-        Self::open_isolated(spec, http, None)
+        Self::open_stopped(spec, http, &std::sync::atomic::AtomicBool::new(false))
     }
-    pub fn open_isolated(
-        spec: &ServerSpec,
-        http: &Arc<dyn Http>,
-        worker: Option<&std::path::Path>,
-    ) -> Result<Self, String> {
-        Self::open_stopped(spec, http, worker, &std::sync::atomic::AtomicBool::new(false))
-    }
+
     pub fn open_stopped(
         spec: &ServerSpec,
         http: &Arc<dyn Http>,
-        worker: Option<&std::path::Path>,
         stop: &std::sync::atomic::AtomicBool,
     ) -> Result<Self, String> {
         if stop.load(Ordering::Relaxed) {
@@ -85,7 +78,7 @@ impl McpServer {
                 Box::new(HttpTransport::new(name, url, headers, Arc::clone(http)))
             }
             ServerSpec::Stdio { name, command, args, env } => {
-                Box::new(StdioTransport::spawn_stopped(name, command, args, env, worker, stop)?)
+                Box::new(StdioTransport::spawn(name, command, args, env)?)
             }
         };
         Ok(Self::new(spec.name(), transport))
@@ -163,19 +156,12 @@ impl McpServer {
 }
 
 pub fn tools(request: &PromptRequest, http: &Arc<dyn Http>) -> Vec<Box<dyn Tool>> {
-    tools_isolated(request, http, None)
+    tools_stopped(request, http, &std::sync::atomic::AtomicBool::new(false))
 }
-pub fn tools_isolated(
+
+pub fn tools_stopped(
     request: &PromptRequest,
     http: &Arc<dyn Http>,
-    worker: Option<&std::path::Path>,
-) -> Vec<Box<dyn Tool>> {
-    tools_isolated_stopped(request, http, worker, &std::sync::atomic::AtomicBool::new(false))
-}
-pub fn tools_isolated_stopped(
-    request: &PromptRequest,
-    http: &Arc<dyn Http>,
-    worker: Option<&std::path::Path>,
     stop: &std::sync::atomic::AtomicBool,
 ) -> Vec<Box<dyn Tool>> {
     let listed = |name: &str, server: Result<McpServer, String>| {
@@ -191,7 +177,7 @@ pub fn tools_isolated_stopped(
     let remote = servers(request)
         .into_iter()
         .take_while(|_| !stop.load(Ordering::Relaxed))
-        .flat_map(|spec| listed(spec.name(), McpServer::open_stopped(&spec, http, worker, stop)));
+        .flat_map(|spec| listed(spec.name(), McpServer::open_stopped(&spec, http, stop)));
     local.chain(remote).map(|tool| Box::new(tool) as Box<dyn Tool>).collect()
 }
 

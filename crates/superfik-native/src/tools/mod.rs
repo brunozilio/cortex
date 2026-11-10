@@ -83,7 +83,6 @@ pub struct Workspace {
     pub stop: Arc<AtomicBool>,
     pub credentials: superfik_core::credentials::RunCredentials,
     pub model: superfik_core::ModelOption,
-    pub worker: Option<PathBuf>,
     pub prompt_context: Option<crate::prompt::Environment>,
     pub hooks: crate::hooks::Hooks,
     pub agent_name: String,
@@ -91,7 +90,6 @@ pub struct Workspace {
     pub auto_memory: bool,
     pub rules: Vec<crate::prompt::rules::Rule>,
     pub(crate) seen_rules: Arc<Mutex<HashSet<PathBuf>>>,
-    pub referenced: Vec<PathBuf>,
     pub safety: Option<Arc<crate::guard::Safety>>,
     pub advisor: Option<String>,
 }
@@ -103,7 +101,6 @@ impl Workspace {
             read: Arc::default(),
             stop: Arc::new(AtomicBool::new(false)),
             credentials: Default::default(),
-            worker: None,
             prompt_context: None,
             hooks: Default::default(),
             agent_name: "main".into(),
@@ -111,8 +108,7 @@ impl Workspace {
             auto_memory: true,
             rules: Vec::new(),
             seen_rules: Arc::default(),
-            referenced: Vec::new(),
-            model: superfik_core::ModelOption::new(superfik_core::EngineKind::Native, "unknown", "Unknown"),
+            model: superfik_core::ModelOption::new("unknown", "Unknown"),
             safety: None,
             advisor: None,
         }
@@ -128,12 +124,7 @@ impl Workspace {
     }
 
     pub fn for_request(request: &superfik_core::PromptRequest) -> Self {
-        Self {
-            credentials: request.credentials.clone(),
-            model: request.model.clone(),
-            referenced: request.references.iter().map(|r| r.path.clone()).collect(),
-            ..Self::new(&request.cwd)
-        }
+        Self { credentials: request.credentials.clone(), model: request.model.clone(), ..Self::new(&request.cwd) }
     }
 
     pub fn fork(&self, stop: Arc<AtomicBool>) -> Self {
@@ -143,7 +134,6 @@ impl Workspace {
             stop,
             credentials: self.credentials.clone(),
             model: self.model.clone(),
-            worker: self.worker.clone(),
             prompt_context: self.prompt_context.clone(),
             hooks: self.hooks.clone(),
             agent_name: self.agent_name.clone(),
@@ -151,7 +141,6 @@ impl Workspace {
             auto_memory: self.auto_memory,
             rules: self.rules.clone(),
             seen_rules: Arc::default(),
-            referenced: self.referenced.clone(),
             safety: self.safety.as_ref().map(|safety| Arc::new(safety.fork())),
             advisor: self.advisor.clone(),
         }

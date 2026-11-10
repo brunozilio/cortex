@@ -42,13 +42,6 @@ impl Agent<'_> {
             Ok(model) => model,
             Err(error) => return Outcome::error(error),
         };
-        if let Some(guard) = &workspace.credentials.model_guard {
-            let mut selected = workspace.model.clone();
-            selected.id = model.clone();
-            if let Err(error) = guard.check(&selected) {
-                return Outcome::error(error);
-            }
-        }
         let turn_limit = match input.get("max_turns") {
             Some(value) => match value.as_u64().filter(|n| *n > 0 && *n <= MAX_TURNS as u64) {
                 Some(turns) => turns as usize,
@@ -84,7 +77,7 @@ impl Agent<'_> {
             Ok(setup) => setup,
             Err(error) => return Outcome::error(format!("Agent setup failed: {error}")),
         };
-        let mut runtime_guard = crate::agent_runtime::Guard::new(setup, workspace);
+        let mut runtime_guard = crate::agent_runtime::Guard::new(setup);
         let setup = &runtime_guard.setup;
         child_workspace.cwd = setup.cwd.clone();
         if config.worktree {

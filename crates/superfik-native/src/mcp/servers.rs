@@ -1,6 +1,6 @@
 //! Which MCP servers a run gets: the app's own (granted with a token per
-//! run) and the plugins' accounts (the MCP config file the backend wrote
-//! for the run, `PluginBrief::mcp_config`).
+//! run) and the host's (the MCP config file the backend wrote for the run,
+//! `Extensions::mcp_config`).
 
 use serde_json::Value;
 use superfik_core::PromptRequest;
@@ -44,13 +44,12 @@ pub fn servers(request: &PromptRequest) -> Vec<ServerSpec> {
         url: url.to_owned(),
         headers: vec![("authorization".to_owned(), format!("Bearer {token}"))],
     };
-    let plugins = request.plugins.as_ref();
     let memory = request.memory.as_ref().and_then(|memory| memory.tool.as_ref());
     let mut servers: Vec<ServerSpec> = memory.map(|t| own(MEMORY_SERVER, &t.url, &t.token)).into_iter().collect();
-    if let Some(path) = plugins.and_then(|p| p.mcp_config.as_ref()) {
+    if let Some(path) = request.extensions.as_ref().and_then(|e| e.mcp_config.as_ref()) {
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|text| parse_config(&text)) {
             Ok(found) => servers.extend(found.into_iter().filter(|s| !s.name().starts_with("superfik_"))),
-            Err(error) => tracing::warn!(%error, "the plugins' MCP servers are not available to this run"),
+            Err(error) => tracing::warn!(%error, "the host's MCP servers are not available to this run"),
         }
     }
     servers
@@ -100,12 +99,12 @@ pub fn parse_config(text: &str) -> Result<Vec<ServerSpec>, String> {
 
 #[cfg(test)]
 mod tests {
-    use superfik_core::{EngineKind, MemoryBrief, MemoryTool, ModelOption, PluginBrief};
+    use superfik_core::{Extensions, MemoryBrief, MemoryTool, ModelOption};
 
     use super::*;
 
     fn request() -> PromptRequest {
-        PromptRequest::plain("/r".into(), "hi", ModelOption::new(EngineKind::Native, "m", "M"))
+        PromptRequest::plain("/r".into(), "hi", ModelOption::new("m", "M"))
     }
 
     #[test]
@@ -127,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn a_plugin_config_brings_http_and_stdio_servers() {
+    fn a_host_config_brings_http_and_stdio_servers() {
         let dir = tempfile::tempdir().expect("dir");
         let path = dir.path().join("mcp.json");
         let config = r#"{"mcpServers": {
@@ -137,7 +136,7 @@ mod tests {
         }}"#;
         std::fs::write(&path, config).expect("write");
         let mut request = request();
-        request.plugins = Some(PluginBrief { mcp_config: Some(path), ..PluginBrief::default() });
+        request.extensions = Some(Extensions { mcp_config: Some(path), ..Extensions::default() });
         let found = servers(&request);
         let names: Vec<&str> = found.iter().map(ServerSpec::name).collect();
         assert_eq!(names, ["gmail-work", "linear-acme"]);

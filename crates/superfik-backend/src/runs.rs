@@ -108,10 +108,6 @@ impl RunTable {
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.lock().len()
-    }
-
     fn lock(&self) -> MutexGuard<'_, HashMap<RunId, Slot>> {
         self.slots.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -152,7 +148,7 @@ mod tests {
         assert!(table.is_active(run));
         table.finish(run);
         assert!(!table.is_active(run));
-        assert_eq!(table.len(), 0);
+        assert!(table.lock().is_empty());
     }
 
     #[test]
@@ -164,7 +160,7 @@ mod tests {
         let (h, _) = handle();
         table.insert(run, owner(), h);
         assert!(!table.is_active(run));
-        assert_eq!(table.len(), 0);
+        assert!(table.lock().is_empty());
     }
 
     #[test]
@@ -178,7 +174,7 @@ mod tests {
         assert_eq!(count.load(Ordering::SeqCst), 1);
         assert!(table.is_active(run));
         table.finish(run);
-        assert_eq!(table.len(), 0);
+        assert!(table.lock().is_empty());
         assert_eq!(table.cancel(RunId::new(), &owner()), Reach::Inactive);
     }
 

@@ -6,12 +6,12 @@ use std::sync::Arc;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use superfik_core::provider::ProviderKeyStore;
-use superfik_core::{ConnectionId, ModelProvider, Principal};
+use superfik_core::{ModelProvider, Principal, SecretId};
 use superfik_native::model::http::UreqHttp;
 use superfik_native::model::providers::oauth;
 use superfik_providers::Config;
 
-use crate::plugins::{SecretStore, Secrets};
+use crate::secrets::{SecretStore, Secrets};
 
 pub(crate) const CONFIG: &str = "config";
 
@@ -50,7 +50,7 @@ fn random(length: usize) -> Result<String, String> {
 pub(crate) struct AccountStore {
     pub secrets: Arc<dyn SecretStore>,
     pub owner: Principal,
-    pub slot: ConnectionId,
+    pub slot: SecretId,
     pub provider: ModelProvider,
 }
 
@@ -75,12 +75,12 @@ pub(crate) fn secrets(config: &Config) -> Result<Secrets, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::InMemorySecretStore;
+    use crate::secrets::InMemorySecretStore;
 
     #[test]
     fn rotated_subscription_tokens_are_saved_and_loaded_back() {
         let secrets = Arc::new(InMemorySecretStore::default());
-        let slot = ConnectionId::new();
+        let slot = SecretId::new();
         let original = r#"{"auth":{"access_token":"access-secret","refresh_token":"refresh-secret","expires_at":"2099-01-01T00:00:00Z","account_id":"acct"}}"#;
         secrets.set(&Principal::LocalOwner, slot, &Secrets::from([(CONFIG.into(), original.into())])).expect("save");
         let source =

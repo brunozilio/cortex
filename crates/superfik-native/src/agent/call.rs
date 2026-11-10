@@ -186,14 +186,6 @@ impl Agent<'_> {
                 outcome.content.push_str(&format!("\nHook failed: {error}"));
             }
         }
-        if !outcome.is_error && name.to_ascii_lowercase().contains("search") {
-            for item in crate::research::extract_sources(
-                &json!(outcome.content),
-                serde_json::from_str::<Value>(&outcome.content).ok().as_ref(),
-            ) {
-                (self.emit)(EngineEvent::ResearchFound(item));
-            }
-        }
         (self.emit)(EngineEvent::ToolFinished { id: id.to_owned() });
         (self.emit)(EngineEvent::ToolResult {
             id: id.to_owned(),

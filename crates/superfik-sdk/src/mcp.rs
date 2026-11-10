@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use superfik_backend::McpServerSpec;
 use superfik_core::mcp::McpEndpoint;
-use superfik_plugins::McpServerSpec;
 
 type Handler = dyn Fn(Value) -> Result<Value, String> + Send + Sync;
 

@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use superfik_core::provider::ProviderKey;
-use superfik_core::{EngineKind, ModelOption, ModelProvider};
+use superfik_core::{ModelOption, ModelProvider};
 use superfik_native::model::ModelApi;
 use superfik_native::model::http::ScriptedHttp;
 use superfik_native::model::providers::ProviderClient;
@@ -67,7 +67,7 @@ fn four_providers_use_their_own_authentication_endpoint_and_wire_body() {
 
 #[test]
 fn anthropic_request_uses_the_discovered_model_capabilities() {
-    let mut model = ModelOption::new(EngineKind::Native, "anthropic:claude-test", "Claude");
+    let mut model = ModelOption::new("anthropic:claude-test", "Claude");
     model.capabilities = Some(superfik_core::model::ModelCapabilities {
         reasoning: true,
         adaptive_thinking: false,
@@ -123,7 +123,7 @@ fn chosen_effort_reaches_each_provider_for_supported_models() {
             }
             .into(),
         )]));
-        let model = ModelOption::new(EngineKind::Native, format!("{}:{id}", provider.id()), id).served_by(provider);
+        let model = ModelOption::new(format!("{}:{id}", provider.id()), id).served_by(provider);
         let client = ProviderClient::for_model(model, http.clone(), Arc::new(ProviderKey::new(credentials(provider))));
         client.turn(&request(id), &mut |_| {}, &AtomicBool::new(false)).expect("turn");
         let body: Value = serde_json::from_str(&http.sent()[0].body).expect("body");
@@ -138,8 +138,8 @@ fn chosen_effort_reaches_each_provider_for_supported_models() {
 #[test]
 fn unsupported_catalog_effort_fails_before_sending_a_request() {
     let http = Arc::new(ScriptedHttp::new([]));
-    let mut model = ModelOption::new(EngineKind::Native, "openai-subscription:gpt-test", "Test")
-        .served_by(ModelProvider::ChatGptSubscription);
+    let mut model =
+        ModelOption::new("openai-subscription:gpt-test", "Test").served_by(ModelProvider::ChatGptSubscription);
     model.capabilities = Some(superfik_core::model::ModelCapabilities {
         reasoning: true,
         reasoning_levels: vec!["low".into()],

@@ -1,4 +1,4 @@
-use superfik_core::{EngineKind, MemoryBrief, MemoryTool, ModelOption};
+use superfik_core::{MemoryBrief, MemoryTool, ModelOption};
 
 use super::*;
 use crate::model::http::ScriptedHttp;
@@ -17,7 +17,7 @@ fn listed(id: u64) -> String {
 }
 
 fn memory_request() -> PromptRequest {
-    let model = ModelOption::new(EngineKind::Native, "m", "M");
+    let model = ModelOption::new("m", "M");
     let mut request = PromptRequest::plain("/repo".into(), "hi", model);
     let tool = MemoryTool { url: "http://127.0.0.1:7/mcp".into(), token: "t-1".into() };
     request.memory = Some(MemoryBrief { tool: Some(tool), ..MemoryBrief::default() });
@@ -102,7 +102,7 @@ done
     let server = Arc::new(McpServer::open(&spec, &http).expect("spawn"));
     let tools = server.tools().expect("tools");
     assert_eq!(tools[0].spec().name, "mcp__echo-me__echo");
-    assert_eq!(tools[0].access(), Access::Executes, "a plugin's tool is asked for");
+    assert_eq!(tools[0].access(), Access::Executes, "a host's tool is asked for");
     assert_eq!(tools[0].run(&json!({}), &Workspace::new("/")), Outcome::ok("hi there"));
 }
 
@@ -166,7 +166,7 @@ impl superfik_core::mcp::McpEndpoint for Echo {
 
 #[test]
 fn an_in_process_server_s_tools_are_called_without_http() {
-    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new(EngineKind::Native, "m", "M"));
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
     request.credentials.mcp = vec![superfik_core::mcp::LocalMcp::new("host", Arc::new(Echo))];
     let http = Arc::new(ScriptedHttp::new([]));
     let shared: Arc<dyn Http> = http.clone();
