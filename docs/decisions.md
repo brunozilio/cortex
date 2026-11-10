@@ -22,7 +22,7 @@ runs carry a redacted handle a client cannot supply. Subscription adapters
 apply their own preludes; the tools, loop and project instructions stay
 Superfik's.
 
-## 0018 — Lite: a CLI and an SDK, internal only
+## 0018 — Lite: a CLI and an SDK
 
 Superfik Lite drops the desktop canvas, the web client, the team server and
 everything only they used (browser cards, voice, sound, haptics, notes,
@@ -43,4 +43,5 @@ and for connecting MCP servers over HTTP and stdio.
   the system keychain.
 - The `Principal`/`Envelope`/`Authorizer` seam stays so a remote backend
   can come back without reshaping the SDK.
-- Internal software: no license, notices, release pipeline or packaging.
+- Published as source (`brunozilio/superfik-lite`), with no license,
+  release pipeline or packaging: install it with `cargo install`.

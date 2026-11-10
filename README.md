@@ -1,6 +1,6 @@
 # Superfik Lite
 
-Internal. Superfik's agent engine: a terminal chat
+Superfik's agent engine: a terminal chat
 (CLI/TUI) for talking to a coding agent, and an SDK for building on top of it
 (agents, commands, skills, memory, in-process MCP tools, MCP over HTTP and
 stdio).
