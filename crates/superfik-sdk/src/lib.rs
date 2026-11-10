@@ -38,7 +38,7 @@ use superfik_core::ModelOption;
 pub use self::account::ProjectMemory;
 pub use self::extensions::{Agent, Command, Skill};
 pub use self::mcp::{McpConnection, McpServer};
-pub use self::session::{Run, Session};
+pub use self::session::{Run, RunControl, Session};
 use client::Client;
 use extensions::Definitions;
 pub use superfik_core::memory::{Memory, MemoryEdit, MemoryId, MemoryKind};

@@ -60,6 +60,19 @@ impl Superfik {
         })
     }
 
+    /// This owner's settings (a JSON object; empty when none were saved).
+    pub fn settings(&self) -> Result<serde_json::Value, Error> {
+        self.client.call(ClientCommand::LoadSettings, |event| match event {
+            ServerEvent::Settings { settings } => Some(Ok(settings.unwrap_or_else(|| serde_json::json!({})))),
+            _ => None,
+        })
+    }
+
+    /// Replaces this owner's settings.
+    pub fn save_settings(&self, settings: serde_json::Value) -> Result<(), Error> {
+        self.client.send(ClientCommand::SaveSettings { settings })
+    }
+
     /// The memory of the project at `cwd`.
     pub fn memory(&self, cwd: impl Into<PathBuf>) -> ProjectMemory<'_> {
         ProjectMemory { superfik: self, path: cwd.into() }

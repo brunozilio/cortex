@@ -1,133 +1,98 @@
-//! The `/commands` of the composer: what each one is called and how typed
-//! text names one. Pure; what a command does lives in the app's reducer.
+//! The terminal chat's own `/commands`: what each is called and how typed
+//! text names one. Any other `/name` is a skill or custom command the
+//! engine expands. Pure.
 
-use crate::Effort;
+use crate::{Effort, PermissionMode};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
+    Help,
     New,
-    Clear,
-    Context,
-    Memory,
-    Notes,
-    Skills,
-    Plugins,
-    Commands,
-    Repository,
-    Model,
-    Compact,
-    Mode,
-    Upload,
+    Model(Option<String>),
+    Mode(Option<PermissionMode>),
     Effort(Option<Effort>),
-    Browser,
-    Share,
-    Publish,
-    Voice,
-    Btw,
-    Rename,
+    Compact,
+    Memory(Option<String>),
+    Skills,
+    Agents,
+    Cost,
+    Exit,
 }
 
 impl Command {
-    pub const ALL: [Self; 20] = [
-        Self::Context,
-        Self::Memory,
-        Self::Notes,
-        Self::Skills,
-        Self::Plugins,
-        Self::Commands,
-        Self::Repository,
-        Self::Model,
-        Self::Compact,
-        Self::Mode,
-        Self::Upload,
-        Self::Effort(None),
-        Self::Browser,
-        Self::Share,
-        Self::Publish,
-        Self::Voice,
-        Self::Btw,
-        Self::Rename,
-        Self::New,
-        Self::Clear,
+    /// Every command with what it does, for `/help` and completion.
+    pub const HELP: [(&'static str, &'static str); 11] = [
+        ("help", "Show the commands and keys"),
+        ("new", "Start a new conversation (also /clear)"),
+        ("model", "Pick the model, or /model <id>"),
+        ("mode", "Pick ask, edits, plan or bypass"),
+        ("effort", "Set low, medium, high, xhigh or max"),
+        ("compact", "Summarize the conversation to free context"),
+        ("memory", "List the project's memory, or /memory <search>"),
+        ("skills", "List skills and commands"),
+        ("agents", "List agents"),
+        ("cost", "Show this session's cost"),
+        ("exit", "Quit (also /quit)"),
     ];
 
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::New => "new",
-            Self::Clear => "clear",
-            Self::Context => "context",
-            Self::Memory => "memory",
-            Self::Notes => "notes",
-            Self::Skills => "skills",
-            Self::Plugins => "plugins",
-            Self::Commands => "commands",
-            Self::Repository => "repository",
-            Self::Model => "model",
-            Self::Compact => "compact",
-            Self::Mode => "mode",
-            Self::Upload => "upload",
-            Self::Effort(_) => "effort",
-            Self::Browser => "browser",
-            Self::Share => "share",
-            Self::Publish => "publish",
-            Self::Voice => "voice",
-            Self::Btw => "btw",
-            Self::Rename => "rename",
-        }
-    }
-
+    /// `None` when `text` is not one of these (a skill, a command, or a
+    /// path typed as a prompt).
     pub fn parse(text: &str) -> Option<Self> {
-        let text = text.trim().strip_prefix('/')?.to_ascii_lowercase();
-        let mut words = text.split_whitespace();
-        let name = words.next()?;
-        if name == "effort" {
-            return match (words.next(), words.next()) {
-                (None, _) => Some(Self::Effort(None)),
-                (Some(level), None) => level_named(level).map(|l| Self::Effort(Some(l))),
-                _ => None,
-            };
+        let text = text.trim().strip_prefix('/')?;
+        let (name, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
+        let rest = rest.trim();
+        let argument = (!rest.is_empty()).then(|| rest.to_owned());
+        let bare = |command: Self| argument.is_none().then_some(command);
+        match name.to_ascii_lowercase().as_str() {
+            "help" | "?" => bare(Self::Help),
+            "new" | "clear" => bare(Self::New),
+            "model" => Some(Self::Model(argument)),
+            "mode" => match &argument {
+                None => Some(Self::Mode(None)),
+                Some(mode) => mode_named(mode).map(|mode| Self::Mode(Some(mode))),
+            },
+            "effort" => match &argument {
+                None => Some(Self::Effort(None)),
+                Some(level) => level_named(level).map(|level| Self::Effort(Some(level))),
+            },
+            "compact" => bare(Self::Compact),
+            "memory" => Some(Self::Memory(argument)),
+            "skills" | "commands" => bare(Self::Skills),
+            "agents" => bare(Self::Agents),
+            "cost" => bare(Self::Cost),
+            "exit" | "quit" => bare(Self::Exit),
+            _ => None,
         }
-        if words.next().is_some() {
-            return None;
-        }
-        Some(match name {
-            "new" => Self::New,
-            "clear" => Self::Clear,
-            "context" => Self::Context,
-            "memory" => Self::Memory,
-            "notes" => Self::Notes,
-            "skills" => Self::Skills,
-            "plugins" => Self::Plugins,
-            "commands" => Self::Commands,
-            "repository" => Self::Repository,
-            "model" => Self::Model,
-            "compact" => Self::Compact,
-            "mode" => Self::Mode,
-            "upload" => Self::Upload,
-            "browser" => Self::Browser,
-            "share" => Self::Share,
-            "publish" => Self::Publish,
-            "voice" => Self::Voice,
-            "btw" => Self::Btw,
-            "rename" => Self::Rename,
-            _ => return None,
-        })
     }
 }
 
-pub fn argument<'a>(text: &'a str, name: &str) -> Option<&'a str> {
-    let rest = text.trim().strip_prefix('/')?.strip_prefix(name)?;
-    let argument = rest.trim();
-    (rest.starts_with(char::is_whitespace) && !argument.is_empty()).then_some(argument)
+/// The short name a mode is typed and shown as (`/mode edits`).
+pub const fn mode_label(mode: PermissionMode) -> &'static str {
+    match mode {
+        PermissionMode::Ask => "ask",
+        PermissionMode::AcceptEdits => "edits",
+        PermissionMode::Plan => "plan",
+        PermissionMode::Bypass => "bypass",
+    }
 }
 
-fn level_named(name: &str) -> Option<Effort> {
-    Some(match name {
+pub fn mode_named(name: &str) -> Option<PermissionMode> {
+    Some(match name.to_ascii_lowercase().as_str() {
+        "ask" | "default" => PermissionMode::Ask,
+        "edits" | "acceptedits" | "accept-edits" => PermissionMode::AcceptEdits,
+        "plan" => PermissionMode::Plan,
+        "bypass" | "yolo" => PermissionMode::Bypass,
+        _ => return None,
+    })
+}
+
+pub fn level_named(name: &str) -> Option<Effort> {
+    Some(match name.to_ascii_lowercase().as_str() {
         "low" => Effort::Low,
         "medium" => Effort::Medium,
         "high" => Effort::High,
         "xhigh" => Effort::XHigh,
-        "max" | "ultracode" => Effort::Max,
+        "max" => Effort::Max,
         _ => return None,
     })
 }
@@ -137,20 +102,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn new_session_commands_accept_only_the_command_itself() {
-        for command in [Command::New, Command::Clear] {
-            assert!(Command::ALL.contains(&command));
-            assert_eq!(Command::parse(&format!("  /{}  ", command.name().to_uppercase())), Some(command));
-            assert_eq!(Command::parse(&format!("/{} explain this", command.name())), None);
+    fn commands_parse_with_their_arguments() {
+        assert_eq!(Command::parse("  /CLEAR "), Some(Command::New));
+        assert_eq!(Command::parse("/model"), Some(Command::Model(None)));
+        assert_eq!(Command::parse("/model claude-opus-5-5"), Some(Command::Model(Some("claude-opus-5-5".into()))));
+        assert_eq!(Command::parse("/mode plan"), Some(Command::Mode(Some(PermissionMode::Plan))));
+        assert_eq!(Command::parse("/effort max"), Some(Command::Effort(Some(Effort::Max))));
+        assert_eq!(Command::parse("/memory the renderer"), Some(Command::Memory(Some("the renderer".into()))));
+    }
+
+    #[test]
+    fn anything_else_is_left_to_the_engine() {
+        assert_eq!(Command::parse("/new explain this"), None, "a bare command takes no argument");
+        assert_eq!(Command::parse("/mode sideways"), None);
+        assert_eq!(Command::parse("/audit src"), None, "a custom command");
+        assert_eq!(Command::parse("/etc/hosts"), None, "a path");
+        assert_eq!(Command::parse("hello"), None);
+    }
+
+    #[test]
+    fn modes_and_levels_read_back_from_their_names() {
+        for mode in PermissionMode::ALL {
+            assert_eq!(mode_named(mode_label(mode)), Some(mode));
+        }
+        for level in Effort::ALL {
+            assert_eq!(level_named(level.cli_value()), Some(level));
+        }
+        let mut mode = PermissionMode::Ask;
+        for expected in [PermissionMode::AcceptEdits, PermissionMode::Plan, PermissionMode::Bypass, PermissionMode::Ask]
+        {
+            mode = mode.next();
+            assert_eq!(mode, expected);
         }
     }
 
     #[test]
-    fn an_argument_is_what_follows_the_name() {
-        assert_eq!(argument("/share Design Ops ", "share"), Some("Design Ops"));
-        assert_eq!(argument("/share", "share"), None);
-        assert_eq!(argument("/shared x", "share"), None);
-        assert_eq!(argument("share x", "share"), None);
-        assert_eq!(Command::parse("/share"), Some(Command::Share));
+    fn help_names_only_commands_that_parse() {
+        for (name, _) in Command::HELP {
+            assert!(Command::parse(&format!("/{name}")).is_some(), "{name}");
+        }
     }
 }

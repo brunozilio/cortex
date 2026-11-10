@@ -51,7 +51,28 @@ pub struct ModelCapabilities {
     pub reasoning_levels: Vec<String>,
 }
 
+/// The model a session starts with: the one `wanted` names when offered,
+/// else the first cloud model, else any.
+pub fn choose_model(models: &[ModelOption], wanted: Option<&str>) -> Option<ModelOption> {
+    wanted
+        .and_then(|wanted| models.iter().find(|model| model.is_named(wanted)))
+        .or_else(|| models.iter().find(|model| model.provider != ModelProvider::Local))
+        .or_else(|| models.first())
+        .cloned()
+}
+
 impl ModelOption {
+    /// Whether `wanted` names this model: its id, its id without the
+    /// provider prefix (`claude-opus-5-5` for `anthropic:claude-opus-5-5`),
+    /// or its label, ignoring case.
+    pub fn is_named(&self, wanted: &str) -> bool {
+        let wanted = wanted.trim();
+        let bare = self.id.split_once(':').map_or(self.id.as_str(), |(_, rest)| rest);
+        self.id.eq_ignore_ascii_case(wanted)
+            || bare.eq_ignore_ascii_case(wanted)
+            || self.label.eq_ignore_ascii_case(wanted)
+    }
+
     pub fn new(engine: EngineKind, id: impl Into<String>, label: impl Into<String>) -> Self {
         Self {
             id: id.into(),
@@ -176,6 +197,24 @@ impl Effort {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn served(id: &str, provider: ModelProvider) -> ModelOption {
+        ModelOption::new(EngineKind::Native, id, id.rsplit(':').next().unwrap_or(id)).served_by(provider)
+    }
+
+    #[test]
+    fn the_asked_model_wins_then_a_cloud_one() {
+        let models = [
+            served("mlx/qwen", ModelProvider::Local),
+            served("anthropic:claude-opus-5-5", ModelProvider::Anthropic),
+            served("openai:gpt-6", ModelProvider::OpenAi),
+        ];
+        assert_eq!(choose_model(&models, Some("gpt-6")).map(|m| m.id), Some("openai:gpt-6".into()));
+        assert_eq!(choose_model(&models, Some("ANTHROPIC:claude-opus-5-5")).map(|m| m.id), Some(models[1].id.clone()));
+        assert_eq!(choose_model(&models, Some("gone")).map(|m| m.id), Some(models[1].id.clone()), "first cloud");
+        assert_eq!(choose_model(&models[..1], None).map(|m| m.id), Some("mlx/qwen".into()));
+        assert_eq!(choose_model(&[], Some("x")), None);
+    }
 
     #[test]
     fn a_model_saved_before_providers_is_served_by_anthropic() {

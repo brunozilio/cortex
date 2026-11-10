@@ -61,6 +61,17 @@ impl PermissionMode {
         }
     }
 
+    /// The next mode in the order a chat cycles them: ask → edits → plan →
+    /// bypass → ask.
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Ask => Self::AcceptEdits,
+            Self::AcceptEdits => Self::Plan,
+            Self::Plan => Self::Bypass,
+            Self::Bypass => Self::Ask,
+        }
+    }
+
     const fn latitude(self) -> u8 {
         match self {
             Self::Plan => 0,

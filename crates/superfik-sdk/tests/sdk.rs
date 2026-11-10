@@ -138,3 +138,37 @@ fn providers_are_listed_and_a_bad_key_is_refused() {
     let listed = superfik.connect_provider(ModelProvider::Anthropic, "sk-ant-0123456789abcd").expect("connect");
     assert!(listed.iter().any(|p| p.provider == ModelProvider::Anthropic && p.account.is_some()));
 }
+
+#[test]
+fn settings_are_kept_between_builds() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(EngineKind::Native, vec![model()], Vec::new());
+    let superfik = build(&engine, data.path());
+    assert_eq!(superfik.settings().expect("settings"), json!({}));
+    superfik.save_settings(json!({"model": "scripted"})).expect("save");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while superfik.settings().expect("settings") != json!({"model": "scripted"}) {
+        assert!(std::time::Instant::now() < deadline, "the settings were not saved");
+    }
+    let again = build(&engine, data.path());
+    assert_eq!(again.settings().expect("settings"), json!({"model": "scripted"}));
+}
+
+#[test]
+fn a_session_s_effort_and_mode_reach_the_run_and_a_control_cancels_it_from_elsewhere() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(EngineKind::Native, vec![model()], script(Vec::new()))
+        .with_delay(std::time::Duration::from_millis(100));
+    let superfik = build(&engine, data.path());
+    let mut session = superfik.session(data.path(), model()).memory(false);
+    session.set_effort(superfik_sdk::Effort::Max);
+    session.set_permission(superfik_sdk::PermissionMode::Plan);
+    let run = session.send("think hard").expect("run");
+    let control = run.control();
+    std::thread::spawn(move || control.cancel().expect("cancel"));
+    let events: Vec<EngineEvent> = run.collect();
+    assert_eq!(events.last(), Some(&EngineEvent::Cancelled));
+    let request = engine.requests().remove(0);
+    assert_eq!((request.effort, request.permission), (superfik_sdk::Effort::Max, superfik_sdk::PermissionMode::Plan));
+    assert!(request.memory.is_none(), "memory was turned off");
+}

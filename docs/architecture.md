@@ -5,17 +5,19 @@ dependencies. Business rules never depend on IO. Decisions are in
 `docs/decisions.md` (cited as `ADR NNNN`), vocabulary in `GLOSSARY.md`.
 
 ```
-(cli, sdk — next) ──► superfik-backend ──► superfik-native ──► (provider APIs, MLX)
-                           │                    ├──► superfik-engine
-                           │                    ├──► superfik-plugins
-                           │                    ├──► superfik-providers
-                           │                    └──► superfik-gateway (MLX)
-                           ├──► superfik-workspace ─► (git, gh)
-                           └──► superfik-protocol ─► superfik-core   (everything speaks core)
+superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfik-native ──► (provider APIs, MLX)
+                                       │                    ├──► superfik-engine
+                                       │                    ├──► superfik-plugins
+                                       │                    ├──► superfik-providers
+                                       │                    └──► superfik-gateway (MLX)
+                                       ├──► superfik-workspace ─► (git, gh)
+                                       └──► superfik-protocol ─► superfik-core   (everything speaks core)
 ```
 
 | Crate | Responsibility |
 |---|---|
+| `superfik-cli` | The `superfik` binary: a full-screen chat (ratatui) over the SDK, `-p` print mode, `login`, `models`. Presentation only. |
+| `superfik-sdk` | `Superfik::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings. |
 | `superfik-core` | Domain model: requests, turns, context, agents, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
 | `superfik-engine` | `AgentEngine` trait, `EngineRegistry`, a `fake` engine for tests. |
 | `superfik-native` | Superfik's own engine (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; provider APIs behind `ModelApi`. |
@@ -89,6 +91,24 @@ folder" is the only way in (nothing ships with Superfik). Connections are
 signed-in accounts of a plugin; secrets stay in the backend's
 `SecretStore`, and a run's MCP config is written `0600` and removed on the
 terminal event.
+
+## The SDK and the CLI
+
+The SDK speaks only `ClientCommand`/`ServerEvent` (one dispatcher thread
+routes run events to their `Run`, other answers to the waiting call), so it
+can move to a remote backend unchanged. What a program adds reaches every
+run through the backend's `Extensions`: its agents, skills and commands are
+written to `<data>/sdk/<name>/` and offered under their own names
+(`PluginBrief::local_dirs`); HTTP/stdio MCP servers join the run's private
+MCP config; in-process servers (`McpServer`, closures behind
+`superfik_core::mcp::McpEndpoint`) ride on `RunCredentials::mcp` and are
+called through `LocalTransport`, never over the wire. A typed
+`/name args` is expanded by the engine when it names a skill or command.
+
+The CLI is a client of the SDK: `App` (state and effects, slow calls on
+threads), `Transcript` (events folded into what is shown), `Input`, `ask`,
+`view` (drawing). Its own `/commands` parse in `superfik_core::command`;
+model, mode and effort persist in the owner's settings.
 
 ## Sessions
 

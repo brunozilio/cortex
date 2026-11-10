@@ -71,6 +71,14 @@ impl Session {
         self.permission = mode;
     }
 
+    pub fn set_effort(&mut self, effort: Effort) {
+        self.effort = effort;
+    }
+
+    pub fn effort_level(&self) -> Effort {
+        self.effort
+    }
+
     pub fn model(&self) -> &ModelOption {
         &self.model
     }
@@ -162,15 +170,21 @@ impl Run {
 
     /// Answers a permission request or a question (`EngineEvent::Asked`).
     pub fn answer(&self, ask: AskId, decision: Decision) -> Result<(), Error> {
-        self.client.send(ClientCommand::AnswerAsk { run: self.id, ask, decision })
+        self.control().answer(ask, decision)
     }
 
     pub fn cancel(&self) -> Result<(), Error> {
-        self.client.send(ClientCommand::CancelRun { run: self.id })
+        self.control().cancel()
     }
 
     pub fn set_permission(&self, mode: PermissionMode) -> Result<(), Error> {
-        self.client.send(ClientCommand::SetPermissionMode { run: self.id, mode })
+        self.control().set_permission(mode)
+    }
+
+    /// A handle that answers, cancels or changes this run's mode while
+    /// another thread reads its events.
+    pub fn control(&self) -> RunControl {
+        RunControl { id: self.id, client: Arc::clone(&self.client) }
     }
 
     /// Runs to the end, denying anything the agent asks, and returns its
@@ -187,6 +201,31 @@ impl Run {
             }
         }
         Ok(text)
+    }
+}
+
+/// Steers a [`Run`] from anywhere; see [`Run::control`].
+#[derive(Debug, Clone)]
+pub struct RunControl {
+    id: RunId,
+    client: Arc<Client>,
+}
+
+impl RunControl {
+    pub fn id(&self) -> RunId {
+        self.id
+    }
+
+    pub fn answer(&self, ask: AskId, decision: Decision) -> Result<(), Error> {
+        self.client.send(ClientCommand::AnswerAsk { run: self.id, ask, decision })
+    }
+
+    pub fn cancel(&self) -> Result<(), Error> {
+        self.client.send(ClientCommand::CancelRun { run: self.id })
+    }
+
+    pub fn set_permission(&self, mode: PermissionMode) -> Result<(), Error> {
+        self.client.send(ClientCommand::SetPermissionMode { run: self.id, mode })
     }
 }
 
