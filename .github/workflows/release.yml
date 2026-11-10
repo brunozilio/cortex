@@ -252,6 +252,13 @@ jobs:
       - run: cargo test --workspace
       - run: python -m unittest discover -s scripts -p 'test_windows_*.py'
       - run: ./scripts/bundle-windows.ps1
+      - name: Check the updater reads the MSI's version
+        shell: pwsh
+        run: |
+          $env:SUPERFIK_TEST_MSI_VERSION = $env:TAG -replace '^v', ''
+          $env:SUPERFIK_TEST_MSI = "target/x86_64-pc-windows-msvc/release/bundle/Superfik-$($env:SUPERFIK_TEST_MSI_VERSION)-x64.msi"
+          cargo test -p superfik-update --lib -- --ignored --exact tests_install::msi::reads_a_built_msis_version
+          if ($LASTEXITCODE -ne 0) { throw "The updater could not read the MSI's version." }
       - name: Attach MSI and checksum
         shell: pwsh
         env:
@@ -262,6 +269,13 @@ jobs:
           if (-not (Test-Path $msi)) { throw "MSI version does not match the release tag." }
           gh release upload $env:TAG $msi "$msi.sha256" --clobber
           if ($LASTEXITCODE -ne 0) { throw "MSI upload failed." }
+      - name: Announce the update
+        shell: bash
+        env:
+          SUPERFIK_UPDATE_KEY: ${{ secrets.SUPERFIK_UPDATE_KEY }}
+          MINIMUM: ${{ vars.SUPERFIK_MINIMUM_VERSION }}
+          GH_TOKEN: ${{ github.token }}
+        run: .github/workflows/scripts/announce-update.sh "target/x86_64-pc-windows-msvc/release/bundle/Superfik-${TAG#v}-x64.msi" windows-x86_64
 
   publish-server:
     needs: release-please

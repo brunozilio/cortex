@@ -170,7 +170,10 @@ dotnet tool install --global wix --version 5.0.2
 It validates the engine and an x64 GUI executable importing CEF, then
 assembles CEF, the app, the x64 CRT (`-VCRuntimeDir` if not found) and
 notices. WiX installs per machine in `%ProgramFiles%\Superfik` with a Start
-menu shortcut and a fixed UpgradeCode; uninstall keeps user data. The icon
+menu shortcut and a fixed UpgradeCode; uninstall keeps user data. The
+installed app updates itself: it downloads the next release's signed MSI,
+checks it, and once the app quits runs it (Windows asks for permission)
+and reopens the app. The icon
 comes from `cargo run -p xtask -- windows-icon assets/windows/superfik.ico`.
 `release.yml`'s Windows job stays off until `SUPERFIK_WINDOWS_RELEASE_ENABLED=true`;
 the MSI is unsigned for now.

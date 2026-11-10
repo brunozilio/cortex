@@ -3,8 +3,8 @@
 //! downloads, checks and stages the offered version with its progress, and
 //! hands over to the swap that relaunches the app. Answers come back as
 //! actions through `poll`, then `wake`. There is none where the install
-//! cannot replace itself (a `cargo run` binary, a `.deb`, Windows for now)
-//! or with `SUPERFIK_UPDATES=off`.
+//! cannot replace itself (a `cargo run` binary, a `.deb`) or with
+//! `SUPERFIK_UPDATES=off`.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};

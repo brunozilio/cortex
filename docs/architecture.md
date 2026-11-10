@@ -566,8 +566,10 @@ Superfik updates itself (`superfik-update`). Each GitHub release carries
 size, SHA-256, Ed25519 signature over the digest). `Updater::prepare`
 downloads, checks size, hash and signature (`UPDATE_KEY`), then the
 `Installer` (`.app` on macOS with `codesign` and team checks, a Linux
-tarball; none for `cargo run`, `.deb` or Windows) stages beside the
-install; `restart` runs `swap.sh` detached. Tools sit behind `Commands`,
+tarball, Windows' MSI with its `ProductVersion` checked; none for
+`cargo run` or `.deb`) stages it; `restart` runs `swap.sh` detached, or on
+Windows `swap.ps1`, which runs the MSI through `msiexec` (Windows asks to
+elevate) and relaunches the app. Tools sit behind `Commands`,
 so every check is tested with stand-ins.
 
 CI signs archives with `SUPERFIK_UPDATE_KEY`

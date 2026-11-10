@@ -1,10 +1,15 @@
-//! The system tools an install calls (`ditto`, `tar`, `codesign`) and the
-//! detached swap, behind `Commands`.
+//! The system tools an install calls (`ditto`, `tar`, `codesign`,
+//! PowerShell) and the detached swap, behind `Commands`.
 
 use std::ffi::OsString;
 use std::process::{Command, Stdio};
 
 use crate::UpdateError;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+#[cfg(windows)]
+const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ran {
@@ -22,7 +27,10 @@ pub struct System;
 
 impl Commands for System {
     fn run(&self, program: &str, args: &[OsString]) -> Result<Ran, UpdateError> {
-        let output = Command::new(program)
+        let mut command = Command::new(program);
+        #[cfg(windows)]
+        std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NO_WINDOW);
+        let output = command
             .args(args)
             .stdin(Stdio::null())
             .output()
@@ -37,6 +45,11 @@ impl Commands for System {
         command.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
         #[cfg(unix)]
         std::os::unix::process::CommandExt::process_group(&mut command, 0);
+        #[cfg(windows)]
+        std::os::windows::process::CommandExt::creation_flags(
+            &mut command,
+            CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP,
+        );
         command.spawn().map(drop).map_err(|error| UpdateError::Install(format!("{program}: {error}")))
     }
 }

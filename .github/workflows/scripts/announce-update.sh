@@ -16,7 +16,9 @@ ASSET="$(cargo run --quiet -p xtask -- sign-update "$ARCHIVE" --version "$VERSIO
 MANIFEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$MANIFEST_DIR"' EXIT
 MANIFEST="$MANIFEST_DIR/superfik-$PLATFORM.json"
-ASSET="$ASSET" VERSION="$VERSION" MINIMUM="${MINIMUM:-}" TAG="$TAG" REPOSITORY="$REPOSITORY" python3 -I -c '
+PYTHON=python3
+"$PYTHON" -c '' 2>/dev/null || PYTHON=python
+ASSET="$ASSET" VERSION="$VERSION" MINIMUM="${MINIMUM:-}" TAG="$TAG" REPOSITORY="$REPOSITORY" "$PYTHON" -I -c '
 import json, os, time
 print(json.dumps({
     "version": os.environ["VERSION"],

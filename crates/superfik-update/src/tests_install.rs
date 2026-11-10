@@ -213,3 +213,5 @@ fn restart_refuses_what_was_not_staged() {
 
 #[cfg(unix)]
 mod swap_script;
+
+mod msi;
