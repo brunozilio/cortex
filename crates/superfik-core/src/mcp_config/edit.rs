@@ -8,8 +8,8 @@ use serde_json::{Map, Value, json};
 
 use super::{McpApproval, is_free_name};
 
-const ENABLED: &str = "enabledMcpjsonServers";
-const DISABLED: &str = "disabledMcpjsonServers";
+const ENABLED: &str = "enabledMcpServers";
+const DISABLED: &str = "disabledMcpServers";
 
 /// Where a server a run can use was configured.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

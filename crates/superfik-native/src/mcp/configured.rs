@@ -1,6 +1,6 @@
-//! MCP servers a person or a project configures, in Claude Code's files:
-//! the project's `.mcp.json` (the nearest up from the run's folder; a
-//! server starts only once the owner approved it) and the user's
+//! MCP servers a person or a project configures: the project's
+//! `.superfik/mcp.json` (the nearest up from the run's folder; a server
+//! starts only once the owner approved it) and the user's
 //! `~/.superfik/mcp.json`. `${VAR}` and `${VAR:-default}` come from the
 //! environment. On a clash of names the project's wins over the user's.
 //! Installed plugins' servers follow, as `plugin_<plugin>_<server>`.
@@ -45,8 +45,17 @@ pub fn list(request: &PromptRequest) -> Result<Vec<McpServerInfo>, String> {
         .collect())
 }
 
+/// The project's `.superfik/mcp.json`: the nearest up from `cwd`, never the
+/// home folder's, which is the user's own.
+pub fn project_config(cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
+    cwd.ancestors()
+        .filter(|dir| Some(*dir) != home)
+        .map(|dir| dir.join(".superfik").join("mcp.json"))
+        .find(|path| path.is_file())
+}
+
 fn origins(cwd: &Path, sources: &McpSources) -> Vec<(McpOrigin, ServerSpec)> {
-    let project = cwd.ancestors().map(|dir| dir.join(".mcp.json")).find(|path| path.is_file());
+    let project = project_config(cwd, sources.home.as_deref());
     let project = project.map(|path| read(&path, "the project's")).unwrap_or_default();
     let user =
         sources.home.as_ref().map(|home| read(&home.join(".superfik/mcp.json"), "the user's")).unwrap_or_default();
@@ -118,6 +127,17 @@ mod tests {
     }
 
     #[test]
+    fn the_home_folder_s_config_is_the_user_s_never_a_project_s() {
+        let home = tempfile::tempdir().expect("home");
+        write(home.path().join(".superfik/mcp.json"), r#"{"mcpServers": {}}"#);
+        let repo = home.path().join("code/app");
+        std::fs::create_dir_all(&repo).expect("repo");
+        assert_eq!(project_config(&repo, Some(home.path())), None);
+        write(home.path().join("code/.superfik/mcp.json"), r#"{"mcpServers": {}}"#);
+        assert_eq!(project_config(&repo, Some(home.path())), Some(home.path().join("code/.superfik/mcp.json")));
+    }
+
+    #[test]
     fn the_listing_shows_every_server_its_origin_and_whether_it_starts() {
         use superfik_core::Extensions;
         use superfik_core::mcp_config::{McpOrigin, McpServerInfo, McpState};
@@ -129,10 +149,10 @@ mod tests {
             r#"{"mcpServers": {"atlassian": {"type": "http", "url": "https://mcp.atlassian.com/v1/mcp", "headers": {"Authorization": "Bearer secret"}}}}"#,
         );
         write(
-            repo.path().join(".mcp.json"),
+            repo.path().join(".superfik/mcp.json"),
             r#"{"mcpServers": {"jira": {"command": "jira-mcp", "args": ["--stdio"]}, "sonar": {"command": "sonar-mcp"}}}"#,
         );
-        write(repo.path().join(".superfik/settings.local.json"), r#"{"disabledMcpjsonServers": ["sonar"]}"#);
+        write(repo.path().join(".superfik/settings.local.json"), r#"{"disabledMcpServers": ["sonar"]}"#);
         write(plugin.path().join(".superfik-plugin/plugin.json"), r#"{"name": "acme"}"#);
         write(plugin.path().join(".mcp.json"), r#"{"mcpServers": {"datadog": {"command": "dd-mcp"}}}"#);
         let mut request = PromptRequest::plain(repo.path().to_path_buf(), "", ModelOption::new("", ""));
@@ -173,7 +193,7 @@ mod tests {
             }}"#,
         );
         write(
-            repo.path().join(".mcp.json"),
+            repo.path().join(".superfik/mcp.json"),
             r#"{"mcpServers": {
                 "jira": {"command": "jira-mcp"},
                 "sonar": {"command": "sonar-mcp"},

@@ -65,16 +65,15 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut judge = None;
     let mut hooks = crate::hooks::Hooks::default();
     let mut mcp_approval = superfik_core::mcp_config::McpApproval::default();
-    let is_user_root =
-        |root: &Path| home.is_some_and(|home| root == home.join(".claude") || root == home.join(".superfik"));
+    let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(".superfik"));
     let mut roots = Vec::new();
     if let Some(home) = home {
-        roots.extend([home.join(".claude"), home.join(".superfik")]);
+        roots.push(home.join(".superfik"));
     }
     let mut ancestors: Vec<_> = cwd.ancestors().collect();
     ancestors.reverse();
     for directory in ancestors {
-        roots.extend([directory.join(".claude"), directory.join(".superfik")]);
+        roots.push(directory.join(".superfik"));
     }
     let mut seen = std::collections::HashSet::new();
     roots.retain(|root| seen.insert(root.canonicalize().unwrap_or_else(|_| root.clone())));
@@ -168,13 +167,13 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
 mod tests {
     use super::*;
     #[test]
-    fn project_overrides_user_and_native_overrides_compatibility_style() {
+    fn project_overrides_user_and_claude_settings_are_not_read() {
         let home = tempfile::tempdir().expect("valid test fixture");
         let repo = tempfile::tempdir().expect("valid test fixture");
         for (root, style) in [
             (home.path().join(".superfik"), "Explanatory"),
-            (repo.path().join(".claude"), "Learning"),
             (repo.path().join(".superfik"), "Concise"),
+            (repo.path().join(".claude"), "Learning"),
         ] {
             std::fs::create_dir_all(&root).expect("valid test fixture");
             std::fs::write(root.join("settings.json"), serde_json::json!({"outputStyle":style}).to_string())
@@ -219,8 +218,8 @@ mod tests {
             std::fs::write(path, text).expect("write");
         };
         write(repo.path().join(".superfik/settings.json"), r#"{"enableAllProjectMcpServers": true}"#);
-        write(repo.path().join(".claude/settings.local.json"), r#"{"enabledMcpjsonServers": ["jira"]}"#);
-        write(home.path().join(".superfik/settings.json"), r#"{"disabledMcpjsonServers": ["sonar"]}"#);
+        write(repo.path().join(".superfik/settings.local.json"), r#"{"enabledMcpServers": ["jira"]}"#);
+        write(home.path().join(".superfik/settings.json"), r#"{"disabledMcpServers": ["sonar"]}"#);
         let approval = load(repo.path(), Some(home.path()), &[]).expect("settings").mcp_approval;
         assert!(!approval.all, "a checked-in setting cannot approve its own servers");
         assert_eq!(approval.enabled, ["jira"]);

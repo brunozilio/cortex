@@ -7,7 +7,6 @@
 use std::path::{Path, PathBuf};
 
 use super::subagent_config::AgentConfig;
-use crate::claude_home::ClaudeHome;
 use serde_json::{Value, json};
 use superfik_core::PromptRequest;
 
@@ -31,12 +30,10 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent>
     let cwd = &request.cwd;
     let mut sources: Vec<(PathBuf, Option<String>)> = Vec::new();
     for directory in cwd.ancestors() {
-        sources.extend([(directory.join(".superfik/agents"), None), (directory.join(".claude/agents"), None)]);
+        sources.push((directory.join(".superfik/agents"), None));
     }
     if let Some(home) = home {
         sources.push((home.join(".superfik/agents"), None));
-        let claude = ClaudeHome::new(home.join(".claude"));
-        sources.extend(claude.agent_sources().into_iter().map(|source| (source.dir, source.namespace)));
     }
     for plugin in crate::plugins::found(request, home) {
         sources.push((plugin.root.join("agents"), Some(plugin.name)));

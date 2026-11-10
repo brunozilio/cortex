@@ -75,12 +75,11 @@ the app. Checking that assertions match source is code review.
 ## Get a handle
 
 **Check the project's skills first — even if you already know how to
-build and run.** They live in `.superfik/skills/` (Superfik also reads
-`.claude/skills/`). A matching `verifier-*` skill is the repo's
+build and run.** They live in `.superfik/skills/`. A matching `verifier-*` skill is the repo's
 evidence-capture protocol: it wraps the session so a reviewer can
 replay what you saw (recording, screenshots). Drive the surface
 without it and you get a verdict with no replay. The repo's
-instruction files (`SUPERFIK.md`, also `CLAUDE.md` and `AGENTS.md`)
+instruction files (`SUPERFIK.md`, also `AGENTS.md`)
 often name the build, run and check commands too — read them.
 
 Skills live at the repo root **and** in the package/app dirs the
@@ -88,8 +87,8 @@ diff touches — in a monorepo the unlock for `apps/desktop/` is
 usually `apps/desktop/.superfik/skills/`, not the root. Probe both:
 
 ```bash
-ls .superfik/skills/ .claude/skills/                   # repo root
-ls <touched-dir>/.superfik/skills/ <touched-dir>/.claude/skills/   # each dir level the diff names
+ls .superfik/skills/                  # repo root
+ls <touched-dir>/.superfik/skills/    # each dir level the diff names
 ```
 
 (Glob works the same on every system: `**/.superfik/skills/*/SKILL.md`.)

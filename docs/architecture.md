@@ -108,9 +108,10 @@ owner and project).
 
 ## Skills, agents and MCP
 
-The engine finds skills, commands and agents where Claude Code keeps them
-(the project's `.claude/` and `.superfik/`, `~/.claude`) plus the SDK
-host's folders (`Extensions::dirs`).
+The engine reads only Superfik's folders (ADR 0021): skills, commands,
+agents, rules and settings in the project's `.superfik/` (and its
+ancestors') and `~/.superfik/`, plus the SDK host's folders
+(`Extensions::dirs`). Nothing in `.claude/`, `~/.claude` or `CLAUDE.md`.
 MCP servers come from the host: HTTP/stdio servers go in a run's private
 MCP config (`0600`, removed on the terminal event), in-process ones ride on
 the run's credentials.

@@ -15,21 +15,21 @@ A project skill that launches this app is the repo's verified path -
 its author already cold-started it and committed what worked: the
 exact install line, the env vars, the patches, the driver. Use it
 instead of rediscovering. The repo's instruction files (`SUPERFIK.md`,
-also `CLAUDE.md` and `AGENTS.md`) often hold the run command too.
+also `AGENTS.md`) often hold the run command too.
 
-Project skills live in `.superfik/skills/` (Superfik also reads
-`.claude/skills/`), from the working directory up to the repo root:
+Project skills live in `.superfik/skills/`, from the working directory up
+to the repo root:
 
 ```bash
 d=$PWD; while :; do
-  grep -Hm1 '^description:' "$d"/.superfik/skills/*/SKILL.md "$d"/.claude/skills/*/SKILL.md 2>/dev/null
+  grep -Hm1 '^description:' "$d"/.superfik/skills/*/SKILL.md 2>/dev/null
   [ -e "$d/.git" ] || [ "$d" = / ] && break
   d=$(dirname "$d")
 done
 ```
 
 On Windows without a POSIX shell, Glob for `**/.superfik/skills/*/SKILL.md`
-and `**/.claude/skills/*/SKILL.md` and Grep their `description:` lines.
+and Grep their `description:` lines.
 
 The user may be on macOS, Windows or Linux, and the app runs on their
 own computer: use the platform's commands, and launch the app the way

@@ -11,7 +11,6 @@ mod boundary;
 pub mod brief;
 pub mod checkpoints;
 pub mod chores;
-pub mod claude_home;
 pub mod control;
 mod engine;
 #[cfg(any(test, feature = "test-support"))]

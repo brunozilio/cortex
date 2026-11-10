@@ -1,4 +1,4 @@
-//! A project's `.mcp.json` servers reach a run once the owner approved them.
+//! A project's `.superfik/mcp.json` servers reach a run once the owner approved them.
 
 use std::sync::{Arc, Mutex};
 
@@ -29,11 +29,11 @@ fn a_project_server_reaches_a_run_once_approved() {
         r#"{{"mcpServers": {{"jira": {{"command": "/bin/sh", "args": ["{}"]}}}}}}"#,
         repo.path().join("server.sh").display()
     );
-    std::fs::write(repo.path().join(".mcp.json"), config).expect("config");
+    std::fs::create_dir_all(repo.path().join(".superfik")).expect("dir");
+    std::fs::write(repo.path().join(".superfik/mcp.json"), config).expect("config");
     assert!(!offered(repo.path()).iter().any(|name| name.starts_with("mcp__jira__")), "not approved yet");
 
-    std::fs::create_dir_all(repo.path().join(".superfik")).expect("dir");
-    std::fs::write(repo.path().join(".superfik/settings.local.json"), r#"{"enabledMcpjsonServers": ["jira"]}"#)
+    std::fs::write(repo.path().join(".superfik/settings.local.json"), r#"{"enabledMcpServers": ["jira"]}"#)
         .expect("approve");
     assert!(offered(repo.path()).contains(&"mcp__jira__ping".to_owned()));
 }

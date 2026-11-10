@@ -33,9 +33,9 @@ building agents, commands, skills, memory access and in-process MCP tools,
 and for connecting MCP servers over HTTP and stdio.
 
 - The AI providers are LLM providers (`superfik-providers`,
-  `ModelProviders`). There is no plugin system of our own: skills, agents
-  and MCP come from Claude Code's folders and from the SDK host. No web
-  search or fetch tool.
+  `ModelProviders`). Skills, agents and MCP come from Superfik's folders
+  (ADR 0021), its plugins (ADR 0019) and the SDK host. No web search or
+  fetch tool.
 - One engine, ours. No registry of engines, no tool worker process, no
   git/workspace inspection, no memory optimizer, no session import.
 - A separate product from the desktop Superfik: its own data folder,
@@ -74,3 +74,14 @@ verdict. A judge that cannot grade fails the check but never the run.
 Planning runs and sub-agents are not judged. The command is
 `/verification`, not `/verify`: `verify` and `run` stay skills, which the
 judge uses.
+
+## 0021 — Only Superfik's folders
+
+Superfik reads only its own files: `SUPERFIK.md` (and `.superfik/SUPERFIK.md`,
+`SUPERFIK.local.md`, `~/.superfik/SUPERFIK.md`), and skills, commands,
+agents, rules, output styles, settings and MCP servers in the project's
+`.superfik/` and `~/.superfik/`. The project's MCP servers are in
+`.superfik/mcp.json`, approved with `enabledMcpServers` /
+`disabledMcpServers`. Nothing in `.claude/`, `~/.claude`, `CLAUDE.md` or a
+root `.mcp.json` is read; `AGENTS.md`, which no single tool owns, still is.
+Hooks get `SUPERFIK_PROJECT_DIR`.

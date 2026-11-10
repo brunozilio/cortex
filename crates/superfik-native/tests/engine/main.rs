@@ -6,6 +6,7 @@ mod mcp;
 mod plugins;
 mod runs;
 mod sessions;
+mod superfik_only;
 mod verification;
 
 use std::sync::mpsc::{Receiver, channel};

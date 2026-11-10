@@ -8,15 +8,7 @@ use std::{
 };
 const MAX_FILE: usize = 1024 * 1024;
 const MAX_TOTAL: usize = 4 * 1024 * 1024;
-const NAMES: [&str; 7] = [
-    "SUPERFIK.md",
-    ".superfik/SUPERFIK.md",
-    "CLAUDE.md",
-    ".claude/CLAUDE.md",
-    "AGENTS.md",
-    "SUPERFIK.local.md",
-    "CLAUDE.local.md",
-];
+const NAMES: [&str; 4] = ["SUPERFIK.md", ".superfik/SUPERFIK.md", "AGENTS.md", "SUPERFIK.local.md"];
 fn network(path: &Path) -> bool {
     let s = path.to_string_lossy();
     s.starts_with("\\\\") || s.starts_with("//") || s.starts_with("/net/") || s.starts_with("/Network/")
@@ -110,17 +102,12 @@ impl Loader {
 pub fn load(cwd: &Path, home: Option<&Path>) -> Vec<Instructions> {
     let mut loader = Loader { seen: HashSet::new(), bytes: 0 };
     let mut result = Vec::new();
-    if let Some(home) = home {
-        for (dir, file) in [(".superfik", "SUPERFIK.md"), (".claude", "CLAUDE.md")] {
-            let root = home.join(dir);
-            let path = root.join(file);
-            if let Ok(allowed) = root.canonicalize()
-                && let Ok(text) = loader.read(&path, &allowed, 0)
-                && !text.trim().is_empty()
-            {
-                result.push(Instructions { path, scope: Scope::User, text });
-            }
-        }
+    if let Some(root) = home.map(|home| home.join(".superfik"))
+        && let Ok(allowed) = root.canonicalize()
+        && let Ok(text) = loader.read(&root.join("SUPERFIK.md"), &allowed, 0)
+        && !text.trim().is_empty()
+    {
+        result.push(Instructions { path: root.join("SUPERFIK.md"), scope: Scope::User, text });
     }
     let trusted = trust_root(cwd);
     let mut ancestors: Vec<_> = cwd.ancestors().collect();
@@ -161,10 +148,7 @@ pub fn nested(cwd: &Path) -> Vec<super::rules::Rule> {
         .filter_map(Result::ok)
         .filter(|e| {
             e.file_type().is_some_and(|t| t.is_file())
-                && matches!(
-                    e.file_name().to_str(),
-                    Some("CLAUDE.md" | "CLAUDE.local.md" | "SUPERFIK.md" | "SUPERFIK.local.md" | "AGENTS.md")
-                )
+                && matches!(e.file_name().to_str(), Some("SUPERFIK.md" | "SUPERFIK.local.md" | "AGENTS.md"))
         })
         .map(|e| e.into_path())
         .collect();
@@ -174,7 +158,7 @@ pub fn nested(cwd: &Path) -> Vec<super::rules::Rule> {
         let Some(mut base) = path.parent() else {
             continue;
         };
-        if matches!(base.file_name().and_then(|s| s.to_str()), Some(".claude" | ".superfik")) {
+        if matches!(base.file_name().and_then(|s| s.to_str()), Some(".superfik")) {
             base = base.parent().unwrap_or(base);
         }
         if base == cwd {

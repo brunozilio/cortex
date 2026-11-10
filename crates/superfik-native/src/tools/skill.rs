@@ -1,12 +1,10 @@
 //! Skills: `SKILL.md` instructions the agent loads by name with the `Skill`
-//! tool. Found where coding agents keep them: the project's
-//! (`.superfik/skills`, `.claude/skills`), the user's (`~/.superfik/skills`,
-//! `~/.claude`), Superfik plugins and the SDK host's folders.
+//! tool. Found in the project's `.superfik/skills`, the user's
+//! `~/.superfik/skills`, Superfik plugins and the SDK host's folders.
 //! On a clash of names the first found wins.
 
 use std::path::{Path, PathBuf};
 
-use crate::claude_home::ClaudeHome;
 use crate::frontmatter::parse as parse_frontmatter;
 use serde_json::{Value, json};
 use superfik_core::PromptRequest;
@@ -32,12 +30,10 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
     let cwd = &request.cwd;
     let mut sources: Vec<(PathBuf, Option<String>)> = Vec::new();
     for directory in cwd.ancestors() {
-        sources.extend([(directory.join(".superfik/skills"), None), (directory.join(".claude/skills"), None)]);
+        sources.push((directory.join(".superfik/skills"), None));
     }
     if let Some(home) = home {
         sources.push((home.join(".superfik/skills"), None));
-        let claude = ClaudeHome::new(home.join(".claude"));
-        sources.extend(claude.skill_sources().into_iter().map(|source| (source.dir, source.namespace)));
     }
     for plugin in crate::plugins::found(request, home) {
         sources.push((plugin.root.join("skills"), Some(plugin.name)));
@@ -226,7 +222,7 @@ mod tests {
         let home = tempfile::tempdir().expect("home");
         let plugin = tempfile::tempdir().expect("plugin");
         skill(&repo.path().join(".superfik/skills"), "release", "Cuts a release.");
-        skill(&repo.path().join(".claude/skills"), "release", "An older copy.");
+        skill(&home.path().join(".superfik/skills"), "release", "The user's copy.");
         skill(&home.path().join(".superfik/skills"), "morning", "The morning briefing.");
         skill(&plugin.path().join("skills"), "dataviz", "Charts.");
         let model = ModelOption::new("m", "M");

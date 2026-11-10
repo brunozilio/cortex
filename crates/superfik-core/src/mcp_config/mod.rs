@@ -1,7 +1,6 @@
-//! Rules for MCP servers a person or a project configures (`.mcp.json`):
-//! which of a project's servers may start, and how `${VAR}` and
-//! `${VAR:-default}` in a config are filled in. Claude Code's keys and
-//! syntax, so the same files work in both.
+//! Rules for MCP servers a person or a project configures
+//! (`.superfik/mcp.json`): which of a project's servers may start, and how
+//! `${VAR}` and `${VAR:-default}` in a config are filled in.
 
 mod edit;
 
@@ -18,9 +17,9 @@ pub fn is_free_name(name: &str) -> bool {
     !RESERVED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }
 
-/// What the owner said about a project's `.mcp.json` servers
-/// (`enableAllProjectMcpServers`, `enabledMcpjsonServers`,
-/// `disabledMcpjsonServers`). A repository cannot say it for itself.
+/// What the owner said about a project's `.superfik/mcp.json` servers
+/// (`enableAllProjectMcpServers`, `enabledMcpServers`,
+/// `disabledMcpServers`). A repository cannot say it for itself.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpApproval {
     pub all: bool,
@@ -37,8 +36,8 @@ impl McpApproval {
         let names = |key: &str| -> Vec<String> {
             settings[key].as_array().into_iter().flatten().filter_map(|n| n.as_str().map(str::to_owned)).collect()
         };
-        self.enabled.extend(names("enabledMcpjsonServers"));
-        self.disabled.extend(names("disabledMcpjsonServers"));
+        self.enabled.extend(names("enabledMcpServers"));
+        self.disabled.extend(names("disabledMcpServers"));
     }
 
     /// A project's server may start when approved and not turned off.
@@ -94,9 +93,9 @@ mod tests {
     fn a_project_server_starts_only_when_the_owner_approved_it() {
         let mut approval = McpApproval::default();
         assert!(!approval.allows("jira"), "nothing approved yet");
-        approval.read(&json!({"enabledMcpjsonServers": ["jira"]}));
+        approval.read(&json!({"enabledMcpServers": ["jira"]}));
         assert!(approval.allows("jira") && !approval.allows("sonar"));
-        approval.read(&json!({"enableAllProjectMcpServers": true, "disabledMcpjsonServers": ["jira"]}));
+        approval.read(&json!({"enableAllProjectMcpServers": true, "disabledMcpServers": ["jira"]}));
         assert!(approval.allows("sonar"), "all approved");
         assert!(!approval.allows("jira"), "turned off wins");
     }
@@ -115,19 +114,16 @@ mod tests {
 
     #[test]
     fn approving_and_turning_off_rewrite_only_the_owner_s_lists() {
-        let settings = json!({"model": "opus", "enabledMcpjsonServers": ["sonar"], "disabledMcpjsonServers": ["jira"]});
+        let settings = json!({"model": "opus", "enabledMcpServers": ["sonar"], "disabledMcpServers": ["jira"]});
         let approved = set_approval(settings, "jira", true);
         assert_eq!(
             approved,
-            json!({"model": "opus", "enabledMcpjsonServers": ["sonar", "jira"], "disabledMcpjsonServers": []})
+            json!({"model": "opus", "enabledMcpServers": ["sonar", "jira"], "disabledMcpServers": []})
         );
         let off = set_approval(approved, "sonar", false);
-        assert_eq!(off["enabledMcpjsonServers"], json!(["jira"]));
-        assert_eq!(off["disabledMcpjsonServers"], json!(["sonar"]));
-        assert_eq!(
-            set_approval(json!(null), "x", true),
-            json!({"enabledMcpjsonServers": ["x"], "disabledMcpjsonServers": []})
-        );
+        assert_eq!(off["enabledMcpServers"], json!(["jira"]));
+        assert_eq!(off["disabledMcpServers"], json!(["sonar"]));
+        assert_eq!(set_approval(json!(null), "x", true), json!({"enabledMcpServers": ["x"], "disabledMcpServers": []}));
     }
 
     #[test]
@@ -147,7 +143,7 @@ mod tests {
     #[test]
     fn a_server_s_state_says_why_it_does_or_does_not_start() {
         let mut approval = McpApproval::default();
-        approval.read(&json!({"enabledMcpjsonServers": ["jira"], "disabledMcpjsonServers": ["sonar"]}));
+        approval.read(&json!({"enabledMcpServers": ["jira"], "disabledMcpServers": ["sonar"]}));
         assert_eq!(McpState::of(&McpOrigin::Project, "jira", &approval), McpState::Ready);
         assert_eq!(McpState::of(&McpOrigin::Project, "sonar", &approval), McpState::Off);
         assert_eq!(McpState::of(&McpOrigin::Project, "new", &approval), McpState::Pending);

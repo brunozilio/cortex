@@ -13,7 +13,6 @@ pub fn summary(skills: &[String], agents: &[CustomAgent], servers: &[McpServerIn
         .map(String::as_str)
         .chain(agents.iter().map(|agent| agent.name.as_str()))
         .filter_map(namespace)
-        .filter(|plugin| plugin != "anthropic-skills")
         .chain(servers.iter().filter_map(|server| match &server.origin {
             McpOrigin::Plugin(plugin) => Some(plugin.clone()),
             _ => None,
@@ -45,7 +44,7 @@ mod tests {
 
     #[test]
     fn a_reload_names_the_plugins_and_counts_what_they_bring() {
-        let skills = ["acme:triage".to_owned(), "anthropic-skills:pdf".to_owned(), "verify".to_owned()];
+        let skills = ["acme:triage".to_owned(), "acme:fix".to_owned(), "verify".to_owned()];
         let agents = [CustomAgent { name: "beta:reviewer".into(), description: String::new() }];
         let server = |name: &str, origin: McpOrigin, state: McpState| McpServerInfo {
             name: name.into(),

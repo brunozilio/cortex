@@ -104,7 +104,7 @@ fn initial_prompt_expands_an_explicit_skill_before_the_first_model_call_through_
 #[test]
 fn initial_prompt_expands_a_custom_command() {
     let dir = tempfile::tempdir().expect("dir");
-    let root = dir.path().join(".claude");
+    let root = dir.path().join(".superfik");
     std::fs::create_dir_all(root.join("agents")).expect("agents");
     std::fs::create_dir_all(root.join("commands")).expect("commands");
     std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer"}"#).expect("settings");
@@ -131,7 +131,7 @@ fn initial_prompt_expands_a_custom_command() {
 #[test]
 fn a_typed_slash_command_becomes_its_text_and_a_path_stays_as_typed() {
     let dir = tempfile::tempdir().expect("dir");
-    let commands = dir.path().join(".claude/commands");
+    let commands = dir.path().join(".superfik/commands");
     std::fs::create_dir_all(&commands).expect("commands");
     std::fs::write(commands.join("audit.md"), "---\ndescription: Audit\n---\nTYPED_COMMAND_SENTINEL $ARGUMENTS")
         .expect("command");

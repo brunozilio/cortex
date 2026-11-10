@@ -58,8 +58,8 @@ provider resends only compatible reasoning signatures.
 
 ## Project settings
 
-`.superfik/settings.json` (project, then user; `.claude` equivalents are
-read for compatibility, the native file and the project win):
+`.superfik/settings.json` (project, then user; the project wins). Nothing
+in `.claude/` or `CLAUDE.md` is read (ADR 0021):
 
 - `outputStyle`; custom styles in `.superfik/output-styles/<name>.md`
   (`keep-coding-instructions: true` keeps the engineering instructions).
@@ -70,9 +70,10 @@ read for compatibility, the native file and the project win):
 - `autoMemoryEnabled: false` (or `SUPERFIK_DISABLE_AUTO_MEMORY=1`) turns
   agent memory off.
 
-Rules in `.superfik/rules` or `.claude/rules` may carry `paths` globs; new
+Rules in `.superfik/rules` may carry `paths` globs; new
 rules found during a call are returned before the batch runs. Instruction
-files load from the ancestors and, nested, when a tool touches their path;
+files (`SUPERFIK.md`, `.superfik/SUPERFIK.md`, `SUPERFIK.local.md`,
+`AGENTS.md`; the user's `~/.superfik/SUPERFIK.md`) load from the ancestors and, nested, when a tool touches their path;
 `@path` imports are relative, inside the trusted folder, five levels deep,
 1 MiB per file and 4 MiB in all. `/skill args` and Markdown commands are
 expanded before the model call (`$ARGUMENTS`). Plan mode blocks mutations,

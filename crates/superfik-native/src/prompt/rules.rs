@@ -15,15 +15,12 @@ pub struct Rule {
 pub fn discover(cwd: &Path, home: Option<&Path>) -> Vec<Rule> {
     let mut roots = Vec::new();
     if let Some(home) = home {
-        roots.extend([(home.join(".claude/rules"), None), (home.join(".superfik/rules"), None)]);
+        roots.push((home.join(".superfik/rules"), None));
     }
     let mut ancestors: Vec<_> = cwd.ancestors().collect();
     ancestors.reverse();
     for directory in ancestors {
-        roots.extend([
-            (directory.join(".claude/rules"), Some(directory.to_path_buf())),
-            (directory.join(".superfik/rules"), Some(directory.to_path_buf())),
-        ]);
+        roots.push((directory.join(".superfik/rules"), Some(directory.to_path_buf())));
     }
     let mut rules = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -115,7 +112,7 @@ mod additional_tests {
             "---\npaths:\n  - 'src/**/*.{ts,tsx}'\n  - 'lib/**/*.ts'\n---\nWeb rules",
         )
         .expect("rule");
-        std::fs::write(repo.path().join("src/CLAUDE.md"), "Nested source instructions").expect("nested");
+        std::fs::write(repo.path().join("src/SUPERFIK.md"), "Nested source instructions").expect("nested");
         let rules = discover(repo.path(), None);
         assert_eq!(rules.len(), 2);
         let web = rules.iter().find(|r| r.text == "Web rules").expect("web");
@@ -159,9 +156,9 @@ mod regression_tests {
     #[test]
     fn ancestor_rules_use_the_declaring_project_and_normalize_tool_paths() {
         let repo = tempfile::tempdir().expect("repo");
-        std::fs::create_dir_all(repo.path().join(".claude/rules")).expect("rules");
+        std::fs::create_dir_all(repo.path().join(".superfik/rules")).expect("rules");
         std::fs::create_dir_all(repo.path().join("src")).expect("src");
-        std::fs::write(repo.path().join(".claude/rules/source.md"), "---\npaths: ['src/**']\n---\nSource rule")
+        std::fs::write(repo.path().join(".superfik/rules/source.md"), "---\npaths: ['src/**']\n---\nSource rule")
             .expect("rule");
         let nested = repo.path().join("src");
         let rules = discover(&nested, None);

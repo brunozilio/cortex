@@ -11,7 +11,7 @@ What to add:
 
 Usage notes:
 - If there's already a SUPERFIK.md, suggest improvements to it.
-- Superfik also reads CLAUDE.md and AGENTS.md, so a project needs no copy of them. If one exists and there is no SUPERFIK.md, read it first: do not repeat what it already says. Create SUPERFIK.md only for what it lacks, or, if it already covers the commands and architecture, suggest improvements to it instead of creating a duplicate.
+- Superfik also reads AGENTS.md, so a project needs no copy of it. If it exists and there is no SUPERFIK.md, read it first: do not repeat what it already says. Create SUPERFIK.md only for what it lacks. Superfik does not read CLAUDE.md: if there is one, use it as a source for SUPERFIK.md.
 - When you make the initial SUPERFIK.md, do not repeat yourself and do not include obvious instructions like "Provide helpful error messages to users", "Write unit tests for all new utilities", "Never include sensitive information (API keys, tokens) in code or commits".
 - Avoid listing every component or file structure that can be easily discovered.
 - Don't include generic development practices.

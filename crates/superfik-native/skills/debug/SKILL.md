@@ -51,7 +51,7 @@ Remember that the agent's settings are in:
 
 Skills are in `.superfik/skills`, agents in `.superfik/agents`, rules in
 `.superfik/rules` (in the project, or under `~/.superfik` for the user).
-Instructions come from `SUPERFIK.md` first, then `CLAUDE.md` and `AGENTS.md`.
+Instructions come from `SUPERFIK.md` first, then `AGENTS.md`.
 
 ## Instructions
 

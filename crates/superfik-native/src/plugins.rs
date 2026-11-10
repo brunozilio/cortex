@@ -23,7 +23,7 @@ pub struct Plugin {
 pub fn found(request: &PromptRequest, home: Option<&Path>) -> Vec<Plugin> {
     let hosted = request.extensions.iter().flat_map(|extensions| &extensions.plugins).map(|root| Plugin::at(root));
     let own = home
-        .map(|home| crate::claude_home::subdirs(&home.join(".superfik").join("plugins")))
+        .map(|home| subdirs(&home.join(".superfik").join("plugins")))
         .unwrap_or_default()
         .into_iter()
         .map(|root| Plugin::at(&root));
@@ -100,6 +100,13 @@ impl Plugin {
     }
 }
 
+fn subdirs(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut dirs: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).filter(|path| path.is_dir()).collect();
+    dirs.sort();
+    dirs
+}
+
 fn read_json(path: &Path) -> Value {
     std::fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or(Value::Null)
 }
@@ -122,13 +129,6 @@ mod tests {
         let hosted = tempfile::tempdir().expect("hosted");
         std::fs::create_dir_all(hosted.path().join(".superfik-plugin")).expect("dir");
         std::fs::write(hosted.path().join(".superfik-plugin/plugin.json"), r#"{"name": "beta"}"#).expect("manifest");
-        let installed_elsewhere = tempfile::tempdir().expect("claude code install");
-        std::fs::create_dir_all(home.path().join(".claude/plugins")).expect("claude code");
-        std::fs::write(
-            home.path().join(".claude/plugins/installed_plugins.json"),
-            serde_json::json!({"plugins": {"other@market": {"installPath": installed_elsewhere.path()}}}).to_string(),
-        )
-        .expect("installs");
         let mut request = PromptRequest::plain("/repo".into(), "", ModelOption::new("", ""));
         request.extensions = Some(Extensions { plugins: vec![hosted.path().to_path_buf()], ..Extensions::default() });
 
@@ -137,7 +137,7 @@ mod tests {
         assert_eq!(
             named,
             [("beta", hosted.path()), ("acme", plugins.join("acme-tools").as_path())],
-            "the host's first; a folder's own copy of a name the host has is left out; Claude Code's installs are not ours"
+            "the host's first; a folder's own copy of a name the host has is left out"
         );
     }
 }

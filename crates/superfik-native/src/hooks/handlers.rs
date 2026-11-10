@@ -20,7 +20,7 @@ pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Resul
         cmd.args(["-c", &handler.command]);
         cmd
     };
-    cmd.env("CLAUDE_PROJECT_DIR", &workspace.cwd).env("SUPERFIK_PROJECT_DIR", &workspace.cwd);
+    cmd.env("SUPERFIK_PROJECT_DIR", &workspace.cwd);
     cmd.current_dir(&workspace.cwd);
     let input = Some(serde_json::to_vec(input).map_err(|e| e.to_string())?);
     let bounds =

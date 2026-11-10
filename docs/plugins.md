@@ -31,7 +31,7 @@ git clone git@github.com:brunozilio/superfik-my-config.git ~/.superfik/plugins/m
 
 | Where | File | Starts |
 |---|---|---|
-| Project | `.mcp.json`, the nearest up from the run's folder | only once the owner approved it |
+| Project | `.superfik/mcp.json`, the nearest up from the run's folder (never the home folder's) | only once the owner approved it |
 | User | `~/.superfik/mcp.json` | always |
 
 On a clash of names the host's wins, then the project's, then the user's.
@@ -47,13 +47,12 @@ so tokens stay out of the file:
 }}
 ```
 
-Approving a project's servers uses Claude Code's keys, read only from the
-user's settings (`~/.superfik/settings.json`, `~/.claude/settings.json`)
-and the project's `settings.local.json`, never from a checked-in
+Approvals are read only from the user's `~/.superfik/settings.json` and
+the project's `.superfik/settings.local.json`, never from a checked-in
 `settings.json`, so a repository cannot approve itself:
 
 ```json
-{"enabledMcpjsonServers": ["sonarqube"], "disabledMcpjsonServers": [], "enableAllProjectMcpServers": false}
+{"enabledMcpServers": ["sonarqube"], "disabledMcpServers": [], "enableAllProjectMcpServers": false}
 ```
 
 ## Managing them

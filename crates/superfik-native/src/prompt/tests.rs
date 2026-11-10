@@ -60,14 +60,14 @@ fn carries_each_instruction_file_with_who_wrote_it() {
 }
 
 #[test]
-fn finds_superfik_md_first_and_honours_other_agents_files() {
+fn finds_superfik_md_first_then_agents_md() {
     let home = tempfile::tempdir().expect("home");
     let repo = tempfile::tempdir().expect("repo");
     std::fs::create_dir(home.path().join(".superfik")).expect("dir");
     std::fs::write(home.path().join(".superfik/SUPERFIK.md"), "mine").expect("write");
     std::fs::write(repo.path().join("SUPERFIK.md"), "project").expect("write");
-    std::fs::write(repo.path().join("CLAUDE.md"), "older").expect("write");
-    std::fs::write(repo.path().join("AGENTS.md"), "  ").expect("write");
+    std::fs::write(repo.path().join("CLAUDE.md"), "not ours").expect("write");
+    std::fs::write(repo.path().join("AGENTS.md"), "older").expect("write");
     std::fs::write(repo.path().join("SUPERFIK.local.md"), "local").expect("write");
     let found: Vec<(Scope, String)> =
         instructions(repo.path(), Some(home.path())).into_iter().map(|file| (file.scope, file.text)).collect();
@@ -120,9 +120,9 @@ fn instructions_load_ancestors_imports_once_and_keep_code_literals() {
     std::fs::create_dir(repo.path().join(".git")).expect("trust root");
     std::fs::create_dir_all(repo.path().join("docs")).expect("docs");
     std::fs::create_dir_all(repo.path().join("src/module")).expect("module");
-    std::fs::write(repo.path().join("CLAUDE.md"),"Root instructions\n@docs/guide.md\n<!-- private maintainer comment -->\n```md\n@not-an-import.md\n<!-- code literal -->\n```\n").expect("root");
-    std::fs::write(repo.path().join("docs/guide.md"), "Imported guidance\n@../CLAUDE.md\n").expect("import");
-    std::fs::write(repo.path().join("src/CLAUDE.local.md"), "Package-local guidance").expect("local");
+    std::fs::write(repo.path().join("SUPERFIK.md"),"Root instructions\n@docs/guide.md\n<!-- private maintainer comment -->\n```md\n@not-an-import.md\n<!-- code literal -->\n```\n").expect("root");
+    std::fs::write(repo.path().join("docs/guide.md"), "Imported guidance\n@../SUPERFIK.md\n").expect("import");
+    std::fs::write(repo.path().join("src/SUPERFIK.local.md"), "Package-local guidance").expect("local");
     let files = instructions(&repo.path().join("src/module"), None);
     let text = files.iter().map(|f| f.text.as_str()).collect::<Vec<_>>().join("\n");
     assert_eq!(text.matches("Root instructions").count(), 1);
@@ -138,7 +138,7 @@ fn project_import_cannot_read_a_sibling_private_file() {
     let repo = root.path().join("repo");
     std::fs::create_dir_all(repo.join(".git")).expect("repo");
     std::fs::write(root.path().join("private.md"), "PRIVATE-SENTINEL").expect("private fixture");
-    std::fs::write(repo.join("CLAUDE.md"), "@../private.md").expect("root instructions");
+    std::fs::write(repo.join("SUPERFIK.md"), "@../private.md").expect("root instructions");
     let text = instructions(&repo, None).into_iter().map(|f| f.text).collect::<String>();
     assert!(!text.contains("PRIVATE-SENTINEL"));
     assert!(text.contains("outside the trusted directory"));

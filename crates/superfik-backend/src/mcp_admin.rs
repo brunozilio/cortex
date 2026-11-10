@@ -38,9 +38,14 @@ pub(crate) fn list(path: &Path, extensions: &Extensions, home: Option<&Path>) ->
     }
 }
 
-pub(crate) fn approve(path: &Path, name: &str, approve: bool) -> Result<(), String> {
-    let project = path.ancestors().find(|dir| dir.join(".mcp.json").is_file()).unwrap_or(path);
-    let file = project.join(".superfik").join("settings.local.json");
+pub(crate) fn approve(path: &Path, home: Option<&Path>, name: &str, approve: bool) -> Result<(), String> {
+    let config = superfik_native::mcp::project_config(path, home);
+    let folder = config.as_deref().and_then(Path::parent).unwrap_or(path);
+    let file = if config.is_some() {
+        folder.join("settings.local.json")
+    } else {
+        folder.join(".superfik/settings.local.json")
+    };
     rewrite(&file, |settings| Ok(mcp_config::set_approval(settings, name, approve)))
 }
 
@@ -88,7 +93,8 @@ mod tests {
     fn the_owner_approves_a_project_s_server_and_keeps_their_own() {
         let home = tempfile::tempdir().expect("home");
         let repo = tempfile::tempdir().expect("repo");
-        std::fs::write(repo.path().join(".mcp.json"), r#"{"mcpServers": {"jira": {"command": "jira-mcp"}}}"#)
+        std::fs::create_dir_all(repo.path().join(".superfik")).expect("dir");
+        std::fs::write(repo.path().join(".superfik/mcp.json"), r#"{"mcpServers": {"jira": {"command": "jira-mcp"}}}"#)
             .expect("config");
         let cwd = repo.path().join("src");
         std::fs::create_dir_all(&cwd).expect("cwd");
@@ -106,8 +112,8 @@ mod tests {
             [("docs".into(), McpOrigin::Host, McpState::Ready), ("jira".into(), McpOrigin::Project, McpState::Pending)]
         );
 
-        approve(&cwd, "jira", true).expect("approve");
-        assert!(repo.path().join(".superfik/settings.local.json").is_file(), "kept beside the project's .mcp.json");
+        approve(&cwd, Some(home.path()), "jira", true).expect("approve");
+        assert!(repo.path().join(".superfik/settings.local.json").is_file(), "kept beside the project's mcp.json");
         assert_eq!(list()[1].2, McpState::Ready);
 
         let atlassian = json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"});

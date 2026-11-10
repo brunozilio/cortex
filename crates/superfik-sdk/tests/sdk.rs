@@ -188,7 +188,8 @@ fn a_program_manages_the_owner_s_mcp_servers() {
     let data = tempfile::tempdir().expect("data");
     let home = tempfile::tempdir().expect("home");
     let repo = tempfile::tempdir().expect("repo");
-    std::fs::write(repo.path().join(".mcp.json"), r#"{"mcpServers": {"jira": {"command": "jira-mcp"}}}"#)
+    std::fs::create_dir_all(repo.path().join(".superfik")).expect("dir");
+    std::fs::write(repo.path().join(".superfik/mcp.json"), r#"{"mcpServers": {"jira": {"command": "jira-mcp"}}}"#)
         .expect("config");
     let engine = FakeEngine::new(vec![model()], Vec::new());
     let mut services = services(&engine);

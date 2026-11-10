@@ -102,7 +102,7 @@ impl CommandHandler {
             }
             ClientCommand::ListMcpServers { path } => self.mcp_servers(&path, Ok(())),
             ClientCommand::ApproveMcpServer { path, name, approve } => {
-                self.mcp_servers(&path, crate::mcp_admin::approve(&path, &name, approve))
+                self.mcp_servers(&path, crate::mcp_admin::approve(&path, self.services.home.as_deref(), &name, approve))
             }
             ClientCommand::AddMcpServer { path, name, server } => {
                 self.mcp_servers(&path, crate::mcp_admin::add(self.services.home.as_deref(), &name, server))

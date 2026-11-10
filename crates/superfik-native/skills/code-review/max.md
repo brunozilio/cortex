@@ -97,8 +97,8 @@ that change.
 
 Find the instruction files that govern the changed code: the user's
 `~/.superfik/SUPERFIK.md`, the repository root's `SUPERFIK.md` (or
-`.superfik/SUPERFIK.md`), the `CLAUDE.md` and `AGENTS.md` Superfik also
-reads, their `.local.md` variants, the rules in `.superfik/rules`, plus any
+`.superfik/SUPERFIK.md`), the `AGENTS.md` Superfik also reads,
+`SUPERFIK.local.md`, the rules in `.superfik/rules`, plus any
 of these files in a directory that is an ancestor of a changed file (a
 directory's file only applies to files at or below it). Read each one that
 exists, then check the diff for clear violations of the rules they state.
