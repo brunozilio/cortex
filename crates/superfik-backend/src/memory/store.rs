@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use superfik_core::{MemoryBook, Principal};
 
@@ -25,6 +25,23 @@ pub fn owner_key(owner: &Principal) -> String {
     }
 }
 
+/// This computer's memory: `<app data>/memory`. Without an app data folder
+/// memories last only as long as the process; a temp folder would lose
+/// them on reboot while looking saved.
+pub fn system_memory_store() -> Arc<dyn MemoryStore> {
+    memory_store_in(app_data_dir())
+}
+
+pub fn memory_store_in(data: Option<PathBuf>) -> Arc<dyn MemoryStore> {
+    match data {
+        Some(data) => Arc::new(FileMemoryStore::new(data.join("memory"))),
+        None => {
+            tracing::error!("no app data folder; memory lasts only until the process ends");
+            Arc::new(InMemoryStore::default())
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FileMemoryStore {
     root: PathBuf,
@@ -35,31 +52,42 @@ impl FileMemoryStore {
         Self { root }
     }
 
-    pub fn system() -> Self {
-        Self::new(app_data_dir().unwrap_or_else(std::env::temp_dir).join("memory"))
-    }
-
     fn path(&self, owner: &Principal, project: &Path) -> PathBuf {
         self.root.join(owner_key(owner)).join(format!("{}.json", project_key(project)))
     }
 }
 
 impl MemoryStore for FileMemoryStore {
+    /// A missing book is empty. An unreadable one is renamed aside
+    /// (`<key>.json.corrupt-<secs>`) before starting empty, so the next
+    /// save never writes over memories that could still be recovered.
     fn load(&self, owner: &Principal, project: &Path) -> MemoryBook {
-        std::fs::read(self.path(owner, project))
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or_default()
+        let path = self.path(owner, project);
+        let Ok(bytes) = std::fs::read(&path) else { return MemoryBook::default() };
+        match serde_json::from_slice(&bytes) {
+            Ok(book) => book,
+            Err(error) => {
+                let aside = path.with_extension(format!("json.corrupt-{}", super::now()));
+                match std::fs::rename(&path, &aside) {
+                    Ok(()) => tracing::warn!(%error, aside = %aside.display(), "unreadable memory kept aside"),
+                    Err(rename) => tracing::error!(%error, %rename, "unreadable memory could not be kept aside"),
+                }
+                MemoryBook::default()
+            }
+        }
     }
 
     fn save(&self, owner: &Principal, project: &Path, book: &MemoryBook) -> std::io::Result<()> {
+        use std::io::Write;
         let path = self.path(owner, project);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_vec_pretty(book).map_err(std::io::Error::other)?;
         let partial = path.with_extension("json.partial");
-        std::fs::write(&partial, json)?;
+        let mut file = std::fs::File::create(&partial)?;
+        file.write_all(&json)?;
+        file.sync_all()?;
         std::fs::rename(partial, path)
     }
 }

@@ -50,7 +50,7 @@ impl LocalServices {
         Self {
             engine,
             memory: Memories::new(
-                Arc::new(FileMemoryStore::system()),
+                crate::memory::system_memory_store(),
                 crate::memory::local(ModelChoice::from_env(), data.join("models")),
             ),
             memory_tool: true,

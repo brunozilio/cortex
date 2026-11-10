@@ -17,7 +17,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub use embedder::{Embedder, ModelChoice, NoEmbedder, Purpose, local};
-pub use store::{FileMemoryStore, InMemoryStore, MemoryStore, app_data_dir, owner_key, project_key};
+pub use store::{
+    FileMemoryStore, InMemoryStore, MemoryStore, app_data_dir, owner_key, project_key, system_memory_store,
+};
 use superfik_core::memory::{Semantic, recall, search};
 use superfik_core::{
     Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, Principal, PromptRequest, Provenance, RecallBudget,

@@ -1,5 +1,6 @@
 use superfik_core::{MemoryKind, ModelOption};
 
+use super::store::memory_store_in;
 use super::*;
 
 fn request(cwd: &Path) -> PromptRequest {
@@ -36,6 +37,48 @@ fn file_store_round_trips_per_owner() {
         MemoryBook::default()
     );
     assert_eq!(store.load(&Principal::LocalOwner, Path::new("/other")), MemoryBook::default());
+}
+
+#[test]
+fn memory_lives_in_the_data_folder_or_only_in_the_process() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut book = MemoryBook::default();
+    book.apply(&[remember("Uses wgpu")], &by_user());
+    let owner = Principal::LocalOwner;
+    let project = Path::new("/repo");
+
+    let on_disk = memory_store_in(Some(dir.path().to_path_buf()));
+    on_disk.save(&owner, project, &book).expect("save");
+    assert!(dir.path().join("memory/local/-repo.json").exists());
+
+    let in_process = memory_store_in(None);
+    in_process.save(&owner, project, &book).expect("save");
+    assert_eq!(in_process.load(&owner, project), book, "kept for the process, never in a temp folder");
+}
+
+#[test]
+fn an_unreadable_book_is_kept_aside_and_never_overwritten() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let store = FileMemoryStore::new(dir.path().to_path_buf());
+    let project = Path::new("/repo");
+    let mut book = MemoryBook::default();
+    book.apply(&[remember("Uses wgpu")], &by_user());
+    store.save(&Principal::LocalOwner, project, &book).expect("save");
+    let folder = dir.path().join("local");
+    let file = folder.join("-repo.json");
+    std::fs::write(&file, br#"{"next": 1, "memories": [{"id": 0, "#).expect("truncate");
+
+    assert_eq!(store.load(&Principal::LocalOwner, project), MemoryBook::default());
+    store.save(&Principal::LocalOwner, project, &MemoryBook::default()).expect("save");
+
+    let kept: Vec<String> = std::fs::read_dir(&folder)
+        .expect("folder")
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter(|name| name.starts_with("-repo.json.corrupt-"))
+        .collect();
+    assert_eq!(kept.len(), 1, "the unreadable file is kept aside: {kept:?}");
+    let aside = std::fs::read(folder.join(&kept[0])).expect("read");
+    assert_eq!(aside, br#"{"next": 1, "memories": [{"id": 0, "#);
 }
 
 #[test]
