@@ -1,20 +1,21 @@
 //! The chat's state and what it does: send prompts (queued while the agent
-//! works), follow the running run, run the chat's own `/commands`. Slow
-//! calls run on threads and come back as [`Msg`]s. Choosing the model,
-//! mode and effort is in `choices`, connecting a provider in `login`.
+//! works), run the chat's own `/commands`. Slow calls run on threads and
+//! come back as [`Msg`]s. Following a run is in `runs`, choosing the model,
+//! mode and effort in `choices`, connecting a provider in `login`, `/btw`
+//! in `side`.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
 use superfik_core::command::Command;
-use superfik_sdk::{Effort, EngineEvent, Model, PermissionMode, Run, RunControl, Session, SessionId, Superfik};
+use superfik_sdk::{Effort, EngineEvent, Model, PermissionMode, RunControl, Session, SessionId, Superfik};
 
 use super::ask::Pending;
 use super::choices::Picker;
 use super::input::Input;
 use super::login::SecretPrompt;
-use super::transcript::{Entry, Transcript};
+use super::transcript::Transcript;
 
 pub enum Msg {
     Ready {
@@ -27,6 +28,12 @@ pub enum Msg {
     /// What Ctrl+V found on the clipboard.
     Clipboard(Result<Option<superfik_sdk::Image>, String>),
     Changes(Result<super::git::Changes, String>),
+    /// What `/diffs` asked git for.
+    Diffs(super::git::Scope, Result<super::git::Changes, String>),
+    Side {
+        question: String,
+        answer: Result<String, String>,
+    },
     Notice(String),
     Error(String),
 }
@@ -53,6 +60,10 @@ pub struct App {
     pub models: Vec<Model>,
     pub skills: Vec<(String, String)>,
     pub picker: Option<Picker>,
+    /// A `/btw` question and its answer, shown until dismissed.
+    pub side: Option<super::side::Side>,
+    /// `/diffs`, full screen while open.
+    pub diffs: Option<super::diff_view::DiffView>,
     pub scroll: u16,
     pub quit: bool,
     pub quit_armed: Option<Instant>,
@@ -92,6 +103,8 @@ impl App {
             models: Vec::new(),
             skills: Vec::new(),
             picker: None,
+            side: None,
+            diffs: None,
             scroll: 0,
             quit: false,
             quit_armed: None,
@@ -161,32 +174,14 @@ impl App {
             }
             Msg::Clipboard(found) => self.clipboard(found),
             Msg::Changes(changes) => self.changes(changes),
+            Msg::Diffs(scope, changes) => {
+                if let Some(view) = &mut self.diffs {
+                    view.loaded(scope, changes);
+                }
+            }
+            Msg::Side { question, answer } => super::side::answered(self, &question, answer),
             Msg::Notice(text) => self.transcript.notice(text),
             Msg::Error(text) => self.transcript.error(text),
-        }
-    }
-
-    fn event(&mut self, run: superfik_core::RunId, event: EngineEvent) {
-        if self.run.as_ref().is_none_or(|current| current.id() != run) {
-            return;
-        }
-        match &event {
-            EngineEvent::Asked(ask) => self.ask = Some(Pending::new(ask.clone())),
-            EngineEvent::AskWithdrawn(id) if self.ask.as_ref().is_some_and(|p| &p.ask.id == id) => self.ask = None,
-            EngineEvent::SessionStarted(id) => self.saver.remember_session(&self.cwd, id),
-            _ => {}
-        }
-        self.transcript.apply(&event);
-        if event.is_terminal() {
-            self.run = None;
-            self.ask = None;
-            self.started = None;
-            if matches!(event, EngineEvent::Cancelled) {
-                self.unqueue();
-            } else if !self.queued.is_empty() {
-                let next = self.queued.remove(0);
-                self.send(next);
-            }
         }
     }
 
@@ -210,57 +205,6 @@ impl App {
         self.send(text);
     }
 
-    fn send(&mut self, text: String) {
-        let Some(session) = &self.session else {
-            self.input.set(&text);
-            return self.transcript.error("No model yet: /login connects a provider.");
-        };
-        let started = session.send_with_images(&text, self.attachments.named_in(&text));
-        self.transcript.push(Entry::User(text));
-        self.follow(started);
-    }
-
-    /// Puts what was queued back in the prompt, so an interrupt loses nothing.
-    fn unqueue(&mut self) {
-        if self.queued.is_empty() {
-            return;
-        }
-        let mut text = std::mem::take(&mut self.queued).join("\n\n");
-        if !self.input.is_empty() {
-            text = format!("{text}\n\n{}", self.input.text());
-        }
-        self.input.set(&text);
-    }
-
-    pub(super) fn follow(&mut self, started: Result<Run, superfik_sdk::Error>) {
-        match started {
-            Ok(run) => {
-                self.run = Some(run.control());
-                self.started = Some(Instant::now());
-                self.transcript.begin();
-                self.scroll = 0;
-                let tx = self.tx.clone();
-                std::thread::spawn(move || {
-                    let id = run.id();
-                    for event in run {
-                        if tx.send(Msg::Event(id, event)).is_err() {
-                            break;
-                        }
-                    }
-                });
-            }
-            Err(error) => self.transcript.error(error.to_string()),
-        }
-    }
-
-    pub fn cancel(&mut self) {
-        if let Some(run) = &self.run
-            && let Err(error) = run.cancel()
-        {
-            self.transcript.error(error.to_string());
-        }
-    }
-
     /// Ctrl+C: stops the run, else clears the prompt, else quits on a
     /// second press.
     pub fn interrupt(&mut self) {
@@ -278,14 +222,6 @@ impl App {
     /// Whether the status line should say "Ctrl+C again to quit".
     pub fn quitting(&self) -> bool {
         self.quit_armed.is_some_and(|at| at.elapsed() < QUIT_WINDOW)
-    }
-
-    pub fn answer(&mut self, decision: superfik_sdk::Decision) {
-        if let (Some(pending), Some(run)) = (self.ask.take(), &self.run)
-            && let Err(error) = run.answer(pending.ask.id, decision)
-        {
-            self.transcript.error(error.to_string());
-        }
     }
 
     pub(super) fn spawn(&self, work: impl FnOnce(&Superfik) -> Msg + Send + 'static) {

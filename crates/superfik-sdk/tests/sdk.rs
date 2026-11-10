@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 use superfik_backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
-use superfik_core::{AgentAsk, AskId, AskKind, SessionId};
+use superfik_core::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId};
 use superfik_engine::fake::FakeEngine;
 use superfik_sdk::{
     Agent, Command, Decision, EngineEvent, Image, McpConnection, McpServer, MemoryKind, Model, ModelProvider, Skill,
@@ -180,4 +180,23 @@ fn a_session_s_effort_and_mode_reach_the_run_and_a_control_cancels_it_from_elsew
     let request = engine.requests().remove(0);
     assert_eq!((request.effort, request.permission), (superfik_sdk::Effort::Max, superfik_sdk::PermissionMode::Plan));
     assert!(request.memory.is_none(), "memory was turned off");
+}
+
+#[test]
+fn a_side_question_is_answered_from_the_conversation_without_continuing_it() {
+    let data = tempfile::tempdir().expect("data");
+    let answer = EngineEvent::Chore(ChoreAnswer::Side("It edits main.rs.".into()));
+    let engine = FakeEngine::new(vec![model()], script(vec![answer]));
+    let superfik = build(&engine, data.path());
+    let session = superfik.session(data.path(), model());
+    assert!(matches!(session.side("too early?"), Err(superfik_sdk::Error::NothingToAsk)));
+
+    session.send("fix the bug").expect("run").text().expect("text");
+    assert_eq!(session.side("which file?").expect("run").side_answer().expect("answer"), "It edits main.rs.");
+
+    let side = engine.requests().remove(1);
+    assert_eq!(side.command, Some(SessionCommand::Side));
+    assert_eq!(side.prompt, "which file?");
+    assert_eq!(side.resume, Some(SessionId("s-1".into())), "asked about this conversation");
+    assert!(side.memory.is_none(), "a side question recalls no memory");
 }

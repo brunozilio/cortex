@@ -41,5 +41,5 @@ chat (CLI/TUI) and an SDK (ADR 0018). No GUI.
 
 ## Workflow
 Work directly: no specs or tickets unless asked. Plan in the conversation,
-implement, verify. Never commit to `main`
-(any branch name will do).
+implement, verify. Work and commit on `main` in this checkout; no feature
+branches or worktrees unless asked.

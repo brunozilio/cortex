@@ -7,7 +7,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use superfik_backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
-use superfik_core::{AgentAsk, AskId, AskKind, SessionId, ToolCall};
+use superfik_core::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId, ToolCall};
 use superfik_engine::fake::FakeEngine;
 use superfik_sdk::{Decision, EngineEvent, Model, PermissionMode, Superfik};
 
@@ -172,6 +172,84 @@ fn a_dropped_image_is_attached_to_the_prompt_that_names_it() {
     let sent = engine.requests().remove(0);
     assert_eq!(sent.prompt, "what is [Image #1] not a file");
     assert_eq!(sent.images, [superfik_sdk::Image::from_bytes(png).expect("ok").expect("png")]);
+}
+
+#[test]
+fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() {
+    let data = tempfile::tempdir().expect("data");
+    let mut script = vec![
+        EngineEvent::SessionStarted(SessionId("s".into())),
+        EngineEvent::Chore(ChoreAnswer::Side("It edits main.rs.".into())),
+    ];
+    script.extend((0..6).map(|_| EngineEvent::TextDelta("…".into())));
+    script.push(EngineEvent::TextDelta("All done.".into()));
+    script.push(EngineEvent::Completed { duration_ms: 1, cost_usd: None });
+    let model = Model::new("anthropic:scripted", "Scripted");
+    let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(40));
+    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+
+    type_text(&mut app, "/btw too early?");
+    press(&mut app, KeyCode::Enter);
+    assert!(screen(&app).contains("no conversation to ask about yet"), "{}", screen(&app));
+
+    type_text(&mut app, "fix the bug");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.session.as_ref().is_some_and(|s| s.id().is_some()));
+    type_text(&mut app, "/btw which file?");
+    press(&mut app, KeyCode::Enter);
+    assert!(screen(&app).contains("which file?") && screen(&app).contains("answering…"), "{}", screen(&app));
+    press(&mut app, KeyCode::Esc);
+    assert!(app.side.is_none() && app.busy(), "Esc closed the answer, not the run");
+    until(&mut app, |app| !app.busy());
+    assert!(screen(&app).contains("All done."), "the run finished: {}", screen(&app));
+
+    type_text(&mut app, "/btw which file?");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.side.as_ref().is_some_and(|side| side.answer.is_some()));
+    let shown = screen(&app);
+    assert!(shown.contains("It edits main.rs."), "{shown}");
+    press(&mut app, KeyCode::Esc);
+    assert!(!screen(&app).contains("It edits main.rs."), "the answer is not kept in the conversation");
+    assert_eq!(engine.requests().last().map(|r| r.command), Some(Some(SessionCommand::Side)));
+}
+
+#[test]
+fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
+    let (data, repo) = (tempfile::tempdir().expect("data"), tempfile::tempdir().expect("repo"));
+    let git = |args: &[&str]| {
+        let done = std::process::Command::new("git").args(args).current_dir(repo.path()).output().expect("git");
+        assert!(done.status.success(), "{args:?}");
+    };
+    git(&["init", "-q", "-b", "main"]);
+    std::fs::write(repo.path().join("a.txt"), "one\n").expect("write");
+    git(&["add", "a.txt"]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a"]);
+    std::fs::write(repo.path().join("a.txt"), "two\n").expect("edit");
+    std::fs::write(repo.path().join("new.txt"), "new\n").expect("new");
+    let model = Model::new("anthropic:scripted", "Scripted");
+    let engine = FakeEngine::new(vec![model], Vec::new());
+    let mut app = App::new(superfik(&engine, data.path()), repo.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    let loaded = |app: &App| app.diffs.as_ref().is_some_and(|view| !view.loading());
+
+    type_text(&mut app, "/diffs");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, loaded);
+    let shown = screen(&app);
+    assert!(shown.contains("Changes · uncommitted · 2 files"), "{shown}");
+    assert!(shown.contains("M a.txt") && shown.contains("? new.txt"), "{shown}");
+    assert!(shown.contains("1 - one") && shown.contains("1 + two"), "{shown}");
+    press(&mut app, KeyCode::Down);
+    assert!(screen(&app).contains("New file, not yet in git."), "{}", screen(&app));
+
+    press(&mut app, KeyCode::Tab);
+    press(&mut app, KeyCode::Tab);
+    until(&mut app, loaded);
+    assert!(screen(&app).contains("No staged changes."), "{}", screen(&app));
+    press(&mut app, KeyCode::Char('q'));
+    assert!(app.diffs.is_none() && screen(&app).contains("Superfik Lite"), "{}", screen(&app));
+    assert!(engine.requests().is_empty(), "nothing reached the agent");
 }
 
 #[test]

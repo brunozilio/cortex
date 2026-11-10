@@ -13,7 +13,11 @@ pub enum Command {
     Effort(Option<Effort>),
     Compact,
     Diff,
+    /// The changes full screen, file by file.
+    Diffs,
     Memory(Option<String>),
+    /// A side question, answered without tools and kept out of the conversation.
+    Btw(Option<String>),
     Skills,
     Agents,
     Cost,
@@ -23,7 +27,7 @@ pub enum Command {
 
 impl Command {
     /// Every command with what it does, for `/help` and completion.
-    pub const HELP: [(&'static str, &'static str); 13] = [
+    pub const HELP: [(&'static str, &'static str); 15] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("model", "Pick the model, or /model <id>"),
@@ -31,7 +35,9 @@ impl Command {
         ("effort", "Set low, medium, high, xhigh or max"),
         ("compact", "Summarize the conversation to free context"),
         ("diff", "Show the project's uncommitted changes"),
+        ("diffs", "Browse the changes full screen: uncommitted, staged or branch"),
         ("memory", "List the project's memory, or /memory <search>"),
+        ("btw", "Ask a side question without interrupting: /btw <question>"),
         ("skills", "List skills and commands"),
         ("agents", "List agents"),
         ("cost", "Show this session's cost"),
@@ -61,7 +67,9 @@ impl Command {
             },
             "compact" => bare(Self::Compact),
             "diff" => bare(Self::Diff),
+            "diffs" => bare(Self::Diffs),
             "memory" => Some(Self::Memory(argument)),
+            "btw" => Some(Self::Btw(argument)),
             "skills" | "commands" => bare(Self::Skills),
             "agents" => bare(Self::Agents),
             "cost" => bare(Self::Cost),
@@ -112,10 +120,13 @@ mod tests {
         assert_eq!(Command::parse("  /CLEAR "), Some(Command::New));
         assert_eq!(Command::parse("/model"), Some(Command::Model(None)));
         assert_eq!(Command::parse("/diff"), Some(Command::Diff));
+        assert_eq!(Command::parse("/diffs"), Some(Command::Diffs));
         assert_eq!(Command::parse("/model claude-opus-5-5"), Some(Command::Model(Some("claude-opus-5-5".into()))));
         assert_eq!(Command::parse("/mode plan"), Some(Command::Mode(Some(PermissionMode::Plan))));
         assert_eq!(Command::parse("/effort max"), Some(Command::Effort(Some(Effort::Max))));
         assert_eq!(Command::parse("/memory the renderer"), Some(Command::Memory(Some("the renderer".into()))));
+        assert_eq!(Command::parse("/btw which file?"), Some(Command::Btw(Some("which file?".into()))));
+        assert_eq!(Command::parse("/btw"), Some(Command::Btw(None)), "answered with how to use it");
     }
 
     #[test]

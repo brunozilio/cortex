@@ -18,12 +18,18 @@ use super::wrap::{layout, wrap};
 const PROMPT_MARK: usize = 2;
 
 pub fn draw(frame: &mut Frame, app: &App) {
+    if let Some(diffs) = &app.diffs
+        && app.ask.is_none()
+        && app.secret.is_none()
+    {
+        return super::diff_view::draw(frame, diffs);
+    }
     let area = frame.area();
     let panel = panel(app, area.width);
     let input_width = usize::from(area.width.saturating_sub(2)).saturating_sub(PROMPT_MARK).max(1);
     let (rows, _) = layout(app.input.text(), app.input.cursor(), input_width);
     let input_lines = u16::try_from(rows.len()).unwrap_or(u16::MAX).clamp(1, 10);
-    let boxed = app.ask.is_some() || app.secret.is_some() || app.picker.is_some();
+    let boxed = app.ask.is_some() || app.secret.is_some() || app.picker.is_some() || app.side.is_some();
     let frame_rows = if boxed { 2 } else { 0 };
     let panel_height = (u16::try_from(panel.len()).unwrap_or(u16::MAX) + frame_rows).min(area.height / 2);
     let [body, panel_area, input_area, status_area] = Layout::vertical([
@@ -35,7 +41,13 @@ pub fn draw(frame: &mut Frame, app: &App) {
     .areas(area);
     let shown = conversation(frame, app, body);
     if boxed {
-        let color = if app.picker.is_some() { Color::DarkGray } else { Color::Yellow };
+        let color = if app.picker.is_some() {
+            Color::DarkGray
+        } else if app.ask.is_some() || app.secret.is_some() {
+            Color::Yellow
+        } else {
+            Color::Cyan
+        };
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
             .border_style(Style::new().fg(color))
@@ -142,6 +154,8 @@ fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
             lines.push(Line::from(vec![Span::styled(format!("{marker}{name}"), style), format!("  {about}").dim()]));
         }
         lines.push(Line::from("↑↓ Enter picks · esc closes").dim());
+    } else if let Some(side) = &app.side {
+        super::side::lines(side, app.busy(), width, &mut lines);
     } else if let Some(typed) = app.input.slash_word() {
         let found = super::commands::suggestions(typed, &app.skills);
         let chosen = app.suggestion % found.len().max(1);
