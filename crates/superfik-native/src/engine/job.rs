@@ -60,7 +60,7 @@ impl Job {
         let workspace = Arc::get_mut(&mut self.workspace).expect("workspace is not shared before starting tools");
         workspace.rules = brief.rules;
         let mut tools = tools::standard();
-        let specs = Arc::new(superfik_core::lsp::defaults());
+        let specs = Arc::new(superfik_core::lsp::servers(superfik_core::lsp::defaults(), &brief.settings.lsp_servers));
         if self.lsp.any_installed(&specs) {
             workspace.lsp = Some(crate::lsp::Lsp { servers: Arc::clone(&self.lsp), specs });
             tools.push(Box::new(tools::Lsp));

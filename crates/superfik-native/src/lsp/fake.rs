@@ -68,7 +68,7 @@ impl LanguageServers for ScriptedServers {
         Ok(Opened { server, language: language.to_owned(), root: cwd.to_path_buf() })
     }
 
-    fn any_installed(&self, _: &[ServerSpec]) -> bool {
-        true
+    fn any_installed(&self, specs: &[ServerSpec]) -> bool {
+        !specs.is_empty()
     }
 }

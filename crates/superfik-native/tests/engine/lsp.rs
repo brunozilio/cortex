@@ -50,6 +50,22 @@ fn the_agent_asks_the_file_s_language_server() {
     assert!(results(&agent).contains("struct Grep (line 1)"), "{}", results(&agent));
 }
 
+#[test]
+fn servers_the_settings_disable_are_not_offered() {
+    let dir = tempfile::tempdir().expect("dir");
+    let off: serde_json::Map<String, serde_json::Value> = ["rust-analyzer", "typescript", "pyright", "gopls", "clangd"]
+        .iter()
+        .map(|n| (n.to_string(), json!({"disabled": true})))
+        .collect();
+    std::fs::create_dir_all(dir.path().join(".superfik")).expect("dir");
+    std::fs::write(dir.path().join(".superfik/settings.json"), json!({"lspServers": off}).to_string())
+        .expect("settings");
+    let agent = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));
+    let engine = engine(vec![agent.clone()]).with_language_servers(ScriptedServer::answering([]).lsp().servers);
+    finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "hi", model())));
+    assert!(!offered(&agent).contains(&"LSP".to_owned()), "{:?}", offered(&agent));
+}
+
 struct NothingInstalled;
 
 impl Starter for NothingInstalled {

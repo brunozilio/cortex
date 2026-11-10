@@ -65,6 +65,19 @@ impl Plugin {
         Some(self.expand(config))
     }
 
+    /// The plugin's language servers (`.lsp.json`, else the manifest's
+    /// `lspServers`), its root filled in.
+    pub fn lsp_servers(&self) -> Option<Value> {
+        let own = read_json(&self.root.join(".lsp.json"));
+        let servers = if own.is_object() {
+            own
+        } else {
+            let manifest = read_json(&self.root.join(MANIFEST_DIR).join("plugin.json"));
+            manifest.get("lspServers").filter(|servers| servers.is_object())?.clone()
+        };
+        Some(self.expand(servers))
+    }
+
     /// The plugin's `hooks/hooks.json` events, its root filled in.
     pub fn hooks(&self) -> Result<Option<Value>, String> {
         let path = self.root.join("hooks").join("hooks.json");

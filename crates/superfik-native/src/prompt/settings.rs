@@ -30,7 +30,13 @@ pub struct Settings {
     /// the user's settings and the project's `settings.local.json`.
     #[serde(default)]
     pub mcp_approval: superfik_core::mcp_config::McpApproval,
+    /// `lspServers` from each settings file, then each plugin, in the order
+    /// they apply over the built-in servers.
+    #[serde(default)]
+    pub lsp_servers: Vec<LspLayer>,
 }
+
+pub type LspLayer = std::collections::BTreeMap<String, superfik_core::lsp::ServerConfig>;
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -42,6 +48,7 @@ impl Default for Settings {
             advisor: None,
             judge: None,
             mcp_approval: Default::default(),
+            lsp_servers: Vec::new(),
         }
     }
 }
@@ -65,6 +72,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut judge = None;
     let mut hooks = crate::hooks::Hooks::default();
     let mut mcp_approval = superfik_core::mcp_config::McpApproval::default();
+    let mut lsp_servers = Vec::new();
     let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(".superfik"));
     let mut roots = Vec::new();
     if let Some(home) = home {
@@ -108,6 +116,11 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
             if let Some(value) = settings.get("hooks") {
                 hooks.extend(&crate::hooks::Hooks::parse(value)?);
             }
+            if let Some(value) = settings.get("lspServers") {
+                let layer = serde_json::from_value(value.clone())
+                    .map_err(|e| format!("{}: lspServers: {e}", path.display()))?;
+                lsp_servers.push(layer);
+            }
             if let Some(style) = settings["outputStyle"].as_str() {
                 selected = style.to_owned();
             }
@@ -121,6 +134,13 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
             Ok(Some(found)) => hooks.extend(&found),
             Ok(None) => {}
             Err(error) => tracing::warn!(%error, plugin = %plugin.name, "a plugin's hooks are left out"),
+        }
+        match plugin.lsp_servers().map(serde_json::from_value::<LspLayer>) {
+            Some(Ok(layer)) => lsp_servers.push(layer),
+            Some(Err(error)) => {
+                tracing::warn!(%error, plugin = %plugin.name, "a plugin's language servers are left out")
+            }
+            None => {}
         }
     }
     if ["CLAUDE_CODE_DISABLE_AUTO_MEMORY", "SUPERFIK_DISABLE_AUTO_MEMORY"]
@@ -158,10 +178,11 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 advisor,
                 judge,
                 mcp_approval,
+                lsp_servers,
             });
         }
     };
-    Ok(Settings { style, schema, agent, hooks, auto_memory, advisor, judge, mcp_approval })
+    Ok(Settings { style, schema, agent, hooks, auto_memory, advisor, judge, mcp_approval, lsp_servers })
 }
 #[cfg(test)]
 mod tests {
@@ -246,5 +267,30 @@ mod tests {
         assert_eq!(groups[0].matcher, "Bash");
         assert_eq!(groups[0].hooks[0].command, format!("{}/check.sh", good.path().display()));
         assert!(!settings.hooks.0.contains_key("NoSuchEvent"));
+    }
+    #[test]
+    fn language_servers_are_set_by_user_then_project_then_plugins() {
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        let plugin = tempfile::tempdir().expect("plugin");
+        let write = |path: std::path::PathBuf, text: &str| {
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+            std::fs::write(path, text).expect("write");
+        };
+        write(home.path().join(".superfik/settings.json"), r#"{"lspServers": {"gopls": {"command": "/opt/gopls"}}}"#);
+        write(repo.path().join(".superfik/settings.json"), r#"{"lspServers": {"gopls": {"disabled": true}}}"#);
+        write(
+            plugin.path().join(".lsp.json"),
+            r#"{"zls": {"command": "${SUPERFIK_PLUGIN_ROOT}/zls", "extensionToLanguage": {".zig": "zig"}}}"#,
+        );
+        let plugins = [crate::plugins::Plugin::at(plugin.path())];
+        let layers = load(repo.path(), Some(home.path()), &plugins).expect("settings").lsp_servers;
+        let specs = superfik_core::lsp::servers(superfik_core::lsp::defaults(), &layers);
+        assert!(!specs.iter().any(|spec| spec.name == "gopls"));
+        let zig = specs.iter().find(|spec| spec.name == "zls").expect("the plugin's server");
+        assert_eq!(zig.command, format!("{}/zls", plugin.path().display()));
+        write(repo.path().join(".superfik/settings.json"), r#"{"lspServers": {"gopls": {"args": "--stdio"}}}"#);
+        let error = load(repo.path(), Some(home.path()), &[]).expect_err("args must be a list");
+        assert!(error.contains("lspServers"), "{error}");
     }
 }
