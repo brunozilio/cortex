@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/brunozilio/lite/compare/v0.3.0...v0.3.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **lsp:** a checked-in project setting never says what a language server runs ([e9746e8](https://github.com/brunozilio/lite/commit/e9746e85ca19ea71e16c89312a15b4297c9f91ed))
+
 ## [0.3.0](https://github.com/brunozilio/lite/compare/v0.2.0...v0.3.0) (2026-11-10)
 
 
