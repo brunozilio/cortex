@@ -36,7 +36,10 @@ pub use extensions::Extensions;
 pub use failure::FailureKind;
 pub use ids::{Id, OrgId, SecretId, SessionId, UserId};
 pub use image::{Image, MAX_IMAGE_BYTES};
-pub use memory::{Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, MemoryKind, Provenance, RecallBudget};
+pub use memory::{
+    Author, Forgotten, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, MemoryKind, Provenance, RecallBudget,
+    Revision,
+};
 pub use model::{Effort, ModelOption, ModelProvider};
 pub use principal::{Member, Principal};
 pub use request::PromptRequest;

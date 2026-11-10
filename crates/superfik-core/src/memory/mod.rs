@@ -60,6 +60,28 @@ pub struct Memory {
     #[serde(default)]
     pub origin: Option<String>,
     pub author: Author,
+    /// The texts revisions replaced, oldest first (at most [`REVISIONS_KEPT`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<Revision>,
+}
+
+/// How many replaced texts a memory keeps.
+pub const REVISIONS_KEPT: usize = 5;
+/// How long a forgotten memory can still be restored.
+pub const FORGOTTEN_KEPT_DAYS: i64 = 30;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Revision {
+    pub text: String,
+    /// When a revision replaced it.
+    pub until: i64,
+}
+
+/// A memory taken out of the live memory, restorable until it expires.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Forgotten {
+    pub memory: Memory,
+    pub at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +91,7 @@ pub enum MemoryEdit {
     Forget { id: MemoryId },
     Revise { id: MemoryId, text: String },
     Reclassify { id: MemoryId, kind: MemoryKind },
+    Restore { id: MemoryId },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,10 +111,17 @@ pub struct MemoryBook {
     pub vectors: BTreeMap<MemoryId, Vec<f32>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub forgotten: Vec<Forgotten>,
 }
 
 impl MemoryBook {
+    /// Applies edits in order. Nothing is lost at once: a forgotten memory
+    /// waits [`FORGOTTEN_KEPT_DAYS`] in [`MemoryBook::forgotten`] and a
+    /// revised one keeps its replaced texts.
     pub fn apply(&mut self, edits: &[MemoryEdit], by: &Provenance) -> Vec<MemoryId> {
+        let expiry = by.now - FORGOTTEN_KEPT_DAYS * 24 * 60 * 60;
+        self.forgotten.retain(|f| f.at >= expiry);
         let mut touched = Vec::new();
         for edit in edits {
             match edit {
@@ -110,12 +140,24 @@ impl MemoryBook {
                         created: by.now,
                         origin: by.origin.clone(),
                         author: by.author,
+                        history: Vec::new(),
                     });
                     touched.push(id);
                 }
                 MemoryEdit::Forget { id } => {
-                    self.memories.retain(|m| m.id != *id);
+                    if let Some(at) = self.memories.iter().position(|m| m.id == *id) {
+                        let memory = self.memories.remove(at);
+                        self.forgotten.push(Forgotten { memory, at: by.now });
+                    }
                     self.vectors.remove(id);
+                }
+                MemoryEdit::Restore { id } => {
+                    if let Some(at) = self.forgotten.iter().position(|f| f.memory.id == *id) {
+                        let memory = self.forgotten.remove(at).memory;
+                        let place = self.memories.partition_point(|m| m.id < memory.id);
+                        self.memories.insert(place, memory);
+                        touched.push(*id);
+                    }
                 }
                 MemoryEdit::Reclassify { id, kind } => {
                     if let Some(memory) = self.memories.iter_mut().find(|m| m.id == *id && m.kind != *kind) {
@@ -128,7 +170,10 @@ impl MemoryBook {
                     else {
                         continue;
                     };
-                    memory.text = text;
+                    let old = std::mem::replace(&mut memory.text, text);
+                    memory.history.push(Revision { text: old, until: by.now });
+                    let extra = memory.history.len().saturating_sub(REVISIONS_KEPT);
+                    memory.history.drain(..extra);
                     self.vectors.remove(id);
                     touched.push(*id);
                 }
@@ -150,7 +195,8 @@ impl MemoryBook {
     }
 
     fn after_highest(&self) -> u32 {
-        self.memories.iter().map(|m| m.id.0 + 1).max().unwrap_or(0)
+        let forgotten = self.forgotten.iter().map(|f| &f.memory);
+        self.memories.iter().chain(forgotten).map(|m| m.id.0 + 1).max().unwrap_or(0)
     }
 }
 

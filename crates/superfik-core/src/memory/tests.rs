@@ -67,6 +67,40 @@ fn secrets_never_reach_a_memory() {
 }
 
 #[test]
+fn a_forgotten_memory_can_be_restored_until_it_expires() {
+    let mut book = book();
+    let day = 24 * 60 * 60;
+    book.apply(&[MemoryEdit::Forget { id: MemoryId(1) }], &by_agent(1_000));
+    assert!(book.memories.iter().all(|m| m.id != MemoryId(1)), "out of the live memory");
+    assert_eq!(book.forgotten.iter().map(|f| (f.memory.id, f.at)).collect::<Vec<_>>(), vec![(MemoryId(1), 1_000)]);
+
+    let touched = book.apply(&[MemoryEdit::Restore { id: MemoryId(1) }], &by_agent(2_000));
+    assert_eq!(touched, vec![MemoryId(1)]);
+    assert_eq!(book.memories.iter().map(|m| m.id.0).collect::<Vec<_>>(), vec![0, 1, 2, 3], "back in its place");
+    assert!(book.forgotten.is_empty());
+
+    book.apply(&[MemoryEdit::Forget { id: MemoryId(2) }], &by_agent(3_000));
+    book.apply(&[], &by_agent(3_000 + FORGOTTEN_KEPT_DAYS * day));
+    assert_eq!(book.forgotten.len(), 1, "kept for the whole grace period");
+    book.apply(&[], &by_agent(3_001 + FORGOTTEN_KEPT_DAYS * day));
+    assert!(book.forgotten.is_empty(), "gone once the grace period is over");
+    let learned = book.apply(&[remember(MemoryKind::Semantic, "New fact", &[])], &by_agent(4_000));
+    assert_eq!(learned, vec![MemoryId(4)], "ids are not reused");
+}
+
+#[test]
+fn a_revision_keeps_the_texts_it_replaced() {
+    let mut book = book();
+    for (n, text) in ["one", "two", "three", "four", "five", "six", "seven"].into_iter().enumerate() {
+        book.apply(&[MemoryEdit::Revise { id: MemoryId(1), text: text.into() }], &by_agent(10 + n as i64));
+    }
+    let memory = &book.memories[1];
+    assert_eq!(memory.text, "seven");
+    let kept: Vec<(&str, i64)> = memory.history.iter().map(|r| (r.text.as_str(), r.until)).collect();
+    assert_eq!(kept, vec![("two", 12), ("three", 13), ("four", 14), ("five", 15), ("six", 16)], "the last five");
+}
+
+#[test]
 fn ids_are_never_reused_after_forgetting() {
     let mut book = book();
     book.apply(&[MemoryEdit::Forget { id: MemoryId(3) }], &by_agent(1));
