@@ -19,7 +19,7 @@ pub trait SecretStore: Send + Sync {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct KeychainSecretStore;
 
-const SERVICE: &str = "Superfik";
+const SERVICE: &str = "Superfik Lite";
 
 fn account(owner: &Principal, connection: ConnectionId) -> String {
     format!("{}/{connection}", owner_key(owner))

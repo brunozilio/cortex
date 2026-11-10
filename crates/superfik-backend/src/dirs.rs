@@ -22,11 +22,13 @@ pub fn local_data_dir() -> Option<PathBuf> {
 pub fn app_data_dir_in(os: &str, var: impl Fn(&str) -> Option<OsString>, home: Option<PathBuf>) -> Option<PathBuf> {
     let set = |name: &str| var(name).filter(|value| !value.is_empty()).map(PathBuf::from);
     match os {
-        "macos" => home.map(|home| home.join("Library/Application Support/Superfik")),
-        "windows" => {
-            set("APPDATA").or_else(|| home.map(|home| home.join("AppData\\Roaming"))).map(|dir| dir.join("Superfik"))
-        }
-        _ => set("XDG_CONFIG_HOME").or_else(|| home.map(|home| home.join(".config"))).map(|dir| dir.join("superfik")),
+        "macos" => home.map(|home| home.join("Library/Application Support/Superfik Lite")),
+        "windows" => set("APPDATA")
+            .or_else(|| home.map(|home| home.join("AppData\\Roaming")))
+            .map(|dir| dir.join("Superfik Lite")),
+        _ => set("XDG_CONFIG_HOME")
+            .or_else(|| home.map(|home| home.join(".config")))
+            .map(|dir| dir.join("superfik-lite")),
     }
 }
 
@@ -38,7 +40,7 @@ pub fn local_data_dir_in(os: &str, var: impl Fn(&str) -> Option<OsString>, home:
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .or_else(|| home.map(|home| home.join("AppData\\Local")))
-        .map(|dir| dir.join("Superfik"))
+        .map(|dir| dir.join("Superfik Lite"))
 }
 
 #[cfg(test)]
@@ -55,11 +57,11 @@ mod tests {
         let home = Some(PathBuf::from(r"C:\Users\ana"));
         assert_eq!(
             app_data_dir_in("windows", env(&vars), home.clone()),
-            Some(PathBuf::from(r"C:\Users\ana\AppData\Roaming").join("Superfik"))
+            Some(PathBuf::from(r"C:\Users\ana\AppData\Roaming").join("Superfik Lite"))
         );
         assert_eq!(
             local_data_dir_in("windows", env(&vars), home),
-            Some(PathBuf::from(r"C:\Users\ana\AppData\Local").join("Superfik"))
+            Some(PathBuf::from(r"C:\Users\ana\AppData\Local").join("Superfik Lite"))
         );
     }
 
@@ -68,7 +70,7 @@ mod tests {
         let home = Some(PathBuf::from(r"C:\Users\ana"));
         assert_eq!(
             local_data_dir_in("windows", env(&[("LOCALAPPDATA", "")]), home),
-            Some(PathBuf::from(r"C:\Users\ana").join("AppData\\Local").join("Superfik"))
+            Some(PathBuf::from(r"C:\Users\ana").join("AppData\\Local").join("Superfik Lite"))
         );
         assert_eq!(app_data_dir_in("windows", env(&[]), None), None);
     }
@@ -77,9 +79,9 @@ mod tests {
     fn elsewhere_both_are_one_folder() {
         let home = Some(PathBuf::from("/Users/ana"));
         let mac = app_data_dir_in("macos", env(&[]), home.clone());
-        assert_eq!(mac, Some(PathBuf::from("/Users/ana/Library/Application Support/Superfik")));
+        assert_eq!(mac, Some(PathBuf::from("/Users/ana/Library/Application Support/Superfik Lite")));
         assert_eq!(local_data_dir_in("macos", env(&[]), home.clone()), mac);
         let linux = local_data_dir_in("linux", env(&[("XDG_CONFIG_HOME", "/cfg")]), home);
-        assert_eq!(linux, Some(PathBuf::from("/cfg/superfik")));
+        assert_eq!(linux, Some(PathBuf::from("/cfg/superfik-lite")));
     }
 }

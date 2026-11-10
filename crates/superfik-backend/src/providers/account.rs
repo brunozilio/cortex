@@ -57,12 +57,7 @@ pub(crate) struct AccountStore {
 impl ProviderKeyStore for AccountStore {
     fn load(&self) -> Result<String, String> {
         let values = self.secrets.get(&self.owner, self.slot).ok_or("provider account disconnected")?;
-        if let Some(config) = values.get(CONFIG) {
-            return Ok(config.clone());
-        }
-        let key = values.get("api_key").ok_or("provider account has no credential")?;
-        let config = Config::parse(self.provider, key).map_err(|e| e.to_string())?;
-        serde_json::to_string(&config).map_err(|e| e.to_string())
+        values.get(CONFIG).cloned().ok_or_else(|| "provider account has no credential".to_owned())
     }
 
     fn save(&self, value: &str) -> Result<(), String> {
@@ -93,16 +88,5 @@ mod tests {
         source.save(&original.replace("refresh-secret", "refresh-rotated")).expect("rotate");
         assert!(source.load().expect("load").contains("refresh-rotated"));
         assert!(source.save("not a credential").is_err(), "a broken credential is never kept");
-    }
-
-    #[test]
-    fn a_key_kept_before_configs_still_loads() {
-        let secrets = Arc::new(InMemorySecretStore::default());
-        let slot = ConnectionId::new();
-        let kept = Secrets::from([("api_key".into(), "sk-ant-0123456789abcd".into())]);
-        secrets.set(&Principal::LocalOwner, slot, &kept).expect("save");
-        let source = AccountStore { secrets, owner: Principal::LocalOwner, slot, provider: ModelProvider::Anthropic };
-        let config = Config::parse(ModelProvider::Anthropic, &source.load().expect("load")).expect("config");
-        assert_eq!(config.api_key, "sk-ant-0123456789abcd");
     }
 }

@@ -19,7 +19,7 @@ pub fn default_path() -> Option<PathBuf> {
         .filter(|dir| !dir.is_empty())
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-    Some(config.join("superfik").join(FILE_NAME))
+    Some(config.join("superfik-lite").join(FILE_NAME))
 }
 
 #[derive(Debug, Clone)]
