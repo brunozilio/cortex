@@ -1,11 +1,10 @@
 //! `Bash`: a command run in the user's shell, in the working directory.
 
-use std::io::Read as _;
 use std::process::Stdio;
-use std::sync::atomic::Ordering;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde_json::{Value, json};
+use superfik_process::{Bounds, Ended};
 
 use super::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
@@ -13,7 +12,6 @@ use crate::model::ToolSpec;
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_TIMEOUT: Duration = Duration::from_secs(600);
 const OUTPUT: usize = 30_000;
-const POLL: Duration = Duration::from_millis(50);
 
 #[derive(Debug)]
 pub struct Bash;
@@ -90,45 +88,29 @@ impl Tool for Bash {
                 Err(error) => Outcome::error(format!("Could not start the shell: {error}")),
             };
         }
-        let mut tree = match superfik_process::Tree::spawn(&mut shell) {
-            Ok(tree) => tree,
+        let bounds = Bounds { timeout, max_output: OUTPUT * 4, stop: &workspace.stop, input: None };
+        let done = match superfik_process::bounded::run(&mut shell, bounds) {
+            Ok(done) => done,
             Err(error) => return Outcome::error(format!("Could not start the shell: {error}")),
         };
-        let stdout = reader(tree.child().stdout.take());
-        let stderr = reader(tree.child().stderr.take());
-        let started = Instant::now();
-        let status = loop {
-            match tree.child().try_wait() {
-                Ok(Some(status)) => break Some(status),
-                Ok(None) if workspace.stop.load(Ordering::Relaxed) || started.elapsed() > timeout => {
-                    tree.kill();
-                    break None;
-                }
-                Ok(None) => std::thread::sleep(POLL),
-                Err(error) => return Outcome::error(format!("Lost the command: {error}")),
-            }
-        };
-        tree.kill();
-        let out = stdout.join().unwrap_or_default();
-        let err = stderr.join().unwrap_or_default();
-        let mut text = out.trim_end().to_owned();
-        if !err.trim().is_empty() {
+        let mut text = done.stdout.trim_end().to_owned();
+        if !done.stderr.trim().is_empty() {
             if !text.is_empty() {
                 text.push('\n');
             }
-            text.push_str(err.trim_end());
+            text.push_str(done.stderr.trim_end());
         }
         let text = clip(&text, OUTPUT);
-        match status {
-            Some(status) if status.success() => {
+        match done.ended {
+            Ended::Exited(status) if status.success() => {
                 Outcome::ok(if text.is_empty() { "(no output)".to_owned() } else { text })
             }
-            Some(status) => {
+            Ended::Exited(status) => {
                 let code = status.code().map_or_else(|| "a signal".to_owned(), |code| code.to_string());
                 Outcome::error(format!("{text}\n(exit code {code})").trim_start().to_owned())
             }
-            None if workspace.stop.load(Ordering::Relaxed) => Outcome::error(format!("{text}\n(cancelled)")),
-            None => {
+            Ended::Stopped => Outcome::error(format!("{text}\n(cancelled)")),
+            Ended::TimedOut => {
                 Outcome::error(format!("{text}\n(stopped after {} ms)", timeout.as_millis()).trim_start().to_owned())
             }
         }
@@ -148,19 +130,10 @@ fn shell(command: &str) -> std::process::Command {
     superfik_process::WindowsShell::detect().command(command)
 }
 
-fn reader(pipe: Option<impl std::io::Read + Send + 'static>) -> std::thread::JoinHandle<String> {
-    std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = (&mut pipe).take((OUTPUT * 4) as u64).read_to_end(&mut bytes);
-            let _ = std::io::copy(&mut pipe, &mut std::io::sink());
-        }
-        String::from_utf8_lossy(&bytes).into_owned()
-    })
-}
-
 #[cfg(all(test, unix))]
 mod tests {
+    use std::time::Instant;
+
     use super::*;
 
     #[test]

@@ -28,9 +28,10 @@ impl GitSnapshot {
 }
 
 pub fn snapshot(cwd: &Path) -> Option<GitSnapshot> {
+    let never = std::sync::atomic::AtomicBool::new(false);
     let git = |args: &[&str]| -> Option<String> {
-        let output = superfik_process::command("git").arg("-C").arg(cwd).args(args).output().ok()?;
-        output.status.success().then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+        let args: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+        crate::agent_runtime::git::output(cwd, &args, &never).ok()
     };
     let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"])?.trim().to_owned();
     let status: String =

@@ -3,11 +3,10 @@
 
 use serde_json::Value;
 use std::{
-    io::{Read, Write},
-    process::Stdio,
     sync::atomic::Ordering,
     time::{Duration, Instant},
 };
+use superfik_process::{Bounds, Ended};
 
 use super::{CommandOutput, Handler};
 use crate::tools::Workspace;
@@ -22,46 +21,15 @@ pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Resul
         cmd
     };
     cmd.env("CLAUDE_PROJECT_DIR", &workspace.cwd).env("SUPERFIK_PROJECT_DIR", &workspace.cwd);
-    cmd.current_dir(&workspace.cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut tree = superfik_process::Tree::spawn(&mut cmd).map_err(|e| e.to_string())?;
-    let mut stdin = tree.child().stdin.take().ok_or("hook stdin unavailable")?;
-    let payload = serde_json::to_vec(input).map_err(|e| e.to_string())?;
-    let writer = std::thread::spawn(move || {
-        let _ = stdin.write_all(&payload);
-    });
-    let stdout = drain(tree.child().stdout.take());
-    let stderr = drain(tree.child().stderr.take());
-    let start = Instant::now();
-    let status = loop {
-        if let Some(status) = tree.child().try_wait().map_err(|e| e.to_string())? {
-            break status;
-        }
-        if workspace.stop.load(Ordering::Relaxed) || start.elapsed() > Duration::from_secs(handler.timeout) {
-            tree.kill();
-            let _ = writer.join();
-            let _ = stdout.join();
-            let _ = stderr.join();
-            return Err("hook cancelled or timed out".into());
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    };
-    tree.kill();
-    let _ = writer.join();
-    Ok(CommandOutput {
-        code: status.code(),
-        stdout: stdout.join().unwrap_or_default(),
-        stderr: stderr.join().unwrap_or_default(),
-    })
-}
-fn drain(pipe: Option<impl Read + Send + 'static>) -> std::thread::JoinHandle<String> {
-    std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = (&mut pipe).take(64 * 1024).read_to_end(&mut bytes);
-            let _ = std::io::copy(&mut pipe, &mut std::io::sink());
-        }
-        String::from_utf8_lossy(&bytes).into_owned()
-    })
+    cmd.current_dir(&workspace.cwd);
+    let input = Some(serde_json::to_vec(input).map_err(|e| e.to_string())?);
+    let bounds =
+        Bounds { timeout: Duration::from_secs(handler.timeout), max_output: 64 * 1024, stop: &workspace.stop, input };
+    let done = superfik_process::bounded::run(&mut cmd, bounds).map_err(|e| e.to_string())?;
+    match done.ended {
+        Ended::Exited(status) => Ok(CommandOutput { code: status.code(), stdout: done.stdout, stderr: done.stderr }),
+        Ended::Stopped | Ended::TimedOut => Err("hook cancelled or timed out".into()),
+    }
 }
 
 pub(super) fn bounded<T: Send>(

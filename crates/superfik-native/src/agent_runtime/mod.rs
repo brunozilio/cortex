@@ -1,5 +1,5 @@
 //! Filesystem setup for a custom agent: its worktree and memory folder.
-mod git;
+pub(crate) mod git;
 
 use self::git::{git, git_stopped};
 use crate::tools::{Workspace, subagent_config::AgentConfig};
@@ -31,13 +31,9 @@ impl Setup {
         })
     }
 }
-pub fn local_resume(
-    config: &AgentConfig,
-    name: &str,
-    owner: &str,
-    state: &WorktreeState,
-    workspace: &Workspace,
-) -> Result<Setup, String> {
+/// Continues a session in the worktree it was given, after checking that
+/// the saved checkout is still this project's.
+pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace: &Workspace) -> Result<Setup, String> {
     let root =
         PathBuf::from(git_stopped(workspace, &workspace.cwd, &["rev-parse".as_ref(), "--show-toplevel".as_ref()])?)
             .canonicalize()
@@ -70,7 +66,7 @@ pub fn local_resume(
     }
     let mut memory_config = config.clone();
     memory_config.worktree = false;
-    let mut setup = local_prepare(&memory_config, name, owner, workspace)?;
+    let mut setup = prepare_as(&memory_config, name, &owner(workspace)?, workspace)?;
     setup.cwd = actual;
     setup.worktree_root = Some(root);
     setup.base_commit = Some(state.base_commit.clone());
@@ -78,13 +74,23 @@ pub fn local_resume(
     setup.context = Some(crate::brief::Brief::load(&request)?);
     Ok(setup)
 }
-pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace: &Workspace) -> Result<Setup, String> {
-    let owner =
-        serde_json::to_string(workspace.credentials.owner.as_ref().unwrap_or(&superfik_core::Principal::LocalOwner))
-            .map_err(|e| e.to_string())?;
-    local_resume(config, name, &owner, state, workspace)
+
+/// An agent's memory folder and, when its configuration asks, a fresh
+/// worktree to work in.
+pub fn prepare(config: &AgentConfig, name: &str, workspace: &Workspace) -> Result<Setup, String> {
+    if config.memory.is_none() && !config.worktree {
+        return Ok(Setup { cwd: workspace.cwd.clone(), ..Default::default() });
+    }
+    prepare_as(config, name, &owner(workspace)?, workspace)
 }
-pub fn local_prepare(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspace) -> Result<Setup, String> {
+
+/// Whose agent memory this is: the run's owner, as a stable key.
+fn owner(workspace: &Workspace) -> Result<String, String> {
+    let owner = workspace.credentials.owner.as_ref().unwrap_or(&superfik_core::Principal::LocalOwner);
+    serde_json::to_string(owner).map_err(|e| e.to_string())
+}
+
+fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspace) -> Result<Setup, String> {
     if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || "_-:".contains(c)) {
         return Err("agent name must be a filesystem-safe name".into());
     }
@@ -151,8 +157,7 @@ pub fn local_prepare(config: &AgentConfig, name: &str, owner: &str, workspace: &
             &root,
             &["worktree".as_ref(), "add".as_ref(), "--detach".as_ref(), target.as_os_str(), base.as_ref()],
         ) {
-            let cleanup = local_cleanup(&setup);
-            return Err(match cleanup {
+            return Err(match cleanup(&setup) {
                 Ok(None) => error,
                 Ok(Some(path)) => format!("{error}; partial checkout retained at {}", path.display()),
                 Err(cleanup) => format!("{error}; inspect partial checkout {}: {cleanup}", target.display()),
@@ -162,14 +167,16 @@ pub fn local_prepare(config: &AgentConfig, name: &str, owner: &str, workspace: &
         setup.context = match crate::brief::Brief::load(&request) {
             Ok(brief) => Some(brief),
             Err(error) => {
-                let _ = local_cleanup(&setup);
+                let _ = cleanup(&setup);
                 return Err(error);
             }
         };
     }
     Ok(setup)
 }
-pub fn local_cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
+/// Removes an agent's worktree when nothing changed in it; otherwise keeps
+/// it and says where.
+pub fn cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
     let Some(root) = &setup.worktree_root else { return Ok(None) };
     if !setup.cwd.starts_with(root.join(".superfik/worktrees"))
         || setup.cwd.file_name().and_then(|s| s.to_str()).and_then(|s| uuid::Uuid::parse_str(s).ok()).is_none()
@@ -185,21 +192,6 @@ pub fn local_cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
     } else {
         Ok(Some(setup.cwd.clone()))
     }
-}
-pub fn prepare(config: &AgentConfig, name: &str, workspace: &Workspace) -> Result<Setup, String> {
-    if config.memory.is_none() && !config.worktree {
-        return Ok(Setup { cwd: workspace.cwd.clone(), ..Default::default() });
-    }
-    let owner =
-        serde_json::to_string(workspace.credentials.owner.as_ref().unwrap_or(&superfik_core::Principal::LocalOwner))
-            .map_err(|e| e.to_string())?;
-    local_prepare(config, name, &owner, workspace)
-}
-pub fn cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
-    if setup.worktree_root.is_none() {
-        return Ok(None);
-    }
-    local_cleanup(setup)
 }
 
 mod guard;

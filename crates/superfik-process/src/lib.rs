@@ -2,10 +2,12 @@
 //! server's command…). Where a tool is found is `superfik_core::executable`; how it is
 //! started is here, so the pure core never touches processes.
 
+pub mod bounded;
 mod tree;
 #[cfg(any(windows, test))]
 mod windows_shell;
 
+pub use bounded::{Bounds, Ended, Finished};
 pub use tree::Tree;
 #[cfg(windows)]
 pub use windows_shell::WindowsShell;
