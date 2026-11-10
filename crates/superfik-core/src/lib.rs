@@ -16,6 +16,7 @@ pub mod extensions;
 pub mod failure;
 pub mod ids;
 pub mod image;
+pub mod lsp;
 pub mod mcp;
 pub mod mcp_config;
 pub mod memory;
