@@ -54,6 +54,7 @@ pub fn run(app: &mut App, command: Command) {
         }
         Command::Effort(effort) => app.set_effort_from(effort),
         Command::Compact => app.compact(),
+        Command::Btw(question) => super::side::ask(app, question),
         Command::Diff => {
             let cwd = app.cwd.clone();
             app.spawn(move |_| Msg::Changes(super::git::changes(&cwd)));

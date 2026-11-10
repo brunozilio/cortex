@@ -30,6 +30,10 @@ pub fn key(app: &mut App, event: KeyEvent) {
     if app.picker.is_some() {
         return pick(app, event);
     }
+    if app.side.is_some() && matches!(event.code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ')) {
+        app.side = None;
+        return;
+    }
     edit(app, event, ctrl);
 }
 

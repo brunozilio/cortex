@@ -7,7 +7,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use superfik_backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
-use superfik_core::{AgentAsk, AskId, AskKind, SessionId, ToolCall};
+use superfik_core::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId, ToolCall};
 use superfik_engine::fake::FakeEngine;
 use superfik_sdk::{Decision, EngineEvent, Model, PermissionMode, Superfik};
 
@@ -172,6 +172,46 @@ fn a_dropped_image_is_attached_to_the_prompt_that_names_it() {
     let sent = engine.requests().remove(0);
     assert_eq!(sent.prompt, "what is [Image #1] not a file");
     assert_eq!(sent.images, [superfik_sdk::Image::from_bytes(png).expect("ok").expect("png")]);
+}
+
+#[test]
+fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() {
+    let data = tempfile::tempdir().expect("data");
+    let mut script = vec![
+        EngineEvent::SessionStarted(SessionId("s".into())),
+        EngineEvent::Chore(ChoreAnswer::Side("It edits main.rs.".into())),
+    ];
+    script.extend((0..6).map(|_| EngineEvent::TextDelta("…".into())));
+    script.push(EngineEvent::TextDelta("All done.".into()));
+    script.push(EngineEvent::Completed { duration_ms: 1, cost_usd: None });
+    let model = Model::new("anthropic:scripted", "Scripted");
+    let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(40));
+    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+
+    type_text(&mut app, "/btw too early?");
+    press(&mut app, KeyCode::Enter);
+    assert!(screen(&app).contains("no conversation to ask about yet"), "{}", screen(&app));
+
+    type_text(&mut app, "fix the bug");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.session.as_ref().is_some_and(|s| s.id().is_some()));
+    type_text(&mut app, "/btw which file?");
+    press(&mut app, KeyCode::Enter);
+    assert!(screen(&app).contains("which file?") && screen(&app).contains("answering…"), "{}", screen(&app));
+    press(&mut app, KeyCode::Esc);
+    assert!(app.side.is_none() && app.busy(), "Esc closed the answer, not the run");
+    until(&mut app, |app| !app.busy());
+    assert!(screen(&app).contains("All done."), "the run finished: {}", screen(&app));
+
+    type_text(&mut app, "/btw which file?");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.side.as_ref().is_some_and(|side| side.answer.is_some()));
+    let shown = screen(&app);
+    assert!(shown.contains("It edits main.rs."), "{shown}");
+    press(&mut app, KeyCode::Esc);
+    assert!(!screen(&app).contains("It edits main.rs."), "the answer is not kept in the conversation");
+    assert_eq!(engine.requests().last().map(|r| r.command), Some(Some(SessionCommand::Side)));
 }
 
 #[test]
