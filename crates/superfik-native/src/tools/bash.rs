@@ -33,6 +33,10 @@ impl Tool for Bash {
                  {OUTPUT} characters is cut. Use Read, Glob, Grep, Edit and Write for files instead of cat, find, \
                  grep, sed or echo. Quote paths with spaces. Its output reaches you, not reliably the user. \
                  This computer runs commands with {shell}.\n\n\
+                 Background: set `run_in_background` for something that keeps running (a dev server, a \
+                 watcher, a long build). It returns an id at once; read what it printed with BashOutput and \
+                 stop it with KillShell. It keeps running across turns until stopped or until the user \
+                 leaves. Never use `&` or `nohup` for this.\n\n\
                  Git:\n\
                  - Interactive flags (`git rebase -i`, `git add -i`) do not work here: there is no terminal.\n\
                  - Use the `gh` CLI for GitHub (pull requests, issues, the API).\n\
@@ -49,6 +53,7 @@ impl Tool for Bash {
                 "properties": {
                     "command": { "type": "string", "description": "The command to run." },
                     "timeout": { "type": "integer", "description": "Milliseconds before it is stopped." },
+                    "run_in_background": { "type": "boolean", "description": "Leave it running and return its id at once." },
                     "description": { "type": "string", "description": "What the command does, in plain active words the user reads, often without seeing the command: do not echo its text, flags or paths. Five to ten words for simple commands (`git status` → \"Show working tree status\"); more context for pipes or obscure flags (`git reset --hard origin/main` → \"Discard all local changes and match remote main\"). Never call a command \"complex\" or \"risky\": say what it does." }
                 },
                 "required": ["command"],
@@ -82,6 +87,14 @@ impl Tool for Bash {
         }
         shell.envs(workspace.credentials.env());
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
+            return match super::shells::start(workspace.credentials.client, command, &mut shell) {
+                Ok(id) => Outcome::ok(format!(
+                    "Started in the background as {id}. Read its output with BashOutput and stop it with KillShell."
+                )),
+                Err(error) => Outcome::error(format!("Could not start the shell: {error}")),
+            };
+        }
         let mut tree = match superfik_process::Tree::spawn(&mut shell) {
             Ok(tree) => tree,
             Err(error) => return Outcome::error(format!("Could not start the shell: {error}")),

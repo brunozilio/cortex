@@ -161,6 +161,10 @@ fn status(app: &App) -> Line<'static> {
     if app.transcript.context > 0 {
         spans.push(format!(" · {} context", entries::tokens(app.transcript.context)).dim());
     }
+    if !app.transcript.background.is_empty() {
+        let count = app.transcript.background.len();
+        spans.push(format!(" · {count} background").fg(Color::Cyan));
+    }
     if app.transcript.cost > 0.0 {
         spans.push(format!(" · ${:.2}", app.transcript.cost).dim());
     }

@@ -21,6 +21,15 @@ pub struct CommandHandler {
     runs: Arc<RunTable>,
     outbox: Outbox,
     memory_tool: Option<McpServer>,
+    /// This client's number: its runs' background commands carry it and
+    /// stop when it leaves.
+    client: u64,
+}
+
+impl Drop for CommandHandler {
+    fn drop(&mut self) {
+        superfik_native::tools::shells::kill_client(self.client);
+    }
 }
 
 impl CommandHandler {
@@ -28,7 +37,9 @@ impl CommandHandler {
         services.providers = services.providers.for_client();
         let memory_tool = services.memory_tool.then(|| McpServer::start(services.memory.clone())).flatten();
         let runs = Arc::new(RunTable::default());
-        Self { services, runs, outbox, memory_tool }
+        static CLIENTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let client = CLIENTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self { services, runs, outbox, memory_tool, client }
     }
 
     pub fn handle(&self, envelope: Envelope<ClientCommand>) {
@@ -167,6 +178,7 @@ impl CommandHandler {
                 owner: Some(owner.clone()),
                 model_guard: None,
                 mcp: Vec::new(),
+                client: self.client,
             },
             ..request.clone()
         };

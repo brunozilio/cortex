@@ -12,6 +12,7 @@ mod glob;
 mod grep;
 mod outside;
 mod read;
+pub mod shells;
 pub mod skill;
 pub mod structured;
 pub mod subagent;
@@ -31,6 +32,7 @@ pub use edit::Edit;
 pub use glob::Glob;
 pub use grep::Grep;
 pub use read::Read;
+pub use shells::{BashOutput, KillShell};
 pub use write::Write;
 
 use crate::model::ToolSpec;
@@ -193,6 +195,8 @@ pub fn standard() -> Vec<Box<dyn Tool>> {
         Box::new(Glob),
         Box::new(Grep),
         Box::new(Bash),
+        Box::new(BashOutput),
+        Box::new(KillShell),
         Box::new(ask::AskUserQuestion),
     ]
 }

@@ -10,6 +10,9 @@ pub struct RunCredentials {
     pub model_guard: Option<ModelGuard>,
     /// The host's in-process MCP servers (the SDK's tools in code).
     pub mcp: Vec<crate::mcp::LocalMcp>,
+    /// Which client connection the run belongs to (its background commands
+    /// end with that client); 0 when unknown.
+    pub client: u64,
 }
 
 type CheckModel = dyn Fn(&crate::ModelOption) -> Result<(), String> + Send + Sync;
