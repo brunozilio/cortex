@@ -12,7 +12,7 @@ superfik-protocol.workspace = true
 superfik-browser.workspace = true
 qrcode = { version = "0.14", default-features = false }
 winit.workspace = true
-base64 = "0.22"
+base64 = "0.23"
 superfik-i18n.workspace = true
 superfik-motion.workspace = true
 superfik-render.workspace = true

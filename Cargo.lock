@@ -6911,7 +6911,7 @@ dependencies = [
 name = "superfik-backend"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "chacha20poly1305",
  "chrono",
  "crossbeam-channel",
@@ -6946,7 +6946,7 @@ name = "superfik-browser"
 version = "0.1.0"
 dependencies = [
  "aes 0.8.4",
- "base64 0.22.1",
+ "base64 0.23.1",
  "block2 0.6.2",
  "cbc 0.1.2",
  "cef",
@@ -6977,7 +6977,7 @@ dependencies = [
 name = "superfik-channels"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "hex",
  "hmac 0.12.1",
  "imap",
@@ -7000,7 +7000,7 @@ dependencies = [
 name = "superfik-client"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "qrcode",
  "serde",
  "serde_json",
@@ -7020,7 +7020,7 @@ dependencies = [
 name = "superfik-core"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "psl",
  "regex",
  "roxmltree 0.21.2",
@@ -7140,7 +7140,7 @@ version = "0.1.0"
 name = "superfik-native"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "globset",
  "ignore",
@@ -7170,7 +7170,7 @@ dependencies = [
 name = "superfik-oauth"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "sha2 0.10.9",
  "tiny_http",
  "ureq 3.5.1",
@@ -7196,7 +7196,7 @@ dependencies = [
 name = "superfik-plugins"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "serde",
  "serde_json",
@@ -7220,7 +7220,7 @@ dependencies = [
 name = "superfik-process"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "libc",
  "windows-sys 0.61.2",
 ]
@@ -7273,7 +7273,7 @@ name = "superfik-server"
 version = "0.1.0"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "crossbeam-channel",
  "futures-util",
  "http-body-util",
