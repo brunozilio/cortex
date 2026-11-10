@@ -63,6 +63,28 @@ fn a_sub_agent_shows_its_own_steps_and_usage_counts_tokens() {
 }
 
 #[test]
+fn a_messaged_sub_agent_runs_again_on_its_own_card() {
+    let mut transcript = Transcript::default();
+    transcript.apply(&EngineEvent::AgentSpawned {
+        index: 0,
+        kind: "Explore".into(),
+        summary: "Find tests".into(),
+        prompt: String::new(),
+    });
+    let update = |status| EngineEvent::AgentUpdate { index: 0, status, summary: None };
+    transcript.apply(&update(AgentStatus::Done { seconds: 1 }));
+    transcript.apply(&EngineEvent::TextDelta("Asking it more.".into()));
+    transcript.apply(&update(AgentStatus::Running { progress: 0.0 }));
+    let step = EngineEvent::ToolStarted(ToolCall::new("y", "Read", "a.rs"));
+    transcript.apply(&EngineEvent::AgentEvent { index: 0, event: Box::new(step) });
+
+    assert!(matches!(&transcript.entries[0], Entry::Agent { done: None, steps, .. } if steps == &["Read(a.rs)"]));
+    assert_eq!(transcript.activity.as_deref(), Some("Explore: Read(a.rs)"));
+    transcript.apply(&update(AgentStatus::Done { seconds: 2 }));
+    assert!(matches!(&transcript.entries[0], Entry::Agent { done: Some(true), .. }));
+}
+
+#[test]
 fn background_commands_are_counted_until_stopped_or_finished() {
     let mut transcript = Transcript::default();
     let result = |output: &str| EngineEvent::ToolResult { id: "t".into(), output: output.into(), failed: false };

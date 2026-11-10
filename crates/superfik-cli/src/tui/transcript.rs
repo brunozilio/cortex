@@ -243,7 +243,8 @@ impl Transcript {
             match status {
                 AgentStatus::Done { .. } => *done = Some(true),
                 AgentStatus::Failed => *done = Some(false),
-                _ => {}
+                // A finished agent that got another message works again.
+                AgentStatus::Running { .. } => *done = None,
             }
         }
     }

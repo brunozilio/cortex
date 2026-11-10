@@ -48,7 +48,7 @@ fn a_sub_agent_works_in_its_own_conversation_and_reports_back() {
         Block::ToolResult { id, content, .. } if id == "a1" => Some(content.clone()),
         _ => None,
     });
-    assert_eq!(report.as_deref(), Some("It lists alpha and beta."));
+    assert_eq!(report.as_deref(), Some("It lists alpha and beta.\n\nagent_id: agent-1 (SendMessage continues it)"));
     assert_eq!(history.len(), 4, "the sub-agent's turns stay in its own conversation");
     let events = rig.events();
     assert!(
@@ -101,7 +101,7 @@ fn background_agent_runs_concurrently_and_output_is_collected() {
                 }
                 _ => {
                     assert!(request.messages.iter().any(|m| m.blocks.iter().any(
-                        |b| matches!(b, Block::ToolResult {id,content,..} if id=="out" && content=="independent report")
+                        |b| matches!(b, Block::ToolResult {id,content,..} if id=="out" && content.starts_with("independent report\n\nagent_id: agent-"))
                     )));
                     ScriptedModel::reply(vec![Block::Text("Reviewed".into())])
                 }

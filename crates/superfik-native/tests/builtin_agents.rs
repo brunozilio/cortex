@@ -83,7 +83,7 @@ fn a_fork_continues_from_the_parents_conversation_and_reports_only_its_own_words
         Block::ToolResult { id, content, .. } if id == "f1" => Some(content.clone()),
         _ => None,
     });
-    assert_eq!(report.as_deref(), Some("Three files."));
+    assert_eq!(report.as_deref(), Some("Three files.\n\nagent_id: agent-1 (SendMessage continues it)"));
 }
 
 #[test]

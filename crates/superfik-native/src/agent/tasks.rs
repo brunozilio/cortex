@@ -8,19 +8,24 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
 use super::Agent;
+use super::conversations::Conversations;
 use crate::control::Control;
 use crate::tools::Outcome;
 use crate::tools::builtin_agents;
 use crate::transcript::Message;
 
 #[derive(Default)]
-pub(super) struct Tasks(pub(super) Mutex<BTreeMap<String, Arc<Task>>>);
+pub(super) struct Tasks {
+    pub(super) background: Mutex<BTreeMap<String, Arc<Task>>>,
+    /// Finished sub-agents, foreground or background, `SendMessage` reaches.
+    pub(super) conversations: Conversations,
+}
 
 pub(super) struct StopTasksOnDrop<'a>(pub(super) &'a Tasks);
 
 impl Drop for StopTasksOnDrop<'_> {
     fn drop(&mut self) {
-        if let Ok(tasks) = self.0.0.lock() {
+        if let Ok(tasks) = self.0.background.lock() {
             for task in tasks.values() {
                 task.control.cancel();
             }
@@ -50,7 +55,7 @@ impl Task {
 
 impl Tasks {
     fn find(&self, input: &Value) -> Option<Arc<Task>> {
-        self.0.lock().expect("tasks").get(input["task_id"].as_str().unwrap_or_default()).cloned()
+        self.background.lock().expect("tasks").get(input["task_id"].as_str().unwrap_or_default()).cloned()
     }
 
     pub(super) fn output(&self, input: &Value) -> Outcome {
@@ -72,7 +77,7 @@ impl Tasks {
     }
 
     pub(super) fn list(&self, planning: impl FnOnce() -> Value) -> Outcome {
-        let tasks = self.0.lock().expect("tasks");
+        let tasks = self.background.lock().expect("tasks");
         let planning = planning();
         Outcome::ok(json!({"planning":planning,"background":tasks.iter().map(|(id,t)| json!({"task_id":id,"status":if t.result.lock().expect("task").is_some(){"completed"}else{"running"}})).collect::<Vec<_>>()}).to_string())
     }
@@ -87,7 +92,8 @@ impl Agent<'_> {
         parent: &[Message],
         spawn: &dyn Fn(Box<dyn FnOnce() + Send + 'env>),
     ) -> Outcome {
-        let mut tasks = tasks.0.lock().expect("tasks");
+        let conversations = tasks.conversations.clone();
+        let mut tasks = tasks.background.lock().expect("tasks");
         if self.depth > 0 || tasks.len() >= 16 {
             return Outcome::error("Background agent limit reached (16 per run; no nested agents).");
         }
@@ -105,7 +111,7 @@ impl Agent<'_> {
         let parent = if builtin_agents::is_fork(&input) { parent.to_vec() } else { Vec::new() };
         spawn(Box::new(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                self.sub_agent_with(&input, &control, &workspace, &parent)
+                self.sub_agent_with(&input, &control, &workspace, &parent, &conversations, None)
             }))
             .unwrap_or_else(|_| Outcome::error("Background agent panicked."));
             *task.result.lock().expect("task result") = Some(result);

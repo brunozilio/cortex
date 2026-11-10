@@ -2,6 +2,7 @@
 
 mod custom_agents;
 mod permissions;
+mod send_message;
 mod sub_agents;
 mod turns;
 

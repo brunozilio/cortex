@@ -6,8 +6,10 @@
 //! - `permission`: asking the user, for questions and permissions.
 //! - `sub_agent`: the sub-agents the `Agent` tool starts.
 //! - `tasks`: background agents and the `Task*` tools.
+//! - `conversations`: finished sub-agents `SendMessage` continues.
 
 mod call;
+mod conversations;
 mod permission;
 mod sub_agent;
 mod tasks;
@@ -68,7 +70,7 @@ impl Agent<'_> {
             };
             let outcome = self.run_loop(history, &tasks, &spawn);
             if outcome.is_err() {
-                for task in tasks.0.lock().expect("tasks").values() {
+                for task in tasks.background.lock().expect("tasks").values() {
                     task.control.cancel();
                 }
             }
@@ -160,7 +162,7 @@ impl Agent<'_> {
                 }
                 StopReason::Refusal => return Err(Ending::Refused),
                 _ if calls.is_empty() => {
-                    let pending: Vec<_> = tasks.0.lock().expect("tasks").values().cloned().collect();
+                    let pending: Vec<_> = tasks.background.lock().expect("tasks").values().cloned().collect();
                     let mut reports = Vec::new();
                     for task in pending {
                         if !task.collected.load(Ordering::Relaxed) {

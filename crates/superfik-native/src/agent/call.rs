@@ -9,6 +9,7 @@ use super::tasks::Tasks;
 use super::{Agent, Ending, SHOWN_OUTPUT};
 use crate::model::ModelError;
 use crate::tools::ask::ASK_TOOL;
+use crate::tools::send_message::SEND_MESSAGE_TOOL;
 use crate::tools::subagent::{AGENT_TOOL, AgentTool};
 use crate::tools::{Outcome, clip};
 use crate::transcript::{Block, Message};
@@ -149,7 +150,10 @@ impl Agent<'_> {
                 Some(_) if name == AGENT_TOOL && (AgentTool { agents: self.agents.to_vec() }).background(input) => {
                     self.start_background(input, tasks, parent, spawn)
                 }
-                Some(_) if name == AGENT_TOOL => self.sub_agent_with(input, self.control, self.workspace, parent),
+                Some(_) if name == AGENT_TOOL => {
+                    self.sub_agent_with(input, self.control, self.workspace, parent, &tasks.conversations, None)
+                }
+                Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
                 Some(_) if name == crate::tools::advisor::ADVISOR_TOOL => match &self.workspace.advisor {
                     Some(model) => {
                         crate::tools::advisor::consult(self.api, &self.request, model, parent, self.control.stop_flag())

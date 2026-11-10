@@ -49,6 +49,11 @@ provider's key (`RunCredentials::model`, never serialized).
 
 - **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`.
   Project or user agents of the same name replace them.
+- **SendMessage** (`agent/conversations.rs`): a finished sub-agent's
+  report ends with its `agent_id`; `SendMessage` continues it with its
+  conversation intact, on its original card. Agents last for the run (one
+  prompt); a background one takes messages once collected, a worktree one
+  never (its folder is gone), and only the top-level agent sends them.
 - **Prompt**: planning mode, output styles, tool descriptions carrying the
   working rules; project instructions and rules (`docs/native-engine.md`).
 - **Compaction** keeps only the nine-section `<summary>`.

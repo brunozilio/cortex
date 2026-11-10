@@ -65,6 +65,7 @@ impl Job {
         }
         let agents = brief.agents;
         tools.push(Box::new(tools::subagent::AgentTool { agents: agents.clone() }));
+        tools.push(Box::new(tools::send_message::SendMessageTool));
         tools.extend(tools::task::tools());
         tools.extend(crate::mcp::tools_stopped(&self.request, &mcp_sources, &self.mcp, self.control.stop_flag()));
         let settings = brief.settings;
