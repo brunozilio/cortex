@@ -3,6 +3,8 @@
 //! `superfik_core::lsp`; here they are started and spoken to.
 
 mod client;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fake;
 pub mod framing;
 mod pool;
 
@@ -36,6 +38,34 @@ pub struct Opened {
 impl std::fmt::Debug for Opened {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Opened").field("language", &self.language).field("root", &self.root).finish_non_exhaustive()
+    }
+}
+
+/// How long an edit waits for the server's diagnostics.
+pub const DIAGNOSTICS_WAIT: Duration = Duration::from_secs(3);
+
+/// A run's language servers: the shared pool and the servers its settings
+/// allow.
+#[derive(Clone, Debug)]
+pub struct Lsp {
+    pub servers: Arc<dyn LanguageServers>,
+    pub specs: Arc<Vec<ServerSpec>>,
+}
+
+impl Lsp {
+    pub fn open(&self, file: &Path, cwd: &Path, stop: &AtomicBool) -> Result<Opened, String> {
+        self.servers.open(file, &self.specs, cwd, stop)
+    }
+
+    /// The errors and warnings the file's server finds in `text`, the file's
+    /// new content; `None` without a server, an answer or a problem.
+    pub fn problems(&self, file: &Path, text: &str, cwd: &Path, stop: &AtomicBool) -> Option<String> {
+        superfik_core::lsp::server_for(file, &self.specs)?;
+        let opened = self.open(file, cwd, stop).ok()?;
+        let version = opened.server.sync(file, &opened.language, text).ok()?;
+        let found = opened.server.diagnostics(file, version, DIAGNOSTICS_WAIT)?;
+        let shown = file.strip_prefix(cwd).unwrap_or(file).display().to_string();
+        superfik_core::lsp::diagnostics::report(&shown, &found)
     }
 }
 

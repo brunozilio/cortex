@@ -18,6 +18,7 @@ pub(super) struct Job {
     pub(super) source: Arc<dyn ApiSource>,
     pub(super) sessions: Arc<dyn Sessions>,
     pub(super) mcp: Arc<dyn Http>,
+    pub(super) lsp: Arc<dyn crate::lsp::LanguageServers>,
     pub(super) request: PromptRequest,
     pub(super) workspace: Arc<Workspace>,
     pub(super) control: Arc<Control>,
@@ -59,6 +60,11 @@ impl Job {
         let workspace = Arc::get_mut(&mut self.workspace).expect("workspace is not shared before starting tools");
         workspace.rules = brief.rules;
         let mut tools = tools::standard();
+        let specs = Arc::new(superfik_core::lsp::defaults());
+        if self.lsp.any_installed(&specs) {
+            workspace.lsp = Some(crate::lsp::Lsp { servers: Arc::clone(&self.lsp), specs });
+            tools.push(Box::new(tools::Lsp));
+        }
         let skills = brief.skills;
         if !skills.is_empty() {
             tools.push(Box::new(tools::skill::SkillTool { skills: skills.clone() }));

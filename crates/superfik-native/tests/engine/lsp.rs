@@ -1,0 +1,72 @@
+//! Language servers reach a run: the `LSP` tool when one is installed.
+
+use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use serde_json::json;
+use superfik_core::lsp::ServerSpec;
+use superfik_core::{EngineEvent, PromptRequest};
+use superfik_native::NativeEngine;
+use superfik_native::lsp::fake::ScriptedServer;
+use superfik_native::lsp::{LanguageServer, LspPool, Starter};
+use superfik_native::model::scripted::ScriptedModel;
+use superfik_native::sessions::InMemorySessions;
+use superfik_native::transcript::Block;
+
+use crate::{Source, finish, model, start};
+
+fn engine(models: Vec<Arc<ScriptedModel>>) -> NativeEngine {
+    NativeEngine::new(Arc::new(Source(Mutex::new(models))), Arc::new(InMemorySessions::default()))
+}
+
+fn offered(model: &ScriptedModel) -> Vec<String> {
+    model.asked()[0].tools.iter().map(|tool| tool.name.clone()).collect()
+}
+
+fn results(model: &ScriptedModel) -> String {
+    format!("{:?}", model.asked().last().expect("asked").messages)
+}
+
+#[test]
+fn the_agent_asks_the_file_s_language_server() {
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::write(dir.path().join("a.rs"), "struct Grep;\n").expect("file");
+    let server = ScriptedServer::answering([Ok(json!([{"name": "Grep", "kind": 23,
+        "range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 11}}}]))]);
+    let agent = Arc::new(ScriptedModel::new([
+        ScriptedModel::reply(vec![Block::ToolUse {
+            id: "l".into(),
+            name: "LSP".into(),
+            input: json!({"operation": "documentSymbol", "file_path": "a.rs"}),
+        }]),
+        ScriptedModel::reply(vec![Block::Text("Found it.".into())]),
+    ]));
+    let engine = engine(vec![agent.clone()]).with_language_servers(server.lsp().servers);
+    let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "outline a.rs", model())));
+    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+    assert!(offered(&agent).contains(&"LSP".to_owned()));
+    assert!(results(&agent).contains("struct Grep (line 1)"), "{}", results(&agent));
+}
+
+struct NothingInstalled;
+
+impl Starter for NothingInstalled {
+    fn find(&self, _: &str) -> Option<PathBuf> {
+        None
+    }
+    fn start(&self, _: &ServerSpec, _: &Path, _: &Path, _: &AtomicBool) -> Result<Arc<dyn LanguageServer>, String> {
+        Err("not installed".into())
+    }
+}
+
+#[test]
+fn without_an_installed_server_the_tool_is_not_offered() {
+    let dir = tempfile::tempdir().expect("dir");
+    let agent = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));
+    let pool = Arc::new(LspPool::new(NothingInstalled, Duration::from_secs(60)));
+    let engine = engine(vec![agent.clone()]).with_language_servers(pool);
+    finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "hi", model())));
+    assert!(!offered(&agent).contains(&"LSP".to_owned()), "{:?}", offered(&agent));
+}

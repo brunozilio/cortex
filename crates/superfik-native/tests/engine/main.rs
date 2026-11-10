@@ -2,6 +2,7 @@
 
 mod agents;
 mod checkpoints;
+mod lsp;
 mod mcp;
 mod plugins;
 mod runs;

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use self::job::Job;
 use crate::boundary::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};
 use crate::control::Control;
+use crate::lsp::{LanguageServers, LspPool};
 use crate::model::http::{Http, NetHttp};
 use crate::model::{ModelApi, ModelError};
 use crate::sessions::Sessions;
@@ -33,6 +34,7 @@ pub struct NativeEngine {
     source: Arc<dyn ApiSource>,
     sessions: Arc<dyn Sessions>,
     mcp: Arc<dyn Http>,
+    lsp: Arc<dyn LanguageServers>,
 }
 
 impl std::fmt::Debug for NativeEngine {
@@ -43,7 +45,14 @@ impl std::fmt::Debug for NativeEngine {
 
 impl NativeEngine {
     pub fn new(source: Arc<dyn ApiSource>, sessions: Arc<dyn Sessions>) -> Self {
-        Self { source, sessions, mcp: Arc::new(NetHttp) }
+        Self { source, sessions, mcp: Arc::new(NetHttp), lsp: Arc::new(LspPool::default()) }
+    }
+
+    /// The language servers runs use, kept for the engine's life; started
+    /// as processes by default.
+    pub fn with_language_servers(mut self, lsp: Arc<dyn LanguageServers>) -> Self {
+        self.lsp = lsp;
+        self
     }
 }
 
@@ -65,6 +74,7 @@ impl AgentEngine for NativeEngine {
             source: Arc::clone(&self.source),
             sessions: Arc::clone(&self.sessions),
             mcp: Arc::clone(&self.mcp),
+            lsp: Arc::clone(&self.lsp),
             request: request.clone(),
             workspace,
             control: Arc::clone(&control),

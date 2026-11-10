@@ -10,6 +10,7 @@ pub mod builtin_skills;
 mod edit;
 mod glob;
 mod grep;
+mod lsp;
 mod outside;
 mod read;
 pub mod send_message;
@@ -33,6 +34,7 @@ pub use bash::Bash;
 pub use edit::Edit;
 pub use glob::Glob;
 pub use grep::Grep;
+pub use lsp::Lsp;
 pub use read::Read;
 pub use shells::{BashOutput, KillShell};
 pub use write::Write;
@@ -99,6 +101,9 @@ pub struct Workspace {
     /// What the run's `Edit`s and `Write`s changed, for its checkpoint;
     /// shared with its sub-agents.
     pub files: Option<Arc<crate::checkpoints::FileHistory>>,
+    /// The language servers for `LSP` and the diagnostics after an edit;
+    /// shared with sub-agents.
+    pub lsp: Option<crate::lsp::Lsp>,
 }
 
 impl Workspace {
@@ -120,6 +125,7 @@ impl Workspace {
             advisor: None,
             verification: None,
             files: None,
+            lsp: None,
         }
     }
 
@@ -154,6 +160,7 @@ impl Workspace {
             advisor: self.advisor.clone(),
             verification: None,
             files: self.files.clone(),
+            lsp: self.lsp.clone(),
         }
     }
 
