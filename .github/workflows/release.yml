@@ -8,6 +8,11 @@ on:
       tag:
         description: The release tag to build and attach the DMG to (v0.2.0)
         required: true
+      platform:
+        description: Which build to attach
+        type: choice
+        options: [all, macos, linux, windows]
+        default: all
 
 permissions:
   contents: read
@@ -62,7 +67,7 @@ jobs:
   publish:
     needs: release-please
     environment: release
-    if: always() && (needs.release-please.outputs.created == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && (needs.release-please.outputs.created == 'true' || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","macos"]'), inputs.platform)))
     runs-on: ${{ fromJSON(vars.SUPERFIK_CI_RUNNER || '["macos-latest"]') }}
     permissions:
       contents: write
@@ -155,7 +160,7 @@ jobs:
   publish-linux:
     needs: release-please
     environment: release
-    if: always() && vars.SUPERFIK_LINUX_RELEASE_ENABLED == 'true' && (needs.release-please.outputs.created == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && vars.SUPERFIK_LINUX_RELEASE_ENABLED == 'true' && (needs.release-please.outputs.created == 'true' || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","linux"]'), inputs.platform)))
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -215,8 +220,11 @@ jobs:
 
   publish-windows:
     needs: release-please
-    if: always() && vars.SUPERFIK_WINDOWS_RELEASE_ENABLED == 'true' && (needs.release-please.outputs.created == 'true' || github.event_name == 'workflow_dispatch')
+    environment: release
+    if: always() && vars.SUPERFIK_WINDOWS_RELEASE_ENABLED == 'true' && (needs.release-please.outputs.created == 'true' || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","windows"]'), inputs.platform)))
     runs-on: windows-latest
+    permissions:
+      contents: write
     env:
       TAG: ${{ inputs.tag || needs.release-please.outputs.tag }}
     steps:
@@ -258,7 +266,7 @@ jobs:
   publish-server:
     needs: release-please
     environment: release
-    if: always() && vars.SUPERFIK_LINUX_RELEASE_ENABLED == 'true' && (needs.release-please.outputs.created == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && vars.SUPERFIK_LINUX_RELEASE_ENABLED == 'true' && (needs.release-please.outputs.created == 'true' || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","linux"]'), inputs.platform)))
     runs-on: ubuntu-24.04
     permissions:
       contents: write
