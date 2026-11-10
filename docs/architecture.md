@@ -92,9 +92,10 @@ whole (`superfik_native::plugins`): skills, commands and agents as
 `<plugin>:<name>`, `hooks/hooks.json` joined to the settings' hooks, and
 `.mcp.json` servers as `plugin_<plugin>_<server>`, with
 `${CLAUDE_PLUGIN_ROOT}` filled in. They come from the backend
-(`Extensions::plugins`, never from a client) and from Claude Code's
-installs; a plugin whose hooks or servers do not parse is left out, the
-run goes on.
+(`Extensions::plugins`, never from a client), from the folders in
+`~/.superfik/plugins/` and from Claude Code's installs; a plugin whose
+hooks or servers do not parse is left out, the run goes on. Every run
+rereads them; `/reload` refreshes what the chat keeps and lists them.
 
 ## The SDK and the CLI
 

@@ -32,8 +32,5 @@ and MCP servers (HTTP, stdio or in-process).
 _Avoid_: Plugin (that is an installed package, below)
 
 **Plugin**:
-An installed package in Claude Code's plugin layout: skills, commands,
-agents, hooks and MCP servers under one name (ADR 0019).
-
-**Marketplace**:
-A git repository listing plugins (`.claude-plugin/marketplace.json`).
+A folder in Claude Code's plugin layout, put in `~/.superfik/plugins/`:
+skills, commands, agents, hooks and MCP servers under one name (ADR 0019).

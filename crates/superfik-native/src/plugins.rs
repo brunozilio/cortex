@@ -1,8 +1,9 @@
 //! Installed plugins, in Claude Code's plugin layout: a folder with
 //! `.claude-plugin/plugin.json`, `skills/`, `agents/`, `commands/`,
 //! `hooks/hooks.json` and `.mcp.json`. They come from the backend
-//! (`Extensions::plugins`) and from Claude Code's own installs; on a clash
-//! of names the backend's wins. `${CLAUDE_PLUGIN_ROOT}` in a plugin's hooks
+//! (`Extensions::plugins`), from the folders a person puts in
+//! `~/.superfik/plugins/`, and from Claude Code's own installs, in that
+//! order; on a clash of names the first wins. `${CLAUDE_PLUGIN_ROOT}` in a plugin's hooks
 //! and MCP servers is its folder.
 
 use std::path::{Path, PathBuf};
@@ -23,13 +24,18 @@ pub struct Plugin {
 /// The plugins a run in `request.cwd` gets.
 pub fn found(request: &PromptRequest, home: Option<&Path>) -> Vec<Plugin> {
     let hosted = request.extensions.iter().flat_map(|extensions| &extensions.plugins).map(|root| Plugin::at(root));
+    let own = home
+        .map(|home| crate::claude_home::subdirs(&home.join(".superfik").join("plugins")))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|root| Plugin::at(&root));
     let claude = home
         .map(|home| ClaudeHome::new(home.join(".claude")).installed_plugins(&request.cwd))
         .unwrap_or_default()
         .into_iter()
         .map(|installed| Plugin { name: installed.name, root: installed.path });
     let mut found: Vec<Plugin> = Vec::new();
-    for plugin in hosted.chain(claude) {
+    for plugin in hosted.chain(own).chain(claude) {
         if !found.iter().any(|known| known.name == plugin.name) {
             found.push(plugin);
         }
@@ -103,4 +109,34 @@ impl Plugin {
 
 fn read_json(path: &Path) -> Value {
     std::fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or(Value::Null)
+}
+
+#[cfg(test)]
+mod tests {
+    use superfik_core::{Extensions, ModelOption};
+
+    use super::*;
+
+    #[test]
+    fn a_folder_in_the_user_s_plugins_is_a_plugin_named_by_its_manifest_or_folder() {
+        let home = tempfile::tempdir().expect("home");
+        let plugins = home.path().join(".superfik/plugins");
+        std::fs::create_dir_all(plugins.join("acme-tools/.claude-plugin")).expect("acme");
+        std::fs::write(plugins.join("acme-tools/.claude-plugin/plugin.json"), r#"{"name": "acme"}"#).expect("manifest");
+        std::fs::create_dir_all(plugins.join("beta")).expect("beta");
+        std::fs::write(plugins.join("notes.txt"), "not a plugin").expect("file");
+        let hosted = tempfile::tempdir().expect("hosted");
+        std::fs::create_dir_all(hosted.path().join(".claude-plugin")).expect("dir");
+        std::fs::write(hosted.path().join(".claude-plugin/plugin.json"), r#"{"name": "beta"}"#).expect("manifest");
+        let mut request = PromptRequest::plain("/repo".into(), "", ModelOption::new("", ""));
+        request.extensions = Some(Extensions { plugins: vec![hosted.path().to_path_buf()], ..Extensions::default() });
+
+        let found = found(&request, Some(home.path()));
+        let named: Vec<(&str, &Path)> = found.iter().map(|p| (p.name.as_str(), p.root.as_path())).collect();
+        assert_eq!(
+            named,
+            [("beta", hosted.path()), ("acme", plugins.join("acme-tools").as_path())],
+            "the host's first; a folder's own copy of a name the host has is left out"
+        );
+    }
 }

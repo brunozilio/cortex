@@ -17,6 +17,7 @@ mod login;
 mod logo;
 mod markdown;
 mod motion;
+mod reload;
 mod runs;
 mod settings;
 mod side;

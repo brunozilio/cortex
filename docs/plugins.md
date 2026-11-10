@@ -17,8 +17,17 @@ my-plugin/
 
 `${CLAUDE_PLUGIN_ROOT}` in hooks and MCP servers is the plugin's folder. A
 plugin whose hooks or servers do not parse is left out; the run goes on.
-Plugins come from the backend (`Extensions::plugins`) and from Claude
-Code's installs (`~/.claude/plugins/installed_plugins.json`).
+To install one, put its folder in `~/.superfik/plugins/` (a `git clone`
+you `git pull` to update) and type `/reload` in the chat: it lists the
+plugins, skills, agents and MCP servers found. Every message rereads them
+anyway. Plugins also come from the backend (`Extensions::plugins`) and
+from Claude Code's installs (`~/.claude/plugins/installed_plugins.json`);
+on a clash of names the first wins, in that order: backend,
+`~/.superfik/plugins/`, Claude Code.
+
+```sh
+git clone git@github.com:brunozilio/superfik-my-config.git ~/.superfik/plugins/my-config
+```
 
 ## MCP servers a person or a project configures
 

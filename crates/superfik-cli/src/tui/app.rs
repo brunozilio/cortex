@@ -24,6 +24,11 @@ pub enum Msg {
     },
     Event(superfik_core::RunId, EngineEvent),
     Skills(Vec<(String, String)>),
+    /// What `/reload` found: the skills to complete and what to say.
+    Reloaded {
+        skills: Vec<(String, String)>,
+        summary: String,
+    },
     Connected(String),
     /// What Ctrl+V found on the clipboard.
     Clipboard(Result<Option<superfik_sdk::Image>, String>),
@@ -168,6 +173,10 @@ impl App {
             Msg::Ready { models, settings } => self.ready(models, &settings),
             Msg::Event(run, event) => self.event(run, event),
             Msg::Skills(skills) => self.skills = skills,
+            Msg::Reloaded { skills, summary } => {
+                self.skills = skills;
+                self.transcript.notice(summary);
+            }
             Msg::Connected(provider) => {
                 self.transcript.notice(format!("Connected {provider}."));
                 self.load(false);
