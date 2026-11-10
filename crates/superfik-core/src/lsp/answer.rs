@@ -8,12 +8,14 @@ use serde_json::Value;
 
 use super::Operation;
 
-/// The answer to `operation`. `line` reads a file's line (from 0), for the
-/// excerpt shown next to each place.
+/// The answer to `operation`. Paths show relative to the first of `cwd`
+/// they are in (the working folder as given and its real path, since
+/// servers may answer either). `line` reads a file's line (from 0), for
+/// the excerpt shown next to each place.
 pub fn describe(
     operation: Operation,
     answer: &Value,
-    cwd: &Path,
+    cwd: &[&Path],
     line: impl Fn(&Path, u32) -> Option<String>,
 ) -> String {
     let items: Vec<&Value> = match answer {
@@ -63,7 +65,7 @@ fn nouns(operation: Operation) -> (&'static str, &'static str) {
 
 /// `path:line:column` from 1 (the path relative to `cwd` when inside it),
 /// the file and its line from 0.
-pub fn position(uri: &str, range: &Value, cwd: &Path) -> Option<(String, PathBuf, u32)> {
+pub fn position(uri: &str, range: &Value, cwd: &[&Path]) -> Option<(String, PathBuf, u32)> {
     let path = super::uri::path_of(uri)?;
     let start = &range["start"];
     let line = u32::try_from(start["line"].as_u64()?).ok()?;
@@ -71,11 +73,11 @@ pub fn position(uri: &str, range: &Value, cwd: &Path) -> Option<(String, PathBuf
     Some((format!("{}:{}:{}", shown(&path, cwd), line + 1, character + 1), path, line))
 }
 
-fn shown(path: &Path, cwd: &Path) -> String {
-    path.strip_prefix(cwd).unwrap_or(path).display().to_string()
+fn shown(path: &Path, cwd: &[&Path]) -> String {
+    cwd.iter().find_map(|root| path.strip_prefix(root).ok()).unwrap_or(path).display().to_string()
 }
 
-fn place(item: &Value, cwd: &Path, line: &impl Fn(&Path, u32) -> Option<String>) -> Option<String> {
+fn place(item: &Value, cwd: &[&Path], line: &impl Fn(&Path, u32) -> Option<String>) -> Option<String> {
     let (uri, range) = match item.get("targetUri") {
         Some(uri) => (uri, item.get("targetSelectionRange").unwrap_or(&item["targetRange"])),
         None => (&item["uri"], &item["range"]),
@@ -100,7 +102,7 @@ fn hover(answer: &Value) -> Option<String> {
     (!joined.trim().is_empty()).then_some(joined)
 }
 
-fn outline(item: &Value, depth: usize, cwd: &Path) -> Vec<String> {
+fn outline(item: &Value, depth: usize, cwd: &[&Path]) -> Vec<String> {
     if item.get("location").is_some() {
         return symbol(item, cwd).into_iter().collect();
     }
@@ -113,7 +115,7 @@ fn outline(item: &Value, depth: usize, cwd: &Path) -> Vec<String> {
     lines
 }
 
-fn symbol(item: &Value, cwd: &Path) -> Option<String> {
+fn symbol(item: &Value, cwd: &[&Path]) -> Option<String> {
     let location = &item["location"];
     let uri = location["uri"].as_str()?;
     let at = match position(uri, &location["range"], cwd) {
@@ -123,7 +125,7 @@ fn symbol(item: &Value, cwd: &Path) -> Option<String> {
     Some(format!("{} {at}", named(item)))
 }
 
-fn call_item(item: &Value, cwd: &Path) -> Option<String> {
+fn call_item(item: &Value, cwd: &[&Path]) -> Option<String> {
     let range = item.get("selectionRange").unwrap_or(&item["range"]);
     let (at, _, _) = position(item["uri"].as_str()?, range, cwd)?;
     Some(format!("{} {at}", named(item)))
@@ -183,7 +185,7 @@ mod tests {
 
     #[test]
     fn places_are_listed_relative_to_the_working_folder_with_their_line() {
-        let cwd = Path::new("/w");
+        let cwd: &[&Path] = &[Path::new("/w")];
         let links = json!([{"targetUri": "file:///w/src/mod.rs", "targetRange": range(9, 0), "targetSelectionRange": range(10, 4)}]);
         assert_eq!(describe(Operation::Definition, &links, cwd, lines), "src/mod.rs:11:5: line 10 of mod.rs");
         let references = json!([
@@ -194,13 +196,16 @@ mod tests {
             describe(Operation::References, &references, cwd, lines),
             "2 references:\na.rs:1:1: line 0 of a.rs\n/elsewhere/b.rs:5:3: line 4 of b.rs"
         );
+        let aliased: &[&Path] = &[Path::new("/var/w"), Path::new("/private/var/w")];
+        let canonical = json!({"uri": "file:///private/var/w/a.rs", "range": range(0, 0)});
+        assert_eq!(describe(Operation::Definition, &canonical, aliased, lines), "a.rs:1:1: line 0 of a.rs");
         assert_eq!(describe(Operation::Definition, &json!(null), cwd, lines), "No definition found.");
         assert_eq!(describe(Operation::References, &json!([]), cwd, lines), "No references found.");
     }
 
     #[test]
     fn hover_reads_as_its_text_and_symbols_as_an_outline() {
-        let cwd = Path::new("/w");
+        let cwd: &[&Path] = &[Path::new("/w")];
         let hover = json!({"contents": {"kind": "markdown", "value": "```rust\npub struct Grep\n```"}});
         assert_eq!(describe(Operation::Hover, &hover, cwd, lines), "```rust\npub struct Grep\n```");
         let old_style = json!({"contents": [{"language": "rust", "value": "fn a()"}, "Does a."]});
@@ -219,7 +224,7 @@ mod tests {
 
     #[test]
     fn calls_name_the_function_on_the_other_side() {
-        let cwd = Path::new("/w");
+        let cwd: &[&Path] = &[Path::new("/w")];
         let item = |name: &str, line: u32| json!({"name": name, "kind": 12, "uri": "file:///w/a.rs", "range": range(line, 0), "selectionRange": range(line, 3)});
         let incoming = json!([{"from": item("main", 2), "fromRanges": [range(5, 4)]}]);
         assert_eq!(describe(Operation::IncomingCalls, &incoming, cwd, lines), "1 caller:\nfunction main a.rs:3:4");

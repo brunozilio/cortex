@@ -91,7 +91,8 @@ fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
         let read = if path == file { Some(text.clone()) } else { std::fs::read_to_string(path).ok() };
         read?.lines().nth(number as usize).map(str::to_owned)
     };
-    Ok(describe(query.operation, &answer, &workspace.cwd, lines))
+    let real = workspace.cwd.canonicalize().unwrap_or_else(|_| workspace.cwd.clone());
+    Ok(describe(query.operation, &answer, &[&workspace.cwd, &real], lines))
 }
 
 #[cfg(test)]
