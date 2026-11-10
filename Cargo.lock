@@ -3803,7 +3803,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "superfik-backend"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "chacha20poly1305",
@@ -3831,7 +3831,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "crossbeam-channel",
@@ -3847,7 +3847,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "serde",
@@ -3857,7 +3857,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "superfik-core",
  "thiserror 2.0.21",
@@ -3865,7 +3865,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-mlx"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3880,7 +3880,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-native"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -3910,7 +3910,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-oauth"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "sha2",
@@ -3921,7 +3921,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-private-file"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "tempfile",
  "windows-sys 0.61.2",
@@ -3929,7 +3929,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-process"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "libc",
@@ -3938,7 +3938,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-protocol"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3948,7 +3948,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-providers"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -3961,7 +3961,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-sdk"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crossbeam-channel",
  "serde_json",
@@ -5055,7 +5055,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "y4m"
