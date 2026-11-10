@@ -1,7 +1,7 @@
-//! The four AI provider plugins (`openai`, `openai-subscription`,
-//! `anthropic`, `claude-subscription`): what each one stores as its
+//! The four LLM providers (OpenAI API, ChatGPT Subscription, Anthropic
+//! API, Claude Subscription; ADR 0016): what each one stores as its
 //! credential, where it is served, how it signs in and how its requests and
-//! catalogs are shaped. Pure: the native engine does the IO with these.
+//! catalogs are shaped. Pure: the native engine and the backend do the IO.
 
 pub mod catalog;
 pub mod oauth;

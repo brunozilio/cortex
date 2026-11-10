@@ -42,12 +42,7 @@ impl ApiSource for NativeApis {
             return Ok(Arc::new(Chat::new(Arc::clone(&self.http), local)));
         }
         let key = request.credentials.model.clone().ok_or_else(|| {
-            let action = if provider.subscription() {
-                "sign in through Settings > Integrations"
-            } else {
-                "add its API key in Settings > Integrations"
-            };
-            ModelError::Unauthorized(format!("{} is not connected: {action}", provider.name()))
+            ModelError::Unauthorized(format!("{} is not connected: run `superfik login`", provider.name()))
         })?;
         Ok(Arc::new(ProviderClient::for_model(request.model.clone(), Arc::clone(&self.http), Arc::new(key))))
     }
@@ -141,7 +136,7 @@ mod tests {
         providers.connect(&owner, ModelProvider::Anthropic, "sk-ant-0123456789abcd");
         let native = |provider| ModelOption::new(EngineKind::Native, "m", "M").served_by(provider);
         let key = key_for(&providers, &owner, &native(ModelProvider::Anthropic)).expect("key");
-        assert_eq!(key.secret(), "sk-ant-0123456789abcd");
+        assert!(key.secret().contains("sk-ant-0123456789abcd"), "the provider's credential config");
         assert_eq!(key_for(&providers, &owner, &native(ModelProvider::OpenAi)), None, "not connected");
         assert_eq!(key_for(&providers, &owner, &native(ModelProvider::Local)), None, "no account");
         let other = ModelOption::new(EngineKind::Codex, "m", "M");

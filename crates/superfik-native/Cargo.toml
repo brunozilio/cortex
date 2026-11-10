@@ -11,6 +11,7 @@ superfik-private-file.workspace = true
 superfik-engine.workspace = true
 superfik-process.workspace = true
 superfik-plugins.workspace = true
+superfik-providers.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-saphyr = { version = "2.1", default-features = false, features = ["deserialize"] }

@@ -24,7 +24,7 @@ fn four_providers_use_their_own_authentication_endpoint_and_wire_body() {
         let http = Arc::new(ScriptedHttp::new([(200, fixture.into())]));
         let client = ProviderClient::new(provider, http.clone(), Arc::new(ProviderKey::new(credentials(provider))));
         client
-            .turn(&request(&format!("{}:model-1", provider.plugin_id())), &mut |_| {}, &AtomicBool::new(false))
+            .turn(&request(&format!("{}:model-1", provider.id())), &mut |_| {}, &AtomicBool::new(false))
             .expect("stream");
         let sent = http.sent();
         let sent = &sent[0];
@@ -123,8 +123,7 @@ fn chosen_effort_reaches_each_provider_for_supported_models() {
             }
             .into(),
         )]));
-        let model =
-            ModelOption::new(EngineKind::Native, format!("{}:{id}", provider.plugin_id()), id).served_by(provider);
+        let model = ModelOption::new(EngineKind::Native, format!("{}:{id}", provider.id()), id).served_by(provider);
         let client = ProviderClient::for_model(model, http.clone(), Arc::new(ProviderKey::new(credentials(provider))));
         client.turn(&request(id), &mut |_| {}, &AtomicBool::new(false)).expect("turn");
         let body: Value = serde_json::from_str(&http.sent()[0].body).expect("body");

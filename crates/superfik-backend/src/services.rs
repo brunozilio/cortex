@@ -111,8 +111,10 @@ mod tests {
         let data = tempfile::tempdir().expect("temp dir");
         let services = LocalServices::with_engines(EngineRegistry::new()).kept_in(data.path());
         let owner = superfik_core::Principal::LocalOwner;
-        let id = superfik_core::PluginId("anthropic".to_owned());
-        services.plugins.install(&owner, Some(&id), None);
+        let folder = tempfile::tempdir().expect("plugin folder");
+        let manifest = r#"{"id":"mine","name":"Mine","version":"1"}"#;
+        std::fs::write(folder.path().join(superfik_plugins::MANIFEST_FILE), manifest).expect("manifest");
+        services.plugins.install(&owner, folder.path());
         assert!(data.path().join("plugins").join(crate::memory::owner_key(&owner)).join("plugins.json").is_file());
     }
 }

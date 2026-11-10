@@ -30,19 +30,11 @@ pub fn model() -> ModelOption {
 struct Source;
 impl ApiSource for Source {
     fn api(&self, request: &PromptRequest) -> Result<Arc<dyn ModelApi>, ModelError> {
-        let key = match request
-            .credentials
-            .model
-            .clone()
-            .or_else(|| {
-                superfik_backend::Plugins::system()
-                    .model_key(&superfik_core::Principal::LocalOwner, request.model.provider)
-            })
-            .or_else(|| {
-                superfik_backend::ModelProviders::system()
-                    .key(&superfik_core::Principal::LocalOwner, request.model.provider)
-                    .ok()
-            }) {
+        let key = match request.credentials.model.clone().or_else(|| {
+            superfik_backend::ModelProviders::system()
+                .key(&superfik_core::Principal::LocalOwner, request.model.provider)
+                .ok()
+        }) {
             Some(key) => key,
             None => {
                 let path=std::env::var_os("SUPERFIK_LIVE_CREDENTIAL_FILE").ok_or_else(||ModelError::Unauthorized("Connect the provider in Superfik, or select a private SUPERFIK_LIVE_CREDENTIAL_FILE for this opt-in test.".into()))?;

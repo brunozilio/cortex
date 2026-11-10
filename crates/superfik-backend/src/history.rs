@@ -128,7 +128,6 @@ mod tests {
             turns: Vec::new(),
             engine_session: None,
             model: "claude-opus-5-5".into(),
-            model_account: None,
             effort: Effort::Medium,
             archived: false,
             repositories: Vec::new(),

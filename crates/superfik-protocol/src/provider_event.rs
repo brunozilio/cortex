@@ -8,6 +8,7 @@ use superfik_core::provider::{ModelProvider, ProviderSummary};
 pub enum ProviderEvent {
     Listed { providers: Vec<ProviderSummary> },
     Download { id: String, state: DownloadState },
+    AuthorizeAt { provider: ModelProvider, url: String },
     Failed { provider: ModelProvider, message: String },
 }
 

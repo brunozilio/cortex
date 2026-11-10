@@ -15,9 +15,9 @@ Its architecture is in [architecture.md](architecture.md) (Engines).
 The browser must reach the machine running the backend; sign-in waits up to
 five minutes. Credentials stay in the backend's `SecretStore`; tokens are
 renewed before they expire (ChatGPT also once after a 401) and never reach
-the client. Contracts are pure in `superfik-plugins/src/providers`; HTTP in
-`superfik-native/src/model/providers`; storage, callbacks and discovery in
-`superfik-backend/src/plugins/model_providers.rs`. HTTP or JSON errors never
+the client. Contracts are pure in `superfik-providers`; HTTP in
+`superfik-native/src/model/providers`; storage, sign-in and discovery in
+`superfik-backend/src/providers/`. HTTP or JSON errors never
 become a made-up catalog.
 
 `effort` reaches every provider that supports it (`reasoning.effort`,
@@ -68,7 +68,7 @@ environment and limits on time, output and turns.
 
 ## Tests against real accounts
 
-Ordinary tests are deterministic. With an account connected in Settings:
+Ordinary tests are deterministic. With a provider connected (`superfik login`):
 
 ```sh
 SUPERFIK_LIVE_PROVIDER=claude-subscription [SUPERFIK_LIVE_MODEL=…] \

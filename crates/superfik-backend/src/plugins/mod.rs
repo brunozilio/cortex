@@ -4,7 +4,6 @@
 
 mod brief;
 mod cli_token;
-pub mod model_providers;
 pub mod oauth;
 mod sealed;
 mod secrets;
@@ -14,11 +13,9 @@ mod store;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use superfik_core::{
-    AuthKind, Connection, ConnectionId, CustomAgent, PluginId, PluginOrigin, PluginSummary, Principal, Skill,
-};
+use superfik_core::{AuthKind, Connection, ConnectionId, CustomAgent, PluginId, PluginSummary, Principal, Skill};
 use superfik_plugins::materialize::materialize;
-use superfik_plugins::{Auth, Installed, PluginBook, PluginError, PluginPackage, catalog};
+use superfik_plugins::{Auth, Installed, PluginBook, PluginError, PluginPackage};
 use superfik_protocol::ServerEvent;
 
 pub(crate) use self::brief::discard;
@@ -37,15 +34,12 @@ pub struct Plugins {
     oauth: Arc<dyn OAuthFlow>,
     cli: Arc<dyn TokenCommand>,
     setup: Arc<dyn SetupRunner>,
-    catalog: Arc<Vec<PluginPackage>>,
-    model_generations: Arc<Mutex<std::collections::HashMap<String, u64>>>,
-    model_catalog: Arc<dyn model_providers::ModelCatalog>,
     lock: Arc<Mutex<()>>,
 }
 
 impl std::fmt::Debug for Plugins {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Plugins").field("catalog", &self.catalog.len()).finish_non_exhaustive()
+        f.debug_struct("Plugins").finish_non_exhaustive()
     }
 }
 
@@ -61,22 +55,7 @@ impl Plugins {
         oauth: Arc<dyn OAuthFlow>,
         cli: Arc<dyn TokenCommand>,
     ) -> Self {
-        Self {
-            store,
-            secrets,
-            oauth,
-            cli,
-            setup: Arc::new(SystemSetup),
-            catalog: Arc::new(catalog::packages()),
-            model_generations: Arc::default(),
-            model_catalog: Arc::new(model_providers::ProviderCatalog),
-            lock: Arc::default(),
-        }
-    }
-
-    pub fn with_model_catalog(mut self, catalog: Arc<dyn model_providers::ModelCatalog>) -> Self {
-        self.model_catalog = catalog;
-        self
+        Self { store, secrets, oauth, cli, setup: Arc::new(SystemSetup), lock: Arc::default() }
     }
 
     pub fn system() -> Self {
@@ -107,20 +86,16 @@ impl Plugins {
         self
     }
 
-    pub fn install_and_set_up(
-        &self,
-        owner: &Principal,
-        plugin: Option<&PluginId>,
-        folder: Option<&Path>,
-        outbox: &Outbox,
-    ) {
-        let event = self.install(owner, plugin, folder);
+    /// Installs a plugin folder, then runs its setup command off the
+    /// command loop (never for a member: their folder is not trusted here).
+    pub fn install_and_set_up(&self, owner: &Principal, folder: &Path, outbox: &Outbox) {
+        let event = self.install(owner, folder);
         let installed = matches!(event, ServerEvent::Plugins { .. });
         outbox.send(event);
         if !installed {
             return;
         }
-        let id = plugin.cloned().or_else(|| folder.and_then(|f| PluginPackage::load(f).ok()).map(|p| p.manifest.id));
+        let id = PluginPackage::load(folder).ok().map(|p| p.manifest.id);
         let book = self.store.load(owner);
         let Some(package) = id
             .and_then(|id| book.installed.iter().find(|i| i.id == id).cloned())
@@ -130,7 +105,7 @@ impl Plugins {
             return;
         };
         let Some(command) = package.manifest.setup.clone() else { return };
-        if folder.is_some() && matches!(owner, Principal::Member(_)) {
+        if matches!(owner, Principal::Member(_)) {
             tracing::warn!(plugin = %package.manifest.id.0, "a member's folder plugin is installed without its setup");
             return;
         }
@@ -143,15 +118,6 @@ impl Plugins {
                 outbox.send(this.failure(Some(&id), error));
             }
         });
-    }
-
-    pub fn with_catalog(mut self, catalog: Vec<PluginPackage>) -> Self {
-        self.catalog = Arc::new(catalog);
-        self
-    }
-
-    fn catalog_package(&self, id: &PluginId) -> Option<&PluginPackage> {
-        self.catalog.iter().find(|package| &package.manifest.id == id)
     }
 
     fn edit<T>(
@@ -173,50 +139,24 @@ impl Plugins {
 
     fn present_one(&self, root: &Path, installed: &Installed) -> Option<Present> {
         let dir = root.join(installed.id.as_str());
-        let on_disk = PluginPackage::load(&dir).ok();
-        let package = match (&installed.origin, self.catalog_package(&installed.id)) {
-            (PluginOrigin::Catalog, Some(shipped)) => {
-                let stale = on_disk
-                    .as_ref()
-                    .is_none_or(|disk| disk.manifest != shipped.manifest || disk.files != shipped.files);
-                if stale && let Err(error) = materialize(shipped, &dir) {
-                    tracing::warn!(%error, plugin = shipped.id(), "could not lay out a plugin");
-                }
-                shipped.clone()
-            }
-            _ => PluginPackage { origin: installed.origin.clone(), ..on_disk? },
-        };
+        let package = PluginPackage { origin: installed.origin.clone(), ..PluginPackage::load(&dir).ok()? };
         Some(Present { package, dir })
     }
 
     pub fn list(&self, owner: &Principal) -> ServerEvent {
         let book = self.store.load(owner);
-        let mut plugins: Vec<PluginSummary> =
-            self.catalog.iter().map(|package| package.summary(book.is_installed(&package.manifest.id))).collect();
-        for present in self.present(owner, &book) {
-            if !plugins.iter().any(|plugin| plugin.id == present.package.manifest.id) {
-                plugins.push(present.package.summary(true));
-            }
-        }
+        let plugins: Vec<PluginSummary> =
+            self.present(owner, &book).iter().map(|present| present.package.summary(true)).collect();
         ServerEvent::Plugins { plugins, connections: book.connections }
     }
 
-    pub fn install(&self, owner: &Principal, plugin: Option<&PluginId>, folder: Option<&Path>) -> ServerEvent {
-        let result = self.try_install(owner, plugin, folder);
-        self.answer(owner, plugin.cloned(), result)
+    pub fn install(&self, owner: &Principal, folder: &Path) -> ServerEvent {
+        let result = self.try_install(owner, folder);
+        self.answer(owner, None, result)
     }
 
-    fn try_install(
-        &self,
-        owner: &Principal,
-        plugin: Option<&PluginId>,
-        folder: Option<&Path>,
-    ) -> Result<(), PluginError> {
-        let package = match (plugin, folder) {
-            (_, Some(folder)) => PluginPackage::load(folder)?,
-            (Some(id), None) => self.catalog_package(id).cloned().ok_or_else(|| PluginError::NotFound(id.0.clone()))?,
-            (None, None) => return Err(PluginError::Invalid("nothing to install".into())),
-        };
+    fn try_install(&self, owner: &Principal, folder: &Path) -> Result<(), PluginError> {
+        let package = PluginPackage::load(folder)?;
         let id = package.manifest.id.clone();
         materialize(&package, &self.store.packages(owner).join(id.as_str()))?;
         self.edit(owner, |book| {
@@ -275,21 +215,9 @@ impl Plugins {
                     .collect();
                 match fields.iter().find(|field| !secrets.contains_key(&field.key)) {
                     Some(missing) => Err(PluginError::Invalid(format!("{} is empty", missing.label))),
-                    None => {
-                        let provider =
-                            superfik_core::ModelProvider::ACCOUNTS.into_iter().find(|p| p.plugin_id() == package.id());
-                        let valid = provider.map_or(Ok(()), |provider| {
-                            let raw =
-                                serde_json::to_string(&secrets).map_err(|e| PluginError::Invalid(e.to_string()))?;
-                            superfik_plugins::providers::Config::parse(provider, &raw)
-                                .map(|_| ())
-                                .map_err(|e| PluginError::Invalid(e.to_string()))
-                        });
-                        valid.and_then(|()| self.keep(owner, &package, label, &secrets))
-                    }
+                    None => self.keep(owner, &package, label, &secrets),
                 }
             }
-            Auth::Qr => self.keep(owner, &package, label, &Secrets::new()),
             Auth::Cli { program, args } => match self.cli.token(program, args) {
                 Ok(_) => self.keep(owner, &package, label, &Secrets::new()),
                 Err(message) => Err(PluginError::Io(message)),

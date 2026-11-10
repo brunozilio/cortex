@@ -18,7 +18,8 @@ Status: cleanup done; the CLI and SDK crates come next.
 | `superfik-protocol` | `ClientCommand` / `ServerEvent` in an `Envelope`. |
 | `superfik-backend` | Command handler: runs, memory, sessions, settings, plugins, providers. |
 | `superfik-workspace` | git and `gh` behind traits. |
-| `superfik-plugins` | Plugin manifests, skill/agent discovery (Claude Code layout), MCP config, provider contracts. |
+| `superfik-plugins` | Plugin manifests, skill/agent discovery (Claude Code layout), MCP config. |
+| `superfik-providers` | LLM providers (Anthropic, OpenAI, Claude and ChatGPT subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
 | `superfik-oauth`, `-keychain`, `-process`, `-private-file` | Small IO helpers. |
 
 Architecture: [docs/architecture.md](docs/architecture.md). Decisions:

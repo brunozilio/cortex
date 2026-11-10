@@ -5,6 +5,10 @@ use crossbeam_channel::Receiver;
 use superfik_core::{Effort, EngineKind, ModelOption, PromptRequest, RunId, WorkspaceId};
 use superfik_plugins::{PackageFile, PluginManifest};
 
+use std::path::{Path, PathBuf};
+
+use superfik_core::PluginOrigin;
+
 use super::*;
 
 struct FakeOAuth;
@@ -30,29 +34,39 @@ impl TokenCommand for FakeCli {
     }
 }
 
-fn package(json: &str, files: Vec<PackageFile>) -> PluginPackage {
-    PluginPackage::new(PluginManifest::parse(json).expect("manifest"), PluginOrigin::Catalog, files).expect("package")
+/// Writes a plugin folder: its manifest and files.
+fn folder(root: &Path, json: &str, files: Vec<PackageFile>) -> PathBuf {
+    let manifest = PluginManifest::parse(json).expect("manifest");
+    let dir = root.join(manifest.id.as_str());
+    for file in &files {
+        let path = dir.join(&file.path);
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+        std::fs::write(path, &file.bytes).expect("file");
+    }
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(dir.join(superfik_plugins::MANIFEST_FILE), json).expect("manifest");
+    dir
 }
 
-fn catalog() -> Vec<PluginPackage> {
+fn sources() -> Vec<(&'static str, Vec<PackageFile>)> {
     vec![
-        package(
+        (
             r#"{"id":"mail","name":"Mail","version":"1","accounts":"many","auth":{"kind":"oauth"},
             "mcp":[{"transport":"http","name":"mail","url":"https://mail.test/mcp",
                     "headers":{"Authorization":"Bearer {{secret.access_token}}"}}]}"#,
             vec![PackageFile { path: "skills/inbox/SKILL.md".into(), bytes: b"---\ndescription: Inbox\n---".to_vec() }],
         ),
-        package(
+        (
             r#"{"id":"docs","name":"Docs","version":"1","auth":{"kind":"api_key","fields":[{"key":"api_key","label":"Key"}]},
             "mcp":[{"transport":"stdio","name":"docs","command":"docs-mcp","env":{"KEY":"{{secret.api_key}}"}}]}"#,
             vec![],
         ),
-        package(
+        (
             r#"{"id":"browser","name":"Browser","version":"1",
             "mcp":[{"transport":"stdio","name":"browser","command":"npx","args":["browser-mcp"]}]}"#,
             vec![],
         ),
-        package(
+        (
             r#"{"id":"hub","name":"Hub","version":"1","auth":{"kind":"cli","program":"hub","args":["token"]},
             "mcp":[{"transport":"http","name":"hub","url":"https://hub.test","headers":{"Authorization":"Bearer {{secret.token}}"}}]}"#,
             vec![],
@@ -60,26 +74,42 @@ fn catalog() -> Vec<PluginPackage> {
     ]
 }
 
+fn write_sources(root: &Path) {
+    for (json, files) in sources() {
+        folder(root, json, files);
+    }
+}
+
 struct Rig {
     plugins: Plugins,
     outbox: Outbox,
     events: Receiver<ServerEvent>,
     secrets: Arc<InMemorySecretStore>,
-    _dir: tempfile::TempDir,
+    dir: tempfile::TempDir,
+}
+
+impl Rig {
+    fn source(&self, plugin: &str) -> PathBuf {
+        self.dir.path().join("sources").join(plugin)
+    }
+
+    fn install(&self, plugin: &str) -> ServerEvent {
+        self.plugins.install(&OWNER, &self.source(plugin))
+    }
 }
 
 fn rig(cli: Result<String, String>) -> Rig {
     let dir = tempfile::tempdir().expect("dir");
     let secrets = Arc::new(InMemorySecretStore::default());
+    write_sources(&dir.path().join("sources"));
     let plugins = Plugins::new(
-        Arc::new(InMemoryPluginStore::new(dir.path().to_path_buf())),
+        Arc::new(InMemoryPluginStore::new(dir.path().join("store"))),
         secrets.clone(),
         Arc::new(FakeOAuth),
         Arc::new(FakeCli(cli)),
-    )
-    .with_catalog(catalog());
+    );
     let (tx, events) = crossbeam_channel::unbounded();
-    Rig { plugins, outbox: Outbox::new(tx, Arc::new(|| {})), events, secrets, _dir: dir }
+    Rig { plugins, outbox: Outbox::new(tx, Arc::new(|| {})), events, secrets, dir }
 }
 
 const OWNER: Principal = Principal::LocalOwner;
@@ -126,23 +156,21 @@ fn request(connections: Vec<Connection>) -> PromptRequest {
 fn installing_lays_out_the_plugin_and_lists_its_skills() {
     let rig = rig(Ok("t".into()));
     let ServerEvent::Plugins { plugins, .. } = rig.plugins.list(&OWNER) else { panic!("plugins") };
-    assert_eq!(plugins.len(), 4);
-    assert!(plugins.iter().all(|plugin| !plugin.installed));
+    assert!(plugins.is_empty(), "no plugin ships with Superfik");
 
-    let ServerEvent::Plugins { plugins, connections } = rig.plugins.install(&OWNER, Some(&id("mail")), None) else {
-        panic!("plugins")
-    };
+    let ServerEvent::Plugins { plugins, connections } = rig.install("mail") else { panic!("plugins") };
+    assert_eq!(plugins.len(), 1);
     assert!(plugins[0].installed);
     assert!(connections.is_empty(), "an OAuth plugin waits for an account");
     assert_eq!(rig.plugins.skills(&OWNER)[0].name, "mail:inbox");
-    assert!(matches!(rig.plugins.install(&OWNER, Some(&id("mail")), None), ServerEvent::PluginFailed { .. }));
-    assert!(matches!(rig.plugins.install(&OWNER, Some(&id("nope")), None), ServerEvent::PluginFailed { .. }));
+    assert!(matches!(rig.install("mail"), ServerEvent::PluginFailed { .. }), "already installed");
+    assert!(matches!(rig.install("nope"), ServerEvent::PluginFailed { .. }), "no such folder");
 }
 
 #[test]
 fn a_plugin_without_sign_in_gets_one_implicit_account() {
     let rig = rig(Ok("t".into()));
-    let event = rig.plugins.install(&OWNER, Some(&id("browser")), None);
+    let event = rig.install("browser");
     let accounts = connections(&event);
     assert_eq!(accounts.len(), 1);
     assert_eq!(accounts[0].slash_name(), "browser");
@@ -151,7 +179,7 @@ fn a_plugin_without_sign_in_gets_one_implicit_account() {
 #[test]
 fn two_oauth_accounts_become_two_servers_in_a_run() {
     let rig = rig(Ok("t".into()));
-    rig.plugins.install(&OWNER, Some(&id("mail")), None);
+    rig.install("mail");
     rig.plugins.connect(&OWNER, &id("mail"), "Work", &[], &rig.outbox);
     assert!(matches!(next(&rig), ServerEvent::AuthorizeAt { url, .. } if url.contains("mail.test")));
     assert_eq!(connections(&next(&rig)).len(), 1);
@@ -188,7 +216,7 @@ fn two_oauth_accounts_become_two_servers_in_a_run() {
 #[test]
 fn api_keys_are_checked_and_one_account_plugins_replace_theirs() {
     let rig = rig(Ok("t".into()));
-    rig.plugins.install(&OWNER, Some(&id("docs")), None);
+    rig.install("docs");
     rig.plugins.connect(&OWNER, &id("docs"), "", &[("api_key".into(), "  ".into())], &rig.outbox);
     assert!(matches!(next(&rig), ServerEvent::PluginFailed { message, .. } if message.contains("Key is empty")));
     rig.plugins.connect(&OWNER, &id("docs"), "a", &[("api_key".into(), "k1".into())], &rig.outbox);
@@ -208,12 +236,12 @@ fn api_keys_are_checked_and_one_account_plugins_replace_theirs() {
 #[test]
 fn cli_accounts_need_the_cli_signed_in() {
     let rig = rig(Err("`hub` is not signed in".into()));
-    rig.plugins.install(&OWNER, Some(&id("hub")), None);
+    rig.install("hub");
     rig.plugins.connect(&OWNER, &id("hub"), "", &[], &rig.outbox);
     assert!(matches!(next(&rig), ServerEvent::PluginFailed { .. }));
 
     let rig = self::rig(Ok("gho_1".into()));
-    rig.plugins.install(&OWNER, Some(&id("hub")), None);
+    rig.install("hub");
     rig.plugins.connect(&OWNER, &id("hub"), "", &[], &rig.outbox);
     let accounts = connections(&next(&rig));
     let brief = rig.plugins.brief(&OWNER, RunId::new(), &request(accounts)).expect("brief").plugins.expect("brief");
@@ -225,7 +253,7 @@ fn cli_accounts_need_the_cli_signed_in() {
 #[test]
 fn uninstalling_forgets_accounts_and_files() {
     let rig = rig(Ok("t".into()));
-    rig.plugins.install(&OWNER, Some(&id("docs")), None);
+    rig.install("docs");
     rig.plugins.connect(&OWNER, &id("docs"), "a", &[("api_key".into(), "k".into())], &rig.outbox);
     let account = connections(&next(&rig))[0].clone();
     let event = rig.plugins.uninstall(&OWNER, &id("docs"));
@@ -245,7 +273,7 @@ fn a_local_folder_installs_too() {
         r#"{"id":"mine","name":"Mine","version":"0.1"}"#,
     )
     .expect("write");
-    let ServerEvent::Plugins { plugins, connections } = rig.plugins.install(&OWNER, None, Some(folder.path())) else {
+    let ServerEvent::Plugins { plugins, connections } = rig.plugins.install(&OWNER, folder.path()) else {
         panic!("plugins")
     };
     let mine = plugins.iter().find(|p| p.id == id("mine")).expect("listed");
@@ -265,25 +293,26 @@ impl SetupRunner for FakeSetup {
 fn with_setup(result: Result<(), String>) -> (Rig, Arc<FakeSetup>) {
     let mut rig = rig(Ok("t".into()));
     let setup = Arc::new(FakeSetup(result, std::sync::Mutex::default()));
-    let browser = package(
+    folder(
+        &rig.dir.path().join("sources"),
         r#"{"id":"browser2","name":"Browser","version":"1","setup":{"command":"npx","args":["install"]},
         "mcp":[{"transport":"stdio","name":"browser","command":"npx"}]}"#,
         vec![],
     );
-    rig.plugins = rig.plugins.clone().with_catalog(vec![browser]).with_setup(setup.clone());
+    rig.plugins = rig.plugins.clone().with_setup(setup.clone());
     (rig, setup)
 }
 
 #[test]
 fn setup_runs_after_installing_and_reports_back() {
     let (rig, setup) = with_setup(Ok(()));
-    rig.plugins.install_and_set_up(&OWNER, Some(&id("browser2")), None, &rig.outbox);
+    rig.plugins.install_and_set_up(&OWNER, &rig.source("browser2"), &rig.outbox);
     assert!(matches!(next(&rig), ServerEvent::Plugins { .. }), "installed at once");
     assert!(matches!(next(&rig), ServerEvent::Plugins { .. }), "then set up");
     assert_eq!(*setup.1.lock().expect("lock"), vec!["npx".to_owned()]);
 
     let (rig, _) = with_setup(Err("no network".into()));
-    rig.plugins.install_and_set_up(&OWNER, Some(&id("browser2")), None, &rig.outbox);
+    rig.plugins.install_and_set_up(&OWNER, &rig.source("browser2"), &rig.outbox);
     next(&rig);
     assert!(matches!(next(&rig), ServerEvent::PluginFailed { message, .. } if message.contains("no network")));
 }
@@ -298,7 +327,7 @@ fn a_members_folder_plugin_never_runs_its_setup_on_the_server() {
         user: superfik_core::UserId::new(),
         org: superfik_core::OrgId::new(),
     });
-    rig.plugins.install_and_set_up(&member, None, Some(folder.path()), &rig.outbox);
+    rig.plugins.install_and_set_up(&member, folder.path(), &rig.outbox);
     assert!(matches!(next(&rig), ServerEvent::Plugins { .. }), "installed");
     let later = rig.events.recv_timeout(std::time::Duration::from_millis(200));
     assert!(later.is_err(), "no setup followed: {later:?}");

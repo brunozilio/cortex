@@ -39,7 +39,6 @@ pub enum AuthKind {
     ApiKey,
     OAuth,
     Cli,
-    Qr,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,7 +53,6 @@ pub struct SecretField {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PluginOrigin {
-    Catalog,
     Local(PathBuf),
 }
 
@@ -82,10 +80,6 @@ pub struct PluginSummary {
 impl PluginSummary {
     pub fn needs_account(&self) -> bool {
         self.auth != AuthKind::None
-    }
-
-    pub fn is_ai_provider(&self) -> bool {
-        crate::ModelProvider::ACCOUNTS.iter().any(|provider| provider.plugin_id() == self.id.as_str())
     }
 }
 

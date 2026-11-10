@@ -67,7 +67,7 @@ fn finish(provider: ModelProvider, mut out: Vec<ModelOption>) -> Vec<ModelOption
 }
 
 fn option(provider: ModelProvider, id: &str, label: String) -> ModelOption {
-    ModelOption::new(EngineKind::Native, format!("{}:{id}", provider.plugin_id()), label).served_by(provider)
+    ModelOption::new(EngineKind::Native, format!("{}:{id}", provider.id()), label).served_by(provider)
 }
 
 fn model(provider: ModelProvider, item: &Value) -> Option<ModelOption> {

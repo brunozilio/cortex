@@ -1,20 +1,26 @@
-//! Model providers on the backend: each owner's API key with OpenAI and
-//! Anthropic (ADR 0015). The keys stay in the [`SecretStore`]; the client
-//! only sees [`ProviderSummary`](superfik_core::provider::ProviderSummary)s.
-//! The native engine asks [`ModelProviders::key`].
+//! LLM providers on the backend (ADR 0016, 0018): each owner's account
+//! with OpenAI, Anthropic and the ChatGPT and Claude subscriptions. The
+//! credentials stay in the [`SecretStore`]; clients only see
+//! [`ProviderSummary`](superfik_core::provider::ProviderSummary)s. A run
+//! gets its key from [`ModelProviders::key`].
 
+mod account;
+mod catalog;
 mod store;
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use superfik_core::provider::{KeyProblem, ModelProvider, ProviderAccount, ProviderKey, clean_key, key_hint};
 use superfik_core::{ConnectionId, Principal};
 use superfik_protocol::{ProviderEvent, ServerEvent};
+use superfik_providers::Config;
 
+pub use self::account::{BrowserSignIn, SignIn};
+pub use self::catalog::{ModelCatalog, ProviderCatalog};
 pub use self::store::{FileProviderStore, InMemoryProviderStore, ProviderStore};
-use crate::plugins::{KeychainSecretStore, SecretStore, Secrets};
-
-const API_KEY: &str = "api_key";
+use crate::outbox::Outbox;
+use crate::plugins::{KeychainSecretStore, SecretStore};
 
 pub(crate) const fn secret_id(provider: ModelProvider) -> ConnectionId {
     ConnectionId::from_uuid(uuid::Uuid::from_u128(match provider {
@@ -32,6 +38,9 @@ type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 pub struct ModelProviders {
     store: Arc<dyn ProviderStore>,
     secrets: Arc<dyn SecretStore>,
+    sign_in: Arc<dyn SignIn>,
+    catalog: Arc<dyn ModelCatalog>,
+    generations: Arc<Mutex<HashMap<String, u64>>>,
     lock: Arc<Mutex<()>>,
     clock: Clock,
 }
@@ -48,7 +57,15 @@ fn system_clock() -> u64 {
 
 impl ModelProviders {
     pub fn new(store: Arc<dyn ProviderStore>, secrets: Arc<dyn SecretStore>) -> Self {
-        Self { store, secrets, lock: Arc::default(), clock: Arc::new(system_clock) }
+        Self {
+            store,
+            secrets,
+            sign_in: Arc::new(BrowserSignIn),
+            catalog: Arc::new(ProviderCatalog),
+            generations: Arc::default(),
+            lock: Arc::default(),
+            clock: Arc::new(system_clock),
+        }
     }
 
     pub fn system() -> Self {
@@ -65,6 +82,16 @@ impl ModelProviders {
         self
     }
 
+    pub fn with_sign_in(mut self, sign_in: Arc<dyn SignIn>) -> Self {
+        self.sign_in = sign_in;
+        self
+    }
+
+    pub fn with_catalog(mut self, catalog: Arc<dyn ModelCatalog>) -> Self {
+        self.catalog = catalog;
+        self
+    }
+
     pub fn with_clock(mut self, clock: impl Fn() -> u64 + Send + Sync + 'static) -> Self {
         self.clock = Arc::new(clock);
         self
@@ -74,26 +101,43 @@ impl ModelProviders {
         ServerEvent::Providers(ProviderEvent::Listed { providers: self.store.load(owner).summaries() })
     }
 
+    /// Connects with an API key, or a subscription's token JSON.
     pub fn connect(&self, owner: &Principal, provider: ModelProvider, raw: &str) -> ServerEvent {
-        if provider.subscription() {
-            let result = superfik_plugins::providers::Config::parse(provider, raw).map_err(|e| e.to_string()).and_then(
-                |config| {
-                    let account = ProviderAccount { label: provider.name().to_owned(), since_unix: self.now() };
-                    let raw = serde_json::to_string(&config).map_err(|e| e.to_string())?;
-                    self.keep(owner, provider, account, &Secrets::from([("config".to_owned(), raw)]))
-                },
-            );
-            return self.answer(owner, provider, result);
-        }
-        let result = Self::accepts(provider).and_then(|()| clean_key(raw)).map_err(|p| p.to_string()).and_then(|key| {
-            let account = ProviderAccount { label: key_hint(&key), since_unix: self.now() };
-            self.keep(owner, provider, account, &Secrets::from([(API_KEY.to_owned(), key)]))
-        });
+        let result = self.parse(provider, raw).and_then(|(config, label)| self.keep(owner, provider, label, &config));
         self.answer(owner, provider, result)
     }
 
-    const fn accepts(provider: ModelProvider) -> Result<(), KeyProblem> {
-        if provider.needs_account() { Ok(()) } else { Err(KeyProblem::NoAccount) }
+    fn parse(&self, provider: ModelProvider, raw: &str) -> Result<(Config, String), String> {
+        if !provider.needs_account() {
+            return Err(KeyProblem::NoAccount.to_string());
+        }
+        if provider.subscription() {
+            let config = Config::parse(provider, raw).map_err(|e| e.to_string())?;
+            return Ok((config, provider.name().to_owned()));
+        }
+        let key = clean_key(raw).map_err(|problem| problem.to_string())?;
+        let config = Config { api_key: key.clone(), ..Config::default() };
+        config.validate(provider).map_err(|e| e.to_string())?;
+        Ok((config, key_hint(&key)))
+    }
+
+    /// Signs in to a subscription in the browser, off the command loop:
+    /// sends [`ProviderEvent::AuthorizeAt`], then the list or the failure.
+    pub fn sign_in(&self, owner: &Principal, provider: ModelProvider, outbox: &Outbox) {
+        if !provider.subscription() {
+            let message = format!("{} connects with an API key", provider.name());
+            return outbox.send(ServerEvent::Providers(ProviderEvent::Failed { provider, message }));
+        }
+        let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
+        std::thread::spawn(move || {
+            let mut open =
+                |url: String| outbox.send(ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url }));
+            let result = this
+                .sign_in
+                .sign_in(provider, &mut open)
+                .and_then(|config| this.keep(&owner, provider, provider.name().to_owned(), &config));
+            outbox.send(this.answer(&owner, provider, result));
+        });
     }
 
     pub fn disconnect(&self, owner: &Principal, provider: ModelProvider) -> ServerEvent {
@@ -107,42 +151,31 @@ impl ModelProviders {
         self.answer(owner, provider, result)
     }
 
+    /// The live credential of a connected provider: rotated tokens are saved
+    /// back, and a disconnected account stops working mid-run.
     pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {
+        use superfik_core::provider::ProviderKeyStore;
         if self.store.load(owner).get(provider).is_none() {
-            return Err(format!("{} is not connected: connect it in Settings", provider.name()));
+            return Err(format!("{} is not connected", provider.name()));
         }
-        if provider.subscription() {
-            use superfik_core::provider::ProviderKeyStore;
-            let source = Arc::new(crate::plugins::model_providers::AccountStore {
-                secrets: self.secrets.clone(),
-                owner: owner.clone(),
-                connection: secret_id(provider),
-                provider,
-            });
-            return Ok(ProviderKey::new(source.load()?).with_store(source));
-        }
-        let secrets = self.secrets.get(owner, secret_id(provider));
-        secrets
-            .and_then(|secrets| secrets.get(API_KEY).cloned())
-            .map(ProviderKey::new)
-            .ok_or_else(|| format!("{} is not connected: add its API key in Settings", provider.name()))
+        let source = Arc::new(account::AccountStore {
+            secrets: self.secrets.clone(),
+            owner: owner.clone(),
+            slot: secret_id(provider),
+            provider,
+        });
+        Ok(ProviderKey::new(source.load()?).with_store(source))
     }
 
     fn now(&self) -> i64 {
         i64::try_from((self.clock)()).unwrap_or(i64::MAX)
     }
 
-    fn keep(
-        &self,
-        owner: &Principal,
-        provider: ModelProvider,
-        account: ProviderAccount,
-        secrets: &Secrets,
-    ) -> Result<(), String> {
+    fn keep(&self, owner: &Principal, provider: ModelProvider, label: String, config: &Config) -> Result<(), String> {
         let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
-        self.secrets.set(owner, secret_id(provider), secrets)?;
+        self.secrets.set(owner, secret_id(provider), &account::secrets(config)?)?;
         let mut book = self.store.load(owner);
-        book.connect(provider, account);
+        book.connect(provider, ProviderAccount { label, since_unix: self.now() });
         self.store.save(owner, &book).map_err(|error| error.to_string())
     }
 

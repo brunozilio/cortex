@@ -1,8 +1,8 @@
 //! The subscriptions' token calls over HTTP; what they send and read is in
-//! `superfik_plugins::providers::oauth`.
+//! `superfik_providers::oauth`.
 use super::super::{ModelError, http::Http};
 use superfik_core::ModelProvider;
-use superfik_plugins::providers::oauth::{self as plugin, TOKEN_LIMIT, TokenRequest};
+use superfik_providers::oauth::{self as plugin, TOKEN_LIMIT, TokenRequest};
 
 pub use plugin::{
     CLAUDE_CLIENT, CLAUDE_TOKEN, OPENAI_CLIENT, OPENAI_REDIRECT, OPENAI_TOKEN, Tokens, account_id, authorize, form,

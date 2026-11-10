@@ -1,25 +1,22 @@
 //! Superfik plugins.
 //!
 //! A plugin is a folder with a [`PluginManifest`] (`superfik-plugin.json`)
-//! plus the skills and agents it ships ([`PluginPackage`]); the
-//! [`catalog`] embeds the curated ones. Installed plugins are laid out as
-//! Claude Code plugins ([`materialize`]) and the accounts a session picks
-//! become MCP servers ([`mcp_config`]). [`PluginBook`] is what one owner
-//! has installed and connected. The AI provider plugins' credentials,
-//! sign-ins, catalogs and request shapes are in [`providers`].
+//! plus the skills, agents and MCP servers it ships ([`PluginPackage`]),
+//! installed from a folder. Installed plugins are laid out as Claude Code
+//! plugins ([`materialize`]) and the accounts a session picks become MCP
+//! servers ([`mcp_config`]). [`PluginBook`] is what one owner has installed
+//! and connected. LLM providers are not plugins (`superfik-providers`).
 //!
 //! Skills and custom agents that Claude Code itself finds are discovered
 //! with [`SkillDiscovery`] and [`AgentDiscovery`] (see [`claude_home`]).
 
 pub mod agents;
-pub mod catalog;
 pub mod claude_home;
 mod error;
 pub mod manifest;
 pub mod materialize;
 pub mod mcp_config;
 mod package;
-pub mod providers;
 mod registry;
 pub mod skills;
 

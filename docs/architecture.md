@@ -8,6 +8,7 @@ dependencies. Business rules never depend on IO. Decisions are in
 (cli, sdk — next) ──► superfik-backend ──► superfik-native ──► (provider APIs, MLX)
                            │                    ├──► superfik-engine
                            │                    ├──► superfik-plugins
+                           │                    ├──► superfik-providers
                            │                    └──► superfik-gateway (MLX)
                            ├──► superfik-workspace ─► (git, gh)
                            └──► superfik-protocol ─► superfik-core   (everything speaks core)
@@ -22,7 +23,8 @@ dependencies. Business rules never depend on IO. Decisions are in
 | `superfik-protocol` | Serialisable `ClientCommand` / `ServerEvent` in an `Envelope` carrying the `Principal`; the `Backend` trait. |
 | `superfik-backend` | `LocalBackend` (worker threads) and `CommandHandler`: runs, memory (+ its MCP tool), sessions, settings, plugins, model providers. |
 | `superfik-workspace` | Git inspection, branch switching, worktrees; repository slug and current PR through `gh`. |
-| `superfik-plugins` | Plugin manifests and packages, skill and agent discovery in Claude Code's layout, MCP config, provider contracts (pure). |
+| `superfik-plugins` | Plugin manifests and packages, skill and agent discovery in Claude Code's layout, MCP config. |
+| `superfik-providers` | LLM provider contracts (ADR 0016): credential config, OAuth shapes, request and catalog shapes. Pure. |
 | `superfik-oauth` | Browser sign-in: PKCE and the loopback redirect. |
 | `superfik-keychain` | Secrets in the system store. |
 | `superfik-process` | Child processes started the same everywhere; `Tree` ends a process with its children. |
@@ -45,9 +47,11 @@ Recognised problems arrive first as `Diagnosed(EngineProblem)`.
 
 The native engine (ADR 0015) runs the loop in process behind `ModelApi`
 (`anthropic::Messages`, `openai::Responses`, `chat::Chat` for local
-servers). `ListModels` asks every connected provider account's catalog and
-lists downloaded MLX models. A run uses its model's account key
-(`RunCredentials::model`, never serialized).
+servers). Providers are not plugins: `ModelProviders` keeps one account per
+provider (`ConnectProvider` with an API key or token JSON, `SignInProvider`
+for a subscription's browser sign-in). `ListModels` asks every connected
+provider's catalog and lists downloaded MLX models. A run uses its
+provider's key (`RunCredentials::model`, never serialized).
 
 - **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`,
   `superfik`. Project or user agents of the same name replace them.
@@ -81,10 +85,10 @@ bearer token per run).
 
 A plugin (`superfik-plugin.json`) brings skills, agents and MCP servers
 (`stdio` or `http`, with `{{secret.<key>}}` templates); "install from
-folder" takes any. Connections are signed-in accounts of a plugin; secrets
-stay in the backend's `SecretStore`, and a run's MCP config is written
-`0600` and removed on the terminal event. The four AI providers are still
-catalog plugins today; ADR 0018 moves them out.
+folder" is the only way in (nothing ships with Superfik). Connections are
+signed-in accounts of a plugin; secrets stay in the backend's
+`SecretStore`, and a run's MCP config is written `0600` and removed on the
+terminal event.
 
 ## Sessions
 

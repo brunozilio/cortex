@@ -41,7 +41,10 @@ pub use plugins::{
     PluginStore, Plugins, SealedSecretStore, SecretStore, Secrets, SetupRunner, SystemSetup, SystemTokenCommand,
     TokenCommand,
 };
-pub use providers::{FileProviderStore, InMemoryProviderStore, ModelProviders, ProviderStore};
+pub use providers::{
+    BrowserSignIn, FileProviderStore, InMemoryProviderStore, ModelCatalog, ModelProviders, ProviderCatalog,
+    ProviderStore, SignIn,
+};
 pub use services::LocalServices;
 pub use settings::{FileSettingsStore, InMemorySettingsStore, SettingsStore};
 pub use superfik_protocol::{Backend, BackendError, Wake};

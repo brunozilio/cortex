@@ -85,9 +85,9 @@ pub enum ClientCommand {
         settings: serde_json::Value,
     },
     ListPlugins,
+    /// Installs the plugin in a folder (`superfik-plugin.json`).
     InstallPlugin {
-        plugin: Option<PluginId>,
-        folder: Option<PathBuf>,
+        folder: PathBuf,
     },
     UninstallPlugin {
         plugin: PluginId,
@@ -105,6 +105,11 @@ pub enum ClientCommand {
     ConnectProvider {
         provider: ModelProvider,
         key: String,
+    },
+    /// Signs in to a subscription in the browser; the backend answers with
+    /// [`ProviderEvent::AuthorizeAt`](crate::ProviderEvent::AuthorizeAt).
+    SignInProvider {
+        provider: ModelProvider,
     },
     DownloadModel {
         id: String,
@@ -145,6 +150,7 @@ impl ClientCommand {
             Self::Disconnect { .. } => "disconnect",
             Self::ListProviders => "list_providers",
             Self::ConnectProvider { .. } => "connect_provider",
+            Self::SignInProvider { .. } => "sign_in_provider",
             Self::DisconnectProvider { .. } => "disconnect_provider",
         }
     }
@@ -172,7 +178,6 @@ mod tests {
             turns: vec![],
             engine_session: None,
             model: "claude-opus-5-5".into(),
-            model_account: None,
             effort: Effort::High,
             archived: true,
             repositories: vec![],
@@ -218,7 +223,7 @@ mod tests {
             ClientCommand::ListPlugins,
             ClientCommand::LoadSettings,
             ClientCommand::SaveSettings { settings: serde_json::json!({"theme": "dark"}) },
-            ClientCommand::InstallPlugin { plugin: None, folder: Some("/p".into()) },
+            ClientCommand::InstallPlugin { folder: "/p".into() },
             ClientCommand::UninstallPlugin { plugin: PluginId("linear".into()) },
             ClientCommand::Connect {
                 plugin: PluginId("context7".into()),
@@ -228,6 +233,7 @@ mod tests {
             ClientCommand::Disconnect { connection: ConnectionId::new() },
             ClientCommand::ListProviders,
             ClientCommand::ConnectProvider { provider: ModelProvider::Anthropic, key: "sk-ant-x".into() },
+            ClientCommand::SignInProvider { provider: ModelProvider::ClaudeSubscription },
             ClientCommand::DisconnectProvider { provider: ModelProvider::Anthropic },
         ];
         for command in &commands {

@@ -64,13 +64,7 @@ impl CommandHandler {
                 if let Some(folder) = &self.services.local_models {
                     models.extend(superfik_gateway::mlx::downloaded(folder, superfik_core::EngineKind::Native));
                 }
-                self.services.plugins.discover_models(
-                    &principal,
-                    &self.services.providers,
-                    models,
-                    self.services.engines.infos(),
-                    outbox,
-                );
+                self.services.providers.discover_models(&principal, models, self.services.engines.infos(), outbox);
             }
             ClientCommand::InspectWorkspace { path } => workspace::inspect(&self.services, outbox, &path),
             ClientCommand::SwitchBranch { path, branch } => {
@@ -116,8 +110,8 @@ impl CommandHandler {
                     outbox.send(ServerEvent::error(format!("Could not save the settings: {error}")));
                 }
             }
-            ClientCommand::InstallPlugin { plugin, folder } => {
-                self.services.plugins.install_and_set_up(&principal, plugin.as_ref(), folder.as_deref(), outbox)
+            ClientCommand::InstallPlugin { folder } => {
+                self.services.plugins.install_and_set_up(&principal, &folder, outbox)
             }
             ClientCommand::UninstallPlugin { plugin } => {
                 outbox.send(self.services.plugins.uninstall(&principal, &plugin));
@@ -135,6 +129,7 @@ impl CommandHandler {
             ClientCommand::ConnectProvider { provider, key } => {
                 outbox.send(self.services.providers.connect(&principal, provider, &key))
             }
+            ClientCommand::SignInProvider { provider } => self.services.providers.sign_in(&principal, provider, outbox),
             ClientCommand::DisconnectProvider { provider } => {
                 outbox.send(self.services.providers.disconnect(&principal, provider))
             }
@@ -161,14 +156,7 @@ impl CommandHandler {
 
     fn start(&self, owner: &Principal, run: RunId, request: &PromptRequest) -> Result<(), String> {
         let outbox = self.outbox.answering(owner);
-        let model = if request.model.engine == superfik_core::EngineKind::Native {
-            self.services
-                .plugins
-                .run_key(owner, &request.model, &request.connections)?
-                .or_else(|| crate::native::key_for(&self.services.providers, owner, &request.model))
-        } else {
-            None
-        };
+        let model = crate::native::key_for(&self.services.providers, owner, &request.model);
         let request = &PromptRequest {
             credentials: superfik_core::credentials::RunCredentials {
                 github: None,

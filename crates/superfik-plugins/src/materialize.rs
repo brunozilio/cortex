@@ -52,7 +52,7 @@ mod tests {
         let manifest = PluginManifest::parse(r#"{"id":"linear","name":"Linear","version":"2.1"}"#).expect("manifest");
         let files =
             vec![PackageFile { path: "skills/triage/SKILL.md".into(), bytes: b"---\nname: triage\n---".to_vec() }];
-        let package = PluginPackage::new(manifest, PluginOrigin::Catalog, files).expect("package");
+        let package = PluginPackage::new(manifest, PluginOrigin::Local("/p".into()), files).expect("package");
         let dir = tempfile::tempdir().expect("dir");
         let target = dir.path().join("linear");
         fs::create_dir_all(&target).expect("mkdir");

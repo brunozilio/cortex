@@ -33,8 +33,6 @@ pub struct ModelOption {
     pub window: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<ModelCapabilities>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub account: Option<crate::ConnectionId>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,16 +60,11 @@ impl ModelOption {
             provider: ModelProvider::Anthropic,
             window: None,
             capabilities: None,
-            account: None,
         }
     }
 
     pub fn served_by(self, provider: ModelProvider) -> Self {
         Self { provider, ..self }
-    }
-
-    pub fn of_account(self, account: crate::ConnectionId) -> Self {
-        Self { account: Some(account), ..self }
     }
 
     pub fn with_window(self, tokens: u64) -> Self {
@@ -98,7 +91,7 @@ impl ModelProvider {
         matches!(self, Self::ChatGptSubscription | Self::ClaudeSubscription)
     }
 
-    pub const fn plugin_id(self) -> &'static str {
+    pub const fn id(self) -> &'static str {
         match self {
             Self::OpenAi => "openai",
             Self::Anthropic => "anthropic",

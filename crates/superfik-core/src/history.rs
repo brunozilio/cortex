@@ -27,8 +27,6 @@ pub struct SessionRecord {
     pub engine_session: Option<SessionId>,
     #[serde(default)]
     pub model: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model_account: Option<crate::ConnectionId>,
     #[serde(default)]
     pub effort: Effort,
     #[serde(default)]
@@ -83,7 +81,6 @@ mod tests {
             turns: vec![turn],
             engine_session: Some(SessionId("s-1".into())),
             model: "claude-opus-5-5".into(),
-            model_account: None,
             effort: Effort::High,
             archived: false,
             repositories: Vec::new(),

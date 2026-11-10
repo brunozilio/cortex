@@ -142,7 +142,6 @@ mod tests {
         assert!(matches!(&events[1], ServerEvent::Error { message } if message.contains("not inside a git")));
     }
 
-
     #[test]
     fn a_missing_directory_is_reported() {
         let (outbox, events) = outbox();

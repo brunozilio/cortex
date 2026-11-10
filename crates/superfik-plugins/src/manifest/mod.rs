@@ -63,7 +63,6 @@ pub enum Auth {
         #[serde(default)]
         args: Vec<String>,
     },
-    Qr,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -124,13 +123,12 @@ impl Auth {
             Self::ApiKey { .. } => AuthKind::ApiKey,
             Self::OAuth(_) => AuthKind::OAuth,
             Self::Cli { .. } => AuthKind::Cli,
-            Self::Qr => AuthKind::Qr,
         }
     }
 
     pub fn secret_keys(&self) -> Vec<&str> {
         match self {
-            Self::None | Self::Qr => Vec::new(),
+            Self::None => Vec::new(),
             Self::ApiKey { fields } => fields.iter().map(|field| field.key.as_str()).collect(),
             Self::OAuth(_) => vec!["access_token"],
             Self::Cli { .. } => vec!["token"],

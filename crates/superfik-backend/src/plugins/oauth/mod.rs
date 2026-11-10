@@ -133,9 +133,6 @@ impl McpOAuth {
 
 impl OAuthFlow for McpOAuth {
     fn sign_in(&self, request: &OAuthRequest, open: &mut dyn FnMut(String)) -> Result<Secrets, String> {
-        if let Some(provider) = super::model_providers::subscription_client(request.spec.client_id.as_deref()) {
-            return super::model_providers::sign_in(provider, open);
-        }
         let metadata = self.metadata(&self.issuer(request)?)?;
         let loopback = Loopback::bind()?;
         let redirect_uri = loopback.redirect_uri();

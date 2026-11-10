@@ -21,7 +21,7 @@ pub fn retries_after_refresh(provider: ModelProvider, status: u16) -> bool {
 }
 
 pub fn shape(provider: ModelProvider, model: Option<&ModelOption>, body: &mut Value) -> Result<(), ProviderError> {
-    let prefix = format!("{}:", provider.plugin_id());
+    let prefix = format!("{}:", provider.id());
     if let Some(name) = body["model"].as_str() {
         body["model"] = json!(name.strip_prefix(&prefix).unwrap_or(name));
     }

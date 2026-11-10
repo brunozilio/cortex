@@ -8,7 +8,7 @@ use std::io::Read;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use superfik_core::ModelProvider;
-use superfik_plugins::providers::{catalog, request};
+use superfik_providers::{catalog, request};
 
 pub(super) struct Transport {
     pub provider: ModelProvider,

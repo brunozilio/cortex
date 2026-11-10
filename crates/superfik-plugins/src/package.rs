@@ -165,8 +165,10 @@ mod tests {
         assert!(PluginPackage::load(dir.path()).is_err());
         let manifest = PluginManifest::parse(r#"{"id":"x","name":"X","version":"1"}"#).expect("manifest");
         let file = |path: &str| PackageFile { path: path.into(), bytes: Vec::new() };
-        assert!(PluginPackage::new(manifest.clone(), PluginOrigin::Catalog, vec![file("../evil")]).is_err());
-        assert!(PluginPackage::new(manifest.clone(), PluginOrigin::Catalog, vec![file("/etc/x")]).is_err());
-        assert!(PluginPackage::new(manifest, PluginOrigin::Catalog, vec![file("skills/a/SKILL.md")]).is_ok());
+        assert!(PluginPackage::new(manifest.clone(), PluginOrigin::Local("/p".into()), vec![file("../evil")]).is_err());
+        assert!(PluginPackage::new(manifest.clone(), PluginOrigin::Local("/p".into()), vec![file("/etc/x")]).is_err());
+        assert!(
+            PluginPackage::new(manifest, PluginOrigin::Local("/p".into()), vec![file("skills/a/SKILL.md")]).is_ok()
+        );
     }
 }

@@ -22,6 +22,7 @@ superfik-process = { path = "crates/superfik-process" }
 superfik-private-file = { path = "crates/superfik-private-file" }
 superfik-gateway = { path = "crates/superfik-gateway" }
 superfik-native = { path = "crates/superfik-native" }
+superfik-providers = { path = "crates/superfik-providers" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

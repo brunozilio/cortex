@@ -93,9 +93,9 @@ mod tests {
         let mut book = PluginBook::default();
         let gmail = PluginId("gmail".into());
         assert!(book.connect(connection("gmail", "work"), true).is_err(), "not installed");
-        book.install(gmail.clone(), PluginOrigin::Catalog).expect("install");
+        book.install(gmail.clone(), PluginOrigin::Local("/p".into())).expect("install");
         assert_eq!(
-            book.install(gmail.clone(), PluginOrigin::Catalog),
+            book.install(gmail.clone(), PluginOrigin::Local("/p".into())),
             Err(PluginError::AlreadyInstalled("gmail".into()))
         );
         book.connect(connection("gmail", "work"), true).expect("connect");
@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn one_account_plugins_replace_their_connection() {
         let mut book = PluginBook::default();
-        book.install(PluginId("github".into()), PluginOrigin::Catalog).expect("install");
+        book.install(PluginId("github".into()), PluginOrigin::Local("/p".into())).expect("install");
         let first = connection("github", "a");
         let first_id = first.id;
         assert_eq!(book.connect(first, false).expect("connect"), None);

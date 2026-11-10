@@ -64,9 +64,9 @@ pub enum ModelError {
     Cancelled,
 }
 
-impl From<superfik_plugins::providers::ProviderError> for ModelError {
-    fn from(error: superfik_plugins::providers::ProviderError) -> Self {
-        use superfik_plugins::providers::ProviderError;
+impl From<superfik_providers::ProviderError> for ModelError {
+    fn from(error: superfik_providers::ProviderError) -> Self {
+        use superfik_providers::ProviderError;
         match error {
             ProviderError::Unauthorized(why) => Self::Unauthorized(why),
             ProviderError::Invalid(why) => Self::Provider(why),

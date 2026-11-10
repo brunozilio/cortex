@@ -14,6 +14,7 @@ superfik-engine.workspace = true
 superfik-protocol.workspace = true
 superfik-workspace.workspace = true
 superfik-plugins.workspace = true
+superfik-providers.workspace = true
 superfik-oauth.workspace = true
 crossbeam-channel.workspace = true
 superfik-gateway.workspace = true

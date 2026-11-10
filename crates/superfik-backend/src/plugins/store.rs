@@ -103,7 +103,7 @@ mod tests {
         let owner = Principal::LocalOwner;
         assert_eq!(store.load(&owner), PluginBook::default());
         let mut book = PluginBook::default();
-        book.install(PluginId("linear".into()), PluginOrigin::Catalog).expect("install");
+        book.install(PluginId("linear".into()), PluginOrigin::Local("/p".into())).expect("install");
         store.save(&owner, &book).expect("save");
         assert_eq!(store.load(&owner), book);
         assert_eq!(
