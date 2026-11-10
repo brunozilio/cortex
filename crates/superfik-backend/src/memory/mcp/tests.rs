@@ -36,6 +36,8 @@ fn listings_name_ids_kinds_and_sessions() {
         origin: Some("Lint".into()),
         author: Author::Agent,
         history: Vec::new(),
+        uses: 0,
+        last_used: 0,
     };
     assert_eq!(listing(&[memory]), "[3] procedural: Run clippy (from \"Lint\")");
     assert_eq!(listing(&[]), "No memory matches.");

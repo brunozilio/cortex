@@ -38,13 +38,44 @@ impl RecallBudget {
     pub const WITH_TOOL: Self = Self { facts: 15, episodes: 3 };
 }
 
-pub fn recall(prompt: &str, memories: &[Memory], semantic: Option<Semantic>, budget: RecallBudget) -> Vec<Memory> {
-    let scores = search(prompt, memories, semantic);
+const DAY: f32 = 24.0 * 60.0 * 60.0;
+/// Days for an unused episode's weight to halve.
+const EPISODE_HALF_LIFE_DAYS: f32 = 30.0;
+/// How much repeated use counts against fading.
+const USE_WEIGHT: f32 = 0.5;
+
+/// How much an episode still weighs at `now`: it halves every
+/// [`EPISODE_HALF_LIFE_DAYS`], and use adds back `USE_WEIGHT·ln(1+uses)`,
+/// itself fading from the last use. Facts and procedures keep 1.0.
+pub fn retention(memory: &Memory, now: i64) -> f32 {
+    if memory.kind != MemoryKind::Episodic {
+        return 1.0;
+    }
+    let decay =
+        |since: i64| (-(std::f32::consts::LN_2) * (now - since).max(0) as f32 / DAY / EPISODE_HALF_LIFE_DAYS).exp();
+    let used = if memory.uses == 0 { 0.0 } else { USE_WEIGHT * (memory.uses as f32).ln_1p() * decay(memory.last_used) };
+    decay(memory.created) + used
+}
+
+pub fn recall(
+    prompt: &str,
+    memories: &[Memory],
+    semantic: Option<Semantic>,
+    budget: RecallBudget,
+    now: i64,
+) -> Vec<Memory> {
+    let relevance = search(prompt, memories, semantic);
+    let kept: Vec<f32> = memories.iter().map(|m| retention(m, now)).collect();
+    let scores: Vec<f32> = relevance.iter().zip(&kept).map(|(score, kept)| score * kept).collect();
     let ranked = |episodic: bool, take: usize| -> Vec<usize> {
         let mut picked: Vec<usize> =
             (0..memories.len()).filter(|&i| (memories[i].kind == MemoryKind::Episodic) == episodic).collect();
         picked.sort_by(|&a, &b| {
-            scores[b].total_cmp(&scores[a]).then(memories[b].created.cmp(&memories[a].created)).then(b.cmp(&a))
+            scores[b]
+                .total_cmp(&scores[a])
+                .then(kept[b].total_cmp(&kept[a]))
+                .then(memories[b].created.cmp(&memories[a].created))
+                .then(b.cmp(&a))
         });
         picked.truncate(take);
         picked

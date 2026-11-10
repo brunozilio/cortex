@@ -63,6 +63,16 @@ pub struct Memory {
     /// The texts revisions replaced, oldest first (at most [`REVISIONS_KEPT`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<Revision>,
+    /// How often it was recalled or found, and when last: use slows an
+    /// episode's fading (see [`recall::retention`]).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub uses: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub last_used: i64,
+}
+
+fn is_zero<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
 }
 
 /// How many replaced texts a memory keeps.
@@ -141,6 +151,8 @@ impl MemoryBook {
                         origin: by.origin.clone(),
                         author: by.author,
                         history: Vec::new(),
+                        uses: 0,
+                        last_used: 0,
                     });
                     touched.push(id);
                 }
@@ -180,6 +192,14 @@ impl MemoryBook {
             }
         }
         touched
+    }
+
+    /// Records that these memories were handed to an agent at `now`.
+    pub fn mark_used(&mut self, ids: &[MemoryId], now: i64) {
+        for memory in self.memories.iter_mut().filter(|m| ids.contains(&m.id)) {
+            memory.uses = memory.uses.saturating_add(1);
+            memory.last_used = memory.last_used.max(now);
+        }
     }
 
     pub fn unembedded(&mut self, model: &str) -> Vec<(MemoryId, String)> {

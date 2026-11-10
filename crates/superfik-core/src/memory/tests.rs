@@ -158,11 +158,38 @@ fn recall_keeps_facts_and_the_best_episodes() {
             &by_agent(300 + n),
         );
     }
-    let recalled = recall("usage grid", &book.memories, None, RecallBudget { facts: 2, episodes: 2 });
+    let recalled = recall("usage grid", &book.memories, None, RecallBudget { facts: 2, episodes: 2 }, 400);
     let ids: Vec<u32> = recalled.iter().map(|m| m.id.0).collect();
     assert_eq!(recalled.iter().filter(|m| m.kind == MemoryKind::Episodic).count(), 2);
     assert!(ids.contains(&2) && ids.contains(&8), "{ids:?}");
     assert_eq!(recalled.len(), 4);
+}
+
+#[test]
+fn old_episodes_fade_unless_they_keep_being_used() {
+    let day = 24 * 60 * 60;
+    let now = 200 * day;
+    let mut book = MemoryBook::default();
+    book.apply(&[remember(MemoryKind::Episodic, "Fixed the shader cache", &[])], &by_agent(now - 90 * day));
+    book.apply(&[remember(MemoryKind::Semantic, "The shader cache lives in target", &[])], &by_agent(now - 180 * day));
+    book.apply(&[remember(MemoryKind::Episodic, "Tuned the shader cache size", &[])], &by_agent(now - day));
+    let one = RecallBudget { facts: 1, episodes: 1 };
+    let episode = |book: &MemoryBook| -> Vec<u32> {
+        recall("shader cache", &book.memories, None, one, now)
+            .iter()
+            .filter(|m| m.kind == MemoryKind::Episodic)
+            .map(|m| m.id.0)
+            .collect()
+    };
+    assert_eq!(episode(&book), vec![2], "the recent episode wins");
+    let recalled = recall("shader cache", &book.memories, None, one, now);
+    assert!(recalled.iter().any(|m| m.id == MemoryId(1)), "facts do not fade");
+
+    for days_ago in [20, 10, 5, 2, 0] {
+        book.mark_used(&[MemoryId(0)], now - days_ago * day);
+    }
+    assert_eq!((book.memories[0].uses, book.memories[0].last_used), (5, now));
+    assert_eq!(episode(&book), vec![0], "an old episode in steady use stays");
 }
 
 #[test]

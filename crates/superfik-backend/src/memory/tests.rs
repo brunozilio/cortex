@@ -122,6 +122,24 @@ fn a_run_is_briefed_and_its_edits_applied_on_completion() {
 }
 
 #[test]
+fn what_an_agent_is_given_counts_as_used() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
+    let owner = Principal::LocalOwner;
+    let font = MemoryEdit::Remember { kind: MemoryKind::Semantic, text: "Inter is the font".into(), tags: vec![] };
+    memories.edit(&owner, dir.path(), &[remember("The renderer uses wgpu"), font], by_user());
+    let uses = || match memories.load(&owner, dir.path()) {
+        ServerEvent::Memory { memories, .. } => memories.iter().map(|m| m.uses).collect::<Vec<_>>(),
+        other => panic!("unexpected {other:?}"),
+    };
+
+    memories.brief(&owner, RunId::new(), &request(dir.path()), false);
+    assert_eq!(uses(), vec![1, 1], "everything recalled");
+    memories.find(&owner, dir.path(), "wgpu", 5);
+    assert_eq!(uses(), vec![2, 1], "only what the search found");
+}
+
+#[test]
 fn a_failed_run_changes_nothing() {
     let dir = tempfile::tempdir().expect("tempdir");
     let memories = Memories::plain(Arc::new(InMemoryStore::default()));

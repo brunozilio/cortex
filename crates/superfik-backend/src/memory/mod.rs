@@ -126,7 +126,22 @@ impl Memories {
         let scores = self.scores(book, query);
         let mut order: Vec<usize> = (0..book.memories.len()).filter(|&i| scores[i] > 0.0).collect();
         order.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then(a.cmp(&b)));
-        order.into_iter().take(limit).map(|i| book.memories[i].clone()).collect()
+        let found: Vec<Memory> = order.into_iter().take(limit).map(|i| book.memories[i].clone()).collect();
+        self.mark_used(owner, project, book, &found);
+        found
+    }
+
+    /// What reaches an agent counts as used, which slows an episode's
+    /// fading (`superfik_core::memory::retention`).
+    fn mark_used(&self, owner: &Principal, project: &Path, book: &mut MemoryBook, given: &[Memory]) {
+        if given.is_empty() {
+            return;
+        }
+        let ids: Vec<MemoryId> = given.iter().map(|m| m.id).collect();
+        book.mark_used(&ids, now());
+        if let Err(error) = self.store.save(owner, project, book) {
+            tracing::warn!(%error, "could not save memory use");
+        }
     }
 
     pub fn search_event(&self, owner: &Principal, project: &Path, query: &str) -> ServerEvent {
@@ -157,7 +172,9 @@ impl Memories {
             let vector = self.query_vector(book, &request.prompt);
             let aligned = book.aligned_vectors();
             let semantic = vector.as_deref().map(|query| Semantic { query, memories: &aligned });
-            recall(&request.prompt, &book.memories, semantic, budget)
+            let recalled = recall(&request.prompt, &book.memories, semantic, budget, now());
+            self.mark_used(owner, &request.cwd, book, &recalled);
+            recalled
         };
         let output = edits_file(run);
         let brief = MemoryBrief { recalled, output, origin: brief.origin.clone(), tool };
