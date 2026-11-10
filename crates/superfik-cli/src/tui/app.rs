@@ -28,6 +28,8 @@ pub enum Msg {
     /// What Ctrl+V found on the clipboard.
     Clipboard(Result<Option<superfik_sdk::Image>, String>),
     Changes(Result<super::git::Changes, String>),
+    /// What `/diffs` asked git for.
+    Diffs(super::git::Scope, Result<super::git::Changes, String>),
     Side {
         question: String,
         answer: Result<String, String>,
@@ -58,6 +60,8 @@ pub struct App {
     pub picker: Option<Picker>,
     /// A `/btw` question and its answer, shown until dismissed.
     pub side: Option<super::side::Side>,
+    /// `/diffs`, full screen while open.
+    pub diffs: Option<super::diff_view::DiffView>,
     pub scroll: u16,
     pub quit: bool,
     pub quit_armed: Option<Instant>,
@@ -97,6 +101,7 @@ impl App {
             skills: Vec::new(),
             picker: None,
             side: None,
+            diffs: None,
             scroll: 0,
             quit: false,
             quit_armed: None,
@@ -166,6 +171,11 @@ impl App {
             }
             Msg::Clipboard(found) => self.clipboard(found),
             Msg::Changes(changes) => self.changes(changes),
+            Msg::Diffs(scope, changes) => {
+                if let Some(view) = &mut self.diffs {
+                    view.loaded(scope, changes);
+                }
+            }
             Msg::Side { question, answer } => super::side::answered(self, &question, answer),
             Msg::Notice(text) => self.transcript.notice(text),
             Msg::Error(text) => self.transcript.error(text),

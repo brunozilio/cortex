@@ -27,6 +27,9 @@ pub fn key(app: &mut App, event: KeyEvent) {
     if app.ask.is_some() {
         return answer(app, event);
     }
+    if app.diffs.is_some() {
+        return diffs(app, event);
+    }
     if app.picker.is_some() {
         return pick(app, event);
     }
@@ -41,8 +44,31 @@ pub fn paste(app: &mut App, text: &str) {
     if app.secret.is_some() {
         return app.paste_secret(text);
     }
-    if app.ask.is_none() && app.picker.is_none() {
+    if app.ask.is_none() && app.picker.is_none() && app.diffs.is_none() {
         app.paste(text);
+    }
+}
+
+fn diffs(app: &mut App, event: KeyEvent) {
+    use super::diff_view::{Action, Key};
+    let key = match event.code {
+        KeyCode::Up => Key::PreviousFile,
+        KeyCode::Down => Key::NextFile,
+        KeyCode::Char('k') => Key::LineUp,
+        KeyCode::Char('j') => Key::LineDown,
+        KeyCode::PageUp => Key::PageUp,
+        KeyCode::PageDown | KeyCode::Char(' ') => Key::PageDown,
+        KeyCode::Char('n') => Key::NextHunk,
+        KeyCode::Char('p') => Key::PreviousHunk,
+        KeyCode::Tab => Key::Scope,
+        KeyCode::Char('r') => Key::Refresh,
+        KeyCode::Esc | KeyCode::Char('q') => Key::Close,
+        _ => return,
+    };
+    match app.diffs.as_mut().map(|view| view.key(key)) {
+        Some(Action::Close) => app.diffs = None,
+        Some(Action::Load(scope)) => app.load_diffs(scope),
+        Some(Action::Stay) | None => {}
     }
 }
 

@@ -6,6 +6,8 @@ mod ask;
 mod attach;
 mod choices;
 mod commands;
+mod diff_model;
+mod diff_view;
 mod diffs;
 mod entries;
 mod git;

@@ -5,6 +5,7 @@
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 
+use super::diff_model::{self, DiffLine, FileDiff, Kind, Status};
 use super::wrap::wrap;
 
 /// Lines of a file change shown while folded.
@@ -40,72 +41,86 @@ pub fn edit(output: &str, width: usize, expanded: bool, out: &mut Vec<Line<'stat
 /// `git diff` output: each file's name, then its hunks numbered by the
 /// lines they touch.
 pub fn unified(diff: &str, width: usize, expanded: bool, out: &mut Vec<Line<'static>>) {
-    let (mut old, mut new, mut shown) = (0usize, 0usize, 0usize);
-    let mut file_lines = 0;
-    for line in diff.lines() {
-        if let Some(header) = line.strip_prefix("diff --git ") {
-            more(file_lines.max(shown), expanded, out);
-            (file_lines, shown) = (0, 0);
-            let name = header.split(" b/").last().unwrap_or(header);
-            out.push(Line::from(""));
-            out.push(Line::from(vec![Span::styled("● ", Style::new().fg(Color::Cyan)), Span::raw(name.to_owned())]));
-            continue;
+    for file in diff_model::parse(diff) {
+        out.push(Line::from(""));
+        out.push(heading(&file));
+        if file.status == Status::Binary {
+            out.push(Line::styled("    binary file changed", dim()));
         }
-        if let Some(hunk) = line.strip_prefix("@@ ") {
-            (old, new) = starts(hunk);
-            if file_lines > 0 && (expanded || shown < FOLDED) {
+        let total: usize = file.hunks.iter().map(|hunk| hunk.lines.len()).sum();
+        let mut shown = 0;
+        for (i, hunk) in file.hunks.iter().enumerate() {
+            if i > 0 && (expanded || shown < FOLDED) {
                 out.push(Line::styled("          ⋮", dim()));
             }
-            continue;
-        }
-        let (mark, number) = match line.chars().next() {
-            Some('+') if !line.starts_with("+++ ") => ('+', &mut new),
-            Some('-') if !line.starts_with("--- ") => ('-', &mut old),
-            Some(' ') => {
-                old += 1;
-                (' ', &mut new)
+            for line in &hunk.lines {
+                if expanded || shown < FOLDED {
+                    out.push(numbered(line, width));
+                    shown += 1;
+                }
             }
-            Some('B') if line.starts_with("Binary files") => {
-                out.push(Line::styled("    binary file changed", dim()));
-                continue;
-            }
-            _ => continue,
-        };
-        file_lines += 1;
-        if expanded || shown < FOLDED {
-            out.push(row(&number.to_string(), mark, &line[1..], width));
-            shown += 1;
         }
-        *number += 1;
+        more(total, expanded, out);
     }
-    more(file_lines.max(shown), expanded, out);
 }
 
-/// Where a hunk starts in the old and new file: `-12,3 +12,4 @@ fn x`.
-fn starts(hunk: &str) -> (usize, usize) {
-    let mut parts = hunk.split_whitespace();
-    let mut start = |prefix: char| {
-        parts
-            .next()
-            .and_then(|part| part.strip_prefix(prefix))
-            .and_then(|range| range.split(',').next()?.parse().ok())
-            .unwrap_or(1)
+/// `● path`, with the old name after a rename.
+pub fn heading(file: &FileDiff) -> Line<'static> {
+    let name = match &file.old_path {
+        Some(old) => format!("{} (renamed from {old})", file.path),
+        None => file.path.clone(),
     };
-    (start('-'), start('+'))
+    Line::from(vec![Span::styled("● ", Style::new().fg(Color::Cyan)), Span::raw(name)])
 }
 
-fn row(number: &str, mark: char, text: &str, width: usize) -> Line<'static> {
-    let style = match mark {
+/// One line of a hunk: its number, then its text on green or red, cut to
+/// one row.
+pub fn numbered(line: &DiffLine, width: usize) -> Line<'static> {
+    row(&line.number.to_string(), mark(line.kind), &line.text, width)
+}
+
+/// [`numbered`], with the whole text wrapped onto as many rows as it takes;
+/// the rows after the first keep the colour but not the number or mark.
+pub fn wrapped(line: &DiffLine, width: usize, out: &mut Vec<Line<'static>>) {
+    let mark = mark(line.kind);
+    for (i, text) in wrap(&line.text, width.saturating_sub(12)).iter().enumerate() {
+        let (number, shown) = if i == 0 { (line.number.to_string(), mark) } else { (String::new(), ' ') };
+        out.push(Line::from(vec![
+            Span::styled(format!("    {number:>5} "), dim()),
+            Span::styled(format!("{shown} {}", fill(text, width)), colour(mark)),
+        ]));
+    }
+}
+
+const fn mark(kind: Kind) -> char {
+    match kind {
+        Kind::Added => '+',
+        Kind::Removed => '-',
+        Kind::Context => ' ',
+    }
+}
+
+fn colour(mark: char) -> Style {
+    match mark {
         '+' => Style::new().bg(ADDED),
         '-' => Style::new().bg(REMOVED),
         _ => Style::new(),
-    };
+    }
+}
+
+/// A numbered row cut to one line of `width`.
+fn row(number: &str, mark: char, text: &str, width: usize) -> Line<'static> {
     let text = wrap(text, width.saturating_sub(12)).into_iter().next().unwrap_or_default();
-    let fill = width.saturating_sub(12 + unicode_width::UnicodeWidthStr::width(text.as_str()));
     Line::from(vec![
         Span::styled(format!("    {number:>5} "), dim()),
-        Span::styled(format!("{mark} {text}{}", " ".repeat(fill)), style),
+        Span::styled(format!("{mark} {}", fill(&text, width)), colour(mark)),
     ])
+}
+
+/// `text` padded so its colour runs to the row's end.
+fn fill(text: &str, width: usize) -> String {
+    let pad = width.saturating_sub(12 + unicode_width::UnicodeWidthStr::width(text));
+    format!("{text}{}", " ".repeat(pad))
 }
 
 fn more(total: usize, expanded: bool, out: &mut Vec<Line<'static>>) {

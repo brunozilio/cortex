@@ -215,6 +215,44 @@ fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() 
 }
 
 #[test]
+fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
+    let (data, repo) = (tempfile::tempdir().expect("data"), tempfile::tempdir().expect("repo"));
+    let git = |args: &[&str]| {
+        let done = std::process::Command::new("git").args(args).current_dir(repo.path()).output().expect("git");
+        assert!(done.status.success(), "{args:?}");
+    };
+    git(&["init", "-q", "-b", "main"]);
+    std::fs::write(repo.path().join("a.txt"), "one\n").expect("write");
+    git(&["add", "a.txt"]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a"]);
+    std::fs::write(repo.path().join("a.txt"), "two\n").expect("edit");
+    std::fs::write(repo.path().join("new.txt"), "new\n").expect("new");
+    let model = Model::new("anthropic:scripted", "Scripted");
+    let engine = FakeEngine::new(vec![model], Vec::new());
+    let mut app = App::new(superfik(&engine, data.path()), repo.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    let loaded = |app: &App| app.diffs.as_ref().is_some_and(|view| !view.loading());
+
+    type_text(&mut app, "/diffs");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, loaded);
+    let shown = screen(&app);
+    assert!(shown.contains("Changes · uncommitted · 2 files"), "{shown}");
+    assert!(shown.contains("M a.txt") && shown.contains("? new.txt"), "{shown}");
+    assert!(shown.contains("1 - one") && shown.contains("1 + two"), "{shown}");
+    press(&mut app, KeyCode::Down);
+    assert!(screen(&app).contains("New file, not yet in git."), "{}", screen(&app));
+
+    press(&mut app, KeyCode::Tab);
+    press(&mut app, KeyCode::Tab);
+    until(&mut app, loaded);
+    assert!(screen(&app).contains("No staged changes."), "{}", screen(&app));
+    press(&mut app, KeyCode::Char('q'));
+    assert!(app.diffs.is_none() && screen(&app).contains("Welcome to Superfik"), "{}", screen(&app));
+    assert!(engine.requests().is_empty(), "nothing reached the agent");
+}
+
+#[test]
 fn ctrl_o_unfolds_a_long_output() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("anthropic:scripted", "Scripted");

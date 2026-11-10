@@ -17,6 +17,12 @@ use super::wrap::{layout, wrap};
 const PROMPT_MARK: usize = 2;
 
 pub fn draw(frame: &mut Frame, app: &App) {
+    if let Some(diffs) = &app.diffs
+        && app.ask.is_none()
+        && app.secret.is_none()
+    {
+        return super::diff_view::draw(frame, diffs);
+    }
     let area = frame.area();
     let panel = panel(app, area.width);
     let input_width = usize::from(area.width.saturating_sub(2)).saturating_sub(PROMPT_MARK).max(1);
