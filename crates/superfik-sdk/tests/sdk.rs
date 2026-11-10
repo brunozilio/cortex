@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 use superfik_backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
-use superfik_core::{AgentAsk, AskId, AskKind, SessionId};
+use superfik_core::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId};
 use superfik_engine::fake::FakeEngine;
 use superfik_sdk::{
     Agent, Command, Decision, EngineEvent, Image, McpConnection, McpServer, MemoryKind, Model, ModelProvider, Skill,
@@ -198,7 +198,10 @@ fn a_program_manages_the_owner_s_mcp_servers() {
         servers.into_iter().map(|s| (s.name, s.origin, s.state)).collect()
     };
 
-    assert_eq!(states(superfik.mcp_servers(repo.path()).expect("list")), [("jira".into(), McpOrigin::Project, McpState::Pending)]);
+    assert_eq!(
+        states(superfik.mcp_servers(repo.path()).expect("list")),
+        [("jira".into(), McpOrigin::Project, McpState::Pending)]
+    );
     let approved = superfik.approve_mcp_server(repo.path(), "jira", true).expect("approve");
     assert_eq!(states(approved)[0].2, McpState::Ready);
     let added = superfik
@@ -208,4 +211,23 @@ fn a_program_manages_the_owner_s_mcp_servers() {
     assert!(home.path().join(".superfik/mcp.json").is_file());
     assert!(superfik.add_mcp_server(repo.path(), "plugin_x", json!({"command": "x"})).is_err());
     assert_eq!(superfik.remove_mcp_server(repo.path(), "atlassian").expect("remove").len(), 1);
+}
+
+#[test]
+fn a_side_question_is_answered_from_the_conversation_without_continuing_it() {
+    let data = tempfile::tempdir().expect("data");
+    let answer = EngineEvent::Chore(ChoreAnswer::Side("It edits main.rs.".into()));
+    let engine = FakeEngine::new(vec![model()], script(vec![answer]));
+    let superfik = build(&engine, data.path());
+    let session = superfik.session(data.path(), model());
+    assert!(matches!(session.side("too early?"), Err(superfik_sdk::Error::NothingToAsk)));
+
+    session.send("fix the bug").expect("run").text().expect("text");
+    assert_eq!(session.side("which file?").expect("run").side_answer().expect("answer"), "It edits main.rs.");
+
+    let side = engine.requests().remove(1);
+    assert_eq!(side.command, Some(SessionCommand::Side));
+    assert_eq!(side.prompt, "which file?");
+    assert_eq!(side.resume, Some(SessionId("s-1".into())), "asked about this conversation");
+    assert!(side.memory.is_none(), "a side question recalls no memory");
 }

@@ -1,7 +1,33 @@
 ---
 name: pr
-description: "Use when writing a PR body."
+description: "Open a PR for the current branch: run the PR gate (tests, clippy, lint), have a sub-agent code-review the branch, then create the PR. `/pr [low|medium|high]` picks the review level (medium by default). Also use when writing a PR body."
 ---
+
+## Opening a PR (`/pr`)
+
+Stop at the first step that fails and say why; fix only what the user asks.
+
+1. **Branch.** Refuse on `main`. Find the base (`origin/HEAD`, else
+   `main`) and check the branch has commits ahead of it. If the tree has
+   uncommitted changes, ask whether to commit them first.
+2. **Gate.** Run `.claude/hooks/pr-gate.sh`; it prints one line per check
+   (tests, doctests, clippy, lint). On failure, show the failing check and its
+   output. The `pre-pr.sh` hook runs the same gate again before
+   `gh pr create`; that run is instant when the tree hasn't changed.
+3. **Review.** Start one sub-agent (Agent tool) to run the `code-review`
+   skill at the level from the arguments (`medium` when none) over the
+   branch's diff against the base. Tell it the base and the CLAUDE.md
+   `CARGO_TARGET_DIR` rule. It reports findings and changes nothing.
+   - Correctness findings: list them and ask whether to fix them first or
+     open the PR anyway.
+   - Only cleanup findings: carry on and list them in the PR body.
+4. **Push** with `git push -u origin HEAD`.
+5. **Create** with `gh pr create --base <base>` and a body from the template
+   below. Under **Evidence**, give each gate check's result and the review's
+   level and findings (or "no findings").
+6. Reply with the PR's URL.
+
+## The PR body
 
 Use this template for writing the PR body:
 

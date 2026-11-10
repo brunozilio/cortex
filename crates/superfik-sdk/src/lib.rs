@@ -64,6 +64,8 @@ pub enum Error {
     NoModel,
     #[error("there is no conversation to compact yet")]
     NothingToCompact,
+    #[error("there is no conversation to ask about yet")]
+    NothingToAsk,
     #[error("could not write the SDK's agents, skills and commands: {0}")]
     Write(#[from] std::io::Error),
 }
