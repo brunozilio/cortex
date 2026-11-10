@@ -50,7 +50,7 @@ change. That's where you observe.
 |---|---|---|
 | CLI / TUI | terminal | type the command, capture the pane — [example](examples/cli.md) |
 | Server / API | socket | send the request, capture the response — [example](examples/server.md) |
-| Web UI | pixels | open it in the browser card (`mcp__superfik_browser__*`), act, snapshot/screenshot |
+| Web UI | pixels | drive it with headless Playwright (or a browser MCP server), act, snapshot/screenshot — [example](../run/examples/playwright.md) |
 | Desktop GUI | pixels | launch it, drive it (Playwright for Electron; xvfb only on headless Linux), screenshot |
 | Library | package boundary | sample code through the public export — `import pkg`, not `import ./src/...` |
 | Prompt / agent config | the agent | run the agent, capture its behavior |
@@ -254,8 +254,7 @@ an organization's server rather than the user's computer, they
 can't — say so, and keep the evidence that matters inline. Either
 way, give absolute paths and keep pane captures and response bodies
 in the report; a bare path only works when the reader shares your
-filesystem. A page you drove in the browser card is on the user's
-screen too: name the card's state you left it in.
+filesystem.
 
 **Verdicts:**
 - **PASS** — you ran the app, the change did what it should at its

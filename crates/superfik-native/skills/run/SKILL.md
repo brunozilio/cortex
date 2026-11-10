@@ -56,12 +56,12 @@ section - you're using the recipe, not authoring one.
 | Web server / API | background launch + `curl` smoke | [examples/server.md](examples/server.md) |
 | TUI / interactive terminal | tmux `send-keys` / `capture-pane` | [examples/tui.md](examples/tui.md) |
 | Electron / desktop GUI | Playwright `_electron` REPL (xvfb only on headless Linux) | [examples/electron.md](examples/electron.md) |
-| Browser-driven | dev server + the browser card (`mcp__superfik_browser__*`) | [examples/playwright.md](examples/playwright.md) |
+| Browser-driven | dev server + headless Playwright (or a browser MCP server) | [examples/playwright.md](examples/playwright.md) |
 | Library / SDK | import-and-call smoke script at the package boundary | [examples/library.md](examples/library.md) |
 
 If nothing fits, start from the closest match and adapt. For a web
-app, [examples/playwright.md](examples/playwright.md) - open it in
-Superfik's browser card, no custom driver needed. For a desktop app,
+app, [examples/playwright.md](examples/playwright.md) - a short
+Playwright script is enough. For a desktop app,
 [examples/electron.md](examples/electron.md) - it has the `_electron`
 REPL driver skeleton and the tmux wrapping.
 

@@ -25,7 +25,7 @@ On the other hand, maybe they already have a draft of the skill. In this case yo
 
 Of course, you should always be flexible and if the user is like "I don't need to run a bunch of evaluations, just vibe with me", you can do that instead.
 
-Then after the skill is done (but again, the order is flexible), you can also run the skill description improver, which we have a whole separate script for, to optimize the triggering of the skill.
+Then after the skill is done (but again, the order is flexible), you can also improve the skill's description to optimize its triggering (see Description Optimization).
 
 Cool? Cool.
 
@@ -58,7 +58,7 @@ Start by understanding the user's intent. The current conversation might already
 
 Proactively ask questions about edge cases, input/output formats, example files, success criteria, and dependencies. Wait to write test prompts until you've got this part ironed out.
 
-Check the tools available to you - if useful for research (searching docs, finding similar skills, looking up best practices), research in parallel via sub-agents (the Agent tool), or browse the web with the browser card. Come prepared with context to reduce burden on the user.
+Check the tools available to you - if useful for research (searching docs, finding similar skills, looking up best practices), research in parallel via sub-agents (the Agent tool). Come prepared with context to reduce burden on the user.
 
 ### Write the SKILL.md
 
@@ -109,7 +109,7 @@ cloud-deploy/
 ```
 The agent reads only the relevant reference file.
 
-**Tools a skill can rely on**: Read, Write, Edit, Bash, Glob, Grep, Agent (sub-agents), AskUserQuestion, Skill, TaskOutput and TaskStop, plus the browser card's `mcp__superfik_browser__*` tools (navigate, snapshot, click, type, screenshot…) for web pages and local dev servers, and whatever MCP tools the user's connected accounts bring. Don't write a skill around a tool that isn't there: there is no web-fetch, web-search, scheduling or plan-mode tool — reach the web through the browser card, and leave scheduling to Superfik's routines. The user may be on macOS, Windows or Linux, so give a script's commands for each platform it supports, or write it in Python or Node so it runs on all three.
+**Tools a skill can rely on**: Read, Write, Edit, Bash, Glob, Grep, Agent (sub-agents), AskUserQuestion, Skill, BashOutput and KillShell, plus whatever MCP tools the user has connected. Don't write a skill around a tool that isn't there: there is no web-fetch, web-search, browser, scheduling or plan-mode tool — reach the web with `curl` or a script, or through an MCP server the user connected. The user may be on macOS, Windows or Linux, so give a script's commands for each platform it supports, or write it in Python or Node so it runs on all three.
 
 #### Principle of Lack of Surprise
 
@@ -398,30 +398,11 @@ Present the eval set to the user for review using the HTML template:
 
 This step matters — bad eval queries lead to bad descriptions.
 
-### Step 3: Run the optimization loop
+### Step 3: Improve the description
 
-The automated loop measures triggering by running a real agent on each query, many times, outside this conversation. That needs a **headless agent command**: something that takes one prompt, runs it non-interactively in the current directory with the project's skills (`.superfik/skills/`) available, and prints its output. Superfik doesn't ship one, so the user configures it: ask whether they have such a command and set the `SKILL_EVAL_AGENT` environment variable to it (or pass `--agent-command`). In the command, `{prompt}` marks where the query goes (without it the query is sent on standard input) and `{model}` where the model id goes, if the command takes one. For trigger detection it should print JSON lines that include the agent's tool calls (objects like `{"type": "tool_use", "name": "Skill", "input": {...}}`, anywhere in each line); with plain-text output the scripts can only look for the skill's name, which is less precise. If the command's text answers come out as JSON, set `SKILL_EVAL_WRITER` to a variant that prints plain text for the step that writes new descriptions.
+Go through the reviewed eval set with the user. For each query, judge whether the current description would lead an agent to the skill, and rewrite the description for the misses — both the should-trigger queries it would miss and the near-misses it would wrongly catch. Keep a held-out third of the queries aside and check the final description against them too, so it isn't tuned to the ones you rewrote for. Say plainly that the result is reasoned, not measured.
 
-If the user has no such command, don't invent one. Skip the automated loop and improve the description by hand instead: go through the reviewed eval set with the user, judge for each query whether the current description would lead an agent to the skill, rewrite it for the misses, and say plainly that the result is reasoned, not measured.
-
-With a command configured, tell the user: "This will take some time — I'll run the optimization loop in the background and check on it periodically."
-
-Save the eval set to the workspace, then run it in the background (`... > <workspace>/loop.log 2>&1 &`, or `Start-Process` on Windows):
-
-```bash
-python -m scripts.run_loop \
-  --eval-set <path-to-trigger-eval.json> \
-  --skill-path <path-to-skill> \
-  --model <model-id-powering-this-session> \
-  --max-iterations 5 \
-  --verbose
-```
-
-Pass the model powering the current session, if the command takes `{model}`, so the triggering test matches what the user actually experiences.
-
-While it runs, periodically tail the log to give the user updates on which iteration it's on and what the scores look like.
-
-This handles the full optimization loop automatically. It splits the eval set into 60% train and 40% held-out test, evaluates the current description (running each query 3 times to get a reliable trigger rate), then asks the agent to propose improvements based on what failed. It re-evaluates each new description on both train and test, iterating up to 5 times. When it's done, it opens an HTML report in the browser showing the results per iteration and returns JSON with `best_description` — selected by test score rather than train score to avoid overfitting.
+To spot-check a few queries for real, install the skill in the project's `.superfik/skills/` and run `superfik -p "<query>"` in the project folder: the tool calls print on standard error, so a `● Skill(<name>)` line there means the skill triggered.
 
 ### How skill triggering works
 
@@ -431,19 +412,13 @@ This means your eval queries should be substantive enough that the agent would a
 
 ### Step 4: Apply the result
 
-Take `best_description` from the JSON output and update the skill's SKILL.md frontmatter. Show the user before/after and report the scores.
+Update the skill's SKILL.md frontmatter with the new description. Show the user before/after and which queries changed.
 
 ---
 
-### Package and share (when the user wants to share the skill)
+### Install and share
 
-A skill is installed by putting its folder in `.superfik/skills/` (project) or `~/.superfik/skills/` (personal); nothing else is needed. To hand it to someone else, package it into a single `.skill` file (a zip of the folder):
-
-```bash
-python -m scripts.package_skill <path/to/skill-folder>
-```
-
-Tell the user where the file is. Whoever receives it unzips it into one of those folders.
+A skill is installed by putting its folder in `.superfik/skills/` (project) or `~/.superfik/skills/` (personal); nothing else is needed. To share one, share the folder (commit it to the project, or zip it).
 
 ---
 
@@ -455,16 +430,11 @@ The core workflow is always the same (draft → test → review → improve → 
 
 **No browser for the viewer**: if the user can't open the viewer (the agent runs on a remote server they can't reach), use `--static`, or skip the browser reviewer entirely and present results directly in the conversation. For each test case, show the prompt and the output. If the output is a file the user needs to see (like a .docx or .xlsx), save it to the filesystem and tell them where it is. Ask for feedback inline: "How does this look? Anything you'd change?"
 
-**No headless agent command**: improve the description by hand, as Step 3 of Description Optimization says.
-
 **If timeouts are a problem**, it's OK to run the test prompts in series rather than in parallel.
 
-**Packaging**: The `package_skill.py` script works anywhere with Python and a filesystem.
-
 **Updating an existing skill**: The user might be asking you to update an existing skill, not create a new one. In this case:
-- **Preserve the original name.** Note the skill's directory name and `name` frontmatter field -- use them unchanged. E.g., if the installed skill is `research-helper`, output `research-helper.skill` (not `research-helper-v2`).
-- **Copy to a writeable location before editing** if the installed skill path is read-only (a built-in or plugin skill). Copy it to a temporary folder, edit there, and install or package from the copy.
-- **If packaging manually, stage in a temporary folder first**, then copy to the output directory -- direct writes may fail due to permissions.
+- **Preserve the original name.** Note the skill's directory name and `name` frontmatter field -- use them unchanged (`research-helper`, not `research-helper-v2`).
+- **Copy to a writeable location before editing** if the installed skill path is read-only (a built-in or plugin skill). Copy it to a temporary folder, edit there, and install from the copy.
 
 ---
 
@@ -490,7 +460,7 @@ Repeating one more time the core loop here for emphasis:
   - Create benchmark.json and run `eval-viewer/generate_review.py` to help the user review them
   - Run quantitative evals
 - Repeat until you and the user are satisfied
-- Install the final skill where the user wants it, and package it if they want to share it.
+- Install the final skill where the user wants it.
 
 If you have planning task tools, add these steps as tasks to make sure you don't forget any — in particular "Create test cases and run `eval-viewer/generate_review.py` so human can review them".
 
