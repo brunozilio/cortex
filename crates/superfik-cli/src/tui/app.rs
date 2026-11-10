@@ -40,6 +40,8 @@ pub struct App {
     pub session: Option<Session>,
     pub transcript: Transcript,
     pub input: Input,
+    /// Animations; a `RefCell` because drawing advances them.
+    pub motion: std::cell::RefCell<super::motion::Motion>,
     pub attachments: super::attach::Attachments,
     /// Ctrl+O: reasoning, outputs and diffs shown in full.
     pub expanded: bool,
@@ -79,6 +81,7 @@ impl App {
             session: None,
             transcript: Transcript::default(),
             input: Input::default(),
+            motion: std::cell::RefCell::new(super::motion::Motion::from_env()),
             attachments: Default::default(),
             expanded: false,
             ask: None,

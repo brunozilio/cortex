@@ -1,6 +1,6 @@
 # Superfik Lite
 
-Internal. Superfik's agent engine: a terminal chat
+Superfik's agent engine: a terminal chat
 (CLI/TUI) for talking to a coding agent, and an SDK for building on top of it
 (agents, commands, skills, memory, in-process MCP tools, MCP over HTTP and
 stdio).
@@ -29,7 +29,8 @@ the clipboard's image (or drop an image file on the terminal; it shows as
 `[Image #1]`), Ctrl+O unfolds reasoning, outputs and diffs. `/help` lists
 the commands (`/model`, `/mode`, `/effort`, `/compact`, `/diff`, `/memory`,
 `/skills`, `/agents`, `/new`, `/cost`, `/exit`); any other `/name` runs a
-skill or custom command.
+skill or custom command. Replies render as Markdown with highlighted code;
+`SUPERFIK_REDUCED_MOTION=1` turns the animations off.
 
 ## Building on it (SDK)
 

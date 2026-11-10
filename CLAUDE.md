@@ -1,6 +1,6 @@
 # Superfik Lite — working agreement
 
-Internal Rust workspace: Superfik's agent engine, driven from a terminal
+Rust workspace: Superfik's agent engine, driven from a terminal
 chat (CLI/TUI) and an SDK (ADR 0018). No GUI.
 
 ## Before changing code
