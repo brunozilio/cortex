@@ -58,6 +58,13 @@ provider's key (`RunCredentials::model`, never serialized).
   `recap`, `heads_up`, `side`). The chat names a conversation after its
   first run, offers the next prompt (Tab takes it), shows a heads-up when
   there is one, recaps on `superfik -c`, and answers `/btw`.
+- **Checkpoints** (`checkpoints.rs`, `engine/rewind.rs`): each prompt opens
+  one (`EngineEvent::Checkpoint(n)`); `Edit`/`Write` keep a file's content
+  before its first change in the run. `SessionCommand::Rewind(n)`
+  (`Session::rewind`) restores those files and cuts the conversation before
+  prompt `n` (only the files once the conversation was compacted). Changes
+  made with `Bash` are not tracked. The chat's `/rewind` picks a prompt;
+  `/retry` rewinds to the last one and sends it again.
 - **Safety check** (`guard/`): in Bypass, every editing or executing action
   is graded by the run's model before it runs.
 - **Built-in skills** (`crates/superfik-native/skills/`, embedded by

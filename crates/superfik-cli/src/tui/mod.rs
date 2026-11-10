@@ -19,6 +19,7 @@ mod logo;
 mod markdown;
 mod motion;
 mod reload;
+mod rewind;
 mod runs;
 mod settings;
 mod side;
@@ -28,6 +29,8 @@ mod wrap;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_going_on;
 
 use std::path::PathBuf;
 use std::time::Duration;

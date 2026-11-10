@@ -54,6 +54,8 @@ pub fn run(app: &mut App, command: Command) {
         }
         Command::Effort(effort) => app.set_effort_from(effort),
         Command::Compact => app.compact(),
+        Command::Rewind => app.open_rewind(),
+        Command::Retry => app.retry(),
         Command::Btw(question) => super::side::ask(app, question),
         Command::Diffs => {
             app.diffs = Some(super::diff_view::DiffView::new(super::git::Scope::Uncommitted));

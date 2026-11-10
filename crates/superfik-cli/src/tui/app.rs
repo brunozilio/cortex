@@ -73,6 +73,12 @@ pub struct App {
     pub title: Option<String>,
     /// The prompt you would likely type next, shown in the empty prompt.
     pub ghost: Option<String>,
+    /// This chat's prompts the engine can rewind to, oldest first.
+    pub checkpoints: Vec<super::rewind::Checkpoint>,
+    /// What the running rewind did, until it ends.
+    pub(super) rewound: Option<superfik_core::Rewound>,
+    /// Whether the running rewind sends its prompt again (`/retry`).
+    pub(super) retrying: bool,
     /// `/diffs`, full screen while open.
     pub diffs: Option<super::diff_view::DiffView>,
     pub scroll: u16,
@@ -117,6 +123,9 @@ impl App {
             side: None,
             title: None,
             ghost: None,
+            checkpoints: Vec::new(),
+            rewound: None,
+            retrying: false,
             diffs: None,
             scroll: 0,
             quit: false,

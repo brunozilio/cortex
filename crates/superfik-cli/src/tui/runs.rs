@@ -18,6 +18,8 @@ impl App {
             EngineEvent::Asked(ask) => self.ask = Some(Pending::new(ask.clone())),
             EngineEvent::AskWithdrawn(id) if self.ask.as_ref().is_some_and(|p| &p.ask.id == id) => self.ask = None,
             EngineEvent::SessionStarted(id) => self.saver.remember_session(&self.cwd, id),
+            EngineEvent::Checkpoint(index) => self.checkpointed(*index),
+            EngineEvent::Rewound(rewound) => self.rewound = Some(rewound.clone()),
             _ => {}
         }
         self.transcript.apply(&event);
@@ -25,8 +27,14 @@ impl App {
             self.run = None;
             self.ask = None;
             self.started = None;
-            if matches!(event, EngineEvent::Cancelled) {
+            if let Some(rewound) = self.rewound.take() {
+                self.rewound(rewound);
+            } else if matches!(event, EngineEvent::Cancelled) {
+                self.retrying = false;
                 self.unqueue();
+            } else if matches!(event, EngineEvent::Failed(_)) && self.queued.is_empty() {
+                self.retrying = false;
+                self.transcript.notice("/retry sends it again from where it started.");
             } else if !self.queued.is_empty() {
                 let next = self.queued.remove(0);
                 self.send(next);

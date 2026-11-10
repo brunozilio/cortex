@@ -120,6 +120,7 @@ fn pick(app: &mut App, event: KeyEvent) {
                     }
                 }
                 PickerKind::Login => app.login_picked(cursor),
+                PickerKind::Rewind => app.rewind_picked(cursor),
             }
         }
         _ => {}

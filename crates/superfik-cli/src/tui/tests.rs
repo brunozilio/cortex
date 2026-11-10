@@ -14,7 +14,7 @@ use superfik_sdk::{Decision, EngineEvent, Model, PermissionMode, Superfik};
 use super::app::App;
 use super::{keys, view};
 
-fn superfik(engine: &FakeEngine, data: &std::path::Path) -> Superfik {
+pub(super) fn superfik(engine: &FakeEngine, data: &std::path::Path) -> Superfik {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
     services.memory_tool = false;
@@ -23,7 +23,7 @@ fn superfik(engine: &FakeEngine, data: &std::path::Path) -> Superfik {
     Superfik::builder().data_dir(data).services(services).build().expect("superfik")
 }
 
-fn until(app: &mut App, done: impl Fn(&App) -> bool) {
+pub(super) fn until(app: &mut App, done: impl Fn(&App) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while !done(app) {
         assert!(Instant::now() < deadline, "timed out");
@@ -33,7 +33,7 @@ fn until(app: &mut App, done: impl Fn(&App) -> bool) {
     }
 }
 
-fn screen(app: &App) -> String {
+pub(super) fn screen(app: &App) -> String {
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("terminal");
     terminal.draw(|frame| view::draw(frame, app)).expect("draw");
     let buffer = terminal.backend().buffer().clone();
@@ -43,13 +43,13 @@ fn screen(app: &App) -> String {
         .join("\n")
 }
 
-fn type_text(app: &mut App, text: &str) {
+pub(super) fn type_text(app: &mut App, text: &str) {
     for c in text.chars() {
         keys::key(app, KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
     }
 }
 
-fn press(app: &mut App, code: KeyCode) {
+pub(super) fn press(app: &mut App, code: KeyCode) {
     keys::key(app, KeyEvent::new(code, KeyModifiers::NONE));
 }
 
@@ -212,39 +212,6 @@ fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() 
     press(&mut app, KeyCode::Esc);
     assert!(!screen(&app).contains("It edits main.rs."), "the answer is not kept in the conversation");
     assert_eq!(engine.requests().last().map(|r| r.command), Some(Some(SessionCommand::Side)));
-}
-
-#[test]
-fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
-    let data = tempfile::tempdir().expect("data");
-    let script = vec![
-        EngineEvent::SessionStarted(SessionId("s".into())),
-        EngineEvent::Chore(ChoreAnswer::Suggestion("run the tests".into())),
-        EngineEvent::Completed { duration_ms: 1, cost_usd: None },
-    ];
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
-    until(&mut app, |app| app.session.is_some());
-
-    type_text(&mut app, "fix the login page");
-    press(&mut app, KeyCode::Enter);
-    until(&mut app, |app| app.ghost.is_some());
-    assert!(screen(&app).contains("run the tests  (tab)"), "{}", screen(&app));
-    press(&mut app, KeyCode::Tab);
-    assert_eq!(app.input.text(), "run the tests");
-    assert!(app.ghost.is_none());
-
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let asked = || engine.requests().iter().filter_map(|r| r.command).collect::<Vec<_>>();
-    while asked().len() < 3 {
-        assert!(Instant::now() < deadline, "{:?}", asked());
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    let mut asked = asked();
-    asked.sort_by_key(|c| format!("{c:?}"));
-    assert_eq!(asked, [SessionCommand::HeadsUp, SessionCommand::Suggest, SessionCommand::Title]);
-    let title = engine.requests().into_iter().find(|r| r.command == Some(SessionCommand::Title)).expect("title");
-    assert_eq!(title.prompt, "fix the login page", "named for what was first asked");
 }
 
 #[test]

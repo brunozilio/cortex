@@ -14,6 +14,7 @@ pub enum PickerKind {
     Model,
     Mode,
     Login,
+    Rewind,
 }
 
 /// A list the user picks one item of: a model, a mode or a provider.
@@ -108,6 +109,9 @@ impl App {
         }
         self.transcript = Transcript::default();
         self.queued.clear();
+        self.checkpoints.clear();
+        self.title = None;
+        self.ghost = None;
         self.scroll = 0;
     }
 

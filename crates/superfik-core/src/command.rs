@@ -12,6 +12,10 @@ pub enum Command {
     Mode(Option<PermissionMode>),
     Effort(Option<Effort>),
     Compact,
+    /// Back to an earlier prompt: its files and the conversation as they were.
+    Rewind,
+    /// The last prompt again, from its checkpoint.
+    Retry,
     Diff,
     /// The changes full screen, file by file.
     Diffs,
@@ -53,13 +57,15 @@ impl McpCommand {
 
 impl Command {
     /// Every command with what it does, for `/help` and completion.
-    pub const HELP: [(&'static str, &'static str); 17] = [
+    pub const HELP: [(&'static str, &'static str); 19] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("model", "Pick the model, or /model <id>"),
         ("mode", "Pick ask, edits, plan or bypass"),
         ("effort", "Set low, medium, high, xhigh or max"),
         ("compact", "Summarize the conversation to free context"),
+        ("rewind", "Go back to an earlier prompt: its files and the conversation"),
+        ("retry", "Send the last prompt again, from where it started"),
         ("diff", "Show the project's uncommitted changes"),
         ("diffs", "Browse the changes full screen: uncommitted, staged or branch"),
         ("memory", "List the project's memory, or /memory <search>"),
@@ -94,6 +100,8 @@ impl Command {
                 Some(level) => level_named(level).map(|level| Self::Effort(Some(level))),
             },
             "compact" => bare(Self::Compact),
+            "rewind" | "undo" => bare(Self::Rewind),
+            "retry" => bare(Self::Retry),
             "diff" => bare(Self::Diff),
             "diffs" => bare(Self::Diffs),
             "memory" => Some(Self::Memory(argument)),
@@ -157,6 +165,9 @@ mod tests {
         assert_eq!(Command::parse("/memory the renderer"), Some(Command::Memory(Some("the renderer".into()))));
         assert_eq!(Command::parse("/mcp"), Some(Command::Mcp(McpCommand::List)));
         assert_eq!(Command::parse("/reload"), Some(Command::Reload));
+        assert_eq!(Command::parse("/rewind"), Some(Command::Rewind));
+        assert_eq!(Command::parse("/undo"), Some(Command::Rewind));
+        assert_eq!(Command::parse("/retry"), Some(Command::Retry));
         assert_eq!(Command::parse("/mcp approve jira"), Some(Command::Mcp(McpCommand::Approve("jira".into()))));
         assert_eq!(Command::parse("/mcp Deny  sonar"), Some(Command::Mcp(McpCommand::Deny("sonar".into()))));
         assert_eq!(Command::parse("/mcp approve"), None, "approve needs a name");

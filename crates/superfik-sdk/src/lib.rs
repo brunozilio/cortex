@@ -52,7 +52,7 @@ pub use superfik_core::memory::{Memory, MemoryEdit, MemoryId, MemoryKind};
 pub use superfik_core::provider::{ModelProvider, ProviderSummary};
 pub use superfik_core::{
     AgentAsk, AskId, AskKind, Choice, ChoreAnswer, CustomAgent, Decision, Effort, EngineEvent, HeadsUp, Image,
-    MAX_IMAGE_BYTES, ModelOption as Model, PermissionMode, Question, SessionId, ToolCall,
+    MAX_IMAGE_BYTES, ModelOption as Model, PermissionMode, Question, Rewound, SessionId, ToolCall,
 };
 
 #[derive(Debug, thiserror::Error)]

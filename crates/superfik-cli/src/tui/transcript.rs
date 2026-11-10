@@ -59,6 +59,13 @@ pub struct Transcript {
     pub background: Vec<String>,
 }
 
+fn user_text(entry: &Entry) -> Option<String> {
+    match entry {
+        Entry::User(text) => Some(text.clone()),
+        _ => None,
+    }
+}
+
 /// How a tool call reads: `Read(src/main.rs)`.
 pub fn call(name: &str, summary: &str) -> String {
     if summary.is_empty() { name.to_owned() } else { format!("{name}({summary})") }
@@ -71,10 +78,12 @@ impl Transcript {
 
     /// What the user first asked in this chat.
     pub fn first_prompt(&self) -> Option<String> {
-        self.entries.iter().find_map(|entry| match entry {
-            Entry::User(text) => Some(text.clone()),
-            _ => None,
-        })
+        self.entries.iter().find_map(user_text)
+    }
+
+    /// What the user last asked in this chat.
+    pub fn last_prompt(&self) -> Option<String> {
+        self.entries.iter().rev().find_map(user_text)
     }
 
     pub fn notice(&mut self, text: impl Into<String>) {

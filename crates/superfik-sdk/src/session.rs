@@ -117,18 +117,33 @@ impl Session {
         self.start(request)
     }
 
+    /// Goes back to checkpoint `index` (each prompt's run announces its
+    /// number with [`EngineEvent::Checkpoint`]): the files the agent edited
+    /// since are restored and the conversation is cut before that prompt.
+    /// The run ends with [`EngineEvent::Rewound`].
+    pub fn rewind(&self, index: u32) -> Result<Run, Error> {
+        let mut request = PromptRequest::plain(self.cwd.clone(), "", self.model.clone());
+        request.resume = Some(self.id().ok_or(Error::NothingToAsk)?);
+        request.command = Some(superfik_core::SessionCommand::Rewind(index));
+        self.start(request)
+    }
+
     pub(crate) fn cwd(&self) -> &std::path::Path {
         &self.cwd
     }
 
     pub(crate) fn start(&self, request: PromptRequest) -> Result<Run, Error> {
+        // Only a run of the conversation itself can name its session; a
+        // side call about it never does.
+        let side_call = request.command.is_some_and(superfik_core::SessionCommand::is_chore);
+        let resume = if side_call { Arc::default() } else { Arc::clone(&self.resume) };
         let run = RunId::new();
         let events = self.client.follow(run);
         if let Err(error) = self.client.send(ClientCommand::SubmitPrompt { run, request }) {
             self.client.forget(run);
             return Err(error);
         }
-        Ok(Run { id: run, events, client: Arc::clone(&self.client), resume: Arc::clone(&self.resume), done: false })
+        Ok(Run { id: run, events, client: Arc::clone(&self.client), resume, done: false })
     }
 }
 
