@@ -33,10 +33,9 @@ you can see it.
 
 ## Download
 
-Get the latest version for **macOS** or **Windows** from the
+Get the latest version for **macOS**, **Windows** or **Linux** from the
 [releases page](https://github.com/brunozilio/superfik/releases/latest).
-Linux is on the way. On Windows the built-in browser comes in a later
-version.
+On Windows the built-in browser comes in a later version.
 
 Open the app, connect a model in **Settings › AI**, and open a repository. It
 updates itself.
