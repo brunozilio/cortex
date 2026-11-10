@@ -16,6 +16,7 @@ mod login;
 mod mcp;
 mod print;
 mod tui;
+mod verdict;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -40,6 +41,10 @@ struct Cli {
     /// ask, edits, plan or bypass.
     #[arg(long, value_parser = parse_mode)]
     mode: Option<PermissionMode>,
+    /// With --print: judge the work against these criteria before it ends
+    /// (exits 1 when it fails them).
+    #[arg(long, requires = "print")]
+    verification: Option<String>,
     /// The project folder (the current one by default).
     #[arg(short = 'C', long)]
     cwd: Option<PathBuf>,
@@ -140,7 +145,8 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 eprintln!("superfik: {stale}");
             }
             let prompt = prompt.ok_or("--print needs a prompt")?;
-            print::print(&superfik, cwd, cli.model.as_deref(), cli.mode, &prompt)
+            let wanted = print::Wanted { model: cli.model.as_deref(), mode: cli.mode, verification: cli.verification };
+            print::print(&superfik, cwd, wanted, &prompt)
         }
         None => {
             let resume = if cli.resume {

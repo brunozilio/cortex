@@ -25,6 +25,7 @@ pub mod provider;
 pub mod request;
 pub mod skill;
 pub mod usage;
+pub mod verification;
 
 pub use agents::{AgentStatus, CustomAgent};
 pub use approval::{AgentAsk, AskId, AskKind, Choice, Decision, PermissionMode, Question};
@@ -43,3 +44,4 @@ pub use skill::Skill;
 pub use usage::{
     ChoreAnswer, Compaction, ContextShare, ContextSlice, ContextUsage, HeadsUp, SessionCommand, compact_tokens,
 };
+pub use verification::{Criteria, CriteriaSource, Verdict, Verifications};

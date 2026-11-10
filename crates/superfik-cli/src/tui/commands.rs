@@ -17,9 +17,9 @@ pub fn run(app: &mut App, command: Command) {
         Command::Help => {
             let mut text = String::from("Commands:");
             for (name, about) in Command::HELP {
-                text.push_str(&format!("\n  /{name:<9} {about}"));
+                text.push_str(&format!("\n  /{name:<12} {about}"));
             }
-            text.push_str("\n  /<skill>   Run a skill or custom command\n");
+            text.push_str("\n  /<skill>      Run a skill or custom command\n");
             text.push_str(KEYS);
             app.transcript.notice(text);
         }
@@ -57,6 +57,7 @@ pub fn run(app: &mut App, command: Command) {
         Command::Rewind => app.open_rewind(),
         Command::Retry => app.retry(),
         Command::Btw(question) => super::side::ask(app, question),
+        Command::Verification(change) => super::verification::run(app, change),
         Command::Diffs => {
             app.diffs = Some(super::diff_view::DiffView::new(super::git::Scope::Uncommitted));
             app.load_diffs(super::git::Scope::Uncommitted);

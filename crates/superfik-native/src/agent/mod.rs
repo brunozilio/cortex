@@ -11,6 +11,7 @@ mod call;
 mod permission;
 mod sub_agent;
 mod tasks;
+mod verify;
 
 use serde_json::{Value, json};
 use std::sync::atomic::Ordering;
@@ -87,6 +88,7 @@ impl Agent<'_> {
         let mut recoveries = 0;
         let mut compacted_at = None;
         let mut stop_hook_active = false;
+        let (prompt_at, mut attempts) = (history.len().saturating_sub(1), 0);
         for _ in 0..self.turn_limit.min(MAX_TURNS) {
             if self.control.is_stopped() {
                 return Err(Ending::Cancelled);
@@ -188,6 +190,10 @@ impl Agent<'_> {
                     if let Some(reason) = hook.blocked {
                         stop_hook_active = true;
                         history.push(Message::user(format!("Completion blocked by hook: {reason}\n{}", hook.context)));
+                        continue;
+                    }
+                    if let Some(feedback) = self.judged(&history[prompt_at..], &mut attempts)? {
+                        history.push(feedback);
                         continue;
                     }
                     return Ok(usage);

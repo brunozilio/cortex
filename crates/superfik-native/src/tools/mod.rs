@@ -92,6 +92,9 @@ pub struct Workspace {
     pub(crate) seen_rules: Arc<Mutex<HashSet<PathBuf>>>,
     pub safety: Option<Arc<crate::guard::Safety>>,
     pub advisor: Option<String>,
+    /// The criteria the top-level run is judged against; never forked to
+    /// sub-agents.
+    pub verification: Option<crate::judge::Verification>,
     /// What the run's `Edit`s and `Write`s changed, for its checkpoint;
     /// shared with its sub-agents.
     pub files: Option<Arc<crate::checkpoints::FileHistory>>,
@@ -114,6 +117,7 @@ impl Workspace {
             model: superfik_core::ModelOption::new("unknown", "Unknown"),
             safety: None,
             advisor: None,
+            verification: None,
             files: None,
         }
     }
@@ -147,6 +151,7 @@ impl Workspace {
             seen_rules: Arc::default(),
             safety: self.safety.as_ref().map(|safety| Arc::new(safety.fork())),
             advisor: self.advisor.clone(),
+            verification: None,
             files: self.files.clone(),
         }
     }

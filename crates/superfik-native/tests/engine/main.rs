@@ -6,6 +6,7 @@ mod mcp;
 mod plugins;
 mod runs;
 mod sessions;
+mod verification;
 
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};

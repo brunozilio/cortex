@@ -22,6 +22,10 @@ pub struct Settings {
     pub auto_memory: bool,
     #[serde(default)]
     pub advisor: Option<String>,
+    /// The model that judges verification (`judgeModel`); the run's own
+    /// when unset.
+    #[serde(default)]
+    pub judge: Option<String>,
     /// The owner's say on the project's `.mcp.json` servers: read only from
     /// the user's settings and the project's `settings.local.json`.
     #[serde(default)]
@@ -36,6 +40,7 @@ impl Default for Settings {
             hooks: Default::default(),
             auto_memory: true,
             advisor: None,
+            judge: None,
             mcp_approval: Default::default(),
         }
     }
@@ -43,12 +48,21 @@ impl Default for Settings {
 fn enabled() -> bool {
     true
 }
+/// A model setting: a name, or `null` to unset one from a broader file.
+fn model_name(value: &Value, key: &str) -> Result<Option<String>, String> {
+    if value.is_null() {
+        return Ok(None);
+    }
+    let name = value.as_str().filter(|s| !s.is_empty() && !s.contains(char::is_whitespace));
+    Ok(Some(name.ok_or(format!("{key} must be a model name"))?.to_owned()))
+}
 pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin]) -> Result<Settings, String> {
     let mut selected = String::from("Default");
     let mut schema = None;
     let mut agent = None;
     let mut auto_memory = true;
     let mut advisor = None;
+    let mut judge = None;
     let mut hooks = crate::hooks::Hooks::default();
     let mut mcp_approval = superfik_core::mcp_config::McpApproval::default();
     let is_user_root =
@@ -87,17 +101,10 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 };
             }
             if let Some(value) = settings.get("advisorModel") {
-                advisor = if value.is_null() {
-                    None
-                } else {
-                    Some(
-                        value
-                            .as_str()
-                            .filter(|s| !s.is_empty() && !s.contains(char::is_whitespace))
-                            .ok_or("advisorModel must be a model name")?
-                            .to_owned(),
-                    )
-                };
+                advisor = model_name(value, "advisorModel")?;
+            }
+            if let Some(value) = settings.get("judgeModel") {
+                judge = model_name(value, "judgeModel")?;
             }
             if let Some(value) = settings.get("hooks") {
                 hooks.extend(&crate::hooks::Hooks::parse(value)?);
@@ -150,11 +157,12 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 hooks,
                 auto_memory,
                 advisor,
+                judge,
                 mcp_approval,
             });
         }
     };
-    Ok(Settings { style, schema, agent, hooks, auto_memory, advisor, mcp_approval })
+    Ok(Settings { style, schema, agent, hooks, auto_memory, advisor, judge, mcp_approval })
 }
 #[cfg(test)]
 mod tests {
@@ -190,6 +198,16 @@ mod tests {
         assert!(!style.keep_coding);
         assert_eq!(style.instructions, "Return review findings.");
         std::fs::write(root.join("settings.json"), r#"{"outputStyle":"../private"}"#).expect("valid test fixture");
+        assert!(load(repo.path(), None, &[]).is_err());
+    }
+    #[test]
+    fn judge_model_names_the_verification_model() {
+        let repo = tempfile::tempdir().expect("repo");
+        let root = repo.path().join(".superfik");
+        std::fs::create_dir_all(&root).expect("dir");
+        std::fs::write(root.join("settings.json"), r#"{"judgeModel":"claude-haiku-5-5"}"#).expect("write");
+        assert_eq!(load(repo.path(), None, &[]).expect("settings").judge.as_deref(), Some("claude-haiku-5-5"));
+        std::fs::write(root.join("settings.json"), r#"{"judgeModel":"two words"}"#).expect("write");
         assert!(load(repo.path(), None, &[]).is_err());
     }
     #[test]

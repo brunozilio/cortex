@@ -8,12 +8,14 @@ use std::sync::{Arc, Mutex, PoisonError};
 use crossbeam_channel::Receiver;
 use superfik_core::memory::MemoryBrief;
 use superfik_core::{
-    AskId, Decision, Effort, EngineEvent, ModelOption, PermissionMode, PromptRequest, RunId, SessionId,
+    AskId, Criteria, Decision, Effort, EngineEvent, ModelOption, PermissionMode, PromptRequest, RunId, SessionId,
+    Verifications,
 };
 use superfik_protocol::ClientCommand;
 
 use crate::Error;
 use crate::client::Client;
+use crate::plan_watch::PlanWatch;
 
 #[derive(Debug)]
 pub struct Session {
@@ -24,6 +26,7 @@ pub struct Session {
     permission: PermissionMode,
     memory: bool,
     resume: Arc<Mutex<Option<SessionId>>>,
+    verifications: Arc<Mutex<Verifications>>,
 }
 
 impl Session {
@@ -36,6 +39,7 @@ impl Session {
             permission: PermissionMode::default(),
             memory: true,
             resume: Arc::default(),
+            verifications: Arc::default(),
         }
     }
 
@@ -87,6 +91,19 @@ impl Session {
         self.permission
     }
 
+    /// Judges every run outside planning against `criteria` before it
+    /// completes (`None` or blank clears them). Without them, the last
+    /// plan's `Verification` section is used.
+    pub fn set_verification(&mut self, criteria: Option<String>) {
+        self.verifications.lock().unwrap_or_else(PoisonError::into_inner).set_user(criteria);
+    }
+
+    /// The criteria the next run is judged against: the user's, else the
+    /// last plan's.
+    pub fn verification(&self) -> Option<Criteria> {
+        self.verifications.lock().unwrap_or_else(PoisonError::into_inner).current()
+    }
+
     /// The engine's id of this conversation, once its first run started.
     pub fn id(&self) -> Option<SessionId> {
         self.resume.lock().unwrap_or_else(PoisonError::into_inner).clone()
@@ -106,6 +123,8 @@ impl Session {
         request.permission = self.permission;
         request.resume = self.id();
         request.memory = self.memory.then(|| MemoryBrief::new(None));
+        request.verification =
+            self.verifications.lock().unwrap_or_else(PoisonError::into_inner).for_run(self.permission);
         self.start(request)
     }
 
@@ -137,13 +156,15 @@ impl Session {
         // side call about it never does.
         let side_call = request.command.is_some_and(superfik_core::SessionCommand::is_chore);
         let resume = if side_call { Arc::default() } else { Arc::clone(&self.resume) };
+        let planning = request.command.is_none() && request.permission == PermissionMode::Plan;
+        let plan = planning.then(|| PlanWatch::new(Arc::clone(&self.verifications)));
         let run = RunId::new();
         let events = self.client.follow(run);
         if let Err(error) = self.client.send(ClientCommand::SubmitPrompt { run, request }) {
             self.client.forget(run);
             return Err(error);
         }
-        Ok(Run { id: run, events, client: Arc::clone(&self.client), resume, done: false })
+        Ok(Run { id: run, events, client: Arc::clone(&self.client), resume, plan, done: false })
     }
 }
 
@@ -155,6 +176,8 @@ pub struct Run {
     events: Receiver<EngineEvent>,
     client: Arc<Client>,
     resume: Arc<Mutex<Option<SessionId>>>,
+    /// A planning run's plan, read for its verification criteria.
+    plan: Option<PlanWatch>,
     done: bool,
 }
 
@@ -186,6 +209,9 @@ impl Run {
     fn observe(&mut self, event: &EngineEvent) {
         if let EngineEvent::SessionStarted(id) = event {
             *self.resume.lock().unwrap_or_else(PoisonError::into_inner) = Some(id.clone());
+        }
+        if let Some(plan) = &mut self.plan {
+            plan.observe(event);
         }
         self.done = event.is_terminal();
     }

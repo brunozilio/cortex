@@ -256,6 +256,10 @@ fn status(app: &App) -> Line<'static> {
         " · ".dim(),
         app.effort().cli_value().dim(),
     ]);
+    if let Some(criteria) = app.session.as_ref().and_then(superfik_sdk::Session::verification) {
+        spans.push(" · ".dim());
+        spans.push(super::verification::marker(&criteria).fg(Color::Green));
+    }
     if app.transcript.context > 0 {
         spans.push(format!(" · {} context", entries::tokens(app.transcript.context)).dim());
     }

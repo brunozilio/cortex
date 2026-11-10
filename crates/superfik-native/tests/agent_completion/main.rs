@@ -3,6 +3,7 @@
 mod configured;
 mod hooks;
 mod runtime;
+mod verification;
 
 use std::sync::Arc;
 

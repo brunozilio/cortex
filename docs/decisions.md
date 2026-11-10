@@ -58,3 +58,19 @@ plugin's folder. Claude Code's plugins and installs are not read. There is
 no installer or marketplace: a person puts a plugin's folder in
 `~/.superfik/plugins/` (a clone they `git pull`), and `/reload` shows what
 is there. MCP servers also come from the project and the user.
+
+## 0020 — Verification: a judge agent grades a run against criteria
+
+A run can carry verification criteria: the user's (`/verification`,
+`Session::set_verification`, `-p --verification`), else the `Verification`
+section of the last plan. Before a top-level run completes, a judge agent
+checks the work against them and emits a `Verdict` (passed, score 0–1, one
+check per criterion with evidence). The judge gathers its own evidence: it
+may run commands (tests, lint, the app through the `verify` and `run`
+skills) under the run's permission mode, but has no editing tools, so it
+reports and never fixes. A failed verdict sends the agent back with the
+reasons, up to three attempts; then the run completes with the last
+verdict. A judge that cannot grade fails the check but never the run.
+Planning runs and sub-agents are not judged. The command is
+`/verification`, not `/verify`: `verify` and `run` stay skills, which the
+judge uses.

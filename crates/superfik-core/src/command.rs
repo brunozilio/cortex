@@ -26,6 +26,8 @@ pub enum Command {
     Agents,
     Reload,
     Mcp(McpCommand),
+    /// What the run's work is judged against before it completes.
+    Verification(VerificationCommand),
     Cost,
     Login,
     Exit,
@@ -37,6 +39,24 @@ pub enum McpCommand {
     List,
     Approve(String),
     Deny(String),
+}
+
+/// `/verification`, `/verification off`, `/verification <criteria>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VerificationCommand {
+    Show,
+    Clear,
+    Set(String),
+}
+
+impl VerificationCommand {
+    fn parse(argument: Option<String>) -> Self {
+        match argument {
+            None => Self::Show,
+            Some(text) if text.eq_ignore_ascii_case("off") => Self::Clear,
+            Some(text) => Self::Set(text),
+        }
+    }
 }
 
 impl McpCommand {
@@ -57,7 +77,7 @@ impl McpCommand {
 
 impl Command {
     /// Every command with what it does, for `/help` and completion.
-    pub const HELP: [(&'static str, &'static str); 19] = [
+    pub const HELP: [(&'static str, &'static str); 20] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("model", "Pick the model, or /model <id>"),
@@ -74,6 +94,7 @@ impl Command {
         ("agents", "List agents"),
         ("reload", "Reread ~/.superfik and the project: plugins, skills, agents, MCP"),
         ("mcp", "List MCP servers, or /mcp approve|deny <name>"),
+        ("verification", "Judge runs: /verification <criteria>, or off"),
         ("cost", "Show this session's cost"),
         ("login", "Connect a provider (API key or subscription)"),
         ("exit", "Quit (also /quit)"),
@@ -110,6 +131,7 @@ impl Command {
             "agents" => bare(Self::Agents),
             "reload" => bare(Self::Reload),
             "mcp" => McpCommand::parse(argument.as_deref()).map(Self::Mcp),
+            "verification" => Some(Self::Verification(VerificationCommand::parse(argument))),
             "cost" => bare(Self::Cost),
             "login" => bare(Self::Login),
             "exit" | "quit" => bare(Self::Exit),
@@ -173,6 +195,17 @@ mod tests {
         assert_eq!(Command::parse("/mcp approve"), None, "approve needs a name");
         assert_eq!(Command::parse("/btw which file?"), Some(Command::Btw(Some("which file?".into()))));
         assert_eq!(Command::parse("/btw"), Some(Command::Btw(None)), "answered with how to use it");
+    }
+
+    #[test]
+    fn verification_shows_sets_or_clears_the_criteria() {
+        assert_eq!(Command::parse("/verification"), Some(Command::Verification(VerificationCommand::Show)));
+        assert_eq!(Command::parse("/verification OFF"), Some(Command::Verification(VerificationCommand::Clear)));
+        assert_eq!(
+            Command::parse("/verification  cargo test passes "),
+            Some(Command::Verification(VerificationCommand::Set("cargo test passes".into())))
+        );
+        assert_eq!(Command::parse("/verify"), None, "the verify skill keeps its name");
     }
 
     #[test]

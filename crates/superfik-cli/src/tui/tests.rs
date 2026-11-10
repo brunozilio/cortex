@@ -109,7 +109,8 @@ fn shift_tab_and_commands_change_the_chat_without_the_agent() {
     press(&mut app, KeyCode::Esc);
     type_text(&mut app, "/help");
     press(&mut app, KeyCode::Enter);
-    assert!(screen(&app).contains("/compact   Summarize"), "{}", screen(&app));
+    assert!(screen(&app).contains("/diff         Show"), "{}", screen(&app));
+    assert!(screen(&app).contains("/verification Judge"), "{}", screen(&app));
     assert!(engine.requests().is_empty(), "nothing reached the agent");
 }
 

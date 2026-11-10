@@ -19,6 +19,7 @@ pub mod fake;
 pub mod frontmatter;
 pub mod guard;
 pub mod hooks;
+pub mod judge;
 pub mod mcp;
 pub mod meter;
 pub mod model;

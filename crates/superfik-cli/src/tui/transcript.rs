@@ -147,6 +147,10 @@ impl Transcript {
                 self.notice(format!("Compacted the conversation ({} tokens freed)", compaction.freed()));
             }
             EngineEvent::Diagnosed(problem) => self.error(problem.message()),
+            EngineEvent::Verified(verdict) => {
+                let line = crate::verdict::line(verdict);
+                if verdict.passed { self.notice(line) } else { self.error(line) }
+            }
             EngineEvent::Completed { cost_usd, .. } => {
                 self.cost += cost_usd.unwrap_or(0.0);
                 self.settle(ToolState::Done);

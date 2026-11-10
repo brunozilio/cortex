@@ -39,3 +39,12 @@ _Avoid_: Plugin (that is an installed package, below)
 **Plugin**:
 A folder with `.superfik-plugin/plugin.json`, put in `~/.superfik/plugins/`:
 skills, commands, agents, hooks and MCP servers under one name (ADR 0019).
+
+**Verification**:
+The criteria a run's work must meet before it completes, set by the user or
+taken from the last plan, and the judge agent that checks them (ADR 0020).
+_Avoid_: Eval, test (those are what the judge may run)
+
+**Verdict**:
+The judge's grade of one attempt: passed, a score from 0 to 1, and one check
+per criterion with its evidence.

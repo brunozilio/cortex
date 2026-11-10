@@ -24,6 +24,7 @@ mod runs;
 mod settings;
 mod side;
 mod transcript;
+mod verification;
 mod view;
 mod wrap;
 

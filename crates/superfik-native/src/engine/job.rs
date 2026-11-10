@@ -101,6 +101,15 @@ impl Job {
                 Err(error) => return self.fail(&format!("advisorModel: {error}"), FailureKind::Other),
             }
         }
+        if let Some(criteria) =
+            self.request.verification.clone().filter(|_| self.request.permission != superfik_core::PermissionMode::Plan)
+        {
+            let config = tools::subagent_config::AgentConfig { model: settings.judge.clone(), ..Default::default() };
+            match config.model(&self.request.model.id, self.request.model.provider) {
+                Ok(model) => workspace.verification = Some(crate::judge::Verification { criteria, model }),
+                Err(error) => return self.fail(&format!("judgeModel: {error}"), FailureKind::Other),
+            }
+        }
         workspace.agent_name = selected.as_ref().map_or("main", |a| a.name.as_str()).into();
         workspace.session_id = session.0.clone();
         workspace.hooks = settings.hooks.clone();

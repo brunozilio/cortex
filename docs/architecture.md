@@ -67,6 +67,18 @@ provider's key (`RunCredentials::model`, never serialized).
   `/retry` rewinds to the last one and sends it again.
 - **Safety check** (`guard/`): in Bypass, every editing or executing action
   is graded by the run's model before it runs.
+- **Verification** (`judge.rs`, `agent/verify.rs`; rules in
+  `superfik_core::verification`, ADR 0020): a top-level run whose
+  `PromptRequest.verification` holds criteria is graded by a judge agent
+  before it completes. The judge has `Read`, `Glob`, `Grep`, `Bash` and
+  `Skill` (it runs tests and lint, loads `verify`/`run`), never edits, and
+  shows as a `verification` sub-agent. It ends with
+  `EngineEvent::Verified(Verdict)`; a failed verdict sends the agent back
+  with the reasons, up to 3 attempts. A judge that cannot grade fails the
+  check, never the run. The model is the run's or `judgeModel`. The SDK's
+  `Session` keeps the criteria (`set_verification`, else the last plan's
+  `Verification` section) and sends them with every run outside Plan mode;
+  the chat sets them with `/verification`, `-p` with `--verification`.
 - **Built-in skills** (`crates/superfik-native/skills/`, embedded by
   `build.rs`).
 

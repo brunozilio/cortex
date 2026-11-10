@@ -73,6 +73,8 @@ pub enum EngineEvent {
     Rewound(Rewound),
     Asked(AgentAsk),
     AskWithdrawn(AskId),
+    /// The judge graded the run against its verification criteria.
+    Verified(crate::verification::Verdict),
     Completed {
         duration_ms: u64,
         cost_usd: Option<f64>,

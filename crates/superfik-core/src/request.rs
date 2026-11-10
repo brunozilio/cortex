@@ -34,6 +34,9 @@ pub struct PromptRequest {
     pub safety_check: bool,
     #[serde(default)]
     pub extensions: Option<Extensions>,
+    /// What the judge checks the run's work against before it completes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<crate::verification::Criteria>,
     #[serde(skip)]
     pub credentials: crate::credentials::RunCredentials,
 }
@@ -57,6 +60,7 @@ impl PromptRequest {
             output_style: None,
             safety_check: true,
             extensions: None,
+            verification: None,
             credentials: Default::default(),
         }
     }
