@@ -5,6 +5,7 @@ pub mod anthropic;
 mod cancellable_http;
 pub mod chat;
 pub mod http;
+pub mod kiro;
 pub mod openai;
 pub mod providers;
 pub mod scripted;

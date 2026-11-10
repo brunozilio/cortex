@@ -6,15 +6,29 @@ use std::io::{BufRead, Write};
 use superfik_sdk::{ModelProvider, Superfik};
 
 /// The providers in the order the menu lists them.
-pub const MENU: [ModelProvider; 4] = [
+pub const MENU: [ModelProvider; 6] = [
     ModelProvider::Anthropic,
     ModelProvider::ClaudeSubscription,
     ModelProvider::OpenAi,
     ModelProvider::ChatGptSubscription,
+    ModelProvider::CopilotSubscription,
+    ModelProvider::KiroSubscription,
 ];
 
 pub fn how(provider: ModelProvider) -> &'static str {
-    if provider.subscription() { "sign in with the browser" } else { "paste an API key" }
+    match provider {
+        ModelProvider::CopilotSubscription => "sign in on GitHub with a code",
+        p if p.subscription() => "sign in with the browser",
+        _ => "paste an API key",
+    }
+}
+
+/// What to tell the user while the browser is open.
+pub fn visit(url: &str, code: Option<&str>) -> String {
+    match code {
+        Some(code) => format!("Enter the code {code} at {url} (opening the browser)."),
+        None => format!("Opening the browser to sign in. If it does not open, visit:\n  {url}"),
+    }
 }
 
 /// The menu entry `answer` picks among `count` (`1`-based).
@@ -27,11 +41,12 @@ pub fn login(superfik: &Superfik) -> Result<(), String> {
     for (i, provider) in MENU.iter().enumerate() {
         eprintln!("  {}. {} ({})", i + 1, provider.name(), how(*provider));
     }
-    let provider = MENU[picked(&ask("Choose 1-4: ")?, MENU.len()).ok_or("not one of the choices")?];
+    let provider =
+        MENU[picked(&ask(&format!("Choose 1-{}: ", MENU.len()))?, MENU.len()).ok_or("not one of the choices")?];
     let listed = if provider.subscription() {
         superfik
-            .sign_in(provider, |url| {
-                eprintln!("Opening the browser to sign in. If it does not open, visit:\n  {url}");
+            .sign_in(provider, |url, code| {
+                eprintln!("{}", visit(url, code));
                 open(url);
             })
             .map_err(|e| e.to_string())?
@@ -132,6 +147,13 @@ mod tests {
         assert_eq!(picked("0", 4), None);
         assert_eq!(picked("5", 4), None);
         assert_eq!(picked("two", 4), None);
-        assert!(MENU.iter().filter(|p| p.subscription()).count() == 2);
+        assert!(MENU.iter().filter(|p| p.subscription()).count() == 4);
+    }
+
+    #[test]
+    fn a_device_sign_in_shows_the_code_to_type() {
+        let told = visit("https://github.com/login/device", Some("AB12-CD34"));
+        assert!(told.contains("AB12-CD34") && told.contains("https://github.com/login/device"));
+        assert!(visit("https://x", None).contains("https://x"));
     }
 }

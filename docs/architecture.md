@@ -43,8 +43,8 @@ exactly one terminal event (`Completed`, `Failed`, `Cancelled`) ends a run.
 Recognised problems arrive first as `Diagnosed(EngineProblem)`.
 
 The native engine (ADR 0015) runs the loop in process behind `ModelApi`
-(`anthropic::Messages`, `openai::Responses`, `chat::Chat` for local
-servers). `ModelProviders` keeps one account per
+(`anthropic::Messages`, `openai::Responses`, `kiro::Conversation`,
+`chat::Chat` for local servers). `ModelProviders` keeps one account per
 provider (`ConnectProvider` with an API key or token JSON, `SignInProvider`
 for a subscription's browser sign-in). `ListModels` asks every connected
 provider's catalog and lists downloaded MLX models. A run uses its

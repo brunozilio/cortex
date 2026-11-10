@@ -102,7 +102,26 @@ impl CommandHandler {
             ClientCommand::DisconnectProvider { provider } => {
                 outbox.send(self.services.providers.disconnect(&principal, provider))
             }
+            ClientCommand::ListMcpServers { path } => self.mcp_servers(&path, Ok(())),
+            ClientCommand::ApproveMcpServer { path, name, approve } => {
+                self.mcp_servers(&path, crate::mcp_admin::approve(&path, &name, approve))
+            }
+            ClientCommand::AddMcpServer { path, name, server } => {
+                self.mcp_servers(&path, crate::mcp_admin::add(self.services.home.as_deref(), &name, server))
+            }
+            ClientCommand::RemoveMcpServer { path, name } => {
+                self.mcp_servers(&path, crate::mcp_admin::remove(self.services.home.as_deref(), &name))
+            }
         }
+    }
+
+    /// Answers an MCP change with what went wrong, else the servers now.
+    fn mcp_servers(&self, path: &std::path::Path, changed: Result<(), String>) {
+        let event = match changed {
+            Ok(()) => crate::mcp_admin::list(path, &self.services.extensions, self.services.home.as_deref()),
+            Err(error) => ServerEvent::error(error),
+        };
+        self.outbox.send(event);
     }
 
     pub fn cancel_all(&self) {

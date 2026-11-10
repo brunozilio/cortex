@@ -47,6 +47,16 @@ impl Transport {
     }
 
     pub(super) fn models(&self) -> Result<Vec<superfik_core::ModelOption>, ModelError> {
+        if self.provider == ModelProvider::KiroSubscription {
+            return catalog::collect_pages(self.provider, |after| {
+                let _guard = self.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let call = superfik_providers::kiro::models::call(&self.config(false)?, after);
+                self.http
+                    .post(&call.url, &call.headers, &call.body)
+                    .map_err(ModelError::Network)
+                    .and_then(json_response)
+            });
+        }
         catalog::collect(self.provider, |path| {
             let _guard = self.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             let config = self.config(false)?;
@@ -94,13 +104,24 @@ impl Transport {
         };
         let mut body: Value = serde_json::from_str(body).map_err(|e| ModelError::Provider(e.to_string()))?;
         request::shape(self.provider, self.model.as_ref(), &mut body)?;
-        let body = body.to_string();
-        let path = request::path(self.provider);
+        let turn_headers = request::turn_headers(self.provider, self.model.as_ref(), &body);
+        let shaped = body;
+        let bound = |config: &Config| {
+            let mut body = shaped.clone();
+            request::bind(self.provider, config, &mut body);
+            body.to_string()
+        };
+        let path = request::path(self.provider, self.model.as_ref());
+        let headers = |config: &Config| {
+            let mut headers = config.headers(self.provider);
+            headers.extend(turn_headers.iter().cloned());
+            headers
+        };
         let mut config = self.config_stopped(false, stop)?;
         let mut response = self.http.post_stopped(
             &format!("{}{path}", config.base(self.provider)),
-            &config.headers(self.provider),
-            &body,
+            &headers(&config),
+            &bound(&config),
             stop,
         )?;
         if request::retries_after_refresh(self.provider, response.status) {
@@ -108,8 +129,8 @@ impl Transport {
             config = self.config_stopped(true, stop)?;
             response = self.http.post_stopped(
                 &format!("{}{path}", config.base(self.provider)),
-                &config.headers(self.provider),
-                &body,
+                &headers(&config),
+                &bound(&config),
                 stop,
             )?;
         }

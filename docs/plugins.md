@@ -48,3 +48,19 @@ and the project's `settings.local.json`, never from a checked-in
 ```json
 {"enabledMcpjsonServers": ["sonarqube"], "disabledMcpjsonServers": [], "enableAllProjectMcpServers": false}
 ```
+
+## Managing them
+
+```sh
+superfik mcp                     # list: origin, ready / waiting for approval / off, target
+superfik mcp approve jira        # let a project's server start (its .superfik/settings.local.json)
+superfik mcp deny jira           # turn it off
+superfik mcp add atlassian https://mcp.atlassian.com/v1/mcp -H 'Authorization: Bearer ${ATLASSIAN_TOKEN}'
+superfik mcp add sonarqube npx -y sonarqube-mcp-server -e SONAR_TOKEN='${SONAR_TOKEN}'
+superfik mcp remove atlassian    # your own servers live in ~/.superfik/mcp.json (0600)
+```
+
+In the chat, `/mcp`, `/mcp approve <name>` and `/mcp deny <name>`; a
+change applies from the next message. Programs use
+`Superfik::mcp_servers`, `approve_mcp_server`, `add_mcp_server` and
+`remove_mcp_server` (`ClientCommand::ListMcpServers` and friends).

@@ -1,9 +1,12 @@
-//! The four LLM providers (OpenAI API, ChatGPT Subscription, Anthropic
-//! API, Claude Subscription; ADR 0016): what each one stores as its
+//! The six LLM providers (OpenAI API, ChatGPT Subscription, Anthropic
+//! API, Claude Subscription, GitHub Copilot Subscription, Kiro Subscription;
+//! ADR 0016): what each one stores as its
 //! credential, where it is served, how it signs in and how its requests and
 //! catalogs are shaped. Pure: the native engine and the backend do the IO.
 
 pub mod catalog;
+pub mod copilot;
+pub mod kiro;
 pub mod oauth;
 pub mod request;
 
@@ -54,6 +57,8 @@ impl Config {
             } else {
                 serde_json::from_value(value).map_err(|_| unauthorized("invalid provider config"))?
             }
+        } else if provider == ModelProvider::CopilotSubscription {
+            Self { auth: Some(Tokens::bearer(raw.trim())), ..Self::default() }
         } else {
             Self { api_key: raw.trim().to_owned(), ..Self::default() }
         };
@@ -65,11 +70,16 @@ impl Config {
         let invalid = |why: &str| ProviderError::Unauthorized(why.to_owned());
         if provider.subscription() {
             let tokens = self.auth.as_ref().ok_or_else(|| invalid("subscription credential is missing"))?;
-            if tokens.access_token.is_empty() || tokens.refresh_token.is_empty() {
+            if provider == ModelProvider::CopilotSubscription {
+                copilot_token(&tokens.access_token)?;
+            } else if tokens.access_token.is_empty() || tokens.refresh_token.is_empty() {
                 return Err(invalid("subscription needs access_token and refresh_token"));
             }
             if provider == ModelProvider::ChatGptSubscription && tokens.account_id.is_empty() {
                 return Err(invalid("ChatGPT account_id is missing"));
+            }
+            if provider == ModelProvider::KiroSubscription && tokens.account_id.is_empty() {
+                return Err(invalid("Kiro profile ARN is missing"));
             }
         } else if self.api_key.trim().is_empty() || self.api_key.chars().any(char::is_whitespace) {
             return Err(invalid("API key is empty or contains whitespace"));
@@ -93,15 +103,22 @@ impl Config {
         if !self.base_url.is_empty() {
             return self.base_url.trim_end_matches('/').to_owned();
         }
+        if provider == ModelProvider::KiroSubscription {
+            return kiro::runtime(self.auth.as_ref().map_or("", |tokens| tokens.account_id.as_str()));
+        }
         match provider {
             ModelProvider::OpenAi => "https://api.openai.com/v1",
             ModelProvider::ChatGptSubscription => "https://chatgpt.com/backend-api",
+            ModelProvider::CopilotSubscription => copilot::API,
             _ => "https://api.anthropic.com/v1",
         }
         .to_owned()
     }
 
     pub fn headers(&self, provider: ModelProvider) -> Vec<(String, String)> {
+        if provider == ModelProvider::KiroSubscription {
+            return kiro::headers(self.auth.as_ref().map_or("", |tokens| tokens.access_token.as_str()), kiro::CHAT);
+        }
         let mut headers: Vec<(String, String)> = vec![("accept".into(), "text/event-stream".into())];
         match provider {
             ModelProvider::ChatGptSubscription => {
@@ -126,6 +143,11 @@ impl Config {
                     ]);
                 }
             }
+            ModelProvider::CopilotSubscription => {
+                if let Some(tokens) = &self.auth {
+                    headers.extend(copilot::headers(&tokens.access_token));
+                }
+            }
             ModelProvider::OpenAi => headers.push(("authorization".into(), format!("Bearer {}", self.api_key))),
             _ => headers.extend([
                 ("x-api-key".into(), self.api_key.clone()),
@@ -136,8 +158,25 @@ impl Config {
     }
 
     pub fn needs_refresh(&self, provider: ModelProvider, force: bool) -> bool {
-        provider.subscription() && self.auth.as_ref().is_some_and(|t| force || t.expired())
+        provider.subscription()
+            && provider != ModelProvider::CopilotSubscription
+            && self.auth.as_ref().is_some_and(|t| force || t.expired())
     }
+}
+
+/// A GitHub token Copilot accepts: an OAuth or fine-grained one. Classic
+/// personal access tokens are refused by Copilot, so they are here too.
+fn copilot_token(token: &str) -> Result<(), ProviderError> {
+    let invalid = |why: &str| ProviderError::Unauthorized(why.to_owned());
+    if token.is_empty() || token.chars().any(char::is_whitespace) {
+        return Err(invalid("GitHub token is empty or contains whitespace"));
+    }
+    if token.starts_with("ghp_") {
+        return Err(invalid(
+            "classic personal access tokens (ghp_) do not work with Copilot; sign in, or use a fine-grained token with the Copilot Requests permission",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -159,6 +198,31 @@ mod tests {
         let config = Config { auth: Some(tokens("")), ..Config::default() };
         assert!(config.validate(ModelProvider::ChatGptSubscription).is_err());
         assert!(config.validate(ModelProvider::ClaudeSubscription).is_ok());
+    }
+
+    #[test]
+    fn copilot_takes_a_bare_github_token_but_not_a_classic_one() {
+        let config = Config::parse(ModelProvider::CopilotSubscription, " gho_abc ").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(config.auth.as_ref().map(|t| t.access_token.as_str()), Some("gho_abc"));
+        assert!(!config.needs_refresh(ModelProvider::CopilotSubscription, true), "GitHub tokens are not refreshed");
+        assert!(Config::parse(ModelProvider::CopilotSubscription, "ghp_classic").is_err());
+        assert!(Config::parse(ModelProvider::CopilotSubscription, "").is_err());
+        let headers = config.headers(ModelProvider::CopilotSubscription);
+        assert!(headers.contains(&("authorization".into(), "Bearer gho_abc".into())));
+        assert_eq!(config.base(ModelProvider::CopilotSubscription), "https://api.githubcopilot.com");
+    }
+
+    #[test]
+    fn kiro_is_served_from_its_profiles_region_with_its_token() {
+        let arn = "arn:aws:codewhisperer:eu-central-1:1:profile/P";
+        let config = Config { auth: Some(tokens(arn)), ..Config::default() };
+        assert!(config.validate(ModelProvider::KiroSubscription).is_ok());
+        assert_eq!(config.base(ModelProvider::KiroSubscription), "https://runtime.eu-central-1.kiro.dev");
+        let headers = config.headers(ModelProvider::KiroSubscription);
+        assert!(headers.contains(&("authorization".into(), "Bearer a".into())));
+        assert!(headers.contains(&("x-amz-target".into(), kiro::CHAT.into())));
+        let without_arn = Config { auth: Some(tokens("")), ..Config::default() };
+        assert!(without_arn.validate(ModelProvider::KiroSubscription).is_err());
     }
 
     #[test]

@@ -1,8 +1,10 @@
-//! The four provider accounts on the wire: requests, catalogs, sign-in and
-//! token refresh, and audio.
+//! The five provider accounts on the wire: requests, catalogs, sign-in and
+//! token refresh.
 
 mod accounts;
 mod catalogs;
+mod copilot;
+mod kiro;
 mod turns;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};

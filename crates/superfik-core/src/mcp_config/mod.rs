@@ -3,8 +3,12 @@
 //! `${VAR:-default}` in a config are filled in. Claude Code's keys and
 //! syntax, so the same files work in both.
 
+mod edit;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+pub use self::edit::{McpOrigin, McpServerInfo, McpState, add_server, remove_server, server_from, set_approval};
 
 /// Names the platform keeps for itself: the app's own servers and plugins'.
 pub const RESERVED_PREFIXES: [&str; 2] = ["superfik_", "plugin_"];
@@ -107,6 +111,61 @@ mod tests {
             json!({"headers": {"Authorization": "Bearer s3cret"},
                 "args": ["sonar.local", "${MISSING}", "${broken"], "port": 9})
         );
+    }
+
+    #[test]
+    fn approving_and_turning_off_rewrite_only_the_owner_s_lists() {
+        let settings = json!({"model": "opus", "enabledMcpjsonServers": ["sonar"], "disabledMcpjsonServers": ["jira"]});
+        let approved = set_approval(settings, "jira", true);
+        assert_eq!(
+            approved,
+            json!({"model": "opus", "enabledMcpjsonServers": ["sonar", "jira"], "disabledMcpjsonServers": []})
+        );
+        let off = set_approval(approved, "sonar", false);
+        assert_eq!(off["enabledMcpjsonServers"], json!(["jira"]));
+        assert_eq!(off["disabledMcpjsonServers"], json!(["sonar"]));
+        assert_eq!(
+            set_approval(json!(null), "x", true),
+            json!({"enabledMcpjsonServers": ["x"], "disabledMcpjsonServers": []})
+        );
+    }
+
+    #[test]
+    fn a_person_adds_and_removes_their_own_servers() {
+        let server = json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"});
+        let config = add_server(json!(null), "atlassian", server.clone()).expect("added");
+        assert_eq!(config, json!({"mcpServers": {"atlassian": server}}));
+        assert!(add_server(config.clone(), "plugin_x", json!({"command": "x"})).is_err(), "reserved");
+        assert!(add_server(config.clone(), "bad name", json!({"command": "x"})).is_err(), "not a tool-safe name");
+        assert!(add_server(config.clone(), "x", json!({"type": "websocket"})).is_err(), "neither stdio nor http");
+        let (left, removed) = remove_server(config, "atlassian");
+        assert!(removed);
+        assert_eq!(left, json!({"mcpServers": {}}));
+        assert!(!remove_server(left, "atlassian").1);
+    }
+
+    #[test]
+    fn a_server_s_state_says_why_it_does_or_does_not_start() {
+        let mut approval = McpApproval::default();
+        approval.read(&json!({"enabledMcpjsonServers": ["jira"], "disabledMcpjsonServers": ["sonar"]}));
+        assert_eq!(McpState::of(&McpOrigin::Project, "jira", &approval), McpState::Ready);
+        assert_eq!(McpState::of(&McpOrigin::Project, "sonar", &approval), McpState::Off);
+        assert_eq!(McpState::of(&McpOrigin::Project, "new", &approval), McpState::Pending);
+        assert_eq!(McpState::of(&McpOrigin::User, "new", &approval), McpState::Ready);
+    }
+
+    #[test]
+    fn a_url_is_an_http_server_and_anything_else_a_command() {
+        let pair = |k: &str, v: &str| (k.to_owned(), v.to_owned());
+        assert_eq!(
+            server_from("https://mcp.atlassian.com/v1/mcp", &[], &[], &[pair("Authorization", "Bearer ${TOKEN}")]),
+            json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp", "headers": {"Authorization": "Bearer ${TOKEN}"}})
+        );
+        assert_eq!(
+            server_from("npx", &["-y".into(), "sonar-mcp".into()], &[pair("SONAR_TOKEN", "${SONAR_TOKEN}")], &[]),
+            json!({"command": "npx", "args": ["-y", "sonar-mcp"], "env": {"SONAR_TOKEN": "${SONAR_TOKEN}"}})
+        );
+        assert_eq!(server_from("jira-mcp", &[], &[], &[]), json!({"command": "jira-mcp"}));
     }
 
     #[test]

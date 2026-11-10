@@ -1,5 +1,6 @@
 //! LLM providers on the backend (ADR 0016, 0018): each owner's account
-//! with OpenAI, Anthropic and the ChatGPT and Claude subscriptions. The
+//! with OpenAI, Anthropic and the ChatGPT, Claude and GitHub Copilot
+//! subscriptions. The
 //! credentials stay in the [`SecretStore`]; clients only see
 //! [`ProviderSummary`](superfik_core::provider::ProviderSummary)s. A run
 //! gets its key from [`ModelProviders::key`].
@@ -28,6 +29,8 @@ pub(crate) const fn secret_id(provider: ModelProvider) -> SecretId {
         ModelProvider::Anthropic => 0x7072_6f76_6964_6572_0000_0000_0000_0002,
         ModelProvider::ChatGptSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0004,
         ModelProvider::ClaudeSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0005,
+        ModelProvider::CopilotSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0006,
+        ModelProvider::KiroSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0007,
         ModelProvider::Local => 0x7072_6f76_6964_6572_0000_0000_0000_0003,
     }))
 }
@@ -137,8 +140,9 @@ impl ModelProviders {
         }
         let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
         std::thread::spawn(move || {
-            let mut open =
-                |url: String| outbox.send(ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url }));
+            let mut open = |url: String, code: Option<String>| {
+                outbox.send(ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code }));
+            };
             let result = this
                 .sign_in
                 .sign_in(provider, &mut open)

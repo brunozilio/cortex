@@ -16,14 +16,39 @@ pub enum Command {
     Memory(Option<String>),
     Skills,
     Agents,
+    Mcp(McpCommand),
     Cost,
     Login,
     Exit,
 }
 
+/// `/mcp`, `/mcp approve <name>`, `/mcp deny <name>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum McpCommand {
+    List,
+    Approve(String),
+    Deny(String),
+}
+
+impl McpCommand {
+    fn parse(argument: Option<&str>) -> Option<Self> {
+        let Some(argument) = argument else { return Some(Self::List) };
+        let mut words = argument.split_whitespace();
+        let (verb, name) = (words.next()?.to_ascii_lowercase(), words.next()?.to_owned());
+        if words.next().is_some() {
+            return None;
+        }
+        match verb.as_str() {
+            "approve" => Some(Self::Approve(name)),
+            "deny" => Some(Self::Deny(name)),
+            _ => None,
+        }
+    }
+}
+
 impl Command {
     /// Every command with what it does, for `/help` and completion.
-    pub const HELP: [(&'static str, &'static str); 13] = [
+    pub const HELP: [(&'static str, &'static str); 14] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("model", "Pick the model, or /model <id>"),
@@ -34,6 +59,7 @@ impl Command {
         ("memory", "List the project's memory, or /memory <search>"),
         ("skills", "List skills and commands"),
         ("agents", "List agents"),
+        ("mcp", "List MCP servers, or /mcp approve|deny <name>"),
         ("cost", "Show this session's cost"),
         ("login", "Connect a provider (API key or subscription)"),
         ("exit", "Quit (also /quit)"),
@@ -64,6 +90,7 @@ impl Command {
             "memory" => Some(Self::Memory(argument)),
             "skills" | "commands" => bare(Self::Skills),
             "agents" => bare(Self::Agents),
+            "mcp" => McpCommand::parse(argument.as_deref()).map(Self::Mcp),
             "cost" => bare(Self::Cost),
             "login" => bare(Self::Login),
             "exit" | "quit" => bare(Self::Exit),
@@ -116,6 +143,10 @@ mod tests {
         assert_eq!(Command::parse("/mode plan"), Some(Command::Mode(Some(PermissionMode::Plan))));
         assert_eq!(Command::parse("/effort max"), Some(Command::Effort(Some(Effort::Max))));
         assert_eq!(Command::parse("/memory the renderer"), Some(Command::Memory(Some("the renderer".into()))));
+        assert_eq!(Command::parse("/mcp"), Some(Command::Mcp(McpCommand::List)));
+        assert_eq!(Command::parse("/mcp approve jira"), Some(Command::Mcp(McpCommand::Approve("jira".into()))));
+        assert_eq!(Command::parse("/mcp Deny  sonar"), Some(Command::Mcp(McpCommand::Deny("sonar".into()))));
+        assert_eq!(Command::parse("/mcp approve"), None, "approve needs a name");
     }
 
     #[test]

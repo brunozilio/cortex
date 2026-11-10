@@ -111,8 +111,9 @@ fn subscriptions_accept_upstream_token_json_and_never_list_tokens() {
 struct FakeSignIn(Result<(), String>);
 
 impl SignIn for FakeSignIn {
-    fn sign_in(&self, provider: ModelProvider, open: &mut dyn FnMut(String)) -> Result<Config, String> {
-        open(format!("https://auth.test/{}", provider.id()));
+    fn sign_in(&self, provider: ModelProvider, open: &mut dyn FnMut(String, Option<String>)) -> Result<Config, String> {
+        let code = (provider == ModelProvider::CopilotSubscription).then(|| "AB12-CD34".to_owned());
+        open(format!("https://auth.test/{}", provider.id()), code);
         self.0.clone()?;
         let raw = r#"{"access_token":"access-secret","refresh_token":"refresh-secret","account_id":"acct","expires_at":"2099-01-01T00:00:00Z"}"#;
         Config::parse(provider, raw).map_err(|e| e.to_string())
@@ -136,13 +137,30 @@ fn signing_in_to_a_subscription_opens_the_browser_then_keeps_the_tokens() {
     providers.sign_in(&OWNER, ModelProvider::ClaudeSubscription, &outbox);
     assert!(matches!(
         next(&rx),
-        ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider: ModelProvider::ClaudeSubscription, url })
+        ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider: ModelProvider::ClaudeSubscription, url, code: None })
             if url.ends_with("claude-subscription")
     ));
     let listed = listed(&next(&rx));
     assert!(listed.iter().any(|p| p.provider == ModelProvider::ClaudeSubscription && p.account.is_some()));
     let key = providers.key(&OWNER, ModelProvider::ClaudeSubscription).expect("key");
     assert!(key.current().expect("load").secret().contains("access-secret"));
+}
+
+#[test]
+fn copilot_signs_in_with_a_code_to_type_and_keeps_its_own_account() {
+    let rig = rig();
+    let providers = rig.providers.clone().with_sign_in(Arc::new(FakeSignIn(Ok(()))));
+    let (outbox, rx) = outbox();
+    providers.sign_in(&OWNER, ModelProvider::CopilotSubscription, &outbox);
+    assert!(matches!(
+        next(&rx),
+        ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider: ModelProvider::CopilotSubscription, code: Some(code), .. })
+            if code == "AB12-CD34"
+    ));
+    let listed = listed(&next(&rx));
+    let connected: Vec<_> = listed.iter().filter(|p| p.account.is_some()).map(|p| p.provider).collect();
+    assert_eq!(connected, [ModelProvider::CopilotSubscription]);
+    assert!(providers.key(&OWNER, ModelProvider::ClaudeSubscription).is_err());
 }
 
 #[test]

@@ -24,6 +24,9 @@ pub struct LocalServices {
     pub authorizer: Arc<dyn Authorizer>,
     /// Where downloaded MLX models are, on Apple silicon.
     pub local_models: Option<PathBuf>,
+    /// The owner's home, whose `.superfik/mcp.json` holds their own MCP
+    /// servers (the process's home; tests name another).
+    pub home: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for LocalServices {
@@ -56,6 +59,7 @@ impl LocalServices {
             providers: ModelProviders::system(),
             authorizer: Arc::new(LocalAuthorizer),
             local_models: None,
+            home: std::env::home_dir(),
         }
     }
 

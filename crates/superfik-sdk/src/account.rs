@@ -28,12 +28,17 @@ impl Superfik {
         self.client.call(ClientCommand::ConnectProvider { provider, key: key.to_owned() }, listed)
     }
 
-    /// Signs in to a subscription (Claude or ChatGPT) in the browser:
-    /// `open` gets the URL to visit; returns once signed in.
-    pub fn sign_in(&self, provider: ModelProvider, mut open: impl FnMut(&str)) -> Result<Vec<ProviderSummary>, Error> {
+    /// Signs in to a subscription (Claude, ChatGPT or GitHub Copilot) in
+    /// the browser: `open` gets the URL to visit and, for Copilot, the code
+    /// to type there; returns once signed in.
+    pub fn sign_in(
+        &self,
+        provider: ModelProvider,
+        mut open: impl FnMut(&str, Option<&str>),
+    ) -> Result<Vec<ProviderSummary>, Error> {
         self.client.call(ClientCommand::SignInProvider { provider }, |event| {
-            if let ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, .. }) = &event {
-                open(url);
+            if let ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, code, .. }) = &event {
+                open(url, code.as_deref());
                 return None;
             }
             listed(event)

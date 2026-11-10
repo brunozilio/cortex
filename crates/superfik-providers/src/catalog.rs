@@ -12,7 +12,7 @@ pub const CLAUDE_FALLBACK: [&str; 4] = ["claude-opus-5-5", "claude-sonnet-5-5", 
 pub fn path(provider: ModelProvider, after: &str) -> String {
     match provider {
         ModelProvider::ChatGptSubscription => "/codex/models?client_version=0.0.0".to_owned(),
-        ModelProvider::OpenAi => "/models".to_owned(),
+        ModelProvider::OpenAi | ModelProvider::CopilotSubscription => "/models".to_owned(),
         _ if after.is_empty() => "/models?limit=1000".to_owned(),
         _ => format!("/models?limit=1000&after_id={}", super::oauth::form(&[("v", after)]).trim_start_matches("v=")),
     }
@@ -25,6 +25,11 @@ pub struct Page {
 }
 
 pub fn page(provider: ModelProvider, value: &Value) -> Result<Page, ProviderError> {
+    if provider == ModelProvider::KiroSubscription {
+        let (models, next) = super::kiro::models::page(value)
+            .ok_or_else(|| ProviderError::Invalid("model catalog has no model array".into()))?;
+        return Ok(Page { models, next });
+    }
     let codex = provider == ModelProvider::ChatGptSubscription;
     let items = value[if codex { "models" } else { "data" }]
         .as_array()
@@ -35,7 +40,17 @@ pub fn page(provider: ModelProvider, value: &Value) -> Result<Page, ProviderErro
     Ok(Page { models, next })
 }
 
+/// Every page of a catalog asked for by its [`path`].
 pub fn collect<E: From<ProviderError>>(
+    provider: ModelProvider,
+    mut fetch: impl FnMut(&str) -> Result<Value, E>,
+) -> Result<Vec<ModelOption>, E> {
+    collect_pages(provider, |after| fetch(&path(provider, after)))
+}
+
+/// Every page of a catalog; `fetch` gets the cursor of the page to ask
+/// for, empty for the first.
+pub fn collect_pages<E: From<ProviderError>>(
     provider: ModelProvider,
     mut fetch: impl FnMut(&str) -> Result<Value, E>,
 ) -> Result<Vec<ModelOption>, E> {
@@ -43,7 +58,7 @@ pub fn collect<E: From<ProviderError>>(
     let mut after = String::new();
     let mut seen = std::collections::HashSet::new();
     for _ in 0..MAX_PAGES {
-        let page = page(provider, &fetch(&path(provider, &after))?)?;
+        let page = page(provider, &fetch(&after)?)?;
         out.extend(page.models);
         let Some(next) = page.next else {
             return Ok(finish(provider, out));
@@ -71,6 +86,9 @@ fn option(provider: ModelProvider, id: &str, label: String) -> ModelOption {
 }
 
 fn model(provider: ModelProvider, item: &Value) -> Option<ModelOption> {
+    if provider == ModelProvider::CopilotSubscription {
+        return super::copilot::models::model(item);
+    }
     let codex = provider == ModelProvider::ChatGptSubscription;
     let id = string(item, if codex { "slug" } else { "id" });
     if id.is_empty() || (provider == ModelProvider::OpenAi && !is_chat_model(id)) {
@@ -106,6 +124,7 @@ fn model(provider: ModelProvider, item: &Value) -> Option<ModelOption> {
             .and_then(|n| u32::try_from(n).ok())
             .filter(|n| *n > 0),
         reasoning_levels: levels,
+        endpoints: Vec::new(),
     });
     Some(model)
 }
@@ -185,6 +204,20 @@ mod tests {
         for id in CLAUDE_FALLBACK {
             assert!(superfik_core::billing::rates(ModelProvider::ClaudeSubscription, id, 0).is_some(), "{id}");
         }
+    }
+
+    #[test]
+    fn copilot_lists_its_data_page_once() {
+        let mut asked = Vec::new();
+        let models = read(ModelProvider::CopilotSubscription, |path| {
+            asked.push(path.to_owned());
+            json!({"data": [{"id": "claude-sonnet-4.5", "name": "Claude Sonnet 4.5"}, {"id": "x", "custom_model": true}]})
+        });
+        assert_eq!(
+            models.map(|m| m.into_iter().map(|m| m.id).collect::<Vec<_>>()),
+            Ok(vec!["copilot-subscription:claude-sonnet-4.5".to_owned()])
+        );
+        assert_eq!(asked, ["/models"]);
     }
 
     #[test]

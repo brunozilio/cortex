@@ -13,12 +13,13 @@ pub fn model() -> ModelOption {
         "openai-subscription" => ModelProvider::ChatGptSubscription,
         "claude-subscription" => ModelProvider::ClaudeSubscription,
         "anthropic" => ModelProvider::Anthropic,
-        _ => panic!("SUPERFIK_LIVE_PROVIDER must name one of the four native providers"),
+        "kiro-subscription" => ModelProvider::KiroSubscription,
+        _ => panic!("SUPERFIK_LIVE_PROVIDER must name one of the native providers"),
     };
-    let default = if matches!(provider, ModelProvider::OpenAi | ModelProvider::ChatGptSubscription) {
-        "gpt-6.1-sol"
-    } else {
-        "claude-haiku-5-5"
+    let default = match provider {
+        ModelProvider::OpenAi | ModelProvider::ChatGptSubscription => "gpt-6.1-sol",
+        ModelProvider::KiroSubscription => "kiro-subscription:claude-haiku-4.5",
+        _ => "claude-haiku-5-5",
     };
     ModelOption::new(std::env::var("SUPERFIK_LIVE_MODEL").unwrap_or_else(|_| default.into()), "Live native model")
         .served_by(provider)

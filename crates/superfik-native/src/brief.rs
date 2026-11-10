@@ -45,6 +45,15 @@ impl Brief {
     }
 }
 
+/// Where a run in `request.cwd` finds its configured MCP servers, without
+/// reading the rest of a brief.
+pub fn mcp_sources(request: &PromptRequest) -> Result<crate::mcp::McpSources, String> {
+    let home = home(request);
+    let plugins = crate::plugins::found(request, home.as_deref());
+    let approval = prompt::settings::load(&request.cwd, home.as_deref(), &plugins)?.mcp_approval;
+    Ok(crate::mcp::McpSources { home, plugins, approval })
+}
+
 /// The owner's home: the one the backend named for the run, else the
 /// process's.
 pub fn home(request: &PromptRequest) -> Option<PathBuf> {

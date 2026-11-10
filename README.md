@@ -9,7 +9,7 @@ stdio).
 
 ```sh
 cargo install --path crates/superfik-cli   # installs `superfik`
-superfik login                             # API key, or Claude/ChatGPT subscription
+superfik login                             # API key, or Claude/ChatGPT/Copilot subscription
 superfik                                   # chat in the current project
 superfik -p "explain src/main.rs"          # one answer, printed
 superfik models                            # what the connected providers offer
@@ -65,7 +65,7 @@ rest; see `crates/superfik-sdk/src/lib.rs`.
 | `superfik-mlx` | Local MLX models (Apple silicon). |
 | `superfik-protocol` | `ClientCommand` / `ServerEvent` in an `Envelope`. |
 | `superfik-backend` | Command handler and daemon: runs, memory, settings, providers, secrets. |
-| `superfik-providers` | LLM providers (Anthropic, OpenAI, Claude and ChatGPT subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
+| `superfik-providers` | LLM providers (Anthropic, OpenAI, Claude, ChatGPT and GitHub Copilot subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
 | `superfik-sdk` | The SDK: sessions and runs, agents, skills, commands, memory, in-process MCP tools, MCP over HTTP/stdio. |
 | `superfik-cli` | The `superfik` binary: terminal chat (ratatui), `-p`, `login`, `models`. |
 | `superfik-oauth`, `-process`, `-private-file` | Small IO helpers. |

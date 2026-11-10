@@ -23,7 +23,7 @@ procedural.
 
 **Provider**:
 Where models come from: an API key or a subscription (Anthropic, OpenAI,
-Claude, ChatGPT), or local MLX models.
+Claude, ChatGPT, GitHub Copilot, Kiro), or local MLX models.
 _Avoid_: Plugin (for providers)
 
 **Extensions**:

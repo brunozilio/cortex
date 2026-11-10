@@ -17,9 +17,9 @@ pub fn window(model: &ModelOption) -> u64 {
         return tokens;
     }
     match model.provider {
-        ModelProvider::Local => 131_072,
+        ModelProvider::Local | ModelProvider::CopilotSubscription => 131_072,
         ModelProvider::OpenAi | ModelProvider::ChatGptSubscription => 400_000,
-        ModelProvider::Anthropic | ModelProvider::ClaudeSubscription => 200_000,
+        ModelProvider::Anthropic | ModelProvider::ClaudeSubscription | ModelProvider::KiroSubscription => 200_000,
     }
 }
 
