@@ -6865,7 +6865,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "superfik-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arboard",
  "chrono",
@@ -6909,7 +6909,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-backend"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "chacha20poly1305",
@@ -6943,7 +6943,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-browser"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aes 0.8.4",
  "base64 0.23.1",
@@ -6975,7 +6975,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-channels"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "hex",
@@ -6998,7 +6998,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-client"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "qrcode",
@@ -7018,7 +7018,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "psl",
@@ -7033,7 +7033,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-dock"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
@@ -7043,7 +7043,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "superfik-core",
  "thiserror 2.0.21",
@@ -7051,7 +7051,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-frames"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "image",
  "superfik-core",
@@ -7060,7 +7060,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-gateway"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crossbeam-channel",
  "serde",
@@ -7078,7 +7078,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-haptics"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "objc2-app-kit 0.3.2",
  "tracing",
@@ -7086,7 +7086,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-i18n"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -7095,7 +7095,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-identity"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "argon2",
  "getrandom 0.3.4",
@@ -7111,7 +7111,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-keychain"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "dbus-secret-service",
  "keyring",
@@ -7124,7 +7124,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-menu"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
@@ -7134,11 +7134,11 @@ dependencies = [
 
 [[package]]
 name = "superfik-motion"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "superfik-native"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -7168,7 +7168,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-oauth"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "sha2 0.10.9",
@@ -7179,7 +7179,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-pages"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crossbeam-channel",
  "pollster 1.0.1",
@@ -7194,7 +7194,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-plugins"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -7210,7 +7210,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-private-file"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "tempfile",
  "windows-sys 0.61.2",
@@ -7218,7 +7218,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-process"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "libc",
@@ -7227,7 +7227,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-protocol"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -7237,7 +7237,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-remote"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crossbeam-channel",
  "serde_json",
@@ -7256,7 +7256,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-render"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -7270,7 +7270,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -7303,7 +7303,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-sound"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rodio",
  "serde",
@@ -7314,7 +7314,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-ui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde_json",
  "superfik-motion",
@@ -7323,7 +7323,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-unlock"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "block2 0.6.2",
  "objc2 0.6.5",
@@ -7336,7 +7336,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-update"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ed25519-dalek",
  "hex",
@@ -7350,7 +7350,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-voice"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bzip2 0.6.1",
  "crossbeam-channel",
@@ -7367,7 +7367,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "js-sys",
  "serde_json",
@@ -7387,7 +7387,7 @@ dependencies = [
 
 [[package]]
 name = "superfik-workspace"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -9738,7 +9738,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
