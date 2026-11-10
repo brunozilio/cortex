@@ -3,12 +3,12 @@
 
 use std::path::{Path, PathBuf};
 
-use superfik_core::memory::{Memory, MemoryEdit, MemoryId, MemoryKind};
+use superfik_core::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind};
 use superfik_core::provider::{ModelProvider, ProviderSummary};
 use superfik_core::{CustomAgent, ModelOption, Skill};
 use superfik_protocol::{ClientCommand, ProviderEvent, ServerEvent};
 
-use crate::{Error, Superfik};
+use crate::{Error, Run, Superfik};
 
 impl Superfik {
     /// The models the connected providers (and local MLX) offer.
@@ -138,10 +138,39 @@ impl ProjectMemory<'_> {
         self.ask(ClientCommand::EditMemory { path: self.path.clone(), edits })
     }
 
+    /// Brings back a memory forgotten in the last 30 days.
+    pub fn restore(&self, id: MemoryId) -> Result<Vec<Memory>, Error> {
+        self.edit(vec![MemoryEdit::Restore { id }])
+    }
+
+    /// What was forgotten and can still be restored, oldest first.
+    pub fn forgotten(&self) -> Result<Vec<Forgotten>, Error> {
+        self.answer(ClientCommand::LoadMemory { path: self.path.clone() }).map(|(_, forgotten)| forgotten)
+    }
+
+    /// Starts a run in which an agent tidies this memory with `model`:
+    /// merges, corrects, reclassifies and drops. [`ProjectMemory::undo`]
+    /// puts it back as it was until the next edit.
+    pub fn optimize(&self, model: ModelOption) -> Result<Run, Error> {
+        let path = self.path.clone();
+        Run::start(&self.superfik.client, |run| ClientCommand::OptimizeMemory { run, path, model })
+    }
+
+    /// The memory as it was before the last optimization.
+    pub fn undo(&self) -> Result<Vec<Memory>, Error> {
+        self.ask(ClientCommand::UndoMemory { path: self.path.clone() })
+    }
+
     fn ask(&self, command: ClientCommand) -> Result<Vec<Memory>, Error> {
+        self.answer(command).map(|(memories, _)| memories)
+    }
+
+    fn answer(&self, command: ClientCommand) -> Result<(Vec<Memory>, Vec<Forgotten>), Error> {
         let path = self.path.clone();
         self.superfik.client.call(command, |event| match event {
-            ServerEvent::Memory { path: answered, memories, .. } if answered == path => Some(Ok(memories)),
+            ServerEvent::Memory { path: answered, memories, forgotten } if answered == path => {
+                Some(Ok((memories, forgotten)))
+            }
             _ => None,
         })
     }

@@ -9,6 +9,7 @@
 
 mod embedder;
 pub mod mcp;
+mod optimize;
 mod store;
 
 use std::collections::HashMap;
@@ -34,6 +35,8 @@ pub struct Memories {
     store: Arc<dyn MemoryStore>,
     embedder: Arc<dyn Embedder>,
     books: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
+    /// Each book as it was before its last optimization, until another edit.
+    before_optimizing: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
 }
 
 impl std::fmt::Debug for Memories {
@@ -44,7 +47,7 @@ impl std::fmt::Debug for Memories {
 
 impl Memories {
     pub fn new(store: Arc<dyn MemoryStore>, embedder: Arc<dyn Embedder>) -> Self {
-        Self { store, embedder, books: Arc::default() }
+        Self { store, embedder, books: Arc::default(), before_optimizing: Arc::default() }
     }
 
     pub fn with_store(&self, store: Arc<dyn MemoryStore>) -> Self {
@@ -93,10 +96,17 @@ impl Memories {
     pub fn load(&self, owner: &Principal, project: &Path) -> ServerEvent {
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
-        ServerEvent::Memory { path: project.to_path_buf(), memories: book.memories.clone() }
+        memory_event(project, book)
     }
 
+    /// Applies edits from the user or a run; the last optimization can no
+    /// longer be undone.
     pub fn edit(&self, owner: &Principal, project: &Path, edits: &[MemoryEdit], by: Provenance) -> ServerEvent {
+        self.set_undo_point(owner, project, None);
+        self.apply(owner, project, edits, by)
+    }
+
+    fn apply(&self, owner: &Principal, project: &Path, edits: &[MemoryEdit], by: Provenance) -> ServerEvent {
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
         let mut changed = book.clone();
@@ -109,7 +119,7 @@ impl Memories {
             return ServerEvent::error(format!("could not save memory: {error}"));
         }
         *book = changed;
-        ServerEvent::Memory { path: project.to_path_buf(), memories: book.memories.clone() }
+        memory_event(project, book)
     }
 
     pub fn search(&self, owner: &Principal, project: &Path, query: &str) -> Vec<(MemoryId, f32)> {
@@ -167,6 +177,9 @@ impl Memories {
 
     pub fn brief(&self, owner: &Principal, run: RunId, request: &PromptRequest, tool: bool) -> PromptRequest {
         let Some(brief) = &request.memory else { return request.clone() };
+        if brief.optimizing {
+            return self.brief_optimization(owner, run, request);
+        }
         let budget = if tool { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
         let recalled = {
             let mut books = self.lock();
@@ -179,7 +192,7 @@ impl Memories {
             recalled
         };
         let output = edits_file(run);
-        let brief = MemoryBrief { recalled, output, origin: brief.origin.clone(), tool };
+        let brief = MemoryBrief { recalled, output, origin: brief.origin.clone(), tool, optimizing: false };
         PromptRequest { memory: Some(brief), ..request.clone() }
     }
 
@@ -189,10 +202,25 @@ impl Memories {
         let _ = std::fs::remove_file(&brief.output);
         let edits = json.and_then(|json| superfik_core::memory::parse_memory_edits(&json)).unwrap_or_default();
         if edits.is_empty() {
+            if brief.optimizing {
+                self.set_undo_point(owner, &request.cwd, None);
+            }
             return None;
         }
         let by = Provenance { author: Author::Agent, now: now(), origin: brief.origin.clone() };
-        Some(self.edit(owner, &request.cwd, &edits, by))
+        if brief.optimizing {
+            Some(self.apply(owner, &request.cwd, &edits, by))
+        } else {
+            Some(self.edit(owner, &request.cwd, &edits, by))
+        }
+    }
+}
+
+fn memory_event(project: &Path, book: &MemoryBook) -> ServerEvent {
+    ServerEvent::Memory {
+        path: project.to_path_buf(),
+        memories: book.memories.clone(),
+        forgotten: book.forgotten.clone(),
     }
 }
 

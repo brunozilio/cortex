@@ -87,7 +87,7 @@ fn edits_answer_with_the_whole_memory() {
     let owner = Principal::LocalOwner;
     memories.edit(&owner, Path::new("/repo"), &[remember("Uses wgpu")], by_user());
     match memories.edit(&owner, Path::new("/repo"), &[remember("Inter is the only font")], by_user()) {
-        ServerEvent::Memory { path, memories } => {
+        ServerEvent::Memory { path, memories, .. } => {
             assert_eq!(path, PathBuf::from("/repo"));
             assert_eq!(memories.len(), 2);
         }
@@ -208,6 +208,42 @@ fn remembering_the_same_meaning_again_revises_instead_of_adding() {
         }
         other => panic!("unexpected {other:?}"),
     }
+}
+
+#[test]
+fn an_optimisation_can_be_undone_until_the_next_edit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
+    let owner = Principal::LocalOwner;
+    memories.edit(&owner, dir.path(), &[remember("Uses wgpu"), remember("The renderer uses wgpu")], by_user());
+    let request = memories.optimization(&owner, dir.path(), ModelOption::new("opus", "Opus"));
+    assert!(request.prompt.contains("[0] semantic (render): Uses wgpu"));
+    let briefed = memories.brief(&owner, RunId::new(), &request, false);
+    let brief = briefed.memory.clone().expect("brief");
+    assert!(brief.optimizing && brief.recalled.is_empty() && !brief.tool);
+
+    std::fs::write(&brief.output, r#"{"forget":[0]}"#).expect("write");
+    match memories.finish(&owner, &briefed, true) {
+        Some(ServerEvent::Memory { memories, forgotten, .. }) => {
+            assert_eq!(memories.len(), 1);
+            assert_eq!(forgotten.iter().map(|f| f.memory.id).collect::<Vec<_>>(), vec![MemoryId(0)]);
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+    match memories.undo(&owner, dir.path()) {
+        ServerEvent::Memory { memories, forgotten, .. } => {
+            assert_eq!(memories.len(), 2, "both memories are back");
+            assert!(forgotten.is_empty());
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+    assert!(matches!(memories.undo(&owner, dir.path()), ServerEvent::Error { .. }), "undone only once");
+
+    let briefed = memories.brief(&owner, RunId::new(), &request, false);
+    std::fs::write(&briefed.memory.clone().expect("brief").output, r#"{"forget":[1]}"#).expect("write");
+    memories.finish(&owner, &briefed, true);
+    memories.edit(&owner, dir.path(), &[remember("Inter is the font")], by_user());
+    assert!(matches!(memories.undo(&owner, dir.path()), ServerEvent::Error { .. }), "an edit ends the undo");
 }
 
 #[test]

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use superfik_core::provider::ModelProvider;
-use superfik_core::{AskId, Decision, MemoryEdit, PermissionMode, PromptRequest, RunId};
+use superfik_core::{AskId, Decision, MemoryEdit, ModelOption, PermissionMode, PromptRequest, RunId};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant, reason = "commands are short-lived messages, never stored in bulk")]
@@ -43,6 +43,17 @@ pub enum ClientCommand {
     EditMemory {
         path: PathBuf,
         edits: Vec<MemoryEdit>,
+    },
+    /// Starts run `run`, in which an agent tidies the project's memory.
+    OptimizeMemory {
+        run: RunId,
+        path: PathBuf,
+        model: ModelOption,
+    },
+    /// Puts back the memory as it was before the last optimization, until
+    /// another edit.
+    UndoMemory {
+        path: PathBuf,
     },
     LoadSettings,
     SaveSettings {
@@ -100,6 +111,8 @@ impl ClientCommand {
             Self::LoadMemory { .. } => "load_memory",
             Self::SearchMemory { .. } => "search_memory",
             Self::EditMemory { .. } => "edit_memory",
+            Self::OptimizeMemory { .. } => "optimize_memory",
+            Self::UndoMemory { .. } => "undo_memory",
             Self::LoadSettings => "load_settings",
             Self::SaveSettings { .. } => "save_settings",
             Self::ListProviders => "list_providers",
@@ -116,8 +129,6 @@ impl ClientCommand {
 
 #[cfg(test)]
 mod tests {
-    use superfik_core::ModelOption;
-
     use super::*;
 
     #[test]
@@ -135,6 +146,8 @@ mod tests {
             ClientCommand::LoadMemory { path: "/repo".into() },
             ClientCommand::SearchMemory { path: "/repo".into(), query: "q".into() },
             ClientCommand::EditMemory { path: "/repo".into(), edits: Vec::new() },
+            ClientCommand::OptimizeMemory { run, path: "/repo".into(), model: ModelOption::new("m", "M") },
+            ClientCommand::UndoMemory { path: "/repo".into() },
             ClientCommand::LoadSettings,
             ClientCommand::SaveSettings { settings: serde_json::json!({"model": "m"}) },
             ClientCommand::ListProviders,

@@ -66,23 +66,7 @@ pub fn run(app: &mut App, command: Command) {
             let cwd = app.cwd.clone();
             app.spawn(move |_| Msg::Changes(super::git::changes(&cwd)));
         }
-        Command::Memory(query) => {
-            let cwd = app.cwd.clone();
-            app.spawn(move |superfik| {
-                let memory = superfik.memory(cwd);
-                let listed = match &query {
-                    Some(query) => memory.search(query).map(|found| {
-                        found.into_iter().map(|(m, score)| format!("  {score:.2}  {}", m.text)).collect::<Vec<_>>()
-                    }),
-                    None => memory.list().map(|all| all.into_iter().map(|m| format!("  · {}", m.text)).collect()),
-                };
-                match listed {
-                    Ok(lines) if lines.is_empty() => Msg::Notice("Nothing remembered for this project yet.".into()),
-                    Ok(lines) => Msg::Notice(format!("Memory:\n{}", lines.join("\n"))),
-                    Err(error) => Msg::Error(error.to_string()),
-                }
-            });
-        }
+        Command::Memory(command) => super::memory::run(app, command),
         Command::Skills => {
             let cwd = app.cwd.clone();
             app.spawn(move |superfik| match superfik.skills(&cwd) {

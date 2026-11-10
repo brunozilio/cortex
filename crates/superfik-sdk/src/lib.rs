@@ -33,6 +33,7 @@ mod local_models;
 mod mcp;
 mod mcp_servers;
 mod plan_watch;
+mod run;
 mod session;
 
 use std::path::PathBuf;
@@ -45,11 +46,12 @@ pub use self::account::ProjectMemory;
 pub use self::extensions::{Agent, Command, Skill};
 pub use self::local_models::{LocalModelError, LocalModels, PullProgress, Pulled, Removed};
 pub use self::mcp::{McpConnection, McpServer};
-pub use self::session::{Run, RunControl, Session};
+pub use self::run::{Run, RunControl};
+pub use self::session::Session;
 use client::Client;
 use extensions::Definitions;
 pub use superfik_core::mcp_config::{McpOrigin, McpServerInfo, McpState};
-pub use superfik_core::memory::{Memory, MemoryEdit, MemoryId, MemoryKind};
+pub use superfik_core::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind, Revision};
 pub use superfik_core::provider::{ModelProvider, ProviderSummary};
 pub use superfik_core::{
     AgentAsk, AskId, AskKind, Choice, ChoreAnswer, Criteria, CriteriaSource, CustomAgent, Decision, Effort,

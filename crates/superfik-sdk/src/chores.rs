@@ -6,7 +6,8 @@
 use superfik_core::{ChoreAnswer, Decision, EngineEvent, PromptRequest, SessionCommand};
 
 use crate::Error;
-use crate::session::{Run, Session};
+use crate::run::Run;
+use crate::session::Session;
 
 impl Session {
     /// Asks a side question about the conversation so far: answered without

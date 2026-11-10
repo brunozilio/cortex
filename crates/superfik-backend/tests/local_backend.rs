@@ -29,10 +29,14 @@ fn model() -> ModelOption {
 }
 
 fn backend(engine: FakeEngine) -> (LocalBackend, Receiver<()>) {
+    backend_with(engine, false)
+}
+
+fn backend_with(engine: FakeEngine, memory_tool: bool) -> (LocalBackend, Receiver<()>) {
     let mut services = LocalServices::with_engine(Arc::new(engine));
     services.extensions.dirs = vec![sdk_folder()];
     services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
-    services.memory_tool = false;
+    services.memory_tool = memory_tool;
     services.providers = services.providers.with_store(Arc::new(superfik_backend::InMemoryProviderStore::default()));
     let (woke_tx, woke) = crossbeam_channel::unbounded();
     let wake: Wake = Arc::new(move || {
@@ -137,6 +141,44 @@ fn queries_answer_models_skills_and_agents() {
     send(&backend, ClientCommand::ListAgents { path: dir.path().to_path_buf() });
     let agents = collect(&backend, &woke, |event| matches!(event, ServerEvent::Agents(_)));
     assert!(matches!(&agents[..], [ServerEvent::Agents(list)] if list.iter().any(|a| a.name == "reviewer")));
+}
+
+#[test]
+fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
+    let engine = scripted();
+    let (backend, woke) = backend_with(engine.clone(), true);
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().to_path_buf();
+    let fact = superfik_core::MemoryEdit::Remember {
+        kind: superfik_core::MemoryKind::Semantic,
+        text: "Uses wgpu".into(),
+        tags: vec![],
+    };
+    send(&backend, ClientCommand::EditMemory { path: path.clone(), edits: vec![fact] });
+    collect(&backend, &woke, |event| matches!(event, ServerEvent::Memory { .. }));
+
+    let run = RunId::new();
+    send(&backend, ClientCommand::OptimizeMemory { run, path: path.clone(), model: model() });
+    collect(&backend, &woke, run_ended);
+    let mut remembering = PromptRequest::plain(path.clone(), "hi", model());
+    remembering.memory = Some(superfik_core::MemoryBrief::default());
+    send(&backend, ClientCommand::SubmitPrompt { run: RunId::new(), request: remembering });
+    collect(&backend, &woke, run_ended);
+
+    let [optimizing, plain] = &engine.requests()[..] else { panic!("two runs: {:?}", engine.requests()) };
+    assert!(optimizing.prompt.contains("long-term memory") && optimizing.prompt.contains("[0] semantic: Uses wgpu"));
+    assert!(optimizing.memory.as_ref().is_some_and(|brief| brief.optimizing && brief.recalled.is_empty()));
+    assert!(optimizing.credentials.mcp.is_empty(), "no memory_search while tidying");
+    assert!(!plain.memory.as_ref().is_some_and(|brief| brief.optimizing), "a client cannot ask for it");
+    assert_eq!(plain.credentials.mcp.len(), 1, "an ordinary run searches memory");
+
+    send(&backend, ClientCommand::UndoMemory { path });
+    let undo =
+        collect(&backend, &woke, |event| matches!(event, ServerEvent::Memory { .. } | ServerEvent::Error { .. }));
+    assert!(
+        matches!(undo.last(), Some(ServerEvent::Error { message }) if message.contains("nothing to undo")),
+        "an optimization that changed nothing leaves nothing to undo: {undo:?}"
+    );
 }
 
 #[test]

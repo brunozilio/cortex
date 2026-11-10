@@ -248,11 +248,13 @@ fn clean_tags(tags: &[String]) -> Vec<String> {
 
 mod brief;
 mod dedup;
+mod optimize;
 mod recall;
 mod sanitize;
 pub mod search;
 
 pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, parse_memory_edits};
+pub use optimize::optimize_prompt;
 pub use recall::{RecallBudget, links, recall};
 pub use sanitize::{REDACTED, Sanitized, sanitize};
 pub use search::{Semantic, activate, search};

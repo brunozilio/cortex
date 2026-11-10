@@ -22,6 +22,10 @@ pub struct MemoryBrief {
     /// [`MEMORY_SERVER`] on the run's credentials).
     #[serde(default)]
     pub tool: bool,
+    /// The run tidies the memory (see `optimize_prompt`): nothing is
+    /// recalled and its edits can be undone as one.
+    #[serde(default)]
+    pub optimizing: bool,
 }
 
 impl MemoryBrief {

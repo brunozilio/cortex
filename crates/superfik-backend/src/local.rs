@@ -118,7 +118,10 @@ fn is_query(command: &ClientCommand) -> bool {
 fn is_memory(command: &ClientCommand) -> bool {
     matches!(
         command,
-        ClientCommand::LoadMemory { .. } | ClientCommand::EditMemory { .. } | ClientCommand::SearchMemory { .. }
+        ClientCommand::LoadMemory { .. }
+            | ClientCommand::EditMemory { .. }
+            | ClientCommand::SearchMemory { .. }
+            | ClientCommand::UndoMemory { .. }
     )
 }
 

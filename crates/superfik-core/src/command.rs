@@ -2,7 +2,7 @@
 //! text names one. Any other `/name` is a skill or custom command the
 //! engine expands. Pure.
 
-use crate::{Effort, PermissionMode};
+use crate::{Effort, MemoryId, PermissionMode};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
@@ -19,7 +19,7 @@ pub enum Command {
     Diff,
     /// The changes full screen, file by file.
     Diffs,
-    Memory(Option<String>),
+    Memory(MemoryCommand),
     /// A side question, answered without tools and kept out of the conversation.
     Btw(Option<String>),
     Skills,
@@ -39,6 +39,37 @@ pub enum McpCommand {
     List,
     Approve(String),
     Deny(String),
+}
+
+/// `/memory`, `/memory <search>`, `/memory optimize`, `/memory undo`,
+/// `/memory forgotten`, `/memory restore <id>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MemoryCommand {
+    List,
+    Search(String),
+    /// An agent tidies the memory: merges, corrects, reclassifies, drops.
+    Optimize,
+    /// Puts back the memory as it was before the last optimization.
+    Undo,
+    Forgotten,
+    Restore(MemoryId),
+}
+
+impl MemoryCommand {
+    fn parse(argument: Option<String>) -> Option<Self> {
+        let Some(text) = argument else { return Some(Self::List) };
+        let mut words = text.split_whitespace();
+        let verb = words.next().unwrap_or_default().to_ascii_lowercase();
+        let rest: Vec<&str> = words.collect();
+        match (verb.as_str(), rest.as_slice()) {
+            ("optimize" | "optimise", []) => Some(Self::Optimize),
+            ("undo", []) => Some(Self::Undo),
+            ("forgotten", []) => Some(Self::Forgotten),
+            ("restore", [id]) => id.parse().ok().map(|id| Self::Restore(MemoryId(id))),
+            ("restore", []) => None,
+            _ => Some(Self::Search(text)),
+        }
+    }
 }
 
 /// `/verification`, `/verification off`, `/verification <criteria>`.
@@ -88,7 +119,7 @@ impl Command {
         ("retry", "Send the last prompt again, from where it started"),
         ("diff", "Show the project's uncommitted changes"),
         ("diffs", "Browse the changes full screen: uncommitted, staged or branch"),
-        ("memory", "List the project's memory, or /memory <search>"),
+        ("memory", "List the project's memory, /memory <search>|optimize|undo|forgotten|restore <id>"),
         ("btw", "Ask a side question without interrupting: /btw <question>"),
         ("skills", "List skills and commands"),
         ("agents", "List agents"),
@@ -125,7 +156,7 @@ impl Command {
             "retry" => bare(Self::Retry),
             "diff" => bare(Self::Diff),
             "diffs" => bare(Self::Diffs),
-            "memory" => Some(Self::Memory(argument)),
+            "memory" => MemoryCommand::parse(argument).map(Self::Memory),
             "btw" => Some(Self::Btw(argument)),
             "skills" | "commands" => bare(Self::Skills),
             "agents" => bare(Self::Agents),
@@ -184,7 +215,21 @@ mod tests {
         assert_eq!(Command::parse("/model claude-opus-5-5"), Some(Command::Model(Some("claude-opus-5-5".into()))));
         assert_eq!(Command::parse("/mode plan"), Some(Command::Mode(Some(PermissionMode::Plan))));
         assert_eq!(Command::parse("/effort max"), Some(Command::Effort(Some(Effort::Max))));
-        assert_eq!(Command::parse("/memory the renderer"), Some(Command::Memory(Some("the renderer".into()))));
+        assert_eq!(Command::parse("/memory"), Some(Command::Memory(MemoryCommand::List)));
+        assert_eq!(
+            Command::parse("/memory the renderer"),
+            Some(Command::Memory(MemoryCommand::Search("the renderer".into())))
+        );
+        assert_eq!(Command::parse("/memory Optimize"), Some(Command::Memory(MemoryCommand::Optimize)));
+        assert_eq!(Command::parse("/memory undo"), Some(Command::Memory(MemoryCommand::Undo)));
+        assert_eq!(Command::parse("/memory forgotten"), Some(Command::Memory(MemoryCommand::Forgotten)));
+        assert_eq!(Command::parse("/memory restore 12"), Some(Command::Memory(MemoryCommand::Restore(MemoryId(12)))));
+        assert_eq!(Command::parse("/memory restore"), None, "restore needs an id");
+        assert_eq!(
+            Command::parse("/memory undo the font"),
+            Some(Command::Memory(MemoryCommand::Search("undo the font".into()))),
+            "more words are a search"
+        );
         assert_eq!(Command::parse("/mcp"), Some(Command::Mcp(McpCommand::List)));
         assert_eq!(Command::parse("/reload"), Some(Command::Reload));
         assert_eq!(Command::parse("/rewind"), Some(Command::Rewind));

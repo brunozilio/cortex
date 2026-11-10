@@ -17,6 +17,7 @@ mod keys;
 mod login;
 mod logo;
 mod markdown;
+mod memory;
 mod motion;
 mod reload;
 mod rewind;

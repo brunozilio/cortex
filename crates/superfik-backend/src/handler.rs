@@ -83,6 +83,11 @@ impl CommandHandler {
                 let by = Provenance { author: Author::User, now: memory::now(), origin: None };
                 outbox.send(self.services.memory.edit(&principal, &path, &edits, by))
             }
+            ClientCommand::OptimizeMemory { run, path, model } => {
+                let request = self.services.memory.optimization(&principal, &path, model);
+                self.submit(&principal, run, &request);
+            }
+            ClientCommand::UndoMemory { path } => outbox.send(self.services.memory.undo(&principal, &path)),
             ClientCommand::LoadSettings => {
                 outbox.send(ServerEvent::Settings { settings: self.services.settings.load(&principal) });
             }
@@ -149,7 +154,8 @@ impl CommandHandler {
             ..request.clone()
         };
         let mut request = self.services.extensions.brief(run, request)?;
-        let tool = self.services.memory_tool && request.memory.is_some();
+        let optimizing = request.memory.as_ref().is_some_and(|brief| brief.optimizing);
+        let tool = self.services.memory_tool && request.memory.is_some() && !optimizing;
         if tool {
             let memories = self.services.memory.clone();
             request.credentials.mcp.push(MemoryEndpoint::for_run(memories, owner.clone(), request.cwd.clone()));

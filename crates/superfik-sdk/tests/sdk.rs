@@ -8,8 +8,8 @@ use superfik_backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memori
 use superfik_core::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId};
 use superfik_native::fake::FakeEngine;
 use superfik_sdk::{
-    Agent, Command, Decision, EngineEvent, Image, McpConnection, McpServer, MemoryKind, Model, ModelProvider, Skill,
-    Superfik,
+    Agent, Command, Decision, EngineEvent, Error, Image, McpConnection, McpServer, MemoryKind, Model, ModelProvider,
+    Skill, Superfik,
 };
 
 fn model() -> Model {
@@ -136,6 +136,24 @@ fn memory_can_be_written_listed_and_searched() {
     assert_eq!(found.first().map(|(m, _)| m.text.as_str()), Some("The renderer uses wgpu."));
     let left = memory.forget(listed[0].id).expect("forget");
     assert_eq!(left.len(), 1);
+    let forgotten = memory.forgotten().expect("forgotten");
+    assert_eq!(forgotten.iter().map(|f| f.memory.id).collect::<Vec<_>>(), vec![listed[0].id]);
+    assert_eq!(memory.restore(listed[0].id).expect("restore").len(), 2);
+    assert!(memory.forgotten().expect("forgotten").is_empty());
+}
+
+#[test]
+fn memory_is_optimized_by_a_run() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![model()], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
+    let superfik = build(&engine, data.path());
+    let memory = superfik.memory(data.path());
+    memory.remember(MemoryKind::Semantic, "The renderer uses wgpu.", &[]).expect("remember");
+    let mut run = memory.optimize(model()).expect("optimize");
+    while run.next_event().is_some() {}
+    let request = engine.requests().pop().expect("a run");
+    assert!(request.prompt.contains("[0] semantic: The renderer uses wgpu."));
+    assert!(matches!(memory.undo(), Err(Error::Backend(message)) if message.contains("nothing to undo")));
 }
 
 #[test]
