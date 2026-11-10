@@ -3668,6 +3668,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "superfik-sdk"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "serde_json",
+ "superfik-backend",
+ "superfik-core",
+ "superfik-engine",
+ "superfik-plugins",
+ "superfik-protocol",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "superfik-workspace"
 version = "0.1.0"
 dependencies = [
