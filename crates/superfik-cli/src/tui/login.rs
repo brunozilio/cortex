@@ -3,7 +3,8 @@
 
 use superfik_sdk::ModelProvider;
 
-use super::app::{App, Msg, Picker, PickerKind};
+use super::app::{App, Msg};
+use super::choices::{Picker, PickerKind};
 use crate::login::{MENU, how};
 
 /// An API key being typed: shown as dots, never echoed.

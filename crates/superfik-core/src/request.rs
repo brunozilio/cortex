@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::approval::PermissionMode;
 use crate::extensions::Extensions;
 use crate::ids::SessionId;
+use crate::image::Image;
 use crate::memory::MemoryBrief;
 use crate::model::{Effort, ModelOption};
 use crate::usage::SessionCommand;
@@ -15,6 +16,9 @@ use crate::usage::SessionCommand;
 pub struct PromptRequest {
     pub cwd: PathBuf,
     pub prompt: String,
+    /// Images attached to the prompt, shown to the model before its text.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<Image>,
     pub model: ModelOption,
     pub effort: Effort,
     pub resume: Option<SessionId>,
@@ -43,6 +47,7 @@ impl PromptRequest {
         Self {
             cwd,
             prompt: prompt.into(),
+            images: Vec::new(),
             model,
             effort: Effort::Medium,
             resume: None,

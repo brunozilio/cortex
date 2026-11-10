@@ -15,6 +15,7 @@ pub mod executable;
 pub mod extensions;
 pub mod failure;
 pub mod ids;
+pub mod image;
 pub mod job;
 pub mod mcp;
 pub mod memory;
@@ -33,6 +34,7 @@ pub use events::{EngineEvent, RunId, ToolCall};
 pub use extensions::Extensions;
 pub use failure::FailureKind;
 pub use ids::{Id, OrgId, SecretId, SessionId, UserId};
+pub use image::{Image, MAX_IMAGE_BYTES};
 pub use memory::{
     Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, MemoryKind, MemoryTool, Provenance, RecallBudget,
 };

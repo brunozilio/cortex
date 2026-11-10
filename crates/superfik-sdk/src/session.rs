@@ -94,7 +94,14 @@ impl Session {
 
     /// Sends a prompt (or `/<command> <arguments>`) and starts a run.
     pub fn send(&self, prompt: &str) -> Result<Run, Error> {
+        self.send_with_images(prompt, Vec::new())
+    }
+
+    /// Sends a prompt with images the model sees before its text
+    /// ([`Image::from_bytes`](crate::Image::from_bytes) reads one).
+    pub fn send_with_images(&self, prompt: &str, images: Vec<crate::Image>) -> Result<Run, Error> {
         let mut request = PromptRequest::plain(self.cwd.clone(), prompt, self.model.clone());
+        request.images = images;
         request.effort = self.effort;
         request.permission = self.permission;
         request.resume = self.id();

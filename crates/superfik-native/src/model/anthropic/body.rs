@@ -75,7 +75,7 @@ fn block(block: &Block) -> Value {
     }
 }
 
-fn image_block(image: &crate::image::Image) -> Value {
+fn image_block(image: &superfik_core::Image) -> Value {
     json!({"type":"image", "source":{"type":"base64", "media_type":image.media_type, "data":image.data}})
 }
 

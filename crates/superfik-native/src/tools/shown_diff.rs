@@ -4,8 +4,9 @@
 //!
 //! [`Outcome::shown`]: super::Outcome::shown
 
-/// Lines shown at most; the rest is counted.
-const LINES: usize = 40;
+/// Lines shown at most (the chat folds them until asked); the rest is
+/// counted.
+const LINES: usize = 500;
 
 /// The change of replacing `old` with `new` where `before` (the file's
 /// text up to it) ends.
@@ -73,7 +74,7 @@ mod tests {
     #[test]
     fn a_new_file_is_all_added_and_long_ones_are_cut() {
         assert_eq!(created("Created a.txt", "one\ntwo"), "Created a.txt · Wrote 2 lines\n    1 + one\n    2 + two");
-        let long = (0..50).map(|n| n.to_string()).collect::<Vec<_>>().join("\n");
+        let long = (0..510).map(|n| n.to_string()).collect::<Vec<_>>().join("\n");
         assert!(created("Created b.txt", &long).ends_with("… +10 lines"));
     }
 }

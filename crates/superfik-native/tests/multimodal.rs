@@ -1,8 +1,7 @@
 //! The same visual payload must survive each provider's wire conversion.
 use serde_json::json;
-use superfik_core::Effort;
+use superfik_core::{Effort, Image};
 use superfik_native::{
-    image::Image,
     model::{TurnRequest, anthropic, chat, openai},
     transcript::{Block, Message, Role},
 };

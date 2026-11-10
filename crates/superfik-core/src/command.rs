@@ -12,6 +12,7 @@ pub enum Command {
     Mode(Option<PermissionMode>),
     Effort(Option<Effort>),
     Compact,
+    Diff,
     Memory(Option<String>),
     Skills,
     Agents,
@@ -22,13 +23,14 @@ pub enum Command {
 
 impl Command {
     /// Every command with what it does, for `/help` and completion.
-    pub const HELP: [(&'static str, &'static str); 12] = [
+    pub const HELP: [(&'static str, &'static str); 13] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("model", "Pick the model, or /model <id>"),
         ("mode", "Pick ask, edits, plan or bypass"),
         ("effort", "Set low, medium, high, xhigh or max"),
         ("compact", "Summarize the conversation to free context"),
+        ("diff", "Show the project's uncommitted changes"),
         ("memory", "List the project's memory, or /memory <search>"),
         ("skills", "List skills and commands"),
         ("agents", "List agents"),
@@ -58,6 +60,7 @@ impl Command {
                 Some(level) => level_named(level).map(|level| Self::Effort(Some(level))),
             },
             "compact" => bare(Self::Compact),
+            "diff" => bare(Self::Diff),
             "memory" => Some(Self::Memory(argument)),
             "skills" | "commands" => bare(Self::Skills),
             "agents" => bare(Self::Agents),
@@ -108,6 +111,7 @@ mod tests {
     fn commands_parse_with_their_arguments() {
         assert_eq!(Command::parse("  /CLEAR "), Some(Command::New));
         assert_eq!(Command::parse("/model"), Some(Command::Model(None)));
+        assert_eq!(Command::parse("/diff"), Some(Command::Diff));
         assert_eq!(Command::parse("/model claude-opus-5-5"), Some(Command::Model(Some("claude-opus-5-5".into()))));
         assert_eq!(Command::parse("/mode plan"), Some(Command::Mode(Some(PermissionMode::Plan))));
         assert_eq!(Command::parse("/effort max"), Some(Command::Effort(Some(Effort::Max))));

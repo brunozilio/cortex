@@ -5,10 +5,12 @@ use superfik_sdk::PermissionMode;
 
 use superfik_core::command::mode_label;
 
-use super::app::{App, Msg, Picker, PickerKind};
+use super::app::{App, Msg};
+use super::choices::{Picker, PickerKind};
 
 const KEYS: &str = "Keys: Enter sends · Alt+Enter or Ctrl+J new line · Esc interrupts · Shift+Tab mode · \
-                    PgUp/PgDn scroll · Ctrl+C quits";
+                    Ctrl+V pastes an image (or drop a file) · Ctrl+O expands output · PgUp/PgDn scroll · \
+                    Ctrl+C quits";
 
 pub fn run(app: &mut App, command: Command) {
     match command {
@@ -52,6 +54,10 @@ pub fn run(app: &mut App, command: Command) {
         }
         Command::Effort(effort) => app.set_effort_from(effort),
         Command::Compact => app.compact(),
+        Command::Diff => {
+            let cwd = app.cwd.clone();
+            app.spawn(move |_| Msg::Changes(super::git::changes(&cwd)));
+        }
         Command::Memory(query) => {
             let cwd = app.cwd.clone();
             app.spawn(move |superfik| {

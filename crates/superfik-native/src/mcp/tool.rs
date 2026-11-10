@@ -20,7 +20,7 @@ pub(super) fn outcome(result: &Value) -> Outcome {
                     text.push(value.to_owned());
                 }
             }
-            Some("image") => match crate::image::Image::from_mcp(
+            Some("image") => match superfik_core::Image::from_mcp(
                 part["mimeType"].as_str().unwrap_or_default(),
                 part["data"].as_str().unwrap_or_default(),
             ) {
@@ -35,7 +35,7 @@ pub(super) fn outcome(result: &Value) -> Outcome {
                 } else if let Some(blob) = resource["blob"].as_str() {
                     let mime = resource["mimeType"].as_str().unwrap_or("application/octet-stream");
                     if mime.starts_with("image/") {
-                        match crate::image::Image::from_mcp(mime, blob) {
+                        match superfik_core::Image::from_mcp(mime, blob) {
                             Ok(image) => images.push(image),
                             Err(error) => problems.push(error),
                         }

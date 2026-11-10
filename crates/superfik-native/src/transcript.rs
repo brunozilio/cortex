@@ -20,11 +20,11 @@ pub enum ReasoningOrigin {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Block {
     Text(String),
-    Image(crate::image::Image),
+    Image(superfik_core::Image),
     ToolResultRich {
         id: String,
         content: String,
-        images: Vec<crate::image::Image>,
+        images: Vec<superfik_core::Image>,
         is_error: bool,
     },
     Thinking {

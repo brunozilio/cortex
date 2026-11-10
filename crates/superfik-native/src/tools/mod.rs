@@ -50,7 +50,7 @@ pub enum Access {
 pub struct Outcome {
     pub content: String,
     pub is_error: bool,
-    pub images: Vec<crate::image::Image>,
+    pub images: Vec<superfik_core::Image>,
     /// What the user sees instead of `content` (an edit's diff); the model
     /// never reads it.
     #[serde(default)]
@@ -67,7 +67,7 @@ impl Outcome {
         self
     }
 
-    pub fn image(image: crate::image::Image) -> Self {
+    pub fn image(image: superfik_core::Image) -> Self {
         Self { content: format!("Image ({})", image.media_type), is_error: false, images: vec![image], shown: None }
     }
 

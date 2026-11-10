@@ -15,7 +15,6 @@ mod engine;
 pub mod frontmatter;
 pub mod guard;
 pub mod hooks;
-pub mod image;
 pub mod mcp;
 pub mod meter;
 pub mod model;

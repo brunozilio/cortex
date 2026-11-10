@@ -52,7 +52,7 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
     lines.extend(welcome(app, width));
     for entry in &app.transcript.entries {
-        entries::lines(entry, width, &mut lines);
+        entries::lines(entry, width, app.expanded, &mut lines);
     }
     if let Some(started) = app.started {
         lines.push(Line::from(""));

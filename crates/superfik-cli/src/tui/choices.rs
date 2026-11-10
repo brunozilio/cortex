@@ -9,6 +9,22 @@ use super::app::App;
 use super::settings;
 use super::transcript::Transcript;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PickerKind {
+    Model,
+    Mode,
+    Login,
+}
+
+/// A list the user picks one item of: a model, a mode or a provider.
+#[derive(Debug)]
+pub struct Picker {
+    pub kind: PickerKind,
+    pub title: String,
+    pub items: Vec<(String, String)>,
+    pub cursor: usize,
+}
+
 impl App {
     pub(super) fn ready(&mut self, models: Result<Vec<Model>, String>, saved: &serde_json::Value) {
         self.loading = false;

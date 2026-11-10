@@ -3,9 +3,12 @@
 
 mod app;
 mod ask;
+mod attach;
 mod choices;
 mod commands;
+mod diffs;
 mod entries;
+mod git;
 mod input;
 mod keys;
 mod login;

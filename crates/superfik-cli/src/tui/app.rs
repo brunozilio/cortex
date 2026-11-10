@@ -11,32 +11,24 @@ use superfik_core::command::Command;
 use superfik_sdk::{Effort, EngineEvent, Model, PermissionMode, Run, RunControl, Session, SessionId, Superfik};
 
 use super::ask::Pending;
+use super::choices::Picker;
 use super::input::Input;
 use super::login::SecretPrompt;
 use super::transcript::{Entry, Transcript};
 
 pub enum Msg {
-    Ready { models: Result<Vec<Model>, String>, settings: serde_json::Value },
+    Ready {
+        models: Result<Vec<Model>, String>,
+        settings: serde_json::Value,
+    },
     Event(superfik_core::RunId, EngineEvent),
     Skills(Vec<(String, String)>),
     Connected(String),
+    /// What Ctrl+V found on the clipboard.
+    Clipboard(Result<Option<superfik_sdk::Image>, String>),
+    Changes(Result<super::git::Changes, String>),
     Notice(String),
     Error(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PickerKind {
-    Model,
-    Mode,
-    Login,
-}
-
-#[derive(Debug)]
-pub struct Picker {
-    pub kind: PickerKind,
-    pub title: String,
-    pub items: Vec<(String, String)>,
-    pub cursor: usize,
 }
 
 /// How long a first Ctrl+C waits for the second that quits.
@@ -48,6 +40,9 @@ pub struct App {
     pub session: Option<Session>,
     pub transcript: Transcript,
     pub input: Input,
+    pub attachments: super::attach::Attachments,
+    /// Ctrl+O: reasoning, outputs and diffs shown in full.
+    pub expanded: bool,
     pub ask: Option<Pending>,
     pub secret: Option<SecretPrompt>,
     pub run: Option<RunControl>,
@@ -84,6 +79,8 @@ impl App {
             session: None,
             transcript: Transcript::default(),
             input: Input::default(),
+            attachments: Default::default(),
+            expanded: false,
             ask: None,
             secret: None,
             run: None,
@@ -159,6 +156,8 @@ impl App {
                 self.transcript.notice(format!("Connected {provider}."));
                 self.load(false);
             }
+            Msg::Clipboard(found) => self.clipboard(found),
+            Msg::Changes(changes) => self.changes(changes),
             Msg::Notice(text) => self.transcript.notice(text),
             Msg::Error(text) => self.transcript.error(text),
         }
@@ -213,7 +212,7 @@ impl App {
             self.input.set(&text);
             return self.transcript.error("No model yet: /login connects a provider.");
         };
-        let started = session.send(&text);
+        let started = session.send_with_images(&text, self.attachments.named_in(&text));
         self.transcript.push(Entry::User(text));
         self.follow(started);
     }

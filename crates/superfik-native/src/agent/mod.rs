@@ -24,7 +24,8 @@ use crate::tools::{Tool, Workspace};
 use crate::transcript::{Block, Message, Role, StopReason, Usage};
 
 pub const MAX_TURNS: usize = 200;
-const SHOWN_OUTPUT: usize = 4_000;
+/// What the client gets of a tool's output: enough for a full diff.
+const SHOWN_OUTPUT: usize = 64_000;
 
 #[derive(Debug, PartialEq)]
 pub enum Ending {

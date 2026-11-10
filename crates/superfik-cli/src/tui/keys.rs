@@ -4,8 +4,9 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use superfik_sdk::PermissionMode;
 
-use super::app::{App, PickerKind};
+use super::app::App;
 use super::ask;
+use super::choices::PickerKind;
 use super::login::SecretKey;
 
 pub fn key(app: &mut App, event: KeyEvent) {
@@ -15,6 +16,10 @@ pub fn key(app: &mut App, event: KeyEvent) {
     let ctrl = event.modifiers.contains(KeyModifiers::CONTROL);
     if ctrl && event.code == KeyCode::Char('c') {
         return app.interrupt();
+    }
+    if ctrl && event.code == KeyCode::Char('o') {
+        app.expanded = !app.expanded;
+        return;
     }
     if app.secret.is_some() {
         return secret(app, event);
@@ -33,7 +38,7 @@ pub fn paste(app: &mut App, text: &str) {
         return app.paste_secret(text);
     }
     if app.ask.is_none() && app.picker.is_none() {
-        app.input.insert_str(&text.replace("\r\n", "\n").replace('\r', "\n"));
+        app.paste(text);
     }
 }
 
@@ -136,6 +141,7 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
         KeyCode::Char('a') if ctrl => app.input.home(),
         KeyCode::Char('e') if ctrl => app.input.end(),
         KeyCode::Char('u') if ctrl => app.input.clear(),
+        KeyCode::Char('v') if ctrl => app.paste_image(),
         KeyCode::Char('w') if ctrl => app.input.delete_word(),
         KeyCode::Char(c) if !ctrl => {
             app.input.insert(c);

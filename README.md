@@ -24,10 +24,12 @@ tokens are sealed in `secrets.json` there (its key in `secrets.key`, both
 readable only by you).
 
 In the chat: Enter sends, Alt+Enter (or Ctrl+J) adds a line, Esc
-interrupts, Shift+Tab cycles ask → edits → plan → bypass, `/help` lists the
-commands (`/model`, `/mode`, `/effort`, `/compact`, `/memory`, `/skills`,
-`/agents`, `/new`, `/cost`, `/exit`); any other `/name` runs a skill or
-custom command.
+interrupts, Shift+Tab cycles ask → edits → plan → bypass, Ctrl+V attaches
+the clipboard's image (or drop an image file on the terminal; it shows as
+`[Image #1]`), Ctrl+O unfolds reasoning, outputs and diffs. `/help` lists
+the commands (`/model`, `/mode`, `/effort`, `/compact`, `/diff`, `/memory`,
+`/skills`, `/agents`, `/new`, `/cost`, `/exit`); any other `/name` runs a
+skill or custom command.
 
 ## Building on it (SDK)
 
@@ -49,7 +51,7 @@ for event in session.send("/audit src")? { /* EngineEvent: text, tools, asks… 
 superfik.memory(".").search("how do we deploy")?;
 ```
 
-`Skill::new`, `McpConnection::stdio`, `Run::answer`/`cancel`,
+`Skill::new`, `McpConnection::stdio`, `Session::send_with_images`, `Run::answer`/`cancel`,
 `connect_provider`/`sign_in` and `memory(..).remember/forget` cover the
 rest; see `crates/superfik-sdk/src/lib.rs`.
 

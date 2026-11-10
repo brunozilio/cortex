@@ -8,7 +8,8 @@ use superfik_backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memori
 use superfik_core::{AgentAsk, AskId, AskKind, SessionId};
 use superfik_engine::fake::FakeEngine;
 use superfik_sdk::{
-    Agent, Command, Decision, EngineEvent, McpConnection, McpServer, MemoryKind, Model, ModelProvider, Skill, Superfik,
+    Agent, Command, Decision, EngineEvent, Image, McpConnection, McpServer, MemoryKind, Model, ModelProvider, Skill,
+    Superfik,
 };
 
 fn model() -> Model {
@@ -54,6 +55,17 @@ fn a_session_streams_a_run_and_the_next_prompt_resumes_it() {
     assert_eq!(requests[0].resume, None);
     assert_eq!(requests[1].resume, Some(SessionId("s-1".into())), "the session continues");
     assert!(requests[0].memory.is_some(), "memory is on by default");
+}
+
+#[test]
+fn images_sent_with_a_prompt_reach_the_run() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![model()], script(Vec::new()));
+    let superfik = build(&engine, data.path());
+    let image = Image::from_bytes(b"\x89PNG\r\n\x1a\n pixels").expect("ok").expect("png");
+    let session = superfik.session(data.path(), model());
+    session.send_with_images("what is this?", vec![image.clone()]).expect("run").text().expect("text");
+    assert_eq!(engine.requests()[0].images, [image]);
 }
 
 #[test]

@@ -152,3 +152,39 @@ fn preview() {
         println!("{}", row.trim_end());
     }
 }
+
+#[test]
+fn a_dropped_image_is_attached_to_the_prompt_that_names_it() {
+    let data = tempfile::tempdir().expect("data");
+    let png = b"\x89PNG\r\n\x1a\n pixels";
+    std::fs::write(data.path().join("shot one.png"), png).expect("png");
+    let model = Model::new("anthropic:scripted", "Scripted");
+    let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
+    let engine = FakeEngine::new(vec![model], done);
+    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    type_text(&mut app, "what is");
+    keys::paste(&mut app, "'shot one.png'");
+    assert_eq!(app.input.text(), "what is [Image #1] ");
+    keys::paste(&mut app, "not a file");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| !app.busy() && !engine.requests().is_empty());
+    let sent = engine.requests().remove(0);
+    assert_eq!(sent.prompt, "what is [Image #1] not a file");
+    assert_eq!(sent.images, [superfik_sdk::Image::from_bytes(png).expect("ok").expect("png")]);
+}
+
+#[test]
+fn ctrl_o_unfolds_a_long_output() {
+    let data = tempfile::tempdir().expect("data");
+    let model = Model::new("anthropic:scripted", "Scripted");
+    let engine = FakeEngine::new(vec![model], Vec::new());
+    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    let long = (1..=8).map(|n| format!("line {n}")).collect::<Vec<_>>().join("\n");
+    app.transcript.apply(&EngineEvent::ToolStarted(ToolCall::new("t", "Bash", "seq 8")));
+    app.transcript.apply(&EngineEvent::ToolResult { id: "t".into(), output: long, failed: false });
+    assert!(screen(&app).contains("+5 lines (ctrl+o to expand)"), "{}", screen(&app));
+    keys::key(&mut app, KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
+    assert!(screen(&app).contains("line 8") && !screen(&app).contains("ctrl+o to expand"), "{}", screen(&app));
+}

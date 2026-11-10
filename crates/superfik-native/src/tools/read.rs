@@ -66,7 +66,7 @@ impl Tool for Read {
             Ok(bytes) => bytes,
             Err(error) => return Outcome::error(format!("Could not read {}: {error}", shown(&path, workspace))),
         };
-        match crate::image::Image::from_bytes(&bytes) {
+        match superfik_core::Image::from_bytes(&bytes) {
             Ok(Some(image)) => {
                 workspace.mark_read(&path);
                 return Outcome::image(image);

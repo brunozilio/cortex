@@ -59,6 +59,24 @@ fn without_an_account_it_says_so_and_fails() {
 }
 
 #[test]
+fn attached_images_reach_the_model_before_the_prompt() {
+    let dir = tempfile::tempdir().expect("dir");
+    let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("A cat.".into())])]));
+    let engine = NativeEngine::new(
+        Arc::new(Source(Mutex::new(vec![Arc::clone(&model_api)]))),
+        Arc::new(InMemorySessions::default()),
+    );
+    let image = superfik_core::Image::from_bytes(b"\x89PNG\r\n\x1a\n pixels").expect("ok").expect("png");
+    let mut request = PromptRequest::plain(dir.path().into(), "What is this?", model());
+    request.images = vec![image.clone()];
+    let events = finish(&start(&engine, &request));
+    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+    let first = &model_api.asked()[0].messages[0];
+    assert_eq!(first.blocks.first(), Some(&Block::Image(image)));
+    assert_eq!(first.text(), "What is this?");
+}
+
+#[test]
 fn provider_failure_during_turn_remains_a_failure_and_is_not_relabelled_cancelled() {
     let dir = tempfile::tempdir().expect("dir");
     let failing = Arc::new(ScriptedModel::new([Err(superfik_native::model::ModelError::Provider(

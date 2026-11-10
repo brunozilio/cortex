@@ -46,8 +46,8 @@ use extensions::Definitions;
 pub use superfik_core::memory::{Memory, MemoryEdit, MemoryId, MemoryKind};
 pub use superfik_core::provider::{ModelProvider, ProviderSummary};
 pub use superfik_core::{
-    AgentAsk, AskId, AskKind, Choice, CustomAgent, Decision, Effort, EngineEvent, ModelOption as Model, PermissionMode,
-    Question, SessionId, ToolCall,
+    AgentAsk, AskId, AskKind, Choice, CustomAgent, Decision, Effort, EngineEvent, Image, MAX_IMAGE_BYTES,
+    ModelOption as Model, PermissionMode, Question, SessionId, ToolCall,
 };
 
 #[derive(Debug, thiserror::Error)]

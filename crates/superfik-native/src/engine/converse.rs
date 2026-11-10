@@ -144,6 +144,7 @@ impl Job {
             None => prompt::user_message(&self.request),
         };
         let mut user = Message::user(format!("{}{}{}", initial, if initial.is_empty() { "" } else { "\n\n" }, typed));
+        user.blocks.splice(0..0, self.request.images.iter().cloned().map(crate::transcript::Block::Image));
         let source = if self.request.resume.is_some() { "resume" } else { "startup" };
         for (event, subject, payload) in [
             (

@@ -16,10 +16,30 @@ pub enum ToolState {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Entry {
     User(String),
-    Thinking { text: String, done: bool },
+    Thinking {
+        text: String,
+        done: bool,
+    },
     Assistant(String),
-    Tool { id: String, name: String, summary: String, state: ToolState, output: Option<String> },
-    Agent { index: usize, kind: String, summary: String, done: Option<bool>, steps: Vec<String> },
+    Tool {
+        id: String,
+        name: String,
+        summary: String,
+        state: ToolState,
+        output: Option<String>,
+    },
+    Agent {
+        index: usize,
+        kind: String,
+        summary: String,
+        done: Option<bool>,
+        steps: Vec<String>,
+    },
+    /// The project's uncommitted changes (`/diff`).
+    Diff {
+        diff: String,
+        untracked: Vec<String>,
+    },
     Notice(String),
     Error(String),
 }
