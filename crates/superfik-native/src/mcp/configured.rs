@@ -3,11 +3,13 @@
 //! server starts only once the owner approved it) and the user's
 //! `~/.superfik/mcp.json`. `${VAR}` and `${VAR:-default}` come from the
 //! environment. On a clash of names the project's wins over the user's.
+//! Installed plugins' servers follow, as `plugin_<plugin>_<server>`.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use superfik_core::mcp_config::{McpApproval, expand, is_free_name};
+use superfik_core::PromptRequest;
+use superfik_core::mcp_config::{McpApproval, McpOrigin, McpServerInfo, McpState, expand, is_free_name};
 
 use super::{ServerSpec, parse_config};
 use crate::plugins::Plugin;
@@ -20,23 +22,66 @@ pub struct McpSources {
     pub approval: McpApproval,
 }
 
-/// The project's approved servers, then the user's.
+/// The servers that start with a run: every configured one that is ready.
 pub fn configured(cwd: &Path, sources: &McpSources) -> Vec<ServerSpec> {
-    let project = cwd.ancestors().map(|dir| dir.join(".mcp.json")).find(|path| path.is_file());
-    let project = project
-        .map(|path| read(&path, "the project's"))
-        .unwrap_or_default()
+    origins(cwd, sources)
         .into_iter()
-        .filter(|server| sources.approval.allows(server.name()));
+        .filter(|(origin, server)| McpState::of(origin, server.name(), &sources.approval) == McpState::Ready)
+        .map(|(_, server)| server)
+        .collect()
+}
+
+/// Every configured server, where it came from and whether it starts.
+pub fn list(request: &PromptRequest) -> Result<Vec<McpServerInfo>, String> {
+    let sources = crate::brief::mcp_sources(request)?;
+    Ok(origins(&request.cwd, &sources)
+        .into_iter()
+        .map(|(origin, server)| McpServerInfo {
+            name: server.name().to_owned(),
+            state: McpState::of(&origin, server.name(), &sources.approval),
+            target: server.target(),
+            origin,
+        })
+        .collect())
+}
+
+fn origins(cwd: &Path, sources: &McpSources) -> Vec<(McpOrigin, ServerSpec)> {
+    let project = cwd.ancestors().map(|dir| dir.join(".mcp.json")).find(|path| path.is_file());
+    let project = project.map(|path| read(&path, "the project's")).unwrap_or_default();
     let user =
         sources.home.as_ref().map(|home| read(&home.join(".superfik/mcp.json"), "the user's")).unwrap_or_default();
-    let mut found: Vec<ServerSpec> = Vec::new();
-    for server in project.chain(user) {
-        if is_free_name(server.name()) && !found.iter().any(|known| known.name() == server.name()) {
-            found.push(server);
+    let mut found: Vec<(McpOrigin, ServerSpec)> = Vec::new();
+    let own =
+        project.into_iter().map(|s| (McpOrigin::Project, s)).chain(user.into_iter().map(|s| (McpOrigin::User, s)));
+    // Only a server that starts takes its name: a project's server nobody
+    // approved never shadows the person's own.
+    for (origin, server) in own {
+        let taken = found.iter().any(|(known_origin, known)| {
+            known.name() == server.name()
+                && McpState::of(known_origin, known.name(), &sources.approval) == McpState::Ready
+        });
+        if is_free_name(server.name()) && !taken {
+            found.push((origin, server));
         }
     }
+    for plugin in &sources.plugins {
+        let origin = McpOrigin::Plugin(plugin.name.clone());
+        found.extend(plugin_servers(plugin).into_iter().map(|server| (origin.clone(), server)));
+    }
     found
+}
+
+fn plugin_servers(plugin: &Plugin) -> Vec<ServerSpec> {
+    let Some(config) = plugin.mcp_config() else { return Vec::new() };
+    match parse_config(&config.to_string()) {
+        Ok(found) => {
+            found.into_iter().filter(|s| !s.name().starts_with("superfik_")).map(|s| s.renamed(plugin)).collect()
+        }
+        Err(error) => {
+            tracing::warn!(%error, plugin = %plugin.name, "a plugin's MCP servers are not available");
+            Vec::new()
+        }
+    }
 }
 
 fn read(path: &Path, whose: &str) -> Vec<ServerSpec> {
@@ -70,6 +115,49 @@ mod tests {
             args: Vec::new(),
             env: env.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect(),
         }
+    }
+
+    #[test]
+    fn the_listing_shows_every_server_its_origin_and_whether_it_starts() {
+        use superfik_core::Extensions;
+        use superfik_core::mcp_config::{McpOrigin, McpServerInfo, McpState};
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        let plugin = tempfile::tempdir().expect("plugin");
+        write(
+            home.path().join(".superfik/mcp.json"),
+            r#"{"mcpServers": {"atlassian": {"type": "http", "url": "https://mcp.atlassian.com/v1/mcp", "headers": {"Authorization": "Bearer secret"}}}}"#,
+        );
+        write(
+            repo.path().join(".mcp.json"),
+            r#"{"mcpServers": {"jira": {"command": "jira-mcp", "args": ["--stdio"]}, "sonar": {"command": "sonar-mcp"}}}"#,
+        );
+        write(repo.path().join(".superfik/settings.local.json"), r#"{"disabledMcpjsonServers": ["sonar"]}"#);
+        write(plugin.path().join(".claude-plugin/plugin.json"), r#"{"name": "acme"}"#);
+        write(plugin.path().join(".mcp.json"), r#"{"mcpServers": {"datadog": {"command": "dd-mcp"}}}"#);
+        let mut request = PromptRequest::plain(repo.path().to_path_buf(), "", ModelOption::new("", ""));
+        request.extensions = Some(Extensions {
+            home: Some(home.path().to_path_buf()),
+            plugins: vec![plugin.path().to_path_buf()],
+            ..Extensions::default()
+        });
+        let info = |name: &str, origin: McpOrigin, target: &str, state: McpState| McpServerInfo {
+            name: name.into(),
+            origin,
+            target: target.into(),
+            state,
+        };
+        let listed = crate::mcp::list(&request).expect("listed");
+        assert_eq!(
+            listed,
+            [
+                info("jira", McpOrigin::Project, "jira-mcp --stdio", McpState::Pending),
+                info("sonar", McpOrigin::Project, "sonar-mcp", McpState::Off),
+                info("atlassian", McpOrigin::User, "https://mcp.atlassian.com/v1/mcp", McpState::Ready),
+                info("plugin_acme_datadog", McpOrigin::Plugin("acme".into()), "dd-mcp", McpState::Ready),
+            ]
+        );
+        assert!(!format!("{listed:?}").contains("secret"), "headers stay out");
     }
 
     #[test]

@@ -13,8 +13,8 @@ and compaction are ours; the prompt loads `SUPERFIK.md` and names Superfik.
 
 ## 0016 — API keys and subscriptions are separate providers
 
-OpenAI API, ChatGPT Subscription, Claude Subscription and Anthropic API are
-four independently connected providers, each with its own credentials and
+OpenAI API, ChatGPT Subscription, Claude Subscription, Anthropic API,
+GitHub Copilot Subscription and Kiro Subscription are independently connected providers, each with its own credentials and
 model catalog. Pure contracts live in `superfik-providers`; the native
 engine does the IO. The backend handles PKCE and loopback callbacks
 and keeps credentials in its `SecretStore`, saving rotated refresh tokens;

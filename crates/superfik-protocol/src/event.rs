@@ -13,6 +13,7 @@ pub enum ServerEvent {
     Settings { settings: Option<serde_json::Value> },
     Skills(Vec<Skill>),
     Agents(Vec<CustomAgent>),
+    McpServers { path: PathBuf, servers: Vec<superfik_core::mcp_config::McpServerInfo> },
     Memory { path: PathBuf, memories: Vec<Memory> },
     MemorySearch { path: PathBuf, query: String, scores: Vec<(MemoryId, f32)> },
     Providers(crate::ProviderEvent),

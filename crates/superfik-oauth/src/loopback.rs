@@ -46,7 +46,17 @@ impl Loopback {
         self.wait_for(state, SIGN_IN_TIMEOUT)
     }
 
+    /// The code and the whole query of the callback, for providers whose
+    /// callback says more than the code (Kiro names the sign-in picked).
+    pub fn wait_callback(&self, state: &str) -> Result<(String, String), String> {
+        self.wait_query(state, SIGN_IN_TIMEOUT)
+    }
+
     pub fn wait_for(&self, state: &str, timeout: Duration) -> Result<String, String> {
+        self.wait_query(state, timeout).map(|(code, _)| code)
+    }
+
+    fn wait_query(&self, state: &str, timeout: Duration) -> Result<(String, String), String> {
         let deadline = Instant::now() + timeout;
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
@@ -65,7 +75,7 @@ impl Loopback {
                 continue;
             }
             let result = callback(query).and_then(|(code, _)| {
-                if code.is_empty() { Err("the sign-in returned no code".into()) } else { Ok(code) }
+                if code.is_empty() { Err("the sign-in returned no code".into()) } else { Ok((code, query.to_owned())) }
             });
             let body = match &result {
                 Ok(_) => DONE_PAGE.to_owned(),
@@ -103,6 +113,16 @@ mod tests {
         let uri = loopback.redirect_uri();
         let hit = std::thread::spawn(move || ureq::get(format!("{uri}?code=c-1&state=s-1")).call().map(|r| r.status()));
         assert_eq!(loopback.wait("s-1"), Ok("c-1".to_owned()));
+        assert!(hit.join().expect("join").is_ok());
+    }
+
+    #[test]
+    fn the_whole_query_comes_back_with_the_code() {
+        let loopback = Loopback::bind().expect("bind");
+        let uri = loopback.redirect_uri();
+        let hit = std::thread::spawn(move || ureq::get(format!("{uri}?login_option=google&code=c&state=s")).call());
+        let (code, query) = loopback.wait_callback("s").expect("callback");
+        assert_eq!((code.as_str(), query.as_str()), ("c", "login_option=google&code=c&state=s"));
         assert!(hit.join().expect("join").is_ok());
     }
 }

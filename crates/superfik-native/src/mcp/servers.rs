@@ -1,6 +1,6 @@
 //! Which MCP servers a run gets: the app's own (granted with a token per
 //! run), the host's (the MCP config file the backend wrote for the run,
-//! `Extensions::mcp_config`) and the installed plugins' (`plugin_<name>_*`).
+//! `Extensions::mcp_config`), then the configured ones (`configured`).
 
 use serde_json::Value;
 
@@ -22,10 +22,20 @@ impl ServerSpec {
         }
     }
 
-    fn renamed(mut self, plugin: &Plugin) -> Self {
+    pub(super) fn renamed(mut self, plugin: &Plugin) -> Self {
         let (Self::Http { name, .. } | Self::Stdio { name, .. }) = &mut self;
         *name = plugin.server_name(name);
         self
+    }
+
+    /// The URL of an HTTP server, the command line of a stdio one.
+    pub fn target(&self) -> String {
+        match self {
+            Self::Http { url, .. } => url.clone(),
+            Self::Stdio { command, args, .. } => {
+                std::iter::once(command).chain(args).cloned().collect::<Vec<_>>().join(" ")
+            }
+        }
     }
 }
 
@@ -64,14 +74,6 @@ pub fn servers(request: &PromptRequest, sources: &McpSources) -> Vec<ServerSpec>
     for server in super::configured::configured(&request.cwd, sources) {
         if !servers.iter().any(|known| known.name() == server.name()) {
             servers.push(server);
-        }
-    }
-    for plugin in &sources.plugins {
-        let Some(config) = plugin.mcp_config() else { continue };
-        match parse_config(&config.to_string()) {
-            Ok(found) => servers
-                .extend(found.into_iter().filter(|s| !s.name().starts_with("superfik_")).map(|s| s.renamed(plugin))),
-            Err(error) => tracing::warn!(%error, plugin = %plugin.name, "a plugin's MCP servers are not available"),
         }
     }
     servers

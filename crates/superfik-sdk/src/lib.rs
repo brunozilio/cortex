@@ -29,6 +29,7 @@ mod client;
 pub mod daemon;
 mod extensions;
 mod mcp;
+mod mcp_servers;
 mod session;
 
 use std::path::PathBuf;
@@ -43,6 +44,7 @@ pub use self::mcp::{McpConnection, McpServer};
 pub use self::session::{Run, RunControl, Session};
 use client::Client;
 use extensions::Definitions;
+pub use superfik_core::mcp_config::{McpOrigin, McpServerInfo, McpState};
 pub use superfik_core::memory::{Memory, MemoryEdit, MemoryId, MemoryKind};
 pub use superfik_core::provider::{ModelProvider, ProviderSummary};
 pub use superfik_core::{

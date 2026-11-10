@@ -28,6 +28,10 @@ pub struct ModelCapabilities {
     pub effective_context_window_percent: Option<u32>,
     #[serde(default)]
     pub reasoning_levels: Vec<String>,
+    /// The API paths a provider serves the model on (GitHub Copilot's
+    /// `supported_endpoints`); empty when the provider has one API.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub endpoints: Vec<String>,
 }
 
 /// The model a session starts with: the one `wanted` names when offered,
@@ -78,15 +82,26 @@ pub enum ModelProvider {
     OpenAi,
     ChatGptSubscription,
     ClaudeSubscription,
+    CopilotSubscription,
+    KiroSubscription,
     Local,
 }
 
 impl ModelProvider {
-    pub const ACCOUNTS: [Self; 4] =
-        [Self::OpenAi, Self::Anthropic, Self::ChatGptSubscription, Self::ClaudeSubscription];
+    pub const ACCOUNTS: [Self; 6] = [
+        Self::OpenAi,
+        Self::Anthropic,
+        Self::ChatGptSubscription,
+        Self::ClaudeSubscription,
+        Self::CopilotSubscription,
+        Self::KiroSubscription,
+    ];
 
     pub const fn subscription(self) -> bool {
-        matches!(self, Self::ChatGptSubscription | Self::ClaudeSubscription)
+        matches!(
+            self,
+            Self::ChatGptSubscription | Self::ClaudeSubscription | Self::CopilotSubscription | Self::KiroSubscription
+        )
     }
 
     pub const fn id(self) -> &'static str {
@@ -95,6 +110,8 @@ impl ModelProvider {
             Self::Anthropic => "anthropic",
             Self::ChatGptSubscription => "openai-subscription",
             Self::ClaudeSubscription => "claude-subscription",
+            Self::CopilotSubscription => "copilot-subscription",
+            Self::KiroSubscription => "kiro-subscription",
             Self::Local => "local",
         }
     }
@@ -108,6 +125,8 @@ impl ModelProvider {
             Self::Anthropic => "Anthropic API",
             Self::ChatGptSubscription => "ChatGPT Subscription",
             Self::ClaudeSubscription => "Claude Subscription",
+            Self::CopilotSubscription => "GitHub Copilot Subscription",
+            Self::KiroSubscription => "Kiro Subscription",
             Self::OpenAi => "OpenAI API",
             Self::Local => "Local",
         }
@@ -117,6 +136,8 @@ impl ModelProvider {
         match self {
             Self::Anthropic | Self::ClaudeSubscription => "anthropic",
             Self::OpenAi | Self::ChatGptSubscription => "openai",
+            Self::CopilotSubscription => "github",
+            Self::KiroSubscription => "kiro",
             Self::Local => "local",
         }
     }

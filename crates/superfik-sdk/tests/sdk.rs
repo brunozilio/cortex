@@ -200,3 +200,34 @@ fn a_side_question_is_answered_from_the_conversation_without_continuing_it() {
     assert_eq!(side.resume, Some(SessionId("s-1".into())), "asked about this conversation");
     assert!(side.memory.is_none(), "a side question recalls no memory");
 }
+
+#[test]
+fn a_program_manages_the_owner_s_mcp_servers() {
+    use superfik_sdk::{McpOrigin, McpState};
+    let data = tempfile::tempdir().expect("data");
+    let home = tempfile::tempdir().expect("home");
+    let repo = tempfile::tempdir().expect("repo");
+    std::fs::write(repo.path().join(".mcp.json"), r#"{"mcpServers": {"jira": {"command": "jira-mcp"}}}"#)
+        .expect("config");
+    let engine = FakeEngine::new(vec![model()], Vec::new());
+    let mut services = services(&engine);
+    services.home = Some(home.path().to_path_buf());
+    let superfik = Superfik::builder().data_dir(data.path()).services(services).build().expect("superfik");
+    let states = |servers: Vec<superfik_sdk::McpServerInfo>| -> Vec<(String, McpOrigin, McpState)> {
+        servers.into_iter().map(|s| (s.name, s.origin, s.state)).collect()
+    };
+
+    assert_eq!(
+        states(superfik.mcp_servers(repo.path()).expect("list")),
+        [("jira".into(), McpOrigin::Project, McpState::Pending)]
+    );
+    let approved = superfik.approve_mcp_server(repo.path(), "jira", true).expect("approve");
+    assert_eq!(states(approved)[0].2, McpState::Ready);
+    let added = superfik
+        .add_mcp_server(repo.path(), "atlassian", json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"}))
+        .expect("add");
+    assert_eq!(states(added)[1], ("atlassian".into(), McpOrigin::User, McpState::Ready));
+    assert!(home.path().join(".superfik/mcp.json").is_file());
+    assert!(superfik.add_mcp_server(repo.path(), "plugin_x", json!({"command": "x"})).is_err());
+    assert_eq!(superfik.remove_mcp_server(repo.path(), "atlassian").expect("remove").len(), 1);
+}

@@ -1,6 +1,6 @@
 //! The chat's own `/commands`.
 
-use superfik_core::command::Command;
+use superfik_core::command::{Command, McpCommand};
 use superfik_sdk::PermissionMode;
 
 use superfik_core::command::mode_label;
@@ -101,6 +101,25 @@ pub fn run(app: &mut App, command: Command) {
                     Msg::Notice(format!("Agents:\n{}", lines.join("\n")))
                 }
                 Err(error) => Msg::Error(error.to_string()),
+            });
+        }
+        Command::Mcp(change) => {
+            let cwd = app.cwd.clone();
+            app.spawn(move |superfik| {
+                let servers = match &change {
+                    McpCommand::List => superfik.mcp_servers(&cwd),
+                    McpCommand::Approve(name) => superfik.approve_mcp_server(&cwd, name, true),
+                    McpCommand::Deny(name) => superfik.approve_mcp_server(&cwd, name, false),
+                };
+                match servers {
+                    Ok(servers) => {
+                        let shown = crate::mcp::render(&servers).replace("superfik mcp approve", "/mcp approve");
+                        let note =
+                            if change == McpCommand::List { "" } else { "\nThe change applies from the next message." };
+                        Msg::Notice(format!("MCP servers:\n{}{note}", shown.trim_end()))
+                    }
+                    Err(error) => Msg::Error(error.to_string()),
+                }
             });
         }
         Command::Cost => {

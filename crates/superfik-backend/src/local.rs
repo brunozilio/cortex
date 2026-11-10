@@ -105,7 +105,15 @@ impl Drop for Workers {
 }
 
 fn is_query(command: &ClientCommand) -> bool {
-    matches!(command, ClientCommand::ListSkills { .. } | ClientCommand::ListAgents { .. })
+    matches!(
+        command,
+        ClientCommand::ListSkills { .. }
+            | ClientCommand::ListAgents { .. }
+            | ClientCommand::ListMcpServers { .. }
+            | ClientCommand::ApproveMcpServer { .. }
+            | ClientCommand::AddMcpServer { .. }
+            | ClientCommand::RemoveMcpServer { .. }
+    )
 }
 
 fn is_memory(command: &ClientCommand) -> bool {

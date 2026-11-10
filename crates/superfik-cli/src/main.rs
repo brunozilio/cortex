@@ -4,12 +4,14 @@
 //! - `superfik -p <prompt>` answers once and prints the reply.
 //! - `superfik login` / `logout` connect or forget an LLM provider.
 //! - `superfik models` lists what the connected providers offer.
+//! - `superfik mcp …` lists, adds, removes and approves MCP servers.
 //!
 //! Every terminal talks to one background daemon per computer (Unix), so
 //! local models, embeddings and memory load once.
 
 mod daemon;
 mod login;
+mod mcp;
 mod print;
 mod tui;
 
@@ -51,6 +53,11 @@ enum Action {
     Logout,
     /// List the models the connected providers offer.
     Models,
+    /// The MCP servers a session here can use: list, add, remove, approve.
+    Mcp {
+        #[command(subcommand)]
+        action: Option<mcp::McpAction>,
+    },
     /// The background daemon every terminal shares.
     #[command(hide = true)]
     Daemon {
@@ -109,6 +116,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 println!("{:<40} {}", model.id, model.label);
             }
             Ok(ExitCode::SUCCESS)
+        }
+        Some(Action::Mcp { action }) => {
+            mcp::run(&superfik, &cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
         }
         Some(Action::Daemon { .. }) => Err("the daemon needs macOS or Linux".into()),
         None if cli.print => {

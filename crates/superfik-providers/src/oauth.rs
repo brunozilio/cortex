@@ -22,6 +22,7 @@ pub const TOKEN_LIMIT: u64 = 1 << 20;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Tokens {
     pub access_token: String,
+    #[serde(default)]
     pub refresh_token: String,
     #[serde(default)]
     pub account_id: String,
@@ -36,6 +37,16 @@ impl std::fmt::Debug for Tokens {
 }
 
 impl Tokens {
+    /// A token used as is, with no refresh token and no expiry (GitHub's).
+    pub fn bearer(token: &str) -> Self {
+        Self {
+            access_token: token.to_owned(),
+            refresh_token: String::new(),
+            account_id: String::new(),
+            expires_at: None,
+        }
+    }
+
     pub fn expired(&self) -> bool {
         self.expires_at.is_none_or(|at| Utc::now() + Duration::seconds(60) > at)
     }
@@ -50,6 +61,9 @@ pub fn subscription_client(client: Option<&str>) -> Option<ModelProvider> {
 }
 
 pub fn callback(provider: ModelProvider) -> (u16, &'static str) {
+    if provider == ModelProvider::KiroSubscription {
+        return super::kiro::auth::CALLBACK;
+    }
     if provider == ModelProvider::ChatGptSubscription { OPENAI_CALLBACK } else { CLAUDE_CALLBACK }
 }
 
@@ -62,6 +76,9 @@ pub fn form(pairs: &[(&str, &str)]) -> String {
 }
 
 pub fn authorize(provider: ModelProvider, challenge: &str, state: &str, redirect: &str) -> String {
+    if provider == ModelProvider::KiroSubscription {
+        return super::kiro::auth::portal(challenge, state, redirect);
+    }
     if provider == ModelProvider::ChatGptSubscription {
         format!(
             "https://auth.openai.com/oauth/authorize?{}",
@@ -108,7 +125,20 @@ impl std::fmt::Debug for TokenRequest {
     }
 }
 
+/// The redirect a code is exchanged for, given the callback's query: the
+/// loopback's own, except for Kiro, whose code is bound to the sign-in
+/// the person picked on its portal.
+pub fn exchange_redirect(provider: ModelProvider, redirect: &str, query: &str) -> Result<String, ProviderError> {
+    if provider == ModelProvider::KiroSubscription {
+        return super::kiro::auth::redirect(redirect, query);
+    }
+    Ok(redirect.to_owned())
+}
+
 pub fn exchange(provider: ModelProvider, code: &str, state: &str, verifier: &str, redirect: &str) -> TokenRequest {
+    if provider == ModelProvider::KiroSubscription {
+        return super::kiro::auth::exchange(code, verifier, redirect);
+    }
     token_request(
         provider,
         &[
@@ -122,6 +152,9 @@ pub fn exchange(provider: ModelProvider, code: &str, state: &str, verifier: &str
 }
 
 pub fn refresh(provider: ModelProvider, previous: &Tokens) -> TokenRequest {
+    if provider == ModelProvider::KiroSubscription {
+        return super::kiro::auth::refresh(previous);
+    }
     token_request(provider, &[("grant_type", "refresh_token"), ("refresh_token", &previous.refresh_token)])
 }
 
@@ -145,6 +178,9 @@ pub fn tokens(
     previous: Option<&Tokens>,
     now: DateTime<Utc>,
 ) -> Result<Tokens, ProviderError> {
+    if provider == ModelProvider::KiroSubscription {
+        return super::kiro::auth::tokens(status, body, previous, now);
+    }
     let unauthorized = |why: String| ProviderError::Unauthorized(why);
     if status != 200 {
         return Err(unauthorized(format!("token endpoint returned HTTP {status}")));

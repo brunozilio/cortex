@@ -15,6 +15,7 @@ mod extensions;
 mod handler;
 mod local;
 mod loopback;
+mod mcp_admin;
 mod memory;
 mod models;
 mod native;

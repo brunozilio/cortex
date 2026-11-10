@@ -36,9 +36,9 @@ impl App {
         self.transcript.notice(format!("Signing in to {} in the browser…", provider.name()));
         let tx = self.tx.clone();
         self.spawn(move |superfik| {
-            let opened = |url: &str| {
+            let opened = |url: &str, code: Option<&str>| {
                 crate::login::open(url);
-                let _ = tx.send(Msg::Notice(format!("If the browser did not open, visit:\n{url}")));
+                let _ = tx.send(Msg::Notice(crate::login::visit(url, code)));
             };
             match superfik.sign_in(provider, opened) {
                 Ok(_) => Msg::Connected(provider.name().to_owned()),

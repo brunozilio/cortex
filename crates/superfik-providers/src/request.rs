@@ -2,22 +2,47 @@
 //! sent: the model's name, the system prompt, the limits and the effort.
 use super::ProviderError;
 use super::catalog::REASONING_PREFIXES;
+use super::copilot;
 use serde_json::{Value, json};
 use superfik_core::{ModelOption, ModelProvider};
 
 pub const STREAM_LIMIT: usize = 8 << 20;
 pub const ERROR_LIMIT: usize = 4 << 10;
 
-pub fn path(provider: ModelProvider) -> &'static str {
+pub fn path(provider: ModelProvider, model: Option<&ModelOption>) -> &'static str {
     match provider {
         ModelProvider::ChatGptSubscription => "/codex/responses",
+        ModelProvider::CopilotSubscription => copilot::path(copilot::wire(model)),
         ModelProvider::OpenAi => "/responses",
+        ModelProvider::KiroSubscription => "/",
         _ => "/messages",
     }
 }
 
+/// What the account adds to a shaped turn: Kiro's profile ARN.
+pub fn bind(provider: ModelProvider, config: &super::Config, body: &mut Value) {
+    if provider == ModelProvider::KiroSubscription
+        && let Some(tokens) = &config.auth
+    {
+        super::kiro::bind(body, &tokens.account_id);
+    }
+}
+
+/// What a turn adds to the account's headers, read from its shaped body.
+pub fn turn_headers(provider: ModelProvider, model: Option<&ModelOption>, body: &Value) -> Vec<(String, String)> {
+    if provider == ModelProvider::CopilotSubscription {
+        copilot::turn_headers(copilot::wire(model), body)
+    } else {
+        Vec::new()
+    }
+}
+
 pub fn retries_after_refresh(provider: ModelProvider, status: u16) -> bool {
-    status == 401 && provider == ModelProvider::ChatGptSubscription
+    match provider {
+        ModelProvider::ChatGptSubscription => status == 401,
+        ModelProvider::KiroSubscription => matches!(status, 401 | 403),
+        _ => false,
+    }
 }
 
 pub fn shape(provider: ModelProvider, model: Option<&ModelOption>, body: &mut Value) -> Result<(), ProviderError> {
@@ -35,6 +60,11 @@ pub fn shape(provider: ModelProvider, model: Option<&ModelOption>, body: &mut Va
         ModelProvider::OpenAi => remove(body, &["reasoning", "tool_choice"]),
         ModelProvider::Anthropic => anthropic(body, model),
         ModelProvider::ClaudeSubscription => claude_subscription(body),
+        ModelProvider::CopilotSubscription => return copilot::shape(model, body, &effort),
+        ModelProvider::KiroSubscription => {
+            super::kiro::shape(body);
+            return Ok(());
+        }
         ModelProvider::Local => {}
     }
     apply_effort(body, provider, model, &effort)

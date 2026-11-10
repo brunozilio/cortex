@@ -55,12 +55,35 @@ pub enum ClientCommand {
         key: String,
     },
     /// Signs in to a subscription in the browser; the backend answers with
-    /// [`ProviderEvent::AuthorizeAt`](crate::ProviderEvent::AuthorizeAt).
+    /// [`ProviderEvent::AuthorizeAt`](crate::ProviderEvent::AuthorizeAt)
+    /// (with a code to type for GitHub Copilot's device flow).
     SignInProvider {
         provider: ModelProvider,
     },
     DisconnectProvider {
         provider: ModelProvider,
+    },
+    /// The MCP servers a run in `path` can use; answered with
+    /// [`ServerEvent::McpServers`](crate::ServerEvent::McpServers), as are
+    /// the three changes below.
+    ListMcpServers {
+        path: PathBuf,
+    },
+    /// Approves a project's `.mcp.json` server, or turns it off.
+    ApproveMcpServer {
+        path: PathBuf,
+        name: String,
+        approve: bool,
+    },
+    /// Adds or replaces one of the owner's own servers (`mcpServers` JSON).
+    AddMcpServer {
+        path: PathBuf,
+        name: String,
+        server: serde_json::Value,
+    },
+    RemoveMcpServer {
+        path: PathBuf,
+        name: String,
     },
 }
 
@@ -83,6 +106,10 @@ impl ClientCommand {
             Self::ConnectProvider { .. } => "connect_provider",
             Self::SignInProvider { .. } => "sign_in_provider",
             Self::DisconnectProvider { .. } => "disconnect_provider",
+            Self::ListMcpServers { .. } => "list_mcp_servers",
+            Self::ApproveMcpServer { .. } => "approve_mcp_server",
+            Self::AddMcpServer { .. } => "add_mcp_server",
+            Self::RemoveMcpServer { .. } => "remove_mcp_server",
         }
     }
 }
@@ -114,6 +141,14 @@ mod tests {
             ClientCommand::ConnectProvider { provider: ModelProvider::Anthropic, key: "sk".into() },
             ClientCommand::SignInProvider { provider: ModelProvider::ClaudeSubscription },
             ClientCommand::DisconnectProvider { provider: ModelProvider::Anthropic },
+            ClientCommand::ListMcpServers { path: "/repo".into() },
+            ClientCommand::ApproveMcpServer { path: "/repo".into(), name: "jira".into(), approve: true },
+            ClientCommand::AddMcpServer {
+                path: "/repo".into(),
+                name: "atlassian".into(),
+                server: serde_json::json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"}),
+            },
+            ClientCommand::RemoveMcpServer { path: "/repo".into(), name: "atlassian".into() },
         ];
         for command in commands {
             let json = serde_json::to_string(&command).expect("serialize");

@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::{Value, json};
 use superfik_core::PromptRequest;
 
-pub use self::configured::McpSources;
+pub use self::configured::{McpSources, list};
 pub use self::http::{HttpTransport, parse};
 pub use self::local::LocalTransport;
 pub use self::servers::{ServerSpec, parse_config, servers};

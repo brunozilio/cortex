@@ -13,13 +13,15 @@ use superfik_native::model::providers::ProviderClient;
 use crate::{credentials, header, request};
 
 #[test]
-fn four_providers_use_their_own_authentication_endpoint_and_wire_body() {
-    for provider in ModelProvider::ACCOUNTS {
-        let openai = matches!(provider, ModelProvider::OpenAi | ModelProvider::ChatGptSubscription);
-        let fixture = if openai {
-            include_str!("../fixtures/openai_tool_use.sse")
-        } else {
-            include_str!("../fixtures/anthropic_tool_use.sse")
+fn each_provider_uses_its_own_authentication_endpoint_and_wire_body() {
+    // Kiro streams binary event-stream frames: see `kiro.rs`.
+    for provider in ModelProvider::ACCOUNTS.into_iter().filter(|p| *p != ModelProvider::KiroSubscription) {
+        let fixture = match provider {
+            ModelProvider::OpenAi | ModelProvider::ChatGptSubscription => {
+                include_str!("../fixtures/openai_tool_use.sse")
+            }
+            ModelProvider::CopilotSubscription => include_str!("../fixtures/chat_tool_use.sse"),
+            _ => include_str!("../fixtures/anthropic_tool_use.sse"),
         };
         let http = Arc::new(ScriptedHttp::new([(200, fixture.into())]));
         let client = ProviderClient::new(provider, http.clone(), Arc::new(ProviderKey::new(credentials(provider))));
@@ -60,7 +62,14 @@ fn four_providers_use_their_own_authentication_endpoint_and_wire_body() {
                 assert_eq!(body["system"][0]["text"], "You are Claude Code, Anthropic's official CLI for Claude.");
                 assert_eq!(body["system"][1]["text"], "Help the user.");
             }
-            ModelProvider::Local => unreachable!(),
+            ModelProvider::CopilotSubscription => {
+                assert_eq!(sent.url, "https://api.githubcopilot.com/chat/completions");
+                assert_eq!(header(sent, "authorization"), Some(format!("Bearer {}", crate::token("account-1"))));
+                assert_eq!(header(sent, "copilot-integration-id").as_deref(), Some("copilot-developer-cli"));
+                assert_eq!(header(sent, "x-initiator").as_deref(), Some("user"));
+                assert_eq!(body["messages"][0], json!({"role": "system", "content": "Help the user."}));
+            }
+            ModelProvider::KiroSubscription | ModelProvider::Local => unreachable!(),
         }
     }
 }
@@ -111,7 +120,12 @@ fn codex_done_only_events_and_final_output_are_folded_without_duplicates() {
 
 #[test]
 fn chosen_effort_reaches_each_provider_for_supported_models() {
-    for provider in ModelProvider::ACCOUNTS {
+    // Copilot's effort follows its catalog entry: see `copilot.rs`. Kiro
+    // takes no effort.
+    for provider in ModelProvider::ACCOUNTS
+        .into_iter()
+        .filter(|p| !matches!(p, ModelProvider::CopilotSubscription | ModelProvider::KiroSubscription))
+    {
         let openai = matches!(provider, ModelProvider::OpenAi | ModelProvider::ChatGptSubscription);
         let id = if openai { "gpt-5.5" } else { "claude-opus-5-5" };
         let http = Arc::new(ScriptedHttp::new([(
