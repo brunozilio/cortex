@@ -1,4 +1,4 @@
-//! `xtask lint`: the CLAUDE.md rules clippy cannot see. Findings already
+//! `xtask lint`: the .superfik/SUPERFIK.md rules clippy cannot see. Findings already
 //! present are recorded in `xtask/lint-baseline.txt` (one `rule path` per
 //! line); only findings outside it fail. `lint --update-baseline` rewrites it.
 

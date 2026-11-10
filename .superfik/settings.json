@@ -1,0 +1,17 @@
+{
+  "outputStyle": "Concise",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{"type": "command", "command": "\"$SUPERFIK_PROJECT_DIR\"/.superfik/hooks/pre-pr.sh", "timeout": 600}]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{"type": "command", "command": "\"$SUPERFIK_PROJECT_DIR\"/.superfik/hooks/rustfmt.sh"}]
+      }
+    ]
+  }
+}

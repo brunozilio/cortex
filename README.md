@@ -79,7 +79,7 @@ Architecture: [docs/architecture.md](docs/architecture.md). Decisions:
 ## Developing
 
 ```sh
-export CARGO_TARGET_DIR="$PWD/target/agents/<task>"   # see CLAUDE.md
+export CARGO_TARGET_DIR="$PWD/target/agents/<task>"   # see .superfik/SUPERFIK.md
 cargo nextest run --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo run -q -p xtask -- lint
