@@ -158,11 +158,6 @@ impl McpServer {
     }
 }
 
-/// The run's own and host's servers' tools, without a stop flag (tests).
-pub fn tools(request: &PromptRequest, http: &Arc<dyn Http>) -> Vec<Box<dyn Tool>> {
-    tools_stopped(request, &McpSources::default(), http, &std::sync::atomic::AtomicBool::new(false))
-}
-
 pub fn tools_stopped(
     request: &PromptRequest,
     sources: &McpSources,

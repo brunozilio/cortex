@@ -1,4 +1,4 @@
-//! Which MCP servers a run gets: the app's own (granted with a token per
+//! Which MCP servers a run gets: Superfik's own memory server (granted with a token per
 //! run), the host's (the MCP config file the backend wrote for the run,
 //! `Extensions::mcp_config`), then the configured ones (`configured`).
 

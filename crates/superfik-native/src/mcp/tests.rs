@@ -4,6 +4,10 @@ use super::*;
 use crate::model::http::ScriptedHttp;
 use crate::tools::{Access, Workspace};
 
+fn tools(request: &PromptRequest, http: &Arc<dyn Http>) -> Vec<Box<dyn Tool>> {
+    tools_stopped(request, &McpSources::default(), http, &std::sync::atomic::AtomicBool::new(false))
+}
+
 fn listed(id: u64) -> String {
     json!({
         "jsonrpc": "2.0", "id": id,

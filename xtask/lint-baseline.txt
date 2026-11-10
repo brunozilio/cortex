@@ -1,2 +1,0 @@
-file-too-long crates/superfik-backend/src/plugins/mod.rs
-file-too-long crates/superfik-backend/src/plugins/tests.rs

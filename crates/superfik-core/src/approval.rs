@@ -52,15 +52,6 @@ pub enum PermissionMode {
 impl PermissionMode {
     pub const ALL: [PermissionMode; 4] = [Self::Ask, Self::AcceptEdits, Self::Plan, Self::Bypass];
 
-    pub const fn cli_value(self) -> &'static str {
-        match self {
-            Self::Ask => "default",
-            Self::AcceptEdits => "acceptEdits",
-            Self::Plan => "plan",
-            Self::Bypass => "bypassPermissions",
-        }
-    }
-
     /// The next mode in the order a chat cycles them: ask → edits → plan →
     /// bypass → ask.
     pub const fn next(self) -> Self {
@@ -90,12 +81,6 @@ impl PermissionMode {
     }
 }
 
-impl Question {
-    pub fn answer_text(&self, indices: &[usize]) -> String {
-        indices.iter().filter_map(|i| self.options.get(*i)).map(|c| c.label.as_str()).collect::<Vec<_>>().join(", ")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,22 +94,8 @@ mod tests {
         assert_eq!(Bypass.capped(None), Bypass);
     }
 
-    fn question(multi: bool) -> Question {
-        let choice = |label: &str| Choice { label: label.into(), description: String::new() };
-        Question { header: "File".into(), text: "Which?".into(), options: vec![choice("a"), choice("b")], multi }
-    }
-
     #[test]
-    fn answer_text_joins_picked_labels_in_order() {
-        assert_eq!(question(false).answer_text(&[1]), "b");
-        assert_eq!(question(true).answer_text(&[0, 1]), "a, b");
-        assert_eq!(question(true).answer_text(&[7]), "", "out of range is ignored");
-    }
-
-    #[test]
-    fn modes_map_to_cli_values() {
-        let values: Vec<_> = PermissionMode::ALL.iter().map(|m| m.cli_value()).collect();
-        assert_eq!(values, ["default", "acceptEdits", "plan", "bypassPermissions"]);
+    fn edits_is_the_default_mode() {
         assert_eq!(PermissionMode::default(), PermissionMode::AcceptEdits);
     }
 }

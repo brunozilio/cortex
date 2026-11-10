@@ -1,22 +1,9 @@
 /target
 **/*.rs.bk
 .DS_Store
-*.dmg
-*.iconset
 .env
 .env.*
 .claude/settings.local.json
 
-# Signing material never enters the repository (release secrets hold it).
-*.p12
-*.p8
-*.pem
-*.key
-*.cer
-*.mobileprovision
-
 # Agent worktrees
 .claude/worktrees/
-
-# Wrangler local cache
-.wrangler/

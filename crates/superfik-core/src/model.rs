@@ -131,16 +131,6 @@ impl ModelProvider {
             Self::Local => "Local",
         }
     }
-
-    pub const fn icon(self) -> &'static str {
-        match self {
-            Self::Anthropic | Self::ClaudeSubscription => "anthropic",
-            Self::OpenAi | Self::ChatGptSubscription => "openai",
-            Self::CopilotSubscription => "github",
-            Self::KiroSubscription => "kiro",
-            Self::Local => "local",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
@@ -156,16 +146,6 @@ pub enum Effort {
 impl Effort {
     pub const ALL: [Effort; 5] = [Self::Low, Self::Medium, Self::High, Self::XHigh, Self::Max];
 
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Low => "Low",
-            Self::Medium => "Medium",
-            Self::High => "High",
-            Self::XHigh => "Extra",
-            Self::Max => "Ultracode",
-        }
-    }
-
     pub const fn cli_value(self) -> &'static str {
         match self {
             Self::Low => "low",
@@ -174,21 +154,6 @@ impl Effort {
             Self::XHigh => "xhigh",
             Self::Max => "max",
         }
-    }
-
-    pub fn level(self) -> f32 {
-        let index = Self::ALL.iter().position(|e| *e == self).unwrap_or(0);
-        index as f32 / (Self::ALL.len() - 1) as f32
-    }
-
-    pub fn from_level(level: f32) -> Self {
-        let max = (Self::ALL.len() - 1) as f32;
-        let index = (level.clamp(0.0, 1.0) * max).round() as usize;
-        Self::ALL[index]
-    }
-
-    pub fn is_ultra(self) -> bool {
-        self == Self::Max
     }
 }
 
@@ -225,25 +190,5 @@ mod tests {
     fn only_company_apis_need_an_account() {
         assert!(ModelProvider::ACCOUNTS.iter().all(|p| p.needs_account()));
         assert!(!ModelProvider::Local.needs_account());
-    }
-
-    #[test]
-    fn effort_level_round_trips() {
-        for effort in Effort::ALL {
-            assert_eq!(Effort::from_level(effort.level()), effort);
-        }
-    }
-
-    #[test]
-    fn effort_level_is_clamped() {
-        assert_eq!(Effort::from_level(-3.0), Effort::Low);
-        assert_eq!(Effort::from_level(7.0), Effort::Max);
-    }
-
-    #[test]
-    fn only_max_is_ultra() {
-        assert!(Effort::Max.is_ultra());
-        assert!(!Effort::High.is_ultra());
-        assert_eq!(Effort::Max.label(), "Ultracode");
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "superfik-engine"
-description = "Agent engine abstraction, registry and test engines."
+description = "Agent engine abstraction and a scripted test engine."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

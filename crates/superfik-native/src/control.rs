@@ -38,10 +38,7 @@ impl Control {
     }
 
     pub fn child(&self) -> Arc<Self> {
-        self.child_limited(None)
-    }
-    pub fn child_limited(&self, ceiling: Option<PermissionMode>) -> Arc<Self> {
-        self.child_configured(ceiling, false)
+        self.child_configured(None, false)
     }
     pub fn child_configured(&self, ceiling: Option<PermissionMode>, no_prompts: bool) -> Arc<Self> {
         let mut children = self.children.lock().expect("child controls");
@@ -168,7 +165,7 @@ mod child_policy_tests {
     #[test]
     fn child_permission_ceiling_survives_parent_mode_changes() {
         let parent = Control::new(PermissionMode::Bypass, Arc::default());
-        let read_only = parent.child_limited(Some(PermissionMode::Plan));
+        let read_only = parent.child_configured(Some(PermissionMode::Plan), false);
         let inherited = parent.child();
         assert_eq!(read_only.mode(), PermissionMode::Plan);
         parent.set_mode(PermissionMode::Ask);

@@ -1,10 +1,8 @@
 //! Each user's settings, kept by the server (ADR 0010): what the client
-//! wrote, opaque here (language, theme, sounds, recents…), one file per
+//! wrote, opaque here (the last model, effort and mode…), one file per
 //! owner. There is no settings file on the client.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 use superfik_core::Principal;
 
@@ -52,20 +50,6 @@ impl SettingsStore for FileSettingsStore {
         let partial = path.with_extension("json.partial");
         std::fs::write(&partial, json).map_err(|error| error.to_string())?;
         std::fs::rename(&partial, &path).map_err(|error| error.to_string())
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct InMemorySettingsStore(Mutex<HashMap<Principal, serde_json::Value>>);
-
-impl SettingsStore for InMemorySettingsStore {
-    fn load(&self, owner: &Principal) -> Option<serde_json::Value> {
-        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(owner).cloned()
-    }
-
-    fn save(&self, owner: &Principal, settings: &serde_json::Value) -> Result<(), String> {
-        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).insert(owner.clone(), settings.clone());
-        Ok(())
     }
 }
 

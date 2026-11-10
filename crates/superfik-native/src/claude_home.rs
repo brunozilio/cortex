@@ -104,9 +104,6 @@ pub(crate) fn subdirs(dir: &Path) -> Vec<PathBuf> {
     dirs.sort();
     dirs
 }
-pub fn bare_name(name: &str) -> &str {
-    name.rsplit(':').next().unwrap_or(name)
-}
 
 #[cfg(test)]
 mod tests {
@@ -134,11 +131,5 @@ mod tests {
         let installed = json!({"version": 1, "plugins": {"a@m": {"installPath": "/c/a"}}});
         assert_eq!(parse_installed(&installed, &Value::Null, Path::new("/r"))[0].name, "a");
         assert!(parse_installed(&json!([1, 2]), &Value::Null, Path::new("/r")).is_empty());
-    }
-
-    #[test]
-    fn namespaced_names_are_bared() {
-        assert_eq!(bare_name("anthropic-skills:pdf"), "pdf");
-        assert_eq!(bare_name("pdf"), "pdf");
     }
 }

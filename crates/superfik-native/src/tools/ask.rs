@@ -1,6 +1,6 @@
-//! `AskUserQuestion`: questions with options the user answers on the ask
-//! card. The agent loop runs it (it waits for the user); this is its
-//! schema and the pure translation to and from the card.
+//! `AskUserQuestion`: questions with options the user answers in the
+//! chat. The agent loop runs it (it waits for the user); this is its
+//! schema and the pure translation to and from the question.
 
 use serde_json::{Value, json};
 use superfik_core::{Choice, Question};

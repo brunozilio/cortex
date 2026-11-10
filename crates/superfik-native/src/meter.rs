@@ -30,7 +30,6 @@ impl ModelApi for Metered {
             .map(|rate| rate.estimate(u.input, u.output, u.cache_read, u.cache_write));
         self.ledger.costs.lock().map_err(|_| ModelError::Provider("usage ledger unavailable".into()))?.push(cost);
         self.gate.emit(EngineEvent::Usage(ModelUsage {
-            accounted_by_server: false,
             model: request.model.clone(),
             input: u.input,
             output: u.output,

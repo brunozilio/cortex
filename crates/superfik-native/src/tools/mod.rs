@@ -1,6 +1,6 @@
 //! The agent's tools. Names, parameters and behaviour follow the tools
 //! coding agents already know (`Read`, `Edit`, `Bash`…), so skills, agents
-//! and the app's step labels work unchanged; descriptions are our own.
+//! and the chat's step labels work unchanged; descriptions are our own.
 
 pub mod advisor;
 pub mod ask;

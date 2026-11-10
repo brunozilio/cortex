@@ -1,4 +1,4 @@
-//! Filesystem setup for a custom agent. Runs under the tool identity.
+//! Filesystem setup for a custom agent: its worktree and memory folder.
 mod git;
 
 use self::git::{git, git_stopped};

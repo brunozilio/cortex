@@ -50,8 +50,8 @@ for a subscription's browser sign-in). `ListModels` asks every connected
 provider's catalog and lists downloaded MLX models. A run uses its
 provider's key (`RunCredentials::model`, never serialized).
 
-- **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`,
-  `superfik`. Project or user agents of the same name replace them.
+- **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`.
+  Project or user agents of the same name replace them.
 - **Prompt**: planning mode, output styles, tool descriptions carrying the
   working rules; project instructions and rules (`docs/native-engine.md`).
 - **Compaction** keeps only the nine-section `<summary>`.

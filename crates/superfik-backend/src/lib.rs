@@ -28,18 +28,14 @@ mod services;
 mod settings;
 
 pub use authorizer::{AuthError, Authorizer, LocalAuthorizer, forbidden};
-pub use dirs::{app_data_dir, local_data_dir};
+pub use dirs::local_data_dir;
 pub use extensions::{Extensions, McpServerSpec};
 pub use handler::CommandHandler;
-pub use local::{LocalBackend, Workers};
-pub use memory::{Embedder, FileMemoryStore, InMemoryStore, Memories, MemoryStore, ModelChoice, Purpose, project_key};
-pub use native::engine as native_engine;
+pub use local::LocalBackend;
+pub use memory::{InMemoryStore, Memories, MemoryStore, project_key};
 pub use outbox::Outbox;
-pub use providers::{
-    BrowserSignIn, FileProviderStore, InMemoryProviderStore, ModelCatalog, ModelProviders, ProviderCatalog,
-    ProviderStore, SignIn,
-};
-pub use secrets::{InMemorySecretStore, SealedSecretStore, SecretStore, Secrets, system_secrets};
+pub use providers::{InMemoryProviderStore, ModelProviders, ProviderStore};
+pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
-pub use settings::{FileSettingsStore, InMemorySettingsStore, SettingsStore};
+pub use settings::SettingsStore;
 pub use superfik_protocol::{Backend, BackendError, Wake};

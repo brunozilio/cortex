@@ -26,8 +26,6 @@ impl TokenRates {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModelUsage {
-    #[serde(default)]
-    pub accounted_by_server: bool,
     pub model: String,
     pub input: u64,
     pub output: u64,

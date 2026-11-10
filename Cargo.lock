@@ -3957,14 +3957,12 @@ dependencies = [
  "superfik-native",
  "superfik-oauth",
  "superfik-private-file",
- "superfik-process",
  "superfik-protocol",
  "superfik-providers",
  "tempfile",
  "thiserror 2.0.21",
  "tiny_http",
  "tracing",
- "ureq",
  "uuid",
 ]
 
@@ -4009,7 +4007,6 @@ dependencies = [
 name = "superfik-mlx"
 version = "0.2.0"
 dependencies = [
- "serde",
  "serde_json",
  "sha2",
  "superfik-core",

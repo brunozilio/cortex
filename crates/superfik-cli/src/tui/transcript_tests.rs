@@ -44,7 +44,6 @@ fn a_sub_agent_shows_its_own_steps_and_usage_counts_tokens() {
     transcript.apply(&EngineEvent::AgentEvent { index: 0, event: Box::new(step) });
     assert_eq!(transcript.activity.as_deref(), Some("Explore: Grep(fn test)"));
     let usage = ModelUsage {
-        accounted_by_server: false,
         model: "m".into(),
         input: 1_000,
         output: 40,

@@ -1,6 +1,5 @@
-//! [`NativeEngine`]: Superfik's own engine behind the same
-//! [`AgentEngine`] trait as the CLI adapters, so the reducer, the protocol
-//! and the canvas see no difference.
+//! [`NativeEngine`]: Superfik's own engine behind the [`AgentEngine`]
+//! trait the backend drives.
 //!
 //! - `job`: a run's setup (session, brief, tools, agent, worktree, model).
 //! - `converse`: its prompt, hooks, agent loop and saved conversation.

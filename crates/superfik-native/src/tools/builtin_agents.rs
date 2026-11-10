@@ -8,8 +8,6 @@ use crate::transcript::{Block, Message, Role};
 
 pub const FORK: &str = "fork";
 
-pub const BACKGROUND: &str = "superfik";
-
 const WRITERS: [&str; 4] = ["Agent", "Edit", "Write", "StructuredOutput"];
 
 pub const GENERAL: &str = "\
@@ -174,15 +172,6 @@ pub fn all() -> Vec<FoundAgent> {
             config: read_only(),
         },
         FoundAgent {
-            name: BACKGROUND.into(),
-            description: "Background job: narrates as it works, restates results in its own words and ends \
-                          with a `result:`, `needs input:` or `failed:` line its report is read by. Pick it as the \
-                          main agent (`\"agent\": \"superfik\"` in settings) for work no one watches."
-                .into(),
-            instructions: superfik_core::job::CONVENTIONS.into(),
-            config: AgentConfig::default(),
-        },
-        FoundAgent {
             name: FORK.into(),
             description: "Forks you: inherits your whole conversation and your model, and carries out one \
                           directive given in `prompt`. Use it for a side task that needs what you already know."
@@ -209,7 +198,6 @@ mod tests {
         assert!(explore.config.omit_instructions);
         let named = |name: &str| all().into_iter().find(|agent| agent.name == name).expect("built in");
         assert!(named(FORK).config.allows("Edit"), "a fork keeps the parent's tools");
-        assert!(named(BACKGROUND).instructions.contains("`result:`"));
     }
 
     #[test]
