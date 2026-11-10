@@ -40,7 +40,7 @@ pub struct Extensions {
     pub dirs: Vec<PathBuf>,
     pub mcp: Vec<McpServerSpec>,
     pub local: Vec<LocalMcp>,
-    /// Installed plugins' folders (Claude Code's layout, ADR 0019).
+    /// Superfik plugins' folders (ADR 0019).
     pub plugins: Vec<PathBuf>,
 }
 

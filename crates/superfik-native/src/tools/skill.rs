@@ -1,7 +1,7 @@
 //! Skills: `SKILL.md` instructions the agent loads by name with the `Skill`
 //! tool. Found where coding agents keep them: the project's
 //! (`.superfik/skills`, `.claude/skills`), the user's (`~/.superfik/skills`,
-//! `~/.claude` and its Claude Code plugins) and the SDK host's folders.
+//! `~/.claude`), Superfik plugins and the SDK host's folders.
 //! On a clash of names the first found wins.
 
 use std::path::{Path, PathBuf};

@@ -217,7 +217,7 @@ mod tests {
         std::fs::write(
             good.path().join("hooks/hooks.json"),
             r#"{"description": "Checks", "hooks": {"PreToolUse": [{"matcher": "Bash",
-                "hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/check.sh"}]}]}}"#,
+                "hooks": [{"type": "command", "command": "${SUPERFIK_PLUGIN_ROOT}/check.sh"}]}]}}"#,
         )
         .expect("hooks");
         std::fs::create_dir_all(broken.path().join("hooks")).expect("hooks dir");

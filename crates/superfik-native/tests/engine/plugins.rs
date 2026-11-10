@@ -1,5 +1,5 @@
-//! An installed plugin, in Claude Code's layout, reaches a run whole: its
-//! commands, its hooks and its MCP servers.
+//! An installed plugin reaches a run whole: its commands, its hooks and its
+//! MCP servers.
 
 use std::sync::{Arc, Mutex};
 
@@ -29,16 +29,16 @@ fn a_plugin_brings_its_command_hook_and_mcp_tools_to_a_run() {
         std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
         std::fs::write(path, text).expect("write");
     };
-    write(".claude-plugin/plugin.json", r#"{"name": "acme"}"#);
+    write(".superfik-plugin/plugin.json", r#"{"name": "acme"}"#);
     write("commands/hello.md", "---\ndescription: Greets\n---\nPLUGIN_COMMAND_SENTINEL $ARGUMENTS");
     write("server.sh", SERVER);
     write(
         ".mcp.json",
-        r#"{"mcpServers": {"tools": {"command": "/bin/sh", "args": ["${CLAUDE_PLUGIN_ROOT}/server.sh"]}}}"#,
+        r#"{"mcpServers": {"tools": {"command": "/bin/sh", "args": ["${SUPERFIK_PLUGIN_ROOT}/server.sh"]}}}"#,
     );
     write(
         "hooks/hooks.json",
-        r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "touch '${CLAUDE_PLUGIN_ROOT}/fired'"}]}]}}"#,
+        r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "touch '${SUPERFIK_PLUGIN_ROOT}/fired'"}]}]}}"#,
     );
 
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));

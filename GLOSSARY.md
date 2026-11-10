@@ -37,5 +37,5 @@ and MCP servers (HTTP, stdio or in-process).
 _Avoid_: Plugin (that is an installed package, below)
 
 **Plugin**:
-A folder in Claude Code's plugin layout, put in `~/.superfik/plugins/`:
+A folder with `.superfik-plugin/plugin.json`, put in `~/.superfik/plugins/`:
 skills, commands, agents, hooks and MCP servers under one name (ADR 0019).

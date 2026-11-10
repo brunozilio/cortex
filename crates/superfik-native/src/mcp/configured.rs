@@ -133,7 +133,7 @@ mod tests {
             r#"{"mcpServers": {"jira": {"command": "jira-mcp", "args": ["--stdio"]}, "sonar": {"command": "sonar-mcp"}}}"#,
         );
         write(repo.path().join(".superfik/settings.local.json"), r#"{"disabledMcpjsonServers": ["sonar"]}"#);
-        write(plugin.path().join(".claude-plugin/plugin.json"), r#"{"name": "acme"}"#);
+        write(plugin.path().join(".superfik-plugin/plugin.json"), r#"{"name": "acme"}"#);
         write(plugin.path().join(".mcp.json"), r#"{"mcpServers": {"datadog": {"command": "dd-mcp"}}}"#);
         let mut request = PromptRequest::plain(repo.path().to_path_buf(), "", ModelOption::new("", ""));
         request.extensions = Some(Extensions {

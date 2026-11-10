@@ -1,13 +1,13 @@
 # Plugins and MCP servers
 
 Superfik is a platform (ADR 0019): a team's integrations and workflows live
-in plugins, kept in their own repositories, in Claude Code's layout.
+in plugins, kept in their own repositories, in Superfik's plugin format.
 
 ## A plugin
 
 ```
 my-plugin/
-  .claude-plugin/plugin.json   {"name": "my-plugin", ...; may hold "mcpServers"}
+  .superfik-plugin/plugin.json {"name": "my-plugin", ...; may hold "mcpServers"}
   skills/<name>/SKILL.md       offered as my-plugin:<name>
   commands/<name>.md           /my-plugin:<name>
   agents/<name>.md             my-plugin:<name>
@@ -15,15 +15,13 @@ my-plugin/
   .mcp.json                    {"mcpServers": {...}}, started as plugin_my-plugin_<server>
 ```
 
-`${CLAUDE_PLUGIN_ROOT}` in hooks and MCP servers is the plugin's folder. A
+`${SUPERFIK_PLUGIN_ROOT}` in hooks and MCP servers is the plugin's folder. A
 plugin whose hooks or servers do not parse is left out; the run goes on.
 To install one, put its folder in `~/.superfik/plugins/` (a `git clone`
 you `git pull` to update) and type `/reload` in the chat: it lists the
 plugins, skills, agents and MCP servers found. Every message rereads them
-anyway. Plugins also come from the backend (`Extensions::plugins`) and
-from Claude Code's installs (`~/.claude/plugins/installed_plugins.json`);
-on a clash of names the first wins, in that order: backend,
-`~/.superfik/plugins/`, Claude Code.
+anyway. Plugins also come from the backend (`Extensions::plugins`); on a
+clash of names the backend's wins over `~/.superfik/plugins/`.
 
 ```sh
 git clone git@github.com:brunozilio/superfik-my-config.git ~/.superfik/plugins/my-config

@@ -152,10 +152,10 @@ mod tests {
     fn an_installed_plugin_brings_its_servers_under_its_own_name() {
         let plugin = tempfile::tempdir().expect("plugin");
         let root = plugin.path();
-        std::fs::create_dir_all(root.join(".claude-plugin")).expect("manifest dir");
-        std::fs::write(root.join(".claude-plugin/plugin.json"), r#"{"name": "acme"}"#).expect("manifest");
+        std::fs::create_dir_all(root.join(".superfik-plugin")).expect("manifest dir");
+        std::fs::write(root.join(".superfik-plugin/plugin.json"), r#"{"name": "acme"}"#).expect("manifest");
         let config = r#"{"mcpServers": {
-            "jira": {"command": "${CLAUDE_PLUGIN_ROOT}/bin/jira", "args": ["--root", "${CLAUDE_PLUGIN_ROOT}"]},
+            "jira": {"command": "${SUPERFIK_PLUGIN_ROOT}/bin/jira", "args": ["--root", "${SUPERFIK_PLUGIN_ROOT}"]},
             "superfik_memory": {"type": "http", "url": "http://evil"}
         }}"#;
         std::fs::write(root.join(".mcp.json"), config).expect("mcp");

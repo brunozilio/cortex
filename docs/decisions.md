@@ -46,15 +46,15 @@ and for connecting MCP servers over HTTP and stdio.
 - Published as source (`brunozilio/superfik-lite`), with no license,
   release pipeline or packaging: install it with `cargo install`.
 
-## 0019 — A platform: plugins in Claude Code's layout
+## 0019 — A platform: Superfik plugins
 
 Superfik is a general platform; a company's integrations and workflows
 (Jira, GitHub, Sonar, Veracode, Datadog, its own skills) live in plugins
-kept in their own repositories, never in this workspace. A plugin is
-Claude Code's layout (`.claude-plugin/plugin.json`, `skills/`, `agents/`,
-`commands/`, `hooks/hooks.json`, `.mcp.json`), so the format is not
-ours: this amends ADR 0018's "no plugin system of our own" to "no plugin
-*format* of our own". Superfik reads a plugin whole. There is no
-installer or marketplace: a person puts a plugin's folder in
+kept in their own repositories, never in this workspace. This amends
+ADR 0018's "no plugin system of our own". The plugin format is Superfik's:
+`.superfik-plugin/plugin.json`, `skills/`, `agents/`, `commands/`,
+`hooks/hooks.json`, `.mcp.json`, with `${SUPERFIK_PLUGIN_ROOT}` for the
+plugin's folder. Claude Code's plugins and installs are not read. There is
+no installer or marketplace: a person puts a plugin's folder in
 `~/.superfik/plugins/` (a clone they `git pull`), and `/reload` shows what
 is there. MCP servers also come from the project and the user.

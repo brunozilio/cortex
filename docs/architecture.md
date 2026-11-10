@@ -103,13 +103,14 @@ MCP servers come from the host: HTTP/stdio servers go in a run's private
 MCP config (`0600`, removed on the terminal event), in-process ones ride on
 the run's credentials.
 
-**Plugins** (ADR 0019) use Claude Code's plugin layout and reach a run
+**Plugins** (ADR 0019) are Superfik's own format
+(`.superfik-plugin/plugin.json`) and reach a run
 whole (`superfik_native::plugins`): skills, commands and agents as
 `<plugin>:<name>`, `hooks/hooks.json` joined to the settings' hooks, and
 `.mcp.json` servers as `plugin_<plugin>_<server>`, with
-`${CLAUDE_PLUGIN_ROOT}` filled in. They come from the backend
-(`Extensions::plugins`, never from a client), from the folders in
-`~/.superfik/plugins/` and from Claude Code's installs; a plugin whose
+`${SUPERFIK_PLUGIN_ROOT}` filled in. They come from the backend
+(`Extensions::plugins`, never from a client) and from the folders in
+`~/.superfik/plugins/`; a plugin whose
 hooks or servers do not parse is left out, the run goes on. Every run
 rereads them; `/reload` refreshes what the chat keeps and lists them.
 

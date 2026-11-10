@@ -4,16 +4,11 @@
 //! - `skills/<name>/SKILL.md` and `agents/<name>.md`: the user's own.
 //! - `skills/synced/<bucket>/<name>/SKILL.md`: skills synced from
 //!   claude.ai; Claude Code exposes them as `anthropic-skills:<name>`.
-//! - `plugins/installed_plugins.json`: installed plugins and their
-//!   `installPath`, a plugin folder `crate::plugins` reads whole; their
-//!   items are namespaced `<plugin>:<name>`. `plugins/marketplaces/` only holds
-//!   catalogues of plugins that are *available*, so it is not scanned.
-//! - `settings.json` → `enabledPlugins`: a plugin set to `false` is off.
+//!
+//! Its plugins are not read: Superfik's are its own (`crate::plugins`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
-
-use serde_json::Value;
 
 pub const SYNCED_NAMESPACE: &str = "anthropic-skills";
 
@@ -21,12 +16,6 @@ pub const SYNCED_NAMESPACE: &str = "anthropic-skills";
 pub struct Source {
     pub dir: PathBuf,
     pub namespace: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InstalledPlugin {
-    pub name: String,
-    pub path: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,8 +36,7 @@ impl ClaudeHome {
         &self.root
     }
 
-    /// The user's own and synced skills; installed plugins' come from
-    /// [`crate::plugins::found`].
+    /// The user's own and synced skills.
     pub fn skill_sources(&self) -> Vec<Source> {
         let mut sources = vec![Source { dir: self.root.join("skills"), namespace: None }];
         sources.extend(
@@ -62,40 +50,6 @@ impl ClaudeHome {
     pub fn agent_sources(&self) -> Vec<Source> {
         vec![Source { dir: self.root.join("agents"), namespace: None }]
     }
-
-    pub fn installed_plugins(&self, repo: &Path) -> Vec<InstalledPlugin> {
-        let installed = read_json(&self.root.join("plugins").join("installed_plugins.json"));
-        let settings = read_json(&self.root.join("settings.json"));
-        parse_installed(&installed, &settings, repo)
-    }
-}
-
-pub fn parse_installed(installed: &Value, settings: &Value, repo: &Path) -> Vec<InstalledPlugin> {
-    let Some(plugins) = installed.get("plugins").and_then(Value::as_object) else { return Vec::new() };
-    let mut found: Vec<InstalledPlugin> = Vec::new();
-    for (id, entries) in plugins {
-        if settings["enabledPlugins"].get(id).and_then(Value::as_bool) == Some(false) {
-            continue;
-        }
-        let name = id.split('@').next().unwrap_or(id).to_owned();
-        let entries: Vec<&Value> = match entries {
-            Value::Array(list) => list.iter().collect(),
-            single => vec![single],
-        };
-        let in_scope = |entry: &&Value| match entry.get("projectPath").and_then(Value::as_str) {
-            Some(project) => Path::new(project) == repo,
-            None => true,
-        };
-        if let Some(path) = entries.into_iter().filter(in_scope).find_map(|entry| entry.get("installPath")?.as_str()) {
-            found.push(InstalledPlugin { name, path: PathBuf::from(path) });
-        }
-    }
-    found.sort_by(|a, b| a.name.cmp(&b.name));
-    found
-}
-
-fn read_json(path: &Path) -> Value {
-    fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok()).unwrap_or(Value::Null)
 }
 
 pub(crate) fn subdirs(dir: &Path) -> Vec<PathBuf> {
@@ -103,33 +57,4 @@ pub(crate) fn subdirs(dir: &Path) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).filter(|path| path.is_dir()).collect();
     dirs.sort();
     dirs
-}
-
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::*;
-
-    #[test]
-    fn parses_v2_installs_with_scope_and_enablement() {
-        let installed = json!({"version": 2, "plugins": {
-            "review@official": [{"scope": "user", "installPath": "/c/review/1.0"}],
-            "off@official": [{"scope": "user", "installPath": "/c/off/1.0"}],
-            "local@official": [{"scope": "project", "projectPath": "/other", "installPath": "/c/local/1.0"}],
-            "mine@official": [{"scope": "project", "projectPath": "/repo", "installPath": "/c/mine/1.0"}]
-        }});
-        let settings = json!({"enabledPlugins": {"off@official": false, "review@official": true}});
-        let plugins = parse_installed(&installed, &settings, Path::new("/repo"));
-        let names: Vec<&str> = plugins.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(names, vec!["mine", "review"]);
-        assert_eq!(plugins[1].path, PathBuf::from("/c/review/1.0"));
-    }
-
-    #[test]
-    fn parses_v1_installs_and_tolerates_garbage() {
-        let installed = json!({"version": 1, "plugins": {"a@m": {"installPath": "/c/a"}}});
-        assert_eq!(parse_installed(&installed, &Value::Null, Path::new("/r"))[0].name, "a");
-        assert!(parse_installed(&json!([1, 2]), &Value::Null, Path::new("/r")).is_empty());
-    }
 }

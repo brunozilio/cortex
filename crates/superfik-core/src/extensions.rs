@@ -12,9 +12,8 @@ pub struct Extensions {
     pub dirs: Vec<PathBuf>,
     #[serde(default)]
     pub mcp_config: Option<PathBuf>,
-    /// Installed plugins' folders, in Claude Code's plugin layout
-    /// (`.claude-plugin/plugin.json`, `skills/`, `agents/`, `commands/`,
-    /// `hooks/hooks.json`, `.mcp.json`).
+    /// Superfik plugins' folders (ADR 0019: `.superfik-plugin/plugin.json`,
+    /// `skills/`, `agents/`, `commands/`, `hooks/hooks.json`, `.mcp.json`).
     #[serde(default)]
     pub plugins: Vec<PathBuf>,
     /// The owner's home folder for the run's user settings, skills and MCP
