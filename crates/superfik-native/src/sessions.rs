@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use sha2::{Digest, Sha256};
 use superfik_core::{Principal, PromptRequest, SessionId};
 
+use crate::checkpoints::Checkpoint;
 use crate::transcript::Message;
 
 pub trait Sessions: Send + Sync {
@@ -39,6 +40,14 @@ pub trait Sessions: Send + Sync {
     fn save_for(&self, request: &PromptRequest, id: &SessionId, history: &[Message]) -> Result<(), String> {
         self.save(&scoped_id(request, id), history)
     }
+    /// The conversation's checkpoints, oldest first (none when the store
+    /// keeps none).
+    fn load_checkpoints(&self, _request: &PromptRequest, _id: &SessionId) -> Result<Vec<Checkpoint>, String> {
+        Ok(Vec::new())
+    }
+    fn save_checkpoints(&self, _request: &PromptRequest, _id: &SessionId, _all: &[Checkpoint]) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 fn scoped_id(request: &PromptRequest, id: &SessionId) -> SessionId {
@@ -53,10 +62,19 @@ fn scoped_id(request: &PromptRequest, id: &SessionId) -> SessionId {
 pub struct InMemorySessions {
     kept: Mutex<HashMap<SessionId, Vec<Message>>>,
     worktrees: Mutex<HashMap<SessionId, crate::agent_runtime::WorktreeState>>,
+    checkpoints: Mutex<HashMap<SessionId, Vec<Checkpoint>>>,
 }
 
 #[cfg(any(test, feature = "test-support"))]
 impl Sessions for InMemorySessions {
+    fn load_checkpoints(&self, request: &PromptRequest, id: &SessionId) -> Result<Vec<Checkpoint>, String> {
+        let kept = self.checkpoints.lock().map_err(|_| "checkpoints unavailable")?;
+        Ok(kept.get(&scoped_id(request, id)).cloned().unwrap_or_default())
+    }
+    fn save_checkpoints(&self, request: &PromptRequest, id: &SessionId, all: &[Checkpoint]) -> Result<(), String> {
+        self.checkpoints.lock().map_err(|_| "checkpoints unavailable")?.insert(scoped_id(request, id), all.to_vec());
+        Ok(())
+    }
     fn load_worktree(
         &self,
         request: &PromptRequest,
@@ -100,29 +118,21 @@ impl FileSessions {
     }
 }
 
-impl Sessions for FileSessions {
-    fn load_worktree(
-        &self,
-        request: &PromptRequest,
-        id: &SessionId,
-    ) -> Result<Option<crate::agent_runtime::WorktreeState>, String> {
-        let path = self.dir.join(format!("worktree-{}.json", scoped_id(request, id).0));
-        match std::fs::read(path) {
+impl FileSessions {
+    fn read_json<T: serde::de::DeserializeOwned>(&self, name: String) -> Result<Option<T>, String> {
+        match std::fs::read(self.dir.join(name)) {
             Ok(bytes) => serde_json::from_slice(&bytes).map(Some).map_err(|e| e.to_string()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e.to_string()),
         }
     }
-    fn save_worktree(
-        &self,
-        request: &PromptRequest,
-        id: &SessionId,
-        state: &crate::agent_runtime::WorktreeState,
-    ) -> Result<(), String> {
+
+    /// Writes only-the-owner-can-read JSON, whole or not at all.
+    fn write_json(&self, name: String, value: &impl serde::Serialize) -> Result<(), String> {
         std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
-        let path = self.dir.join(format!("worktree-{}.json", scoped_id(request, id).0));
+        let path = self.dir.join(name);
         let partial = path.with_extension(format!("{}.partial", uuid::Uuid::new_v4()));
-        let bytes = serde_json::to_vec(state).map_err(|e| e.to_string())?;
+        let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
         let result = (|| {
             superfik_private_file::write(&partial, &bytes)?;
             std::fs::rename(&partial, &path)
@@ -131,6 +141,30 @@ impl Sessions for FileSessions {
             let _ = std::fs::remove_file(partial);
         }
         result.map_err(|e: std::io::Error| e.to_string())
+    }
+}
+
+impl Sessions for FileSessions {
+    fn load_worktree(
+        &self,
+        request: &PromptRequest,
+        id: &SessionId,
+    ) -> Result<Option<crate::agent_runtime::WorktreeState>, String> {
+        self.read_json(format!("worktree-{}.json", scoped_id(request, id).0))
+    }
+    fn save_worktree(
+        &self,
+        request: &PromptRequest,
+        id: &SessionId,
+        state: &crate::agent_runtime::WorktreeState,
+    ) -> Result<(), String> {
+        self.write_json(format!("worktree-{}.json", scoped_id(request, id).0), state)
+    }
+    fn load_checkpoints(&self, request: &PromptRequest, id: &SessionId) -> Result<Vec<Checkpoint>, String> {
+        Ok(self.read_json(format!("checkpoints-{}.json", scoped_id(request, id).0))?.unwrap_or_default())
+    }
+    fn save_checkpoints(&self, request: &PromptRequest, id: &SessionId, all: &[Checkpoint]) -> Result<(), String> {
+        self.write_json(format!("checkpoints-{}.json", scoped_id(request, id).0), &all)
     }
     fn load_for(&self, request: &PromptRequest, id: &SessionId) -> Option<Vec<Message>> {
         self.load_for_checked(request, id).ok().flatten()

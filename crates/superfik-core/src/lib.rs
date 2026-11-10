@@ -30,7 +30,7 @@ pub use agents::{AgentStatus, CustomAgent};
 pub use approval::{AgentAsk, AskId, AskKind, Choice, Decision, PermissionMode, Question};
 pub use command::Command;
 pub use engines::EngineProblem;
-pub use events::{EngineEvent, RunId, ToolCall};
+pub use events::{EngineEvent, Rewound, RunId, ToolCall};
 pub use extensions::Extensions;
 pub use failure::FailureKind;
 pub use ids::{Id, OrgId, SecretId, SessionId, UserId};

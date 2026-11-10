@@ -4,11 +4,13 @@
 //! - `job`: a run's setup (session, brief, tools, agent, worktree, model).
 //! - `converse`: its prompt, hooks, agent loop and saved conversation.
 //! - `report`: side calls and how a run ends on the gate.
+//! - `rewind`: each run's checkpoint, and going back to one.
 
 mod converse;
 mod date;
 mod job;
 mod report;
+mod rewind;
 
 use std::sync::Arc;
 

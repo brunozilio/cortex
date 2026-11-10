@@ -64,6 +64,11 @@ pub enum SessionCommand {
     Side,
     HeadsUp,
     Rename,
+    /// Back to the checkpoint taken when the prompt numbered `.0` was sent
+    /// (as [`EngineEvent::Checkpoint`](crate::EngineEvent::Checkpoint)
+    /// numbered it): the files the agent edited since are restored and the
+    /// conversation is cut before that prompt.
+    Rewind(u32),
 }
 
 impl SessionCommand {

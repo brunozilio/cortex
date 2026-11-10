@@ -170,6 +170,7 @@ impl Job {
                 Err(error) => return self.fail(&error, FailureKind::Other),
             }
         }
+        let checkpoint = self.open_checkpoint(&session, &history);
         history.push(user);
         let outcome = agent.run(&mut history);
         let _ =
@@ -186,6 +187,7 @@ impl Job {
         if let Err(error) = self.sessions.save_for(&self.request, &session, &history) {
             return self.fail(&format!("Could not save the conversation: {error}"), FailureKind::Other);
         }
+        self.keep_checkpoint(&session, checkpoint);
         match outcome {
             Ok(_usage) => self.completed(started, ledger.cost()),
             Err(Ending::Cancelled) => {

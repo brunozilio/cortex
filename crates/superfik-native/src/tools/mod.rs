@@ -92,6 +92,9 @@ pub struct Workspace {
     pub(crate) seen_rules: Arc<Mutex<HashSet<PathBuf>>>,
     pub safety: Option<Arc<crate::guard::Safety>>,
     pub advisor: Option<String>,
+    /// What the run's `Edit`s and `Write`s changed, for its checkpoint;
+    /// shared with its sub-agents.
+    pub files: Option<Arc<crate::checkpoints::FileHistory>>,
 }
 
 impl Workspace {
@@ -111,6 +114,7 @@ impl Workspace {
             model: superfik_core::ModelOption::new("unknown", "Unknown"),
             safety: None,
             advisor: None,
+            files: None,
         }
     }
 
@@ -143,6 +147,14 @@ impl Workspace {
             seen_rules: Arc::default(),
             safety: self.safety.as_ref().map(|safety| Arc::new(safety.fork())),
             advisor: self.advisor.clone(),
+            files: self.files.clone(),
+        }
+    }
+
+    /// Call before a tool writes `path`, so the run's checkpoint can put it back.
+    pub fn before_write(&self, path: &std::path::Path) {
+        if let Some(files) = &self.files {
+            files.before_write(path);
         }
     }
 

@@ -1,6 +1,7 @@
 //! The native engine through `AgentEngine::start`, as the backend drives it.
 
 mod agents;
+mod checkpoints;
 mod mcp;
 mod plugins;
 mod runs;

@@ -135,7 +135,7 @@ pub fn answer(
         SessionCommand::Rename => {
             branch_name(api, template, history, stop)?.map(|name| ChoreAnswer::Title(spoken(&name)))
         }
-        SessionCommand::MeasureContext | SessionCommand::Compact => None,
+        SessionCommand::MeasureContext | SessionCommand::Compact | SessionCommand::Rewind(_) => None,
     })
 }
 

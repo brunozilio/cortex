@@ -74,6 +74,7 @@ impl Tool for Edit {
         };
         let before = text.find(old).map_or("", |at| &text[..at]);
         let shown = super::shown_diff::edit(&format!("Edited {name}"), before, old, new);
+        workspace.before_write(&path);
         match std::fs::write(&path, changed) {
             Ok(()) => Outcome::ok(if count == 1 {
                 format!("Edited {name}.")

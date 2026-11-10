@@ -67,6 +67,10 @@ pub enum EngineEvent {
     ContextMeasured(ContextUsage),
     Compacted(Compaction),
     Chore(crate::usage::ChoreAnswer),
+    /// The run's prompt opened checkpoint `.0`, which
+    /// [`SessionCommand::Rewind`](crate::SessionCommand::Rewind) goes back to.
+    Checkpoint(u32),
+    Rewound(Rewound),
     Asked(AgentAsk),
     AskWithdrawn(AskId),
     Completed {
@@ -76,6 +80,19 @@ pub enum EngineEvent {
     Failure(FailureKind),
     Failed(String),
     Cancelled,
+}
+
+/// What a rewind did.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Rewound {
+    pub checkpoint: u32,
+    /// The prompt that opened the checkpoint, to send again or edit.
+    pub prompt: String,
+    /// Files put back as they were (or removed, when the agent made them).
+    pub restored: Vec<std::path::PathBuf>,
+    /// Whether the conversation was cut too; it is not when it was
+    /// compacted since the checkpoint.
+    pub conversation: bool,
 }
 
 impl EngineEvent {

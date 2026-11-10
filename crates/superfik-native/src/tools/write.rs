@@ -51,6 +51,7 @@ impl Tool for Write {
         {
             return Outcome::error(format!("Could not create {}: {error}", parent.display()));
         }
+        workspace.before_write(&path);
         match std::fs::write(&path, content) {
             Ok(()) => {
                 workspace.mark_read(&path);

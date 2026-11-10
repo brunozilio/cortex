@@ -9,6 +9,7 @@ pub mod agent;
 pub mod agent_runtime;
 mod boundary;
 pub mod brief;
+pub mod checkpoints;
 pub mod chores;
 pub mod claude_home;
 pub mod control;

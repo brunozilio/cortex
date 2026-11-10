@@ -47,6 +47,9 @@ impl Job {
         if let Some(command) = self.request.command.filter(|c| c.is_chore()) {
             return self.chore(command, &history, started);
         }
+        if let Some(SessionCommand::Rewind(index)) = self.request.command {
+            return self.rewind(&session, history, index, started);
+        }
         self.gate.emit(EngineEvent::SessionStarted(session.clone()));
         let brief = match crate::brief::Brief::load(&self.request) {
             Ok(brief) => brief,
@@ -84,6 +87,7 @@ impl Job {
         let workspace = Arc::get_mut(&mut self.workspace).expect("unshared setup");
         workspace.stop = self.control.shared_stop();
         workspace.auto_memory = settings.auto_memory;
+        workspace.files = Some(Arc::default());
         if self.request.safety_check {
             workspace.safety = Some(Arc::new(crate::guard::Safety::default()));
         }
