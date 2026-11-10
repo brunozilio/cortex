@@ -18,6 +18,7 @@ pub mod ids;
 pub mod image;
 pub mod job;
 pub mod mcp;
+pub mod mcp_config;
 pub mod memory;
 pub mod model;
 pub mod principal;

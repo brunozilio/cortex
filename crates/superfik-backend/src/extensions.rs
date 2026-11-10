@@ -46,7 +46,7 @@ pub struct Extensions {
 
 impl Extensions {
     fn for_run(&self) -> superfik_core::Extensions {
-        superfik_core::Extensions { dirs: self.dirs.clone(), plugins: self.plugins.clone(), mcp_config: None }
+        superfik_core::Extensions { dirs: self.dirs.clone(), plugins: self.plugins.clone(), ..Default::default() }
     }
 
     /// Adds the host's folders and MCP servers to a run and hands it the

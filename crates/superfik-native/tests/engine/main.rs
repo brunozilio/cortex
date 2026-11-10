@@ -1,6 +1,7 @@
 //! The native engine through `AgentEngine::start`, as the backend drives it.
 
 mod agents;
+mod mcp;
 mod plugins;
 mod runs;
 mod sessions;
@@ -27,7 +28,15 @@ impl ApiSource for Source {
     }
 }
 
+/// Runs a request with an empty home of its own, so the person's settings,
+/// skills and MCP servers stay out of the tests.
 fn start(engine: &NativeEngine, request: &PromptRequest) -> Receiver<EngineEvent> {
+    static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    let home = HOME.get_or_init(|| tempfile::tempdir().expect("home")).path().to_path_buf();
+    let mut request = request.clone();
+    let extensions = request.extensions.get_or_insert_with(Default::default);
+    extensions.home.get_or_insert(home);
+    let request = &request;
     let (send, receive) = channel();
     let send = Mutex::new(send);
     let sink = Arc::new(move |_run: RunId, event: EngineEvent| {

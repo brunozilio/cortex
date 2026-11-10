@@ -1,5 +1,7 @@
 //! What a run reads from disk before it starts: skills, agents, settings,
-//! rules, git state and project instructions.
+//! rules, git state, project instructions and installed plugins.
+use std::path::PathBuf;
+
 use crate::{prompt, tools};
 use serde::{Deserialize, Serialize};
 use superfik_core::PromptRequest;
@@ -13,10 +15,12 @@ pub struct Brief {
     pub instructions: Vec<prompt::Instructions>,
     #[serde(default)]
     pub plugins: Vec<crate::plugins::Plugin>,
+    #[serde(default)]
+    pub home: Option<PathBuf>,
 }
 impl Brief {
     pub fn load(request: &PromptRequest) -> Result<Self, String> {
-        let home = std::env::home_dir();
+        let home = home(request);
         let home = home.as_deref();
         let plugins = crate::plugins::found(request, home);
         Ok(Self {
@@ -27,6 +31,22 @@ impl Brief {
             git: prompt::snapshot(&request.cwd),
             instructions: prompt::instructions(&request.cwd, home),
             plugins,
+            home: home.map(PathBuf::from),
         })
     }
+
+    /// Where the run's configured MCP servers come from.
+    pub fn mcp(&self) -> crate::mcp::McpSources {
+        crate::mcp::McpSources {
+            home: self.home.clone(),
+            plugins: self.plugins.clone(),
+            approval: self.settings.mcp_approval.clone(),
+        }
+    }
+}
+
+/// The owner's home: the one the backend named for the run, else the
+/// process's.
+pub fn home(request: &PromptRequest) -> Option<PathBuf> {
+    request.extensions.as_ref().and_then(|extensions| extensions.home.clone()).or_else(std::env::home_dir)
 }

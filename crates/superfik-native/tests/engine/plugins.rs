@@ -11,7 +11,7 @@ use superfik_native::transcript::Block;
 
 use crate::{Source, finish, model, start};
 
-const SERVER: &str = r#"while IFS= read -r line; do
+pub(crate) const SERVER: &str = r#"while IFS= read -r line; do
 case "$line" in
 *'"method":"initialize"'*) printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{}}';;
 *'"method":"tools/list"'*) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"ping","inputSchema":{"type":"object"}}]}}';;

@@ -55,7 +55,7 @@ fn a_granted_server_s_tools_are_named_for_it_and_called_with_its_token() {
 fn a_failed_call_and_an_unreachable_server_say_so() {
     let failed = json!({ "jsonrpc": "2.0", "id": 1, "result": { "content": [{ "type": "text", "text": "no" }], "isError": true } });
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([(200, failed.to_string()), (401, String::new())]));
-    let spec = servers(&memory_request(), &[]).remove(0);
+    let spec = servers(&memory_request(), &super::McpSources::default()).remove(0);
     let server = McpServer::open(&spec, &http).expect("open");
     assert_eq!(
         server.call("memory_search", &Value::Null, &std::sync::atomic::AtomicBool::new(false)),

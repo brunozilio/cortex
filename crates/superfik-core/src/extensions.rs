@@ -17,10 +17,14 @@ pub struct Extensions {
     /// `hooks/hooks.json`, `.mcp.json`).
     #[serde(default)]
     pub plugins: Vec<PathBuf>,
+    /// The owner's home folder for the run's user settings, skills and MCP
+    /// servers; the process's when unset.
+    #[serde(default)]
+    pub home: Option<PathBuf>,
 }
 
 impl Extensions {
     pub fn is_empty(&self) -> bool {
-        self.dirs.is_empty() && self.mcp_config.is_none() && self.plugins.is_empty()
+        self.dirs.is_empty() && self.mcp_config.is_none() && self.plugins.is_empty() && self.home.is_none()
     }
 }

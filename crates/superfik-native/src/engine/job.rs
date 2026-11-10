@@ -53,6 +53,7 @@ impl Job {
             Ok(brief) => brief,
             Err(error) => return self.fail(&error, FailureKind::Other),
         };
+        let mcp_sources = brief.mcp();
         let workspace = Arc::get_mut(&mut self.workspace).expect("workspace is not shared before starting tools");
         workspace.rules = brief.rules;
         let mut tools = tools::standard();
@@ -63,7 +64,7 @@ impl Job {
         let agents = brief.agents;
         tools.push(Box::new(tools::subagent::AgentTool { agents: agents.clone() }));
         tools.extend(tools::task::tools());
-        tools.extend(crate::mcp::tools_stopped(&self.request, &brief.plugins, &self.mcp, self.control.stop_flag()));
+        tools.extend(crate::mcp::tools_stopped(&self.request, &mcp_sources, &self.mcp, self.control.stop_flag()));
         let settings = brief.settings;
         let selected = if let Some(name) = &settings.agent {
             match (tools::subagent::AgentTool { agents: agents.clone() })

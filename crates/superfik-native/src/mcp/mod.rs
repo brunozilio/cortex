@@ -1,8 +1,10 @@
 //! MCP tools for the native engine: Superfik's own memory server, the
-//! SDK host's servers over streamable HTTP or as processes, and
-//! the host's in-process servers ([`LocalTransport`]); each tool is offered
-//! as `mcp__<server>__<tool>`.
+//! SDK host's servers over streamable HTTP or as processes, the host's
+//! in-process servers ([`LocalTransport`]), the project's and the user's
+//! configured servers and installed plugins'; each tool is offered as
+//! `mcp__<server>__<tool>`.
 
+mod configured;
 mod http;
 mod local;
 mod servers;
@@ -15,6 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::{Value, json};
 use superfik_core::PromptRequest;
 
+pub use self::configured::McpSources;
 pub use self::http::{HttpTransport, parse};
 pub use self::local::LocalTransport;
 pub use self::servers::{ServerSpec, parse_config, servers};
@@ -155,14 +158,14 @@ impl McpServer {
     }
 }
 
-/// The run's servers' tools without plugins and without a stop flag (tests).
+/// The run's own and host's servers' tools, without a stop flag (tests).
 pub fn tools(request: &PromptRequest, http: &Arc<dyn Http>) -> Vec<Box<dyn Tool>> {
-    tools_stopped(request, &[], http, &std::sync::atomic::AtomicBool::new(false))
+    tools_stopped(request, &McpSources::default(), http, &std::sync::atomic::AtomicBool::new(false))
 }
 
 pub fn tools_stopped(
     request: &PromptRequest,
-    plugins: &[crate::plugins::Plugin],
+    sources: &McpSources,
     http: &Arc<dyn Http>,
     stop: &std::sync::atomic::AtomicBool,
 ) -> Vec<Box<dyn Tool>> {
@@ -176,7 +179,7 @@ pub fn tools_stopped(
         let transport = Box::new(LocalTransport::new(Arc::clone(&local.endpoint)));
         listed(&local.name, Ok(McpServer::new(local.name.clone(), transport)))
     });
-    let remote = servers(request, plugins)
+    let remote = servers(request, sources)
         .into_iter()
         .take_while(|_| !stop.load(Ordering::Relaxed))
         .flat_map(|spec| listed(spec.name(), McpServer::open_stopped(&spec, http, stop)));

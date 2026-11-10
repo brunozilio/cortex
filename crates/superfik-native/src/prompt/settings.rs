@@ -22,10 +22,22 @@ pub struct Settings {
     pub auto_memory: bool,
     #[serde(default)]
     pub advisor: Option<String>,
+    /// The owner's say on the project's `.mcp.json` servers: read only from
+    /// the user's settings and the project's `settings.local.json`.
+    #[serde(default)]
+    pub mcp_approval: superfik_core::mcp_config::McpApproval,
 }
 impl Default for Settings {
     fn default() -> Self {
-        Self { style: None, schema: None, agent: None, hooks: Default::default(), auto_memory: true, advisor: None }
+        Self {
+            style: None,
+            schema: None,
+            agent: None,
+            hooks: Default::default(),
+            auto_memory: true,
+            advisor: None,
+            mcp_approval: Default::default(),
+        }
     }
 }
 fn enabled() -> bool {
@@ -38,6 +50,9 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut auto_memory = true;
     let mut advisor = None;
     let mut hooks = crate::hooks::Hooks::default();
+    let mut mcp_approval = superfik_core::mcp_config::McpApproval::default();
+    let is_user_root =
+        |root: &Path| home.is_some_and(|home| root == home.join(".claude") || root == home.join(".superfik"));
     let mut roots = Vec::new();
     if let Some(home) = home {
         roots.extend([home.join(".claude"), home.join(".superfik")]);
@@ -58,6 +73,9 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 Err(e) => return Err(format!("{}: {e}", path.display())),
             };
             let settings: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+            if is_user_root(root) || name == "settings.local.json" {
+                mcp_approval.read(&settings);
+            }
             if let Some(value) = settings.get("autoMemoryEnabled") {
                 auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;
             }
@@ -132,10 +150,11 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 hooks,
                 auto_memory,
                 advisor,
+                mcp_approval,
             });
         }
     };
-    Ok(Settings { style, schema, agent, hooks, auto_memory, advisor })
+    Ok(Settings { style, schema, agent, hooks, auto_memory, advisor, mcp_approval })
 }
 #[cfg(test)]
 mod tests {
@@ -172,6 +191,22 @@ mod tests {
         assert_eq!(style.instructions, "Return review findings.");
         std::fs::write(root.join("settings.json"), r#"{"outputStyle":"../private"}"#).expect("valid test fixture");
         assert!(load(repo.path(), None, &[]).is_err());
+    }
+    #[test]
+    fn only_the_owner_approves_a_project_s_mcp_servers() {
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        let write = |path: std::path::PathBuf, text: &str| {
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+            std::fs::write(path, text).expect("write");
+        };
+        write(repo.path().join(".superfik/settings.json"), r#"{"enableAllProjectMcpServers": true}"#);
+        write(repo.path().join(".claude/settings.local.json"), r#"{"enabledMcpjsonServers": ["jira"]}"#);
+        write(home.path().join(".superfik/settings.json"), r#"{"disabledMcpjsonServers": ["sonar"]}"#);
+        let approval = load(repo.path(), Some(home.path()), &[]).expect("settings").mcp_approval;
+        assert!(!approval.all, "a checked-in setting cannot approve its own servers");
+        assert_eq!(approval.enabled, ["jira"]);
+        assert_eq!(approval.disabled, ["sonar"]);
     }
     #[test]
     fn an_installed_plugin_adds_its_hooks_and_a_broken_one_is_left_out() {

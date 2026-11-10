@@ -4,6 +4,7 @@
 
 use serde_json::Value;
 
+use super::McpSources;
 use crate::plugins::Plugin;
 use superfik_core::PromptRequest;
 use superfik_core::memory::MEMORY_SERVER;
@@ -46,7 +47,7 @@ impl std::fmt::Debug for ServerSpec {
     }
 }
 
-pub fn servers(request: &PromptRequest, plugins: &[Plugin]) -> Vec<ServerSpec> {
+pub fn servers(request: &PromptRequest, sources: &McpSources) -> Vec<ServerSpec> {
     let own = |name: &str, url: &str, token: &str| ServerSpec::Http {
         name: name.to_owned(),
         url: url.to_owned(),
@@ -60,7 +61,12 @@ pub fn servers(request: &PromptRequest, plugins: &[Plugin]) -> Vec<ServerSpec> {
             Err(error) => tracing::warn!(%error, "the host's MCP servers are not available to this run"),
         }
     }
-    for plugin in plugins {
+    for server in super::configured::configured(&request.cwd, sources) {
+        if !servers.iter().any(|known| known.name() == server.name()) {
+            servers.push(server);
+        }
+    }
+    for plugin in &sources.plugins {
         let Some(config) = plugin.mcp_config() else { continue };
         match parse_config(&config.to_string()) {
             Ok(found) => servers
@@ -125,11 +131,11 @@ mod tests {
 
     #[test]
     fn the_app_s_servers_carry_the_run_s_token() {
-        assert!(servers(&request(), &[]).is_empty());
+        assert!(servers(&request(), &McpSources::default()).is_empty());
         let mut request = request();
         let tool = MemoryTool { url: "http://127.0.0.1:7/mcp".into(), token: "t-1".into() };
         request.memory = Some(MemoryBrief { tool: Some(tool), ..MemoryBrief::default() });
-        let found = servers(&request, &[]);
+        let found = servers(&request, &McpSources::default());
         assert_eq!(
             found,
             vec![ServerSpec::Http {
@@ -157,7 +163,7 @@ mod tests {
         let plugins = crate::plugins::found(&request, None);
         let root = root.display().to_string();
         assert_eq!(
-            servers(&request, &plugins),
+            servers(&request, &McpSources { plugins, ..McpSources::default() }),
             vec![ServerSpec::Stdio {
                 name: "plugin_acme_jira".into(),
                 command: format!("{root}/bin/jira"),
@@ -180,7 +186,7 @@ mod tests {
         std::fs::write(&path, config).expect("write");
         let mut request = request();
         request.extensions = Some(Extensions { mcp_config: Some(path), ..Extensions::default() });
-        let found = servers(&request, &[]);
+        let found = servers(&request, &McpSources::default());
         let names: Vec<&str> = found.iter().map(ServerSpec::name).collect();
         assert_eq!(names, ["gmail-work", "linear-acme"]);
         assert_eq!(
