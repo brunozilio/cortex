@@ -113,7 +113,7 @@ jobs:
           toolchain: stable
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - run: sudo apt-get update && sudo apt-get install -y cmake ninja-build libssl-dev libdbus-1-dev libudev-dev libasound2-dev libxkbcommon-dev libwayland-dev libx11-dev mesa-vulkan-drivers libnss3 libnspr4 libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libcups2t64 libgbm1 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libpango-1.0-0 libcairo2 xvfb xauth fonts-dejavu-core
+      - run: sudo apt-get update && sudo apt-get install -y cmake ninja-build libssl-dev libdbus-1-dev libudev-dev libasound2-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev mesa-vulkan-drivers libnss3 libnspr4 libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libcups2t64 libgbm1 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libpango-1.0-0 libcairo2 xvfb xauth fonts-dejavu-core
       - name: Fetch the pinned Linux engine
         if: hashFiles('scripts/cef-release.linux-x86_64.lock.json') != ''
         run: |
@@ -127,6 +127,7 @@ jobs:
         if: hashFiles('scripts/cef-release.linux-x86_64.lock.json') != ''
         env:
           SUPERFIK_BROWSER_CHECK_LOGS: target/browser-check-logs
+          SUPERFIK_PROFILES_ON_SOFTWARE_GL: '1'
         run: xvfb-run -a bash scripts/check-browser-native.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()

@@ -27,6 +27,10 @@ fn linux(display: bool) -> Vec<(String, Option<String>)> {
     switches
 }
 
+pub fn software_gl() -> Vec<(String, Option<String>)> {
+    vec![("enable-unsafe-swiftshader".into(), None), ("ignore-gpu-blocklist".into(), None)]
+}
+
 pub fn through(proxy: std::net::SocketAddr) -> Vec<(String, Option<String>)> {
     vec![
         ("proxy-server".into(), Some(format!("socks5://{proxy}"))),
@@ -37,6 +41,12 @@ pub fn through(proxy: std::net::SocketAddr) -> Vec<(String, Option<String>)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn software_gl_lets_a_machine_without_a_gpu_run_webgl() {
+        let names: Vec<String> = super::software_gl().into_iter().map(|(name, _)| name).collect();
+        assert_eq!(names, ["enable-unsafe-swiftshader", "ignore-gpu-blocklist"]);
+    }
+
     #[test]
     fn a_guarded_browser_goes_out_only_through_its_proxy() {
         let switches = super::through("127.0.0.1:4100".parse().expect("address"));

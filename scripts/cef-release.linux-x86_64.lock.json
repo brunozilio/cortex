@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "target": "x86_64-unknown-linux-gnu",
+  "repository": "brunozilio/superfik-browser",
+  "tag": "cef-154.0.34-superfik.4",
+  "asset": "superfik-cef-linux-x86_64-cef-154.0.34-superfik.4.tar.gz",
+  "sha256": "ed5778570ee9eb35ad360d16c5e67724e8839b291cc5b01ba65567ea9d0d61d5",
+  "provenance_sha256": "0fd5a13b4d45184ddc76eabb295fb50e0db0d7e63c78d8a42719e7ce7cb3cb48"
+}

@@ -50,6 +50,9 @@ pub(super) fn runtime(
     {
         config.command_line_switches.push(("ignore-certificate-errors-spki-list".into(), Some(spki.into())));
     }
+    if cfg!(debug_assertions) && std::env::var_os("SUPERFIK_BROWSER_SOFTWARE_GL").is_some_and(|v| v == "1") {
+        config.command_line_switches.extend(crate::services::software_gl());
+    }
     if let Some(proxy) = proxy {
         config.command_line_switches.extend(crate::services::through(proxy));
     }

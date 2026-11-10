@@ -16,6 +16,7 @@ deadline.
 | Flag | Checks |
 | --- | --- |
 | (none) | Two hardware identities across processes: page, iframe, worker, client-hint headers; default and private contexts. |
+| `SUPERFIK_BROWSER_SOFTWARE_GL=1` | Debug builds only: WebGL through SwiftShader on a machine without a GPU (CI). |
 | `SUPERFIK_EXTENDED_PROFILE_SMOKE=1` | Canvas (WebGL2, float reads), offline audio, fonts, WebGL/WebGPU identity, screen, WebRTC, real values, clicks at DPR 1 and 2, seed stability. |
 | `SUPERFIK_PROXY_SMOKE=1` | Nine proxy cases (needs Python 3 and OpenSSL): CONNECT, workers, credential isolation, dead proxy, bad password, rejected TLS, no direct fallback, WebRTC UDP. |
 | `SUPERFIK_AGENT_SMOKE=1` | Snapshots, stable refs, closed shadow roots, clicks, hidden passwords, detached refs. Combine with one of the flags below. |

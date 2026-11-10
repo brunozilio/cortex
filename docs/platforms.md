@@ -14,14 +14,13 @@ Engine changes and Chromium builds happen there; this repository only
 downloads a published build. App, adapter and Settings changes reuse it.
 
 - **Pins.** `scripts/cef-release.lock.json` (macOS) names the repository,
-  tag, asset, archive SHA-256 and provenance SHA-256. Linux and Windows
-  read `scripts/cef-release.linux-x86_64.lock.json` and
-  `scripts/cef-release.windows-x86_64.lock.json`; **neither exists yet**.
-  Until a pin lands: the Windows MSI ships without the browser (the app
-  already reports it unavailable there), CI's Linux job builds against
-  stock CEF and skips the browser acceptance, and the Linux packages and
-  the server archive are not released (`SUPERFIK_LINUX_RELEASE_ENABLED`
-  stays unset).
+  tag, asset, archive SHA-256 and provenance SHA-256. Linux reads
+  `scripts/cef-release.linux-x86_64.lock.json`; CI runs the browser
+  acceptance against it. Windows will read
+  `scripts/cef-release.windows-x86_64.lock.json`, which **does not exist
+  yet**: until it lands the MSI ships without the browser (the app reports
+  it unavailable there). The Linux packages and the server archive are
+  released once `SUPERFIK_LINUX_RELEASE_ENABLED=true`.
 - **Install.** `python3 scripts/fetch_engine.py [--lock …] [--archive file]`
   checks the archive's checksum, extracts it safely and validates manifest,
   file hashes, symlinks, CEF ABI and provenance; the result is cached in
