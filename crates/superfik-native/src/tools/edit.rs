@@ -75,13 +75,15 @@ impl Tool for Edit {
         let before = text.find(old).map_or("", |at| &text[..at]);
         let shown = super::shown_diff::edit(&format!("Edited {name}"), before, old, new);
         workspace.before_write(&path);
-        match std::fs::write(&path, changed) {
-            Ok(()) => Outcome::ok(if count == 1 {
-                format!("Edited {name}.")
-            } else {
-                format!("Edited {name} ({count} replacements).")
-            })
-            .showing(shown),
+        match std::fs::write(&path, &changed) {
+            Ok(()) => {
+                let said = if count == 1 {
+                    format!("Edited {name}.")
+                } else {
+                    format!("Edited {name} ({count} replacements).")
+                };
+                Outcome::ok(said + &workspace.diagnosed(&path, &changed)).showing(shown)
+            }
             Err(error) => Outcome::error(format!("Could not write {name}: {error}")),
         }
     }
@@ -127,5 +129,25 @@ mod tests {
         std::fs::write(dir.path().join("g.rs"), "x").expect("write");
         let unread = Edit.run(&json!({"file_path": "g.rs", "old_string": "x", "new_string": "y"}), &workspace);
         assert!(unread.content.starts_with("Read g.rs"));
+    }
+
+    #[test]
+    fn the_language_server_s_errors_follow_the_edit_and_the_diff_stays_the_same() {
+        let (dir, mut workspace) = setup("let a: u32 = 1;\n");
+        let server = crate::lsp::fake::ScriptedServer::answering([]);
+        *server.diagnostics.lock().expect("diagnostics") =
+            Some(vec![json!({"severity": 1, "message": "mismatched types",
+            "range": {"start": {"line": 0, "character": 13}, "end": {"line": 0, "character": 16}}})]);
+        workspace.lsp = Some(server.lsp());
+        let edit = json!({"file_path": "f.rs", "old_string": "1", "new_string": "\"one\""});
+        let outcome = Edit.run(&edit, &workspace);
+        assert_eq!(outcome.content, "Edited f.rs.\n\n<diagnostics>\nf.rs:1:14 error: mismatched types\n</diagnostics>");
+        assert!(!outcome.shown.unwrap_or_default().contains("diagnostics"));
+        let synced = server.synced.lock().expect("synced");
+        assert_eq!(synced[0], (dir.path().join("f.rs"), "rust".to_owned(), "let a: u32 = \"one\";\n".to_owned()));
+        drop(synced);
+        *server.diagnostics.lock().expect("diagnostics") = Some(Vec::new());
+        let clean = Edit.run(&json!({"file_path": "f.rs", "old_string": "\"one\"", "new_string": "2"}), &workspace);
+        assert_eq!(clean.content, "Edited f.rs.");
     }
 }

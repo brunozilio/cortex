@@ -62,7 +62,8 @@ impl Tool for Write {
                     format!("Created {name} ({lines} lines).")
                 };
                 let heading = if existed { format!("Replaced {name}") } else { format!("Created {name}") };
-                Outcome::ok(said).showing(super::shown_diff::created(&heading, content))
+                Outcome::ok(said + &workspace.diagnosed(&path, content))
+                    .showing(super::shown_diff::created(&heading, content))
             }
             Err(error) => Outcome::error(format!("Could not write {name}: {error}")),
         }
@@ -87,5 +88,23 @@ mod tests {
 
         workspace.mark_read(&dir.path().join("old.txt"));
         assert!(!Write.run(&json!({"file_path": "old.txt", "content": "x"}), &workspace).is_error);
+    }
+
+    #[test]
+    fn a_written_file_s_problems_follow_and_other_files_are_left_alone() {
+        let dir = tempfile::tempdir().expect("dir");
+        let mut workspace = Workspace::new(dir.path());
+        let server = crate::lsp::fake::ScriptedServer::answering([]);
+        *server.diagnostics.lock().expect("diagnostics") = Some(vec![json!({"severity": 2, "message": "unused",
+            "range": {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 3}}})]);
+        workspace.lsp = Some(server.lsp());
+        let written = Write.run(&json!({"file_path": "src/a.py", "content": "import os\nx = 1\n"}), &workspace);
+        assert_eq!(
+            written.content,
+            "Created src/a.py (2 lines).\n\n<diagnostics>\nsrc/a.py:2:1 warning: unused\n</diagnostics>"
+        );
+        let notes = Write.run(&json!({"file_path": "notes.md", "content": "hi"}), &workspace);
+        assert_eq!(notes.content, "Created notes.md (1 lines).");
+        assert_eq!(server.synced.lock().expect("synced").len(), 1);
     }
 }

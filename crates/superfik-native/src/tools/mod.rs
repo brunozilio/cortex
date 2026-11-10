@@ -171,6 +171,14 @@ impl Workspace {
         }
     }
 
+    /// What the file's language server finds wrong in `text` (just written
+    /// to `path`), as a block to add to the tool's result; empty when
+    /// there is no server or nothing wrong.
+    pub fn diagnosed(&self, path: &Path, text: &str) -> String {
+        let problems = self.lsp.as_ref().and_then(|lsp| lsp.problems(path, text, &self.cwd, &self.stop));
+        problems.map(|problems| format!("\n\n<diagnostics>\n{problems}\n</diagnostics>")).unwrap_or_default()
+    }
+
     pub fn rule_instructions(&self) -> String {
         let seen = self.seen_rules.lock().expect("project rules");
         self.rules
