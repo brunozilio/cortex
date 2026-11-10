@@ -1,83 +1,134 @@
-//! The little Markdown a reply line needs on a terminal: `**bold**`,
-//! `` `code` ``, `# headings` and `- bullets`.
+//! A reply's Markdown drawn for the terminal with `tui-markdown`:
+//! headings, lists, quotes, tables and highlighted code, wrapped to the
+//! width. Renders are kept, so a long conversation is not parsed again on
+//! every frame; only the reply still streaming is.
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Span;
+use ratatui::text::{Line, Span};
+use tui_markdown::{Options, StyleSheet};
 
-/// One line of a reply (outside a code block) as styled spans.
-pub fn line(text: &str) -> Vec<Span<'static>> {
-    let trimmed = text.trim_start();
-    if trimmed.starts_with('#') {
-        let heading = trimmed.trim_start_matches('#').trim().to_owned();
-        return vec![Span::styled(heading, Style::new().add_modifier(Modifier::BOLD))];
-    }
-    let indent = &text[..text.len() - trimmed.len()];
-    let (bullet, rest) = match trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
-        Some(rest) => (format!("{indent}• "), rest),
-        None => (indent.to_owned(), trimmed),
-    };
-    let mut spans = Vec::new();
-    if !bullet.is_empty() {
-        spans.push(Span::raw(bullet));
-    }
-    spans.extend(inline(rest));
-    spans
+use super::wrap::wrap_line;
+
+/// Drawn above and below a code block, before its language.
+const FENCE: &str = "─── ";
+/// Renders kept at most before they are all dropped.
+const KEPT: usize = 256;
+
+thread_local! {
+    static RENDERED: RefCell<HashMap<(u64, usize), Vec<Line<'static>>>> = RefCell::new(HashMap::new());
 }
 
-fn inline(text: &str) -> Vec<Span<'static>> {
-    let mut spans = Vec::new();
-    let mut rest = text;
-    while !rest.is_empty() {
-        let code = rest.find('`');
-        let bold = rest.find("**");
-        let (at, marker, style) = match (code, bold) {
-            (Some(c), Some(b)) if b < c => (b, "**", Style::new().add_modifier(Modifier::BOLD)),
-            (_, Some(b)) if code.is_none() => (b, "**", Style::new().add_modifier(Modifier::BOLD)),
-            (Some(c), _) => (c, "`", Style::new().fg(Color::Cyan)),
-            _ => break,
-        };
-        let after = &rest[at + marker.len()..];
-        let Some(end) = after.find(marker) else { break };
-        if at > 0 {
-            spans.push(Span::raw(rest[..at].to_owned()));
+/// Superfik's look: magenta headings without `#`, cyan inline code,
+/// dimmed quotes.
+#[derive(Debug, Clone, Copy)]
+struct Look;
+
+impl StyleSheet for Look {
+    fn heading(&self, level: u8) -> Style {
+        let style = Style::new().fg(Color::Magenta).add_modifier(Modifier::BOLD);
+        if level == 1 { style.add_modifier(Modifier::UNDERLINED) } else { style }
+    }
+
+    fn heading_marker(&self, _level: u8) -> &str {
+        ""
+    }
+
+    fn code(&self) -> Style {
+        Style::new().fg(Color::Cyan)
+    }
+
+    fn link(&self) -> Style {
+        Style::new().fg(Color::Blue).add_modifier(Modifier::UNDERLINED)
+    }
+
+    fn blockquote(&self) -> Style {
+        Style::new().fg(Color::Gray).add_modifier(Modifier::ITALIC)
+    }
+
+    fn code_block_fence(&self) -> &str {
+        FENCE
+    }
+
+    fn list_marker(&self) -> Style {
+        Style::new().fg(Color::Magenta)
+    }
+
+    fn table_border(&self) -> Style {
+        Style::new().fg(Color::DarkGray)
+    }
+
+    fn table_header(&self) -> Style {
+        Style::new().add_modifier(Modifier::BOLD)
+    }
+}
+
+/// `text` as lines at most `width` columns wide.
+pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    let key = (hasher.finish(), width);
+    if let Some(kept) = RENDERED.with(|kept| kept.borrow().get(&key).cloned()) {
+        return kept;
+    }
+    let options = Options::new(Look).table_width(u16::try_from(width).unwrap_or(u16::MAX));
+    let lines: Vec<Line<'static>> = tui_markdown::from_str_with_options(text, &options)
+        .lines
+        .into_iter()
+        .map(|line| {
+            let line = owned(line);
+            let fence = line.spans.first().is_some_and(|span| span.content.starts_with(FENCE.trim_end()));
+            if fence { line.style(Style::new().fg(Color::DarkGray)) } else { line }
+        })
+        .flat_map(|line| wrap_line(line, width))
+        .collect();
+    RENDERED.with(|kept| {
+        let mut kept = kept.borrow_mut();
+        if kept.len() >= KEPT {
+            kept.clear();
         }
-        spans.push(Span::styled(after[..end].to_owned(), style));
-        rest = &after[end + marker.len()..];
-    }
-    if !rest.is_empty() {
-        spans.push(Span::raw(rest.to_owned()));
-    }
-    spans
+        kept.insert(key, lines.clone());
+    });
+    lines
+}
+
+fn owned(line: Line<'_>) -> Line<'static> {
+    let spans: Vec<Span<'static>> =
+        line.spans.into_iter().map(|span| Span::styled(span.content.into_owned(), span.style)).collect();
+    Line::from(spans).style(line.style)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn text(spans: &[Span]) -> Vec<(String, bool, bool)> {
-        spans
-            .iter()
-            .map(|s| {
-                let bold = s.style.add_modifier.contains(Modifier::BOLD);
-                (s.content.to_string(), bold, s.style.fg == Some(Color::Cyan))
-            })
-            .collect()
+    fn plain(lines: &[Line]) -> Vec<String> {
+        lines.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect()
     }
 
     #[test]
-    fn bold_code_bullets_and_headings_are_styled() {
-        assert_eq!(
-            text(&line("Run **all** tests with `cargo test` now")),
-            [
-                ("Run ".into(), false, false),
-                ("all".into(), true, false),
-                (" tests with ".into(), false, false),
-                ("cargo test".into(), false, true),
-                (" now".into(), false, false),
-            ]
-        );
-        assert_eq!(text(&line("  - item")), [("  • ".into(), false, false), ("item".into(), false, false)]);
-        assert_eq!(text(&line("## Plan")), [("Plan".into(), true, false)]);
-        assert_eq!(text(&line("a `lone backtick")), [("a `lone backtick".into(), false, false)], "unclosed stays");
+    fn headings_lists_and_code_are_drawn_and_wrapped() {
+        let lines = render("## Plan\n\n- run **all** the tests\n\n```rust\nfn main() {}\n```", 14);
+        let text = plain(&lines);
+        assert_eq!(text[0], "Plan", "no # marker: {text:?}");
+        assert_eq!(lines[0].spans[0].style.fg.or(lines[0].style.fg), Some(Color::Magenta));
+        assert!(text.iter().any(|l| l.contains("run all the")), "{text:?}");
+        assert!(text.iter().any(|l| l == "─── rust"), "{text:?}");
+        assert!(text.iter().any(|l| l.contains("fn main() {}")), "{text:?}");
+        assert!(lines.iter().all(|l| l.width() <= 14), "{text:?}");
+    }
+
+    #[test]
+    fn a_render_is_kept_for_the_same_text_and_width() {
+        let first = render("kept **once**", 40);
+        assert_eq!(render("kept **once**", 40), first);
+        assert!(RENDERED.with(|kept| kept.borrow().contains_key(&{
+            let mut h = DefaultHasher::new();
+            "kept **once**".hash(&mut h);
+            (h.finish(), 40)
+        })));
     }
 }

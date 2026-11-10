@@ -14,7 +14,9 @@ mod git;
 mod input;
 mod keys;
 mod login;
+mod logo;
 mod markdown;
+mod motion;
 mod runs;
 mod settings;
 mod side;
@@ -40,6 +42,8 @@ pub use app::App;
 pub use settings::last_session;
 
 const FRAME: Duration = Duration::from_millis(80);
+/// Between frames while an animation runs.
+const ANIMATING: Duration = Duration::from_millis(33);
 
 pub fn run(
     superfik: Superfik,
@@ -77,7 +81,8 @@ pub fn run(
                 app.submit();
             }
             terminal.draw(|frame| view::draw(frame, &app))?;
-            if event::poll(FRAME)? {
+            let wait = if app.motion.borrow().animating() { ANIMATING } else { FRAME };
+            if event::poll(wait)? {
                 match event::read()? {
                     Event::Key(key) => keys::key(&mut app, key),
                     Event::Paste(text) => keys::paste(&mut app, &text),

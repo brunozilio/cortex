@@ -248,7 +248,7 @@ fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
     until(&mut app, loaded);
     assert!(screen(&app).contains("No staged changes."), "{}", screen(&app));
     press(&mut app, KeyCode::Char('q'));
-    assert!(app.diffs.is_none() && screen(&app).contains("Welcome to Superfik"), "{}", screen(&app));
+    assert!(app.diffs.is_none() && screen(&app).contains("Superfik Lite"), "{}", screen(&app));
     assert!(engine.requests().is_empty(), "nothing reached the agent");
 }
 

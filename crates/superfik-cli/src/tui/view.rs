@@ -11,6 +11,7 @@ use superfik_sdk::{AskKind, PermissionMode};
 
 use super::app::App;
 use super::entries;
+use super::motion::Scene;
 use super::wrap::{layout, wrap};
 
 /// Columns the prompt's `> ` takes.
@@ -38,7 +39,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Constraint::Length(1),
     ])
     .areas(area);
-    conversation(frame, app, body);
+    let shown = conversation(frame, app, body);
     if boxed {
         let color = if app.picker.is_some() {
             Color::DarkGray
@@ -57,17 +58,40 @@ pub fn draw(frame: &mut Frame, app: &App) {
     }
     prompt(frame, app, input_area);
     frame.render_widget(Paragraph::new(status(app)), status_area);
+    let mut motion = app.motion.borrow_mut();
+    motion.frame(Scene {
+        conversation: body,
+        entries: app.transcript.entries.len(),
+        added: shown.added,
+        panel: (panel_height > 0).then_some(panel_area),
+        working: shown.working,
+    });
+    motion.apply(frame.buffer_mut());
 }
 
-fn conversation(frame: &mut Frame, app: &App, area: Rect) {
+/// Where the conversation drew the newest entries and the "Working…" line.
+struct Shown {
+    added: Option<Rect>,
+    working: Option<Rect>,
+}
+
+fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
     let width = usize::from(area.width.saturating_sub(2)).max(10);
+    let seen = app.motion.borrow().seen();
     let mut lines: Vec<Line> = Vec::new();
     lines.extend(welcome(app, width));
-    for entry in &app.transcript.entries {
+    let mut added = None;
+    for (i, entry) in app.transcript.entries.iter().enumerate() {
+        if i == seen {
+            added = Some(lines.len());
+        }
         entries::lines(entry, width, app.expanded, &mut lines);
     }
+    let added = added.map(|first| first..lines.len());
+    let mut working = None;
     if let Some(started) = app.started {
         lines.push(Line::from(""));
+        working = Some(lines.len()..lines.len() + 1);
         lines.push(entries::working(started, &app.transcript, width));
     }
     for queued in &app.queued {
@@ -79,7 +103,16 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) {
     let end = lines.len().saturating_sub(scroll);
     let start = end.saturating_sub(height);
     let shown: Vec<Line> = lines.drain(start..end).collect();
-    frame.render_widget(Paragraph::new(shown), area.inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 }));
+    let inner = area.inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 });
+    frame.render_widget(Paragraph::new(shown), inner);
+    let on_screen = |rows: std::ops::Range<usize>| {
+        let (top, bottom) = (rows.start.max(start), rows.end.min(end));
+        (top < bottom).then(|| {
+            let y = inner.y + u16::try_from(top - start).unwrap_or(0);
+            Rect::new(inner.x, y, inner.width, u16::try_from(bottom - top).unwrap_or(0))
+        })
+    };
+    Shown { added: added.and_then(on_screen), working: working.and_then(on_screen) }
 }
 
 /// What sits above the prompt: the question being asked, the picker, or
@@ -145,36 +178,21 @@ fn tail(text: &str, columns: usize) -> String {
     format!("…{kept}")
 }
 
-/// The box the conversation starts with.
+/// What the conversation starts with: the logo, where this chat works,
+/// and how to begin.
 fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
-    let inner = width.clamp(30, 64) - 2;
     let home = std::env::var("HOME").unwrap_or_default();
     let cwd = app.cwd.display().to_string();
     let cwd = match cwd.strip_prefix(&home) {
         Some(rest) if !home.is_empty() => format!("~{rest}"),
         _ => cwd,
     };
-    let row = |text: String, style: Style| {
-        let text = wrap(&text, inner - 2).into_iter().next().unwrap_or_default();
-        let fill = inner.saturating_sub(2 + unicode_width::UnicodeWidthStr::width(text.as_str()));
-        Line::from(vec![
-            "│ ".fg(Color::Magenta),
-            Span::styled(text, style),
-            Span::raw(" ".repeat(fill)),
-            " │".fg(Color::Magenta),
-        ])
-    };
-    let border = |left: &str, right: &str| Line::from(format!("{left}{}{right}", "─".repeat(inner))).fg(Color::Magenta);
-    vec![
-        border("╭", "╮"),
-        row("✻ Welcome to Superfik".into(), Style::new().add_modifier(Modifier::BOLD)),
-        row(String::new(), Style::new()),
-        row("/help for commands, /login to connect a provider".into(), Style::new().fg(Color::DarkGray)),
-        row(format!("cwd: {}", tail(&cwd, inner.saturating_sub(8))), Style::new().fg(Color::DarkGray)),
-        border("╰", "╯"),
-        Line::from(""),
-        Line::from(" Tips: Shift+Tab changes the mode · ↑ recalls earlier prompts · superfik -c continues").dim(),
-    ]
+    let mut lines = vec![Line::from("")];
+    lines.extend(super::logo::lines(width).unwrap_or_else(|| vec![Line::from(" ✻ Superfik").magenta().bold()]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![" Superfik Lite".bold(), format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim()]));
+    lines.push(Line::from(" /help commands · /login connects a provider · ↑ earlier prompts · Ctrl+V an image").dim());
+    lines
 }
 
 fn prompt(frame: &mut Frame, app: &App, area: Rect) {

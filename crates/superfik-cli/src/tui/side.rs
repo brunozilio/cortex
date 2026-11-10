@@ -47,9 +47,7 @@ pub fn lines(side: &Side, busy: bool, width: usize, out: &mut Vec<Line<'static>>
     match &side.answer {
         None => out.push(Line::from("answering…").dim()),
         Some(Ok(answer)) => {
-            for line in answer.lines().flat_map(|line| wrap(line, width)) {
-                out.push(Line::from(markdown::line(&line)));
-            }
+            out.extend(markdown::render(answer, width));
         }
         Some(Err(error)) => out.push(Line::from(error.clone()).fg(Color::Red)),
     }

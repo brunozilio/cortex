@@ -44,19 +44,10 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
         }
         Entry::Assistant(text) => {
             out.push(Line::from(""));
-            let mut code = false;
-            for (i, line) in wrap(text.trim(), width.saturating_sub(2)).into_iter().enumerate() {
-                if line.trim_start().starts_with("```") {
-                    code = !code;
-                    continue;
-                }
+            for (i, line) in markdown::render(text.trim(), width.saturating_sub(2)).into_iter().enumerate() {
                 let mut spans = vec![Span::raw(if i == 0 { "● " } else { "  " })];
-                if code {
-                    spans.push(Span::styled("│ ", dim));
-                    spans.push(Span::raw(line).fg(Color::Cyan));
-                } else {
-                    spans.extend(markdown::line(&line));
-                }
+                let style = line.style;
+                spans.extend(line.spans.into_iter().map(|span| Span::styled(span.content, style.patch(span.style))));
                 out.push(Line::from(spans));
             }
         }
