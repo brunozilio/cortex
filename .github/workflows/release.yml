@@ -256,7 +256,7 @@ jobs:
         shell: pwsh
         run: |
           $env:SUPERFIK_TEST_MSI_VERSION = $env:TAG -replace '^v', ''
-          $env:SUPERFIK_TEST_MSI = "target/x86_64-pc-windows-msvc/release/bundle/Superfik-$($env:SUPERFIK_TEST_MSI_VERSION)-x64.msi"
+          $env:SUPERFIK_TEST_MSI = (Resolve-Path "target/x86_64-pc-windows-msvc/release/bundle/Superfik-$($env:SUPERFIK_TEST_MSI_VERSION)-x64.msi").Path
           cargo test -p superfik-update --lib -- --ignored --exact tests_install::msi::reads_a_built_msis_version
           if ($LASTEXITCODE -ne 0) { throw "The updater could not read the MSI's version." }
       - name: Attach MSI and checksum
