@@ -83,10 +83,13 @@ A run uses its provider's key (`RunCredentials::model`, never serialized).
 
 Built-in tools live in folders under `crates/agent-engine/src/tools/builtin/`
 (`files`: Read, Write, Edit, Glob, Grep, NotebookEdit; `shell`: Bash,
-BashOutput, KillShell, Monitor; `notify`: PushNotification). Each folder's
-`tools()` is gathered by `build.rs`; deleting a folder drops its tools. Tools
-tied to the agent loop (plan mode, worktrees, schedules, peers, web, asking
-the user) are still listed in `tools::standard()`.
+BashOutput, KillShell, Monitor and the background-shell registry; `notify`:
+PushNotification; `web`: WebFetch, WebSearch over `Workspace::network`;
+`schedules`). Each folder's `tools()` is gathered by `build.rs`; deleting a
+folder drops its tools. Tools the agent loop acts on itself stay core and are
+listed in `tools::standard()`: AskUserQuestion, Enter/ExitPlanMode (plan is
+a `PermissionMode`), Enter/ExitWorktree (session relocation) and
+ListSessions (peers, tied to SendMessage routing).
 
 A feature that spans layers is one folder per layer, with the same name:
 `crates/agent-engine/src/tools/builtin/<name>/` (its tools),
