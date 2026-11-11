@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/brunozilio/lite/compare/v0.7.1...v0.7.2) (2026-11-11)
+
+
+### Bug Fixes
+
+* trust the system's certificates and say why a request failed ([#13](https://github.com/brunozilio/lite/issues/13)) ([7c6bd00](https://github.com/brunozilio/lite/commit/7c6bd002c13125b00ddbf8bebf9fd234e1aea706))
+
 ## [0.7.1](https://github.com/brunozilio/lite/compare/v0.7.0...v0.7.1) (2026-11-11)
 
 
