@@ -101,6 +101,8 @@ fn answer(app: &mut App, event: KeyEvent) {
         KeyCode::Enter => ask::Key::Enter,
         KeyCode::Esc => ask::Key::Esc,
         KeyCode::Backspace => ask::Key::Backspace,
+        KeyCode::PageUp => return app.scroll = app.scroll.saturating_add(10),
+        KeyCode::PageDown => return app.scroll = app.scroll.saturating_sub(10),
         _ => return,
     };
     let decided = app.ask.as_mut().and_then(|pending| pending.key(key));

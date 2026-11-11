@@ -64,6 +64,36 @@ fn the_plan_shows_in_a_box_and_approving_it_switches_the_mode() {
 }
 
 #[test]
+fn a_long_plan_scrolls_with_page_keys_while_it_waits_for_approval() {
+    let data = tempfile::tempdir().expect("data");
+    let plan: String = (1..=40).map(|step| format!("{step}. Step number {step}\n")).collect();
+    let engine = FakeEngine::new(
+        vec![Model::new("keyed:scripted", "Scripted")],
+        vec![
+            EngineEvent::SessionStarted(SessionId("s".into())),
+            EngineEvent::ToolStarted(ToolCall::new("p1", "ExitPlanMode", "")),
+            EngineEvent::Asked(AgentAsk { id: AskId("p".into()), kind: AskKind::Plan { plan } }),
+            EngineEvent::Completed { duration_ms: 5, cost_usd: None },
+        ],
+    )
+    .with_delay(Duration::from_millis(60));
+    let mut app = planning(&engine, data.path());
+    assert!(!screen(&app).contains("Step number 1\u{20}"), "{}", screen(&app));
+
+    for _ in 0..5 {
+        press(&mut app, KeyCode::PageUp);
+    }
+    let shown = screen(&app);
+    assert!(shown.contains("Step number 1\u{20}"), "{shown}");
+    assert!(app.ask.is_some(), "scrolling leaves the plan waiting");
+
+    for _ in 0..5 {
+        press(&mut app, KeyCode::PageDown);
+    }
+    assert!(screen(&app).contains("Step number 40"), "{}", screen(&app));
+}
+
+#[test]
 fn keeping_on_planning_is_marked_on_the_plan() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(
