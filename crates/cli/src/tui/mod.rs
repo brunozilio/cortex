@@ -44,7 +44,6 @@ mod slash;
 mod statusline;
 mod submit;
 mod transcript;
-mod verification;
 mod view;
 mod vim;
 mod wrap;

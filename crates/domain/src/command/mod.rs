@@ -42,14 +42,13 @@ pub enum Command {
     Config,
     Reload,
     Mcp(McpCommand),
-    Verification(VerificationCommand),
     Cost,
     Login,
     Exit,
 }
 
 impl Command {
-    pub const HELP: [(&'static str, &'static str); 37] = [
+    pub const HELP: [(&'static str, &'static str); 36] = [
         ("help", "Show the commands and keys"),
         ("clear", "Clear the conversation and start fresh (also /new, /reset)"),
         ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
@@ -77,7 +76,6 @@ impl Command {
         ("config", "Change the chat's settings"),
         ("reload", concat!("Reread ~/", brand::dir!(), " and the project: plugins, skills, agents, MCP")),
         ("mcp", "List MCP servers, or /mcp approve|deny|login|logout <name>"),
-        ("verification", "Judge runs: /verification <criteria>, or off"),
         ("cost", "Show this session's cost (also /usage)"),
         ("status", "Show the model, mode, folders, session and version"),
         ("export", "Write the conversation as Markdown, /export <path>"),
@@ -106,7 +104,7 @@ impl Command {
 
     pub const GROUPS: [(&'static str, &'static [&'static str]); 4] = [
         ("Conversation", &["clear", "resume", "fork", "compact", "rewind", "retry", "btw", "export", "copy"]),
-        ("Model and mode", &["model", "mode", "effort", "output-style", "verification"]),
+        ("Model and mode", &["model", "mode", "effort", "output-style"]),
         (
             "Project",
             &[
@@ -187,7 +185,6 @@ impl Command {
             "config" | "settings" => bare(Self::Config),
             "reload" => bare(Self::Reload),
             "mcp" => McpCommand::parse(argument.as_deref()).map(Self::Mcp),
-            "verification" => Some(Self::Verification(VerificationCommand::parse(argument))),
             "cost" | "usage" => bare(Self::Cost),
             "status" => bare(Self::Status),
             "export" => Some(Self::Export(argument)),

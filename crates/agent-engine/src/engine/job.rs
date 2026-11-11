@@ -128,7 +128,7 @@ impl Job {
         {
             let config = tools::subagent_config::AgentConfig { model: settings.judge.clone(), ..Default::default() };
             match config.model(&self.request.model.id, self.request.model.provider) {
-                Ok(model) => workspace.verification = Some(crate::judge::Verification { criteria, model }),
+                Ok(model) => workspace.verification = Some(tools::Verification { criteria, model }),
                 Err(error) => return self.fail(&format!("judgeModel: {error}"), FailureKind::Other),
             }
         }

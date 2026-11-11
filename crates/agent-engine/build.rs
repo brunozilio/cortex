@@ -19,9 +19,18 @@ fn main() {
         registry.push_str(&format!("#[path = {:?}]\npub mod {name};\n", folder.join(name).join("mod.rs")));
     }
     let listed: Vec<String> = names.iter().map(|name| format!("{name}::tools()")).collect();
+    let reviewers: Vec<String> = names
+        .iter()
+        .filter(|name| folder.join(name).join("review.rs").is_file())
+        .map(|name| format!("{name}::review::reviewers()"))
+        .collect();
     registry.push_str(&format!(
-        "pub fn tools() -> Vec<Box<dyn crate::tools::Tool>> {{\n    [{}].into_iter().flatten().collect()\n}}\n",
-        listed.join(", ")
+        "pub fn tools() -> Vec<Box<dyn crate::tools::Tool>> {{\n    [{}].into_iter().flatten().collect()\n}}\n\
+         pub fn reviewers() -> Vec<Box<dyn crate::agent::Review>> {{\n    \
+         let all: [Vec<Box<dyn crate::agent::Review>>; {}] = [{}];\n    all.into_iter().flatten().collect()\n}}\n",
+        listed.join(", "),
+        reviewers.len(),
+        reviewers.join(", ")
     ));
     let out = std::env::var("OUT_DIR").unwrap_or_default();
     if let Err(error) = std::fs::write(Path::new(&out).join("builtin_tools.rs"), registry) {

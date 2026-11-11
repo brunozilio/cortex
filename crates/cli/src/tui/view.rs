@@ -212,9 +212,9 @@ fn status(app: &App) -> Line<'static> {
         " · ".dim(),
         app.effort().cli_value().dim(),
     ]);
-    if let Some(criteria) = app.session.as_ref().and_then(sdk::Session::verification) {
+    for marker in super::features::status(app) {
         spans.push(" · ".dim());
-        spans.push(super::verification::marker(&criteria).fg(Color::Green));
+        spans.push(marker.fg(Color::Green));
     }
     if app.transcript.context > 0 {
         let window = app.window.or_else(|| app.model().and_then(|model| model.window));

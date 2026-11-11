@@ -3,6 +3,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Verification {
+    pub criteria: domain::Criteria,
+    pub model: String,
+}
+
 #[derive(Debug)]
 pub struct Workspace {
     pub cwd: PathBuf,
@@ -28,7 +34,7 @@ pub struct Workspace {
     pub(crate) seen_rules: Arc<Mutex<HashSet<PathBuf>>>,
     pub safety: Option<Arc<crate::guard::Safety>>,
     pub advisor: Option<String>,
-    pub verification: Option<crate::judge::Verification>,
+    pub verification: Option<Verification>,
     pub files: Option<Arc<crate::checkpoints::FileHistory>>,
     pub lsp: Option<crate::lsp::Lsp>,
     pub worktree: Option<crate::agent_runtime::WorktreeState>,

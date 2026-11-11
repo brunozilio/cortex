@@ -1,9 +1,27 @@
 use domain::command::VerificationCommand;
 use sdk::{Criteria, CriteriaSource};
 
-use super::app::App;
+use super::{Feature, Setting, Slash};
+use crate::tui::app::App;
 
-pub fn run(app: &mut App, command: VerificationCommand) {
+pub fn feature() -> Feature {
+    Feature {
+        commands: vec![Slash {
+            names: &["verification"],
+            about: "Judge runs: /verification <criteria>, or off",
+            run: |app, argument| run(app, VerificationCommand::parse(argument)),
+        }],
+        status: Some(|app| app.session.as_ref().and_then(sdk::Session::verification).map(|c| marker(&c))),
+        setting: Some(Setting {
+            name: "Verification",
+            value: |_| String::new(),
+            run: |app, _| run(app, VerificationCommand::Show),
+        }),
+        ..Feature::default()
+    }
+}
+
+fn run(app: &mut App, command: VerificationCommand) {
     let Some(session) = app.session.as_mut() else {
         return app.transcript.notice("Pick a model first: verification belongs to a conversation.");
     };
@@ -29,7 +47,7 @@ pub fn run(app: &mut App, command: VerificationCommand) {
     app.transcript.notice(notice);
 }
 
-pub fn marker(criteria: &Criteria) -> String {
+fn marker(criteria: &Criteria) -> String {
     format!("verify ({})", source(criteria))
 }
 
@@ -46,8 +64,8 @@ mod tests {
     use ratatui::crossterm::event::KeyCode;
     use sdk::{EngineEvent, Model, PermissionMode};
 
-    use super::super::tests::{press, screen, sdk, type_text, until};
     use super::*;
+    use crate::tui::tests::{press, screen, sdk, type_text, until};
 
     fn command(app: &mut App, text: &str) {
         type_text(app, text);

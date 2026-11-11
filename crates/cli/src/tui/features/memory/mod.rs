@@ -13,6 +13,7 @@ pub fn feature() -> Feature {
         }],
         tick: None,
         prefix: Some(('#', |app, note| remember(app, note.unwrap_or_default()))),
+        ..Feature::default()
     }
 }
 
@@ -25,7 +26,7 @@ fn memory(app: &mut App, argument: Option<String>) {
 
 fn run(app: &mut App, command: MemoryCommand) {
     if command == MemoryCommand::Edit {
-        app.edit_file = Some(crate::tui::config::instructions_file(&app.cwd));
+        app.edit_file = Some(instructions_file(&app.cwd));
         return;
     }
     let cwd = app.cwd.clone();
@@ -98,8 +99,26 @@ fn forgotten_listing(forgotten: &[Forgotten]) -> String {
     format!("Forgotten (/memory restore <id>, for 30 days):\n{}", lines.join("\n"))
 }
 
+fn instructions_file(cwd: &std::path::Path) -> std::path::PathBuf {
+    let root = cwd.join(brand::INSTRUCTIONS);
+    let nested = cwd.join(brand::DIR).join(brand::INSTRUCTIONS);
+    if !root.exists() && nested.exists() { nested } else { root }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_instructions_file_is_the_one_the_project_has() {
+        let dir = tempfile::tempdir().expect("dir");
+        assert_eq!(super::instructions_file(dir.path()), dir.path().join(brand::INSTRUCTIONS));
+        std::fs::create_dir_all(dir.path().join(brand::DIR)).expect("dir");
+        std::fs::write(dir.path().join(concat!(brand::dir!(), "/", brand::instructions!())), "x").expect("write");
+        assert_eq!(
+            super::instructions_file(dir.path()),
+            dir.path().join(concat!(brand::dir!(), "/", brand::instructions!()))
+        );
+    }
+
     use agent_engine::fake::FakeEngine;
     use ratatui::crossterm::event::KeyCode;
     use sdk::{EngineEvent, MemoryKind, Model};

@@ -40,11 +40,11 @@ fn commands_parse_with_their_arguments() {
 
 #[test]
 fn verification_shows_sets_or_clears_the_criteria() {
-    assert_eq!(Command::parse("/verification"), Some(Command::Verification(VerificationCommand::Show)));
-    assert_eq!(Command::parse("/verification OFF"), Some(Command::Verification(VerificationCommand::Clear)));
+    assert_eq!(VerificationCommand::parse(None), VerificationCommand::Show);
+    assert_eq!(VerificationCommand::parse(Some("OFF".into())), VerificationCommand::Clear);
     assert_eq!(
-        Command::parse("/verification  cargo test passes "),
-        Some(Command::Verification(VerificationCommand::Set("cargo test passes".into())))
+        VerificationCommand::parse(Some("cargo test passes".into())),
+        VerificationCommand::Set("cargo test passes".into())
     );
     assert_eq!(Command::parse("/verify"), None, "the verify skill keeps its name");
 }

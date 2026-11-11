@@ -11,7 +11,6 @@ mod reminders;
 mod script_call;
 mod sub_agent;
 mod tasks;
-mod verify;
 mod worktree;
 
 use domain::EngineEvent;
@@ -35,6 +34,10 @@ pub enum Ending {
     Refused,
     TooManyTurns,
     Moved,
+}
+
+pub trait Review: Sync {
+    fn review(&self, agent: &Agent<'_>, run: &[Message], attempts: &mut u8) -> Result<Option<Message>, Ending>;
 }
 
 pub struct Agent<'a> {
@@ -210,7 +213,7 @@ impl Agent<'_> {
                         history.push(Message::user(format!("Completion blocked by hook: {reason}\n{}", hook.context)));
                         continue;
                     }
-                    if let Some(feedback) = self.judged(&history[prompt_at..], &mut attempts)? {
+                    if let Some(feedback) = self.reviewed(&history[prompt_at..], &mut attempts)? {
                         history.push(feedback);
                         continue;
                     }
@@ -234,6 +237,15 @@ impl Agent<'_> {
             }
         }
         Err(Ending::TooManyTurns)
+    }
+
+    fn reviewed(&self, run: &[Message], attempts: &mut u8) -> Result<Option<Message>, Ending> {
+        for reviewer in crate::tools::builtin::reviewers() {
+            if let Some(feedback) = reviewer.review(self, run, attempts)? {
+                return Ok(Some(feedback));
+            }
+        }
+        Ok(None)
     }
 
     fn runtime_reminder(&self) -> String {

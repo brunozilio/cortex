@@ -46,7 +46,7 @@ pub enum VerificationCommand {
 }
 
 impl VerificationCommand {
-    pub(super) fn parse(argument: Option<String>) -> Self {
+    pub fn parse(argument: Option<String>) -> Self {
         match argument {
             None => Self::Show,
             Some(text) if text.eq_ignore_ascii_case("off") => Self::Clear,

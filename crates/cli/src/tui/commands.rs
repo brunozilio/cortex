@@ -124,7 +124,6 @@ pub fn run(app: &mut App, command: Command) {
                 Err(error) => Msg::Error(error.to_string()),
             });
         }
-        Command::Verification(change) => super::verification::run(app, change),
         Command::Diffs => {
             app.diffs = Some(super::diff_view::DiffView::new(super::git::Scope::Uncommitted));
             app.load_diffs(super::git::Scope::Uncommitted);
@@ -245,9 +244,17 @@ mod tests {
         let skills = [("memo".to_owned(), "Writes a memo".to_owned()), ("audit".to_owned(), "Audits".to_owned())];
         let names: Vec<String> = suggestions("me", &skills).into_iter().map(|(name, _)| name).collect();
         assert_eq!(names, ["memory", "memo"]);
-        let cleared: Vec<(String, String)> = suggestions("", &[]).into_iter().filter(|(_, about)| about.contains("/clear")).collect();
-        assert_eq!(cleared.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["new", "reset"], "aliases follow");
-        assert_eq!(suggestions("res", &[]).iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["reset", "resume"]);
+        let cleared: Vec<(String, String)> =
+            suggestions("", &[]).into_iter().filter(|(_, about)| about.contains("/clear")).collect();
+        assert_eq!(
+            cleared.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(),
+            ["new", "reset"],
+            "aliases follow"
+        );
+        assert_eq!(
+            suggestions("res", &[]).iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(),
+            ["reset", "resume"]
+        );
         assert_eq!(
             suggestions("", &skills).len(),
             Command::HELP.len() + Command::ALIASES.len() + super::super::features::help().len() + 2,

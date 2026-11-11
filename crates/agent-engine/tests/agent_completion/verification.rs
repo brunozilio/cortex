@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 use agent_engine::{
     agent::Agent,
     control::Control,
-    judge::Verification,
+
     model::{TurnRequest, scripted::ScriptedModel},
-    tools::{self, Workspace, subagent::AgentTool},
+    tools::{self, Verification, Workspace, subagent::AgentTool},
     transcript::Message,
 };
 use domain::{AgentStatus, Criteria, Effort, EngineEvent, PermissionMode, Verdict};

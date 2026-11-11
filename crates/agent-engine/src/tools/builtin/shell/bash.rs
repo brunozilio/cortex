@@ -1,9 +1,10 @@
 use std::process::Stdio;
 use std::time::Duration;
 
+use super::clip_middle;
 use super::shells::Waited;
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, clip_middle, field, required};
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 use serde_json::{Value, json};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
@@ -68,7 +69,7 @@ impl Tool for Bash {
                 Err(error) => Outcome::error(format!("Could not start the shell: {error}")),
             };
         }
-        let watched = crate::shell_changes::before(workspace);
+        let watched = super::changes::before(workspace);
         let id = match super::shells::start(workspace.credentials.client, command, &mut shell) {
             Ok(id) => id,
             Err(error) => return Outcome::error(format!("Could not start the shell: {error}")),

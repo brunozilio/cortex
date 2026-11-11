@@ -13,7 +13,7 @@ mod rule_target;
 pub(crate) mod script_bridge;
 pub(crate) mod script_io;
 pub mod script_tool;
-mod seen_files;
+pub mod seen_files;
 pub mod send_message;
 pub mod skill;
 mod skill_script;
@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 pub use lsp::Lsp;
-pub use workspace::{Network, Workspace};
+pub use workspace::{Network, Verification, Workspace};
 
 use crate::model::ToolSpec;
 
@@ -156,16 +156,6 @@ pub(crate) fn clip(text: &str, limit: usize) -> String {
     }
 }
 
-pub(crate) fn clip_middle(text: &str, limit: usize) -> String {
-    let count = text.chars().count();
-    if count <= limit {
-        return text.to_owned();
-    }
-    let head: String = text.chars().take(limit / 2).collect();
-    let tail: String = text.chars().skip(count - (limit - limit / 2)).collect();
-    format!("{head}\n… [{} characters cut from the middle] …\n{tail}", count - limit)
-}
-
 pub(crate) fn shown(path: &Path, workspace: &Workspace) -> String {
     path.strip_prefix(&workspace.cwd).unwrap_or(path).display().to_string()
 }
@@ -188,12 +178,6 @@ mod tests {
     fn clips_long_text() {
         assert_eq!(clip("abc", 5), "abc");
         assert_eq!(clip("abcdef", 3), "abc\n… [3 more characters cut]");
-    }
-
-    #[test]
-    fn long_output_keeps_its_start_and_its_end() {
-        assert_eq!(clip_middle("abcdef", 6), "abcdef");
-        assert_eq!(clip_middle("ábcdefghij", 4), "áb\n… [6 characters cut from the middle] …\nij");
     }
 
     #[test]

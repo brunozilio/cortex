@@ -11,10 +11,27 @@ pub struct Slash {
     pub run: Run,
 }
 
+#[derive(Default)]
 pub struct Feature {
     pub commands: Vec<Slash>,
     pub tick: Option<fn(&mut App)>,
     pub prefix: Option<(char, Run)>,
+    pub status: Option<fn(&App) -> Option<String>>,
+    pub setting: Option<Setting>,
+}
+
+pub struct Setting {
+    pub name: &'static str,
+    pub value: fn(&App) -> String,
+    pub run: Run,
+}
+
+pub fn status(app: &App) -> Vec<String> {
+    all().into_iter().filter_map(|feature| feature.status).filter_map(|status| status(app)).collect()
+}
+
+pub fn settings() -> Vec<Setting> {
+    all().into_iter().filter_map(|feature| feature.setting).collect()
 }
 
 include!(concat!(env!("OUT_DIR"), "/features.rs"));

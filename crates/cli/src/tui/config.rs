@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use domain::Command;
 
 use super::app::App;
@@ -19,18 +17,23 @@ fn entries(app: &App) -> Vec<(String, String, Command)> {
         ("Vim keys".into(), on(app.vim.is_some()), Command::Vim),
         ("Mouse wheel scrolls".into(), on(app.mouse), Command::Mouse),
         ("Status line".into(), app.status.command.clone().unwrap_or_else(|| "usual".into()), Command::StatusLine(None)),
-        ("Verification".into(), String::new(), Command::Verification(domain::command::VerificationCommand::Show)),
     ]
 }
 
 pub fn open(app: &mut App) {
-    let items = entries(app).into_iter().map(|(name, value, _)| (name, value)).collect();
+    let mut items: Vec<(String, String)> = entries(app).into_iter().map(|(name, value, _)| (name, value)).collect();
+    items.extend(super::features::settings().into_iter().map(|setting| (setting.name.into(), (setting.value)(app))));
     app.picker = Some(Picker { kind: PickerKind::Config, title: "Settings".into(), items, cursor: 0 });
 }
 
 pub fn picked(app: &mut App, cursor: usize) {
-    if let Some((_, _, command)) = entries(app).into_iter().nth(cursor) {
-        super::commands::run(app, command);
+    let entries = entries(app);
+    let count = entries.len();
+    if let Some((_, _, command)) = entries.into_iter().nth(cursor) {
+        return super::commands::run(app, command);
+    }
+    if let Some(setting) = super::features::settings().into_iter().nth(cursor - count) {
+        (setting.run)(app, None);
     }
 }
 
@@ -56,25 +59,4 @@ pub fn create(app: &mut App, agent: bool, what: &str) {
         )
     };
     app.send(prompt);
-}
-
-pub fn instructions_file(cwd: &std::path::Path) -> PathBuf {
-    let root = cwd.join(brand::INSTRUCTIONS);
-    let nested = cwd.join(brand::DIR).join(brand::INSTRUCTIONS);
-    if !root.exists() && nested.exists() { nested } else { root }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn the_instructions_file_is_the_one_the_project_has() {
-        let dir = tempfile::tempdir().expect("dir");
-        assert_eq!(super::instructions_file(dir.path()), dir.path().join(brand::INSTRUCTIONS));
-        std::fs::create_dir_all(dir.path().join(brand::DIR)).expect("dir");
-        std::fs::write(dir.path().join(concat!(brand::dir!(), "/", brand::instructions!())), "x").expect("write");
-        assert_eq!(
-            super::instructions_file(dir.path()),
-            dir.path().join(concat!(brand::dir!(), "/", brand::instructions!()))
-        );
-    }
 }

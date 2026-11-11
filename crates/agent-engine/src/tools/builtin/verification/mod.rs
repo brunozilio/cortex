@@ -1,11 +1,11 @@
+pub mod review;
+
 use domain::Criteria;
 
 use crate::transcript::{Message, Role};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Verification {
-    pub criteria: Criteria,
-    pub model: String,
+pub fn tools() -> Vec<Box<dyn crate::tools::Tool>> {
+    Vec::new()
 }
 
 pub const TOOLS: [&str; 5] = ["Read", "Glob", "Grep", "Bash", "Skill"];
