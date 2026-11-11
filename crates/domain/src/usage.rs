@@ -45,10 +45,12 @@ impl ContextUsage {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Compaction {
     pub before: u64,
     pub after: u64,
+    #[serde(default)]
+    pub summary: String,
 }
 
 impl Compaction {
@@ -138,7 +140,7 @@ mod tests {
 
     #[test]
     fn compaction_reports_what_it_freed() {
-        assert_eq!(Compaction { before: 19_875, after: 4_917 }.freed(), 14_958);
-        assert_eq!(Compaction { before: 10, after: 20 }.freed(), 0);
+        assert_eq!(Compaction { before: 19_875, after: 4_917, ..Compaction::default() }.freed(), 14_958);
+        assert_eq!(Compaction { before: 10, after: 20, ..Compaction::default() }.freed(), 0);
     }
 }

@@ -27,6 +27,7 @@ pub mod request;
 pub mod routing;
 pub mod schedule;
 pub mod skill;
+pub mod trace;
 pub mod usage;
 pub mod verification;
 

@@ -54,7 +54,7 @@ impl Agent<'_> {
             }
         }
         let summary = tool.map(|tool| tool.summary(input)).unwrap_or_default();
-        (self.emit)(EngineEvent::ToolStarted(ToolCall::new(id, name, summary.clone())));
+        (self.emit)(EngineEvent::ToolStarted(ToolCall::new(id, name, summary.clone()).with_input(input.clone())));
         let mut outcome = if let Some(reason) = &pre.blocked {
             Outcome::error(format!("Hook blocked {name}: {reason}"))
         } else if !rule_context.is_empty() {

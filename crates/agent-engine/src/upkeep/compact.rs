@@ -74,7 +74,7 @@ pub fn compact_on(
         history.push(latest);
     }
     let after = history.iter().map(message_tokens).sum();
-    Ok(Compaction { before, after })
+    Ok(Compaction { before, after, summary: summary.trim().to_owned() })
 }
 
 fn bounded_summary(

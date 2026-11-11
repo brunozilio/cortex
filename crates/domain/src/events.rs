@@ -20,11 +20,17 @@ pub struct ToolCall {
     pub output: Option<String>,
     #[serde(default)]
     pub failed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<serde_json::Value>,
 }
 
 impl ToolCall {
     pub fn new(id: impl Into<String>, name: impl Into<String>, summary: impl Into<String>) -> Self {
-        Self { id: id.into(), name: name.into(), summary: summary.into(), output: None, failed: false }
+        Self { id: id.into(), name: name.into(), summary: summary.into(), output: None, failed: false, input: None }
+    }
+
+    pub fn with_input(self, input: serde_json::Value) -> Self {
+        Self { input: Some(input), ..self }
     }
 }
 
