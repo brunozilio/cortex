@@ -2,7 +2,7 @@ mod gate;
 
 use std::sync::Arc;
 
-pub use self::gate::RunGate;
+pub use self::gate::{Observer, RunGate};
 
 use domain::{AskId, Decision, EngineEvent, ModelOption, PermissionMode, PromptRequest, RunId};
 

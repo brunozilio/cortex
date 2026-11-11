@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 use std::io::{ErrorKind, Write};
 use std::path::PathBuf;
 
-use domain::{EngineEvent, PromptRequest, SessionId};
+use domain::{PromptRequest, SessionId};
 
 use super::log::{self, Entry};
 use super::{Sessions, scoped_id};
@@ -46,16 +46,22 @@ impl FileSessions {
     }
 
     fn append(&self, id: &SessionId, entries: &[Entry]) -> Result<(), String> {
+        let path = self.path(id, "jsonl")?;
+        let legacy = if path.exists() { None } else { self.legacy(id)? };
+        let carried: Vec<Entry> = legacy.iter().flatten().cloned().map(Entry::Message).collect();
         let mut lines = String::new();
-        for entry in entries {
+        for entry in carried.iter().chain(entries) {
             lines.push_str(&serde_json::to_string(entry).map_err(|e| e.to_string())?);
             lines.push('\n');
         }
         std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
-        let path = self.path(id, "jsonl")?;
         let mut file = platform::private_file::open(OpenOptions::new().create(true).append(true), &path)
             .map_err(|e| e.to_string())?;
-        file.write_all(lines.as_bytes()).map_err(|e| e.to_string())
+        file.write_all(lines.as_bytes()).map_err(|e| e.to_string())?;
+        if legacy.is_some() {
+            std::fs::remove_file(self.path(id, "json")?).map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 
     fn read_json<T: serde::de::DeserializeOwned>(&self, name: String) -> Result<Option<T>, String> {
@@ -136,25 +142,11 @@ impl Sessions for FileSessions {
         self.conversation(id).ok().flatten()
     }
     fn save(&self, id: &SessionId, history: &[Message]) -> Result<(), String> {
-        let started = read(&self.path(id, "jsonl")?)?.is_some();
-        let legacy = if started { None } else { self.legacy(id)? };
-        let kept = match &legacy {
-            Some(old) => old.clone(),
-            None => self.conversation(id)?.unwrap_or_default(),
-        };
-        let mut entries: Vec<Entry> = legacy.unwrap_or_default().into_iter().map(Entry::Message).collect();
-        entries.extend(log::changes(&kept, history));
-        self.append(id, &entries)?;
-        if !started {
-            match std::fs::remove_file(self.path(id, "json")?) {
-                Err(error) if error.kind() != ErrorKind::NotFound => return Err(error.to_string()),
-                _ => {}
-            }
-        }
-        Ok(())
+        let kept = self.conversation(id)?.unwrap_or_default();
+        self.append(id, &log::changes(&kept, history))
     }
-    fn record(&self, request: &PromptRequest, id: &SessionId, at_ms: u64, event: &EngineEvent) -> Result<(), String> {
-        self.append(&scoped_id(request, id), &[Entry::Event { at_ms, event: event.clone() }])
+    fn record(&self, request: &PromptRequest, id: &SessionId, entry: &Entry) -> Result<(), String> {
+        self.append(&scoped_id(request, id), std::slice::from_ref(entry))
     }
 }
 

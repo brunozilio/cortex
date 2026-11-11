@@ -52,6 +52,7 @@ impl Job {
         if let Some(SessionCommand::Rewind(index)) = self.request.command {
             return self.rewind(&session, history, index, started);
         }
+        self.gate.observe(super::record::Recorder::start(Arc::clone(&self.sessions), &self.request, &session));
         self.gate.emit(EngineEvent::SessionStarted(session.clone()));
         let brief = match crate::brief::Brief::load(&self.request) {
             Ok(brief) => brief,

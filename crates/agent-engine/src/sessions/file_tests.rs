@@ -82,13 +82,26 @@ fn events_are_kept_beside_the_conversation_without_entering_it() {
     let store = FileSessions::new(dir.path().join("native"));
     let (request, id) = (request(dir.path()), SessionId("s1".into()));
     store.save_for(&request, &id, &[Message::user("one")]).expect("save");
-    store.record(&request, &id, 1_700_000_000_000, &EngineEvent::Steered("faster".into())).expect("record");
+    let steered = Entry::Event { at_ms: 1_700_000_000_000, event: EngineEvent::Steered("faster".into()) };
+    store.record(&request, &id, &steered).expect("record");
 
     assert_eq!(store.load_for(&request, &id), Some(vec![Message::user("one")]));
-    assert_eq!(
-        store.entries(&request, &id).expect("entries").last(),
-        Some(&Entry::Event { at_ms: 1_700_000_000_000, event: EngineEvent::Steered("faster".into()) })
-    );
+    assert_eq!(store.entries(&request, &id).expect("entries").last(), Some(&steered));
+}
+
+#[test]
+fn recording_into_a_conversation_saved_in_the_old_format_keeps_the_conversation() {
+    let dir = tempfile::tempdir().expect("dir");
+    let native = dir.path().join("native");
+    let store = FileSessions::new(&native);
+    let (request, id) = (request(dir.path()), SessionId("s1".into()));
+    std::fs::create_dir_all(&native).expect("dir");
+    let legacy = native.join(format!("{}.json", scoped_id(&request, &id).0));
+    std::fs::write(&legacy, serde_json::to_vec(&[Message::user("old")]).expect("json")).expect("old file");
+
+    store.record(&request, &id, &Entry::Prompted { at_ms: 1, prompt: "new".into() }).expect("record");
+    assert_eq!(store.load_for(&request, &id), Some(vec![Message::user("old")]));
+    assert!(!legacy.exists());
 }
 
 #[test]

@@ -10,7 +10,10 @@ pub enum Entry {
     Truncated { keep: usize },
     Restarted,
     Event { at_ms: u64, event: EngineEvent },
+    Prompted { at_ms: u64, prompt: String },
 }
+
+const CONVERSATION: [&str; 3] = ["message", "truncated", "restarted"];
 
 #[derive(Deserialize)]
 struct Kind {
@@ -34,7 +37,7 @@ pub(super) fn conversation(entries: impl IntoIterator<Item = Entry>) -> Vec<Mess
             Entry::Message(message) => history.push(message),
             Entry::Truncated { keep } => history.truncate(keep),
             Entry::Restarted => history.clear(),
-            Entry::Event { .. } => {}
+            Entry::Event { .. } | Entry::Prompted { .. } => {}
         }
     }
     history
@@ -46,7 +49,7 @@ pub(super) fn resume(text: &str) -> Result<Vec<Message>, String> {
     for line in lines.iter().rev() {
         let kind = serde_json::from_str::<Kind>(line).map_err(invalid)?.kind;
         let restarted = kind == "restarted";
-        if kind != "event" {
+        if CONVERSATION.contains(&kind.as_str()) {
             since_restart.push(*line);
         }
         if restarted {

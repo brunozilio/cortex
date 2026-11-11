@@ -11,6 +11,7 @@ mod scripts;
 mod sessions;
 mod stable_prompt;
 mod steering;
+mod trace;
 mod verification;
 mod worktrees;
 

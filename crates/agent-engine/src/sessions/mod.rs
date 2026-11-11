@@ -3,7 +3,7 @@ use std::collections::HashMap;
 #[cfg(any(test, feature = "test-support"))]
 use std::sync::Mutex;
 
-use domain::{EngineEvent, Principal, PromptRequest, SessionId};
+use domain::{Principal, PromptRequest, SessionId};
 use sha2::{Digest, Sha256};
 
 use crate::checkpoints::Checkpoint;
@@ -33,13 +33,7 @@ pub trait Sessions: Send + Sync {
     fn load_for(&self, request: &PromptRequest, id: &SessionId) -> Option<Vec<Message>> {
         self.load(&scoped_id(request, id))
     }
-    fn record(
-        &self,
-        _request: &PromptRequest,
-        _id: &SessionId,
-        _at_ms: u64,
-        _event: &EngineEvent,
-    ) -> Result<(), String> {
+    fn record(&self, _request: &PromptRequest, _id: &SessionId, _entry: &Entry) -> Result<(), String> {
         Ok(())
     }
     fn load_for_checked(&self, request: &PromptRequest, id: &SessionId) -> Result<Option<Vec<Message>>, String> {

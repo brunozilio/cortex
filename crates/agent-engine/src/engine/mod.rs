@@ -2,6 +2,7 @@ mod converse;
 mod date;
 mod job;
 mod moved;
+mod record;
 mod report;
 mod rewind;
 mod snapshot;
