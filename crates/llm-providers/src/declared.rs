@@ -28,8 +28,10 @@ pub struct Declared {
     pub window: Option<u64>,
 }
 
-#[derive(Debug)]
+pub type Shaper = Box<dyn Fn(&mut Value) -> Result<(), String> + Send + Sync>;
+
 struct DeclaredProvider {
+    shaper: Option<Shaper>,
     id: &'static str,
     name: &'static str,
     wire: Wire,
@@ -47,8 +49,18 @@ pub(crate) fn registered() -> Vec<&'static dyn Provider> {
     REGISTERED.read().unwrap_or_else(PoisonError::into_inner).clone()
 }
 
+impl std::fmt::Debug for DeclaredProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeclaredProvider").field("id", &self.id).field("shaped", &self.shaper.is_some()).finish()
+    }
+}
+
 pub fn register(declared: Declared) -> Result<ModelProvider, ProviderError> {
-    let provider = check(declared)?;
+    register_shaped(declared, None)
+}
+
+pub fn register_shaped(declared: Declared, shaper: Option<Shaper>) -> Result<ModelProvider, ProviderError> {
+    let provider = DeclaredProvider { shaper, ..check(declared)? };
     let mut registered = REGISTERED.write().unwrap_or_else(PoisonError::into_inner);
     registered.retain(|known| known.id() != provider.id);
     let id = ModelProvider::named(provider.id);
@@ -78,6 +90,7 @@ fn check(declared: Declared) -> Result<DeclaredProvider, ProviderError> {
         return invalid("base must be https, or http on localhost".into());
     }
     Ok(DeclaredProvider {
+        shaper: None,
         id: Box::leak(declared.id.into_boxed_str()),
         name: Box::leak(declared.name.into_boxed_str()),
         wire,
@@ -139,8 +152,11 @@ impl Provider for DeclaredProvider {
             Wire::Chat | Wire::EventStream => "/chat/completions",
         }
     }
-    fn shape(&self, _model: Option<&ModelOption>, _body: &mut Value, _effort: &str) -> Result<(), ProviderError> {
-        Ok(())
+    fn shape(&self, _model: Option<&ModelOption>, body: &mut Value, _effort: &str) -> Result<(), ProviderError> {
+        match &self.shaper {
+            Some(shaper) => shaper(body).map_err(|why| ProviderError::Invalid(format!("{}: shape: {why}", self.id))),
+            None => Ok(()),
+        }
     }
     fn catalog(&self, config: &Config, _after: &str) -> Call {
         Call::get(self, config, "/models")

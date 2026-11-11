@@ -50,6 +50,25 @@ fn its_models_come_from_its_list_or_its_catalog() {
 }
 
 #[test]
+fn a_shaper_rewrites_each_body_and_its_failure_is_a_provider_error() {
+    let mut declared = groq();
+    declared.id = "test-shaped".into();
+    let shaper: Shaper = Box::new(|body: &mut Value| {
+        if body["model"] == "bad" {
+            return Err("no such model".into());
+        }
+        body["temperature"] = json!(0.2);
+        Ok(())
+    });
+    let provider = crate::get(register_shaped(declared, Some(shaper)).expect("registered")).expect("found");
+    let mut body = json!({"model": "llama"});
+    provider.shape(None, &mut body, "medium").expect("shaped");
+    assert_eq!(body["temperature"], 0.2);
+    let refused = provider.shape(None, &mut json!({"model": "bad"}), "medium").expect_err("refused");
+    assert!(refused.to_string().contains("no such model"));
+}
+
+#[test]
 fn a_bad_declaration_says_what_is_wrong() {
     let refused = |value: Value| register(declared(value)).expect_err("refused").to_string();
     let base = json!({"id": "x", "name": "X", "wire": "chat", "base": "https://x.dev"});

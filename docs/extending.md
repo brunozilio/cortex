@@ -27,6 +27,11 @@ export default {
 | `models` | The models offered; without it the provider's `GET /models` is read. |
 | `window` | The context window, 128000 by default. |
 
+A file may also `export function shape(body) { … }`: it gets each
+request body just before it is sent and returns the body to send (or
+nothing to keep it). It runs with no files, processes or network and
+at most 2 seconds; an error stops the call with the provider's name.
+
 The file is read when the app starts and again on `/reload` (`backend::native::
 declare_providers`, `agent_engine::declared_providers`), checked and
 registered beside the built-in providers (`llm_providers::declared`).
