@@ -152,7 +152,7 @@ pub fn run(
                 }
             }
             if app.session.is_some() && std::mem::take(&mut pick) {
-                resume::open(&mut app);
+                resume::open(&mut app, None);
             }
             if app.session.is_some()
                 && let Some(prompt) = first.take()

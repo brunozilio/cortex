@@ -25,7 +25,7 @@ pub enum Command {
     Context,
     Vim,
     Mouse,
-    Resume,
+    Resume(Option<String>),
     Fork,
     Export(Option<String>),
     Copy,
@@ -55,7 +55,7 @@ impl Command {
     pub const HELP: [(&'static str, &'static str); 40] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
-        ("resume", "Go back to an earlier conversation of this folder"),
+        ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
         ("fork", "Go on in a copy of this conversation, leaving it as it is"),
         ("model", "Pick the model, or /model <id>"),
         ("mode", "Pick ask, edits, plan or bypass"),
@@ -167,7 +167,7 @@ impl Command {
             "context" => bare(Self::Context),
             "vim" => bare(Self::Vim),
             "mouse" => bare(Self::Mouse),
-            "resume" | "continue" => bare(Self::Resume),
+            "resume" | "continue" => Some(Self::Resume(argument)),
             "fork" | "branch" => bare(Self::Fork),
             "skills" | "commands" | "agents" => match argument.as_deref().map(|a| a.split_once(' ').unwrap_or((a, "")))
             {

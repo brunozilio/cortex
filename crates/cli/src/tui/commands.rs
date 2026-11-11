@@ -54,7 +54,7 @@ pub fn run(app: &mut App, command: Command) {
         Command::Btw(question) => super::side::ask(app, question),
         Command::AddDir(typed) => super::dirs::run(app, typed),
         Command::Context => super::context::measure(app),
-        Command::Resume => super::resume::open(app),
+        Command::Resume(query) => super::resume::open(app, query),
         Command::Fork => match app.session.as_ref().filter(|session| session.id().is_some()) {
             Some(session) => {
                 session.fork_next();

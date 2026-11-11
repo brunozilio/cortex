@@ -74,6 +74,12 @@ fn every_command_is_in_exactly_one_help_group() {
 }
 
 #[test]
+fn resume_may_search_the_titles() {
+    assert_eq!(Command::parse("/resume"), Some(Command::Resume(None)));
+    assert_eq!(Command::parse("/continue login bug"), Some(Command::Resume(Some("login bug".into()))));
+}
+
+#[test]
 fn help_names_one_command_or_lists_them_all() {
     assert_eq!(Command::parse("/help"), Some(Command::Help(None)));
     assert_eq!(Command::parse("/? mode"), Some(Command::Help(Some("mode".into()))));
