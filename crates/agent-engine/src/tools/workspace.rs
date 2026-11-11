@@ -17,7 +17,7 @@ pub struct Workspace {
     pub home: Option<PathBuf>,
     pub added_dirs: Vec<PathBuf>,
     pub fallback: Option<String>,
-    pub web: Option<super::web::Web>,
+    pub network: Option<Network>,
     pub deferred: Option<Arc<super::tool_search::Deferred>>,
     pub agent_name: String,
     pub session_id: String,
@@ -47,7 +47,7 @@ impl Workspace {
             home: None,
             added_dirs: Vec::new(),
             fallback: None,
-            web: None,
+            network: None,
             deferred: None,
             agent_name: "main".into(),
             session_id: uuid::Uuid::new_v4().to_string(),
@@ -92,7 +92,7 @@ impl Workspace {
             home: self.home.clone(),
             added_dirs: self.added_dirs.clone(),
             fallback: self.fallback.clone(),
-            web: self.web.clone(),
+            network: self.network.clone(),
             deferred: self.deferred.clone(),
             agent_name: self.agent_name.clone(),
             session_id: self.session_id.clone(),
@@ -143,5 +143,14 @@ impl Workspace {
 
     pub fn has_read(&self, path: &Path) -> bool {
         self.read.lock().map(|read| read.contains(path)).unwrap_or(false)
+    }
+}
+
+#[derive(Clone)]
+pub struct Network(pub std::sync::Arc<dyn crate::model::http::Http>);
+
+impl std::fmt::Debug for Network {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Network")
     }
 }

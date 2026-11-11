@@ -21,7 +21,6 @@ pub mod subagent;
 pub mod subagent_config;
 pub mod task;
 pub mod tool_search;
-pub mod web;
 mod workspace;
 pub mod worktree;
 
@@ -30,7 +29,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 pub use lsp::Lsp;
-pub use workspace::Workspace;
+pub use workspace::{Network, Workspace};
 
 use crate::model::ToolSpec;
 
@@ -100,8 +99,6 @@ pub fn standard() -> Vec<Box<dyn Tool>> {
         Box::new(worktree::EnterWorktree),
         Box::new(worktree::ExitWorktree),
         Box::new(peers::ListSessions),
-        Box::new(web::WebFetch),
-        Box::new(web::WebSearch),
     ];
     builtin::tools().into_iter().chain(features).collect()
 }

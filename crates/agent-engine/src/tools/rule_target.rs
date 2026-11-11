@@ -31,7 +31,7 @@ impl Workspace {
         }
         if name == "WebFetch" {
             let url = input.get("url").and_then(Value::as_str).unwrap_or(subject);
-            let site = super::web::host(url).map(|host| format!("domain:{host}")).unwrap_or_default();
+            let site = domain::permission_rules::site(url).map(|host| format!("domain:{host}")).unwrap_or_default();
             return rule(&Target::Other(&site));
         }
         if !searches && path.is_none() {

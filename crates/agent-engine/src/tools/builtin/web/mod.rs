@@ -2,28 +2,21 @@ mod html;
 mod search;
 
 use std::io::Read as _;
-use std::sync::Arc;
 
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace, clip, field, required};
+use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
-use crate::model::http::Http;
 
 const SHOWN: usize = 60_000;
 const READ: u64 = 5 << 20;
 
-#[derive(Clone)]
-pub struct Web(pub Arc<dyn Http>);
-
-impl std::fmt::Debug for Web {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Web")
-    }
-}
-
 use domain::permission_rules::is_private;
-pub use domain::permission_rules::site as host;
+use domain::permission_rules::site as host;
+
+pub fn tools() -> Vec<Box<dyn Tool>> {
+    vec![Box::new(WebFetch), Box::new(WebSearch)]
+}
 
 #[derive(Debug)]
 pub struct WebFetch;
@@ -64,7 +57,7 @@ impl Tool for WebFetch {
         if is_private(&site) {
             return Outcome::error(format!("{site} is this computer or its private network; WebFetch reads the web."));
         }
-        let Some(web) = &workspace.web else { return Outcome::error("The web is not available to this run.") };
+        let Some(web) = &workspace.network else { return Outcome::error("The web is not available to this run.") };
         let response = match web.0.get(&url, &[("User-Agent".into(), brand::NAME.into())]) {
             Ok(response) => response,
             Err(error) => return Outcome::error(format!("Could not fetch {url}: {error}")),
@@ -114,7 +107,7 @@ impl Tool for WebSearch {
             Ok(query) => query,
             Err(error) => return error,
         };
-        let Some(web) = &workspace.web else { return Outcome::error("The web is not available to this run.") };
+        let Some(web) = &workspace.network else { return Outcome::error("The web is not available to this run.") };
         let key = std::env::var("BRAVE_SEARCH_API_KEY").ok().filter(|key| !key.is_empty());
         match search::search(web.0.as_ref(), query, key.as_deref()) {
             Ok(results) if results.is_empty() => Outcome::ok(format!("No results for \"{query}\".")),
@@ -128,10 +121,12 @@ impl Tool for WebSearch {
 mod tests {
     use super::*;
     use crate::model::http::ScriptedHttp;
+    use crate::tools::Network;
+    use std::sync::Arc;
 
     fn workspace(answers: Vec<(u16, String)>) -> Workspace {
         let mut workspace = Workspace::new("/tmp");
-        workspace.web = Some(Web(Arc::new(ScriptedHttp::new(answers))));
+        workspace.network = Some(Network(Arc::new(ScriptedHttp::new(answers))));
         workspace
     }
 
