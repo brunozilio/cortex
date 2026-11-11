@@ -3,8 +3,8 @@
 use std::path::PathBuf;
 
 use crate::{prompt, tools};
-use serde::{Deserialize, Serialize};
 use domain::PromptRequest;
+use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Brief {
     pub skills: Vec<tools::skill::FoundSkill>,
@@ -105,9 +105,9 @@ mod tests {
     fn the_permissions_of_a_folder_are_its_settings_rules() {
         let home = tempfile::tempdir().expect("home");
         let repo = tempfile::tempdir().expect("repo");
-        std::fs::create_dir_all(repo.path().join(".superfik")).expect("dir");
+        std::fs::create_dir_all(repo.path().join(brand::DIR)).expect("dir");
         std::fs::write(
-            repo.path().join(".superfik/settings.local.json"),
+            repo.path().join(concat!(brand::dir!(), "/settings.local.json")),
             r#"{"permissions": {"allow": ["Bash(ls:*)"], "additionalDirectories": ["../lib"]},
                 "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "./check.sh"}]}]}}"#,
         )

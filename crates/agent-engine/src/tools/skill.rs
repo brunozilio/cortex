@@ -1,13 +1,13 @@
 //! Skills: `SKILL.md` instructions the agent loads by name with the `Skill`
-//! tool. Found in the project's `.superfik/skills`, the user's
-//! `~/.superfik/skills`, Superfik plugins and the SDK host's folders.
+//! tool. Found in the project's `.<command>/skills`, the user's
+//! `~/.<command>/skills`, the app plugins and the SDK host's folders.
 //! On a clash of names the first found wins.
 
 use std::path::{Path, PathBuf};
 
 use crate::frontmatter::parse as parse_frontmatter;
-use serde_json::{Value, json};
 use domain::PromptRequest;
+use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace, required};
 use crate::model::ToolSpec;
@@ -30,10 +30,10 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
     let cwd = &request.cwd;
     let mut sources: Vec<(PathBuf, Option<String>)> = Vec::new();
     for directory in cwd.ancestors() {
-        sources.push((directory.join(".superfik/skills"), None));
+        sources.push((directory.join(concat!(brand::dir!(), "/skills")), None));
     }
     if let Some(home) = home {
-        sources.push((home.join(".superfik/skills"), None));
+        sources.push((home.join(concat!(brand::dir!(), "/skills")), None));
     }
     for plugin in crate::plugins::found(request, home) {
         sources.push((plugin.root.join("skills"), Some(plugin.name)));
@@ -221,9 +221,9 @@ mod tests {
         let repo = tempfile::tempdir().expect("repo");
         let home = tempfile::tempdir().expect("home");
         let plugin = tempfile::tempdir().expect("plugin");
-        skill(&repo.path().join(".superfik/skills"), "release", "Cuts a release.");
-        skill(&home.path().join(".superfik/skills"), "release", "The user's copy.");
-        skill(&home.path().join(".superfik/skills"), "morning", "The morning briefing.");
+        skill(&repo.path().join(concat!(brand::dir!(), "/skills")), "release", "Cuts a release.");
+        skill(&home.path().join(concat!(brand::dir!(), "/skills")), "release", "The user's copy.");
+        skill(&home.path().join(concat!(brand::dir!(), "/skills")), "morning", "The morning briefing.");
         skill(&plugin.path().join("skills"), "dataviz", "Charts.");
         let model = ModelOption::new("m", "M");
         let mut request = PromptRequest::plain(repo.path().to_path_buf(), "hi", model);
@@ -235,7 +235,11 @@ mod tests {
             [("release", "Cuts a release."), ("morning", "The morning briefing."), ("dataviz", "Charts.")],
             "the project's, the user's and the host's first"
         );
-        assert!(names[3..].iter().any(|(name, _)| *name == "code-review"), "then Superfik's own");
+        assert!(
+            names[3..].iter().any(|(name, _)| *name == "code-review"),
+            "then {brand_name}'s own",
+            brand_name = brand::NAME
+        );
         assert_eq!(listing(&found[..1]), "- release: Cuts a release.");
 
         let tool = SkillTool { skills: found };

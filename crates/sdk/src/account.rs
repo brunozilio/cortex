@@ -1,4 +1,4 @@
-//! What one [`Superfik`](crate::Superfik) can ask besides running the
+//! What one [`the app`](crate::the app) can ask besides running the
 //! agent: models, LLM providers, a project's memory, skills and agents.
 
 use std::path::{Path, PathBuf};
@@ -8,9 +8,9 @@ use domain::provider::{ModelProvider, ProviderSummary};
 use domain::{CustomAgent, ModelOption, Skill};
 use protocol::{ClientCommand, ProviderEvent, ServerEvent};
 
-use crate::{Error, Run, Superfik};
+use crate::{Error, Run, Sdk};
 
-impl Superfik {
+impl Sdk {
     /// The models the connected providers (and local MLX) offer.
     pub fn models(&self) -> Result<Vec<ModelOption>, Error> {
         self.client.call(ClientCommand::ListModels, |event| match event {
@@ -80,7 +80,7 @@ impl Superfik {
 
     /// The memory of the project at `cwd`.
     pub fn memory(&self, cwd: impl Into<PathBuf>) -> ProjectMemory<'_> {
-        ProjectMemory { superfik: self, path: cwd.into() }
+        ProjectMemory { sdk: self, path: cwd.into() }
     }
 }
 
@@ -95,7 +95,7 @@ fn listed(event: ServerEvent) -> Option<Result<Vec<ProviderSummary>, String>> {
 /// What agents remember about one project between sessions.
 #[derive(Debug)]
 pub struct ProjectMemory<'a> {
-    superfik: &'a Superfik,
+    sdk: &'a Sdk,
     path: PathBuf,
 }
 
@@ -107,7 +107,7 @@ impl ProjectMemory<'_> {
     /// The memories that best match `query`, best first, with their score.
     pub fn search(&self, query: &str) -> Result<Vec<(Memory, f32)>, Error> {
         let path = self.path.clone();
-        let scores = self.superfik.client.call(
+        let scores = self.sdk.client.call(
             ClientCommand::SearchMemory { path: path.clone(), query: query.to_owned() },
             |event| match event {
                 ServerEvent::MemorySearch { path: answered, scores, .. } if answered == path => Some(Ok(scores)),
@@ -153,7 +153,7 @@ impl ProjectMemory<'_> {
     /// puts it back as it was until the next edit.
     pub fn optimize(&self, model: ModelOption) -> Result<Run, Error> {
         let path = self.path.clone();
-        Run::start(&self.superfik.client, |run| ClientCommand::OptimizeMemory { run, path, model })
+        Run::start(&self.sdk.client, |run| ClientCommand::OptimizeMemory { run, path, model })
     }
 
     /// The memory as it was before the last optimization.
@@ -167,7 +167,7 @@ impl ProjectMemory<'_> {
 
     fn answer(&self, command: ClientCommand) -> Result<(Vec<Memory>, Vec<Forgotten>), Error> {
         let path = self.path.clone();
-        self.superfik.client.call(command, |event| match event {
+        self.sdk.client.call(command, |event| match event {
             ServerEvent::Memory { path: answered, memories, forgotten } if answered == path => {
                 Some(Ok((memories, forgotten)))
             }

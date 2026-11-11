@@ -4,13 +4,13 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use serde_json::json;
-use domain::{AgentStatus, EngineEvent, PermissionMode};
 use agent_engine::agent::Agent;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
 use agent_engine::tools;
 use agent_engine::transcript::{Block, Message};
+use domain::{AgentStatus, EngineEvent, PermissionMode};
+use serde_json::json;
 
 use crate::{Rig, request, tool_use};
 

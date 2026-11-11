@@ -1,8 +1,8 @@
 //! Asking the user: the questions of the `AskUserQuestion` tool, and the
 //! permission a tool call needs under the run's mode and hooks.
 
-use serde_json::{Value, json};
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
+use serde_json::{Value, json};
 
 use super::Agent;
 use crate::permission::{Verdict, ruled, verdict};
@@ -18,7 +18,7 @@ impl Agent<'_> {
             Ok(asked) => asked,
             Err(problem) => return Outcome::error(format!("The questions could not be asked: {problem}.")),
         };
-        self.notify("elicitation_dialog", "Superfik has questions for you");
+        self.notify("elicitation_dialog", concat!(brand::name!(), " has questions for you"));
         let ask = AskId(format!("ask-{}-{id}", uuid::Uuid::new_v4()));
         let answer = self.control.open(ask.clone());
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind: AskKind::Questions(asked.clone()) }));

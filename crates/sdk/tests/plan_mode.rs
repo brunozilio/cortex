@@ -3,21 +3,21 @@
 
 use std::sync::Arc;
 
+use agent_engine::fake::FakeEngine;
 use backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
 use domain::{AgentAsk, AskId, AskKind, Criteria, PermissionMode, SessionId};
-use agent_engine::fake::FakeEngine;
-use sdk::{EngineEvent, Model, Superfik};
+use sdk::{EngineEvent, Model, Sdk};
 
 fn model() -> Model {
     Model::new("scripted", "Scripted")
 }
 
-fn superfik(engine: &FakeEngine, data: &std::path::Path) -> Superfik {
+fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
     services.memory_tool = false;
     services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
-    Superfik::builder().data_dir(data).services(services).build().expect("superfik")
+    Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
 }
 
 const PLAN: &str = "## Approach\nEdit it.\n\n## Verification\ncargo test passes";
@@ -39,8 +39,8 @@ fn an_approved_plan_leaves_the_session_in_the_mode_chosen_with_the_plans_criteri
     let data = tempfile::tempdir().expect("data");
     let engine =
         FakeEngine::new(vec![model()], run(vec![presented(), EngineEvent::ModeChanged(PermissionMode::AcceptEdits)]));
-    let superfik = superfik(&engine, data.path());
-    let session = superfik.session(data.path(), model()).permission(PermissionMode::Plan);
+    let sdk = sdk(&engine, data.path());
+    let session = sdk.session(data.path(), model()).permission(PermissionMode::Plan);
     let events: Vec<EngineEvent> = session.send("plan it").expect("run").collect();
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })));
 
@@ -56,8 +56,8 @@ fn an_approved_plan_leaves_the_session_in_the_mode_chosen_with_the_plans_criteri
 fn entering_plan_mode_keeps_the_session_planning() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], run(vec![EngineEvent::ModeChanged(PermissionMode::Plan)]));
-    let superfik = superfik(&engine, data.path());
-    let session = superfik.session(data.path(), model());
+    let sdk = sdk(&engine, data.path());
+    let session = sdk.session(data.path(), model());
     session.send("big change").expect("run").text().expect("text");
     assert_eq!(session.permission_mode(), PermissionMode::Plan);
 }
@@ -66,8 +66,8 @@ fn entering_plan_mode_keeps_the_session_planning() {
 fn a_runs_text_includes_the_plan_it_presented() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], run(vec![presented()]));
-    let superfik = superfik(&engine, data.path());
-    let session = superfik.session(data.path(), model()).permission(PermissionMode::Plan);
+    let sdk = sdk(&engine, data.path());
+    let session = sdk.session(data.path(), model()).permission(PermissionMode::Plan);
     let text = session.send("plan it").expect("run").text().expect("text");
     assert!(text.contains("## Approach") && text.ends_with("Implemented."), "{text}");
     assert_eq!(session.permission_mode(), PermissionMode::Plan, "an unanswered plan keeps planning");

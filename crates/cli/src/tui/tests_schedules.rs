@@ -3,14 +3,14 @@
 
 use std::time::Duration;
 
-use ratatui::crossterm::event::KeyCode;
+use agent_engine::fake::FakeEngine;
 use domain::SessionId;
 use domain::schedule::{Scheduled, When};
-use agent_engine::fake::FakeEngine;
+use ratatui::crossterm::event::KeyCode;
 use sdk::{EngineEvent, Model};
 
 use super::app::{App, Msg};
-use super::tests::{press, screen, superfik, type_text, until};
+use super::tests::{press, screen, sdk, type_text, until};
 
 fn script() -> Vec<EngineEvent> {
     vec![
@@ -29,7 +29,7 @@ fn due(id: &str, prompt: &str) -> Scheduled {
 }
 
 fn app(engine: &FakeEngine, data: &std::path::Path) -> App {
-    let mut app = App::new(superfik(engine, data), data.into(), None, None);
+    let mut app = App::new(sdk(engine, data), data.into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app
 }

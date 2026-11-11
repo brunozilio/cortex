@@ -7,8 +7,8 @@ pub mod auth;
 pub mod idc;
 pub mod models;
 
-use serde_json::{Value, json};
 use domain::ModelProvider;
+use serde_json::{Value, json};
 
 pub const ORIGIN: &str = "KIRO_CLI";
 pub const CHAT: &str = "AmazonCodeWhispererStreamingService.GenerateAssistantResponse";

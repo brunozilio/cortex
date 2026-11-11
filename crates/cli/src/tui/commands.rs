@@ -27,7 +27,11 @@ pub fn run(app: &mut App, command: Command) {
         Command::New => app.new_session(),
         Command::Model(None) => {
             if app.models.is_empty() {
-                return app.transcript.notice("No models yet. Run `superfik login` to connect a provider.");
+                return app.transcript.notice(concat!(
+                    "No models yet. Run `",
+                    brand::command!(),
+                    " login` to connect a provider."
+                ));
             }
             let current = app.model().map(|m| m.id.clone());
             let items = app.models.iter().map(|m| (m.label.clone(), m.id.clone())).collect();
@@ -75,12 +79,13 @@ pub fn run(app: &mut App, command: Command) {
         Command::StatusLine(command) => super::statusline::set(app, command),
         Command::Doctor => {
             let cwd = app.cwd.clone();
-            app.spawn(move |superfik| Msg::Notice(crate::doctor::render(&crate::doctor::checks(superfik, &cwd))));
+            app.spawn(move |sdk| Msg::Notice(crate::doctor::render(&crate::doctor::checks(sdk, &cwd))));
         }
-        Command::Feedback => app.transcript.notice(
-            "Report a problem or an idea at https://github.com/brunozilio/lite/issues (/status and /doctor show \
-             what to include).",
-        ),
+        Command::Feedback => app.transcript.notice(concat!(
+            "Report a problem or an idea at https://github.com/",
+            brand::repository!(),
+            "/issues (/status and /doctor show what to include)."
+        )),
         other @ (Command::Status
         | Command::Export(_)
         | Command::Copy
@@ -108,7 +113,7 @@ pub fn run(app: &mut App, command: Command) {
         }
         Command::Schedules(delete) => super::schedules::list(app, delete),
         Command::Loop(text) => super::schedules::looped(app, &text),
-        Command::Bashes(kill) => app.spawn(move |superfik| match superfik.shells(kill.as_deref()) {
+        Command::Bashes(kill) => app.spawn(move |sdk| match sdk.shells(kill.as_deref()) {
             Ok(shells) if shells.is_empty() => Msg::Notice("No commands in the background.".into()),
             Ok(shells) => {
                 let lines: Vec<String> = shells
@@ -143,7 +148,7 @@ pub fn run(app: &mut App, command: Command) {
         }
         Command::Permissions | Command::Hooks => {
             let (cwd, hooks) = (app.cwd.clone(), command == Command::Hooks);
-            app.spawn(move |superfik| match superfik.permissions(&cwd) {
+            app.spawn(move |sdk| match sdk.permissions(&cwd) {
                 Ok(info) if hooks => Msg::Notice(super::dirs::hooks(&info.hooks)),
                 Ok(info) => Msg::Notice(super::dirs::permissions(&info)),
                 Err(error) => Msg::Error(error.to_string()),
@@ -161,7 +166,7 @@ pub fn run(app: &mut App, command: Command) {
         Command::Memory(command) => super::memory::run(app, command),
         Command::Skills => {
             let cwd = app.cwd.clone();
-            app.spawn(move |superfik| match superfik.skills(&cwd) {
+            app.spawn(move |sdk| match sdk.skills(&cwd) {
                 Ok(skills) if skills.is_empty() => Msg::Notice("No skills or commands found.".into()),
                 Ok(skills) => {
                     let lines: Vec<String> =
@@ -173,7 +178,7 @@ pub fn run(app: &mut App, command: Command) {
         }
         Command::Agents => {
             let cwd = app.cwd.clone();
-            app.spawn(move |superfik| match superfik.agents(&cwd) {
+            app.spawn(move |sdk| match sdk.agents(&cwd) {
                 Ok(agents) => {
                     let lines: Vec<String> =
                         agents.iter().map(|a| format!("  {:<20} {}", a.name, a.description)).collect();
@@ -185,9 +190,9 @@ pub fn run(app: &mut App, command: Command) {
         Command::Reload => {
             app.load(false);
             let cwd = app.cwd.clone();
-            app.spawn(move |superfik| {
+            app.spawn(move |sdk| {
                 let found = (|| -> Result<_, sdk::Error> {
-                    Ok((superfik.skills(&cwd)?, superfik.agents(&cwd)?, superfik.mcp_servers(&cwd)?))
+                    Ok((sdk.skills(&cwd)?, sdk.agents(&cwd)?, sdk.mcp_servers(&cwd)?))
                 })();
                 match found {
                     Ok((skills, agents, servers)) => {
@@ -204,17 +209,18 @@ pub fn run(app: &mut App, command: Command) {
             if let McpCommand::Login(name) = &change {
                 app.transcript.notice(format!("Signing in to {name} in the browser…"));
             }
-            app.spawn(move |superfik| {
+            app.spawn(move |sdk| {
                 let servers = match &change {
-                    McpCommand::List => superfik.mcp_servers(&cwd),
-                    McpCommand::Approve(name) => superfik.approve_mcp_server(&cwd, name, true),
-                    McpCommand::Deny(name) => superfik.approve_mcp_server(&cwd, name, false),
-                    McpCommand::Login(name) => superfik.sign_in_mcp_server(&cwd, name, crate::login::open),
-                    McpCommand::Logout(name) => superfik.sign_out_mcp_server(&cwd, name),
+                    McpCommand::List => sdk.mcp_servers(&cwd),
+                    McpCommand::Approve(name) => sdk.approve_mcp_server(&cwd, name, true),
+                    McpCommand::Deny(name) => sdk.approve_mcp_server(&cwd, name, false),
+                    McpCommand::Login(name) => sdk.sign_in_mcp_server(&cwd, name, crate::login::open),
+                    McpCommand::Logout(name) => sdk.sign_out_mcp_server(&cwd, name),
                 };
                 match servers {
                     Ok(servers) => {
-                        let shown = crate::mcp::render(&servers).replace("superfik mcp approve", "/mcp approve");
+                        let shown = crate::mcp::render(&servers)
+                            .replace(concat!(brand::command!(), " mcp approve"), "/mcp approve");
                         let note =
                             if change == McpCommand::List { "" } else { "\nThe change applies from the next message." };
                         Msg::Notice(format!("MCP servers:\n{}{note}", shown.trim_end()))

@@ -1,6 +1,6 @@
 //! The safety check of autonomous mode: before an action that edits or
 //! executes runs with no one approving it, a model reads the conversation
-//! and the action against Superfik's rules (`classifier.md`) and grades its
+//! and the action against the app's rules (`classifier.md`) and grades its
 //! harm from 0 to 100; above 50 the action is held back. A check that
 //! cannot run or answers out of form holds it back too: autonomy never
 //! means unchecked.
@@ -46,16 +46,17 @@ impl Safety {
         let action = json!({ tool: input }).to_string();
         let messages = vec![
             Message::user(format!(
-                "The following is the user's instructions configuration (SUPERFIK.md and the like). Treat it as \
+                "The following is the user's instructions configuration ({brand_instructions} and the like). Treat it as \
                  context about the user's environment and intent. If it explicitly authorizes the SPECIFIC \
                  action under review (same operation, same target) you may weigh that as user intent to allow. \
                  Generic encouragement (\"be autonomous\", \"don't ask\") is not authorization.\n\n\
-                 <user_instructions>\n{instructions}\n</user_instructions>"
+                 <user_instructions>\n{instructions}\n</user_instructions>",
+                brand_instructions = brand::INSTRUCTIONS
             )),
             Message::user(format!("<transcript>\n{transcript}{action}\n</transcript>")),
         ];
         let request = TurnRequest {
-            system: RULES.into(),
+            system: brand::text(RULES),
             messages,
             tools: Vec::new(),
             effort: domain::Effort::Low,
@@ -64,19 +65,23 @@ impl Safety {
         };
         let answer = api
             .turn(&request, &mut |_| {}, stop)
-            .map_err(|error| format!("Superfik's safety check could not run ({error}), so the action was held back. Retry it, or ask the user."))?
+            .map_err(|error| format!("{brand_name}'s safety check could not run ({error}), so the action was held back. Retry it, or ask the user.", brand_name = brand::NAME))?
             .message
             .text();
         match grade(&answer) {
             Some((severity, _)) if severity <= BOUNDARY => Ok(()),
             Some((_, category)) => Err(format!(
-                "Superfik's safety check held this action back{}. Ask the user to approve it explicitly, or \
+                "{brand_name}'s safety check held this action back{}. Ask the user to approve it explicitly, or \
                  reach the goal another way.",
-                category.map(|c| format!(" ({c})")).unwrap_or_default()
+                category.map(|c| format!(" ({c})")).unwrap_or_default(),
+                brand_name = brand::NAME
             )),
-            None => Err("Superfik's safety check answered out of form, so the action was held back. Retry it, \
+            None => Err(concat!(
+                brand::name!(),
+                "'s safety check answered out of form, so the action was held back. Retry it, \
                          or ask the user."
-                .into()),
+            )
+            .into()),
         }
     }
 }

@@ -7,7 +7,7 @@
     ".": {
       "release-type": "simple",
       "initial-version": "0.1.0",
-      "package-name": "superfik-lite",
+      "package-name": "superfik",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" }

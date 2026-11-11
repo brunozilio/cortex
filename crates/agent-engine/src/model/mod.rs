@@ -14,9 +14,9 @@ pub mod sse;
 
 use std::sync::atomic::AtomicBool;
 
-use serde_json::Value;
 use domain::Effort;
 use domain::provider::ProviderKey;
+use serde_json::Value;
 
 use crate::transcript::{Message, StopReason, Usage};
 

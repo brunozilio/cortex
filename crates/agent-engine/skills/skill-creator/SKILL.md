@@ -52,7 +52,7 @@ Start by understanding the user's intent. The current conversation might already
 2. When should this skill trigger? (what user phrases/contexts)
 3. What's the expected output format?
 4. Should we set up test cases to verify the skill works? Skills with objectively verifiable outputs (file transforms, data extraction, code generation, fixed workflow steps) benefit from test cases. Skills with subjective outputs (writing style, art) often don't need them. Suggest the appropriate default based on the skill type, but let the user decide.
-5. Where should it live? A project skill goes in `.superfik/skills/<name>/` at the repository root, shared with everyone who works on the project; a personal one in `~/.superfik/skills/<name>/`, available in every project. Superfik also reads a project's `.claude/skills/`, so a skill already kept there works as it is.
+5. Where should it live? A project skill goes in `{{DIR}}/skills/<name>/` at the repository root, shared with everyone who works on the project; a personal one in `~/{{DIR}}/skills/<name>/`, available in every project. {{NAME}} also reads a project's `.claude/skills/`, so a skill already kept there works as it is.
 
 ### Interview and Research
 
@@ -371,7 +371,7 @@ Create 20 eval queries — a mix of should-trigger and should-not-trigger. Save 
 ]
 ```
 
-The queries must be realistic and something a Superfik user would actually type. Not abstract requests, but requests that are concrete and specific and have a good amount of detail. For instance, file paths, personal context about the user's job or situation, column names and values, company names, URLs. A little bit of backstory. Some might be in lowercase or contain abbreviations or typos or casual speech. Use a mix of different lengths, and focus on edge cases rather than making them clear-cut (the user will get a chance to sign off on them).
+The queries must be realistic and something a {{NAME}} user would actually type. Not abstract requests, but requests that are concrete and specific and have a good amount of detail. For instance, file paths, personal context about the user's job or situation, column names and values, company names, URLs. A little bit of backstory. Some might be in lowercase or contain abbreviations or typos or casual speech. Use a mix of different lengths, and focus on edge cases rather than making them clear-cut (the user will get a chance to sign off on them).
 
 Bad: `"Format this data"`, `"Extract text from PDF"`, `"Create a chart"`
 
@@ -402,7 +402,7 @@ This step matters — bad eval queries lead to bad descriptions.
 
 Go through the reviewed eval set with the user. For each query, judge whether the current description would lead an agent to the skill, and rewrite the description for the misses — both the should-trigger queries it would miss and the near-misses it would wrongly catch. Keep a held-out third of the queries aside and check the final description against them too, so it isn't tuned to the ones you rewrote for. Say plainly that the result is reasoned, not measured.
 
-To spot-check a few queries for real, install the skill in the project's `.superfik/skills/` and run `superfik -p "<query>"` in the project folder: the tool calls print on standard error, so a `● Skill(<name>)` line there means the skill triggered.
+To spot-check a few queries for real, install the skill in the project's `{{DIR}}/skills/` and run `{{COMMAND}} -p "<query>"` in the project folder: the tool calls print on standard error, so a `● Skill(<name>)` line there means the skill triggered.
 
 ### How skill triggering works
 
@@ -418,7 +418,7 @@ Update the skill's SKILL.md frontmatter with the new description. Show the user 
 
 ### Install and share
 
-A skill is installed by putting its folder in `.superfik/skills/` (project) or `~/.superfik/skills/` (personal); nothing else is needed. To share one, share the folder (commit it to the project, or zip it).
+A skill is installed by putting its folder in `{{DIR}}/skills/` (project) or `~/{{DIR}}/skills/` (personal); nothing else is needed. To share one, share the folder (commit it to the project, or zip it).
 
 ---
 

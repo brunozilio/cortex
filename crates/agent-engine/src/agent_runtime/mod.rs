@@ -42,7 +42,7 @@ pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace
     let actual =
         state.cwd.canonicalize().map_err(|_| "The session worktree no longer exists; restore it before resuming")?;
     if root != expected
-        || actual.parent() != Some(root.join(".superfik/worktrees").as_path())
+        || actual.parent() != Some(root.join(concat!(brand::dir!(), "/worktrees")).as_path())
         || actual.file_name().and_then(|s| s.to_str()).and_then(|s| uuid::Uuid::parse_str(s).ok()).is_none()
     {
         return Err("saved worktree is outside the session project".into());
@@ -98,9 +98,11 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
     let project = workspace.cwd.ancestors().find(|path| path.join(".git").exists()).unwrap_or(&workspace.cwd);
     if let Some(scope) = &config.memory {
         let base = match scope.as_str() {
-            "user" => std::env::home_dir().ok_or("user home unavailable")?.join(".superfik/agent-memory"),
-            "project" => project.join(".superfik/agent-memory"),
-            "local" => project.join(".superfik/agent-memory-local"),
+            "user" => {
+                std::env::home_dir().ok_or("user home unavailable")?.join(concat!(brand::dir!(), "/agent-memory"))
+            }
+            "project" => project.join(concat!(brand::dir!(), "/agent-memory")),
+            "local" => project.join(concat!(brand::dir!(), "/agent-memory-local")),
             _ => return Err("invalid memory scope".into()),
         };
         let owner = format!("{:x}", Sha256::digest(owner.as_bytes()));
@@ -147,7 +149,7 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
                 }
                 Ok::<_, String>("HEAD".into())
             })?;
-        let target = root.join(".superfik/worktrees").join(uuid::Uuid::new_v4().to_string());
+        let target = root.join(concat!(brand::dir!(), "/worktrees")).join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(target.parent().ok_or("worktree parent missing")?).map_err(|e| e.to_string())?;
         setup.base_commit = Some(git_stopped(workspace, &root, &["rev-parse".as_ref(), base.as_ref()])?);
         setup.cwd = target.clone();
@@ -192,9 +194,9 @@ pub fn cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
     }
 }
 
-/// Whether `path` is a worktree Superfik made in `root`.
+/// Whether `path` is a worktree the app made in `root`.
 fn managed(root: &std::path::Path, path: &std::path::Path) -> bool {
-    path.parent() == Some(root.join(".superfik/worktrees").as_path())
+    path.parent() == Some(root.join(concat!(brand::dir!(), "/worktrees")).as_path())
         && path.file_name().and_then(|s| s.to_str()).and_then(|s| uuid::Uuid::parse_str(s).ok()).is_some()
 }
 

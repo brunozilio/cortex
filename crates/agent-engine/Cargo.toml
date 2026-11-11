@@ -1,6 +1,6 @@
 [package]
 name = "agent-engine"
-description = "Superfik's native agent engine: the agent loop, its tools and the model providers' APIs, in process."
+description = "The native agent engine: the agent loop, its tools and the model providers' APIs, in process."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -10,6 +10,7 @@ publish.workspace = true
 test-support = []
 
 [dependencies]
+brand.workspace = true
 domain.workspace = true
 private-file.workspace = true
 subprocess.workspace = true

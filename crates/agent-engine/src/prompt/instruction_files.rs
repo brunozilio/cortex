@@ -8,7 +8,8 @@ use std::{
 };
 const MAX_FILE: usize = 1024 * 1024;
 const MAX_TOTAL: usize = 4 * 1024 * 1024;
-const NAMES: [&str; 4] = ["SUPERFIK.md", ".superfik/SUPERFIK.md", "AGENTS.md", "SUPERFIK.local.md"];
+const NAMES: [&str; 4] =
+    [brand::INSTRUCTIONS, concat!(brand::dir!(), "/", brand::instructions!()), "AGENTS.md", brand::LOCAL_INSTRUCTIONS];
 fn network(path: &Path) -> bool {
     let s = path.to_string_lossy();
     s.starts_with("\\\\") || s.starts_with("//") || s.starts_with("/net/") || s.starts_with("/Network/")
@@ -102,12 +103,12 @@ impl Loader {
 pub fn load(cwd: &Path, home: Option<&Path>) -> Vec<Instructions> {
     let mut loader = Loader { seen: HashSet::new(), bytes: 0 };
     let mut result = Vec::new();
-    if let Some(root) = home.map(|home| home.join(".superfik"))
+    if let Some(root) = home.map(|home| home.join(brand::DIR))
         && let Ok(allowed) = root.canonicalize()
-        && let Ok(text) = loader.read(&root.join("SUPERFIK.md"), &allowed, 0)
+        && let Ok(text) = loader.read(&root.join(brand::INSTRUCTIONS), &allowed, 0)
         && !text.trim().is_empty()
     {
-        result.push(Instructions { path: root.join("SUPERFIK.md"), scope: Scope::User, text });
+        result.push(Instructions { path: root.join(brand::INSTRUCTIONS), scope: Scope::User, text });
     }
     let trusted = trust_root(cwd);
     let mut ancestors: Vec<_> = cwd.ancestors().collect();
@@ -148,7 +149,7 @@ pub fn nested(cwd: &Path) -> Vec<super::rules::Rule> {
         .filter_map(Result::ok)
         .filter(|e| {
             e.file_type().is_some_and(|t| t.is_file())
-                && matches!(e.file_name().to_str(), Some("SUPERFIK.md" | "SUPERFIK.local.md" | "AGENTS.md"))
+                && matches!(e.file_name().to_str(), Some(brand::INSTRUCTIONS | brand::LOCAL_INSTRUCTIONS | "AGENTS.md"))
         })
         .map(|e| e.into_path())
         .collect();
@@ -158,7 +159,7 @@ pub fn nested(cwd: &Path) -> Vec<super::rules::Rule> {
         let Some(mut base) = path.parent() else {
             continue;
         };
-        if matches!(base.file_name().and_then(|s| s.to_str()), Some(".superfik")) {
+        if matches!(base.file_name().and_then(|s| s.to_str()), Some(brand::DIR)) {
             base = base.parent().unwrap_or(base);
         }
         if base == cwd {
@@ -227,7 +228,7 @@ mod regression_tests {
     fn inline_multiline_comments_and_code_never_expand_imports() {
         let repo = tempfile::tempdir().expect("repo");
         std::fs::write(repo.path().join("hidden.md"), "SHOULD_NOT_BE_IMPORTED").expect("hidden");
-        std::fs::write(repo.path().join("SUPERFIK.md"),
+        std::fs::write(repo.path().join(brand::INSTRUCTIONS),
             "Visible. <!-- @hidden.md --> More.\n<!-- multiline\n```\n@hidden.md\n-->\n``@hidden.md`` and `<!-- @hidden.md -->`\nAfter.").expect("instructions");
         let loaded = load(repo.path(), None);
         let text = loaded.iter().map(|item| item.text.as_str()).collect::<Vec<_>>().join("\n");
@@ -259,7 +260,7 @@ mod fence_tests {
         let repo = tempfile::tempdir().expect("repo");
         std::fs::write(repo.path().join("hidden.md"), "SHOULD_NOT_BE_IMPORTED").expect("hidden");
         std::fs::write(
-            repo.path().join("SUPERFIK.md"),
+            repo.path().join(brand::INSTRUCTIONS),
             "````md\n```\n@hidden.md\n````not-a-closer\n@hidden.md\n````\nAfter.",
         )
         .expect("instructions");

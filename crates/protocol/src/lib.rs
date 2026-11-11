@@ -1,4 +1,4 @@
-//! Superfik's client/backend protocol: a client sends [`ClientCommand`]s
+//! The app's client/backend protocol: a client sends [`ClientCommand`]s
 //! in an [`Envelope`] naming the acting [`Principal`](domain::Principal)
 //! and receives [`ServerEvent`]s. Everything is serde-serializable, so the
 //! same messages go in process or over the daemon's socket.

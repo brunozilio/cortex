@@ -1,6 +1,6 @@
 # Reporting findings
 
-Superfik shows a review's results as the agent's final
+{{NAME}} shows a review's results as the agent's final
 message; there is no separate tool to report them. Every level reports the
 same way, in text, unless its own instructions give a stricter format.
 

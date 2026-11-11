@@ -2,7 +2,8 @@ name: Release
 
 # release-please keeps a release PR open from the conventional commits on
 # main. Merging it tags vX.Y.Z and creates the GitHub release; the build
-# job then attaches the `superfik` binary for each platform.
+# job then attaches the binary (named by brand.toml's `command`) for each
+# platform.
 
 on:
   push:
@@ -126,6 +127,9 @@ jobs:
       # zig is the musl C toolchain (ring, oniguruma): from PyPI, not apt.
       - if: matrix.cargo == 'zigbuild'
         run: python3 -m pip install --user --break-system-packages ziglang cargo-zigbuild
+      - name: Brand
+        shell: bash
+        run: echo "COMMAND=$(sed -n 's/^command *= *"\(.*\)".*/\1/p' brand.toml)" >> "$GITHUB_ENV"
       - run: cargo ${{ matrix.cargo || 'build' }} --release --locked -p cli --target ${{ matrix.target }} ${{ matrix.flags }}
       - name: Sign and notarize
         if: runner.os == 'macOS'
@@ -135,21 +139,21 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: .github/workflows/scripts/sign-macos.sh "target/${{ matrix.target }}/release/superfik"
+        run: .github/workflows/scripts/sign-macos.sh "target/${{ matrix.target }}/release/$COMMAND"
       - name: Package
         shell: bash
         run: |
           set -euo pipefail
-          NAME="superfik-${TAG#v}-${{ matrix.target }}"
+          NAME="$COMMAND-${TAG#v}-${{ matrix.target }}"
           STAGE="$RUNNER_TEMP/$NAME"
           mkdir -p "$STAGE"
-          cp "target/${{ matrix.target }}/release/superfik" README.md "$STAGE/"
+          cp "target/${{ matrix.target }}/release/$COMMAND" README.md "$STAGE/"
           tar -C "$RUNNER_TEMP" -czf "$NAME.tar.gz" "$NAME"
           shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
           echo "ASSET=$NAME.tar.gz" >> "$GITHUB_ENV"
       - name: Smoke test
         shell: bash
-        run: "target/${{ matrix.target }}/release/superfik --version"
+        run: "target/${{ matrix.target }}/release/$COMMAND --version"
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}

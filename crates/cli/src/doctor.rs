@@ -1,9 +1,9 @@
-//! `superfik doctor` and `/doctor`: whether this installation can work in a
+//! `<command> doctor` and `/doctor`: whether this installation can work in a
 //! folder, check by check, with what to do about each problem.
 
 use std::path::Path;
 
-use sdk::Superfik;
+use sdk::Sdk;
 
 /// One check: its name, whether it passed, and what it found.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,17 +21,17 @@ fn check(name: &'static str, result: Result<String, String>) -> Check {
 }
 
 /// Every check, in the order a problem would block the next.
-pub fn checks(superfik: &Superfik, cwd: &Path) -> Vec<Check> {
+pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
     let mut found = vec![check("version", Ok(env!("CARGO_PKG_VERSION").to_owned()))];
     #[cfg(unix)]
     found.push(check("daemon", Ok(crate::daemon::status())));
     found.push(check(
         "providers",
-        superfik.providers().map_err(|e| e.to_string()).and_then(|providers| {
+        sdk.providers().map_err(|e| e.to_string()).and_then(|providers| {
             let connected: Vec<&str> =
                 providers.iter().filter(|p| p.account.is_some()).map(|p| p.provider.name()).collect();
             if connected.is_empty() {
-                Err("none connected: run `superfik login`".to_owned())
+                Err(concat!("none connected: run `", brand::command!(), " login`").to_owned())
             } else {
                 Ok(connected.join(", "))
             }
@@ -39,21 +39,20 @@ pub fn checks(superfik: &Superfik, cwd: &Path) -> Vec<Check> {
     ));
     found.push(check(
         "models",
-        superfik.models().map_err(|e| e.to_string()).and_then(|models| match models.len() {
+        sdk.models().map_err(|e| e.to_string()).and_then(|models| match models.len() {
             0 => Err("none available: connect a provider".to_owned()),
             n => Ok(format!("{n} available")),
         }),
     ));
     found.push(check(
         "settings",
-        superfik
-            .permissions(cwd)
+        sdk.permissions(cwd)
             .map(|info| format!("{} permission rules, {} hooks", info.rules.len(), info.hooks.len()))
             .map_err(|e| format!("{e} (fix the file it names)")),
     ));
     found.push(check(
         "mcp servers",
-        superfik.mcp_servers(cwd).map(|servers| format!("{} configured", servers.len())).map_err(|e| e.to_string()),
+        sdk.mcp_servers(cwd).map(|servers| format!("{} configured", servers.len())).map_err(|e| e.to_string()),
     ));
     found.push(check("git", program("git", &["--version"])));
     found.push(check(
@@ -90,11 +89,19 @@ mod tests {
     fn problems_are_counted_and_marked() {
         let checks = [
             Check { name: "version", ok: true, detail: "0.3.1".into() },
-            Check { name: "providers", ok: false, detail: "none connected: run `superfik login`".into() },
+            Check {
+                name: "providers",
+                ok: false,
+                detail: concat!("none connected: run `", brand::command!(), " login`").into(),
+            },
         ];
         assert_eq!(
             render(&checks),
-            "1 problem(s):\n  ✓ version      0.3.1\n  ✗ providers    none connected: run `superfik login`"
+            concat!(
+                "1 problem(s):\n  ✓ version      0.3.1\n  ✗ providers    none connected: run `",
+                brand::command!(),
+                " login`"
+            )
         );
     }
 }

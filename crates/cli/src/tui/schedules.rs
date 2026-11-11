@@ -29,7 +29,7 @@ pub(super) fn poll(app: &mut App) {
         return;
     }
     app.schedules = Poll { last: Some(Instant::now()), asking: true };
-    app.spawn(|superfik| match superfik.schedules(None, true) {
+    app.spawn(|sdk| match sdk.schedules(None, true) {
         Ok(found) => Msg::Due(found.due, found.notices),
         Err(_) => Msg::Due(Vec::new(), Vec::new()),
     });
@@ -71,7 +71,7 @@ pub(super) fn due(app: &mut App, due: Vec<Scheduled>, notices: Vec<Notice>) {
 
 /// `/schedules`, or `/schedules delete <id>`.
 pub(super) fn list(app: &App, delete: Option<String>) {
-    app.spawn(move |superfik| match superfik.schedules(delete.as_deref(), false) {
+    app.spawn(move |sdk| match sdk.schedules(delete.as_deref(), false) {
         Ok(found) if found.scheduled.is_empty() => Msg::Notice("Nothing is scheduled.".into()),
         Ok(found) => {
             let lines: Vec<String> = found.scheduled.iter().map(line).collect();

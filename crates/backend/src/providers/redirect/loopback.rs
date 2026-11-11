@@ -7,9 +7,15 @@ use super::callback;
 
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(300);
 
-const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Superfik</title>\
+const DONE_PAGE: &str = concat!(
+    "<!doctype html><meta charset=utf-8><title>",
+    brand::name!(),
+    "</title>\
 <body style=\"font:16px -apple-system,system-ui,sans-serif;display:grid;place-items:center;height:90vh\">\
-<p>Signed in. You can close this tab and return to Superfik.</p>";
+<p>Signed in. You can close this tab and return to ",
+    brand::name!(),
+    ".</p>"
+);
 
 pub struct Loopback {
     server: tiny_http::Server,
@@ -90,11 +96,15 @@ impl Loopback {
             let url = request.url().to_owned();
             let (path, query) = url.split_once('?').unwrap_or((&url, ""));
             if path != self.path && !others.contains(&path) {
-                let _ = request.respond(page("<p>Superfik is not waiting for this address.</p>".into(), 404));
+                let _ = request
+                    .respond(page(concat!("<p>", brand::name!(), " is not waiting for this address.</p>").into(), 404));
                 continue;
             }
             if state_of(query).as_deref() != Some(state) {
-                let _ = request.respond(page("<p>This is not the sign-in Superfik is waiting for.</p>".into(), 400));
+                let _ = request.respond(page(
+                    concat!("<p>This is not the sign-in ", brand::name!(), " is waiting for.</p>").into(),
+                    400,
+                ));
                 continue;
             }
             return Ok(Pending { path: path.to_owned(), query: query.to_owned(), request: Some(request) });

@@ -1,15 +1,15 @@
 //! GitHub Copilot on the wire: each model on the API its catalog entry
 //! names, the catalog itself, and the device sign-in.
 
-use serde_json::{Value, json};
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
-use domain::model::ModelCapabilities;
-use domain::provider::ProviderKey;
-use domain::{ModelOption, ModelProvider};
 use agent_engine::model::ModelApi;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::{ProviderClient, copilot};
+use domain::model::ModelCapabilities;
+use domain::provider::ProviderKey;
+use domain::{ModelOption, ModelProvider};
+use serde_json::{Value, json};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 use crate::{header, request};
 

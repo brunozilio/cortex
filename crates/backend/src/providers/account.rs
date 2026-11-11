@@ -5,11 +5,11 @@
 
 use std::sync::Arc;
 
+use agent_engine::model::http::NetHttp;
+use agent_engine::model::providers::{copilot, oauth};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use domain::provider::ProviderKeyStore;
 use domain::{ModelProvider, Principal, SecretId};
-use agent_engine::model::http::NetHttp;
-use agent_engine::model::providers::{copilot, oauth};
 use llm_providers::Config;
 
 use crate::secrets::{SecretStore, Secrets};

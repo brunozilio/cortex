@@ -1,13 +1,13 @@
 //! A custom agent's configuration at work: its permission mode, what it
 //! leaves out of its prompt, and its own compaction window.
 
-use serde_json::json;
-use domain::PermissionMode;
 use agent_engine::{
     model::scripted::ScriptedModel,
     prompt::{self, Environment, Instructions, Scope},
     tools::Workspace,
 };
+use domain::PermissionMode;
+use serde_json::json;
 
 use crate::{call, delegated, done, run};
 

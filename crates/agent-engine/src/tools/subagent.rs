@@ -7,8 +7,8 @@
 use std::path::{Path, PathBuf};
 
 use super::subagent_config::AgentConfig;
-use serde_json::{Value, json};
 use domain::PromptRequest;
+use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
@@ -30,10 +30,10 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent>
     let cwd = &request.cwd;
     let mut sources: Vec<(PathBuf, Option<String>)> = Vec::new();
     for directory in cwd.ancestors() {
-        sources.push((directory.join(".superfik/agents"), None));
+        sources.push((directory.join(concat!(brand::dir!(), "/agents")), None));
     }
     if let Some(home) = home {
-        sources.push((home.join(".superfik/agents"), None));
+        sources.push((home.join(concat!(brand::dir!(), "/agents")), None));
     }
     for plugin in crate::plugins::found(request, home) {
         sources.push((plugin.root.join("agents"), Some(plugin.name)));
@@ -157,7 +157,8 @@ impl Tool for AgentTool {
     }
 }
 
-const AGENT_GUIDE: &str = "\
+const AGENT_GUIDE: &str = concat!(
+    "\
 Starts a sub-agent for a task of several steps. Each kind of agent has its own abilities and tools. Leaving out \
 `subagent_type` starts a fresh general-purpose agent; `fork` forks you, inheriting your whole conversation and \
 your model.
@@ -183,7 +184,10 @@ yours: give it only its directive.
 - Its report is not shown to the user: pass on what matters.
 - `run_in_background` runs it while you go on; collect its report with TaskOutput. Never make up or predict a \
 pending agent's result; if the user asks before it arrives, say it is still running.
-- Each kind's model, effort and tools come from its definition (`.superfik/agents/*.md` frontmatter).";
+- Each kind's model, effort and tools come from its definition (`",
+    brand::dir!(),
+    "/agents/*.md` frontmatter)."
+);
 
 pub fn system(parent: &str, agent: Option<&FoundAgent>) -> String {
     let mut system = format!(
@@ -211,7 +215,7 @@ mod tests {
     #[test]
     fn finds_custom_agents_and_picks_the_one_asked_for() {
         let repo = tempfile::tempdir().expect("repo");
-        let dir = repo.path().join(".superfik/agents");
+        let dir = repo.path().join(concat!(brand::dir!(), "/agents"));
         std::fs::create_dir_all(&dir).expect("dir");
         std::fs::write(
             dir.join("reviewer.md"),

@@ -1,5 +1,5 @@
 //! Rules for MCP servers a person or a project configures
-//! (`.superfik/mcp.json`): which of a project's servers may start, and how
+//! (`.<command>/mcp.json`): which of a project's servers may start, and how
 //! `${VAR}` and `${VAR:-default}` in a config are filled in.
 
 mod edit;
@@ -10,14 +10,14 @@ use serde_json::Value;
 pub use self::edit::{McpOrigin, McpServerInfo, McpState, add_server, remove_server, server_from, set_approval};
 
 /// Names the platform keeps for itself: the app's own servers and plugins'.
-pub const RESERVED_PREFIXES: [&str; 2] = ["superfik_", "plugin_"];
+pub const RESERVED_PREFIXES: [&str; 2] = [concat!(brand::command!(), "_"), "plugin_"];
 
 /// Whether a name is free for a person's or a project's server.
 pub fn is_free_name(name: &str) -> bool {
     !RESERVED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }
 
-/// What the owner said about a project's `.superfik/mcp.json` servers
+/// What the owner said about a project's `.<command>/mcp.json` servers
 /// (`enableAllProjectMcpServers`, `enabledMcpServers`,
 /// `disabledMcpServers`). A repository cannot say it for itself.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -167,6 +167,6 @@ mod tests {
     #[test]
     fn the_platform_s_prefixes_are_not_free() {
         assert!(is_free_name("jira"));
-        assert!(!is_free_name("superfik_memory") && !is_free_name("plugin_acme_jira"));
+        assert!(!is_free_name(concat!(brand::command!(), "_memory")) && !is_free_name("plugin_acme_jira"));
     }
 }

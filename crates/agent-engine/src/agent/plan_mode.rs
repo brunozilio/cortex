@@ -2,8 +2,8 @@
 //! it (`EnterPlanMode`). Only the top-level agent changes the mode; the
 //! client hears of it through [`EngineEvent::ModeChanged`].
 
-use serde_json::Value;
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, PermissionMode};
+use serde_json::Value;
 
 use super::Agent;
 use crate::tools::Outcome;
@@ -23,7 +23,7 @@ impl Agent<'_> {
         let Some(plan) = plan(input) else {
             return Outcome::error("Missing the plan: pass it, in markdown, as `plan`.");
         };
-        self.notify("plan_approval", "Superfik's plan is ready for your review");
+        self.notify("plan_approval", concat!(brand::name!(), "'s plan is ready for your review"));
         let ask = AskId(format!("ask-{}-{id}", uuid::Uuid::new_v4()));
         let answer = self.control.open(ask.clone());
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind: AskKind::Plan { plan: plan.to_owned() } }));

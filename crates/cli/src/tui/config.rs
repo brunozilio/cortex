@@ -24,11 +24,7 @@ fn entries(app: &App) -> Vec<(String, String, Command)> {
         ("Vim keys".into(), on(app.vim.is_some()), Command::Vim),
         ("Mouse wheel scrolls".into(), on(app.mouse), Command::Mouse),
         ("Status line".into(), app.status.command.clone().unwrap_or_else(|| "usual".into()), Command::StatusLine(None)),
-        (
-            "Verification".into(),
-            String::new(),
-            Command::Verification(domain::command::VerificationCommand::Show),
-        ),
+        ("Verification".into(), String::new(), Command::Verification(domain::command::VerificationCommand::Show)),
     ]
 }
 
@@ -50,25 +46,29 @@ pub fn create(app: &mut App, agent: bool, what: &str) {
     }
     let prompt = if agent {
         format!(
-            "Create a Superfik sub-agent for this: {what}\n\nWrite it to .superfik/agents/<name>.md: YAML \
+            "Create a {brand_name} sub-agent for this: {what}\n\nWrite it to {brand_dir}/agents/<name>.md: YAML \
              frontmatter with `name` (lowercase, hyphens), `description` (when to use it, one or two sentences), \
              and `tools` only if it should have fewer than all; then its instructions as the body. Ask me first \
-             if what it should do is unclear."
+             if what it should do is unclear.",
+            brand_name = brand::NAME,
+            brand_dir = brand::DIR
         )
     } else {
         format!(
-            "Create a Superfik skill for this: {what}\n\nLoad the skill-creator skill and follow it. Write the \
-             skill under .superfik/skills/<name>/SKILL.md."
+            "Create a {brand_name} skill for this: {what}\n\nLoad the skill-creator skill and follow it. Write the \
+             skill under {brand_dir}/skills/<name>/SKILL.md.",
+            brand_name = brand::NAME,
+            brand_dir = brand::DIR
         )
     };
     app.send(prompt);
 }
 
-/// The project's instructions file: SUPERFIK.md at its root, else
-/// .superfik/SUPERFIK.md, else a new SUPERFIK.md.
+/// The project's instructions file: <COMMAND>.md at its root, else
+/// .<command>/<COMMAND>.md, else a new <COMMAND>.md.
 pub fn instructions_file(cwd: &std::path::Path) -> PathBuf {
-    let root = cwd.join("SUPERFIK.md");
-    let nested = cwd.join(".superfik").join("SUPERFIK.md");
+    let root = cwd.join(brand::INSTRUCTIONS);
+    let nested = cwd.join(brand::DIR).join(brand::INSTRUCTIONS);
     if !root.exists() && nested.exists() { nested } else { root }
 }
 
@@ -77,9 +77,12 @@ mod tests {
     #[test]
     fn the_instructions_file_is_the_one_the_project_has() {
         let dir = tempfile::tempdir().expect("dir");
-        assert_eq!(super::instructions_file(dir.path()), dir.path().join("SUPERFIK.md"));
-        std::fs::create_dir_all(dir.path().join(".superfik")).expect("dir");
-        std::fs::write(dir.path().join(".superfik/SUPERFIK.md"), "x").expect("write");
-        assert_eq!(super::instructions_file(dir.path()), dir.path().join(".superfik/SUPERFIK.md"));
+        assert_eq!(super::instructions_file(dir.path()), dir.path().join(brand::INSTRUCTIONS));
+        std::fs::create_dir_all(dir.path().join(brand::DIR)).expect("dir");
+        std::fs::write(dir.path().join(concat!(brand::dir!(), "/", brand::instructions!())), "x").expect("write");
+        assert_eq!(
+            super::instructions_file(dir.path()),
+            dir.path().join(concat!(brand::dir!(), "/", brand::instructions!()))
+        );
     }
 }

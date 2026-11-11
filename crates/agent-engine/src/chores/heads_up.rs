@@ -21,7 +21,7 @@ pub(super) fn look(
     while messages.last().is_some_and(|message| message.tool_uses().next().is_some()) {
         messages.pop();
     }
-    messages.push(Message::user(ASK));
+    messages.push(Message::user(brand::text(ASK)));
     let request =
         TurnRequest { messages, tools: Vec::new(), max_tokens: template.max_tokens.min(1500), ..template.clone() };
     Ok(parse(&api.turn(&request, &mut |_| {}, stop)?.message.text()))

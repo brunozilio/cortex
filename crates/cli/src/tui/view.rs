@@ -1,12 +1,12 @@
 //! Drawing the chat: the conversation, what the agent asks, the picker or
 //! completions, the prompt (wrapped as it grows), and a status line.
 
+use domain::command::mode_label;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph};
-use domain::command::mode_label;
 use sdk::PermissionMode;
 
 use super::app::App;
@@ -140,9 +140,14 @@ pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
         _ => cwd,
     };
     let mut lines = vec![Line::from("")];
-    lines.extend(super::logo::lines(width).unwrap_or_else(|| vec![Line::from(" ✻ Superfik").magenta().bold()]));
+    lines.extend(
+        super::logo::lines(width).unwrap_or_else(|| vec![Line::from(concat!(" ✻ ", brand::name!())).magenta().bold()]),
+    );
     lines.push(Line::from(""));
-    lines.push(Line::from(vec![" Superfik Lite".bold(), format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim()]));
+    lines.push(Line::from(vec![
+        concat!(" ", brand::name!()).bold(),
+        format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim(),
+    ]));
     lines.push(Line::from(" /help commands · /login connects a provider · ↑ earlier prompts · Ctrl+V an image").dim());
     lines
 }

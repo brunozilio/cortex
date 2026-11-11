@@ -168,7 +168,7 @@ impl Transport for HttpTransport {
         }
         let (shared, listener, closed) = (Arc::clone(&self.shared), Arc::clone(listener), Arc::clone(&self.closed));
         let spawned = std::thread::Builder::new()
-            .name(format!("superfik-mcp-{}-stream", shared.name))
+            .name(format!("{brand_command}-mcp-{}-stream", shared.name, brand_command = brand::COMMAND))
             .spawn(move || super::http_listen::run(&shared, &listener, &closed));
         if let Err(error) = spawned {
             tracing::warn!(%error, server = self.shared.name, "an MCP server's stream could not be opened");

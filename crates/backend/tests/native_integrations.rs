@@ -1,5 +1,17 @@
 //! Real backend -> NativeEngine -> loopback MCP -> storage. Only model inference
 //! is deterministic; no FakeEngine, CLI, credentials or external account.
+use agent_engine::{
+    ApiSource, NativeEngine,
+    model::{Delta, ModelApi, ModelError, Reply, TurnRequest, scripted::ScriptedModel},
+    sessions::InMemorySessions,
+    transcript::Block,
+};
+use backend::{Backend, InMemoryStore, LocalBackend, LocalServices, Memories};
+use domain::{
+    Author, EngineEvent, MemoryBrief, MemoryEdit, MemoryKind, ModelOption, ModelProvider, PermissionMode, Principal,
+    PromptRequest, Provenance, RunId,
+};
+use protocol::{ClientCommand, Envelope, ServerEvent};
 use serde_json::json;
 use std::{
     sync::{
@@ -8,18 +20,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use backend::{Backend, InMemoryStore, LocalBackend, LocalServices, Memories};
-use domain::{
-    Author, EngineEvent, MemoryBrief, MemoryEdit, MemoryKind, ModelOption, ModelProvider, PermissionMode, Principal,
-    PromptRequest, Provenance, RunId,
-};
-use agent_engine::{
-    ApiSource, NativeEngine,
-    model::{Delta, ModelApi, ModelError, Reply, TurnRequest, scripted::ScriptedModel},
-    sessions::InMemorySessions,
-    transcript::Block,
-};
-use protocol::{ClientCommand, Envelope, ServerEvent};
 struct Source;
 impl ApiSource for Source {
     fn api(&self, request: &PromptRequest) -> Result<Arc<dyn ModelApi>, ModelError> {

@@ -1,4 +1,4 @@
-//! `superfik pull` / `superfik rm`: local MLX models, like ollama's.
+//! `<command> pull` / `<command> rm`: local MLX models, like ollama's.
 //! Presentation only: the progress line and the messages; the download
 //! and the folder are `sdk::LocalModels`'.
 
@@ -63,7 +63,13 @@ fn file_line(progress: &PullProgress) -> String {
 
 fn pulled_message(pulled: &Pulled) -> String {
     let what = if pulled.fresh { "pulled" } else { "already downloaded:" };
-    format!("{what} {} ({})\nuse it with: superfik -m {}", pulled.id, bytes(pulled.bytes), pulled.id)
+    format!(
+        "{what} {} ({})\nuse it with: {brand_command} -m {}",
+        pulled.id,
+        bytes(pulled.bytes),
+        pulled.id,
+        brand_command = brand::COMMAND
+    )
 }
 
 fn removed_message(removed: &Removed) -> String {
@@ -134,7 +140,11 @@ mod tests {
         };
         assert_eq!(
             pulled_message(&pulled),
-            "pulled mlx-community/Qwen3-8B-4bit (4.6 GB)\nuse it with: superfik -m mlx-community/Qwen3-8B-4bit"
+            concat!(
+                "pulled mlx-community/Qwen3-8B-4bit (4.6 GB)\nuse it with: ",
+                brand::command!(),
+                " -m mlx-community/Qwen3-8B-4bit"
+            )
         );
         assert!(pulled_message(&Pulled { fresh: false, ..pulled }).starts_with("already downloaded: "));
         let removed =

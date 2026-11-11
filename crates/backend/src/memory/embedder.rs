@@ -39,7 +39,7 @@ pub enum ModelChoice {
 
 impl ModelChoice {
     pub fn from_env() -> Self {
-        Self::parse(std::env::var("SUPERFIK_MEMORY_MODEL").ok().as_deref())
+        Self::parse(std::env::var(concat!(brand::env_prefix!(), "_MEMORY_MODEL")).ok().as_deref())
     }
 
     pub fn parse(value: Option<&str>) -> Self {
@@ -92,16 +92,17 @@ mod fast {
 
         fn load(&self) {
             let (slot, kind, cache, name) = (Arc::clone(&self.model), self.kind.clone(), self.cache.clone(), self.name);
-            let spawned = std::thread::Builder::new().name("superfik-memory-model".into()).spawn(move || {
-                let options = TextInitOptions::new(kind).with_cache_dir(cache).with_show_download_progress(false);
-                match TextEmbedding::try_new(options) {
-                    Ok(loaded) => {
-                        *slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(loaded);
-                        tracing::info!(model = name, "memory model ready");
+            let spawned =
+                std::thread::Builder::new().name(concat!(brand::command!(), "-memory-model").into()).spawn(move || {
+                    let options = TextInitOptions::new(kind).with_cache_dir(cache).with_show_download_progress(false);
+                    match TextEmbedding::try_new(options) {
+                        Ok(loaded) => {
+                            *slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(loaded);
+                            tracing::info!(model = name, "memory model ready");
+                        }
+                        Err(error) => tracing::warn!(%error, "memory model unavailable; searching by words"),
                     }
-                    Err(error) => tracing::warn!(%error, "memory model unavailable; searching by words"),
-                }
-            });
+                });
             if let Err(error) = spawned {
                 tracing::warn!(%error, "could not start the memory model");
             }

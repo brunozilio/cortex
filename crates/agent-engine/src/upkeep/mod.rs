@@ -65,8 +65,8 @@ pub fn measure(model: &ModelOption, system: &str, tools: &[ToolSpec], history: &
 mod tests {
     use std::sync::atomic::AtomicBool;
 
-    use serde_json::json;
     use domain::Effort;
+    use serde_json::json;
 
     use super::*;
     use crate::model::TurnRequest;
@@ -92,7 +92,7 @@ mod tests {
         let tools = vec![
             ToolSpec { name: "Read".into(), description: "x".repeat(40), schema: json!({}) },
             ToolSpec {
-                name: "mcp__superfik_memory__memory_search".into(),
+                name: concat!("mcp__", brand::command!(), "_memory__memory_search").into(),
                 description: String::new(),
                 schema: json!({}),
             },

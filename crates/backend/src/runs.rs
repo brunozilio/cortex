@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
-use domain::{Principal, RunId};
 use agent_engine::RunHandle;
+use domain::{Principal, RunId};
 
 enum Slot {
     Active(Principal, Box<dyn RunHandle>),

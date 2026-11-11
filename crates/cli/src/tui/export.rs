@@ -10,7 +10,7 @@ use super::transcript::{Entry, ToolState};
 /// The conversation as Markdown: prompts as quotes, answers as they are,
 /// tool calls as one line each.
 pub fn markdown(title: Option<&str>, entries: &[Entry]) -> String {
-    let mut out = format!("# {}\n", title.unwrap_or("Superfik conversation"));
+    let mut out = format!("# {}\n", title.unwrap_or(concat!(brand::name!(), " conversation")));
     for entry in entries {
         let block = match entry {
             Entry::User(text) => text.lines().map(|line| format!("> {line}")).collect::<Vec<_>>().join("\n"),

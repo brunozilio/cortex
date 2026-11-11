@@ -1,29 +1,29 @@
 ---
 name: init
-description: Initialize a new SUPERFIK.md file with codebase documentation
+description: Initialize a new {{INSTRUCTIONS}} file with codebase documentation
 ---
 
-Please analyze this codebase and create a SUPERFIK.md file at the repository root, which will be given to future Superfik agents to operate in this repository.
+Please analyze this codebase and create a {{INSTRUCTIONS}} file at the repository root, which will be given to future {{NAME}} agents to operate in this repository.
 
 What to add:
 1. Commands that will be commonly used, such as how to build, lint, and run tests. Include the necessary commands to develop in this codebase, such as how to run a single test.
 2. High-level code architecture and structure so that future agents can be productive more quickly. Focus on the "big picture" architecture that requires reading multiple files to understand.
 
 Usage notes:
-- If there's already a SUPERFIK.md, suggest improvements to it.
-- Superfik also reads AGENTS.md, so a project needs no copy of it. If it exists and there is no SUPERFIK.md, read it first: do not repeat what it already says. Create SUPERFIK.md only for what it lacks. Superfik does not read CLAUDE.md: if there is one, use it as a source for SUPERFIK.md.
-- When you make the initial SUPERFIK.md, do not repeat yourself and do not include obvious instructions like "Provide helpful error messages to users", "Write unit tests for all new utilities", "Never include sensitive information (API keys, tokens) in code or commits".
+- If there's already a {{INSTRUCTIONS}}, suggest improvements to it.
+- {{NAME}} also reads AGENTS.md, so a project needs no copy of it. If it exists and there is no {{INSTRUCTIONS}}, read it first: do not repeat what it already says. Create {{INSTRUCTIONS}} only for what it lacks. {{NAME}} does not read CLAUDE.md: if there is one, use it as a source for {{INSTRUCTIONS}}.
+- When you make the initial {{INSTRUCTIONS}}, do not repeat yourself and do not include obvious instructions like "Provide helpful error messages to users", "Write unit tests for all new utilities", "Never include sensitive information (API keys, tokens) in code or commits".
 - Avoid listing every component or file structure that can be easily discovered.
 - Don't include generic development practices.
 - If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (in .github/copilot-instructions.md), make sure to include the important parts.
 - If there is a README.md, make sure to include the important parts.
-- If there is a GEMINI.md, make sure to include the important parts. Do not read or convert other agents' configuration (Codex's `~/.codex/config.toml` or `./.codex/`, Gemini CLI's `~/.gemini/settings.json` or `./.gemini/`); if you find one, tell the user that its skills, agents and settings can be moved by hand to `.superfik/skills`, `.superfik/agents` and `.superfik/settings.json`.
+- If there is a GEMINI.md, make sure to include the important parts. Do not read or convert other agents' configuration (Codex's `~/.codex/config.toml` or `./.codex/`, Gemini CLI's `~/.gemini/settings.json` or `./.gemini/`); if you find one, tell the user that its skills, agents and settings can be moved by hand to `{{DIR}}/skills`, `{{DIR}}/agents` and `{{DIR}}/settings.json`.
 - Commands may differ between macOS, Windows and Linux; when the project says so, note each one.
 - Do not make up information such as "Common Development Tasks", "Tips for Development", "Support and Documentation" unless this is expressly included in other files that you read.
 - Be sure to prefix the file with the following text:
 
 ```
-# SUPERFIK.md
+# {{INSTRUCTIONS}}
 
-This file provides guidance to Superfik agents when working with code in this repository.
+This file provides guidance to {{NAME}} agents when working with code in this repository.
 ```

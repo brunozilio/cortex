@@ -1,4 +1,4 @@
-//! Superfik domain model.
+//! The app domain model.
 //!
 //! This crate is pure: no IO, no threads, no rendering. Every other crate
 //! (engines, backends, UI) speaks in these types, which keeps the boundary

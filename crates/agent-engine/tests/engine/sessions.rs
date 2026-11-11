@@ -3,12 +3,12 @@
 
 use std::sync::{Arc, Mutex};
 
-use serde_json::json;
-use domain::{EngineEvent, EngineProblem, PromptRequest};
 use agent_engine::NativeEngine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::{Block, Message};
+use domain::{EngineEvent, EngineProblem, PromptRequest};
+use serde_json::json;
 
 use crate::{Source, finish, model, start};
 
@@ -85,8 +85,8 @@ fn measures_and_compacts_a_session() {
 
 #[test]
 fn sessions_are_bound_to_owner_and_directory_and_owner_cannot_come_from_wire() {
-    use domain::{OrgId, Principal, UserId};
     use agent_engine::sessions::Sessions;
+    use domain::{OrgId, Principal, UserId};
     let store = InMemorySessions::default();
     let dir = tempfile::tempdir().expect("valid test fixture");
     let mut request = PromptRequest::plain(dir.path().into(), "hello", model());
@@ -143,12 +143,12 @@ fn a_main_worktree_and_its_uncommitted_files_survive_resume_after_engine_restart
         );
     };
     git(&["init", "-b", "main"]);
-    let root = dir.path().join(".superfik");
+    let root = dir.path().join(brand::DIR);
     std::fs::create_dir_all(root.join("agents")).expect("agents");
     std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer"}"#).expect("settings");
     std::fs::write(root.join("agents/reviewer.md"), "---\nname: reviewer\nisolation: worktree\n---\nReview.")
         .expect("agent");
-    git(&["add", ".superfik"]);
+    git(&["add", brand::DIR]);
     git(&["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "base"]);
     let first = Arc::new(ScriptedModel::new([
         ScriptedModel::reply(vec![Block::ToolUse {

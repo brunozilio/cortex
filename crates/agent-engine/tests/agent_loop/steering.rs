@@ -2,10 +2,10 @@
 //! same run: with the next tool results, or as a new turn when the model
 //! was about to finish.
 
-use serde_json::json;
-use domain::{EngineEvent, PermissionMode};
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::transcript::{Block, Message, Role};
+use domain::{EngineEvent, PermissionMode};
+use serde_json::json;
 
 use crate::{Rig, tool_use};
 

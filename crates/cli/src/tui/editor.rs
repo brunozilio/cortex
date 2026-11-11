@@ -10,7 +10,11 @@ pub fn named() -> String {
 pub fn edit(editor: &str, text: &str) -> Result<String, String> {
     let mut words = editor.split_whitespace();
     let program = words.next().ok_or("no editor set: export EDITOR")?;
-    let path = std::env::temp_dir().join(format!("superfik-prompt-{}.md", std::process::id()));
+    let path = std::env::temp_dir().join(format!(
+        "{brand_command}-prompt-{}.md",
+        std::process::id(),
+        brand_command = brand::COMMAND
+    ));
     std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
     let status = std::process::Command::new(program).args(words).arg(&path).status();
     let edited = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()));

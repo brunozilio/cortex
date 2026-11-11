@@ -19,9 +19,9 @@ mod tasks;
 mod verify;
 mod worktree;
 
+use domain::EngineEvent;
 use serde_json::{Value, json};
 use std::sync::atomic::Ordering;
-use domain::EngineEvent;
 
 use self::tasks::{StopTasksOnDrop, Tasks};
 use crate::control::Control;

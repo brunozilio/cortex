@@ -1,6 +1,6 @@
 [package]
 name = "cli"
-description = "The terminal chat: talk to Superfik's agent in your project."
+description = "The terminal chat: talk to the agent in your project."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -15,6 +15,7 @@ default = ["embeddings"]
 embeddings = ["sdk/embeddings"]
 
 [dependencies]
+brand.workspace = true
 sdk = { workspace = true, default-features = false }
 domain.workspace = true
 serde_json.workspace = true

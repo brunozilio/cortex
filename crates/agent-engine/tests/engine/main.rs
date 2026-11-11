@@ -1,6 +1,7 @@
 //! The native engine through `AgentEngine::start`, as the backend drives it.
 
 mod agents;
+mod brand_only;
 mod checkpoints;
 mod headless;
 mod inbox;
@@ -10,7 +11,6 @@ mod plugins;
 mod runs;
 mod sessions;
 mod steering;
-mod superfik_only;
 mod verification;
 mod worktrees;
 
@@ -18,10 +18,10 @@ use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use domain::{EngineEvent, ModelOption, PromptRequest, RunId};
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{ModelApi, ModelError};
 use agent_engine::{AgentEngine, ApiSource, NativeEngine};
+use domain::{EngineEvent, ModelOption, PromptRequest, RunId};
 
 struct Source(Mutex<Vec<Arc<ScriptedModel>>>);
 

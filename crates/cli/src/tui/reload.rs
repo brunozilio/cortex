@@ -1,4 +1,4 @@
-//! `/reload`: the engine rereads `~/.superfik` and the project on every
+//! `/reload`: the engine rereads `~/.<command>` and the project on every
 //! message, so reloading means refreshing what the chat keeps (the skills
 //! it completes, the settings and models) and saying what is there now.
 
@@ -29,12 +29,16 @@ pub fn summary(skills: &[String], agents: &[CustomAgent], servers: &[McpServerIn
     if count(McpState::Off) > 0 {
         mcp.push_str(&format!(" · {} off", count(McpState::Off)));
     }
-    let plugins =
-        if plugins.is_empty() { "none (put them in ~/.superfik/plugins/)".to_owned() } else { plugins.join(", ") };
+    let plugins = if plugins.is_empty() {
+        concat!("none (put them in ~/", brand::dir!(), "/plugins/)").to_owned()
+    } else {
+        plugins.join(", ")
+    };
     format!(
-        "Reloaded ~/.superfik and the project:\n  plugins  {plugins}\n  skills   {}\n  agents   {}\n  MCP      {mcp}",
+        "Reloaded ~/{brand_dir} and the project:\n  plugins  {plugins}\n  skills   {}\n  agents   {}\n  MCP      {mcp}",
         skills.len(),
-        agents.len()
+        agents.len(),
+        brand_dir = brand::DIR
     )
 }
 
@@ -58,8 +62,12 @@ mod tests {
         ];
         assert_eq!(
             summary(&skills, &agents, &servers),
-            "Reloaded ~/.superfik and the project:\n  plugins  acme, beta, gamma\n  skills   3\n  agents   1\n  MCP      1 ready · 1 waiting for approval (/mcp)"
+            concat!(
+                "Reloaded ~/",
+                brand::dir!(),
+                " and the project:\n  plugins  acme, beta, gamma\n  skills   3\n  agents   1\n  MCP      1 ready · 1 waiting for approval (/mcp)"
+            )
         );
-        assert!(summary(&[], &[], &[]).contains("plugins  none (put them in ~/.superfik/plugins/)"));
+        assert!(summary(&[], &[], &[]).contains(concat!("plugins  none (put them in ~/", brand::dir!(), "/plugins/)")));
     }
 }

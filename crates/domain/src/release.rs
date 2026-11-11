@@ -1,5 +1,5 @@
-//! Which published build replaces this one (`superfik update`): releases
-//! are tagged `vX.Y.Z` and carry one `superfik-X.Y.Z-<target>.tar.gz` per
+//! Which published build replaces this one (`<command> update`): releases
+//! are tagged `vX.Y.Z` and carry one `<command>-X.Y.Z-<target>.tar.gz` per
 //! platform, with its SHA-256 beside it in `<asset>.sha256`.
 
 /// A release's `X.Y.Z`, compared numerically.
@@ -40,7 +40,7 @@ pub fn asset(version: Version, arch: &str, os: &str, libc: &str) -> Option<Strin
         ("x86_64", "linux", _) => "x86_64-unknown-linux-gnu",
         _ => return None,
     };
-    Some(format!("superfik-{version}-{target}.tar.gz"))
+    Some(format!("{brand_command}-{version}-{target}.tar.gz", brand_command = brand::COMMAND))
 }
 
 /// The digest a `.sha256` file gives for `asset` (`shasum -a 256` output:
@@ -61,14 +61,17 @@ mod tests {
     #[test]
     fn each_published_platform_has_its_archive() {
         let v = Version(0, 3, 1);
-        assert_eq!(asset(v, "aarch64", "macos", "").as_deref(), Some("superfik-0.3.1-aarch64-apple-darwin.tar.gz"));
+        assert_eq!(
+            asset(v, "aarch64", "macos", "").as_deref(),
+            Some(concat!(brand::command!(), "-0.3.1-aarch64-apple-darwin.tar.gz"))
+        );
         assert_eq!(
             asset(v, "x86_64", "linux", "gnu").as_deref(),
-            Some("superfik-0.3.1-x86_64-unknown-linux-gnu.tar.gz")
+            Some(concat!(brand::command!(), "-0.3.1-x86_64-unknown-linux-gnu.tar.gz"))
         );
         assert_eq!(
             asset(v, "aarch64", "linux", "gnu").as_deref(),
-            Some("superfik-0.3.1-aarch64-unknown-linux-gnu.tar.gz")
+            Some(concat!(brand::command!(), "-0.3.1-aarch64-unknown-linux-gnu.tar.gz"))
         );
         assert_eq!(asset(v, "x86_64", "macos", ""), None, "no Intel Mac build");
         assert_eq!(asset(v, "x86_64", "windows", "msvc"), None);
@@ -79,21 +82,32 @@ mod tests {
         let v = Version(0, 6, 1);
         assert_eq!(
             asset(v, "x86_64", "linux", "musl").as_deref(),
-            Some("superfik-0.6.1-x86_64-unknown-linux-musl.tar.gz")
+            Some(concat!(brand::command!(), "-0.6.1-x86_64-unknown-linux-musl.tar.gz"))
         );
         assert_eq!(
             asset(v, "aarch64", "linux", "musl").as_deref(),
-            Some("superfik-0.6.1-aarch64-unknown-linux-musl.tar.gz")
+            Some(concat!(brand::command!(), "-0.6.1-aarch64-unknown-linux-musl.tar.gz"))
         );
     }
 
     #[test]
     fn the_checksum_file_names_the_digest_of_its_archive() {
         let hex = "AB".repeat(32);
-        let text = format!("{hex}  superfik-0.3.1-aarch64-apple-darwin.tar.gz\n");
-        assert_eq!(checksum(&text, "superfik-0.3.1-aarch64-apple-darwin.tar.gz"), Some("ab".repeat(32)));
-        assert_eq!(checksum(&text, "superfik-0.3.1-x86_64-unknown-linux-gnu.tar.gz"), None, "another archive");
-        assert_eq!(checksum("nonsense  superfik.tar.gz", "superfik.tar.gz"), None);
+        let text =
+            format!("{hex}  {brand_command}-0.3.1-aarch64-apple-darwin.tar.gz\n", brand_command = brand::COMMAND);
+        assert_eq!(
+            checksum(&text, concat!(brand::command!(), "-0.3.1-aarch64-apple-darwin.tar.gz")),
+            Some("ab".repeat(32))
+        );
+        assert_eq!(
+            checksum(&text, concat!(brand::command!(), "-0.3.1-x86_64-unknown-linux-gnu.tar.gz")),
+            None,
+            "another archive"
+        );
+        assert_eq!(
+            checksum(concat!("nonsense  ", brand::command!(), ".tar.gz"), concat!(brand::command!(), ".tar.gz")),
+            None
+        );
     }
 
     #[test]

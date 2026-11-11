@@ -2,17 +2,17 @@
 //! rejected token refreshed once, and the catalog from the management
 //! service. The streams are recorded from Kiro (event-stream frames).
 
+use agent_engine::model::http::{Http, Response, Sent};
+use agent_engine::model::providers::ProviderClient;
+use agent_engine::model::{ModelApi, ModelError};
+use agent_engine::transcript::Block;
+use domain::ModelProvider;
+use domain::provider::{ProviderKey, ProviderKeyStore};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::io::Cursor;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use domain::ModelProvider;
-use domain::provider::{ProviderKey, ProviderKeyStore};
-use agent_engine::model::http::{Http, Response, Sent};
-use agent_engine::model::providers::ProviderClient;
-use agent_engine::model::{ModelApi, ModelError};
-use agent_engine::transcript::Block;
 
 use crate::request;
 

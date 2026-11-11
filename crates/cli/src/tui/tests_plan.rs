@@ -3,13 +3,13 @@
 
 use std::time::Duration;
 
-use ratatui::crossterm::event::KeyCode;
-use domain::{AgentAsk, AskId, AskKind, SessionId, ToolCall};
 use agent_engine::fake::FakeEngine;
+use domain::{AgentAsk, AskId, AskKind, SessionId, ToolCall};
+use ratatui::crossterm::event::KeyCode;
 use sdk::{EngineEvent, Model, PermissionMode};
 
 use super::app::App;
-use super::tests::{press, screen, superfik, type_text, until};
+use super::tests::{press, screen, sdk, type_text, until};
 
 fn script(after: Vec<EngineEvent>) -> Vec<EngineEvent> {
     let mut events = vec![
@@ -26,7 +26,7 @@ fn script(after: Vec<EngineEvent>) -> Vec<EngineEvent> {
 }
 
 fn planning(engine: &FakeEngine, data: &std::path::Path) -> App {
-    let mut app = App::new(superfik(engine, data), data.into(), None, None);
+    let mut app = App::new(sdk(engine, data), data.into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app.set_mode(PermissionMode::Plan);
     type_text(&mut app, "plan the site");
@@ -95,7 +95,7 @@ fn the_chat_follows_the_agent_into_plan_mode() {
             EngineEvent::Completed { duration_ms: 5, cost_usd: None },
         ],
     );
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "big change");
     press(&mut app, KeyCode::Enter);

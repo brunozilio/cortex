@@ -1,11 +1,11 @@
-//! `superfik`: talk to Superfik's agent in a terminal.
+//! `<command>`: talk to the app's agent in a terminal.
 //!
-//! - `superfik [prompt]` opens the chat (sending `prompt` first).
-//! - `superfik -p <prompt>` answers once and prints the reply.
-//! - `superfik login` / `logout` connect or forget an LLM provider.
-//! - `superfik models` lists what the connected providers offer.
-//! - `superfik pull <model>` / `rm <model>` download or delete a local MLX model.
-//! - `superfik mcp …` lists, adds, removes and approves MCP servers.
+//! - `<command> [prompt]` opens the chat (sending `prompt` first).
+//! - `<command> -p <prompt>` answers once and prints the reply.
+//! - `<command> login` / `logout` connect or forget an LLM provider.
+//! - `<command> models` lists what the connected providers offer.
+//! - `<command> pull <model>` / `rm <model>` download or delete a local MLX model.
+//! - `<command> mcp …` lists, adds, removes and approves MCP servers.
 //!
 //! Every terminal talks to one background daemon per computer (Unix), so
 //! local models, embeddings and memory load once.
@@ -29,7 +29,7 @@ use clap::{Parser, Subcommand};
 use sdk::PermissionMode;
 
 #[derive(Debug, Parser)]
-#[command(name = "superfik", version, about = "Talk to Superfik's coding agent in your project.")]
+#[command(name = brand::COMMAND, version, about = concat!("Talk to ", brand::name!(), "'s coding agent in your project."))]
 struct Cli {
     /// What to ask; opens the chat with it unless --print is given.
     prompt: Vec<String>,
@@ -124,7 +124,7 @@ enum Action {
     Config {
         #[command(subcommand)]
         action: config::ConfigAction,
-        /// This project's .superfik/settings.local.json instead.
+        /// This project's .<command>/settings.local.json instead.
         #[arg(long, global = true)]
         project: bool,
     },
@@ -159,7 +159,7 @@ fn main() -> ExitCode {
     match run(cli) {
         Ok(code) => code,
         Err(message) => {
-            eprintln!("superfik: {message}");
+            eprintln!("{brand_command}: {message}", brand_command = brand::COMMAND);
             ExitCode::FAILURE
         }
     }
@@ -191,7 +191,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         }
         _ => {}
     }
-    let (superfik, stale) = daemon::connect()?;
+    let (sdk, stale) = daemon::connect()?;
     let prompt = (!cli.prompt.is_empty()).then(|| cli.prompt.join(" "));
     let add_dirs = cli.add_dir.iter().map(|typed| tui::dirs::folder(&cwd, typed)).collect::<Result<Vec<_>, _>>()?;
     let headless = sdk::Headless {
@@ -202,27 +202,27 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         fallback_model: cli.fallback_model.clone(),
     };
     match cli.command {
-        Some(Action::Login) => login::login(&superfik).map(|()| ExitCode::SUCCESS),
-        Some(Action::Logout) => login::logout(&superfik).map(|()| ExitCode::SUCCESS),
+        Some(Action::Login) => login::login(&sdk).map(|()| ExitCode::SUCCESS),
+        Some(Action::Logout) => login::logout(&sdk).map(|()| ExitCode::SUCCESS),
         Some(Action::Doctor) => {
-            let checks = doctor::checks(&superfik, &cwd);
+            let checks = doctor::checks(&sdk, &cwd);
             println!("{}", doctor::render(&checks));
             Ok(if checks.iter().all(|c| c.ok) { ExitCode::SUCCESS } else { ExitCode::FAILURE })
         }
         Some(Action::Models) => {
-            for model in superfik.models().map_err(|e| e.to_string())? {
+            for model in sdk.models().map_err(|e| e.to_string())? {
                 println!("{:<40} {}", model.id, model.label);
             }
             Ok(ExitCode::SUCCESS)
         }
         Some(Action::Mcp { action }) => {
-            mcp::run(&superfik, &cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
+            mcp::run(&sdk, &cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
         }
         Some(Action::Daemon { .. }) => Err("the daemon needs macOS or Linux".into()),
         Some(Action::Pull { .. } | Action::Rm { .. } | Action::Update | Action::Config { .. }) => Ok(ExitCode::SUCCESS),
         None if cli.print => {
             if let Some(stale) = &stale {
-                eprintln!("superfik: {stale}");
+                eprintln!("{brand_command}: {stale}", brand_command = brand::COMMAND);
             }
             let prompts = match cli.input_format.as_str() {
                 "stream-json" => print_output::prompts(std::io::stdin().lines().map_while(Result::ok))?,
@@ -231,7 +231,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             };
             let resume = match cli.pick.as_deref() {
                 Some(id) if !id.is_empty() => Some(sdk::SessionId(id.to_owned())),
-                _ if cli.resume => tui::last_session(&superfik.settings().map_err(|e| e.to_string())?, &cwd),
+                _ if cli.resume => tui::last_session(&sdk.settings().map_err(|e| e.to_string())?, &cwd),
                 _ => None,
             };
             let wanted = print::Wanted {
@@ -244,14 +244,17 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 resume,
                 fork: cli.fork_session,
             };
-            print::print_all(&superfik, cwd, wanted, &prompts)
+            print::print_all(&sdk, cwd, wanted, &prompts)
         }
         None => {
             let resume = if cli.resume {
-                let settings = superfik.settings().map_err(|e| e.to_string())?;
+                let settings = sdk.settings().map_err(|e| e.to_string())?;
                 let last = tui::last_session(&settings, &cwd);
                 if last.is_none() {
-                    eprintln!("superfik: no earlier conversation in this folder; starting a new one");
+                    eprintln!(
+                        "{brand_command}: no earlier conversation in this folder; starting a new one",
+                        brand_command = brand::COMMAND
+                    );
                 }
                 last
             } else {
@@ -271,7 +274,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 inline: cli.inline,
                 channels: cli.channels,
             };
-            tui::run(superfik, cwd, cli.model, cli.mode, prompt, stale, start).map_err(|e| e.to_string())?;
+            tui::run(sdk, cwd, cli.model, cli.mode, prompt, stale, start).map_err(|e| e.to_string())?;
             Ok(ExitCode::SUCCESS)
         }
     }

@@ -5,12 +5,12 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use domain::provider::ProviderKey;
-use domain::{ModelOption, ModelProvider, Principal, PromptRequest};
-use mlx::{MlxError, MlxRuntime};
 use agent_engine::model::chat::{Chat, Endpoint, Endpoints};
 use agent_engine::model::http::{Http, NetHttp};
 use agent_engine::model::providers::ProviderClient;
+use domain::provider::ProviderKey;
+use domain::{ModelOption, ModelProvider, Principal, PromptRequest};
+use mlx::{MlxError, MlxRuntime};
 
 use agent_engine::model::{ModelApi, ModelError};
 use agent_engine::sessions::FileSessions;
@@ -40,7 +40,11 @@ impl ApiSource for NativeApis {
             return Ok(Arc::new(Chat::new(Arc::clone(&self.http), local)));
         }
         let key = request.credentials.model.clone().ok_or_else(|| {
-            ModelError::Unauthorized(format!("{} is not connected: run `superfik login`", provider.name()))
+            ModelError::Unauthorized(format!(
+                "{} is not connected: run `{brand_command} login`",
+                provider.name(),
+                brand_command = brand::COMMAND
+            ))
         })?;
         Ok(Arc::new(ProviderClient::for_model(request.model.clone(), Arc::clone(&self.http), Arc::new(key))))
     }

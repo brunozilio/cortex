@@ -3,9 +3,9 @@
 
 use std::sync::Arc;
 
-use serde_json::json;
 use agent_engine::lsp::{LanguageServers, Lsp, LspPool};
 use agent_engine::tools::{self, Tool, Workspace};
+use serde_json::json;
 
 #[test]
 #[ignore = "needs clangd on PATH"]

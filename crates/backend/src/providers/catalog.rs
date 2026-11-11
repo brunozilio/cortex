@@ -3,9 +3,9 @@
 
 use std::sync::Arc;
 
+use agent_engine::model::http::NetHttp;
 use domain::provider::ProviderKey;
 use domain::{ModelOption, ModelProvider, Principal};
-use agent_engine::model::http::NetHttp;
 use protocol::{ProviderEvent, ServerEvent};
 
 use super::ModelProviders;

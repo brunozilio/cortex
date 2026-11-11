@@ -35,7 +35,7 @@ pub fn remove(state: &WorktreeState, discard: bool, stop: &AtomicBool) -> Result
 /// uncommitted files or commits of its own, unless `discard`.
 pub fn removable(state: &WorktreeState, discard: bool, stop: &AtomicBool) -> Result<(), String> {
     if !managed(&state.root, &state.cwd) {
-        return Err("not a worktree Superfik made".into());
+        return Err(concat!("not a worktree ", brand::name!(), " made").into());
     }
     if !discard {
         let head = output(&state.cwd, &["rev-parse".as_ref(), "HEAD".as_ref()], stop)?;

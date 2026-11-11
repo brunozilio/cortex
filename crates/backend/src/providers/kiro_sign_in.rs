@@ -5,9 +5,9 @@
 //! start URL and region, and the same browser tab is sent on to that
 //! organization's sign-in, which returns its code to `/oauth/callback`.
 
-use domain::ModelProvider;
 use agent_engine::model::http::Http;
 use agent_engine::model::providers::{Tokens, kiro_idc, oauth};
+use domain::ModelProvider;
 use llm_providers::kiro::idc::{self, PortalAnswer};
 
 use super::redirect::{Loopback, pkce};
@@ -37,8 +37,8 @@ pub(super) fn sign_in(
             let query = answer.query.clone();
             let code = answer.code();
             answer.finish(code.as_ref().map(|_| ()));
-            let redirect = llm_providers::oauth::exchange_redirect(KIRO, &redirect, &query)
-                .map_err(|error| error.to_string())?;
+            let redirect =
+                llm_providers::oauth::exchange_redirect(KIRO, &redirect, &query).map_err(|error| error.to_string())?;
             oauth::exchange(http, KIRO, &code?, &state, &verifier, &redirect).map_err(|error| error.to_string())
         }
         Ok(PortalAnswer::Organization { start_url, region }) => {

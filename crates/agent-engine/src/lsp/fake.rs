@@ -7,8 +7,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde_json::Value;
 use domain::lsp::ServerSpec;
+use serde_json::Value;
 
 use super::{LanguageServer, LanguageServers, Lsp, Opened};
 

@@ -1,30 +1,30 @@
 ---
 name: debug
-description: Help diagnose an issue with Superfik itself, from its logs and settings
+description: Help diagnose an issue with {{NAME}} itself, from its logs and settings
 disable-model-invocation: true
 ---
 
 # Debug Skill
 
-Help the user debug an issue they're encountering with Superfik: the app,
+Help the user debug an issue they're encountering with {{NAME}}: the app,
 this session's agent, or its tools.
 
 ## Logs
 
-Superfik writes its diagnostics to a log only on Windows; elsewhere they go
+{{NAME}} writes its diagnostics to a log only on Windows; elsewhere they go
 to standard error. Find the ones for the user's system:
 
-* Windows - `%LOCALAPPDATA%\Superfik\logs\superfik-<date>-<pid>.log`, one
+* Windows - `%LOCALAPPDATA%\{{NAME}}\logs\{{COMMAND}}-<date>-<pid>.log`, one
   file per launch (the newest is the current one).
 * macOS - standard error of the app's process: nothing is kept when
-  Superfik is opened from the Dock or Finder. To capture a run, quit it and
+  {{NAME}} is opened from the Dock or Finder. To capture a run, quit it and
   start the binary from a terminal, e.g.
-  `/Applications/Superfik.app/Contents/MacOS/superfik 2> ~/superfik.log`.
+  `/Applications/{{NAME}}.app/Contents/MacOS/{{COMMAND}} 2> ~/{{COMMAND}}.log`.
 * Linux - standard error: the terminal it was started from, or the user
-  journal when the desktop started it (`journalctl --user -b | grep -i superfik`).
+  journal when the desktop started it (`journalctl --user -b | grep -i {{COMMAND}}`).
 
-The default level is `superfik=info,warn`. For more detail, start Superfik
-with `RUST_LOG=superfik=debug` (or `superfik=trace`, which also logs every
+The default level is `{{COMMAND}}=info,warn`. For more detail, start {{NAME}}
+with `RUST_LOG={{COMMAND}}=debug` (or `{{COMMAND}}=trace`, which also logs every
 frame's timing) in its environment, then reproduce the issue.
 
 If no log covers the moment the issue happened, tell the user where the log
@@ -36,22 +36,22 @@ For context, grep for `ERROR` and `WARN` lines across the whole file.
 ## Data
 
 * App data (sessions, settings kept by the server, memory, notes, plugins):
-  `~/Library/Application Support/Superfik` on macOS, `%APPDATA%\Superfik` on
-  Windows, `$XDG_CONFIG_HOME/superfik` (or `~/.config/superfik`) on Linux.
+  `~/Library/Application Support/{{NAME}}` on macOS, `%APPDATA%\{{NAME}}` on
+  Windows, `$XDG_CONFIG_HOME/{{COMMAND}}` (or `~/.config/{{COMMAND}}`) on Linux.
 * Local data (models, worktrees, browser profiles, the agent's sessions in
-  `native-sessions`): the same folder, except `%LOCALAPPDATA%\Superfik` on
+  `native-sessions`): the same folder, except `%LOCALAPPDATA%\{{NAME}}` on
   Windows.
 
 ## Settings
 
 Remember that the agent's settings are in:
-* user - `~/.superfik/settings.json`
-* project - `.superfik/settings.json`
-* local - `.superfik/settings.local.json`
+* user - `~/{{DIR}}/settings.json`
+* project - `{{DIR}}/settings.json`
+* local - `{{DIR}}/settings.local.json`
 
-Skills are in `.superfik/skills`, agents in `.superfik/agents`, rules in
-`.superfik/rules` (in the project, or under `~/.superfik` for the user).
-Instructions come from `SUPERFIK.md` first, then `AGENTS.md`.
+Skills are in `{{DIR}}/skills`, agents in `{{DIR}}/agents`, rules in
+`{{DIR}}/rules` (in the project, or under `~/{{DIR}}` for the user).
+Instructions come from `{{INSTRUCTIONS}}` first, then `AGENTS.md`.
 
 ## Instructions
 

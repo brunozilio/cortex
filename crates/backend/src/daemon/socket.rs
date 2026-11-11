@@ -39,7 +39,13 @@ impl SocketBackend {
                     Err(error) => tracing::warn!(%error, "the daemon sent something this client does not understand"),
                 }
             }
-            let _ = tx.send(ServerEvent::error("The Superfik daemon stopped. Start superfik again."));
+            let _ = tx.send(ServerEvent::error(concat!(
+                "The ",
+                brand::name!(),
+                " daemon stopped. Start ",
+                brand::command!(),
+                " again."
+            )));
             wake();
         });
         Ok(Self { writer: Arc::new(Mutex::new(stream)), events })
@@ -81,7 +87,10 @@ pub fn connect_or_start(
         match SocketBackend::connect(dir, Arc::clone(&wake)) {
             Ok(backend) => return Ok(backend),
             Err(error) if Instant::now() >= deadline => {
-                return Err(std::io::Error::other(format!("the Superfik daemon did not start: {error}")));
+                return Err(std::io::Error::other(format!(
+                    "the {brand_name} daemon did not start: {error}",
+                    brand_name = brand::NAME
+                )));
             }
             Err(_) => std::thread::sleep(Duration::from_millis(50)),
         }

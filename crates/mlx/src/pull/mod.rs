@@ -20,7 +20,7 @@ pub use repo::{DEFAULT_ORG, RepoId};
 pub enum LocalModelError {
     #[error("local MLX models need Apple silicon")]
     NeedsAppleSilicon,
-    #[error("this computer has no folder for Superfik's local data")]
+    #[error("this computer has no folder for {}'s local data", brand::NAME)]
     NoDataFolder,
     #[error("`{id}` is not a Hugging Face model id ({why}); use <org>/<name>, like mlx-community/Qwen3-8B-4bit")]
     InvalidId { id: String, why: String },

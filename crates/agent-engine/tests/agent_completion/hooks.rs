@@ -1,9 +1,9 @@
 //! Hooks around a custom agent's work: command, prompt, agent and HTTP
 //! handlers, their decisions, rewritten input and time limits.
 
-use serde_json::json;
-use domain::PermissionMode;
 use agent_engine::{model::scripted::ScriptedModel, tools::Workspace};
+use domain::PermissionMode;
+use serde_json::json;
 
 use crate::{call, delegated, done, run};
 

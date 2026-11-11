@@ -5,8 +5,6 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-use serde_json::json;
-use domain::{Effort, EngineEvent, PermissionMode};
 use agent_engine::agent::Agent;
 use agent_engine::control::Control;
 use agent_engine::guard::Safety;
@@ -14,15 +12,14 @@ use agent_engine::model::TurnRequest;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::tools::{self, Workspace};
 use agent_engine::transcript::{Block, Message};
+use domain::{Effort, EngineEvent, PermissionMode};
+use serde_json::json;
 
 fn says(text: &str) -> Result<agent_engine::model::Reply, agent_engine::model::ModelError> {
     ScriptedModel::reply(vec![Block::Text(text.into())])
 }
 
-fn calls(
-    name: &str,
-    input: serde_json::Value,
-) -> Result<agent_engine::model::Reply, agent_engine::model::ModelError> {
+fn calls(name: &str, input: serde_json::Value) -> Result<agent_engine::model::Reply, agent_engine::model::ModelError> {
     ScriptedModel::reply(vec![Block::ToolUse { id: "t1".into(), name: name.into(), input }])
 }
 

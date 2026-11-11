@@ -7,9 +7,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
-use serde_json::{Value, json};
 use domain::Principal;
 use domain::inbox::Notice;
+use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
@@ -111,9 +111,13 @@ impl Tool for ListSessions {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "ListSessions".into(),
-            description: "List the user's other Superfik sessions open on this computer: their names and folders. \
+            description: concat!(
+                "List the user's other ",
+                brand::name!(),
+                " sessions open on this computer: their names and folders. \
                           Send one a message with SendMessage (`to` its name); its answer reaches you as an event."
-                .into(),
+            )
+            .into(),
             schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
         }
     }
@@ -150,10 +154,8 @@ mod tests {
     fn sessions_message_each_other_within_one_owner() {
         let me = register(9401, None, Path::new("/work/api"));
         let other = register(9402, None, Path::new("/work/web"));
-        let stranger = Principal::Member(domain::principal::Member {
-            user: domain::UserId::new(),
-            org: domain::OrgId::LOCAL,
-        });
+        let stranger =
+            Principal::Member(domain::principal::Member { user: domain::UserId::new(), org: domain::OrgId::LOCAL });
         register(9403, Some(&stranger), Path::new("/work/secret"));
         assert_eq!((me.as_str(), other.as_str()), ("api-9401", "web-9402"));
         assert_eq!(register(9401, None, Path::new("/work/api2")), "api-9401", "the name stays");

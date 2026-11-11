@@ -1,4 +1,4 @@
-//! "superfik" in big letters (`tui-big-text`, a quadrant per font pixel),
+//! "<command>" in big letters (`tui-big-text`, a quadrant per font pixel),
 //! coloured from magenta to blue across its width, as lines the
 //! conversation starts with.
 
@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 use tui_big_text::{BigText, PixelSize};
 
-const WORD: &str = "superfik";
+const WORD: &str = brand::COMMAND;
 /// Columns and rows the word takes: four columns and four rows a letter.
 const WIDTH: u16 = 4 * WORD.len() as u16;
 const HEIGHT: u16 = 4;

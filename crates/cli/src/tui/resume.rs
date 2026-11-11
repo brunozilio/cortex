@@ -11,7 +11,7 @@ pub fn open(app: &mut App) {
         return app.transcript.notice("Wait for the agent to finish, or press Esc, before resuming another.");
     }
     let cwd = app.cwd.clone();
-    app.spawn(move |superfik| match superfik.settings() {
+    app.spawn(move |sdk| match sdk.settings() {
         Ok(settings) => Msg::Conversations(conversations::list(&settings, &cwd)),
         Err(error) => Msg::Error(error.to_string()),
     });

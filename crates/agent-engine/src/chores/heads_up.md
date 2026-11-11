@@ -1,6 +1,6 @@
 <system-reminder>
 
-This is a side request from the user (via Superfik's "You should know" feature). You must answer it directly in this single response.
+This is a side request from the user (via {{NAME}}'s "You should know" feature). You must answer it directly in this single response.
 
 IMPORTANT CONTEXT:
 - You are a separate, lightweight agent spawned to answer this one request

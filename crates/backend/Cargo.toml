@@ -1,11 +1,12 @@
 [package]
 name = "backend"
-description = "Superfik backend: executes client commands against the agent engine. In-process today; the same seam serves a remote server later."
+description = "The backend: executes client commands against the agent engine. In-process today; the same seam serves a remote server later."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+brand.workspace = true
 private-file.workspace = true
 domain.workspace = true
 protocol.workspace = true

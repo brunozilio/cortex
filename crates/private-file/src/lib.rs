@@ -1,4 +1,4 @@
-//! Files only the user running Superfik can read: secrets, tokens and
+//! Files only the user running the app can read: secrets, tokens and
 //! MCP configurations (ADR 0013).
 //!
 //! - Unix: mode `0600`, also on a file that already existed.

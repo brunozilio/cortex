@@ -1,4 +1,4 @@
-//! MCP tools for the native engine: Superfik's own memory server, the
+//! MCP tools for the native engine: the app's own memory server, the
 //! SDK host's servers over streamable HTTP or as processes, the host's
 //! in-process servers ([`LocalTransport`]), the project's and the user's
 //! configured servers and installed plugins'; each tool is offered as
@@ -18,8 +18,8 @@ mod tool;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use serde_json::{Value, json};
 use domain::PromptRequest;
+use serde_json::{Value, json};
 
 pub use self::configured::{McpSources, list, project_config, sources};
 pub use self::http::{HttpTransport, parse};
@@ -137,7 +137,7 @@ impl McpServer {
 
     /// Opens the session: the handshake, keeping what the server offers.
     pub fn initialize_stopped(&self, stop: &std::sync::atomic::AtomicBool) -> Result<(), String> {
-        let client = json!({ "name": "superfik", "version": env!("CARGO_PKG_VERSION") });
+        let client = json!({ "name": brand::COMMAND, "version": env!("CARGO_PKG_VERSION") });
         let answer = self.rpc_stopped(
             "initialize",
             json!({ "protocolVersion": PROTOCOL_VERSION, "capabilities": {}, "clientInfo": client }),

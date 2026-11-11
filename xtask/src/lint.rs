@@ -1,4 +1,4 @@
-//! `xtask lint`: the .superfik/SUPERFIK.md rules clippy cannot see. Findings already
+//! `xtask lint`: the .<command>/<COMMAND>.md rules clippy cannot see. Findings already
 //! present are recorded in `xtask/lint-baseline.txt` (one `rule path` per
 //! line); only findings outside it fail. `lint --update-baseline` rewrites it.
 
@@ -17,6 +17,7 @@ pub fn run(root: &Path, update_baseline: bool) -> Result<(), Box<dyn std::error:
         let source = std::fs::read_to_string(&file)?;
         found.extend(check(&rel, &source));
     }
+    found.extend(crate::brand::findings(root)?);
     let baseline_path = root.join(BASELINE);
     if update_baseline {
         std::fs::write(&baseline_path, found.iter().map(|f| format!("{f}\n")).collect::<String>())?;

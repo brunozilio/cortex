@@ -1,12 +1,12 @@
-//! A project's `.superfik/mcp.json` servers reach a run once the owner approved them.
+//! A project's `.<command>/mcp.json` servers reach a run once the owner approved them.
 
 use std::sync::{Arc, Mutex};
 
-use domain::{EngineEvent, PromptRequest};
 use agent_engine::NativeEngine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
+use domain::{EngineEvent, PromptRequest};
 
 use crate::plugins::SERVER;
 use crate::{Source, finish, model, start};
@@ -29,11 +29,14 @@ fn a_project_server_reaches_a_run_once_approved() {
         r#"{{"mcpServers": {{"jira": {{"command": "/bin/sh", "args": ["{}"]}}}}}}"#,
         repo.path().join("server.sh").display()
     );
-    std::fs::create_dir_all(repo.path().join(".superfik")).expect("dir");
-    std::fs::write(repo.path().join(".superfik/mcp.json"), config).expect("config");
+    std::fs::create_dir_all(repo.path().join(brand::DIR)).expect("dir");
+    std::fs::write(repo.path().join(concat!(brand::dir!(), "/mcp.json")), config).expect("config");
     assert!(!offered(repo.path()).iter().any(|name| name.starts_with("mcp__jira__")), "not approved yet");
 
-    std::fs::write(repo.path().join(".superfik/settings.local.json"), r#"{"enabledMcpServers": ["jira"]}"#)
-        .expect("approve");
+    std::fs::write(
+        repo.path().join(concat!(brand::dir!(), "/settings.local.json")),
+        r#"{"enabledMcpServers": ["jira"]}"#,
+    )
+    .expect("approve");
     assert!(offered(repo.path()).contains(&"mcp__jira__ping".to_owned()));
 }

@@ -1,6 +1,6 @@
-//! `superfik config`: reading and changing the settings the engine reads,
-//! the user's (`~/.superfik/settings.json`) or, with `--project`, this
-//! project's own (`.superfik/settings.local.json`, never checked in).
+//! `<command> config`: reading and changing the settings the engine reads,
+//! the user's (`~/.<command>/settings.json`) or, with `--project`, this
+//! project's own (`.<command>/settings.local.json`, never checked in).
 //!
 //! It edits files on this computer, like `git config`, and so needs no
 //! backend: a remote server keeps its own settings, changed through its own
@@ -26,9 +26,9 @@ pub enum ConfigAction {
 /// The file `--project` (or not) means.
 pub fn file(cwd: &Path, project: bool) -> Result<PathBuf, String> {
     if project {
-        return Ok(cwd.join(".superfik").join("settings.local.json"));
+        return Ok(cwd.join(brand::DIR).join("settings.local.json"));
     }
-    Ok(std::env::home_dir().ok_or("no home folder")?.join(".superfik").join("settings.json"))
+    Ok(std::env::home_dir().ok_or("no home folder")?.join(brand::DIR).join("settings.json"))
 }
 
 pub fn run(path: &Path, action: ConfigAction) -> Result<String, String> {

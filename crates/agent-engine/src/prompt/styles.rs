@@ -1,4 +1,4 @@
-//! The output styles Superfik ships: how the agent talks while it works.
+//! The output styles the app ships: how the agent talks while it works.
 //! A style replaces the coding guidance only when it says so; its turn
 //! reminder is repeated every turn, where long sessions would forget it.
 

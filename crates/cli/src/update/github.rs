@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use super::Releases;
 
-const REPO: &str = "brunozilio/lite";
-const AGENT: &str = concat!("superfik/", env!("CARGO_PKG_VERSION"));
+const REPO: &str = brand::REPOSITORY;
+const AGENT: &str = concat!(concat!(brand::command!(), "/"), env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug)]
 pub struct GitHub {

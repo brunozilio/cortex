@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
 use domain::provider::ModelProvider;
 use domain::{AskId, Decision, MemoryEdit, ModelOption, PermissionMode, PromptRequest, RunId};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant, reason = "commands are short-lived messages, never stored in bulk")]

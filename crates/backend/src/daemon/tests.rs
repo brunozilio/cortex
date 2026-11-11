@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use domain::{EngineEvent, ModelOption, PromptRequest, RunId, SessionId};
 use agent_engine::fake::FakeEngine;
+use domain::{EngineEvent, ModelOption, PromptRequest, RunId, SessionId};
 use protocol::{Backend, ClientCommand, Envelope, ServerEvent};
 
 use super::*;

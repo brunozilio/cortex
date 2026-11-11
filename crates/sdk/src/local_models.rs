@@ -3,7 +3,7 @@
 //!
 //! These touch only this computer's folder (Apple silicon), so they are
 //! not backend commands; the backend lists what is there on its own
-//! (`ListModels`), so a pulled model shows up in [`crate::Superfik::models`].
+//! (`ListModels`), so a pulled model shows up in [`crate::the app::models`].
 
 use std::path::{Path, PathBuf};
 

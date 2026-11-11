@@ -1,13 +1,13 @@
 //! The loop's turns: tool calls and their results, failures, cancellation,
 //! the output token limit and parallel reads.
 
-use serde_json::json;
-use domain::{EngineEvent, PermissionMode};
 use agent_engine::agent::{Agent, Ending};
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{ModelError, TurnRequest};
 use agent_engine::tools::Workspace;
 use agent_engine::transcript::{Block, Message};
+use domain::{EngineEvent, PermissionMode};
+use serde_json::json;
 
 use crate::{Rig, request, tool_use};
 
@@ -144,11 +144,11 @@ fn output_token_limit_continues_without_reporting_a_truncated_success() {
 
 #[test]
 fn independent_reads_overlap_and_results_keep_the_model_call_order() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use agent_engine::{
         model::ToolSpec,
         tools::{Access, Outcome, Tool},
     };
+    use std::sync::atomic::{AtomicUsize, Ordering};
     struct ConcurrentRead(AtomicUsize);
     impl Tool for ConcurrentRead {
         fn spec(&self) -> ToolSpec {

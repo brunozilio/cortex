@@ -3,18 +3,18 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use serde_json::json;
-use domain::Effort;
-use domain::provider::ProviderKey;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::openai::Responses;
 use agent_engine::model::{Delta, ModelApi, ModelError, TurnRequest};
 use agent_engine::transcript::{Block, Message, StopReason};
+use domain::Effort;
+use domain::provider::ProviderKey;
+use serde_json::json;
 
 fn request() -> TurnRequest {
     TurnRequest {
         model: "gpt-x".into(),
-        system: "You are Superfik's agent.".into(),
+        system: concat!("You are ", brand::name!(), "'s agent.").into(),
         messages: vec![Message::user("Read src/main.rs")],
         tools: Vec::new(),
         effort: Effort::Medium,
@@ -68,7 +68,7 @@ fn the_key_goes_to_the_api() {
     let header = |name: &str| sent[0].headers.iter().find(|(key, _)| key == name).map(|(_, v)| v.clone());
     assert_eq!(sent[0].url, "https://api.openai.com/v1/responses");
     assert_eq!(header("authorization").as_deref(), Some("Bearer sk"));
-    assert!(header("user-agent").is_some_and(|agent| agent.starts_with("superfik/")));
+    assert!(header("user-agent").is_some_and(|agent| agent.starts_with(concat!(brand::command!(), "/"))));
 }
 
 #[test]

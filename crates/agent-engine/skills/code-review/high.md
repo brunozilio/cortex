@@ -76,9 +76,9 @@ that change.
 ### Conventions (instruction files)
 
 Find the instruction files that govern the changed code: the user's
-`~/.superfik/SUPERFIK.md`, the repository root's `SUPERFIK.md` (or
-`.superfik/SUPERFIK.md`), the `AGENTS.md` Superfik also reads,
-`SUPERFIK.local.md`, the rules in `.superfik/rules`, plus any
+`~/{{DIR}}/{{INSTRUCTIONS}}`, the repository root's `{{INSTRUCTIONS}}` (or
+`{{DIR}}/{{INSTRUCTIONS}}`), the `AGENTS.md` {{NAME}} also reads,
+`{{LOCAL_INSTRUCTIONS}}`, the rules in `{{DIR}}/rules`, plus any
 of these files in a directory that is an ancestor of a changed file (a
 directory's file only applies to files at or below it). Read each one that
 exists, then check the diff for clear violations of the rules they state.

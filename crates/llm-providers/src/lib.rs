@@ -10,8 +10,8 @@ pub mod kiro;
 pub mod oauth;
 pub mod request;
 
-use serde::{Deserialize, Serialize};
 use domain::ModelProvider;
+use serde::{Deserialize, Serialize};
 
 pub use oauth::Tokens;
 

@@ -27,9 +27,13 @@ pub fn run(app: &mut App, typed: Option<String>) {
 pub fn permissions(info: &domain::permission_rules::PermissionsInfo) -> String {
     use domain::permission_rules::RuleKind;
     if info.rules.is_empty() && info.added_dirs.is_empty() {
-        return "No permission rules. Add permissions.allow/ask/deny to .superfik/settings.local.json, \
+        return concat!(
+            "No permission rules. Add permissions.allow/ask/deny to ",
+            brand::dir!(),
+            "/settings.local.json, \
                 or answer \"don't ask again\" when the agent asks."
-            .to_owned();
+        )
+        .to_owned();
     }
     let mut text = String::from("Permission rules (deny wins over ask, ask over allow):");
     for (kind, rule) in &info.rules {
@@ -49,7 +53,7 @@ pub fn permissions(info: &domain::permission_rules::PermissionsInfo) -> String {
 /// How `/hooks` reads: each hook under its event.
 pub fn hooks(hooks: &[domain::permission_rules::HookInfo]) -> String {
     if hooks.is_empty() {
-        return "No hooks. Add them under \"hooks\" in .superfik/settings.json.".to_owned();
+        return concat!("No hooks. Add them under \"hooks\" in ", brand::dir!(), "/settings.json.").to_owned();
     }
     let mut text = String::from("Hooks:");
     for hook in hooks {

@@ -1,8 +1,8 @@
 //! The Copilot API's `GET /models`: the models this account may pick, as
 //! the Copilot CLI's picker filters them.
-use serde_json::Value;
 use domain::model::ModelCapabilities;
 use domain::{ModelOption, ModelProvider};
+use serde_json::Value;
 
 /// One catalog entry, or `None` for one the picker hides: a custom model,
 /// a model neither offered in the picker nor enabled by policy, or one

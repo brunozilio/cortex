@@ -3,13 +3,13 @@
 
 use std::time::{Duration, Instant};
 
-use ratatui::crossterm::event::KeyCode;
-use domain::{ChoreAnswer, Rewound, SessionCommand, SessionId};
 use agent_engine::fake::FakeEngine;
+use domain::{ChoreAnswer, Rewound, SessionCommand, SessionId};
+use ratatui::crossterm::event::KeyCode;
 use sdk::{EngineEvent, Model};
 
 use super::app::App;
-use super::tests::{press, screen, superfik, type_text, until};
+use super::tests::{press, screen, sdk, type_text, until};
 use super::transcript::Entry;
 
 #[test]
@@ -21,7 +21,7 @@ fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
         EngineEvent::Completed { duration_ms: 1, cost_usd: None },
     ];
     let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
     type_text(&mut app, "fix the login page");
@@ -49,7 +49,7 @@ fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
 fn a_rewind_cuts_the_chat_before_its_prompt_and_gives_the_prompt_back() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], Vec::new());
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     app.transcript.push(Entry::User("write the notes".into()));
     app.checkpointed(0);
     app.transcript.notice("Written.");

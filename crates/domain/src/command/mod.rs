@@ -122,7 +122,7 @@ impl Command {
         ("skills", "List skills and commands, /skills new <what it does> writes one"),
         ("agents", "List agents, /agents new <what it does> writes one"),
         ("config", "Change the chat's settings"),
-        ("reload", "Reread ~/.superfik and the project: plugins, skills, agents, MCP"),
+        ("reload", concat!("Reread ~/", brand::dir!(), " and the project: plugins, skills, agents, MCP")),
         ("mcp", "List MCP servers, or /mcp approve|deny|login|logout <name>"),
         ("verification", "Judge runs: /verification <criteria>, or off"),
         ("cost", "Show this session's cost (also /usage)"),

@@ -1,4 +1,4 @@
-//! [`NativeEngine`]: Superfik's own engine behind the [`AgentEngine`]
+//! [`NativeEngine`]: the app's own engine behind the [`AgentEngine`]
 //! trait the backend drives.
 //!
 //! - `job`: a run's setup (session, brief, tools, agent, worktree, model).

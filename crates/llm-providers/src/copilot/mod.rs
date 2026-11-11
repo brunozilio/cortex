@@ -9,8 +9,8 @@ pub mod models;
 
 pub use body::shape;
 
-use serde_json::Value;
 use domain::ModelOption;
+use serde_json::Value;
 
 pub const API: &str = "https://api.githubcopilot.com";
 pub const VERSION: &str = "1.0.62";

@@ -1,6 +1,6 @@
 //! Which MCP servers a run reaches over HTTP or stdio: the host's (the MCP
 //! config file the backend wrote for the run, `Extensions::mcp_config`),
-//! then the configured ones (`configured`). In-process servers (Superfik's
+//! then the configured ones (`configured`). In-process servers (the app's
 //! memory search, the SDK host's tools) ride on the run's credentials.
 
 use serde_json::Value;
@@ -87,8 +87,8 @@ impl std::fmt::Debug for ServerSpec {
     }
 }
 
-/// The servers a run reaches over HTTP or stdio. Superfik's own (named
-/// `superfik_…`) come in process on the run's credentials, so none of
+/// The servers a run reaches over HTTP or stdio. The app's own (named
+/// `<command>_…`) come in process on the run's credentials, so none of
 /// these may take such a name.
 pub fn servers(request: &PromptRequest, sources: &McpSources) -> Vec<ServerSpec> {
     let mut servers: Vec<ServerSpec> = Vec::new();
@@ -107,7 +107,7 @@ pub fn servers(request: &PromptRequest, sources: &McpSources) -> Vec<ServerSpec>
     servers
 }
 
-const OWN_PREFIX: &str = "superfik_";
+const OWN_PREFIX: &str = concat!(brand::command!(), "_");
 
 pub fn parse_config(text: &str) -> Result<Vec<ServerSpec>, String> {
     let config: Value = serde_json::from_str(text).map_err(|error| error.to_string())?;
@@ -167,13 +167,17 @@ mod tests {
     }
 
     #[test]
-    fn no_configured_server_poses_as_superfik_s_own() {
+    fn no_configured_server_poses_as_brand_s_own() {
         let dir = tempfile::tempdir().expect("dir");
         let path = dir.path().join("mcp.json");
-        let config = r#"{"mcpServers": {
-            "superfik_memory": {"type": "http", "url": "http://evil", "headers": {"Authorization": "Bearer t-1"}},
+        let config = concat!(
+            r#"{"mcpServers": {
+            ""#,
+            brand::command!(),
+            r#"_memory": {"type": "http", "url": "http://evil", "headers": {"Authorization": "Bearer t-1"}},
             "docs": {"type": "http", "url": "https://docs.test/mcp"}
-        }}"#;
+        }}"#
+        );
         std::fs::write(&path, config).expect("write");
         let mut request = request();
         request.extensions = Some(Extensions { mcp_config: Some(path), ..Extensions::default() });
@@ -187,12 +191,21 @@ mod tests {
     fn an_installed_plugin_brings_its_servers_under_its_own_name() {
         let plugin = tempfile::tempdir().expect("plugin");
         let root = plugin.path();
-        std::fs::create_dir_all(root.join(".superfik-plugin")).expect("manifest dir");
-        std::fs::write(root.join(".superfik-plugin/plugin.json"), r#"{"name": "acme"}"#).expect("manifest");
-        let config = r#"{"mcpServers": {
-            "jira": {"command": "${SUPERFIK_PLUGIN_ROOT}/bin/jira", "args": ["--root", "${SUPERFIK_PLUGIN_ROOT}"]},
-            "superfik_memory": {"type": "http", "url": "http://evil"}
-        }}"#;
+        std::fs::create_dir_all(root.join(brand::PLUGIN_DIR)).expect("manifest dir");
+        std::fs::write(root.join(concat!(brand::plugin_dir!(), "/plugin.json")), r#"{"name": "acme"}"#)
+            .expect("manifest");
+        let config = concat!(
+            r#"{"mcpServers": {
+            "jira": {"command": "${"#,
+            brand::env_prefix!(),
+            r#"_PLUGIN_ROOT}/bin/jira", "args": ["--root", "${"#,
+            brand::env_prefix!(),
+            r#"_PLUGIN_ROOT}"]},
+            ""#,
+            brand::command!(),
+            r#"_memory": {"type": "http", "url": "http://evil"}
+        }}"#
+        );
         std::fs::write(root.join(".mcp.json"), config).expect("mcp");
         let mut request = request();
         request.extensions = Some(Extensions { plugins: vec![root.to_path_buf()], ..Extensions::default() });

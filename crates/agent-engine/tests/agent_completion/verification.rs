@@ -3,8 +3,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use serde_json::json;
-use domain::{AgentStatus, Criteria, Effort, EngineEvent, PermissionMode, Verdict};
 use agent_engine::{
     agent::Agent,
     control::Control,
@@ -13,6 +11,8 @@ use agent_engine::{
     tools::{self, Workspace, subagent::AgentTool},
     transcript::Message,
 };
+use domain::{AgentStatus, Criteria, Effort, EngineEvent, PermissionMode, Verdict};
+use serde_json::json;
 
 use super::{call, done};
 

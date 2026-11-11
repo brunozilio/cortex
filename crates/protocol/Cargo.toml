@@ -1,6 +1,6 @@
 [package]
 name = "protocol"
-description = "Transport-agnostic messages between a Superfik client and backend (local today, remote server later)."
+description = "Transport-agnostic messages between a client and backend (local today, remote server later)."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

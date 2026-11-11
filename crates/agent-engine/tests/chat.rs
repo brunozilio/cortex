@@ -3,12 +3,12 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use serde_json::{Value, json};
-use domain::Effort;
 use agent_engine::model::chat::{Chat, Endpoint, Endpoints};
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::{Delta, ModelApi, ModelError, ToolSpec, TurnRequest};
 use agent_engine::transcript::{Block, Message, StopReason};
+use domain::Effort;
+use serde_json::{Value, json};
 
 struct Fixed(Result<Endpoint, ModelError>);
 
@@ -25,7 +25,7 @@ fn served() -> Arc<Fixed> {
 fn request() -> TurnRequest {
     TurnRequest {
         model: "mlx-community/Qwen3-8B".into(),
-        system: "You are Superfik's agent.".into(),
+        system: concat!("You are ", brand::name!(), "'s agent.").into(),
         messages: vec![Message::user("Read src/main.rs")],
         tools: vec![ToolSpec {
             name: "Read".into(),
@@ -118,7 +118,7 @@ fn asks_the_served_model_with_the_whole_conversation_and_the_tools() {
     assert_eq!(
         body["messages"],
         json!([
-            {"role": "system", "content": "You are Superfik's agent."},
+            {"role": "system", "content": concat!("You are ", brand::name!(), "'s agent.")},
             {"role": "user", "content": "Read src/main.rs"},
             {"role": "assistant", "content": "Reading.", "tool_calls": [
                 {"id": "call_0", "type": "function", "function": {"name": "Read", "arguments": "{\"file_path\":\"a\"}"}}

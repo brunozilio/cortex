@@ -1,10 +1,10 @@
 //! The conversations had in each folder, newest first, for `/resume` and
-//! `superfik --resume`: their session, title and when they were last used.
+//! `<command> --resume`: their session, title and when they were last used.
 
 use std::path::Path;
 
-use serde_json::{Value, json};
 use sdk::SessionId;
+use serde_json::{Value, json};
 
 /// Conversations kept per folder.
 const KEPT: usize = 30;

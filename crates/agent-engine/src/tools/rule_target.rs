@@ -7,8 +7,8 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use serde_json::Value;
 use domain::permission_rules::{PermissionRules, RuleKind, Target};
+use serde_json::Value;
 
 use super::Workspace;
 
@@ -111,8 +111,8 @@ fn resolved(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
     use domain::permission_rules::{PermissionRules, RuleKind};
+    use serde_json::json;
 
     use super::*;
 

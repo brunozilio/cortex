@@ -1,9 +1,9 @@
 //! Where a ChatGPT sign-in finds the account its requests name.
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde_json::{Value, json};
-use domain::ModelProvider;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::oauth;
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use domain::ModelProvider;
+use serde_json::{Value, json};
 
 fn claims(claims: Value) -> String {
     format!("e30.{}.sig", URL_SAFE_NO_PAD.encode(claims.to_string()))

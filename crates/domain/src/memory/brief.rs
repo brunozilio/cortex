@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{Memory, MemoryEdit, MemoryId, MemoryKind};
 
-pub const MEMORY_SERVER: &str = "superfik_memory";
+pub const MEMORY_SERVER: &str = concat!(brand::command!(), "_memory");
 pub const MEMORY_SEARCH_TOOL: &str = "memory_search";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,5 +1,5 @@
 //! Signing in to remote MCP servers (`/mcp login <name>`): find the
-//! server's authorization server, register Superfik with it, send the
+//! server's authorization server, register the app with it, send the
 //! person through the browser (PKCE, a loopback redirect), and keep the
 //! tokens in the secrets store, by server URL. Runs get a fresh access token
 //! through [`McpTokenSource`], refreshed when stale. The rules are
@@ -7,11 +7,11 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use serde_json::{Value, json};
+use agent_engine::model::http::Http;
 use domain::credentials::{McpSignIns, McpTokenSource};
 use domain::mcp_oauth::{self, AuthServer, Authorize, McpTokens};
 use domain::{Principal, SecretId};
-use agent_engine::model::http::Http;
+use serde_json::{Value, json};
 
 use crate::providers::redirect::{Loopback, pkce};
 use crate::secrets::SecretStore;
@@ -188,14 +188,15 @@ impl McpAuth {
         Ok(auth)
     }
 
-    /// A client id for Superfik at `auth` (dynamic registration).
+    /// A client id for the app at `auth` (dynamic registration).
     fn register(&self, auth: &AuthServer, redirect: &str) -> Result<(String, Option<String>), String> {
-        let endpoint = auth
-            .registration_endpoint
-            .as_deref()
-            .ok_or("this server does not let applications register themselves, so Superfik cannot sign in")?;
+        let endpoint = auth.registration_endpoint.as_deref().ok_or(concat!(
+            "this server does not let applications register themselves, so ",
+            brand::name!(),
+            " cannot sign in"
+        ))?;
         let body = json!({
-            "client_name": "Superfik",
+            "client_name": brand::NAME,
             "redirect_uris": [redirect],
             "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"],

@@ -1,4 +1,4 @@
-//! Superfik's native agent engine: the agent loop runs in the backend's own
+//! The app's native agent engine: the agent loop runs in the backend's own
 //! process, calling the model providers' APIs over HTTP and running its
 //! tools as Rust functions. No other agent program is involved.
 //!

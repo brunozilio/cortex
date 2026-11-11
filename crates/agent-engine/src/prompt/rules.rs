@@ -15,12 +15,12 @@ pub struct Rule {
 pub fn discover(cwd: &Path, home: Option<&Path>) -> Vec<Rule> {
     let mut roots = Vec::new();
     if let Some(home) = home {
-        roots.push((home.join(".superfik/rules"), None));
+        roots.push((home.join(concat!(brand::dir!(), "/rules")), None));
     }
     let mut ancestors: Vec<_> = cwd.ancestors().collect();
     ancestors.reverse();
     for directory in ancestors {
-        roots.push((directory.join(".superfik/rules"), Some(directory.to_path_buf())));
+        roots.push((directory.join(concat!(brand::dir!(), "/rules")), Some(directory.to_path_buf())));
     }
     let mut rules = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -85,7 +85,7 @@ mod tests {
     #[test]
     fn loads_unconditional_and_path_scoped_rules_recursively() {
         let dir = tempfile::tempdir().expect("valid test fixture");
-        let rules = dir.path().join(".superfik/rules/nested");
+        let rules = dir.path().join(concat!(brand::dir!(), "/rules/nested"));
         std::fs::create_dir_all(&rules).expect("valid test fixture");
         std::fs::write(
             rules.join("rust.md"),
@@ -105,14 +105,15 @@ mod additional_tests {
     #[test]
     fn yaml_brace_globs_and_nested_instructions_remain_scoped() {
         let repo = tempfile::tempdir().expect("repo");
-        std::fs::create_dir_all(repo.path().join(".superfik/rules")).expect("rules");
+        std::fs::create_dir_all(repo.path().join(concat!(brand::dir!(), "/rules"))).expect("rules");
         std::fs::create_dir_all(repo.path().join("src")).expect("src");
         std::fs::write(
-            repo.path().join(".superfik/rules/web.md"),
+            repo.path().join(concat!(brand::dir!(), "/rules/web.md")),
             "---\npaths:\n  - 'src/**/*.{ts,tsx}'\n  - 'lib/**/*.ts'\n---\nWeb rules",
         )
         .expect("rule");
-        std::fs::write(repo.path().join("src/SUPERFIK.md"), "Nested source instructions").expect("nested");
+        std::fs::write(repo.path().join(concat!("src/", brand::instructions!())), "Nested source instructions")
+            .expect("nested");
         let rules = discover(repo.path(), None);
         assert_eq!(rules.len(), 2);
         let web = rules.iter().find(|r| r.text == "Web rules").expect("web");
@@ -125,9 +126,9 @@ mod additional_tests {
     #[test]
     fn invalid_rule_metadata_fails_closed() {
         let repo = tempfile::tempdir().expect("repo");
-        std::fs::create_dir_all(repo.path().join(".superfik/rules")).expect("rules");
+        std::fs::create_dir_all(repo.path().join(concat!(brand::dir!(), "/rules"))).expect("rules");
         std::fs::write(
-            repo.path().join(".superfik/rules/invalid.md"),
+            repo.path().join(concat!(brand::dir!(), "/rules/invalid.md")),
             "---\npaths: [unterminated\n---\nDo not broaden this rule.",
         )
         .expect("rule");
@@ -156,10 +157,13 @@ mod regression_tests {
     #[test]
     fn ancestor_rules_use_the_declaring_project_and_normalize_tool_paths() {
         let repo = tempfile::tempdir().expect("repo");
-        std::fs::create_dir_all(repo.path().join(".superfik/rules")).expect("rules");
+        std::fs::create_dir_all(repo.path().join(concat!(brand::dir!(), "/rules"))).expect("rules");
         std::fs::create_dir_all(repo.path().join("src")).expect("src");
-        std::fs::write(repo.path().join(".superfik/rules/source.md"), "---\npaths: ['src/**']\n---\nSource rule")
-            .expect("rule");
+        std::fs::write(
+            repo.path().join(concat!(brand::dir!(), "/rules/source.md")),
+            "---\npaths: ['src/**']\n---\nSource rule",
+        )
+        .expect("rule");
         let nested = repo.path().join("src");
         let rules = discover(&nested, None);
         let rule = rules.iter().find(|rule| rule.text == "Source rule").expect("ancestor rule");
@@ -194,11 +198,14 @@ mod symlink_tests {
     #[test]
     fn symlink_parent_of_new_file_receives_target_rules() {
         let repo = tempfile::tempdir().expect("repo");
-        std::fs::create_dir_all(repo.path().join(".superfik/rules")).expect("rules");
+        std::fs::create_dir_all(repo.path().join(concat!(brand::dir!(), "/rules"))).expect("rules");
         std::fs::create_dir_all(repo.path().join("src")).expect("src");
         std::os::unix::fs::symlink(repo.path().join("src"), repo.path().join("alias")).expect("alias");
-        std::fs::write(repo.path().join(".superfik/rules/source.md"), "---\npaths: ['src/**']\n---\nSource rule")
-            .expect("rule");
+        std::fs::write(
+            repo.path().join(concat!(brand::dir!(), "/rules/source.md")),
+            "---\npaths: ['src/**']\n---\nSource rule",
+        )
+        .expect("rule");
         let rule = discover(repo.path(), None).remove(0);
         assert!(rule.applies(repo.path(), Some(&repo.path().join("alias/new.rs"))).expect("real path rule"));
     }

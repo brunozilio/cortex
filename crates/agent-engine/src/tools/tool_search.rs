@@ -74,8 +74,10 @@ impl Deferred {
 /// The turn's tools, with the MCP ones left out when there are many; the
 /// left-out ones and the `ToolSearch` that loads them.
 pub fn defer(specs: Vec<ToolSpec>) -> (Vec<ToolSpec>, Option<Deferred>) {
-    // Superfik's own servers (its memory) always stay.
-    let deferrable = |spec: &ToolSpec| spec.name.starts_with("mcp__") && !spec.name.starts_with("mcp__superfik_");
+    // The app's own servers (its memory) always stay.
+    let deferrable = |spec: &ToolSpec| {
+        spec.name.starts_with("mcp__") && !spec.name.starts_with(concat!("mcp__", brand::command!(), "_"))
+    };
     if specs.iter().filter(|spec| deferrable(spec)).count() <= DEFER_OVER {
         return (specs, None);
     }

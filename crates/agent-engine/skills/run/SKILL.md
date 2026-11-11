@@ -14,21 +14,21 @@ window.
 A project skill that launches this app is the repo's verified path -
 its author already cold-started it and committed what worked: the
 exact install line, the env vars, the patches, the driver. Use it
-instead of rediscovering. The repo's instruction files (`SUPERFIK.md`,
+instead of rediscovering. The repo's instruction files (`{{INSTRUCTIONS}}`,
 also `AGENTS.md`) often hold the run command too.
 
-Project skills live in `.superfik/skills/`, from the working directory up
+Project skills live in `{{DIR}}/skills/`, from the working directory up
 to the repo root:
 
 ```bash
 d=$PWD; while :; do
-  grep -Hm1 '^description:' "$d"/.superfik/skills/*/SKILL.md 2>/dev/null
+  grep -Hm1 '^description:' "$d"/{{DIR}}/skills/*/SKILL.md 2>/dev/null
   [ -e "$d/.git" ] || [ "$d" = / ] && break
   d=$(dirname "$d")
 done
 ```
 
-On Windows without a POSIX shell, Glob for `**/.superfik/skills/*/SKILL.md`
+On Windows without a POSIX shell, Glob for `**/{{DIR}}/skills/*/SKILL.md`
 and Grep their `description:` lines.
 
 The user may be on macOS, Windows or Linux, and the app runs on their
@@ -83,5 +83,5 @@ a point where a user would see something:
 If the fallback pattern didn't work out of the box - you had to
 install packages, set env vars, patch config, or write a driver -
 recommend in your report capturing that work as a project skill
-(`.superfik/skills/run-<unit>/SKILL.md`; the skill-creator skill can
+(`{{DIR}}/skills/run-<unit>/SKILL.md`; the skill-creator skill can
 write it). If it just worked, don't.

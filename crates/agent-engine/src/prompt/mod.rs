@@ -1,6 +1,6 @@
-//! The native engine's system prompt (ADR 0015): Superfik's own text
+//! The native engine's system prompt (ADR 0015): the app's own text
 //! ([`text`]), the sections for the tools the run was granted, the
-//! instruction files (`SUPERFIK.md` first) and where the agent runs.
+//! instruction files (`<COMMAND>.md` first) and where the agent runs.
 
 mod git;
 mod instruction_files;
@@ -14,8 +14,8 @@ pub const CONTRACT_VERSION: &str = "agent-engine/1";
 
 use std::path::{Path, PathBuf};
 
-pub use git::{GitSnapshot, snapshot};
 use domain::PromptRequest;
+pub use git::{GitSnapshot, snapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Scope {
@@ -64,7 +64,7 @@ impl Environment {
 
 pub fn system(environment: &Environment) -> String {
     let mut sections = vec![text::ROLE, text::HARNESS];
-    if environment.has("mcp__superfik_memory__") {
+    if environment.has(concat!("mcp__", brand::command!(), "_memory__")) {
         sections.push(text::MEMORY);
     }
     sections.push(text::CONTEXT);

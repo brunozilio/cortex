@@ -2,9 +2,9 @@
 //! kept in the project's `settings.local.json`, else remembered for the
 //! session), or no, with what to do instead.
 
-use serde_json::Value;
 use domain::permission_rules::{self, RuleKind};
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
+use serde_json::Value;
 
 use super::Agent;
 use crate::tools::{Access, Outcome, Tool};
@@ -20,7 +20,10 @@ impl Agent<'_> {
     ) -> Outcome {
         let name = tool.spec().name;
         let rule = permission_rules::suggest(&name, subject, access == Access::ReadsOutside);
-        self.notify("permission_prompt", &format!("Superfik needs your permission to use {name}"));
+        self.notify(
+            "permission_prompt",
+            &format!("{brand_name} needs your permission to use {name}", brand_name = brand::NAME),
+        );
         let ask = AskId(format!("ask-{}-{id}", uuid::Uuid::new_v4()));
         let answer = self.control.open(ask.clone());
         let kind = AskKind::Permission {

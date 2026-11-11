@@ -2,7 +2,7 @@
 //! `memory_search` tool over MCP and the edits file. Ignored by default (it
 //! costs money and needs a connected provider); run with
 //! `cargo test -p backend --test live_memory -- --ignored --nocapture`.
-//! `SUPERFIK_LIVE_MODEL` picks the model (cheapest by default).
+//! `<COMMAND>_LIVE_MODEL` picks the model (cheapest by default).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -78,7 +78,6 @@ fn an_agent_searches_and_writes_project_memory() {
     assert!(reply.to_uppercase().contains("PERSIMMON"), "reply: {reply}");
     assert!(learned.iter().any(|m| m.text.to_lowercase().contains("tab")), "{learned:?}");
     let home = std::env::var("HOME").unwrap_or_default();
-    let native =
-        Path::new(&home).join(".claude/projects").join(backend::project_key(project.path())).join("memory");
+    let native = Path::new(&home).join(".claude/projects").join(backend::project_key(project.path())).join("memory");
     assert!(!native.exists(), "Claude Code wrote its own memory at {}", native.display());
 }

@@ -1,8 +1,8 @@
 //! Kiro's `ListAvailableModels`: the models this account may pick, a page
 //! at a time, each with its token limits.
-use serde_json::{Value, json};
 use domain::model::ModelCapabilities;
 use domain::{ModelOption, ModelProvider};
+use serde_json::{Value, json};
 
 /// The POST that asks for a catalog page: where, with which headers and
 /// body.

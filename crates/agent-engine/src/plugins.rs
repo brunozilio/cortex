@@ -1,17 +1,17 @@
-//! Superfik plugins (ADR 0019): a folder with `.superfik-plugin/plugin.json`,
+//! The app plugins (ADR 0019): a folder with `.<command>-plugin/plugin.json`,
 //! `skills/`, `agents/`, `commands/`, `hooks/hooks.json` and `.mcp.json`.
 //! They come from the backend (`Extensions::plugins`), then from the
-//! folders a person puts in `~/.superfik/plugins/`; on a clash of names the
-//! first wins. `${SUPERFIK_PLUGIN_ROOT}` in a plugin's hooks and MCP servers
+//! folders a person puts in `~/.<command>/plugins/`; on a clash of names the
+//! first wins. `${<COMMAND>_PLUGIN_ROOT}` in a plugin's hooks and MCP servers
 //! is its folder.
 
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
 use domain::PromptRequest;
+use serde_json::Value;
 
-const MANIFEST_DIR: &str = ".superfik-plugin";
-const ROOT_VARIABLE: &str = "${SUPERFIK_PLUGIN_ROOT}";
+const MANIFEST_DIR: &str = brand::PLUGIN_DIR;
+const ROOT_VARIABLE: &str = concat!("${", brand::env_prefix!(), "_PLUGIN_ROOT}");
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Plugin {
@@ -23,7 +23,7 @@ pub struct Plugin {
 pub fn found(request: &PromptRequest, home: Option<&Path>) -> Vec<Plugin> {
     let hosted = request.extensions.iter().flat_map(|extensions| &extensions.plugins).map(|root| Plugin::at(root));
     let own = home
-        .map(|home| subdirs(&home.join(".superfik").join("plugins")))
+        .map(|home| subdirs(&home.join(brand::DIR).join("plugins")))
         .unwrap_or_default()
         .into_iter()
         .map(|root| Plugin::at(&root));
@@ -148,15 +148,19 @@ mod tests {
     #[test]
     fn a_folder_in_the_user_s_plugins_is_a_plugin_named_by_its_manifest_or_folder() {
         let home = tempfile::tempdir().expect("home");
-        let plugins = home.path().join(".superfik/plugins");
-        std::fs::create_dir_all(plugins.join("acme-tools/.superfik-plugin")).expect("acme");
-        std::fs::write(plugins.join("acme-tools/.superfik-plugin/plugin.json"), r#"{"name": "acme"}"#)
-            .expect("manifest");
+        let plugins = home.path().join(concat!(brand::dir!(), "/plugins"));
+        std::fs::create_dir_all(plugins.join(concat!("acme-tools/", brand::plugin_dir!()))).expect("acme");
+        std::fs::write(
+            plugins.join(concat!("acme-tools/", brand::plugin_dir!(), "/plugin.json")),
+            r#"{"name": "acme"}"#,
+        )
+        .expect("manifest");
         std::fs::create_dir_all(plugins.join("beta")).expect("beta");
         std::fs::write(plugins.join("notes.txt"), "not a plugin").expect("file");
         let hosted = tempfile::tempdir().expect("hosted");
-        std::fs::create_dir_all(hosted.path().join(".superfik-plugin")).expect("dir");
-        std::fs::write(hosted.path().join(".superfik-plugin/plugin.json"), r#"{"name": "beta"}"#).expect("manifest");
+        std::fs::create_dir_all(hosted.path().join(brand::PLUGIN_DIR)).expect("dir");
+        std::fs::write(hosted.path().join(concat!(brand::plugin_dir!(), "/plugin.json")), r#"{"name": "beta"}"#)
+            .expect("manifest");
         let mut request = PromptRequest::plain("/repo".into(), "", ModelOption::new("", ""));
         request.extensions = Some(Extensions { plugins: vec![hosted.path().to_path_buf()], ..Extensions::default() });
 
@@ -182,8 +186,12 @@ mod tests {
         );
         write(own.path().join(".lsp.json"), r#"{"zls": {"command": "zls", "extensionToLanguage": {".zig": "zig"}}}"#);
         write(
-            manifest.path().join(".superfik-plugin/plugin.json"),
-            r#"{"name": "m", "lspServers": {"gopls": {"args": ["${SUPERFIK_PLUGIN_ROOT}/x"]}}}"#,
+            manifest.path().join(concat!(brand::plugin_dir!(), "/plugin.json")),
+            concat!(
+                r#"{"name": "m", "lspServers": {"gopls": {"args": ["${"#,
+                brand::env_prefix!(),
+                r#"_PLUGIN_ROOT}/x"]}}}"#
+            ),
         );
         write(broken.path().join(".lsp.json"), r#"{"gopls": {"args": "not a list"}}"#);
         let plugins = [Plugin::at(own.path()), Plugin::at(manifest.path()), Plugin::at(broken.path())];

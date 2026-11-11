@@ -2,8 +2,8 @@
 //! worktree and prompt, the run in a conversation of their own, and the
 //! report that comes back.
 
-use serde_json::{Value, json};
 use domain::{AgentStatus, EngineEvent};
+use serde_json::{Value, json};
 
 use super::conversations::{Conversations, Kept, Resume};
 use super::{Agent, Ending, MAX_TURNS};

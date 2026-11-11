@@ -7,8 +7,8 @@ use std::path::PathBuf;
 #[cfg(any(test, feature = "test-support"))]
 use std::sync::Mutex;
 
-use sha2::{Digest, Sha256};
 use domain::{Principal, PromptRequest, SessionId};
+use sha2::{Digest, Sha256};
 
 use crate::checkpoints::Checkpoint;
 use crate::transcript::Message;

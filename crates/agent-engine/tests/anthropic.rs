@@ -3,18 +3,18 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use serde_json::json;
-use domain::Effort;
-use domain::provider::ProviderKey;
 use agent_engine::model::anthropic::Messages;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::{Delta, ModelApi, ModelError, TurnRequest};
 use agent_engine::transcript::{Block, Message, StopReason};
+use domain::Effort;
+use domain::provider::ProviderKey;
+use serde_json::json;
 
 fn request() -> TurnRequest {
     TurnRequest {
         model: "claude-opus-5-5".into(),
-        system: "You are Superfik's agent.".into(),
+        system: concat!("You are ", brand::name!(), "'s agent.").into(),
         messages: vec![Message::user("Read src/main.rs")],
         tools: Vec::new(),
         effort: Effort::High,
@@ -73,7 +73,7 @@ fn sends_the_key_and_names_itself() {
     assert_eq!(sent[0].url, "https://api.anthropic.com/v1/messages");
     assert_eq!(header(0, "x-api-key").as_deref(), Some("sk-test"));
     assert_eq!(header(0, "authorization"), None);
-    assert!(header(0, "user-agent").is_some_and(|agent| agent.starts_with("superfik/")));
+    assert!(header(0, "user-agent").is_some_and(|agent| agent.starts_with(concat!(brand::command!(), "/"))));
     assert!(sent.iter().all(|request| !request.headers.iter().any(|(key, _)| key == "anthropic-beta")));
 }
 

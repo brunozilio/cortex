@@ -4,12 +4,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::Receiver;
-use backend::{Backend, InMemoryStore, LocalBackend, LocalServices, Memories, Wake};
-use domain::{
-    AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, Principal, PromptRequest, RunId, UserId,
-};
 use agent_engine::fake::FakeEngine;
+use backend::{Backend, InMemoryStore, LocalBackend, LocalServices, Memories, Wake};
+use crossbeam_channel::Receiver;
+use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, Principal, PromptRequest, RunId, UserId};
 use protocol::{ClientCommand, Envelope, ServerEvent};
 
 /// A host folder with one skill and one agent, as the SDK would add.
@@ -149,11 +147,8 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
     let (backend, woke) = backend_with(engine.clone(), true);
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().to_path_buf();
-    let fact = domain::MemoryEdit::Remember {
-        kind: domain::MemoryKind::Semantic,
-        text: "Uses wgpu".into(),
-        tags: vec![],
-    };
+    let fact =
+        domain::MemoryEdit::Remember { kind: domain::MemoryKind::Semantic, text: "Uses wgpu".into(), tags: vec![] };
     send(&backend, ClientCommand::EditMemory { path: path.clone(), edits: vec![fact] });
     collect(&backend, &woke, |event| matches!(event, ServerEvent::Memory { .. }));
 

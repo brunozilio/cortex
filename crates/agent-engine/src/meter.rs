@@ -1,10 +1,10 @@
 //! Every successful provider call is metered, including compaction and children.
 use crate::RunGate;
 use crate::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
 use domain::billing::{ModelUsage, PRICE_DATE, rates};
 use domain::{EngineEvent, ModelProvider};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
 pub struct Ledger {

@@ -12,13 +12,13 @@ mod turns;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-use domain::{Effort, EngineEvent, PermissionMode};
 use agent_engine::agent::{Agent, Ending};
 use agent_engine::control::Control;
 use agent_engine::model::TurnRequest;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::tools::{self, Workspace};
 use agent_engine::transcript::{Block, Message};
+use domain::{Effort, EngineEvent, PermissionMode};
 
 fn request() -> TurnRequest {
     TurnRequest {

@@ -1,9 +1,9 @@
-//! `superfik mcp`: the MCP servers a session in this folder can use, and
+//! `<command> mcp`: the MCP servers a session in this folder can use, and
 //! the owner's say over them. Presentation only; the rules are
 //! `domain::mcp_config`'s and the files the backend's.
 
 use clap::Subcommand;
-use sdk::{McpOrigin, McpServerInfo, McpState, Superfik};
+use sdk::{McpOrigin, McpServerInfo, McpState, Sdk};
 
 #[derive(Debug, Subcommand)]
 pub enum McpAction {
@@ -39,24 +39,24 @@ pub enum McpAction {
     Logout { name: String },
 }
 
-pub fn run(superfik: &Superfik, cwd: &std::path::Path, action: McpAction) -> Result<(), String> {
+pub fn run(sdk: &Sdk, cwd: &std::path::Path, action: McpAction) -> Result<(), String> {
     let servers = match action {
-        McpAction::List => superfik.mcp_servers(cwd),
+        McpAction::List => sdk.mcp_servers(cwd),
         McpAction::Add { name, target, args, env, headers, transport } => {
             let mut server = domain::mcp_config::server_from(&target, &args, &env, &headers);
             if transport == "sse" && server.get("url").is_some() {
                 server["type"] = "sse".into();
             }
-            superfik.add_mcp_server(cwd, &name, server)
+            sdk.add_mcp_server(cwd, &name, server)
         }
-        McpAction::Remove { name } => superfik.remove_mcp_server(cwd, &name),
-        McpAction::Approve { name } => superfik.approve_mcp_server(cwd, &name, true),
-        McpAction::Deny { name } => superfik.approve_mcp_server(cwd, &name, false),
-        McpAction::Login { name } => superfik.sign_in_mcp_server(cwd, &name, |url| {
+        McpAction::Remove { name } => sdk.remove_mcp_server(cwd, &name),
+        McpAction::Approve { name } => sdk.approve_mcp_server(cwd, &name, true),
+        McpAction::Deny { name } => sdk.approve_mcp_server(cwd, &name, false),
+        McpAction::Login { name } => sdk.sign_in_mcp_server(cwd, &name, |url| {
             eprintln!("Opening the sign-in page: {url}");
             crate::login::open(url);
         }),
-        McpAction::Logout { name } => superfik.sign_out_mcp_server(cwd, &name),
+        McpAction::Logout { name } => sdk.sign_out_mcp_server(cwd, &name),
     }
     .map_err(|error| error.to_string())?;
     print!("{}", render(&servers));
@@ -66,8 +66,12 @@ pub fn run(superfik: &Superfik, cwd: &std::path::Path, action: McpAction) -> Res
 /// The servers as a table, and how to approve the ones waiting.
 pub fn render(servers: &[McpServerInfo]) -> String {
     if servers.is_empty() {
-        return "No MCP servers. Add one with `superfik mcp add <name> <url|command>`, or a project's .mcp.json.\n"
-            .into();
+        return concat!(
+            "No MCP servers. Add one with `",
+            brand::command!(),
+            " mcp add <name> <url|command>`, or a project's .mcp.json.\n"
+        )
+        .into();
     }
     let width = servers.iter().map(|server| server.name.len()).max().unwrap_or(0);
     let mut out = String::new();
@@ -88,7 +92,11 @@ pub fn render(servers: &[McpServerInfo]) -> String {
     let waiting: Vec<&str> =
         servers.iter().filter(|server| server.state == McpState::Pending).map(|server| server.name.as_str()).collect();
     if !waiting.is_empty() {
-        out.push_str(&format!("\nApprove with `superfik mcp approve <name>`: {}\n", waiting.join(", ")));
+        out.push_str(&format!(
+            "\nApprove with `{brand_command} mcp approve <name>`: {}\n",
+            waiting.join(", "),
+            brand_command = brand::COMMAND
+        ));
     }
     out
 }
@@ -116,9 +124,13 @@ mod tests {
         ]);
         assert_eq!(
             shown,
-            "jira            project        waiting for approval  jira-mcp\n\
+            concat!(
+                "jira            project        waiting for approval  jira-mcp\n\
              plugin_acme_dd  plugin acme    ready                 dd-mcp\n\
-             \nApprove with `superfik mcp approve <name>`: jira\n"
+             \nApprove with `",
+                brand::command!(),
+                " mcp approve <name>`: jira\n"
+            )
         );
         assert!(render(&[]).starts_with("No MCP servers."));
     }

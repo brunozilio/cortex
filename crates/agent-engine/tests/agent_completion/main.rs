@@ -7,7 +7,6 @@ mod verification;
 
 use std::sync::Arc;
 
-use domain::{Effort, EngineEvent, PermissionMode};
 use agent_engine::{
     agent::Agent,
     control::Control,
@@ -20,6 +19,7 @@ use agent_engine::{
     },
     transcript::{Block, Message},
 };
+use domain::{Effort, EngineEvent, PermissionMode};
 fn call(id: &str, name: &str, input: serde_json::Value) -> Block {
     Block::ToolUse { id: id.into(), name: name.into(), input }
 }

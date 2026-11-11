@@ -6,9 +6,9 @@ use base64::{
     engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
 };
 use chrono::{DateTime, Duration, Utc};
+use domain::ModelProvider;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use domain::ModelProvider;
 
 pub const OPENAI_CLIENT: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 pub const CLAUDE_CLIENT: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";

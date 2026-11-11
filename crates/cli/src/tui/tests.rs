@@ -3,24 +3,24 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use agent_engine::fake::FakeEngine;
+use backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
+use domain::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId, ToolCall};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
-use domain::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId, ToolCall};
-use agent_engine::fake::FakeEngine;
-use sdk::{Decision, EngineEvent, Model, PermissionMode, Superfik};
+use sdk::{Decision, EngineEvent, Model, PermissionMode, Sdk};
 
 use super::app::App;
 use super::{keys, view};
 
-pub(super) fn superfik(engine: &FakeEngine, data: &std::path::Path) -> Superfik {
+pub(super) fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
     services.memory_tool = false;
     let secrets = Arc::new(InMemorySecretStore::default());
     services.providers = services.providers.with_secrets(secrets);
-    Superfik::builder().data_dir(data).services(services).build().expect("superfik")
+    Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
 }
 
 pub(super) fn until(app: &mut App, done: impl Fn(&App) -> bool) {
@@ -71,7 +71,7 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
     ];
     let model = Model::new("anthropic:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(60));
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     assert!(screen(&app).contains("Scripted · edits"), "{}", screen(&app));
 
@@ -96,7 +96,7 @@ fn shift_tab_and_commands_change_the_chat_without_the_agent() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("anthropic:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
     until(&mut app, |app| app.session.is_some());
     press(&mut app, KeyCode::BackTab);
     assert_eq!(app.mode(), PermissionMode::AcceptEdits);
@@ -149,7 +149,7 @@ fn preview() {
     ];
     let model = Model::new("anthropic:claude-opus-5-5", "Opus 5.5");
     let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(5));
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "make the port configurable");
     press(&mut app, KeyCode::Enter);
@@ -171,7 +171,7 @@ fn a_dropped_image_is_attached_to_the_prompt_that_names_it() {
     let model = Model::new("anthropic:scripted", "Scripted");
     let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![model], done);
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "what is");
     keys::paste(&mut app, "'shot one.png'");
@@ -196,7 +196,7 @@ fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() 
     script.push(EngineEvent::Completed { duration_ms: 1, cost_usd: None });
     let model = Model::new("anthropic:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(40));
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
     type_text(&mut app, "/btw too early?");
@@ -239,7 +239,7 @@ fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
     std::fs::write(repo.path().join("new.txt"), "new\n").expect("new");
     let model = Model::new("anthropic:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
-    let mut app = App::new(superfik(&engine, data.path()), repo.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), repo.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let loaded = |app: &App| app.diffs.as_ref().is_some_and(|view| !view.loading());
 
@@ -258,7 +258,7 @@ fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
     until(&mut app, loaded);
     assert!(screen(&app).contains("No staged changes."), "{}", screen(&app));
     press(&mut app, KeyCode::Char('q'));
-    assert!(app.diffs.is_none() && screen(&app).contains("Superfik Lite"), "{}", screen(&app));
+    assert!(app.diffs.is_none() && screen(&app).contains(brand::NAME), "{}", screen(&app));
     assert!(engine.requests().is_empty(), "nothing reached the agent");
 }
 
@@ -267,7 +267,7 @@ fn ctrl_o_unfolds_a_long_output() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("anthropic:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let long = (1..=8).map(|n| format!("line {n}")).collect::<Vec<_>>().join("\n");
     app.transcript.apply(&EngineEvent::ToolStarted(ToolCall::new("t", "Bash", "seq 8")));

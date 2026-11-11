@@ -1,7 +1,7 @@
 //! Where command-line tools live, for every system (ADR 0013).
 //!
 //! Pure: the system and the folders to search are passed in. The tools
-//! Superfik starts (`uv`, `npx`, an MCP server's command) are searched with
+//! The app starts (`uv`, `npx`, an MCP server's command) are searched with
 //! these.
 //!
 //! On Windows a tool is a file with an extension Windows can start

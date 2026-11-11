@@ -4,10 +4,10 @@
 use std::path::Path;
 use std::time::Duration;
 
-use serde_json::{Value, json};
 use domain::lsp::answer::{describe, explain};
 use domain::lsp::uri::uri_of;
 use domain::lsp::{Operation, Query};
+use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace, clip, field, shown};
 use crate::model::ToolSpec;

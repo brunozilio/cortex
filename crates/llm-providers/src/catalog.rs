@@ -1,9 +1,9 @@
 //! Each provider's model catalog: which page to ask for and what a page
 //! lists.
 use super::ProviderError;
-use serde_json::Value;
 use domain::model::ModelCapabilities;
 use domain::{ModelOption, ModelProvider};
+use serde_json::Value;
 
 pub const MAX_PAGES: usize = 100;
 pub const PAGE_LIMIT: u64 = 8 << 20;

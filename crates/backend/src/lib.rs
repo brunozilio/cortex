@@ -1,4 +1,4 @@
-//! Superfik's backend: a client sends [`ClientCommand`]s in an
+//! The app's backend: a client sends [`ClientCommand`]s in an
 //! [`Envelope`] and polls [`ServerEvent`]s, woken by a [`Wake`] callback.
 //! [`LocalBackend`] runs everything in process; the daemon serves one per
 //! connected terminal on shared services.
@@ -37,11 +37,11 @@ pub use local::LocalBackend;
 pub use mcp_auth::McpAuth;
 pub use memory::{InMemoryStore, Memories, MemoryStore, project_key};
 pub use outbox::Outbox;
+pub use protocol::{Backend, BackendError, Wake};
 pub use providers::{InMemoryProviderStore, ModelProviders, ProviderStore};
 pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
 pub use settings::SettingsStore;
-pub use protocol::{Backend, BackendError, Wake};
 
 /// Local MLX models pulled from Hugging Face and removed again, on this
 /// computer only (Apple silicon).

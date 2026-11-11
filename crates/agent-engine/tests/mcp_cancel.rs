@@ -1,13 +1,13 @@
 #[test]
 #[cfg(unix)]
 fn cancelling_stdio_mcp_stops_its_process_tree_before_it_can_write() {
-    use serde_json::json;
-    use std::{sync::Arc, time::Duration};
     use agent_engine::{
         mcp::{McpServer, ServerSpec},
         model::http::{Http, NetHttp},
         tools::{Tool, Workspace},
     };
+    use serde_json::json;
+    use std::{sync::Arc, time::Duration};
     let dir = tempfile::tempdir().expect("valid test fixture");
     let started = dir.path().join("started");
     let leaked = dir.path().join("leaked");
@@ -48,11 +48,11 @@ done"#,
 }
 #[test]
 fn planning_mode_rejects_builtin_mutations() {
-    use domain::{PermissionMode, memory};
     use agent_engine::{
         mcp::builtin_access,
         permission::{Remembered, Verdict, verdict},
     };
+    use domain::{PermissionMode, memory};
     for (server, tool) in [("linear", "create_issue"), (memory::MEMORY_SERVER, "memory_forget")] {
         assert!(
             matches!(

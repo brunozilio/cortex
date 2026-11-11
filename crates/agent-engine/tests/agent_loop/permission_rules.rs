@@ -1,10 +1,10 @@
 //! Permission rules from settings, over the permission mode.
 
-use serde_json::json;
-use domain::permission_rules::{PermissionRules, RuleKind};
-use domain::{EngineEvent, PermissionMode};
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::transcript::{Block, Message};
+use domain::permission_rules::{PermissionRules, RuleKind};
+use domain::{EngineEvent, PermissionMode};
+use serde_json::json;
 
 use crate::{Rig, tool_use};
 
@@ -150,7 +150,8 @@ fn always_keeps_the_suggested_rule_in_the_project_and_stops_asking() {
         "asked once, offering the rule: {asks:?}"
     );
     assert!(rig.dir.path().join("a.txt").exists() && rig.dir.path().join("b.txt").exists());
-    let local = std::fs::read_to_string(rig.dir.path().join(".superfik/settings.local.json")).expect("kept");
+    let local =
+        std::fs::read_to_string(rig.dir.path().join(concat!(brand::dir!(), "/settings.local.json"))).expect("kept");
     assert!(local.contains("Bash(touch:*)"), "{local}");
 }
 
@@ -169,7 +170,7 @@ fn asking_runs_the_notification_hooks() {
         serde_json::from_str(&std::fs::read_to_string(rig.dir.path().join("notified.json")).expect("notified"))
             .expect("json");
     assert_eq!(notified["hook_event_name"], "Notification");
-    assert_eq!(notified["message"], "Superfik needs your permission to use Bash");
+    assert_eq!(notified["message"], concat!(brand::name!(), " needs your permission to use Bash"));
 }
 
 #[test]

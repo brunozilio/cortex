@@ -27,7 +27,7 @@ impl HfHub {
 
     fn at(base: &str, token: Option<String>) -> Result<Self, LocalModelError> {
         let client = reqwest::blocking::Client::builder()
-            .user_agent(concat!("superfik/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!(concat!(brand::command!(), "/"), env!("CARGO_PKG_VERSION")))
             .connect_timeout(STALL)
             .timeout(STALL)
             .build()

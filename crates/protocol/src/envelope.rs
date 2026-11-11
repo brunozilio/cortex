@@ -1,7 +1,7 @@
 //! Wraps a message with who sent it.
 
-use serde::{Deserialize, Serialize};
 use domain::Principal;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Envelope<T> {

@@ -1,6 +1,6 @@
 //! Channels: MCP servers that push messages into a session (a chat bot, a
 //! webhook) with `notifications/claude/channel`. A client opens the ones it
-//! names (`superfik --channels telegram`); each stays up while the client
+//! names (`<command> --channels telegram`); each stays up while the client
 //! does, its messages go to the client's inbox, and runs reach its tools
 //! (the replies) through a [`Bridge`] to that same server, never a second
 //! one. A process, an SSE server or a streamable HTTP server can be one.
@@ -9,9 +9,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use serde_json::{Value, json};
 use domain::inbox::{CHANNEL_CAPABILITY, channel_notice};
 use domain::mcp::{LocalMcp, McpEndpoint};
+use serde_json::{Value, json};
 
 use super::{Listener, McpServer, ServerSpec};
 use crate::model::http::Http;

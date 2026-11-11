@@ -18,12 +18,16 @@ impl Tool for EnterWorktree {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: ENTER_WORKTREE.into(),
-            description: "Move this session into a new git worktree of the project (a separate checkout of its \
-                          base branch under .superfik/worktrees), to work on a change apart from the user's \
+            description: concat!(
+                "Move this session into a new git worktree of the project (a separate checkout of its \
+                          base branch under ",
+                brand::dir!(),
+                "/worktrees), to work on a change apart from the user's \
                           checkout. From the next step on, files and commands are in the worktree, and later \
                           prompts of the session too, until ExitWorktree. Use it only when the user asks for a \
                           worktree or for working apart."
-                .into(),
+            )
+            .into(),
             schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
         }
     }

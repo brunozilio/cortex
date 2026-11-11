@@ -1,15 +1,15 @@
 # Decisions
 
-Decisions that shape Superfik Lite. Code cites them as `ADR NNNN`; numbers
+Decisions that shape the app. Code cites them as `ADR NNNN`; numbers
 of decisions dropped with the desktop app are not reused.
 
-## 0015 — Superfik is the engine
+## 0015 — The app is the engine
 
 No agent CLI runs underneath. The agent loop is ours (`agent-engine`): it calls the provider's API itself, runs its tools as
 Rust functions, and emits `EngineEvent`s, so clients are engine-agnostic.
 Providers sit behind `ModelApi`, tested against captured streams; local
 models run on MLX as Chat Completions. The system prompt, tools, sessions
-and compaction are ours; the prompt loads `SUPERFIK.md` and names Superfik.
+and compaction are ours; the prompt loads `<COMMAND>.md` and names the app.
 
 ## 0016 — API keys and subscriptions are separate providers
 
@@ -20,11 +20,11 @@ engine does the IO. The backend handles PKCE and loopback callbacks
 and keeps credentials in its `SecretStore`, saving rotated refresh tokens;
 runs carry a redacted handle a client cannot supply. Subscription adapters
 apply their own preludes; the tools, loop and project instructions stay
-Superfik's.
+The app's.
 
 ## 0018 — Lite: a CLI and an SDK
 
-Superfik Lite drops the desktop canvas, the web client, the team server and
+the app drops the desktop canvas, the web client, the team server and
 everything only they used (browser cards, voice, sound, haptics, notes,
 routines, channels, vaults, review, visuals, updates, i18n). What remains is
 the engine, the backend that drives it, memory, sessions, skills, agents
@@ -33,32 +33,32 @@ building agents, commands, skills, memory access and in-process MCP tools,
 and for connecting MCP servers over HTTP and stdio.
 
 - The AI providers are LLM providers (`llm-providers`,
-  `ModelProviders`). Skills, agents and MCP come from Superfik's folders
+  `ModelProviders`). Skills, agents and MCP come from the app's folders
   (ADR 0021), its plugins (ADR 0019) and the SDK host. No web search or
   fetch tool.
 - One engine, ours. No registry of engines, no tool worker process, no
   git/workspace inspection, no session import. (The memory optimizer came
   back in ADR 0022.)
-- A separate product from the desktop Superfik: its own data folder,
+- A separate product from the desktop the app: its own data folder,
   nothing shared, nothing migrated. Secrets sit in a sealed file, never
   the system keychain.
 - The `Principal`/`Envelope`/`Authorizer` seam stays so a remote backend
   can come back without reshaping the SDK.
-- Published as source (`brunozilio/superfik-lite`), with no license,
+- Published as source (the repository), with no license,
   release pipeline or packaging: install it with `cargo install` (amended
   by ADR 0024).
 
-## 0019 — A platform: Superfik plugins
+## 0019 — A platform: the app plugins
 
-Superfik is a general platform; a company's integrations and workflows
+The app is a general platform; a company's integrations and workflows
 (Jira, GitHub, Sonar, Veracode, Datadog, its own skills) live in plugins
 kept in their own repositories, never in this workspace. This amends
-ADR 0018's "no plugin system of our own". The plugin format is Superfik's:
-`.superfik-plugin/plugin.json`, `skills/`, `agents/`, `commands/`,
-`hooks/hooks.json`, `.mcp.json`, with `${SUPERFIK_PLUGIN_ROOT}` for the
+ADR 0018's "no plugin system of our own". The plugin format is the app's:
+`.<command>-plugin/plugin.json`, `skills/`, `agents/`, `commands/`,
+`hooks/hooks.json`, `.mcp.json`, with `${<COMMAND>_PLUGIN_ROOT}` for the
 plugin's folder. Claude Code's plugins and installs are not read. There is
 no installer or marketplace: a person puts a plugin's folder in
-`~/.superfik/plugins/` (a clone they `git pull`), and `/reload` shows what
+`~/.<command>/plugins/` (a clone they `git pull`), and `/reload` shows what
 is there. MCP servers also come from the project and the user.
 
 ## 0020 — Verification: a judge agent grades a run against criteria
@@ -77,16 +77,16 @@ Planning runs and sub-agents are not judged. The command is
 `/verification`, not `/verify`: `verify` and `run` stay skills, which the
 judge uses.
 
-## 0021 — Only Superfik's folders
+## 0021 — Only the app's folders
 
-Superfik reads only its own files: `SUPERFIK.md` (and `.superfik/SUPERFIK.md`,
-`SUPERFIK.local.md`, `~/.superfik/SUPERFIK.md`), and skills, commands,
+The app reads only its own files: `<COMMAND>.md` (and `.<command>/<COMMAND>.md`,
+`<COMMAND>.local.md`, `~/.<command>/<COMMAND>.md`), and skills, commands,
 agents, rules, output styles, settings and MCP servers in the project's
-`.superfik/` and `~/.superfik/`. The project's MCP servers are in
-`.superfik/mcp.json`, approved with `enabledMcpServers` /
+`.<command>/` and `~/.<command>/`. The project's MCP servers are in
+`.<command>/mcp.json`, approved with `enabledMcpServers` /
 `disabledMcpServers`. Nothing in `.claude/`, `~/.claude`, `CLAUDE.md` or a
 root `.mcp.json` is read; `AGENTS.md`, which no single tool owns, still is.
-Hooks get `SUPERFIK_PROJECT_DIR`.
+Hooks get `<COMMAND>_PROJECT_DIR`.
 
 ## 0022 — Memory is reversible and kept without an LLM
 
@@ -155,15 +155,15 @@ Rejected: an MCP server for LSP (one more process and protocol between the
 agent and the server, and no way to add diagnostics to an edit), and a
 server per run (rust-analyzer indexing anew on every prompt).
 
-## 0024 — Released binaries and `superfik update`
+## 0024 — Released binaries and `<command> update`
 
 Amends ADR 0018's "no release pipeline or packaging": release-please tags
-`vX.Y.Z` on `brunozilio/lite` and the release job attaches
-`superfik-X.Y.Z-<target>.tar.gz` and its `.sha256` for macOS (Apple
+`vX.Y.Z` on the repository and the release job attaches
+`<command>-X.Y.Z-<target>.tar.gz` and its `.sha256` for macOS (Apple
 silicon, signed and notarized) and Linux (x86_64, arm64). `cargo install`
 still works.
 
-- `superfik update` asks GitHub for the latest tag, installs it only when
+- `<command> update` asks GitHub for the latest tag, installs it only when
   it is newer than this build, and refuses an archive whose SHA-256 does
   not match the published one. Which release and which archive are pure
   rules in `domain::release`; the download sits behind the CLI's

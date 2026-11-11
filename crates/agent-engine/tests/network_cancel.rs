@@ -1,4 +1,5 @@
 //! Cancellation must interrupt both response headers and a stalled SSE body.
+use agent_engine::model::http::{Http, NetHttp, read_line_stopped};
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::TcpListener,
@@ -9,7 +10,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use agent_engine::model::http::{Http, NetHttp, read_line_stopped};
 #[test]
 fn cancellation_closes_stalled_connections_before_and_after_headers() {
     for headers in [false, true] {

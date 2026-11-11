@@ -1,13 +1,13 @@
 //! `/add-dir`: a folder the agent reads like the project, from the next
 //! prompt on and in new conversations.
 
-use ratatui::crossterm::event::KeyCode;
-use domain::SessionId;
 use agent_engine::fake::FakeEngine;
+use domain::SessionId;
+use ratatui::crossterm::event::KeyCode;
 use sdk::{EngineEvent, Model};
 
 use super::app::App;
-use super::tests::{press, screen, superfik, type_text, until};
+use super::tests::{press, screen, sdk, type_text, until};
 
 #[test]
 fn an_added_folder_goes_with_every_prompt_even_after_new() {
@@ -18,7 +18,7 @@ fn an_added_folder_goes_with_every_prompt_even_after_new() {
         EngineEvent::Completed { duration_ms: 1, cost_usd: None },
     ];
     let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let real = shared.path().canonicalize().expect("real");
 
@@ -38,14 +38,14 @@ fn an_added_folder_goes_with_every_prompt_even_after_new() {
 fn permissions_lists_the_project_s_rules() {
     let data = tempfile::tempdir().expect("data");
     let project = tempfile::tempdir().expect("project");
-    std::fs::create_dir_all(project.path().join(".superfik")).expect("dir");
+    std::fs::create_dir_all(project.path().join(brand::DIR)).expect("dir");
     std::fs::write(
-        project.path().join(".superfik/settings.json"),
+        project.path().join(concat!(brand::dir!(), "/settings.json")),
         r#"{"permissions": {"deny": ["Read(.env)"], "ask": ["Bash(git push:*)"]}}"#,
     )
     .expect("write");
     let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], Vec::new());
-    let mut app = App::new(superfik(&engine, data.path()), project.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/permissions");
     press(&mut app, KeyCode::Enter);
@@ -64,7 +64,7 @@ fn an_at_mention_completes_a_project_file_and_sends_its_text() {
     assert!(init.is_ok_and(|status| status.success()), "git is needed for this test");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
-    let mut app = App::new(superfik(&engine, data.path()), project.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
     type_text(&mut app, "explain @mai");
@@ -84,7 +84,7 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
     let project = tempfile::tempdir().expect("project");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
-    let superfik = superfik(&engine, data.path());
+    let sdk = sdk(&engine, data.path());
     let mut settings = serde_json::json!({});
     let now = super::conversations::now();
     super::conversations::touch(
@@ -94,8 +94,8 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
         Some("Login page"),
         now - 7_200,
     );
-    superfik.save_settings(settings).expect("saved");
-    let mut app = App::new(superfik, project.path().into(), None, None);
+    sdk.save_settings(settings).expect("saved");
+    let mut app = App::new(sdk, project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
     type_text(&mut app, "/resume");
@@ -116,7 +116,7 @@ fn the_output_style_picked_goes_with_the_next_prompt() {
     let data = tempfile::tempdir().expect("data");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/output-style");
     press(&mut app, KeyCode::Enter);
@@ -134,7 +134,7 @@ fn the_output_style_picked_goes_with_the_next_prompt() {
 fn a_missing_folder_is_refused() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], Vec::new());
-    let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/add-dir nowhere/at/all");
     press(&mut app, KeyCode::Enter);

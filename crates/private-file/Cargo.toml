@@ -1,6 +1,6 @@
 [package]
 name = "private-file"
-description = "Files only the user who runs Superfik can read, on every system."
+description = "Files only the user who runs the app can read, on every system."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

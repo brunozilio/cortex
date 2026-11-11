@@ -68,7 +68,7 @@ context:
   scaffold_script: place-files.sh
 ```
 
-**Running the same tests headlessly** (optional): Superfik itself has no command for this. If the user has a headless test runner that reads this layout, it can run each case folder with and without the skill from a terminal or in CI (such runners usually don't read `evals.json`, and keep their own report under `evals/results/`). These are real, billed model runs, so offer it rather than just doing it.
+**Running the same tests headlessly** (optional): {{NAME}} itself has no command for this. If the user has a headless test runner that reads this layout, it can run each case folder with and without the skill from a terminal or in CI (such runners usually don't read `evals.json`, and keep their own report under `evals/results/`). These are real, billed model runs, so offer it rather than just doing it.
 
 ---
 

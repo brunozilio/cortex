@@ -11,12 +11,12 @@ fn environment() -> Environment {
 }
 
 #[test]
-fn speaks_as_superfik_and_never_as_another_product() {
+fn speaks_as_brand_and_never_as_another_product() {
     let mut everything = environment();
-    everything.tools = vec!["mcp__superfik_memory__memory_search".to_owned()];
+    everything.tools = vec![concat!("mcp__", brand::command!(), "_memory__memory_search").to_owned()];
     let prompt = system(&everything);
-    assert!(prompt.starts_with("You are Superfik, an interactive agent"));
-    for other in ["Claude", "Anthropic", "claude.ai", "1Password", "CLAUDE.md", "Sofik"] {
+    assert!(prompt.starts_with(concat!("You are ", brand::name!(), ", an interactive agent")));
+    for other in ["Claude", "Anthropic", "claude.ai", "1Password", "CLAUDE.md", brand::COMPANY] {
         assert!(!prompt.contains(other), "the prompt names {other}");
     }
 }
@@ -25,7 +25,7 @@ fn speaks_as_superfik_and_never_as_another_product() {
 fn offers_the_sections_of_the_tools_the_run_has() {
     assert!(!system(&environment()).contains("# Memory"));
     let mut granted = environment();
-    granted.tools = vec!["mcp__superfik_memory__memory_search".into()];
+    granted.tools = vec![concat!("mcp__", brand::command!(), "_memory__memory_search").into()];
     assert!(system(&granted).contains("# Memory"));
 }
 
@@ -59,27 +59,39 @@ fn says_where_it_runs_and_what_git_looked_like() {
 fn carries_each_instruction_file_with_who_wrote_it() {
     let mut environment = environment();
     environment.instructions = vec![
-        Instructions { path: "/home/.superfik/SUPERFIK.md".into(), scope: Scope::User, text: "Be brief.\n".into() },
-        Instructions { path: "/repo/SUPERFIK.md".into(), scope: Scope::Project, text: "Use tabs.".into() },
+        Instructions {
+            path: concat!("/home/", brand::dir!(), "/", brand::instructions!()).into(),
+            scope: Scope::User,
+            text: "Be brief.\n".into(),
+        },
+        Instructions {
+            path: concat!("/repo/", brand::instructions!()).into(),
+            scope: Scope::Project,
+            text: "Use tabs.".into(),
+        },
     ];
     let prompt = system(&environment);
-    let user = prompt.find("Contents of /home/.superfik/SUPERFIK.md (the user's private").expect("user's");
-    let project = prompt.find("Contents of /repo/SUPERFIK.md (the project's instructions").expect("project's");
+    let user = prompt
+        .find(concat!("Contents of /home/", brand::dir!(), "/", brand::instructions!(), " (the user's private"))
+        .expect("user's");
+    let project = prompt
+        .find(concat!("Contents of /repo/", brand::instructions!(), " (the project's instructions"))
+        .expect("project's");
     assert!(user < project);
     assert!(prompt.contains("kept in the repository):\n\nUse tabs."));
     assert!(prompt.contains("take precedence over any default behaviour"));
 }
 
 #[test]
-fn finds_superfik_md_first_then_agents_md() {
+fn finds_brand_md_first_then_agents_md() {
     let home = tempfile::tempdir().expect("home");
     let repo = tempfile::tempdir().expect("repo");
-    std::fs::create_dir(home.path().join(".superfik")).expect("dir");
-    std::fs::write(home.path().join(".superfik/SUPERFIK.md"), "mine").expect("write");
-    std::fs::write(repo.path().join("SUPERFIK.md"), "project").expect("write");
+    std::fs::create_dir(home.path().join(brand::DIR)).expect("dir");
+    std::fs::write(home.path().join(concat!(brand::dir!(), "/", brand::instructions!())), "mine").expect("write");
+    std::fs::write(repo.path().join(brand::INSTRUCTIONS), "project").expect("write");
     std::fs::write(repo.path().join("CLAUDE.md"), "not ours").expect("write");
     std::fs::write(repo.path().join("AGENTS.md"), "older").expect("write");
-    std::fs::write(repo.path().join("SUPERFIK.local.md"), "local").expect("write");
+    std::fs::write(repo.path().join(brand::LOCAL_INSTRUCTIONS), "local").expect("write");
     let found: Vec<(Scope, String)> =
         instructions(repo.path(), Some(home.path())).into_iter().map(|file| (file.scope, file.text)).collect();
     assert_eq!(
@@ -131,9 +143,11 @@ fn instructions_load_ancestors_imports_once_and_keep_code_literals() {
     std::fs::create_dir(repo.path().join(".git")).expect("trust root");
     std::fs::create_dir_all(repo.path().join("docs")).expect("docs");
     std::fs::create_dir_all(repo.path().join("src/module")).expect("module");
-    std::fs::write(repo.path().join("SUPERFIK.md"),"Root instructions\n@docs/guide.md\n<!-- private maintainer comment -->\n```md\n@not-an-import.md\n<!-- code literal -->\n```\n").expect("root");
-    std::fs::write(repo.path().join("docs/guide.md"), "Imported guidance\n@../SUPERFIK.md\n").expect("import");
-    std::fs::write(repo.path().join("src/SUPERFIK.local.md"), "Package-local guidance").expect("local");
+    std::fs::write(repo.path().join(brand::INSTRUCTIONS),"Root instructions\n@docs/guide.md\n<!-- private maintainer comment -->\n```md\n@not-an-import.md\n<!-- code literal -->\n```\n").expect("root");
+    std::fs::write(repo.path().join("docs/guide.md"), concat!("Imported guidance\n@../", brand::instructions!(), "\n"))
+        .expect("import");
+    std::fs::write(repo.path().join(concat!("src/", brand::local_instructions!())), "Package-local guidance")
+        .expect("local");
     let files = instructions(&repo.path().join("src/module"), None);
     let text = files.iter().map(|f| f.text.as_str()).collect::<Vec<_>>().join("\n");
     assert_eq!(text.matches("Root instructions").count(), 1);
@@ -149,7 +163,7 @@ fn project_import_cannot_read_a_sibling_private_file() {
     let repo = root.path().join("repo");
     std::fs::create_dir_all(repo.join(".git")).expect("repo");
     std::fs::write(root.path().join("private.md"), "PRIVATE-SENTINEL").expect("private fixture");
-    std::fs::write(repo.join("SUPERFIK.md"), "@../private.md").expect("root instructions");
+    std::fs::write(repo.join(brand::INSTRUCTIONS), "@../private.md").expect("root instructions");
     let text = instructions(&repo, None).into_iter().map(|f| f.text).collect::<String>();
     assert!(!text.contains("PRIVATE-SENTINEL"));
     assert!(text.contains("outside the trusted directory"));

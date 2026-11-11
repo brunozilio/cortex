@@ -8,9 +8,9 @@ mod transport;
 
 use super::http::Http;
 use super::{Delta, KeySource, ModelApi, ModelError, Reply, TurnRequest};
+use domain::{ModelOption, ModelProvider};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use domain::{ModelOption, ModelProvider};
 
 pub use llm_providers::Config;
 use llm_providers::copilot::Wire;

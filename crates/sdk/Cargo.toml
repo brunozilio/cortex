@@ -1,11 +1,12 @@
 [package]
 name = "sdk"
-description = "Build on Superfik: sessions with the agent, agents, commands, skills, memory, and MCP tools in code, over HTTP or stdio."
+description = "Build on the agent: sessions with the agent, agents, commands, skills, memory, and MCP tools in code, over HTTP or stdio."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+brand.workspace = true
 domain.workspace = true
 protocol.workspace = true
 backend.workspace = true

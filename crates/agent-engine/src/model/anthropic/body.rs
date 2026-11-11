@@ -1,7 +1,7 @@
 //! The Messages API request body for a [`TurnRequest`].
 
-use serde_json::{Value, json};
 use domain::Effort;
+use serde_json::{Value, json};
 
 use crate::model::TurnRequest;
 use crate::transcript::{Block, Message, Role};

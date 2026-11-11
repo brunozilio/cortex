@@ -1,4 +1,4 @@
-# Superfik Lite
+# Superfik
 
 Superfik's agent engine: a terminal chat
 (CLI/TUI) for talking to a coding agent, and an SDK for building on top of it
@@ -43,7 +43,7 @@ and memory load once); it leaves a few seconds after the last terminal
 closes. `superfik daemon
 status|stop` manages it; `SUPERFIK_NO_DAEMON=1` runs everything in the
 terminal's own process. Data lives in `~/Library/Application
-Support/Superfik Lite` (macOS) or `~/.config/superfik-lite`. Keys and
+Support/Superfik` (macOS) or `~/.config/superfik`. Keys and
 tokens are sealed in `secrets.json` there (its key in `secrets.key`, both
 readable only by you).
 

@@ -73,7 +73,7 @@ use ratatui::crossterm::event::{
 };
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{SetTitle, supports_keyboard_enhancement};
-use sdk::{PermissionMode, Superfik};
+use sdk::{PermissionMode, Sdk};
 
 pub use app::App;
 pub use settings::last_session;
@@ -88,7 +88,7 @@ const ANIMATING: Duration = Duration::from_millis(33);
 pub struct Start {
     pub resume: Option<sdk::SessionId>,
     pub add_dirs: Vec<PathBuf>,
-    /// Open `/resume`'s picker once the chat is ready (`superfik -r`).
+    /// Open `/resume`'s picker once the chat is ready (`<command> -r`).
     pub pick: bool,
     /// `--allowedTools`, `--disallowedTools`, `--append-system-prompt`.
     pub headless: sdk::Headless,
@@ -103,7 +103,7 @@ pub struct Start {
 }
 
 pub fn run(
-    superfik: Superfik,
+    sdk: Sdk,
     cwd: PathBuf,
     model: Option<String>,
     mode: Option<PermissionMode>,
@@ -111,7 +111,7 @@ pub fn run(
     notice: Option<String>,
     start: Start,
 ) -> std::io::Result<()> {
-    let mut app = App::new(superfik, cwd, model, mode).resuming(start.resume);
+    let mut app = App::new(sdk, cwd, model, mode).resuming(start.resume);
     for dir in start.add_dirs {
         app.add_dir(dir);
     }
@@ -123,7 +123,7 @@ pub fn run(
     app.inline = start.inline.then_some(0);
     if !start.channels.is_empty() {
         let (cwd, names) = (app.cwd.clone(), start.channels.clone());
-        app.spawn(move |superfik| match superfik.open_channels(&cwd, &names) {
+        app.spawn(move |sdk| match sdk.open_channels(&cwd, &names) {
             Ok((opened, failed)) if failed.is_empty() => {
                 app::Msg::Notice(format!("Channels open: {}.", opened.join(", ")))
             }
@@ -157,7 +157,10 @@ pub fn run(
             if app.title != named {
                 named.clone_from(&app.title);
                 if let Some(title) = &named {
-                    let _ = execute!(std::io::stdout(), SetTitle(format!("{title} · Superfik")));
+                    let _ = execute!(
+                        std::io::stdout(),
+                        SetTitle(format!("{title} · {brand_name}", brand_name = brand::NAME))
+                    );
                 }
             }
             if app.session.is_some() && std::mem::take(&mut pick) {
@@ -238,7 +241,7 @@ pub fn run(
     let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange, event::DisableMouseCapture);
     ratatui::restore();
     if app.session.as_ref().and_then(sdk::Session::id).is_some() {
-        println!("Continue this conversation with: superfik -c");
+        println!("Continue this conversation with: {brand_command} -c", brand_command = brand::COMMAND);
     }
     result
 }

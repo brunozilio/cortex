@@ -3,19 +3,19 @@
 
 use std::sync::{Arc, Mutex};
 
-use serde_json::json;
-use domain::{EngineEvent, PromptRequest};
 use agent_engine::NativeEngine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
+use domain::{EngineEvent, PromptRequest};
+use serde_json::json;
 
 use crate::{Source, finish, model, start};
 
 #[test]
 fn configured_main_agent_applies_initial_prompt_once_and_blocks_unadvertised_tools() {
     let dir = tempfile::tempdir().expect("dir");
-    let root = dir.path().join(".superfik");
+    let root = dir.path().join(brand::DIR);
     std::fs::create_dir_all(root.join("agents")).expect("agents");
     std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer"}"#).expect("settings");
     std::fs::write(root.join("agents/reviewer.md"),"---\nname: reviewer\ntools: [Read]\ninitialPrompt: Start with a review.\neffort: low\npermissionMode: dontAsk\n---\nYou review carefully.").expect("agent");
@@ -53,7 +53,7 @@ fn configured_main_agent_applies_initial_prompt_once_and_blocks_unadvertised_too
 #[test]
 fn disabling_auto_memory_prevents_configured_agent_memory_setup() {
     let dir = tempfile::tempdir().expect("dir");
-    let root = dir.path().join(".superfik");
+    let root = dir.path().join(brand::DIR);
     std::fs::create_dir_all(root.join("agents")).expect("agents");
     std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer","autoMemoryEnabled":false}"#).expect("settings");
     std::fs::write(
@@ -77,7 +77,7 @@ fn disabling_auto_memory_prevents_configured_agent_memory_setup() {
 #[test]
 fn initial_prompt_expands_an_explicit_skill_before_the_first_model_call_through_the_worker() {
     let dir = tempfile::tempdir().expect("dir");
-    let root = dir.path().join(".superfik");
+    let root = dir.path().join(brand::DIR);
     std::fs::create_dir_all(root.join("agents")).expect("agents");
     std::fs::create_dir_all(root.join("skills/start")).expect("skill");
     std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer"}"#).expect("settings");
@@ -104,7 +104,7 @@ fn initial_prompt_expands_an_explicit_skill_before_the_first_model_call_through_
 #[test]
 fn initial_prompt_expands_a_custom_command() {
     let dir = tempfile::tempdir().expect("dir");
-    let root = dir.path().join(".superfik");
+    let root = dir.path().join(brand::DIR);
     std::fs::create_dir_all(root.join("agents")).expect("agents");
     std::fs::create_dir_all(root.join("commands")).expect("commands");
     std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer"}"#).expect("settings");
@@ -131,7 +131,7 @@ fn initial_prompt_expands_a_custom_command() {
 #[test]
 fn a_typed_slash_command_becomes_its_text_and_a_path_stays_as_typed() {
     let dir = tempfile::tempdir().expect("dir");
-    let commands = dir.path().join(".superfik/commands");
+    let commands = dir.path().join(concat!(brand::dir!(), "/commands"));
     std::fs::create_dir_all(&commands).expect("commands");
     std::fs::write(commands.join("audit.md"), "---\ndescription: Audit\n---\nTYPED_COMMAND_SENTINEL $ARGUMENTS")
         .expect("command");

@@ -2,8 +2,8 @@
 //! read first, read-only calls in parallel, and each call between its
 //! `PreToolUse` and `PostToolUse` hooks, reported as a step.
 
-use serde_json::{Value, json};
 use domain::{EngineEvent, ToolCall};
+use serde_json::{Value, json};
 
 use super::tasks::Tasks;
 use super::{Agent, Ending};

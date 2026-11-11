@@ -1,10 +1,10 @@
 //! The same visual payload must survive each provider's wire conversion.
-use serde_json::json;
-use domain::{Effort, Image};
 use agent_engine::{
     model::{TurnRequest, anthropic, chat, openai},
     transcript::{Block, Message, Role},
 };
+use domain::{Effort, Image};
+use serde_json::json;
 #[test]
 fn image_from_tool_result_is_sent_visually_to_all_wire_dialects() {
     let image = Image::from_mcp(

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use serde_json::json;
-use domain::Principal;
 use agent_engine::model::http::ScriptedHttp;
+use domain::Principal;
+use serde_json::json;
 
 use super::*;
 use crate::secrets::InMemorySecretStore;
@@ -16,7 +16,7 @@ fn query_value(url: &str, key: &str) -> String {
 }
 
 /// The person approving in the browser: the authorization server sends
-/// them back to Superfik's loopback with a code.
+/// them back to the app's loopback with a code.
 fn approve(url: &str) {
     let back = format!("{}?code=xyz&state={}", query_value(url, "redirect_uri"), query_value(url, "state"));
     std::thread::spawn(move || {
@@ -72,7 +72,7 @@ fn signing_in_discovers_registers_and_keeps_tokens_that_are_refreshed_when_stale
 }
 
 #[test]
-fn a_server_that_does_not_let_superfik_register_says_so() {
+fn a_server_that_does_not_let_brand_register_says_so() {
     let http = Arc::new(ScriptedHttp::new([
         (404, String::new()),
         (404, String::new()),

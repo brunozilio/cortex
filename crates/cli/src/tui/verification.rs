@@ -46,11 +46,11 @@ fn source(criteria: &Criteria) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use ratatui::crossterm::event::KeyCode;
     use agent_engine::fake::FakeEngine;
+    use ratatui::crossterm::event::KeyCode;
     use sdk::{EngineEvent, Model, PermissionMode};
 
-    use super::super::tests::{press, screen, superfik, type_text, until};
+    use super::super::tests::{press, screen, sdk, type_text, until};
     use super::*;
 
     fn command(app: &mut App, text: &str) {
@@ -63,7 +63,7 @@ mod tests {
         let data = tempfile::tempdir().expect("data");
         let model = Model::new("anthropic:scripted", "Scripted");
         let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
-        let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
+        let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
         until(&mut app, |app| app.session.is_some());
         command(&mut app, "/verification");
         assert!(screen(&app).contains("No verification."), "{}", screen(&app));

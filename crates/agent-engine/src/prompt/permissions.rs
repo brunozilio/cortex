@@ -4,8 +4,8 @@
 //! checked-in file only restricts, so a cloned project never approves its
 //! own commands.
 
-use serde_json::Value;
 use domain::permission_rules::{PermissionRules, RuleKind};
+use serde_json::Value;
 
 pub fn read(settings: &Value, owners: bool, rules: &mut PermissionRules, dirs: &mut Vec<String>) -> Result<(), String> {
     let Some(permissions) = settings.get("permissions") else { return Ok(()) };
@@ -30,10 +30,10 @@ pub fn read(settings: &Value, owners: bool, rules: &mut PermissionRules, dirs: &
     Ok(())
 }
 
-/// Keeps allow rule `rule` in the project's `.superfik/settings.local.json`
+/// Keeps allow rule `rule` in the project's `.<command>/settings.local.json`
 /// (the owner's, never checked in), next to what the file already holds.
 pub fn keep_allow(project: &std::path::Path, rule: &str) -> Result<(), String> {
-    let path = project.join(".superfik").join("settings.local.json");
+    let path = project.join(brand::DIR).join("settings.local.json");
     let mut settings: Value = match std::fs::read_to_string(&path) {
         Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Value::Object(Default::default()),
@@ -62,7 +62,7 @@ mod tests {
     #[test]
     fn a_kept_rule_joins_the_local_settings_once_and_keeps_the_rest() {
         let repo = tempfile::tempdir().expect("repo");
-        let local = repo.path().join(".superfik/settings.local.json");
+        let local = repo.path().join(concat!(brand::dir!(), "/settings.local.json"));
         std::fs::create_dir_all(local.parent().expect("folder")).expect("dir");
         std::fs::write(&local, r#"{"enabledMcpServers": ["jira"], "permissions": {"deny": ["Bash(rm:*)"]}}"#)
             .expect("write");
@@ -101,11 +101,17 @@ mod loading {
             std::fs::write(path, text).expect("write");
         };
         write(
-            repo.path().join(".superfik/settings.json"),
+            repo.path().join(concat!(brand::dir!(), "/settings.json")),
             r#"{"permissions": {"allow": ["Bash"], "deny": ["Bash(rm:*)"]}}"#,
         );
-        write(repo.path().join(".superfik/settings.local.json"), r#"{"permissions": {"allow": ["Bash(cargo test)"]}}"#);
-        write(home.path().join(".superfik/settings.json"), r#"{"permissions": {"ask": ["Bash(git push:*)"]}}"#);
+        write(
+            repo.path().join(concat!(brand::dir!(), "/settings.local.json")),
+            r#"{"permissions": {"allow": ["Bash(cargo test)"]}}"#,
+        );
+        write(
+            home.path().join(concat!(brand::dir!(), "/settings.json")),
+            r#"{"permissions": {"ask": ["Bash(git push:*)"]}}"#,
+        );
         let rules = load(repo.path(), Some(home.path()), &[]).expect("settings").permissions;
         let cwd = repo.path().to_string_lossy().into_owned();
         let decide = |command| rules.decide("Bash", &Target::Command(command), &cwd, None);
@@ -123,13 +129,16 @@ mod loading {
             std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
             std::fs::write(path, text).expect("write");
         };
-        write(repo.path().join(".superfik/settings.json"), r#"{"permissions": {"additionalDirectories": ["/"]}}"#);
         write(
-            repo.path().join(".superfik/settings.local.json"),
+            repo.path().join(concat!(brand::dir!(), "/settings.json")),
+            r#"{"permissions": {"additionalDirectories": ["/"]}}"#,
+        );
+        write(
+            repo.path().join(concat!(brand::dir!(), "/settings.local.json")),
             r#"{"permissions": {"additionalDirectories": ["../shared"]}}"#,
         );
         write(
-            home.path().join(".superfik/settings.json"),
+            home.path().join(concat!(brand::dir!(), "/settings.json")),
             r#"{"permissions": {"additionalDirectories": ["~/notes"]}}"#,
         );
         let settings = load(repo.path(), Some(home.path()), &[]).expect("settings");
@@ -139,9 +148,12 @@ mod loading {
     #[test]
     fn a_malformed_rule_says_which_list_it_is_in() {
         let repo = tempfile::tempdir().expect("repo");
-        std::fs::create_dir_all(repo.path().join(".superfik")).expect("dir");
-        std::fs::write(repo.path().join(".superfik/settings.json"), r#"{"permissions": {"deny": ["Bash(rm"]}}"#)
-            .expect("write");
+        std::fs::create_dir_all(repo.path().join(brand::DIR)).expect("dir");
+        std::fs::write(
+            repo.path().join(concat!(brand::dir!(), "/settings.json")),
+            r#"{"permissions": {"deny": ["Bash(rm"]}}"#,
+        )
+        .expect("write");
         let error = load(repo.path(), None, &[]).expect_err("malformed");
         assert!(error.contains("permissions.deny"), "{error}");
     }

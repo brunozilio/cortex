@@ -74,7 +74,7 @@ impl StdioTransport {
             (Arc::clone(&transport.waiting), Arc::clone(&transport.ended), Arc::clone(&transport.input));
         let server = name.to_owned();
         std::thread::Builder::new()
-            .name(format!("superfik-mcp-{name}"))
+            .name(format!("{brand_command}-mcp-{name}", brand_command = brand::COMMAND))
             .spawn(move || {
                 for line in BufReader::new(output).lines().map_while(Result::ok) {
                     let Ok(message) = serde_json::from_str::<Value>(&line) else { continue };

@@ -17,16 +17,16 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub use embedder::{Embedder, ModelChoice, NoEmbedder, Purpose, local};
-pub use store::{
-    FileMemoryStore, InMemoryStore, MemoryStore, app_data_dir, owner_key, project_key, system_memory_store,
-};
 use domain::memory::{Semantic, recall, search};
 use domain::{
     Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, Principal, PromptRequest, Provenance, RecallBudget,
     RunId,
 };
+pub use embedder::{Embedder, ModelChoice, NoEmbedder, Purpose, local};
 use protocol::ServerEvent;
+pub use store::{
+    FileMemoryStore, InMemoryStore, MemoryStore, app_data_dir, owner_key, project_key, system_memory_store,
+};
 
 type BookKey = (Principal, PathBuf);
 
@@ -225,7 +225,7 @@ fn memory_event(project: &Path, book: &MemoryBook) -> ServerEvent {
 }
 
 fn edits_file(run: RunId) -> PathBuf {
-    let folder = std::env::temp_dir().join("superfik-memory");
+    let folder = std::env::temp_dir().join(concat!(brand::command!(), "-memory"));
     if let Err(error) = std::fs::create_dir_all(&folder) {
         tracing::warn!(%error, "could not create the memory edits folder");
     }

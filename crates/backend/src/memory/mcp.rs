@@ -7,10 +7,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use serde_json::{Value, json};
 use domain::mcp::{LocalMcp, McpEndpoint, RpcError, text_result};
 use domain::memory::{MEMORY_SEARCH_TOOL, MEMORY_SERVER};
 use domain::{Memory, MemoryKind, Principal};
+use serde_json::{Value, json};
 
 use super::Memories;
 

@@ -1,9 +1,9 @@
 //! The agent's plan in the chat: the entry `ExitPlanMode` becomes (instead
 //! of a tool line), what the user made of it, and its box.
 
+use domain::command::mode_label;
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
-use domain::command::mode_label;
 use sdk::{AskKind, EngineEvent, PermissionMode};
 use unicode_width::UnicodeWidthStr;
 

@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicBool;
 
-use serde_json::json;
 use domain::Effort;
+use serde_json::json;
 
 use super::*;
 use crate::model::scripted::ScriptedModel;
@@ -88,7 +88,7 @@ fn a_check_that_cannot_answer_holds_the_action_back() {
 }
 
 #[test]
-fn the_rules_speak_of_superfik() {
+fn the_rules_speak_of_brand() {
     assert!(RULES.contains("<severity>"));
     for other in ["Claude Code", "Anthropic", "claude.ai", "asgeirtj"] {
         assert!(!RULES.contains(other), "{other}");

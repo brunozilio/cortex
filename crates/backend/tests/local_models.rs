@@ -4,10 +4,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use agent_engine::fake::FakeEngine;
 use backend::{CommandHandler, InMemoryProviderStore, LocalServices, ModelProviders, Outbox};
 use backend::{SecretStore, Secrets};
 use domain::{ModelOption, ModelProvider, Principal, SecretId};
-use agent_engine::fake::FakeEngine;
 use protocol::{ClientCommand, Envelope, ServerEvent};
 
 #[derive(Default)]

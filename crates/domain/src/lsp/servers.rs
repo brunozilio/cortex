@@ -57,7 +57,7 @@ fn built_in(name: &str, command: &str, args: &[&str], languages: &[(&str, &str)]
     }
 }
 
-/// The servers Superfik knows without configuration; each is used only when
+/// The servers the app knows without configuration; each is used only when
 /// its command is installed.
 pub fn defaults() -> Vec<ServerSpec> {
     vec![

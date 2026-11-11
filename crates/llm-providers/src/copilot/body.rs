@@ -1,8 +1,8 @@
 //! What Copilot serves a turn with: a body built for the wire's own API
 //! fitted to the model's output limit, thinking and effort.
 
-use serde_json::{Value, json};
 use domain::ModelOption;
+use serde_json::{Value, json};
 
 use super::{Wire, wire};
 use crate::ProviderError;

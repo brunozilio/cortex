@@ -1,23 +1,35 @@
 #!/usr/bin/env bash
-# Installs the latest superfik release for this computer:
+# Installs the latest release of this app for this computer:
 #
-#   curl -fsSL https://raw.githubusercontent.com/brunozilio/lite/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/<repository>/main/install.sh | bash
 #
-# SUPERFIK_VERSION=0.6.1      a given release instead of the latest
-# SUPERFIK_INSTALL_DIR=/path  where the binary goes (~/.local/bin by default)
-# SUPERFIK_LIBC=musl|gnu      Linux: force the static (musl) or glibc build
+# <ENV>_VERSION=0.6.1      a given release instead of the latest
+# <ENV>_INSTALL_DIR=/path  where the binary goes (~/.local/bin by default)
+# <ENV>_LIBC=musl|gnu      Linux: force the static (musl) or glibc build
+# (<ENV> is the command in capitals: LITE for `lite`.)
 #
 # On Linux the glibc build (with semantic memory) is used when the system's
 # glibc is new enough, the static musl build otherwise (RHEL 8/9, older
-# Debian/Ubuntu). `superfik update` keeps to the build installed.
+# Debian/Ubuntu). `<command> update` keeps to the build installed.
 
 set -euo pipefail
 
+# Written by `cargo run -p xtask -- brand` from brand.toml.
+NAME="Superfik"
+COMMAND="superfik"
 REPO="brunozilio/lite"
+
+ENV="$(printf '%s' "$COMMAND" | tr 'a-z-' 'A-Z_')"
 # The glibc the published glibc builds need (they are built on Ubuntu 24.04).
 MIN_GLIBC="2.39"
 
-say() { printf 'superfik: %s\n' "$*" >&2; }
+# The value of the environment variable <ENV>_$1, or $2.
+setting() {
+    local name="${ENV}_$1"
+    printf '%s' "${!name:-${2:-}}"
+}
+
+say() { printf '%s: %s\n' "$COMMAND" "$*" >&2; }
 fail() { say "$*"; exit 1; }
 
 # Whether version $1 is at least $2 (both like 2.39).
@@ -29,8 +41,8 @@ at_least() {
 
 # gnu or musl: the build this Linux can run.
 linux_libc() {
-    if [ -n "${SUPERFIK_LIBC:-}" ]; then
-        printf '%s' "$SUPERFIK_LIBC"
+    if [ -n "$(setting LIBC)" ]; then
+        setting LIBC
         return
     fi
     local glibc
@@ -84,10 +96,11 @@ main() {
     command -v tar >/dev/null 2>&1 || fail "tar is needed"
     local target version name dir tmp expected actual
     target="$(target)"
-    version="${SUPERFIK_VERSION:-$(latest_version)}"
+    version="$(setting VERSION)"
+    version="${version:-$(latest_version)}"
     version="${version#v}"
-    name="superfik-$version-$target"
-    dir="${SUPERFIK_INSTALL_DIR:-$HOME/.local/bin}"
+    name="$COMMAND-$version-$target"
+    dir="$(setting INSTALL_DIR "$HOME/.local/bin")"
     tmp="$(mktemp -d)"
     # shellcheck disable=SC2064 # the folder is known now; main's locals are gone at exit
     trap "rm -rf '$tmp'" EXIT
@@ -102,15 +115,15 @@ main() {
 
     tar -xzf "$tmp/$name.tar.gz" -C "$tmp"
     mkdir -p "$dir"
-    install -m 755 "$tmp/$name/superfik" "$dir/superfik.new"
-    mv -f "$dir/superfik.new" "$dir/superfik"
-    say "installed $("$dir/superfik" --version) in $dir"
+    install -m 755 "$tmp/$name/$COMMAND" "$dir/$COMMAND.new"
+    mv -f "$dir/$COMMAND.new" "$dir/$COMMAND"
+    say "installed $("$dir/$COMMAND" --version) in $dir"
     case "$target" in
-        *musl) say "this static build has no semantic memory search (memory search is by words)" ;;
+        *musl) say "this static build of $NAME has no semantic memory search (memory search is by words)" ;;
     esac
 
     case ":$PATH:" in
-        *":$dir:"*) say "run: superfik login, then superfik" ;;
+        *":$dir:"*) say "run: $COMMAND login, then $COMMAND" ;;
         *)
             say "$dir is not on your PATH; add it, e.g.:"
             say "  echo 'export PATH=\"$dir:\$PATH\"' >> ~/.bashrc && source ~/.bashrc"

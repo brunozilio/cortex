@@ -3,27 +3,27 @@
 
 use std::sync::{Arc, Mutex};
 
-use serde_json::json;
-use domain::{EngineEvent, EngineProblem, PromptRequest};
 use agent_engine::model::ModelApi;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::{Block, Role};
 use agent_engine::{ApiSource, NativeEngine};
+use domain::{EngineEvent, EngineProblem, PromptRequest};
+use serde_json::json;
 
 use crate::{Source, finish, model, start};
 
 #[test]
 fn runs_a_prompt_and_continues_the_session() {
     let dir = tempfile::tempdir().expect("dir");
-    std::fs::write(dir.path().join("SUPERFIK.md"), "Answer in one word.").expect("write");
+    std::fs::write(dir.path().join(brand::INSTRUCTIONS), "Answer in one word.").expect("write");
     let first = Arc::new(ScriptedModel::new([
         ScriptedModel::reply(vec![Block::ToolUse {
             id: "g".into(),
             name: "Glob".into(),
             input: json!({"pattern": "*.md"}),
         }]),
-        ScriptedModel::reply(vec![Block::Text("SUPERFIK.md".into())]),
+        ScriptedModel::reply(vec![Block::Text(brand::INSTRUCTIONS.into())]),
     ]));
     let second = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Yes.".into())])]));
     let engine = NativeEngine::new(
@@ -35,7 +35,7 @@ fn runs_a_prompt_and_continues_the_session() {
     let events = finish(&start(&engine, &request));
     let Some(EngineEvent::SessionStarted(session)) = events.first().cloned() else { panic!("{events:?}") };
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
-    assert!(events.contains(&EngineEvent::TextDelta("SUPERFIK.md".into())));
+    assert!(events.contains(&EngineEvent::TextDelta(brand::INSTRUCTIONS.into())));
     let system = &first.asked()[0].system;
     assert!(system.contains("Answer in one word."), "the project's instructions reach the model");
 
@@ -110,7 +110,11 @@ fn an_unexpected_provider_panic_still_emits_one_terminal_failure() {
 fn nested_instruction_is_delivered_before_the_first_matching_tool_batch_executes() {
     let dir = tempfile::tempdir().expect("dir");
     std::fs::create_dir_all(dir.path().join("src")).expect("src");
-    std::fs::write(dir.path().join("src/SUPERFIK.md"), "NESTED-INSTRUCTION: use checked arithmetic.").expect("nested");
+    std::fs::write(
+        dir.path().join(concat!("src/", brand::instructions!())),
+        "NESTED-INSTRUCTION: use checked arithmetic.",
+    )
+    .expect("nested");
     std::fs::write(dir.path().join("src/file.txt"), "content").expect("file");
     let call = || {
         ScriptedModel::reply(vec![Block::ToolUse {

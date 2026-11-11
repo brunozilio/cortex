@@ -74,7 +74,7 @@ impl Tool for WebFetch {
             return Outcome::error(format!("{site} is this computer or its private network; WebFetch reads the web."));
         }
         let Some(web) = &workspace.web else { return Outcome::error("The web is not available to this run.") };
-        let response = match web.0.get(&url, &[("User-Agent".into(), "Superfik".into())]) {
+        let response = match web.0.get(&url, &[("User-Agent".into(), brand::NAME.into())]) {
             Ok(response) => response,
             Err(error) => return Outcome::error(format!("Could not fetch {url}: {error}")),
         };

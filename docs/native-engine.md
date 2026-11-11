@@ -1,6 +1,6 @@
 # Native engine
 
-How Superfik's own engine (`agent-engine`) is configured and tested.
+How the app's own engine (`agent-engine`) is configured and tested.
 Its architecture is in [architecture.md](architecture.md) (Engines).
 
 ## Providers
@@ -58,22 +58,22 @@ provider resends only compatible reasoning signatures.
 
 ## Project settings
 
-`.superfik/settings.json` (project, then user; the project wins). Nothing
+`.<command>/settings.json` (project, then user; the project wins). Nothing
 in `.claude/` or `CLAUDE.md` is read (ADR 0021):
 
-- `outputStyle`; custom styles in `.superfik/output-styles/<name>.md`
+- `outputStyle`; custom styles in `.<command>/output-styles/<name>.md`
   (`keep-coding-instructions: true` keeps the engineering instructions).
 - `jsonSchema`: the model answers through `StructuredOutput`, validated and
   emitted as `EngineEvent::StructuredOutput`.
 - `agent`: a definition run as the main agent (`initialPrompt` only before
   the first turn; its worktree persists for the session).
-- `autoMemoryEnabled: false` (or `SUPERFIK_DISABLE_AUTO_MEMORY=1`) turns
+- `autoMemoryEnabled: false` (or `<COMMAND>_DISABLE_AUTO_MEMORY=1`) turns
   agent memory off.
 
-Rules in `.superfik/rules` may carry `paths` globs; new
+Rules in `.<command>/rules` may carry `paths` globs; new
 rules found during a call are returned before the batch runs. Instruction
-files (`SUPERFIK.md`, `.superfik/SUPERFIK.md`, `SUPERFIK.local.md`,
-`AGENTS.md`; the user's `~/.superfik/SUPERFIK.md`) load from the ancestors and, nested, when a tool touches their path;
+files (`<COMMAND>.md`, `.<command>/<COMMAND>.md`, `<COMMAND>.local.md`,
+`AGENTS.md`; the user's `~/.<command>/<COMMAND>.md`) load from the ancestors and, nested, when a tool touches their path;
 `@path` imports are relative, inside the trusted folder, five levels deep,
 1 MiB per file and 4 MiB in all. `/skill args` and Markdown commands are
 expanded before the model call (`$ARGUMENTS`). Plan mode blocks mutations,
@@ -83,7 +83,7 @@ internal MCP tools included. The prompt identifies as `agent-engine/1`.
 
 Agents honour `tools`, `disallowedTools`, `mcpServers`, `permissionMode`,
 `maxTurns`, `model`, `effort`, `skills`, `background`, `omitClaudeMd`,
-`autoCompactWindow`, `memory` (`.superfik/agent-memory[-local]`, index
+`autoCompactWindow`, `memory` (`.<command>/agent-memory[-local]`, index
 capped at 200 lines / 25 KB), `isolation: worktree` (removed only when
 untouched) and hooks. Omitted tools stay blocked; hooks never lift Plan mode
 or the parent's permission ceiling. Before every model call (main,
@@ -100,13 +100,13 @@ output and turns.
 
 ## Tests against real accounts
 
-Ordinary tests are deterministic. With a provider connected (`superfik login`):
+Ordinary tests are deterministic. With a provider connected (`<command> login`):
 
 ```sh
-SUPERFIK_LIVE_PROVIDER=claude-subscription [SUPERFIK_LIVE_MODEL=…] \
+<COMMAND>_LIVE_PROVIDER=claude-subscription [<COMMAND>_LIVE_MODEL=…] \
   cargo test -p backend --test live_memory -- --ignored --nocapture
 ```
 
-`SUPERFIK_LIVE_CREDENTIAL_FILE` supplies a private credential in isolated
+`<COMMAND>_LIVE_CREDENTIAL_FILE` supplies a private credential in isolated
 environments; never put tokens in arguments or logs. These runs cost real
 usage.

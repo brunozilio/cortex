@@ -35,7 +35,7 @@ pub fn run(app: &mut App, command: Command) {
             },
             None => app.transcript.notice("No answer to copy yet."),
         },
-        Command::Logout => app.spawn(|superfik| match superfik.providers() {
+        Command::Logout => app.spawn(|sdk| match sdk.providers() {
             Ok(providers) => {
                 Msg::Providers(providers.into_iter().filter(|p| p.account.is_some()).map(|p| p.provider).collect())
             }
@@ -43,18 +43,20 @@ pub fn run(app: &mut App, command: Command) {
         }),
         Command::ReleaseNotes => app.transcript.notice(release_notes()),
         Command::OutputStyle(named) => output_style(app, named),
-        Command::TerminalSetup => app.transcript.notice(
+        Command::TerminalSetup => app.transcript.notice(concat!(
             "New lines: Alt+Enter or Ctrl+J work everywhere. For Shift+Enter, use a terminal that reports it \
              (Ghostty, kitty, WezTerm, iTerm2 with \"Report modifiers using CSI u\"), or map Shift+Enter to \
-             send \\n in your terminal's key settings. Superfik asks the terminal for these keys when it can.",
-        ),
+             send \\n in your terminal's key settings. ",
+            brand::name!(),
+            " asks the terminal for these keys when it can."
+        )),
         _ => {}
     }
 }
 
 /// The styles `/output-style` offers: id and what it does.
 pub const STYLES: [(&str, &str); 5] = [
-    ("default", "Superfik's usual way: works, then reports"),
+    ("default", concat!(brand::name!(), "'s usual way: works, then reports")),
     ("concise", "Leads with the result, skips narration"),
     ("proactive", "Acts on its best judgement, asks less"),
     ("explanatory", "Explains its choices and the codebase as it works"),
@@ -98,7 +100,7 @@ pub fn connected(app: &mut App, providers: Vec<ModelProvider>) {
 impl App {
     pub(super) fn logout_picked(&mut self, cursor: usize) {
         let Some(provider) = self.connected.get(cursor).copied() else { return };
-        self.spawn(move |superfik| match superfik.disconnect_provider(provider) {
+        self.spawn(move |sdk| match sdk.disconnect_provider(provider) {
             Ok(_) => Msg::Notice(format!("Forgot {}.", provider.name())),
             Err(error) => Msg::Error(error.to_string()),
         });
@@ -109,11 +111,12 @@ fn status(app: &App) -> String {
     let session = app.session.as_ref().and_then(sdk::Session::id).map_or("not started".to_owned(), |id| id.0);
     let model = app.model().map_or("none".to_owned(), |m| format!("{} ({})", m.label, m.id));
     let mut text = format!(
-        "Superfik {}\n  Model    {model}\n  Mode     {}\n  Effort   {}\n  Folder   {}\n  Session  {session}",
+        "{brand_name} {}\n  Model    {model}\n  Mode     {}\n  Effort   {}\n  Folder   {}\n  Session  {session}",
         env!("CARGO_PKG_VERSION"),
         mode_label(app.mode()),
         app.effort().cli_value(),
         app.cwd.display(),
+        brand_name = brand::NAME
     );
     for dir in &app.added_dirs {
         text.push_str(&format!("\n  Added    {}", dir.display()));
@@ -129,7 +132,7 @@ fn release_notes() -> String {
     let mut sections = CHANGELOG.split("\n## ").skip(1);
     match sections.next() {
         Some(latest) => format!("## {}", latest.trim()),
-        None => format!("Superfik {}", env!("CARGO_PKG_VERSION")),
+        None => format!("{brand_name} {}", env!("CARGO_PKG_VERSION"), brand_name = brand::NAME),
     }
 }
 

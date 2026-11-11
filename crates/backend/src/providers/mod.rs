@@ -16,8 +16,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use domain::provider::{KeyProblem, ModelProvider, ProviderAccount, ProviderKey, clean_key, key_hint};
 use domain::{Principal, SecretId};
-use protocol::{ProviderEvent, ServerEvent};
 use llm_providers::Config;
+use protocol::{ProviderEvent, ServerEvent};
 
 pub use self::account::{BrowserSignIn, SignIn};
 pub use self::catalog::{ModelCatalog, ProviderCatalog};

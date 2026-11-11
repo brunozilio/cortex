@@ -22,14 +22,23 @@ pub(crate) fn command(title: &str, message: &str) -> (String, Vec<String>, Vec<(
         let script = format!("display notification {} with title {}", quoted(message), quoted(title));
         ("osascript".into(), vec!["-e".into(), script], Vec::new())
     } else if cfg!(windows) {
-        let script = "[reflection.assembly]::loadwithpartialname('System.Windows.Forms') | Out-Null; \
+        let script = concat!(
+            "[reflection.assembly]::loadwithpartialname('System.Windows.Forms') | Out-Null; \
              $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; \
-             $n.Visible = $true; $n.ShowBalloonTip(5000, $env:SUPERFIK_TITLE, $env:SUPERFIK_MESSAGE, 'Info'); \
-             Start-Sleep 6";
-        let env = vec![("SUPERFIK_TITLE".into(), title.into()), ("SUPERFIK_MESSAGE".into(), message.into())];
+             $n.Visible = $true; $n.ShowBalloonTip(5000, $env:",
+            brand::env_prefix!(),
+            "_TITLE, $env:",
+            brand::env_prefix!(),
+            "_MESSAGE, 'Info'); \
+             Start-Sleep 6"
+        );
+        let env = vec![
+            (concat!(brand::env_prefix!(), "_TITLE").into(), title.into()),
+            (concat!(brand::env_prefix!(), "_MESSAGE").into(), message.into()),
+        ];
         ("powershell".into(), vec!["-NoProfile".into(), "-Command".into(), script.into()], env)
     } else {
-        let args = vec!["--app-name=Superfik".into(), "--".into(), title.into(), message.into()];
+        let args = vec![concat!("--app-name=", brand::name!()).into(), "--".into(), title.into(), message.into()];
         ("notify-send".into(), args, Vec::new())
     }
 }
@@ -46,7 +55,7 @@ impl Tool for PushNotification {
                 "type": "object",
                 "properties": {
                     "message": { "type": "string" },
-                    "title": { "type": "string", "description": "Superfik by default." }
+                    "title": { "type": "string", "description": concat!(brand::name!(), " by default.") }
                 },
                 "required": ["message"],
                 "additionalProperties": false
@@ -67,7 +76,7 @@ impl Tool for PushNotification {
             Ok(message) => super::clip(message, 300),
             Err(error) => return error,
         };
-        let title = field(input, "title").filter(|title| !title.trim().is_empty()).unwrap_or("Superfik");
+        let title = field(input, "title").filter(|title| !title.trim().is_empty()).unwrap_or(brand::NAME);
         let title = super::clip(title, 80);
         let (program, args, env) = command(&title, &message);
         let mut process = subprocess::command(&program);

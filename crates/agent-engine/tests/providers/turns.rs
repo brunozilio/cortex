@@ -1,14 +1,14 @@
 //! A model turn on each provider: endpoint, authentication, body, effort
 //! and the streamed reply folded.
 
-use serde_json::{Value, json};
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use domain::provider::ProviderKey;
-use domain::{ModelOption, ModelProvider};
 use agent_engine::model::ModelApi;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::ProviderClient;
+use domain::provider::ProviderKey;
+use domain::{ModelOption, ModelProvider};
+use serde_json::{Value, json};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crate::{credentials, header, request};
 

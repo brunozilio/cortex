@@ -13,8 +13,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use serde_json::Value;
 use domain::lsp::ServerSpec;
+use serde_json::Value;
 
 pub use client::LspClient;
 pub use pool::{LspPool, Processes, Starter};

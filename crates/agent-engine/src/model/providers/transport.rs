@@ -3,12 +3,12 @@ use super::super::{
     http::{Http, Response},
 };
 use super::{Config, oauth};
+use domain::ModelProvider;
+use llm_providers::{catalog, request};
 use serde_json::Value;
 use std::io::Read;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use domain::ModelProvider;
-use llm_providers::{catalog, request};
 
 pub(super) struct Transport {
     pub provider: ModelProvider,

@@ -3,11 +3,11 @@
 
 use std::sync::{Arc, Mutex};
 
-use domain::{EngineEvent, Extensions, PromptRequest};
 use agent_engine::NativeEngine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
+use domain::{EngineEvent, Extensions, PromptRequest};
 
 use crate::{Source, finish, model, start};
 
@@ -29,16 +29,24 @@ fn a_plugin_brings_its_command_hook_and_mcp_tools_to_a_run() {
         std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
         std::fs::write(path, text).expect("write");
     };
-    write(".superfik-plugin/plugin.json", r#"{"name": "acme"}"#);
+    write(concat!(brand::plugin_dir!(), "/plugin.json"), r#"{"name": "acme"}"#);
     write("commands/hello.md", "---\ndescription: Greets\n---\nPLUGIN_COMMAND_SENTINEL $ARGUMENTS");
     write("server.sh", SERVER);
     write(
         ".mcp.json",
-        r#"{"mcpServers": {"tools": {"command": "/bin/sh", "args": ["${SUPERFIK_PLUGIN_ROOT}/server.sh"]}}}"#,
+        concat!(
+            r#"{"mcpServers": {"tools": {"command": "/bin/sh", "args": ["${"#,
+            brand::env_prefix!(),
+            r#"_PLUGIN_ROOT}/server.sh"]}}}"#
+        ),
     );
     write(
         "hooks/hooks.json",
-        r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "touch '${SUPERFIK_PLUGIN_ROOT}/fired'"}]}]}}"#,
+        concat!(
+            r#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "touch '${"#,
+            brand::env_prefix!(),
+            r#"_PLUGIN_ROOT}/fired'"}]}]}}"#
+        ),
     );
 
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));

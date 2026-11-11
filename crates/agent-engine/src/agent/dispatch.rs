@@ -2,8 +2,8 @@
 //! tools the loop runs itself (questions, plan mode, worktrees, agents,
 //! tasks) and the others, asked for when the mode says so.
 
-use serde_json::{Value, json};
 use domain::{EngineEvent, ToolCall};
+use serde_json::{Value, json};
 
 use super::tasks::Tasks;
 use super::{Agent, SHOWN_OUTPUT};

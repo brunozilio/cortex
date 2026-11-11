@@ -1,11 +1,11 @@
-//! How `superfik -p` writes a run: `text` (the reply on stdout, steps on
+//! How `<command> -p` writes a run: `text` (the reply on stdout, steps on
 //! stderr), `json` (one result object at the end) or `stream-json` (every
 //! event as a line, then the result).
 
 use std::io::Write;
 
-use serde_json::json;
 use sdk::EngineEvent;
+use serde_json::json;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Format {
@@ -104,7 +104,7 @@ impl<W: Write> Output<W> {
         match self.format {
             Format::Text => {
                 if let Some(error) = &self.error {
-                    eprintln!("superfik: {error}");
+                    eprintln!("{brand_command}: {error}", brand_command = brand::COMMAND);
                 }
                 let _ = writeln!(self.out);
             }

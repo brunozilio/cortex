@@ -2,11 +2,11 @@
 
 use std::sync::{Arc, Mutex};
 
-use domain::{Criteria, EngineEvent, PermissionMode, PromptRequest};
 use agent_engine::NativeEngine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
+use domain::{Criteria, EngineEvent, PermissionMode, PromptRequest};
 
 use crate::{Source, finish, model, start};
 

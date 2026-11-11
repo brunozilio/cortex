@@ -12,8 +12,8 @@ pub fn run(app: &mut App, command: MemoryCommand) {
     }
     let cwd = app.cwd.clone();
     let model = app.model().cloned();
-    app.spawn(move |superfik| {
-        let memory = superfik.memory(cwd);
+    app.spawn(move |sdk| {
+        let memory = sdk.memory(cwd);
         let answer = match command {
             MemoryCommand::List => memory.list().map(|all| listing("Memory", &all)),
             MemoryCommand::Search(query) => memory.search(&query).map(|found| {
@@ -43,11 +43,9 @@ pub fn run(app: &mut App, command: MemoryCommand) {
 /// `#note`: the project's memory keeps it, for every later conversation.
 pub fn remember(app: &mut App, note: String) {
     let cwd = app.cwd.clone();
-    app.spawn(move |superfik| {
-        match superfik.memory(cwd).remember(sdk::MemoryKind::Semantic, &note, &["user"]) {
-            Ok(_) => Msg::Notice(format!("Remembered: {note}")),
-            Err(error) => Msg::Error(error.to_string()),
-        }
+    app.spawn(move |sdk| match sdk.memory(cwd).remember(sdk::MemoryKind::Semantic, &note, &["user"]) {
+        Ok(_) => Msg::Notice(format!("Remembered: {note}")),
+        Err(error) => Msg::Error(error.to_string()),
     });
 }
 
@@ -85,12 +83,12 @@ fn forgotten_listing(forgotten: &[Forgotten]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use ratatui::crossterm::event::KeyCode;
     use agent_engine::fake::FakeEngine;
+    use ratatui::crossterm::event::KeyCode;
     use sdk::{EngineEvent, MemoryKind, Model};
 
     use super::super::app::App;
-    use super::super::tests::{press, screen, superfik, type_text, until};
+    use super::super::tests::{press, screen, sdk, type_text, until};
 
     fn command(app: &mut App, text: &str, shows: &str) {
         type_text(app, text);
@@ -103,12 +101,12 @@ mod tests {
         let data = tempfile::tempdir().expect("data");
         let model = Model::new("anthropic:scripted", "Scripted");
         let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
-        let superfik = superfik(&engine, data.path());
-        let memory = superfik.memory(data.path());
+        let sdk = sdk(&engine, data.path());
+        let memory = sdk.memory(data.path());
         memory.remember(MemoryKind::Semantic, "Uses wgpu", &[]).expect("remember");
         memory.remember(MemoryKind::Semantic, "Inter is the font", &[]).expect("remember");
         memory.forget(sdk::MemoryId(0)).expect("forget");
-        let mut app = App::new(superfik, data.path().into(), None, None);
+        let mut app = App::new(sdk, data.path().into(), None, None);
         until(&mut app, |app| app.session.is_some());
 
         command(&mut app, "/memory", "[1] Inter is the font");
@@ -123,11 +121,11 @@ mod tests {
         let data = tempfile::tempdir().expect("data");
         let model = Model::new("anthropic:scripted", "Scripted");
         let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
-        let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+        let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
         until(&mut app, |app| app.session.is_some());
 
         command(&mut app, "# tests run with cargo nextest", "Remembered: tests run with cargo nextest");
-        let memories = superfik(&engine, data.path()).memory(data.path()).list().expect("list");
+        let memories = sdk(&engine, data.path()).memory(data.path()).list().expect("list");
         assert!(memories.iter().any(|m| m.text == "tests run with cargo nextest"), "{memories:?}");
 
         command(&mut app, "!echo from the shell", "from the shell");

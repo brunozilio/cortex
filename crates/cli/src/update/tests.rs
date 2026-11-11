@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use super::*;
 
 const MAC: Platform<'static> = Platform { arch: "aarch64", os: "macos", libc: "" };
-const ASSET: &str = "superfik-0.4.0-aarch64-apple-darwin.tar.gz";
+const ASSET: &str = concat!(brand::command!(), "-0.4.0-aarch64-apple-darwin.tar.gz");
 
 struct Fake {
     tag: String,
@@ -29,8 +29,8 @@ fn archive(binary: &[u8]) -> Vec<u8> {
     let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
     let mut tar = tar::Builder::new(encoder);
     for (path, data) in [
-        ("superfik-0.4.0-aarch64-apple-darwin/README.md", b"readme".as_slice()),
-        ("superfik-0.4.0-aarch64-apple-darwin/superfik", binary),
+        (concat!(brand::command!(), "-0.4.0-aarch64-apple-darwin/README.md"), b"readme".as_slice()),
+        (concat!(brand::command!(), "-0.4.0-aarch64-apple-darwin/", brand::command!()), binary),
     ] {
         let mut header = tar::Header::new_gnu();
         header.set_size(data.len() as u64);
@@ -56,7 +56,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 fn installed(dir: &tempfile::TempDir) -> std::path::PathBuf {
-    let exe = dir.path().join("superfik");
+    let exe = dir.path().join(brand::COMMAND);
     std::fs::File::create(&exe).and_then(|mut f| f.write_all(b"old")).expect("old binary");
     exe
 }

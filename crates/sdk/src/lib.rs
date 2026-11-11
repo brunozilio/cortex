@@ -1,11 +1,11 @@
-//! Superfik's SDK: talk to the agent from your own program and extend it.
+//! The app's SDK: talk to the agent from your own program and extend it.
 //!
 //! ```no_run
-//! use sdk::{Agent, Command, McpConnection, McpServer, Superfik};
+//! use sdk::{Agent, Command, McpConnection, McpServer, the app};
 //! use serde_json::json;
 //!
 //! # fn main() -> Result<(), sdk::Error> {
-//! let superfik = Superfik::builder()
+//! let <command> = the app::builder()
 //!     .agent(Agent::new("reviewer", "Reviews a diff for bugs.").tools(["Read", "Grep"]))
 //!     .command(Command::new("audit", "Audits a path.", "Audit $ARGUMENTS for security issues."))
 //!     .mcp(McpServer::new("math").tool("add", "Adds a and b.", json!({"type": "object"}), |input| {
@@ -13,8 +13,8 @@
 //!     }))
 //!     .connect(McpConnection::stdio("files", "npx").arg("-y").arg("@modelcontextprotocol/server-filesystem"))
 //!     .build()?;
-//! let model = superfik.models()?.into_iter().next().ok_or(sdk::Error::NoModel)?;
-//! let session = superfik.session(".", model);
+//! let model = <command>.models()?.into_iter().next().ok_or(sdk::Error::NoModel)?;
+//! let session = <command>.session(".", model);
 //! println!("{}", session.send("What does this project do?")?.text()?);
 //! # Ok(()) }
 //! ```
@@ -50,7 +50,6 @@ pub use self::mcp_servers::Schedules;
 pub use self::run::{Run, RunControl};
 pub use self::session::{Headless, Session};
 use client::Client;
-use extensions::Definitions;
 pub use domain::mcp_config::{McpOrigin, McpServerInfo, McpState};
 pub use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind, Revision};
 pub use domain::provider::{ModelProvider, ProviderSummary};
@@ -60,6 +59,7 @@ pub use domain::{
     EngineEvent, HeadsUp, Image, MAX_IMAGE_BYTES, ModelOption as Model, PermissionMode, Question, Rewound, SessionId,
     ToolCall, Verdict,
 };
+use extensions::Definitions;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -79,14 +79,14 @@ pub enum Error {
     Write(#[from] std::io::Error),
 }
 
-/// One embedded Superfik: start [`Session`]s, list models, manage
+/// One embedded the app: start [`Session`]s, list models, manage
 /// providers and memory.
 #[derive(Debug, Clone)]
-pub struct Superfik {
+pub struct Sdk {
     client: Arc<Client>,
 }
 
-impl Superfik {
+impl Sdk {
     pub fn builder() -> Builder {
         Builder::default()
     }
@@ -126,7 +126,7 @@ impl Superfik {
     }
 }
 
-/// Sets up a [`Superfik`]: what it adds to every run, and where it keeps
+/// Sets up a [`the app`]: what it adds to every run, and where it keeps
 /// its data.
 #[derive(Default)]
 pub struct Builder {
@@ -154,7 +154,7 @@ impl Builder {
     }
 
     /// Keeps sessions, memory, settings and providers under `dir` instead
-    /// of the system's Superfik folder.
+    /// of the system's the app folder.
     pub fn data_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.data = Some(dir.into());
         self
@@ -195,7 +195,7 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> Result<Superfik, Error> {
+    pub fn build(self) -> Result<Sdk, Error> {
         let mut services = self.services.unwrap_or_else(LocalServices::detect);
         if let Some(data) = &self.data {
             services = services.kept_in(data);
@@ -219,6 +219,6 @@ impl Builder {
             let _ = wake_tx.try_send(());
         });
         let backend = LocalBackend::new(services, wake).map_err(|error| Error::Backend(error.to_string()))?;
-        Ok(Superfik { client: Arc::new(Client::new(Box::new(backend), woken)) })
+        Ok(Sdk { client: Arc::new(Client::new(Box::new(backend), woken)) })
     }
 }

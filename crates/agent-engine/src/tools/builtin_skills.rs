@@ -1,6 +1,6 @@
-//! The skills Superfik ships (`crates/agent-engine/skills/`), embedded
+//! The skills the app ships (`crates/agent-engine/skills/`), embedded
 //! at build time. A skill reads its own files by path, so they are written
-//! once per build to `~/.superfik/builtin-skills/<hash>/` and found after
+//! once per build to `~/.<command>/builtin-skills/<hash>/` and found after
 //! the project's and the user's skills: one of theirs with the same name
 //! wins.
 
@@ -11,7 +11,7 @@ mod embedded {
 }
 
 pub fn dir(home: &Path) -> Option<PathBuf> {
-    let root = home.join(".superfik/builtin-skills");
+    let root = home.join(concat!(brand::dir!(), "/builtin-skills"));
     write(&root, embedded::FILES, embedded::HASH)
 }
 
@@ -34,7 +34,11 @@ fn write(root: &Path, files: &[(&str, &[u8])], hash: u64) -> Option<PathBuf> {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(path, bytes)?;
+            // Text names the product through placeholders (`brand::text`).
+            match std::str::from_utf8(bytes) {
+                Ok(text) => std::fs::write(path, brand::text(text))?,
+                Err(_) => std::fs::write(path, bytes)?,
+            }
         }
         std::fs::write(staging.join(".complete"), b"")
     })();
@@ -58,11 +62,14 @@ mod tests {
         let files: &[(&str, &[u8])] = &[
             ("review/SKILL.md", b"---\nname: review\n---\nLook."),
             ("review/levels/low.md", b"Few."),
+            ("review/named.md", b"Ask {{NAME}} to read {{DIR}}/{{INSTRUCTIONS}}."),
             ("../escape", b"x"),
         ];
         let dir = write(home.path(), files, 7).expect("written");
         assert_eq!(std::fs::read_to_string(dir.join("review/levels/low.md")).expect("read"), "Few.");
         assert!(!home.path().join("escape").exists(), "nothing lands outside the copy");
+        let named = std::fs::read_to_string(dir.join("review/named.md")).expect("read");
+        assert_eq!(named, format!("Ask {} to read {}/{}.", brand::NAME, brand::DIR, brand::INSTRUCTIONS));
         std::fs::write(dir.join("review/SKILL.md"), "kept").expect("write");
         assert_eq!(write(home.path(), files, 7), Some(dir.clone()), "an existing copy is reused");
         assert_eq!(std::fs::read_to_string(dir.join("review/SKILL.md")).expect("read"), "kept");
@@ -80,12 +87,13 @@ mod tests {
     }
 
     #[test]
-    fn every_shipped_skill_speaks_as_superfik() {
+    fn every_shipped_skill_speaks_as_brand() {
         for (path, bytes) in embedded::FILES {
             if path.ends_with("LICENSE.txt") || !path.ends_with(".md") {
                 continue;
             }
             let text = String::from_utf8_lossy(bytes);
+            assert!(!brand::text(&text).contains("{{"), "{path}: an unknown placeholder");
             for other in ["Claude", "Anthropic", "claude.ai"] {
                 assert!(!text.contains(other), "{path} names {other}");
             }

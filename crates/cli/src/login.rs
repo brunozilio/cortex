@@ -1,9 +1,9 @@
-//! `superfik login` and `logout`: pick a provider on the terminal; an API
+//! `<command> login` and `logout`: pick a provider on the terminal; an API
 //! key is pasted, a subscription signs in in the browser.
 
 use std::io::{BufRead, Write};
 
-use sdk::{ModelProvider, Superfik};
+use sdk::{ModelProvider, Sdk};
 
 /// The providers in the order the menu lists them.
 pub const MENU: [ModelProvider; 6] = [
@@ -36,7 +36,7 @@ pub fn picked(answer: &str, count: usize) -> Option<usize> {
     answer.trim().parse::<usize>().ok().filter(|n| (1..=count).contains(n)).map(|n| n - 1)
 }
 
-pub fn login(superfik: &Superfik) -> Result<(), String> {
+pub fn login(sdk: &Sdk) -> Result<(), String> {
     eprintln!("Connect a provider:");
     for (i, provider) in MENU.iter().enumerate() {
         eprintln!("  {}. {} ({})", i + 1, provider.name(), how(*provider));
@@ -44,15 +44,14 @@ pub fn login(superfik: &Superfik) -> Result<(), String> {
     let provider =
         MENU[picked(&ask(&format!("Choose 1-{}: ", MENU.len()))?, MENU.len()).ok_or("not one of the choices")?];
     let listed = if provider.subscription() {
-        superfik
-            .sign_in(provider, |url, code| {
-                eprintln!("{}", visit(url, code));
-                open(url);
-            })
-            .map_err(|e| e.to_string())?
+        sdk.sign_in(provider, |url, code| {
+            eprintln!("{}", visit(url, code));
+            open(url);
+        })
+        .map_err(|e| e.to_string())?
     } else {
         let key = secret(&format!("{} API key (hidden): ", provider.name()))?;
-        superfik.connect_provider(provider, &key).map_err(|e| e.to_string())?
+        sdk.connect_provider(provider, &key).map_err(|e| e.to_string())?
     };
     let account = listed.iter().find(|p| p.provider == provider).and_then(|p| p.account.as_ref());
     match account {
@@ -62,8 +61,8 @@ pub fn login(superfik: &Superfik) -> Result<(), String> {
     Ok(())
 }
 
-pub fn logout(superfik: &Superfik) -> Result<(), String> {
-    let connected: Vec<ModelProvider> = superfik
+pub fn logout(sdk: &Sdk) -> Result<(), String> {
+    let connected: Vec<ModelProvider> = sdk
         .providers()
         .map_err(|e| e.to_string())?
         .into_iter()
@@ -78,7 +77,7 @@ pub fn logout(superfik: &Superfik) -> Result<(), String> {
         eprintln!("  {}. {}", i + 1, provider.name());
     }
     let index = picked(&ask("Forget which? ")?, connected.len()).ok_or("not one of the choices")?;
-    superfik.disconnect_provider(connected[index]).map_err(|e| e.to_string())?;
+    sdk.disconnect_provider(connected[index]).map_err(|e| e.to_string())?;
     eprintln!("Forgot {}.", connected[index].name());
     Ok(())
 }

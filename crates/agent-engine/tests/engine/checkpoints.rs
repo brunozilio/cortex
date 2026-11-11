@@ -3,12 +3,12 @@
 
 use std::sync::{Arc, Mutex};
 
-use serde_json::json;
-use domain::{EngineEvent, PromptRequest, Rewound, SessionCommand, SessionId};
 use agent_engine::NativeEngine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::{InMemorySessions, Sessions};
 use agent_engine::transcript::Block;
+use domain::{EngineEvent, PromptRequest, Rewound, SessionCommand, SessionId};
+use serde_json::json;
 
 use crate::{Source, finish, model, start};
 

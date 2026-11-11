@@ -5,8 +5,8 @@ fn project_overrides_user_and_claude_settings_are_not_read() {
     let home = tempfile::tempdir().expect("valid test fixture");
     let repo = tempfile::tempdir().expect("valid test fixture");
     for (root, style) in [
-        (home.path().join(".superfik"), "Explanatory"),
-        (repo.path().join(".superfik"), "Concise"),
+        (home.path().join(brand::DIR), "Explanatory"),
+        (repo.path().join(brand::DIR), "Concise"),
         (repo.path().join(".claude"), "Learning"),
     ] {
         std::fs::create_dir_all(&root).expect("valid test fixture");
@@ -20,7 +20,7 @@ fn project_overrides_user_and_claude_settings_are_not_read() {
 #[test]
 fn custom_style_controls_coding_instructions_and_rejects_paths() {
     let repo = tempfile::tempdir().expect("valid test fixture");
-    let root = repo.path().join(".superfik");
+    let root = repo.path().join(brand::DIR);
     std::fs::create_dir_all(root.join("output-styles")).expect("valid test fixture");
     std::fs::write(root.join("settings.json"), r#"{"outputStyle":"review"}"#).expect("valid test fixture");
     std::fs::write(
@@ -38,7 +38,7 @@ fn custom_style_controls_coding_instructions_and_rejects_paths() {
 #[test]
 fn judge_and_fallback_models_are_model_names() {
     let repo = tempfile::tempdir().expect("repo");
-    let root = repo.path().join(".superfik");
+    let root = repo.path().join(brand::DIR);
     std::fs::create_dir_all(&root).expect("dir");
     std::fs::write(
         root.join("settings.json"),
@@ -60,9 +60,9 @@ fn only_the_owner_approves_a_project_s_mcp_servers() {
         std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
         std::fs::write(path, text).expect("write");
     };
-    write(repo.path().join(".superfik/settings.json"), r#"{"enableAllProjectMcpServers": true}"#);
-    write(repo.path().join(".superfik/settings.local.json"), r#"{"enabledMcpServers": ["jira"]}"#);
-    write(home.path().join(".superfik/settings.json"), r#"{"disabledMcpServers": ["sonar"]}"#);
+    write(repo.path().join(concat!(brand::dir!(), "/settings.json")), r#"{"enableAllProjectMcpServers": true}"#);
+    write(repo.path().join(concat!(brand::dir!(), "/settings.local.json")), r#"{"enabledMcpServers": ["jira"]}"#);
+    write(home.path().join(concat!(brand::dir!(), "/settings.json")), r#"{"disabledMcpServers": ["sonar"]}"#);
     let approval = load(repo.path(), Some(home.path()), &[]).expect("settings").mcp_approval;
     assert!(!approval.all, "a checked-in setting cannot approve its own servers");
     assert_eq!(approval.enabled, ["jira"]);
@@ -77,8 +77,12 @@ fn an_installed_plugin_adds_its_hooks_and_a_broken_one_is_left_out() {
     std::fs::create_dir_all(good.path().join("hooks")).expect("hooks dir");
     std::fs::write(
         good.path().join("hooks/hooks.json"),
-        r#"{"description": "Checks", "hooks": {"PreToolUse": [{"matcher": "Bash",
-            "hooks": [{"type": "command", "command": "${SUPERFIK_PLUGIN_ROOT}/check.sh"}]}]}}"#,
+        concat!(
+            r#"{"description": "Checks", "hooks": {"PreToolUse": [{"matcher": "Bash",
+            "hooks": [{"type": "command", "command": "${"#,
+            brand::env_prefix!(),
+            r#"_PLUGIN_ROOT}/check.sh"}]}]}}"#
+        ),
     )
     .expect("hooks");
     std::fs::create_dir_all(broken.path().join("hooks")).expect("hooks dir");

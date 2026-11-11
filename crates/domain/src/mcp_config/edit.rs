@@ -44,7 +44,7 @@ impl McpState {
     }
 }
 
-/// A server as `superfik mcp list` shows it: never its headers or env.
+/// A server as `<command> mcp list` shows it: never its headers or env.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpServerInfo {
     pub name: String,
@@ -107,7 +107,7 @@ pub fn add_server(config: Value, name: &str, server: Value) -> Result<Value, Str
         return Err(format!("`{name}` is not a server name: use letters, digits, - and _"));
     }
     if !is_free_name(name) {
-        return Err(format!("`{name}` starts with a name Superfik keeps for itself"));
+        return Err(format!("`{name}` starts with a name {brand_name} keeps for itself", brand_name = brand::NAME));
     }
     let valid = match server["type"].as_str() {
         Some("http" | "sse") => server["url"].is_string(),

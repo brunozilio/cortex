@@ -3,8 +3,8 @@
 use super::ProviderError;
 use super::catalog::REASONING_PREFIXES;
 use super::copilot;
-use serde_json::{Value, json};
 use domain::{ModelOption, ModelProvider};
+use serde_json::{Value, json};
 
 pub const STREAM_LIMIT: usize = 8 << 20;
 pub const ERROR_LIMIT: usize = 4 << 10;
@@ -80,8 +80,9 @@ fn remove(body: &mut Value, keys: &[&str]) {
 
 fn codex(body: &mut Value, effort: &str) {
     body["instructions"] = json!(format!(
-        "You are a helpful coding assistant operating through Superfik.\n\n{}",
-        body["instructions"].as_str().unwrap_or_default()
+        "You are a helpful coding assistant operating through {brand_name}.\n\n{}",
+        body["instructions"].as_str().unwrap_or_default(),
+        brand_name = brand::NAME
     ));
     body["reasoning"]["effort"] = json!(effort);
     body["text"] = json!({"verbosity": "medium"});

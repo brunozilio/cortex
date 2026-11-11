@@ -1,12 +1,12 @@
 //! Custom agents: their tools, permission mode, model, effort and turns.
 
-use serde_json::json;
-use domain::{Effort, PermissionMode};
 use agent_engine::agent::Agent;
 use agent_engine::model::TurnRequest;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::tools;
 use agent_engine::transcript::{Block, Message};
+use domain::{Effort, PermissionMode};
+use serde_json::json;
 
 use crate::{Rig, request, tool_use};
 

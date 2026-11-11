@@ -1,7 +1,7 @@
 //! What `NetHttp` puts on the wire, read by a one-shot local server.
+use agent_engine::model::http::{Http, NetHttp};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
-use agent_engine::model::http::{Http, NetHttp};
 
 fn sent_headers(headers: &[(String, String)]) -> Vec<String> {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");

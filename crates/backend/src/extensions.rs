@@ -6,9 +6,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use serde_json::{Value, json};
 use domain::mcp::LocalMcp;
 use domain::{CustomAgent, ModelOption, PromptRequest, RunId, Skill};
+use serde_json::{Value, json};
 
 /// An MCP server the agent reaches over streamable HTTP or by starting a
 /// process that speaks stdio.
@@ -40,7 +40,7 @@ pub struct Extensions {
     pub dirs: Vec<PathBuf>,
     pub mcp: Vec<McpServerSpec>,
     pub local: Vec<LocalMcp>,
-    /// Superfik plugins' folders (ADR 0019).
+    /// The app plugins' folders (ADR 0019).
     pub plugins: Vec<PathBuf>,
 }
 
@@ -57,14 +57,17 @@ impl Extensions {
         if !self.mcp.is_empty() {
             let servers: serde_json::Map<String, Value> =
                 self.mcp.iter().map(|spec| (spec.name().to_owned(), spec.config())).collect();
-            let path = std::env::temp_dir().join(format!("superfik-mcp-{run}.json"));
+            let path =
+                std::env::temp_dir().join(format!("{brand_command}-mcp-{run}.json", brand_command = brand::COMMAND));
             let text = json!({ "mcpServers": servers }).to_string();
             private_file::write(&path, text.as_bytes()).map_err(|error| error.to_string())?;
             extensions.mcp_config = Some(path);
         }
         let mut credentials = request.credentials.clone();
-        // `superfik_…` names are Superfik's own servers (its memory search).
-        credentials.mcp.extend(self.local.iter().filter(|server| !server.name.starts_with("superfik_")).cloned());
+        // `<command>_…` names are the app's own servers (its memory search).
+        credentials.mcp.extend(
+            self.local.iter().filter(|server| !server.name.starts_with(concat!(brand::command!(), "_"))).cloned(),
+        );
         Ok(PromptRequest { extensions: (!extensions.is_empty()).then_some(extensions), credentials, ..request })
     }
 }

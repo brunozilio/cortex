@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use sdk::{Effort, Model, PermissionMode, RunControl, Session, SessionId, Superfik};
+use sdk::{Effort, Model, PermissionMode, RunControl, Sdk, Session, SessionId};
 
 use super::ask::Pending;
 use super::choices::Picker;
@@ -22,7 +22,7 @@ pub use super::msg::Msg;
 const QUIT_WINDOW: Duration = Duration::from_secs(2);
 
 pub struct App {
-    pub superfik: Superfik,
+    pub sdk: Sdk,
     pub cwd: PathBuf,
     pub session: Option<Session>,
     pub transcript: Transcript,
@@ -117,11 +117,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(superfik: Superfik, cwd: PathBuf, wanted: Option<String>, mode: Option<PermissionMode>) -> Self {
+    pub fn new(sdk: Sdk, cwd: PathBuf, wanted: Option<String>, mode: Option<PermissionMode>) -> Self {
         let (tx, rx) = crossbeam_channel::unbounded();
-        let saver = super::settings::Saver::start(&superfik);
+        let saver = super::settings::Saver::start(&sdk);
         let mut app = Self {
-            superfik,
+            sdk,
             cwd,
             session: None,
             transcript: Transcript::default(),
@@ -185,7 +185,7 @@ impl App {
         app
     }
 
-    /// Continues `session` (from `superfik -c`) once a model is chosen.
+    /// Continues `session` (from `<command> -c`) once a model is chosen.
     pub fn resuming(mut self, session: Option<SessionId>) -> Self {
         if session.is_some() {
             self.transcript.notice("Continuing the last conversation in this folder.");
@@ -208,12 +208,12 @@ impl App {
     /// Asks for the settings and models (and the skills, at first).
     pub(super) fn load(&mut self, skills: bool) {
         self.loading = true;
-        let (superfik, tx, cwd) = (self.superfik.clone(), self.tx.clone(), self.cwd.clone());
+        let (sdk, tx, cwd) = (self.sdk.clone(), self.tx.clone(), self.cwd.clone());
         std::thread::spawn(move || {
-            let settings = superfik.settings().unwrap_or_else(|_| serde_json::json!({}));
-            let models = superfik.models().map_err(|error| error.to_string());
+            let settings = sdk.settings().unwrap_or_else(|_| serde_json::json!({}));
+            let models = sdk.models().map_err(|error| error.to_string());
             let _ = tx.send(Msg::Ready { models, settings });
-            if skills && let Ok(found) = superfik.skills(&cwd) {
+            if skills && let Ok(found) = sdk.skills(&cwd) {
                 let _ = tx.send(Msg::Skills(found.into_iter().map(|s| (s.name, s.description)).collect()));
             }
         });
@@ -254,10 +254,10 @@ impl App {
         self.quit_armed.is_some_and(|at| at.elapsed() < QUIT_WINDOW)
     }
 
-    pub(super) fn spawn(&self, work: impl FnOnce(&Superfik) -> Msg + Send + 'static) {
-        let (superfik, tx) = (self.superfik.clone(), self.tx.clone());
+    pub(super) fn spawn(&self, work: impl FnOnce(&Sdk) -> Msg + Send + 'static) {
+        let (sdk, tx) = (self.sdk.clone(), self.tx.clone());
         std::thread::spawn(move || {
-            let _ = tx.send(work(&superfik));
+            let _ = tx.send(work(&sdk));
         });
     }
 }

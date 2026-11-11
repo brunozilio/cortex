@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use serde_json::{Value, json};
 use domain::{ModelOption, PromptRequest};
+use serde_json::{Value, json};
 
 use super::{expand_prompt, resource_tools};
 use crate::mcp::connect_stopped;

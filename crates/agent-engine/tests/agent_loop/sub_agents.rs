@@ -3,13 +3,13 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use serde_json::json;
-use domain::{EngineEvent, PermissionMode};
 use agent_engine::agent::Agent;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{ModelError, TurnRequest};
 use agent_engine::tools;
 use agent_engine::transcript::{Block, Message};
+use domain::{EngineEvent, PermissionMode};
+use serde_json::json;
 
 use crate::{Rig, request, tool_use};
 
@@ -57,10 +57,11 @@ fn a_sub_agent_works_in_its_own_conversation_and_reports_back() {
             .any(|e| matches!(e, EngineEvent::AgentSpawned { index: 0, kind, .. } if kind == "general-purpose"))
     );
     assert!(events.iter().any(|e| matches!(e, EngineEvent::AgentEvent { index: 0, event } if matches!(**event, EngineEvent::ToolStarted(ref call) if call.name == "Read"))));
-    assert!(events.iter().any(|e| matches!(
-        e,
-        EngineEvent::AgentUpdate { index: 0, status: domain::AgentStatus::Done { .. }, .. }
-    )));
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, EngineEvent::AgentUpdate { index: 0, status: domain::AgentStatus::Done { .. }, .. }))
+    );
     assert!(
         !events.iter().any(|e| matches!(e, EngineEvent::ToolStarted(call) if call.id == "s1")),
         "the sub-agent's steps are its card's, not the run's"
@@ -101,8 +102,8 @@ fn a_call_can_pick_the_sub_agent_s_model() {
 
 #[test]
 fn background_agent_runs_concurrently_and_output_is_collected() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use agent_engine::model::{Delta, ModelApi, Reply};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     struct Concurrent {
         parent: AtomicUsize,
         started: AtomicBool,
@@ -167,8 +168,8 @@ fn background_agent_runs_concurrently_and_output_is_collected() {
 #[test]
 #[cfg(unix)]
 fn stopping_background_task_joins_its_shell_without_stopping_parent() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use agent_engine::model::{Delta, ModelApi, Reply};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     struct StopModel {
         parent: AtomicUsize,
         child: AtomicUsize,

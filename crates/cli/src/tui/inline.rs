@@ -1,4 +1,4 @@
-//! The inline chat (`superfik --inline`): no alternate screen. The prompt,
+//! The inline chat (`<command> --inline`): no alternate screen. The prompt,
 //! status and the run at work live in a small area at the bottom; once the
 //! agent is idle, the conversation's new entries are printed above it into
 //! the terminal's own scrollback, where the terminal scrolls, selects and
@@ -58,12 +58,12 @@ pub fn flush<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use ratatui::backend::TestBackend;
     use agent_engine::fake::FakeEngine;
+    use ratatui::backend::TestBackend;
     use sdk::{EngineEvent, Model, SessionId};
 
     use super::*;
-    use crate::tui::tests::{superfik, type_text, until};
+    use crate::tui::tests::{sdk, type_text, until};
 
     fn text(buffer: &ratatui::buffer::Buffer) -> String {
         let area = buffer.area;
@@ -82,7 +82,7 @@ mod tests {
             EngineEvent::Completed { duration_ms: 1, cost_usd: None },
         ];
         let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
-        let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+        let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
         app.inline = Some(0);
         until(&mut app, |app| app.session.is_some());
         let options = TerminalOptions { viewport: Viewport::Inline(8) };

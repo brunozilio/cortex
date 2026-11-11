@@ -1,10 +1,10 @@
 //! What the chat keeps between launches in the owner's settings: the
 //! model, the permission mode and the effort.
 
-use std::path::Path;
 use domain::command::{level_named, mode_named};
+use std::path::Path;
 
-use sdk::{Effort, PermissionMode, SessionId, Superfik};
+use sdk::{Effort, PermissionMode, Sdk, SessionId};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Saved {
@@ -21,7 +21,7 @@ pub fn read(settings: &serde_json::Value) -> Saved {
     }
 }
 
-/// The conversation last had in `cwd`, for `superfik -c`.
+/// The conversation last had in `cwd`, for `<command> -c`.
 pub fn last_session(settings: &serde_json::Value, cwd: &Path) -> Option<SessionId> {
     settings["sessions"][cwd.to_string_lossy().as_ref()].as_str().map(|id| SessionId(id.to_owned()))
 }
@@ -51,12 +51,12 @@ type Change = Box<dyn FnOnce(&mut serde_json::Value) + Send>;
 pub struct Saver(crossbeam_channel::Sender<Change>);
 
 impl Saver {
-    pub fn start(superfik: &Superfik) -> Self {
+    pub fn start(sdk: &Sdk) -> Self {
         let (tx, rx) = crossbeam_channel::unbounded::<Change>();
-        let superfik = superfik.clone();
+        let sdk = sdk.clone();
         std::thread::spawn(move || {
             while let Ok(change) = rx.recv() {
-                let mut settings = superfik.settings().unwrap_or_else(|_| serde_json::json!({}));
+                let mut settings = sdk.settings().unwrap_or_else(|_| serde_json::json!({}));
                 if !settings.is_object() {
                     settings = serde_json::json!({});
                 }
@@ -64,7 +64,7 @@ impl Saver {
                 while let Ok(more) = rx.try_recv() {
                     more(&mut settings);
                 }
-                let _ = superfik.save_settings(settings);
+                let _ = sdk.save_settings(settings);
             }
         });
         Self(tx)

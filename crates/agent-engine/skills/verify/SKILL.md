@@ -75,23 +75,23 @@ the app. Checking that assertions match source is code review.
 ## Get a handle
 
 **Check the project's skills first — even if you already know how to
-build and run.** They live in `.superfik/skills/`. A matching `verifier-*` skill is the repo's
+build and run.** They live in `{{DIR}}/skills/`. A matching `verifier-*` skill is the repo's
 evidence-capture protocol: it wraps the session so a reviewer can
 replay what you saw (recording, screenshots). Drive the surface
 without it and you get a verdict with no replay. The repo's
-instruction files (`SUPERFIK.md`, also `AGENTS.md`)
+instruction files (`{{INSTRUCTIONS}}`, also `AGENTS.md`)
 often name the build, run and check commands too — read them.
 
 Skills live at the repo root **and** in the package/app dirs the
 diff touches — in a monorepo the unlock for `apps/desktop/` is
-usually `apps/desktop/.superfik/skills/`, not the root. Probe both:
+usually `apps/desktop/{{DIR}}/skills/`, not the root. Probe both:
 
 ```bash
-ls .superfik/skills/                  # repo root
-ls <touched-dir>/.superfik/skills/    # each dir level the diff names
+ls {{DIR}}/skills/                  # repo root
+ls <touched-dir>/{{DIR}}/skills/    # each dir level the diff names
 ```
 
-(Glob works the same on every system: `**/.superfik/skills/*/SKILL.md`.)
+(Glob works the same on every system: `**/{{DIR}}/skills/*/SKILL.md`.)
 
 - **`verifier-*` matching your surface** (CLI verifier for a CLI
   change, etc.) → invoke it with the Skill tool and follow its
@@ -100,13 +100,13 @@ ls <touched-dir>/.superfik/skills/    # each dir level the diff names
   user whether to patch it; don't FAIL the change for verifier rot.
 - **`run-*` but no matching verifier** → use its build/launch
   primitives as your handle.
-- **Neither** → cold start from README/SUPERFIK.md/package.json/
+- **Neither** → cold start from README/{{INSTRUCTIONS}}/package.json/
   Makefile. Timebox ~15min. Stuck → BLOCKED with exactly where, plus a
   filled-in prompt the user can send to write a `run-<unit>` project
   skill (the skill-creator skill does that). Got through → **persist what you
-  learned**: create `.superfik/skills/verify/SKILL.md` at the level you
+  learned**: create `{{DIR}}/skills/verify/SKILL.md` at the level you
   probed above — repo root for a single-package repo; the touched
-  package/app dir (`apps/desktop/.superfik/skills/verify/SKILL.md`) in
+  package/app dir (`apps/desktop/{{DIR}}/skills/verify/SKILL.md`) in
   a monorepo where verification is per-package — capturing the
   build/launch/drive recipe that worked, so the next session skips
   this cold start. Keep it short: the commands that worked, the

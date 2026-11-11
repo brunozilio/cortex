@@ -3,7 +3,7 @@ name: code-review
 description: |-
   Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the level's recipe covers them) at the effort level given first, before any target (low|medium|high|xhigh|max: from few high-confidence findings to many, some uncertain); with no level given, it runs at high. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding.
 when_to_use: |-
-  Use the max level only when the user, or instructions such as SUPERFIK.md or a skill, explicitly ask for it, never on your own judgment: it is the costliest review and starts many reviewer sub-agents.
+  Use the max level only when the user, or instructions such as {{INSTRUCTIONS}} or a skill, explicitly ask for it, never on your own judgment: it is the costliest review and starts many reviewer sub-agents.
 ---
 
 ## Arguments
@@ -109,9 +109,9 @@ that change.
 ### Conventions (instruction files)
 
 Find the instruction files that govern the changed code: the user's
-`~/.superfik/SUPERFIK.md`, the repository root's `SUPERFIK.md` (or
-`.superfik/SUPERFIK.md`), the `AGENTS.md` Superfik also reads,
-`SUPERFIK.local.md`, the rules in `.superfik/rules`, plus any
+`~/{{DIR}}/{{INSTRUCTIONS}}`, the repository root's `{{INSTRUCTIONS}}` (or
+`{{DIR}}/{{INSTRUCTIONS}}`), the `AGENTS.md` {{NAME}} also reads,
+`{{LOCAL_INSTRUCTIONS}}`, the rules in `{{DIR}}/rules`, plus any
 of these files in a directory that is an ancestor of a changed file (a
 directory's file only applies to files at or below it). Read each one that
 exists, then check the diff for clear violations of the rules they state.

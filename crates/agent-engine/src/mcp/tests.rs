@@ -110,8 +110,12 @@ done
 
 #[test]
 fn a_command_that_does_not_exist_is_left_out() {
-    let spec =
-        ServerSpec::Stdio { name: "gone".into(), command: "superfik-no-such-tool".into(), args: vec![], env: vec![] };
+    let spec = ServerSpec::Stdio {
+        name: "gone".into(),
+        command: concat!(brand::command!(), "-no-such-tool").into(),
+        args: vec![],
+        env: vec![],
+    };
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
     let error = McpServer::open(&spec, &http).expect_err("missing");
     assert!(error.contains("gone could not start"), "{error}");
@@ -183,20 +187,20 @@ struct Memory;
 impl domain::mcp::McpEndpoint for Memory {
     fn handle(&self, message: &Value) -> Option<Value> {
         let tools = || vec![json!({ "name": "memory_search", "inputSchema": { "type": "object" } })];
-        domain::mcp::respond(message, "superfik_memory", tools, |_, _| {
+        domain::mcp::respond(message, concat!(brand::command!(), "_memory"), tools, |_, _| {
             Ok(domain::mcp::text_result("[4] Uses wgpu", false))
         })
     }
 }
 
 #[test]
-fn superfik_s_own_memory_search_runs_without_asking() {
+fn brand_s_own_memory_search_runs_without_asking() {
     let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
     let memory = domain::mcp::LocalMcp::new(domain::memory::MEMORY_SERVER, Arc::new(Memory));
     request.credentials.mcp = vec![memory];
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
     let tools = tools(&request, &http);
-    assert_eq!(tools[0].spec().name, "mcp__superfik_memory__memory_search");
+    assert_eq!(tools[0].spec().name, concat!("mcp__", brand::command!(), "_memory__memory_search"));
     assert_eq!(tools[0].access(), Access::Reads);
     let input = json!({ "query": "renderer" });
     assert_eq!(tools[0].summary(&input), "renderer");

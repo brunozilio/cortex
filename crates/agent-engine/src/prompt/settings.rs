@@ -89,15 +89,15 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut lsp_servers = Vec::new();
     let mut permissions = domain::permission_rules::PermissionRules::default();
     let mut added_dirs = Vec::new();
-    let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(".superfik"));
+    let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(brand::DIR));
     let mut roots = Vec::new();
     if let Some(home) = home {
-        roots.push(home.join(".superfik"));
+        roots.push(home.join(brand::DIR));
     }
     let mut ancestors: Vec<_> = cwd.ancestors().collect();
     ancestors.reverse();
     for directory in ancestors {
-        roots.push(directory.join(".superfik"));
+        roots.push(directory.join(brand::DIR));
     }
     let mut seen = std::collections::HashSet::new();
     roots.retain(|root| seen.insert(root.canonicalize().unwrap_or_else(|_| root.clone())));
@@ -163,7 +163,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         }
     }
     lsp_servers.extend(crate::plugins::lsp_layers(plugins));
-    if ["CLAUDE_CODE_DISABLE_AUTO_MEMORY", "SUPERFIK_DISABLE_AUTO_MEMORY"]
+    if ["CLAUDE_CODE_DISABLE_AUTO_MEMORY", concat!(brand::env_prefix!(), "_DISABLE_AUTO_MEMORY")]
         .iter()
         .any(|key| std::env::var(key).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes")))
     {

@@ -1,7 +1,7 @@
 //! Animations (`tachyonfx`) drawn over what the chat already drew: the
 //! conversation sweeps in at start, new parts of it and the panels fade
 //! in, and "Working…" shimmers while the agent works. They change colours
-//! only, never characters, and `SUPERFIK_REDUCED_MOTION=1` turns them off.
+//! only, never characters, and `<COMMAND>_REDUCED_MOTION=1` turns them off.
 
 use std::time::{Duration, Instant};
 
@@ -53,7 +53,9 @@ impl Motion {
     }
 
     pub fn from_env() -> Self {
-        Self::new(std::env::var_os("SUPERFIK_REDUCED_MOTION").is_none_or(|v| v.is_empty() || v == "0"))
+        Self::new(
+            std::env::var_os(concat!(brand::env_prefix!(), "_REDUCED_MOTION")).is_none_or(|v| v.is_empty() || v == "0"),
+        )
     }
 
     /// How many entries the conversation had on the last frame: those

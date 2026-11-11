@@ -1,11 +1,11 @@
-//! `superfik -p`: one prompt, the reply on stdout, the agent's steps on
+//! `<command> -p`: one prompt, the reply on stdout, the agent's steps on
 //! stderr. Nobody is there to answer, so whatever the agent asks is
 //! denied (pick `--mode bypass` or `edits` to let it act).
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use sdk::{Decision, EngineEvent, PermissionMode, Superfik};
+use sdk::{Decision, EngineEvent, PermissionMode, Sdk};
 
 use crate::print_output::{Format, Output};
 
@@ -29,23 +29,24 @@ pub struct Wanted<'a> {
 
 /// Each prompt in turn, in one conversation (`--input-format stream-json`
 /// gives several).
-pub fn print_all(
-    superfik: &Superfik,
-    cwd: PathBuf,
-    wanted: Wanted<'_>,
-    prompts: &[String],
-) -> Result<ExitCode, String> {
+pub fn print_all(sdk: &Sdk, cwd: PathBuf, wanted: Wanted<'_>, prompts: &[String]) -> Result<ExitCode, String> {
     let Wanted { model: wanted, mode, verification, add_dirs, headless, format, resume, fork } = wanted;
-    let models = superfik.models().map_err(|e| e.to_string())?;
-    let remembered = superfik.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
-    let model = domain::model::choose_model(&models, wanted.or(remembered.as_deref()))
-        .ok_or("no model is available: run `superfik login` first")?;
+    let models = sdk.models().map_err(|e| e.to_string())?;
+    let remembered = sdk.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
+    let model = domain::model::choose_model(&models, wanted.or(remembered.as_deref())).ok_or(concat!(
+        "no model is available: run `",
+        brand::command!(),
+        " login` first"
+    ))?;
     if let Some(wanted) = wanted
         && !model.is_named(wanted)
     {
-        return Err(format!("no model named {wanted}: `superfik models` lists them"));
+        return Err(format!(
+            "no model named {wanted}: `{brand_command} models` lists them",
+            brand_command = brand::COMMAND
+        ));
     }
-    let mut session = superfik.session(cwd, model);
+    let mut session = sdk.session(cwd, model);
     if let Some(id) = resume {
         session = session.resume(id);
     }
@@ -92,8 +93,8 @@ pub fn print_all(
 mod tests {
     use std::sync::Arc;
 
-    use backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
     use agent_engine::fake::FakeEngine;
+    use backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
     use sdk::{Criteria, Model, Verdict};
 
     use super::*;
@@ -108,9 +109,9 @@ mod tests {
         services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
         services.memory_tool = false;
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
-        let superfik = Superfik::builder().data_dir(data.path()).services(services).build().expect("superfik");
+        let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
         let wanted = Wanted { verification: Some("tests pass".into()), ..Wanted::default() };
-        (print_all(&superfik, data.path().into(), wanted, &["fix it".into()]).expect("printed"), engine)
+        (print_all(&sdk, data.path().into(), wanted, &["fix it".into()]).expect("printed"), engine)
     }
 
     #[test]

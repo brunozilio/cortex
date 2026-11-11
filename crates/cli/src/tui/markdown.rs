@@ -22,7 +22,7 @@ thread_local! {
     static RENDERED: RefCell<HashMap<(u64, usize), Vec<Line<'static>>>> = RefCell::new(HashMap::new());
 }
 
-/// Superfik's look: magenta headings without `#`, cyan inline code,
+/// The app's look: magenta headings without `#`, cyan inline code,
 /// dimmed quotes.
 #[derive(Debug, Clone, Copy)]
 struct Look;

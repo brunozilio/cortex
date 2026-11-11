@@ -1,14 +1,14 @@
 //! Signing in and staying signed in: OAuth, token refresh and its limits,
 //! and credentials that are refused.
 
-use serde_json::{Value, json};
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
-use domain::ModelProvider;
-use domain::provider::{ProviderKey, ProviderKeyStore};
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::{Config, ProviderClient, oauth};
 use agent_engine::model::{ModelApi, ModelError};
+use domain::ModelProvider;
+use domain::provider::{ProviderKey, ProviderKeyStore};
+use serde_json::{Value, json};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 use crate::{credentials, header, request, token};
 

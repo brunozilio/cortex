@@ -1,4 +1,4 @@
-//! `superfik update`: replaces this binary with the latest release's build
+//! `<command> update`: replaces this binary with the latest release's build
 //! for this platform, checked against its published SHA-256. Which
 //! release and which archive is `domain::release`; the download is
 //! behind [`Releases`] so the replacement is testable.
@@ -8,8 +8,8 @@ mod github;
 use std::io::{Read, Write};
 use std::path::Path;
 
-use sha2::{Digest, Sha256};
 use domain::release::{self, Version};
+use sha2::{Digest, Sha256};
 
 pub use self::github::GitHub;
 
@@ -45,14 +45,20 @@ pub enum Updated {
     To(Version),
 }
 
-/// `superfik update`: this binary, from GitHub.
+/// `<command> update`: this binary, from GitHub.
 pub fn run() -> Result<(), String> {
     let current = env!("CARGO_PKG_VERSION");
     let exe = std::env::current_exe().and_then(std::fs::canonicalize).map_err(|e| e.to_string())?;
     match update(&GitHub::new()?, current, &exe, Platform::this())? {
-        Updated::AlreadyLatest => println!("superfik {current} is the latest release"),
+        Updated::AlreadyLatest => {
+            println!("{brand_command} {current} is the latest release", brand_command = brand::COMMAND)
+        }
         Updated::To(version) => {
-            println!("superfik updated {current} → {version} ({})", exe.display());
+            println!(
+                "{brand_command} updated {current} → {version} ({})",
+                exe.display(),
+                brand_command = brand::COMMAND
+            );
             #[cfg(unix)]
             if sdk::daemon::daemon_info().is_some() {
                 println!("The background daemon keeps {current} until its last session closes.");
@@ -69,8 +75,14 @@ pub fn update(releases: &dyn Releases, current: &str, exe: &Path, platform: Plat
     let Some(version) = release::newer(current, &tag) else {
         return Ok(Updated::AlreadyLatest);
     };
-    let asset = release::asset(version, platform.arch, platform.os, platform.libc)
-        .ok_or_else(|| format!("no build of superfik is published for {} {}", platform.arch, platform.os))?;
+    let asset = release::asset(version, platform.arch, platform.os, platform.libc).ok_or_else(|| {
+        format!(
+            "no build of {brand_command} is published for {} {}",
+            platform.arch,
+            platform.os,
+            brand_command = brand::COMMAND
+        )
+    })?;
     let sums = String::from_utf8_lossy(&releases.download(&tag, &format!("{asset}.sha256"))?).into_owned();
     let expected = release::checksum(&sums, &asset).ok_or_else(|| format!("{asset}.sha256 gives no checksum"))?;
     let archive = releases.download(&tag, &asset)?;
@@ -82,19 +94,19 @@ pub fn update(releases: &dyn Releases, current: &str, exe: &Path, platform: Plat
     Ok(Updated::To(version))
 }
 
-/// The `superfik` file inside a release archive.
+/// The `<command>` file inside a release archive.
 fn binary_in(archive: &[u8]) -> Result<Vec<u8>, String> {
     let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(archive));
     for entry in tar.entries().map_err(|e| e.to_string())? {
         let mut entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path().map_err(|e| e.to_string())?;
-        if path.file_name().is_some_and(|name| name == "superfik") {
+        if path.file_name().is_some_and(|name| name == brand::COMMAND) {
             let mut binary = Vec::new();
             entry.read_to_end(&mut binary).map_err(|e| e.to_string())?;
             return Ok(binary);
         }
     }
-    Err("the release archive has no superfik binary".into())
+    Err(concat!("the release archive has no ", brand::command!(), " binary").into())
 }
 
 /// Writes the new binary beside `exe` and renames it over, so `exe` is

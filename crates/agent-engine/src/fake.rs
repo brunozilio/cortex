@@ -115,7 +115,7 @@ impl AgentEngine for FakeEngine {
         let replay_gate = gate.clone();
         let replay_cancelled = Arc::clone(&cancelled);
         thread::Builder::new()
-            .name("superfik-fake-engine".into())
+            .name(concat!(brand::command!(), "-fake-engine").into())
             .spawn(move || replay(script, delay, &replay_gate, &replay_cancelled))
             .map_err(|source| EngineError::Spawn { engine: "fake engine", source })?;
         Ok(Box::new(FakeHandle {

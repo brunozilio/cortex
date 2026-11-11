@@ -10,8 +10,8 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
-use serde_json::{Value, json};
 use domain::lsp::{ServerSpec, uri::uri_of};
+use serde_json::{Value, json};
 use subprocess::Tree;
 
 use super::framing::{read_message, write_message};
@@ -80,7 +80,7 @@ impl LspClient {
         });
         let reading = Arc::clone(&shared);
         std::thread::Builder::new()
-            .name(format!("superfik-lsp-{name}"))
+            .name(format!("{brand_command}-lsp-{name}", brand_command = brand::COMMAND))
             .spawn(move || reading.read_all(BufReader::new(reader)))
             .map_err(|error| error.to_string())?;
         let client = Self { shared, next: AtomicU64::new(1), documents: Mutex::default(), tree: tree.map(Mutex::new) };

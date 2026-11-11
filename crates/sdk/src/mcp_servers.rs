@@ -7,9 +7,9 @@ use std::path::Path;
 use domain::mcp_config::McpServerInfo;
 use protocol::{ClientCommand, ServerEvent};
 
-use crate::{Error, Superfik};
+use crate::{Error, Sdk};
 
-impl Superfik {
+impl Sdk {
     /// The MCP servers a session in `cwd` can use.
     pub fn mcp_servers(&self, cwd: &Path) -> Result<Vec<McpServerInfo>, Error> {
         self.client.call(ClientCommand::ListMcpServers { path: cwd.to_path_buf() }, listed)
@@ -73,7 +73,7 @@ impl Superfik {
     }
 }
 
-impl Superfik {
+impl Sdk {
     /// The commands this client's runs left in the background (id,
     /// command, still running), after stopping `kill` when given.
     pub fn shells(&self, kill: Option<&str>) -> Result<Vec<(String, String, bool)>, Error> {
@@ -112,7 +112,7 @@ fn listed(event: ServerEvent) -> Option<Result<Vec<McpServerInfo>, String>> {
     }
 }
 
-/// What [`Superfik::schedules`] answers.
+/// What [`the app::schedules`] answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schedules {
     pub due: Vec<domain::schedule::Scheduled>,

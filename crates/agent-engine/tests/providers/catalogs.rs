@@ -1,12 +1,12 @@
 //! Each provider's model catalog: filtering, metadata and pagination.
 
-use serde_json::json;
-use std::sync::Arc;
-use domain::ModelProvider;
-use domain::provider::ProviderKey;
 use agent_engine::model::ModelError;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::ProviderClient;
+use domain::ModelProvider;
+use domain::provider::ProviderKey;
+use serde_json::json;
+use std::sync::Arc;
 
 use crate::credentials;
 

@@ -101,7 +101,7 @@ impl LspPool {
             return;
         }
         let inner = Arc::downgrade(&self.inner);
-        let _ = std::thread::Builder::new().name("superfik-lsp-sweep".into()).spawn(move || {
+        let _ = std::thread::Builder::new().name(concat!(brand::command!(), "-lsp-sweep").into()).spawn(move || {
             loop {
                 std::thread::sleep(Duration::from_secs(60));
                 let Some(inner) = inner.upgrade() else { return };

@@ -2,8 +2,8 @@
 //! chat. The agent loop runs it (it waits for the user); this is its
 //! schema and the pure translation to and from the question.
 
-use serde_json::{Value, json};
 use domain::{Choice, Question};
+use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;

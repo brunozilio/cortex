@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
 use domain::{CustomAgent, EngineEvent, Forgotten, Memory, MemoryId, ModelOption, RunId, Skill};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]

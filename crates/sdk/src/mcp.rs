@@ -5,9 +5,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use serde_json::{Value, json};
 use backend::McpServerSpec;
 use domain::mcp::{McpEndpoint, respond, text_result};
+use serde_json::{Value, json};
 
 type Handler = dyn Fn(Value) -> Result<Value, String> + Send + Sync;
 

@@ -5,13 +5,13 @@ use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use domain::{ChoreAnswer, EngineEvent, ModelOption, PromptRequest, RunId, SessionCommand};
 use agent_engine::AgentEngine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{ModelApi, ModelError};
 use agent_engine::sessions::{InMemorySessions, Sessions};
 use agent_engine::transcript::{Block, Message};
 use agent_engine::{ApiSource, NativeEngine};
+use domain::{ChoreAnswer, EngineEvent, ModelOption, PromptRequest, RunId, SessionCommand};
 
 struct Source(Mutex<Vec<Arc<ScriptedModel>>>);
 

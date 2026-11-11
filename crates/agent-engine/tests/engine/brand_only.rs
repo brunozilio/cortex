@@ -1,14 +1,14 @@
-//! Only Superfik's own folders reach a run: nothing in `.claude/`,
+//! Only the app's own folders reach a run: nothing in `.claude/`,
 //! `~/.claude/` or a `CLAUDE.md`, and no project `.mcp.json`.
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use domain::{EngineEvent, Extensions, PromptRequest};
 use agent_engine::NativeEngine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
+use domain::{EngineEvent, Extensions, PromptRequest};
 
 use crate::plugins::SERVER;
 use crate::{Source, finish, model, start};
@@ -43,7 +43,7 @@ fn nothing_of_claude_code_s_folders_reaches_a_run() {
             r.join("server.sh").display()
         ),
     );
-    write(&r.join(".superfik/settings.local.json"), r#"{"enabledMcpServers": ["jira"]}"#);
+    write(&r.join(concat!(brand::dir!(), "/settings.local.json")), r#"{"enabledMcpServers": ["jira"]}"#);
     write(&h.join(".claude/CLAUDE.md"), "SENTINEL_HOME_CLAUDE_MD");
     write(&h.join(".claude/rules/all.md"), "SENTINEL_HOME_CLAUDE_RULE");
     write(&h.join(".claude/skills/home-sentinel/SKILL.md"), "---\nname: home-sentinel\ndescription: S\n---\nS");

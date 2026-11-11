@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use serde_json::Value;
 use domain::mcp::McpEndpoint;
+use serde_json::Value;
 
 use super::Transport;
 

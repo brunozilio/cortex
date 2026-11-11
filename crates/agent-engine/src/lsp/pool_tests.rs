@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use serde_json::Value;
 use domain::lsp::{ServerSpec, defaults};
+use serde_json::Value;
 
 use super::{LspPool, Starter};
 use crate::lsp::{LanguageServer, LanguageServers};

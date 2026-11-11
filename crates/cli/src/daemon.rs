@@ -1,11 +1,11 @@
 //! How the CLI reaches its backend: this computer's shared daemon (Unix),
 //! started in the background on first use, or one in this process
-//! (`SUPERFIK_NO_DAEMON=1`, or Windows).
+//! (`<COMMAND>_NO_DAEMON=1`, or Windows).
 
-use sdk::Superfik;
+use sdk::Sdk;
 
 /// This build: the version and when the binary was written, so a client
-/// can tell that the running daemon is an older `superfik`.
+/// can tell that the running daemon is an older `<command>`.
 pub fn build() -> String {
     let written = std::env::current_exe()
         .and_then(std::fs::metadata)
@@ -17,16 +17,21 @@ pub fn build() -> String {
 }
 
 /// The backend, and a warning when the daemon answering is an older build.
-pub fn connect() -> Result<(Superfik, Option<String>), String> {
+pub fn connect() -> Result<(Sdk, Option<String>), String> {
     #[cfg(unix)]
-    if std::env::var_os("SUPERFIK_NO_DAEMON").is_none() {
-        let superfik = Superfik::connect_daemon(start).map_err(|e| e.to_string())?;
+    if std::env::var_os(concat!(brand::env_prefix!(), "_NO_DAEMON")).is_none() {
+        let sdk = Sdk::connect_daemon(start).map_err(|e| e.to_string())?;
         let stale = sdk::daemon::daemon_info().filter(|(_, running)| *running != build()).map(|_| {
-            "The background daemon is from an older build: run `superfik daemon stop` to update it.".to_owned()
+            concat!(
+                "The background daemon is from an older build: run `",
+                brand::command!(),
+                " daemon stop` to update it."
+            )
+            .to_owned()
         });
-        return Ok((superfik, stale));
+        return Ok((sdk, stale));
     }
-    Ok((Superfik::builder().build().map_err(|e| e.to_string())?, None))
+    Ok((Sdk::builder().build().map_err(|e| e.to_string())?, None))
 }
 
 #[cfg(unix)]
@@ -68,7 +73,10 @@ pub fn status() -> String {
     match sdk::daemon::daemon_info() {
         Some((pid, running)) if running == build() => format!("running (pid {pid})"),
         Some((pid, running)) => {
-            format!("running an older build {running} (pid {pid}); `superfik daemon stop` updates it")
+            format!(
+                "running an older build {running} (pid {pid}); `{brand_command} daemon stop` updates it",
+                brand_command = brand::COMMAND
+            )
         }
         None => "not running".to_owned(),
     }

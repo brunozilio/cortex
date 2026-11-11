@@ -32,7 +32,7 @@ pub struct Session {
     fork: std::sync::atomic::AtomicBool,
 }
 
-/// What a scripted session sets for every run (`superfik -p`'s flags).
+/// What a scripted session sets for every run (`<command> -p`'s flags).
 #[derive(Debug, Clone, Default)]
 pub struct Headless {
     /// The most model turns a run may take.

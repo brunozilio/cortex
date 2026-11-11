@@ -6,11 +6,11 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use serde_json::{Value, json};
-use domain::{EngineEvent, PermissionMode, PromptRequest, SessionId};
 use agent_engine::NativeEngine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::transcript::Block;
+use domain::{EngineEvent, PermissionMode, PromptRequest, SessionId};
+use serde_json::{Value, json};
 
 use crate::{Source, finish, model, start};
 
@@ -93,7 +93,7 @@ fn the_session_moves_into_a_worktree_and_back() {
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let [worktree] = moved(&events).try_into().unwrap_or_else(|moves| panic!("one move: {moves:?}"));
-    assert!(worktree.starts_with(project.join(".superfik/worktrees")), "{}", worktree.display());
+    assert!(worktree.starts_with(project.join(concat!(brand::dir!(), "/worktrees"))), "{}", worktree.display());
     assert!(!result(&events, "enter").1);
     assert_eq!(std::fs::read_to_string(worktree.join("work.txt")).expect("work"), "In the worktree");
     assert!(!project.join("work.txt").exists(), "the project stays as it was");

@@ -1,4 +1,4 @@
-//! The channels each client opened (`superfik --channels telegram`): MCP
+//! The channels each client opened (`<command> --channels telegram`): MCP
 //! servers kept up while the client is, whose messages reach its inbox and
 //! whose tools its runs reach through that same connection. The rules and
 //! the bridge are `agent_engine::mcp::channel`'s; this keeps them per
@@ -8,10 +8,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use domain::mcp::LocalMcp;
 use agent_engine::mcp::McpServer;
 use agent_engine::mcp::channel::{self, Bridge};
 use agent_engine::model::http::{Http, NetHttp};
+use domain::mcp::LocalMcp;
 use protocol::ServerEvent;
 
 use crate::extensions::Extensions;
@@ -92,9 +92,9 @@ mod tests {
     fn a_client_s_channels_stay_open_reach_its_inbox_and_its_runs() {
         let home = tempfile::tempdir().expect("home");
         let project = tempfile::tempdir().expect("project");
-        std::fs::create_dir_all(home.path().join(".superfik")).expect("dir");
+        std::fs::create_dir_all(home.path().join(brand::DIR)).expect("dir");
         let config = serde_json::json!({ "mcpServers": { "chat": { "command": "/bin/sh", "args": ["-c", SERVER] } } });
-        std::fs::write(home.path().join(".superfik/mcp.json"), config.to_string()).expect("config");
+        std::fs::write(home.path().join(concat!(brand::dir!(), "/mcp.json")), config.to_string()).expect("config");
         let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
         let names = vec!["chat".to_owned(), "missing".to_owned()];
         let opened = open(9601, project.path(), &names, &Extensions::default(), Some(home.path()), &http);

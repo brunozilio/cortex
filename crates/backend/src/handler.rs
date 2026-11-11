@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use domain::{Author, EngineEvent, Principal, PromptRequest, Provenance, RunId};
 use agent_engine::EventSink;
+use domain::{Author, EngineEvent, Principal, PromptRequest, Provenance, RunId};
 use protocol::{ClientCommand, Envelope, ServerEvent};
 
 use crate::memory::mcp::MemoryEndpoint;
@@ -137,10 +137,7 @@ impl CommandHandler {
                     schedules::remove(self.client, &id);
                 }
                 let (due, notices) = if take_due {
-                    (
-                        schedules::take_due(self.client, schedules::now()),
-                        agent_engine::tools::inbox::take(self.client),
-                    )
+                    (schedules::take_due(self.client, schedules::now()), agent_engine::tools::inbox::take(self.client))
                 } else {
                     (Vec::new(), Vec::new())
                 };

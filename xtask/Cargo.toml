@@ -1,6 +1,6 @@
 [package]
 name = "xtask"
-description = "Developer tasks for Superfik (repo lint)."
+description = "Developer tasks: the repo lint and applying brand.toml."
 version.workspace = true
 edition.workspace = true
 publish = false

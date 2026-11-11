@@ -1,7 +1,7 @@
 //! What a backend says about LLM providers.
 
-use serde::{Deserialize, Serialize};
 use domain::provider::{ModelProvider, ProviderSummary};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]

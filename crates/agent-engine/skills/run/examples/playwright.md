@@ -11,7 +11,7 @@ Chromium with Playwright from a small script.
 ## Dev server
 
 Find the dev command (`package.json` `scripts.dev`, `Makefile`,
-README, SUPERFIK.md), start it in the background, and wait for it to
+README, {{INSTRUCTIONS}}), start it in the background, and wait for it to
 actually serve:
 
 ```bash

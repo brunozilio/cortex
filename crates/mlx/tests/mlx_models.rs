@@ -35,7 +35,7 @@ fn a_download_still_running_is_not_offered() {
 
 #[test]
 fn no_models_folder_offers_nothing() {
-    assert!(downloaded(Path::new("/nonexistent/superfik/models")).is_empty());
+    assert!(downloaded(Path::new(concat!("/nonexistent/", brand::command!(), "/models"))).is_empty());
 }
 
 #[test]

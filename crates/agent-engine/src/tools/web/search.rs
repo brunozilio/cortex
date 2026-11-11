@@ -32,7 +32,11 @@ pub fn search(http: &dyn Http, query: &str, brave_key: Option<&str>) -> Result<V
         }
         None => {
             let url = format!("https://html.duckduckgo.com/html/?q={encoded}");
-            let body = fetched(http, &url, &[("User-Agent".to_owned(), "Mozilla/5.0 (Superfik)".to_owned())])?;
+            let body = fetched(
+                http,
+                &url,
+                &[("User-Agent".to_owned(), concat!("Mozilla/5.0 (", brand::name!(), ")").to_owned())],
+            )?;
             Ok(duckduckgo(&body))
         }
     }
