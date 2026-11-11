@@ -10,6 +10,7 @@ authors = ["Bruno Zilio"]
 rust-version = "1.97"
 
 [workspace.dependencies]
+brand = { path = "crates/brand" }
 domain = { path = "crates/domain" }
 protocol = { path = "crates/protocol" }
 # Semantic memory (`embeddings`) is a feature each user turns on: the static
