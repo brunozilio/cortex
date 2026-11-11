@@ -17,14 +17,17 @@ my-plugin/
 
 `${{COMMAND}_PLUGIN_ROOT}` in hooks and MCP servers is the plugin's folder. A
 plugin whose hooks or servers do not parse is left out; the run goes on.
-To install one, put its folder in `~/.{command}/plugins/` (a `git clone`
-you `git pull` to update) and type `/reload` in the chat: it lists the
-plugins, skills, agents and MCP servers found. Every message rereads them
-anyway. Plugins also come from the backend (`Extensions::plugins`); on a
-clash of names the backend's wins over `~/.{command}/plugins/`.
+To install one, `{command} plugin install <git-url>` clones it into
+`~/.{command}/plugins/` (`--name` picks the folder's name); `plugin list`,
+`plugin update <name>` (`git pull --ff-only`) and `plugin remove <name>`
+do the rest, through the backend's `plugins` feature. A folder put there
+by hand works too. Type `/reload` in the chat: it lists the plugins,
+skills, agents and MCP servers found. Every message rereads them anyway.
+Plugins also come from the backend (`Extensions::plugins`); on a clash of
+names the backend's wins over `~/.{command}/plugins/`.
 
 ```sh
-git clone git@github.com:you/my-config.git ~/.{command}/plugins/my-config
+{command} plugin install git@github.com:you/my-config.git
 ```
 
 ## MCP servers a person or a project configures

@@ -2,6 +2,7 @@ mod config;
 mod doctor;
 mod login;
 mod mcp;
+mod plugin;
 mod print;
 mod print_output;
 mod tui;
@@ -96,6 +97,11 @@ enum Action {
         #[command(subcommand)]
         action: Option<mcp::McpAction>,
     },
+    #[command(about = "The plugins in ~/.{command}/plugins: list, install, update, remove")]
+    Plugin {
+        #[command(subcommand)]
+        action: Option<plugin::PluginAction>,
+    },
     #[command(about = "Replace this binary with the latest release")]
     Update,
     #[command(about = "Check that this installation can work in the folder")]
@@ -169,6 +175,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         }
         Some(Action::Mcp { action }) => {
             mcp::run(&sdk, &cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
+        }
+        Some(Action::Plugin { action }) => {
+            plugin::run(&sdk, action.unwrap_or(plugin::PluginAction::List)).map(|()| ExitCode::SUCCESS)
         }
         Some(Action::Update | Action::Config { .. }) => Ok(ExitCode::SUCCESS),
         None if cli.print => {
