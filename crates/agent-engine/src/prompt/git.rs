@@ -9,21 +9,6 @@ pub struct GitSnapshot {
     pub recent: String,
 }
 
-impl GitSnapshot {
-    pub fn describe(&self) -> String {
-        let mut out = String::from(
-            "\n# Git\nThe repository's state when the conversation started; it is not updated as you work.\n",
-        );
-        out.push_str(&format!("- Current branch: {}\n", self.branch));
-        let status = if self.status.trim().is_empty() { "(clean)" } else { self.status.trim_end() };
-        out.push_str(&format!("\nStatus:\n{status}\n"));
-        if !self.recent.trim().is_empty() {
-            out.push_str(&format!("\nRecent commits:\n{}\n", self.recent.trim_end()));
-        }
-        out
-    }
-}
-
 pub fn snapshot(cwd: &Path) -> Option<GitSnapshot> {
     let never = std::sync::atomic::AtomicBool::new(false);
     let git = |args: &[&str]| -> Option<String> {

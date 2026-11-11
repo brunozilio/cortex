@@ -2,6 +2,7 @@ mod git;
 mod instruction_files;
 pub(crate) mod markdown;
 pub(crate) mod permissions;
+mod render;
 pub mod rules;
 pub mod settings;
 pub mod styles;
@@ -20,11 +21,11 @@ pub enum Scope {
 }
 
 impl Scope {
-    const fn label(self) -> &'static str {
+    const fn id(self) -> &'static str {
         match self {
-            Self::User => "the user's private instructions for every project",
-            Self::Project => "the project's instructions, kept in the repository",
-            Self::Local => "the user's private instructions for this project",
+            Self::User => "user",
+            Self::Project => "project",
+            Self::Local => "local",
         }
     }
 }
@@ -51,9 +52,36 @@ pub struct Environment {
 }
 
 impl Environment {
-    fn has(&self, prefix: &str) -> bool {
-        self.tools.iter().any(|tool| tool.starts_with(prefix))
+    fn data(&self) -> serde_json::Value {
+        let shown = |path: &Path| path.display().to_string();
+        serde_json::json!({
+            "cwd": shown(&self.cwd),
+            "added_dirs": self.added_dirs.iter().map(|dir| shown(dir)).collect::<Vec<_>>(),
+            "platform": self.platform,
+            "date": self.date,
+            "model": self.model,
+            "git": self.git.as_ref().map(|git| serde_json::json!({
+                "branch": git.branch, "status": git.status, "recent": git.recent,
+            })),
+            "instructions": self.instructions.iter().map(|file| serde_json::json!({
+                "path": shown(&file.path), "scope": file.scope.id(), "text": file.text,
+            })).collect::<Vec<_>>(),
+            "tools": self.tools,
+            "skills": self.skills,
+            "output_style": self.output_style.as_ref().map(|style| serde_json::json!({
+                "name": style.name, "instructions": style.instructions, "keep_coding": style.keep_coding,
+            })),
+            "contract": CONTRACT_VERSION,
+            "brand": brand_data(),
+        })
     }
+}
+
+fn brand_data() -> serde_json::Value {
+    serde_json::json!({
+        "NAME": brand::NAME, "COMMAND": brand::COMMAND, "DIR": brand::DIR,
+        "INSTRUCTIONS": brand::INSTRUCTIONS, "ENV": brand::ENV,
+    })
 }
 
 pub fn text(name: &str) -> String {
@@ -61,56 +89,7 @@ pub fn text(name: &str) -> String {
 }
 
 pub fn system(environment: &Environment) -> String {
-    let mut sections = vec![text("role"), text("harness")];
-    if environment.has(concat!("mcp__", brand::command!(), "_memory__")) {
-        sections.push(text("memory"));
-    }
-    sections.push(text("context"));
-    if environment.output_style.as_ref().is_none_or(|style| style.keep_coding) {
-        sections.extend([text("delivery"), text("writing")]);
-    }
-    if environment.tools.iter().any(|tool| tool == crate::tools::advisor::ADVISOR_TOOL) {
-        sections.push(text("advisor"));
-    }
-    let mut prompt = sections.join("\n\n");
-    prompt.push_str(&format!("\n\nPrompt contract: {CONTRACT_VERSION}"));
-    if let Some(style) = &environment.output_style {
-        prompt.push_str(&format!("\n\n# Output style: {}\n{}", style.name, style.instructions));
-    }
-    if !environment.skills.is_empty() {
-        prompt.push_str("\n\n");
-        prompt.push_str(&text("skills"));
-        prompt.push('\n');
-        prompt.push_str(&environment.skills);
-    }
-    if !environment.instructions.is_empty() {
-        prompt.push_str("\n\n");
-        prompt.push_str(&text("instructions"));
-        for file in &environment.instructions {
-            prompt.push_str(&format!(
-                "\n\nContents of {} ({}):\n\n{}",
-                file.path.display(),
-                file.scope.label(),
-                file.text.trim()
-            ));
-        }
-    }
-    prompt.push_str("\n\n# Environment\n");
-    prompt.push_str(&format!("- Working directory: {}\n", environment.cwd.display()));
-    if !environment.added_dirs.is_empty() {
-        let dirs: Vec<String> = environment.added_dirs.iter().map(|dir| dir.display().to_string()).collect();
-        prompt.push_str(&format!("- Additional working directories: {}\n", dirs.join(", ")));
-    }
-    prompt.push_str(&format!("- Git repository: {}\n", if environment.git.is_some() { "yes" } else { "no" }));
-    prompt.push_str(&format!("- Platform: {}\n", environment.platform));
-    prompt.push_str(&format!("- Today: {}\n", environment.date));
-    if !environment.model.is_empty() {
-        prompt.push_str(&format!("- Model: {}\n", environment.model));
-    }
-    if let Some(git) = &environment.git {
-        prompt.push_str(&git.describe());
-    }
-    prompt
+    render::render("prompts/system.js", &environment.data())
 }
 
 pub fn user_message(request: &PromptRequest) -> String {
@@ -136,17 +115,11 @@ mod tests;
 
 pub fn reminder(mode: domain::PermissionMode, depth: usize, style: Option<&str>) -> String {
     let mode = match mode {
-        domain::PermissionMode::Plan if depth == 0 => text("mode-plan"),
-        domain::PermissionMode::Plan => text("mode-plan-sub-agent"),
-        domain::PermissionMode::Ask => text("mode-ask"),
-        domain::PermissionMode::AcceptEdits => text("mode-edits"),
-        domain::PermissionMode::Bypass => text("mode-bypass"),
+        domain::PermissionMode::Plan => "plan",
+        domain::PermissionMode::Ask => "ask",
+        domain::PermissionMode::AcceptEdits => "edits",
+        domain::PermissionMode::Bypass => "bypass",
     };
-    let role = if depth > 0 { text("reminder-sub-agent") } else { text("reminder-main") };
-    let mut reminder = format!("\n\n# Runtime reminder\n{mode}\n{role}");
-    if let Some(style) = style.filter(|_| depth == 0) {
-        reminder.push('\n');
-        reminder.push_str(style);
-    }
-    reminder
+    let data = serde_json::json!({ "mode": mode, "depth": depth, "style": style, "brand": brand_data() });
+    render::render("prompts/reminder.js", &data)
 }

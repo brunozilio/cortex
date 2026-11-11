@@ -26,6 +26,15 @@ pub fn override_path(folder: &Path, path: &str) -> Option<PathBuf> {
     plain.then(|| folder.join(relative))
 }
 
+pub fn user_text(folder: Option<&Path>, path: &str) -> Option<String> {
+    let file = folder.and_then(|folder| override_path(folder, path))?;
+    std::fs::read_to_string(file).ok().map(|text| brand::text(text.trim_end_matches('\n')))
+}
+
+pub fn builtin_text(path: &str) -> Option<String> {
+    builtin(path).map(|bytes| brand::text(String::from_utf8_lossy(bytes).trim_end_matches('\n')))
+}
+
 pub fn text_in(folder: Option<&Path>, path: &str) -> String {
     let overridden =
         folder.and_then(|folder| override_path(folder, path)).and_then(|file| std::fs::read_to_string(file).ok());

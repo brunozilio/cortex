@@ -12,6 +12,7 @@ rust-version = "1.97"
 [workspace.dependencies]
 brand = { path = "crates/brand" }
 content = { path = "crates/content" }
+script = { path = "crates/script" }
 domain = { path = "crates/domain" }
 protocol = { path = "crates/protocol" }
 backend = { path = "crates/backend" }

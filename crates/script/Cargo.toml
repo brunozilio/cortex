@@ -1,0 +1,13 @@
+[package]
+name = "script"
+description = "Runs the JavaScript the agent is extended with (prompts, tools, commands, hooks, MCP servers) in an embedded engine."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+rquickjs = "0.14"
+serde_json.workspace = true
+
+[lints]
+workspace = true

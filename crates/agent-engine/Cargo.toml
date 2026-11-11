@@ -9,6 +9,7 @@ publish.workspace = true
 test-support = []
 
 [dependencies]
+script.workspace = true
 content.workspace = true
 brand.workspace = true
 domain.workspace = true
