@@ -55,9 +55,7 @@ pub fn view(usage: &ContextUsage) -> String {
 }
 
 pub fn left(used: u64, window: Option<u64>) -> Option<String> {
-    let window = window.filter(|w| *w > 0)?;
-    let left = 100u64.saturating_sub(used.saturating_mul(100) / window);
-    Some(format!("{left}% context left"))
+    domain::usage::percent_left(used, window).map(|left| format!("{left}% context left"))
 }
 
 #[cfg(test)]

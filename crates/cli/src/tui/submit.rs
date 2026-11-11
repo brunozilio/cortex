@@ -27,7 +27,7 @@ impl App {
             return super::memory::remember(self, note.to_owned());
         }
         if let Some(run) = &self.run {
-            let text = super::mentions::with_files(&self.cwd, &self.pastes.unfold(&text));
+            let text = super::mentions::with_files(&self.sdk, &self.cwd, &self.pastes.unfold(&text));
             let _ = run.steer(&text);
             self.queued.push(text);
             return;

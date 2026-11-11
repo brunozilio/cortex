@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod approval;
 pub mod billing;
+pub mod changes;
 pub mod command;
 pub mod credentials;
 pub mod engines;

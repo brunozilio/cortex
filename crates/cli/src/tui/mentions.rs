@@ -1,7 +1,6 @@
 use std::path::Path;
 
 const OFFERED: usize = 8;
-const KEPT: usize = 50_000;
 
 pub(super) fn offered(app: &super::app::App) -> Vec<String> {
     let Some((_, query)) = typing(app.input.text(), app.input.cursor()) else { return Vec::new() };
@@ -12,7 +11,7 @@ pub(super) fn load(app: &mut super::app::App) {
     if app.files.is_none() && typing(app.input.text(), app.input.cursor()).is_some() {
         app.files = Some(Vec::new());
         let cwd = app.cwd.clone();
-        app.spawn(move |_| super::app::Msg::Files(list(&cwd)));
+        app.spawn(move |sdk| super::app::Msg::Files(list(sdk, &cwd)));
     }
 }
 
@@ -57,36 +56,17 @@ fn score(query: &str, file: &str) -> Option<i64> {
     Some(100 - gaps.min(99))
 }
 
-pub fn list(cwd: &Path) -> Vec<String> {
-    let output = std::process::Command::new("git")
-        .args(["ls-files", "--cached", "--others", "--exclude-standard"])
-        .current_dir(cwd)
-        .output();
-    match output {
-        Ok(output) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).lines().take(50_000).map(str::to_owned).collect()
-        }
-        _ => Vec::new(),
-    }
+pub fn list(sdk: &sdk::Sdk, cwd: &Path) -> Vec<String> {
+    let listed = sdk.feature("workspace", serde_json::json!({ "op": "files", "path": cwd }));
+    listed.ok().and_then(|value| serde_json::from_value(value).ok()).unwrap_or_default()
 }
 
-pub fn with_files(cwd: &Path, prompt: &str) -> String {
-    let mut out = prompt.to_owned();
-    let mut seen = Vec::new();
-    for word in prompt.split_whitespace() {
-        let Some(path) = word.strip_prefix('@').map(|p| p.trim_end_matches([',', '.', ':', ';', ')', '?', '!'])) else {
-            continue;
-        };
-        if path.is_empty() || seen.contains(&path) || seen.len() >= 5 {
-            continue;
-        }
-        let Ok(text) = std::fs::read_to_string(cwd.join(path)) else { continue };
-        seen.push(path);
-        let kept: String = text.chars().take(KEPT).collect();
-        let cut = if kept.len() < text.len() { "\n[… cut]" } else { "" };
-        out.push_str(&format!("\n\n<file path=\"{path}\">\n{kept}{cut}\n</file>"));
+pub fn with_files(sdk: &sdk::Sdk, cwd: &Path, prompt: &str) -> String {
+    if !prompt.contains('@') {
+        return prompt.to_owned();
     }
-    out
+    let asked = sdk.feature("workspace", serde_json::json!({ "op": "mentions", "path": cwd, "prompt": prompt }));
+    asked.ok().and_then(|value| value.as_str().map(str::to_owned)).unwrap_or_else(|| prompt.to_owned())
 }
 
 #[cfg(test)]
@@ -110,13 +90,5 @@ mod tests {
         assert_eq!(rank("main", &files)[..2], ["src/main.rs", "docs/main-notes.md"]);
         assert_eq!(rank("stm", &files)[0], "src/tui/mod.rs", "letters in order, the closest first");
         assert!(rank("zzz", &files).is_empty());
-    }
-
-    #[test]
-    fn mentioned_files_go_with_the_prompt() {
-        let dir = tempfile::tempdir().expect("dir");
-        std::fs::write(dir.path().join("a.rs"), "fn a() {}").expect("write");
-        let sent = with_files(dir.path(), "why is @a.rs empty? and @missing.rs");
-        assert_eq!(sent, "why is @a.rs empty? and @missing.rs\n\n<file path=\"a.rs\">\nfn a() {}\n</file>");
     }
 }

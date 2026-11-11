@@ -26,6 +26,11 @@ pub struct ContextUsage {
     pub shares: Vec<ContextShare>,
 }
 
+pub fn percent_left(used: u64, window: Option<u64>) -> Option<u64> {
+    let window = window.filter(|window| *window > 0)?;
+    Some(100u64.saturating_sub(used.saturating_mul(100) / window))
+}
+
 impl ContextUsage {
     pub fn fraction(&self) -> f32 {
         if self.window == 0 { 0.0 } else { (self.used as f64 / self.window as f64).clamp(0.0, 1.0) as f32 }
@@ -103,6 +108,14 @@ pub fn compact_tokens(tokens: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_context_left_is_a_whole_percent_of_a_known_window() {
+        assert_eq!(percent_left(50_000, Some(200_000)), Some(75));
+        assert_eq!(percent_left(300_000, Some(200_000)), Some(0));
+        assert_eq!(percent_left(1, Some(0)), None);
+        assert_eq!(percent_left(1, None), None);
+    }
 
     #[test]
     fn fraction_free_and_percent() {
