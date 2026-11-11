@@ -129,8 +129,14 @@ fn nested_instruction_is_delivered_before_the_first_matching_tool_batch_executes
     ));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let asked = model.asked();
-    assert!(!asked[0].system.contains("NESTED-INSTRUCTION"));
-    assert!(asked[1].system.contains("NESTED-INSTRUCTION"));
+    assert!(!format!("{:?}", asked[0]).contains("NESTED-INSTRUCTION"));
+    assert_eq!(asked[1].system, asked[0].system, "the cached system prompt does not change mid-run");
+    let reminded = asked[1]
+        .messages
+        .iter()
+        .flat_map(|m| &m.blocks)
+        .any(|block| matches!(block, Block::Reminder(text) if text.contains("NESTED-INSTRUCTION")));
+    assert!(reminded, "the rule reaches the model as a reminder");
     assert!(
         matches!(&asked[1].messages.last().expect("rule delivery").blocks[0],Block::ToolResult{is_error:true,content,..} if content.contains("NESTED-INSTRUCTION"))
     );

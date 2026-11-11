@@ -59,6 +59,7 @@ fn message(message: &Message) -> Option<Value> {
 fn block(block: &Block) -> Value {
     match block {
         Block::Text(text) => json!({ "type": "text", "text": text }),
+        Block::Reminder(_) => json!({ "type": "text", "text": block.sent_text().unwrap_or_default() }),
         Block::Image(image) => image_block(image),
         Block::ToolResultRich { id, content, images, is_error } => {
             let mut parts = vec![json!({"type":"text", "text":content})];

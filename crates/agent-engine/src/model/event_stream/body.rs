@@ -47,6 +47,7 @@ fn message(message: &Message, model: &str) -> Value {
     for block in &message.blocks {
         match block {
             Block::Text(text) => texts.push(text.clone()),
+            Block::Reminder(_) => texts.extend(block.sent_text()),
             Block::Image(image) => images.push(image_value(image)),
             Block::ToolResult { id, content, is_error } => results.push(result(id, content, *is_error)),
             Block::ToolResultRich { id, content, images: shown, is_error } => {

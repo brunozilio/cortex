@@ -218,7 +218,11 @@ Removing the folders of one name removes the feature; CI checks every name.
   working rules; project instructions and rules (`docs/native-engine.md`).
 - **Keeping the context small and cached**: a session keeps the date and
   git snapshot of its first prompt (`Sessions::load_snapshot`), so later
-  prompts reuse the cached prefix; providers keep one cache key per
+  prompts reuse the cached prefix. The mode's reminder and the path rules
+  a run meets are not in the system prompt: they ride as
+  `Block::Reminder` (sent as `<system-reminder>` text, left out of
+  `Message::text`) on the latest user message whenever they change
+  (`agent/reminders.rs`). Providers keep one cache key per
   conversation (`model/conversation_key.rs`). Read sends a note for an
   unchanged range already read (`tools/seen_files.rs`) and stops before
   100k characters; long Bash output keeps its start and end. At the

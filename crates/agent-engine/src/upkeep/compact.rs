@@ -63,9 +63,12 @@ pub fn compact_on(
         .last()
         .filter(|m| {
             m.role == crate::transcript::Role::User
-                && m.blocks.iter().all(|b| matches!(b, Block::Text(_) | Block::Image(_)))
+                && m.blocks.iter().all(|b| matches!(b, Block::Text(_) | Block::Image(_) | Block::Reminder(_)))
         })
-        .cloned();
+        .map(|m| Message {
+            blocks: m.blocks.iter().filter(|b| !matches!(b, Block::Reminder(_))).cloned().collect(),
+            ..m.clone()
+        });
     *history = vec![Message::user(format!("{}\n\n{}", crate::prompt::text("continued"), summary.trim()))];
     if let Some(latest) = latest {
         history.push(latest);
@@ -86,6 +89,7 @@ fn bounded_summary(
         for block in &message.blocks {
             match block {
                 Block::Text(s) | Block::Thinking { text: s, .. } => text.push_str(s),
+                Block::Reminder(_) => {}
                 Block::ToolUse { id, name, input } => text.push_str(&format!("Tool {id} {name}: {input}")),
                 Block::ToolResult { id, content, is_error } | Block::ToolResultRich { id, content, is_error, .. } => {
                     text.push_str(&format!("Result {id} (error={is_error}): {content}"))

@@ -28,7 +28,7 @@ fn message_tokens(message: &Message) -> u64 {
         .blocks
         .iter()
         .map(|block| match block {
-            Block::Text(text) => tokens(text),
+            Block::Text(text) | Block::Reminder(text) => tokens(text),
             Block::Thinking { text, .. } => tokens(text),
             Block::ToolUse { name, input, .. } => tokens(name) + tokens(&input.to_string()),
             Block::ToolResult { content, .. } => tokens(content),

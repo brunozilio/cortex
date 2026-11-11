@@ -93,7 +93,8 @@ fn the_style_picked_in_settings_reaches_the_prompt() {
     finish(&engine, &request);
     let asked = &model_api.asked()[0];
     assert!(asked.system.contains("# Concise style"), "the style's text");
-    assert!(asked.system.contains("Be concise: lead with the result"), "and its turn reminder");
+    let reminded = format!("{:?}", asked.messages.last().map(|m| &m.blocks));
+    assert!(reminded.contains("Be concise: lead with the result"), "and its turn reminder: {reminded}");
 }
 
 #[test]

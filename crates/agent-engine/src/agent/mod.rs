@@ -6,6 +6,7 @@ mod model_hooks;
 mod permission;
 mod permission_ask;
 mod plan_mode;
+mod reminders;
 mod script_call;
 mod sub_agent;
 mod tasks;
@@ -87,6 +88,7 @@ impl Agent<'_> {
         let mut recoveries = 0;
         let mut compacted_at = None;
         let mut counted = crate::upkeep::Counted::default();
+        let mut reminders = reminders::Reminders::default();
         let mut fell_back: Option<String> = None;
         let mut hook_fell_back = false;
         let mut stop_hook_active = false;
@@ -113,9 +115,11 @@ impl Agent<'_> {
                 let compaction = crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto")
                     .map_err(Ending::Failed)?;
                 counted.forget();
+                reminders.resend();
                 (self.emit)(EngineEvent::Compacted(compaction));
                 compacted_at = Some(history.len());
             }
+            reminders.deliver(self.runtime_reminder(), history);
             let mut request = TurnRequest { messages: history.clone(), ..self.turn_template(fell_back.as_ref()) };
             if let Some(model) = self.hooked_model("ModelRequest", &request, serde_json::json!({})) {
                 request.model = model;
@@ -144,6 +148,7 @@ impl Agent<'_> {
                         crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto")
                             .map_err(Ending::Failed)?;
                     counted.forget();
+                    reminders.resend();
                     (self.emit)(EngineEvent::Compacted(compaction));
                     compacted_at = Some(history.len());
                     continue;
@@ -244,13 +249,17 @@ impl Agent<'_> {
         Err(Ending::TooManyTurns)
     }
 
-    fn turn_template(&self, fell_back: Option<&String>) -> TurnRequest {
+    fn runtime_reminder(&self) -> String {
         let style = self.workspace.prompt_context.as_ref().and_then(|context| context.output_style.as_ref());
         let reminder =
             crate::prompt::reminder(self.control.mode(), self.depth, style.and_then(|s| s.reminder.as_deref()));
+        format!("{reminder}{}", self.workspace.rule_instructions())
+    }
+
+    fn turn_template(&self, fell_back: Option<&String>) -> TurnRequest {
         TurnRequest {
             messages: Vec::new(),
-            system: format!("{}{reminder}{}", self.request.system, self.workspace.rule_instructions()),
+            system: self.request.system.clone(),
             tools: self.offered(),
             model: fell_back.cloned().unwrap_or_else(|| self.request.model.clone()),
             ..self.request.clone()

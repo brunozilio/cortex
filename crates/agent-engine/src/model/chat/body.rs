@@ -46,6 +46,10 @@ fn user(message: &Message, messages: &mut Vec<Value>) {
                 messages.push(json!({ "role": "tool", "tool_call_id": id, "content": content }));
             }
             Block::Text(part) => text.push_str(part),
+            Block::Reminder(_) => {
+                let sent = block.sent_text().unwrap_or_default();
+                text.push_str(&if text.is_empty() { sent } else { format!("\n\n{sent}") });
+            }
             Block::Image(image) => images.push(image.clone()),
             Block::ToolResultRich { id, content, images: found, is_error } => {
                 messages.push(json!({"role":"tool", "tool_call_id":id, "content":if *is_error {format!("Error: {content}")} else {content.clone()}}));

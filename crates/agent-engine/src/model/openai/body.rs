@@ -61,6 +61,10 @@ fn items(message: &Message) -> Vec<Value> {
     for block in &message.blocks {
         match block {
             Block::Text(part) => text.push_str(part),
+            Block::Reminder(_) => {
+                let sent = block.sent_text().unwrap_or_default();
+                text.push_str(&if text.is_empty() { sent } else { format!("\n\n{sent}") });
+            }
             Block::Image(image) => {
                 flush(&mut text, &mut items);
                 items.push(json!({"type":"message", "role":"user", "content":[{"type":"input_image", "image_url":image.data_url(), "detail":"auto"}]}));

@@ -40,6 +40,17 @@ pub enum Block {
         content: String,
         is_error: bool,
     },
+    Reminder(String),
+}
+
+impl Block {
+    pub fn sent_text(&self) -> Option<String> {
+        match self {
+            Self::Text(text) => Some(text.clone()),
+            Self::Reminder(text) => Some(format!("<system-reminder>\n{}\n</system-reminder>", text.trim())),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
