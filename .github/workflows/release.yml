@@ -126,7 +126,7 @@ jobs:
       # zig is the musl C toolchain (ring, oniguruma): from PyPI, not apt.
       - if: matrix.cargo == 'zigbuild'
         run: python3 -m pip install --user --break-system-packages ziglang cargo-zigbuild
-      - run: cargo ${{ matrix.cargo || 'build' }} --release --locked -p superfik-cli --target ${{ matrix.target }} ${{ matrix.flags }}
+      - run: cargo ${{ matrix.cargo || 'build' }} --release --locked -p cli --target ${{ matrix.target }} ${{ matrix.flags }}
       - name: Sign and notarize
         if: runner.os == 'macOS'
         env:

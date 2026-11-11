@@ -29,7 +29,7 @@ chat (CLI/TUI) and an SDK (ADR 0018). No GUI.
   package cache can still briefly require a lock during dependency downloads.
 
 ## Rules
-- Domain rules live in `superfik-core` (pure, no IO), never in the CLI's
+- Domain rules live in `domain` (pure, no IO), never in the CLI's
   rendering or the SDK's glue.
 - Files over ~200–300 lines or functions mixing concerns get split.
 - Every new behaviour gets a test; IO sits behind traits so logic is testable.

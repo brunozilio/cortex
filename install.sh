@@ -53,7 +53,7 @@ target() {
     esac
     case "$os" in
         Darwin)
-            [ "$arch" = "aarch64" ] || fail "no build for Intel Macs; build it with: cargo install --path crates/superfik-cli"
+            [ "$arch" = "aarch64" ] || fail "no build for Intel Macs; build it with: cargo install --path crates/cli"
             printf 'aarch64-apple-darwin'
             ;;
         Linux) printf '%s-unknown-linux-%s' "$arch" "$(linux_libc)" ;;

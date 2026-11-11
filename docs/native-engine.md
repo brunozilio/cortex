@@ -1,6 +1,6 @@
 # Native engine
 
-How Superfik's own engine (`superfik-native`) is configured and tested.
+How Superfik's own engine (`agent-engine`) is configured and tested.
 Its architecture is in [architecture.md](architecture.md) (Engines).
 
 ## Providers
@@ -46,9 +46,9 @@ with the user's own message, so tool round-trips are not premium requests.
 The browser must reach the machine running the backend; sign-in waits up to
 five minutes. Credentials stay in the backend's `SecretStore`; tokens are
 renewed before they expire (ChatGPT also once after a 401) and never reach
-the client. Contracts are pure in `superfik-providers`; HTTP in
-`superfik-native/src/model/providers`; storage, sign-in and discovery in
-`superfik-backend/src/providers/`. HTTP or JSON errors never
+the client. Contracts are pure in `llm-providers`; HTTP in
+`agent-engine/src/model/providers`; storage, sign-in and discovery in
+`backend/src/providers/`. HTTP or JSON errors never
 become a made-up catalog.
 
 `effort` reaches every provider that supports it (`reasoning.effort`,
@@ -77,7 +77,7 @@ files (`SUPERFIK.md`, `.superfik/SUPERFIK.md`, `SUPERFIK.local.md`,
 `@path` imports are relative, inside the trusted folder, five levels deep,
 1 MiB per file and 4 MiB in all. `/skill args` and Markdown commands are
 expanded before the model call (`$ARGUMENTS`). Plan mode blocks mutations,
-internal MCP tools included. The prompt identifies as `superfik-native/1`.
+internal MCP tools included. The prompt identifies as `agent-engine/1`.
 
 ## Custom agents and hooks
 
@@ -104,7 +104,7 @@ Ordinary tests are deterministic. With a provider connected (`superfik login`):
 
 ```sh
 SUPERFIK_LIVE_PROVIDER=claude-subscription [SUPERFIK_LIVE_MODEL=…] \
-  cargo test -p superfik-backend --test live_memory -- --ignored --nocapture
+  cargo test -p backend --test live_memory -- --ignored --nocapture
 ```
 
 `SUPERFIK_LIVE_CREDENTIAL_FILE` supplies a private credential in isolated

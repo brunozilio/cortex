@@ -1,0 +1,21 @@
+[package]
+name = "mlx"
+description = "Open models on Apple silicon: pulled from Hugging Face, one mlx_lm.server for the model in use, installed and stopped on demand."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+domain.workspace = true
+subprocess.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "rustls-tls-native-roots"] }
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

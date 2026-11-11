@@ -1,0 +1,26 @@
+[package]
+name = "sdk"
+description = "Build on Superfik: sessions with the agent, agents, commands, skills, memory, and MCP tools in code, over HTTP or stdio."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+domain.workspace = true
+protocol.workspace = true
+backend.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+crossbeam-channel.workspace = true
+
+[features]
+default = ["embeddings"]
+# Semantic memory search (local embeddings through ONNX Runtime).
+embeddings = ["backend/embeddings"]
+
+[dev-dependencies]
+agent-engine = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

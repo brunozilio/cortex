@@ -5,7 +5,7 @@ of decisions dropped with the desktop app are not reused.
 
 ## 0015 — Superfik is the engine
 
-No agent CLI runs underneath. The agent loop is ours (`superfik-native`): it calls the provider's API itself, runs its tools as
+No agent CLI runs underneath. The agent loop is ours (`agent-engine`): it calls the provider's API itself, runs its tools as
 Rust functions, and emits `EngineEvent`s, so clients are engine-agnostic.
 Providers sit behind `ModelApi`, tested against captured streams; local
 models run on MLX as Chat Completions. The system prompt, tools, sessions
@@ -15,7 +15,7 @@ and compaction are ours; the prompt loads `SUPERFIK.md` and names Superfik.
 
 OpenAI API, ChatGPT Subscription, Claude Subscription, Anthropic API,
 GitHub Copilot Subscription and Kiro Subscription are independently connected providers, each with its own credentials and
-model catalog. Pure contracts live in `superfik-providers`; the native
+model catalog. Pure contracts live in `llm-providers`; the native
 engine does the IO. The backend handles PKCE and loopback callbacks
 and keeps credentials in its `SecretStore`, saving rotated refresh tokens;
 runs carry a redacted handle a client cannot supply. Subscription adapters
@@ -32,7 +32,7 @@ and MCP. Two crates come on top: a terminal chat (CLI/TUI) and an SDK for
 building agents, commands, skills, memory access and in-process MCP tools,
 and for connecting MCP servers over HTTP and stdio.
 
-- The AI providers are LLM providers (`superfik-providers`,
+- The AI providers are LLM providers (`llm-providers`,
   `ModelProviders`). Skills, agents and MCP come from Superfik's folders
   (ADR 0021), its plugins (ADR 0019) and the SDK host. No web search or
   fetch tool.
@@ -120,13 +120,13 @@ consolidation running in the background.
 
 The agent asks language servers instead of only searching text.
 
-- Rules are pure in `superfik_core::lsp`: the servers (a built-in table for
+- Rules are pure in `domain::lsp`: the servers (a built-in table for
   rust-analyzer, typescript-language-server, pyright, gopls and clangd,
   changed by `lspServers` in each settings file, then a plugin's `.lsp.json`,
   by name and field by field; `disabled` removes one), the server for a
   file (its extension) and its root (the closest marker, never above the
   working folder), the questions and how answers read.
-- `superfik_native::lsp`: `LspClient` speaks the protocol to one process;
+- `agent_engine::lsp`: `LspClient` speaks the protocol to one process;
   `LspPool` keeps one per server and root for the engine's life (in the
   daemon, across runs and clients), starts it on first use, restarts it if
   it ended, ends it after 10 idle minutes and does not retry one that
@@ -166,7 +166,7 @@ still works.
 - `superfik update` asks GitHub for the latest tag, installs it only when
   it is newer than this build, and refuses an archive whose SHA-256 does
   not match the published one. Which release and which archive are pure
-  rules in `superfik_core::release`; the download sits behind the CLI's
+  rules in `domain::release`; the download sits behind the CLI's
   `Releases` trait.
 - The new binary is written beside the running one and renamed over it,
   so the file is always the whole old or the whole new build.

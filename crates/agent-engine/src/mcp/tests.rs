@@ -1,0 +1,235 @@
+use domain::{Extensions, ModelOption};
+
+use super::*;
+use crate::model::http::ScriptedHttp;
+use crate::tools::{Access, Workspace};
+
+fn tools(request: &PromptRequest, http: &Arc<dyn Http>) -> Vec<Box<dyn Tool>> {
+    tools_stopped(request, &McpSources::default(), http, &std::sync::atomic::AtomicBool::new(false))
+}
+
+fn listed(id: u64) -> String {
+    json!({
+        "jsonrpc": "2.0", "id": id,
+        "result": { "tools": [{
+            "name": "search",
+            "description": "Searches the docs.",
+            "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } } },
+        }] },
+    })
+    .to_string()
+}
+
+/// A run whose host configured one HTTP server, `docs`, with a token.
+fn docs_request() -> (tempfile::TempDir, PromptRequest) {
+    let dir = tempfile::tempdir().expect("dir");
+    let config = dir.path().join("mcp.json");
+    let server = r#"{"mcpServers": {"docs": {"type": "http", "url": "http://127.0.0.1:7/mcp", "headers": {"authorization": "Bearer t-1"}}}}"#;
+    std::fs::write(&config, server).expect("config");
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
+    request.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
+    (dir, request)
+}
+
+#[test]
+fn an_http_server_s_tools_are_named_for_it_and_called_with_its_headers() {
+    let initialized = json!({ "jsonrpc": "2.0", "id": 1, "result": { "capabilities": { "tools": {} } } });
+    let called =
+        json!({ "jsonrpc": "2.0", "id": 3, "result": { "content": [{ "type": "text", "text": "[4] Uses wgpu" }] } });
+    let http = Arc::new(ScriptedHttp::new([
+        (200, initialized.to_string()),
+        (202, String::new()),
+        (200, listed(2)),
+        (200, called.to_string()),
+    ]));
+    let shared: Arc<dyn Http> = http.clone();
+    let (_dir, request) = docs_request();
+    let tools = tools(&request, &shared);
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].spec().name, "mcp__docs__search");
+    assert_eq!(tools[0].access(), Access::Executes, "another's tools ask first");
+    assert_eq!(tools[0].spec().schema["properties"]["query"]["type"], "string");
+    let input = json!({ "query": "renderer" });
+    assert_eq!(tools[0].summary(&input), "renderer");
+    assert_eq!(tools[0].run(&input, &Workspace::new("/repo")), Outcome::ok("[4] Uses wgpu"));
+    let sent = http.sent();
+    assert!(sent.iter().all(|s| s.url == "http://127.0.0.1:7/mcp"));
+    assert!(sent.iter().all(|s| s.headers.contains(&("authorization".to_owned(), "Bearer t-1".to_owned()))));
+    let call: Value = serde_json::from_str(&sent[3].body).expect("json");
+    assert_eq!((call["method"].as_str(), call["params"]["name"].as_str()), (Some("tools/call"), Some("search")));
+}
+
+#[test]
+fn a_failed_call_and_an_unreachable_server_say_so() {
+    let failed = json!({ "jsonrpc": "2.0", "id": 1, "result": { "content": [{ "type": "text", "text": "no" }], "isError": true } });
+    let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([(200, failed.to_string()), (401, String::new())]));
+    let (_dir, request) = docs_request();
+    let spec = servers(&request, &super::McpSources::default()).remove(0);
+    let server = McpServer::open(&spec, &http).expect("open");
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    assert_eq!(server.call("search", &Value::Null, &stop), Outcome::error("no"));
+    assert!(server.call("search", &Value::Null, &stop).content.contains("HTTP 401"));
+    let none: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
+    assert!(tools(&request, &none).is_empty(), "the run goes on without it");
+}
+
+#[test]
+fn an_answer_sent_as_a_stream_is_read_too() {
+    let streamed = "event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n\n";
+    assert_eq!(parse(streamed), Some(json!({ "jsonrpc": "2.0", "id": 1, "result": {} })));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_process_server_s_tools_are_listed_and_called() {
+    let script = r#"
+echo 'starting up'
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+  [ -z "$id" ] && continue
+  case "$line" in
+    *'"initialize"'*) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{}}" ;;
+    *'"tools/list"'*) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"tools\":[{\"name\":\"echo\",\"inputSchema\":{\"type\":\"object\"}}]}}" ;;
+    *'"tools/call"'*) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"hi $GREETING\"}]}}" ;;
+  esac
+done
+"#;
+    let spec = ServerSpec::Stdio {
+        name: "echo-me".into(),
+        command: "sh".into(),
+        args: vec!["-c".into(), script.into()],
+        env: vec![("GREETING".into(), "there".into())],
+    };
+    let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
+    let server = Arc::new(McpServer::open(&spec, &http).expect("spawn"));
+    let tools = server.tools().expect("tools");
+    assert_eq!(tools[0].spec().name, "mcp__echo-me__echo");
+    assert_eq!(tools[0].access(), Access::Executes, "a host's tool is asked for");
+    assert_eq!(tools[0].run(&json!({}), &Workspace::new("/")), Outcome::ok("hi there"));
+}
+
+#[test]
+fn a_command_that_does_not_exist_is_left_out() {
+    let spec =
+        ServerSpec::Stdio { name: "gone".into(), command: "superfik-no-such-tool".into(), args: vec![], env: vec![] };
+    let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
+    let error = McpServer::open(&spec, &http).expect_err("missing");
+    assert!(error.contains("gone could not start"), "{error}");
+}
+
+#[test]
+fn lists_every_page_and_rejects_a_repeated_mcp_cursor() {
+    let initialized = json!({"id":1,"result":{}}).to_string();
+    let first = json!({"id":2,"result":{"tools":[{"name":"first"}],"nextCursor":"next"}}).to_string();
+    let last = json!({"id":3,"result":{"tools":[{"name":"second"}]}}).to_string();
+    let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([
+        (200, initialized.clone()),
+        (202, String::new()),
+        (200, first.clone()),
+        (200, last),
+    ]));
+    let spec = ServerSpec::Http { name: "pages".into(), url: "http://fixture".into(), headers: vec![] };
+    let tools = Arc::new(McpServer::open(&spec, &http).expect("server")).tools().expect("all pages");
+    assert_eq!(tools.iter().map(|t| t.spec().name).collect::<Vec<_>>(), ["mcp__pages__first", "mcp__pages__second"]);
+    let repeated = json!({"id":3,"result":{"tools":[],"nextCursor":"next"}}).to_string();
+    let http: Arc<dyn Http> =
+        Arc::new(ScriptedHttp::new([(200, initialized), (202, String::new()), (200, first), (200, repeated)]));
+    let error = Arc::new(McpServer::open(&spec, &http).expect("server")).tools().expect_err("repeated cursor");
+    assert!(error.contains("repeated"));
+}
+
+#[test]
+fn embedded_resource_links_and_structured_results_survive_tool_output() {
+    let result = outcome(
+        &json!({"content":[{"type":"resource","resource":{"uri":"fixture://resource","text":"ORANGE-RESOURCE"}},{"type":"resource_link","uri":"fixture://link","name":"Linked file"}],"structuredContent":{"summary":"ORANGE-STRUCTURED"}}),
+    );
+    assert!(!result.is_error);
+    for expected in ["ORANGE-RESOURCE", "ORANGE-STRUCTURED", "fixture://link"] {
+        assert!(result.content.contains(expected), "{expected}");
+    }
+    assert!(outcome(&json!({"content":[{"type":"audio","data":"not-supported"}]})).is_error);
+}
+
+struct Echo;
+
+impl domain::mcp::McpEndpoint for Echo {
+    fn handle(&self, message: &Value) -> Option<Value> {
+        let id = message.get("id")?.clone();
+        let result = match message["method"].as_str() {
+            Some("tools/list") => json!({ "tools": [{ "name": "echo", "inputSchema": { "type": "object" } }] }),
+            Some("tools/call") => {
+                json!({ "content": [{ "type": "text", "text": message["params"]["arguments"]["say"].clone() }] })
+            }
+            _ => json!({}),
+        };
+        Some(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
+    }
+}
+
+#[test]
+fn an_in_process_server_s_tools_are_called_without_http() {
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
+    request.credentials.mcp = vec![domain::mcp::LocalMcp::new("host", Arc::new(Echo))];
+    let http = Arc::new(ScriptedHttp::new([]));
+    let shared: Arc<dyn Http> = http.clone();
+    let tools = tools(&request, &shared);
+    assert_eq!(tools.iter().map(|t| t.spec().name).collect::<Vec<_>>(), ["mcp__host__echo"]);
+    assert_eq!(tools[0].run(&json!({ "say": "hello" }), &Workspace::new("/repo")), Outcome::ok("hello"));
+    assert!(http.sent().is_empty(), "nothing went over HTTP");
+}
+
+struct Memory;
+
+impl domain::mcp::McpEndpoint for Memory {
+    fn handle(&self, message: &Value) -> Option<Value> {
+        let tools = || vec![json!({ "name": "memory_search", "inputSchema": { "type": "object" } })];
+        domain::mcp::respond(message, "superfik_memory", tools, |_, _| {
+            Ok(domain::mcp::text_result("[4] Uses wgpu", false))
+        })
+    }
+}
+
+#[test]
+fn superfik_s_own_memory_search_runs_without_asking() {
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
+    let memory = domain::mcp::LocalMcp::new(domain::memory::MEMORY_SERVER, Arc::new(Memory));
+    request.credentials.mcp = vec![memory];
+    let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
+    let tools = tools(&request, &http);
+    assert_eq!(tools[0].spec().name, "mcp__superfik_memory__memory_search");
+    assert_eq!(tools[0].access(), Access::Reads);
+    let input = json!({ "query": "renderer" });
+    assert_eq!(tools[0].summary(&input), "renderer");
+    assert_eq!(tools[0].run(&input, &Workspace::new("/repo")), Outcome::ok("[4] Uses wgpu"));
+}
+
+struct SignedIn;
+
+impl domain::credentials::McpTokenSource for SignedIn {
+    fn token(&self, server_url: &str) -> Option<String> {
+        (server_url == "https://mcp.test/mcp").then(|| "oauth-1".to_owned())
+    }
+}
+
+#[test]
+fn a_server_the_owner_signed_in_to_gets_their_token_and_one_refusing_says_how_to_sign_in() {
+    let dir = tempfile::tempdir().expect("dir");
+    let config = dir.path().join("mcp.json");
+    let servers = r#"{"mcpServers": {"linear": {"type": "http", "url": "https://mcp.test/mcp"}}}"#;
+    std::fs::write(&config, servers).expect("config");
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
+    request.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
+    request.credentials.mcp_tokens = Some(domain::credentials::McpSignIns(Arc::new(SignedIn)));
+    let initialized = json!({ "jsonrpc": "2.0", "id": 1, "result": { "capabilities": { "tools": {} } } });
+    let http = Arc::new(ScriptedHttp::new([(200, initialized.to_string()), (202, String::new()), (200, listed(2))]));
+    let shared: Arc<dyn Http> = http.clone();
+    assert_eq!(tools(&request, &shared).len(), 1);
+    assert!(http.sent().iter().all(|s| s.headers.contains(&("Authorization".to_owned(), "Bearer oauth-1".to_owned()))));
+
+    request.credentials.mcp_tokens = None;
+    let spec = super::servers(&request, &super::McpSources::default()).remove(0);
+    let refusing: Arc<dyn Http> = Arc::new(ScriptedHttp::new([(401, String::new())]));
+    let error =
+        McpServer::open(&spec, &refusing).expect("open").initialize_stopped(&std::sync::atomic::AtomicBool::new(false));
+    assert!(error.expect_err("refused").contains("/mcp login linear"));
+}

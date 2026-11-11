@@ -1,0 +1,18 @@
+[package]
+name = "llm-providers"
+description = "LLM providers (Anthropic, OpenAI, Claude and ChatGPT subscriptions): credentials, sign-in, request and catalog shapes. Pure."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+domain.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+serde_json.workspace = true
+base64 = "0.23"
+chrono = { version = "0.4", features = ["serde"] }
+url = "2"
+
+[lints]
+workspace = true
