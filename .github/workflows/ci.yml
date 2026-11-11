@@ -111,11 +111,10 @@ jobs:
             done
           done
           for keep in $(ls "$providers"); do
+            kept=$(mktemp -d)
             for name in $(ls "$providers"); do
-              [ "$name" = "$keep" ] || mv "$providers/$name" "$aside/"
+              [ "$name" = "$keep" ] || mv "$providers/$name" "$kept/"
             done
             cargo check --workspace --locked
-            for name in $(ls "$aside"); do
-              [ -d "$aside/$name/src" ] || mv "$aside/$name" "$providers/"
-            done
+            mv "$kept"/* "$providers/"
           done
