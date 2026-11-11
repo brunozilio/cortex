@@ -47,12 +47,27 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
         "mcp servers",
         sdk.mcp_servers(cwd).map(|servers| format!("{} configured", servers.len())).map_err(|e| e.to_string()),
     ));
+    found.push(check("declared providers", declared(sdk, cwd)));
     found.push(check("git", program("git", &["--version"])));
     found.push(check(
         "ripgrep",
         program("rg", &["--version"]).or_else(|_| Ok("not installed (Grep works without it)".into())),
     ));
     found
+}
+
+fn declared(sdk: &Sdk, cwd: &Path) -> Result<String, String> {
+    let lines = sdk.feature("declared_providers", serde_json::json!({ "path": cwd })).map_err(|e| e.to_string())?;
+    summarize(&serde_json::from_value::<Vec<String>>(lines).map_err(|e| e.to_string())?)
+}
+
+fn summarize(lines: &[String]) -> Result<String, String> {
+    let (loaded, problems): (Vec<&String>, Vec<&String>) = lines.iter().partition(|line| line.ends_with(" loaded"));
+    match (loaded.len(), problems.is_empty()) {
+        (_, false) => Err(problems.iter().map(|line| line.as_str()).collect::<Vec<_>>().join("; ")),
+        (0, true) => Ok(concat!("none (~/.", brand::command!(), "/providers/*.js adds one)").to_owned()),
+        (count, true) => Ok(format!("{count} loaded")),
+    }
 }
 
 fn program(name: &str, args: &[&str]) -> Result<String, String> {
@@ -95,5 +110,14 @@ mod tests {
                 " login`"
             )
         );
+    }
+
+    #[test]
+    fn declared_providers_pass_when_every_file_loaded() {
+        let lines = |all: &[&str]| all.iter().map(|line| (*line).to_owned()).collect::<Vec<_>>();
+        assert!(summarize(&[]).is_ok_and(|text| text.starts_with("none")));
+        assert_eq!(summarize(&lines(&["groq loaded", "local loaded"])), Ok("2 loaded".into()));
+        let mixed = lines(&["groq loaded", "/p/x.js: left out: bad wire"]);
+        assert_eq!(summarize(&mixed), Err("/p/x.js: left out: bad wire".into()));
     }
 }

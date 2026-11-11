@@ -32,7 +32,7 @@ impl LocalServices {
     pub fn detect() -> Self {
         let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
         if let Ok(cwd) = std::env::current_dir() {
-            crate::native::declare_providers(std::env::home_dir().as_deref(), &cwd);
+            let _ = crate::native::declare_providers(std::env::home_dir().as_deref(), &cwd);
         }
         Self::with_engine(Arc::new(crate::native::engine(&data)))
     }

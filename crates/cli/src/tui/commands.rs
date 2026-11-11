@@ -166,6 +166,7 @@ pub fn run(app: &mut App, command: Command) {
             app.load(false);
             let cwd = app.cwd.clone();
             app.spawn(move |sdk| {
+                let _ = sdk.feature("declared_providers", serde_json::json!({ "path": cwd }));
                 let found = (|| -> Result<_, sdk::Error> {
                     Ok((sdk.skills(&cwd)?, sdk.agents(&cwd)?, sdk.mcp_servers(&cwd)?))
                 })();

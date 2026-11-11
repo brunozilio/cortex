@@ -27,12 +27,12 @@ export default {
 | `models` | The models offered; without it the provider's `GET /models` is read. |
 | `window` | The context window, 128000 by default. |
 
-The file is read once when the app starts (`backend::native::
+The file is read when the app starts and again on `/reload` (`backend::native::
 declare_providers`, `agent_engine::declared_providers`), checked and
 registered beside the built-in providers (`llm_providers::declared`).
 Connect it with `/login` like any provider that takes an API key. A file
-that cannot be read or declares something invalid is left out with a
-warning in the log.
+that cannot be read or declares something invalid is left out; `/doctor`
+(and `{command} doctor`) names each one and why, and the log has it too.
 
 A project can bring providers in `.{command}/providers/*.js` too, but
 one starts only when the owner approves its id in their own settings

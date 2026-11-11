@@ -59,23 +59,33 @@ pub fn other_keys(
         .collect()
 }
 
-pub fn declare_providers(home: Option<&Path>, cwd: &Path) {
+pub fn declare_providers(home: Option<&Path>, cwd: &Path) -> Vec<String> {
     use agent_engine::declared_providers::{Loaded, load};
     let approved = agent_engine::prompt::settings::load(cwd, home, &[])
         .map(|settings| settings.enabled_providers)
         .unwrap_or_default();
-    for loaded in load(home, cwd, &approved) {
-        match loaded {
-            Loaded::Ready(provider) => tracing::info!(%provider, "declared provider loaded"),
-            Loaded::Unapproved { path, id } => tracing::warn!(
-                path = %path.display(),
-                "the project's provider {id} waits for approval: add it to enabledProviders in your own settings"
+    let described: Vec<(bool, String)> = load(home, cwd, &approved)
+        .into_iter()
+        .map(|loaded| match loaded {
+            Loaded::Ready(provider) => (true, format!("{provider} loaded")),
+            Loaded::Unapproved { path, id } => (
+                false,
+                format!(
+                    "{}: the project's provider {id} waits: add it to enabledProviders in your settings",
+                    path.display()
+                ),
             ),
-            Loaded::Broken { path, why } => {
-                tracing::warn!(path = %path.display(), %why, "a declared provider was left out")
-            }
+            Loaded::Broken { path, why } => (false, format!("{}: left out: {why}", path.display())),
+        })
+        .collect();
+    for (ok, line) in &described {
+        if *ok {
+            tracing::info!("{line}");
+        } else {
+            tracing::warn!("{line}");
         }
     }
+    described.into_iter().map(|(_, line)| line).collect()
 }
 
 pub fn engine(data: &Path) -> NativeEngine {
