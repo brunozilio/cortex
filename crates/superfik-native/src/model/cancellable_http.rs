@@ -15,6 +15,22 @@ const POLL: Duration = Duration::from_millis(25);
 /// How long a model turn may stream.
 pub const STREAM_TIMEOUT: Duration = Duration::from_secs(900);
 
+/// `error` with what caused it (`error sending request: … : invalid peer
+/// certificate: UnknownIssuer`), each cause once: a proxy, certificate or
+/// DNS problem names itself.
+pub(crate) fn described(error: &(dyn std::error::Error + 'static)) -> String {
+    let mut text = error.to_string();
+    let mut cause = error.source();
+    while let Some(next) = cause {
+        let said = next.to_string();
+        if !text.contains(&said) {
+            text = format!("{text}: {said}");
+        }
+        cause = next.source();
+    }
+    text
+}
+
 pub fn post(url: &str, headers: &[(String, String)], body: &str, stop: &AtomicBool) -> Result<Response, ModelError> {
     send(url, headers, Some(body), stop, STREAM_TIMEOUT)
 }
@@ -60,7 +76,7 @@ pub fn send(
                 tokio::pin!(waiting);
                 let mut response = loop {
                     tokio::select! {
-                        result=&mut waiting=>break result.map_err(|e|e.to_string())?,
+                        result=&mut waiting=>break result.map_err(|e| described(&e))?,
                         _=tokio::time::sleep(POLL)=>if signal.load(Ordering::Relaxed){return Ok(());}
                     }
                 };
@@ -76,7 +92,7 @@ pub fn send(
                 loop {
                     let chunk = loop {
                         tokio::select! {
-                            result=response.chunk()=>break result.map_err(|e|e.to_string())?,
+                            result=response.chunk()=>break result.map_err(|e| described(&e))?,
                             _=tokio::time::sleep(POLL)=>if signal.load(Ordering::Relaxed){return Ok(());}
                         }
                     };
@@ -155,5 +171,50 @@ impl BufRead for Body {
     }
     fn consume(&mut self, count: usize) {
         self.at = (self.at + count).min(self.buffer.len());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct Layer(&'static str, Option<Box<Layer>>);
+
+    impl std::fmt::Display for Layer {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(self.0)
+        }
+    }
+
+    impl std::error::Error for Layer {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            self.1.as_deref().map(|layer| layer as &(dyn std::error::Error + 'static))
+        }
+    }
+
+    #[test]
+    fn an_error_names_what_caused_it_once() {
+        let error = Layer(
+            "error sending request",
+            Some(Box::new(Layer(
+                "client error (Connect)",
+                Some(Box::new(Layer("invalid peer certificate: UnknownIssuer", None))),
+            ))),
+        );
+        assert_eq!(
+            described(&error),
+            "error sending request: client error (Connect): invalid peer certificate: UnknownIssuer"
+        );
+        let repeated = Layer("tcp connect error: refused", Some(Box::new(Layer("refused", None))));
+        assert_eq!(described(&repeated), "tcp connect error: refused");
+    }
+
+    #[test]
+    fn a_request_that_cannot_connect_says_why() {
+        let never = AtomicBool::new(false);
+        let error = send("https://127.0.0.1:1/", &[], None, &never, Duration::from_secs(5)).expect_err("refused");
+        let text = error.to_string();
+        assert!(text.contains("error sending request") && text.contains("connect"), "{text}");
     }
 }

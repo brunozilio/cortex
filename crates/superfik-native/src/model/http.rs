@@ -64,8 +64,12 @@ pub const SHORT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15
 impl NetHttp {
     fn short(url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
         let never = std::sync::atomic::AtomicBool::new(false);
-        let response = super::cancellable_http::send(url, headers, body, &never, SHORT_TIMEOUT)
-            .map_err(|error| error.to_string())?;
+        // The bare reason: callers say themselves that the provider was not reached.
+        let response =
+            super::cancellable_http::send(url, headers, body, &never, SHORT_TIMEOUT).map_err(|error| match error {
+                super::ModelError::Network(reason) => reason,
+                error => error.to_string(),
+            })?;
         let (status, headers) = (response.status, response.headers.clone());
         let text = response.text_stopped(&never).map_err(|error| error.to_string())?;
         Ok(Response { status, headers, body: Box::new(Cursor::new(text.into_bytes())) })
