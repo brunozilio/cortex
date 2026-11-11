@@ -6,17 +6,12 @@ edition.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "superfik"
+name = "lite"
 path = "src/main.rs"
-
-[features]
-default = ["embeddings"]
-# Semantic memory search; the static (musl) Linux build goes without it.
-embeddings = ["sdk/embeddings"]
 
 [dependencies]
 brand.workspace = true
-sdk = { workspace = true, default-features = false }
+sdk.workspace = true
 domain.workspace = true
 serde_json.workspace = true
 crossbeam-channel.workspace = true

@@ -17,7 +17,7 @@ pub fn window(model: &ModelOption) -> u64 {
         return tokens;
     }
     match model.provider {
-        ModelProvider::Local | ModelProvider::CopilotSubscription => 131_072,
+        ModelProvider::CopilotSubscription => 131_072,
         ModelProvider::OpenAi | ModelProvider::ChatGptSubscription => 400_000,
         ModelProvider::Anthropic | ModelProvider::ClaudeSubscription | ModelProvider::KiroSubscription => 200_000,
     }
@@ -73,7 +73,7 @@ mod tests {
     use crate::model::scripted::ScriptedModel;
 
     fn model() -> ModelOption {
-        ModelOption::new("qwen", "Qwen").served_by(ModelProvider::Local)
+        ModelOption::new("gpt-5-mini", "GPT-5 mini").served_by(ModelProvider::CopilotSubscription)
     }
 
     fn template() -> TurnRequest {

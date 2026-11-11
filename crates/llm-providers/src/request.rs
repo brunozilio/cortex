@@ -65,7 +65,6 @@ pub fn shape(provider: ModelProvider, model: Option<&ModelOption>, body: &mut Va
             super::kiro::shape(body);
             return Ok(());
         }
-        ModelProvider::Local => {}
     }
     apply_effort(body, provider, model, &effort)
 }

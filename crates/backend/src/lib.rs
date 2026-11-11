@@ -1,7 +1,6 @@
 //! The app's backend: a client sends [`ClientCommand`]s in an
 //! [`Envelope`] and polls [`ServerEvent`]s, woken by a [`Wake`] callback.
-//! [`LocalBackend`] runs everything in process; the daemon serves one per
-//! connected terminal on shared services.
+//! [`LocalBackend`] runs everything in process.
 //!
 //! [`ClientCommand`]: protocol::ClientCommand
 //! [`Envelope`]: protocol::Envelope
@@ -9,8 +8,6 @@
 
 mod authorizer;
 mod channels;
-#[cfg(unix)]
-pub mod daemon;
 mod dirs;
 mod extensions;
 mod handler;
@@ -18,7 +15,6 @@ mod local;
 mod mcp_admin;
 mod mcp_auth;
 mod memory;
-mod models;
 mod native;
 mod outbox;
 mod permissions;
@@ -43,9 +39,3 @@ pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
 pub use settings::SettingsStore;
 
-/// Local MLX models pulled from Hugging Face and removed again, on this
-/// computer only (Apple silicon).
-pub mod local_models {
-    pub use crate::models::local_models_folder as folder;
-    pub use mlx::{HfHub, Hub, LocalModelError, PullProgress, Pulled, Removed, pull, remove};
-}

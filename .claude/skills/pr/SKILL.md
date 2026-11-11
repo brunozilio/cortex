@@ -10,13 +10,13 @@ Stop at the first step that fails and say why; fix only what the user asks.
 1. **Branch.** Refuse on `main`. Find the base (`origin/HEAD`, else
    `main`) and check the branch has commits ahead of it. If the tree has
    uncommitted changes, ask whether to commit them first.
-2. **Gate.** Run `.superfik/hooks/pr-gate.sh`; it prints one line per check
+2. **Gate.** Run `.claude/hooks/pr-gate.sh`; it prints one line per check
    (tests, doctests, clippy, lint). On failure, show the failing check and its
    output. The `pre-pr.sh` hook runs the same gate again before
    `gh pr create`; that run is instant when the tree hasn't changed.
 3. **Review.** Start one sub-agent (Agent tool) to run the `code-review`
    skill at the level from the arguments (`medium` when none) over the
-   branch's diff against the base. Tell it the base and the .superfik/SUPERFIK.md
+   branch's diff against the base. Tell it the base and the CLAUDE.md
    `CARGO_TARGET_DIR` rule. It reports findings and changes nothing.
    - Correctness findings: list them and ask whether to fix them first or
      open the PR anyway.

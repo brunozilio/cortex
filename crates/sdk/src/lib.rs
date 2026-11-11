@@ -26,10 +26,7 @@
 mod account;
 mod chores;
 mod client;
-#[cfg(unix)]
-pub mod daemon;
 mod extensions;
-mod local_models;
 mod mcp;
 mod mcp_servers;
 mod plan_watch;
@@ -44,7 +41,6 @@ use domain::ModelOption;
 
 pub use self::account::ProjectMemory;
 pub use self::extensions::{Agent, Command, Skill};
-pub use self::local_models::{LocalModelError, LocalModels, PullProgress, Pulled, Removed};
 pub use self::mcp::{McpConnection, McpServer};
 pub use self::mcp_servers::Schedules;
 pub use self::run::{Run, RunControl};
@@ -89,33 +85,6 @@ pub struct Sdk {
 impl Sdk {
     pub fn builder() -> Builder {
         Builder::default()
-    }
-
-    /// Runs on another backend (the shared daemon, later a remote server):
-    /// `connect` gets the callback the backend calls when events arrive.
-    /// Agents, skills, commands and MCP servers added on a [`Builder`] are
-    /// not available this way; that backend has its own.
-    pub fn with_backend(
-        connect: impl FnOnce(protocol::Wake) -> Result<Box<dyn protocol::Backend>, String>,
-    ) -> Result<Self, Error> {
-        let (wake_tx, woken) = crossbeam_channel::bounded(1);
-        let wake = Arc::new(move || {
-            let _ = wake_tx.try_send(());
-        });
-        let backend = connect(wake).map_err(Error::Backend)?;
-        Ok(Self { client: Arc::new(Client::new(backend, woken)) })
-    }
-
-    /// Connects to this computer's shared daemon, starting it with `start`
-    /// (which launches `serve_daemon` in the background) when none answers.
-    #[cfg(unix)]
-    pub fn connect_daemon(start: impl FnOnce() -> std::io::Result<()>) -> Result<Self, Error> {
-        let dir = backend::daemon::DaemonDir::system().ok_or(Error::Backend("no data folder".into()))?;
-        Self::with_backend(|wake| {
-            backend::daemon::connect_or_start(&dir, wake, start)
-                .map(|backend| Box::new(backend) as Box<dyn protocol::Backend>)
-                .map_err(|error| error.to_string())
-        })
     }
 
     /// A conversation with the agent working in `cwd`.

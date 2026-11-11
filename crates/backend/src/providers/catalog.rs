@@ -29,7 +29,7 @@ impl ModelCatalog for ProviderCatalog {
 impl ModelProviders {
     /// Publishes [`ServerEvent::Models`] from a background thread; only the
     /// latest ask per owner is published.
-    pub(crate) fn discover_models(&self, owner: &Principal, local_models: Vec<ModelOption>, outbox: &Outbox) {
+    pub(crate) fn discover_models(&self, owner: &Principal, engine_models: Vec<ModelOption>, outbox: &Outbox) {
         let owner_key = crate::memory::owner_key(owner);
         let generation = {
             let mut generations = self.generations.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -44,7 +44,7 @@ impl ModelProviders {
                 .filter_map(|provider| Some((provider, this.key(&owner, provider).ok()?)))
                 .collect();
             let mut models = list(this.catalog.as_ref(), accounts, &outbox);
-            models.extend(local_models);
+            models.extend(engine_models);
             let latest = this.generations.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(&owner_key)
                 == Some(&generation);
             if latest {

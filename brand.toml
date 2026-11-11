@@ -6,11 +6,11 @@
 # must spell the name out (the binary's name, install.sh) follow.
 
 # How texts name the product.
-name = "Superfik"
-# The command, its folders (~/.superfik, .superfik/, SUPERFIK.md) and its
-# environment variables (SUPERFIK_*): lowercase letters, digits and dashes.
-command = "superfik"
-company = "Sofik AI"
-author = "Bruno Zilio"
+name = "Lite"
+# The command, its folders (~/.lite, .lite/, LITE.md) and its environment
+# variables (LITE_*): lowercase letters, digits and dashes.
+command = "lite"
+company = "brunozilio"
+author = "brunozilio"
 # The GitHub repository (owner/name) whose releases `update` installs.
-repository = "brunozilio/lite"
+repository = "brunozilio/cortex"

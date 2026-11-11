@@ -37,9 +37,6 @@ pub struct ModelUsage {
 }
 
 pub fn rates(provider: ModelProvider, model: &str, prompt_tokens: u64) -> Option<TokenRates> {
-    if provider == ModelProvider::Local {
-        return Some(TokenRates { input: 0, output: 0, cache_read: 0, cache_write: 0 });
-    }
     let model = model.rsplit(':').next().unwrap_or(model);
     let tuple = match model {
         "claude-opus-5-5" => (4_000_000, 20_000_000, 200_000, 5_000_000),
@@ -81,9 +78,5 @@ mod tests {
         assert!((rate.estimate(100, 10, 20, 5) - 0.0003145).abs() < 1e-12);
         assert!(rates(ModelProvider::OpenAi, "claude-sonnet-5-5", 1).is_none());
         assert!(rates(ModelProvider::Anthropic, "unreviewed-model", 1).is_none());
-        assert_eq!(
-            rates(ModelProvider::Local, "anything", 1).expect("valid test fixture").estimate(100, 10, 20, 5),
-            0.0
-        );
     }
 }

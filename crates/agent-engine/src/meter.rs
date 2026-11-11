@@ -38,8 +38,6 @@ impl ModelApi for Metered {
             estimated_cost_usd: cost,
             basis: if self.provider.subscription() {
                 "subscription-api-equivalent"
-            } else if self.provider == ModelProvider::Local {
-                "local"
             } else {
                 "api-reference-estimate"
             }

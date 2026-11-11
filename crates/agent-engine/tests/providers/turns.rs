@@ -69,7 +69,7 @@ fn each_provider_uses_its_own_authentication_endpoint_and_wire_body() {
                 assert_eq!(header(sent, "x-initiator").as_deref(), Some("user"));
                 assert_eq!(body["messages"][0], json!({"role": "system", "content": "Help the user."}));
             }
-            ModelProvider::KiroSubscription | ModelProvider::Local => unreachable!(),
+            ModelProvider::KiroSubscription => unreachable!(),
         }
     }
 }

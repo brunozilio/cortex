@@ -3,22 +3,19 @@ resolver = "3"
 members = ["crates/*", "xtask"]
 
 [workspace.package]
-version = "0.7.3"
+version = "0.0.0"
 edition = "2024"
 publish = false
-authors = ["Bruno Zilio"]
+authors = ["brunozilio"]
 rust-version = "1.97"
 
 [workspace.dependencies]
 brand = { path = "crates/brand" }
 domain = { path = "crates/domain" }
 protocol = { path = "crates/protocol" }
-# Semantic memory (`embeddings`) is a feature each user turns on: the static
-# Linux build goes without it (ONNX Runtime has no musl build).
-backend = { path = "crates/backend", default-features = false }
+backend = { path = "crates/backend" }
 subprocess = { path = "crates/subprocess" }
 private-file = { path = "crates/private-file" }
-mlx = { path = "crates/mlx" }
 agent-engine = { path = "crates/agent-engine" }
 llm-providers = { path = "crates/llm-providers" }
 sdk = { path = "crates/sdk" }

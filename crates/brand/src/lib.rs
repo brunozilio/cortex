@@ -41,7 +41,7 @@ mod tests {
         assert_eq!(DIR, format!(".{COMMAND}"));
         assert_eq!(ENV, COMMAND.to_ascii_uppercase().replace('-', "_"));
         assert_eq!(INSTRUCTIONS, format!("{ENV}.md"));
-        assert_eq!(env("NO_DAEMON"), format!("{ENV}_NO_DAEMON"));
+        assert_eq!(env("PROJECT_DIR"), format!("{ENV}_PROJECT_DIR"));
     }
 
     #[test]

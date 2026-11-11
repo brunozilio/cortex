@@ -53,7 +53,6 @@ impl ProviderBook {
 pub enum KeyProblem {
     Empty,
     Whitespace,
-    NoAccount,
 }
 
 impl std::fmt::Display for KeyProblem {
@@ -61,7 +60,6 @@ impl std::fmt::Display for KeyProblem {
         f.write_str(match self {
             Self::Empty => "the key is empty",
             Self::Whitespace => "the key has spaces in it",
-            Self::NoAccount => "local models need no key",
         })
     }
 }

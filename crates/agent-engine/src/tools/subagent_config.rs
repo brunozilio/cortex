@@ -145,7 +145,6 @@ impl AgentConfig {
             "opus" if claude => Ok("claude-opus-5-5".into()),
             "haiku" if claude => Ok("claude-haiku-5-5".into()),
             _ if model == parent
-                || provider == ModelProvider::Local
                 || (claude && model.starts_with("claude-"))
                 || (!claude
                     && (model.starts_with("gpt-")

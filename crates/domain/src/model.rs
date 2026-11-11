@@ -35,13 +35,9 @@ pub struct ModelCapabilities {
 }
 
 /// The model a session starts with: the one `wanted` names when offered,
-/// else the first cloud model, else any.
+/// else the first.
 pub fn choose_model(models: &[ModelOption], wanted: Option<&str>) -> Option<ModelOption> {
-    wanted
-        .and_then(|wanted| models.iter().find(|model| model.is_named(wanted)))
-        .or_else(|| models.iter().find(|model| model.provider != ModelProvider::Local))
-        .or_else(|| models.first())
-        .cloned()
+    wanted.and_then(|wanted| models.iter().find(|model| model.is_named(wanted))).or_else(|| models.first()).cloned()
 }
 
 impl ModelOption {
@@ -84,7 +80,6 @@ pub enum ModelProvider {
     ClaudeSubscription,
     CopilotSubscription,
     KiroSubscription,
-    Local,
 }
 
 impl ModelProvider {
@@ -112,12 +107,7 @@ impl ModelProvider {
             Self::ClaudeSubscription => "claude-subscription",
             Self::CopilotSubscription => "copilot-subscription",
             Self::KiroSubscription => "kiro-subscription",
-            Self::Local => "local",
         }
-    }
-
-    pub const fn needs_account(self) -> bool {
-        !matches!(self, Self::Local)
     }
 
     pub const fn name(self) -> &'static str {
@@ -128,7 +118,6 @@ impl ModelProvider {
             Self::CopilotSubscription => "GitHub Copilot Subscription",
             Self::KiroSubscription => "Kiro Subscription",
             Self::OpenAi => "OpenAI API",
-            Self::Local => "Local",
         }
     }
 }
@@ -166,29 +155,21 @@ mod tests {
     }
 
     #[test]
-    fn the_asked_model_wins_then_a_cloud_one() {
+    fn the_asked_model_wins_then_the_first() {
         let models = [
-            served("mlx/qwen", ModelProvider::Local),
             served("anthropic:claude-opus-5-5", ModelProvider::Anthropic),
             served("openai:gpt-6", ModelProvider::OpenAi),
         ];
         assert_eq!(choose_model(&models, Some("gpt-6")).map(|m| m.id), Some("openai:gpt-6".into()));
-        assert_eq!(choose_model(&models, Some("ANTHROPIC:claude-opus-5-5")).map(|m| m.id), Some(models[1].id.clone()));
-        assert_eq!(choose_model(&models, Some("gone")).map(|m| m.id), Some(models[1].id.clone()), "first cloud");
-        assert_eq!(choose_model(&models[..1], None).map(|m| m.id), Some("mlx/qwen".into()));
+        assert_eq!(choose_model(&models, Some("ANTHROPIC:claude-opus-5-5")).map(|m| m.id), Some(models[0].id.clone()));
+        assert_eq!(choose_model(&models, Some("gone")).map(|m| m.id), Some(models[0].id.clone()), "the first");
         assert_eq!(choose_model(&[], Some("x")), None);
     }
 
     #[test]
     fn a_model_round_trips_with_its_provider() {
-        let local = ModelOption::new("qwen", "Qwen").served_by(ModelProvider::Local);
-        let json = serde_json::to_string(&local).expect("serialize");
-        assert_eq!(serde_json::from_str::<ModelOption>(&json).expect("round trip"), local);
-    }
-
-    #[test]
-    fn only_company_apis_need_an_account() {
-        assert!(ModelProvider::ACCOUNTS.iter().all(|p| p.needs_account()));
-        assert!(!ModelProvider::Local.needs_account());
+        let model = ModelOption::new("gpt-6", "GPT-6").served_by(ModelProvider::OpenAi);
+        let json = serde_json::to_string(&model).expect("serialize");
+        assert_eq!(serde_json::from_str::<ModelOption>(&json).expect("round trip"), model);
     }
 }

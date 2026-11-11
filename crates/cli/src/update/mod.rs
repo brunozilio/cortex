@@ -21,19 +21,16 @@ pub trait Releases {
     fn download(&self, tag: &str, name: &str) -> Result<Vec<u8>, String>;
 }
 
-/// The platform the binary runs on (`std::env::consts::ARCH`, `OS`, and
-/// the C library it was built for: `musl` for the static Linux build).
+/// The platform the binary runs on (`std::env::consts::ARCH`, `OS`).
 #[derive(Debug, Clone, Copy)]
 pub struct Platform<'a> {
     pub arch: &'a str,
     pub os: &'a str,
-    pub libc: &'a str,
 }
 
 impl Platform<'static> {
     pub fn this() -> Self {
-        let libc = if cfg!(target_env = "musl") { "musl" } else { "gnu" };
-        Self { arch: std::env::consts::ARCH, os: std::env::consts::OS, libc }
+        Self { arch: std::env::consts::ARCH, os: std::env::consts::OS }
     }
 }
 
@@ -59,10 +56,6 @@ pub fn run() -> Result<(), String> {
                 exe.display(),
                 brand_command = brand::COMMAND
             );
-            #[cfg(unix)]
-            if sdk::daemon::daemon_info().is_some() {
-                println!("The background daemon keeps {current} until its last session closes.");
-            }
         }
     }
     Ok(())
@@ -75,7 +68,7 @@ pub fn update(releases: &dyn Releases, current: &str, exe: &Path, platform: Plat
     let Some(version) = release::newer(current, &tag) else {
         return Ok(Updated::AlreadyLatest);
     };
-    let asset = release::asset(version, platform.arch, platform.os, platform.libc).ok_or_else(|| {
+    let asset = release::asset(version, platform.arch, platform.os).ok_or_else(|| {
         format!(
             "no build of {brand_command} is published for {} {}",
             platform.arch,

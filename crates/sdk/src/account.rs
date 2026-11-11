@@ -11,7 +11,7 @@ use protocol::{ClientCommand, ProviderEvent, ServerEvent};
 use crate::{Error, Run, Sdk};
 
 impl Sdk {
-    /// The models the connected providers (and local MLX) offer.
+    /// The models the connected providers offer.
     pub fn models(&self) -> Result<Vec<ModelOption>, Error> {
         self.client.call(ClientCommand::ListModels, |event| match event {
             ServerEvent::Models(models) => Some(Ok(models)),

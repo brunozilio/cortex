@@ -22,7 +22,7 @@ use domain::{
     Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, Principal, PromptRequest, Provenance, RecallBudget,
     RunId,
 };
-pub use embedder::{Embedder, ModelChoice, NoEmbedder, Purpose, local};
+pub use embedder::{Embedder, NoEmbedder, Purpose};
 use protocol::ServerEvent;
 pub use store::{
     FileMemoryStore, InMemoryStore, MemoryStore, app_data_dir, owner_key, project_key, system_memory_store,

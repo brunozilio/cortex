@@ -66,14 +66,6 @@ fn a_blank_key_fails_and_keeps_nothing() {
 }
 
 #[test]
-fn a_local_model_takes_no_key() {
-    let rig = rig();
-    let event = rig.providers.connect(&OWNER, ModelProvider::Local, "sk-proj-0123456789abcd");
-    assert_eq!(failure(&event), "local models need no key");
-    assert!(rig.secrets.get(&OWNER, secret_id(ModelProvider::Local)).is_none());
-}
-
-#[test]
 fn a_new_key_replaces_the_old_and_disconnecting_forgets_it() {
     let rig = rig();
     rig.providers.connect(&OWNER, ModelProvider::OpenAi, "sk-proj-0123456789abcd");
@@ -203,14 +195,14 @@ fn discovered(providers: &ModelProviders, local: Vec<domain::ModelOption>) -> (V
 }
 
 #[test]
-fn each_connected_provider_lists_its_models_and_local_ones_come_last() {
+fn each_connected_provider_lists_its_models_and_the_engine_s_come_last() {
     let providers = rig().providers.with_catalog(Arc::new(ByKey));
     assert!(discovered(&providers, Vec::new()).0.is_empty(), "no fixed list without an account");
     providers.connect(&OWNER, ModelProvider::Anthropic, "sk-ant-0123456789");
     providers.connect(&OWNER, ModelProvider::OpenAi, "sk-broken-0123456789");
-    let qwen = domain::ModelOption::new("mlx/qwen", "Qwen").served_by(ModelProvider::Local);
-    let (models, events) = discovered(&providers, vec![qwen]);
-    assert_eq!(models, ["anthropic:sk-ant", "mlx/qwen"]);
+    let fixture = domain::ModelOption::new("fixture", "Fixture").served_by(ModelProvider::OpenAi);
+    let (models, events) = discovered(&providers, vec![fixture]);
+    assert_eq!(models, ["anthropic:sk-ant", "fixture"]);
     assert!(
         events.iter().any(|e| matches!(
             e,

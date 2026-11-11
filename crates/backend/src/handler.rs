@@ -80,10 +80,7 @@ impl CommandHandler {
                 Self::reached(&principal, outbox, "background_run", run, reach);
             }
             ClientCommand::ListModels => {
-                let mut models = self.services.engine.models();
-                if let Some(folder) = &self.services.local_models {
-                    models.extend(mlx::downloaded(folder));
-                }
+                let models = self.services.engine.models();
                 self.services.providers.discover_models(&principal, models, outbox);
             }
             ClientCommand::ListSkills { path } => {

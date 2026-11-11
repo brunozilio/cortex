@@ -94,7 +94,7 @@ fn native_backend_searches_memory_and_learns() {
     );
     services.providers = services.providers.with_store(Arc::new(backend::InMemoryProviderStore::default()));
     let backend = LocalBackend::new(services, Arc::new(|| {})).expect("valid test fixture");
-    let model = ModelOption::new("fixture", "Fixture inference").served_by(ModelProvider::Local);
+    let model = ModelOption::new("fixture", "Fixture inference").served_by(ModelProvider::OpenAi);
     let mut request =
         PromptRequest::plain(dir.path().into(), "Find the codename and remember the tabs preference.", model);
     request.permission = PermissionMode::Bypass;

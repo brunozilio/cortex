@@ -3,25 +3,21 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/{repository}/main/install.sh | bash
 #
-# {ENV}_VERSION=0.6.1      a given release instead of the latest
+# {ENV}_VERSION=0.1.0      a given release instead of the latest
 # {ENV}_INSTALL_DIR=/path  where the binary goes (~/.local/bin by default)
-# {ENV}_LIBC=musl|gnu      Linux: force the static (musl) or glibc build
 # ({ENV} is the command in capitals, dashes as underscores.)
 #
-# On Linux the glibc build (with semantic memory) is used when the system's
-# glibc is new enough, the static musl build otherwise (RHEL 8/9, older
-# Debian/Ubuntu). `{command} update` keeps to the build installed.
+# Linux gets a static build that runs on any distribution; macOS needs
+# Apple silicon. Nothing else has to be installed.
 
 set -euo pipefail
 
 # Written by `cargo run -p xtask -- brand` from brand.toml.
-NAME="Superfik"
-COMMAND="superfik"
-REPO="brunozilio/lite"
+NAME="Lite"
+COMMAND="lite"
+REPO="brunozilio/cortex"
 
 ENV="$(printf '%s' "$COMMAND" | tr 'a-z-' 'A-Z_')"
-# The glibc the published glibc builds need (they are built on Ubuntu 24.04).
-MIN_GLIBC="2.39"
 
 # The value of the environment variable {ENV}_$1, or $2.
 setting() {
@@ -31,28 +27,6 @@ setting() {
 
 say() { printf '%s: %s\n' "$COMMAND" "$*" >&2; }
 fail() { say "$*"; exit 1; }
-
-# Whether version $1 is at least $2 (both like 2.39).
-at_least() {
-    local have_major="${1%%.*}" have_minor="${1#*.}" need_major="${2%%.*}" need_minor="${2#*.}"
-    have_minor="${have_minor%%.*}"
-    [ "$have_major" -gt "$need_major" ] || { [ "$have_major" -eq "$need_major" ] && [ "$have_minor" -ge "$need_minor" ]; }
-}
-
-# gnu or musl: the build this Linux can run.
-linux_libc() {
-    if [ -n "$(setting LIBC)" ]; then
-        setting LIBC
-        return
-    fi
-    local glibc
-    glibc="$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')" || true
-    if [ -n "$glibc" ] && at_least "$glibc" "$MIN_GLIBC"; then
-        printf 'gnu'
-    else
-        printf 'musl'
-    fi
-}
 
 target() {
     local os arch
@@ -68,7 +42,7 @@ target() {
             [ "$arch" = "aarch64" ] || fail "no build for Intel Macs; build it with: cargo install --path crates/cli"
             printf 'aarch64-apple-darwin'
             ;;
-        Linux) printf '%s-unknown-linux-%s' "$arch" "$(linux_libc)" ;;
+        Linux) printf '%s-unknown-linux-musl' "$arch" ;;
         *) fail "no build for $os" ;;
     esac
 }
@@ -117,10 +91,7 @@ main() {
     mkdir -p "$dir"
     install -m 755 "$tmp/$name/$COMMAND" "$dir/$COMMAND.new"
     mv -f "$dir/$COMMAND.new" "$dir/$COMMAND"
-    say "installed $("$dir/$COMMAND" --version) in $dir"
-    case "$target" in
-        *musl) say "this static build of $NAME has no semantic memory search (memory search is by words)" ;;
-    esac
+    say "installed $NAME ($("$dir/$COMMAND" --version)) in $dir"
 
     case ":$PATH:" in
         *":$dir:"*) say "run: $COMMAND login, then $COMMAND" ;;

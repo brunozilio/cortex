@@ -24,7 +24,6 @@ fn check(name: &'static str, result: Result<String, String>) -> Check {
 pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
     let mut found = vec![check("version", Ok(env!("CARGO_PKG_VERSION").to_owned()))];
     #[cfg(unix)]
-    found.push(check("daemon", Ok(crate::daemon::status())));
     found.push(check(
         "providers",
         sdk.providers().map_err(|e| e.to_string()).and_then(|providers| {

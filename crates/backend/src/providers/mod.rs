@@ -14,7 +14,7 @@ mod store;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use domain::provider::{KeyProblem, ModelProvider, ProviderAccount, ProviderKey, clean_key, key_hint};
+use domain::provider::{ModelProvider, ProviderAccount, ProviderKey, clean_key, key_hint};
 use domain::{Principal, SecretId};
 use llm_providers::Config;
 use protocol::{ProviderEvent, ServerEvent};
@@ -33,7 +33,6 @@ pub(crate) const fn secret_id(provider: ModelProvider) -> SecretId {
         ModelProvider::ClaudeSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0005,
         ModelProvider::CopilotSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0006,
         ModelProvider::KiroSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0007,
-        ModelProvider::Local => 0x7072_6f76_6964_6572_0000_0000_0000_0003,
     }))
 }
 
@@ -120,9 +119,6 @@ impl ModelProviders {
     }
 
     fn parse(&self, provider: ModelProvider, raw: &str) -> Result<(Config, String), String> {
-        if !provider.needs_account() {
-            return Err(KeyProblem::NoAccount.to_string());
-        }
         if provider.subscription() {
             let config = Config::parse(provider, raw).map_err(|e| e.to_string())?;
             return Ok((config, provider.name().to_owned()));

@@ -4,16 +4,10 @@
 //! - `{command} -p <prompt>` answers once and prints the reply.
 //! - `{command} login` / `logout` connect or forget an LLM provider.
 //! - `{command} models` lists what the connected providers offer.
-//! - `{command} pull <model>` / `rm <model>` download or delete a local MLX model.
 //! - `{command} mcp …` lists, adds, removes and approves MCP servers.
-//!
-//! Every terminal talks to one background daemon per computer (Unix), so
-//! local models, embeddings and memory load once.
 
 mod config;
-mod daemon;
 mod doctor;
-mod local_models;
 mod login;
 mod mcp;
 mod print;
@@ -26,7 +20,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use sdk::PermissionMode;
+use sdk::{PermissionMode, Sdk};
 
 #[derive(Debug, Parser)]
 #[command(name = brand::COMMAND, version, about = concat!("Talk to ", brand::name!(), "'s coding agent in your project."))]
@@ -106,11 +100,6 @@ enum Action {
     Logout,
     /// List the models the connected providers offer.
     Models,
-    /// Download a local MLX model from Hugging Face (Apple silicon), e.g.
-    /// `mlx-community/Qwen3-8B-4bit`; a bare name means mlx-community's.
-    Pull { model: String },
-    /// Delete a downloaded local MLX model.
-    Rm { model: String },
     /// The MCP servers a session here can use: list, add, remove, approve.
     Mcp {
         #[command(subcommand)]
@@ -128,22 +117,6 @@ enum Action {
         #[arg(long, global = true)]
         project: bool,
     },
-    /// The background daemon every terminal shares.
-    #[command(hide = true)]
-    Daemon {
-        #[command(subcommand)]
-        action: DaemonAction,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum DaemonAction {
-    /// Serve this computer's terminals until the last one leaves.
-    Serve,
-    /// Stop the running daemon (its terminals' runs end).
-    Stop,
-    /// Say whether one is running.
-    Status,
 }
 
 fn rule_list(text: &str) -> Vec<String> {
@@ -171,19 +144,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         None => std::env::current_dir().map_err(|e| e.to_string())?,
     };
     let cwd = std::fs::canonicalize(&cwd).map_err(|e| format!("{}: {e}", cwd.display()))?;
-    #[cfg(unix)]
-    if let Some(Action::Daemon { action }) = &cli.command {
-        match action {
-            DaemonAction::Serve => daemon::serve()?,
-            DaemonAction::Stop => daemon::stop()?,
-            DaemonAction::Status => println!("{}", daemon::status()),
-        }
-        return Ok(ExitCode::SUCCESS);
-    }
-    // Local models are this computer's files: no daemon needed.
     match &cli.command {
-        Some(Action::Pull { model }) => return local_models::pull(model).map(|()| ExitCode::SUCCESS),
-        Some(Action::Rm { model }) => return local_models::remove(model).map(|()| ExitCode::SUCCESS),
         Some(Action::Update) => return update::run().map(|()| ExitCode::SUCCESS),
         Some(Action::Config { action, project }) => {
             println!("{}", config::run(&config::file(&cwd, *project)?, action.clone())?);
@@ -191,7 +152,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         }
         _ => {}
     }
-    let (sdk, stale) = daemon::connect()?;
+    let sdk = Sdk::builder().build().map_err(|e| e.to_string())?;
     let prompt = (!cli.prompt.is_empty()).then(|| cli.prompt.join(" "));
     let add_dirs = cli.add_dir.iter().map(|typed| tui::dirs::folder(&cwd, typed)).collect::<Result<Vec<_>, _>>()?;
     let headless = sdk::Headless {
@@ -218,12 +179,8 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         Some(Action::Mcp { action }) => {
             mcp::run(&sdk, &cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
         }
-        Some(Action::Daemon { .. }) => Err("the daemon needs macOS or Linux".into()),
-        Some(Action::Pull { .. } | Action::Rm { .. } | Action::Update | Action::Config { .. }) => Ok(ExitCode::SUCCESS),
+        Some(Action::Update | Action::Config { .. }) => Ok(ExitCode::SUCCESS),
         None if cli.print => {
-            if let Some(stale) = &stale {
-                eprintln!("{brand_command}: {stale}", brand_command = brand::COMMAND);
-            }
             let prompts = match cli.input_format.as_str() {
                 "stream-json" => print_output::prompts(std::io::stdin().lines().map_while(Result::ok))?,
                 "text" => vec![prompt.ok_or("--print needs a prompt")?],
@@ -274,7 +231,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 inline: cli.inline,
                 channels: cli.channels,
             };
-            tui::run(sdk, cwd, cli.model, cli.mode, prompt, stale, start).map_err(|e| e.to_string())?;
+            tui::run(sdk, cwd, cli.model, cli.mode, prompt, None, start).map_err(|e| e.to_string())?;
             Ok(ExitCode::SUCCESS)
         }
     }

@@ -66,8 +66,8 @@ fn folds_thinking_text_and_a_call_from_a_streamed_answer() {
 }
 
 #[test]
-fn folds_a_real_qwen_answer_from_mlx_lm_server() {
-    let stream = include_str!("fixtures/mlx_qwen_tool_call.sse").to_owned();
+fn folds_a_recorded_chat_answer_with_reasoning_and_a_tool_call() {
+    let stream = include_str!("fixtures/chat_reasoning_tool_call.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
     let reply = Chat::new(http, served()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("reply");
     assert_eq!(reply.stop, StopReason::ToolUse);

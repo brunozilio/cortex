@@ -48,12 +48,10 @@ jobs:
           toolchain: stable
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      # Usually on the image already: no apt (and its mirrors) unless missing.
-      - run: dpkg -s pkg-config libssl-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev)
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
 
-  # The static Linux build the release publishes (no semantic memory).
+  # The static Linux build the release publishes.
   musl:
     runs-on: ubuntu-24.04
     env:
@@ -68,7 +66,7 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # zig is the musl C toolchain (ring, oniguruma): from PyPI, not apt.
       - run: python3 -m pip install --user --break-system-packages ziglang cargo-zigbuild
-      - run: cargo zigbuild --locked -p cli --no-default-features --target x86_64-unknown-linux-musl
+      - run: cargo zigbuild --locked -p cli --target x86_64-unknown-linux-musl
       - run: |
           command=$(sed -n 's/^command *= *"\(.*\)".*/\1/p' brand.toml)
           file "target/x86_64-unknown-linux-musl/debug/$command"

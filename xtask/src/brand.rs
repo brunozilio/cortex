@@ -146,14 +146,10 @@ fn changes(root: &Path, brand: &Brand) -> Result<Vec<Change>, String> {
 /// What `brand` would change: empty when every file is current.
 pub fn stale(root: &Path) -> Result<Vec<String>, String> {
     let brand = Brand::read(root)?;
-    let mut stale: Vec<String> = changes(root, &brand)?
+    Ok(changes(root, &brand)?
         .into_iter()
         .map(|change| change.path.strip_prefix(root).unwrap_or(&change.path).display().to_string())
-        .collect();
-    if !root.join(format!(".{}", brand.command)).is_dir() {
-        stale.push(format!(".{}/", brand.command));
-    }
-    Ok(stale)
+        .collect())
 }
 
 /// Applies brand.toml.
@@ -229,18 +225,18 @@ mod tests {
 
     fn brand() -> Brand {
         Brand {
-            name: "Lite".into(),
-            command: "lite".into(),
+            name: "Nova".into(),
+            command: "nova".into(),
             company: "Acme".into(),
             author: "Ana Souza".into(),
-            repository: "acme/lite".into(),
+            repository: "acme/nova".into(),
         }
     }
 
     #[test]
     fn templates_are_filled_from_the_brand() {
         let filled = brand().fill("{{NAME}}: `{{COMMAND}}`, {{DIR}}/{{INSTRUCTIONS}}, {{ENV}}_X, {{REPOSITORY}}");
-        assert_eq!(filled, "Lite: `lite`, .lite/LITE.md, LITE_X, acme/lite");
+        assert_eq!(filled, "Nova: `nova`, .nova/NOVA.md, NOVA_X, acme/nova");
     }
 
     #[test]
@@ -251,7 +247,7 @@ mod tests {
     #[test]
     fn the_words_include_the_owner_but_not_short_ones() {
         let words = brand().words();
-        assert!(words.contains(&"acme".to_owned()) && words.contains(&"LITE".to_owned()));
+        assert!(words.contains(&"acme".to_owned()) && words.contains(&"NOVA".to_owned()));
         assert!(words.iter().all(|word| word.len() >= 4));
     }
 }
@@ -314,6 +310,6 @@ mod name_tests {
         assert!(names("ACME_X=1", "acme"));
         assert!(names("brand::NAME and ~/.acme/", "acme"));
         assert!(!names("acmes", "acme"));
-        assert!(!names("satellite", "lite"));
+        assert!(!names("supernova", "nova"));
     }
 }
