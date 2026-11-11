@@ -52,10 +52,6 @@ fn commands_parse_with_their_arguments() {
     assert_eq!(Command::parse("/bashes"), Some(Command::Bashes(None)));
     assert_eq!(Command::parse("/bashes kill bash_3"), Some(Command::Bashes(Some("bash_3".into()))));
     assert_eq!(Command::parse("/bashes kill"), None);
-    assert_eq!(Command::parse("/schedules"), Some(Command::Schedules(None)));
-    assert_eq!(Command::parse("/schedules delete cron_2"), Some(Command::Schedules(Some("cron_2".into()))));
-    assert_eq!(Command::parse("/loop 5m check ci"), Some(Command::Loop("5m check ci".into())));
-    assert_eq!(Command::parse("/loop"), Some(Command::Loop(String::new())), "shows how to use it");
 }
 
 #[test]

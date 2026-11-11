@@ -15,7 +15,7 @@ pub fn run(app: &mut App, command: Command) {
     match command {
         Command::Help => {
             let mut text = String::from("Commands:");
-            for (name, about) in Command::HELP {
+            for (name, about) in Command::HELP.into_iter().chain(super::features::help()) {
                 text.push_str(&format!("\n  /{name:<12} {about}"));
             }
             text.push_str("\n  /<skill>      Run a skill or custom command\n");
@@ -109,8 +109,6 @@ pub fn run(app: &mut App, command: Command) {
                 "Vim keys off."
             });
         }
-        Command::Schedules(delete) => super::schedules::list(app, delete),
-        Command::Loop(text) => super::schedules::looped(app, &text),
         Command::Bashes(kill) => app.spawn(move |sdk| match sdk.shells(kill.as_deref()) {
             Ok(shells) if shells.is_empty() => Msg::Notice("No commands in the background.".into()),
             Ok(shells) => {
@@ -237,7 +235,10 @@ pub fn run(app: &mut App, command: Command) {
 }
 
 pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, String)> {
-    let builtin = Command::HELP.iter().map(|(name, about)| ((*name).to_owned(), (*about).to_owned()));
+    let builtin = Command::HELP
+        .into_iter()
+        .chain(super::features::help())
+        .map(|(name, about)| (name.to_owned(), about.to_owned()));
     let skills = skills.iter().map(|(name, about)| (name.clone(), about.clone()));
     builtin.chain(skills).filter(|(name, _)| name.starts_with(typed)).collect()
 }
@@ -266,7 +267,11 @@ mod tests {
         let skills = [("memo".to_owned(), "Writes a memo".to_owned()), ("audit".to_owned(), "Audits".to_owned())];
         let names: Vec<String> = suggestions("me", &skills).into_iter().map(|(name, _)| name).collect();
         assert_eq!(names, ["memory", "memo"]);
-        assert_eq!(suggestions("", &skills).len(), Command::HELP.len() + 2, "every match, not just a screenful");
+        assert_eq!(
+            suggestions("", &skills).len(),
+            Command::HELP.len() + super::super::features::help().len() + 2,
+            "every match, not just a screenful"
+        );
     }
 
     #[test]

@@ -88,6 +88,17 @@ BashOutput, KillShell, Monitor; `notify`: PushNotification). Each folder's
 tied to the agent loop (plan mode, worktrees, schedules, peers, web, asking
 the user) are still listed in `tools::standard()`.
 
+A feature that spans layers is one folder per layer, with the same name:
+`crates/agent-engine/src/tools/builtin/<name>/` (its tools),
+`crates/backend/src/features/<name>/` (`handle` and `forget`, reached by the
+generic `ClientCommand::Feature { feature, input }` and answered with
+`ServerEvent::Feature`) and `crates/cli/src/tui/features/<name>/` (its `/`
+commands as `Slash`, an optional `tick`, state in `App::features`, results
+back through `Msg::Feature`). Each layer's `build.rs` gathers its folders.
+Removing the folders of one name removes the feature; CI checks every name.
+`schedules` is the first: CronCreate, CronList, CronDelete, ScheduleWakeup,
+`/schedules` and `/loop`. Inbox notices are core (`TakeNotices`).
+
 - **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`.
   Project or user agents of the same name replace them.
 - **SendMessage** (`agent/conversations.rs`): a finished sub-agent's

@@ -15,6 +15,7 @@ mod drafted;
 mod editor;
 mod entries;
 mod export;
+mod features;
 mod git;
 mod highlight;
 mod info;
@@ -28,6 +29,7 @@ mod memory;
 mod mentions;
 mod motion;
 mod msg;
+mod notices;
 mod panel;
 mod pastes;
 mod plan;
@@ -35,7 +37,6 @@ mod reload;
 mod resume;
 mod rewind;
 mod runs;
-mod schedules;
 mod search;
 mod settings;
 mod shell;
@@ -55,9 +56,9 @@ mod tests_dirs;
 #[cfg(test)]
 mod tests_going_on;
 #[cfg(test)]
-mod tests_plan;
+mod tests_notices;
 #[cfg(test)]
-mod tests_schedules;
+mod tests_plan;
 #[cfg(test)]
 mod tests_steering;
 
@@ -157,7 +158,8 @@ pub fn run(
                 app.input.set(&prompt);
                 app.submit();
             }
-            schedules::poll(&mut app);
+            notices::poll(&mut app);
+            features::tick(&mut app);
             statusline::refresh(&mut app);
             inline::flush(&mut terminal, &mut app)?;
             terminal.draw(|frame| view::draw(frame, &app))?;

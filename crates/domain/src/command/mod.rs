@@ -1,8 +1,6 @@
 use crate::{Effort, PermissionMode};
 
-mod looping;
 mod sub;
-pub use looping::loop_prompt;
 pub use sub::{McpCommand, MemoryCommand, VerificationCommand};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,8 +22,6 @@ pub enum Command {
     Todos,
     Context,
     Bashes(Option<String>),
-    Schedules(Option<String>),
-    Loop(String),
     Vim,
     Mouse,
     Resume,
@@ -55,7 +51,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const HELP: [(&'static str, &'static str); 43] = [
+    pub const HELP: [(&'static str, &'static str); 41] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("resume", "Go back to an earlier conversation of this folder"),
@@ -78,8 +74,6 @@ impl Command {
         ("todos", "Show the agent's task list (Ctrl+T shows or hides it)"),
         ("context", "Show what fills the context window and what is left"),
         ("bashes", "List commands left in the background, /bashes kill <id> stops one"),
-        ("schedules", "List scheduled prompts, /schedules delete <id> removes one"),
-        ("loop", "Run a task now and again later: /loop [5m|2h|1d] <task>"),
         ("vim", "Turn vim keys in the prompt on or off"),
         ("mouse", "Let the mouse wheel scroll (select text with Shift/Option)"),
         ("skills", "List skills and commands, /skills new <what it does> writes one"),
@@ -134,12 +128,6 @@ impl Command {
             "mouse" => bare(Self::Mouse),
             "resume" | "continue" => bare(Self::Resume),
             "fork" | "branch" => bare(Self::Fork),
-            "schedules" => match argument.as_deref().map(|a| a.split_once(' ').unwrap_or((a, ""))) {
-                None => Some(Self::Schedules(None)),
-                Some(("delete", id)) if !id.trim().is_empty() => Some(Self::Schedules(Some(id.trim().to_owned()))),
-                Some(_) => None,
-            },
-            "loop" => Some(Self::Loop(argument.unwrap_or_default())),
             "bashes" => match argument.as_deref().map(|a| a.split_once(' ').unwrap_or((a, ""))) {
                 None => Some(Self::Bashes(None)),
                 Some(("kill", id)) if !id.trim().is_empty() => Some(Self::Bashes(Some(id.trim().to_owned()))),

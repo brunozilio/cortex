@@ -2,6 +2,9 @@ mod authorizer;
 mod channels;
 mod dirs;
 mod extensions;
+mod features {
+    include!(concat!(env!("OUT_DIR"), "/features.rs"));
+}
 mod handler;
 mod local;
 mod mcp_admin;

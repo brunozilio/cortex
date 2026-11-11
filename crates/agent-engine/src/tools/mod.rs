@@ -11,7 +11,6 @@ mod outside;
 pub mod peers;
 pub mod plan_mode;
 mod rule_target;
-pub mod schedules;
 pub(crate) mod script_io;
 pub mod script_tool;
 pub mod send_message;
@@ -101,10 +100,6 @@ pub fn standard() -> Vec<Box<dyn Tool>> {
         Box::new(plan_mode::ExitPlanMode),
         Box::new(worktree::EnterWorktree),
         Box::new(worktree::ExitWorktree),
-        Box::new(schedules::CronCreate),
-        Box::new(schedules::CronList),
-        Box::new(schedules::CronDelete),
-        Box::new(schedules::ScheduleWakeup),
         Box::new(peers::ListSessions),
         Box::new(web::WebFetch),
         Box::new(web::WebSearch),

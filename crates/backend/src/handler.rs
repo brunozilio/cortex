@@ -23,7 +23,7 @@ impl Drop for CommandHandler {
         crate::channels::close(self.client);
         agent_engine::tools::shells::kill_client(self.client);
         agent_engine::tools::peers::forget(self.client);
-        agent_engine::tools::schedules::forget_client(self.client);
+        crate::features::forget(self.client);
         agent_engine::tools::inbox::forget_client(self.client);
     }
 }
@@ -121,17 +121,13 @@ impl CommandHandler {
                 }
                 outbox.send(ServerEvent::Shells(agent_engine::tools::shells::list(self.client)));
             }
-            ClientCommand::Schedules { delete, take_due } => {
-                use agent_engine::tools::schedules;
-                if let Some(id) = delete {
-                    schedules::remove(self.client, &id);
-                }
-                let (due, notices) = if take_due {
-                    (schedules::take_due(self.client, schedules::now()), agent_engine::tools::inbox::take(self.client))
-                } else {
-                    (Vec::new(), Vec::new())
-                };
-                outbox.send(ServerEvent::Schedules { due, scheduled: schedules::list(self.client), notices });
+            ClientCommand::TakeNotices => {
+                outbox.send(ServerEvent::Notices(agent_engine::tools::inbox::take(self.client)));
+            }
+            ClientCommand::Feature { feature, input } => {
+                let output = crate::features::handle(&feature, self.client, &principal, input)
+                    .unwrap_or_else(|| Err(format!("there is no {feature} here")));
+                outbox.send(ServerEvent::Feature { feature, output });
             }
             ClientCommand::ListPermissions { path } => self.outbox.send(crate::permissions::list(
                 &path,

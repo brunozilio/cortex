@@ -14,6 +14,9 @@ impl App {
         if let Some(command) = Command::parse(&text) {
             return super::commands::run(self, command);
         }
+        if let Some((run, argument)) = super::features::command(&text) {
+            return run(self, argument);
+        }
         if let Some(command) = text.strip_prefix('!').map(str::trim).filter(|c| !c.is_empty()) {
             return super::shell::start(self, command.to_owned());
         }

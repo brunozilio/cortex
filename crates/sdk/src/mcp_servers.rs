@@ -67,10 +67,18 @@ impl Sdk {
         })
     }
 
-    pub fn schedules(&self, delete: Option<&str>, take_due: bool) -> Result<Schedules, Error> {
-        let command = ClientCommand::Schedules { delete: delete.map(str::to_owned), take_due };
-        self.client.call(command, |event| match event {
-            ServerEvent::Schedules { due, scheduled, notices } => Some(Ok(Schedules { due, scheduled, notices })),
+    pub fn notices(&self) -> Result<Vec<domain::inbox::Notice>, Error> {
+        self.client.call(ClientCommand::TakeNotices, |event| match event {
+            ServerEvent::Notices(notices) => Some(Ok(notices)),
+            _ => None,
+        })
+    }
+
+    pub fn feature(&self, feature: &str, input: serde_json::Value) -> Result<serde_json::Value, Error> {
+        let command = ClientCommand::Feature { feature: feature.to_owned(), input };
+        let asked = feature.to_owned();
+        self.client.call(command, move |event| match event {
+            ServerEvent::Feature { feature, output } if feature == asked => Some(output),
             _ => None,
         })
     }
@@ -88,11 +96,4 @@ fn listed(event: ServerEvent) -> Option<Result<Vec<McpServerInfo>, String>> {
         ServerEvent::McpServers { servers, .. } => Some(Ok(servers)),
         _ => None,
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Schedules {
-    pub due: Vec<domain::schedule::Scheduled>,
-    pub scheduled: Vec<domain::schedule::Scheduled>,
-    pub notices: Vec<domain::inbox::Notice>,
 }

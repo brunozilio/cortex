@@ -6,8 +6,9 @@ use domain::schedule::{Scheduled, When};
 use ratatui::crossterm::event::KeyCode;
 use sdk::{EngineEvent, Model};
 
-use super::app::{App, Msg};
-use super::tests::{press, screen, sdk, type_text, until};
+use super::arrived;
+use crate::tui::app::App;
+use crate::tui::tests::{press, screen, sdk, type_text, until};
 
 fn script() -> Vec<EngineEvent> {
     vec![
@@ -36,7 +37,7 @@ fn a_due_prompt_is_sent_while_the_chat_is_idle() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script());
     let mut app = app(&engine, data.path());
-    app.message(Msg::Due(vec![due("cron_1", "check the build")], Vec::new()));
+    arrived(&mut app, vec![due("cron_1", "check the build")]);
     until(&mut app, |app| !app.busy() && !prompts(&engine).is_empty());
     assert_eq!(prompts(&engine), ["check the build"]);
     assert!(screen(&app).contains("Scheduled (cron_1)"), "{}", screen(&app));
@@ -51,7 +52,7 @@ fn a_prompt_due_while_the_agent_works_waits_for_the_run_to_end() {
     type_text(&mut app, "first");
     press(&mut app, KeyCode::Enter);
     until(&mut app, |app| app.busy());
-    app.message(Msg::Due(vec![due("cron_2", "later")], Vec::new()));
+    arrived(&mut app, vec![due("cron_2", "later")]);
     assert_eq!(app.queued, ["later"]);
     until(&mut app, |app| prompts(&engine).len() == 2 && !app.busy());
     assert_eq!(prompts(&engine), ["first", "later"]);
@@ -75,15 +76,3 @@ fn loop_asks_the_agent_to_schedule_the_task() {
     assert!(screen(&app).contains("/loop [5m|2h|1d] <task>"), "{}", screen(&app));
 }
 
-#[test]
-fn events_that_reached_the_inbox_are_sent_as_a_turn_when_idle() {
-    let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script());
-    let mut app = app(&engine, data.path());
-    let notice = domain::inbox::Notice::new("monitor bash_4", "ERROR: disk full");
-    app.message(Msg::Due(Vec::new(), vec![notice]));
-    until(&mut app, |app| !app.busy() && !prompts(&engine).is_empty());
-    let sent = &prompts(&engine)[0];
-    assert!(sent.contains("<event source=\"monitor bash_4\">") && sent.contains("ERROR: disk full"), "{sent}");
-    assert!(screen(&app).contains("[monitor bash_4] ERROR: disk full"), "{}", screen(&app));
-}

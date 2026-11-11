@@ -87,27 +87,35 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
         with:
           toolchain: stable
+          components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
-      - name: Each provider or tool folder can be removed; each provider can be kept alone
+      - name: Each provider, tool or feature folder can be removed; each provider can be kept alone
         run: |
           set -eu
-          folder=crates/llm-providers/src/providers
           aside=$(mktemp -d)
-          for name in $(ls "$folder"); do
-            mv "$folder/$name" "$aside/"
-            cargo check --workspace --all-targets --locked
-            mv "$aside/$name" "$folder/"
+          check() { cargo clippy --workspace --all-targets --locked -- -D warnings; }
+          providers=crates/llm-providers/src/providers
+          for name in $(ls "$providers"); do
+            mv "$providers/$name" "$aside/"
+            check
+            mv "$aside/$name" "$providers/"
           done
-          tools=crates/agent-engine/src/tools/builtin
-          for name in $(ls "$tools"); do
-            mv "$tools/$name" "$aside/"
-            cargo check --workspace --all-targets --locked
-            mv "$aside/$name" "$tools/"
+          layers="crates/agent-engine/src/tools/builtin crates/backend/src/features crates/cli/src/tui/features"
+          for name in $(for layer in $layers; do find "$layer" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;; done | sort -u); do
+            for layer in $layers; do
+              if [ -d "$layer/$name" ]; then mkdir -p "$aside/$layer" && mv "$layer/$name" "$aside/$layer/"; fi
+            done
+            check
+            for layer in $layers; do
+              if [ -d "$aside/$layer/$name" ]; then mv "$aside/$layer/$name" "$layer/"; fi
+            done
           done
-          for keep in $(ls "$folder"); do
-            for name in $(ls "$folder"); do
-              [ "$name" = "$keep" ] || mv "$folder/$name" "$aside/"
+          for keep in $(ls "$providers"); do
+            for name in $(ls "$providers"); do
+              [ "$name" = "$keep" ] || mv "$providers/$name" "$aside/"
             done
             cargo check --workspace --locked
-            mv "$aside"/* "$folder/"
+            for name in $(ls "$aside"); do
+              [ -d "$aside/$name/src" ] || mv "$aside/$name" "$providers/"
+            done
           done

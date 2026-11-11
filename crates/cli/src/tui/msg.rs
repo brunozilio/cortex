@@ -18,7 +18,9 @@ pub enum Msg {
     Conversations(Vec<super::conversations::Conversation>),
     Context(domain::usage::ContextUsage),
     Shell { id: String, command: String, result: Result<(String, bool), String> },
-    Due(Vec<domain::schedule::Scheduled>, Vec<domain::inbox::Notice>),
+    Notices(Vec<domain::inbox::Notice>),
+    #[allow(dead_code, reason = "the feature folders send it, and any of them may be removed")]
+    Feature(Box<dyn FnOnce(&mut super::app::App) + Send>),
     Notice(String),
     Error(String),
 }
@@ -56,7 +58,8 @@ impl super::app::App {
                 self.transcript.notice(super::context::view(&usage));
             }
             Msg::Shell { id, command, result } => super::shell::finished(self, &id, command, result),
-            Msg::Due(due, notices) => super::schedules::due(self, due, notices),
+            Msg::Notices(notices) => super::notices::arrived(self, notices),
+            Msg::Feature(apply) => apply(self),
             Msg::Notice(text) => self.transcript.notice(text),
             Msg::Error(text) => self.transcript.error(text),
         }

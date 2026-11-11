@@ -16,7 +16,7 @@ fn main() {
     names.sort();
     let mut registry = String::new();
     for name in &names {
-        registry.push_str(&format!("#[path = {:?}]\nmod {name};\n", folder.join(name).join("mod.rs")));
+        registry.push_str(&format!("#[path = {:?}]\npub mod {name};\n", folder.join(name).join("mod.rs")));
     }
     let listed: Vec<String> = names.iter().map(|name| format!("{name}::tools()")).collect();
     registry.push_str(&format!(

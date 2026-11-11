@@ -6,7 +6,7 @@ use chrono::{DateTime, Datelike, Local, TimeZone, Timelike};
 use domain::schedule::{MOST, Moment, Scheduled, When};
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace, field, required};
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
 
 struct Entry {
@@ -102,3 +102,7 @@ mod tests;
 
 mod tools;
 pub use tools::{CronCreate, CronDelete, CronList, ScheduleWakeup};
+
+pub fn tools() -> Vec<Box<dyn Tool>> {
+    vec![Box::new(CronCreate), Box::new(CronList), Box::new(CronDelete), Box::new(ScheduleWakeup)]
+}

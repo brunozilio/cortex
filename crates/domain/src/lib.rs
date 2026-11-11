@@ -11,6 +11,7 @@ pub mod failure;
 pub mod ids;
 pub mod image;
 pub mod inbox;
+pub mod looping;
 pub mod lsp;
 pub mod mcp;
 pub mod mcp_config;

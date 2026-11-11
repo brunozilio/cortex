@@ -29,11 +29,10 @@ pub enum ServerEvent {
         url: String,
     },
     Shells(Vec<(String, String, bool)>),
-    Schedules {
-        due: Vec<domain::schedule::Scheduled>,
-        scheduled: Vec<domain::schedule::Scheduled>,
-        #[serde(default)]
-        notices: Vec<domain::inbox::Notice>,
+    Notices(Vec<domain::inbox::Notice>),
+    Feature {
+        feature: String,
+        output: Result<serde_json::Value, String>,
     },
     Permissions {
         path: PathBuf,
