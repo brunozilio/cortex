@@ -198,3 +198,7 @@ pub fn failure(error: &Value) -> ModelError {
         _ => ModelError::Provider(message),
     }
 }
+
+#[cfg(test)]
+#[path = "stream_tests.rs"]
+mod tests;
