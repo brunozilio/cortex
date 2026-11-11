@@ -61,7 +61,7 @@ impl App {
         match choose_model(&self.models, wanted.as_deref()) {
             Some(model) => self.start_session(model),
             None => {
-                self.transcript.notice("No model yet. Connect a provider to start:");
+                self.transcript.passing("No model yet. Connect a provider to start:");
                 self.login();
             }
         }

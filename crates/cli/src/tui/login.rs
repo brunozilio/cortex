@@ -39,12 +39,12 @@ impl App {
             self.secret = Some(SecretPrompt { provider, name, text: String::new() });
             return;
         }
-        self.transcript.notice(format!("Signing in to {name}…"));
+        self.transcript.passing(format!("Signing in to {name}…"));
         let tx = self.tx.clone();
         self.spawn(move |sdk| {
             let opened = |url: &str, code: Option<&str>| {
                 crate::login::open(url);
-                let _ = tx.send(Msg::Notice(crate::login::visit(url, code)));
+                let _ = tx.send(Msg::Passing(crate::login::visit(url, code)));
             };
             match sdk.sign_in(provider, opened) {
                 Ok(_) => Msg::Connected(name),

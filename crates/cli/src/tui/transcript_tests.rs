@@ -121,3 +121,15 @@ fn background_commands_are_counted_until_stopped_or_finished() {
     transcript.apply(&result("[bash_2: finished (exit code 0)]\nbuilt"));
     assert!(transcript.background.is_empty());
 }
+
+#[test]
+fn passing_notices_give_way_to_the_next_one_and_all_go_when_cleared() {
+    let mut transcript = Transcript::default();
+    transcript.notice("kept");
+    transcript.passing("Signing in…");
+    transcript.passing("Opening the browser…");
+    transcript.replace_passing("Connected.");
+    assert_eq!(transcript.entries, [Entry::Notice("kept".into()), Entry::Passing("Connected.".into())]);
+    transcript.clear_passing();
+    assert_eq!(transcript.entries, [Entry::Notice("kept".into())]);
+}

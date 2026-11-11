@@ -35,6 +35,7 @@ pub enum Msg {
     #[allow(dead_code, reason = "the feature folders send it, and any of them may be removed")]
     Feature(Box<dyn FnOnce(&mut super::app::App) + Send>),
     Notice(String),
+    Passing(String),
     Error(String),
 }
 
@@ -49,7 +50,7 @@ impl super::app::App {
                 self.transcript.notice(summary);
             }
             Msg::Connected(provider) => {
-                self.transcript.notice(format!("Connected {provider}."));
+                self.transcript.replace_passing(format!("Connected {provider}."));
                 self.load(false);
             }
             Msg::Clipboard(found) => self.clipboard(found),
@@ -74,6 +75,7 @@ impl super::app::App {
             Msg::Notices(notices) => super::notices::arrived(self, notices),
             Msg::Feature(apply) => apply(self),
             Msg::Notice(text) => self.transcript.notice(text),
+            Msg::Passing(text) => self.transcript.passing(text),
             Msg::Error(text) => self.transcript.error(text),
         }
     }

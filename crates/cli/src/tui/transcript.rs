@@ -18,6 +18,7 @@ pub enum Entry {
     Diff { diff: String, untracked: Vec<String> },
     Plan { plan: String, outcome: super::plan::Outcome },
     Notice(String),
+    Passing(String),
     Error(String),
 }
 
@@ -63,6 +64,19 @@ impl Transcript {
 
     pub fn notice(&mut self, text: impl Into<String>) {
         self.push(Entry::Notice(text.into()));
+    }
+
+    pub fn passing(&mut self, text: impl Into<String>) {
+        self.push(Entry::Passing(text.into()));
+    }
+
+    pub fn replace_passing(&mut self, text: impl Into<String>) {
+        self.clear_passing();
+        self.passing(text);
+    }
+
+    pub fn clear_passing(&mut self) {
+        self.entries.retain(|entry| !matches!(entry, Entry::Passing(_)));
     }
 
     pub fn error(&mut self, text: impl Into<String>) {

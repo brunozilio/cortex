@@ -69,6 +69,7 @@ impl App {
         let prompt = super::mentions::with_files(&self.sdk, &self.cwd, &self.pastes.unfold(&text));
         let prompt = super::shell::with_context(&mut self.shell_context, &prompt);
         let started = session.send_with_images(&prompt, self.attachments.named_in(&text));
+        self.transcript.clear_passing();
         self.transcript.push(Entry::User(shown));
         self.follow(started);
     }

@@ -67,3 +67,22 @@ fn a_rewind_cuts_the_chat_before_its_prompt_and_gives_the_prompt_back() {
     assert_eq!(app.input.text(), "add more", "the prompt is back to edit");
     assert_eq!(app.checkpoints.iter().map(|c| c.index).collect::<Vec<_>>(), [0]);
 }
+
+#[test]
+fn the_sign_in_notices_go_once_connected_and_connected_goes_with_the_first_prompt() {
+    let data = tempfile::tempdir().expect("data");
+    let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
+    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    app.transcript.passing("Signing in to Scripted…");
+    app.message(super::app::Msg::Connected("Scripted".into()));
+    let passing = |app: &App| app.transcript.entries.iter().filter(|e| matches!(e, Entry::Passing(_))).count();
+    assert_eq!(passing(&app), 1);
+    assert!(screen(&app).contains("Connected Scripted.") && !screen(&app).contains("Signing in"));
+
+    type_text(&mut app, "hello");
+    press(&mut app, KeyCode::Enter);
+    assert_eq!(passing(&app), 0);
+    assert!(!screen(&app).contains("Connected Scripted."), "{}", screen(&app));
+}

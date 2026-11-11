@@ -100,7 +100,7 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
             }
         }
         Entry::Plan { plan, outcome } => super::plan::lines(plan, *outcome, width, out),
-        Entry::Notice(text) => {
+        Entry::Notice(text) | Entry::Passing(text) => {
             out.push(Line::from(""));
             out.extend(wrap(text, width).into_iter().map(|line| Line::styled(line, dim)));
         }

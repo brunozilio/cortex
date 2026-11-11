@@ -17,7 +17,7 @@ pub fn markdown(title: Option<&str>, entries: &[Entry]) -> String {
             Entry::Agent { kind, summary, .. } => format!("- agent `{kind}`: {summary}"),
             Entry::Plan { plan, .. } => format!("**Plan**\n\n{}", plan.trim()),
             Entry::Diff { diff, .. } => format!("```diff\n{}\n```", diff.trim_end()),
-            Entry::Thinking { .. } | Entry::Notice(_) | Entry::Error(_) => continue,
+            Entry::Thinking { .. } | Entry::Notice(_) | Entry::Passing(_) | Entry::Error(_) => continue,
         };
         out.push('\n');
         out.push_str(&block);
