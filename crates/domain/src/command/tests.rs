@@ -64,6 +64,16 @@ fn verification_shows_sets_or_clears_the_criteria() {
 }
 
 #[test]
+fn every_command_is_in_exactly_one_help_group() {
+    for (name, _) in Command::HELP {
+        let homes = Command::GROUPS.iter().filter(|(_, names)| names.contains(&name)).count();
+        assert_eq!(homes, 1, "/{name}");
+    }
+    let grouped: usize = Command::GROUPS.iter().map(|(_, names)| names.len()).sum();
+    assert_eq!(grouped, Command::HELP.len(), "no group names a command that does not exist");
+}
+
+#[test]
 fn help_names_one_command_or_lists_them_all() {
     assert_eq!(Command::parse("/help"), Some(Command::Help(None)));
     assert_eq!(Command::parse("/? mode"), Some(Command::Help(Some("mode".into()))));

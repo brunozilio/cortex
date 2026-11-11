@@ -12,11 +12,15 @@ fn about(name: &str) -> Option<(&'static str, &'static str)> {
 
 pub fn help(app: &mut App, name: Option<String>, keys: &str) {
     let Some(name) = name else {
-        let mut text = String::from("Commands:");
-        for (name, about) in builtin() {
-            text.push_str(&format!("\n  /{name:<12} {about}"));
+        let mut text = String::from("Commands (/help <command> for one):");
+        let line = |text: &mut String, (name, about): (&str, &str)| text.push_str(&format!("\n  /{name:<12} {about}"));
+        for (group, names) in Command::GROUPS {
+            text.push_str(&format!("\n\n{group}"));
+            names.iter().filter_map(|name| about(name)).for_each(|entry| line(&mut text, entry));
         }
-        text.push_str("\n  /<skill>      Run a skill or custom command\n");
+        text.push_str("\n\nFeatures");
+        super::features::help().into_iter().for_each(|entry| line(&mut text, entry));
+        text.push_str("\n  /<skill>      Run a skill or custom command\n\n");
         text.push_str(keys);
         return app.transcript.notice(text);
     };

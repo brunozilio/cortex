@@ -95,6 +95,47 @@ impl Command {
         ("exit", "Quit (also /quit)"),
     ];
 
+    pub const GROUPS: [(&'static str, &'static [&'static str]); 4] = [
+        ("Conversation", &["new", "resume", "fork", "compact", "rewind", "retry", "btw", "export", "copy"]),
+        ("Model and mode", &["model", "mode", "effort", "output-style", "verification"]),
+        (
+            "Project",
+            &[
+                "diff",
+                "diffs",
+                "memory",
+                "add-dir",
+                "permissions",
+                "hooks",
+                "todos",
+                "context",
+                "skills",
+                "agents",
+                "mcp",
+                "reload",
+            ],
+        ),
+        (
+            "App",
+            &[
+                "cost",
+                "status",
+                "config",
+                "statusline",
+                "vim",
+                "mouse",
+                "login",
+                "logout",
+                "doctor",
+                "feedback",
+                "release-notes",
+                "terminal-setup",
+                "help",
+                "exit",
+            ],
+        ),
+    ];
+
     pub fn parse(text: &str) -> Option<Self> {
         let text = text.trim().strip_prefix('/')?;
         let (name, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
