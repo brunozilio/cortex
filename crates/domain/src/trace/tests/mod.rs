@@ -1,9 +1,11 @@
+mod details;
+
 use serde_json::json;
 
 use super::*;
 use crate::billing::ModelUsage;
 use crate::usage::Compaction;
-use crate::{AgentStatus, EngineEvent, ToolCall};
+use crate::{AgentAsk, AgentStatus, AskId, AskKind, EngineEvent, Rewound, ToolCall};
 
 fn at(at_ms: u64, event: EngineEvent) -> Record {
     Record::Event { at_ms, event }
@@ -72,7 +74,7 @@ fn a_run_reads_as_prompt_then_turns_with_the_tools_each_turn_called_side_by_side
     assert_eq!(kinds(&trace.lane), vec!["prompt", "turn", "[tool Grep | tool Read]", "turn", "completed"]);
     let first = only(&trace.lane.steps[1]);
     assert_eq!((first.at_ms, first.until_ms), (100, Some(130)), "a turn runs from the step before it to its usage");
-    let Kind::Turn { text, thinking, usage } = &first.kind else { panic!("{first:?}") };
+    let Kind::Turn { text, thinking, usage, .. } = &first.kind else { panic!("{first:?}") };
     assert_eq!((text.as_str(), thinking.as_str()), ("Checking.", "look at the repo"));
     assert_eq!(usage.as_ref().map(|u| u.output), Some(5));
 
@@ -175,19 +177,4 @@ fn a_standalone_agent_keeps_its_name_beside_the_node_kind_in_json() {
     let json = serde_json::to_value(&trace).expect("json");
     let node = &json["lane"]["steps"][0]["nodes"][0];
     assert_eq!((node["kind"].as_str(), node["name"].as_str()), (Some("agent"), Some("verify")));
-}
-
-#[test]
-fn the_trace_totals_what_the_session_cost() {
-    let trace = build(vec![
-        Record::Prompted { at_ms: 1, prompt: "one".into() },
-        at(2, usage(5)),
-        at(3, tool("x", "Agent")),
-        at(4, usage(6)),
-        at(5, result("x", "done", false)),
-    ]);
-    assert_eq!(trace.totals.output, 11);
-    assert_eq!(trace.totals.input, 20);
-    assert!((trace.totals.cost_usd - 0.02).abs() < 1e-9);
-    assert_eq!((trace.totals.started_ms, trace.totals.ended_ms), (1, 5));
 }

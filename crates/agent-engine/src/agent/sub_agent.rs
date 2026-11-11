@@ -224,7 +224,7 @@ impl Agent<'_> {
                 if !hook.context.is_empty() {
                     history.push(Message::user(hook.context));
                 }
-                child.run(&mut history)
+                super::current::within(index, || child.run(&mut history))
             }
             Ok(hook) => Err(Ending::Failed(ModelError::Provider(hook.blocked.unwrap_or_default()))),
             Err(error) => Err(Ending::Failed(ModelError::Provider(error))),

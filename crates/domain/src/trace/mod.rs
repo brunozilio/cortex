@@ -1,11 +1,12 @@
-mod build;
+mod lane;
+mod route;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::build::build;
+pub use self::route::build;
 use crate::billing::ModelUsage;
 use crate::usage::Compaction;
-use crate::{AgentStatus, EngineEvent, ToolCall};
+use crate::{AgentAsk, AgentStatus, EngineEvent, ToolCall};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Record {
@@ -13,6 +14,39 @@ pub enum Record {
     Event { at_ms: u64, event: EngineEvent },
     Restarted,
     Truncated { keep: usize },
+    Called { at_ms: u64, agent: Option<usize>, call: ModelCall },
+    Opened { at_ms: u64, run: RunInfo },
+    Partial,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RunInfo {
+    pub model: String,
+    pub provider: String,
+    pub permission: String,
+    pub effort: String,
+    pub cwd: String,
+    #[serde(default)]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub recent: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ModelCall {
+    pub model: String,
+    pub stop: String,
+    pub messages: usize,
+    pub max_tokens: u32,
+    pub effort: String,
+    pub system_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<String>,
+    pub tools_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -75,29 +109,37 @@ pub struct Agent {
 pub enum Kind {
     Prompt {
         text: String,
+        run: Option<RunInfo>,
     },
     Turn {
         text: String,
         thinking: String,
         usage: Option<ModelUsage>,
+        call: Option<ModelCall>,
     },
     Tool {
         call: ToolCall,
         output: Option<String>,
         logs: Vec<String>,
         usage: Vec<ModelUsage>,
+        calls: Vec<ModelCall>,
+        asks: Vec<AgentAsk>,
         agent: Option<Box<Agent>>,
     },
     Agent(Box<Agent>),
     Compacted(Compaction),
     Rewound {
-        keep: usize,
+        keep: Option<usize>,
+        checkpoint: Option<u32>,
+        prompt: Option<String>,
+        restored: Vec<String>,
     },
     Steered {
         text: String,
     },
     FellBack {
         model: String,
+        from: Option<String>,
     },
     Failed {
         error: String,

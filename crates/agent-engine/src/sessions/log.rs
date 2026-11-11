@@ -1,5 +1,5 @@
 use domain::EngineEvent;
-use domain::trace::Record;
+use domain::trace::{ModelCall, RunInfo};
 use serde::{Deserialize, Serialize};
 
 use crate::transcript::Message;
@@ -8,25 +8,31 @@ use crate::transcript::Message;
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Entry {
     Message(Message),
-    Truncated { keep: usize },
+    Truncated {
+        keep: usize,
+    },
     Restarted,
-    Event { at_ms: u64, event: EngineEvent },
-    Prompted { at_ms: u64, prompt: String },
+    Event {
+        at_ms: u64,
+        event: EngineEvent,
+    },
+    Prompted {
+        at_ms: u64,
+        prompt: String,
+    },
+    Called {
+        at_ms: u64,
+        #[serde(default)]
+        agent: Option<usize>,
+        call: ModelCall,
+    },
+    Opened {
+        at_ms: u64,
+        run: RunInfo,
+    },
 }
 
 const CONVERSATION: [&str; 3] = ["message", "truncated", "restarted"];
-
-impl Entry {
-    pub fn record(self) -> Option<Record> {
-        match self {
-            Entry::Message(_) => None,
-            Entry::Truncated { keep } => Some(Record::Truncated { keep }),
-            Entry::Restarted => Some(Record::Restarted),
-            Entry::Event { at_ms, event } => Some(Record::Event { at_ms, event }),
-            Entry::Prompted { at_ms, prompt } => Some(Record::Prompted { at_ms, prompt }),
-        }
-    }
-}
 
 #[derive(Deserialize)]
 struct Kind {
@@ -50,7 +56,7 @@ pub(super) fn conversation(entries: impl IntoIterator<Item = Entry>) -> Vec<Mess
             Entry::Message(message) => history.push(message),
             Entry::Truncated { keep } => history.truncate(keep),
             Entry::Restarted => history.clear(),
-            Entry::Event { .. } | Entry::Prompted { .. } => {}
+            Entry::Event { .. } | Entry::Prompted { .. } | Entry::Called { .. } | Entry::Opened { .. } => {}
         }
     }
     history

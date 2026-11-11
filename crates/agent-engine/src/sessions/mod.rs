@@ -132,6 +132,8 @@ impl Sessions for InMemorySessions {
 
 mod file;
 mod log;
+mod records;
 
 pub use file::FileSessions;
 pub use log::Entry;
+pub use records::records;

@@ -21,6 +21,7 @@ impl Job {
             provider: self.request.model.provider,
             gate: self.gate.clone(),
             model: self.request.model.clone(),
+            calls: None,
         };
         let template = TurnRequest {
             model: self.request.model.id.clone(),

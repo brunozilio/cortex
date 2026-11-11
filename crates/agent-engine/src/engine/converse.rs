@@ -48,6 +48,18 @@ impl Job {
         } = prepared;
         let git = runtime_guard.setup.context.as_ref().and_then(|b| b.git.clone()).or(git);
         let snapshot = self.session_snapshot(&session, prompt::Snapshot { date: today(), git });
+        if let Some(recorder) = &self.recorder {
+            recorder.opened(domain::trace::RunInfo {
+                model: self.request.model.id.clone(),
+                provider: format!("{:?}", self.request.model.provider),
+                permission: format!("{:?}", self.request.permission),
+                effort: format!("{:?}", self.request.effort),
+                cwd: self.workspace.cwd.display().to_string(),
+                branch: snapshot.git.as_ref().map(|git| git.branch.clone()),
+                recent: snapshot.git.as_ref().map(|git| git.recent.clone()),
+                status: snapshot.git.as_ref().map(|git| git.status.clone()),
+            });
+        }
         let environment = Environment {
             cwd: self.workspace.cwd.clone(),
             added_dirs: self.workspace.added_dirs.clone(),
@@ -113,6 +125,7 @@ impl Job {
             provider: self.request.model.provider,
             gate: self.gate.clone(),
             model: self.request.model.clone(),
+            calls: self.recorder.as_ref().map(|recorder| recorder.calls()),
         };
         if self.request.command == Some(SessionCommand::Compact) {
             let focus = Some(self.request.prompt.as_str()).filter(|focus| !focus.trim().is_empty());

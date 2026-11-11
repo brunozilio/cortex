@@ -14,16 +14,22 @@ impl Ledger {
         self.costs.lock().ok()?.iter().copied().sum()
     }
 }
+pub type Calls = Arc<dyn Fn(&TurnRequest, &Reply) + Send + Sync>;
+
 pub struct Metered {
     pub api: Arc<dyn ModelApi>,
     pub ledger: Arc<Ledger>,
     pub provider: ModelProvider,
     pub gate: RunGate,
     pub model: domain::ModelOption,
+    pub calls: Option<Calls>,
 }
 impl ModelApi for Metered {
     fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
         let reply = self.api.turn(request, on, stop)?;
+        if let Some(calls) = &self.calls {
+            calls(request, &reply);
+        }
         let u = reply.usage;
         let provider = llm_providers::find(self.provider);
         let vendor = provider.map_or("", |provider| provider.vendor());

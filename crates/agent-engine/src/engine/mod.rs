@@ -73,6 +73,7 @@ impl AgentEngine for NativeEngine {
             workspace,
             control: Arc::clone(&control),
             gate: gate.clone(),
+            recorder: None,
         };
         let panic_gate = gate.clone();
         let panic_control = control.clone();

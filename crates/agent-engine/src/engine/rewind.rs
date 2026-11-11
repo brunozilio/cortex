@@ -35,6 +35,13 @@ impl Job {
         });
         match rewound {
             Ok(rewound) => {
+                let kept = crate::sessions::Entry::Event {
+                    at_ms: super::record::now(),
+                    event: EngineEvent::Rewound(rewound.clone()),
+                };
+                if let Err(error) = self.sessions.record(&self.request, session, &kept) {
+                    tracing::warn!(%error, "the rewind was not kept in the session's trace");
+                }
                 self.gate.emit(EngineEvent::Rewound(rewound));
                 self.completed(started, None);
             }
