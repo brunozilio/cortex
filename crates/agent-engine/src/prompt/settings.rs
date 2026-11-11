@@ -24,7 +24,7 @@ pub struct Settings {
     #[serde(default)]
     pub judge: Option<String>,
     #[serde(default)]
-    pub fallback: Option<String>,
+    pub fallbacks: Vec<String>,
     #[serde(default)]
     pub small_model: Option<String>,
     #[serde(default)]
@@ -51,7 +51,7 @@ impl Default for Settings {
             auto_memory: true,
             advisor: None,
             judge: None,
-            fallback: None,
+            fallbacks: Vec::new(),
             small_model: None,
             enabled_providers: Vec::new(),
             mcp_approval: Default::default(),
@@ -72,6 +72,12 @@ fn model_name(value: &Value, key: &str) -> Result<Option<String>, String> {
     let name = value.as_str().filter(|s| !s.is_empty() && !s.contains(char::is_whitespace));
     Ok(Some(name.ok_or(format!("{key} must be a model name"))?.to_owned()))
 }
+fn model_names(value: &Value, key: &str) -> Result<Vec<String>, String> {
+    match value.as_array() {
+        Some(models) => models.iter().map(|model| model_name(model, key)).filter_map(Result::transpose).collect(),
+        None => Ok(model_name(value, key)?.into_iter().collect()),
+    }
+}
 pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin]) -> Result<Settings, String> {
     let mut selected = String::from("Default");
     let mut schema = None;
@@ -79,7 +85,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut auto_memory = true;
     let mut advisor = None;
     let mut judge = None;
-    let mut fallback = None;
+    let mut fallbacks = Vec::new();
     let mut small_model = None;
     let mut enabled_providers = Vec::new();
     let mut hooks = crate::hooks::Hooks::default();
@@ -140,7 +146,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 judge = model_name(value, "judgeModel")?;
             }
             if let Some(value) = settings.get("fallbackModel") {
-                fallback = model_name(value, "fallbackModel")?;
+                fallbacks = model_names(value, "fallbackModel")?;
             }
             if let Some(value) = settings.get("smallModel") {
                 small_model = model_name(value, "smallModel")?;
@@ -208,7 +214,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 auto_memory,
                 advisor,
                 judge,
-                fallback,
+                fallbacks,
                 small_model,
                 enabled_providers,
                 mcp_approval,
@@ -227,7 +233,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         auto_memory,
         advisor,
         judge,
-        fallback,
+        fallbacks,
         small_model,
         enabled_providers,
         mcp_approval,

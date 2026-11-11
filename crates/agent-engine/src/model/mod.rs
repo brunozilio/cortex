@@ -82,6 +82,18 @@ impl ModelError {
     pub const fn is_transient(&self) -> bool {
         matches!(self, Self::Overloaded(_) | Self::Network(_))
     }
+
+    pub const fn failure(&self) -> Option<domain::fallback::Failure> {
+        use domain::fallback::Failure;
+        match self {
+            Self::Unauthorized(_) => Some(Failure::Unauthorized),
+            Self::Overloaded(_) => Some(Failure::Overloaded),
+            Self::TooLong(_) => Some(Failure::TooLong),
+            Self::Provider(_) => Some(Failure::Provider),
+            Self::Network(_) => Some(Failure::Network),
+            Self::Cancelled => None,
+        }
+    }
 }
 
 pub trait KeySource: Send + Sync {

@@ -78,7 +78,7 @@ fn mixed_calls_run_reads_together_and_keep_their_order() {
 #[test]
 fn an_overloaded_model_falls_back_once_for_the_rest_of_the_run() {
     let mut rig = Rig::new(PermissionMode::Bypass);
-    rig.workspace.fallback = Some("backup".into());
+    rig.workspace.fallbacks = vec!["backup".into()];
     let model = ScriptedModel::new([
         Err(ModelError::Overloaded("529".into())),
         ScriptedModel::reply(vec![tool_use("r", "Read", json!({"file_path": "notes.txt"}))]),
@@ -88,6 +88,29 @@ fn an_overloaded_model_falls_back_once_for_the_rest_of_the_run() {
     let models: Vec<String> = model.asked().into_iter().map(|asked| asked.model).collect();
     assert_eq!(models, ["m", "backup", "backup"]);
     assert!(rig.events().contains(&EngineEvent::FellBack("backup".into())));
+}
+
+#[test]
+fn an_overloaded_model_goes_down_the_fallback_chain() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    rig.workspace.fallbacks = vec!["first".into(), "second".into()];
+    let model = ScriptedModel::new([
+        Err(ModelError::Overloaded("529".into())),
+        Err(ModelError::Overloaded("529".into())),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    rig.run(&model, &mut vec![Message::user("go")]).expect("run");
+    let models: Vec<String> = model.asked().into_iter().map(|asked| asked.model).collect();
+    assert_eq!(models, ["m", "first", "second"]);
+}
+
+#[test]
+fn other_failures_end_the_run_without_a_hook() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    rig.workspace.fallbacks = vec!["backup".into()];
+    let model = ScriptedModel::new([Err(ModelError::Network("down".into()))]);
+    let ending = rig.run(&model, &mut vec![Message::user("go")]);
+    assert_eq!(ending, Err(Ending::Failed(ModelError::Network("down".into()))));
 }
 
 #[test]

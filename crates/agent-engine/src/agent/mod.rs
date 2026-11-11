@@ -91,7 +91,7 @@ impl Agent<'_> {
         let mut counted = crate::upkeep::Counted::default();
         let mut reminders = reminders::Reminders::default();
         let mut fell_back: Option<String> = None;
-        let mut hook_fell_back = false;
+        let mut fallback = domain::fallback::Fallback::new(self.workspace.fallbacks.clone());
         let mut stop_hook_active = false;
         let (prompt_at, mut attempts) = (history.len().saturating_sub(1), 0);
         for _ in 0..self.turn_limit.min(MAX_TURNS) {
@@ -131,17 +131,11 @@ impl Agent<'_> {
                 Delta::ToolInput { name, piece } => (self.emit)(EngineEvent::ToolInputDelta { name, piece }),
             };
             let reply = match self.api.turn(&request, &mut on, self.control.stop_flag()) {
-                Ok(reply) => reply,
-                Err(ModelError::Cancelled) => return Err(Ending::Cancelled),
-                Err(ModelError::Overloaded(_))
-                    if fell_back.is_none()
-                        && let Some(fallback) =
-                            self.workspace.fallback.as_ref().filter(|model| **model != self.request.model) =>
-                {
-                    fell_back = Some(fallback.clone());
-                    (self.emit)(EngineEvent::FellBack(fallback.clone()));
-                    continue;
+                Ok(reply) => {
+                    fallback.succeeded();
+                    reply
                 }
+                Err(ModelError::Cancelled) => return Err(Ending::Cancelled),
                 Err(ModelError::TooLong(_)) if recoveries < 2 => {
                     recoveries += 1;
                     let template = self.turn_template(fell_back.as_ref());
@@ -154,15 +148,7 @@ impl Agent<'_> {
                     compacted_at = Some(history.len());
                     continue;
                 }
-                Err(error)
-                    if !hook_fell_back
-                        && let Some(model) = self.hooked_model(
-                            "ModelError",
-                            &request,
-                            serde_json::json!({"error": error.to_string()}),
-                        ) =>
-                {
-                    hook_fell_back = true;
+                Err(error) if let Some(model) = self.next_model(&mut fallback, &request, &error) => {
                     (self.emit)(EngineEvent::FellBack(model.clone()));
                     fell_back = Some(model);
                     continue;

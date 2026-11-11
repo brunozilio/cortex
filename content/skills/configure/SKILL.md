@@ -41,38 +41,46 @@ user. If a provider is not connected, tell the user to run
 ### Simple: `fallbackModel`
 
 ```json
-{ "fallbackModel": "kiro:claude-sonnet-5" }
+{ "fallbackModel": ["kiro:claude-sonnet-5", "openai:gpt-6.1"] }
 ```
 
-When the run's model stays overloaded (after the provider's own
-retries), the run hands over to this model once and keeps going on it.
-It does not trigger on other errors (auth, rate limit, network) and it
-names one model, not a chain. `--fallback-model` sets it for one
-`{{COMMAND}} -p` run.
+One model or a list. When the run's model stays overloaded (after the
+provider's own retries), the run hands over to the first model of the
+list it has not tried yet and keeps going on it. The list alone answers
+only overloads; for auth, network or provider errors use a hook.
+`--fallback-model` sets one model for one `{{COMMAND}} -p` run.
 
-Use it when the user's main model is on one provider and they want a
-single backup on another: main `chatgpt:…`, `fallbackModel` `kiro:…`.
+Use it when the user's main model is on one provider and they want
+backups on others: main `chatgpt:…`, `fallbackModel` `["kiro:…"]`.
 
-### Any error, or a chain: a `ModelError` hook
+### Any error, any policy: a `ModelError` hook
 
-A hook script in `{{DIR}}/hooks/` (project) or `~/{{DIR}}/hooks/`
-(user) runs when a model call fails, after `fallbackModel`. Its input
-has `model`, `kind` (`main` or `sub-agent`), `mode`, `messages` and
-`error`. Returning a model tries that model:
+A `ModelError` hook intercepts every failed model call, before the
+`fallbackModel` list. A script in `{{DIR}}/hooks/` (project) or
+`~/{{DIR}}/hooks/` (user) gets as input `model`, `kind` (`main` or
+`sub-agent`), `mode`, `messages`, `error`, `errorKind` (`overloaded`,
+`unauthorized`, `network`, `provider`, `too_long`), `attempt`, `tried`
+(models that failed since the last answer) and `fallbacks` (the
+settings' list). It answers one of:
+
+- `{ hookSpecificOutput: { model: "kiro:…" } }`: forward the call there.
+- `{ decision: "block", reason: "…" }`: stop, the run fails with the error.
+- nothing: the `fallbackModel` list decides.
 
 ```js
 export const event = "ModelError";
 export const matcher = "main";
-const chain = ["chatgpt:gpt-6.1", "kiro:claude-sonnet-5"];
+const chain = ["kiro:claude-sonnet-5", "openai:gpt-6.1"];
 export default function (input) {
-  const next = chain[chain.indexOf(input.model) + 1] ?? chain[0];
-  if (next !== input.model) return { hookSpecificOutput: { model: next } };
+  if (input.errorKind === "too_long") return;
+  const next = chain.find((model) => !input.tried.includes(model));
+  if (next) return { hookSpecificOutput: { model: next } };
 }
 ```
 
-`ModelError` answers once per run: if the model it named fails too, the
-run fails. Tell the user this limit plainly when they ask for a longer
-chain.
+A model already in `tried` is never tried again before a call
+succeeds, and a streak stops after a few switches, so a hook cannot
+loop forever.
 
 ### Choosing the model per call: a `ModelRequest` hook
 

@@ -9,6 +9,7 @@ pub mod events;
 pub mod executable;
 pub mod extensions;
 pub mod failure;
+pub mod fallback;
 pub mod ids;
 pub mod image;
 pub mod inbox;

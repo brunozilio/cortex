@@ -208,9 +208,11 @@ Removing the folders of one name removes the feature; CI checks every name.
   and `/loop [interval] <task>` asks the agent to schedule a task.
 - **Runs from scripts**: `PromptRequest` carries `max_turns`,
   `allowed_tools`/`disallowed_tools` (rules for the run), `append_system`,
-  `fallback_model` (or the settings' `fallbackModel`: an overloaded model
-  hands the run over, `EngineEvent::FellBack`; `provider:model`, such as
-  `openai:gpt-6.1-sol`, falls back to another connected provider) and `fork` (go on from
+  `fallback_model` (or the settings' `fallbackModel`, one model or a
+  chain: an overloaded model hands the run over, `EngineEvent::FellBack`;
+  `provider:model`, such as `openai:gpt-6.1-sol`, falls back to another
+  connected provider; the `ModelError` hook intercepts any failure first,
+  policy in `domain::fallback`) and `fork` (go on from
   `resume` under a new session). `{command} -p` maps them to flags and
   writes `text`, `json` or `stream-json` (`print_output`).
 - **Prompt**: planning mode, output styles, tool descriptions carrying the

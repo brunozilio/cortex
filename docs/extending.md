@@ -53,13 +53,16 @@ A model named `provider:model` (the catalog's own id form) runs on that
 provider with the owner's key for it, wherever a model is named:
 
 - `fallbackModel` / `--fallback-model`: `"openai:gpt-6.1-sol"` takes over
-  when the run's model stays overloaded.
+  when the run's model stays overloaded; a list (`["kiro:auto",
+  "openai:gpt-6.1-sol"]`) is tried in order.
 - The `ModelRequest` hook runs before each model call and may answer
   `{"hookSpecificOutput": {"model": "groq:llama-4-scout"}}`. Its matcher
   is the kind of call, `main` or `sub-agent`, so sub-agents can go to a
   cheaper provider.
-- The `ModelError` hook runs when a call fails and may name one model to
-  try next.
+- The `ModelError` hook intercepts every failed call: it sees the error,
+  its kind and the models already tried, and may forward the call to
+  another model, block (end the run) or stay silent (the `fallbackModel`
+  chain answers). See `docs/native-engine.md`.
 
 Any other name stays on the run's provider. A provider that is not
 connected says how to log in.

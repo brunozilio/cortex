@@ -106,12 +106,19 @@ read-only tool (Read, Grep, Glob, LSP…) inside the project; anything else
 is refused. The script runs on its own thread and each such call is served
 by the caller (`hooks/script_hook.rs`, `tools/script_bridge.rs`).
 
-ModelRequest runs before each model call of the loop and ModelError when
-one fails (after the provider's own retries and `fallbackModel`). Their
-input has `model`, `kind` (`main` or `sub-agent`, also the matcher's
-subject), `mode`, `messages` and, for ModelError, `error`. Answering
+ModelRequest runs before each model call of the loop and ModelError on
+every failed call (after the provider's own retries). Their input has
+`model`, `kind` (`main` or `sub-agent`, also the matcher's subject),
+`mode`, `messages` and, for ModelError, `error`, `errorKind`
+(`overloaded`, `unauthorized`, `network`, `provider`, `too_long`),
+`attempt`, `tried` (the models that failed since the last answer) and
+`fallbacks` (the settings' chain). Answering
 `{"hookSpecificOutput": {"model": "openai:gpt-6.1-sol"}}` routes the call
-(see `domain::routing`); ModelError tries that model once. Only command,
+(see `domain::routing`). On ModelError it forwards the failed call to that
+model, `{"decision": "block"}` ends the run with the error, and no answer
+leaves it to the `fallbackModel` chain, which takes only overloads. The
+policy is `domain::fallback`: a model is not tried twice before an answer
+arrives, and at most `MAX_SWITCHES` models are tried in a row. Only command,
 script and http handlers run on them, so routing never asks a model.
 
 ## Tests against real accounts

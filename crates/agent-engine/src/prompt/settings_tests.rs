@@ -47,8 +47,12 @@ fn judge_and_fallback_models_are_model_names() {
     .expect("write");
     let settings = load(repo.path(), None, &[]).expect("settings");
     assert_eq!(settings.judge.as_deref(), Some("claude-haiku-5-5"));
-    assert_eq!(settings.fallback.as_deref(), Some("claude-sonnet-5-5"));
+    assert_eq!(settings.fallbacks, ["claude-sonnet-5-5"]);
+    std::fs::write(root.join("settings.json"), r#"{"fallbackModel":["chatgpt:a","kiro:b"]}"#).expect("write");
+    assert_eq!(load(repo.path(), None, &[]).expect("settings").fallbacks, ["chatgpt:a", "kiro:b"]);
     std::fs::write(root.join("settings.json"), r#"{"judgeModel":"two words"}"#).expect("write");
+    assert!(load(repo.path(), None, &[]).is_err());
+    std::fs::write(root.join("settings.json"), r#"{"fallbackModel":["ok","two words"]}"#).expect("write");
     assert!(load(repo.path(), None, &[]).is_err());
 }
 
