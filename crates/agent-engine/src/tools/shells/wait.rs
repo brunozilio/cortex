@@ -1,23 +1,12 @@
-//! A command `Bash` runs in the foreground waits here: until it exits, its
-//! time is up, the run is cancelled, or the user moves it to the background
-//! (Ctrl+B), where it goes on like one started with `run_in_background`.
-
 use std::sync::PoisonError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use super::{Shell, lock, refresh};
 
-/// How the wait ended, with what the command printed (stdout and stderr
-/// as they came).
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Waited {
-    Exited {
-        output: String,
-        success: bool,
-        code: Option<i32>,
-    },
-    /// Moved to the background; it goes on under its id.
+    Exited { output: String, success: bool, code: Option<i32> },
     Detached,
     TimedOut(String),
     Stopped(String),
@@ -25,7 +14,6 @@ pub(crate) enum Waited {
 
 pub(crate) fn wait(id: &str, timeout: Duration, stop: &AtomicBool, detach: &AtomicBool) -> Waited {
     let started = Instant::now();
-    // A Ctrl+B from before this command does not move it.
     detach.store(false, Ordering::SeqCst);
     loop {
         let exited = {
@@ -38,7 +26,6 @@ pub(crate) fn wait(id: &str, timeout: Duration, stop: &AtomicBool, detach: &Atom
                 None
             }
         };
-        // Waiting for the readers holds no lock: other shells go on.
         if let Some((status, shell)) = exited {
             return Waited::Exited {
                 output: taken(shell),
@@ -63,11 +50,8 @@ pub(crate) fn wait(id: &str, timeout: Duration, stop: &AtomicBool, detach: &Atom
     }
 }
 
-/// What the shell printed, once its readers have caught up.
 fn taken(shell: Option<Shell>) -> String {
     let Some(shell) = shell else { return String::new() };
-    // The readers finish when the pipes close, just after the exit (or
-    // never, when something the command left behind holds them).
     let deadline = Instant::now() + Duration::from_millis(500);
     while !shell.readers.iter().all(std::thread::JoinHandle::is_finished) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));

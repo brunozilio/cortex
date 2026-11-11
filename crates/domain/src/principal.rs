@@ -1,7 +1,3 @@
-//! Who is acting. Every command carries a `Principal` so a server can
-//! authorize it: the local owner of the embedded server, or a member of an
-//! organization.
-
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{OrgId, UserId};

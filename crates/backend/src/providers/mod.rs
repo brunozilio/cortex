@@ -1,10 +1,3 @@
-//! LLM providers on the backend (ADR 0016, 0018): each owner's account
-//! with OpenAI, Anthropic and the ChatGPT, Claude and GitHub Copilot
-//! subscriptions. The
-//! credentials stay in the [`SecretStore`]; clients only see
-//! [`ProviderSummary`](domain::provider::ProviderSummary)s. A run
-//! gets its key from [`ModelProviders::key`].
-
 mod account;
 mod catalog;
 mod kiro_sign_in;
@@ -101,8 +94,6 @@ impl ModelProviders {
         self
     }
 
-    /// The same accounts for another client: its model listings are its
-    /// own, so a newer listing by someone else never swallows its answer.
     pub(crate) fn for_client(mut self) -> Self {
         self.generations = Arc::default();
         self
@@ -112,7 +103,6 @@ impl ModelProviders {
         ServerEvent::Providers(ProviderEvent::Listed { providers: self.store.load(owner).summaries() })
     }
 
-    /// Connects with an API key, or a subscription's token JSON.
     pub fn connect(&self, owner: &Principal, provider: ModelProvider, raw: &str) -> ServerEvent {
         let result = self.parse(provider, raw).and_then(|(config, label)| self.keep(owner, provider, label, &config));
         self.answer(owner, provider, result)
@@ -129,8 +119,6 @@ impl ModelProviders {
         Ok((config, key_hint(&key)))
     }
 
-    /// Signs in to a subscription in the browser, off the command loop:
-    /// sends [`ProviderEvent::AuthorizeAt`], then the list or the failure.
     pub fn sign_in(&self, owner: &Principal, provider: ModelProvider, outbox: &Outbox) {
         if !provider.subscription() {
             let message = format!("{} connects with an API key", provider.name());
@@ -160,8 +148,6 @@ impl ModelProviders {
         self.answer(owner, provider, result)
     }
 
-    /// The live credential of a connected provider: rotated tokens are saved
-    /// back, and a disconnected account stops working mid-run.
     pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {
         use domain::provider::ProviderKeyStore;
         if self.store.load(owner).get(provider).is_none() {

@@ -1,8 +1,3 @@
-//! `Advisor`: a stronger reviewer model reads the agent's whole
-//! conversation and advises, before substantive work, when stuck and before
-//! declaring done. Offered when settings name a model for it
-//! (`advisorModel`); the agent loop runs it, since it needs the history.
-
 use std::sync::atomic::AtomicBool;
 
 use serde_json::{Value, json};

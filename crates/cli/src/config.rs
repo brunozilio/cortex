@@ -1,11 +1,3 @@
-//! `{command} config`: reading and changing the settings the engine reads,
-//! the user's (`~/.{command}/settings.json`) or, with `--project`, this
-//! project's own (`.{command}/settings.local.json`, never checked in).
-//!
-//! It edits files on this computer, like `git config`, and so needs no
-//! backend: a remote server keeps its own settings, changed through its own
-//! commands. The engine reads these files at each run's start.
-
 use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
@@ -13,17 +5,16 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum ConfigAction {
-    /// Every setting.
+    #[command(about = "Every setting")]
     List,
-    /// One setting (a dotted path like `permissions.allow`).
+    #[command(about = "One setting (a dotted path like `permissions.allow`)")]
     Get { key: String },
-    /// Set one: JSON (`true`, `["Bash(ls:*)"]`) or else text.
+    #[command(about = "Set one: JSON (`true`, `[\"Bash(ls:*)\"]`) or else text")]
     Set { key: String, value: String },
-    /// Remove one.
+    #[command(about = "Remove one")]
     Unset { key: String },
 }
 
-/// The file `--project` (or not) means.
 pub fn file(cwd: &Path, project: bool) -> Result<PathBuf, String> {
     if project {
         return Ok(cwd.join(brand::DIR).join("settings.local.json"));
@@ -73,8 +64,6 @@ fn lookup<'a>(settings: &'a Value, key: &str) -> Option<&'a Value> {
     key.split('.').try_fold(settings, |value, part| value.get(part))
 }
 
-/// Sets (or, with `None`, removes) the setting at dotted `key`, making the
-/// objects on the way.
 fn place(settings: &mut Value, key: &str, value: Option<Value>) -> Result<(), String> {
     let parts: Vec<&str> = key.split('.').filter(|part| !part.is_empty()).collect();
     let (last, path) = parts.split_last().ok_or("an empty key")?;

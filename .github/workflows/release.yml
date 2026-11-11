@@ -1,10 +1,5 @@
 name: Release
 
-# release-please keeps a release PR open from the conventional commits on
-# main. Merging it tags vX.Y.Z and creates the GitHub release; the build
-# job then attaches the binary (named by brand.toml's `command`) for each
-# platform.
-
 on:
   push:
     branches: [main]
@@ -36,14 +31,12 @@ jobs:
       tag: ${{ steps.release.outputs.tag_name }}
       pr: ${{ steps.release.outputs.pr }}
     steps:
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
         id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # release-please bumps the version in Cargo.toml; keep Cargo.lock in step
-  # on the release PR so `--locked` builds pass after the merge.
   lockfile:
     needs: release-please
     if: needs.release-please.outputs.pr
@@ -51,10 +44,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
         with:
           toolchain: stable
       - run: cargo update --workspace
@@ -65,9 +58,6 @@ jobs:
           git commit -am "chore: update Cargo.lock"
           git push
 
-  # A PR opened or pushed with GITHUB_TOKEN triggers no workflows, but
-  # workflow_dispatch is exempt: run the required checks on the release
-  # branch so its PR can merge.
   release-pr-checks:
     needs: [release-please, lockfile]
     if: needs.release-please.outputs.pr
@@ -91,7 +81,6 @@ jobs:
         include:
           - target: aarch64-apple-darwin
             os: macos-latest
-          # Static builds: they run on any Linux distribution.
           - target: x86_64-unknown-linux-musl
             os: ubuntu-24.04
             cargo: zigbuild
@@ -104,17 +93,16 @@ jobs:
     env:
       TAG: ${{ inputs.tag || needs.release-please.outputs.tag }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.tag || needs.release-please.outputs.tag }}
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           key: ${{ matrix.target }}
-      # zig is the musl C toolchain (ring, oniguruma): from PyPI, not apt.
       - if: matrix.cargo == 'zigbuild'
         run: python3 -m pip install --user --break-system-packages ziglang cargo-zigbuild
       - name: Brand

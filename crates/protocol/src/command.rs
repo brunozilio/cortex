@@ -1,5 +1,3 @@
-//! Requests a client sends to a backend.
-
 use std::path::PathBuf;
 
 use domain::provider::ModelProvider;
@@ -10,144 +8,37 @@ use serde::{Deserialize, Serialize};
 #[allow(clippy::large_enum_variant, reason = "commands are short-lived messages, never stored in bulk")]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum ClientCommand {
-    SubmitPrompt {
-        run: RunId,
-        request: PromptRequest,
-    },
-    CancelRun {
-        run: RunId,
-    },
-    AnswerAsk {
-        run: RunId,
-        ask: AskId,
-        decision: Decision,
-    },
-    SetPermissionMode {
-        run: RunId,
-        mode: PermissionMode,
-    },
-    /// A message for run `run`'s model, handed over at its next turn
-    /// (`EngineEvent::Steered` says when).
-    SteerRun {
-        run: RunId,
-        text: String,
-    },
-    /// Takes back what was steered into run `run` and not handed over yet
-    /// (`EngineEvent::Unsteered` returns it).
-    UnsteerRun {
-        run: RunId,
-    },
-    /// Moves the command run `run` waits on to the background (Ctrl+B).
-    BackgroundRun {
-        run: RunId,
-    },
+    SubmitPrompt { run: RunId, request: PromptRequest },
+    CancelRun { run: RunId },
+    AnswerAsk { run: RunId, ask: AskId, decision: Decision },
+    SetPermissionMode { run: RunId, mode: PermissionMode },
+    SteerRun { run: RunId, text: String },
+    UnsteerRun { run: RunId },
+    BackgroundRun { run: RunId },
     ListModels,
-    ListSkills {
-        path: PathBuf,
-    },
-    ListAgents {
-        path: PathBuf,
-    },
-    LoadMemory {
-        path: PathBuf,
-    },
-    SearchMemory {
-        path: PathBuf,
-        query: String,
-    },
-    EditMemory {
-        path: PathBuf,
-        edits: Vec<MemoryEdit>,
-    },
-    /// Starts run `run`, in which an agent tidies the project's memory.
-    OptimizeMemory {
-        run: RunId,
-        path: PathBuf,
-        model: ModelOption,
-    },
-    /// Puts back the memory as it was before the last optimization, until
-    /// another edit.
-    UndoMemory {
-        path: PathBuf,
-    },
+    ListSkills { path: PathBuf },
+    ListAgents { path: PathBuf },
+    LoadMemory { path: PathBuf },
+    SearchMemory { path: PathBuf, query: String },
+    EditMemory { path: PathBuf, edits: Vec<MemoryEdit> },
+    OptimizeMemory { run: RunId, path: PathBuf, model: ModelOption },
+    UndoMemory { path: PathBuf },
     LoadSettings,
-    SaveSettings {
-        settings: serde_json::Value,
-    },
+    SaveSettings { settings: serde_json::Value },
     ListProviders,
-    /// Connects with an API key, or a subscription's token JSON.
-    ConnectProvider {
-        provider: ModelProvider,
-        key: String,
-    },
-    /// Signs in to a subscription in the browser; the backend answers with
-    /// [`ProviderEvent::AuthorizeAt`](crate::ProviderEvent::AuthorizeAt)
-    /// (with a code to type for GitHub Copilot's device flow).
-    SignInProvider {
-        provider: ModelProvider,
-    },
-    DisconnectProvider {
-        provider: ModelProvider,
-    },
-    /// The MCP servers a run in `path` can use; answered with
-    /// [`ServerEvent::McpServers`](crate::ServerEvent::McpServers), as are
-    /// the three changes below.
-    ListMcpServers {
-        path: PathBuf,
-    },
-    /// The commands this client's runs left in the background, answered
-    /// with `ServerEvent::Shells`; `kill` stops one first.
-    ListShells {
-        kill: Option<String>,
-    },
-    /// The prompts this client's runs scheduled (`CronCreate`,
-    /// `ScheduleWakeup`), answered with `ServerEvent::Schedules`: `delete`
-    /// removes one first, `take_due` also hands over (and moves on) the due
-    /// ones, for an idle session to send.
-    Schedules {
-        delete: Option<String>,
-        take_due: bool,
-    },
-    /// The permission rules and added folders of a folder's settings,
-    /// answered with `ServerEvent::Permissions`.
-    ListPermissions {
-        path: PathBuf,
-    },
-    /// Approves a project's `.mcp.json` server, or turns it off.
-    ApproveMcpServer {
-        path: PathBuf,
-        name: String,
-        approve: bool,
-    },
-    /// Adds or replaces one of the owner's own servers (`mcpServers` JSON).
-    AddMcpServer {
-        path: PathBuf,
-        name: String,
-        server: serde_json::Value,
-    },
-    RemoveMcpServer {
-        path: PathBuf,
-        name: String,
-    },
-    /// Signs in to a remote MCP server in the browser: answered with
-    /// `ServerEvent::McpAuthorizeAt` (the address to visit), then the
-    /// listing once signed in.
-    SignInMcpServer {
-        path: PathBuf,
-        name: String,
-    },
-    /// Forgets the sign-in; answered with the listing.
-    SignOutMcpServer {
-        path: PathBuf,
-        name: String,
-    },
-    /// Keeps the MCP servers `names` (a run in `path` could use them) up as
-    /// this client's channels: their messages reach its inbox. Answered
-    /// with `ServerEvent::Channels`.
-    OpenChannels {
-        path: PathBuf,
-        names: Vec<String>,
-    },
+    ConnectProvider { provider: ModelProvider, key: String },
+    SignInProvider { provider: ModelProvider },
+    DisconnectProvider { provider: ModelProvider },
+    ListMcpServers { path: PathBuf },
+    ListShells { kill: Option<String> },
+    Schedules { delete: Option<String>, take_due: bool },
+    ListPermissions { path: PathBuf },
+    ApproveMcpServer { path: PathBuf, name: String, approve: bool },
+    AddMcpServer { path: PathBuf, name: String, server: serde_json::Value },
+    RemoveMcpServer { path: PathBuf, name: String },
+    SignInMcpServer { path: PathBuf, name: String },
+    SignOutMcpServer { path: PathBuf, name: String },
+    OpenChannels { path: PathBuf, names: Vec<String> },
 }
 
 impl ClientCommand {

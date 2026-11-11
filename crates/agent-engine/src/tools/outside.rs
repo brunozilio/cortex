@@ -1,10 +1,3 @@
-//! Where a run may look without asking: its project (the repository
-//! holding the working directory, or the working directory itself), the
-//! folders the user added to it (`/add-dir`, `additionalDirectories`) and
-//! the files the user referenced. A read anywhere else (`~/.ssh`, another
-//! project) is asked for like an edit, so an agent talked into it by what
-//! it read cannot quietly take a secret off the computer.
-
 use std::path::{Component, Path, PathBuf};
 
 use super::Workspace;

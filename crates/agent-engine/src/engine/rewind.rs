@@ -1,6 +1,3 @@
-//! A run's checkpoint (opened before its prompt joins the conversation,
-//! kept once it ends, whatever the outcome) and rewinding to one.
-
 use std::time::Instant;
 
 use domain::{EngineEvent, FailureKind, Rewound, SessionId};

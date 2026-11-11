@@ -1,6 +1,3 @@
-//! Messages typed while the agent works: handed to it mid-run, or sent as
-//! the next prompt when the engine could not take them.
-
 use std::time::Duration;
 
 use agent_engine::fake::FakeEngine;
@@ -132,7 +129,6 @@ fn ctrl_r_finds_an_earlier_prompt_and_esc_twice_opens_rewind() {
     );
 }
 
-/// The prompts sent, without the side calls the chat makes by itself.
 fn prompts(engine: &FakeEngine) -> Vec<String> {
     engine.requests().into_iter().filter(|request| request.command.is_none()).map(|request| request.prompt).collect()
 }

@@ -1,7 +1,3 @@
-//! What sits above the prompt: an API key being typed, the question being
-//! asked, the picker, a `/btw` answer, or the completions of an `@file` or
-//! a `/word`.
-
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use sdk::AskKind;
@@ -57,7 +53,6 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
     lines
 }
 
-/// The agent's task list: done ones crossed out, the one in progress bold.
 fn tasks(tasks: &[domain::events::TaskItem], width: usize, lines: &mut Vec<Line<'static>>) {
     let done = tasks.iter().filter(|task| task.status == "completed").count();
     lines.push(Line::from(format!("Tasks {done}/{} · ctrl+t hides", tasks.len())).dim());
@@ -71,8 +66,6 @@ fn tasks(tasks: &[domain::events::TaskItem], width: usize, lines: &mut Vec<Line<
     }
 }
 
-/// The question being asked: its title, choices, the note being typed
-/// after "No", and the keys.
 fn asking(pending: &Pending, width: usize, lines: &mut Vec<Line<'static>>) {
     let title = match &pending.ask.kind {
         AskKind::Permission { tool, subject, .. } => format!("Allow {tool}: {subject}?"),

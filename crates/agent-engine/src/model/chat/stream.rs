@@ -1,7 +1,3 @@
-//! Folds a Chat Completions stream into the assistant's message. Models
-//! that think in their text (Qwen's `<think>…</think>`) have it split out
-//! as thinking, even when a tag arrives in pieces.
-
 use serde_json::Value;
 
 use crate::model::{Delta, ModelError, Reply};

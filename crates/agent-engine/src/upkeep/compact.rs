@@ -1,6 +1,3 @@
-//! Compacting a conversation into a summary it goes on from, in one call
-//! or, when even that overflows, in bounded chunks; with its hooks.
-
 use std::sync::atomic::AtomicBool;
 
 use domain::Compaction;
@@ -78,7 +75,6 @@ pub fn compact(
     compact_on(api, template, history, stop, None)
 }
 
-/// [`compact`], the summary keeping what `focus` names (`/compact <focus>`).
 pub fn compact_on(
     api: &dyn ModelApi,
     template: &TurnRequest,
@@ -205,8 +201,6 @@ pub fn compact_hooked(
     compact_hooked_on(api, template, history, workspace, trigger, None)
 }
 
-/// [`compact_hooked`] with the user's focus for the summary, which the
-/// hooks see as `custom_instructions`.
 pub fn compact_hooked_on(
     api: &dyn ModelApi,
     template: &TurnRequest,

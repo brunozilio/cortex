@@ -1,9 +1,3 @@
-//! The channels each client opened (`{command} --channels telegram`): MCP
-//! servers kept up while the client is, whose messages reach its inbox and
-//! whose tools its runs reach through that same connection. The rules and
-//! the bridge are `agent_engine::mcp::channel`'s; this keeps them per
-//! client.
-
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
@@ -21,8 +15,6 @@ fn lock() -> std::sync::MutexGuard<'static, HashMap<u64, Vec<Arc<McpServer>>>> {
     OPEN.get_or_init(Mutex::default).lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Opens the servers `names` a run in `path` could use as `client`'s
-/// channels; answered with the channels open and why the others are not.
 pub(crate) fn open(
     client: u64,
     path: &Path,
@@ -55,7 +47,6 @@ pub(crate) fn open(
     ServerEvent::Channels { opened, failed }
 }
 
-/// [`open`] over the network.
 pub(crate) fn open_here(
     client: u64,
     path: &Path,
@@ -67,12 +58,10 @@ pub(crate) fn open_here(
     open(client, path, names, extensions, home, &http)
 }
 
-/// What a run of `client` reaches its open channels through.
 pub(crate) fn for_run(client: u64) -> Vec<LocalMcp> {
     lock().get(&client).map(|open| open.iter().map(Bridge::local).collect()).unwrap_or_default()
 }
 
-/// Closes `client`'s channels (their processes end).
 pub(crate) fn close(client: u64) {
     lock().remove(&client);
 }
@@ -85,7 +74,6 @@ mod tests {
 
     use super::*;
 
-    /// A channel server: it shakes hands, then pushes one message.
     const SERVER: &str = "read l; printf '{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"capabilities\":{\"experimental\":{\"claude/channel\":{}}}}}\\n'; read l; printf '{\"jsonrpc\":\"2.0\",\"method\":\"notifications/claude/channel\",\"params\":{\"content\":\"hello from chat\"}}\\n'; sleep 30";
 
     #[test]

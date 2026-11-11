@@ -1,7 +1,3 @@
-//! The output styles the app ships: how the agent talks while it works.
-//! A style replaces the coding guidance only when it says so; its turn
-//! reminder is repeated every turn, where long sessions would forget it.
-
 use super::settings::Style;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,8 +26,6 @@ pub fn builtin(name: &str) -> Option<Builtin> {
     BUILTIN.into_iter().find(|style| style.id.eq_ignore_ascii_case(name))
 }
 
-/// The style a run speaks in: the one its request picked (`default` for
-/// none) over the settings' `outputStyle`.
 pub fn picked(requested: Option<&str>, from_settings: Option<Style>) -> Option<Style> {
     match requested {
         Some(name) if name.eq_ignore_ascii_case("default") => None,

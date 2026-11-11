@@ -1,5 +1,3 @@
-//! Who may run which command: the seam for a future multi-user server.
-
 use domain::Principal;
 use protocol::ClientCommand;
 

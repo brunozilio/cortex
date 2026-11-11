@@ -1,9 +1,3 @@
-//! An MCP server run as a process: JSON-RPC messages one per line on its
-//! standard input and output. A reader thread routes each answer to the
-//! request waiting for it, answers the server's own requests (`ping`), and
-//! hands its notifications to a [`Listener`] (a channel's messages). The
-//! process (and whatever it starts) ends with the transport.
-
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{ChildStdin, Stdio};
@@ -26,10 +20,7 @@ pub struct StdioTransport {
     tree: Mutex<Tree>,
     input: Arc<Mutex<ChildStdin>>,
     waiting: Waiting,
-    /// Set once the server's output ended.
     ended: Arc<AtomicBool>,
-    /// Listened to, so shared (a channel): a dropped call is cancelled
-    /// with `notifications/cancelled` instead of ending the process.
     shared: bool,
 }
 

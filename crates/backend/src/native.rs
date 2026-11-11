@@ -1,6 +1,3 @@
-//! The native engine as the backend sets it up: which API a run's model is
-//! called through, with the key the backend put on the run.
-
 use std::path::Path;
 use std::sync::Arc;
 

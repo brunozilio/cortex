@@ -1,6 +1,3 @@
-//! Folds a Messages API event stream into the assistant's message, calling
-//! back with text and thinking as they arrive.
-
 use serde_json::Value;
 
 use crate::model::{Delta, ModelError, Reply};

@@ -1,6 +1,3 @@
-//! An in-process MCP server's transport: JSON-RPC handed to the host's
-//! [`McpEndpoint`] as a function call, no HTTP and no child process.
-
 use std::sync::Arc;
 
 use domain::mcp::McpEndpoint;

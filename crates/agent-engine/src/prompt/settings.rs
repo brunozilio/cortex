@@ -1,4 +1,3 @@
-//! User/project output settings; native settings override compatibility files.
 use crate::frontmatter::parse as parse_frontmatter;
 use serde_json::Value;
 use std::path::Path;
@@ -22,26 +21,16 @@ pub struct Settings {
     pub auto_memory: bool,
     #[serde(default)]
     pub advisor: Option<String>,
-    /// The model that judges verification (`judgeModel`); the run's own
-    /// when unset.
     #[serde(default)]
     pub judge: Option<String>,
-    /// The model to go on with when the run's is overloaded (`fallbackModel`).
     #[serde(default)]
     pub fallback: Option<String>,
-    /// The owner's say on the project's `.mcp.json` servers: read only from
-    /// the user's settings and the project's `settings.local.json`.
     #[serde(default)]
     pub mcp_approval: domain::mcp_config::McpApproval,
-    /// `lspServers` from each settings file, then each plugin, in the order
-    /// they apply over the built-in servers.
     #[serde(default)]
     pub lsp_servers: Vec<LspLayer>,
-    /// `permissions.allow/ask/deny` of every file (allow only the owner's).
     #[serde(skip)]
     pub permissions: domain::permission_rules::PermissionRules,
-    /// `permissions.additionalDirectories` of the owner's files, as written
-    /// (`~/`, relative to the project, or absolute).
     #[serde(default)]
     pub added_dirs: Vec<String>,
 }
@@ -68,7 +57,6 @@ impl Default for Settings {
 fn enabled() -> bool {
     true
 }
-/// A model setting: a name, or `null` to unset one from a broader file.
 fn model_name(value: &Value, key: &str) -> Result<Option<String>, String> {
     if value.is_null() {
         return Ok(None);

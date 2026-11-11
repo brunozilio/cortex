@@ -1,13 +1,7 @@
-//! Which published build replaces this one (`{command} update`): releases
-//! are tagged `vX.Y.Z` and carry one `{command}-X.Y.Z-<target>.tar.gz` per
-//! platform, with its SHA-256 beside it in `<asset>.sha256`.
-
-/// A release's `X.Y.Z`, compared numerically.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version(pub u64, pub u64, pub u64);
 
 impl Version {
-    /// `0.3.1` or `v0.3.1`; `None` for anything else.
     pub fn parse(text: &str) -> Option<Self> {
         let text = text.trim();
         let mut parts = text.strip_prefix('v').unwrap_or(text).split('.').map(str::parse::<u64>);
@@ -22,15 +16,11 @@ impl std::fmt::Display for Version {
     }
 }
 
-/// The latest release when it is newer than `current`.
 pub fn newer(current: &str, latest_tag: &str) -> Option<Version> {
     let latest = Version::parse(latest_tag)?;
     (Version::parse(current).is_none_or(|current| latest > current)).then_some(latest)
 }
 
-/// The archive built for this platform (`std::env::consts::ARCH`, `OS`):
-/// Linux gets the static (musl) build, which runs on any distribution;
-/// `None` where no build is published.
 pub fn asset(version: Version, arch: &str, os: &str) -> Option<String> {
     let target = match (arch, os) {
         ("aarch64", "macos") => "aarch64-apple-darwin",
@@ -41,8 +31,6 @@ pub fn asset(version: Version, arch: &str, os: &str) -> Option<String> {
     Some(format!("{brand_command}-{version}-{target}.tar.gz", brand_command = brand::COMMAND))
 }
 
-/// The digest a `.sha256` file gives for `asset` (`shasum -a 256` output:
-/// `<hex>  <name>`), lowercase.
 pub fn checksum(text: &str, asset: &str) -> Option<String> {
     text.lines().find_map(|line| {
         let (hex, name) = line.trim().split_once(char::is_whitespace)?;

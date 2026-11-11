@@ -1,6 +1,3 @@
-//! Kiro's `GenerateAssistantResponse`, streamed as AWS event-stream frames.
-//! The account's transport adds the token, the address and the profile.
-
 mod body;
 mod frames;
 mod stream;
@@ -30,8 +27,6 @@ impl std::fmt::Debug for Conversation {
 }
 
 impl Conversation {
-    /// `window` is the model's context window, to size the prompt from the
-    /// share of it Kiro reports.
     pub fn new(http: Arc<dyn Http>, window: Option<u64>) -> Self {
         Self { http, window, backoff: Duration::from_secs(2) }
     }

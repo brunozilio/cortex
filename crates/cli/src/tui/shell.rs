@@ -1,6 +1,3 @@
-//! `!command`: runs in the project's shell right away, without the agent.
-//! What it printed goes with the next prompt, so the agent sees it.
-
 use std::io::Read as _;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -9,9 +6,7 @@ use std::time::{Duration, Instant};
 use super::app::{App, Msg};
 use super::transcript::{Entry, ToolState};
 
-/// A command that runs longer is stopped.
 const LIMIT: Duration = Duration::from_secs(120);
-/// What the agent is shown of an output, at most.
 const KEPT: usize = 30_000;
 
 pub fn start(app: &mut App, command: String) {
@@ -27,7 +22,6 @@ pub fn start(app: &mut App, command: String) {
     app.spawn(move |_| Msg::Shell { id, result: run(&cwd, &command), command });
 }
 
-/// The command's output (and whether it failed) once it ends.
 pub fn finished(app: &mut App, id: &str, command: String, result: Result<(String, bool), String>) {
     let (output, failed) = result.unwrap_or_else(|error| (error, true));
     for entry in &mut app.transcript.entries {
@@ -42,8 +36,6 @@ pub fn finished(app: &mut App, id: &str, command: String, result: Result<(String
     app.shell_context.push(format!("$ {command}\n{kept}"));
 }
 
-/// The prompt as the agent gets it: what was run with `!` since the last
-/// one first.
 pub fn with_context(context: &mut Vec<String>, prompt: &str) -> String {
     if context.is_empty() {
         return prompt.to_owned();

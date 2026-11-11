@@ -1,6 +1,3 @@
-//! Code in a diff coloured by its language (from the file's extension), on
-//! the line's green or red.
-
 use std::sync::OnceLock;
 
 use ratatui::style::{Color, Style};
@@ -22,16 +19,12 @@ fn theme() -> &'static Theme {
     })
 }
 
-/// The extension of the file a diff heading names (`src/a.rs · Added…`).
 pub fn extension(heading: &str) -> Option<&str> {
     let path = heading.split(" · ").next()?.trim();
     let name = path.rsplit('/').next()?;
     name.rsplit_once('.').map(|(_, ext)| ext).filter(|ext| !ext.is_empty())
 }
 
-/// `text` as coloured spans for a file with extension `ext`, each on
-/// `base` (the line's background); one plain span when the language is
-/// unknown.
 pub fn spans(ext: Option<&str>, text: &str, base: Style) -> Vec<Span<'static>> {
     let syntax = ext.and_then(|ext| syntaxes().find_syntax_by_extension(ext));
     let Some(syntax) = syntax else { return vec![Span::styled(text.to_owned(), base)] };

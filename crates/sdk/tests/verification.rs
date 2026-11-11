@@ -1,6 +1,3 @@
-//! A session's verification criteria: the user's, or the last plan's,
-//! sent with every run that is not planning.
-
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;

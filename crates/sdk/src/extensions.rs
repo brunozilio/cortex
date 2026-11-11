@@ -1,11 +1,5 @@
-//! Agents, skills and commands written in code. They are laid out as a
-//! folder in the coding agents' layout (`agents/<name>.md`,
-//! `skills/<name>/SKILL.md`, `commands/<name>.md`), offered to every run
-//! under their own names.
-
 use std::path::Path;
 
-/// A sub-agent the main agent can hand work to (or a session can run as).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Agent {
     name: String,
@@ -16,7 +10,6 @@ pub struct Agent {
 }
 
 impl Agent {
-    /// `description` says when to use it: the main agent reads it to choose.
     pub fn new(name: impl Into<String>, description: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -27,20 +20,16 @@ impl Agent {
         }
     }
 
-    /// Its system prompt.
     pub fn instructions(mut self, text: impl Into<String>) -> Self {
         self.instructions = text.into();
         self
     }
 
-    /// The only tools it may use (`Read`, `Grep`, `mcp__math__*`, …); all
-    /// when none are named.
     pub fn tools<S: Into<String>>(mut self, tools: impl IntoIterator<Item = S>) -> Self {
         self.tools = tools.into_iter().map(Into::into).collect();
         self
     }
 
-    /// A model of its own (`sonnet`, `opus`, `haiku`, `inherit` or an id).
     pub fn model(mut self, model: impl Into<String>) -> Self {
         self.model = Some(model.into());
         self
@@ -58,8 +47,6 @@ impl Agent {
     }
 }
 
-/// Instructions the agent loads by name when they fit the task (and the
-/// user can run as `/<name>`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Skill {
     name: String,
@@ -77,8 +64,6 @@ impl Skill {
     }
 }
 
-/// A prompt the user runs as `/<name> <arguments>`; `$ARGUMENTS` in its
-/// body is replaced by what follows the name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Command {
     name: String,
@@ -108,7 +93,6 @@ impl Definitions {
         self.agents.is_empty() && self.skills.is_empty() && self.commands.is_empty()
     }
 
-    /// Replaces `root` with this folder.
     pub fn write(&self, root: &Path) -> std::io::Result<()> {
         if root.exists() {
             std::fs::remove_dir_all(root)?;

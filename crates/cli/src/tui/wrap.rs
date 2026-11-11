@@ -1,6 +1,3 @@
-//! Breaking text into lines that fit a width, by words, counting what a
-//! character takes on screen (wide characters take two columns).
-
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -37,7 +34,6 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
-/// [`wrap`] for a styled line: words keep their style, the line its own.
 pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
     let width = width.max(1);
     let mut rows: Vec<Vec<(String, Style)>> = vec![Vec::new()];
@@ -85,8 +81,6 @@ pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
         .collect()
 }
 
-/// The prompt being typed broken into rows of `width` columns, by
-/// character, and the row and column of the byte offset `cursor`.
 pub fn layout(text: &str, cursor: usize, width: usize) -> (Vec<String>, (usize, usize)) {
     let width = width.max(1);
     let mut rows = vec![String::new()];

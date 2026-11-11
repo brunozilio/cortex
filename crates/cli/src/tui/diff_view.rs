@@ -1,7 +1,3 @@
-//! `/diffs`: the project's changes full screen. The files on the left, the
-//! chosen one's hunks on the right, for the uncommitted, unstaged, staged
-//! or whole-branch changes.
-
 use std::cell::Cell;
 
 use ratatui::Frame;
@@ -23,8 +19,6 @@ pub struct DiffView {
     loading: bool,
     selected: usize,
     scroll: usize,
-    /// The hunk pane's width and height at the last draw, for paging and
-    /// jumping between hunks.
     pane: Cell<(usize, usize)>,
 }
 
@@ -51,7 +45,6 @@ pub enum Action {
 }
 
 impl DiffView {
-    /// Opens loading; [`DiffView::loaded`] fills it.
     pub fn new(scope: Scope) -> Self {
         Self {
             scope,
@@ -69,8 +62,6 @@ impl DiffView {
         self.loading
     }
 
-    /// The changes git reported for `scope`; an answer for a scope since
-    /// left is dropped. The chosen file stays chosen when it still changed.
     pub fn loaded(&mut self, scope: Scope, changes: Result<Changes, String>) {
         if scope != self.scope {
             return;
@@ -125,12 +116,10 @@ impl DiffView {
         self.scroll = 0;
     }
 
-    /// The changed files, then the untracked ones.
     fn names(&self) -> impl Iterator<Item = &str> {
         self.files.iter().map(|f| f.path.as_str()).chain(self.untracked.iter().map(String::as_str))
     }
 
-    /// The chosen file's rows at `width`, and where each hunk starts.
     fn hunks(&self, width: usize) -> (Vec<Line<'static>>, Vec<usize>) {
         let (mut lines, mut starts) = (Vec::new(), Vec::new());
         if self.loading {

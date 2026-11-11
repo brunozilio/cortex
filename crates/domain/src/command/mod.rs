@@ -1,7 +1,3 @@
-//! The terminal chat's own `/commands`: what each is called and how typed
-//! text names one. Any other `/name` is a skill or custom command the
-//! engine expands. Pure.
-
 use crate::{Effort, PermissionMode};
 
 mod looping;
@@ -16,74 +12,42 @@ pub enum Command {
     Model(Option<String>),
     Mode(Option<PermissionMode>),
     Effort(Option<Effort>),
-    /// Summarize the conversation, keeping what the words after it name.
     Compact(Option<String>),
-    /// Back to an earlier prompt: its files and the conversation as they were.
     Rewind,
-    /// The last prompt again, from its checkpoint.
     Retry,
     Diff,
-    /// The changes full screen, file by file.
     Diffs,
     Memory(MemoryCommand),
-    /// A side question, answered without tools and kept out of the conversation.
     Btw(Option<String>),
-    /// Lets the agent read a folder like the project's own; bare, lists
-    /// the folders added.
     AddDir(Option<String>),
-    /// The permission rules and added folders the agent follows here.
     Permissions,
-    /// The agent's task list.
     Todos,
-    /// What fills the context window.
     Context,
-    /// The commands left in the background; `/bashes kill <id>` stops one.
     Bashes(Option<String>),
-    /// The prompts the agent scheduled; `/schedules delete <id>` removes one.
     Schedules(Option<String>),
-    /// A task now and again later: `/loop [interval] <task>`.
     Loop(String),
-    /// Vim keys in the prompt, on or off.
     Vim,
-    /// The mouse wheel scrolls the conversation, on or off.
     Mouse,
-    /// Go back to an earlier conversation of this folder.
     Resume,
-    /// The next message goes on in a copy of this conversation.
     Fork,
-    /// Write the conversation as Markdown (to a path, or one named after it).
     Export(Option<String>),
-    /// Put the agent's last answer on the clipboard.
     Copy,
-    /// The model, mode, folders, session and version in use.
     Status,
-    /// Forget a provider's credentials.
     Logout,
-    /// What changed in this version.
     ReleaseNotes,
-    /// How to make Shift+Enter add a line in this terminal.
     TerminalSetup,
-    /// How the agent talks: a picker, or `/output-style <name>`.
     OutputStyle(Option<String>),
-    /// The hooks a run here fires.
     Hooks,
-    /// The status line drawn by the user's command, or `off`.
     StatusLine(Option<String>),
-    /// Whether this installation can work in the folder.
     Doctor,
-    /// Where to report a problem or an idea.
     Feedback,
     Skills,
     Agents,
-    /// `/agents new <what it does>`: the agent writes a sub-agent for it.
     NewAgent(String),
-    /// `/skills new <what it does>`: the agent writes a skill for it.
     NewSkill(String),
-    /// The chat's settings, to change one.
     Config,
     Reload,
     Mcp(McpCommand),
-    /// What the run's work is judged against before it completes.
     Verification(VerificationCommand),
     Cost,
     Login,
@@ -91,7 +55,6 @@ pub enum Command {
 }
 
 impl Command {
-    /// Every command with what it does, for `/help` and completion.
     pub const HELP: [(&'static str, &'static str); 43] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
@@ -138,8 +101,6 @@ impl Command {
         ("exit", "Quit (also /quit)"),
     ];
 
-    /// `None` when `text` is not one of these (a skill, a command, or a
-    /// path typed as a prompt).
     pub fn parse(text: &str) -> Option<Self> {
         let text = text.trim().strip_prefix('/')?;
         let (name, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
@@ -217,7 +178,6 @@ impl Command {
     }
 }
 
-/// The short name a mode is typed and shown as (`/mode edits`).
 pub const fn mode_label(mode: PermissionMode) -> &'static str {
     match mode {
         PermissionMode::Ask => "ask",

@@ -1,4 +1,3 @@
-//! What `NetHttp` puts on the wire, read by a one-shot local server.
 use agent_engine::model::http::{Http, NetHttp};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;

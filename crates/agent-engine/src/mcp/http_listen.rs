@@ -1,8 +1,3 @@
-//! A streamable HTTP server's GET stream: what it says unasked (a
-//! channel's messages), read until the transport is dropped. A stream that
-//! ends or fails is opened again, waiting longer each time; a server that
-//! offers none (HTTP 405) is left alone.
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -33,8 +28,6 @@ pub(super) fn run(shared: &Shared, listener: &Listener, closed: &AtomicBool) {
     }
 }
 
-/// Hands the stream's notifications to `listener` and answers its
-/// requests; whether it carried anything.
 fn read(shared: &Shared, mut stream: Response, listener: &Listener, closed: &AtomicBool) -> bool {
     let mut decoder = SseDecoder::new();
     let mut heard = false;

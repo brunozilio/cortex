@@ -1,6 +1,3 @@
-//! A model that answers from a script and records what it was asked, for
-//! testing the loop and the engine without a provider.
-
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;

@@ -1,6 +1,3 @@
-//! Signing in to GitHub Copilot over HTTP: the device flow and the Copilot
-//! user lookup. What each call sends and reads is in
-//! `llm_providers::copilot::device`.
 use std::time::Duration;
 
 use super::super::{ModelError, http::Http};
@@ -8,9 +5,6 @@ use super::Config;
 use llm_providers::copilot::device::{self, Pacing, Poll, Post};
 use llm_providers::oauth::{TOKEN_LIMIT, Tokens};
 
-/// Asks GitHub for a device code, hands its page and code to `show`, waits
-/// (through `sleep`) until the user approves, and returns the account's
-/// credential with the Copilot API it is served from.
 pub fn sign_in(
     http: &dyn Http,
     show: &mut dyn FnMut(String, String),

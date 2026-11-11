@@ -24,7 +24,6 @@ impl Server {
         write_message(&mut self.output, &message).expect("write");
     }
 
-    /// Answers `initialize`, then expects `initialized`.
     fn handshake(&mut self) {
         let initialize = self.next();
         assert_eq!(initialize["method"], "initialize");
@@ -34,7 +33,6 @@ impl Server {
     }
 }
 
-/// A client connected to a scripted server running on its own thread.
 fn connected(script: impl FnOnce(Server) + Send + 'static) -> (LspClient, std::thread::JoinHandle<()>) {
     let (server_reads, client_writes) = std::io::pipe().expect("pipe");
     let (client_reads, server_writes) = std::io::pipe().expect("pipe");

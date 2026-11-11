@@ -1,5 +1,3 @@
-//! `file://` URIs as language servers write them.
-
 use std::path::{Path, PathBuf};
 
 pub fn uri_of(path: &Path) -> String {

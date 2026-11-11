@@ -1,6 +1,3 @@
-//! The LLM providers' accounts as model clients. What each provider sends
-//! and expects is in `llm_providers`; this module does the IO.
-
 pub mod copilot;
 pub mod kiro_idc;
 pub mod oauth;
@@ -17,8 +14,6 @@ use llm_providers::copilot::Wire;
 pub use llm_providers::oauth::Tokens;
 use transport::Transport;
 
-/// Chat Completions through the account's transport, which knows where to
-/// send it: the model is the one asked for.
 struct SameModel;
 
 impl super::chat::Endpoints for SameModel {

@@ -1,7 +1,3 @@
-//! Our side of a browser sign-in (OAuth 2.1 authorization code with PKCE):
-//! the verifier's challenge, and the loopback listener the browser is sent
-//! back to.
-
 mod loopback;
 pub mod pkce;
 

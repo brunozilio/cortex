@@ -1,8 +1,3 @@
-//! Prompts the agent scheduled (`CronCreate`, `ScheduleWakeup`, `/loop`):
-//! while the chat is idle it asks the backend each second for the due ones
-//! and sends them as if typed; one due while the agent works waits for the
-//! run to end. `/schedules` lists them.
-
 use std::time::{Duration, Instant};
 
 use domain::inbox::Notice;
@@ -10,7 +5,6 @@ use domain::schedule::{Scheduled, When};
 
 use super::app::{App, Msg};
 
-/// How often an idle chat asks for due prompts.
 const EVERY: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Default)]
@@ -19,7 +13,6 @@ pub struct Poll {
     asking: bool,
 }
 
-/// Asks for the due prompts when the chat is idle and a second has passed.
 pub(super) fn poll(app: &mut App) {
     let poll = &app.schedules;
     if app.busy() || app.session.is_none() || app.ask.is_some() || poll.asking {
@@ -35,8 +28,6 @@ pub(super) fn poll(app: &mut App) {
     });
 }
 
-/// Sends the due prompts, or queues them behind the working run; the
-/// inbox's notices go as one turn (a run at work reads them itself).
 pub(super) fn due(app: &mut App, due: Vec<Scheduled>, notices: Vec<Notice>) {
     app.schedules.asking = false;
     let (notices, held) = domain::inbox::admitted(notices, app.mode());
@@ -52,7 +43,6 @@ pub(super) fn due(app: &mut App, due: Vec<Scheduled>, notices: Vec<Notice>) {
             .join("\n");
         let message = domain::inbox::as_message(&notices);
         if let Some(run) = &app.run {
-            // Into the run at work, with its next tool results (sent after it, if never handed over).
             let _ = run.steer(&message);
             app.queued.push(message);
         } else {
@@ -69,7 +59,6 @@ pub(super) fn due(app: &mut App, due: Vec<Scheduled>, notices: Vec<Notice>) {
     }
 }
 
-/// `/schedules`, or `/schedules delete <id>`.
 pub(super) fn list(app: &App, delete: Option<String>) {
     app.spawn(move |sdk| match sdk.schedules(delete.as_deref(), false) {
         Ok(found) if found.scheduled.is_empty() => Msg::Notice("Nothing is scheduled.".into()),
@@ -97,8 +86,6 @@ fn unix_now() -> i64 {
         .map_or(0, |since| i64::try_from(since.as_secs()).unwrap_or(i64::MAX))
 }
 
-/// `/loop [interval] <task>`: the prompt that has the agent do it now and
-/// schedule it.
 pub(super) fn looped(app: &mut App, text: &str) {
     match domain::command::loop_prompt(text) {
         Some(prompt) => {

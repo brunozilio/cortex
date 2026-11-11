@@ -1,6 +1,3 @@
-//! How each part of the conversation is drawn, and the line that says
-//! what the agent is doing now.
-
 use std::time::Instant;
 
 use ratatui::style::{Color, Modifier, Style, Stylize};
@@ -12,15 +9,10 @@ use super::transcript::{Entry, ToolState, Transcript, call};
 use super::wrap::wrap;
 
 const SPINNER: [&str; 6] = ["·", "✢", "✳", "✶", "✻", "✽"];
-/// Lines of reasoning shown while the model thinks.
 const THINKING_LINES: usize = 3;
-/// Steps of a sub-agent shown under it.
 const AGENT_STEPS: usize = 3;
-/// Lines of a tool's output shown under it while folded.
 const OUTPUT_LINES: usize = 3;
 
-/// The lines `entry` draws as; `expanded` (Ctrl+O) unfolds reasoning,
-/// outputs, diffs and sub-agents' steps.
 pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'static>>) {
     let dim = Style::new().fg(Color::DarkGray);
     match entry {
@@ -119,7 +111,6 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
     }
 }
 
-/// `✻ Read(src/main.rs)… (12s · ↓ 1.2k tokens · esc to interrupt)`
 pub fn working(started: Instant, transcript: &Transcript, width: usize) -> Line<'static> {
     let tick = usize::try_from(started.elapsed().as_millis() / 120).unwrap_or(0);
     let doing = transcript.activity.clone().unwrap_or_else(|| "Working".into());
@@ -135,7 +126,6 @@ pub fn working(started: Instant, transcript: &Transcript, width: usize) -> Line<
     ])
 }
 
-/// `950`, `1.2k`, `34k`.
 pub fn tokens(count: u64) -> String {
     match count {
         0..1_000 => count.to_string(),

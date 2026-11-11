@@ -1,8 +1,5 @@
-//! What the `LSP` tool asks, and the protocol request that asks it.
-
 use serde_json::{Value, json};
 
-/// The questions the agent can ask a language server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operation {
     Definition,
@@ -15,8 +12,6 @@ pub enum Operation {
     OutgoingCalls,
 }
 
-/// The tool's input, checked: lines and columns count from 1, columns in
-/// characters as `Read` shows them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Query {
     pub operation: Operation,
@@ -51,8 +46,6 @@ impl Query {
         Ok(Self { operation, file, line, column, query })
     }
 
-    /// The method and params to send; `line_text` is the file's line at
-    /// `self.line`, used to count the column in UTF-16 as LSP does.
     pub fn request(&self, uri: &str, line_text: &str) -> (&'static str, Value) {
         let document = json!({"uri": uri});
         let character: usize = line_text.chars().take(self.column as usize - 1).map(char::len_utf16).sum();
@@ -74,8 +67,6 @@ impl Query {
 }
 
 impl Query {
-    /// Calls are asked in two steps: after `prepareCallHierarchy` answers
-    /// `prepared`, the calls of its first item.
     pub fn follow_up(&self, prepared: &Value) -> Option<(&'static str, Value)> {
         let method = match self.operation {
             Operation::IncomingCalls => "callHierarchy/incomingCalls",

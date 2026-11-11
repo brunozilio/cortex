@@ -1,5 +1,3 @@
-//! Each provider's model catalog: filtering, metadata and pagination.
-
 use agent_engine::model::ModelError;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::ProviderClient;

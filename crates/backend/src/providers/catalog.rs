@@ -1,6 +1,3 @@
-//! Listing what the connected providers may run: each provider's catalog,
-//! asked all at once off the command loop, published as the model list.
-
 use std::sync::Arc;
 
 use agent_engine::model::http::NetHttp;
@@ -27,8 +24,6 @@ impl ModelCatalog for ProviderCatalog {
 }
 
 impl ModelProviders {
-    /// Publishes [`ServerEvent::Models`] from a background thread; only the
-    /// latest ask per owner is published.
     pub(crate) fn discover_models(&self, owner: &Principal, engine_models: Vec<ModelOption>, outbox: &Outbox) {
         let owner_key = crate::memory::owner_key(owner);
         let generation = {

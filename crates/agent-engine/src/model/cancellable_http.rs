@@ -1,6 +1,3 @@
-//! Async socket ownership behind the synchronous model interface. Dropping the
-//! body or cancelling a run aborts the request, including a stalled SSE stream.
-//! Every HTTP request the engine makes goes through here.
 use super::{ModelError, http::Response};
 use std::{
     io::{self, BufRead, Read},
@@ -12,12 +9,8 @@ use std::{
     time::Duration,
 };
 const POLL: Duration = Duration::from_millis(25);
-/// How long a model turn may stream.
 pub const STREAM_TIMEOUT: Duration = Duration::from_secs(900);
 
-/// `error` with what caused it (`error sending request: … : invalid peer
-/// certificate: UnknownIssuer`), each cause once: a proxy, certificate or
-/// DNS problem names itself.
 pub(crate) fn described(error: &(dyn std::error::Error + 'static)) -> String {
     let mut text = error.to_string();
     let mut cause = error.source();
@@ -35,7 +28,6 @@ pub fn post(url: &str, headers: &[(String, String)], body: &str, stop: &AtomicBo
     send(url, headers, Some(body), stop, STREAM_TIMEOUT)
 }
 
-/// A request that may be stopped; `body` makes it a POST, `None` a GET.
 pub fn send(
     url: &str,
     headers: &[(String, String)],

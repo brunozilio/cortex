@@ -1,5 +1,3 @@
-//! The well-known reasons a run cannot start or continue.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

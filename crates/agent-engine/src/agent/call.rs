@@ -1,7 +1,3 @@
-//! Running the tool calls of one model turn: project rules that must be
-//! read first, read-only calls in parallel, and each call between its
-//! `PreToolUse` and `PostToolUse` hooks, reported as a step.
-
 use domain::{EngineEvent, ToolCall};
 use serde_json::{Value, json};
 
@@ -92,7 +88,6 @@ impl Agent<'_> {
         }
     }
 
-    /// Shows the user the task list as it now is.
     pub(super) fn emit_tasks(&self) {
         let Some(list) = self.tools.iter().find(|tool| tool.spec().name == "TaskList") else { return };
         let listed = list.run(&json!({}), self.workspace);
@@ -108,9 +103,6 @@ impl Agent<'_> {
         (self.emit)(EngineEvent::Tasks(tasks));
     }
 
-    /// Whether a call can run beside others: a read-only tool inside the
-    /// project that no rule asks about (one question at a time), and none
-    /// of the tools that talk to the user or start agents.
     fn concurrent(&self, name: &str, input: &Value) -> bool {
         const SERIAL: [&str; 8] = [
             ASK_TOOL,
@@ -135,8 +127,6 @@ impl Agent<'_> {
     }
 }
 
-/// The calls of a turn in groups that keep their order: each run of calls
-/// that may go in parallel together, the others one by one.
 fn batches(parallel: &[bool]) -> Vec<std::ops::Range<usize>> {
     let mut groups: Vec<std::ops::Range<usize>> = Vec::new();
     for (at, &together) in parallel.iter().enumerate() {

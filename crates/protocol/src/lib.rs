@@ -1,8 +1,3 @@
-//! The app's client/backend protocol: a client sends [`ClientCommand`]s
-//! in an [`Envelope`] naming the acting [`Principal`](domain::Principal)
-//! and receives [`ServerEvent`]s. Everything is serde-serializable, so the
-//! same messages could go to a remote server later.
-
 mod backend;
 mod command;
 mod envelope;

@@ -1,7 +1,3 @@
-//! Background agents of one run: started by the `Agent` tool, collected
-//! with `TaskOutput`, stopped with `TaskStop`, listed with `TaskList`, and
-//! all cancelled when the run ends.
-
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,7 +13,6 @@ use crate::transcript::Message;
 #[derive(Default)]
 pub(super) struct Tasks {
     pub(super) background: Mutex<BTreeMap<String, Arc<Task>>>,
-    /// Finished sub-agents, foreground or background, `SendMessage` reaches.
     pub(super) conversations: Conversations,
 }
 
@@ -54,7 +49,6 @@ impl Task {
 }
 
 impl Tasks {
-    /// Whether a background agent's work is still to come or uncollected.
     pub(super) fn busy(&self) -> bool {
         self.background.lock().is_ok_and(|tasks| tasks.values().any(|task| !task.collected.load(Ordering::Relaxed)))
     }

@@ -1,7 +1,3 @@
-//! `WebFetch` and `WebSearch`: the web, through the engine's [`Http`] (so
-//! tests script it). Both reach outside the computer, so they ask like a
-//! command does; rules name a site as `WebFetch(domain:docs.rs)`.
-
 mod html;
 mod search;
 
@@ -14,12 +10,9 @@ use super::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
 use crate::model::http::Http;
 
-/// What a fetched page gives the agent at most.
 const SHOWN: usize = 60_000;
-/// What is read of a page at most.
 const READ: u64 = 5 << 20;
 
-/// The run's way to the web.
 #[derive(Clone)]
 pub struct Web(pub Arc<dyn Http>);
 
@@ -86,7 +79,6 @@ impl Tool for WebFetch {
         if let Err(error) = response.body.take(READ).read_to_end(&mut bytes) {
             return Outcome::error(format!("Could not read {url}: {error}"));
         }
-        // The cut may split a character; what is whole stays.
         let body = String::from_utf8_lossy(&bytes).into_owned();
         let text = if html { html::text(&body) } else { body };
         let prompt = field(input, "prompt").unwrap_or_default();

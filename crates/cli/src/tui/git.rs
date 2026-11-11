@@ -1,24 +1,17 @@
-//! `/diff` and `/diffs`: the project's changes, as git reports them.
-
 use std::path::Path;
 use std::process::Command;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Changes {
-    /// The unified diff of tracked files.
     pub diff: String,
-    /// Files git does not track yet (and does not ignore).
     pub untracked: Vec<String>,
 }
 
-/// Which changes to show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
-    /// Staged and unstaged: `git diff HEAD`.
     Uncommitted,
     Unstaged,
     Staged,
-    /// Everything since the branch left the default branch, committed or not.
     Branch,
 }
 
@@ -65,8 +58,6 @@ fn staged(cwd: &Path) -> Result<String, String> {
     git(cwd, &["diff", "--cached", "--no-color", "--no-ext-diff"])
 }
 
-/// Where this branch left the default branch (`origin/HEAD`, `main` or
-/// `master`), else its upstream.
 fn branch_base(cwd: &Path) -> Result<String, String> {
     ["origin/HEAD", "main", "master", "@{upstream}"]
         .iter()

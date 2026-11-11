@@ -1,13 +1,3 @@
-//! A process started with everything it starts, so a time limit ends the
-//! whole tree and not only the shell at its root (ADR 0013).
-//!
-//! - Unix: the child leads its own process group; [`Tree::kill`] signals
-//!   the group.
-//! - Windows: the child is assigned to a Job Object; [`Tree::kill`]
-//!   terminates the job. The job closes with the `Tree`, and with it any
-//!   descendant still running (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`), so
-//!   nothing a command left behind outlives it, even if the app crashes.
-
 #![allow(unsafe_code)]
 
 use std::io;
@@ -48,7 +38,6 @@ impl Tree {
     pub fn kill(&mut self) {
         #[cfg(unix)]
         if let Ok(group) = i32::try_from(self.child.id()) {
-            // SAFETY: `kill` takes plain integers; a negative pid names the
             unsafe { libc::kill(-group, libc::SIGKILL) };
         }
         #[cfg(windows)]
@@ -72,24 +61,18 @@ mod job {
     #[derive(Debug)]
     pub(super) struct Job(OwnedHandle);
 
-    // SAFETY: a Job Object handle is a process-wide kernel handle, valid on
     unsafe impl Send for Job {}
-    // SAFETY: as above; `&Job` only assigns or terminates through the handle.
     unsafe impl Sync for Job {}
 
     impl Job {
         pub(super) fn new() -> io::Result<Self> {
-            // SAFETY: null attributes and name create an unnamed job owned
             let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
             if handle.is_null() {
                 return Err(io::Error::last_os_error());
             }
-            // SAFETY: CreateJobObjectW returned an owned, non-null handle.
             let job = Self(unsafe { OwnedHandle::from_raw_handle(handle) });
-            // SAFETY: a zeroed limit structure is valid; only the flag is set.
             let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
             limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            // SAFETY: the pointer and size describe `limits`, alive for the call.
             let set = unsafe {
                 SetInformationJobObject(
                     job.0.as_raw_handle(),
@@ -105,7 +88,6 @@ mod job {
         }
 
         pub(super) fn assign(&self, child: &Child) -> io::Result<()> {
-            // SAFETY: both handles are open: the job is owned, the child alive.
             if unsafe { AssignProcessToJobObject(self.0.as_raw_handle(), child.as_raw_handle()) } == 0 {
                 return Err(io::Error::last_os_error());
             }
@@ -113,7 +95,6 @@ mod job {
         }
 
         pub(super) fn terminate(&self) {
-            // SAFETY: the job handle is owned and open.
             unsafe { TerminateJobObject(self.0.as_raw_handle(), 1) };
         }
     }
@@ -146,16 +127,13 @@ mod windows_tests {
         let mut line = String::new();
         io::BufReader::new(stdout).read_line(&mut line)?;
         let pid: u32 = line.trim().parse().map_err(io::Error::other)?;
-        // SAFETY: this only opens a wait handle for the fixture's child.
         let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
         if handle.is_null() {
             return Err(io::Error::last_os_error());
         }
-        // SAFETY: OpenProcess returned this owned, non-null handle.
         let child = unsafe { OwnedHandle::from_raw_handle(handle) };
         tree.kill();
         tree.child().wait()?;
-        // SAFETY: the wait handle stays open throughout this bounded wait.
         let stopped = unsafe { WaitForSingleObject(child.as_raw_handle(), 5000) };
         assert_eq!(stopped, WAIT_OBJECT_0, "the grandchild outlived its job");
         Ok(())
@@ -170,7 +148,6 @@ mod tests {
     use std::time::{Duration, Instant};
 
     fn alive(pid: i32) -> bool {
-        // SAFETY: signal 0 only checks that the process exists.
         unsafe { libc::kill(pid, 0) == 0 }
     }
 

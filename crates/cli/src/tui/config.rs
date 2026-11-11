@@ -1,7 +1,3 @@
-//! `/config`: the chat's settings in one list, each opening its own choice;
-//! `/agents new` and `/skills new`, which ask the agent to write one; and
-//! `/memory edit`, which opens the project's instructions in `$EDITOR`.
-
 use std::path::PathBuf;
 
 use domain::Command;
@@ -9,7 +5,6 @@ use domain::Command;
 use super::app::App;
 use super::choices::{Picker, PickerKind};
 
-/// What `/config` lists, and the command each runs.
 fn entries(app: &App) -> Vec<(String, String, Command)> {
     let on = |yes: bool| if yes { "on" } else { "off" }.to_owned();
     vec![
@@ -39,7 +34,6 @@ pub fn picked(app: &mut App, cursor: usize) {
     }
 }
 
-/// Asks the agent to write a sub-agent or a skill for `what`.
 pub fn create(app: &mut App, agent: bool, what: &str) {
     if app.busy() {
         return app.transcript.notice("Wait for the agent to finish first.");
@@ -64,8 +58,6 @@ pub fn create(app: &mut App, agent: bool, what: &str) {
     app.send(prompt);
 }
 
-/// The project's instructions file: {COMMAND}.md at its root, else
-/// .{command}/{COMMAND}.md, else a new {COMMAND}.md.
 pub fn instructions_file(cwd: &std::path::Path) -> PathBuf {
     let root = cwd.join(brand::INSTRUCTIONS);
     let nested = cwd.join(brand::DIR).join(brand::INSTRUCTIONS);

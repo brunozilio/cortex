@@ -1,7 +1,3 @@
-//! Images attached to the prompt: pasted from the clipboard (Ctrl+V) or
-//! dropped on the terminal as a file. Each one is typed into the prompt as
-//! `[Image #N]`; a prompt sends the images it still names.
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -15,13 +11,11 @@ pub struct Attachments {
 }
 
 impl Attachments {
-    /// Keeps `image` and gives the text that names it in the prompt.
     pub fn add(&mut self, image: Image) -> String {
         self.images.push(image);
         placeholder(self.images.len())
     }
 
-    /// The images `text` names, in the order it first names them.
     pub fn named_in(&self, text: &str) -> Vec<Image> {
         let mut named: Vec<usize> = Vec::new();
         let mut rest = text;
@@ -44,8 +38,6 @@ pub fn placeholder(number: usize) -> String {
     format!("[Image #{number}]")
 }
 
-/// The file a paste names when it is a single path, as terminals paste a
-/// dropped file: plain, quoted, or with its spaces escaped.
 pub fn pasted_path(text: &str, cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
     let text = text.trim();
     if text.is_empty() || text.contains('\n') {
@@ -76,7 +68,6 @@ fn unescape(text: &str) -> String {
     out
 }
 
-/// The image in the file at `path`; `None` when it holds none.
 pub fn image_file(path: &Path) -> Result<Option<Image>, String> {
     let size = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
     if size > sdk::MAX_IMAGE_BYTES as u64 {
@@ -85,7 +76,6 @@ pub fn image_file(path: &Path) -> Result<Option<Image>, String> {
     Image::from_bytes(&std::fs::read(path).map_err(|e| e.to_string())?)
 }
 
-/// The image on the system clipboard, if it holds one.
 pub fn clipboard() -> Result<Option<Image>, String> {
     let bytes = if cfg!(target_os = "macos") {
         let script = "the clipboard as «class PNGf»";
@@ -105,7 +95,6 @@ fn run(program: &str, args: &[&str]) -> Option<Vec<u8>> {
     (output.status.success() && !output.stdout.is_empty()).then_some(output.stdout)
 }
 
-/// The bytes AppleScript prints as `«data PNGf89504E47…»`.
 fn apple_data(printed: &str) -> Option<Vec<u8>> {
     let hex = printed.trim().strip_prefix("«data PNGf")?.strip_suffix('»')?;
     (hex.len() % 2 == 0)
@@ -114,7 +103,6 @@ fn apple_data(printed: &str) -> Option<Vec<u8>> {
 }
 
 impl App {
-    /// Ctrl+V: attaches the clipboard's image, read on a thread.
     pub fn paste_image(&self) {
         self.spawn(|_| Msg::Clipboard(clipboard()));
     }
@@ -127,7 +115,6 @@ impl App {
         }
     }
 
-    /// A paste: a dropped image file is attached, anything else typed.
     pub fn paste(&mut self, text: &str) {
         let home = std::env::home_dir();
         if let Some(path) = pasted_path(text, &self.cwd, home.as_deref()) {

@@ -10,8 +10,6 @@ fn random(length: usize) -> Result<String, String> {
     Ok(format!("r{length}x{}", std::time::SystemTime::now().elapsed().map(|d| d.as_nanos()).unwrap_or(0)))
 }
 
-/// A browser that follows nothing on its own: each answer's status and
-/// where it sends next.
 fn get(url: &str) -> (u16, Option<String>) {
     let client = reqwest::blocking::Client::builder()
         .no_proxy()

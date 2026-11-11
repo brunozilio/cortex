@@ -1,5 +1,3 @@
-//! Delivers server events to the client and wakes it.
-
 use crossbeam_channel::Sender;
 use protocol::{ServerEvent, Wake};
 

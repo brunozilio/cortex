@@ -1,6 +1,3 @@
-//! The language servers kept running between runs: one per server and
-//! project root, started on first use and ended after sitting idle.
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,7 +8,6 @@ use domain::lsp::ServerSpec;
 
 use super::{LanguageServer, LanguageServers, Opened};
 
-/// How servers are found and started; processes in production.
 pub trait Starter: Send + Sync {
     fn find(&self, command: &str) -> Option<PathBuf>;
     fn start(
@@ -48,7 +44,6 @@ impl Starter for Processes {
     }
 }
 
-/// How long a server may sit unused before it is ended.
 pub const IDLE: Duration = Duration::from_secs(10 * 60);
 
 enum Slot {
@@ -57,7 +52,6 @@ enum Slot {
     Failed { reason: String, at: Instant },
 }
 
-/// A server's name and the root it serves.
 type Key = (String, PathBuf);
 
 struct Inner {
@@ -89,13 +83,10 @@ impl LspPool {
         Self { inner: Arc::new(inner), sweeping: AtomicBool::new(false) }
     }
 
-    /// Ends the servers unused since `now - idle`, and forgets failures as
-    /// old, so a server installed since is tried again.
     pub fn sweep(&self, now: Instant) {
         self.inner.sweep(now);
     }
 
-    /// Sweeps every minute while the pool lives, once a server has started.
     fn keep_sweeping(&self) {
         if self.sweeping.swap(true, Ordering::Relaxed) {
             return;

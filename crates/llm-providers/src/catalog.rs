@@ -1,5 +1,3 @@
-//! Each provider's model catalog: which page to ask for and what a page
-//! lists.
 use super::ProviderError;
 use domain::model::ModelCapabilities;
 use domain::{ModelOption, ModelProvider};
@@ -40,7 +38,6 @@ pub fn page(provider: ModelProvider, value: &Value) -> Result<Page, ProviderErro
     Ok(Page { models, next })
 }
 
-/// Every page of a catalog asked for by its [`path`].
 pub fn collect<E: From<ProviderError>>(
     provider: ModelProvider,
     mut fetch: impl FnMut(&str) -> Result<Value, E>,
@@ -48,8 +45,6 @@ pub fn collect<E: From<ProviderError>>(
     collect_pages(provider, |after| fetch(&path(provider, after)))
 }
 
-/// Every page of a catalog; `fetch` gets the cursor of the page to ask
-/// for, empty for the first.
 pub fn collect_pages<E: From<ProviderError>>(
     provider: ModelProvider,
     mut fetch: impl FnMut(&str) -> Result<Value, E>,

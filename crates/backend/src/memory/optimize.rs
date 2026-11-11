@@ -1,8 +1,3 @@
-//! The memory optimizer: one run in which an agent tidies a project's
-//! memory (`domain::memory::optimize_prompt`). Its edits apply like
-//! any run's, and the book as it was before can be put back with
-//! [`Memories::undo`] until the next edit.
-
 use std::path::Path;
 
 use domain::{MemoryBook, MemoryBrief, ModelOption, Principal, PromptRequest, RunId};
@@ -11,7 +6,6 @@ use protocol::ServerEvent;
 use super::{Memories, edits_file, memory_event};
 
 impl Memories {
-    /// The request for a run that tidies the memory of `project`.
     pub fn optimization(&self, owner: &Principal, project: &Path, model: ModelOption) -> PromptRequest {
         let memories = {
             let mut books = self.lock();
@@ -24,7 +18,6 @@ impl Memories {
         }
     }
 
-    /// Puts back the book as it was before its last optimization.
     pub fn undo(&self, owner: &Principal, project: &Path) -> ServerEvent {
         let key = (owner.clone(), project.to_path_buf());
         let point = self.undo_points().remove(&key);
@@ -37,8 +30,6 @@ impl Memories {
         event
     }
 
-    /// An optimizing run recalls nothing and gets no search tool; the book
-    /// as it is now becomes the undo point.
     pub(super) fn brief_optimization(&self, owner: &Principal, run: RunId, request: &PromptRequest) -> PromptRequest {
         let book = {
             let mut books = self.lock();

@@ -1,5 +1,3 @@
-//! `/memory`: list, search, optimize, undo, forgotten and restore.
-
 use domain::command::MemoryCommand;
 use sdk::{Error, Forgotten, Memory, ProjectMemory};
 
@@ -40,7 +38,6 @@ pub fn run(app: &mut App, command: MemoryCommand) {
     });
 }
 
-/// `#note`: the project's memory keeps it, for every later conversation.
 pub fn remember(app: &mut App, note: String) {
     let cwd = app.cwd.clone();
     app.spawn(move |sdk| match sdk.memory(cwd).remember(sdk::MemoryKind::Semantic, &note, &["user"]) {

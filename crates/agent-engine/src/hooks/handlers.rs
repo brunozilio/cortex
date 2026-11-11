@@ -1,6 +1,3 @@
-//! Running a command or HTTP hook handler: bounded in time and output,
-//! cancelled with the run.
-
 use serde_json::Value;
 use std::{
     sync::atomic::Ordering,

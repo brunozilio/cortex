@@ -1,4 +1,3 @@
-//! The same visual payload must survive each provider's wire conversion.
 use agent_engine::{
     model::{TurnRequest, anthropic, chat, openai},
     transcript::{Block, Message, Role},

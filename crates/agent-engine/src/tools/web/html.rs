@@ -1,7 +1,3 @@
-//! A web page's HTML read as plain text: scripts, styles and tags dropped,
-//! blocks on their own lines, links kept as `text (url)`, entities decoded.
-
-/// The page's text.
 pub fn text(html: &str) -> String {
     let mut out = String::new();
     let mut rest = html;
@@ -71,7 +67,6 @@ fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
     if quote == '"' || quote == '\'' { value[1..].split(quote).next() } else { value.split(char::is_whitespace).next() }
 }
 
-/// The common entities, and numeric ones.
 pub fn decode(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -112,7 +107,6 @@ pub fn decode(text: &str) -> String {
     out
 }
 
-/// Runs of spaces as one, and no more than one blank line in a row.
 fn tidy(text: &str) -> String {
     let lines: Vec<String> = text.lines().map(|line| line.split_whitespace().collect::<Vec<_>>().join(" ")).collect();
     let mut out = String::new();

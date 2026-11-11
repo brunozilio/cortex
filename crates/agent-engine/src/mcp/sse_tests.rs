@@ -9,11 +9,8 @@ use crate::model::ModelError;
 use crate::model::http::{Http, Response};
 use crate::tools::{Outcome, Tool, Workspace};
 
-/// Where a message went, and with which headers.
 type Posted = (String, Vec<(String, String)>);
 
-/// An old-style MCP server: its event stream names where to post, and its
-/// answers come back on the stream.
 struct Legacy {
     endpoint: String,
     stream: Mutex<Option<Sender<Vec<u8>>>>,
@@ -24,8 +21,6 @@ struct Pipe(Receiver<Vec<u8>>, Vec<u8>);
 
 impl Read for Pipe {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        // Like the network's body: a quiet stream times out now and then,
-        // so the reader can look at its stop flag.
         if self.1.is_empty() {
             match self.0.recv_timeout(std::time::Duration::from_millis(25)) {
                 Ok(bytes) => self.1 = bytes,
@@ -79,7 +74,6 @@ impl Http for Legacy {
                 }
                 _ => json!({ "capabilities": { "tools": {} } }),
             };
-            // A ping from the server first: the client must answer it.
             self.send("message", &json!({ "jsonrpc": "2.0", "id": "srv-1", "method": "ping" }).to_string());
             self.send("message", &json!({ "jsonrpc": "2.0", "id": id, "result": result }).to_string());
         }
@@ -131,7 +125,6 @@ fn a_request_after_the_stream_ended_fails_instead_of_waiting() {
 
 #[test]
 fn a_cancelled_run_stops_waiting_for_the_endpoint() {
-    /// A server that accepts the stream and never names its endpoint.
     struct Silent(Mutex<Option<Sender<Vec<u8>>>>);
     impl Http for Silent {
         fn get_stream(

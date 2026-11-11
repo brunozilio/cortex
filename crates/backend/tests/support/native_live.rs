@@ -1,5 +1,3 @@
-//! Opt-in real provider inference. Auth comes from the platform's request, or
-//! from an explicitly selected private credential file. Never a model CLI.
 use agent_engine::{
     ApiSource, NativeEngine,
     model::{ModelApi, ModelError, http::NetHttp, providers::ProviderClient},

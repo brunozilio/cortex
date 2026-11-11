@@ -1,5 +1,3 @@
-//! Real backend -> NativeEngine -> loopback MCP -> storage. Only model inference
-//! is deterministic; no FakeEngine, CLI, credentials or external account.
 use agent_engine::{
     ApiSource, NativeEngine,
     model::{Delta, ModelApi, ModelError, Reply, TurnRequest, scripted::ScriptedModel},

@@ -1,11 +1,3 @@
-//! Tidying a project's memory: one agent run reads every memory and hands
-//! back edits that merge, correct, reclassify and drop, through the same
-//! edits file as any run (see [`MemoryBrief::instructions`]). What it
-//! forgets stays restorable, and the whole pass can be undone until the
-//! next edit.
-//!
-//! [`MemoryBrief::instructions`]: super::MemoryBrief::instructions
-
 use super::Memory;
 
 pub fn optimize_prompt(memories: &[Memory]) -> String {

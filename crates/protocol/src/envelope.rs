@@ -1,5 +1,3 @@
-//! Wraps a message with who sent it.
-
 use domain::Principal;
 use serde::{Deserialize, Serialize};
 

@@ -1,16 +1,11 @@
-//! Verification: the criteria a run's work is judged against before it
-//! completes, where they come from, and the judge's verdict. Pure.
-
 use serde::{Deserialize, Serialize};
 
-/// What a run's work must satisfy before it completes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Criteria {
     pub text: String,
     pub source: CriteriaSource,
 }
 
-/// Who set the criteria: the user (`/verification`) or the last plan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CriteriaSource {
     User,
@@ -26,14 +21,11 @@ impl Criteria {
         Self { text: text.into(), source: CriteriaSource::Plan }
     }
 
-    /// The criteria a run is judged against: the user's, else the plan's.
     pub fn resolve(user: Option<&Criteria>, plan: Option<&Criteria>) -> Option<Criteria> {
         user.or(plan).cloned()
     }
 }
 
-/// A conversation's criteria: the user's, set with `/verification`, and the
-/// last plan's `Verification` section.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Verifications {
     user: Option<Criteria>,
@@ -41,12 +33,10 @@ pub struct Verifications {
 }
 
 impl Verifications {
-    /// Sets (or, with `None` or blank text, clears) the user's criteria.
     pub fn set_user(&mut self, text: Option<String>) {
         self.user = text.map(|text| text.trim().to_owned()).filter(|text| !text.is_empty()).map(Criteria::user);
     }
 
-    /// A planning run finished with `plan`: its section replaces the last plan's.
     pub fn plan_finished(&mut self, plan: &str) {
         self.plan = plan_verification(plan).map(Criteria::plan);
     }
@@ -55,29 +45,23 @@ impl Verifications {
         Criteria::resolve(self.user.as_ref(), self.plan.as_ref())
     }
 
-    /// The criteria a run in `mode` is judged against; a planning run never is.
     pub fn for_run(&self, mode: crate::PermissionMode) -> Option<Criteria> {
         (mode != crate::PermissionMode::Plan).then(|| self.current()).flatten()
     }
 }
 
-/// How many times the judge grades one run before it completes anyway.
 pub const MAX_ATTEMPTS: u8 = 3;
 
 const UNAVAILABLE: &str = "judge unavailable";
 
-/// The judge's grade of a run against its criteria.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Verdict {
     pub passed: bool,
-    /// 0 to 1.
     pub score: f32,
     pub checks: Vec<Check>,
-    /// 1 for the first grade of the run.
     pub attempt: u8,
 }
 
-/// One criterion, whether it held, and what showed it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Check {
     pub criterion: String,
@@ -95,7 +79,6 @@ struct Reply {
 }
 
 impl Verdict {
-    /// Reads the judge's reply: the first JSON object in it, fenced or not.
     pub fn parse(reply: &str, attempt: u8) -> Result<Self, String> {
         let start = reply.find('{').ok_or("the judge returned no JSON verdict")?;
         let end = reply.rfind('}').ok_or("the judge returned no JSON verdict")?;
@@ -108,24 +91,19 @@ impl Verdict {
         Ok(Self { passed: parsed.passed, score: score.clamp(0.0, 1.0), checks: parsed.checks, attempt })
     }
 
-    /// A failed verdict for a judge that could not grade (the run completes).
     pub fn unavailable(reason: impl Into<String>, attempt: u8) -> Self {
         let check = Check { criterion: UNAVAILABLE.into(), passed: false, evidence: reason.into() };
         Self { passed: false, score: 0.0, checks: vec![check], attempt }
     }
 
-    /// Whether the judge could not grade at all.
     pub fn is_unavailable(&self) -> bool {
         matches!(&self.checks[..], [check] if check.criterion == UNAVAILABLE)
     }
 
-    /// Whether the agent gets another try after this verdict: it failed a
-    /// real grade and attempts remain.
     pub fn should_retry(&self) -> bool {
         !self.passed && !self.is_unavailable() && self.attempt < MAX_ATTEMPTS
     }
 
-    /// The failed checks, as the agent reads them when it tries again.
     pub fn feedback(&self) -> String {
         let failed: Vec<String> = self
             .checks
@@ -143,10 +121,6 @@ impl Verdict {
 
 const SECTION: &str = "verification";
 
-/// The `Verification` section of a plan, as planning mode asks for it: a
-/// `**Verification**:` list item (with its indented continuation) or a
-/// `## Verification` heading (up to the next heading). `None` when the plan
-/// has no such section or it is empty.
 pub fn plan_verification(plan: &str) -> Option<String> {
     let lines: Vec<&str> = plan.lines().collect();
     let (start, body) = lines.iter().enumerate().find_map(|(index, line)| {
@@ -194,7 +168,6 @@ fn heading_title(line: &str) -> Option<&str> {
     Some(rest.trim().trim_matches('*').trim())
 }
 
-/// What follows `**Verification**` in a list item, or `None`.
 fn bullet_rest(line: &str) -> Option<&str> {
     let item = line.trim_start();
     let item = item

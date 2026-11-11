@@ -1,9 +1,3 @@
-//! The skills the app ships (`crates/agent-engine/skills/`), embedded
-//! at build time. A skill reads its own files by path, so they are written
-//! once per build to `~/.{command}/builtin-skills/<hash>/` and found after
-//! the project's and the user's skills: one of theirs with the same name
-//! wins.
-
 use std::path::{Path, PathBuf};
 
 mod embedded {
@@ -34,7 +28,6 @@ fn write(root: &Path, files: &[(&str, &[u8])], hash: u64) -> Option<PathBuf> {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            // Text names the product through placeholders (`brand::text`).
             match std::str::from_utf8(bytes) {
                 Ok(text) => std::fs::write(path, brand::text(text))?,
                 Err(_) => std::fs::write(path, bytes)?,

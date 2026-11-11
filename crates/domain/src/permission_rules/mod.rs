@@ -1,21 +1,3 @@
-//! Permission rules from settings (`permissions.allow/ask/deny`): which tool
-//! calls run without asking, which always ask and which are refused, whatever
-//! the permission mode.
-//!
-//! A rule is a tool name, optionally with a specifier: `Bash`,
-//! `Bash(git diff:*)` (a command prefix), `Bash(npm run *)` (a pattern),
-//! `Edit(src/**)` or `Read(~/notes/*.md)` (gitignore-like paths: from the
-//! project, `~/` from home, `//` from the root; without a slash at any
-//! depth below the project), `mcp__server` or `mcp__server__tool`. Deny wins
-//! over ask, ask over allow. Pure.
-//!
-//! Matching errs toward asking: deny and ask rules see a command as the
-//! shell runs it (wrappers, assignments and paths stripped) and paths in
-//! any case; allow rules see the command as written and paths exactly, and
-//! never cover a command hiding another (`$(…)`, `bash -c`…) or writing a
-//! file (`>`). A hidden command asks whenever a deny or ask rule could
-//! have caught it.
-
 mod pattern;
 mod site;
 
@@ -24,7 +6,6 @@ pub use site::{is_private, site};
 #[cfg(test)]
 mod tests;
 
-/// What a matching rule says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuleKind {
@@ -33,38 +14,26 @@ pub enum RuleKind {
     Deny,
 }
 
-/// What `/permissions` shows: the rules a run in a folder follows, as
-/// written, and the folders it reads like the project.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PermissionsInfo {
     pub rules: Vec<(RuleKind, String)>,
     pub added_dirs: Vec<String>,
-    /// The hooks a run there fires (`/hooks`).
     #[serde(default)]
     pub hooks: Vec<HookInfo>,
 }
 
-/// One hook as `/hooks` shows it.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HookInfo {
     pub event: String,
-    /// Which tools (or triggers) it is for; empty for all.
     pub matcher: String,
-    /// What it runs: a command, a URL, or the start of its prompt.
     pub runs: String,
 }
 
-/// What a tool call acts on, for its rules to match.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target<'a> {
-    /// A shell command.
     Command(&'a str),
-    /// An absolute file path.
     Path(&'a str),
-    /// An absolute folder searched with everything inside it (`Glob`,
-    /// `Grep`).
     Tree(&'a str),
-    /// Anything else (matched exactly by a specifier).
     Other(&'a str),
 }
 
@@ -94,9 +63,6 @@ impl Rule {
         Ok(Self { text: text.to_owned(), tool: tool.to_owned(), specifier })
     }
 
-    /// Whether the rule names this tool: the tool itself, its family
-    /// (`Edit` for the editing tools, `Read` for the reading ones) or, for
-    /// `mcp__server`, a tool of exactly that server.
     fn names(&self, tool: &str) -> bool {
         if self.tool == tool {
             return true;
@@ -113,11 +79,6 @@ impl Rule {
     }
 }
 
-/// The allow rule "don't ask again" offers for `tool` on `subject`: a
-/// command's program and subcommand (`Bash(cargo test:*)`), or the folder
-/// of a file read outside the project (`Read(//home/ana/notes/**)`, a
-/// searched folder itself). `None` when no rule fits safely: several or
-/// hidden commands, a program by path, assignments, edits.
 pub fn suggest(tool: &str, subject: &str, outside: bool) -> Option<String> {
     if tool == "WebFetch" {
         return site(subject).map(|host| format!("WebFetch(domain:{host})"));
@@ -146,8 +107,6 @@ pub fn suggest(tool: &str, subject: &str, outside: bool) -> Option<String> {
     None
 }
 
-/// The rules of a list as typed on a command line (`Bash(git diff:*) Edit,
-/// Read`): split at commas and spaces outside parentheses.
 pub fn split_list(text: &str) -> Vec<String> {
     let (mut rules, mut current, mut depth) = (Vec::new(), String::new(), 0usize);
     for c in text.chars() {
@@ -170,7 +129,6 @@ pub fn split_list(text: &str) -> Vec<String> {
     rules
 }
 
-/// One command of a line, as written and as the shell runs it.
 struct Part<'a> {
     target: Target<'a>,
     written: String,
@@ -178,20 +136,17 @@ struct Part<'a> {
     hides: bool,
 }
 
-/// The rules of every settings file, merged.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PermissionRules {
     rules: Vec<(RuleKind, Rule)>,
 }
 
 impl PermissionRules {
-    /// Adds rule `text`, or says why it is not one.
     pub fn add(&mut self, kind: RuleKind, text: &str) -> Result<(), String> {
         self.rules.push((kind, Rule::parse(text)?));
         Ok(())
     }
 
-    /// [`add`](Self::add) for rules known to be valid.
     pub fn with(mut self, kind: RuleKind, text: &str) -> Self {
         if let Ok(rule) = Rule::parse(text) {
             self.rules.push((kind, rule));
@@ -203,7 +158,6 @@ impl PermissionRules {
         self.rules.is_empty()
     }
 
-    /// Every rule as written in settings, deny first, then ask, then allow.
     pub fn listed(&self) -> Vec<(RuleKind, String)> {
         let mut listed: Vec<_> = self.rules.iter().map(|(kind, rule)| (*kind, rule.text.clone())).collect();
         listed.sort_by_key(|(kind, _)| match kind {
@@ -214,16 +168,10 @@ impl PermissionRules {
         listed
     }
 
-    /// What the rules say about `tool` acting on `target`, if any names it.
-    /// A command is split at `&&`, `||`, `;`, `|` and new lines: one part
-    /// denied or asked about is enough, and it is allowed only when every
-    /// part is.
     pub fn decide(&self, tool: &str, target: &Target<'_>, cwd: &str, home: Option<&str>) -> Option<RuleKind> {
         self.ruling(tool, target, cwd, home).map(|(kind, _)| kind)
     }
 
-    /// [`decide`](Self::decide), with the deny or ask rule that decided (as
-    /// written in settings) to tell the agent; empty for an allow.
     pub fn ruling(&self, tool: &str, target: &Target<'_>, cwd: &str, home: Option<&str>) -> Option<(RuleKind, String)> {
         let parts = parts(target);
         let named = |kind: RuleKind| {
@@ -262,8 +210,6 @@ fn parts<'a>(target: &Target<'a>) -> Vec<Part<'a>> {
         .collect()
 }
 
-/// Whether a deny or ask rule catches the part: the command as run, the
-/// path in any case, a searched folder that meets it.
 fn restricts(rule: &Rule, part: &Part<'_>, cwd: &str, home: Option<&str>) -> bool {
     let Some(specifier) = &rule.specifier else { return true };
     match part.target {
@@ -274,8 +220,6 @@ fn restricts(rule: &Rule, part: &Part<'_>, cwd: &str, home: Option<&str>) -> boo
     }
 }
 
-/// Whether an allow rule covers the part: the command as written (never
-/// one hiding another), the path or searched folder exactly.
 fn allows(rule: &Rule, part: &Part<'_>, cwd: &str, home: Option<&str>) -> bool {
     let Some(specifier) = &rule.specifier else { return true };
     match part.target {

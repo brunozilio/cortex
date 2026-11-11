@@ -1,18 +1,9 @@
-//! The product's name, command, folders and owner. They are fixed when it
-//! is built, from the workspace's `brand.toml`; nothing else spells them
-//! out. Texts kept in files (prompts, skills) name them with placeholders
-//! that [`text`] fills in.
-
 include!(concat!(env!("OUT_DIR"), "/brand.rs"));
 
-/// The environment variable `key` of this product (`{ENV}_<key>`).
 pub fn env(key: &str) -> String {
     format!("{ENV}_{key}")
 }
 
-/// `template` with its placeholders filled in: `{{NAME}}`, `{{COMMAND}}`,
-/// `{{DIR}}`, `{{INSTRUCTIONS}}`, `{{LOCAL_INSTRUCTIONS}}`, `{{PLUGIN_DIR}}`,
-/// `{{ENV}}`, `{{COMPANY}}` and `{{REPOSITORY}}`.
 pub fn text(template: &str) -> String {
     if !template.contains("{{") {
         return template.to_owned();

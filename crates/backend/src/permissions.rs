@@ -1,6 +1,3 @@
-//! `/permissions`: the rules and added folders of a folder's settings, as
-//! the engine reads them for a run there.
-
 use std::path::Path;
 
 use domain::{ModelOption, PromptRequest};

@@ -1,5 +1,3 @@
-//! The native engine through `AgentEngine::start`, as the backend drives it.
-
 mod agents;
 mod brand_only;
 mod checkpoints;
@@ -35,13 +33,10 @@ impl ApiSource for Source {
     }
 }
 
-/// Runs a request with an empty home of its own, so the person's settings,
-/// skills and MCP servers stay out of the tests.
 fn start(engine: &NativeEngine, request: &PromptRequest) -> Receiver<EngineEvent> {
     start_with_handle(engine, request).0
 }
 
-/// [`start`], keeping the handle to steer, answer or cancel the run.
 fn start_with_handle(
     engine: &NativeEngine,
     request: &PromptRequest,

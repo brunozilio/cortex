@@ -1,5 +1,3 @@
-//! `Write`: a whole file, created or replaced.
-
 use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace, field, required, shown};

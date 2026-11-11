@@ -1,6 +1,3 @@
-//! The session's model, permission mode and effort: picked once the
-//! models arrive, changed by the user, kept in the owner's settings.
-
 use domain::command::mode_label;
 use domain::model::choose_model;
 use sdk::{Effort, Model, PermissionMode};
@@ -21,7 +18,6 @@ pub enum PickerKind {
     Config,
 }
 
-/// A list the user picks one item of: a model, a mode or a provider.
 #[derive(Debug)]
 pub struct Picker {
     pub kind: PickerKind,

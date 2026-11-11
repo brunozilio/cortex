@@ -1,7 +1,3 @@
-//! Commands for the console tools the app starts (`uv`, `git`, an MCP
-//! server's command…). Where a tool is found is `domain::executable`; how it is
-//! started is here, so the pure core never touches processes.
-
 pub mod bounded;
 mod tree;
 #[cfg(any(windows, test))]

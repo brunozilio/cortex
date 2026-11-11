@@ -1,6 +1,3 @@
-//! `SendMessage`: continues a sub-agent this run started, in its own
-//! conversation. The agent loop runs it; this is its description.
-
 use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace};

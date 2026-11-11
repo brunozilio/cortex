@@ -1,5 +1,3 @@
-//! Custom agents: their tools, permission mode, model, effort and turns.
-
 use agent_engine::agent::Agent;
 use agent_engine::model::TurnRequest;
 use agent_engine::model::scripted::ScriptedModel;

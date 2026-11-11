@@ -1,6 +1,3 @@
-//! How a failed run went wrong, so its turn can offer the retry that fits:
-//! wait for the usage limit to reset, or simply try again.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

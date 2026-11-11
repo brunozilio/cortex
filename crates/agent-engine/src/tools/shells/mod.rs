@@ -1,12 +1,3 @@
-//! Commands left running in the background (`Bash` with
-//! `run_in_background`): a dev server, a watcher, a long build. They
-//! outlive the turn that started them; the agent reads what they printed
-//! with `BashOutput` and stops them with `KillShell`. Each belongs to the
-//! client whose run started it ([`RunCredentials::client`]) and ends when
-//! that client leaves ([`kill_client`]).
-//!
-//! [`RunCredentials::client`]: domain::credentials::RunCredentials::client
-
 use std::collections::HashMap;
 use std::io::Read as _;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -24,9 +15,7 @@ mod watch;
 pub(crate) use wait::{Waited, wait};
 pub(crate) use watch::{Watch, watch};
 
-/// What a shell keeps of its output (the newest part).
 const KEPT: usize = 1 << 20;
-/// What one `BashOutput` returns at most.
 const SHOWN: usize = 30_000;
 
 struct Shell {
@@ -34,13 +23,10 @@ struct Shell {
     command: String,
     tree: Tree,
     output: Arc<Mutex<Vec<u8>>>,
-    /// How much of its output was dropped from the front so far (for
-    /// readers that keep their own place, like a monitor's watch).
     dropped: Arc<std::sync::atomic::AtomicUsize>,
     read: usize,
     started: Instant,
     exit: Option<String>,
-    /// The threads reading its stdout and stderr.
     readers: Vec<std::thread::JoinHandle<()>>,
 }
 
@@ -53,16 +39,11 @@ fn lock() -> std::sync::MutexGuard<'static, HashMap<String, Shell>> {
     shells().lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Starts `command` (already set up, stdout and stderr piped) in the
-/// background for `client`; returns its id.
 pub(crate) fn start(client: u64, summary: &str, command: &mut std::process::Command) -> std::io::Result<String> {
     static NEXT: AtomicU64 = AtomicU64::new(1);
-    // One pipe for both stdout and stderr, so what it printed keeps its order.
     let (reader, writer) = std::io::pipe()?;
     command.stdout(writer.try_clone()?).stderr(writer);
     let spawned = Tree::spawn(command);
-    // The command keeps its copies of the pipe's end until told otherwise;
-    // the reader only ends once every writer is gone.
     command.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
     let tree = spawned?;
     let output = Arc::new(Mutex::new(Vec::new()));
@@ -96,9 +77,6 @@ fn collect(mut pipe: Box<dyn std::io::Read + Send>, output: &Mutex<Vec<u8>>, dro
     }
 }
 
-/// A command nobody reads keeps only its newest output: past twice
-/// [`KEPT`], the oldest goes (`BashOutput` then starts over from what is
-/// left).
 fn capped(kept: &mut Vec<u8>) -> usize {
     if kept.len() <= 2 * KEPT {
         return 0;
@@ -108,7 +86,6 @@ fn capped(kept: &mut Vec<u8>) -> usize {
     drop
 }
 
-/// Stops every background command of a client that left.
 pub fn kill_client(client: u64) {
     let mut shells = lock();
     let ids: Vec<String> =
@@ -121,7 +98,6 @@ pub fn kill_client(client: u64) {
     }
 }
 
-/// Stops background command `id` of `client`; whether there was one.
 pub fn kill(client: u64, id: &str) -> bool {
     let mut shells = lock();
     if !shells.get(id).is_some_and(|shell| shell.client == client) {
@@ -134,7 +110,6 @@ pub fn kill(client: u64, id: &str) -> bool {
     true
 }
 
-/// The background commands of `client`: id, command, still running.
 pub fn list(client: u64) -> Vec<(String, String, bool)> {
     let mut shells = lock();
     let mut listed: Vec<_> = shells
@@ -146,7 +121,6 @@ pub fn list(client: u64) -> Vec<(String, String, bool)> {
     listed
 }
 
-/// Its exit, once it has one.
 fn refresh(shell: &mut Shell) -> Option<String> {
     if shell.exit.is_none()
         && let Ok(Some(status)) = shell.tree.child().try_wait()
@@ -199,7 +173,6 @@ impl Tool for BashOutput {
         let exit = refresh(shell);
         let text = {
             let mut kept = shell.output.lock().unwrap_or_else(PoisonError::into_inner);
-            // Past the end when the reader dropped the oldest output.
             let from = if shell.read > kept.len() { 0 } else { shell.read };
             let new = String::from_utf8_lossy(&kept[from..]).into_owned();
             if kept.len() > KEPT {

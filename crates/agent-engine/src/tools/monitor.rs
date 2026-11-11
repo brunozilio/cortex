@@ -1,9 +1,3 @@
-//! `Monitor`: a command left running whose every line of output is an
-//! event for the agent: a log tailed for errors, a watcher, a poll loop
-//! printing when something changes. The lines reach the agent with its next
-//! tool results, or wake the idle chat; it ends when the command does, or
-//! with `KillShell`.
-
 use serde_json::{Value, json};
 
 use super::shells::Watch;
@@ -114,7 +108,6 @@ mod read_tests {
             std::thread::sleep(Duration::from_millis(100));
             lines.extend(inbox::take(8902).into_iter().map(|notice| notice.text));
             if !read && lines.iter().any(|text| text == "one") {
-                // The agent reads it meanwhile: the buffer loses what it read.
                 super::super::shells::BashOutput.run(&json!({ "bash_id": id }), &workspace);
                 read = true;
             }

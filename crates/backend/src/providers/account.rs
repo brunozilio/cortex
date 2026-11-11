@@ -1,8 +1,3 @@
-//! One provider account's credential: kept in the [`SecretStore`] as the
-//! provider's [`Config`] JSON, rotated subscription tokens saved back.
-//! Subscriptions sign in through the browser with PKCE on a loopback port;
-//! GitHub Copilot with GitHub's device flow.
-
 use std::sync::Arc;
 
 use agent_engine::model::http::NetHttp;
@@ -16,9 +11,6 @@ use crate::secrets::{SecretStore, Secrets};
 
 pub(crate) const CONFIG: &str = "config";
 
-/// Signs in to a subscription and returns its credential [`Config`]. The
-/// URL to open (and, for a device flow, the code to type there) goes to
-/// `open`; the call blocks until the sign-in is approved.
 pub trait SignIn: Send + Sync {
     fn sign_in(&self, provider: ModelProvider, open: &mut dyn FnMut(String, Option<String>)) -> Result<Config, String>;
 }

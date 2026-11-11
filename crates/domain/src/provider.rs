@@ -1,9 +1,3 @@
-//! Model provider accounts: the API key a native engine calls a company's
-//! models with. Each provider in [`ModelProvider::ACCOUNTS`] is connected
-//! at most once per owner, by a key from its developer platform (ADR
-//! 0015). The keys stay on the backend; this is what everyone may see.
-//! Pure.
-
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};

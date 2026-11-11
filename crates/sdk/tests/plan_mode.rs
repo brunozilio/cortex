@@ -1,6 +1,3 @@
-//! The agent leaving or entering plan mode: the session follows the mode it
-//! changed to, and the plan it presented sets the verification criteria.
-
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;

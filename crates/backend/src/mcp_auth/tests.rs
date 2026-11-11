@@ -15,8 +15,6 @@ fn query_value(url: &str, key: &str) -> String {
     raw.replace("%3A", ":").replace("%2F", "/")
 }
 
-/// The person approving in the browser: the authorization server sends
-/// them back to the app's loopback with a code.
 fn approve(url: &str) {
     let back = format!("{}?code=xyz&state={}", query_value(url, "redirect_uri"), query_value(url, "state"));
     std::thread::spawn(move || {

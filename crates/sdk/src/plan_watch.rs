@@ -1,7 +1,3 @@
-//! A run's plan, read as it comes so that the finished plan's
-//! `Verification` section becomes the session's criteria: the one the
-//! agent presented with `ExitPlanMode`, else a planning run's text.
-
 use std::sync::{Arc, Mutex, PoisonError};
 
 use domain::{AskKind, EngineEvent, PermissionMode, Verifications};
@@ -9,7 +5,6 @@ use domain::{AskKind, EngineEvent, PermissionMode, Verifications};
 #[derive(Debug)]
 pub(crate) struct PlanWatch {
     verifications: Arc<Mutex<Verifications>>,
-    /// Whether the run plans: it started in plan mode or the agent entered it.
     planning: bool,
     text: String,
     presented: Option<String>,

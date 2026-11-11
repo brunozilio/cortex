@@ -1,7 +1,3 @@
-//! Checking what a side call gives back, with no model involved: the
-//! conversation as plain lines, a field of a JSON answer, and the title,
-//! branch name and suggestion as shown.
-
 use crate::transcript::{Block, Message, Role};
 
 pub(super) const TITLE_CHARS: usize = 60;

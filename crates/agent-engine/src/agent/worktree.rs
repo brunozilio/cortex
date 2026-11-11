@@ -1,7 +1,3 @@
-//! `EnterWorktree` and `ExitWorktree` in the loop: they ask for the move,
-//! which the run makes once the turn's calls are done
-//! ([`Ending::Moved`](super::Ending::Moved)).
-
 use serde_json::Value;
 
 use super::Agent;
@@ -41,7 +37,6 @@ impl Agent<'_> {
         let Some(state) = &self.workspace.worktree else {
             return Outcome::error("The session is not in a worktree (EnterWorktree makes one).");
         };
-        // The worktree goes once the turn's other calls are done with it.
         let (said, remove) = match input["action"].as_str() {
             Some("keep") => (format!("Kept the worktree at {}", state.cwd.display()), None),
             Some("remove") => {
@@ -57,7 +52,6 @@ impl Agent<'_> {
         Outcome::ok(format!("{said}. From your next step on, the session works in {}.", state.root.display()))
     }
 
-    /// Why the session cannot move now, if it cannot.
     fn unmovable(&self, tasks: &Tasks) -> Option<Outcome> {
         if self.depth > 0 {
             return Some(Outcome::error("Only the main agent moves the session between worktrees."));

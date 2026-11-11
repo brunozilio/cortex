@@ -1,9 +1,3 @@
-//! Bookkeeping of in-flight runs, so they can be cancelled or answered,
-//! by whoever started them only: a run's id is no key to it.
-//!
-//! An engine may finish a run before `start` even returns its handle, so
-//! the table copes with "finished" arriving before "inserted".
-
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 

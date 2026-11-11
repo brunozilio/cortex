@@ -1,6 +1,3 @@
-//! Drawing the chat: the conversation, what the agent asks, the picker or
-//! completions, the prompt (wrapped as it grows), and a status line.
-
 use domain::command::mode_label;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Position, Rect};
@@ -14,7 +11,6 @@ use super::entries;
 use super::motion::Scene;
 use super::wrap::{layout, wrap};
 
-/// Columns the prompt's `> ` takes.
 const PROMPT_MARK: usize = 2;
 
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -69,7 +65,6 @@ pub fn draw(frame: &mut Frame, app: &App) {
     motion.apply(frame.buffer_mut());
 }
 
-/// Where the conversation drew the newest entries and the "Working…" line.
 struct Shown {
     added: Option<Rect>,
     working: Option<Rect>,
@@ -79,7 +74,6 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
     let width = usize::from(area.width.saturating_sub(2)).max(10);
     let seen = app.motion.borrow().seen();
     let mut lines: Vec<Line> = Vec::new();
-    // Inline, what went to the scrollback is not drawn again.
     if app.inline.is_none() {
         lines.extend(welcome(app, width));
     }
@@ -120,7 +114,6 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
 
 use super::panel::panel;
 
-/// The end of `text` that fits in `columns`, marked `…` when cut.
 fn tail(text: &str, columns: usize) -> String {
     let chars: Vec<char> = text.chars().collect();
     if chars.len() <= columns {
@@ -130,8 +123,6 @@ fn tail(text: &str, columns: usize) -> String {
     format!("…{kept}")
 }
 
-/// What the conversation starts with: the logo, where this chat works,
-/// and how to begin.
 pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
     let home = std::env::var("HOME").unwrap_or_default();
     let cwd = app.cwd.display().to_string();

@@ -1,5 +1,3 @@
-//! The chat end to end on a scripted engine, drawn on a test terminal.
-
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

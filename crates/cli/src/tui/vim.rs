@@ -1,21 +1,14 @@
-//! `/vim`: the prompt edited with vim's keys. Esc goes to normal mode
-//! (`h l w b 0 $ j k x dd D i a I A o`), `i`/`a`/… back to inserting;
-//! Enter sends from either.
-
 use ratatui::crossterm::event::KeyCode;
 
 use super::input::Input;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Vim {
-    /// In normal mode (keys move and edit) rather than inserting.
     pub normal: bool,
-    /// The first key of a two-key command (`d` of `dd`).
     pending: Option<char>,
 }
 
 impl Vim {
-    /// Esc while inserting: to normal mode, the cursor back one like vim.
     pub fn escape(&mut self, input: &mut Input) {
         if !self.normal {
             self.normal = true;
@@ -24,7 +17,6 @@ impl Vim {
         self.pending = None;
     }
 
-    /// A key in normal mode; `false` when it is not vim's (Enter, Ctrl…).
     pub fn key(&mut self, code: KeyCode, input: &mut Input) -> bool {
         let KeyCode::Char(c) = code else {
             match code {

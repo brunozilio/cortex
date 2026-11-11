@@ -1,5 +1,3 @@
-//! `/add-dir`: folders the agent reads like the project's own.
-
 use std::path::{Path, PathBuf};
 
 use super::app::App;
@@ -22,8 +20,6 @@ pub fn run(app: &mut App, typed: Option<String>) {
     }
 }
 
-/// How `/permissions` reads: each rule under what it does, and the added
-/// folders.
 pub fn permissions(info: &domain::permission_rules::PermissionsInfo) -> String {
     use domain::permission_rules::RuleKind;
     if info.rules.is_empty() && info.added_dirs.is_empty() {
@@ -50,7 +46,6 @@ pub fn permissions(info: &domain::permission_rules::PermissionsInfo) -> String {
     text
 }
 
-/// How `/hooks` reads: each hook under its event.
 pub fn hooks(hooks: &[domain::permission_rules::HookInfo]) -> String {
     if hooks.is_empty() {
         return concat!("No hooks. Add them under \"hooks\" in ", brand::dir!(), "/settings.json.").to_owned();
@@ -63,7 +58,6 @@ pub fn hooks(hooks: &[domain::permission_rules::HookInfo]) -> String {
     text
 }
 
-/// The folder `typed` names, from home (`~/`) or the project, made real.
 pub fn folder(cwd: &Path, typed: &str) -> Result<PathBuf, String> {
     let path = match typed.strip_prefix("~/") {
         Some(rest) => std::env::home_dir().ok_or("no home folder to start ~/ from")?.join(rest),

@@ -1,9 +1,3 @@
-//! The memory search tool, served to agents over MCP in process: each run
-//! gets its own [`MemoryEndpoint`] on its credentials, bound to its owner
-//! and project, so an agent can only search the memory it was briefed with.
-//!
-//! [`respond`] is the protocol and is pure.
-
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -75,7 +69,6 @@ pub fn listing(memories: &[Memory]) -> String {
         .join("\n")
 }
 
-/// One run's memory search: its owner's memory of its project.
 pub struct MemoryEndpoint {
     memories: Memories,
     owner: Principal,
@@ -83,7 +76,6 @@ pub struct MemoryEndpoint {
 }
 
 impl MemoryEndpoint {
-    /// The server a run gets, named [`MEMORY_SERVER`].
     pub fn for_run(memories: Memories, owner: Principal, project: PathBuf) -> LocalMcp {
         LocalMcp::new(MEMORY_SERVER, Arc::new(Self { memories, owner, project }))
     }

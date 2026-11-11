@@ -1,7 +1,3 @@
-//! Rules for MCP servers a person or a project configures
-//! (`.{command}/mcp.json`): which of a project's servers may start, and how
-//! `${VAR}` and `${VAR:-default}` in a config are filled in.
-
 mod edit;
 
 use serde::{Deserialize, Serialize};
@@ -9,17 +5,12 @@ use serde_json::Value;
 
 pub use self::edit::{McpOrigin, McpServerInfo, McpState, add_server, remove_server, server_from, set_approval};
 
-/// Names the platform keeps for itself: the app's own servers and plugins'.
 pub const RESERVED_PREFIXES: [&str; 2] = [concat!(brand::command!(), "_"), "plugin_"];
 
-/// Whether a name is free for a person's or a project's server.
 pub fn is_free_name(name: &str) -> bool {
     !RESERVED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }
 
-/// What the owner said about a project's `.{command}/mcp.json` servers
-/// (`enableAllProjectMcpServers`, `enabledMcpServers`,
-/// `disabledMcpServers`). A repository cannot say it for itself.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpApproval {
     pub all: bool,
@@ -28,7 +19,6 @@ pub struct McpApproval {
 }
 
 impl McpApproval {
-    /// Reads the approval keys of one settings file over what is known.
     pub fn read(&mut self, settings: &Value) {
         if let Some(all) = settings["enableAllProjectMcpServers"].as_bool() {
             self.all = all;
@@ -40,15 +30,12 @@ impl McpApproval {
         self.disabled.extend(names("disabledMcpServers"));
     }
 
-    /// A project's server may start when approved and not turned off.
     pub fn allows(&self, name: &str) -> bool {
         let named = |list: &[String]| list.iter().any(|known| known == name);
         !named(&self.disabled) && (self.all || named(&self.enabled))
     }
 }
 
-/// Fills `${VAR}` and `${VAR:-default}` in every string of a config. An
-/// unknown variable without a default stays as written.
 pub fn expand(value: Value, lookup: &dyn Fn(&str) -> Option<String>) -> Value {
     match value {
         Value::String(text) => Value::String(expand_text(&text, lookup)),

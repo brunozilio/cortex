@@ -1,5 +1,3 @@
-//! What a backend says about LLM providers.
-
 use domain::provider::{ModelProvider, ProviderSummary};
 use serde::{Deserialize, Serialize};
 
@@ -9,8 +7,6 @@ pub enum ProviderEvent {
     Listed {
         providers: Vec<ProviderSummary>,
     },
-    /// Where the user signs in; `code` is the one to type there when the
-    /// sign-in is a device flow (GitHub Copilot).
     AuthorizeAt {
         provider: ModelProvider,
         url: String,

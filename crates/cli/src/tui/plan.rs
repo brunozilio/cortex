@@ -1,6 +1,3 @@
-//! The agent's plan in the chat: the entry `ExitPlanMode` becomes (instead
-//! of a tool line), what the user made of it, and its box.
-
 use domain::command::mode_label;
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -21,8 +18,6 @@ pub enum Outcome {
 }
 
 impl Transcript {
-    /// Folds in the events of leaving or entering plan mode; `true` when
-    /// `event` was one of them.
     pub(super) fn planned(&mut self, event: &EngineEvent) -> bool {
         match event {
             EngineEvent::ToolStarted(call) if call.name == EXIT_PLAN => {
@@ -65,7 +60,6 @@ impl Transcript {
     }
 }
 
-/// The plan under a line saying what became of it, in a rounded box.
 pub fn lines(plan: &str, outcome: Outcome, width: usize, out: &mut Vec<Line<'static>>) {
     let (mark, header) = match outcome {
         Outcome::Waiting => (Color::Cyan, "Plan ready for review".to_owned()),

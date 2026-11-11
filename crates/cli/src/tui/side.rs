@@ -1,7 +1,3 @@
-//! `/btw <question>`: a side question answered from the conversation so
-//! far, beside any run in progress. The answer shows above the prompt
-//! until dismissed and never joins the conversation.
-
 use ratatui::style::{Color, Stylize};
 use ratatui::text::Line;
 
@@ -11,7 +7,6 @@ use super::wrap::wrap;
 
 pub struct Side {
     pub question: String,
-    /// `None` while it is being answered.
     pub answer: Option<Result<String, String>>,
 }
 
@@ -30,7 +25,6 @@ pub fn ask(app: &mut App, question: Option<String>) {
     app.spawn(move |_| Msg::Side { question, answer: started.side_answer().map_err(|e| e.to_string()) });
 }
 
-/// An answer arrives; one for a question since dismissed is dropped.
 pub fn answered(app: &mut App, question: &str, answer: Result<String, String>) {
     if let Some(side) = &mut app.side
         && side.question == question

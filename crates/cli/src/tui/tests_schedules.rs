@@ -1,6 +1,3 @@
-//! Prompts the agent scheduled: sent when they are due and the chat is
-//! idle, or after the run that is working; `/loop` asks for one.
-
 use std::time::Duration;
 
 use agent_engine::fake::FakeEngine;

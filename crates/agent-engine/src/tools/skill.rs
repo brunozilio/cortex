@@ -1,8 +1,3 @@
-//! Skills: `SKILL.md` instructions the agent loads by name with the `Skill`
-//! tool. Found in the project's `.{command}/skills`, the user's
-//! `~/.{command}/skills`, the app plugins and the SDK host's folders.
-//! On a clash of names the first found wins.
-
 use std::path::{Path, PathBuf};
 
 use crate::frontmatter::parse as parse_frontmatter;
@@ -163,9 +158,6 @@ pub fn expand_initial(initial: &str, skills: &[FoundSkill]) -> Result<String, St
     })
 }
 
-/// A prompt typed as `/<skill or command> <arguments>` becomes that skill's
-/// text with `$ARGUMENTS` filled in; `None` when it names none (a path such
-/// as `/etc/hosts` stays as typed).
 pub fn expand_command(prompt: &str, skills: &[FoundSkill]) -> Option<Result<String, String>> {
     let command = prompt.trim().strip_prefix('/')?;
     let (name, args) = command.split_once(char::is_whitespace).unwrap_or((command, ""));

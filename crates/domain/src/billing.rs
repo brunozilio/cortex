@@ -1,7 +1,3 @@
-//! Versioned reference tariffs. Estimates are distinct from provider invoices.
-//! Sources (retrieved 2026-11-07):
-//! https://platform.claude.com/docs/en/about-claude/pricing
-//! https://developers.openai.com/api/docs/pricing
 use crate::ModelProvider;
 use serde::{Deserialize, Serialize};
 

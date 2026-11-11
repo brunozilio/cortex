@@ -1,9 +1,3 @@
-//! The chat's state and what it does: send prompts (queued while the agent
-//! works), run the chat's own `/commands`. Slow calls run on threads and
-//! come back as [`Msg`]s. Following a run is in `runs`, choosing the model,
-//! mode and effort in `choices`, connecting a provider in `login`, `/btw`
-//! in `side`.
-
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -18,7 +12,6 @@ use super::transcript::Transcript;
 
 pub use super::msg::Msg;
 
-/// How long a first Ctrl+C waits for the second that quits.
 const QUIT_WINDOW: Duration = Duration::from_secs(2);
 
 pub struct App {
@@ -27,83 +20,50 @@ pub struct App {
     pub session: Option<Session>,
     pub transcript: Transcript,
     pub input: Input,
-    /// Animations; a `RefCell` because drawing advances them.
     pub motion: std::cell::RefCell<super::motion::Motion>,
     pub attachments: super::attach::Attachments,
-    /// Long pastes folded in the prompt.
     pub pastes: super::pastes::Pastes,
-    /// What `!commands` printed, for the next prompt.
     pub shell_context: Vec<String>,
-    /// The project's files for `@` completion, once asked for.
     pub files: Option<Vec<String>>,
-    /// Whether the agent's task list shows above the prompt (Ctrl+T).
     pub show_tasks: bool,
-    /// Inline (`--inline`): how many entries went to the terminal's scrollback.
     pub inline: Option<usize>,
-    /// The model's context window, once measured or known.
     pub window: Option<u64>,
-    /// The conversations `/resume` offers, in the picker's order.
     pub conversations: Vec<super::conversations::Conversation>,
-    /// The status line's command (`/statusline`), its output and last run.
     pub status: super::statusline::Status,
-    /// The command line's rules and appended prompt, for every conversation.
     pub headless: sdk::Headless,
-    /// The conversation resumed at launch goes on in a copy of itself.
     pub fork_resumed: bool,
-    /// The output style picked with `/output-style`, kept between launches.
     pub output_style: Option<String>,
-    /// The providers `/logout` offers, in the picker's order.
     pub connected: Vec<domain::provider::ModelProvider>,
-    /// Vim keys for the prompt (`/vim`).
     pub vim: Option<super::vim::Vim>,
-    /// The wheel scrolls the conversation (`/mouse`); selecting needs Shift/Option.
     pub mouse: bool,
-    /// Ctrl+R's search of the prompts sent before, while it runs.
     pub search: Option<super::search::Search>,
-    /// Ctrl+G: edit the prompt in `$EDITOR` at the next frame.
     pub external_edit: bool,
-    /// A file to open in `$EDITOR` at the next frame (`/memory edit`).
     pub edit_file: Option<PathBuf>,
-    /// Ctrl+L: clear and redraw the screen at the next frame.
     pub redraw: bool,
-    /// Ctrl+O: reasoning, outputs and diffs shown in full.
     pub expanded: bool,
     pub ask: Option<Pending>,
     pub secret: Option<SecretPrompt>,
     pub run: Option<RunControl>,
     pub started: Option<Instant>,
     pub queued: Vec<String>,
-    /// Asking for scheduled prompts while idle.
     pub schedules: super::schedules::Poll,
-    /// Folders read like the project (`/add-dir`, `--add-dir`), kept for every conversation.
     pub added_dirs: Vec<PathBuf>,
-    /// Whether the terminal has focus (terminals that report it).
     pub focused: bool,
-    /// Ring the bell at the next frame: the agent waits on an absent user.
     pub bell: bool,
     pub models: Vec<Model>,
     pub skills: Vec<(String, String)>,
     pub picker: Option<Picker>,
-    /// A `/btw` question and its answer, shown until dismissed.
     pub side: Option<super::side::Side>,
-    /// The conversation's name, once a side call gave one.
     pub title: Option<String>,
-    /// The prompt you would likely type next, shown in the empty prompt.
     pub ghost: Option<String>,
-    /// This chat's prompts the engine can rewind to, oldest first.
     pub checkpoints: Vec<super::rewind::Checkpoint>,
-    /// What the running rewind did, until it ends.
     pub(super) rewound: Option<domain::Rewound>,
-    /// Whether the running rewind sends its prompt again (`/retry`).
     pub(super) retrying: bool,
-    /// `/diffs`, full screen while open.
     pub diffs: Option<super::diff_view::DiffView>,
     pub scroll: u16,
     pub quit: bool,
     pub quit_armed: Option<Instant>,
-    /// A first Esc with text typed; the second clears it.
     pub clear_armed: Option<Instant>,
-    /// The highlighted `/` completion.
     pub suggestion: usize,
     pub loading: bool,
     pub(super) wanted: Option<String>,
@@ -185,7 +145,6 @@ impl App {
         app
     }
 
-    /// Continues `session` (from `{command} -c`) once a model is chosen.
     pub fn resuming(mut self, session: Option<SessionId>) -> Self {
         if session.is_some() {
             self.transcript.notice("Continuing the last conversation in this folder.");
@@ -194,8 +153,6 @@ impl App {
         self
     }
 
-    /// Lets the agent read `dir` like the project, in this conversation and
-    /// the next ones.
     pub fn add_dir(&mut self, dir: PathBuf) {
         if let Some(session) = &mut self.session {
             session.add_dir(dir.clone());
@@ -205,7 +162,6 @@ impl App {
         }
     }
 
-    /// Asks for the settings and models (and the skills, at first).
     pub(super) fn load(&mut self, skills: bool) {
         self.loading = true;
         let (sdk, tx, cwd) = (self.sdk.clone(), self.tx.clone(), self.cwd.clone());
@@ -235,8 +191,6 @@ impl App {
         self.session.as_ref().map(Session::model)
     }
 
-    /// Ctrl+C: stops the run, else clears the prompt, else quits on a
-    /// second press.
     pub fn interrupt(&mut self) {
         if self.busy() {
             self.cancel();
@@ -249,7 +203,6 @@ impl App {
         }
     }
 
-    /// Whether the status line should say "Ctrl+C again to quit".
     pub fn quitting(&self) -> bool {
         self.quit_armed.is_some_and(|at| at.elapsed() < QUIT_WINDOW)
     }

@@ -1,8 +1,3 @@
-//! Strongly typed identifiers.
-//!
-//! `Id<T>` wraps a UUID with a phantom marker so a `UserId` can never be
-//! passed where an `OrgId` is expected.
-
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -81,7 +76,6 @@ pub enum SecretMarker {}
 
 pub type UserId = Id<UserMarker>;
 pub type OrgId = Id<OrgMarker>;
-/// Which entry of the secrets store a credential is.
 pub type SecretId = Id<SecretMarker>;
 
 impl OrgId {

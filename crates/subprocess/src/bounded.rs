@@ -1,7 +1,3 @@
-//! A command run to its end within bounds: its output read up to a cap
-//! (the rest drained so it never blocks), its whole process tree ended when
-//! a stop flag is raised or its time is up.
-
 use std::io::{self, Read, Write};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,14 +11,11 @@ const POLL: Duration = Duration::from_millis(20);
 #[derive(Debug)]
 pub struct Bounds<'a> {
     pub timeout: Duration,
-    /// Bytes kept from each of stdout and stderr.
     pub max_output: usize,
     pub stop: &'a AtomicBool,
-    /// Written to the command's stdin, which is closed after it.
     pub input: Option<Vec<u8>>,
 }
 
-/// How the command ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ended {
     Exited(ExitStatus),
@@ -38,7 +31,6 @@ pub struct Finished {
 }
 
 impl Finished {
-    /// The exit status, when the command ran to its end.
     pub fn status(&self) -> Option<ExitStatus> {
         match self.ended {
             Ended::Exited(status) => Some(status),
@@ -47,8 +39,6 @@ impl Finished {
     }
 }
 
-/// Starts `command` with piped stdout and stderr and waits for it within
-/// `bounds`. Only starting it can fail; how it ended is in [`Finished`].
 pub fn run(command: &mut Command, bounds: Bounds<'_>) -> io::Result<Finished> {
     let stdin = if bounds.input.is_some() { Stdio::piped() } else { Stdio::null() };
     command.stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped());

@@ -1,10 +1,3 @@
-//! The safety check of autonomous mode: before an action that edits or
-//! executes runs with no one approving it, a model reads the conversation
-//! and the action against the app's rules (`classifier.md`) and grades its
-//! harm from 0 to 100; above 50 the action is held back. A check that
-//! cannot run or answers out of form holds it back too: autonomy never
-//! means unchecked.
-
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 

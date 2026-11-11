@@ -1,9 +1,3 @@
-//! `/loop [interval] <task>`: the task now and again later. With an
-//! interval (`30s`, `5m`, `2h`, `1d`) the agent schedules it on a cron
-//! expression; without one it picks each next wakeup itself.
-
-/// The prompt `/loop` sends for `text` (an optional interval, then the
-/// task); `None` without a task.
 pub fn loop_prompt(text: &str) -> Option<String> {
     let text = text.trim();
     let (first, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
@@ -27,7 +21,6 @@ pub fn loop_prompt(text: &str) -> Option<String> {
     })
 }
 
-/// The cron expression for an interval like `5m`, and how to say it.
 fn every(interval: &str) -> Option<(String, String)> {
     let unit = interval.chars().last()?;
     let n: u32 = interval[..interval.len() - unit.len_utf8()].parse().ok().filter(|n| *n > 0)?;

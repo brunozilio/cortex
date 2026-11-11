@@ -1,9 +1,3 @@
-//! A tiny, tolerant parser for the `---` frontmatter of `SKILL.md` files.
-//!
-//! Supports `key: value` pairs, quoted values, and values continued on
-//! indented lines (including `>` / `|` block markers). Anything it does not
-//! understand is skipped rather than rejected.
-
 use std::collections::HashMap;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

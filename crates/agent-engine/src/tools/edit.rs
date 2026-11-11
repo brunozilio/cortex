@@ -1,5 +1,3 @@
-//! `Edit`: an exact string replaced in a file.
-
 use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace, field, required, shown};

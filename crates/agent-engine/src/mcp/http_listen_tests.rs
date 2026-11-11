@@ -10,13 +10,9 @@ use crate::mcp::{Listener, McpServer, ServerSpec};
 use crate::model::ModelError;
 use crate::model::http::{Http, Response};
 
-/// A streamable HTTP server: answers in an event stream that first carries
-/// a notification, and keeps GET streams the test writes to.
 struct Streamable {
-    /// What its GET answers: 200 (a stream) or 405.
     get_status: u16,
     streams: Mutex<Vec<Sender<Vec<u8>>>>,
-    /// The session id each GET carried.
     opened: Mutex<Vec<Option<String>>>,
 }
 
@@ -47,7 +43,6 @@ impl Streamable {
         Arc::new(Self { get_status, streams: Mutex::default(), opened: Mutex::default() })
     }
 
-    /// Says `content` on the latest GET stream, ending the earlier ones.
     fn say(&self, content: &str) {
         let mut streams = self.streams.lock().expect("streams");
         let latest = streams.pop();
@@ -60,7 +55,6 @@ impl Streamable {
         }
     }
 
-    /// Ends every GET stream, as a server restarting would.
     fn hang_up(&self) {
         self.streams.lock().expect("streams").clear();
     }
@@ -107,7 +101,6 @@ fn spec() -> ServerSpec {
     ServerSpec::Http { name: "chat".into(), url: "https://chat.example/mcp".into(), headers: Vec::new() }
 }
 
-/// Opens the server listening, and what its listener heard.
 fn listened(server: &Arc<Streamable>) -> (McpServer, Arc<Mutex<Vec<String>>>) {
     let heard: Arc<Mutex<Vec<String>>> = Arc::default();
     let kept = Arc::clone(&heard);

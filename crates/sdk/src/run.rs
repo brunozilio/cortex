@@ -1,5 +1,3 @@
-//! One run of the agent and the handle that steers it from anywhere.
-
 use std::sync::{Arc, Mutex, PoisonError};
 
 use crossbeam_channel::Receiver;
@@ -10,24 +8,18 @@ use crate::Error;
 use crate::client::Client;
 use crate::plan_watch::PlanWatch;
 
-/// One run of the agent. Iterate it for its [`EngineEvent`]s; the last one
-/// is `Completed`, `Failed` or `Cancelled`.
 #[derive(Debug)]
 pub struct Run {
     id: RunId,
     events: Receiver<EngineEvent>,
     client: Arc<Client>,
-    /// Where a conversation's run records its session id.
     pub(crate) resume: Arc<Mutex<Option<SessionId>>>,
-    /// The conversation's mode, which the agent changes by leaving or entering plan mode.
     pub(crate) mode: Arc<Mutex<PermissionMode>>,
-    /// The run's plan, read for its verification criteria.
     pub(crate) plan: Option<PlanWatch>,
     done: bool,
 }
 
 impl Run {
-    /// Follows a new run, then sends the command that starts it.
     pub(crate) fn start(client: &Arc<Client>, command: impl FnOnce(RunId) -> ClientCommand) -> Result<Self, Error> {
         let run = RunId::new();
         let events = client.follow(run);
@@ -50,7 +42,6 @@ impl Run {
         self.id
     }
 
-    /// Waits for the next event; `None` after the terminal one.
     pub fn next_event(&mut self) -> Option<EngineEvent> {
         if self.done {
             return None;
@@ -60,7 +51,6 @@ impl Run {
         Some(event)
     }
 
-    /// The next event if one is waiting.
     pub fn try_next_event(&mut self) -> Option<EngineEvent> {
         if self.done {
             return None;
@@ -87,7 +77,6 @@ impl Run {
         self.done
     }
 
-    /// Answers a permission request or a question (`EngineEvent::Asked`).
     pub fn answer(&self, ask: AskId, decision: Decision) -> Result<(), Error> {
         self.control().answer(ask, decision)
     }
@@ -100,20 +89,14 @@ impl Run {
         self.control().set_permission(mode)
     }
 
-    /// See [`RunControl::steer`].
     pub fn steer(&self, text: &str) -> Result<(), Error> {
         self.control().steer(text)
     }
 
-    /// A handle that answers, cancels or changes this run's mode while
-    /// another thread reads its events.
     pub fn control(&self) -> RunControl {
         RunControl { id: self.id, client: Arc::clone(&self.client) }
     }
 
-    /// Runs to the end, denying anything the agent asks (a plan it presents
-    /// is kept in the text and planning goes on), and returns its
-    /// text. For runs that need answers, iterate instead.
     pub fn text(mut self) -> Result<String, Error> {
         let mut text = String::new();
         while let Some(event) = self.next_event() {
@@ -135,7 +118,6 @@ impl Run {
     }
 }
 
-/// Steers a [`Run`] from anywhere; see [`Run::control`].
 #[derive(Debug, Clone)]
 pub struct RunControl {
     id: RunId,
@@ -159,20 +141,14 @@ impl RunControl {
         self.client.send(ClientCommand::SetPermissionMode { run: self.id, mode })
     }
 
-    /// Sends the run's model a message at its next turn;
-    /// `EngineEvent::Steered` arrives once it was handed over.
     pub fn steer(&self, text: &str) -> Result<(), Error> {
         self.client.send(ClientCommand::SteerRun { run: self.id, text: text.to_owned() })
     }
 
-    /// Takes back what was steered and not handed over yet;
-    /// `EngineEvent::Unsteered` returns it.
     pub fn unsteer(&self) -> Result<(), Error> {
         self.client.send(ClientCommand::UnsteerRun { run: self.id })
     }
 
-    /// Moves the command the run waits on to the background, where the
-    /// agent can read or stop it; the run goes on.
     pub fn background(&self) -> Result<(), Error> {
         self.client.send(ClientCommand::BackgroundRun { run: self.id })
     }

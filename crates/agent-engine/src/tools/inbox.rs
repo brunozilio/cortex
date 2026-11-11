@@ -1,9 +1,3 @@
-//! Each client's inbox of [`Notice`]s: what its monitors, background
-//! commands and channels report, and what other sessions send it. A run of
-//! the client reads them with its next tool results; when no run works, the
-//! client takes them ([`take`]) and sends them as a turn. They end with the
-//! client ([`forget_client`]).
-
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock, PoisonError};
 
@@ -14,12 +8,10 @@ fn lock() -> std::sync::MutexGuard<'static, HashMap<u64, Vec<Notice>>> {
     ALL.get_or_init(Mutex::default).lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Leaves `notice` for `client`.
 pub fn push(client: u64, notice: Notice) {
     inbox::keep(lock().entry(client).or_default(), notice);
 }
 
-/// What waits for `client`, oldest first; the inbox is then empty.
 pub fn take(client: u64) -> Vec<Notice> {
     lock().remove(&client).unwrap_or_default()
 }

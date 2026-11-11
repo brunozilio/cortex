@@ -1,5 +1,3 @@
-//! How a verification verdict reads, in the chat and in `-p`.
-
 use domain::verification::MAX_ATTEMPTS;
 use sdk::Verdict;
 

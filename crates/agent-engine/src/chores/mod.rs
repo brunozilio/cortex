@@ -1,9 +1,3 @@
-//! Small one-shot calls about a session, apart from its run: a title for the
-//! timeline, a branch name, a recap for someone coming back, the prompt the
-//! user would likely type next, an answer to a side question and a heads-up
-//! worth knowing. Each is one model turn without tools; what comes back is
-//! checked here, so a chatty or empty answer never reaches the user.
-
 mod clean;
 mod heads_up;
 

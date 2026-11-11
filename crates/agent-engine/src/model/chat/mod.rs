@@ -1,7 +1,3 @@
-//! Chat Completions, streamed: the API local model servers
-//! (`mlx_lm.server`) speak. No key; the server for a model is found
-//! (and started, if it must be) through [`Endpoints`].
-
 mod body;
 mod stream;
 

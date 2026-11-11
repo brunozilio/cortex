@@ -1,6 +1,3 @@
-//! The memory a run starts with, the instructions for writing edits, and
-//! the parser for the file the agent writes.
-
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -18,12 +15,8 @@ pub struct MemoryBrief {
     pub output: PathBuf,
     #[serde(default)]
     pub origin: Option<String>,
-    /// Whether the run has the `memory_search` tool (served in process as
-    /// [`MEMORY_SERVER`] on the run's credentials).
     #[serde(default)]
     pub tool: bool,
-    /// The run tidies the memory (see `optimize_prompt`): nothing is
-    /// recalled and its edits can be undone as one.
     #[serde(default)]
     pub optimizing: bool,
 }

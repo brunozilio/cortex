@@ -1,25 +1,17 @@
-//! Going back: `/rewind` picks an earlier prompt of this chat and restores
-//! the files the agent edited since and the conversation before it (the
-//! prompt comes back in the input to edit); `/retry` does that for the last
-//! prompt and sends it again.
-
 use domain::Rewound;
 
 use super::app::App;
 use super::choices::{Picker, PickerKind};
 use super::transcript::Entry;
 
-/// A prompt of this chat the engine can rewind to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Checkpoint {
     pub index: u32,
     pub prompt: String,
-    /// Where its prompt sits in the transcript.
     pub entry: usize,
 }
 
 impl App {
-    /// The running prompt opened checkpoint `index`.
     pub(super) fn checkpointed(&mut self, index: u32) {
         let Some((entry, prompt)) =
             self.transcript.entries.iter().enumerate().rev().find_map(|(at, entry)| match entry {
@@ -73,7 +65,6 @@ impl App {
         self.follow(started);
     }
 
-    /// The rewind run ended with `rewound`.
     pub(super) fn rewound(&mut self, rewound: Rewound) {
         let at = self.checkpoints.iter().position(|known| known.index == rewound.checkpoint);
         if let Some(at) = at {

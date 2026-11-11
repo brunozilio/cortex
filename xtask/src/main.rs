@@ -1,6 +1,3 @@
-//! Developer tasks: `lint` (repo rules clippy cannot check) and `brand`
-//! (applies brand.toml to the files that spell it out).
-
 mod brand;
 mod lint;
 

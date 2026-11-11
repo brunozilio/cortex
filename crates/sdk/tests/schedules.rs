@@ -1,6 +1,3 @@
-//! Prompts a client's runs scheduled, through the protocol: listed, due
-//! ones handed over once, deleted, and only ever the client's own.
-
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
@@ -27,7 +24,6 @@ fn a_client_takes_its_due_prompts_once_and_deletes_the_others() {
     let engine = FakeEngine::new(vec![Model::new("scripted", "Scripted")], script);
     let sdk = build(&engine, data.path());
     sdk.session(data.path(), Model::new("scripted", "Scripted")).send("hi").expect("run").for_each(drop);
-    // What a run of this client scheduled (as `CronCreate` would).
     let client = engine.requests()[0].credentials.client;
     let now = schedules::now();
     schedules::add(client, "check the build", When::At(now - 1), now).expect("due");

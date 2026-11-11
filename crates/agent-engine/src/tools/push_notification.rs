@@ -1,7 +1,3 @@
-//! `PushNotification`: tells the user something on their desktop when they
-//! may be looking elsewhere: a long task done, a decision needed. macOS's
-//! notification centre, `notify-send` on Linux, a toast on Windows.
-
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -13,9 +9,6 @@ use crate::model::ToolSpec;
 #[derive(Debug)]
 pub struct PushNotification;
 
-/// The program, arguments and environment that show `message` titled
-/// `title` here. The text never becomes code: escaped for AppleScript, an
-/// environment variable for PowerShell, after `--` for `notify-send`.
 pub(crate) fn command(title: &str, message: &str) -> (String, Vec<String>, Vec<(String, String)>) {
     if cfg!(target_os = "macos") {
         let quoted = |text: &str| format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""));

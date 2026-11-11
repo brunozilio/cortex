@@ -1,7 +1,3 @@
-//! Leaving and entering plan mode from the agent: `ExitPlanMode` puts the
-//! plan to the user, whose approval switches the mode in the same run;
-//! `EnterPlanMode` makes the agent read-only until then.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::control::Control;
@@ -12,7 +8,6 @@ use serde_json::json;
 
 use crate::{Rig, tool_use};
 
-/// Answers every ask with `decision` until the run ends.
 fn answering(rig: &Rig, decision: Decision) -> std::thread::JoinHandle<()> {
     let control: Arc<Control> = Arc::clone(&rig.control);
     let events: Arc<Mutex<Vec<EngineEvent>>> = Arc::clone(&rig.events);

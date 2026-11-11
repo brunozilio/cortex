@@ -9,7 +9,6 @@ use crate::mcp::connect_stopped;
 use crate::model::http::{Http, ScriptedHttp};
 use crate::tools::Workspace;
 
-/// A server with a resource and a prompt.
 struct Docs;
 
 impl domain::mcp::McpEndpoint for Docs {

@@ -1,6 +1,3 @@
-//! Asking the user: the questions of the `AskUserQuestion` tool, and the
-//! permission a tool call needs under the run's mode and hooks.
-
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
 use serde_json::{Value, json};
 
@@ -63,7 +60,6 @@ impl Agent<'_> {
         let rule = self.workspace.ruling(&name, subject, input).or_else(|| self.remembered_rule(&name, subject, input));
         let rule_asks = matches!(rule, Some((domain::permission_rules::RuleKind::Ask, _)));
         let original = ruled(mode, access, rule, by_mode);
-        // An ask rule is the owner's say: a hook can refuse, never skip the question.
         let rule_asks = rule_asks && original == Verdict::Ask;
         let verdict = match (original, hook_permission) {
             (Verdict::Deny(reason), _) => Verdict::Deny(reason),

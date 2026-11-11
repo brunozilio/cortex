@@ -1,6 +1,3 @@
-//! A custom agent's filesystem setup: memory per owner, isolated worktrees
-//! kept or removed, cancellation, and reads that never block.
-
 use std::path::Path;
 
 use agent_engine::tools::{Workspace, subagent_config::AgentConfig};

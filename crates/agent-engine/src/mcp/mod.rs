@@ -1,9 +1,3 @@
-//! MCP tools for the native engine: the app's own memory server, the
-//! SDK host's servers over streamable HTTP or as processes, the host's
-//! in-process servers ([`LocalTransport`]), the project's and the user's
-//! configured servers and installed plugins'; each tool is offered as
-//! `mcp__<server>__<tool>`.
-
 pub mod channel;
 mod configured;
 pub mod extras;
@@ -34,8 +28,6 @@ use crate::tools::{Outcome, Tool};
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
 
-/// What hears a server's notifications (method, params): a channel's
-/// messages.
 pub type Listener = Arc<dyn Fn(&str, &Value) + Send + Sync>;
 
 pub trait Transport: Send + Sync {
@@ -53,8 +45,6 @@ pub trait Transport: Send + Sync {
         }
         self.notify(message)
     }
-    /// Starts hearing what the server says unasked, once the session is
-    /// open (a streamable HTTP server's GET stream).
     fn listen(&self) {}
 }
 
@@ -62,7 +52,6 @@ pub struct McpServer {
     name: String,
     transport: Box<dyn Transport>,
     next: AtomicU64,
-    /// What it said it offers (`resources`, `prompts`…) when initialized.
     capabilities: std::sync::Mutex<Value>,
 }
 
@@ -89,9 +78,6 @@ impl McpServer {
         Self::open_listening(spec, http, stop, None)
     }
 
-    /// [`open_stopped`](Self::open_stopped), with `listener` hearing its
-    /// notifications. A listened server is shared (a channel): a call it
-    /// is asked to drop is cancelled, its process kept.
     pub fn open_listening(
         spec: &ServerSpec,
         http: &Arc<dyn Http>,
@@ -135,7 +121,6 @@ impl McpServer {
         self.listed_tools_stopped(stop)
     }
 
-    /// Opens the session: the handshake, keeping what the server offers.
     pub fn initialize_stopped(&self, stop: &std::sync::atomic::AtomicBool) -> Result<(), String> {
         let client = json!({ "name": brand::COMMAND, "version": env!("CARGO_PKG_VERSION") });
         let answer = self.rpc_stopped(
@@ -155,22 +140,18 @@ impl McpServer {
         &self.name
     }
 
-    /// What it said it offers when initialized.
     pub fn capabilities(&self) -> Value {
         self.capabilities.lock().map(|capabilities| capabilities.clone()).unwrap_or_default()
     }
 
-    /// Whether it said it offers `capability` (`resources`, `prompts`).
     pub fn offers(&self, capability: &str) -> bool {
         self.capabilities.lock().is_ok_and(|capabilities| capabilities.get(capability).is_some_and(Value::is_object))
     }
 
-    /// A request after the handshake, its `result`.
     pub fn ask(&self, method: &str, params: Value, stop: &std::sync::atomic::AtomicBool) -> Result<Value, String> {
         self.rpc_stopped(method, params, stop)
     }
 
-    /// Its tools, once initialized.
     pub fn listed_tools_stopped(
         self: &Arc<Self>,
         stop: &std::sync::atomic::AtomicBool,
@@ -232,8 +213,6 @@ pub fn tools_stopped(
     tools_of(&connect_stopped(request, sources, http, stop), stop)
 }
 
-/// Every server the run can use, opened and initialized; one that fails
-/// is left out.
 pub fn connect_stopped(
     request: &PromptRequest,
     sources: &McpSources,
@@ -250,7 +229,6 @@ pub fn connect_stopped(
         let transport = Box::new(LocalTransport::new(Arc::clone(&local.endpoint)));
         ready(&local.name, Ok(McpServer::new(local.name.clone(), transport)))
     });
-    // An open channel stands in for the configured server of its name.
     let remote = servers(request, sources)
         .into_iter()
         .filter(|spec| !request.credentials.mcp.iter().any(|local| local.name == spec.name()))
@@ -260,7 +238,6 @@ pub fn connect_stopped(
     local.chain(remote).collect()
 }
 
-/// The servers' tools, and the resource tools when one offers resources.
 pub fn tools_of(servers: &[Arc<McpServer>], stop: &std::sync::atomic::AtomicBool) -> Vec<Box<dyn Tool>> {
     let mut tools: Vec<Box<dyn Tool>> = servers
         .iter()

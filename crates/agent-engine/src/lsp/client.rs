@@ -1,6 +1,3 @@
-//! One language server: a reader thread routes its answers to the waiting
-//! requests, keeps the diagnostics it publishes and answers what it asks.
-
 use std::collections::HashMap;
 use std::io::{BufReader, Read, Write};
 use std::path::Path;
@@ -49,7 +46,6 @@ impl std::fmt::Debug for LspClient {
 }
 
 impl LspClient {
-    /// Starts `spec`'s server (found at `program`) in `root`.
     pub fn spawn(spec: &ServerSpec, program: &Path, root: &Path, stop: &AtomicBool) -> Result<Self, String> {
         let mut command = subprocess::command(program);
         command.args(&spec.args).envs(&spec.env).current_dir(root);
@@ -60,8 +56,6 @@ impl LspClient {
         Self::connect(&spec.name, output, input, root, Some(tree), stop)
     }
 
-    /// Speaks to a server over `reader`/`writer` and runs the `initialize`
-    /// handshake for `root`. `tree` is the server's process, ended on drop.
     pub fn connect(
         name: &str,
         reader: impl Read + Send + 'static,
@@ -147,8 +141,6 @@ impl LspClient {
         self.shared.send(&json!({"jsonrpc": "2.0", "method": method, "params": params}))
     }
 
-    /// Sends `text` as the file's content: opened the first time, changed
-    /// after. Returns the version sent.
     pub fn sync(&self, file: &Path, language: &str, text: &str) -> Result<i64, String> {
         let uri = uri_of(file);
         let mut documents = self.documents.lock().map_err(|_| "the open files are unavailable")?;
@@ -175,8 +167,6 @@ impl LspClient {
         Ok(version)
     }
 
-    /// The diagnostics published for `file` since its last `sync`, at
-    /// `version` or later when the server says which; waits up to `wait`.
     pub fn diagnostics(&self, file: &Path, version: i64, wait: Duration) -> Option<Vec<Value>> {
         let uri = uri_of(file);
         let deadline = Instant::now() + wait;

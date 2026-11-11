@@ -1,5 +1,3 @@
-//! LocalBackend end to end, with a scripted engine.
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,7 +8,6 @@ use crossbeam_channel::Receiver;
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, Principal, PromptRequest, RunId, UserId};
 use protocol::{ClientCommand, Envelope, ServerEvent};
 
-/// A host folder with one skill and one agent, as the SDK would add.
 fn sdk_folder() -> PathBuf {
     let root = tempfile::tempdir().expect("sdk").keep();
     std::fs::create_dir_all(root.join("skills/motion")).expect("skills");

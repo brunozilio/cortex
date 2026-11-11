@@ -1,6 +1,3 @@
-//! `prompt` and `agent` hooks: the model judges the hook's condition, alone
-//! or as a read-only agent, and answers `{ok, reason}`.
-
 use serde_json::Value;
 
 use super::handlers::bounded;

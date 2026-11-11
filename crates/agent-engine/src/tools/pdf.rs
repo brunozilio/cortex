@@ -1,15 +1,11 @@
-//! PDFs read as text with poppler's `pdftotext`, page by page.
-
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use subprocess::bounded::{Bounds, Ended};
 
-/// What one read of a PDF shows at most.
 const SHOWN: usize = 100_000;
 
-/// The first and last page `pages` names (`"3"`, `"1-5"`), from 1.
 pub fn range(pages: &str) -> Result<(u32, u32), String> {
     let invalid = || format!("pages must be a page or a range like \"1-5\", not {pages:?}");
     let (first, last) = pages.split_once('-').unwrap_or((pages, pages));
@@ -21,8 +17,6 @@ pub fn range(pages: &str) -> Result<(u32, u32), String> {
     Ok((first, last))
 }
 
-/// The text of `path`'s pages (all, or `pages`); a minute at most, and
-/// cancelling the run (`stop`) ends it.
 pub fn text(path: &Path, pages: Option<&str>, stop: &AtomicBool) -> Result<String, String> {
     let mut command = subprocess::command("pdftotext");
     command.arg("-layout");

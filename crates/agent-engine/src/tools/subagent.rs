@@ -1,9 +1,3 @@
-//! `Agent`: hands a self-contained task to a sub-agent, which works with
-//! the same tools in its own conversation and returns a report. The agent
-//! loop runs it (it needs the model); here are its schema and the custom
-//! agents (`<name>.md` with `name` and `description` frontmatter, the body
-//! being the sub-agent's instructions) it can be given.
-
 use std::path::{Path, PathBuf};
 
 use super::subagent_config::AgentConfig;

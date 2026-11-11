@@ -1,5 +1,3 @@
-//! What a run reads from disk before it starts: skills, agents, settings,
-//! rules, git state, project instructions and installed plugins.
 use std::path::PathBuf;
 
 use crate::{prompt, tools};
@@ -35,7 +33,6 @@ impl Brief {
         })
     }
 
-    /// Where the run's configured MCP servers come from.
     pub fn mcp(&self) -> crate::mcp::McpSources {
         crate::mcp::McpSources {
             home: self.home.clone(),
@@ -45,8 +42,6 @@ impl Brief {
     }
 }
 
-/// Where a run in `request.cwd` finds its configured MCP servers, without
-/// reading the rest of a brief.
 pub fn mcp_sources(request: &PromptRequest) -> Result<crate::mcp::McpSources, String> {
     let home = home(request);
     let plugins = crate::plugins::found(request, home.as_deref());
@@ -54,8 +49,6 @@ pub fn mcp_sources(request: &PromptRequest) -> Result<crate::mcp::McpSources, St
     Ok(crate::mcp::McpSources { home, plugins, approval })
 }
 
-/// The permission rules and added folders a run in `request.cwd` follows
-/// (`/permissions`).
 pub fn permissions(request: &PromptRequest) -> Result<domain::permission_rules::PermissionsInfo, String> {
     let home = home(request);
     let plugins = crate::plugins::found(request, home.as_deref());
@@ -67,15 +60,10 @@ pub fn permissions(request: &PromptRequest) -> Result<domain::permission_rules::
     })
 }
 
-/// The owner's home: the one the backend named for the run, else the
-/// process's.
 pub fn home(request: &PromptRequest) -> Option<PathBuf> {
     request.extensions.as_ref().and_then(|extensions| extensions.home.clone()).or_else(std::env::home_dir)
 }
 
-/// The folders read like the project's own: the session's (`/add-dir`)
-/// and the settings' `additionalDirectories`, from `~/`, the project or
-/// the root.
 pub fn added_dirs(request: &PromptRequest, settings: &[String], home: Option<&std::path::Path>) -> Vec<PathBuf> {
     let from_settings = settings.iter().filter_map(|dir| match dir.strip_prefix("~/") {
         Some(rest) => home.map(|home| home.join(rest)),

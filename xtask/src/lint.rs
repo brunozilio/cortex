@@ -1,7 +1,3 @@
-//! `xtask lint`: the .{command}/{COMMAND}.md rules clippy cannot see. Findings already
-//! present are recorded in `xtask/lint-baseline.txt` (one `rule path` per
-//! line); only findings outside it fail. `lint --update-baseline` rewrites it.
-
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 

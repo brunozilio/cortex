@@ -1,7 +1,3 @@
-//! Each user's settings, kept by the server (ADR 0010): what the client
-//! wrote, opaque here (the last model, effort and mode…), one file per
-//! owner. There is no settings file on the client.
-
 use std::path::PathBuf;
 
 use domain::Principal;

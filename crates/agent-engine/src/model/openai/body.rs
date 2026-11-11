@@ -1,5 +1,3 @@
-//! The Responses API request body for a [`TurnRequest`].
-
 use domain::Effort;
 use serde_json::{Value, json};
 

@@ -1,7 +1,3 @@
-//! The sub-agents the app ships: Explore and Plan (read only), and the
-//! fork, which continues from the parent's conversation. A project or user
-//! agent of the same name replaces one of these.
-
 use super::subagent::FoundAgent;
 use super::subagent_config::AgentConfig;
 use crate::transcript::{Block, Message, Role};

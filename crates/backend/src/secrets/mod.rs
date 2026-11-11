@@ -1,6 +1,3 @@
-//! Keys and tokens. Only the backend reads them; a client never receives
-//! one.
-
 mod sealed;
 
 use std::collections::{BTreeMap, HashMap};
@@ -20,10 +17,6 @@ pub trait SecretStore: Send + Sync {
     fn delete(&self, owner: &Principal, connection: SecretId);
 }
 
-/// This computer's store for keys and tokens: a sealed file in the data
-/// folder (`secrets.json`, its key in `secrets.key`, both `0600`), shared
-/// by everything in the process. When the folder cannot hold it, secrets
-/// last only as long as the process.
 pub fn system_secrets() -> std::sync::Arc<dyn SecretStore> {
     static STORE: std::sync::OnceLock<std::sync::Arc<dyn SecretStore>> = std::sync::OnceLock::new();
     std::sync::Arc::clone(STORE.get_or_init(|| {

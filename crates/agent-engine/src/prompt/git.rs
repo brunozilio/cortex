@@ -1,6 +1,3 @@
-//! The repository as the run starts: branch, changes and recent commits,
-//! read once with `git` and described in the prompt.
-
 use std::path::Path;
 
 const STATUS_LINES: usize = 40;

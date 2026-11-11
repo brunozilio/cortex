@@ -1,6 +1,3 @@
-//! Executes one authorized command. Synchronous and transport-free, so a
-//! local backend and a future network server share it.
-
 use std::sync::Arc;
 
 use agent_engine::EventSink;
@@ -18,14 +15,11 @@ pub struct CommandHandler {
     services: LocalServices,
     runs: Arc<RunTable>,
     outbox: Outbox,
-    /// This client's number: its runs' background commands carry it and
-    /// stop when it leaves.
     client: u64,
 }
 
 impl Drop for CommandHandler {
     fn drop(&mut self) {
-        // What could still leave notices goes first; the inbox last.
         crate::channels::close(self.client);
         agent_engine::tools::shells::kill_client(self.client);
         agent_engine::tools::peers::forget(self.client);
@@ -84,7 +78,6 @@ impl CommandHandler {
                 self.services.providers.discover_models(&principal, models, outbox);
             }
             ClientCommand::ListSkills { path } => {
-                // A chat asks for its folder's skills as it opens: other sessions can reach it from then on.
                 agent_engine::tools::peers::register(self.client, Some(&principal), &path);
                 outbox.send(ServerEvent::Skills(crate::extensions::skills(&path, &self.services.extensions)));
             }
@@ -170,7 +163,6 @@ impl CommandHandler {
         }
     }
 
-    /// Answers an MCP change with what went wrong, else the servers now.
     fn mcp_servers(&self, path: &std::path::Path, changed: Result<(), String>) {
         let event = match changed {
             Ok(()) => crate::mcp_admin::list(path, &self.services.extensions, self.services.home.as_deref()),

@@ -1,18 +1,8 @@
-//! What happens outside the conversation and reaches the agent: a
-//! monitor's output, a background command ending, a channel's message,
-//! another session's message. Notices wait in their client's inbox; a run
-//! at work reads them with its next tool results, an idle chat sends them
-//! as a turn of their own.
-
 use serde::{Deserialize, Serialize};
 
-/// Notices one client keeps at most (the oldest go first).
 pub const MOST: usize = 200;
-/// What one notice says at most, in characters.
 pub const TEXT: usize = 8_000;
 
-/// Something that happened, and where it came from (`monitor bash_3`,
-/// `channel telegram`, `session api-7`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Notice {
     pub source: String,
@@ -22,7 +12,6 @@ pub struct Notice {
 impl Notice {
     pub fn new(source: impl Into<String>, text: impl Into<String>) -> Self {
         let text: String = text.into();
-        // One notice never floods the inbox or the model's context.
         let text = match text.char_indices().nth(TEXT) {
             Some((at, _)) => format!("{}… [cut]", &text[..at]),
             None => text,
@@ -31,15 +20,11 @@ impl Notice {
     }
 }
 
-/// The notices as one message for the agent. They are not the user's
-/// words: what a channel or another session sends is information, not an
-/// instruction.
 pub fn as_message(notices: &[Notice]) -> String {
     let events: Vec<String> = notices
         .iter()
         .map(|notice| {
             let source = notice.source.replace(['"', '<', '>'], "");
-            // No `<` of theirs: a message cannot close its event or forge another.
             let text = notice.text.replace('<', "&lt;");
             format!("<event source=\"{source}\">\n{}\n</event>", text.trim_end())
         })
@@ -51,14 +36,9 @@ pub fn as_message(notices: &[Notice]) -> String {
     )
 }
 
-/// The notification a channel server sends with each message.
 pub const CHANNEL_METHOD: &str = "notifications/claude/channel";
-/// The experimental capability a server declares to be a channel.
 pub const CHANNEL_CAPABILITY: &str = "claude/channel";
 
-/// The notice a channel's notification carries: its `content`, after its
-/// `meta` (who sent it, from which chat), so the agent can answer through
-/// the server's own tools. `None` for any other notification.
 pub fn channel_notice(server: &str, method: &str, params: &serde_json::Value) -> Option<Notice> {
     if method != CHANNEL_METHOD {
         return None;
@@ -78,7 +58,6 @@ pub fn channel_notice(server: &str, method: &str, params: &serde_json::Value) ->
     Some(Notice::new(format!("channel {server}"), text))
 }
 
-/// Adds `notice` to `inbox`, dropping the oldest past [`MOST`].
 pub fn keep(inbox: &mut Vec<Notice>, notice: Notice) {
     inbox.push(notice);
     if inbox.len() > MOST {
@@ -135,15 +114,10 @@ mod channel_tests {
     }
 }
 
-/// Whether `notice` came from outside this computer's own commands: a
-/// channel (anyone who can write to it) or another session. In bypass mode
-/// these never reach the agent on their own, or a chat message would run
-/// commands unasked.
 pub fn from_outside(notice: &Notice) -> bool {
     notice.source.starts_with("channel ") || notice.source.starts_with("session ")
 }
 
-/// What may reach the agent in `mode`, and what is held back.
 pub fn admitted(notices: Vec<Notice>, mode: crate::PermissionMode) -> (Vec<Notice>, Vec<Notice>) {
     if mode != crate::PermissionMode::Bypass {
         return (notices, Vec::new());

@@ -1,11 +1,5 @@
-//! `/reload`: the engine rereads `~/.{command}` and the project on every
-//! message, so reloading means refreshing what the chat keeps (the skills
-//! it completes, the settings and models) and saying what is there now.
-
 use sdk::{CustomAgent, McpOrigin, McpServerInfo, McpState};
 
-/// What a reload found: the plugins (named by their skills, agents and
-/// servers), how many skills and agents, and the MCP servers' states.
 pub fn summary(skills: &[String], agents: &[CustomAgent], servers: &[McpServerInfo]) -> String {
     let namespace = |name: &str| name.split_once(':').map(|(plugin, _)| plugin.to_owned());
     let mut plugins: Vec<String> = skills

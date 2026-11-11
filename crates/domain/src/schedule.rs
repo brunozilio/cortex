@@ -1,41 +1,29 @@
-//! Prompts scheduled for later (`CronCreate`, `ScheduleWakeup`): a cron
-//! expression in the user's local time, or a moment. They belong to the
-//! client that made them and are sent to its session when it is idle.
-
 use serde::{Deserialize, Serialize};
 
-/// A scheduled prompt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Scheduled {
     pub id: String,
     pub prompt: String,
     pub when: When,
-    /// When it next fires, in Unix seconds.
     pub next: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum When {
-    /// A cron expression; once, or each time it matches until it expires.
     Cron { expr: String, recurring: bool },
-    /// Once, at this moment (Unix seconds).
     At(i64),
 }
 
-/// A minute of the local calendar, as cron reads it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Moment {
     pub minute: u32,
     pub hour: u32,
     pub day: u32,
     pub month: u32,
-    /// 0 is Sunday.
     pub weekday: u32,
 }
 
-/// A five-field cron expression: minute, hour, day of month, month, day of
-/// week. Each takes `*`, a number, `a-b`, a list `a,b` and a step `/n`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cron {
     minutes: u64,
@@ -55,7 +43,7 @@ impl Cron {
         };
         let mut weekdays = field(weekday, 0, 7)?;
         if weekdays & (1 << 7) != 0 {
-            weekdays |= 1; // 7 is Sunday too.
+            weekdays |= 1;
         }
         Ok(Self {
             minutes: field(minute, 0, 59)?,
@@ -68,32 +56,23 @@ impl Cron {
         })
     }
 
-    /// Whether the expression fires at `at`. With both a day of month and
-    /// a day of week given, either one is enough (as cron does).
     pub fn matches(&self, at: &Moment) -> bool {
         let has = |set: u64, n: u32| set & (1 << n) != 0;
         has(self.minutes, at.minute) && has(self.hours, at.hour) && has(self.months, at.month) && self.on_day(at)
     }
 }
 
-/// Prompts one client may have scheduled at once.
 pub const MOST: usize = 50;
-/// A recurring prompt ends a week after it was made.
 pub const EXPIRES: i64 = 7 * 24 * 3600;
-/// How far ahead a cron expression is looked for: a year.
 const HORIZON: i64 = 366 * 24 * 3600;
 
 impl Cron {
-    /// The first minute after `now` (Unix seconds) it fires, reading the
-    /// local calendar through `moment`. Whole hours and days that cannot
-    /// match are skipped, so a year is a few hundred steps.
     pub fn next_after(&self, now: i64, moment: impl Fn(i64) -> Option<Moment>) -> Option<i64> {
         let has = |set: u64, n: u32| set & (1 << n) != 0;
         let mut at = now - now.rem_euclid(60) + 60;
         while at - now <= HORIZON {
             let m = moment(at)?;
             if !has(self.months, m.month) || !self.on_day(&m) {
-                // To the next local midnight.
                 at += i64::from((23 - m.hour.min(23)) * 60 + (60 - m.minute.min(59))) * 60;
             } else if !has(self.hours, m.hour) {
                 at += i64::from(60 - m.minute.min(59)) * 60;
@@ -118,7 +97,6 @@ impl Cron {
 }
 
 impl When {
-    /// When it first fires after `now`.
     pub fn first(&self, now: i64, moment: impl Fn(i64) -> Option<Moment>) -> Result<i64, String> {
         match self {
             Self::Cron { expr, .. } => {
@@ -128,8 +106,6 @@ impl When {
         }
     }
 
-    /// When a prompt made at `made` fires again after firing at `now`;
-    /// `None` once it is done (a one-shot, or a recurring one expired).
     pub fn again(&self, made: i64, now: i64, moment: impl Fn(i64) -> Option<Moment>) -> Option<i64> {
         let Self::Cron { expr, recurring: true } = self else { return None };
         Cron::parse(expr).ok()?.next_after(now, moment).filter(|next| next - made < EXPIRES)
@@ -206,7 +182,6 @@ mod tests {
 mod next_tests {
     use super::*;
 
-    /// The calendar in UTC, for the tests.
     fn utc(secs: i64) -> Option<Moment> {
         let days = secs.div_euclid(86_400);
         let of_day = secs.rem_euclid(86_400);
@@ -227,7 +202,6 @@ mod next_tests {
         })
     }
 
-    /// Tuesday 2026-11-10, 00:00 UTC.
     const TUESDAY: i64 = 20_767 * 86_400;
 
     #[test]

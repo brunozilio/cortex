@@ -1,9 +1,5 @@
-//! The release notes `/release-notes` shows: the newest CHANGELOG.md
-//! section, without its links (they name the repository).
-
 use std::path::PathBuf;
 
-/// `[text](target)` as `text`, and ` ([text](target))` references dropped.
 fn unlinked(text: &str) -> String {
     let mut out = String::new();
     let mut rest = text;
@@ -12,7 +8,6 @@ fn unlinked(text: &str) -> String {
         let Some(end) = rest[close..].find(')').map(|at| close + at) else { break };
         let label = &rest[open + 1..close];
         let before = &rest[..open];
-        // A reference in parentheses, `([#16](…))`, goes entirely.
         if before.ends_with('(') && rest[end + 1..].starts_with(')') {
             out.push_str(before.trim_end_matches('(').trim_end());
             rest = &rest[end + 2..];

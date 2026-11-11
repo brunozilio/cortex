@@ -1,9 +1,3 @@
-//! A scripted engine for tests (feature `test-support`).
-//!
-//! [`FakeEngine`] replays a fixed list of events on a background thread,
-//! optionally pausing between them, and honours cancellation exactly like a
-//! real engine.
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -24,14 +18,10 @@ pub struct FakeEngine {
     steering: Steering,
 }
 
-/// What a fake run does with a steered message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Steering {
-    /// Hands it over at once.
     HandOver,
-    /// Keeps it until it is taken back.
     Hold,
-    /// Ignores it, like an engine that cannot take messages mid-run.
     Off,
 }
 
@@ -48,20 +38,15 @@ impl FakeEngine {
         }
     }
 
-    /// The messages its runs handed over (at once, unless held).
     pub fn steers(&self) -> Vec<String> {
         self.steers.lock().map(|steers| steers.clone()).unwrap_or_default()
     }
 
-    /// Like an engine that cannot take messages mid-run: it never hands
-    /// them over.
     pub fn without_steering(mut self) -> Self {
         self.steering = Steering::Off;
         self
     }
 
-    /// Its runs keep steered messages, never handing them over, until they
-    /// are taken back.
     pub fn holding_steers(mut self) -> Self {
         self.steering = Steering::Hold;
         self

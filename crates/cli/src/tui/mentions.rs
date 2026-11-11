@@ -1,20 +1,13 @@
-//! `@path` in a prompt: completing it from the project's files (fuzzy, the
-//! file's own name first) and sending the files' text along with it.
-
 use std::path::Path;
 
-/// How many files the completion offers.
 const OFFERED: usize = 8;
-/// What of a mentioned file goes with the prompt, at most.
 const KEPT: usize = 50_000;
 
-/// The files offered for the `@word` being typed.
 pub(super) fn offered(app: &super::app::App) -> Vec<String> {
     let Some((_, query)) = typing(app.input.text(), app.input.cursor()) else { return Vec::new() };
     app.files.as_deref().map(|files| rank(query, files).into_iter().map(str::to_owned).collect()).unwrap_or_default()
 }
 
-/// Asks for the project's files the first time an `@word` is typed.
 pub(super) fn load(app: &mut super::app::App) {
     if app.files.is_none() && typing(app.input.text(), app.input.cursor()).is_some() {
         app.files = Some(Vec::new());
@@ -23,7 +16,6 @@ pub(super) fn load(app: &mut super::app::App) {
     }
 }
 
-/// Puts the chosen file in place of the `@word` being typed.
 pub(super) fn complete(app: &mut super::app::App, file: &str) {
     let (text, cursor) = (app.input.text().to_owned(), app.input.cursor());
     let Some((start, _)) = typing(&text, cursor) else { return };
@@ -32,8 +24,6 @@ pub(super) fn complete(app: &mut super::app::App, file: &str) {
     app.input.set(&format!("{}@{file} {}", &text[..start], joined.trim_start()).replace("  ", " "));
 }
 
-/// The `@word` the cursor ends: where it starts (at the `@`) and what
-/// follows the `@`.
 pub fn typing(text: &str, cursor: usize) -> Option<(usize, &str)> {
     let before = &text[..cursor];
     let start = before.rfind(char::is_whitespace).map_or(0, |at| at + 1);
@@ -41,8 +31,6 @@ pub fn typing(text: &str, cursor: usize) -> Option<(usize, &str)> {
     word.strip_prefix('@').map(|rest| (start, rest))
 }
 
-/// The files best matching `query`: its letters in order, best when they
-/// fall in the file's name and close together, then shorter paths.
 pub fn rank<'a>(query: &str, files: &'a [String]) -> Vec<&'a str> {
     let query = query.to_lowercase();
     let mut scored: Vec<(i64, &str)> =
@@ -69,7 +57,6 @@ fn score(query: &str, file: &str) -> Option<i64> {
     Some(100 - gaps.min(99))
 }
 
-/// The project's files, as git sees them (tracked and new, not ignored).
 pub fn list(cwd: &Path) -> Vec<String> {
     let output = std::process::Command::new("git")
         .args(["ls-files", "--cached", "--others", "--exclude-standard"])
@@ -83,8 +70,6 @@ pub fn list(cwd: &Path) -> Vec<String> {
     }
 }
 
-/// `prompt` with the text of each `@file` it names after it, so the agent
-/// has it without reading it first.
 pub fn with_files(cwd: &Path, prompt: &str) -> String {
     let mut out = prompt.to_owned();
     let mut seen = Vec::new();

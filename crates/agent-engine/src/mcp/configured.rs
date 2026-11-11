@@ -1,10 +1,3 @@
-//! MCP servers a person or a project configures: the project's
-//! `.{command}/mcp.json` (the nearest up from the run's folder; a server
-//! starts only once the owner approved it) and the user's
-//! `~/.{command}/mcp.json`. `${VAR}` and `${VAR:-default}` come from the
-//! environment. On a clash of names the project's wins over the user's.
-//! Installed plugins' servers follow, as `plugin_<plugin>_<server>`.
-
 use std::path::{Path, PathBuf};
 
 use domain::PromptRequest;
@@ -14,7 +7,6 @@ use serde_json::Value;
 use super::{ServerSpec, parse_config};
 use crate::plugins::Plugin;
 
-/// Where a run's configured servers come from, found by its brief.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct McpSources {
     pub home: Option<PathBuf>,
@@ -22,7 +14,6 @@ pub struct McpSources {
     pub approval: McpApproval,
 }
 
-/// The servers that start with a run: every configured one that is ready.
 pub fn configured(cwd: &Path, sources: &McpSources) -> Vec<ServerSpec> {
     origins(cwd, sources)
         .into_iter()
@@ -31,12 +22,10 @@ pub fn configured(cwd: &Path, sources: &McpSources) -> Vec<ServerSpec> {
         .collect()
 }
 
-/// Where a run in `request`'s folder would find its servers.
 pub fn sources(request: &PromptRequest) -> Result<McpSources, String> {
     crate::brief::mcp_sources(request)
 }
 
-/// Every configured server, where it came from and whether it starts.
 pub fn list(request: &PromptRequest) -> Result<Vec<McpServerInfo>, String> {
     let sources = crate::brief::mcp_sources(request)?;
     Ok(origins(&request.cwd, &sources)
@@ -50,8 +39,6 @@ pub fn list(request: &PromptRequest) -> Result<Vec<McpServerInfo>, String> {
         .collect())
 }
 
-/// The project's `.{command}/mcp.json`: the nearest up from `cwd`, never the
-/// home folder's, which is the user's own.
 pub fn project_config(cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
     cwd.ancestors()
         .filter(|dir| Some(*dir) != home)
@@ -70,8 +57,6 @@ fn origins(cwd: &Path, sources: &McpSources) -> Vec<(McpOrigin, ServerSpec)> {
     let mut found: Vec<(McpOrigin, ServerSpec)> = Vec::new();
     let own =
         project.into_iter().map(|s| (McpOrigin::Project, s)).chain(user.into_iter().map(|s| (McpOrigin::User, s)));
-    // Only a server that starts takes its name: a project's server nobody
-    // approved never shadows the person's own.
     for (origin, server) in own {
         let taken = found.iter().any(|(known_origin, known)| {
             known.name() == server.name()

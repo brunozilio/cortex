@@ -24,7 +24,6 @@ impl Releases for Fake {
     }
 }
 
-/// An archive laid out as the release job packs it.
 fn archive(binary: &[u8]) -> Vec<u8> {
     let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
     let mut tar = tar::Builder::new(encoder);

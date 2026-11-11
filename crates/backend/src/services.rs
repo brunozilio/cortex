@@ -1,6 +1,3 @@
-//! What a backend runs on: the engine, memory, settings, providers and the
-//! host's extensions, injected so tests and the SDK can swap them.
-
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -16,16 +13,12 @@ use crate::settings::{FileSettingsStore, SettingsStore};
 pub struct LocalServices {
     pub engine: Arc<dyn AgentEngine>,
     pub memory: Memories,
-    /// Whether runs get the `memory_search` MCP tool.
     pub memory_tool: bool,
     pub settings: Arc<dyn SettingsStore>,
     pub extensions: Extensions,
     pub providers: ModelProviders,
     pub authorizer: Arc<dyn Authorizer>,
-    /// The owner's home, whose `.{command}/mcp.json` holds their own MCP
-    /// servers (the process's home; tests name another).
     pub home: Option<PathBuf>,
-    /// The owner's sign-ins to remote MCP servers (`/mcp login`).
     pub mcp_auth: crate::McpAuth,
 }
 
@@ -36,7 +29,6 @@ impl std::fmt::Debug for LocalServices {
 }
 
 impl LocalServices {
-    /// The native engine on this computer.
     pub fn detect() -> Self {
         let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
         Self::with_engine(Arc::new(crate::native::engine(&data)))
@@ -56,8 +48,6 @@ impl LocalServices {
         }
     }
 
-    /// Keeps every store under `data` instead of the system folders (tests,
-    /// or an isolated profile).
     pub fn kept_in(mut self, data: &Path) -> Self {
         self.memory = self.memory.with_store(Arc::new(FileMemoryStore::new(data.join("memory"))));
         self.settings = Arc::new(FileSettingsStore::new(data.join("users")));

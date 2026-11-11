@@ -1,7 +1,3 @@
-//! "You should know": an observer reads the session and, rarely, finds the
-//! one thing the user should really understand about it, as a `learn:`,
-//! `tag:` and `explain:` answer, or `learn: none`.
-
 use std::sync::atomic::AtomicBool;
 
 use domain::HeadsUp;

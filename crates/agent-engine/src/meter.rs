@@ -1,4 +1,3 @@
-//! Every successful provider call is metered, including compaction and children.
 use crate::RunGate;
 use crate::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
 use domain::billing::{ModelUsage, PRICE_DATE, rates};
@@ -36,12 +35,8 @@ impl ModelApi for Metered {
             cache_read: u.cache_read,
             cache_write: u.cache_write,
             estimated_cost_usd: cost,
-            basis: if self.provider.subscription() {
-                "subscription-api-equivalent"
-            } else {
-                "api-reference-estimate"
-            }
-            .into(),
+            basis: if self.provider.subscription() { "subscription-api-equivalent" } else { "api-reference-estimate" }
+                .into(),
             price_date: PRICE_DATE.into(),
         }));
         Ok(reply)

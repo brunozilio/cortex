@@ -1,7 +1,3 @@
-//! Embeds the built-in skills (`skills/<name>/…`) in the engine: every file
-//! under `skills/`, listed in `$OUT_DIR/builtin_skills.rs` with its bytes
-//! and a hash of them all, so a new build writes a fresh copy.
-
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 
@@ -38,9 +34,7 @@ fn main() {
         entries.push_str(&format!("    ({relative:?}, include_bytes!({:?})),\n", file.display().to_string()));
     }
     let code = format!(
-        "/// Every built-in skill file: its path under `skills/` and its bytes.\n\
-         pub(crate) const FILES: &[(&str, &[u8])] = &[\n{entries}];\n\
-         /// Changes whenever a file does.\n\
+        "pub(crate) const FILES: &[(&str, &[u8])] = &[\n{entries}];\n\
          pub(crate) const HASH: u64 = {};\n",
         hasher.finish()
     );

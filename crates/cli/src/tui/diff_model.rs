@@ -1,10 +1,6 @@
-//! `git diff` output read into files, hunks and numbered lines, for the
-//! inline `/diff` and the `/diffs` viewer to draw. Pure.
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileDiff {
     pub path: String,
-    /// The name before a rename.
     pub old_path: Option<String>,
     pub status: Status,
     pub hunks: Vec<Hunk>,
@@ -22,7 +18,6 @@ pub enum Status {
 }
 
 impl Status {
-    /// The letter `git status` shows it as.
     pub const fn letter(self) -> char {
         match self {
             Self::Modified => 'M',
@@ -36,7 +31,6 @@ impl Status {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hunk {
-    /// What git shows after `@@ … @@`: usually the enclosing function.
     pub context: String,
     pub lines: Vec<DiffLine>,
 }
@@ -44,7 +38,6 @@ pub struct Hunk {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffLine {
     pub kind: Kind,
-    /// The line's number in the new file, or in the old one when removed.
     pub number: usize,
     pub text: String,
 }
@@ -103,7 +96,6 @@ pub fn parse(diff: &str) -> Vec<FileDiff> {
     files
 }
 
-/// A line between `diff --git` and the first hunk.
 fn header_line(file: &mut FileDiff, line: &str) {
     if line.starts_with("new file mode") {
         file.status = Status::Added;
@@ -119,7 +111,6 @@ fn header_line(file: &mut FileDiff, line: &str) {
     }
 }
 
-/// Where a hunk starts in the old and new file: `-12,3 +12,4`.
 fn starts(ranges: &str) -> (usize, usize) {
     let mut parts = ranges.split_whitespace();
     let mut start = |prefix: char| {

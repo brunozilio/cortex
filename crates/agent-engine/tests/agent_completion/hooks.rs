@@ -1,6 +1,3 @@
-//! Hooks around a custom agent's work: command, prompt, agent and HTTP
-//! handlers, their decisions, rewritten input and time limits.
-
 use agent_engine::{model::scripted::ScriptedModel, tools::Workspace};
 use domain::PermissionMode;
 use serde_json::json;

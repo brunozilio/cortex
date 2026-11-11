@@ -1,10 +1,5 @@
-//! What the agent is asking: permission for a tool, or questions with
-//! choices. Keys pick; a finished pick is a [`Decision`].
-
 use sdk::{AgentAsk, AskKind, Decision, PermissionMode, Question};
 
-/// What a plan can be answered with, in order: the mode to carry it out in,
-/// or `None` to keep planning.
 const PLAN_CHOICES: [(&str, Option<PermissionMode>); 3] = [
     ("Yes, and auto-accept edits", Some(PermissionMode::AcceptEdits)),
     ("Yes, and manually approve edits", Some(PermissionMode::Ask)),
@@ -14,14 +9,9 @@ const PLAN_CHOICES: [(&str, Option<PermissionMode>); 3] = [
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pending {
     pub ask: AgentAsk,
-    /// The question being answered.
     pub question: usize,
-    /// The highlighted choice.
     pub cursor: usize,
-    /// The choices picked for each question so far.
     pub picked: Vec<Vec<usize>>,
-    /// What the user is typing for the agent after "No" (`Some` once
-    /// picked): sent with the refusal.
     pub note: Option<String>,
 }
 
@@ -47,8 +37,6 @@ impl Pending {
         }
     }
 
-    /// The choices of the current question, Yes / Always / No, or how to
-    /// carry out a plan.
     pub fn choices(&self) -> Vec<String> {
         match &self.ask.kind {
             AskKind::Permission { rememberable, rule, .. } => {
@@ -74,7 +62,6 @@ impl Pending {
         self.questions().get(self.question).is_some_and(|q| q.multi)
     }
 
-    /// Handles a key; `Some` once the ask is decided.
     pub fn key(&mut self, key: Key) -> Option<Decision> {
         if let Some(note) = &mut self.note {
             return match key {

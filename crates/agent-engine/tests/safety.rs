@@ -1,7 +1,3 @@
-//! The safety check of autonomous mode through the agent loop: an action
-//! that edits or executes is graded first and held back above the line;
-//! reading never waits for it, and supervised modes never call it.
-
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 

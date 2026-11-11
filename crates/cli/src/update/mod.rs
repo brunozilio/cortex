@@ -1,8 +1,3 @@
-//! `{command} update`: replaces this binary with the latest release's build
-//! for this platform, checked against its published SHA-256. Which
-//! release and which archive is `domain::release`; the download is
-//! behind [`Releases`] so the replacement is testable.
-
 mod github;
 
 use std::io::{Read, Write};
@@ -13,15 +8,11 @@ use sha2::{Digest, Sha256};
 
 pub use self::github::GitHub;
 
-/// Where releases are published.
 pub trait Releases {
-    /// The latest release's tag (`v0.3.1`).
     fn latest_tag(&self) -> Result<String, String>;
-    /// One file attached to the release tagged `tag`.
     fn download(&self, tag: &str, name: &str) -> Result<Vec<u8>, String>;
 }
 
-/// The platform the binary runs on (`std::env::consts::ARCH`, `OS`).
 #[derive(Debug, Clone, Copy)]
 pub struct Platform<'a> {
     pub arch: &'a str,
@@ -36,13 +27,10 @@ impl Platform<'static> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Updated {
-    /// `current` is already the latest release.
     AlreadyLatest,
-    /// The binary at the path is now this release.
     To(Version),
 }
 
-/// `{command} update`: this binary, from GitHub.
 pub fn run() -> Result<(), String> {
     let current = env!("CARGO_PKG_VERSION");
     let exe = std::env::current_exe().and_then(std::fs::canonicalize).map_err(|e| e.to_string())?;
@@ -61,8 +49,6 @@ pub fn run() -> Result<(), String> {
     Ok(())
 }
 
-/// Replaces the binary at `exe` (version `current`) with the latest
-/// release, unless it is not newer. The file is untouched on any error.
 pub fn update(releases: &dyn Releases, current: &str, exe: &Path, platform: Platform<'_>) -> Result<Updated, String> {
     let tag = releases.latest_tag()?;
     let Some(version) = release::newer(current, &tag) else {
@@ -87,7 +73,6 @@ pub fn update(releases: &dyn Releases, current: &str, exe: &Path, platform: Plat
     Ok(Updated::To(version))
 }
 
-/// The `{command}` file inside a release archive.
 fn binary_in(archive: &[u8]) -> Result<Vec<u8>, String> {
     let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(archive));
     for entry in tar.entries().map_err(|e| e.to_string())? {
@@ -102,8 +87,6 @@ fn binary_in(archive: &[u8]) -> Result<Vec<u8>, String> {
     Err(concat!("the release archive has no ", brand::command!(), " binary").into())
 }
 
-/// Writes the new binary beside `exe` and renames it over, so `exe` is
-/// either the old file or the whole new one.
 fn replace(exe: &Path, binary: &[u8]) -> Result<(), String> {
     let name = exe.file_name().ok_or("the binary has no file name")?.to_string_lossy();
     let next = exe.with_file_name(format!(".{name}.update-{}", std::process::id()));

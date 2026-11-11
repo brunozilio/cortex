@@ -1,6 +1,3 @@
-//! The system prompt's sections, as the app says them. English, whatever
-//! the user's language: the agent answers in theirs.
-
 pub const ROLE: &str = concat!(
     "\
 You are ",

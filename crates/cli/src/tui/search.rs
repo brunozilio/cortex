@@ -1,17 +1,10 @@
-//! Ctrl+R: searching the prompts sent before, newest first. Typing narrows
-//! the query, Ctrl+R again goes to an older match, Enter takes it and Esc
-//! leaves the prompt as it was.
-
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Search {
     pub query: String,
-    /// The history index of the match shown.
     pub at: Option<usize>,
 }
 
 impl Search {
-    /// The newest prompt holding the query, older than the one shown when
-    /// `older`; it stays on the current match when there is none.
     pub fn find(&mut self, history: &[String], older: bool) {
         let before = match (self.at, older) {
             (Some(at), true) => at,

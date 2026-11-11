@@ -1,6 +1,3 @@
-//! `/context`: what fills the context window, part by part, and how much
-//! is left before the conversation is compacted.
-
 use domain::usage::{ContextSlice, ContextUsage};
 use sdk::EngineEvent;
 
@@ -30,8 +27,6 @@ pub fn measure(app: &mut App) {
     }
 }
 
-/// How `/context` reads: a bar, the total against the window, then each
-/// part.
 pub fn view(usage: &ContextUsage) -> String {
     const WIDTH: usize = 40;
     let filled = ((usage.fraction() * WIDTH as f32).round() as usize).min(WIDTH);
@@ -59,8 +54,6 @@ pub fn view(usage: &ContextUsage) -> String {
     text
 }
 
-/// What the status line says of the context: the share left, once the
-/// window is known.
 pub fn left(used: u64, window: Option<u64>) -> Option<String> {
     let window = window.filter(|w| *w > 0)?;
     let left = 100u64.saturating_sub(used.saturating_mul(100) / window);

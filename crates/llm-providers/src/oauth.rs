@@ -1,5 +1,3 @@
-//! Signing in to the ChatGPT and Claude subscriptions: the clients, the
-//! authorize address, the token requests and what their answers carry.
 use super::ProviderError;
 use base64::{
     Engine,
@@ -28,7 +26,6 @@ pub struct Tokens {
     pub account_id: String,
     #[serde(default)]
     pub expires_at: Option<DateTime<Utc>>,
-    /// The Identity Center client a Kiro organization sign-in registered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idc: Option<super::kiro::idc::IdcClient>,
 }
@@ -40,7 +37,6 @@ impl std::fmt::Debug for Tokens {
 }
 
 impl Tokens {
-    /// A token used as is, with no refresh token and no expiry (GitHub's).
     pub fn bearer(token: &str) -> Self {
         Self {
             access_token: token.to_owned(),
@@ -129,9 +125,6 @@ impl std::fmt::Debug for TokenRequest {
     }
 }
 
-/// The redirect a code is exchanged for, given the callback's query: the
-/// loopback's own, except for Kiro, whose code is bound to the sign-in
-/// the person picked on its portal.
 pub fn exchange_redirect(provider: ModelProvider, redirect: &str, query: &str) -> Result<String, ProviderError> {
     if provider == ModelProvider::KiroSubscription {
         return super::kiro::auth::redirect(redirect, query);

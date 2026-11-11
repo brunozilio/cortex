@@ -1,6 +1,3 @@
-//! The HTTP calls of a Kiro sign-in through an organization's Identity
-//! Center; what they send and read is in `llm_providers::kiro::idc`.
-
 use llm_providers::kiro::idc::{self, IdcClient, PROFILE_REGIONS};
 use llm_providers::oauth::{TOKEN_LIMIT, TokenRequest, Tokens};
 
@@ -13,14 +10,11 @@ fn send(http: &dyn Http, request: &TokenRequest) -> Result<(u16, String), ModelE
     Ok((status, if status == 200 { super::transport::read(response, TOKEN_LIMIT)? } else { String::new() }))
 }
 
-/// Registers this client with the organization's region.
 pub fn register(http: &dyn Http, region: &str, start_url: &str, redirect: &str) -> Result<IdcClient, ModelError> {
     let (status, body) = send(http, &idc::register(region, start_url, redirect))?;
     Ok(idc::registered(region, status, &body)?)
 }
 
-/// Exchanges the organization's code, then finds the Kiro profile the
-/// account uses (the first one listed in us-east-1, then eu-central-1).
 pub fn sign_in(
     http: &dyn Http,
     client: &IdcClient,

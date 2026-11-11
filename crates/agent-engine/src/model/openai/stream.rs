@@ -1,5 +1,3 @@
-//! Folds a Responses API event stream into the assistant's message.
-
 use serde_json::Value;
 use std::collections::HashSet;
 
@@ -15,7 +13,6 @@ pub struct Folder {
     seen: HashSet<String>,
     streamed: String,
     final_text: Vec<String>,
-    /// The tool the call whose arguments stream now is for.
     calling: Option<String>,
 }
 

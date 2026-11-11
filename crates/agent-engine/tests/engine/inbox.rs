@@ -1,6 +1,3 @@
-//! Events that reach a client's inbox while its run works go to the model
-//! with the next tool results.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::NativeEngine;

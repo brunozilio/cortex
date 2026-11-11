@@ -1,7 +1,3 @@
-//! One tool call between its `PreToolUse` and `PostToolUse` hooks: the
-//! tools the loop runs itself (questions, plan mode, worktrees, agents,
-//! tasks) and the others, asked for when the mode says so.
-
 use domain::{EngineEvent, ToolCall};
 use serde_json::{Value, json};
 
@@ -96,7 +92,6 @@ impl Agent<'_> {
                 Some(_) if name == AGENT_TOOL => {
                     self.sub_agent_with(input, self.control, self.workspace, parent, &tasks.conversations, None)
                 }
-                // To another session (not an agent of this run): an action, asked like one.
                 Some(_) if name == SEND_MESSAGE_TOOL && self.to_session(input, &tasks.conversations) => {
                     let message = crate::tools::peers::SessionMessage;
                     self.permitted(id, &message, &summary, input, pre.permission.as_deref())

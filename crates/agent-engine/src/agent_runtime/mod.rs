@@ -1,4 +1,3 @@
-//! Filesystem setup for a custom agent: its worktree and memory folder.
 pub(crate) mod git;
 
 use self::git::{git, git_stopped};
@@ -31,8 +30,6 @@ impl Setup {
         })
     }
 }
-/// Continues a session in the worktree it was given, after checking that
-/// the saved checkout is still this project's.
 pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace: &Workspace) -> Result<Setup, String> {
     let root =
         PathBuf::from(git_stopped(workspace, &workspace.cwd, &["rev-parse".as_ref(), "--show-toplevel".as_ref()])?)
@@ -75,8 +72,6 @@ pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace
     Ok(setup)
 }
 
-/// An agent's memory folder and, when its configuration asks, a fresh
-/// worktree to work in.
 pub fn prepare(config: &AgentConfig, name: &str, workspace: &Workspace) -> Result<Setup, String> {
     if config.memory.is_none() && !config.worktree {
         return Ok(Setup { cwd: workspace.cwd.clone(), ..Default::default() });
@@ -84,7 +79,6 @@ pub fn prepare(config: &AgentConfig, name: &str, workspace: &Workspace) -> Resul
     prepare_as(config, name, &owner(workspace)?, workspace)
 }
 
-/// Whose agent memory this is: the run's owner, as a stable key.
 fn owner(workspace: &Workspace) -> Result<String, String> {
     let owner = workspace.credentials.owner.as_ref().unwrap_or(&domain::Principal::LocalOwner);
     serde_json::to_string(owner).map_err(|e| e.to_string())
@@ -176,8 +170,6 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
     }
     Ok(setup)
 }
-/// Removes an agent's worktree when nothing changed in it; otherwise keeps
-/// it and says where.
 pub fn cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
     let Some(root) = &setup.worktree_root else { return Ok(None) };
     if !managed(root, &setup.cwd) {
@@ -194,7 +186,6 @@ pub fn cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
     }
 }
 
-/// Whether `path` is a worktree the app made in `root`.
 fn managed(root: &std::path::Path, path: &std::path::Path) -> bool {
     path.parent() == Some(root.join(concat!(brand::dir!(), "/worktrees")).as_path())
         && path.file_name().and_then(|s| s.to_str()).and_then(|s| uuid::Uuid::parse_str(s).ok()).is_some()

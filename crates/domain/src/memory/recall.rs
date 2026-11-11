@@ -1,5 +1,3 @@
-//! The graph's links and what a prompt recalls.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::search::{Semantic, search};
@@ -39,14 +37,9 @@ impl RecallBudget {
 }
 
 const DAY: f32 = 24.0 * 60.0 * 60.0;
-/// Days for an unused episode's weight to halve.
 const EPISODE_HALF_LIFE_DAYS: f32 = 30.0;
-/// How much repeated use counts against fading.
 const USE_WEIGHT: f32 = 0.5;
 
-/// How much an episode still weighs at `now`: it halves every
-/// [`EPISODE_HALF_LIFE_DAYS`], and use adds back `USE_WEIGHT·ln(1+uses)`,
-/// itself fading from the last use. Facts and procedures keep 1.0.
 pub fn retention(memory: &Memory, now: i64) -> f32 {
     if memory.kind != MemoryKind::Episodic {
         return 1.0;

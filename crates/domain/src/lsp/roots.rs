@@ -1,18 +1,12 @@
-//! Which server reads a file, and the project root it is started in.
-
 use std::path::{Path, PathBuf};
 
 use super::ServerSpec;
 
-/// The server for `file` by its extension, with the file's `languageId`.
 pub fn server_for<'a>(file: &Path, specs: &'a [ServerSpec]) -> Option<(&'a ServerSpec, &'a str)> {
     let extension = format!(".{}", file.extension()?.to_str()?);
     specs.iter().find_map(|spec| spec.extension_to_language.get(&extension).map(|id| (spec, id.as_str())))
 }
 
-/// The closest folder holding one of `markers`, looking up from `file` but
-/// never above `cwd` when the file is inside it; else `cwd` (or the file's
-/// folder for a file outside it). `exists` answers for the file system.
 pub fn root_for(file: &Path, markers: &[String], cwd: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
     let inside = file.starts_with(cwd);
     let folder = file.parent().unwrap_or(file);

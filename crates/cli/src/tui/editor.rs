@@ -1,12 +1,7 @@
-//! Ctrl+G: the prompt edited in `$VISUAL` or `$EDITOR` (else `vi`).
-
-/// The editor the user named, as a program and its arguments.
 pub fn named() -> String {
     std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")).unwrap_or_else(|_| "vi".to_owned())
 }
 
-/// `text` as the user left it after editing it with `editor` (a program
-/// and arguments, the file added last).
 pub fn edit(editor: &str, text: &str) -> Result<String, String> {
     let mut words = editor.split_whitespace();
     let program = words.next().ok_or("no editor set: export EDITOR")?;
@@ -26,7 +21,6 @@ pub fn edit(editor: &str, text: &str) -> Result<String, String> {
     }
 }
 
-/// Opens `path` in `editor` and waits for it to close.
 pub fn open(editor: &str, path: &std::path::Path) -> Result<(), String> {
     let mut words = editor.split_whitespace();
     let program = words.next().ok_or("no editor set: export EDITOR")?;

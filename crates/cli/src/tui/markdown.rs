@@ -1,8 +1,3 @@
-//! A reply's Markdown drawn for the terminal with `tui-markdown`:
-//! headings, lists, quotes, tables and highlighted code, wrapped to the
-//! width. Renders are kept, so a long conversation is not parsed again on
-//! every frame; only the reply still streaming is.
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -13,17 +8,13 @@ use tui_markdown::{Options, StyleSheet};
 
 use super::wrap::wrap_line;
 
-/// Drawn above and below a code block, before its language.
 const FENCE: &str = "─── ";
-/// Renders kept at most before they are all dropped.
 const KEPT: usize = 256;
 
 thread_local! {
     static RENDERED: RefCell<HashMap<(u64, usize), Vec<Line<'static>>>> = RefCell::new(HashMap::new());
 }
 
-/// The app's look: magenta headings without `#`, cyan inline code,
-/// dimmed quotes.
 #[derive(Debug, Clone, Copy)]
 struct Look;
 
@@ -66,7 +57,6 @@ impl StyleSheet for Look {
     }
 }
 
-/// `text` as lines at most `width` columns wide.
 pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
     let mut hasher = DefaultHasher::new();
     text.hash(&mut hasher);

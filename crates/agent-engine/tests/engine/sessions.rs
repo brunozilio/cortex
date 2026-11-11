@@ -1,6 +1,3 @@
-//! Sessions: lost, measured, compacted, scoped to owner and directory,
-//! and a worktree kept across restarts.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::NativeEngine;

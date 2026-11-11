@@ -1,20 +1,14 @@
-//! File changes drawn with their line numbers on green and red: an edit as
-//! its tool shows it (`   12 + text`), and `git diff` output for `/diff`.
-//! Folded to a few lines until Ctrl+O expands them.
-
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 
 use super::diff_model::{self, DiffLine, FileDiff, Kind, Status};
 use super::wrap::wrap;
 
-/// Lines of a file change shown while folded.
 const FOLDED: usize = 20;
 const ADDED: Color = Color::Indexed(22);
 const REMOVED: Color = Color::Indexed(52);
 pub const EXPAND: &str = "ctrl+o to expand";
 
-/// Whether a tool's output is a file change: a heading, then `   12 + text`.
 pub fn is_edit(output: &str) -> bool {
     output.lines().nth(1).is_some_and(|line| {
         let rest = line.trim_start();
@@ -40,8 +34,6 @@ pub fn edit(output: &str, width: usize, expanded: bool, out: &mut Vec<Line<'stat
     more(body.len(), expanded, out);
 }
 
-/// `git diff` output: each file's name, then its hunks numbered by the
-/// lines they touch.
 pub fn unified(diff: &str, width: usize, expanded: bool, out: &mut Vec<Line<'static>>) {
     for file in diff_model::parse(diff) {
         out.push(Line::from(""));
@@ -67,7 +59,6 @@ pub fn unified(diff: &str, width: usize, expanded: bool, out: &mut Vec<Line<'sta
     }
 }
 
-/// `● path`, with the old name after a rename.
 pub fn heading(file: &FileDiff) -> Line<'static> {
     let name = match &file.old_path {
         Some(old) => format!("{} (renamed from {old})", file.path),
@@ -76,9 +67,6 @@ pub fn heading(file: &FileDiff) -> Line<'static> {
     Line::from(vec![Span::styled("● ", Style::new().fg(Color::Cyan)), Span::raw(name)])
 }
 
-/// One line of a hunk: its number, then its whole text on green or red,
-/// wrapped onto as many rows as it takes;
-/// the rows after the first keep the colour but not the number or mark.
 pub fn wrapped(line: &DiffLine, width: usize, out: &mut Vec<Line<'static>>) {
     let mark = mark(line.kind);
     for (i, text) in wrap(&line.text, width.saturating_sub(12)).iter().enumerate() {
@@ -106,8 +94,6 @@ fn colour(mark: char) -> Style {
     }
 }
 
-/// A numbered row cut to one line of `width`, its code coloured by the
-/// language of extension `ext`.
 fn row(number: &str, mark: char, text: &str, width: usize, ext: Option<&str>) -> Line<'static> {
     let text = wrap(text, width.saturating_sub(12)).into_iter().next().unwrap_or_default();
     let filled = fill(&text, width);
@@ -118,7 +104,6 @@ fn row(number: &str, mark: char, text: &str, width: usize, ext: Option<&str>) ->
     Line::from(spans)
 }
 
-/// `text` padded so its colour runs to the row's end.
 fn fill(text: &str, width: usize) -> String {
     let pad = width.saturating_sub(12 + unicode_width::UnicodeWidthStr::width(text));
     format!("{text}{}", " ".repeat(pad))

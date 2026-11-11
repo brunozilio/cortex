@@ -1,9 +1,3 @@
-//! The memory end to end against the native engine and a real provider: recall, the
-//! `memory_search` tool over MCP and the edits file. Ignored by default (it
-//! costs money and needs a connected provider); run with
-//! `cargo test -p backend --test live_memory -- --ignored --nocapture`.
-//! `{COMMAND}_LIVE_MODEL` picks the model (cheapest by default).
-
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

@@ -1,6 +1,3 @@
-//! Asking the user: permissions for commands and outside reads, plan mode,
-//! and questions on the card.
-
 use std::sync::Arc;
 
 use agent_engine::model::scripted::ScriptedModel;

@@ -1,5 +1,3 @@
-//! What the user asks an engine to do.
-
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -16,14 +14,11 @@ use crate::usage::SessionCommand;
 pub struct PromptRequest {
     pub cwd: PathBuf,
     pub prompt: String,
-    /// Images attached to the prompt, shown to the model before its text.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<Image>,
     pub model: ModelOption,
     pub effort: Effort,
     pub resume: Option<SessionId>,
-    /// Go on from `resume` under a new session, leaving it as it was
-    /// (`--fork-session`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub fork: bool,
     #[serde(default)]
@@ -38,27 +33,18 @@ pub struct PromptRequest {
     pub safety_check: bool,
     #[serde(default)]
     pub extensions: Option<Extensions>,
-    /// Folders the user added to the project for this session (`/add-dir`,
-    /// `--add-dir`), read like its own.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub add_dirs: Vec<PathBuf>,
-    /// The most model turns the run may take (`--max-turns`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_turns: Option<u32>,
-    /// Permission rules for this run only, on top of the settings'
-    /// (`--allowedTools`, `--disallowedTools`): allowed, then denied.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_tools: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disallowed_tools: Vec<String>,
-    /// The model to go on with when the run's is overloaded
-    /// (`--fallback-model`), over the settings' `fallbackModel`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback_model: Option<String>,
-    /// Text added to the end of the system prompt (`--append-system-prompt`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub append_system: Option<String>,
-    /// What the judge checks the run's work against before it completes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verification: Option<crate::verification::Criteria>,
     #[serde(skip)]
@@ -96,8 +82,6 @@ impl PromptRequest {
         }
     }
 
-    /// The prompt as the model reads it: what was typed, then the memory's
-    /// instructions on a fresh conversation.
     pub fn compose(&self) -> String {
         let mut out = self.prompt.trim().to_owned();
         if let Some(memory) = self.memory.as_ref().and_then(|memory| memory.instructions(self.resume.is_none())) {

@@ -1,6 +1,3 @@
-//! The judge's run: a checking agent with read and run tools only, shown
-//! to the client as a sub-agent, that grades the run against its criteria.
-
 use domain::{AgentStatus, EngineEvent, Verdict};
 
 use super::{Agent, Ending};
@@ -11,9 +8,6 @@ use crate::transcript::{Message, Role};
 const JUDGE_TURNS: usize = 50;
 
 impl Agent<'_> {
-    /// When the run has criteria and this is the top level, grades `run`
-    /// (counting `attempts`) and returns the feedback to try again with,
-    /// or `None` when the run may complete.
     pub(super) fn judged(&self, run: &[Message], attempts: &mut u8) -> Result<Option<Message>, Ending> {
         let Some(verification) = self.workspace.verification.as_ref().filter(|_| self.depth == 0) else {
             return Ok(None);
@@ -27,10 +21,7 @@ impl Agent<'_> {
         Ok(verdict.should_retry().then(|| Message::user(verdict.feedback())))
     }
 
-    /// Grades `run` (the run's messages from its prompt on). A judge that
-    /// cannot grade gives a failed verdict; it never fails the run.
     fn verify(&self, verification: &Verification, run: &[Message], attempt: u8) -> Verdict {
-        // Calls are limited to the offered specs, so the shared tools stay.
         let specs = self.request.tools.iter().filter(|spec| judge::TOOLS.contains(&spec.name.as_str())).cloned();
         let control = self.control.child_configured(None, false);
         let mut workspace = self.workspace.fork(control.shared_stop());

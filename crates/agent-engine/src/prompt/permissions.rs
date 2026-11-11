@@ -1,9 +1,3 @@
-//! The `permissions` of a settings file: `allow`, `ask` and `deny` rules
-//! and `additionalDirectories`. Only the owner's files (the user's settings
-//! and the project's `settings.local.json`) can allow or add folders; a
-//! checked-in file only restricts, so a cloned project never approves its
-//! own commands.
-
 use domain::permission_rules::{PermissionRules, RuleKind};
 use serde_json::Value;
 
@@ -30,8 +24,6 @@ pub fn read(settings: &Value, owners: bool, rules: &mut PermissionRules, dirs: &
     Ok(())
 }
 
-/// Keeps allow rule `rule` in the project's `.{command}/settings.local.json`
-/// (the owner's, never checked in), next to what the file already holds.
 pub fn keep_allow(project: &std::path::Path, rule: &str) -> Result<(), String> {
     let path = project.join(brand::DIR).join("settings.local.json");
     let mut settings: Value = match std::fs::read_to_string(&path) {

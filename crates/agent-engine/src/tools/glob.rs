@@ -1,5 +1,3 @@
-//! `Glob`: files whose path matches a pattern, newest first.
-
 use std::path::PathBuf;
 use std::time::SystemTime;
 

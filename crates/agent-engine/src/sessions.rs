@@ -1,6 +1,3 @@
-//! Conversations the engine can resume: the transcript of each session,
-//! kept between prompts (and, on disk, between launches).
-
 #[cfg(any(test, feature = "test-support"))]
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -31,7 +28,6 @@ pub trait Sessions: Send + Sync {
     ) -> Result<(), String> {
         Err("session store does not support persistent worktrees".into())
     }
-    /// The session works in its project again (`ExitWorktree`).
     fn forget_worktree(&self, _request: &PromptRequest, _id: &SessionId) -> Result<(), String> {
         Ok(())
     }
@@ -44,8 +40,6 @@ pub trait Sessions: Send + Sync {
     fn save_for(&self, request: &PromptRequest, id: &SessionId, history: &[Message]) -> Result<(), String> {
         self.save(&scoped_id(request, id), history)
     }
-    /// The conversation's checkpoints, oldest first (none when the store
-    /// keeps none).
     fn load_checkpoints(&self, _request: &PromptRequest, _id: &SessionId) -> Result<Vec<Checkpoint>, String> {
         Ok(Vec::new())
     }
@@ -135,7 +129,6 @@ impl FileSessions {
         }
     }
 
-    /// Writes only-the-owner-can-read JSON, whole or not at all.
     fn write_json(&self, name: String, value: &impl serde::Serialize) -> Result<(), String> {
         std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
         let path = self.dir.join(name);

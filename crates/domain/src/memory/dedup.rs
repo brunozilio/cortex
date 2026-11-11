@@ -1,23 +1,13 @@
-//! Near duplicates: a new memory whose meaning matches an older one of the
-//! same kind becomes a revision of it instead of a second copy.
-
 use super::search::cosine;
 use super::{MemoryBook, MemoryId, REVISIONS_KEPT, Revision};
 
-/// Cosine similarity from which two memories say the same thing.
 pub const NEAR_DUPLICATE: f32 = 0.92;
 
 impl MemoryBook {
-    /// The id the next remembered memory gets.
     pub fn next_id(&self) -> MemoryId {
         MemoryId(self.next.max(self.after_highest()))
     }
 
-    /// Folds each memory from `since` on into the most similar older one of
-    /// its kind when their vectors are [`NEAR_DUPLICATE`]: the older keeps
-    /// its id, takes the newer text (the old one goes to its history), the
-    /// union of tags and the newer vector. Answers (merged, into) pairs.
-    /// Memories without a vector are left alone.
     pub fn merge_near_duplicates(&mut self, since: MemoryId, now: i64) -> Vec<(MemoryId, MemoryId)> {
         let fresh: Vec<MemoryId> = self.memories.iter().filter(|m| m.id >= since).map(|m| m.id).collect();
         let mut merged = Vec::new();

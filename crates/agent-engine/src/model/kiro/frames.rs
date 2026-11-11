@@ -1,14 +1,8 @@
-//! AWS event-stream framing (`application/vnd.amazon.eventstream`): each
-//! message is a 12-byte prelude (total length, headers length, prelude
-//! CRC), typed headers, a payload and a message CRC. TLS already guards
-//! the bytes, so the CRCs are not checked.
-
 use std::io::{BufRead, ErrorKind};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::model::ModelError;
 
-/// The largest message accepted; Kiro's are a few hundred bytes.
 const MAX_MESSAGE: usize = 16 << 20;
 const PRELUDE: usize = 12;
 const TRAILER: usize = 4;
@@ -20,14 +14,11 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// A string header's value.
     pub fn header(&self, name: &str) -> Option<&str> {
         self.headers.iter().find(|(key, _)| key == name).map(|(_, value)| value.as_str())
     }
 }
 
-/// The next message, or `None` at a clean end of the stream. A body that
-/// times out while waiting (so the reader can see `stop`) is read again.
 pub fn next(reader: &mut dyn BufRead, stop: &AtomicBool) -> Result<Option<Frame>, ModelError> {
     let mut prelude = [0u8; PRELUDE];
     if fill(reader, &mut prelude, stop)? == 0 {
@@ -45,8 +36,6 @@ pub fn next(reader: &mut dyn BufRead, stop: &AtomicBool) -> Result<Option<Frame>
     Ok(Some(Frame { headers, payload }))
 }
 
-/// Fills `buffer`, or reads nothing at the end of the stream; an end in the
-/// middle is a cut stream.
 fn fill(reader: &mut dyn BufRead, buffer: &mut [u8], stop: &AtomicBool) -> Result<usize, ModelError> {
     let mut filled = 0;
     while filled < buffer.len() {
@@ -65,7 +54,6 @@ fn fill(reader: &mut dyn BufRead, buffer: &mut [u8], stop: &AtomicBool) -> Resul
     Ok(filled)
 }
 
-/// The string headers; other types are skipped.
 fn headers(mut bytes: &[u8]) -> Result<Vec<(String, String)>, String> {
     let invalid = || "invalid event stream header".to_owned();
     let mut out = Vec::new();
@@ -130,8 +118,6 @@ mod tests {
         std::iter::from_fn(|| next(&mut reader, &stop).transpose()).collect()
     }
 
-    /// A body that hands out a few bytes at a time and times out between
-    /// them, as the cancellable HTTP body does while it waits.
     struct Trickle(Vec<u8>, usize, bool);
 
     impl std::io::Read for Trickle {

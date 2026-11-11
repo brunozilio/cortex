@@ -1,6 +1,3 @@
-//! What a running agent asks the user: permission to use a tool, or answers
-//! to multiple-choice questions. The run pauses until a [`Decision`] arrives.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -18,16 +15,10 @@ pub enum AskKind {
         tool: String,
         subject: String,
         rememberable: bool,
-        /// The allow rule [`Decision::AllowAlways`] keeps in the project's
-        /// `settings.local.json` (`Bash(cargo test:*)`); without one it
-        /// lasts the session.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         rule: Option<String>,
     },
     Questions(Vec<Question>),
-    /// The agent's plan, put to the user before it leaves plan mode:
-    /// [`Decision::Approve`] names the mode to implement it in, `Deny`
-    /// keeps planning.
     Plan {
         plan: String,
     },
@@ -52,10 +43,8 @@ pub enum Decision {
     Allow,
     AllowAlways,
     Deny,
-    /// Denied, with what the user wants the agent to do instead.
     DenyWith(String),
     Answer(Vec<Vec<usize>>),
-    /// A plan approved, to be carried out in this mode.
     Approve(PermissionMode),
 }
 
@@ -71,8 +60,6 @@ pub enum PermissionMode {
 impl PermissionMode {
     pub const ALL: [PermissionMode; 4] = [Self::Ask, Self::AcceptEdits, Self::Plan, Self::Bypass];
 
-    /// The next mode in the order a chat cycles them: ask → edits → plan →
-    /// bypass → ask.
     pub const fn next(self) -> Self {
         match self {
             Self::Ask => Self::AcceptEdits,
@@ -91,7 +78,6 @@ impl PermissionMode {
         }
     }
 
-    /// This mode, or `ceiling` when this one allows more than it.
     pub fn capped(self, ceiling: Option<PermissionMode>) -> PermissionMode {
         match ceiling {
             Some(max) if self.latitude() > max.latitude() => max,

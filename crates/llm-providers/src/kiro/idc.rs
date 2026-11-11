@@ -1,11 +1,3 @@
-//! Signing in to Kiro through an organization's AWS IAM Identity Center, as
-//! Kiro CLI does: the portal returns `/signin/callback?login_option=awsidc
-//! &issuer_url=<start URL>&idc_region=<region>` (no code). This client then
-//! registers with that region's SSO OIDC service, sends the browser to its
-//! `/authorize` with PKCE, exchanges the code there, and finds the Kiro
-//! profile the account may use with `ListAvailableProfiles`. Refreshes go
-//! to the same OIDC service with the registered client.
-
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -13,20 +5,13 @@ use serde_json::{Value, json};
 use super::super::ProviderError;
 use super::super::oauth::{TokenRequest, Tokens, form};
 
-/// What a Kiro sign-in asks of the OIDC service.
 pub const SCOPES: [&str; 3] = ["codewhisperer:completions", "codewhisperer:analysis", "codewhisperer:conversations"];
-/// The services that list profiles, in the order they are asked.
 pub const PROFILE_REGIONS: [&str; 2] = ["us-east-1", "eu-central-1"];
 pub const PROFILES: &str = "AmazonCodeWhispererService.ListAvailableProfiles";
-/// The name the organization's sign-in page shows: Kiro's, as this is a
-/// Kiro sign-in.
 pub const CLIENT_NAME: &str = "Kiro CLI";
-/// Builder ID's start URL, for a portal answer that names none.
 const BUILDER_ID: &str = "https://view.awsapps.com/start";
 const LIFETIME: i64 = 3600;
 
-/// The client registered with an Identity Center region: kept with the
-/// tokens, since refreshing needs it.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IdcClient {
     pub region: String,
@@ -40,16 +25,12 @@ impl std::fmt::Debug for IdcClient {
     }
 }
 
-/// How the person chose to sign in on Kiro's portal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PortalAnswer {
-    /// Google or GitHub: the code is in the answer.
     Social,
-    /// An Identity Center: its start URL and region.
     Organization { start_url: String, region: String },
 }
 
-/// Reads the portal's answer on `path` with `query`.
 pub fn portal_answer(path: &str, query: &str) -> Result<PortalAnswer, ProviderError> {
     let value = |name: &str| {
         url::form_urlencoded::parse(query.as_bytes())
@@ -87,7 +68,6 @@ pub fn portal_answer(path: &str, query: &str) -> Result<PortalAnswer, ProviderEr
     }
 }
 
-/// Whether `text` can be put in a host name as a region (`eu-west-1`).
 fn region_name(text: &str) -> bool {
     !text.is_empty()
         && text.len() <= 32
@@ -99,7 +79,6 @@ fn oidc(region: &str) -> String {
     format!("https://oidc.{region}.amazonaws.com")
 }
 
-/// Registers this client with the region's OIDC service for `start_url`.
 pub fn register(region: &str, start_url: &str, redirect: &str) -> TokenRequest {
     let body = json!({
         "clientName": CLIENT_NAME,
@@ -116,7 +95,6 @@ pub fn register(region: &str, start_url: &str, redirect: &str) -> TokenRequest {
     }
 }
 
-/// The client the OIDC service registered.
 pub fn registered(region: &str, status: u16, body: &str) -> Result<IdcClient, ProviderError> {
     let unauthorized = |why: String| ProviderError::Unauthorized(why);
     if status != 200 {
@@ -130,7 +108,6 @@ pub fn registered(region: &str, status: u16, body: &str) -> Result<IdcClient, Pr
     }
 }
 
-/// Where the browser signs in to the organization.
 pub fn authorize(client: &IdcClient, redirect: &str, state: &str, challenge: &str) -> String {
     let scopes = SCOPES.join(" ");
     format!(
@@ -178,8 +155,6 @@ pub fn refresh(client: &IdcClient, previous: &Tokens) -> TokenRequest {
     }
 }
 
-/// The OIDC service's token answer, with `client` kept for refreshes; the
-/// profile ARN is the previous one (a sign-in finds it afterwards).
 pub fn tokens(
     client: &IdcClient,
     status: u16,
@@ -208,8 +183,6 @@ pub fn tokens(
     })
 }
 
-/// The call that lists the profiles `access_token` may use in `region`:
-/// its URL, headers and body.
 pub fn profiles(region: &str, access_token: &str) -> (String, Vec<(String, String)>, String) {
     let headers = vec![
         ("authorization".into(), format!("Bearer {access_token}")),
@@ -219,7 +192,6 @@ pub fn profiles(region: &str, access_token: &str) -> (String, Vec<(String, Strin
     (format!("https://q.{region}.amazonaws.com/"), headers, json!({ "maxResults": 10 }).to_string())
 }
 
-/// The first profile ARN a `ListAvailableProfiles` answer names.
 pub fn first_profile(status: u16, body: &str) -> Option<String> {
     if status != 200 {
         return None;

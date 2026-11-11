@@ -1,9 +1,3 @@
-//! The app domain model.
-//!
-//! This crate is pure: no IO, no threads, no rendering. Every other crate
-//! (engines, backends, UI) speaks in these types, which keeps the boundary
-//! between "what the product means" and "how it is delivered" explicit.
-
 pub mod agents;
 pub mod approval;
 pub mod billing;

@@ -1,6 +1,3 @@
-//! The agent's plan in the chat: drawn in a box, approved with a choice of
-//! mode, and the chat following the mode the agent changed to.
-
 use std::time::Duration;
 
 use agent_engine::fake::FakeEngine;

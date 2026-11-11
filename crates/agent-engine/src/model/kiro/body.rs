@@ -1,8 +1,3 @@
-//! A [`TurnRequest`] as Kiro's `conversationState`: the last user message
-//! is the current one and carries the tools; earlier messages are the
-//! history. Kiro has no system field, so the system prompt opens the first
-//! user message. Thinking is not sent back.
-
 use serde_json::{Value, json};
 
 use crate::model::TurnRequest;

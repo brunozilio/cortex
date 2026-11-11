@@ -1,4 +1,3 @@
-//! Validated structured results, independent of a provider's wire dialect.
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 use serde_json::{Value, json};

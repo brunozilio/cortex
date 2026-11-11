@@ -1,6 +1,3 @@
-//! The five provider accounts on the wire: requests, catalogs, sign-in and
-//! token refresh.
-
 mod accounts;
 mod catalogs;
 mod copilot;

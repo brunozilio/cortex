@@ -1,6 +1,3 @@
-//! A run from start to its terminal event: prompts, failures, panics and
-//! project rules delivered on the way.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::model::ModelApi;

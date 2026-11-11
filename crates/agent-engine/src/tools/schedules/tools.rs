@@ -1,5 +1,3 @@
-//! The scheduling tools' schemas and wording.
-
 use super::*;
 
 #[derive(Debug)]
@@ -28,7 +26,6 @@ impl Tool for CronCreate {
     }
 
     fn access(&self) -> Access {
-        // What it schedules is later sent as if the user typed it: asked first.
         Access::Executes
     }
 
@@ -53,7 +50,6 @@ impl Tool for CronCreate {
 #[derive(Debug)]
 pub struct ScheduleWakeup;
 
-/// The shortest and longest wait `ScheduleWakeup` takes, in seconds.
 const WAKE: (i64, i64) = (60, 3600);
 
 impl Tool for ScheduleWakeup {
@@ -78,7 +74,6 @@ impl Tool for ScheduleWakeup {
     }
 
     fn access(&self) -> Access {
-        // What it schedules is later sent as if the user typed it: asked first.
         Access::Executes
     }
 

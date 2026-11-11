@@ -1,22 +1,15 @@
-//! The judge's brief: the criteria a run is graded against, the tools it
-//! checks with, its instructions, and what it reads of the run. The agent
-//! loop runs it (`agent/verify.rs`), since it needs the conversation.
-
 use domain::Criteria;
 
 use crate::transcript::{Message, Role};
 
-/// What a run is judged against and the model that judges it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verification {
     pub criteria: Criteria,
     pub model: String,
 }
 
-/// The judge checks; it never edits, delegates or asks.
 pub const TOOLS: [&str; 5] = ["Read", "Glob", "Grep", "Bash", "Skill"];
 
-/// How the judge appears to the client, as a sub-agent.
 pub const KIND: &str = "verification";
 
 const MAX_STEPS: usize = 60;
@@ -37,9 +30,6 @@ string}]}
 One check per criterion; `evidence` names the command or file and quotes what showed the result. `passed` is \
 true only when every check passed.";
 
-/// The judge's first message: the criteria, the task, the agent's steps and
-/// its final message. `run` is the run's part of the conversation, from the
-/// prompt that started it.
 pub fn brief(criteria: &Criteria, run: &[Message]) -> String {
     let task = run.first().map(Message::text).unwrap_or_default();
     let steps: Vec<String> = run

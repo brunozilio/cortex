@@ -1,9 +1,3 @@
-//! Folds Kiro's response events into the assistant's message: text from
-//! `assistantResponseEvent`, reasoning from `reasoningContentEvent`, tool
-//! calls streamed in pieces by `toolUseEvent` until `stop`, the stop reason
-//! from `metadataEvent`. Kiro reports how full the context is, not tokens,
-//! so the prompt's size is estimated from that share of the model's window.
-
 use serde_json::Value;
 
 use super::frames::Frame;
@@ -157,7 +151,6 @@ fn stop_reason(reason: &str) -> StopReason {
     }
 }
 
-/// An AWS error, from a failed call's JSON body or a stream exception.
 pub fn error(kind: &str, body: &Value) -> ModelError {
     let message = body["message"].as_str().or_else(|| body["Message"].as_str()).unwrap_or(kind).to_owned();
     let reason = body["reason"].as_str().unwrap_or_default();

@@ -1,12 +1,3 @@
-//! Where the app keeps its data on this computer (ADR 0013).
-//!
-//! Two folders: the **app data** folder for small state the user owns
-//! (books, sessions, settings) and the **local data** folder for large or
-//! machine-bound data (embedding and local models, worktrees). They are the same folder except on Windows, where the
-//! first roams (`%APPDATA%`) and the second does not (`%LOCALAPPDATA%`).
-//! The decision is pure ([`app_data_dir_in`], [`local_data_dir_in`]); only
-//! [`app_data_dir`] and [`local_data_dir`] read the environment.
-
 use std::ffi::OsString;
 use std::path::PathBuf;
 

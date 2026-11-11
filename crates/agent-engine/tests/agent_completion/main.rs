@@ -1,5 +1,3 @@
-//! Behavioral coverage of custom-agent runtime features with real local tools.
-
 mod configured;
 mod hooks;
 mod runtime;

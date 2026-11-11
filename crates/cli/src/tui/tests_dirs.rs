@@ -1,6 +1,3 @@
-//! `/add-dir`: a folder the agent reads like the project, from the next
-//! prompt on and in new conversations.
-
 use agent_engine::fake::FakeEngine;
 use domain::SessionId;
 use ratatui::crossterm::event::KeyCode;

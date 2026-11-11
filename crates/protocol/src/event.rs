@@ -1,5 +1,3 @@
-//! Messages a backend sends to its client.
-
 use std::path::PathBuf;
 
 use domain::{CustomAgent, EngineEvent, Forgotten, Memory, MemoryId, ModelOption, RunId, Skill};
@@ -22,24 +20,18 @@ pub enum ServerEvent {
         path: PathBuf,
         servers: Vec<domain::mcp_config::McpServerInfo>,
     },
-    /// The client's open channels, and why those asked for are not.
     Channels {
         opened: Vec<String>,
         failed: Vec<String>,
     },
-    /// Where to sign in to the MCP server `name` (open it in a browser).
     McpAuthorizeAt {
         name: String,
         url: String,
     },
-    /// Background commands: id, command, still running.
     Shells(Vec<(String, String, bool)>),
-    /// Scheduled prompts: those now due (to send), and all still waiting.
     Schedules {
         due: Vec<domain::schedule::Scheduled>,
         scheduled: Vec<domain::schedule::Scheduled>,
-        /// With `take_due`, what reached the client's inbox (monitors,
-        /// background commands, channels, other sessions), to send as a turn.
         #[serde(default)]
         notices: Vec<domain::inbox::Notice>,
     },
@@ -47,7 +39,6 @@ pub enum ServerEvent {
         path: PathBuf,
         permissions: domain::permission_rules::PermissionsInfo,
     },
-    /// The live memory, and what was forgotten but can still be restored.
     Memory {
         path: PathBuf,
         memories: Vec<Memory>,

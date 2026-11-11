@@ -1,10 +1,3 @@
-//! The owner's MCP servers: what a run in a folder can use (the host's,
-//! the project's, the owner's, installed plugins'), approving a project's
-//! server or turning it off (the project's `.{command}/settings.local.json`),
-//! and adding or removing the owner's own (`~/.{command}/mcp.json`). The
-//! rules are `domain::mcp_config`'s; this is their IO. Both files
-//! are written readable only by the owner: they may hold tokens.
-
 use std::path::{Path, PathBuf};
 
 use domain::mcp_config::{self, McpOrigin, McpServerInfo, McpState};
@@ -14,7 +7,6 @@ use serde_json::Value;
 
 use crate::extensions::{Extensions, McpServerSpec};
 
-/// A request in `path` that reads the MCP servers a run there would.
 pub(crate) fn request_in(path: &Path, extensions: &Extensions, home: Option<&Path>) -> PromptRequest {
     let mut request = PromptRequest::plain(path.to_path_buf(), "", ModelOption::new("", ""));
     request.extensions = Some(domain::Extensions {

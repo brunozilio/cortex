@@ -1,9 +1,3 @@
-//! The six LLM providers (OpenAI API, ChatGPT Subscription, Anthropic
-//! API, Claude Subscription, GitHub Copilot Subscription, Kiro Subscription;
-//! ADR 0016): what each one stores as its
-//! credential, where it is served, how it signs in and how its requests and
-//! catalogs are shaped. Pure: the native engine and the backend do the IO.
-
 pub mod catalog;
 pub mod copilot;
 pub mod kiro;
@@ -164,8 +158,6 @@ impl Config {
     }
 }
 
-/// A GitHub token Copilot accepts: an OAuth or fine-grained one. Classic
-/// personal access tokens are refused by Copilot, so they are here too.
 fn copilot_token(token: &str) -> Result<(), ProviderError> {
     let invalid = |why: &str| ProviderError::Unauthorized(why.to_owned());
     if token.is_empty() || token.chars().any(char::is_whitespace) {

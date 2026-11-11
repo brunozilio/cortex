@@ -1,7 +1,3 @@
-//! The privacy boundary for memory text: keys, tokens and passwords become
-//! `[redacted]` before a memory is kept. [`Sanitized`] has no constructor
-//! but [`sanitize`], so a book can only hold text that went through it.
-
 pub const REDACTED: &str = "[redacted]";
 
 const TOKEN_PREFIXES: &[(&str, usize)] = &[
@@ -21,7 +17,6 @@ const TOKEN_PREFIXES: &[(&str, usize)] = &[
 
 const SECRET_KEYS: &[&str] = &["password", "passwd", "secret", "token", "api_key", "apikey", "api-key"];
 
-/// Text that went through [`sanitize`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sanitized(String);
 
@@ -35,7 +30,6 @@ impl Sanitized {
     }
 }
 
-/// Redacts secrets word by word; whitespace collapses to single spaces.
 pub fn sanitize(text: &str) -> Sanitized {
     let words: Vec<&str> = text.split_whitespace().collect();
     let mut out: Vec<String> = Vec::with_capacity(words.len());
@@ -99,14 +93,12 @@ fn is_secret_key(key: &str) -> bool {
     SECRET_KEYS.iter().any(|secret| key.ends_with(secret))
 }
 
-/// `password=x`, `API_KEY=x`, `token:x`: where the value starts.
 fn secret_assignment(word: &str) -> Option<usize> {
     let at = word.find(['=', ':'])?;
     let (key, value) = (&word[..at], &word[at + 1..]);
     (!core(value).is_empty() && is_secret_key(key)).then_some(at + 1)
 }
 
-/// `password:` followed by its value in the next word.
 fn is_secret_label(word: &str) -> bool {
     word.strip_suffix(':').is_some_and(is_secret_key)
 }

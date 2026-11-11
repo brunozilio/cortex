@@ -1,9 +1,3 @@
-//! An MCP server over streamable HTTP: each message POSTed, the answer as
-//! JSON or as an event stream that may carry the server's notifications
-//! before it. A session id the server hands out is sent back with every
-//! later message. A listened server (a channel) also keeps a GET stream
-//! open for what it says unasked ([`listen`](mod@super::http_listen)).
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -15,12 +9,10 @@ use crate::model::http::{Http, Response};
 pub struct HttpTransport {
     shared: Arc<Shared>,
     listener: Option<Listener>,
-    /// Set when dropped: the GET stream ends.
     closed: Arc<AtomicBool>,
     listening: AtomicBool,
 }
 
-/// What both the requests and the GET stream use.
 pub(super) struct Shared {
     pub(super) name: String,
     url: String,
@@ -43,7 +35,6 @@ impl Drop for HttpTransport {
 }
 
 impl Shared {
-    /// The server's headers, what it may answer with and the session.
     fn headers(&self, accept: &str) -> Vec<(String, String)> {
         let mut headers = self.headers.clone();
         headers.push(("accept".to_owned(), accept.to_owned()));
@@ -73,8 +64,6 @@ impl Shared {
         Ok(response)
     }
 
-    /// The GET stream of what the server says unasked; `None` when it
-    /// offers none (HTTP 405).
     pub(super) fn stream(&self, stop: &AtomicBool) -> Result<Option<Response>, String> {
         let response = self.http.get_stream(&self.url, &self.headers("text/event-stream"), stop);
         let response = response.map_err(|e| e.to_string())?;
@@ -91,7 +80,6 @@ impl HttpTransport {
         Self::listening(name, url, headers, http, None)
     }
 
-    /// One whose notifications `listener` hears.
     pub fn listening(
         name: &str,
         url: &str,

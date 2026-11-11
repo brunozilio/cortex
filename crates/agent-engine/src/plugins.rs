@@ -1,10 +1,3 @@
-//! The app plugins (ADR 0019): a folder with `.{command}-plugin/plugin.json`,
-//! `skills/`, `agents/`, `commands/`, `hooks/hooks.json` and `.mcp.json`.
-//! They come from the backend (`Extensions::plugins`), then from the
-//! folders a person puts in `~/.{command}/plugins/`; on a clash of names the
-//! first wins. `${{COMMAND}_PLUGIN_ROOT}` in a plugin's hooks and MCP servers
-//! is its folder.
-
 use std::path::{Path, PathBuf};
 
 use domain::PromptRequest;
@@ -19,7 +12,6 @@ pub struct Plugin {
     pub root: PathBuf,
 }
 
-/// The plugins a run in `request.cwd` gets.
 pub fn found(request: &PromptRequest, home: Option<&Path>) -> Vec<Plugin> {
     let hosted = request.extensions.iter().flat_map(|extensions| &extensions.plugins).map(|root| Plugin::at(root));
     let own = home
@@ -37,7 +29,6 @@ pub fn found(request: &PromptRequest, home: Option<&Path>) -> Vec<Plugin> {
 }
 
 impl Plugin {
-    /// A plugin's folder, named by its manifest or else by the folder.
     pub fn at(root: &Path) -> Self {
         let manifest = read_json(&root.join(MANIFEST_DIR).join("plugin.json"));
         let name = manifest["name"]
@@ -49,8 +40,6 @@ impl Plugin {
         Self { name, root: root.to_path_buf() }
     }
 
-    /// The plugin's `mcpServers` (`.mcp.json`, else the manifest's), its
-    /// root filled in.
     pub fn mcp_config(&self) -> Option<Value> {
         let own = read_json(&self.root.join(".mcp.json"));
         let config = if own["mcpServers"].is_object() {
@@ -65,8 +54,6 @@ impl Plugin {
         Some(self.expand(config))
     }
 
-    /// The plugin's language servers (`.lsp.json`, else the manifest's
-    /// `lspServers`), its root filled in.
     pub fn lsp_servers(&self) -> Option<Value> {
         let own = read_json(&self.root.join(".lsp.json"));
         let servers = if own.is_object() {
@@ -78,7 +65,6 @@ impl Plugin {
         Some(self.expand(servers))
     }
 
-    /// The plugin's `hooks/hooks.json` events, its root filled in.
     pub fn hooks(&self) -> Result<Option<Value>, String> {
         let path = self.root.join("hooks").join("hooks.json");
         let text = match std::fs::read_to_string(&path) {
@@ -94,7 +80,6 @@ impl Plugin {
         Ok(Some(self.expand(events)))
     }
 
-    /// A name an MCP server of this plugin can carry: `plugin_<plugin>_<server>`.
     pub fn server_name(&self, server: &str) -> String {
         let clean = |text: &str| -> String {
             text.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
@@ -113,8 +98,6 @@ impl Plugin {
     }
 }
 
-/// Each plugin's language servers, in order, as a layer over the settings'
-/// (ADR 0023); a plugin whose servers do not parse is left out.
 pub fn lsp_layers(plugins: &[Plugin]) -> Vec<crate::prompt::settings::LspLayer> {
     plugins
         .iter()

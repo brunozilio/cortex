@@ -1,15 +1,8 @@
-//! Side calls the chat makes by itself, each one model turn without tools
-//! that never joins the conversation: a title once its first run ends, the
-//! prompt you would likely type next (dimmed in the empty prompt; Tab takes
-//! it), the rare heads-up worth knowing, and a recap when continuing an
-//! earlier conversation.
-
 use sdk::{ChoreAnswer, Error, HeadsUp, Run};
 
 use super::app::{App, Msg};
 
 impl App {
-    /// After a run of the conversation completes.
     pub(super) fn after_run(&mut self) {
         if self.title.is_none()
             && let Some(prompt) = self.transcript.first_prompt()
@@ -25,7 +18,6 @@ impl App {
         }
     }
 
-    /// When the chat continues an earlier conversation.
     pub(super) fn recap(&mut self) {
         if let Some(session) = &self.session {
             let started = session.recap();
@@ -54,13 +46,10 @@ impl App {
             }
             Ok(Some(ChoreAnswer::Recap(text))) => self.transcript.notice(format!("Where you left off: {text}")),
             Ok(Some(ChoreAnswer::HeadsUp(heads_up))) => self.transcript.notice(heads_up_text(&heads_up)),
-            // A side call is a nicety: when it gives nothing or fails, the
-            // chat goes on without it.
             Ok(_) | Err(_) => {}
         }
     }
 
-    /// Tab on an empty prompt: takes the suggested next prompt.
     pub(super) fn take_ghost(&mut self) -> bool {
         match self.ghost.take() {
             Some(text) if self.input.is_empty() => {

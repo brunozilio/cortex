@@ -1,8 +1,3 @@
-//! Animations (`tachyonfx`) drawn over what the chat already drew: the
-//! conversation sweeps in at start, new parts of it and the panels fade
-//! in, and "Working…" shimmers while the agent works. They change colours
-//! only, never characters, and `{COMMAND}_REDUCED_MOTION=1` turns them off.
-
 use std::time::{Duration, Instant};
 
 use ratatui::buffer::Buffer;
@@ -11,22 +6,15 @@ use ratatui::style::Color;
 use tachyonfx::pattern::SweepPattern;
 use tachyonfx::{Effect, Interpolation, RefRect, fx};
 
-/// The longest step an effect advances by, so a pause does not skip it.
 const STEP: Duration = Duration::from_millis(100);
-/// What faded text starts as: readable on dark and light terminals.
 const FADED: Color = Color::DarkGray;
 
-/// Where things are on this frame.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Scene {
     pub conversation: Rect,
-    /// How many entries the conversation has.
     pub entries: usize,
-    /// The rows the entries added since the last frame take, when shown.
     pub added: Option<Rect>,
-    /// The question, picker or completions above the prompt.
     pub panel: Option<Rect>,
-    /// The "Working…" line, while the agent works and it is shown.
     pub working: Option<Rect>,
 }
 
@@ -58,18 +46,14 @@ impl Motion {
         )
     }
 
-    /// How many entries the conversation had on the last frame: those
-    /// after it are new.
     pub fn seen(&self) -> usize {
         self.entries
     }
 
-    /// Whether frames should come faster to keep an effect smooth.
     pub fn animating(&self) -> bool {
         self.on && (!self.effects.is_empty() || self.shimmer.is_some())
     }
 
-    /// Starts the effects what changed since the last frame calls for.
     pub fn frame(&mut self, scene: Scene) {
         if !self.on {
             return;
@@ -106,7 +90,6 @@ impl Motion {
         }
     }
 
-    /// Advances every effect by the time since the last frame and draws it.
     pub fn apply(&mut self, buffer: &mut Buffer) {
         if !self.animating() {
             return;

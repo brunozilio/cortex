@@ -1,14 +1,9 @@
-//! `/export` writes the conversation as Markdown; `/copy` puts the agent's
-//! last answer on the clipboard.
-
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use super::transcript::{Entry, ToolState};
 
-/// The conversation as Markdown: prompts as quotes, answers as they are,
-/// tool calls as one line each.
 pub fn markdown(title: Option<&str>, entries: &[Entry]) -> String {
     let mut out = format!("# {}\n", title.unwrap_or(concat!(brand::name!(), " conversation")));
     for entry in entries {
@@ -31,8 +26,6 @@ pub fn markdown(title: Option<&str>, entries: &[Entry]) -> String {
     out
 }
 
-/// Where `/export` writes when no path is given: a file named after the
-/// title in the project.
 pub fn default_path(cwd: &Path, title: Option<&str>) -> PathBuf {
     let name: String = title
         .unwrap_or("conversation")
@@ -43,7 +36,6 @@ pub fn default_path(cwd: &Path, title: Option<&str>) -> PathBuf {
     cwd.join(format!("{}.md", if name.is_empty() { "conversation" } else { &name }))
 }
 
-/// The agent's last answer.
 pub fn last_answer(entries: &[Entry]) -> Option<&str> {
     entries.iter().rev().find_map(|entry| match entry {
         Entry::Assistant(text) => Some(text.as_str()),
@@ -51,7 +43,6 @@ pub fn last_answer(entries: &[Entry]) -> Option<&str> {
     })
 }
 
-/// Puts `text` on the system clipboard (`pbcopy`, `wl-copy`, `xclip`).
 pub fn copy(text: &str) -> Result<(), String> {
     let tries: [(&str, &[&str]); 3] = [("pbcopy", &[]), ("wl-copy", &[]), ("xclip", &["-selection", "clipboard"])];
     for (program, args) in tries {

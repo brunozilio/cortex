@@ -1,8 +1,3 @@
-//! What the host program adds to every run (the SDK): folders of skills,
-//! commands and agents that keep their own names,
-//! MCP servers over HTTP or stdio, and in-process MCP servers. Also what a
-//! session in a folder can use, found the way the engine finds it.
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -10,8 +5,6 @@ use domain::mcp::LocalMcp;
 use domain::{CustomAgent, ModelOption, PromptRequest, RunId, Skill};
 use serde_json::{Value, json};
 
-/// An MCP server the agent reaches over streamable HTTP or by starting a
-/// process that speaks stdio.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum McpServerSpec {
     Http { name: String, url: String, headers: BTreeMap<String, String> },
@@ -40,7 +33,6 @@ pub struct Extensions {
     pub dirs: Vec<PathBuf>,
     pub mcp: Vec<McpServerSpec>,
     pub local: Vec<LocalMcp>,
-    /// The app plugins' folders (ADR 0019).
     pub plugins: Vec<PathBuf>,
 }
 
@@ -49,9 +41,6 @@ impl Extensions {
         domain::Extensions { dirs: self.dirs.clone(), plugins: self.plugins.clone(), ..Default::default() }
     }
 
-    /// Adds the host's folders and MCP servers to a run and hands it the
-    /// in-process servers. The HTTP and stdio servers go in a private
-    /// config file the run reads and [`discard`] removes.
     pub(crate) fn brief(&self, run: RunId, request: PromptRequest) -> Result<PromptRequest, String> {
         let mut extensions = self.for_run();
         if !self.mcp.is_empty() {
@@ -64,7 +53,6 @@ impl Extensions {
             extensions.mcp_config = Some(path);
         }
         let mut credentials = request.credentials.clone();
-        // `{command}_…` names are the app's own servers (its memory search).
         credentials.mcp.extend(
             self.local.iter().filter(|server| !server.name.starts_with(concat!(brand::command!(), "_"))).cloned(),
         );
@@ -72,7 +60,6 @@ impl Extensions {
     }
 }
 
-/// Removes a finished run's private MCP config.
 pub(crate) fn discard(extensions: Option<&domain::Extensions>) {
     if let Some(path) = extensions.and_then(|extensions| extensions.mcp_config.as_ref()) {
         let _ = std::fs::remove_file(path);
@@ -85,7 +72,6 @@ fn session(cwd: &Path, extensions: &Extensions) -> PromptRequest {
     request
 }
 
-/// The skills and commands a session in `cwd` can use.
 pub(crate) fn skills(cwd: &Path, extensions: &Extensions) -> Vec<Skill> {
     let home = std::env::home_dir();
     agent_engine::tools::skill::discover(&session(cwd, extensions), home.as_deref())
@@ -94,7 +80,6 @@ pub(crate) fn skills(cwd: &Path, extensions: &Extensions) -> Vec<Skill> {
         .collect()
 }
 
-/// The agents a session in `cwd` can hand work to.
 pub(crate) fn agents(cwd: &Path, extensions: &Extensions) -> Vec<CustomAgent> {
     let home = std::env::home_dir();
     agent_engine::tools::subagent::discover(&session(cwd, extensions), home.as_deref())

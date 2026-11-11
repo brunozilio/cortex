@@ -1,6 +1,3 @@
-//! How a run ends on the gate (completed, failed, cancelled), and the side
-//! calls (`SessionCommand::is_chore`) that take a single model turn.
-
 use std::sync::Arc;
 use std::time::Instant;
 

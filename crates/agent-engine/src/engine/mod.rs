@@ -1,11 +1,3 @@
-//! [`NativeEngine`]: the app's own engine behind the [`AgentEngine`]
-//! trait the backend drives.
-//!
-//! - `job`: a run's setup (session, brief, tools, agent, worktree, model).
-//! - `converse`: its prompt, hooks, agent loop and saved conversation.
-//! - `report`: side calls and how a run ends on the gate.
-//! - `rewind`: each run's checkpoint, and going back to one.
-
 mod converse;
 mod date;
 mod job;
@@ -49,8 +41,6 @@ impl NativeEngine {
         Self { source, sessions, mcp: Arc::new(NetHttp), lsp: Arc::new(LspPool::default()) }
     }
 
-    /// The language servers runs use, kept for the engine's life; started
-    /// as processes by default.
     pub fn with_language_servers(mut self, lsp: Arc<dyn LanguageServers>) -> Self {
         self.lsp = lsp;
         self

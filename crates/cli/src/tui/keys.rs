@@ -1,6 +1,3 @@
-//! Keys and pastes: to the question being asked, the open picker, or the
-//! prompt.
-
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use sdk::PermissionMode;
 
@@ -149,10 +146,6 @@ fn pick(app: &mut App, event: KeyEvent) {
     }
 }
 
-/// Editing the prompt. Option (Alt) or Ctrl with the arrows jumps words,
-/// Cmd (where the terminal reports it) jumps to the line's ends; Up and
-/// Down move between lines and, from the first or last, through the
-/// prompts sent before (or the `/` completions while they show).
 fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
     let alt = event.modifiers.contains(KeyModifiers::ALT);
     let shift = event.modifiers.contains(KeyModifiers::SHIFT);
@@ -242,8 +235,6 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
     }
 }
 
-/// Ctrl+R's search: typing narrows it, Ctrl+R goes older, Enter or Tab
-/// takes the match into the prompt, Esc leaves.
 fn search(app: &mut App, event: KeyEvent, ctrl: bool) {
     let Some(search) = &mut app.search else { return };
     let history = app.input.history();

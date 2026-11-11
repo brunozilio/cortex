@@ -1,6 +1,3 @@
-//! Where each owner's [`ProviderBook`] lives (no secrets: those are in the
-//! [`SecretStore`](crate::SecretStore)).
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;

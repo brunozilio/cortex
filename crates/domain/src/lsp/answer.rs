@@ -1,17 +1,9 @@
-//! A language server's answer, as short text for the agent: places as
-//! `path:line:column` (from 1, relative to the working folder) with the
-//! line they point at.
-
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
 use super::Operation;
 
-/// The answer to `operation`. Paths show relative to the first of `cwd`
-/// they are in (the working folder as given and its real path, since
-/// servers may answer either). `line` reads a file's line (from 0), for
-/// the excerpt shown next to each place.
 pub fn describe(
     operation: Operation,
     answer: &Value,
@@ -52,8 +44,6 @@ pub fn describe(
 
 const MAX_ENTRIES: usize = 100;
 
-/// A failed question, said so the agent knows whether to ask again: a
-/// server answers "content modified" (or not in time) while it indexes.
 pub fn explain(error: &str) -> String {
     if error.contains("content modified") || error.contains("did not answer") {
         format!("{error}. The language server is still indexing the project; try again shortly.")
@@ -73,8 +63,6 @@ fn nouns(operation: Operation) -> (&'static str, &'static str) {
     }
 }
 
-/// `path:line:column` from 1 (the path relative to `cwd` when inside it),
-/// the file and its line from 0.
 pub fn position(uri: &str, range: &Value, cwd: &[&Path]) -> Option<(String, PathBuf, u32)> {
     let path = super::uri::path_of(uri)?;
     let start = &range["start"];

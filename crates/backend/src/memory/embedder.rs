@@ -1,7 +1,3 @@
-//! Text to vectors for semantic memory search. No model runs on this
-//! machine: memory is searched by words ([`NoEmbedder`]). The seam stays so
-//! a remote embedding service can plug in later.
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Purpose {
     Query,

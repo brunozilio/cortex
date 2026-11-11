@@ -1,8 +1,3 @@
-//! `EnterWorktree` and `ExitWorktree`: the main agent moves the session
-//! into a worktree of its own mid-run, the session's next runs go on there,
-//! and leaving takes it back to the project (keeping or removing the
-//! worktree).
-
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -149,7 +144,6 @@ fn a_worktree_entered_in_a_run_that_then_fails_is_still_the_session_s() {
     let dir = tempfile::tempdir().expect("dir");
     let project = dir.path().canonicalize().expect("real");
     repo(&project);
-    // The model answers the call once, then has nothing more to say: the run fails.
     let run = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::ToolUse {
         id: "enter".into(),
         name: "EnterWorktree".into(),

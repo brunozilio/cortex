@@ -1,5 +1,3 @@
-//! Sub-agents: in a conversation of their own, and in the background.
-
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 

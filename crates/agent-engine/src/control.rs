@@ -1,7 +1,3 @@
-//! What the user can do to a run while it works: cancel it, answer its
-//! asks, change its permission mode. Shared between the run's thread and
-//! its [`RunHandle`](crate::RunHandle).
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -20,8 +16,6 @@ pub struct Control {
     remembered: Mutex<Remembered>,
     asks: Mutex<HashMap<AskId, Sender<Decision>>>,
     steered: Mutex<Vec<String>>,
-    /// Where the session moves once this turn's calls are done
-    /// (`EnterWorktree`, `ExitWorktree`).
     moving: Mutex<Option<crate::agent_runtime::Relocation>>,
     spawned: AtomicUsize,
     children: Mutex<Vec<Weak<Control>>>,
@@ -116,16 +110,12 @@ impl Control {
         }
     }
 
-    /// Keeps a message the user sent while the run works, for the loop to
-    /// hand the model at its next turn.
     pub fn steer(&self, text: String) {
         if let Ok(mut steered) = self.steered.lock() {
             steered.push(text);
         }
     }
 
-    /// Moves the session to `setup`'s folder once this turn's calls are
-    /// done.
     pub fn move_to(&self, setup: crate::agent_runtime::Relocation) {
         if let Ok(mut moving) = self.moving.lock() {
             *moving = Some(setup);
@@ -140,7 +130,6 @@ impl Control {
         self.moving.lock().ok().and_then(|mut moving| moving.take())
     }
 
-    /// The messages steered since the last call, oldest first.
     pub fn take_steered(&self) -> Vec<String> {
         self.steered.lock().map(|mut steered| std::mem::take(&mut *steered)).unwrap_or_default()
     }

@@ -1,8 +1,3 @@
-//! The other sessions open on this backend, for agents to talk across them:
-//! `ListSessions` names them, `SendMessage` to a session's name leaves a
-//! message in its inbox (it answers the same way). Each belongs to its
-//! owner: an agent only sees and reaches its owner's own sessions.
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -14,7 +9,6 @@ use serde_json::{Value, json};
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
-/// A session open on this backend.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Peer {
     pub client: u64,
@@ -32,8 +26,6 @@ fn owner_key(owner: Option<&Principal>) -> String {
     serde_json::to_string(owner.unwrap_or(&Principal::LocalOwner)).unwrap_or_default()
 }
 
-/// Names `client`'s session after its folder (`api-3`), once; a later
-/// call only follows it to another folder. The name.
 pub fn register(client: u64, owner: Option<&Principal>, cwd: &Path) -> String {
     let mut all = lock();
     if let Some(peer) = all.get_mut(&client) {
@@ -52,14 +44,11 @@ pub fn forget(client: u64) {
     lock().remove(&client);
 }
 
-/// `owner`'s sessions, `client`'s own included.
 pub fn of_owner(owner: Option<&Principal>) -> Vec<Peer> {
     let key = owner_key(owner);
     lock().values().filter(|peer| peer.owner == key).cloned().collect()
 }
 
-/// Leaves `message` from `client`'s session in the inbox of `owner`'s
-/// session `to`.
 pub fn send(client: u64, owner: Option<&Principal>, to: &str, message: &str) -> Result<String, String> {
     let sessions = of_owner(owner);
     let from = sessions.iter().find(|peer| peer.client == client).map_or("another session", |peer| &peer.name);
@@ -74,8 +63,6 @@ pub fn send(client: u64, owner: Option<&Principal>, to: &str, message: &str) -> 
     Ok(target.name.clone())
 }
 
-/// `SendMessage` to another session, run once the user allows it: it acts
-/// in that session, which may work under another permission mode.
 #[derive(Debug)]
 pub struct SessionMessage;
 

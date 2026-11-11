@@ -1,13 +1,8 @@
-//! The prompt being typed: text with a cursor, and the prompts sent
-//! before (Up and Down recall them).
-
 #[derive(Debug, Default)]
 pub struct Input {
     text: String,
-    /// Byte offset, always on a character boundary.
     cursor: usize,
     history: Vec<String>,
-    /// Which sent prompt Up reached; `None` while editing a new one.
     recalled: Option<usize>,
 }
 
@@ -74,7 +69,6 @@ impl Input {
         self.cursor = self.text[self.cursor..].find('\n').map_or(self.text.len(), |at| self.cursor + at);
     }
 
-    /// Moves to the start of this or the previous word (Option+Left).
     pub fn word_left(&mut self) {
         let before = &self.text[..self.cursor];
         let trimmed = before.trim_end_matches(|c: char| !c.is_alphanumeric());
@@ -84,7 +78,6 @@ impl Input {
         }
     }
 
-    /// Moves past the end of this or the next word (Option+Right).
     pub fn word_right(&mut self) {
         let after = &self.text[self.cursor..];
         let skipped = after.len() - after.trim_start_matches(|c: char| !c.is_alphanumeric()).len();
@@ -93,7 +86,6 @@ impl Input {
         self.cursor += skipped + word;
     }
 
-    /// Deletes from the cursor to the end of the next word (Option+Delete).
     pub fn delete_word_forward(&mut self) {
         let start = self.cursor;
         self.word_right();
@@ -101,7 +93,6 @@ impl Input {
         self.cursor = start;
     }
 
-    /// Deletes back to the start of the line (Cmd+Backspace).
     pub fn delete_to_line_start(&mut self) {
         let start = self.text[..self.cursor].rfind('\n').map_or(0, |at| at + 1);
         self.text.replace_range(start..self.cursor, "");
@@ -116,8 +107,6 @@ impl Input {
         !self.text[self.cursor..].contains('\n')
     }
 
-    /// Moves to the line above (`up`) or below, at the same column or the
-    /// line's end.
     pub fn line(&mut self, up: bool) {
         let start = self.text[..self.cursor].rfind('\n').map_or(0, |at| at + 1);
         let column = self.text[start..self.cursor].chars().count();
@@ -133,14 +122,12 @@ impl Input {
         self.cursor = target + line.char_indices().nth(column).map_or(line.len(), |(at, _)| at);
     }
 
-    /// Prompts sent in earlier chats, oldest first.
     pub fn set_history(&mut self, history: Vec<String>) {
         let mut merged = history;
         merged.append(&mut self.history);
         self.history = merged;
     }
 
-    /// Deletes back to the start of the previous word (Ctrl+W).
     pub fn delete_word(&mut self) {
         let before = &self.text[..self.cursor];
         let trimmed = before.trim_end();
@@ -149,7 +136,6 @@ impl Input {
         self.cursor = start;
     }
 
-    /// Takes the text to send and remembers it.
     pub fn take(&mut self) -> String {
         let text = std::mem::take(&mut self.text);
         self.cursor = 0;
@@ -191,12 +177,10 @@ impl Input {
         }
     }
 
-    /// The prompts sent before, oldest first.
     pub fn history(&self) -> &[String] {
         &self.history
     }
 
-    /// The `/word` being typed when the whole input is one, for completion.
     pub fn slash_word(&self) -> Option<&str> {
         let word = self.text.strip_prefix('/')?;
         (!word.contains(char::is_whitespace)).then_some(word)

@@ -1,6 +1,3 @@
-//! A server's tool as the model's: its access, its step summary, and its
-//! result turned into an [`Outcome`].
-
 use std::sync::Arc;
 
 use serde_json::Value;

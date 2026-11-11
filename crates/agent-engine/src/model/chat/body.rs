@@ -1,6 +1,3 @@
-//! The Chat Completions request body for a [`TurnRequest`]: what local
-//! servers (`mlx_lm.server`) speak. Pure.
-
 use serde_json::{Value, json};
 
 use crate::model::TurnRequest;

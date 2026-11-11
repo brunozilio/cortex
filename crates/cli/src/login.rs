@@ -1,11 +1,7 @@
-//! `{command} login` and `logout`: pick a provider on the terminal; an API
-//! key is pasted, a subscription signs in in the browser.
-
 use std::io::{BufRead, Write};
 
 use sdk::{ModelProvider, Sdk};
 
-/// The providers in the order the menu lists them.
 pub const MENU: [ModelProvider; 6] = [
     ModelProvider::Anthropic,
     ModelProvider::ClaudeSubscription,
@@ -23,7 +19,6 @@ pub fn how(provider: ModelProvider) -> &'static str {
     }
 }
 
-/// What to tell the user while the browser is open.
 pub fn visit(url: &str, code: Option<&str>) -> String {
     match code {
         Some(code) => format!("Enter the code {code} at {url} (opening the browser)."),
@@ -31,7 +26,6 @@ pub fn visit(url: &str, code: Option<&str>) -> String {
     }
 }
 
-/// The menu entry `answer` picks among `count` (`1`-based).
 pub fn picked(answer: &str, count: usize) -> Option<usize> {
     answer.trim().parse::<usize>().ok().filter(|n| (1..=count).contains(n)).map(|n| n - 1)
 }
@@ -90,7 +84,6 @@ fn ask(question: &str) -> Result<String, String> {
     Ok(line.trim().to_owned())
 }
 
-/// Reads a line without echoing it (an API key).
 fn secret(question: &str) -> Result<String, String> {
     use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, read};
     use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -125,9 +118,6 @@ fn secret(question: &str) -> Result<String, String> {
     result.map(|()| text.trim().to_owned())
 }
 
-/// Opens `url` in the browser. The browser never writes on the terminal
-/// (Chrome's warnings would land on the chat's screen); the address is
-/// shown to visit by hand when it does not open.
 pub fn open(url: &str) {
     if let Ok(mut child) = browser(url).spawn() {
         std::thread::spawn(move || child.wait());
@@ -172,7 +162,6 @@ mod tests {
     #[test]
     fn the_browser_never_writes_on_the_terminal() {
         use std::os::unix::fs::PermissionsExt;
-        // A stand-in browser that complains, as Chrome does.
         let dir = tempfile::tempdir().expect("dir");
         let program = dir.path().join("browser");
         std::fs::write(&program, "#!/bin/sh\necho 'Failed sending zygote boot message' >&2\necho \"$1\"\n")

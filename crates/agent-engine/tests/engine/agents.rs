@@ -1,6 +1,3 @@
-//! A run's configured main agent: its prompt, initial prompt, memory,
-//! tools, and the backend's model guard over it and its children.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::NativeEngine;

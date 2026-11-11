@@ -1,7 +1,3 @@
-//! What the host program adds to a run (the SDK's): folders whose skills,
-//! commands and agents keep their own names, and the run's private MCP
-//! config file. Set by the backend, never by a client.
-
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -12,12 +8,8 @@ pub struct Extensions {
     pub dirs: Vec<PathBuf>,
     #[serde(default)]
     pub mcp_config: Option<PathBuf>,
-    /// The app plugins' folders (ADR 0019: `.{command}-plugin/plugin.json`,
-    /// `skills/`, `agents/`, `commands/`, `hooks/hooks.json`, `.mcp.json`).
     #[serde(default)]
     pub plugins: Vec<PathBuf>,
-    /// The owner's home folder for the run's user settings, skills and MCP
-    /// servers; the process's when unset.
     #[serde(default)]
     pub home: Option<PathBuf>,
 }

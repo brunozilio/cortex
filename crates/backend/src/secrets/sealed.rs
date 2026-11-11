@@ -1,11 +1,3 @@
-//! Secrets sealed in one file.
-//! Each connection's secrets are encrypted on their own with
-//! XChaCha20-Poly1305: a fresh random nonce each time, and the
-//! connection's key as associated data, so an entry moved to another
-//! connection fails to open. The key is 32 bytes kept apart from the file
-//! (`secrets.key`, `0600`), or handed in (`{COMMAND}_SECRET_KEY`, e.g. from
-//! a KMS).
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -59,8 +51,6 @@ impl SealedSecretStore {
         Ok(key)
     }
 
-    /// The entries as the file holds them now (another process, such as a
-    /// terminal running without the daemon, may have written since).
     fn entries(&self) -> MutexGuard<'_, BTreeMap<String, Sealed>> {
         let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
         if let Ok(json) = std::fs::read_to_string(&self.path)

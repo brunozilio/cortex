@@ -1,6 +1,3 @@
-//! Signing in and staying signed in: OAuth, token refresh and its limits,
-//! and credentials that are refused.
-
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::{Config, ProviderClient, oauth};
 use agent_engine::model::{ModelApi, ModelError};

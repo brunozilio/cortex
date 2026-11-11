@@ -1,7 +1,3 @@
-//! Work on a session itself (`SessionCommand`): how full its context
-//! window is, and compacting it into a summary the conversation goes on
-//! from (`compact`). Measuring is an estimate made here, with no model call.
-
 mod compact;
 
 use domain::{ContextShare, ContextSlice, ContextUsage, ModelOption, ModelProvider};

@@ -1,4 +1,3 @@
-//! Where a ChatGPT sign-in finds the account its requests name.
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::oauth;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};

@@ -1,7 +1,3 @@
-//! One run, second half: the system prompt, the session commands that need
-//! it (measuring, compacting), the session hooks, the agent loop itself,
-//! and saving the conversation it leaves.
-
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -64,7 +60,6 @@ impl Job {
         };
         Arc::get_mut(&mut self.workspace).expect("unshared context").prompt_context = Some(environment.clone());
         let mut main_system = prompt::system(&environment);
-        // What follows the environment's part, kept when the session moves.
         let mut extra = String::new();
         if let Some(agent) = &selected {
             extra.push_str(&format!("\n\n# Agent instructions ({})\n{}", agent.name, agent.instructions));
@@ -190,11 +185,8 @@ impl Job {
             let before = history.len();
             let outcome = agent.run(&mut history);
             drop(agent);
-            // The run's turn budget spans its moves.
             let used = history[before.min(history.len())..].iter().filter(|m| m.role == Role::Assistant).count();
             turn_limit = turn_limit.saturating_sub(used);
-            // A move asked for is made whatever ended the turn, so a
-            // worktree just made is never left behind.
             let Some(relocation) = self.control.take_move() else { break outcome };
             let mover =
                 moved::Move { request: &self.request, sessions: &*self.sessions, session: &session, extra: &extra };

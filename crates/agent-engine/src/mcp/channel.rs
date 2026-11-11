@@ -1,10 +1,3 @@
-//! Channels: MCP servers that push messages into a session (a chat bot, a
-//! webhook) with `notifications/claude/channel`. A client opens the ones it
-//! names (`{command} --channels telegram`); each stays up while the client
-//! does, its messages go to the client's inbox, and runs reach its tools
-//! (the replies) through a [`Bridge`] to that same server, never a second
-//! one. A process, an SSE server or a streamable HTTP server can be one.
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -17,11 +10,8 @@ use super::{Listener, McpServer, ServerSpec};
 use crate::model::http::Http;
 use crate::tools::inbox;
 
-/// How long a channel may take to open.
 const OPEN_WAIT: Duration = Duration::from_secs(30);
 
-/// Opens `spec` as a channel of `client`: up, initialized, and declaring
-/// itself a channel.
 pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>, client: u64) -> Result<Arc<McpServer>, String> {
     let name = spec.name().to_owned();
     let listener: Listener = Arc::new(move |method, params| {
@@ -29,7 +19,6 @@ pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>, client: u64) -> Result<Arc<
             inbox::push(client, notice);
         }
     });
-    // A server that never answers gives up after OPEN_WAIT (its process ends).
     let (given_up, opened) = (AtomicBool::new(false), AtomicBool::new(false));
     let server = std::thread::scope(|scope| {
         scope.spawn(|| {
@@ -61,8 +50,6 @@ pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>, client: u64) -> Result<Arc<
     Ok(Arc::new(server))
 }
 
-/// A run's way to an open channel's tools: the run's MCP messages, sent on
-/// the channel's own connection.
 #[derive(Debug)]
 pub struct Bridge(pub Arc<McpServer>);
 
@@ -77,11 +64,9 @@ impl McpEndpoint for Bridge {
         self.handle_stopped(message, &AtomicBool::new(false))
     }
 
-    /// A cancelled run's call is cancelled at the channel, which stays up.
     fn handle_stopped(&self, message: &Value, stop: &AtomicBool) -> Option<Value> {
         let id = message.get("id")?.clone();
         let method = message["method"].as_str().unwrap_or_default();
-        // The channel shook hands once, when it opened; each run only hears so.
         let answer = if method == "initialize" {
             Ok(json!({ "protocolVersion": super::PROTOCOL_VERSION, "capabilities": self.0.capabilities() }))
         } else {
@@ -101,9 +86,6 @@ mod tests {
     use super::*;
     use crate::model::http::ScriptedHttp;
 
-    /// A channel server in shell: it answers the handshake, then pushes a
-    /// message; a `slow` call never answers, the others answer `sent` and
-    /// how many calls were cancelled.
     const SERVER: &str = r#"
 read init
 id=$(printf '%s' "$init" | sed 's/.*"id":\([0-9]*\).*/\1/')

@@ -1,6 +1,5 @@
 use super::*;
 
-/// A Unix time at the start of a local minute.
 fn minute_start() -> i64 {
     let now = Local::now().timestamp();
     now - now.rem_euclid(60)

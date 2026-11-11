@@ -1,6 +1,3 @@
-//! The loop's turns: tool calls and their results, failures, cancellation,
-//! the output token limit and parallel reads.
-
 use agent_engine::agent::{Agent, Ending};
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{ModelError, TurnRequest};

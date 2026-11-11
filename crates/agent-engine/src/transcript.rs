@@ -1,6 +1,3 @@
-//! A conversation as the agent loop keeps it, independent of any provider:
-//! each provider's API module translates it to and from its own wire shape.
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

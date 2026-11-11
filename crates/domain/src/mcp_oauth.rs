@@ -1,15 +1,8 @@
-//! Signing in to a remote MCP server (OAuth 2.1, as the MCP authorization
-//! spec has it): where its metadata lives (RFC 9728, RFC 8414), the
-//! browser's authorization URL (PKCE, RFC 7636; the `resource`, RFC 8707),
-//! and the tokens kept afterwards. Pure: the requests are the backend's.
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// A token this close to expiring is refreshed first.
 const SKEW: i64 = 60;
 
-/// `https://host` and `/path` of `url` (no query).
 fn split(url: &str) -> Option<(String, String)> {
     let (scheme, rest) = url.split_once("://")?;
     let rest = rest.split(['?', '#']).next().unwrap_or_default();
@@ -21,7 +14,6 @@ fn split(url: &str) -> Option<(String, String)> {
     Some((format!("{scheme}://{host}"), if path.is_empty() { String::new() } else { format!("/{path}") }))
 }
 
-/// Where a server's protected-resource metadata may be, most specific first.
 pub fn resource_metadata_urls(server: &str) -> Vec<String> {
     let Some((origin, path)) = split(server) else { return Vec::new() };
     let mut urls = vec![format!("{origin}/.well-known/oauth-protected-resource{path}")];
@@ -31,7 +23,6 @@ pub fn resource_metadata_urls(server: &str) -> Vec<String> {
     urls
 }
 
-/// Where an authorization server's metadata may be, most specific first.
 pub fn auth_server_metadata_urls(issuer: &str) -> Vec<String> {
     let Some((origin, path)) = split(issuer) else { return Vec::new() };
     let mut urls = vec![
@@ -44,7 +35,6 @@ pub fn auth_server_metadata_urls(issuer: &str) -> Vec<String> {
     urls
 }
 
-/// What sign-in needs of the authorization server's metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct AuthServer {
     pub authorization_endpoint: String,
@@ -55,7 +45,6 @@ pub struct AuthServer {
     pub scopes_supported: Vec<String>,
 }
 
-/// The browser's sign-in address.
 #[derive(Debug)]
 pub struct Authorize<'a> {
     pub server: &'a AuthServer,
@@ -63,7 +52,6 @@ pub struct Authorize<'a> {
     pub redirect_uri: &'a str,
     pub challenge: &'a str,
     pub state: &'a str,
-    /// The MCP server's URL: the token is for it alone.
     pub resource: &'a str,
 }
 
@@ -86,7 +74,6 @@ impl Authorize<'_> {
     }
 }
 
-/// `key=value&…`, form-encoded.
 pub fn form(pairs: &[(&str, String)]) -> String {
     pairs.iter().map(|(key, value)| format!("{}={}", encode(key), encode(value))).collect::<Vec<_>>().join("&")
 }
@@ -100,9 +87,6 @@ fn encode(text: &str) -> String {
         .collect()
 }
 
-/// Whether sign-in may use `url` (a server, its metadata or endpoints, the
-/// page the browser opens): `https` to a public host, or `http` to this
-/// computer. Never another scheme, a private network or `http` elsewhere.
 pub fn endpoint_ok(url: &str) -> bool {
     let Some(host) = crate::permission_rules::site(url) else { return false };
     let loopback = host == "localhost" || host == "::1" || host.starts_with("127.");
@@ -113,12 +97,10 @@ pub fn endpoint_ok(url: &str) -> bool {
     }
 }
 
-/// What a sign-in keeps for one server. Its `Debug` hides the secrets.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpTokens {
     pub access_token: String,
     pub refresh_token: Option<String>,
-    /// Unix seconds; `None` when the server did not say.
     pub expires_at: Option<i64>,
     pub client_id: String,
     pub client_secret: Option<String>,
@@ -138,8 +120,6 @@ impl std::fmt::Debug for McpTokens {
 }
 
 impl McpTokens {
-    /// The tokens a token endpoint answered with at `now`; a refresh that
-    /// gives no new refresh token keeps the old one.
     pub fn answered(&self, answer: &Value, now: i64) -> Result<Self, String> {
         let access = answer["access_token"].as_str().ok_or_else(|| {
             answer["error_description"].as_str().or(answer["error"].as_str()).unwrap_or("no access token").to_owned()
@@ -152,7 +132,6 @@ impl McpTokens {
         })
     }
 
-    /// Whether the access token is still good at `now`.
     pub fn fresh(&self, now: i64) -> bool {
         self.expires_at.is_none_or(|at| now + SKEW < at)
     }

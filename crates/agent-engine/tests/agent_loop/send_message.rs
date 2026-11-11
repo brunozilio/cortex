@@ -1,6 +1,3 @@
-//! SendMessage: a sub-agent of this run continues with its conversation
-//! intact.
-
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -102,8 +99,6 @@ fn an_unknown_agent_is_an_error_and_sub_agents_are_not_offered_the_tool() {
     assert!(!child.tools.iter().any(|spec| spec.name == "SendMessage" || spec.name == "Agent"));
 }
 
-/// The parent's and the sub-agents' replies apart, for agents that run
-/// alongside the parent.
 struct Split {
     parent: ScriptedModel,
     child: ScriptedModel,

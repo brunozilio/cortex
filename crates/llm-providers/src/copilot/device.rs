@@ -1,7 +1,3 @@
-//! Signing in to GitHub Copilot as the Copilot CLI does: GitHub's OAuth
-//! device flow with the CLI's client, then `copilot_internal/user` for the
-//! Copilot API this account is served from. The GitHub token is used as is;
-//! it is never exchanged and has no refresh token.
 use super::super::ProviderError;
 use super::super::oauth::form;
 use serde_json::Value;
@@ -9,8 +5,6 @@ use serde_json::Value;
 pub const CLIENT: &str = "Ov23ctDVkRmgkPke0Mmm";
 pub const GITHUB: &str = "https://github.com";
 pub const USER: &str = "https://api.github.com/copilot_internal/user";
-/// Only what Copilot inference needs; the Copilot CLI also asks for
-/// `read:org,repo,gist` for its own GitHub tools.
 pub const SCOPE: &str = "read:user";
 pub const GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
 const MAX_INTERVAL: u64 = 60;
@@ -32,7 +26,6 @@ pub fn poll_request(device_code: &str) -> Post {
     }
 }
 
-/// Both device-flow posts: a form in, JSON out.
 pub fn post_headers() -> Vec<(String, String)> {
     vec![
         ("content-type".into(), "application/x-www-form-urlencoded".into()),
@@ -103,8 +96,6 @@ pub fn poll(status: u16, body: &str) -> Result<Poll, ProviderError> {
     }
 }
 
-/// How long to wait between polls: the Copilot CLI's pacing, 20% over
-/// GitHub's interval, five more seconds per `slow_down`, at most a minute.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pacing {
     interval: u64,
@@ -124,8 +115,6 @@ impl Pacing {
     }
 }
 
-/// The Copilot API base `copilot_internal/user` names (individual, business
-/// and enterprise accounts each have their own).
 pub fn api_base(status: u16, body: &str) -> Result<String, ProviderError> {
     match status {
         200 => {}

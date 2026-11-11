@@ -1,8 +1,3 @@
-//! What a tool call the model is still writing is about, from its partial
-//! JSON input.
-
-/// The command, path or pattern in `json` so far, cut with `…`; empty
-/// when none has started.
 pub fn drafted(json: &str) -> String {
     for key in ["command", "file_path", "notebook_path", "path", "pattern", "url", "query", "description"] {
         let Some(at) = json.find(&format!("\"{key}\"")) else { continue };

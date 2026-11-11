@@ -1,7 +1,3 @@
-//! One run on its own thread, first half: the conversation to continue,
-//! the project's brief, the tools, the selected agent's configuration, its
-//! worktree and model. `converse` takes it from there.
-
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -45,8 +41,6 @@ impl Job {
             },
             None => (SessionId(uuid::Uuid::new_v4().to_string()), Vec::new()),
         };
-        // A fork goes on from the conversation under a new id; the original
-        // stays as it was.
         let session = if self.request.fork && self.request.command.is_none() {
             SessionId(uuid::Uuid::new_v4().to_string())
         } else {
@@ -149,8 +143,6 @@ impl Job {
         workspace.web = Some(tools::web::Web(Arc::clone(&self.mcp)));
         workspace.added_dirs = crate::brief::added_dirs(&self.request, &settings.added_dirs, workspace.home.as_deref());
         workspace.hooks.extend(&agent_config.hooks);
-        // A session goes on in the worktree it was in: its agent's
-        // (`isolation: worktree`) or the one it entered (`EnterWorktree`).
         let previous = match self.sessions.load_worktree(&self.request, &session) {
             Ok(state) => state,
             Err(error) => return self.fail(&error, FailureKind::Other),

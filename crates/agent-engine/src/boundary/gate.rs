@@ -1,9 +1,3 @@
-//! Guarantees each run ends with exactly one terminal event.
-//!
-//! A run can end from two directions at once: the engine finishing and the
-//! user cancelling. Both paths go through a shared [`RunGate`]; whoever
-//! closes it first emits the terminal event, and everything after is dropped.
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 

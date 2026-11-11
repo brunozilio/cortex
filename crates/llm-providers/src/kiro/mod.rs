@@ -1,8 +1,3 @@
-//! The Kiro subscription as Kiro CLI 3.1.0 speaks it: the bearer token from
-//! Kiro's sign-in, the profile ARN that names the account (and its region),
-//! `GenerateAssistantResponse` on the runtime service for turns and
-//! `ListAvailableModels` on the management service for the catalog. Both
-//! are AWS JSON 1.0 calls picked by `x-amz-target`.
 pub mod auth;
 pub mod idc;
 pub mod models;
@@ -15,8 +10,6 @@ pub const CHAT: &str = "AmazonCodeWhispererStreamingService.GenerateAssistantRes
 pub const MODELS: &str = "KiroControlPlaneBearerService.ListAvailableModels";
 const DEFAULT_REGION: &str = "us-east-1";
 
-/// The region in a profile ARN (`arn:aws:codewhisperer:<region>:…`), or
-/// `us-east-1` when it is missing or not a region name.
 pub fn region(profile_arn: &str) -> &str {
     profile_arn
         .split(':')
@@ -27,12 +20,10 @@ pub fn region(profile_arn: &str) -> &str {
         .unwrap_or(DEFAULT_REGION)
 }
 
-/// Where turns are served for this account.
 pub fn runtime(profile_arn: &str) -> String {
     format!("https://runtime.{}.kiro.dev", region(profile_arn))
 }
 
-/// Where the account's model catalog is served.
 pub fn management(profile_arn: &str) -> String {
     format!("https://management.{}.kiro.dev", region(profile_arn))
 }
@@ -45,7 +36,6 @@ pub fn headers(access_token: &str, target: &str) -> Vec<(String, String)> {
     ]
 }
 
-/// Leaves Kiro's own model name in every message of a turn.
 pub fn shape(body: &mut Value) {
     let prefix = format!("{}:", ModelProvider::KiroSubscription.id());
     let state = &mut body["conversationState"];
@@ -61,7 +51,6 @@ pub fn shape(body: &mut Value) {
     }
 }
 
-/// Names the account a turn is billed to.
 pub fn bind(body: &mut Value, profile_arn: &str) {
     body["profileArn"] = json!(profile_arn);
 }

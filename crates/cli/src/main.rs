@@ -1,11 +1,3 @@
-//! `{command}`: talk to the app's agent in a terminal.
-//!
-//! - `{command} [prompt]` opens the chat (sending `prompt` first).
-//! - `{command} -p <prompt>` answers once and prints the reply.
-//! - `{command} login` / `logout` connect or forget an LLM provider.
-//! - `{command} models` lists what the connected providers offer.
-//! - `{command} mcp …` lists, adds, removes and approves MCP servers.
-
 mod config;
 mod doctor;
 mod login;
@@ -25,67 +17,66 @@ use sdk::{PermissionMode, Sdk};
 #[derive(Debug, Parser)]
 #[command(name = brand::COMMAND, version, about = concat!("Talk to ", brand::name!(), "'s coding agent in your project."))]
 struct Cli {
-    /// What to ask; opens the chat with it unless --print is given.
+    #[arg(help = "What to ask; opens the chat with it unless --print is given")]
     prompt: Vec<String>,
-    /// Answer once, print the reply and exit.
+    #[arg(help = "Answer once, print the reply and exit")]
     #[arg(short, long)]
     print: bool,
-    /// Continue the last conversation in this folder.
+    #[arg(help = "Continue the last conversation in this folder")]
     #[arg(short = 'c', long = "continue")]
     resume: bool,
-    /// Continue an earlier conversation: its id, or pick one of this folder.
+    #[arg(help = "Continue an earlier conversation: its id, or pick one of this folder")]
     #[arg(short = 'r', long = "resume", conflicts_with = "resume", num_args = 0..=1, default_missing_value = "")]
     pick: Option<String>,
-    /// With --print: text, json (one result object) or stream-json (every
-    /// event as a JSON line, then the result).
+    #[arg(
+        help = "With --print: text, json (one result object) or stream-json (every event as a JSON line, then the result)"
+    )]
     #[arg(long = "output-format", requires = "print", value_parser = print_output::Format::parse, default_value = "text")]
     output_format: print_output::Format,
-    /// With --print: text (the prompt) or stream-json (user messages as
-    /// JSON lines on stdin, answered in turn).
+    #[arg(
+        help = "With --print: text (the prompt) or stream-json (user messages as JSON lines on stdin, answered in turn)"
+    )]
     #[arg(long = "input-format", requires = "print", default_value = "text")]
     input_format: String,
-    /// With --print: the most model turns a run may take.
+    #[arg(help = "With --print: the most model turns a run may take")]
     #[arg(long = "max-turns", requires = "print")]
     max_turns: Option<u32>,
-    /// Rules allowed without asking, like `Bash(git diff:*) Edit` (repeatable).
+    #[arg(help = "Rules allowed without asking, like `Bash(git diff:*) Edit` (repeatable)")]
     #[arg(long = "allowedTools", alias = "allowed-tools", value_name = "RULES")]
     allowed_tools: Vec<String>,
-    /// Rules refused, like `Bash(rm:*)` (repeatable).
+    #[arg(help = "Rules refused, like `Bash(rm:*)` (repeatable)")]
     #[arg(long = "disallowedTools", alias = "disallowed-tools", value_name = "RULES")]
     disallowed_tools: Vec<String>,
-    /// Text added at the end of the system prompt.
+    #[arg(help = "Text added at the end of the system prompt")]
     #[arg(long = "append-system-prompt")]
     append_system_prompt: Option<String>,
-    /// With -c or -r: go on in a copy of that conversation, leaving it as
-    /// it is.
+    #[arg(help = "With -c or -r: go on in a copy of that conversation, leaving it as it is")]
     #[arg(long = "fork-session")]
     fork_session: bool,
-    /// Chat at the bottom of the terminal, the conversation in its own
-    /// scrollback, instead of full screen.
+    #[arg(help = "Chat at the bottom of the terminal, the conversation in its own scrollback, instead of full screen")]
     #[arg(long)]
     inline: bool,
-    /// MCP servers to keep up as channels: what they send (a chat's
-    /// messages, a webhook) reaches the agent as an event. Comma-separated.
+    #[arg(
+        help = "MCP servers to keep up as channels: what they send (a chat's messages, a webhook) reaches the agent as an event. Comma-separated."
+    )]
     #[arg(long, value_delimiter = ',')]
     channels: Vec<String>,
-    /// The model to go on with when the chosen one is overloaded (same
-    /// provider).
+    #[arg(help = "The model to go on with when the chosen one is overloaded (same provider)")]
     #[arg(long = "fallback-model")]
     fallback_model: Option<String>,
-    /// The model (its id or name); the last one used otherwise.
+    #[arg(help = "The model (its id or name); the last one used otherwise")]
     #[arg(short, long)]
     model: Option<String>,
-    /// ask, edits, plan or bypass.
+    #[arg(help = "ask, edits, plan or bypass")]
     #[arg(long, value_parser = parse_mode)]
     mode: Option<PermissionMode>,
-    /// With --print: judge the work against these criteria before it ends
-    /// (exits 1 when it fails them).
+    #[arg(help = "With --print: judge the work against these criteria before it ends (exits 1 when it fails them)")]
     #[arg(long, requires = "print")]
     verification: Option<String>,
-    /// The project folder (the current one by default).
+    #[arg(help = "The project folder (the current one by default)")]
     #[arg(short = 'C', long)]
     cwd: Option<PathBuf>,
-    /// Let the agent read this folder like the project (repeatable).
+    #[arg(help = "Let the agent read this folder like the project (repeatable)")]
     #[arg(long = "add-dir", value_name = "PATH")]
     add_dir: Vec<String>,
     #[command(subcommand)]
@@ -94,26 +85,26 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Action {
-    /// Connect an LLM provider: an API key, or a Claude or ChatGPT subscription.
+    #[command(about = "Connect an LLM provider: an API key, or a Claude or ChatGPT subscription")]
     Login,
-    /// Forget a provider's credentials.
+    #[command(about = "Forget a provider's credentials")]
     Logout,
-    /// List the models the connected providers offer.
+    #[command(about = "List the models the connected providers offer")]
     Models,
-    /// The MCP servers a session here can use: list, add, remove, approve.
+    #[command(about = "The MCP servers a session here can use: list, add, remove, approve")]
     Mcp {
         #[command(subcommand)]
         action: Option<mcp::McpAction>,
     },
-    /// Replace this binary with the latest release.
+    #[command(about = "Replace this binary with the latest release")]
     Update,
-    /// Check that this installation can work in the folder.
+    #[command(about = "Check that this installation can work in the folder")]
     Doctor,
-    /// Read or change the settings: the user's, or this project's with --project.
+    #[command(about = "Read or change the settings: the user's, or this project's with --project")]
     Config {
         #[command(subcommand)]
         action: config::ConfigAction,
-        /// This project's .{command}/settings.local.json instead.
+        #[arg(help = "This project's .{command}/settings.local.json instead")]
         #[arg(long, global = true)]
         project: bool,
     },

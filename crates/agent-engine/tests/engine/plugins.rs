@@ -1,6 +1,3 @@
-//! An installed plugin reaches a run whole: its commands, its hooks and its
-//! MCP servers.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::NativeEngine;

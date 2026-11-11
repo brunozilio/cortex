@@ -1,10 +1,3 @@
-//! Signing in to Kiro as Kiro CLI does: the browser opens Kiro's sign-in
-//! portal with a PKCE challenge, the person picks how to sign in, and the
-//! portal returns `/oauth/callback?login_option=…&code=…&state=…` to a
-//! loopback on port 49153 (the only port Kiro's sign-in accepts). Google
-//! and GitHub codes are exchanged at Kiro's auth service, which also
-//! refreshes the tokens and names the account's profile ARN. An
-//! organization's sign-in (Identity Center) is in [`super::idc`].
 use super::super::ProviderError;
 use super::super::oauth::{TokenRequest, Tokens, form};
 use chrono::{DateTime, Duration, Utc};
@@ -14,11 +7,8 @@ pub const PORTAL: &str = "https://app.kiro.dev/signin";
 pub const TOKEN: &str = "https://prod.us-east-1.auth.desktop.kiro.dev/oauth/token";
 pub const REFRESH: &str = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken";
 pub const CALLBACK: (u16, &str) = (49153, "/oauth/callback");
-/// How long an access token lasts when an answer does not say.
 const LIFETIME: i64 = 3600;
 
-/// The portal's address. `redirect` is the loopback's callback; the portal
-/// is given its origin and adds the callback path itself.
 pub fn portal(challenge: &str, state: &str, redirect: &str) -> String {
     let origin = redirect.strip_suffix(CALLBACK.1).unwrap_or(redirect);
     format!(
@@ -33,8 +23,6 @@ pub fn portal(challenge: &str, state: &str, redirect: &str) -> String {
     )
 }
 
-/// The redirect the code was issued for: the callback with the sign-in
-/// the person picked. Only Google and GitHub sign-ins are exchanged here.
 pub fn redirect(callback: &str, query: &str) -> Result<String, ProviderError> {
     let option = url::form_urlencoded::parse(query.as_bytes())
         .find(|(key, _)| key == "login_option")
@@ -59,7 +47,6 @@ pub fn refresh(previous: &Tokens) -> TokenRequest {
     TokenRequest { url: REFRESH.into(), content_type: "application/json", body: body.to_string() }
 }
 
-/// Kiro's token answer; the profile ARN is kept as the account id.
 pub fn tokens(status: u16, body: &str, previous: Option<&Tokens>, now: DateTime<Utc>) -> Result<Tokens, ProviderError> {
     let unauthorized = |why: String| ProviderError::Unauthorized(why);
     if status != 200 {

@@ -1,8 +1,3 @@
-//! `EnterWorktree` and `ExitWorktree`: the main agent moves the session
-//! into a worktree of its own, to work apart from the checkout, and back.
-//! The agent loop runs them (the move happens between turns); this is
-//! their schema and wording.
-
 use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace, field};

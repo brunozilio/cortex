@@ -1,13 +1,7 @@
-//! The problems a language server finds in a file after an edit, as the
-//! lines added to the `Edit`/`Write` result.
-
 use serde_json::Value;
 
-/// How many problems one edit's result lists.
 pub const MAX_PROBLEMS: usize = 20;
 
-/// Errors first, then warnings, by line, in a `<diagnostics>` block; hints
-/// and information left out. `None` when nothing is left to report.
 pub fn report(file: &str, diagnostics: &[Value]) -> Option<String> {
     let mut problems: Vec<(u64, u64, u64, String)> = diagnostics
         .iter()

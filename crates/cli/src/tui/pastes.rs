@@ -1,7 +1,3 @@
-//! Large pastes stand in the prompt as `[Pasted text #1 +40 lines]` and go
-//! to the agent whole.
-
-/// Pastes this long (in lines, or characters) are folded.
 const LINES: usize = 5;
 const CHARS: usize = 1_000;
 
@@ -11,7 +7,6 @@ pub struct Pastes {
 }
 
 impl Pastes {
-    /// The placeholder to type for `text` when it is long enough to fold.
     pub fn fold(&mut self, text: &str) -> Option<String> {
         let lines = text.lines().count();
         if lines < LINES && text.chars().count() < CHARS {
@@ -21,7 +16,6 @@ impl Pastes {
         Some(format!("[Pasted text #{} +{lines} lines]", self.texts.len()))
     }
 
-    /// `text` with every placeholder still in it replaced by its paste.
     pub fn unfold(&self, text: &str) -> String {
         let mut out = text.to_owned();
         for (at, paste) in self.texts.iter().enumerate() {

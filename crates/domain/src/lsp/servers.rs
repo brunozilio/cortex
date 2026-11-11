@@ -1,11 +1,7 @@
-//! The language servers a run may start: a built-in table, changed by the
-//! settings' and plugins' `lspServers` (keyed by name, like `mcpServers`).
-
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// One language server: how to start it and the files it reads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerSpec {
@@ -13,18 +9,13 @@ pub struct ServerSpec {
     pub command: String,
     #[serde(default)]
     pub args: Vec<String>,
-    /// File extension (with its dot) to the LSP `languageId`.
     pub extension_to_language: BTreeMap<String, String>,
-    /// Files that mark a project root (`Cargo.toml`, `package.json`…).
     #[serde(default)]
     pub root_markers: Vec<String>,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
 }
 
-/// A settings or plugin entry: every field optional, so it can change a
-/// built-in server, add a new one (with `command` and
-/// `extensionToLanguage`) or remove one (`disabled`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ServerConfig {
@@ -37,9 +28,6 @@ pub struct ServerConfig {
 }
 
 impl ServerConfig {
-    /// What a checked-in project file may set: it may choose and disable
-    /// servers, never what they run (`command`, `args`, `env`); only the
-    /// owner's settings and installed plugins may (ADR 0023).
     pub fn without_commands(self) -> Self {
         Self { command: None, args: None, env: None, ..self }
     }
@@ -57,8 +45,6 @@ fn built_in(name: &str, command: &str, args: &[&str], languages: &[(&str, &str)]
     }
 }
 
-/// The servers the app knows without configuration; each is used only when
-/// its command is installed.
 pub fn defaults() -> Vec<ServerSpec> {
     vec![
         built_in("rust-analyzer", "rust-analyzer", &[], &[(".rs", "rust")], &["Cargo.toml"]),
@@ -94,9 +80,6 @@ pub fn defaults() -> Vec<ServerSpec> {
     ]
 }
 
-/// The servers after applying each layer of configuration in order (user,
-/// project, plugins): a later entry of the same name wins field by field.
-/// A new server without `command` or `extensionToLanguage` is left out.
 pub fn servers(defaults: Vec<ServerSpec>, layers: &[BTreeMap<String, ServerConfig>]) -> Vec<ServerSpec> {
     let mut specs = defaults;
     for (name, config) in layers.iter().flatten() {

@@ -1,7 +1,3 @@
-//! Putting a tool call to the user: yes, yes and don't ask again (a rule
-//! kept in the project's `settings.local.json`, else remembered for the
-//! session), or no, with what to do instead.
-
 use domain::permission_rules::{self, RuleKind};
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
 use serde_json::Value;
@@ -57,9 +53,6 @@ impl Agent<'_> {
         }
     }
 
-    /// Runs the `Notification` hooks (matched on `kind`:
-    /// `permission_prompt`, `elicitation_dialog`) as the agent starts
-    /// waiting on the user; a failing hook never stops the run.
     pub(super) fn notify(&self, kind: &str, message: &str) {
         let input = serde_json::json!({ "message": message, "notification_type": kind });
         if let Err(error) = self.workspace.hooks.run("Notification", kind, input, self.workspace) {
@@ -67,8 +60,6 @@ impl Agent<'_> {
         }
     }
 
-    /// The rules the user allowed during the run ("don't ask again"), for a
-    /// call no settings rule decides.
     pub(super) fn remembered_rule(&self, name: &str, subject: &str, input: &Value) -> Option<(RuleKind, String)> {
         let remembered = self.control.remembered();
         self.workspace.ruling_with(remembered.rules(), name, subject, input)

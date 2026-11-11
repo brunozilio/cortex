@@ -1,5 +1,3 @@
-//! `Read`: a file's lines, numbered.
-
 use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace, field, required, shown};

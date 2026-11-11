@@ -1,12 +1,7 @@
-//! The Copilot API's `GET /models`: the models this account may pick, as
-//! the Copilot CLI's picker filters them.
 use domain::model::ModelCapabilities;
 use domain::{ModelOption, ModelProvider};
 use serde_json::Value;
 
-/// One catalog entry, or `None` for one the picker hides: a custom model,
-/// a model neither offered in the picker nor enabled by policy, or one
-/// that does not chat (embeddings).
 pub fn model(item: &Value) -> Option<ModelOption> {
     let id = item["id"].as_str().map(str::trim).filter(|id| !id.is_empty())?;
     let picked = item["model_picker_enabled"] != false || item["policy"]["state"] == "enabled";

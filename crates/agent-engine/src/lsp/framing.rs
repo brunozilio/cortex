@@ -1,11 +1,7 @@
-//! LSP's base protocol: each JSON-RPC message after a `Content-Length`
-//! header and a blank line.
-
 use std::io::{self, BufRead, Write};
 
 use serde_json::Value;
 
-/// Messages larger than this are refused rather than read into memory.
 const MAX_BODY: usize = 64 * 1024 * 1024;
 
 pub fn write_message(out: &mut impl Write, message: &Value) -> io::Result<()> {
@@ -15,7 +11,6 @@ pub fn write_message(out: &mut impl Write, message: &Value) -> io::Result<()> {
     out.flush()
 }
 
-/// The next message, or `None` when the stream ends.
 pub fn read_message(input: &mut impl BufRead) -> io::Result<Option<Value>> {
     let mut length = None;
     let mut header = String::new();

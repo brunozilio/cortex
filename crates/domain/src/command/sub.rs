@@ -1,32 +1,22 @@
-//! The commands that take their own words: `/mcp`, `/memory` and
-//! `/verification`.
-
 use crate::MemoryId;
 
-/// `/mcp`, `/mcp approve|deny|login|logout <name>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum McpCommand {
     List,
     Approve(String),
     Deny(String),
-    /// Sign in to a remote server in the browser.
     Login(String),
     Logout(String),
 }
 
-/// `/memory`, `/memory <search>`, `/memory optimize`, `/memory undo`,
-/// `/memory forgotten`, `/memory restore <id>`, `/memory edit`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryCommand {
     List,
     Search(String),
-    /// An agent tidies the memory: merges, corrects, reclassifies, drops.
     Optimize,
-    /// Puts back the memory as it was before the last optimization.
     Undo,
     Forgotten,
     Restore(MemoryId),
-    /// The project's {COMMAND}.md, opened in the user's editor.
     Edit,
 }
 
@@ -48,7 +38,6 @@ impl MemoryCommand {
     }
 }
 
-/// `/verification`, `/verification off`, `/verification <criteria>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerificationCommand {
     Show,

@@ -20,7 +20,6 @@ fn listed(id: u64) -> String {
     .to_string()
 }
 
-/// A run whose host configured one HTTP server, `docs`, with a token.
 fn docs_request() -> (tempfile::TempDir, PromptRequest) {
     let dir = tempfile::tempdir().expect("dir");
     let config = dir.path().join("mcp.json");

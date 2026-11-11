@@ -1,8 +1,3 @@
-//! Bounded command hooks. Hook processes use the same identity and environment
-//! boundary as tools; credentials are never part of hook input.
-//!
-//! - `handlers`: command and HTTP handlers, bounded in time and output.
-//! - `model`: prompt and agent handlers, judged by the model.
 mod handlers;
 mod model;
 
@@ -60,7 +55,6 @@ pub struct CommandOutput {
     pub stderr: String,
 }
 impl Hooks {
-    /// Every hook as `/hooks` shows it, by event.
     pub fn listed(&self) -> Vec<domain::permission_rules::HookInfo> {
         let mut listed = Vec::new();
         for (event, groups) in &self.0 {

@@ -1,8 +1,3 @@
-//! The GitHub Copilot subscription as the Copilot CLI (`@github/copilot`
-//! 1.0.62, checked against 1.0.108) speaks it: the GitHub token sent as is
-//! to the Copilot API, each model served on the API its
-//! `supported_endpoints` name, and the headers that bill a premium request
-//! only for a turn the user started.
 mod body;
 pub mod device;
 pub mod models;
@@ -17,7 +12,6 @@ pub const VERSION: &str = "1.0.62";
 pub const API_VERSION: &str = "2026-06-01";
 pub const INTEGRATION: &str = "copilot-developer-cli";
 
-/// Which of the Copilot API's three wire formats a model is served on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Wire {
     Messages,
@@ -25,8 +19,6 @@ pub enum Wire {
     Chat,
 }
 
-/// Anthropic's Messages when offered, then Responses, else Chat
-/// Completions: the Copilot CLI's order with thinking turned on.
 pub fn wire(model: Option<&ModelOption>) -> Wire {
     let endpoints = model.and_then(|m| m.capabilities.as_ref()).map(|c| c.endpoints.as_slice()).unwrap_or_default();
     let offers = |path: &str| endpoints.iter().any(|e| e == path);
@@ -51,7 +43,6 @@ pub fn user_agent() -> String {
     format!("copilot/{VERSION} ({}) term/unknown", std::env::consts::OS)
 }
 
-/// What every Copilot API call carries.
 pub fn headers(token: &str) -> Vec<(String, String)> {
     vec![
         ("authorization".into(), format!("Bearer {token}")),
@@ -63,8 +54,6 @@ pub fn headers(token: &str) -> Vec<(String, String)> {
     ]
 }
 
-/// What one turn adds: who started it (only a user's turn is a premium
-/// request), whether it carries images, and the Messages API version.
 pub fn turn_headers(wire: Wire, body: &Value) -> Vec<(String, String)> {
     let by_user = started_by_user(body);
     let mut headers = vec![
@@ -80,8 +69,6 @@ pub fn turn_headers(wire: Wire, body: &Value) -> Vec<(String, String)> {
     headers
 }
 
-/// True when the messages after the model's last answer are the user's
-/// own, not tool results going back to the model.
 fn started_by_user(body: &Value) -> bool {
     let items = body["messages"].as_array().or_else(|| body["input"].as_array()).map(Vec::as_slice).unwrap_or_default();
     let mut user = false;
@@ -113,7 +100,6 @@ fn has_image(value: &Value) -> bool {
     }
 }
 
-/// A Copilot model offering `endpoints` with `caps`, for tests.
 #[cfg(test)]
 pub(crate) fn served(endpoints: &[&str], caps: domain::model::ModelCapabilities) -> ModelOption {
     let mut model =

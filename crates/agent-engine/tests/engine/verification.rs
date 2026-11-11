@@ -1,5 +1,3 @@
-//! A request's verification criteria reach the judge, except in planning.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::NativeEngine;

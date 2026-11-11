@@ -1,6 +1,3 @@
-//! The SDK end to end on a real `LocalBackend` with a scripted engine: no
-//! network, no secrets on disk, no model download.
-
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;

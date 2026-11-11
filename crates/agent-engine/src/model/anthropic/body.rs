@@ -1,5 +1,3 @@
-//! The Messages API request body for a [`TurnRequest`].
-
 use domain::Effort;
 use serde_json::{Value, json};
 
@@ -14,9 +12,6 @@ pub fn body(request: &TurnRequest) -> Value {
         "thinking": { "type": "adaptive", "display": "summarized" },
         "output_config": { "effort": effort(request.effort) },
         "cache_control": { "type": "ephemeral" },
-        // A breakpoint of its own after the tools and system prompt, so they
-        // stay cached when the conversation changes under them (compaction,
-        // rewind); the top-level one caches up to the newest message.
         "system": [{ "type": "text", "text": request.system, "cache_control": { "type": "ephemeral" } }],
         "messages": request.messages.iter().filter_map(message).collect::<Vec<_>>(),
     });

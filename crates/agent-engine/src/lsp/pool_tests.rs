@@ -31,7 +31,6 @@ impl LanguageServer for Fake {
     }
 }
 
-/// Starts fakes for the installed commands and records each start.
 #[derive(Clone, Default)]
 struct Starts {
     installed: Vec<&'static str>,

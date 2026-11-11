@@ -1,6 +1,3 @@
-//! What MCP servers offer besides tools: resources (`ListMcpResources`,
-//! `ReadMcpResource`) and prompts, typed as `/mcp__server__prompt args`.
-
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -10,10 +7,8 @@ use super::McpServer;
 use crate::model::ToolSpec;
 use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 
-/// What one resource read shows at most.
 const SHOWN: usize = 60_000;
 
-/// The resource tools, when a server offers resources.
 pub fn resource_tools(servers: &[Arc<McpServer>]) -> Vec<Box<dyn Tool>> {
     let with: Vec<Arc<McpServer>> = servers.iter().filter(|server| server.offers("resources")).cloned().collect();
     if with.is_empty() {
@@ -151,10 +146,6 @@ impl Tool for ReadResource {
     }
 }
 
-/// `/mcp__server__prompt args`: the server's prompt filled with the words
-/// typed after it (in the order of its arguments; the last takes the rest),
-/// as the text to send. `None` when the text does not name an MCP prompt.
-/// Cancelling the run (`stop`) stops the wait for the server.
 pub fn expand_prompt(servers: &[Arc<McpServer>], typed: &str, stop: &AtomicBool) -> Option<Result<String, String>> {
     let rest = typed.trim().strip_prefix("/mcp__")?;
     let (name, args) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));

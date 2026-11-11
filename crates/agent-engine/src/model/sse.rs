@@ -1,5 +1,3 @@
-//! Server-sent events: lines in, `(event, data)` pairs out.
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SseEvent {
     pub event: String,

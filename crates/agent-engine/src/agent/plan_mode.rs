@@ -1,7 +1,3 @@
-//! Leaving plan mode with the user's approval (`ExitPlanMode`) and entering
-//! it (`EnterPlanMode`). Only the top-level agent changes the mode; the
-//! client hears of it through [`EngineEvent::ModeChanged`].
-
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, PermissionMode};
 use serde_json::Value;
 

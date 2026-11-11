@@ -1,5 +1,3 @@
-//! OpenAI's Responses API, streamed, with the owner's API key.
-
 mod body;
 mod stream;
 

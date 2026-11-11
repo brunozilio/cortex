@@ -1,9 +1,3 @@
-//! An MCP server over the older HTTP+SSE transport (`"type": "sse"`): a
-//! GET opens an event stream whose `endpoint` event names where to POST
-//! messages; answers come back on the stream as `message` events, matched
-//! to their request by id. The endpoint must be on the server's own site,
-//! so its headers (a token) never go elsewhere.
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
@@ -24,8 +18,6 @@ pub struct SseTransport {
     headers: Vec<(String, String)>,
     http: Arc<dyn Http>,
     waiting: Waiting,
-    /// Set when the stream ends, and when this transport is dropped (which
-    /// ends the stream).
     closed: Arc<AtomicBool>,
 }
 
@@ -57,7 +49,6 @@ impl SseTransport {
             return Err(format!("{name} answered HTTP {}", stream.status));
         }
         let mut decoder = SseDecoder::new();
-        // The wait for the endpoint ends with the run, or after ENDPOINT_WAIT.
         let given_up = AtomicBool::new(false);
         let found = AtomicBool::new(false);
         let endpoint = std::thread::scope(|scope| {
@@ -87,8 +78,6 @@ impl SseTransport {
         Ok(transport)
     }
 
-    /// Reads the stream on its own thread: answers go to their requests,
-    /// the server's pings are answered.
     fn listen(&self, mut stream: Response, mut decoder: SseDecoder, listener: Option<super::Listener>) {
         let (waiting, closed) = (Arc::clone(&self.waiting), Arc::clone(&self.closed));
         let poster = self.poster();
@@ -161,8 +150,6 @@ impl Transport for SseTransport {
             return Err(format!("{}: {error}", self.name));
         }
         loop {
-            // A stream already ended never answers (its waiters were dropped
-            // before this one came).
             if stop.load(Ordering::Relaxed) || self.closed.load(Ordering::Relaxed) {
                 if let Ok(reply) = receive.try_recv() {
                     return Ok(reply);
@@ -191,10 +178,8 @@ impl Transport for SseTransport {
     }
 }
 
-/// How long a server may take to name its endpoint.
 const ENDPOINT_WAIT: Duration = Duration::from_secs(30);
 
-/// The endpoint the stream's `endpoint` event names, read until `given_up`.
 fn endpoint_of(
     name: &str,
     url: &str,
@@ -221,14 +206,12 @@ fn endpoint_of(
     }
 }
 
-/// `endpoint` made absolute against `url`, when it is on the same site.
 fn same_site(url: &str, endpoint: &str) -> Option<String> {
     let base = url::Url::parse(url).ok()?;
     let joined = base.join(endpoint).ok()?;
     (joined.origin() == base.origin()).then(|| joined.to_string())
 }
 
-/// What the client answers a server's own request with.
 pub(super) fn client_answer(id: &Value, method: &str) -> Value {
     if method == "ping" {
         json!({ "jsonrpc": "2.0", "id": id, "result": {} })

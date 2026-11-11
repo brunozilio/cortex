@@ -1,7 +1,3 @@
-//! Messages the user sends while the agent works reach the model in the
-//! same run: with the next tool results, or as a new turn when the model
-//! was about to finish.
-
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::transcript::{Block, Message, Role};
 use domain::{EngineEvent, PermissionMode};

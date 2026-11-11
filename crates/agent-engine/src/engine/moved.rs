@@ -1,7 +1,3 @@
-//! The session moving mid-run (`EnterWorktree`, `ExitWorktree`): the
-//! workspace, its project instructions and the system prompt follow the new
-//! folder, and the session store remembers where later runs go on.
-
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 
@@ -15,14 +11,10 @@ pub(super) struct Move<'a> {
     pub(super) request: &'a PromptRequest,
     pub(super) sessions: &'a dyn Sessions,
     pub(super) session: &'a SessionId,
-    /// What the run's system prompt adds after the environment's part.
     pub(super) extra: &'a str,
 }
 
 impl Move<'_> {
-    /// Moves as `relocation` says: the new system prompt and folder, and
-    /// what to tell the user when the worktree left could not go. A
-    /// worktree just made is removed again when the move fails.
     pub(super) fn to(
         &self,
         relocation: Relocation,
@@ -49,8 +41,6 @@ impl Move<'_> {
         Ok(Moved { system, cwd, kept })
     }
 
-    /// The fallible reads first; the session store and the workspace
-    /// change only once nothing else can fail.
     fn switch(&self, setup: Setup, workspace: &mut Workspace, guard: &mut Guard) -> Result<(String, PathBuf), String> {
         let brief = crate::brief::Brief::load(&PromptRequest { cwd: setup.cwd.clone(), ..self.request.clone() })?;
         let Some(mut context) = workspace.prompt_context.clone() else {
@@ -75,10 +65,8 @@ impl Move<'_> {
     }
 }
 
-/// Where the session went.
 pub(super) struct Moved {
     pub(super) system: String,
     pub(super) cwd: PathBuf,
-    /// Why the worktree left was not removed, when it was not.
     pub(super) kept: Option<String>,
 }

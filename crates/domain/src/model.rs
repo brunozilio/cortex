@@ -1,5 +1,3 @@
-//! Models, who serves them, and reasoning effort.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,22 +26,15 @@ pub struct ModelCapabilities {
     pub effective_context_window_percent: Option<u32>,
     #[serde(default)]
     pub reasoning_levels: Vec<String>,
-    /// The API paths a provider serves the model on (GitHub Copilot's
-    /// `supported_endpoints`); empty when the provider has one API.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub endpoints: Vec<String>,
 }
 
-/// The model a session starts with: the one `wanted` names when offered,
-/// else the first.
 pub fn choose_model(models: &[ModelOption], wanted: Option<&str>) -> Option<ModelOption> {
     wanted.and_then(|wanted| models.iter().find(|model| model.is_named(wanted))).or_else(|| models.first()).cloned()
 }
 
 impl ModelOption {
-    /// Whether `wanted` names this model: its id, its id without the
-    /// provider prefix (`claude-opus-5-5` for `anthropic:claude-opus-5-5`),
-    /// or its label, ignoring case.
     pub fn is_named(&self, wanted: &str) -> bool {
         let wanted = wanted.trim();
         let bare = self.id.split_once(':').map_or(self.id.as_str(), |(_, rest)| rest);

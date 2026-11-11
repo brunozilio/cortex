@@ -1,12 +1,8 @@
 name: PR title
 
-# `conventional` is a required status check on main: release-please builds
-# the changelog and the next version from squash-merged PR titles.
-
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
-  # Dispatched by the release workflow on release-please's PR branch.
   workflow_dispatch:
 
 permissions:
@@ -16,7 +12,7 @@ jobs:
   conventional:
     runs-on: ubuntu-latest
     steps:
-      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6
+      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6
         if: github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ github.token }}

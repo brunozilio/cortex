@@ -1,5 +1,3 @@
-//! The Chat Completions client (local models) against recorded streams.
-
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 

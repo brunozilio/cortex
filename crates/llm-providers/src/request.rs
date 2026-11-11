@@ -1,5 +1,3 @@
-//! What each LLM provider changes in a streamed request before it is
-//! sent: the model's name, the system prompt, the limits and the effort.
 use super::ProviderError;
 use super::catalog::REASONING_PREFIXES;
 use super::copilot;
@@ -19,7 +17,6 @@ pub fn path(provider: ModelProvider, model: Option<&ModelOption>) -> &'static st
     }
 }
 
-/// What the account adds to a shaped turn: Kiro's profile ARN.
 pub fn bind(provider: ModelProvider, config: &super::Config, body: &mut Value) {
     if provider == ModelProvider::KiroSubscription
         && let Some(tokens) = &config.auth
@@ -28,7 +25,6 @@ pub fn bind(provider: ModelProvider, config: &super::Config, body: &mut Value) {
     }
 }
 
-/// What a turn adds to the account's headers, read from its shaped body.
 pub fn turn_headers(provider: ModelProvider, model: Option<&ModelOption>, body: &Value) -> Vec<(String, String)> {
     if provider == ModelProvider::CopilotSubscription {
         copilot::turn_headers(copilot::wire(model), body)

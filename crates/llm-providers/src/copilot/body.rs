@@ -1,14 +1,9 @@
-//! What Copilot serves a turn with: a body built for the wire's own API
-//! fitted to the model's output limit, thinking and effort.
-
 use domain::ModelOption;
 use serde_json::{Value, json};
 
 use super::{Wire, wire};
 use crate::ProviderError;
 
-/// Fits a body built for the wire's own API to what Copilot serves:
-/// output limits, thinking and effort from the model's catalog entry.
 pub fn shape(model: Option<&ModelOption>, body: &mut Value, effort: &str) -> Result<(), ProviderError> {
     let caps = model.and_then(|m| m.capabilities.clone()).unwrap_or_default();
     let limit = |asked: Option<u64>, fallback: u64| {
@@ -27,9 +22,6 @@ pub fn shape(model: Option<&ModelOption>, body: &mut Value, effort: &str) -> Res
                 object.remove("include");
             }
         }
-        // The Copilot CLI's `getAnthropicRequestParams`: a model with
-        // reasoning effort thinks adaptively at that effort; one that only
-        // thinks gets a fixed budget; any other does not think.
         Wire::Messages => {
             let max = limit(body["max_tokens"].as_u64(), 8192);
             body["max_tokens"] = json!(max);
@@ -56,7 +48,6 @@ pub fn shape(model: Option<&ModelOption>, body: &mut Value, effort: &str) -> Res
     Ok(())
 }
 
-/// The asked effort, or the strongest level the model offers below it.
 fn level(levels: &[String], effort: &str) -> String {
     const ORDER: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
     let asked = ORDER.iter().position(|l| *l == effort).unwrap_or(1);
@@ -72,7 +63,6 @@ fn level(levels: &[String], effort: &str) -> String {
 
 const BUDGET_FLOOR: u64 = 1024;
 
-/// The Copilot CLI's `reasoningEffortToBudget`.
 fn budget(effort: &str) -> u64 {
     match effort {
         "low" => BUDGET_FLOOR,

@@ -1,5 +1,3 @@
-//! Permission rules from settings, over the permission mode.
-
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::transcript::{Block, Message};
 use domain::permission_rules::{PermissionRules, RuleKind};
@@ -110,7 +108,6 @@ fn a_hook_allowing_the_call_does_not_skip_an_ask_rule() {
     assert!(!rig.dir.path().join("made.txt").exists());
 }
 
-/// Answers every ask of the run with `decision` until it ends.
 fn answering(rig: &Rig, decision: domain::Decision) -> std::thread::JoinHandle<()> {
     let control = std::sync::Arc::clone(&rig.control);
     let events = std::sync::Arc::clone(&rig.events);

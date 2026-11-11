@@ -1,7 +1,3 @@
-//! Images the model sees: attached to a prompt, read by a tool or returned
-//! by an MCP server. Kept base64-encoded with the media type their bytes
-//! show; only PNG, JPEG, GIF and WebP are accepted.
-
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +15,6 @@ impl std::fmt::Debug for Image {
     }
 }
 
-/// The media type `bytes` start like, when it is an image the model reads.
 pub fn media_type(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         Some("image/png")
@@ -35,8 +30,6 @@ pub fn media_type(bytes: &[u8]) -> Option<&'static str> {
 }
 
 impl Image {
-    /// The image in `bytes`; `None` when they are not one, an error when
-    /// it is too large.
     pub fn from_bytes(bytes: &[u8]) -> Result<Option<Self>, String> {
         let Some(media_type) = media_type(bytes) else { return Ok(None) };
         if bytes.len() > MAX_IMAGE_BYTES {
@@ -45,7 +38,6 @@ impl Image {
         Ok(Some(Self { media_type: media_type.into(), data: STANDARD.encode(bytes) }))
     }
 
-    /// An image an MCP server returned, checked against its bytes.
     pub fn from_mcp(media_type: &str, data: &str) -> Result<Self, String> {
         if data.len() > MAX_IMAGE_BYTES * 4 / 3 + 8 {
             return Err("MCP image exceeds the upload limit".into());

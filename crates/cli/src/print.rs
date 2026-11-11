@@ -1,7 +1,3 @@
-//! `{command} -p`: one prompt, the reply on stdout, the agent's steps on
-//! stderr. Nobody is there to answer, so whatever the agent asks is
-//! denied (pick `--mode bypass` or `edits` to let it act).
-
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -9,26 +5,18 @@ use sdk::{Decision, EngineEvent, PermissionMode, Sdk};
 
 use crate::print_output::{Format, Output};
 
-/// What the command line asked for besides the prompt.
 #[derive(Default)]
 pub struct Wanted<'a> {
     pub model: Option<&'a str>,
     pub mode: Option<PermissionMode>,
     pub verification: Option<String>,
-    /// Folders read like the project (`--add-dir`).
     pub add_dirs: Vec<PathBuf>,
-    /// `--max-turns`, `--allowedTools`, `--disallowedTools`,
-    /// `--append-system-prompt`.
     pub headless: sdk::Headless,
     pub format: Format,
-    /// The conversation to go on with (`--resume <id>`, `-c`).
     pub resume: Option<sdk::SessionId>,
-    /// Go on in a copy of it (`--fork-session`).
     pub fork: bool,
 }
 
-/// Each prompt in turn, in one conversation (`--input-format stream-json`
-/// gives several).
 pub fn print_all(sdk: &Sdk, cwd: PathBuf, wanted: Wanted<'_>, prompts: &[String]) -> Result<ExitCode, String> {
     let Wanted { model: wanted, mode, verification, add_dirs, headless, format, resume, fork } = wanted;
     let models = sdk.models().map_err(|e| e.to_string())?;

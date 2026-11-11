@@ -1,5 +1,3 @@
-//! Ordered project instructions and bounded, local @imports. External imports
-//! are not implicitly trusted by a project's Markdown file.
 use super::{Instructions, Scope};
 use std::{
     collections::HashSet,

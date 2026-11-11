@@ -1,5 +1,3 @@
-//! The subscriptions' token calls over HTTP; what they send and read is in
-//! `llm_providers::oauth`.
 use super::super::{ModelError, http::Http};
 use domain::ModelProvider;
 use llm_providers::oauth::{self as plugin, TOKEN_LIMIT, TokenRequest};

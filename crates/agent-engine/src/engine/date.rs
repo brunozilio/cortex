@@ -1,5 +1,3 @@
-//! Today's date for the system prompt, with no calendar dependency.
-
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(super) fn today() -> String {

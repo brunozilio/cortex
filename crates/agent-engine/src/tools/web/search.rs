@@ -1,6 +1,3 @@
-//! Web search: Brave's API when `BRAVE_SEARCH_API_KEY` is set, else
-//! DuckDuckGo's HTML results page (no key needed).
-
 use std::io::Read as _;
 
 use serde_json::Value;
@@ -8,7 +5,6 @@ use serde_json::Value;
 use super::html::{decode, text};
 use crate::model::http::Http;
 
-/// Results returned at most.
 const RESULTS: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,8 +63,6 @@ fn brave(body: &str) -> Result<Vec<Found>, String> {
         .collect())
 }
 
-/// The results of DuckDuckGo's HTML page: `result__a` links (their real
-/// address in `uddg=`) and `result__snippet`s.
 fn duckduckgo(page: &str) -> Vec<Found> {
     let mut found = Vec::new();
     for block in page.split("class=\"result__a\"").skip(1) {
@@ -94,7 +88,6 @@ fn duckduckgo(page: &str) -> Vec<Found> {
     found
 }
 
-/// The results as the agent reads them.
 pub fn render(query: &str, results: &[Found]) -> String {
     let mut out = format!("Results for \"{query}\":");
     for (at, result) in results.iter().enumerate() {

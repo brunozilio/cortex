@@ -1,6 +1,3 @@
-//! The chat's informational commands: `/status`, `/export`, `/copy`,
-//! `/logout`, `/release-notes` and `/terminal-setup`.
-
 use domain::Command;
 use domain::command::mode_label;
 use domain::provider::ModelProvider;
@@ -8,7 +5,6 @@ use domain::provider::ModelProvider;
 use super::app::{App, Msg};
 use super::choices::{Picker, PickerKind};
 
-/// The newest CHANGELOG.md section, without links (`build.rs`).
 const RELEASE_NOTES: &str = include_str!(concat!(env!("OUT_DIR"), "/release_notes.md"));
 
 pub fn run(app: &mut App, command: Command) {
@@ -55,7 +51,6 @@ pub fn run(app: &mut App, command: Command) {
     }
 }
 
-/// The styles `/output-style` offers: id and what it does.
 pub const STYLES: [(&str, &str); 5] = [
     ("default", concat!(brand::name!(), "'s usual way: works, then reports")),
     ("concise", "Leads with the result, skips narration"),
@@ -64,7 +59,6 @@ pub const STYLES: [(&str, &str); 5] = [
     ("learning", "Leaves parts for you to write, to learn by doing"),
 ];
 
-/// `/output-style`: a picker, or the style named.
 pub fn output_style(app: &mut App, named: Option<String>) {
     match named {
         Some(name) => app.set_output_style(name.to_lowercase()),
@@ -88,7 +82,6 @@ impl App {
     }
 }
 
-/// `/logout`'s choice among the connected providers.
 pub fn connected(app: &mut App, providers: Vec<ModelProvider>) {
     if providers.is_empty() {
         return app.transcript.notice("No provider is connected.");
@@ -128,7 +121,6 @@ fn status(app: &App) -> String {
     text
 }
 
-/// This version's section of the changelog.
 fn release_notes() -> String {
     if RELEASE_NOTES.is_empty() {
         format!("{} {}", brand::NAME, env!("CARGO_PKG_VERSION"))

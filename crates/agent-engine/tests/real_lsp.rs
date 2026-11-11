@@ -1,6 +1,3 @@
-//! Against a real language server (clangd), when installed:
-//! `cargo test -p agent-engine --test real_lsp -- --ignored`.
-
 use std::sync::Arc;
 
 use agent_engine::lsp::{LanguageServers, Lsp, LspPool};

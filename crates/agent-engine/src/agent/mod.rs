@@ -1,13 +1,3 @@
-//! The agent loop: send the conversation, stream the reply, run the tools
-//! it asks for (asking the user when the mode says so), send their results
-//! back, until the model ends its turn.
-//!
-//! - `call`: one turn's tool calls, between their hooks.
-//! - `permission`: asking the user, for questions and permissions.
-//! - `sub_agent`: the sub-agents the `Agent` tool starts.
-//! - `tasks`: background agents and the `Task*` tools.
-//! - `conversations`: finished sub-agents `SendMessage` continues.
-
 mod call;
 mod conversations;
 mod dispatch;
@@ -31,7 +21,6 @@ use crate::tools::{Tool, Workspace};
 use crate::transcript::{Block, Message, Role, StopReason, Usage};
 
 pub const MAX_TURNS: usize = 200;
-/// What the client gets of a tool's output: enough for a full diff.
 const SHOWN_OUTPUT: usize = 64_000;
 
 #[derive(Debug, PartialEq)]
@@ -40,8 +29,6 @@ pub enum Ending {
     Failed(ModelError),
     Refused,
     TooManyTurns,
-    /// The session moves (`EnterWorktree`, `ExitWorktree`): the run goes on
-    /// in the new folder with the same conversation.
     Moved,
 }
 
@@ -96,7 +83,6 @@ impl Agent<'_> {
         let mut structured = false;
         let mut recoveries = 0;
         let mut compacted_at = None;
-        // The model in use once the run's own was overloaded (`fallbackModel`).
         let mut fell_back: Option<String> = None;
         let mut stop_hook_active = false;
         let (prompt_at, mut attempts) = (history.len().saturating_sub(1), 0);
@@ -246,7 +232,6 @@ impl Agent<'_> {
         Err(Ending::TooManyTurns)
     }
 
-    /// The tools a turn offers: the request's, and those `ToolSearch` loaded.
     pub(super) fn offered(&self) -> Vec<crate::model::ToolSpec> {
         let mut tools = self.request.tools.clone();
         if let Some(deferred) = &self.workspace.deferred {
@@ -255,8 +240,6 @@ impl Agent<'_> {
         tools
     }
 
-    /// What the user sent while the run worked, as text for the model's
-    /// next turn; each message is announced as it is handed over.
     fn steered(&self) -> Vec<Block> {
         self.control
             .take_steered()
@@ -268,8 +251,6 @@ impl Agent<'_> {
             .collect()
     }
 
-    /// What reached the client's inbox meanwhile (the main agent's only),
-    /// as one message with the next tool results.
     fn notices(&self) -> Option<Block> {
         if self.depth > 0 {
             return None;

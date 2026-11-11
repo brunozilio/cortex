@@ -1,10 +1,3 @@
-//! Kiro's browser sign-in, as Kiro CLI does it. Its portal answers on the
-//! loopback in one of two ways: Google and GitHub come back to
-//! `/oauth/callback` with a code for Kiro's auth service; an organization
-//! (AWS IAM Identity Center) comes back to `/signin/callback` naming its
-//! start URL and region, and the same browser tab is sent on to that
-//! organization's sign-in, which returns its code to `/oauth/callback`.
-
 use agent_engine::model::http::Http;
 use agent_engine::model::providers::{Tokens, kiro_idc, oauth};
 use domain::ModelProvider;
@@ -12,11 +5,9 @@ use llm_providers::kiro::idc::{self, PortalAnswer};
 
 use super::redirect::{Loopback, pkce};
 
-/// Where the portal returns an organization sign-in.
 const PORTAL_CALLBACK: &str = "/signin/callback";
 const KIRO: ModelProvider = ModelProvider::KiroSubscription;
 
-/// Signs in on `listener` (Kiro's loopback), `open` showing the portal.
 pub(super) fn sign_in(
     http: &dyn Http,
     listener: &Loopback,

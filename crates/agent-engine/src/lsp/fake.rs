@@ -1,6 +1,3 @@
-//! A scripted language server for tests: answers in order, records what it
-//! was asked and sent.
-
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -29,7 +26,6 @@ impl ScriptedServer {
         self.asked.lock().map(|asked| asked.clone()).unwrap_or_default()
     }
 
-    /// The workspace handle a run's tools would get, serving every default.
     pub fn lsp(self: &Arc<Self>) -> Lsp {
         Lsp { servers: Arc::new(ScriptedServers(Arc::clone(self))), specs: Arc::new(domain::lsp::defaults()) }
     }

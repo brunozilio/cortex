@@ -1,4 +1,3 @@
-//! Cancellation must interrupt both response headers and a stalled SSE body.
 use agent_engine::model::http::{Http, NetHttp, read_line_stopped};
 use std::{
     io::{BufRead, BufReader, Read, Write},

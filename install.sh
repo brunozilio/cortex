@@ -1,25 +1,13 @@
 #!/usr/bin/env bash
-# Installs the latest release of this app for this computer:
-#
-#   curl -fsSL https://raw.githubusercontent.com/{repository}/main/install.sh | bash
-#
-# {ENV}_VERSION=0.1.0      a given release instead of the latest
-# {ENV}_INSTALL_DIR=/path  where the binary goes (~/.local/bin by default)
-# ({ENV} is the command in capitals, dashes as underscores.)
-#
-# Linux gets a static build that runs on any distribution; macOS needs
-# Apple silicon. Nothing else has to be installed.
 
 set -euo pipefail
 
-# Written by `cargo run -p xtask -- brand` from brand.toml.
 NAME="Lite"
 COMMAND="lite"
 REPO="brunozilio/cortex"
 
 ENV="$(printf '%s' "$COMMAND" | tr 'a-z-' 'A-Z_')"
 
-# The value of the environment variable {ENV}_$1, or $2.
 setting() {
     local name="${ENV}_$1"
     printf '%s' "${!name:-${2:-}}"
@@ -76,7 +64,6 @@ main() {
     name="$COMMAND-$version-$target"
     dir="$(setting INSTALL_DIR "$HOME/.local/bin")"
     tmp="$(mktemp -d)"
-    # shellcheck disable=SC2064 # the folder is known now; main's locals are gone at exit
     trap "rm -rf '$tmp'" EXIT
 
     say "downloading $name"

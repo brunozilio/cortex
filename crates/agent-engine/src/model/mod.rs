@@ -1,6 +1,3 @@
-//! The model providers' APIs behind one trait: a turn of conversation in,
-//! streamed deltas and the assistant's message out.
-
 pub mod anthropic;
 mod cancellable_http;
 pub mod chat;
@@ -41,11 +38,7 @@ pub struct TurnRequest {
 pub enum Delta {
     Text(String),
     Thinking(String),
-    /// A piece of the JSON input of a tool call the model is writing.
-    ToolInput {
-        name: String,
-        piece: String,
-    },
+    ToolInput { name: String, piece: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]

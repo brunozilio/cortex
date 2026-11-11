@@ -1,13 +1,3 @@
-//! Project memory: what agents remember between sessions.
-//!
-//! One scope only: every session in a project shares the same memory,
-//! private to its owner. Memories are episodic (what happened), semantic
-//! (facts about the project or the user) or procedural (how to do things
-//! here). The agent writes edits through a JSON file at the end of a run
-//! (see [`MemoryBrief::instructions`]); the user adds and forgets them by
-//! hand. [`activate`] scores memories against a text: the search field
-//! and prompt recall share it, so what lights up is what the agent gets.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
@@ -60,11 +50,8 @@ pub struct Memory {
     #[serde(default)]
     pub origin: Option<String>,
     pub author: Author,
-    /// The texts revisions replaced, oldest first (at most [`REVISIONS_KEPT`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<Revision>,
-    /// How often it was recalled or found, and when last: use slows an
-    /// episode's fading (see [`recall::retention`]).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub uses: u32,
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -75,19 +62,15 @@ fn is_zero<T: Default + PartialEq>(value: &T) -> bool {
     *value == T::default()
 }
 
-/// How many replaced texts a memory keeps.
 pub const REVISIONS_KEPT: usize = 5;
-/// How long a forgotten memory can still be restored.
 pub const FORGOTTEN_KEPT_DAYS: i64 = 30;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Revision {
     pub text: String,
-    /// When a revision replaced it.
     pub until: i64,
 }
 
-/// A memory taken out of the live memory, restorable until it expires.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Forgotten {
     pub memory: Memory,
@@ -126,9 +109,6 @@ pub struct MemoryBook {
 }
 
 impl MemoryBook {
-    /// Applies edits in order. Nothing is lost at once: a forgotten memory
-    /// waits [`FORGOTTEN_KEPT_DAYS`] in [`MemoryBook::forgotten`] and a
-    /// revised one keeps its replaced texts.
     pub fn apply(&mut self, edits: &[MemoryEdit], by: &Provenance) -> Vec<MemoryId> {
         let expiry = by.now - FORGOTTEN_KEPT_DAYS * 24 * 60 * 60;
         self.forgotten.retain(|f| f.at >= expiry);
@@ -194,7 +174,6 @@ impl MemoryBook {
         touched
     }
 
-    /// Records that these memories were handed to an agent at `now`.
     pub fn mark_used(&mut self, ids: &[MemoryId], now: i64) {
         for memory in self.memories.iter_mut().filter(|m| ids.contains(&m.id)) {
             memory.uses = memory.uses.saturating_add(1);

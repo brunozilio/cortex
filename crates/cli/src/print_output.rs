@@ -1,7 +1,3 @@
-//! How `{command} -p` writes a run: `text` (the reply on stdout, steps on
-//! stderr), `json` (one result object at the end) or `stream-json` (every
-//! event as a line, then the result).
-
 use std::io::Write;
 
 use sdk::EngineEvent;
@@ -26,7 +22,6 @@ impl Format {
     }
 }
 
-/// A run being written out.
 pub struct Output<W: Write> {
     format: Format,
     out: W,
@@ -68,7 +63,6 @@ impl<W: Write> Output<W> {
         }
     }
 
-    /// A note for whoever reads the output (a denied ask, a plan).
     pub fn note(&mut self, text: &str) {
         match self.format {
             Format::Text => eprintln!("\x1b[2m{text}\x1b[0m"),
@@ -79,7 +73,6 @@ impl<W: Write> Output<W> {
         }
     }
 
-    /// The text the agent wrote, for a plan shown in place of the reply.
     pub fn push_text(&mut self, text: &str) {
         self.text.push_str(text);
         if self.format == Format::Text {
@@ -87,8 +80,6 @@ impl<W: Write> Output<W> {
         }
     }
 
-    /// Writes the end (the result object, or a last new line); whether the
-    /// run failed.
     pub fn finish(&mut self, failed_check: bool) -> bool {
         let failed = self.error.is_some() || failed_check;
         let result = json!({
@@ -116,9 +107,6 @@ impl<W: Write> Output<W> {
     }
 }
 
-/// The prompts of `--input-format stream-json`: one JSON object per line,
-/// `{"type":"user","message":{"content":"…"}}` (content as text or as
-/// text blocks).
 pub fn prompts(lines: impl Iterator<Item = String>) -> Result<Vec<String>, String> {
     let mut prompts = Vec::new();
     for (at, line) in lines.enumerate().filter(|(_, line)| !line.trim().is_empty()) {

@@ -1,10 +1,3 @@
-//! What a tool call acts on, for the settings' permission rules: the
-//! command a `Bash` runs, the folder a `Glob` or `Grep` searches, or the
-//! path a file tool reads or writes. A path is judged both as written (made
-//! absolute, `..` folded) and as the file system resolves it (links
-//! followed): either one denied or asked about is enough, and both must be
-//! allowed.
-
 use std::path::{Component, Path, PathBuf};
 
 use domain::permission_rules::{PermissionRules, RuleKind, Target};
@@ -15,13 +8,10 @@ use super::Workspace;
 type Ruling = Option<(RuleKind, String)>;
 
 impl Workspace {
-    /// What the permission rules say about tool `name` called with `input`.
     pub fn ruling(&self, name: &str, subject: &str, input: &Value) -> Ruling {
         self.ruling_with(&self.permissions, name, subject, input)
     }
 
-    /// [`ruling`](Self::ruling) under other rules (those allowed during the
-    /// run).
     pub fn ruling_with(&self, rules: &PermissionRules, name: &str, subject: &str, input: &Value) -> Ruling {
         if rules.is_empty() {
             return None;
@@ -35,7 +25,6 @@ impl Workspace {
             return rule(&Target::Command(command));
         }
         if matches!(name, "ListMcpResources" | "ReadMcpResource") {
-            // A server's resources are its own: its rules (`mcp__docs`) apply.
             let server = input.get("server").and_then(Value::as_str).unwrap_or_default();
             let uri = input.get("uri").and_then(Value::as_str).unwrap_or_default();
             return rules.ruling(&format!("mcp__{server}__resources"), &Target::Other(uri), &cwd, home.as_deref());
@@ -43,7 +32,6 @@ impl Workspace {
         if name == "WebFetch" {
             let url = input.get("url").and_then(Value::as_str).unwrap_or(subject);
             let site = super::web::host(url).map(|host| format!("domain:{host}")).unwrap_or_default();
-            // `domain:Docs.RS.` is the same site as `domain:docs.rs`.
             return rule(&Target::Other(&site));
         }
         if !searches && path.is_none() {
@@ -60,8 +48,6 @@ impl Workspace {
     }
 }
 
-/// Of two rulings of one call: a deny, else an ask, and an allow only when
-/// both allow.
 fn strictest(a: Ruling, b: Ruling) -> Ruling {
     let kind = |r: &Ruling| r.as_ref().map(|(kind, _)| *kind);
     for wanted in [RuleKind::Deny, RuleKind::Ask] {
@@ -75,7 +61,6 @@ fn strictest(a: Ruling, b: Ruling) -> Ruling {
     if kind(&a) == Some(RuleKind::Allow) && kind(&b) == Some(RuleKind::Allow) { a } else { None }
 }
 
-/// `path` without `.` and with each `..` taking its folder away, as written.
 fn folded(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for component in path.components() {
@@ -90,8 +75,6 @@ fn folded(path: &Path) -> PathBuf {
     out
 }
 
-/// `path` with its deepest existing folder resolved through links (what is
-/// below it does not exist yet).
 fn resolved(path: &Path) -> PathBuf {
     let mut existing = path;
     let mut rest = Vec::new();

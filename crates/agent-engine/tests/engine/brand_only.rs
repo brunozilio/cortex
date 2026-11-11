@@ -1,6 +1,3 @@
-//! Only the app's own folders reach a run: nothing in `.claude/`,
-//! `~/.claude/` or a `CLAUDE.md`, and no project `.mcp.json`.
-
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 

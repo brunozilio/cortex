@@ -1,6 +1,3 @@
-//! `/verification` in the chat, and how the active criteria read. The
-//! rules (precedence, attempts, plan section) are core's.
-
 use domain::command::VerificationCommand;
 use sdk::{Criteria, CriteriaSource};
 
@@ -32,7 +29,6 @@ pub fn run(app: &mut App, command: VerificationCommand) {
     app.transcript.notice(notice);
 }
 
-/// The status line's marker: `verify` and where the criteria came from.
 pub fn marker(criteria: &Criteria) -> String {
     format!("verify ({})", source(criteria))
 }

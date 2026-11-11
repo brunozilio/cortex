@@ -1,28 +1,3 @@
-//! The app's SDK: talk to the agent from your own program and extend it.
-//!
-//! ```no_run
-//! use sdk::{Agent, Command, McpConnection, McpServer, Sdk};
-//! use serde_json::json;
-//!
-//! # fn main() -> Result<(), sdk::Error> {
-//! let sdk = Sdk::builder()
-//!     .agent(Agent::new("reviewer", "Reviews a diff for bugs.").tools(["Read", "Grep"]))
-//!     .command(Command::new("audit", "Audits a path.", "Audit $ARGUMENTS for security issues."))
-//!     .mcp(McpServer::new("math").tool("add", "Adds a and b.", json!({"type": "object"}), |input| {
-//!         Ok(json!(input["a"].as_f64().unwrap_or(0.0) + input["b"].as_f64().unwrap_or(0.0)))
-//!     }))
-//!     .connect(McpConnection::stdio("files", "npx").arg("-y").arg("@modelcontextprotocol/server-filesystem"))
-//!     .build()?;
-//! let model = sdk.models()?.into_iter().next().ok_or(sdk::Error::NoModel)?;
-//! let session = sdk.session(".", model);
-//! println!("{}", session.send("What does this project do?")?.text()?);
-//! # Ok(()) }
-//! ```
-//!
-//! Everything runs in this process on a [`LocalBackend`]: the agent loop,
-//! its tools, memory and sessions. Commands carry the local owner's
-//! `Principal`, so the same calls can reach a remote backend later.
-
 mod account;
 mod chores;
 mod client;
@@ -75,8 +50,6 @@ pub enum Error {
     Write(#[from] std::io::Error),
 }
 
-/// One embedded the app: start [`Session`]s, list models, manage
-/// providers and memory.
 #[derive(Debug, Clone)]
 pub struct Sdk {
     client: Arc<Client>,
@@ -87,7 +60,6 @@ impl Sdk {
         Builder::default()
     }
 
-    /// A conversation with the agent working in `cwd`.
     pub fn session(&self, cwd: impl Into<PathBuf>, model: ModelOption) -> Session {
         let cwd = cwd.into();
         let cwd = std::path::absolute(&cwd).unwrap_or(cwd);
@@ -95,8 +67,6 @@ impl Sdk {
     }
 }
 
-/// Sets up an [`Sdk`]: what it adds to every run, and where it keeps
-/// its data.
 #[derive(Default)]
 pub struct Builder {
     name: Option<String>,
@@ -114,16 +84,11 @@ impl std::fmt::Debug for Builder {
 }
 
 impl Builder {
-    /// Names this program's agents, skills and commands folder (`sdk` by
-    /// default); two programs with different names never overwrite each
-    /// other's.
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
     }
 
-    /// Keeps sessions, memory, settings and providers under `dir` instead
-    /// of the system's the app folder.
     pub fn data_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.data = Some(dir.into());
         self
@@ -144,20 +109,16 @@ impl Builder {
         self
     }
 
-    /// Tools written in code, served in this process.
     pub fn mcp(mut self, server: McpServer) -> Self {
         self.servers.push(server);
         self
     }
 
-    /// An MCP server over HTTP or stdio.
     pub fn connect(mut self, connection: McpConnection) -> Self {
         self.connections.push(connection);
         self
     }
 
-    /// Runs on these services instead of the detected ones (tests, or a
-    /// custom engine).
     #[doc(hidden)]
     pub fn services(mut self, services: LocalServices) -> Self {
         self.services = Some(services);

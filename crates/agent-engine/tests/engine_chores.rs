@@ -1,6 +1,3 @@
-//! Side calls through `AgentEngine::start`: a title before any session, a
-//! suggestion on a kept one, and the output style picked in Settings.
-
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

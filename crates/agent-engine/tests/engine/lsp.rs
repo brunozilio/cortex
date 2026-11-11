@@ -1,5 +1,3 @@
-//! Language servers reach a run: the `LSP` tool when one is installed.
-
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};

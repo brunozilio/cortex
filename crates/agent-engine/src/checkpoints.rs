@@ -1,9 +1,3 @@
-//! Checkpoints: each prompt of a conversation opens one, and the first time
-//! a run's `Edit` or `Write` touches a file, its content before (or that it
-//! did not exist) is kept there. Rewinding to a checkpoint puts those files
-//! back and cuts the conversation before its prompt. Changes made through
-//! `Bash` are not tracked.
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
@@ -15,18 +9,13 @@ use sha2::{Digest, Sha256};
 
 use crate::transcript::Message;
 
-/// Larger files are not kept, so a rewind leaves them as they are.
 const MAX_FILE: u64 = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Checkpoint {
     pub prompt: String,
-    /// How long the conversation was before the prompt.
     pub history_len: usize,
-    /// What that conversation was, to tell whether it was compacted since.
     pub history_hash: String,
-    /// Each file's content before the run first changed it (base64), or
-    /// `None` when the run made it.
     pub files: BTreeMap<PathBuf, Option<String>>,
 }
 
@@ -46,12 +35,10 @@ fn hash(history: &[Message]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-/// The files one run changed, recorded before each first change.
 #[derive(Debug, Default)]
 pub struct FileHistory(Mutex<BTreeMap<PathBuf, Option<String>>>);
 
 impl FileHistory {
-    /// Call before writing `path`; only its first state is kept.
     pub fn before_write(&self, path: &Path) {
         let mut files = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         if files.contains_key(path) {
@@ -73,10 +60,6 @@ impl FileHistory {
     }
 }
 
-/// What rewinding `checkpoints` to `index` does: restores every file the
-/// later runs changed to its state at that checkpoint, and says whether
-/// `history` can be cut there (it cannot once compacted). The checkpoints
-/// from `index` on are dropped.
 pub fn rewind(
     checkpoints: &mut Vec<Checkpoint>,
     index: usize,

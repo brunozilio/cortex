@@ -1,8 +1,3 @@
-//! Hybrid search over memories: BM25 on words and tags, cosine similarity
-//! on embedding vectors when a model is available, fused by reciprocal
-//! rank and spread one hop along shared tags. The search field and prompt
-//! recall share it, so what lights up is what the agent would get.
-
 use std::collections::BTreeSet;
 
 use super::Memory;

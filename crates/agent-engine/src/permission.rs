@@ -1,6 +1,3 @@
-//! Which tool calls run at once, which ask the user and which are refused,
-//! for each permission mode. Pure.
-
 use std::collections::HashSet;
 
 use domain::PermissionMode;
@@ -18,7 +15,6 @@ pub enum Verdict {
 #[derive(Debug, Default, Clone)]
 pub struct Remembered {
     rules: HashSet<String>,
-    /// Allow rules the user accepted during the run ("don't ask again").
     allowed: PermissionRules,
 }
 
@@ -61,10 +57,6 @@ pub fn verdict(mode: PermissionMode, access: Access, tool: &str, subject: &str, 
     }
 }
 
-/// The mode's `verdict` under the settings' permission rules: a deny rule
-/// refuses even when bypassing; otherwise bypassing allows and planning
-/// keeps refusing what is not a read, and past those an ask rule asks and an
-/// allow rule allows.
 pub fn ruled(mode: PermissionMode, access: Access, rule: Option<(RuleKind, String)>, by_mode: Verdict) -> Verdict {
     let planning = mode == PermissionMode::Plan && matches!(access, Access::Edits | Access::Executes);
     match rule {

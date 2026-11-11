@@ -1,11 +1,7 @@
-//! `{command} doctor` and `/doctor`: whether this installation can work in a
-//! folder, check by check, with what to do about each problem.
-
 use std::path::Path;
 
 use sdk::Sdk;
 
-/// One check: its name, whether it passed, and what it found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
     pub name: &'static str,
@@ -20,7 +16,6 @@ fn check(name: &'static str, result: Result<String, String>) -> Check {
     }
 }
 
-/// Every check, in the order a problem would block the next.
 pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
     let mut found = vec![check("version", Ok(env!("CARGO_PKG_VERSION").to_owned()))];
     #[cfg(unix)]
@@ -70,7 +65,6 @@ fn program(name: &str, args: &[&str]) -> Result<String, String> {
     }
 }
 
-/// The checks as lines, a mark before each.
 pub fn render(checks: &[Check]) -> String {
     let failed = checks.iter().filter(|c| !c.ok).count();
     let mut text = if failed == 0 { "All checks passed:".to_owned() } else { format!("{failed} problem(s):") };

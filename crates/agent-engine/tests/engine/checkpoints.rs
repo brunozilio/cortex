@@ -1,6 +1,3 @@
-//! Each prompt opens a checkpoint; rewinding to one puts back the files the
-//! agent wrote since and cuts the conversation before that prompt.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::NativeEngine;

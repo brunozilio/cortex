@@ -1,9 +1,3 @@
-//! The inline chat (`{command} --inline`): no alternate screen. The prompt,
-//! status and the run at work live in a small area at the bottom; once the
-//! agent is idle, the conversation's new entries are printed above it into
-//! the terminal's own scrollback, where the terminal scrolls, selects and
-//! searches them.
-
 use ratatui::backend::Backend;
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Widget, Wrap};
@@ -12,10 +6,8 @@ use ratatui::{DefaultTerminal, Terminal, TerminalOptions, Viewport};
 use super::app::App;
 use super::entries;
 
-/// Rows the inline chat takes at the bottom of the terminal.
 pub const HEIGHT: u16 = 16;
 
-/// The terminal: full screen, or inline at the bottom.
 pub fn terminal(inline: bool) -> DefaultTerminal {
     if inline {
         ratatui::init_with_options(TerminalOptions { viewport: Viewport::Inline(HEIGHT) })
@@ -24,7 +16,6 @@ pub fn terminal(inline: bool) -> DefaultTerminal {
     }
 }
 
-/// Prints `lines` above the inline area, into the scrollback.
 pub fn print<B: Backend>(terminal: &mut Terminal<B>, lines: Vec<Line<'static>>) -> Result<(), B::Error> {
     if lines.is_empty() {
         return Ok(());
@@ -34,9 +25,6 @@ pub fn print<B: Backend>(terminal: &mut Terminal<B>, lines: Vec<Line<'static>>) 
         .insert_before(height, |buffer| Paragraph::new(lines).wrap(Wrap { trim: false }).render(buffer.area, buffer))
 }
 
-/// Moves the entries the agent can no longer change to the scrollback:
-/// all of them once it is idle (while it works, a tool's entry still
-/// changes). A cleared or rewound conversation starts again below.
 pub fn flush<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(), B::Error> {
     let Some(printed) = app.inline else { return Ok(()) };
     let entries = &app.transcript.entries;

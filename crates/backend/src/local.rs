@@ -1,9 +1,3 @@
-//! [`LocalBackend`]: the in-process [`Backend`].
-//!
-//! Commands are handled on worker threads so the chat never blocks. Run
-//! control (submit, cancel, models) and slower queries (skills, memory) use
-//! separate workers, so a slow query never delays a cancel.
-
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 

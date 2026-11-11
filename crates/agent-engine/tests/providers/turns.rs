@@ -1,6 +1,3 @@
-//! A model turn on each provider: endpoint, authentication, body, effort
-//! and the streamed reply folded.
-
 use agent_engine::model::ModelApi;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::ProviderClient;
@@ -14,7 +11,6 @@ use crate::{credentials, header, request};
 
 #[test]
 fn each_provider_uses_its_own_authentication_endpoint_and_wire_body() {
-    // Kiro streams binary event-stream frames: see `kiro.rs`.
     for provider in ModelProvider::ACCOUNTS.into_iter().filter(|p| *p != ModelProvider::KiroSubscription) {
         let fixture = match provider {
             ModelProvider::OpenAi | ModelProvider::ChatGptSubscription => {
@@ -120,8 +116,6 @@ fn codex_done_only_events_and_final_output_are_folded_without_duplicates() {
 
 #[test]
 fn chosen_effort_reaches_each_provider_for_supported_models() {
-    // Copilot's effort follows its catalog entry: see `copilot.rs`. Kiro
-    // takes no effort.
     for provider in ModelProvider::ACCOUNTS
         .into_iter()
         .filter(|p| !matches!(p, ModelProvider::CopilotSubscription | ModelProvider::KiroSubscription))

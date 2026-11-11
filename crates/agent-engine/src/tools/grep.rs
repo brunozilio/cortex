@@ -1,5 +1,3 @@
-//! `Grep`: a regular expression searched through files.
-
 use std::path::Path;
 
 use serde_json::{Value, json};

@@ -1,6 +1,3 @@
-//! Releases on GitHub: the latest tag from the API, files from the
-//! release's download links. The repository is public; no token.
-
 use std::time::Duration;
 
 use super::Releases;

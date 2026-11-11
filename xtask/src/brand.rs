@@ -1,13 +1,5 @@
-//! `xtask brand`: spells `brand.toml` out where a file cannot read it: the
-//! binary's name, the workspace's author, release-please's package name,
-//! install.sh's defaults, README.md (from docs/README.template.md) and the
-//! repository's own project folder (`.{command}/`, renamed with its
-//! references). `xtask lint` checks they are current, and that nothing
-//! else names the product.
-
 use std::path::{Path, PathBuf};
 
-/// brand.toml's values and the names derived from them.
 #[derive(Debug, Clone)]
 pub struct Brand {
     pub name: String,
@@ -48,7 +40,6 @@ impl Brand {
         self.command.to_ascii_uppercase().replace('-', "_")
     }
 
-    /// The words that name the product or its owner.
     pub fn words(&self) -> Vec<String> {
         let mut words = vec![self.name.clone(), self.company.clone(), self.author.clone(), self.repository.clone()];
         if let Some((owner, _)) = self.repository.split_once('/') {
@@ -60,7 +51,6 @@ impl Brand {
         words
     }
 
-    /// `template` with `{{NAME}}`, `{{COMMAND}}`… filled in.
     pub fn fill(&self, template: &str) -> String {
         let env = self.env();
         [
@@ -80,13 +70,11 @@ impl Brand {
     }
 }
 
-/// A file's content as brand.toml wants it, when it differs.
 struct Change {
     path: PathBuf,
     content: String,
 }
 
-/// The command the binary is named now: the brand last applied.
 fn applied_command(root: &Path) -> Result<String, String> {
     let manifest = std::fs::read_to_string(root.join("crates/cli/Cargo.toml")).map_err(|e| e.to_string())?;
     let bin = manifest.split("[[bin]]").nth(1).ok_or("crates/cli/Cargo.toml has no [[bin]]")?;
@@ -96,7 +84,6 @@ fn applied_command(root: &Path) -> Result<String, String> {
         .ok_or_else(|| "crates/cli/Cargo.toml's [[bin]] has no name".into())
 }
 
-/// Replaces the value of the first line starting with `key` in `text`.
 fn set_line(text: &str, key: &str, line: &str) -> String {
     text.lines()
         .scan(false, |done, current| {
@@ -143,7 +130,6 @@ fn changes(root: &Path, brand: &Brand) -> Result<Vec<Change>, String> {
         .collect())
 }
 
-/// What `brand` would change: empty when every file is current.
 pub fn stale(root: &Path) -> Result<Vec<String>, String> {
     let brand = Brand::read(root)?;
     Ok(changes(root, &brand)?
@@ -152,7 +138,6 @@ pub fn stale(root: &Path) -> Result<Vec<String>, String> {
         .collect())
 }
 
-/// Applies brand.toml.
 pub fn run(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let brand = Brand::read(root)?;
     let old = applied_command(root)?;
@@ -167,8 +152,6 @@ pub fn run(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Moves the repository's own `.<old>/` (and its `<OLD>.md`) to the new
-/// names, with every reference to them in it, CLAUDE.md and `.claude/`.
 fn rename_project_folder(root: &Path, old: &str, new: &str) -> Result<(), Box<dyn std::error::Error>> {
     let (old_dir, new_dir) = (root.join(format!(".{old}")), root.join(format!(".{new}")));
     if !old_dir.is_dir() || new_dir.exists() {
@@ -252,8 +235,6 @@ mod tests {
     }
 }
 
-/// Files that spell the brand out on purpose: brand.toml, what `brand`
-/// writes, history, and the repository's own project folder.
 fn allowed(path: &str, brand: &Brand) -> bool {
     let own = format!(".{}/", brand.command);
     ["brand.toml", "CHANGELOG.md", "Cargo.lock", "Cargo.toml", "crates/cli/Cargo.toml", "release-please-config.json"]
@@ -263,7 +244,6 @@ fn allowed(path: &str, brand: &Brand) -> bool {
         || path.starts_with(".claude/")
 }
 
-/// Whether `word` is in `text` on its own (not inside a longer word).
 fn names(text: &str, word: &str) -> bool {
     let (text, word) = (text.to_ascii_lowercase(), word.to_ascii_lowercase());
     text.match_indices(&word).any(|(at, _)| {
@@ -273,7 +253,6 @@ fn names(text: &str, word: &str) -> bool {
     })
 }
 
-/// `brand-stale` and `brand-name` findings.
 pub fn findings(root: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let brand = Brand::read(root)?;
     let mut found: Vec<String> = stale(root)?.into_iter().map(|path| format!("brand-stale {path}")).collect();
@@ -284,7 +263,6 @@ pub fn findings(root: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> 
             continue;
         }
         let Ok(text) = std::fs::read_to_string(root.join(path)) else { continue };
-        // install.sh's defaults are written by `brand`.
         let text: String = if path == "install.sh" {
             text.lines()
                 .filter(|line| !["NAME=", "COMMAND=", "REPO="].iter().any(|key| line.starts_with(key)))

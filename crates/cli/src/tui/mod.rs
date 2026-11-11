@@ -1,6 +1,3 @@
-//! The terminal chat: full screen, redrawn as keys and the agent's events
-//! arrive.
-
 mod app;
 mod ask;
 mod attach;
@@ -79,26 +76,16 @@ pub use app::App;
 pub use settings::last_session;
 
 const FRAME: Duration = Duration::from_millis(80);
-/// Between frames while an animation runs.
 const ANIMATING: Duration = Duration::from_millis(33);
 
-/// Where the chat starts: the conversation it continues and the folders
-/// added to the project (`--add-dir`).
 #[derive(Debug, Default)]
 pub struct Start {
     pub resume: Option<sdk::SessionId>,
     pub add_dirs: Vec<PathBuf>,
-    /// Open `/resume`'s picker once the chat is ready (`{command} -r`).
     pub pick: bool,
-    /// `--allowedTools`, `--disallowedTools`, `--append-system-prompt`.
     pub headless: sdk::Headless,
-    /// Go on in a copy of the conversation resumed (`--fork-session`).
     pub fork: bool,
-    /// Draw at the bottom and print the conversation into the terminal's
-    /// scrollback (`--inline`), instead of full screen.
     pub inline: bool,
-    /// MCP servers kept up as channels (`--channels`): their messages reach
-    /// the chat as events.
     pub channels: Vec<String>,
 }
 
@@ -137,8 +124,6 @@ pub fn run(
         inline::print(&mut terminal, view::welcome(&app, width))?;
     }
     let _ = execute!(std::io::stdout(), EnableBracketedPaste, event::EnableFocusChange);
-    // Terminals that can tell keys apart (kitty, Ghostty, WezTerm, iTerm2)
-    // then report Cmd, so Cmd+arrows reach the prompt.
     let enhanced = supports_keyboard_enhancement().unwrap_or(false)
         && execute!(
             std::io::stdout(),

@@ -1,11 +1,3 @@
-//! The app's backend: a client sends [`ClientCommand`]s in an
-//! [`Envelope`] and polls [`ServerEvent`]s, woken by a [`Wake`] callback.
-//! [`LocalBackend`] runs everything in process.
-//!
-//! [`ClientCommand`]: protocol::ClientCommand
-//! [`Envelope`]: protocol::Envelope
-//! [`ServerEvent`]: protocol::ServerEvent
-
 mod authorizer;
 mod channels;
 mod dirs;
@@ -38,4 +30,3 @@ pub use providers::{InMemoryProviderStore, ModelProviders, ProviderStore};
 pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
 pub use settings::SettingsStore;
-

@@ -1,10 +1,3 @@
-//! Signing in to remote MCP servers (`/mcp login <name>`): find the
-//! server's authorization server, register the app with it, send the
-//! person through the browser (PKCE, a loopback redirect), and keep the
-//! tokens in the secrets store, by server URL. Runs get a fresh access token
-//! through [`McpTokenSource`], refreshed when stale. The rules are
-//! `domain::mcp_oauth`'s; this is their IO.
-
 use std::sync::{Arc, Mutex, PoisonError};
 
 use agent_engine::model::http::Http;
@@ -16,7 +9,6 @@ use serde_json::{Value, json};
 use crate::providers::redirect::{Loopback, pkce};
 use crate::secrets::SecretStore;
 
-/// The secrets entry holding every server's tokens (URL → JSON).
 const SLOT: SecretId = SecretId::from_uuid(uuid::Uuid::from_u128(0x6d63_705f_6f61_7574_6800_0000_0000_0001));
 const FORM: &str = "application/x-www-form-urlencoded";
 
@@ -25,7 +17,6 @@ pub struct McpAuth {
     secrets: Arc<dyn SecretStore>,
     http: Arc<dyn Http>,
     clock: Arc<dyn Fn() -> i64 + Send + Sync>,
-    /// One refresh or sign-in writes the tokens at a time.
     lock: Arc<Mutex<()>>,
 }
 
@@ -55,13 +46,10 @@ impl McpAuth {
         self
     }
 
-    /// What a run of `owner` reads its MCP tokens through.
     pub fn for_run(&self, owner: &Principal) -> McpSignIns {
         McpSignIns(Arc::new(RunTokens { auth: self.clone(), owner: owner.clone() }))
     }
 
-    /// Signs `owner` in to the MCP server at `server`: `open` gets the
-    /// address to visit in the browser; returns once signed in.
     pub fn sign_in(&self, owner: &Principal, server: &str, open: &mut dyn FnMut(&str)) -> Result<(), String> {
         let auth = self.auth_server(server)?;
         let loopback = Loopback::bind_on(0, "/callback", false)?;
@@ -107,7 +95,6 @@ impl McpAuth {
         self.save(owner, server, Some(&tokens))
     }
 
-    /// Forgets `owner`'s tokens for `server`; whether there were some.
     pub fn sign_out(&self, owner: &Principal, server: &str) -> Result<bool, String> {
         let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let had = self.load(owner, server).is_some();
@@ -115,9 +102,6 @@ impl McpAuth {
         Ok(had)
     }
 
-    /// A good access token for `server`, refreshed when stale.
-    /// The refresh goes out without the lock, so one slow server holds up
-    /// no other; a refresh that finished meanwhile wins.
     pub fn token(&self, owner: &Principal, server: &str) -> Option<String> {
         let tokens = {
             let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
@@ -145,7 +129,6 @@ impl McpAuth {
         let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         match self.load(owner, server) {
             Some(kept) if kept.access_token != tokens.access_token && kept.fresh(now) => Some(kept.access_token),
-            // Signed out meanwhile: the refreshed token is not kept.
             None => None,
             Some(_) => {
                 if let Err(error) = self.save(owner, server, Some(&refreshed)) {
@@ -156,8 +139,6 @@ impl McpAuth {
         }
     }
 
-    /// The authorization server `server` names, or its own origin's.
-    /// Every address it gives must pass [`mcp_oauth::endpoint_ok`].
     fn auth_server(&self, server: &str) -> Result<AuthServer, String> {
         let refuse =
             |url: &str| format!("{url} is not a safe address to sign in with (https, or http to this computer)");
@@ -188,7 +169,6 @@ impl McpAuth {
         Ok(auth)
     }
 
-    /// A client id for the app at `auth` (dynamic registration).
     fn register(&self, auth: &AuthServer, redirect: &str) -> Result<(String, Option<String>), String> {
         let endpoint = auth.registration_endpoint.as_deref().ok_or(concat!(
             "this server does not let applications register themselves, so ",

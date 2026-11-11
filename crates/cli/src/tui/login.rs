@@ -1,13 +1,9 @@
-//! Connecting a provider without leaving the chat (`/login`): pick one;
-//! a subscription signs in in the browser, an API key is typed hidden.
-
 use sdk::ModelProvider;
 
 use super::app::{App, Msg};
 use super::choices::{Picker, PickerKind};
 use crate::login::{MENU, how};
 
-/// An API key being typed: shown as dots, never echoed.
 #[derive(Debug)]
 pub struct SecretPrompt {
     pub provider: ModelProvider,

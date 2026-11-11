@@ -1,13 +1,3 @@
-//! Where command-line tools live, for every system (ADR 0013).
-//!
-//! Pure: the system and the folders to search are passed in. The tools
-//! The app starts (`uv`, `npx`, an MCP server's command) are searched with
-//! these.
-//!
-//! On Windows a tool is a file with an extension Windows can start
-//! (`claude.exe`, `npx.cmd`). npm also writes an extensionless shell script
-//! next to its `.cmd` shim; Windows cannot start it, so it is never chosen.
-
 use std::path::{Path, PathBuf};
 
 const WINDOWS_EXTENSIONS: [&str; 3] = ["exe", "cmd", "bat"];

@@ -1,4 +1,3 @@
-//! Markdown rules, scoped to paths through frontmatter `paths` globs.
 use globset::{Glob, GlobSetBuilder};
 use std::path::{Path, PathBuf};
 

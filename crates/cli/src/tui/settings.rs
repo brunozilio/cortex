@@ -1,6 +1,3 @@
-//! What the chat keeps between launches in the owner's settings: the
-//! model, the permission mode and the effort.
-
 use domain::command::{level_named, mode_named};
 use std::path::Path;
 
@@ -21,21 +18,17 @@ pub fn read(settings: &serde_json::Value) -> Saved {
     }
 }
 
-/// The conversation last had in `cwd`, for `{command} -c`.
 pub fn last_session(settings: &serde_json::Value, cwd: &Path) -> Option<SessionId> {
     settings["sessions"][cwd.to_string_lossy().as_ref()].as_str().map(|id| SessionId(id.to_owned()))
 }
 
-/// The name given to `session`, the last conversation titled in `cwd`.
 pub fn title(settings: &serde_json::Value, cwd: &Path, session: &SessionId) -> Option<String> {
     let kept = &settings["titles"][cwd.to_string_lossy().as_ref()];
     (kept["session"].as_str() == Some(session.0.as_str())).then(|| kept["title"].as_str().map(str::to_owned))?
 }
 
-/// Prompts kept per folder for Up and Down.
 const HISTORY: usize = 100;
 
-/// The prompts sent in `cwd` before, oldest first.
 pub fn history(settings: &serde_json::Value, cwd: &Path) -> Vec<String> {
     settings["history"][cwd.to_string_lossy().as_ref()]
         .as_array()
@@ -45,8 +38,6 @@ pub fn history(settings: &serde_json::Value, cwd: &Path) -> Vec<String> {
 
 type Change = Box<dyn FnOnce(&mut serde_json::Value) + Send>;
 
-/// Writes settings one change at a time, off the chat's thread, so two
-/// quick changes never overwrite each other.
 #[derive(Clone)]
 pub struct Saver(crossbeam_channel::Sender<Change>);
 
@@ -74,19 +65,16 @@ impl Saver {
         let _ = self.0.send(Box::new(change));
     }
 
-    /// Saves one setting, keeping the others.
     pub fn remember(&self, key: &str, value: &str) {
         let (key, value) = (key.to_owned(), value.to_owned());
         self.change(move |settings| settings[key] = serde_json::Value::String(value));
     }
 
-    /// Adds `prompt` to what was sent in `cwd`.
     pub fn remember_prompt(&self, cwd: &Path, prompt: &str) {
         let (cwd, prompt) = (cwd.to_owned(), prompt.to_owned());
         self.change(move |settings| add_prompt(settings, &cwd, prompt));
     }
 
-    /// Remembers `session` as the conversation last had in `cwd`.
     pub fn remember_session(&self, cwd: &Path, session: &SessionId) {
         let (cwd, session) = (cwd.to_string_lossy().into_owned(), session.0.clone());
         self.change(move |settings| {
@@ -99,7 +87,6 @@ impl Saver {
         });
     }
 
-    /// Keeps `title` as the name of `session` in `cwd` (one per folder).
     pub fn remember_title(&self, cwd: &Path, session: &SessionId, title: &str) {
         let (cwd, session, title) = (cwd.to_string_lossy().into_owned(), session.0.clone(), title.to_owned());
         self.change(move |settings| {

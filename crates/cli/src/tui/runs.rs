@@ -1,6 +1,3 @@
-//! Following the agent's runs: starting one, applying its events, sending
-//! what was queued when it ends, and answering or cancelling it.
-
 use std::time::Instant;
 
 use sdk::{EngineEvent, Run};
@@ -63,7 +60,6 @@ impl App {
         self.send_as(text.clone(), text);
     }
 
-    /// Sends `text`, shown in the conversation as `shown`.
     pub(super) fn send_as(&mut self, text: String, shown: String) {
         self.ghost = None;
         let Some(session) = &self.session else {
@@ -77,8 +73,6 @@ impl App {
         self.follow(started);
     }
 
-    /// ↑ while the agent works: asks for the messages it has not taken yet,
-    /// which come back (`Unsteered`) into the prompt to edit.
     pub(super) fn take_back_queued(&mut self) {
         if let Some(run) = &self.run {
             let _ = run.unsteer();
@@ -91,7 +85,6 @@ impl App {
         }
     }
 
-    /// Puts what was queued back in the prompt, so an interrupt loses nothing.
     fn unqueue(&mut self) {
         if self.queued.is_empty() {
             return;
@@ -100,7 +93,6 @@ impl App {
         self.back_in_prompt(text);
     }
 
-    /// Puts `text` in the prompt, before what is typed there.
     fn back_in_prompt(&mut self, mut text: String) {
         if !self.input.is_empty() {
             text = format!("{text}\n\n{}", self.input.text());

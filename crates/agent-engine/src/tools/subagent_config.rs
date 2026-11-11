@@ -1,5 +1,3 @@
-//! Enforced custom-agent metadata. Unsupported execution features fail explicitly
-//! instead of silently granting a broader tool/permission set.
 use domain::{Effort, ModelProvider, PermissionMode};
 use serde_json::Value;
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

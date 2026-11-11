@@ -1,9 +1,3 @@
-//! The site of a web address, as rules name it (`domain:docs.rs`), and
-//! whether it is this computer or its private network, which the web tools
-//! never reach.
-
-/// The host of `url`, lowercased and without a trailing dot, so
-/// `Docs.RS.` and `docs.rs` are one site. `None` when there is none.
 pub fn site(url: &str) -> Option<String> {
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
     let host = rest.split(['/', '?', '#', '\\']).next()?;
@@ -16,8 +10,6 @@ pub fn site(url: &str) -> Option<String> {
     (!host.is_empty()).then_some(host)
 }
 
-/// Whether `host` (as [`site`] gives it) is this computer, its private
-/// network, or a cloud's metadata service.
 pub fn is_private(host: &str) -> bool {
     if host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local") || host.ends_with(".internal") {
         return true;
@@ -34,8 +26,6 @@ pub fn is_private(host: &str) -> bool {
                 || (first & 0xffc0) == 0xfe80
                 || ip.to_ipv4_mapped().is_some_and(|v4| is_private(&v4.to_string()))
         }
-        // Digits only (`2130706433`) or hex parts read as an address by
-        // some resolvers.
         Err(_) => host.chars().all(|c| c.is_ascii_digit() || c == '.') || host.starts_with("0x"),
     }
 }

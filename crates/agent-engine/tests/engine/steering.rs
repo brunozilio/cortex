@@ -1,5 +1,3 @@
-//! Messages steered into a run, and taken back before the model saw them.
-
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

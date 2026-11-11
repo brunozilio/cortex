@@ -1,6 +1,3 @@
-//! GitHub Copilot on the wire: each model on the API its catalog entry
-//! names, the catalog itself, and the device sign-in.
-
 use agent_engine::model::ModelApi;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::{ProviderClient, copilot};

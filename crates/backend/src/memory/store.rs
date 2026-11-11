@@ -1,6 +1,3 @@
-//! Where memory books are kept: one JSON file per owner and project, or
-//! in memory for tests.
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -25,9 +22,6 @@ pub fn owner_key(owner: &Principal) -> String {
     }
 }
 
-/// This computer's memory: `<app data>/memory`. Without an app data folder
-/// memories last only as long as the process; a temp folder would lose
-/// them on reboot while looking saved.
 pub fn system_memory_store() -> Arc<dyn MemoryStore> {
     memory_store_in(app_data_dir())
 }
@@ -58,9 +52,6 @@ impl FileMemoryStore {
 }
 
 impl MemoryStore for FileMemoryStore {
-    /// A missing book is empty. An unreadable one is renamed aside
-    /// (`<key>.json.corrupt-<secs>`) before starting empty, so the next
-    /// save never writes over memories that could still be recovered.
     fn load(&self, owner: &Principal, project: &Path) -> MemoryBook {
         let path = self.path(owner, project);
         let Ok(bytes) = std::fs::read(&path) else { return MemoryBook::default() };

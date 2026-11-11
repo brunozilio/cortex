@@ -1,6 +1,3 @@
-//! The judge: a top-level run with verification criteria is graded before
-//! it completes, and tries again with the judge's reasons when it fails.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::{

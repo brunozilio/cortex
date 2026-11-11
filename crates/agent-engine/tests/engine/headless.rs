@@ -1,6 +1,3 @@
-//! What `{command} -p` adds to a run: a turn limit, rules for this run only
-//! and text after the system prompt.
-
 use std::sync::{Arc, Mutex};
 
 use agent_engine::NativeEngine;

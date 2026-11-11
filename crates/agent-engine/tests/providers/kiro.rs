@@ -1,7 +1,3 @@
-//! Kiro on the wire: a turn on the profile's runtime with its ARN, a
-//! rejected token refreshed once, and the catalog from the management
-//! service. The streams are recorded from Kiro (event-stream frames).
-
 use agent_engine::model::http::{Http, Response, Sent};
 use agent_engine::model::providers::ProviderClient;
 use agent_engine::model::{ModelApi, ModelError};

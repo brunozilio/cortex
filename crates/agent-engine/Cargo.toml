@@ -6,7 +6,6 @@ edition.workspace = true
 publish.workspace = true
 
 [features]
-# Scripted engines, models and stores for other crates' tests.
 test-support = []
 
 [dependencies]
@@ -33,7 +32,6 @@ url = "2"
 uuid.workspace = true
 
 [dev-dependencies]
-# The integration tests in tests/ use the scripted models and stores.
 agent-engine = { path = ".", features = ["test-support"] }
 tempfile.workspace = true
 

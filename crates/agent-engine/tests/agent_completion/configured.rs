@@ -1,6 +1,3 @@
-//! A custom agent's configuration at work: its permission mode, what it
-//! leaves out of its prompt, and its own compaction window.
-
 use agent_engine::{
     model::scripted::ScriptedModel,
     prompt::{self, Environment, Instructions, Scope},

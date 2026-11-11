@@ -1,7 +1,3 @@
-//! The native engine's system prompt (ADR 0015): the app's own text
-//! ([`text`]), the sections for the tools the run was granted, the
-//! instruction files (`{COMMAND}.md` first) and where the agent runs.
-
 mod git;
 mod instruction_files;
 pub(crate) mod markdown;
@@ -44,7 +40,6 @@ pub struct Instructions {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Environment {
     pub cwd: PathBuf,
-    /// Folders added to the project (`/add-dir`, `additionalDirectories`).
     pub added_dirs: Vec<PathBuf>,
     pub platform: &'static str,
     pub date: String,

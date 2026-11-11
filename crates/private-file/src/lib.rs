@@ -1,13 +1,3 @@
-//! Files only the user running the app can read: secrets, tokens and
-//! MCP configurations (ADR 0013).
-//!
-//! - Unix: mode `0600`, also on a file that already existed.
-//! - Windows: a protected DACL granting the current user alone, so the
-//!   file inherits nothing from its folder.
-//!
-//! The file is restricted before it is handed back, so nothing is written
-//! to it while others could read it.
-
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::path::Path;
@@ -92,7 +82,6 @@ mod windows {
 
     pub(super) fn restrict(path: &Path) -> io::Result<()> {
         let user = current_user()?;
-        // SAFETY: `user` holds a TOKEN_USER filled by GetTokenInformation;
         let sid = unsafe { (*user.as_ptr().cast::<TOKEN_USER>()).User.Sid };
         let access = EXPLICIT_ACCESS_W {
             grfAccessPermissions: GENERIC_ALL,
@@ -107,13 +96,11 @@ mod windows {
             },
         };
         let mut acl: *mut ACL = std::ptr::null_mut();
-        // SAFETY: one valid entry, no old ACL; `acl` receives a LocalAlloc'd ACL.
         let made = unsafe { SetEntriesInAclW(1, &access, std::ptr::null(), &mut acl) };
         if made != ERROR_SUCCESS {
             return Err(io::Error::from_raw_os_error(made as i32));
         }
         let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
-        // SAFETY: `wide` is a NUL-terminated path; `acl` was just built.
         let set = unsafe {
             SetNamedSecurityInfoW(
                 wide.as_ptr(),
@@ -125,7 +112,6 @@ mod windows {
                 std::ptr::null(),
             )
         };
-        // SAFETY: `acl` came from SetEntriesInAclW and is freed once.
         unsafe { LocalFree(acl.cast()) };
         if set != ERROR_SUCCESS {
             return Err(io::Error::from_raw_os_error(set as i32));
@@ -135,19 +121,15 @@ mod windows {
 
     fn current_user() -> io::Result<Vec<u64>> {
         let mut token: HANDLE = std::ptr::null_mut();
-        // SAFETY: the pseudo-handle of this process needs no closing.
         if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
             return Err(io::Error::last_os_error());
         }
         let mut needed = 0u32;
-        // SAFETY: a null buffer of size 0 only asks for the size needed.
         unsafe { GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut needed) };
         let mut buffer = vec![0u64; (needed as usize).div_ceil(8).max(1)];
         let size = u32::try_from(buffer.len() * 8).unwrap_or(u32::MAX);
-        // SAFETY: `buffer` holds `size` bytes, aligned for TOKEN_USER.
         let read = unsafe { GetTokenInformation(token, TokenUser, buffer.as_mut_ptr().cast(), size, &mut needed) };
         let error = io::Error::last_os_error();
-        // SAFETY: `token` was opened above and is closed once.
         unsafe { CloseHandle(token) };
         if read == 0 {
             return Err(error);

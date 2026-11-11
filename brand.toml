@@ -1,16 +1,6 @@
-# The product's name and owner, fixed when it is built. Every text the app
-# shows or sends (the agent's prompts too), its folders, its environment
-# variables and the command itself come from here.
-#
-# After changing it, run `cargo run -p xtask -- brand` so the files that
-# must spell the name out (the binary's name, install.sh) follow.
 
-# How texts name the product.
 name = "Lite"
-# The command, its folders (~/.lite, .lite/, LITE.md) and its environment
-# variables (LITE_*): lowercase letters, digits and dashes.
 command = "lite"
 company = "brunozilio"
 author = "brunozilio"
-# The GitHub repository (owner/name) whose releases `update` installs.
 repository = "brunozilio/cortex"

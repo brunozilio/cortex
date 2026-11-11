@@ -1,7 +1,3 @@
-//! MCP for the host program: tools written in code ([`McpServer`], served
-//! in process, no HTTP) and servers reached over HTTP or stdio
-//! ([`McpConnection`]).
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -18,22 +14,6 @@ struct McpTool {
     handler: Arc<Handler>,
 }
 
-/// An MCP server whose tools are Rust closures. The agent sees each tool
-/// as `mcp__<server>__<tool>`; a tool returns a string (sent as text) or
-/// any JSON value (sent as its JSON text), or an error message.
-///
-/// ```
-/// use sdk::McpServer;
-/// use serde_json::json;
-///
-/// let math = McpServer::new("math").tool(
-///     "add",
-///     "Adds two numbers.",
-///     json!({"type": "object", "properties": {"a": {"type": "number"}, "b": {"type": "number"}}}),
-///     |input| Ok(json!(input["a"].as_f64().unwrap_or(0.0) + input["b"].as_f64().unwrap_or(0.0))),
-/// );
-/// assert_eq!(math.name(), "math");
-/// ```
 #[derive(Clone)]
 pub struct McpServer {
     name: String,
@@ -56,7 +36,6 @@ impl McpServer {
         &self.name
     }
 
-    /// Adds a tool; `schema` is its input's JSON Schema.
     pub fn tool(
         mut self,
         name: impl Into<String>,
@@ -96,8 +75,6 @@ impl McpEndpoint for McpServer {
     }
 }
 
-/// An MCP server the agent reaches over streamable HTTP or by starting a
-/// process that speaks stdio.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct McpConnection(pub(crate) McpServerSpec);
 
@@ -112,7 +89,6 @@ impl McpConnection {
         Self(spec)
     }
 
-    /// A request header (HTTP), such as `Authorization`.
     pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         if let McpServerSpec::Http { headers, .. } = &mut self.0 {
             headers.insert(key.into(), value.into());
@@ -120,7 +96,6 @@ impl McpConnection {
         self
     }
 
-    /// A command-line argument (stdio).
     pub fn arg(mut self, arg: impl Into<String>) -> Self {
         if let McpServerSpec::Stdio { args, .. } = &mut self.0 {
             args.push(arg.into());
@@ -128,7 +103,6 @@ impl McpConnection {
         self
     }
 
-    /// An environment variable for the process (stdio).
     pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         if let McpServerSpec::Stdio { env, .. } = &mut self.0 {
             env.insert(key.into(), value.into());

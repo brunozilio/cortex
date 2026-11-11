@@ -1,11 +1,7 @@
-//! `/resume`: going back to an earlier conversation of this folder, picked
-//! from the newest.
-
 use super::app::{App, Msg};
 use super::choices::{Picker, PickerKind};
 use super::conversations::{self, Conversation};
 
-/// Reads the folder's conversations, then offers them.
 pub fn open(app: &mut App) {
     if app.busy() {
         return app.transcript.notice("Wait for the agent to finish, or press Esc, before resuming another.");

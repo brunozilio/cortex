@@ -1,7 +1,3 @@
-//! The agent's tools. Names, parameters and behaviour follow the tools
-//! coding agents already know (`Read`, `Edit`, `Bash`…), so skills, agents
-//! and the chat's step labels work unchanged; descriptions are our own.
-
 pub mod advisor;
 pub mod ask;
 mod bash;
@@ -65,8 +61,6 @@ pub struct Outcome {
     pub content: String,
     pub is_error: bool,
     pub images: Vec<domain::Image>,
-    /// What the user sees instead of `content` (an edit's diff); the model
-    /// never reads it.
     #[serde(default)]
     pub shown: Option<String>,
 }

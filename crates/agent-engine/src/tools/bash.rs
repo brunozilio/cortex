@@ -1,5 +1,3 @@
-//! `Bash`: a command run in the user's shell, in the working directory.
-
 use std::process::Stdio;
 use std::time::Duration;
 

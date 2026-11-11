@@ -1,12 +1,8 @@
-//! Jupyter notebooks: `Read` shows their cells with their outputs, and
-//! `NotebookEdit` replaces, inserts or deletes one cell.
-
 use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
 
-/// What one cell's outputs show at most.
 const OUTPUT: usize = 4_000;
 
 fn source(cell: &Value) -> String {
@@ -17,8 +13,6 @@ fn source(cell: &Value) -> String {
     }
 }
 
-/// A notebook's cells as `Read` shows them: number, id and kind, the
-/// source, then what it printed.
 pub fn render(text: &str) -> Result<String, String> {
     let notebook: Value = serde_json::from_str(text).map_err(|e| format!("not a notebook: {e}"))?;
     let cells = notebook["cells"].as_array().ok_or("not a notebook: no cells")?;
@@ -104,7 +98,6 @@ impl Tool for NotebookEdit {
     }
 }
 
-/// The notebook `text` with the edit `input` asks for.
 fn edit(text: &str, input: &Value) -> Result<String, String> {
     let mut notebook: Value = serde_json::from_str(text).map_err(|e| format!("not a notebook: {e}"))?;
     let cells = notebook["cells"].as_array_mut().ok_or("not a notebook: no cells")?;

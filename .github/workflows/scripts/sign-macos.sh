@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Sign a macOS binary with the Developer ID certificate and notarize it.
-#
-# Usage: sign-macos.sh <binary>
-# Env:   MACOS_CERTIFICATE (base64 .p12), MACOS_CERTIFICATE_PASSWORD,
-#        APPLE_API_KEY (base64 .p8), APPLE_API_KEY_ID, APPLE_API_ISSUER
-#
-# A bare executable cannot carry a stapled ticket; Gatekeeper looks the
-# notarization up online the first time the binary runs.
 set -euo pipefail
 
 BINARY="$1"
@@ -28,7 +20,6 @@ echo "$MACOS_CERTIFICATE" | base64 --decode > "$WORK/certificate.p12"
 security import "$WORK/certificate.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" \
   -T /usr/bin/codesign -T /usr/bin/security
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PASSWORD" "$KEYCHAIN" >/dev/null
-# codesign resolves the identity's chain through the search list.
 security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
 
 codesign --force --options runtime --timestamp --keychain "$KEYCHAIN" --sign "$IDENTITY" "$BINARY"

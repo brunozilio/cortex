@@ -1,4 +1,3 @@
-//! Run-local handles for background agents; execution lives in the agent loop.
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 use serde_json::{Value, json};

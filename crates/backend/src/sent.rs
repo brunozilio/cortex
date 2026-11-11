@@ -1,7 +1,3 @@
-//! What a client may say about a prompt. The tools, folders and recall a
-//! run gets are the backend's to grant: whatever a client put there is
-//! dropped before the run starts.
-
 use domain::{MemoryBrief, PromptRequest};
 
 pub fn as_sent(request: &PromptRequest) -> PromptRequest {

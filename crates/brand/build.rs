@@ -1,9 +1,5 @@
-//! Reads the workspace's `brand.toml` (or the file `BRAND_FILE` names) and
-//! writes its values, and the names derived from them, as constants.
-
 use std::path::PathBuf;
 
-/// The `key = "value"` lines of a flat TOML file.
 fn values(text: &str) -> Vec<(String, String)> {
     text.lines()
         .map(|line| line.split_once('#').map_or(line, |(before, _)| before).trim())
@@ -33,25 +29,22 @@ fn main() {
     assert!(valid, "`command` in {} must be lowercase letters, digits and dashes: {command}", file.display());
     let env = command.to_ascii_uppercase().replace('-', "_");
     let constants = [
-        ("NAME", "How texts name the product.", get("name")),
-        ("COMMAND", "The command, and the name of its folders.", command.clone()),
-        ("ENV", "The prefix of its environment variables (`ENV_NAME`).", env.clone()),
-        ("COMPANY", "Who makes it.", get("company")),
-        ("AUTHOR", "Who wrote it.", get("author")),
-        ("REPOSITORY", "The GitHub repository (owner/name) of its releases.", get("repository")),
-        ("DIR", "The folder of its files in a project and in the home folder.", format!(".{command}")),
-        ("INSTRUCTIONS", "The instructions file a project gives the agent.", format!("{env}.md")),
-        ("LOCAL_INSTRUCTIONS", "The instructions file kept out of version control.", format!("{env}.local.md")),
-        ("PLUGIN_DIR", "The folder holding a plugin's manifest.", format!(".{command}-plugin")),
+        ("NAME", get("name")),
+        ("COMMAND", command.clone()),
+        ("ENV", env.clone()),
+        ("COMPANY", get("company")),
+        ("AUTHOR", get("author")),
+        ("REPOSITORY", get("repository")),
+        ("DIR", format!(".{command}")),
+        ("INSTRUCTIONS", format!("{env}.md")),
+        ("LOCAL_INSTRUCTIONS", format!("{env}.local.md")),
+        ("PLUGIN_DIR", format!(".{command}-plugin")),
     ];
     let mut code = String::new();
-    for (name, doc, value) in constants {
-        code.push_str(&format!("/// {doc}\npub const {name}: &str = {value:?};\n"));
-        // The same as a literal, for `concat!` (constants, format strings).
+    for (name, value) in constants {
+        code.push_str(&format!("pub const {name}: &str = {value:?};\n"));
         let lower = if name == "ENV" { "env_prefix".to_owned() } else { name.to_ascii_lowercase() };
-        code.push_str(&format!(
-            "/// [`{name}`] as a literal, for `concat!`.\n#[macro_export]\nmacro_rules! {lower} {{ () => {{ {value:?} }}; }}\n"
-        ));
+        code.push_str(&format!("#[macro_export]\nmacro_rules! {lower} {{ () => {{ {value:?} }}; }}\n"));
     }
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap_or_default()).join("brand.rs");
     std::fs::write(&out, code).unwrap_or_else(|error| panic!("{}: {error}", out.display()));

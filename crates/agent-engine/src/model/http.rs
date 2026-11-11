@@ -1,5 +1,3 @@
-//! HTTP behind a trait, so providers are tested against recorded streams.
-
 use std::io::{BufRead, Cursor};
 
 pub struct Response {
@@ -36,7 +34,6 @@ pub trait Http: Send + Sync {
     fn get(&self, _url: &str, _headers: &[(String, String)]) -> Result<Response, String> {
         Err("GET is not supported by this HTTP transport".into())
     }
-    /// A GET whose body streams until `stop` (an event stream).
     fn get_stream(
         &self,
         _url: &str,
@@ -53,18 +50,14 @@ pub trait Http: Send + Sync {
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String>;
 }
 
-/// The network. Model turns stream and stop with the run; short calls
-/// (sign-in, catalogs) are read whole within [`SHORT_TIMEOUT`].
 #[derive(Debug, Default)]
 pub struct NetHttp;
 
-/// How long a sign-in, catalog or other short call may take.
 pub const SHORT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 impl NetHttp {
     fn short(url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
         let never = std::sync::atomic::AtomicBool::new(false);
-        // The bare reason: callers say themselves that the provider was not reached.
         let response =
             super::cancellable_http::send(url, headers, body, &never, SHORT_TIMEOUT).map_err(|error| match error {
                 super::ModelError::Network(reason) => reason,
@@ -97,7 +90,6 @@ impl Http for NetHttp {
         headers: &[(String, String)],
         stop: &std::sync::atomic::AtomicBool,
     ) -> Result<Response, super::ModelError> {
-        // An MCP server's stream lasts as long as the run that opened it.
         super::cancellable_http::send(url, headers, None, stop, std::time::Duration::from_secs(12 * 3600))
     }
 

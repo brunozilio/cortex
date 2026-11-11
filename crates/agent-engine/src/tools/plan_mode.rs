@@ -1,7 +1,3 @@
-//! `ExitPlanMode` and `EnterPlanMode`: the agent puts its plan to the user,
-//! or turns planning on for a task that needs one. The agent loop runs them
-//! (leaving waits for the user); this is their schema and wording.
-
 use serde_json::{Value, json};
 
 use super::{Access, Outcome, Tool, Workspace};
@@ -79,7 +75,6 @@ impl Tool for EnterPlanMode {
     }
 }
 
-/// The plan an `ExitPlanMode` call carries, if it has one.
 pub fn plan(input: &Value) -> Option<&str> {
     input["plan"].as_str().map(str::trim).filter(|plan| !plan.is_empty())
 }

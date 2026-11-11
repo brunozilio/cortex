@@ -1,23 +1,17 @@
-//! The conversations had in each folder, newest first, for `/resume` and
-//! `{command} --resume`: their session, title and when they were last used.
-
 use std::path::Path;
 
 use sdk::SessionId;
 use serde_json::{Value, json};
 
-/// Conversations kept per folder.
 const KEPT: usize = 30;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conversation {
     pub session: SessionId,
     pub title: Option<String>,
-    /// Seconds since the epoch.
     pub at: u64,
 }
 
-/// The conversations of `cwd`, newest first.
 pub fn list(settings: &Value, cwd: &Path) -> Vec<Conversation> {
     settings["conversations"][cwd.to_string_lossy().as_ref()]
         .as_array()
@@ -35,8 +29,6 @@ pub fn list(settings: &Value, cwd: &Path) -> Vec<Conversation> {
         .unwrap_or_default()
 }
 
-/// Notes that `session` was used in `cwd` at `at` (and its title, when
-/// given), moving it to the front.
 pub fn touch(settings: &mut Value, cwd: &Path, session: &SessionId, title: Option<&str>, at: u64) {
     let mut kept = list(settings, cwd);
     let title =
@@ -52,7 +44,6 @@ pub fn touch(settings: &mut Value, cwd: &Path, session: &SessionId, title: Optio
     );
 }
 
-/// When a conversation was last used, said shortly ("3h ago").
 pub fn ago(at: u64, now: u64) -> String {
     let seconds = now.saturating_sub(at);
     match seconds {

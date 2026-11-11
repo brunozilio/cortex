@@ -1,4 +1,3 @@
-//! Strict YAML metadata shared by rules and custom agents.
 use serde_json::Value;
 pub fn frontmatter(text: &str) -> Result<(Value, &str), String> {
     let text = text.trim_start_matches('\u{feff}');

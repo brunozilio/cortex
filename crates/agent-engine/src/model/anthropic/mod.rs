@@ -1,5 +1,3 @@
-//! Anthropic's Messages API (`POST /v1/messages`), streamed.
-
 mod body;
 mod stream;
 

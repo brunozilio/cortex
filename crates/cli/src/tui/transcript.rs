@@ -1,8 +1,3 @@
-//! The conversation as the chat shows it: what was said, the model's
-//! reasoning, the tools the agent ran, its sub-agents and their steps, and
-//! notices. [`Transcript::apply`] folds a run's events into it and keeps
-//! what the agent is doing right now ([`Transcript::activity`]).
-
 use domain::{AgentStatus, ToolCall};
 use sdk::EngineEvent;
 
@@ -16,35 +11,12 @@ pub enum ToolState {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Entry {
     User(String),
-    Thinking {
-        text: String,
-        done: bool,
-    },
+    Thinking { text: String, done: bool },
     Assistant(String),
-    Tool {
-        id: String,
-        name: String,
-        summary: String,
-        state: ToolState,
-        output: Option<String>,
-    },
-    Agent {
-        index: usize,
-        kind: String,
-        summary: String,
-        done: Option<bool>,
-        steps: Vec<String>,
-    },
-    /// The project's uncommitted changes (`/diff`).
-    Diff {
-        diff: String,
-        untracked: Vec<String>,
-    },
-    /// The plan the agent put to the user (`ExitPlanMode`).
-    Plan {
-        plan: String,
-        outcome: super::plan::Outcome,
-    },
+    Tool { id: String, name: String, summary: String, state: ToolState, output: Option<String> },
+    Agent { index: usize, kind: String, summary: String, done: Option<bool>, steps: Vec<String> },
+    Diff { diff: String, untracked: Vec<String> },
+    Plan { plan: String, outcome: super::plan::Outcome },
     Notice(String),
     Error(String),
 }
@@ -52,21 +24,13 @@ pub enum Entry {
 #[derive(Debug, Default)]
 pub struct Transcript {
     pub entries: Vec<Entry>,
-    /// Cost of the runs so far, in US dollars, when the provider prices it.
     pub cost: f64,
-    /// Tokens the last model call read: how full the context is.
     pub context: u64,
-    /// Tokens the model wrote during the running run.
     pub written: u64,
-    /// What the agent is doing now ("Thinking", "Bash(cargo test)").
     pub activity: Option<String>,
-    /// Commands the agent left running in the background, by id.
     pub background: Vec<String>,
-    /// The `ExitPlanMode` call waiting on the user, by id.
     pub(super) plan_call: Option<String>,
-    /// The JSON input of the tool call the model is writing.
     drafting: Option<String>,
-    /// The agent's task list, as it last showed it.
     pub tasks: Vec<domain::events::TaskItem>,
 }
 
@@ -79,7 +43,6 @@ fn user_text(entry: &Entry) -> Option<String> {
     }
 }
 
-/// How a tool call reads: `Read(src/main.rs)`.
 pub fn call(name: &str, summary: &str) -> String {
     if summary.is_empty() { name.to_owned() } else { format!("{name}({summary})") }
 }
@@ -89,12 +52,10 @@ impl Transcript {
         self.entries.push(entry);
     }
 
-    /// What the user first asked in this chat.
     pub fn first_prompt(&self) -> Option<String> {
         self.entries.iter().find_map(user_text)
     }
 
-    /// What the user last asked in this chat.
     pub fn last_prompt(&self) -> Option<String> {
         self.entries.iter().rev().find_map(user_text)
     }
@@ -107,8 +68,6 @@ impl Transcript {
         self.push(Entry::Error(text.into()));
     }
 
-    /// Folds one event of the running run in. Asks are the chat's to
-    /// handle; they leave the transcript as it is.
     pub fn apply(&mut self, event: &EngineEvent) {
         if self.planned(event) {
             return;
@@ -197,7 +156,6 @@ impl Transcript {
         }
     }
 
-    /// A new run: nothing written yet.
     pub fn begin(&mut self) {
         self.written = 0;
         self.activity = Some("Working".into());
@@ -216,7 +174,6 @@ impl Transcript {
         });
     }
 
-    /// Notices the background commands a result started, stopped or saw end.
     fn track_background(&mut self, output: &str) {
         let first = |text: &str| text.split(|c: char| !(c.is_alphanumeric() || c == '_')).next().map(str::to_owned);
         if let Some(id) = output.strip_prefix("Started in the background as ").and_then(first) {
@@ -274,13 +231,11 @@ impl Transcript {
             match status {
                 AgentStatus::Done { .. } => *done = Some(true),
                 AgentStatus::Failed => *done = Some(false),
-                // A finished agent that got another message works again.
                 AgentStatus::Running { .. } => *done = None,
             }
         }
     }
 
-    /// The run ended: tools still running get its outcome, reasoning closes.
     fn settle(&mut self, outcome: ToolState) {
         self.close_thinking();
         self.activity = None;

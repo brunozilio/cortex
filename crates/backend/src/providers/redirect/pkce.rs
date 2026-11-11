@@ -1,5 +1,3 @@
-//! PKCE (RFC 7636): the S256 challenge of a verifier.
-
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use sha2::{Digest, Sha256};

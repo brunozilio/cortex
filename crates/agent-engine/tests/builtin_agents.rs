@@ -1,6 +1,3 @@
-//! The built-in sub-agents through the agent loop: a fork starts from the
-//! parent's conversation, Explore cannot reach the editing tools.
-
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 

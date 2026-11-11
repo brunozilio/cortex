@@ -1,5 +1,3 @@
-//! The agent loop against a scripted model and real tools in a temp dir.
-
 mod custom_agents;
 mod permission_rules;
 mod permissions;

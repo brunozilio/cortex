@@ -1,5 +1,3 @@
-//! One Windows shell selection for agent tools, hooks and vault commands.
-
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::Command;

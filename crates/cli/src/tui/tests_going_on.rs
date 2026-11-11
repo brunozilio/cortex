@@ -1,6 +1,3 @@
-//! The chat around its runs: the side calls it makes by itself, and going
-//! back to an earlier prompt.
-
 use std::time::{Duration, Instant};
 
 use agent_engine::fake::FakeEngine;

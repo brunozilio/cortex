@@ -1,5 +1,3 @@
-//! The chat's own `/commands`.
-
 use domain::command::{Command, McpCommand};
 use sdk::PermissionMode;
 
@@ -238,17 +236,14 @@ pub fn run(app: &mut App, command: Command) {
     }
 }
 
-/// Built-in commands and skills whose name starts with `typed`.
 pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, String)> {
     let builtin = Command::HELP.iter().map(|(name, about)| ((*name).to_owned(), (*about).to_owned()));
     let skills = skills.iter().map(|(name, about)| (name.clone(), about.clone()));
     builtin.chain(skills).filter(|(name, _)| name.starts_with(typed)).collect()
 }
 
-/// How many `/` suggestions show at once; the arrows scroll the rest.
 pub const SHOWN: usize = 8;
 
-/// The suggestion after (or before) `current` among `len`, wrapping round.
 pub fn step(current: usize, len: usize, forward: bool) -> usize {
     match len {
         0 => 0,
@@ -257,7 +252,6 @@ pub fn step(current: usize, len: usize, forward: bool) -> usize {
     }
 }
 
-/// Which of `len` suggestions show, scrolled so `chosen` is on screen.
 pub fn shown(len: usize, chosen: usize) -> std::ops::Range<usize> {
     let start = (chosen + 1).saturating_sub(SHOWN);
     start..(start + SHOWN).min(len)

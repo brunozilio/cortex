@@ -1,6 +1,3 @@
-//! `LSP`: questions about code (definitions, references, symbols, calls)
-//! answered by the file's language server.
-
 use std::path::Path;
 use std::time::Duration;
 

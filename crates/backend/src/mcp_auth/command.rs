@@ -1,7 +1,3 @@
-//! `SignInMcpServer` and `SignOutMcpServer`: a server named as the folder's
-//! listing names it, signed in to on a thread of its own (the browser may
-//! take minutes), answered with the listing again.
-
 use std::path::{Path, PathBuf};
 
 use domain::Principal;
@@ -10,7 +6,6 @@ use protocol::ServerEvent;
 use crate::outbox::Outbox;
 use crate::services::LocalServices;
 
-/// The URL of the remote server `name` a run in `path` can use.
 fn url_of(services: &LocalServices, path: &Path, name: &str) -> Result<String, String> {
     let ServerEvent::McpServers { servers, .. } =
         crate::mcp_admin::list(path, &services.extensions, services.home.as_deref())

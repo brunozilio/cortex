@@ -1,7 +1,3 @@
-//! The SDK's line to a [`Backend`]: commands go out with the local owner's
-//! [`Envelope`]; a dispatcher thread routes each run's events to that run
-//! and everything else to the one call waiting for an answer.
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -32,7 +28,6 @@ impl std::fmt::Debug for Client {
 }
 
 impl Client {
-    /// `woken` fires whenever the backend has events (its `Wake`).
     pub(crate) fn new(backend: Box<dyn Backend>, woken: Receiver<()>) -> Self {
         let backend = Arc::new(Mutex::new(backend));
         let routes: Routes = Arc::default();
@@ -48,8 +43,6 @@ impl Client {
         backend.send(Envelope::local(command)).map_err(|error| Error::Backend(error.to_string()))
     }
 
-    /// Sends `command` and waits for the first answer `pick` accepts; an
-    /// error the backend sends meanwhile fails the call.
     pub(crate) fn call<T>(
         &self,
         command: ClientCommand,
@@ -71,7 +64,6 @@ impl Client {
         }
     }
 
-    /// Starts receiving a run's events (before its command is sent).
     pub(crate) fn follow(&self, run: RunId) -> Receiver<EngineEvent> {
         let (tx, rx) = crossbeam_channel::unbounded();
         self.routes.lock().unwrap_or_else(PoisonError::into_inner).insert(run, tx);
@@ -97,8 +89,6 @@ fn dispatch(
     stop: &AtomicBool,
 ) {
     while !stop.load(Ordering::Relaxed) {
-        // Once nothing can wake it (the daemon's connection ended), the
-        // wait returns at once: poll at the same pace instead of spinning.
         if let Err(crossbeam_channel::RecvTimeoutError::Disconnected) = woken.recv_timeout(Duration::from_millis(250)) {
             std::thread::sleep(Duration::from_millis(250));
         }
@@ -132,7 +122,6 @@ mod tests {
 
     use super::*;
 
-    /// A backend whose connection is gone: nothing more ever comes.
     struct Gone(Arc<AtomicUsize>);
 
     impl Backend for Gone {
@@ -150,7 +139,6 @@ mod tests {
     fn a_backend_that_stopped_waking_is_not_polled_in_a_busy_loop() {
         let polled = Arc::new(AtomicUsize::new(0));
         let (wake, woken) = crossbeam_channel::bounded(1);
-        // The daemon's connection ended: what woke the client is gone.
         drop(wake);
         let client = Client::new(Box::new(Gone(Arc::clone(&polled))), woken);
         std::thread::sleep(Duration::from_millis(600));

@@ -1,11 +1,7 @@
-//! Kiro's `ListAvailableModels`: the models this account may pick, a page
-//! at a time, each with its token limits.
 use domain::model::ModelCapabilities;
 use domain::{ModelOption, ModelProvider};
 use serde_json::{Value, json};
 
-/// The POST that asks for a catalog page: where, with which headers and
-/// body.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Call {
     pub url: String,
@@ -19,7 +15,6 @@ impl std::fmt::Debug for Call {
     }
 }
 
-/// The call for the page after `next` with this account's credential.
 pub fn call(config: &crate::Config, next: &str) -> Call {
     let (token, arn) = config.auth.as_ref().map_or(("", ""), |t| (t.access_token.as_str(), t.account_id.as_str()));
     Call {
@@ -29,7 +24,6 @@ pub fn call(config: &crate::Config, next: &str) -> Call {
     }
 }
 
-/// The request for the page after `next` (empty for the first).
 pub fn request(profile_arn: &str, next: &str) -> String {
     let mut body = json!({"origin": super::ORIGIN, "profileArn": profile_arn});
     if !next.is_empty() {
@@ -38,8 +32,6 @@ pub fn request(profile_arn: &str, next: &str) -> String {
     body.to_string()
 }
 
-/// A page's models, or `None` when it has no model list; and the next
-/// page's token.
 pub fn page(value: &Value) -> Option<(Vec<ModelOption>, Option<String>)> {
     let models = value["models"].as_array()?.iter().filter_map(model).collect();
     let next = value["nextToken"].as_str().filter(|s| !s.is_empty()).map(str::to_owned);

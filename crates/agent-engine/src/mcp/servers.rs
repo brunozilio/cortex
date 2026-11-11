@@ -1,8 +1,3 @@
-//! Which MCP servers a run reaches over HTTP or stdio: the host's (the MCP
-//! config file the backend wrote for the run, `Extensions::mcp_config`),
-//! then the configured ones (`configured`). In-process servers (the app's
-//! memory search, the SDK host's tools) ride on the run's credentials.
-
 use serde_json::Value;
 
 use super::McpSources;
@@ -11,23 +6,9 @@ use domain::PromptRequest;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ServerSpec {
-    Http {
-        name: String,
-        url: String,
-        headers: Vec<(String, String)>,
-    },
-    /// The older HTTP+SSE transport (`"type": "sse"`).
-    Sse {
-        name: String,
-        url: String,
-        headers: Vec<(String, String)>,
-    },
-    Stdio {
-        name: String,
-        command: String,
-        args: Vec<String>,
-        env: Vec<(String, String)>,
-    },
+    Http { name: String, url: String, headers: Vec<(String, String)> },
+    Sse { name: String, url: String, headers: Vec<(String, String)> },
+    Stdio { name: String, command: String, args: Vec<String>, env: Vec<(String, String)> },
 }
 
 impl ServerSpec {
@@ -43,8 +24,6 @@ impl ServerSpec {
         self
     }
 
-    /// A remote server with the owner's token (`/mcp login`), unless its
-    /// configuration already sends an `Authorization` header.
     pub fn signed_in(mut self, tokens: Option<&domain::credentials::McpSignIns>) -> Self {
         if let (Self::Http { url, headers, .. } | Self::Sse { url, headers, .. }, Some(tokens)) = (&mut self, tokens)
             && !headers.iter().any(|(key, _)| key.eq_ignore_ascii_case("authorization"))
@@ -55,7 +34,6 @@ impl ServerSpec {
         self
     }
 
-    /// The URL of an HTTP server, the command line of a stdio one.
     pub fn target(&self) -> String {
         match self {
             Self::Http { url, .. } | Self::Sse { url, .. } => url.clone(),
@@ -87,9 +65,6 @@ impl std::fmt::Debug for ServerSpec {
     }
 }
 
-/// The servers a run reaches over HTTP or stdio. The app's own (named
-/// `{command}_…`) come in process on the run's credentials, so none of
-/// these may take such a name.
 pub fn servers(request: &PromptRequest, sources: &McpSources) -> Vec<ServerSpec> {
     let mut servers: Vec<ServerSpec> = Vec::new();
     if let Some(path) = request.extensions.as_ref().and_then(|e| e.mcp_config.as_ref()) {

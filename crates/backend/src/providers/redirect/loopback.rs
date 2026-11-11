@@ -1,6 +1,3 @@
-//! The redirect target of a browser sign-in: a one-shot HTTP listener on
-//! `127.0.0.1` that waits for `/callback?code=…&state=…`.
-
 use std::time::{Duration, Instant};
 
 use super::callback;
@@ -53,8 +50,6 @@ impl Loopback {
         format!("http://{}:{}{}", if self.localhost { "localhost" } else { "127.0.0.1" }, self.port, self.path)
     }
 
-    /// The code and the whole query of the callback, for providers whose
-    /// callback says more than the code (Kiro names the sign-in picked).
     pub fn wait_callback(&self, state: &str) -> Result<(String, String), String> {
         self.wait_query(state, SIGN_IN_TIMEOUT)
     }
@@ -77,10 +72,6 @@ impl Loopback {
         result.map(|code| (code, query))
     }
 
-    /// The next request for this sign-in (`state`) on the callback path or
-    /// one of `others`, left unanswered: the browser waits until the
-    /// sign-in says where it goes next ([`Pending::redirect`]) or how it
-    /// ended ([`Pending::finish`]).
     pub fn next(&self, state: &str, others: &[&str]) -> Result<Pending, String> {
         self.next_within(state, others, SIGN_IN_TIMEOUT)
     }
@@ -112,8 +103,6 @@ impl Loopback {
     }
 }
 
-/// A browser request the sign-in has not answered yet. One dropped
-/// unanswered is told the sign-in failed.
 pub struct Pending {
     pub path: String,
     pub query: String,
@@ -127,13 +116,11 @@ impl std::fmt::Debug for Pending {
 }
 
 impl Pending {
-    /// The code it carries, or the error the provider sent instead.
     pub fn code(&self) -> Result<String, String> {
         callback(&self.query)
             .and_then(|(code, _)| if code.is_empty() { Err("the sign-in returned no code".into()) } else { Ok(code) })
     }
 
-    /// Sends the browser on to `to` (the next sign-in step).
     pub fn redirect(mut self, to: &str) {
         let Some(request) = self.request.take() else { return };
         let response = tiny_http::Response::empty(302);
@@ -147,7 +134,6 @@ impl Pending {
         }
     }
 
-    /// Tells the browser the sign-in is done, or why it failed.
     pub fn finish(mut self, result: Result<(), &String>) {
         let Some(request) = self.request.take() else { return };
         let body = match result {
@@ -182,7 +168,6 @@ fn html(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
-/// The status a GET of `url` answers with, as a browser would see it.
 #[cfg(test)]
 fn status(url: String) -> Result<u16, String> {
     let client = reqwest::blocking::Client::builder().no_proxy().build().map_err(|e| e.to_string())?;

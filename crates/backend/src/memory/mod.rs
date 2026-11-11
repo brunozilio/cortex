@@ -1,12 +1,3 @@
-//! Project memories: where they live, how they are searched, and the one
-//! place they change.
-//!
-//! A [`MemoryStore`] keeps one [`MemoryBook`] per owner and project.
-//! [`Memories`] caches the books it has read, serialises every change
-//! (runs finish on their own threads), keeps each memory's embedding
-//! vector up to date and answers searches with the hybrid ranking of
-//! `domain::memory::search`.
-
 mod embedder;
 pub mod mcp;
 mod optimize;
@@ -35,7 +26,6 @@ pub struct Memories {
     store: Arc<dyn MemoryStore>,
     embedder: Arc<dyn Embedder>,
     books: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
-    /// Each book as it was before its last optimization, until another edit.
     before_optimizing: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
 }
 
@@ -99,8 +89,6 @@ impl Memories {
         memory_event(project, book)
     }
 
-    /// Applies edits from the user or a run; the last optimization can no
-    /// longer be undone.
     pub fn edit(&self, owner: &Principal, project: &Path, edits: &[MemoryEdit], by: Provenance) -> ServerEvent {
         self.set_undo_point(owner, project, None);
         self.apply(owner, project, edits, by)
@@ -143,8 +131,6 @@ impl Memories {
         found
     }
 
-    /// What reaches an agent counts as used, which slows an episode's
-    /// fading (`domain::memory::retention`).
     fn mark_used(&self, owner: &Principal, project: &Path, book: &mut MemoryBook, given: &[Memory]) {
         if given.is_empty() {
             return;

@@ -1,7 +1,3 @@
-//! `ToolSearch`: with many MCP tools, their schemas stay out of every turn
-//! (only their names are listed) until the agent loads the ones it needs,
-//! by name (`select:a,b`) or by keywords. Loaded tools join the next turns.
-
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 
@@ -11,12 +7,9 @@ use super::{Access, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
 
 pub const TOOL_SEARCH: &str = "ToolSearch";
-/// More MCP tools than this are deferred.
 const DEFER_OVER: usize = 20;
-/// Tools a keyword search loads at most.
 const FOUND: usize = 5;
 
-/// The tools left out of the turns, and those the agent loaded since.
 #[derive(Debug, Default)]
 pub struct Deferred {
     specs: Vec<ToolSpec>,
@@ -24,14 +17,11 @@ pub struct Deferred {
 }
 
 impl Deferred {
-    /// The schemas of the tools loaded so far.
     pub fn loaded(&self) -> Vec<ToolSpec> {
         let loaded = self.loaded.lock().map(|loaded| loaded.clone()).unwrap_or_default();
         self.specs.iter().filter(|spec| loaded.contains(&spec.name)).cloned().collect()
     }
 
-    /// A sub-agent's own: only the tools it may use, none loaded yet (it
-    /// never inherits what its parent loaded).
     pub fn only(&self, allowed: impl Fn(&str) -> bool) -> Self {
         let specs = self.specs.iter().filter(|spec| allowed(&spec.name)).cloned().collect();
         Self { specs, loaded: Mutex::default() }
@@ -41,8 +31,6 @@ impl Deferred {
         self.loaded.lock().is_ok_and(|loaded| loaded.contains(name))
     }
 
-    /// The tools `query` names (`select:a,b`) or best matches by its
-    /// words, now loaded.
     pub fn search(&self, query: &str) -> Vec<ToolSpec> {
         let found: Vec<&ToolSpec> = match query.strip_prefix("select:") {
             Some(names) => {
@@ -71,10 +59,7 @@ impl Deferred {
     }
 }
 
-/// The turn's tools, with the MCP ones left out when there are many; the
-/// left-out ones and the `ToolSearch` that loads them.
 pub fn defer(specs: Vec<ToolSpec>) -> (Vec<ToolSpec>, Option<Deferred>) {
-    // The app's own servers (its memory) always stay.
     let deferrable = |spec: &ToolSpec| {
         spec.name.starts_with("mcp__") && !spec.name.starts_with(concat!("mcp__", brand::command!(), "_"))
     };

@@ -1,7 +1,3 @@
-//! Sub-agents the `Agent` tool starts: their model, permissions, hooks,
-//! worktree and prompt, the run in a conversation of their own, and the
-//! report that comes back.
-
 use domain::{AgentStatus, EngineEvent};
 use serde_json::{Value, json};
 
@@ -15,8 +11,6 @@ use crate::tools::subagent::{self, AGENT_TOOL, AgentTool};
 use crate::tools::{Outcome, Workspace};
 use crate::transcript::{Message, Role};
 
-/// Tools only the top-level agent has: starting or messaging agents, and
-/// leaving or entering plan mode.
 const TOP_LEVEL_ONLY: [&str; 6] = [
     AGENT_TOOL,
     SEND_MESSAGE_TOOL,
@@ -246,8 +240,6 @@ impl Agent<'_> {
                 (self.emit)(EngineEvent::AgentUpdate { index, status, summary: Some(summary) });
                 let mut report =
                     if report.trim().is_empty() { "The sub-agent finished without a report.".into() } else { report };
-                // A worktree is gone or set aside once the agent ends, so
-                // only agents working in the run's folder can go on.
                 if !config.worktree {
                     let id = conversations.keep(Kept { input: input.clone(), index, history });
                     report.push_str(&format!("\n\nagent_id: {id} (SendMessage continues it)"));

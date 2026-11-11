@@ -1,7 +1,3 @@
-//! `/statusline {command}`: a command of the user's draws the status line.
-//! It reads the session's state as JSON on stdin and its first line of
-//! output is shown, refreshed every few seconds.
-
 use std::io::Write as _;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -10,8 +6,6 @@ use serde_json::{Value, json};
 
 use super::app::{App, Msg};
 
-/// The user's command that draws the status line, what it last printed,
-/// and when it last ran.
 #[derive(Debug, Default)]
 pub struct Status {
     pub command: Option<String>,
@@ -19,7 +13,6 @@ pub struct Status {
     pub ran: Option<Instant>,
 }
 
-/// How often the command runs again.
 const EVERY: Duration = Duration::from_secs(3);
 
 pub fn set(app: &mut App, command: Option<String>) {
@@ -45,7 +38,6 @@ pub fn set(app: &mut App, command: Option<String>) {
     }
 }
 
-/// Runs the command again when it is due.
 pub fn refresh(app: &mut App) {
     let Some(command) = app.status.command.clone() else { return };
     if app.status.ran.is_some_and(|at| at.elapsed() < EVERY) {
@@ -57,7 +49,6 @@ pub fn refresh(app: &mut App) {
     app.spawn(move |_| Msg::StatusLine(run(&command, &state, &cwd)));
 }
 
-/// What the command reads on stdin.
 pub fn state(app: &App) -> Value {
     let model = app.model();
     let window = app.window.or_else(|| model.and_then(|m| m.window));
@@ -73,7 +64,6 @@ pub fn state(app: &App) -> Value {
     })
 }
 
-/// The first line the command printed, or what went wrong.
 fn run(command: &str, state: &Value, cwd: &std::path::Path) -> String {
     let child = Command::new("sh")
         .arg("-c")

@@ -1,8 +1,3 @@
-//! Watching a background command for its client's inbox: a monitor's new
-//! lines as they come (batched every half second), and every command's end.
-//! A command stopped with `KillShell` (or by its client leaving) says
-//! nothing more.
-
 use std::time::Duration;
 
 use domain::inbox::Notice;
@@ -10,21 +5,15 @@ use domain::inbox::Notice;
 use super::{lock, refresh};
 use crate::tools::inbox;
 
-/// How often a watched command is looked at.
 const EVERY: Duration = Duration::from_millis(500);
-/// What one batch of a monitor's lines carries at most.
 const BATCH: usize = 4_000;
 
-/// What to report of a background command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Watch {
-    /// Only that it ended (a command left running).
     End,
-    /// Each new line, and that it ended (`Monitor`).
     Lines,
 }
 
-/// Watches background command `id` of `client` on a thread of its own.
 pub(crate) fn watch(id: String, client: u64, what: Watch) {
     std::thread::spawn(move || {
         let mut seen: usize = 0;
@@ -36,8 +25,6 @@ pub(crate) fn watch(id: String, client: u64, what: Watch) {
                 let Some(shell) = shells.get_mut(&id) else { return };
                 let exit = refresh(shell);
                 let kept = shell.output.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                // `seen` counts every byte ever printed; the buffer lost `dropped` of them
-                // from its front (unread output, or `BashOutput` reading it).
                 let dropped = shell.dropped.load(std::sync::atomic::Ordering::Relaxed);
                 let from = seen.saturating_sub(dropped).min(kept.len());
                 let new = String::from_utf8_lossy(&kept[from..]).into_owned();

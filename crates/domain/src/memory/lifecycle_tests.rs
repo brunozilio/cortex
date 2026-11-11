@@ -1,5 +1,3 @@
-//! How memories are kept clean, fade and come back.
-
 use super::tests::{book, by_agent, remember};
 use super::*;
 
