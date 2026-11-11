@@ -37,7 +37,7 @@ interrupts, Shift+Tab cycles ask → edits → plan → bypass, Ctrl+V attaches
 the clipboard's image (or drop an image file on the terminal; it shows as
 `[Image #1]`), Ctrl+O unfolds reasoning, outputs and diffs. `/help` lists
 the commands (`/model`, `/mode`, `/effort`, `/compact`, `/diff`, `/memory`,
-`/skills`, `/agents`, `/new`, `/cost`, `/exit`); any other `/name` runs a
+`/skills`, `/agents`, `/clear`, `/cost`, `/exit`); any other `/name` runs a
 skill or custom command. Replies render as Markdown with highlighted code;
 `CORTEX_REDUCED_MOTION=1` turns the animations off.
 

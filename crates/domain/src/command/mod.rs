@@ -52,7 +52,7 @@ pub enum Command {
 impl Command {
     pub const HELP: [(&'static str, &'static str); 38] = [
         ("help", "Show the commands and keys"),
-        ("new", "Start a new conversation (also /clear)"),
+        ("clear", "Clear the conversation and start fresh (also /new, /reset)"),
         ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
         ("fork", "Go on in a copy of this conversation, leaving it as it is"),
         ("model", "Pick the model, or /model <id>"),
@@ -92,7 +92,7 @@ impl Command {
     ];
 
     pub const GROUPS: [(&'static str, &'static [&'static str]); 4] = [
-        ("Conversation", &["new", "resume", "fork", "compact", "rewind", "retry", "btw", "export", "copy"]),
+        ("Conversation", &["clear", "resume", "fork", "compact", "rewind", "retry", "btw", "export", "copy"]),
         ("Model and mode", &["model", "mode", "effort", "output-style", "verification"]),
         (
             "Project",
@@ -138,7 +138,7 @@ impl Command {
         let bare = |command: Self| argument.is_none().then_some(command);
         match name.to_ascii_lowercase().as_str() {
             "help" | "?" => Some(Self::Help(argument.map(|name| name.trim_start_matches('/').to_owned()))),
-            "new" | "clear" => bare(Self::New),
+            "clear" | "new" | "reset" => bare(Self::New),
             "model" => Some(Self::Model(argument)),
             "mode" => match &argument {
                 None => Some(Self::Mode(None)),

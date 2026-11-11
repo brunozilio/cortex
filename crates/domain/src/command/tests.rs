@@ -4,6 +4,9 @@ use crate::MemoryId;
 #[test]
 fn commands_parse_with_their_arguments() {
     assert_eq!(Command::parse("  /CLEAR "), Some(Command::New));
+    assert_eq!(Command::parse("/reset"), Some(Command::New));
+    assert_eq!(Command::parse("/new"), Some(Command::New));
+    assert!(Command::HELP.iter().any(|(name, _)| *name == "clear"), "/clear is listed and completed");
     assert_eq!(Command::parse("/model"), Some(Command::Model(None)));
     assert_eq!(Command::parse("/diff"), Some(Command::Diff));
     assert_eq!(Command::parse("/diffs"), Some(Command::Diffs));
