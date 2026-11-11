@@ -15,8 +15,6 @@ use super::{Delta, KeySource, ModelApi, ModelError, Reply, TurnRequest};
 pub const API: &str = "https://api.anthropic.com";
 pub const VERSION: &str = "2026-10-21";
 
-const ATTEMPTS: u32 = 4;
-
 pub struct Messages {
     http: Arc<dyn Http>,
     keys: Arc<dyn KeySource>,
@@ -82,23 +80,7 @@ impl Messages {
 
 impl ModelApi for Messages {
     fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        let mut wait = self.backoff;
-        let mut wrote = false;
-        for attempt in 1..=ATTEMPTS {
-            let mut seen = |delta: Delta| {
-                wrote = true;
-                on(delta);
-            };
-            match self.once(request, &mut seen, stop) {
-                Err(error) if error.is_transient() && !wrote && attempt < ATTEMPTS => {
-                    tracing::warn!(%error, attempt, "Anthropic is busy, retrying");
-                    std::thread::sleep(wait);
-                    wait *= 2;
-                }
-                other => return other,
-            }
-        }
-        Err(ModelError::Overloaded("no answer after retrying".into()))
+        super::retry::with_retries("Anthropic", self.backoff, stop, on, |on| self.once(request, on, stop))
     }
 }
 

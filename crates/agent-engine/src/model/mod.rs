@@ -6,6 +6,7 @@ pub mod event_stream;
 pub mod http;
 pub mod openai;
 pub mod providers;
+mod retry;
 #[cfg(any(test, feature = "test-support"))]
 pub mod scripted;
 pub mod sse;

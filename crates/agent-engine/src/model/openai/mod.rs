@@ -14,8 +14,6 @@ use super::{Delta, KeySource, ModelApi, ModelError, Reply, TurnRequest};
 
 pub const API: &str = "https://api.openai.com/v1";
 
-const ATTEMPTS: u32 = 4;
-
 pub struct Responses {
     http: Arc<dyn Http>,
     keys: Arc<dyn KeySource>,
@@ -80,23 +78,7 @@ impl Responses {
 
 impl ModelApi for Responses {
     fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        let mut wait = self.backoff;
-        let mut wrote = false;
-        for attempt in 1..=ATTEMPTS {
-            let mut seen = |delta: Delta| {
-                wrote = true;
-                on(delta);
-            };
-            match self.once(request, &mut seen, stop) {
-                Err(error) if error.is_transient() && !wrote && attempt < ATTEMPTS => {
-                    tracing::warn!(%error, attempt, "OpenAI is busy, retrying");
-                    std::thread::sleep(wait);
-                    wait *= 2;
-                }
-                other => return other,
-            }
-        }
-        Err(ModelError::Overloaded("no answer after retrying".into()))
+        super::retry::with_retries("OpenAI", self.backoff, stop, on, |on| self.once(request, on, stop))
     }
 }
 

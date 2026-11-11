@@ -12,8 +12,6 @@ pub use stream::Folder;
 use super::http::Http;
 use super::{Delta, ModelApi, ModelError, Reply, TurnRequest};
 
-const ATTEMPTS: u32 = 4;
-
 pub struct Conversation {
     http: Arc<dyn Http>,
     window: Option<u64>,
@@ -52,23 +50,7 @@ impl Conversation {
 
 impl ModelApi for Conversation {
     fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        let mut wait = self.backoff;
-        let mut wrote = false;
-        for attempt in 1..=ATTEMPTS {
-            let mut seen = |delta: Delta| {
-                wrote = true;
-                on(delta);
-            };
-            match self.once(request, &mut seen, stop) {
-                Err(error) if error.is_transient() && !wrote && attempt < ATTEMPTS => {
-                    tracing::warn!(%error, attempt, "Kiro is busy, retrying");
-                    std::thread::sleep(wait);
-                    wait *= 2;
-                }
-                other => return other,
-            }
-        }
-        Err(ModelError::Overloaded("no answer after retrying".into()))
+        super::retry::with_retries("Kiro", self.backoff, stop, on, |on| self.once(request, on, stop))
     }
 }
 

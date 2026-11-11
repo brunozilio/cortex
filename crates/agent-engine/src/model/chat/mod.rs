@@ -22,8 +22,6 @@ pub trait Endpoints: Send + Sync {
     fn endpoint(&self, model: &str) -> Result<Endpoint, ModelError>;
 }
 
-const ATTEMPTS: u32 = 4;
-
 pub struct Chat {
     http: Arc<dyn Http>,
     endpoints: Arc<dyn Endpoints>,
@@ -77,23 +75,7 @@ impl Chat {
 
 impl ModelApi for Chat {
     fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        let mut wait = self.backoff;
-        let mut wrote = false;
-        for attempt in 1..=ATTEMPTS {
-            let mut seen = |delta: Delta| {
-                wrote = true;
-                on(delta);
-            };
-            match self.once(request, &mut seen, stop) {
-                Err(error) if error.is_transient() && !wrote && attempt < ATTEMPTS => {
-                    tracing::info!(%error, attempt, "the local model is not ready, retrying");
-                    std::thread::sleep(wait);
-                    wait *= 2;
-                }
-                other => return other,
-            }
-        }
-        Err(ModelError::Overloaded("the local model did not answer after retrying".into()))
+        super::retry::with_retries("The model", self.backoff, stop, on, |on| self.once(request, on, stop))
     }
 }
 
