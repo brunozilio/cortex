@@ -126,7 +126,16 @@ fn secret(question: &str) -> Result<String, String> {
     result.map(|()| text.trim().to_owned())
 }
 
+/// Opens `url` in the browser. The browser never writes on the terminal
+/// (Chrome's warnings would land on the chat's screen); the address is
+/// shown to visit by hand when it does not open.
 pub fn open(url: &str) {
+    if let Ok(mut child) = browser(url).spawn() {
+        std::thread::spawn(move || child.wait());
+    }
+}
+
+fn browser(url: &str) -> std::process::Command {
     let program = if cfg!(target_os = "macos") {
         "open"
     } else if cfg!(windows) {
@@ -134,7 +143,17 @@ pub fn open(url: &str) {
     } else {
         "xdg-open"
     };
-    let _ = std::process::Command::new(program).arg(url).spawn();
+    launcher(program, url)
+}
+
+fn launcher(program: &str, url: &str) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    command
+        .arg(url)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    command
 }
 
 #[cfg(test)]
@@ -148,6 +167,21 @@ mod tests {
         assert_eq!(picked("5", 4), None);
         assert_eq!(picked("two", 4), None);
         assert!(MENU.iter().filter(|p| p.subscription()).count() == 4);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_browser_never_writes_on_the_terminal() {
+        use std::os::unix::fs::PermissionsExt;
+        // A stand-in browser that complains, as Chrome does.
+        let dir = tempfile::tempdir().expect("dir");
+        let program = dir.path().join("browser");
+        std::fs::write(&program, "#!/bin/sh\necho 'Failed sending zygote boot message' >&2\necho \"$1\"\n")
+            .expect("write");
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        let ran = launcher(program.to_str().expect("path"), "https://example.com").output().expect("run");
+        assert!(ran.status.success());
+        assert!(ran.stdout.is_empty() && ran.stderr.is_empty(), "nothing reaches the terminal");
     }
 
     #[test]

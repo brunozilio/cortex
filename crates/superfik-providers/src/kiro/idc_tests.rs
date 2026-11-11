@@ -48,6 +48,7 @@ fn the_client_registers_with_the_region_and_the_browser_authorizes_there() {
     let request = register("eu-west-1", "https://acme.awsapps.com/start", "http://127.0.0.1:49153/oauth/callback");
     assert_eq!(request.url, "https://oidc.eu-west-1.amazonaws.com/client/register");
     assert_eq!(body(&request)["issuerUrl"], "https://acme.awsapps.com/start");
+    assert_eq!(body(&request)["clientName"], "Kiro CLI", "the sign-in page names Kiro");
     assert_eq!(body(&request)["redirectUris"], json!(["http://127.0.0.1:49153/oauth/callback"]));
     assert_eq!(body(&request)["grantTypes"], json!(["authorization_code", "refresh_token"]));
     assert_eq!(registered("eu-west-1", 200, r#"{"clientId":"cid","clientSecret":"secret"}"#), Ok(client()));

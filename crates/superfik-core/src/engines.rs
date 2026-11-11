@@ -11,7 +11,10 @@ pub enum EngineProblem {
 impl EngineProblem {
     pub fn message(self) -> &'static str {
         match self {
-            Self::NotLoggedIn => "No provider is connected: run `superfik login` (or /login in the chat).",
+            Self::NotLoggedIn => {
+                "The provider refused the sign-in, or none is connected (the reason follows): \
+                 run `superfik login` (or /login in the chat)."
+            }
             Self::SessionNotFound => "The earlier conversation was not found; your next message starts a new one.",
         }
     }

@@ -18,6 +18,9 @@ pub const SCOPES: [&str; 3] = ["codewhisperer:completions", "codewhisperer:analy
 /// The services that list profiles, in the order they are asked.
 pub const PROFILE_REGIONS: [&str; 2] = ["us-east-1", "eu-central-1"];
 pub const PROFILES: &str = "AmazonCodeWhispererService.ListAvailableProfiles";
+/// The name the organization's sign-in page shows: Kiro's, as this is a
+/// Kiro sign-in.
+pub const CLIENT_NAME: &str = "Kiro CLI";
 /// Builder ID's start URL, for a portal answer that names none.
 const BUILDER_ID: &str = "https://view.awsapps.com/start";
 const LIFETIME: i64 = 3600;
@@ -99,7 +102,7 @@ fn oidc(region: &str) -> String {
 /// Registers this client with the region's OIDC service for `start_url`.
 pub fn register(region: &str, start_url: &str, redirect: &str) -> TokenRequest {
     let body = json!({
-        "clientName": "Superfik",
+        "clientName": CLIENT_NAME,
         "clientType": "public",
         "scopes": SCOPES,
         "grantTypes": ["authorization_code", "refresh_token"],
