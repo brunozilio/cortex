@@ -74,6 +74,11 @@ impl Job {
         tools.push(Box::new(tools::subagent::AgentTool { agents: agents.clone() }));
         tools.push(Box::new(tools::send_message::SendMessageTool));
         tools.extend(tools::task::tools());
+        let home = workspace.home.clone();
+        for script in tools::script_tool::load(home.as_deref(), &self.request.cwd) {
+            tools.retain(|tool| tool.spec().name != script.spec.name);
+            tools.push(Box::new(script));
+        }
         let servers = crate::mcp::connect_stopped(&self.request, &mcp_sources, &self.mcp, self.control.stop_flag());
         tools.extend(crate::mcp::tools_of(&servers, self.control.stop_flag()));
         match crate::mcp::extras::expand_prompt(&servers, &self.request.prompt, self.control.stop_flag()) {
@@ -101,6 +106,7 @@ impl Job {
         let workspace = Arc::get_mut(&mut self.workspace).expect("unshared setup");
         workspace.stop = self.control.shared_stop();
         workspace.auto_memory = settings.auto_memory;
+        workspace.scripts = settings.scripts;
         workspace.files = Some(Arc::default());
         if self.request.safety_check {
             workspace.safety = Some(Arc::new(crate::guard::Safety::default()));

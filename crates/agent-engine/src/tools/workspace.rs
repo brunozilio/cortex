@@ -30,6 +30,7 @@ pub struct Workspace {
     pub files: Option<Arc<crate::checkpoints::FileHistory>>,
     pub lsp: Option<crate::lsp::Lsp>,
     pub worktree: Option<crate::agent_runtime::WorktreeState>,
+    pub scripts: super::script_tool::ScriptAccess,
 }
 
 impl Workspace {
@@ -60,6 +61,7 @@ impl Workspace {
             files: None,
             lsp: None,
             worktree: None,
+            scripts: super::script_tool::ScriptAccess::default(),
         }
     }
 
@@ -103,6 +105,7 @@ impl Workspace {
             files: self.files.clone(),
             lsp: self.lsp.clone(),
             worktree: None,
+            scripts: self.scripts,
         }
     }
 

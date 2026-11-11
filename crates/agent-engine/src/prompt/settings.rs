@@ -33,6 +33,7 @@ pub struct Settings {
     pub permissions: domain::permission_rules::PermissionRules,
     #[serde(default)]
     pub added_dirs: Vec<String>,
+    pub scripts: crate::tools::script_tool::ScriptAccess,
 }
 
 pub type LspLayer = std::collections::BTreeMap<String, domain::lsp::ServerConfig>;
@@ -51,6 +52,7 @@ impl Default for Settings {
             lsp_servers: Vec::new(),
             permissions: Default::default(),
             added_dirs: Vec::new(),
+            scripts: Default::default(),
         }
     }
 }
@@ -77,6 +79,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut lsp_servers = Vec::new();
     let mut permissions = domain::permission_rules::PermissionRules::default();
     let mut added_dirs = Vec::new();
+    let mut scripts = crate::tools::script_tool::ScriptAccess::default();
     let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(brand::DIR));
     let mut roots = Vec::new();
     if let Some(home) = home {
@@ -104,6 +107,9 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
             }
             super::permissions::read(&settings, owners, &mut permissions, &mut added_dirs)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
+            if let Some(value) = settings.get("scripts") {
+                scripts = crate::tools::script_tool::ScriptAccess::read(value)?;
+            }
             if let Some(value) = settings.get("autoMemoryEnabled") {
                 auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;
             }
@@ -190,6 +196,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 lsp_servers,
                 permissions,
                 added_dirs,
+                scripts,
             });
         }
     };
@@ -206,6 +213,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         lsp_servers,
         permissions,
         added_dirs,
+        scripts,
     })
 }
 #[cfg(test)]

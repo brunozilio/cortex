@@ -4,6 +4,7 @@ mod dispatch;
 mod permission;
 mod permission_ask;
 mod plan_mode;
+mod script_call;
 mod sub_agent;
 mod tasks;
 mod verify;

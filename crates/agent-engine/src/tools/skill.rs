@@ -95,6 +95,10 @@ pub struct SkillTool {
 }
 
 impl Tool for SkillTool {
+    fn skills(&self) -> &[FoundSkill] {
+        &self.skills
+    }
+
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: SKILL_TOOL.to_owned(),

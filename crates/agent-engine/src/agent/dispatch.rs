@@ -103,6 +103,10 @@ impl Agent<'_> {
                     }
                     None => Outcome::error("No advisor is configured."),
                 },
+                Some(tool) if tool.script().is_some() => match tool.script() {
+                    Some(script) => self.script_call(id, script, &summary, input, parent, pre.permission.as_deref()),
+                    None => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),
+                },
                 Some(tool) => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),
             }
         };

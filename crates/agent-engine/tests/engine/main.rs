@@ -7,6 +7,7 @@ mod lsp;
 mod mcp;
 mod plugins;
 mod runs;
+mod scripts;
 mod sessions;
 mod steering;
 mod verification;

@@ -81,3 +81,10 @@ fn stopping_interrupts_a_script_that_never_ends() {
     assert_eq!(result, Err("cancelled".to_owned()));
     assert!(started.elapsed() < std::time::Duration::from_secs(5));
 }
+
+#[test]
+fn an_exported_value_is_read_without_running_anything_else() {
+    let source = r#"export const spec = { name: "Echo", input: { type: "object" } }; export function run() {}"#;
+    assert_eq!(exported("echo.js", source, "spec"), Ok(json!({ "name": "Echo", "input": { "type": "object" } })));
+    assert!(exported("bad.js", "export const spec = ", "spec").is_err());
+}

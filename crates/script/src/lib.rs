@@ -108,6 +108,22 @@ fn evaluate<'js>(
     js_to_json(ctx, value)
 }
 
+pub fn exported(name: &str, source: &str, export: &str) -> Result<Value, String> {
+    let runtime = Runtime::new().map_err(|error| error.to_string())?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
+    let context = Context::full(&runtime).map_err(|error| error.to_string())?;
+    context.with(|ctx| {
+        let evaluated = (|| {
+            let (module, done) = Module::declare(ctx.clone(), name, source)?.eval()?;
+            done.finish::<()>()?;
+            let value: JsValue = module.get(export)?;
+            js_to_json(&ctx, value)
+        })();
+        evaluated.map_err(|error| describe(&ctx, error))
+    })
+}
+
 fn json_to_js<'js>(ctx: &Ctx<'js>, value: &Value) -> rquickjs::Result<JsValue<'js>> {
     ctx.json_parse(value.to_string())
 }

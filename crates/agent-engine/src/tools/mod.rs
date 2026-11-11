@@ -18,6 +18,8 @@ pub mod push_notification;
 mod read;
 mod rule_target;
 pub mod schedules;
+pub(crate) mod script_io;
+pub mod script_tool;
 pub mod send_message;
 pub mod shells;
 mod shown_diff;
@@ -96,6 +98,14 @@ pub trait Tool: Send + Sync {
     fn summary(&self, input: &Value) -> String;
 
     fn run(&self, input: &Value, workspace: &Workspace) -> Outcome;
+
+    fn script(&self) -> Option<&script_tool::ScriptTool> {
+        None
+    }
+
+    fn skills(&self) -> &[skill::FoundSkill] {
+        &[]
+    }
 }
 
 pub fn standard() -> Vec<Box<dyn Tool>> {
