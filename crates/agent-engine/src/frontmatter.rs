@@ -6,6 +6,10 @@ pub struct Frontmatter {
 }
 
 impl Frontmatter {
+    pub fn from_pairs(pairs: impl IntoIterator<Item = (String, String)>) -> Self {
+        Self { fields: pairs.into_iter().collect() }
+    }
+
     pub fn get(&self, key: &str) -> Option<&str> {
         self.fields.get(key).map(String::as_str).filter(|value| !value.is_empty())
     }

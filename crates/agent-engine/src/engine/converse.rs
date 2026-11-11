@@ -137,11 +137,11 @@ impl Job {
             .unwrap_or(crate::agent::MAX_TURNS);
         let mut template = template;
         let initial = if history.is_empty() { agent_config.initial_prompt.as_deref().unwrap_or_default() } else { "" };
-        let initial = match tools::skill::expand_initial(initial, &skills) {
+        let initial = match tools::skill::expand_initial(initial, &skills, &self.request.cwd) {
             Ok(initial) => initial,
             Err(error) => return self.fail(&error, FailureKind::Other),
         };
-        let typed = match tools::skill::expand_command(&self.request.prompt, &skills) {
+        let typed = match tools::skill::expand_command(&self.request.prompt, &skills, &self.request.cwd) {
             Some(Ok(prompt)) => prompt::user_message(&PromptRequest { prompt, ..self.request.clone() }),
             Some(Err(error)) => return self.fail(&error, FailureKind::Other),
             None => prompt::user_message(&self.request),

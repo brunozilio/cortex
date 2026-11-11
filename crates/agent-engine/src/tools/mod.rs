@@ -24,6 +24,7 @@ pub mod send_message;
 pub mod shells;
 mod shown_diff;
 pub mod skill;
+mod skill_script;
 pub mod structured;
 pub mod subagent;
 pub mod subagent_config;

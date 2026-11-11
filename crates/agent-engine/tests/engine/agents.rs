@@ -144,3 +144,37 @@ fn a_typed_slash_command_becomes_its_text_and_a_path_stays_as_typed() {
         assert!(sent.contains(expected), "{typed}: {sent}");
     }
 }
+
+#[test]
+fn a_javascript_command_and_skill_write_their_text_from_their_arguments() {
+    let dir = tempfile::tempdir().expect("dir");
+    let commands = dir.path().join(concat!(brand::dir!(), "/commands"));
+    let skill = dir.path().join(concat!(brand::dir!(), "/skills/count"));
+    std::fs::create_dir_all(&commands).expect("commands");
+    std::fs::create_dir_all(&skill).expect("skill");
+    std::fs::write(
+        commands.join("greet.js"),
+        r#"export const description = "Greets someone.";
+export default (args, ctx) => args ? `JS_COMMAND greet ${args.toUpperCase()}` : "JS_COMMAND nobody";"#,
+    )
+    .expect("command");
+    std::fs::write(
+        skill.join("skill.js"),
+        r#"export const description = "Counts words.";
+export default (args) => `JS_SKILL ${args.split(" ").filter(Boolean).length} words`;"#,
+    )
+    .expect("skill");
+    for (typed, expected) in [("/greet ana", "JS_COMMAND greet ANA"), ("/count one two three", "JS_SKILL 3 words")] {
+        let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done".into())])]));
+        let engine = NativeEngine::new(
+            Arc::new(Source(Mutex::new(vec![model_api.clone()]))),
+            Arc::new(InMemorySessions::default()),
+        );
+        let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), typed, model())));
+        assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+        let sent = model_api.asked()[0].messages.last().expect("user").text();
+        assert!(sent.contains(expected), "{typed}: {sent}");
+        let system = &model_api.asked()[0].system;
+        assert!(system.contains("count: Counts words."), "the skill is listed for the model");
+    }
+}
