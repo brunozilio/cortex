@@ -4,6 +4,7 @@ use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind};
 use domain::provider::{ModelProvider, ProviderSummary};
 use domain::{CustomAgent, ModelOption, Skill};
 use protocol::{ClientCommand, ProviderEvent, ServerEvent};
+use serde_json::{Value, json};
 
 use crate::{Error, Run, Sdk};
 
@@ -87,18 +88,12 @@ pub struct ProjectMemory<'a> {
 
 impl ProjectMemory<'_> {
     pub fn list(&self) -> Result<Vec<Memory>, Error> {
-        self.ask(ClientCommand::LoadMemory { path: self.path.clone() })
+        self.answer(json!({ "op": "list" })).map(|(memories, _)| memories)
     }
 
     pub fn search(&self, query: &str) -> Result<Vec<(Memory, f32)>, Error> {
-        let path = self.path.clone();
-        let scores = self.sdk.client.call(
-            ClientCommand::SearchMemory { path: path.clone(), query: query.to_owned() },
-            |event| match event {
-                ServerEvent::MemorySearch { path: answered, scores, .. } if answered == path => Some(Ok(scores)),
-                _ => None,
-            },
-        )?;
+        let found = self.ask(json!({ "op": "search", "query": query }), "scores")?;
+        let scores: Vec<(MemoryId, f32)> = parse(&found["scores"])?;
         let memories = self.list()?;
         Ok(scores
             .into_iter()
@@ -120,7 +115,7 @@ impl ProjectMemory<'_> {
     }
 
     pub fn edit(&self, edits: Vec<MemoryEdit>) -> Result<Vec<Memory>, Error> {
-        self.ask(ClientCommand::EditMemory { path: self.path.clone(), edits })
+        self.answer(json!({ "op": "edit", "edits": edits })).map(|(memories, _)| memories)
     }
 
     pub fn restore(&self, id: MemoryId) -> Result<Vec<Memory>, Error> {
@@ -128,29 +123,46 @@ impl ProjectMemory<'_> {
     }
 
     pub fn forgotten(&self) -> Result<Vec<Forgotten>, Error> {
-        self.answer(ClientCommand::LoadMemory { path: self.path.clone() }).map(|(_, forgotten)| forgotten)
+        self.answer(json!({ "op": "list" })).map(|(_, forgotten)| forgotten)
     }
 
     pub fn optimize(&self, model: ModelOption) -> Result<Run, Error> {
         let path = self.path.clone();
-        Run::start(&self.sdk.client, |run| ClientCommand::OptimizeMemory { run, path, model })
+        Run::start(&self.sdk.client, |run| ClientCommand::Feature {
+            feature: MEMORY.into(),
+            input: json!({ "op": "optimize", "path": path, "run": run, "model": model }),
+        })
     }
 
     pub fn undo(&self) -> Result<Vec<Memory>, Error> {
-        self.ask(ClientCommand::UndoMemory { path: self.path.clone() })
+        self.answer(json!({ "op": "undo" })).map(|(memories, _)| memories)
     }
 
-    fn ask(&self, command: ClientCommand) -> Result<Vec<Memory>, Error> {
-        self.answer(command).map(|(memories, _)| memories)
+    fn answer(&self, input: Value) -> Result<(Vec<Memory>, Vec<Forgotten>), Error> {
+        let answer = self.ask(input, "memories")?;
+        Ok((parse(&answer["memories"])?, parse(&answer["forgotten"])?))
     }
 
-    fn answer(&self, command: ClientCommand) -> Result<(Vec<Memory>, Vec<Forgotten>), Error> {
-        let path = self.path.clone();
+    fn ask(&self, mut input: Value, holding: &'static str) -> Result<Value, Error> {
+        input["path"] = json!(self.path);
+        let path = json!(self.path);
+        let command = ClientCommand::Feature { feature: MEMORY.into(), input };
         self.sdk.client.call(command, |event| match event {
-            ServerEvent::Memory { path: answered, memories, forgotten } if answered == path => {
-                Some(Ok((memories, forgotten)))
-            }
+            ServerEvent::Feature { feature, output } if feature == MEMORY => match output {
+                Ok(answer) if answer["path"] == path && answer.get(holding).is_some() => Some(Ok(answer)),
+                Ok(_) => None,
+                Err(error) => Some(Err(error)),
+            },
             _ => None,
         })
     }
+}
+
+const MEMORY: &str = "memory";
+
+fn parse<T: serde::de::DeserializeOwned + Default>(value: &Value) -> Result<T, Error> {
+    if value.is_null() {
+        return Ok(T::default());
+    }
+    serde_json::from_value(value.clone()).map_err(|error| Error::Backend(error.to_string()))
 }

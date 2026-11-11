@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
 use agent_engine::EventSink;
-use domain::{Author, EngineEvent, Principal, PromptRequest, Provenance, RunId};
+use domain::{EngineEvent, Principal, PromptRequest, RunId};
 use protocol::{ClientCommand, Envelope, ServerEvent};
 
-use crate::memory::mcp::MemoryEndpoint;
-use crate::memory::{self, Memories};
+use crate::feature::{Context, Finish};
 use crate::outbox::Outbox;
 use crate::runs::{Reach, RunTable};
 use crate::services::LocalServices;
@@ -83,19 +82,6 @@ impl CommandHandler {
             ClientCommand::ListAgents { path } => {
                 outbox.send(ServerEvent::Agents(crate::extensions::agents(&path, &self.services.extensions)));
             }
-            ClientCommand::LoadMemory { path } => outbox.send(self.services.memory.load(&principal, &path)),
-            ClientCommand::SearchMemory { path, query } => {
-                outbox.send(self.services.memory.search_event(&principal, &path, &query))
-            }
-            ClientCommand::EditMemory { path, edits } => {
-                let by = Provenance { author: Author::User, now: memory::now(), origin: None };
-                outbox.send(self.services.memory.edit(&principal, &path, &edits, by))
-            }
-            ClientCommand::OptimizeMemory { run, path, model } => {
-                let request = self.services.memory.optimization(&principal, &path, model);
-                self.submit(&principal, run, &request);
-            }
-            ClientCommand::UndoMemory { path } => outbox.send(self.services.memory.undo(&principal, &path)),
             ClientCommand::LoadSettings => {
                 outbox.send(ServerEvent::Settings { settings: self.services.settings.load(&principal) });
             }
@@ -118,7 +104,8 @@ impl CommandHandler {
                 outbox.send(ServerEvent::Notices(agent_engine::tools::inbox::take(self.client)));
             }
             ClientCommand::Feature { feature, input } => {
-                let output = crate::features::handle(&feature, self.client, &principal, input)
+                let output = self
+                    .with_context(&principal, |context| crate::features::handle(&feature, context, input))
                     .unwrap_or_else(|| Err(format!("there is no {feature} here")));
                 outbox.send(ServerEvent::Feature { feature, output });
             }
@@ -164,6 +151,14 @@ impl CommandHandler {
         self.runs.cancel_all();
     }
 
+    fn with_context<T>(&self, principal: &Principal, body: impl FnOnce(&Context<'_>) -> T) -> T {
+        let submit = |run: RunId, request: PromptRequest| {
+            self.submit(principal, run, &request);
+            Ok(())
+        };
+        body(&Context { client: self.client, principal, services: &self.services, submit: &submit })
+    }
+
     fn submit(&self, owner: &Principal, run: RunId, request: &PromptRequest) {
         if self.runs.is_active(run) {
             self.outbox.send(ServerEvent::error(format!("run {run} is already in progress")));
@@ -189,18 +184,12 @@ impl CommandHandler {
             },
             ..request.clone()
         };
-        let mut request = self.services.extensions.brief(run, request)?;
-        let optimizing = request.memory.as_ref().is_some_and(|brief| brief.optimizing);
-        let tool = self.services.memory_tool && request.memory.is_some() && !optimizing;
-        if tool {
-            let memories = self.services.memory.clone();
-            request.credentials.mcp.push(MemoryEndpoint::for_run(memories, owner.clone(), request.cwd.clone()));
-        }
-        let request = self.services.memory.brief(owner, run, &request, tool);
+        let request = self.services.extensions.brief(run, request)?;
+        let (request, finishes) = self.with_context(owner, |context| crate::features::prepare(context, run, request));
         let sink = Arc::new(RunSink {
             runs: Arc::clone(&self.runs),
             outbox,
-            memory: request.memory.is_some().then(|| (self.services.memory.clone(), owner.clone(), request.clone())),
+            finishes: std::sync::Mutex::new(finishes),
             extensions: request.extensions.clone(),
         });
         match self.services.engine.start(run, &request, sink) {
@@ -235,7 +224,7 @@ impl CommandHandler {
 struct RunSink {
     runs: Arc<RunTable>,
     outbox: Outbox,
-    memory: Option<(Memories, Principal, PromptRequest)>,
+    finishes: std::sync::Mutex<Vec<Finish>>,
     extensions: Option<domain::Extensions>,
 }
 
@@ -245,10 +234,10 @@ impl EventSink for RunSink {
             self.runs.finish(run);
             crate::extensions::discard(self.extensions.as_ref());
             let completed = matches!(event, EngineEvent::Completed { .. });
-            if let Some(memory) =
-                self.memory.as_ref().and_then(|(memories, owner, request)| memories.finish(owner, request, completed))
-            {
-                self.outbox.send(memory);
+            let finishes =
+                std::mem::take(&mut *self.finishes.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+            for finished in finishes.into_iter().filter_map(|finish| finish(completed)) {
+                self.outbox.send(finished);
             }
         }
         self.outbox.send(ServerEvent::Run { run, event });

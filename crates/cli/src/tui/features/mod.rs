@@ -14,6 +14,7 @@ pub struct Slash {
 pub struct Feature {
     pub commands: Vec<Slash>,
     pub tick: Option<fn(&mut App)>,
+    pub prefix: Option<(char, Run)>,
 }
 
 include!(concat!(env!("OUT_DIR"), "/features.rs"));
@@ -28,6 +29,13 @@ pub fn command(text: &str) -> Option<(Run, Option<String>)> {
         .flat_map(|feature| feature.commands)
         .find(|slash| slash.names.iter().any(|known| known.eq_ignore_ascii_case(name)))
         .map(|slash| (slash.run, argument))
+}
+
+pub fn prefixed(text: &str) -> Option<(Run, Option<String>)> {
+    let first = text.chars().next()?;
+    let rest = text[first.len_utf8()..].trim();
+    let (_, run) = all().into_iter().filter_map(|feature| feature.prefix).find(|(sign, _)| *sign == first)?;
+    (!rest.is_empty()).then(|| (run, Some(rest.to_owned())))
 }
 
 pub fn help() -> Vec<(&'static str, &'static str)> {

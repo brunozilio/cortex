@@ -25,7 +25,7 @@ impl ModelCatalog for ProviderCatalog {
 
 impl ModelProviders {
     pub(crate) fn discover_models(&self, owner: &Principal, engine_models: Vec<ModelOption>, outbox: &Outbox) {
-        let owner_key = crate::memory::owner_key(owner);
+        let owner_key = crate::dirs::owner_key(owner);
         let generation = {
             let mut generations = self.generations.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             let value = generations.entry(owner_key.clone()).or_default();

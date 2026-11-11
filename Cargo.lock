@@ -2750,6 +2750,7 @@ dependencies = [
  "crossbeam-channel",
  "domain",
  "protocol",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",

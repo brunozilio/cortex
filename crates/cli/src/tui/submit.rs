@@ -23,8 +23,8 @@ impl App {
         if let Some(command) = text.strip_prefix('!').map(str::trim).filter(|c| !c.is_empty()) {
             return super::shell::start(self, command.to_owned());
         }
-        if let Some(note) = text.strip_prefix('#').map(str::trim).filter(|n| !n.is_empty()) {
-            return super::memory::remember(self, note.to_owned());
+        if let Some((run, argument)) = super::features::prefixed(&text) {
+            return run(self, argument);
         }
         if let Some(run) = &self.run {
             let text = super::mentions::with_files(&self.sdk, &self.cwd, &self.pastes.unfold(&text));

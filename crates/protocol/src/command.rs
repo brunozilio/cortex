@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use domain::provider::ModelProvider;
-use domain::{AskId, Decision, MemoryEdit, ModelOption, PermissionMode, PromptRequest, RunId};
+use domain::{AskId, Decision, PermissionMode, PromptRequest, RunId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -18,11 +18,6 @@ pub enum ClientCommand {
     ListModels,
     ListSkills { path: PathBuf },
     ListAgents { path: PathBuf },
-    LoadMemory { path: PathBuf },
-    SearchMemory { path: PathBuf, query: String },
-    EditMemory { path: PathBuf, edits: Vec<MemoryEdit> },
-    OptimizeMemory { run: RunId, path: PathBuf, model: ModelOption },
-    UndoMemory { path: PathBuf },
     LoadSettings,
     SaveSettings { settings: serde_json::Value },
     ListProviders,
@@ -54,11 +49,6 @@ impl ClientCommand {
             Self::ListModels => "list_models",
             Self::ListSkills { .. } => "list_skills",
             Self::ListAgents { .. } => "list_agents",
-            Self::LoadMemory { .. } => "load_memory",
-            Self::SearchMemory { .. } => "search_memory",
-            Self::EditMemory { .. } => "edit_memory",
-            Self::OptimizeMemory { .. } => "optimize_memory",
-            Self::UndoMemory { .. } => "undo_memory",
             Self::LoadSettings => "load_settings",
             Self::SaveSettings { .. } => "save_settings",
             Self::ListProviders => "list_providers",
@@ -82,6 +72,7 @@ impl ClientCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use domain::ModelOption;
 
     #[test]
     fn every_command_round_trips() {
@@ -98,11 +89,6 @@ mod tests {
             ClientCommand::ListModels,
             ClientCommand::ListSkills { path: "/repo".into() },
             ClientCommand::ListAgents { path: "/repo".into() },
-            ClientCommand::LoadMemory { path: "/repo".into() },
-            ClientCommand::SearchMemory { path: "/repo".into(), query: "q".into() },
-            ClientCommand::EditMemory { path: "/repo".into(), edits: Vec::new() },
-            ClientCommand::OptimizeMemory { run, path: "/repo".into(), model: ModelOption::new("m", "M") },
-            ClientCommand::UndoMemory { path: "/repo".into() },
             ClientCommand::LoadSettings,
             ClientCommand::SaveSettings { settings: serde_json::json!({"model": "m"}) },
             ClientCommand::ListProviders,

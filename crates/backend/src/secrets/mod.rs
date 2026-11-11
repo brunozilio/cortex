@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use domain::{Principal, SecretId};
 
-use crate::memory::owner_key;
+use crate::dirs::owner_key;
 
 pub use self::sealed::SealedSecretStore;
 

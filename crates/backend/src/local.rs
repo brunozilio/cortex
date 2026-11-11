@@ -46,7 +46,6 @@ impl Backend for LocalBackend {
 pub struct Workers {
     control: Option<Sender<Command>>,
     queries: Option<Sender<Command>>,
-    memory: Option<Sender<Command>>,
     handler: Arc<CommandHandler>,
     workers: Vec<JoinHandle<()>>,
 }
@@ -62,23 +61,15 @@ impl Workers {
         let handler = Arc::new(CommandHandler::new(services, outbox));
         let (control, control_rx) = crossbeam_channel::unbounded();
         let (queries, queries_rx) = crossbeam_channel::unbounded();
-        let (memory, memory_rx) = crossbeam_channel::unbounded();
         let workers = vec![
             spawn_worker("backend-control", control_rx, Arc::clone(&handler))?,
             spawn_worker("backend-queries", queries_rx, Arc::clone(&handler))?,
-            spawn_memory_worker(memory_rx, Arc::clone(&handler))?,
         ];
-        Ok(Self { control: Some(control), queries: Some(queries), memory: Some(memory), handler, workers })
+        Ok(Self { control: Some(control), queries: Some(queries), handler, workers })
     }
 
     pub fn send(&self, command: Command) -> Result<(), BackendError> {
-        let queue = if is_memory(&command.payload) {
-            &self.memory
-        } else if is_query(&command.payload) {
-            &self.queries
-        } else {
-            &self.control
-        };
+        let queue = if is_query(&command.payload) { &self.queries } else { &self.control };
         queue.as_ref().ok_or(BackendError::Disconnected)?.send(command).map_err(|_| BackendError::Disconnected)
     }
 }
@@ -87,7 +78,6 @@ impl Drop for Workers {
     fn drop(&mut self) {
         self.control.take();
         self.queries.take();
-        self.memory.take();
         for worker in self.workers.drain(..) {
             if worker.join().is_err() {
                 tracing::error!("backend worker panicked");
@@ -115,48 +105,6 @@ fn is_query(command: &ClientCommand) -> bool {
     )
 }
 
-fn is_memory(command: &ClientCommand) -> bool {
-    matches!(
-        command,
-        ClientCommand::LoadMemory { .. }
-            | ClientCommand::EditMemory { .. }
-            | ClientCommand::SearchMemory { .. }
-            | ClientCommand::UndoMemory { .. }
-    )
-}
-
-fn coalesce(pending: Vec<Command>) -> Vec<Command> {
-    let last_search = |path: &std::path::Path| {
-        pending.iter().rposition(|c| matches!(&c.payload, ClientCommand::SearchMemory { path: p, .. } if p == path))
-    };
-    pending
-        .iter()
-        .enumerate()
-        .filter(|(i, c)| match &c.payload {
-            ClientCommand::SearchMemory { path, .. } => last_search(path) == Some(*i),
-            _ => true,
-        })
-        .map(|(_, c)| c.clone())
-        .collect()
-}
-
-fn spawn_memory_worker(
-    commands: Receiver<Command>,
-    handler: Arc<CommandHandler>,
-) -> Result<JoinHandle<()>, BackendError> {
-    thread::Builder::new()
-        .name("backend-memory".to_owned())
-        .spawn(move || {
-            while let Ok(first) = commands.recv() {
-                let pending: Vec<Command> = std::iter::once(first).chain(commands.try_iter()).collect();
-                for command in coalesce(pending) {
-                    handler.handle(command);
-                }
-            }
-        })
-        .map_err(BackendError::Worker)
-}
-
 fn spawn_worker(
     name: &str,
     commands: Receiver<Command>,
@@ -181,25 +129,5 @@ mod tests {
         assert!(is_query(&ClientCommand::ListSkills { path: "/".into() }));
         assert!(is_query(&ClientCommand::ListAgents { path: "/".into() }));
         assert!(!is_query(&ClientCommand::ListModels));
-        assert!(is_memory(&ClientCommand::SearchMemory { path: "/".into(), query: "x".into() }));
-        assert!(!is_memory(&ClientCommand::ListModels));
-    }
-
-    fn search(path: &str, query: &str) -> Command {
-        Envelope::local(ClientCommand::SearchMemory { path: path.into(), query: query.into() })
-    }
-
-    #[test]
-    fn only_the_latest_search_per_project_runs() {
-        let load = Envelope::local(ClientCommand::LoadMemory { path: "/a".into() });
-        let kept = coalesce(vec![search("/a", "r"), search("/b", "x"), load, search("/a", "re"), search("/a", "ren")]);
-        let names: Vec<String> = kept
-            .iter()
-            .map(|c| match &c.payload {
-                ClientCommand::SearchMemory { path, query } => format!("{}:{query}", path.display()),
-                other => other.name().to_owned(),
-            })
-            .collect();
-        assert_eq!(names, vec!["/b:x", "load_memory", "/a:ren"]);
     }
 }

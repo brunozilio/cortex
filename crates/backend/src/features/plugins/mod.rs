@@ -1,10 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use domain::Principal;
 use serde_json::{Value, json};
 
-pub fn handle(_client: u64, _principal: &Principal, input: Value) -> Result<Value, String> {
+use crate::feature::Context;
+
+pub fn handle(_context: &Context<'_>, input: Value) -> Result<Value, String> {
     let home = std::env::home_dir().ok_or("no home folder to keep plugins in")?;
     let folder = home.join(brand::DIR).join("plugins");
     let text = |key: &str| input[key].as_str().map(str::trim).filter(|value| !value.is_empty());
@@ -20,8 +21,13 @@ pub fn handle(_client: u64, _principal: &Principal, input: Value) -> Result<Valu
 pub fn forget(_client: u64) {}
 
 fn list(folder: &Path) -> Vec<Value> {
-    let mut found: Vec<PathBuf> =
-        std::fs::read_dir(folder).into_iter().flatten().flatten().map(|entry| entry.path()).filter(|p| p.is_dir()).collect();
+    let mut found: Vec<PathBuf> = std::fs::read_dir(folder)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|p| p.is_dir())
+        .collect();
     found.sort();
     found
         .iter()
@@ -69,7 +75,8 @@ fn remove(folder: &Path, name: &str) -> Result<Value, String> {
 }
 
 fn plugin(folder: &Path, name: &str) -> Result<PathBuf, String> {
-    let plain = name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) && !name.starts_with('.');
+    let plain =
+        name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) && !name.starts_with('.');
     plain.then(|| folder.join(name)).ok_or_else(|| format!("{name:?} is not a plugin name"))
 }
 

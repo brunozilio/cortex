@@ -5,15 +5,14 @@ use agent_engine::AgentEngine;
 
 use crate::authorizer::{Authorizer, LocalAuthorizer};
 use crate::extensions::Extensions;
-use crate::memory::{FileMemoryStore, Memories};
 use crate::providers::{FileProviderStore, ModelProviders};
 use crate::settings::{FileSettingsStore, SettingsStore};
 
 #[derive(Clone)]
 pub struct LocalServices {
     pub engine: Arc<dyn AgentEngine>,
-    pub memory: Memories,
-    pub memory_tool: bool,
+    pub data: Option<PathBuf>,
+    pub off: std::collections::BTreeSet<String>,
     pub settings: Arc<dyn SettingsStore>,
     pub extensions: Extensions,
     pub providers: ModelProviders,
@@ -40,8 +39,8 @@ impl LocalServices {
     pub fn with_engine(engine: Arc<dyn AgentEngine>) -> Self {
         Self {
             engine,
-            memory: Memories::plain(crate::memory::system_memory_store()),
-            memory_tool: true,
+            data: crate::dirs::app_data_dir(),
+            off: std::collections::BTreeSet::new(),
             settings: Arc::new(FileSettingsStore::system()),
             extensions: Extensions::default(),
             providers: ModelProviders::system(),
@@ -51,8 +50,13 @@ impl LocalServices {
         }
     }
 
+    pub fn without(mut self, feature: &str) -> Self {
+        self.off.insert(feature.to_owned());
+        self
+    }
+
     pub fn kept_in(mut self, data: &Path) -> Self {
-        self.memory = self.memory.with_store(Arc::new(FileMemoryStore::new(data.join("memory"))));
+        self.data = Some(data.to_path_buf());
         self.settings = Arc::new(FileSettingsStore::new(data.join("users")));
         self.providers = self.providers.with_store(Arc::new(FileProviderStore::new(data.join("providers"))));
         self

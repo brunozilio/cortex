@@ -11,6 +11,7 @@ pub fn feature() -> Feature {
             run: bashes,
         }],
         tick: None,
+        prefix: None,
     }
 }
 

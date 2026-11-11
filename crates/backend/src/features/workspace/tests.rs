@@ -12,7 +12,7 @@ fn run(cwd: &Path, args: &[&str]) {
 fn ask(cwd: &Path, input: Value) -> Result<Value, String> {
     let mut input = input;
     input["path"] = json!(cwd);
-    handle(1, &Principal::LocalOwner, input)
+    crate::feature::testing::local(1, |context| handle(context, input))
 }
 
 fn changes(cwd: &Path, scope: &str) -> Result<Changes, String> {

@@ -1,5 +1,4 @@
 use super::*;
-use crate::MemoryId;
 
 #[test]
 fn commands_parse_with_their_arguments() {
@@ -13,21 +12,6 @@ fn commands_parse_with_their_arguments() {
     assert_eq!(Command::parse("/model claude-opus-5-5"), Some(Command::Model(Some("claude-opus-5-5".into()))));
     assert_eq!(Command::parse("/mode plan"), Some(Command::Mode(Some(PermissionMode::Plan))));
     assert_eq!(Command::parse("/effort max"), Some(Command::Effort(Some(Effort::Max))));
-    assert_eq!(Command::parse("/memory"), Some(Command::Memory(MemoryCommand::List)));
-    assert_eq!(
-        Command::parse("/memory the renderer"),
-        Some(Command::Memory(MemoryCommand::Search("the renderer".into())))
-    );
-    assert_eq!(Command::parse("/memory Optimize"), Some(Command::Memory(MemoryCommand::Optimize)));
-    assert_eq!(Command::parse("/memory undo"), Some(Command::Memory(MemoryCommand::Undo)));
-    assert_eq!(Command::parse("/memory forgotten"), Some(Command::Memory(MemoryCommand::Forgotten)));
-    assert_eq!(Command::parse("/memory restore 12"), Some(Command::Memory(MemoryCommand::Restore(MemoryId(12)))));
-    assert_eq!(Command::parse("/memory restore"), None, "restore needs an id");
-    assert_eq!(
-        Command::parse("/memory undo the font"),
-        Some(Command::Memory(MemoryCommand::Search("undo the font".into()))),
-        "more words are a search"
-    );
     assert_eq!(Command::parse("/mcp"), Some(Command::Mcp(McpCommand::List)));
     assert_eq!(Command::parse("/reload"), Some(Command::Reload));
     assert_eq!(Command::parse("/rewind"), Some(Command::Rewind));
@@ -49,7 +33,6 @@ fn commands_parse_with_their_arguments() {
     assert_eq!(Command::parse("/agents new reviews SQL"), Some(Command::NewAgent("reviews SQL".into())));
     assert_eq!(Command::parse("/skills new deploys to fly"), Some(Command::NewSkill("deploys to fly".into())));
     assert_eq!(Command::parse("/skills new"), None);
-    assert_eq!(Command::parse("/memory edit"), Some(Command::Memory(MemoryCommand::Edit)));
     assert_eq!(Command::parse("/config"), Some(Command::Config));
     assert_eq!(Command::parse("/compact the API work"), Some(Command::Compact(Some("the API work".into()))));
     assert_eq!(Command::parse("/bashes kill"), None);
@@ -117,6 +100,24 @@ fn help_names_only_commands_that_parse() {
     for (name, _) in Command::HELP {
         assert!(Command::parse(&format!("/{name}")).is_some(), "{name}");
     }
+}
+
+#[test]
+fn memory_commands_parse_from_their_argument() {
+    use crate::MemoryId;
+    assert_eq!(MemoryCommand::parse(None), Some(MemoryCommand::List));
+    assert_eq!(MemoryCommand::parse(Some("the renderer".into())), Some(MemoryCommand::Search("the renderer".into())));
+    assert_eq!(MemoryCommand::parse(Some("Optimize".into())), Some(MemoryCommand::Optimize));
+    assert_eq!(MemoryCommand::parse(Some("undo".into())), Some(MemoryCommand::Undo));
+    assert_eq!(MemoryCommand::parse(Some("forgotten".into())), Some(MemoryCommand::Forgotten));
+    assert_eq!(MemoryCommand::parse(Some("edit".into())), Some(MemoryCommand::Edit));
+    assert_eq!(MemoryCommand::parse(Some("restore 12".into())), Some(MemoryCommand::Restore(MemoryId(12))));
+    assert_eq!(MemoryCommand::parse(Some("restore".into())), None, "restore needs an id");
+    assert_eq!(
+        MemoryCommand::parse(Some("undo the font".into())),
+        Some(MemoryCommand::Search("undo the font".into())),
+        "more words are a search"
+    );
 }
 
 #[test]

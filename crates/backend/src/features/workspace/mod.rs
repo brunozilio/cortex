@@ -2,14 +2,15 @@ mod git;
 
 use std::path::{Path, PathBuf};
 
-use domain::Principal;
 use domain::changes::DiffScope;
 use serde_json::{Value, json};
+
+use crate::feature::Context;
 
 const MENTIONED: usize = 5;
 const KEPT: usize = 50_000;
 
-pub fn handle(_client: u64, _principal: &Principal, input: Value) -> Result<Value, String> {
+pub fn handle(_context: &Context<'_>, input: Value) -> Result<Value, String> {
     let path: PathBuf = input["path"].as_str().map(PathBuf::from).ok_or("the workspace feature needs a path")?;
     match input["op"].as_str().unwrap_or_default() {
         "changes" => {

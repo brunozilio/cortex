@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
-use backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
+use backend::{InMemorySecretStore, LocalServices};
 use domain::{AgentAsk, AskId, AskKind, Criteria, PermissionMode, SessionId};
 use sdk::{EngineEvent, Model, Sdk};
 
@@ -11,8 +11,8 @@ fn model() -> Model {
 
 fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-    services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
-    services.memory_tool = false;
+    services.data = None;
+    services.off.insert("memory_search".into());
     services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
     Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
 }

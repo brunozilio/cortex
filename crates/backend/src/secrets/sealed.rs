@@ -8,7 +8,7 @@ use domain::{Principal, SecretId};
 use serde::{Deserialize, Serialize};
 
 use super::{SecretStore, Secrets};
-use crate::memory::owner_key;
+use crate::dirs::owner_key;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Sealed {

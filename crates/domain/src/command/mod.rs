@@ -17,7 +17,6 @@ pub enum Command {
     Retry,
     Diff,
     Diffs,
-    Memory(MemoryCommand),
     Btw(Option<String>),
     AddDir(Option<String>),
     Permissions,
@@ -50,7 +49,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const HELP: [(&'static str, &'static str); 38] = [
+    pub const HELP: [(&'static str, &'static str); 37] = [
         ("help", "Show the commands and keys"),
         ("clear", "Clear the conversation and start fresh (also /new, /reset)"),
         ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
@@ -64,7 +63,6 @@ impl Command {
         ("retry", "Send the last prompt again, from where it started"),
         ("diff", "Show the project's uncommitted changes"),
         ("diffs", "Browse the changes full screen: uncommitted, staged or branch"),
-        ("memory", "List the project's memory, /memory <search>|optimize|undo|forgotten|restore <id>|edit"),
         ("btw", "Ask a side question without interrupting: /btw <question>"),
         ("add-dir", "Let the agent read a folder like the project: /add-dir <path>"),
         ("permissions", "Show the allow, ask and deny rules the agent follows here"),
@@ -114,7 +112,6 @@ impl Command {
             &[
                 "diff",
                 "diffs",
-                "memory",
                 "add-dir",
                 "permissions",
                 "hooks",
@@ -168,7 +165,6 @@ impl Command {
             "retry" => bare(Self::Retry),
             "diff" => bare(Self::Diff),
             "diffs" => bare(Self::Diffs),
-            "memory" => MemoryCommand::parse(argument).map(Self::Memory),
             "btw" => Some(Self::Btw(argument)),
             "add-dir" => Some(Self::AddDir(argument)),
             "permissions" | "allowed-tools" => bare(Self::Permissions),

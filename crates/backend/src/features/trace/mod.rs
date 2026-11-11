@@ -4,12 +4,14 @@ use agent_engine::sessions::{FileSessions, records};
 use domain::{ModelOption, Principal, PromptRequest, SessionId};
 use serde_json::Value;
 
-pub fn handle(_client: u64, principal: &Principal, input: Value) -> Result<Value, String> {
+use crate::feature::Context;
+
+pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let session = input["session"].as_str().ok_or("the trace feature needs a session")?;
     let cwd = input["cwd"].as_str().ok_or("the trace feature needs the session's folder")?;
     let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
     let store = FileSessions::new(data.join(crate::native::SESSIONS));
-    traced(&store, principal, Path::new(cwd), &SessionId(session.into()))
+    traced(&store, context.principal, Path::new(cwd), &SessionId(session.into()))
 }
 
 pub fn forget(_client: u64) {}

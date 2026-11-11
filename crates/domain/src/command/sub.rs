@@ -21,7 +21,7 @@ pub enum MemoryCommand {
 }
 
 impl MemoryCommand {
-    pub(super) fn parse(argument: Option<String>) -> Option<Self> {
+    pub fn parse(argument: Option<String>) -> Option<Self> {
         let Some(text) = argument else { return Some(Self::List) };
         let mut words = text.split_whitespace();
         let verb = words.next().unwrap_or_default().to_ascii_lowercase();

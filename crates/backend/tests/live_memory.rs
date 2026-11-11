@@ -2,17 +2,13 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use backend::{Backend, InMemoryStore, LocalBackend, LocalServices, Memories, Wake};
-use domain::{
-    Author, Effort, EngineEvent, MemoryBrief, MemoryEdit, MemoryKind, Principal, PromptRequest, Provenance, RunId,
-};
+use backend::{Backend, LocalBackend, LocalServices, Wake};
+use domain::{Effort, EngineEvent, Memory, MemoryBrief, MemoryEdit, MemoryKind, PromptRequest, RunId};
 #[path = "support/native_live.rs"]
 mod native_live;
 use protocol::{ClientCommand, Envelope, ServerEvent};
 
-fn seeded(project: &Path) -> Memories {
-    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
-    let by = Provenance { author: Author::User, now: 1, origin: None };
+fn seed(backend: &LocalBackend, project: &Path) {
     let mut edits = vec![MemoryEdit::Remember {
         kind: MemoryKind::Semantic,
         text: "The release codename of this project is PERSIMMON.".into(),
@@ -23,8 +19,8 @@ fn seeded(project: &Path) -> Memories {
         text: format!("Module m{n} keeps its helpers in m{n}/util."),
         tags: vec![],
     }));
-    memories.edit(&Principal::LocalOwner, project, &edits, by);
-    memories
+    let input = serde_json::json!({ "op": "edit", "path": project, "edits": edits });
+    backend.send(Envelope::local(ClientCommand::Feature { feature: "memory".into(), input })).expect("seed");
 }
 
 #[test]
@@ -32,9 +28,10 @@ fn seeded(project: &Path) -> Memories {
 fn an_agent_searches_and_writes_project_memory() {
     let project = tempfile::tempdir().expect("tempdir");
     let mut services = LocalServices::with_engine(Arc::new(native_live::engine()));
-    services.memory = seeded(project.path());
+    services.data = None;
     let wake: Wake = Arc::new(|| {});
     let backend = LocalBackend::new(services, wake).expect("backend");
+    seed(&backend, project.path());
     let request = PromptRequest {
         effort: Effort::Low,
         memory: Some(MemoryBrief::new(Some("Live memory".into()))),
@@ -57,7 +54,9 @@ fn an_agent_searches_and_writes_project_memory() {
                 println!("tool {} {}", call.name, call.summary);
                 searched |= call.name.contains("memory_search");
             }
-            Some(ServerEvent::Memory { memories, .. }) => learned = memories,
+            Some(ServerEvent::Feature { feature, output: Ok(answer) }) if feature == "memory" => {
+                learned = serde_json::from_value::<Vec<Memory>>(answer["memories"].clone()).unwrap_or_default();
+            }
             Some(ServerEvent::Run { event: EngineEvent::Asked(ask), .. }) => panic!("the run asked: {ask:?}"),
             Some(ServerEvent::Run { event, .. }) if event.is_terminal() => {
                 assert!(matches!(event, EngineEvent::Completed { .. }), "{event:?}");

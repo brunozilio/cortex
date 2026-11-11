@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use domain::{MemoryBook, MemoryBrief, ModelOption, Principal, PromptRequest, RunId};
-use protocol::ServerEvent;
+use serde_json::Value;
 
-use super::{Memories, edits_file, memory_event};
+use super::{Memories, edits_file, listing};
 
 impl Memories {
     pub fn optimization(&self, owner: &Principal, project: &Path, model: ModelOption) -> PromptRequest {
@@ -18,16 +18,14 @@ impl Memories {
         }
     }
 
-    pub fn undo(&self, owner: &Principal, project: &Path) -> ServerEvent {
+    pub fn undo(&self, owner: &Principal, project: &Path) -> Result<Value, String> {
         let key = (owner.clone(), project.to_path_buf());
         let point = self.undo_points().remove(&key);
-        let Some(book) = point else { return ServerEvent::error("nothing to undo in the memory") };
-        if let Err(error) = self.store.save(owner, project, &book) {
-            return ServerEvent::error(format!("could not save memory: {error}"));
-        }
-        let event = memory_event(project, &book);
+        let Some(book) = point else { return Err("nothing to undo in the memory".into()) };
+        self.store.save(owner, project, &book).map_err(|error| format!("could not save memory: {error}"))?;
+        let answer = listing(project, &book);
         self.lock().insert(key, book);
-        event
+        Ok(answer)
     }
 
     pub(super) fn brief_optimization(&self, owner: &Principal, run: RunId, request: &PromptRequest) -> PromptRequest {

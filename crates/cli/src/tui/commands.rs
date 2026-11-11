@@ -133,7 +133,6 @@ pub fn run(app: &mut App, command: Command) {
             let cwd = app.cwd.clone();
             app.spawn(move |sdk| Msg::Changes(super::git::changes(sdk, &cwd)));
         }
-        Command::Memory(command) => super::memory::run(app, command),
         Command::Skills => {
             let cwd = app.cwd.clone();
             app.spawn(move |sdk| match sdk.skills(&cwd) {

@@ -21,14 +21,32 @@ fn main() {
     let arms: String = names
         .iter()
         .map(|name| {
-            format!("    if feature == {name:?} {{\n        return Some({name}::handle(client, principal, input));\n    }}\n")
+            format!(
+                "    if feature == {name:?} && context.on({name:?}) {{\n        return Some({name}::handle(context, input));\n    }}\n"
+            )
         })
         .collect();
     let forgets: String = names.iter().map(|name| format!("    {name}::forget(client);\n")).collect();
+    let steps: String = names
+        .iter()
+        .filter(|name| folder.join(name).join("run.rs").is_file())
+        .map(|name| {
+            format!(
+                "    let (request, finishes) = if context.on({name:?}) {{\n        \
+                 let (request, finish) = {name}::run::prepare(context, run, request);\n        \
+                 (request, finishes.into_iter().chain(finish).collect::<Vec<Finish>>())\n    \
+                 }} else {{\n        (request, finishes)\n    }};\n"
+            )
+        })
+        .collect();
     registry.push_str(&format!(
-        "pub fn handle(feature: &str, client: u64, principal: &domain::Principal, input: serde_json::Value) \
-         -> Option<Result<serde_json::Value, String>> {{\n    let _ = (feature, client, principal, &input);\n{arms}    None\n}}\n\
-         pub fn forget(client: u64) {{\n    let _ = client;\n{forgets}}}\n"
+        "use crate::feature::{{Context, Finish}};\n\
+         pub fn handle(feature: &str, context: &Context<'_>, input: serde_json::Value) \
+         -> Option<Result<serde_json::Value, String>> {{\n    let _ = (feature, context, &input);\n{arms}    None\n}}\n\
+         pub fn forget(client: u64) {{\n    let _ = client;\n{forgets}}}\n\
+         pub fn prepare(context: &Context<'_>, run: domain::RunId, request: domain::PromptRequest) \
+         -> (domain::PromptRequest, Vec<Finish>) {{\n    let _ = (context, run);\n    let finishes: Vec<Finish> = Vec::new();\n\
+         {steps}    (request, finishes)\n}}\n"
     ));
     let out = std::env::var("OUT_DIR").unwrap_or_default();
     if let Err(error) = std::fs::write(Path::new(&out).join("features.rs"), registry) {

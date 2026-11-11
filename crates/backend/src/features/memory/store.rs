@@ -9,22 +9,7 @@ pub trait MemoryStore: Send + Sync {
     fn save(&self, owner: &Principal, project: &Path, book: &MemoryBook) -> std::io::Result<()>;
 }
 
-pub use crate::dirs::app_data_dir;
-
-pub fn project_key(project: &Path) -> String {
-    project.to_string_lossy().chars().map(|c| if c.is_alphanumeric() { c } else { '-' }).collect()
-}
-
-pub fn owner_key(owner: &Principal) -> String {
-    match owner {
-        Principal::LocalOwner => "local".to_owned(),
-        Principal::Member(member) => format!("org-{}-user-{}", member.org, member.user),
-    }
-}
-
-pub fn system_memory_store() -> Arc<dyn MemoryStore> {
-    memory_store_in(app_data_dir())
-}
+use crate::dirs::{owner_key, project_key};
 
 pub fn memory_store_in(data: Option<PathBuf>) -> Arc<dyn MemoryStore> {
     match data {

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use domain::Principal;
 
-use crate::memory::{app_data_dir, owner_key};
+use crate::dirs::{app_data_dir, owner_key};
 
 const AT_MOST: usize = 256 * 1024;
 

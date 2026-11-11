@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use domain::Principal;
 use domain::provider::ProviderBook;
 
-use crate::memory::{app_data_dir, owner_key};
+use crate::dirs::{app_data_dir, owner_key};
 
 pub trait ProviderStore: Send + Sync {
     fn load(&self, owner: &Principal) -> ProviderBook;

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_engine::fake::FakeEngine;
-use backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
+use backend::{InMemorySecretStore, LocalServices};
 use domain::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId, ToolCall};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -14,8 +14,8 @@ use super::{keys, view};
 
 pub(super) fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-    services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
-    services.memory_tool = false;
+    services.data = None;
+    services.off.insert("memory_search".into());
     let secrets = Arc::new(InMemorySecretStore::default());
     services.providers = services.providers.with_secrets(secrets);
     Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)

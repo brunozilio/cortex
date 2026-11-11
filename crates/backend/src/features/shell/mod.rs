@@ -1,12 +1,13 @@
 use agent_engine::tools::builtin::shell::shells;
-use domain::Principal;
 use serde_json::{Value, json};
 
-pub fn handle(client: u64, _principal: &Principal, input: Value) -> Result<Value, String> {
+use crate::feature::Context;
+
+pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     if let Some(id) = input["kill"].as_str() {
-        shells::kill(client, id);
+        shells::kill(context.client, id);
     }
-    Ok(json!({ "shells": shells::list(client) }))
+    Ok(json!({ "shells": shells::list(context.client) }))
 }
 
 pub fn forget(client: u64) {
@@ -19,7 +20,8 @@ mod tests {
 
     #[test]
     fn a_client_sees_only_its_own_commands() {
-        let listed = handle(78_001, &Principal::LocalOwner, json!({ "kill": "bash_none" })).expect("listed");
+        let listed = crate::feature::testing::local(78_001, |context| handle(context, json!({ "kill": "bash_none" })))
+            .expect("listed");
         assert_eq!(listed, json!({ "shells": [] }));
         forget(78_001);
     }

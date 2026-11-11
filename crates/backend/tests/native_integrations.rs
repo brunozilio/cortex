@@ -4,10 +4,9 @@ use agent_engine::{
     sessions::InMemorySessions,
     transcript::Block,
 };
-use backend::{Backend, InMemoryStore, LocalBackend, LocalServices, Memories};
+use backend::{Backend, LocalBackend, LocalServices};
 use domain::{
-    Author, EngineEvent, MemoryBrief, MemoryEdit, MemoryKind, ModelOption, ModelProvider, PermissionMode, Principal,
-    PromptRequest, Provenance, RunId,
+    EngineEvent, MemoryBrief, MemoryEdit, MemoryKind, ModelOption, ModelProvider, PermissionMode, PromptRequest, RunId,
 };
 use protocol::{ClientCommand, Envelope, ServerEvent};
 use serde_json::json;
@@ -79,19 +78,17 @@ fn native_backend_searches_memory_and_learns() {
     let dir = tempfile::tempdir().expect("valid test fixture");
     let engine = NativeEngine::new(Arc::new(Source), Arc::new(InMemorySessions::default()));
     let mut services = LocalServices::with_engine(Arc::new(engine)).kept_in(&dir.path().join("data"));
-    services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
-    services.memory.edit(
-        &Principal::LocalOwner,
-        dir.path(),
-        &[MemoryEdit::Remember {
-            kind: MemoryKind::Semantic,
-            text: "The release codename is PERSIMMON.".into(),
-            tags: vec!["release".into()],
-        }],
-        Provenance { author: Author::User, now: 1, origin: None },
-    );
     services.providers = services.providers.with_store(Arc::new(backend::InMemoryProviderStore::default()));
     let backend = LocalBackend::new(services, Arc::new(|| {})).expect("valid test fixture");
+    let fact = MemoryEdit::Remember {
+        kind: MemoryKind::Semantic,
+        text: "The release codename is PERSIMMON.".into(),
+        tags: vec!["release".into()],
+    };
+    let input = serde_json::json!({ "op": "edit", "path": dir.path(), "edits": [fact] });
+    backend
+        .send(Envelope::local(ClientCommand::Feature { feature: "memory".into(), input }))
+        .expect("valid test fixture");
     let model = ModelOption::new("fixture", "Fixture inference").served_by(ModelProvider::new("openai"));
     let mut request =
         PromptRequest::plain(dir.path().into(), "Find the codename and remember the tabs preference.", model);
@@ -113,8 +110,8 @@ fn native_backend_searches_memory_and_learns() {
                     break;
                 }
             }
-            Some(ServerEvent::Memory { memories, .. }) => {
-                learned |= memories.iter().any(|m| m.text.contains("prefers tabs"))
+            Some(ServerEvent::Feature { feature, output: Ok(answer) }) if feature == "memory" => {
+                learned |= answer["memories"].to_string().contains("prefers tabs");
             }
             Some(_) => {}
             None => std::thread::sleep(Duration::from_millis(5)),

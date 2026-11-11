@@ -82,7 +82,7 @@ mod tests {
     use std::sync::Arc;
 
     use agent_engine::fake::FakeEngine;
-    use backend::{InMemorySecretStore, InMemoryStore, LocalServices, Memories};
+    use backend::{InMemorySecretStore, LocalServices};
     use sdk::{Criteria, Model, Verdict};
 
     use super::*;
@@ -94,8 +94,8 @@ mod tests {
             vec![EngineEvent::Verified(verdict), EngineEvent::Completed { duration_ms: 1, cost_usd: None }],
         );
         let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-        services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
-        services.memory_tool = false;
+        services.data = None;
+        services.off.insert("memory_search".into());
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
         let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
         let wanted = Wanted { verification: Some("tests pass".into()), ..Wanted::default() };

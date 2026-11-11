@@ -10,6 +10,7 @@ brand.workspace = true
 domain.workspace = true
 protocol.workspace = true
 backend.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 crossbeam-channel.workspace = true

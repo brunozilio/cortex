@@ -25,7 +25,6 @@ mod input;
 mod keys;
 mod login;
 mod markdown;
-mod memory;
 mod mentions;
 mod motion;
 mod msg;

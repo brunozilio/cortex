@@ -1,11 +1,31 @@
 use domain::command::MemoryCommand;
 use sdk::{Error, Forgotten, Memory, ProjectMemory};
 
-use super::app::{App, Msg};
+use super::{Feature, Slash};
+use crate::tui::app::{App, Msg};
 
-pub fn run(app: &mut App, command: MemoryCommand) {
+pub fn feature() -> Feature {
+    Feature {
+        commands: vec![Slash {
+            names: &["memory"],
+            about: "List the project's memory, /memory <search>|optimize|undo|forgotten|restore <id>|edit",
+            run: memory,
+        }],
+        tick: None,
+        prefix: Some(('#', |app, note| remember(app, note.unwrap_or_default()))),
+    }
+}
+
+fn memory(app: &mut App, argument: Option<String>) {
+    match MemoryCommand::parse(argument) {
+        Some(command) => run(app, command),
+        None => app.transcript.notice("/memory restore needs an id (see /memory forgotten)."),
+    }
+}
+
+fn run(app: &mut App, command: MemoryCommand) {
     if command == MemoryCommand::Edit {
-        app.edit_file = Some(super::config::instructions_file(&app.cwd));
+        app.edit_file = Some(crate::tui::config::instructions_file(&app.cwd));
         return;
     }
     let cwd = app.cwd.clone();
@@ -38,7 +58,7 @@ pub fn run(app: &mut App, command: MemoryCommand) {
     });
 }
 
-pub fn remember(app: &mut App, note: String) {
+fn remember(app: &mut App, note: String) {
     let cwd = app.cwd.clone();
     app.spawn(move |sdk| match sdk.memory(cwd).remember(sdk::MemoryKind::Semantic, &note, &["user"]) {
         Ok(_) => Msg::Notice(format!("Remembered: {note}")),
@@ -84,8 +104,8 @@ mod tests {
     use ratatui::crossterm::event::KeyCode;
     use sdk::{EngineEvent, MemoryKind, Model};
 
-    use super::super::app::App;
-    use super::super::tests::{press, screen, sdk, type_text, until};
+    use crate::tui::app::App;
+    use crate::tui::tests::{press, screen, sdk, type_text, until};
 
     fn command(app: &mut App, text: &str, shows: &str) {
         type_text(app, text);

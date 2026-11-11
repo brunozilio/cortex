@@ -1,7 +1,19 @@
-use domain::{MemoryKind, ModelOption};
+use domain::{Forgotten, MemoryKind};
 
-use super::store::memory_store_in;
 use super::*;
+use crate::dirs::project_key;
+
+fn plain() -> Memories {
+    Memories::new(Arc::new(InMemoryStore::default()))
+}
+
+fn listed(answer: &Value) -> Vec<Memory> {
+    serde_json::from_value(answer["memories"].clone()).expect("memories")
+}
+
+fn forgotten(answer: &Value) -> Vec<Forgotten> {
+    serde_json::from_value(answer["forgotten"].clone()).expect("forgotten")
+}
 
 fn request(cwd: &Path) -> PromptRequest {
     PromptRequest {
@@ -83,24 +95,23 @@ fn an_unreadable_book_is_kept_aside_and_never_overwritten() {
 
 #[test]
 fn edits_answer_with_the_whole_memory() {
-    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
+    let memories = plain();
     let owner = Principal::LocalOwner;
-    memories.edit(&owner, Path::new("/repo"), &[remember("Uses wgpu")], by_user());
-    match memories.edit(&owner, Path::new("/repo"), &[remember("Inter is the only font")], by_user()) {
-        ServerEvent::Memory { path, memories, .. } => {
-            assert_eq!(path, PathBuf::from("/repo"));
-            assert_eq!(memories.len(), 2);
-        }
-        other => panic!("unexpected {other:?}"),
-    }
+    memories.edit(&owner, Path::new("/repo"), &[remember("Uses wgpu")], by_user()).expect("edit");
+    let answer = memories.edit(&owner, Path::new("/repo"), &[remember("Inter is the only font")], by_user());
+    let answer = answer.expect("edit");
+    assert_eq!(answer["path"], "/repo");
+    assert_eq!(listed(&answer).len(), 2);
 }
 
 #[test]
 fn a_run_is_briefed_and_its_edits_applied_on_completion() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
+    let memories = plain();
     let owner = Principal::LocalOwner;
-    memories.edit(&owner, dir.path(), &[remember("The renderer uses signed distance fields")], by_user());
+    memories
+        .edit(&owner, dir.path(), &[remember("The renderer uses signed distance fields")], by_user())
+        .expect("edit");
 
     let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), false);
     let brief = briefed.memory.clone().expect("brief");
@@ -110,28 +121,21 @@ fn a_run_is_briefed_and_its_edits_applied_on_completion() {
 
     std::fs::write(&brief.output, r#"{"remember":[{"kind":"episodic","text":"Tuned the renderer"}],"forget":[0]}"#)
         .expect("write");
-    match memories.finish(&owner, &briefed, true) {
-        Some(ServerEvent::Memory { memories, .. }) => {
-            assert_eq!(memories.len(), 1);
-            assert_eq!((memories[0].kind, memories[0].author), (MemoryKind::Episodic, Author::Agent));
-            assert_eq!(memories[0].origin.as_deref(), Some("Night sky"));
-        }
-        other => panic!("unexpected {other:?}"),
-    }
+    let learned = listed(&memories.finish(&owner, &briefed, true).expect("changed").expect("saved"));
+    assert_eq!(learned.len(), 1);
+    assert_eq!((learned[0].kind, learned[0].author), (MemoryKind::Episodic, Author::Agent));
+    assert_eq!(learned[0].origin.as_deref(), Some("Night sky"));
     assert!(!brief.output.exists(), "the edits file is removed");
 }
 
 #[test]
 fn what_an_agent_is_given_counts_as_used() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
+    let memories = plain();
     let owner = Principal::LocalOwner;
     let font = MemoryEdit::Remember { kind: MemoryKind::Semantic, text: "Inter is the font".into(), tags: vec![] };
-    memories.edit(&owner, dir.path(), &[remember("The renderer uses wgpu"), font], by_user());
-    let uses = || match memories.load(&owner, dir.path()) {
-        ServerEvent::Memory { memories, .. } => memories.iter().map(|m| m.uses).collect::<Vec<_>>(),
-        other => panic!("unexpected {other:?}"),
-    };
+    memories.edit(&owner, dir.path(), &[remember("The renderer uses wgpu"), font], by_user()).expect("edit");
+    let uses = || listed(&memories.load(&owner, dir.path())).iter().map(|m| m.uses).collect::<Vec<_>>();
 
     memories.brief(&owner, RunId::new(), &request(dir.path()), false);
     assert_eq!(uses(), vec![1, 1], "everything recalled");
@@ -142,7 +146,7 @@ fn what_an_agent_is_given_counts_as_used() {
 #[test]
 fn a_failed_run_changes_nothing() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
+    let memories = plain();
     let owner = Principal::LocalOwner;
     let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), false);
     let output = briefed.memory.clone().expect("brief").output;
@@ -154,68 +158,13 @@ fn a_failed_run_changes_nothing() {
     assert_eq!(memories.brief(&owner, RunId::new(), &no_memory, false), no_memory);
 }
 
-struct Buckets;
-impl Embedder for Buckets {
-    fn model(&self) -> &str {
-        "buckets"
-    }
-
-    fn embed(&self, texts: &[String], _purpose: Purpose) -> Option<Vec<Vec<f32>>> {
-        let synonyms = |w: &str| match w {
-            "superfícies" | "surface" | "renderer" => 0,
-            "lint" | "clippy" => 1,
-            _ => 2 + w.len() % 6,
-        };
-        Some(
-            texts
-                .iter()
-                .map(|t| {
-                    let mut v = vec![0.0f32; 8];
-                    for word in t.to_lowercase().split_whitespace() {
-                        v[synonyms(word)] += 1.0;
-                    }
-                    v
-                })
-                .collect(),
-        )
-    }
-}
-
-#[test]
-fn search_uses_meaning_once_vectors_exist() {
-    let memories = Memories::new(Arc::new(InMemoryStore::default()), Arc::new(Buckets));
-    let owner = Principal::LocalOwner;
-    let project = Path::new("/repo");
-    memories.edit(&owner, project, &[remember("The renderer draws every surface"), remember("Use clippy")], by_user());
-    let hits = memories.search(&owner, project, "superfícies");
-    assert_eq!(hits.first().map(|h| h.0), Some(MemoryId(0)), "found by meaning: {hits:?}");
-    let plain = Memories::plain(Arc::new(InMemoryStore::default()));
-    plain.edit(&owner, project, &[remember("The renderer draws every surface")], by_user());
-    assert!(plain.search(&owner, project, "superfícies").is_empty(), "words alone miss it");
-}
-
-#[test]
-fn remembering_the_same_meaning_again_revises_instead_of_adding() {
-    let memories = Memories::new(Arc::new(InMemoryStore::default()), Arc::new(Buckets));
-    let owner = Principal::LocalOwner;
-    let project = Path::new("/repo");
-    memories.edit(&owner, project, &[remember("The renderer draws every surface")], by_user());
-    match memories.edit(&owner, project, &[remember("Every renderer draws the surface")], by_user()) {
-        ServerEvent::Memory { memories, .. } => {
-            assert_eq!(memories.len(), 1, "{memories:?}");
-            assert_eq!(memories[0].text, "Every renderer draws the surface");
-            assert_eq!(memories[0].history.len(), 1);
-        }
-        other => panic!("unexpected {other:?}"),
-    }
-}
-
 #[test]
 fn an_optimisation_can_be_undone_until_the_next_edit() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
+    let memories = plain();
     let owner = Principal::LocalOwner;
-    memories.edit(&owner, dir.path(), &[remember("Uses wgpu"), remember("The renderer uses wgpu")], by_user());
+    let both = [remember("Uses wgpu"), remember("The renderer uses wgpu")];
+    memories.edit(&owner, dir.path(), &both, by_user()).expect("edit");
     let request = memories.optimization(&owner, dir.path(), ModelOption::new("opus", "Opus"));
     assert!(request.prompt.contains("[0] semantic (render): Uses wgpu"));
     let briefed = memories.brief(&owner, RunId::new(), &request, false);
@@ -223,38 +172,60 @@ fn an_optimisation_can_be_undone_until_the_next_edit() {
     assert!(brief.optimizing && brief.recalled.is_empty() && !brief.tool);
 
     std::fs::write(&brief.output, r#"{"forget":[0]}"#).expect("write");
-    match memories.finish(&owner, &briefed, true) {
-        Some(ServerEvent::Memory { memories, forgotten, .. }) => {
-            assert_eq!(memories.len(), 1);
-            assert_eq!(forgotten.iter().map(|f| f.memory.id).collect::<Vec<_>>(), vec![MemoryId(0)]);
-        }
-        other => panic!("unexpected {other:?}"),
-    }
-    match memories.undo(&owner, dir.path()) {
-        ServerEvent::Memory { memories, forgotten, .. } => {
-            assert_eq!(memories.len(), 2, "both memories are back");
-            assert!(forgotten.is_empty());
-        }
-        other => panic!("unexpected {other:?}"),
-    }
-    assert!(matches!(memories.undo(&owner, dir.path()), ServerEvent::Error { .. }), "undone only once");
+    let optimized = memories.finish(&owner, &briefed, true).expect("changed").expect("saved");
+    assert_eq!(listed(&optimized).len(), 1);
+    assert_eq!(forgotten(&optimized).iter().map(|f| f.memory.id).collect::<Vec<_>>(), vec![MemoryId(0)]);
+    let undone = memories.undo(&owner, dir.path()).expect("undone");
+    assert_eq!(listed(&undone).len(), 2, "both memories are back");
+    assert!(forgotten(&undone).is_empty());
+    assert!(memories.undo(&owner, dir.path()).is_err(), "undone only once");
 
     let briefed = memories.brief(&owner, RunId::new(), &request, false);
     std::fs::write(&briefed.memory.clone().expect("brief").output, r#"{"forget":[1]}"#).expect("write");
-    memories.finish(&owner, &briefed, true);
-    memories.edit(&owner, dir.path(), &[remember("Inter is the font")], by_user());
-    assert!(matches!(memories.undo(&owner, dir.path()), ServerEvent::Error { .. }), "an edit ends the undo");
+    let _ = memories.finish(&owner, &briefed, true);
+    memories.edit(&owner, dir.path(), &[remember("Inter is the font")], by_user()).expect("edit");
+    assert!(memories.undo(&owner, dir.path()).is_err(), "an edit ends the undo");
 }
 
 #[test]
 fn a_tool_shortens_what_is_recalled() {
-    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
+    let memories = plain();
     let owner = Principal::LocalOwner;
     let dir = tempfile::tempdir().expect("tempdir");
     let edits: Vec<MemoryEdit> = (0..30).map(|n| remember(&format!("Fact number {n}"))).collect();
-    memories.edit(&owner, dir.path(), &edits, by_user());
+    memories.edit(&owner, dir.path(), &edits, by_user()).expect("edit");
     let with = memories.brief(&owner, RunId::new(), &request(dir.path()), true).memory.expect("brief");
     let without = memories.brief(&owner, RunId::new(), &request(dir.path()), false).memory.expect("brief");
     assert_eq!((with.recalled.len(), without.recalled.len()), (RecallBudget::WITH_TOOL.facts, 30));
     assert!(with.tool);
+}
+
+#[test]
+fn the_feature_keeps_memory_in_the_data_folder_and_starts_optimisations() {
+    let data = tempfile::tempdir().expect("data");
+    let project = tempfile::tempdir().expect("project");
+    let services = crate::feature::testing::services(Some(data.path()));
+    let path = json!(project.path());
+    crate::feature::testing::with(1, &services, |context| {
+        let edit = json!({ "op": "edit", "path": path, "edits": [remember("Uses wgpu")] });
+        assert_eq!(listed(&handle(context, edit).expect("edited")).len(), 1);
+        let found = handle(context, json!({ "op": "search", "path": path, "query": "wgpu" })).expect("found");
+        assert_eq!(found["scores"][0][0], 0);
+        assert!(handle(context, json!({ "op": "list" })).is_err());
+        assert!(handle(context, json!({ "op": "undo", "path": path })).is_err());
+    });
+    assert!(data.path().join("memory/local").exists());
+
+    let started = std::sync::Mutex::new(Vec::new());
+    let submit = |run: RunId, request: PromptRequest| {
+        started.lock().expect("lock").push((run, request));
+        Ok(())
+    };
+    let context = Context { client: 1, principal: &Principal::LocalOwner, services: &services, submit: &submit };
+    let run = RunId::new();
+    let optimize = json!({ "op": "optimize", "path": path, "run": run, "model": ModelOption::new("m", "M") });
+    assert_eq!(handle(&context, optimize).expect("started"), json!({ "run": run }));
+    let started = started.into_inner().expect("lock");
+    assert_eq!(started[0].0, run);
+    assert!(started[0].1.memory.as_ref().is_some_and(|brief| brief.optimizing));
 }

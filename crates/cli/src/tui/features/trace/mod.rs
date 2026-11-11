@@ -18,6 +18,7 @@ pub fn feature() -> Feature {
             run: trace,
         }],
         tick: None,
+        prefix: None,
     }
 }
 

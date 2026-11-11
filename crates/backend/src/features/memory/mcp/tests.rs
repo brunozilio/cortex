@@ -1,7 +1,7 @@
 use domain::{Author, MemoryEdit, MemoryId, Provenance};
 
 use super::*;
-use crate::memory::InMemoryStore;
+use crate::features::memory::InMemoryStore;
 
 fn ask(method: &str, params: Value) -> Value {
     let message = json!({ "jsonrpc": "2.0", "id": 7, "method": method, "params": params });
@@ -45,7 +45,7 @@ fn listings_name_ids_kinds_and_sessions() {
 
 #[test]
 fn a_run_searches_only_its_own_project_s_memory() {
-    let memories = Memories::plain(Arc::new(InMemoryStore::default()));
+    let memories = Memories::new(Arc::new(InMemoryStore::default()));
     let owner = Principal::LocalOwner;
     let by = Provenance { author: Author::User, now: 1, origin: None };
     let edit = MemoryEdit::Remember {
@@ -53,7 +53,7 @@ fn a_run_searches_only_its_own_project_s_memory() {
         text: "Run clippy before committing".into(),
         tags: vec![],
     };
-    memories.edit(&owner, std::path::Path::new("/repo"), &[edit], by);
+    memories.edit(&owner, std::path::Path::new("/repo"), &[edit], by).expect("edit");
     let call = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": MEMORY_SEARCH_TOOL, "arguments": { "query": "clippy" } } });
     let text = |project: &str| {
         let server = MemoryEndpoint::for_run(memories.clone(), owner.clone(), project.into());

@@ -3,10 +3,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_engine::fake::FakeEngine;
-use backend::{Backend, InMemoryStore, LocalBackend, LocalServices, Memories, Wake};
+use backend::{Backend, LocalBackend, LocalServices, Wake};
 use crossbeam_channel::Receiver;
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, Principal, PromptRequest, RunId, UserId};
 use protocol::{ClientCommand, Envelope, ServerEvent};
+use serde_json::json;
 
 fn sdk_folder() -> PathBuf {
     let root = tempfile::tempdir().expect("sdk").keep();
@@ -30,8 +31,10 @@ fn backend(engine: FakeEngine) -> (LocalBackend, Receiver<()>) {
 fn backend_with(engine: FakeEngine, memory_tool: bool) -> (LocalBackend, Receiver<()>) {
     let mut services = LocalServices::with_engine(Arc::new(engine));
     services.extensions.dirs = vec![sdk_folder()];
-    services.memory = Memories::plain(Arc::new(InMemoryStore::default()));
-    services.memory_tool = memory_tool;
+    services.data = None;
+    if !memory_tool {
+        services = services.without("memory_search");
+    }
     services.providers = services.providers.with_store(Arc::new(backend::InMemoryProviderStore::default()));
     let (woke_tx, woke) = crossbeam_channel::unbounded();
     let wake: Wake = Arc::new(move || {
@@ -146,11 +149,11 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
     let path = dir.path().to_path_buf();
     let fact =
         domain::MemoryEdit::Remember { kind: domain::MemoryKind::Semantic, text: "Uses wgpu".into(), tags: vec![] };
-    send(&backend, ClientCommand::EditMemory { path: path.clone(), edits: vec![fact] });
-    collect(&backend, &woke, |event| matches!(event, ServerEvent::Memory { .. }));
+    send(&backend, memory(json!({ "op": "edit", "path": path, "edits": [fact] })));
+    collect(&backend, &woke, answered);
 
     let run = RunId::new();
-    send(&backend, ClientCommand::OptimizeMemory { run, path: path.clone(), model: model() });
+    send(&backend, memory(json!({ "op": "optimize", "path": path, "run": run, "model": model() })));
     collect(&backend, &woke, run_ended);
     let mut remembering = PromptRequest::plain(path.clone(), "hi", model());
     remembering.memory = Some(domain::MemoryBrief::default());
@@ -164,13 +167,20 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
     assert!(!plain.memory.as_ref().is_some_and(|brief| brief.optimizing), "a client cannot ask for it");
     assert_eq!(plain.credentials.mcp.len(), 1, "an ordinary run searches memory");
 
-    send(&backend, ClientCommand::UndoMemory { path });
-    let undo =
-        collect(&backend, &woke, |event| matches!(event, ServerEvent::Memory { .. } | ServerEvent::Error { .. }));
+    send(&backend, memory(json!({ "op": "undo", "path": path })));
+    let undo = collect(&backend, &woke, answered);
     assert!(
-        matches!(undo.last(), Some(ServerEvent::Error { message }) if message.contains("nothing to undo")),
+        matches!(undo.last(), Some(ServerEvent::Feature { output: Err(message), .. }) if message.contains("nothing to undo")),
         "an optimization that changed nothing leaves nothing to undo: {undo:?}"
     );
+}
+
+fn memory(input: serde_json::Value) -> ClientCommand {
+    ClientCommand::Feature { feature: "memory".into(), input }
+}
+
+fn answered(event: &ServerEvent) -> bool {
+    matches!(event, ServerEvent::Feature { feature, .. } if feature == "memory")
 }
 
 #[test]
