@@ -1,5 +1,5 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use sdk::PermissionMode;
+use sdk::{Effort, PermissionMode};
 
 use super::app::App;
 use super::ask;
@@ -125,6 +125,7 @@ fn pick(app: &mut App, event: KeyEvent) {
                         app.set_model(model);
                     }
                 }
+                PickerKind::Effort => app.set_effort_from(Effort::ALL.get(cursor).copied()),
                 PickerKind::Mode => {
                     if let Some(mode) = PermissionMode::ALL.get(cursor) {
                         app.set_mode(*mode);

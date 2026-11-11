@@ -86,3 +86,20 @@ fn the_sign_in_notices_go_once_connected_and_connected_goes_with_the_first_promp
     assert_eq!(passing(&app), 0);
     assert!(!screen(&app).contains("Connected Scripted."), "{}", screen(&app));
 }
+
+#[test]
+fn effort_without_a_level_opens_a_picker_at_the_current_one() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], Vec::new());
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    type_text(&mut app, "/effort");
+    press(&mut app, KeyCode::Enter);
+    let picker = app.picker.as_ref().expect("a picker");
+    assert_eq!(picker.items[picker.cursor].0, app.effort().cli_value());
+    assert!(screen(&app).contains("xhigh"), "{}", screen(&app));
+    press(&mut app, KeyCode::Down);
+    press(&mut app, KeyCode::Enter);
+    assert!(app.picker.is_none());
+    assert_eq!(app.effort(), sdk::Effort::High, "the level after medium");
+}

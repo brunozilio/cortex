@@ -47,6 +47,7 @@ pub fn run(app: &mut App, command: Command) {
             app.set_mode(mode);
             app.transcript.notice(format!("Mode: {}", mode_label(mode)));
         }
+        Command::Effort(None) => app.effort_picker(),
         Command::Effort(effort) => app.set_effort_from(effort),
         Command::Compact(focus) => app.compact(focus.as_deref().unwrap_or_default()),
         Command::Rewind => app.open_rewind(),

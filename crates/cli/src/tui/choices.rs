@@ -16,6 +16,7 @@ pub enum PickerKind {
     Logout,
     OutputStyle,
     Config,
+    Effort,
 }
 
 #[derive(Debug)]
@@ -109,6 +110,12 @@ impl App {
         }
     }
 
+    pub(super) fn effort_picker(&mut self) {
+        let items = Effort::ALL.iter().map(|e| (e.cli_value().to_owned(), effort_about(*e).to_owned())).collect();
+        let cursor = Effort::ALL.iter().position(|e| *e == self.effort).unwrap_or(0);
+        self.picker = Some(Picker { kind: PickerKind::Effort, title: "Effort".into(), items, cursor });
+    }
+
     pub(super) fn set_effort_from(&mut self, effort: Option<Effort>) {
         let Some(effort) = effort else {
             return self.transcript.notice(format!("Effort: {}", self.effort.cli_value()));
@@ -141,5 +148,15 @@ impl App {
         let started = session.compact_on(focus);
         self.transcript.notice("Compacting the conversation…");
         self.follow(started);
+    }
+}
+
+fn effort_about(effort: Effort) -> &'static str {
+    match effort {
+        Effort::Low => "Quickest answers, least reasoning",
+        Effort::Medium => "Balanced",
+        Effort::High => "More reasoning for harder work",
+        Effort::XHigh => "Extended reasoning",
+        Effort::Max => "As much reasoning as the model allows",
     }
 }
