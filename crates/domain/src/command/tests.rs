@@ -64,6 +64,12 @@ fn verification_shows_sets_or_clears_the_criteria() {
 }
 
 #[test]
+fn help_names_one_command_or_lists_them_all() {
+    assert_eq!(Command::parse("/help"), Some(Command::Help(None)));
+    assert_eq!(Command::parse("/? mode"), Some(Command::Help(Some("mode".into()))));
+}
+
+#[test]
 fn anything_else_is_left_to_the_engine() {
     assert_eq!(Command::parse("/new explain this"), None, "a bare command takes no argument");
     assert_eq!(Command::parse("/mode sideways"), None);

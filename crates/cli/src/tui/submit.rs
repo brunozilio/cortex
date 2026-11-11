@@ -17,6 +17,9 @@ impl App {
         if let Some((run, argument)) = super::features::command(&text) {
             return run(self, argument);
         }
+        if super::slash::refused(self, &text) {
+            return;
+        }
         if let Some(command) = text.strip_prefix('!').map(str::trim).filter(|c| !c.is_empty()) {
             return super::shell::start(self, command.to_owned());
         }
@@ -32,3 +35,7 @@ impl App {
         self.send(text);
     }
 }
+
+#[cfg(test)]
+#[path = "submit_tests.rs"]
+mod tests;

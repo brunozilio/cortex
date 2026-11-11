@@ -41,6 +41,7 @@ mod search;
 mod settings;
 mod shell;
 mod side;
+mod slash;
 mod statusline;
 mod submit;
 mod transcript;

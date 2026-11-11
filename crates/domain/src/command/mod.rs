@@ -1,11 +1,13 @@
 use crate::{Effort, PermissionMode};
 
+mod slash;
 mod sub;
+pub use slash::{closest, slash_name};
 pub use sub::{McpCommand, MemoryCommand, VerificationCommand};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
-    Help,
+    Help(Option<String>),
     New,
     Model(Option<String>),
     Mode(Option<PermissionMode>),
@@ -100,7 +102,7 @@ impl Command {
         let argument = (!rest.is_empty()).then(|| rest.to_owned());
         let bare = |command: Self| argument.is_none().then_some(command);
         match name.to_ascii_lowercase().as_str() {
-            "help" | "?" => bare(Self::Help),
+            "help" | "?" => Some(Self::Help(argument.map(|name| name.trim_start_matches('/').to_owned()))),
             "new" | "clear" => bare(Self::New),
             "model" => Some(Self::Model(argument)),
             "mode" => match &argument {

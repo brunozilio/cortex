@@ -13,15 +13,7 @@ const KEYS: &str = "Keys: Enter sends · Alt+Enter or Ctrl+J new line · Esc int
 
 pub fn run(app: &mut App, command: Command) {
     match command {
-        Command::Help => {
-            let mut text = String::from("Commands:");
-            for (name, about) in Command::HELP.into_iter().chain(super::features::help()) {
-                text.push_str(&format!("\n  /{name:<12} {about}"));
-            }
-            text.push_str("\n  /<skill>      Run a skill or custom command\n");
-            text.push_str(KEYS);
-            app.transcript.notice(text);
-        }
+        Command::Help(name) => super::slash::help(app, name, KEYS),
         Command::New => app.new_session(),
         Command::Model(None) => {
             if app.models.is_empty() {
