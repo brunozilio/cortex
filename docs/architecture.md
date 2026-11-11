@@ -81,6 +81,13 @@ listed summaries carry each provider's name and `Access`, so the CLI's menus
 come from the server. `ListModels` asks every connected provider's catalog.
 A run uses its provider's key (`RunCredentials::model`, never serialized).
 
+Built-in tools live in folders under `crates/agent-engine/src/tools/builtin/`
+(`files`: Read, Write, Edit, Glob, Grep, NotebookEdit; `shell`: Bash,
+BashOutput, KillShell, Monitor; `notify`: PushNotification). Each folder's
+`tools()` is gathered by `build.rs`; deleting a folder drops its tools. Tools
+tied to the agent loop (plan mode, worktrees, schedules, peers, web, asking
+the user) are still listed in `tools::standard()`.
+
 - **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`.
   Project or user agents of the same name replace them.
 - **SendMessage** (`agent/conversations.rs`): a finished sub-agent's

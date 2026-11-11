@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace, clip, field, required};
+use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
 
 const OUTPUT: usize = 4_000;

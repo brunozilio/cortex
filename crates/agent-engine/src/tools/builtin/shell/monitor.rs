@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
-use super::shells::Watch;
-use super::{Access, Outcome, Tool, Workspace, field, required};
+use crate::tools::shells::Watch;
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
 
 #[derive(Debug)]
@@ -40,9 +40,9 @@ impl Tool for Monitor {
         let mut shell = super::bash::shell(command);
         shell.current_dir(&workspace.cwd).stdin(std::process::Stdio::null());
         let client = workspace.credentials.client;
-        match super::shells::start(client, command, &mut shell) {
+        match crate::tools::shells::start(client, command, &mut shell) {
             Ok(id) => {
-                super::shells::watch(id.clone(), client, Watch::Lines);
+                crate::tools::shells::watch(id.clone(), client, Watch::Lines);
                 Outcome::ok(format!(
                     "Monitoring as {id}: each line it prints reaches you as an event. Stop it with KillShell."
                 ))
@@ -102,7 +102,7 @@ mod read_tests {
             std::thread::sleep(Duration::from_millis(100));
             lines.extend(inbox::take(8902).into_iter().map(|notice| notice.text));
             if !read && lines.iter().any(|text| text == "one") {
-                super::super::shells::BashOutput.run(&json!({ "bash_id": id }), &workspace);
+                crate::tools::shells::BashOutput.run(&json!({ "bash_id": id }), &workspace);
                 read = true;
             }
         }

@@ -3,7 +3,7 @@ use std::time::Duration;
 use platform::bounded::{Bounds, Ended};
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace, field, required};
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
 
 #[derive(Debug)]
@@ -40,11 +40,11 @@ impl Tool for PushNotification {
 
     fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
         let message = match required(input, "message") {
-            Ok(message) => super::clip(message, 300),
+            Ok(message) => crate::tools::clip(message, 300),
             Err(error) => return error,
         };
         let title = field(input, "title").filter(|title| !title.trim().is_empty()).unwrap_or(brand::NAME);
-        let title = super::clip(title, 80);
+        let title = crate::tools::clip(title, 80);
         let (program, args, env) = command(&title, &message);
         let mut process = platform::command(&program);
         process.args(&args).envs(env);

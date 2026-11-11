@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace, clip, field, required, shown};
+use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required, shown};
 use crate::model::ToolSpec;
 
 const OUTPUT: usize = 30_000;

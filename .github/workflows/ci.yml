@@ -88,7 +88,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
-      - name: Each provider folder can be removed, or kept alone
+      - name: Each provider or tool folder can be removed; each provider can be kept alone
         run: |
           set -eu
           folder=crates/llm-providers/src/providers
@@ -97,6 +97,12 @@ jobs:
             mv "$folder/$name" "$aside/"
             cargo check --workspace --all-targets --locked
             mv "$aside/$name" "$folder/"
+          done
+          tools=crates/agent-engine/src/tools/builtin
+          for name in $(ls "$tools"); do
+            mv "$tools/$name" "$aside/"
+            cargo check --workspace --all-targets --locked
+            mv "$aside/$name" "$tools/"
           done
           for keep in $(ls "$folder"); do
             for name in $(ls "$folder"); do

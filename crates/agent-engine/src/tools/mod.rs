@@ -1,28 +1,21 @@
 pub mod advisor;
 pub mod ask;
-mod bash;
+pub mod builtin {
+    include!(concat!(env!("OUT_DIR"), "/builtin_tools.rs"));
+}
 pub mod builtin_agents;
 pub mod builtin_skills;
-mod edit;
-mod glob;
-mod grep;
 pub mod inbox;
 mod lsp;
-mod monitor;
-pub mod notebook;
 mod outside;
-mod pdf;
 pub mod peers;
 pub mod plan_mode;
-pub mod push_notification;
-mod read;
 mod rule_target;
 pub mod schedules;
 pub(crate) mod script_io;
 pub mod script_tool;
 pub mod send_message;
 pub mod shells;
-mod shown_diff;
 pub mod skill;
 mod skill_script;
 pub mod structured;
@@ -33,21 +26,13 @@ pub mod tool_search;
 pub mod web;
 mod workspace;
 pub mod worktree;
-mod write;
 
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-pub use bash::Bash;
-pub use edit::Edit;
-pub use glob::Glob;
-pub use grep::Grep;
 pub use lsp::Lsp;
-pub use read::Read;
-pub use shells::{BashOutput, KillShell};
 pub use workspace::Workspace;
-pub use write::Write;
 
 use crate::model::ToolSpec;
 
@@ -110,15 +95,7 @@ pub trait Tool: Send + Sync {
 }
 
 pub fn standard() -> Vec<Box<dyn Tool>> {
-    vec![
-        Box::new(Read),
-        Box::new(Write),
-        Box::new(Edit),
-        Box::new(Glob),
-        Box::new(Grep),
-        Box::new(Bash),
-        Box::new(BashOutput),
-        Box::new(KillShell),
+    let features: Vec<Box<dyn Tool>> = vec![
         Box::new(ask::AskUserQuestion),
         Box::new(plan_mode::EnterPlanMode),
         Box::new(plan_mode::ExitPlanMode),
@@ -128,13 +105,15 @@ pub fn standard() -> Vec<Box<dyn Tool>> {
         Box::new(schedules::CronList),
         Box::new(schedules::CronDelete),
         Box::new(schedules::ScheduleWakeup),
-        Box::new(push_notification::PushNotification),
         Box::new(peers::ListSessions),
-        Box::new(notebook::NotebookEdit),
-        Box::new(monitor::Monitor),
         Box::new(web::WebFetch),
         Box::new(web::WebSearch),
-    ]
+    ];
+    builtin::tools().into_iter().chain(features).collect()
+}
+
+pub fn named(name: &str) -> Option<Box<dyn Tool>> {
+    standard().into_iter().find(|tool| tool.spec().name == name)
 }
 
 pub fn describe(name: &str, data: &Value) -> String {

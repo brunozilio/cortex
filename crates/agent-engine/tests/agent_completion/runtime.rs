@@ -84,13 +84,12 @@ fn worktree_with_new_commits_is_retained_even_when_status_is_clean() {
 #[test]
 #[cfg(unix)]
 fn read_rejects_a_fifo_without_waiting_for_a_writer() {
-    use agent_engine::tools::Tool;
     let dir = tempfile::tempdir().expect("dir");
     let fifo = dir.path().join("pipe");
     assert!(std::process::Command::new("mkfifo").arg(&fifo).status().expect("mkfifo").success());
     let workspace = Workspace::new(dir.path());
     let start = std::time::Instant::now();
-    let result = agent_engine::tools::Read.run(&json!({"file_path":"pipe"}), &workspace);
+    let result = agent_engine::tools::named("Read").expect("Read").run(&json!({"file_path":"pipe"}), &workspace);
     assert!(result.is_error && result.content.contains("regular file"));
     assert!(start.elapsed() < std::time::Duration::from_secs(1));
 }

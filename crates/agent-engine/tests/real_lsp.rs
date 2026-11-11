@@ -25,7 +25,7 @@ fn clangd_answers_symbols_and_reports_an_edit_s_error() {
 
     workspace.mark_read(&file);
     let edit = json!({"file_path": "main.c", "old_string": "add(1, 2)", "new_string": "add(1, undefined_name)"});
-    let edited = tools::Edit.run(&edit, &workspace);
+    let edited = tools::named("Edit").expect("Edit").run(&edit, &workspace);
     assert!(
         edited.content.contains("<diagnostics>") && edited.content.contains("undefined_name"),
         "{}",

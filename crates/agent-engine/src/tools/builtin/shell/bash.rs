@@ -1,8 +1,8 @@
 use std::process::Stdio;
 use std::time::Duration;
 
-use super::shells::Waited;
-use super::{Access, Outcome, Tool, Workspace, clip, field, required};
+use crate::tools::shells::Waited;
+use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
 use serde_json::{Value, json};
 
@@ -57,9 +57,9 @@ impl Tool for Bash {
         let mut shell = shell(command);
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
-            return match super::shells::start(workspace.credentials.client, command, &mut shell) {
+            return match crate::tools::shells::start(workspace.credentials.client, command, &mut shell) {
                 Ok(id) => {
-                    super::shells::watch(id.clone(), workspace.credentials.client, super::shells::Watch::End);
+                    crate::tools::shells::watch(id.clone(), workspace.credentials.client, crate::tools::shells::Watch::End);
                     Outcome::ok(format!(
                         "Started in the background as {id}. Read its output with BashOutput and stop it with \
                          KillShell; you will be told when it ends."
@@ -68,11 +68,11 @@ impl Tool for Bash {
                 Err(error) => Outcome::error(format!("Could not start the shell: {error}")),
             };
         }
-        let id = match super::shells::start(workspace.credentials.client, command, &mut shell) {
+        let id = match crate::tools::shells::start(workspace.credentials.client, command, &mut shell) {
             Ok(id) => id,
             Err(error) => return Outcome::error(format!("Could not start the shell: {error}")),
         };
-        match super::shells::wait(&id, timeout, &workspace.stop, &workspace.detach) {
+        match crate::tools::shells::wait(&id, timeout, &workspace.stop, &workspace.detach) {
             Waited::Exited { output, success: true, .. } => {
                 let text = clip(&output, OUTPUT);
                 Outcome::ok(if text.is_empty() { "(no output)".to_owned() } else { text })
@@ -82,7 +82,7 @@ impl Tool for Bash {
                 Outcome::error(format!("{}\n(exit code {code})", clip(&output, OUTPUT)).trim_start().to_owned())
             }
             Waited::Detached => {
-                super::shells::watch(id.clone(), workspace.credentials.client, super::shells::Watch::End);
+                crate::tools::shells::watch(id.clone(), workspace.credentials.client, crate::tools::shells::Watch::End);
                 Outcome::ok(format!(
                     "The user moved this command to the background, where it goes on as {id}. Read its output \
                      with BashOutput and stop it with KillShell; you will be told when it ends."

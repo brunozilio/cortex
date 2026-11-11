@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace, field, required, shown};
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
 use crate::model::ToolSpec;
 
 #[derive(Debug)]

@@ -42,7 +42,7 @@ pub fn text(path: &Path, pages: Option<&str>, stop: &AtomicBool) -> Result<Strin
     for (at, page) in pages.iter().enumerate().filter(|(_, page)| !page.trim().is_empty()) {
         out.push_str(&format!("--- page {} ---\n{}\n", at + first, page.trim_end()));
     }
-    Ok(super::clip(&out, SHOWN))
+    Ok(crate::tools::clip(&out, SHOWN))
 }
 
 #[cfg(test)]
