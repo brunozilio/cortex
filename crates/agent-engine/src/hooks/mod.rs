@@ -1,9 +1,11 @@
 mod handlers;
 mod model;
+mod script_hook;
 mod scripts;
 mod validate;
 
-pub use self::handlers::{command, http, script};
+pub use self::handlers::{command, http};
+pub use self::script_hook::script;
 use crate::tools::Workspace;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -128,7 +130,7 @@ impl Hooks {
                 let result: CommandOutput = if matches!(handler.kind.as_str(), "command" | "http" | "script") {
                     match handler.kind.as_str() {
                         "http" => http(handler, &input, workspace)?,
-                        "script" => script(handler, &input, workspace)?,
+                        "script" => script(handler, &input, workspace, model)?,
                         _ => command(handler, &input, workspace)?,
                     }
                 } else {

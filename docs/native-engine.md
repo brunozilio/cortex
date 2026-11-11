@@ -99,6 +99,13 @@ reason. Exit code 2 or a JSON decision blocks; PreToolUse may rewrite
 arguments (checked again); Stop may demand more work. Hooks run with the
 user's environment and limits on time, output and turns.
 
+A `script` hook (a `.js` file) gets the same `ctx` as a script tool. On
+events that run with a model at hand (the tool, permission, stop, session
+and compaction ones), `ctx.llm` asks the run's model and `ctx.tool` runs a
+read-only tool (Read, Grep, Glob, LSP…) inside the project; anything else
+is refused. The script runs on its own thread and each such call is served
+by the caller (`hooks/script_hook.rs`, `tools/script_bridge.rs`).
+
 ModelRequest runs before each model call of the loop and ModelError when
 one fails (after the provider's own retries and `fallbackModel`). Their
 input has `model`, `kind` (`main` or `sub-agent`, also the matcher's

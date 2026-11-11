@@ -7,7 +7,8 @@ use serde_json::{Value, json};
 
 use super::Agent;
 use super::tasks::Tasks;
-use crate::model::{ToolSpec, TurnRequest};
+use crate::model::ToolSpec;
+use crate::tools::script_bridge::{Bridge, Request};
 use crate::tools::script_tool::ScriptTool;
 use crate::tools::{Access, Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message};
@@ -16,23 +17,6 @@ const DEEPEST: usize = 8;
 
 thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
-}
-
-struct Request {
-    function: String,
-    arguments: Value,
-    reply: mpsc::Sender<Result<Value, String>>,
-}
-
-struct Bridge(Mutex<mpsc::Sender<Request>>);
-
-impl script::Host for Bridge {
-    fn call(&self, function: &str, arguments: Value) -> Result<Value, String> {
-        let (reply, answer) = mpsc::channel();
-        let request = Request { function: function.to_owned(), arguments, reply };
-        self.0.lock().map_err(|_| "the agent is unavailable")?.send(request).map_err(|_| "the agent is gone")?;
-        answer.recv().map_err(|_| "the agent did not answer".to_owned())?
-    }
 }
 
 struct ScriptCall<'a, 'b> {
@@ -184,17 +168,6 @@ impl Agent<'_> {
     }
 
     fn script_llm(&self, arguments: &Value) -> Result<Value, String> {
-        let field = |key: &str| arguments.get(key).and_then(Value::as_str).map(str::to_owned);
-        let prompt = field("prompt").ok_or("ctx.llm needs a prompt")?;
-        let request = TurnRequest {
-            model: field("model").unwrap_or_else(|| self.request.model.clone()),
-            system: field("system").unwrap_or_default(),
-            messages: vec![Message::user(prompt)],
-            tools: Vec::new(),
-            ..self.request.clone()
-        };
-        let reply =
-            self.api.turn(&request, &mut |_| {}, self.control.stop_flag()).map_err(|error| error.to_string())?;
-        Ok(Value::String(reply.message.text()))
+        crate::tools::script_bridge::ask_model(self.api, &self.request, arguments, self.control.stop_flag())
     }
 }
