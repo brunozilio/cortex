@@ -2,8 +2,8 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use super::shells::Waited;
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
+use crate::tools::{Access, Outcome, Tool, Workspace, clip_middle, field, required};
 use serde_json::{Value, json};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
@@ -74,12 +74,12 @@ impl Tool for Bash {
         };
         match super::shells::wait(&id, timeout, &workspace.stop, &workspace.detach) {
             Waited::Exited { output, success: true, .. } => {
-                let text = clip(&output, OUTPUT);
+                let text = clip_middle(&output, OUTPUT);
                 Outcome::ok(if text.is_empty() { "(no output)".to_owned() } else { text })
             }
             Waited::Exited { output, code, .. } => {
                 let code = code.map_or_else(|| "a signal".to_owned(), |code| code.to_string());
-                Outcome::error(format!("{}\n(exit code {code})", clip(&output, OUTPUT)).trim_start().to_owned())
+                Outcome::error(format!("{}\n(exit code {code})", clip_middle(&output, OUTPUT)).trim_start().to_owned())
             }
             Waited::Detached => {
                 super::shells::watch(id.clone(), workspace.credentials.client, super::shells::Watch::End);
@@ -88,9 +88,9 @@ impl Tool for Bash {
                      with BashOutput and stop it with KillShell; you will be told when it ends."
                 ))
             }
-            Waited::Stopped(output) => Outcome::error(format!("{}\n(cancelled)", clip(&output, OUTPUT))),
+            Waited::Stopped(output) => Outcome::error(format!("{}\n(cancelled)", clip_middle(&output, OUTPUT))),
             Waited::TimedOut(output) => Outcome::error(
-                format!("{}\n(stopped after {} ms)", clip(&output, OUTPUT), timeout.as_millis())
+                format!("{}\n(stopped after {} ms)", clip_middle(&output, OUTPUT), timeout.as_millis())
                     .trim_start()
                     .to_owned(),
             ),

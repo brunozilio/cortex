@@ -5,6 +5,7 @@ use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
 
 const DEFAULT_LINES: usize = 2000;
 const LINE_CHARS: usize = 2000;
+const MAX_CHARS: usize = 100_000;
 
 #[derive(Debug)]
 pub struct Read;
@@ -15,7 +16,7 @@ impl Tool for Read {
             name: "Read".into(),
             description: crate::tools::describe(
                 "Read",
-                &serde_json::json!({ "DEFAULT_LINES": DEFAULT_LINES, "LINE_CHARS": LINE_CHARS }),
+                &serde_json::json!({ "DEFAULT_LINES": DEFAULT_LINES, "LINE_CHARS": LINE_CHARS, "MAX_CHARS": MAX_CHARS }),
             ),
             schema: json!({
                 "type": "object",
@@ -94,14 +95,19 @@ impl Tool for Read {
             return Outcome::error(format!("The file has {total} lines; offset {offset} is past its end."));
         }
         let mut out = String::new();
+        let mut last = (offset - 1 + limit).min(total);
         for (number, line) in text.lines().enumerate().skip(offset - 1).take(limit) {
             let line = match line.char_indices().nth(LINE_CHARS) {
                 Some((at, _)) => format!("{}… [line cut]", &line[..at]),
                 None => line.to_owned(),
             };
-            out.push_str(&format!("{:>6}\t{line}\n", number + 1));
+            let numbered = format!("{:>6}\t{line}\n", number + 1);
+            if out.len() + numbered.len() > MAX_CHARS && !out.is_empty() {
+                last = number;
+                break;
+            }
+            out.push_str(&numbered);
         }
-        let last = (offset - 1 + limit).min(total);
         if last < total {
             out.push_str(&format!("… [{} more lines; read on from offset {}]\n", total - last, last + 1));
         }

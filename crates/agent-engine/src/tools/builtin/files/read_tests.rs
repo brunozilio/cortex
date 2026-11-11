@@ -34,6 +34,17 @@ fn a_changed_file_or_another_range_is_read_in_full() {
 }
 
 #[test]
+fn a_huge_read_stops_at_a_whole_line_and_says_where_to_go_on() {
+    let (dir, workspace) = project();
+    let line = "x".repeat(1_000);
+    std::fs::write(dir.path().join("big.txt"), format!("{line}\n").repeat(500)).expect("write");
+    let text = read(&workspace, json!({"file_path": "big.txt"}));
+    assert!(text.len() < MAX_CHARS + 500, "{}", text.len());
+    let next = text.lines().filter(|l| l.contains('\t')).count() + 1;
+    assert!(text.ends_with(&format!("read on from offset {next}]\n")), "{}", &text[text.len() - 200..]);
+}
+
+#[test]
 fn a_sub_agent_or_a_compacted_conversation_gets_the_text_again() {
     let (_dir, workspace) = project();
     read(&workspace, json!({"file_path": "a.rs"}));
