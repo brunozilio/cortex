@@ -118,7 +118,7 @@ fn corrupt_saved_history_fails_without_diagnosing_it_as_a_missing_session() {
         .expect("dir")
         .flatten()
         .map(|e| e.path())
-        .find(|p| p.extension().is_some_and(|ext| ext == "json"));
+        .find(|p| p.extension().is_some_and(|ext| ext == "jsonl"));
     std::fs::write(saved.expect("the saved conversation"), "{broken").expect("corrupt it");
     assert!(store.load_for_checked(&request, &id).is_err());
     let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(store));
