@@ -6,6 +6,13 @@ fn jwt(claims: Value) -> String {
 }
 
 #[test]
+fn a_conversation_s_cache_key_also_names_its_session() {
+    let headers = Provider.turn_headers(None, &json!({"prompt_cache_key": "c-1", "input": []}));
+    assert_eq!(headers, [("session_id".to_owned(), "c-1".to_owned())]);
+    assert!(Provider.turn_headers(None, &json!({"input": []})).is_empty());
+}
+
+#[test]
 fn the_account_comes_from_any_of_the_three_claims() {
     let nested = jwt(json!({"https://api.openai.com/auth": {"chatgpt_account_id": "a1"}}));
     assert_eq!(account_id(&nested), Ok("a1".into()));

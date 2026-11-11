@@ -63,6 +63,9 @@ impl Shape for Provider {
         }
         headers
     }
+    fn turn_headers(&self, _model: Option<&ModelOption>, body: &Value) -> Vec<(String, String)> {
+        body["prompt_cache_key"].as_str().map(|key| ("session_id".to_owned(), key.to_owned())).into_iter().collect()
+    }
     fn path(&self, _model: Option<&ModelOption>) -> &'static str {
         "/codex/responses"
     }
