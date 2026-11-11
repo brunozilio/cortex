@@ -185,6 +185,7 @@ pub fn compact_hooked_on(
         return Err(ModelError::Provider(format!("Compaction blocked by hook: {reason}")));
     }
     let compaction = compact_on(api, template, history, &workspace.stop, focus)?;
+    workspace.forget_seen_files();
     let after = workspace
         .hooks
         .run_with_model("PostCompact", trigger, input, workspace, Some((api, template)))

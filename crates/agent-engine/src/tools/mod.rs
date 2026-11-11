@@ -12,6 +12,7 @@ pub mod plan_mode;
 mod rule_target;
 pub(crate) mod script_io;
 pub mod script_tool;
+mod seen_files;
 pub mod send_message;
 pub mod skill;
 mod skill_script;

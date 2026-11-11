@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
 use crate::model::ToolSpec;
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
 
 const DEFAULT_LINES: usize = 2000;
 const LINE_CHARS: usize = 2000;
@@ -82,6 +82,12 @@ impl Tool for Read {
         }
         if text.is_empty() {
             return Outcome::ok("(the file is empty)");
+        }
+        if workspace.seen_files.seen_again(&path, offset, limit) {
+            return Outcome::ok(format!(
+                "{} is unchanged since you last read these lines in this conversation; that text is still current.",
+                shown(&path, workspace)
+            ));
         }
         let total = text.lines().count();
         if offset > total {
@@ -164,3 +170,7 @@ mod tests {
         assert!(Read.run(&json!({"file_path": "b"}), &workspace).content.contains("not a text file"));
     }
 }
+
+#[cfg(test)]
+#[path = "read_tests.rs"]
+mod seen_tests;

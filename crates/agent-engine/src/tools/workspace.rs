@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 pub struct Workspace {
     pub cwd: PathBuf,
     pub(crate) read: Arc<Mutex<HashSet<PathBuf>>>,
+    pub(crate) seen_files: Arc<super::seen_files::SeenFiles>,
     pub stop: Arc<AtomicBool>,
     pub detach: Arc<AtomicBool>,
     pub credentials: domain::credentials::RunCredentials,
@@ -38,6 +39,7 @@ impl Workspace {
         Self {
             cwd: cwd.into(),
             read: Arc::default(),
+            seen_files: Arc::default(),
             stop: Arc::new(AtomicBool::new(false)),
             detach: Arc::default(),
             credentials: Default::default(),
@@ -82,6 +84,7 @@ impl Workspace {
         Self {
             cwd: self.cwd.clone(),
             read: self.read.clone(),
+            seen_files: Arc::default(),
             stop,
             detach: Arc::clone(&self.detach),
             credentials: self.credentials.clone(),
@@ -139,6 +142,10 @@ impl Workspace {
         if let Ok(mut read) = self.read.lock() {
             read.insert(path.to_path_buf());
         }
+    }
+
+    pub fn forget_seen_files(&self) {
+        self.seen_files.forget();
     }
 
     pub fn has_read(&self, path: &Path) -> bool {
