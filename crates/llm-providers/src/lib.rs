@@ -4,13 +4,9 @@ pub mod declared;
 pub mod oauth;
 pub mod request;
 pub mod sign_in;
-#[cfg(test)]
-mod testing;
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing;
 mod vendor;
-
-pub mod providers {
-    include!(concat!(env!("OUT_DIR"), "/registry.rs"));
-}
 
 pub mod vendors {
     include!(concat!(env!("OUT_DIR"), "/vendors.rs"));
@@ -18,8 +14,7 @@ pub mod vendors {
 
 pub use vendor::{Vendor, effort, owner, rated, rates, vendor};
 
-use domain::provider::ProviderInfo;
-use domain::{Access, ModelOption, ModelProvider};
+use domain::{Access, ModelOption};
 use serde_json::Value;
 
 pub use catalog::{Call, Page};
@@ -35,14 +30,6 @@ pub enum ProviderError {
     Invalid(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Wire {
-    Messages,
-    Responses,
-    Chat,
-    EventStream,
-}
-
 pub trait Provider: Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
@@ -51,7 +38,7 @@ pub trait Provider: Sync {
     fn rank(&self) -> u8;
     fn slot(&self) -> u128;
     fn window(&self) -> u64;
-    fn wire(&self, model: Option<&ModelOption>) -> Wire;
+    fn wire(&self, model: Option<&ModelOption>) -> &'static str;
     fn base(&self, config: &Config) -> String;
     fn headers(&self, config: &Config) -> Vec<(String, String)>;
     fn path(&self, model: Option<&ModelOption>) -> &'static str;
@@ -105,65 +92,6 @@ pub trait Provider: Sync {
     }
 }
 
-pub fn all() -> Vec<&'static dyn Provider> {
-    let mut all = providers::ALL.to_vec();
-    all.extend(declared::registered());
-    all.sort_by_key(|provider| provider.rank());
-    all
-}
-
-pub fn find(provider: ModelProvider) -> Option<&'static dyn Provider> {
-    providers::ALL
-        .iter()
-        .copied()
-        .find(|known| known.id() == provider.id())
-        .or_else(|| declared::registered().into_iter().find(|known| known.id() == provider.id()))
-}
-
-pub fn get(provider: ModelProvider) -> Result<&'static dyn Provider, ProviderError> {
-    find(provider).ok_or_else(|| ProviderError::Invalid(format!("no provider is called {provider}")))
-}
-
-pub fn id(provider: &dyn Provider) -> ModelProvider {
-    ModelProvider::new(provider.id())
-}
-
-pub fn infos() -> Vec<ProviderInfo> {
-    all()
-        .into_iter()
-        .map(|provider| ProviderInfo {
-            provider: id(provider),
-            name: provider.name().to_owned(),
-            access: provider.access(),
-        })
-        .collect()
-}
-
-pub fn name(provider: ModelProvider) -> String {
-    find(provider).map_or_else(|| provider.id().to_owned(), |known| known.name().to_owned())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_built_in_provider_has_its_own_id_rank_and_secret_slot() {
-        let mut all = providers::ALL.to_vec();
-        all.sort_by_key(|provider| provider.rank());
-        let mut ids: Vec<_> = all.iter().map(|p| p.id()).collect();
-        let mut slots: Vec<_> = all.iter().map(|p| p.slot()).collect();
-        ids.dedup();
-        slots.sort_unstable();
-        slots.dedup();
-        assert_eq!((ids.len(), slots.len()), (all.len(), all.len()));
-        assert!(all.windows(2).all(|pair| pair[0].rank() < pair[1].rank()));
-    }
-
-    #[test]
-    fn an_unknown_provider_is_named_by_its_id_and_cannot_be_used() {
-        let unknown = ModelProvider::new("nobody");
-        assert_eq!(name(unknown), "nobody");
-        assert!(get(unknown).is_err());
-    }
+pub fn id(provider: &dyn Provider) -> domain::ModelProvider {
+    domain::ModelProvider::new(provider.id())
 }

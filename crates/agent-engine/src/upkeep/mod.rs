@@ -16,7 +16,7 @@ pub fn window(model: &ModelOption) -> u64 {
     if let Some(tokens) = model.window {
         return tokens;
     }
-    llm_providers::find(model.provider).map_or(200_000, |provider| provider.window())
+    crate::providers::find(model.provider).map_or(200_000, |provider| provider.window())
 }
 
 pub fn tokens(text: &str) -> u64 {

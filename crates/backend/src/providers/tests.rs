@@ -21,7 +21,7 @@ const OWNER: Principal = Principal::LocalOwner;
 
 fn api_key(rig: &Rig, provider: ModelProvider) -> String {
     let key = rig.providers.key(&OWNER, provider).expect("key");
-    Config::parse(llm_providers::get(provider).expect("known"), key.current().expect("load").secret())
+    Config::parse(agent_engine::providers::get(provider).expect("known"), key.current().expect("load").secret())
         .expect("config")
         .api_key
 }
@@ -49,7 +49,7 @@ fn an_empty_owner_lists_every_provider_with_an_account() {
     let list = listed(&rig().providers.list(&OWNER));
     assert_eq!(
         list.iter().map(|s| s.provider).collect::<Vec<_>>(),
-        llm_providers::all().into_iter().map(llm_providers::id).collect::<Vec<_>>()
+        agent_engine::providers::all().into_iter().map(llm_providers::id).collect::<Vec<_>>()
     );
     assert!(list.iter().all(|s| !s.name.is_empty()));
     assert!(list.iter().all(|s| s.account.is_none()));
@@ -118,7 +118,7 @@ impl SignIn for FakeSignIn {
         open(format!("https://auth.test/{}", provider.id()), code);
         self.0.clone()?;
         let raw = r#"{"access_token":"access-secret","refresh_token":"refresh-secret","account_id":"acct","expires_at":"2099-01-01T00:00:00Z"}"#;
-        Config::parse(llm_providers::get(provider).expect("known"), raw).map_err(|e| e.to_string())
+        Config::parse(agent_engine::providers::get(provider).expect("known"), raw).map_err(|e| e.to_string())
     }
 }
 
@@ -184,7 +184,7 @@ impl ModelCatalog for ByKey {
     fn models(&self, provider: ModelProvider, key: ProviderKey) -> Result<Vec<domain::ModelOption>, String> {
         let secret = key.current()?.secret().to_owned();
         let api_key =
-            Config::parse(llm_providers::get(provider).expect("known"), &secret).map_err(|e| e.to_string())?.api_key;
+            Config::parse(agent_engine::providers::get(provider).expect("known"), &secret).map_err(|e| e.to_string())?.api_key;
         match api_key.strip_suffix("-0123456789") {
             Some("sk-broken") => Err("401".into()),
             Some(name) => Ok(vec![domain::ModelOption::new(format!("{}:{name}", provider.id()), name)]),

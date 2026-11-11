@@ -1,5 +1,8 @@
 use agent_engine::{
-    model::{TurnRequest, anthropic, chat, openai},
+    model::{
+        TurnRequest,
+        wires::{chat, messages, responses},
+    },
     transcript::{Block, Message, Role},
 };
 use domain::{Effort, Image};
@@ -35,9 +38,9 @@ fn image_from_tool_result_is_sent_visually_to_all_wire_dialects() {
         effort: Effort::Low,
         max_tokens: 100,
     };
-    let claude = anthropic::body(&request);
+    let claude = messages::body(&request);
     assert_eq!(claude["messages"][2]["content"][0]["content"][1]["source"]["data"], image.data);
-    let openai = openai::body(&request);
+    let openai = responses::body(&request);
     let result = openai["input"]
         .as_array()
         .expect("valid test fixture")
@@ -64,7 +67,6 @@ fn image_from_tool_result_is_sent_visually_to_all_wire_dialects() {
 
 #[test]
 fn switching_provider_preserves_visible_context_without_forwarding_foreign_reasoning_signatures() {
-    use agent_engine::transcript::ReasoningOrigin;
     let mut request = TurnRequest {
         model: "fixture".into(),
         system: "system".into(),
@@ -74,7 +76,7 @@ fn switching_provider_preserves_visible_context_without_forwarding_foreign_reaso
                 Block::Thinking {
                     text: "private reasoning".into(),
                     signature: Some("ANTHROPIC-SIGNATURE".into()),
-                    origin: Some(ReasoningOrigin::Anthropic),
+                    origin: Some(messages::ORIGIN),
                 },
                 Block::Text("Visible answer".into()),
             ]),
@@ -84,21 +86,21 @@ fn switching_provider_preserves_visible_context_without_forwarding_foreign_reaso
         effort: Effort::Low,
         max_tokens: 100,
     };
-    let anthropic_request = anthropic::body(&request).to_string();
-    let openai_request = openai::body(&request).to_string();
+    let anthropic_request = messages::body(&request).to_string();
+    let openai_request = responses::body(&request).to_string();
     assert!(anthropic_request.contains("ANTHROPIC-SIGNATURE"));
     assert!(!openai_request.contains("ANTHROPIC-SIGNATURE"));
     assert!(openai_request.contains("Visible answer"));
     request.messages[1].blocks[0] = Block::Thinking {
         text: String::new(),
         signature: Some("OPENAI-ENCRYPTED".into()),
-        origin: Some(ReasoningOrigin::OpenAi),
+        origin: Some(responses::ORIGIN),
     };
-    assert!(!anthropic::body(&request).to_string().contains("OPENAI-ENCRYPTED"));
-    assert!(openai::body(&request).to_string().contains("OPENAI-ENCRYPTED"));
+    assert!(!messages::body(&request).to_string().contains("OPENAI-ENCRYPTED"));
+    assert!(responses::body(&request).to_string().contains("OPENAI-ENCRYPTED"));
     let legacy: Block = serde_json::from_value(json!({"Thinking":{"text":"legacy","signature":"UNKNOWN-SIGNATURE"}}))
         .expect("legacy block");
     request.messages[1].blocks[0] = legacy;
-    assert!(!anthropic::body(&request).to_string().contains("UNKNOWN-SIGNATURE"));
-    assert!(!openai::body(&request).to_string().contains("UNKNOWN-SIGNATURE"));
+    assert!(!messages::body(&request).to_string().contains("UNKNOWN-SIGNATURE"));
+    assert!(!responses::body(&request).to_string().contains("UNKNOWN-SIGNATURE"));
 }

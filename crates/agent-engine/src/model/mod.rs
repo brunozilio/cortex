@@ -1,17 +1,17 @@
-pub mod anthropic;
 mod cancellable_http;
-pub mod chat;
-mod conversation_key;
-pub mod event_stream;
+pub(crate) mod conversation_key;
 pub mod http;
-pub mod openai;
-pub mod providers;
-mod retry;
+pub mod client;
+pub(crate) mod retry;
 pub mod routed;
 #[cfg(any(test, feature = "test-support"))]
 pub mod scripted;
 pub mod sse;
-mod sse_read;
+pub(crate) mod sse_read;
+
+pub mod wires {
+    include!(concat!(env!("OUT_DIR"), "/wires.rs"));
+}
 
 use std::sync::atomic::AtomicBool;
 

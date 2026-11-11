@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use agent_engine::model::http::{Http, NetHttp};
-use agent_engine::model::providers::ProviderClient;
+use agent_engine::model::client::ProviderClient;
 use domain::provider::ProviderKey;
 use domain::{ModelOption, ModelProvider, Principal, PromptRequest};
 
@@ -28,7 +28,7 @@ impl ApiSource for NativeApis {
         let key = request.credentials.model.clone().ok_or_else(|| {
             ModelError::Unauthorized(format!(
                 "{} is not connected: run `{brand_command} login`",
-                llm_providers::name(provider),
+                agent_engine::providers::name(provider),
                 brand_command = brand::COMMAND
             ))
         })?;
@@ -51,7 +51,7 @@ pub fn other_keys(
     owner: &Principal,
     model: &ModelOption,
 ) -> Vec<(ModelProvider, ProviderKey)> {
-    llm_providers::all()
+    agent_engine::providers::all()
         .into_iter()
         .map(|provider| ModelProvider::named(provider.id()))
         .filter(|provider| *provider != model.provider)

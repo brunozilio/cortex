@@ -19,7 +19,7 @@ const COPILOT: ModelProvider = ModelProvider::new("copilot-subscription");
 const KIRO: ModelProvider = ModelProvider::new("kiro-subscription");
 
 fn shape(provider: ModelProvider) -> &'static dyn Provider {
-    llm_providers::get(provider).expect("a provider folder")
+    agent_engine::providers::get(provider).expect("a provider folder")
 }
 
 fn request(id: &str) -> TurnRequest {

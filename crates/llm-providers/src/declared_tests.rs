@@ -19,9 +19,9 @@ fn groq() -> Declared {
 #[test]
 fn a_declared_provider_is_found_like_a_built_in_one() {
     let id = register(groq()).expect("registered");
-    let provider = crate::get(id).expect("found");
+    let provider = find(id).expect("found");
     assert_eq!(provider.name(), "Groq");
-    assert!(crate::infos().iter().any(|info| info.provider == id), "it can be connected");
+    assert!(registered().iter().any(|known| crate::id(*known) == id), "it can be connected");
     let config = Config { api_key: "gsk-1".into(), ..Config::default() };
     assert_eq!(Call::get(provider, &config, "/models").url, "https://api.groq.com/openai/v1/models");
     let headers = provider.headers(&config);
@@ -37,14 +37,14 @@ fn its_models_come_from_its_list_or_its_catalog() {
         "id": "test-listed", "name": "Listed", "wire": "responses", "base": "http://localhost:8080/v1",
         "models": ["small", "large"], "authHeader": "x-api-key", "authPrefix": "",
     }));
-    let provider = crate::get(register(listed).expect("registered")).expect("found");
+    let provider = find(register(listed).expect("registered")).expect("found");
     let page = provider.page(&json!({})).expect("page");
     let ids: Vec<&str> = page.models.iter().map(|model| model.id.as_str()).collect();
     assert_eq!(ids, ["test-listed:small", "test-listed:large"]);
     let config = Config { api_key: "k".into(), ..Config::default() };
     assert!(provider.headers(&config).contains(&("x-api-key".into(), "k".into())));
 
-    let catalog = crate::get(register(groq()).expect("registered")).expect("found");
+    let catalog = find(register(groq()).expect("registered")).expect("found");
     let page = catalog.page(&json!({"data": [{"id": "llama-4"}]})).expect("page");
     assert_eq!(page.models[0].id, "test-groq:llama-4");
 }
@@ -60,7 +60,7 @@ fn a_shaper_rewrites_each_body_and_its_failure_is_a_provider_error() {
         body["temperature"] = json!(0.2);
         Ok(())
     });
-    let provider = crate::get(register_shaped(declared, Some(shaper)).expect("registered")).expect("found");
+    let provider = find(register_shaped(declared, Some(shaper)).expect("registered")).expect("found");
     let mut body = json!({"model": "llama"});
     provider.shape(None, &mut body, "medium").expect("shaped");
     assert_eq!(body["temperature"], 0.2);
@@ -78,7 +78,6 @@ fn a_bad_declaration_says_what_is_wrong() {
         changed
     };
     assert!(refused(with("id", json!("Has Space"))).contains("lowercase"));
-    assert!(refused(with("id", json!("openai"))).contains("built-in"));
     assert!(refused(with("wire", json!("grpc"))).contains("wire"));
     assert!(refused(with("base", json!("http://evil.example"))).contains("https"));
 }

@@ -1,6 +1,6 @@
 use crate::*;
 use agent_engine::model::http::{Http, Response, Sent};
-use agent_engine::model::providers::ProviderClient;
+use agent_engine::model::client::ProviderClient;
 use agent_engine::model::{ModelApi, ModelError};
 use agent_engine::transcript::Block;
 use domain::provider::{ProviderKey, ProviderKeyStore};
@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use crate::request;
 
 const ARN: &str = "arn:aws:codewhisperer:eu-central-1:699475941385:profile/EHGA3GRVQMUK";
-const TOOL_USE: &[u8] = include_bytes!("../../src/model/event_stream/testdata/tool_use.bin");
+const TOOL_USE: &[u8] = include_bytes!("../../src/providers/kiro/wire/testdata/tool_use.bin");
 
 #[derive(Default)]
 struct Wire {

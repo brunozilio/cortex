@@ -17,7 +17,7 @@ pub struct ProviderCatalog;
 
 impl ModelCatalog for ProviderCatalog {
     fn models(&self, provider: ModelProvider, key: ProviderKey) -> Result<Vec<ModelOption>, String> {
-        agent_engine::model::providers::ProviderClient::new(provider, Arc::new(NetHttp), Arc::new(key))
+        agent_engine::model::client::ProviderClient::new(provider, Arc::new(NetHttp), Arc::new(key))
             .models()
             .map_err(|error| error.to_string())
     }
@@ -34,7 +34,7 @@ impl ModelProviders {
         };
         let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
         std::thread::spawn(move || {
-            let accounts: Vec<_> = llm_providers::all()
+            let accounts: Vec<_> = agent_engine::providers::all()
                 .into_iter()
                 .map(llm_providers::id)
                 .filter_map(|provider| Some((provider, this.key(&owner, provider).ok()?)))

@@ -1,8 +1,9 @@
 use domain::{Access, ModelOption};
 use serde_json::Value;
 
-use super::{Call, Config, Page, Provider, ProviderError, Wire};
+use super::{Call, Config, Page, Provider, ProviderError};
 
+#[derive(Debug)]
 pub struct Keyed;
 
 pub const KEYED: Keyed = Keyed;
@@ -29,8 +30,8 @@ impl Provider for Keyed {
     fn window(&self) -> u64 {
         1000
     }
-    fn wire(&self, _model: Option<&ModelOption>) -> Wire {
-        Wire::Chat
+    fn wire(&self, _model: Option<&ModelOption>) -> &'static str {
+        "chat"
     }
     fn base(&self, _config: &Config) -> String {
         "https://keyed.test".into()
@@ -64,7 +65,7 @@ use std::rc::Rc;
 
 use crate::sign_in::{Answer, Host, Listener};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Log {
     pub opened: Vec<(String, Option<String>)>,
     pub sent: Vec<(String, String)>,
@@ -72,7 +73,7 @@ pub struct Log {
     pub waits: Vec<std::time::Duration>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ScriptedHost {
     replies: RefCell<VecDeque<(u16, String)>>,
     visits: Rc<RefCell<VecDeque<(String, String)>>>,

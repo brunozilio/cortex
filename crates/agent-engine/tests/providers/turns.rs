@@ -1,7 +1,7 @@
 use crate::*;
 use agent_engine::model::ModelApi;
 use agent_engine::model::http::ScriptedHttp;
-use agent_engine::model::providers::ProviderClient;
+use agent_engine::model::client::ProviderClient;
 use domain::ModelOption;
 use domain::provider::ProviderKey;
 use serde_json::{Value, json};
@@ -88,7 +88,7 @@ fn anthropic_request_uses_the_discovered_model_capabilities() {
 
 #[test]
 fn codex_done_only_events_and_final_output_are_folded_without_duplicates() {
-    use agent_engine::model::openai::Folder;
+    use agent_engine::model::wires::responses::Folder;
     use agent_engine::transcript::Block;
     let mut folder = Folder::new();
     let mut observed = Vec::new();

@@ -35,6 +35,9 @@ fn one(path: &Path, approved: Option<&[String]>) -> Loaded {
         Ok(declared) => declared,
         Err(error) => return broken(format!("the default export is not a provider: {error}")),
     };
+    if crate::providers::ALL.iter().any(|known| known.id() == declared.id) {
+        return broken(format!("{}: a built-in provider already has this id", declared.id));
+    }
     if approved.is_some_and(|approved| !approved.contains(&declared.id)) {
         return Loaded::Unapproved { path: path.to_owned(), id: declared.id };
     }
@@ -118,7 +121,7 @@ mod tests {
         let loaded = load(Some(home.path()), project.path(), &[]);
         assert_eq!(loaded[0], Loaded::Ready(ModelProvider::named("loaded-mine")));
         assert!(matches!(&loaded[1], Loaded::Unapproved { id, .. } if id == "loaded-theirs"));
-        assert!(llm_providers::find(ModelProvider::named("loaded-theirs")).is_none());
+        assert!(crate::providers::find(ModelProvider::named("loaded-theirs")).is_none());
 
         let approved = load(Some(home.path()), project.path(), &["loaded-theirs".to_owned()]);
         assert_eq!(approved[1], Loaded::Ready(ModelProvider::named("loaded-theirs")));
@@ -134,7 +137,7 @@ export function shape(body) { return { ...body, temperature: 0.1, model: body.mo
         std::fs::write(folder.join("shaped.js"), source).expect("write");
         let loaded = load(Some(home.path()), &home.path().join("elsewhere"), &[]);
         assert_eq!(loaded, [Loaded::Ready(ModelProvider::named("loaded-shaped"))]);
-        let provider = llm_providers::get(ModelProvider::named("loaded-shaped")).expect("found");
+        let provider = crate::providers::get(ModelProvider::named("loaded-shaped")).expect("found");
         let mut body = serde_json::json!({"model": "fast", "messages": []});
         provider.shape(None, &mut body, "low").expect("shaped");
         assert_eq!(body, serde_json::json!({"model": "fast-v2", "messages": [], "temperature": 0.1}));

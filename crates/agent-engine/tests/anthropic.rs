@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use agent_engine::model::anthropic::Messages;
+use agent_engine::model::wires::messages::Messages;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::{Delta, ModelApi, ModelError, TurnRequest};
 use agent_engine::transcript::{Block, Message, StopReason};
@@ -40,7 +40,7 @@ fn folds_thinking_text_and_a_tool_call() {
             Block::Thinking {
                 text: "I should read it.".into(),
                 signature: Some("EqQB".into()),
-                origin: Some(agent_engine::transcript::ReasoningOrigin::Anthropic)
+                origin: Some(agent_engine::model::wires::messages::ORIGIN)
             },
             Block::Text("Let me look.".into()),
             Block::ToolUse { id: "toolu_1".into(), name: "Read".into(), input: json!({"file_path": "src/main.rs"}) },

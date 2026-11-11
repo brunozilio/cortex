@@ -137,7 +137,7 @@ impl AgentConfig {
         let Some(model) = &self.model else {
             return Ok(parent.into());
         };
-        let provider = llm_providers::find(provider);
+        let provider = crate::providers::find(provider);
         let vendor = provider.and_then(|provider| llm_providers::vendor(provider.vendor()));
         if let Some(full) = vendor.and_then(|vendor| vendor.alias(model)) {
             return Ok(full.into());

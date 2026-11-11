@@ -1,7 +1,7 @@
 use crate::*;
 use agent_engine::model::ModelApi;
 use agent_engine::model::http::ScriptedHttp;
-use agent_engine::model::providers::ProviderClient;
+use agent_engine::model::client::ProviderClient;
 use domain::ModelOption;
 use domain::model::ModelCapabilities;
 use domain::provider::ProviderKey;

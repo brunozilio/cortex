@@ -6,7 +6,7 @@ edition.workspace = true
 publish.workspace = true
 
 [features]
-test-support = []
+test-support = ["llm-providers/test-support"]
 
 [dependencies]
 script.workspace = true

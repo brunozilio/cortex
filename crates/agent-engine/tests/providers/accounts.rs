@@ -1,6 +1,6 @@
 use crate::*;
 use agent_engine::model::http::ScriptedHttp;
-use agent_engine::model::providers::{Config, ProviderClient};
+use agent_engine::model::client::{Config, ProviderClient};
 use agent_engine::model::{ModelApi, ModelError};
 use domain::provider::{ProviderKey, ProviderKeyStore};
 use serde_json::{Value, json};

@@ -1,9 +1,12 @@
 [package]
 name = "llm-providers"
-description = "Model providers, one folder each: credentials, sign-in, request and catalog shapes."
+description = "What every model provider shares: the Provider trait, credentials, OAuth, sign-in, catalogs, and the model families' prices and reasoning rules."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+
+[features]
+test-support = []
 
 [dependencies]
 brand.workspace = true

@@ -20,7 +20,7 @@ use crate::secrets::SecretStore;
 const UNKNOWN_SLOT: u128 = 0x7072_6f76_6964_6572_ffff_ffff_ffff_ffff;
 
 pub(crate) fn secret_id(provider: ModelProvider) -> SecretId {
-    let slot = llm_providers::find(provider).map_or(UNKNOWN_SLOT, |known| known.slot());
+    let slot = agent_engine::providers::find(provider).map_or(UNKNOWN_SLOT, |known| known.slot());
     SecretId::from_uuid(uuid::Uuid::from_u128(slot))
 }
 
@@ -96,7 +96,7 @@ impl ModelProviders {
 
     pub fn list(&self, owner: &Principal) -> ServerEvent {
         ServerEvent::Providers(ProviderEvent::Listed {
-            providers: self.store.load(owner).summaries(llm_providers::infos()),
+            providers: self.store.load(owner).summaries(agent_engine::providers::infos()),
         })
     }
 
@@ -106,7 +106,7 @@ impl ModelProviders {
     }
 
     fn parse(&self, provider: ModelProvider, raw: &str) -> Result<(Config, String), String> {
-        let provider = llm_providers::get(provider).map_err(|e| e.to_string())?;
+        let provider = agent_engine::providers::get(provider).map_err(|e| e.to_string())?;
         if provider.access().subscription() {
             let config = Config::parse(provider, raw).map_err(|e| e.to_string())?;
             return Ok((config, provider.name().to_owned()));
@@ -118,8 +118,8 @@ impl ModelProviders {
     }
 
     pub fn sign_in(&self, owner: &Principal, provider: ModelProvider, outbox: &Outbox) {
-        if !llm_providers::find(provider).is_some_and(|known| known.access().subscription()) {
-            let message = format!("{} connects with an API key", llm_providers::name(provider));
+        if !agent_engine::providers::find(provider).is_some_and(|known| known.access().subscription()) {
+            let message = format!("{} connects with an API key", agent_engine::providers::name(provider));
             return outbox.send(ServerEvent::Providers(ProviderEvent::Failed { provider, message }));
         }
         let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
@@ -130,7 +130,7 @@ impl ModelProviders {
             let result = this
                 .sign_in
                 .sign_in(provider, &mut open)
-                .and_then(|config| this.keep(&owner, provider, llm_providers::name(provider), &config));
+                .and_then(|config| this.keep(&owner, provider, agent_engine::providers::name(provider), &config));
             outbox.send(this.answer(&owner, provider, result));
         });
     }
@@ -149,7 +149,7 @@ impl ModelProviders {
     pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {
         use domain::provider::ProviderKeyStore;
         if self.store.load(owner).get(provider).is_none() {
-            return Err(format!("{} is not connected", llm_providers::name(provider)));
+            return Err(format!("{} is not connected", agent_engine::providers::name(provider)));
         }
         let source = Arc::new(account::AccountStore {
             secrets: self.secrets.clone(),

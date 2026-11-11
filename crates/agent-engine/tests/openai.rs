@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use agent_engine::model::http::ScriptedHttp;
-use agent_engine::model::openai::Responses;
+use agent_engine::model::wires::responses::Responses;
 use agent_engine::model::{Delta, ModelApi, ModelError, TurnRequest};
 use agent_engine::transcript::{Block, Message, StopReason};
 use domain::Effort;
@@ -39,7 +39,7 @@ fn folds_reasoning_text_and_a_call() {
             Block::Thinking {
                 text: "Look first.".into(),
                 signature: Some("gAAAA".into()),
-                origin: Some(agent_engine::transcript::ReasoningOrigin::OpenAi)
+                origin: Some(agent_engine::model::wires::responses::ORIGIN)
             },
             Block::Text("Let me look.".into()),
             Block::ToolUse { id: "call_1".into(), name: "Read".into(), input: json!({"file_path": "src/main.rs"}) },

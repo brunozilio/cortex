@@ -32,7 +32,7 @@ impl ModelApi for Metered {
             calls(request, &reply);
         }
         let u = reply.usage;
-        let provider = llm_providers::find(self.provider);
+        let provider = crate::providers::find(self.provider);
         let vendor = provider.map_or("", |provider| provider.vendor());
         let cost = rates(vendor, &request.model, u.prompt())
             .map(|rate| rate.estimate(u.input, u.output, u.cache_read, u.cache_write));

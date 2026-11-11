@@ -7,7 +7,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::catalog::{self, Call, Page, STANDARD};
-use crate::{Config, Provider, ProviderError, Wire};
+use crate::{Config, Provider, ProviderError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -34,7 +34,7 @@ struct DeclaredProvider {
     shaper: Option<Shaper>,
     id: &'static str,
     name: &'static str,
-    wire: Wire,
+    wire: &'static str,
     base: String,
     auth_header: String,
     auth_prefix: String,
@@ -45,8 +45,12 @@ struct DeclaredProvider {
 
 static REGISTERED: RwLock<Vec<&'static dyn Provider>> = RwLock::new(Vec::new());
 
-pub(crate) fn registered() -> Vec<&'static dyn Provider> {
+pub fn registered() -> Vec<&'static dyn Provider> {
     REGISTERED.read().unwrap_or_else(PoisonError::into_inner).clone()
+}
+
+pub fn find(provider: ModelProvider) -> Option<&'static dyn Provider> {
+    registered().into_iter().find(|known| known.id() == provider.id())
 }
 
 impl std::fmt::Debug for DeclaredProvider {
@@ -75,13 +79,10 @@ fn check(declared: Declared) -> Result<DeclaredProvider, ProviderError> {
     if !id_shaped {
         return invalid("the id takes lowercase letters, digits and dashes".into());
     }
-    if crate::providers::ALL.iter().any(|known| known.id() == declared.id) {
-        return invalid("a built-in provider already has this id".into());
-    }
     let wire = match declared.wire.as_str() {
-        "chat" => Wire::Chat,
-        "responses" => Wire::Responses,
-        "messages" => Wire::Messages,
+        "chat" => "chat",
+        "responses" => "responses",
+        "messages" => "messages",
         other => return invalid(format!("wire {other:?} is not chat, responses or messages")),
     };
     let base = declared.base.trim_end_matches('/').to_owned();
@@ -128,7 +129,7 @@ impl Provider for DeclaredProvider {
     fn window(&self) -> u64 {
         self.window
     }
-    fn wire(&self, _model: Option<&ModelOption>) -> Wire {
+    fn wire(&self, _model: Option<&ModelOption>) -> &'static str {
         self.wire
     }
     fn base(&self, _config: &Config) -> String {
@@ -139,7 +140,7 @@ impl Provider for DeclaredProvider {
             ("accept".to_owned(), "text/event-stream".to_owned()),
             (self.auth_header.clone(), format!("{}{}", self.auth_prefix, config.api_key)),
         ];
-        if self.wire == Wire::Messages {
+        if self.wire == "messages" {
             headers.push(("anthropic-version".into(), "2023-06-01".into()));
         }
         headers.extend(self.headers.iter().map(|(name, value)| (name.clone(), value.clone())));
@@ -147,9 +148,9 @@ impl Provider for DeclaredProvider {
     }
     fn path(&self, _model: Option<&ModelOption>) -> &'static str {
         match self.wire {
-            Wire::Responses => "/responses",
-            Wire::Messages => "/messages",
-            Wire::Chat | Wire::EventStream => "/chat/completions",
+            "responses" => "/responses",
+            "messages" => "/messages",
+            _ => "/chat/completions",
         }
     }
     fn shape(&self, _model: Option<&ModelOption>, body: &mut Value, _effort: &str) -> Result<(), ProviderError> {

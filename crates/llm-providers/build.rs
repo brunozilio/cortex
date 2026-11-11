@@ -29,11 +29,8 @@ fn registry(folder: &Path, kind: &str) -> String {
 fn main() {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
     let out = std::env::var("OUT_DIR").unwrap_or_default();
-    for (folder, kind, file) in [("src/providers", "Provider", "registry.rs"), ("src/vendors", "Vendor", "vendors.rs")]
-    {
-        let written = registry(&Path::new(&manifest).join(folder), kind);
-        if let Err(error) = std::fs::write(Path::new(&out).join(file), written) {
-            panic!("cannot write the {kind} registry: {error}");
-        }
+    let written = registry(&Path::new(&manifest).join("src/vendors"), "Vendor");
+    if let Err(error) = std::fs::write(Path::new(&out).join("vendors.rs"), written) {
+        panic!("cannot write the vendor registry: {error}");
     }
 }

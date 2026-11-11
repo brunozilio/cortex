@@ -19,6 +19,7 @@ pub mod model;
 pub mod permission;
 pub mod plugins;
 pub mod prompt;
+pub mod providers;
 pub mod sessions;
 pub mod tools;
 pub mod transcript;

@@ -7,11 +7,14 @@ pub enum Role {
     Assistant,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ReasoningOrigin {
-    Anthropic,
-    OpenAi,
-    Local,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ReasoningOrigin(pub std::borrow::Cow<'static, str>);
+
+impl ReasoningOrigin {
+    pub const fn of(wire: &'static str) -> Self {
+        Self(std::borrow::Cow::Borrowed(wire))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

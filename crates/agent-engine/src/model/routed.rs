@@ -6,7 +6,7 @@ use domain::provider::ProviderKey;
 use domain::{ModelOption, ModelProvider};
 
 use super::http::Http;
-use super::providers::ProviderClient;
+use super::client::ProviderClient;
 use super::{Delta, ModelApi, ModelError, Reply, TurnRequest};
 
 pub struct Routed {
@@ -42,7 +42,7 @@ impl Routed {
         let Some((_, key)) = self.others.iter().find(|(connected, _)| *connected == provider) else {
             return Err(ModelError::Unauthorized(format!(
                 "{} is not connected: run `{} login`",
-                llm_providers::name(provider),
+                crate::providers::name(provider),
                 brand::COMMAND
             )));
         };
@@ -56,7 +56,7 @@ impl Routed {
 
 impl ModelApi for Routed {
     fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        let known: Vec<&str> = llm_providers::all().iter().map(|provider| provider.id()).collect();
+        let known: Vec<&str> = crate::providers::all().iter().map(|provider| provider.id()).collect();
         let route = domain::routing::route(&request.model, &known);
         match route.provider.map(ModelProvider::named) {
             Some(provider) if provider != self.provider => {

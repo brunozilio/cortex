@@ -1,13 +1,13 @@
 use agent_engine::{
     ApiSource, NativeEngine,
-    model::{ModelApi, ModelError, http::NetHttp, providers::ProviderClient},
+    model::{ModelApi, ModelError, client::ProviderClient, http::NetHttp},
     sessions::InMemorySessions,
 };
 use domain::{ModelOption, ModelProvider, PromptRequest};
 use std::sync::Arc;
 pub fn model() -> ModelOption {
     let named = std::env::var(concat!(brand::env_prefix!(), "_LIVE_PROVIDER")).unwrap_or_else(|_| "anthropic".into());
-    let Some(provider) = llm_providers::find(ModelProvider::named(&named)).map(llm_providers::id) else {
+    let Some(provider) = agent_engine::providers::find(ModelProvider::named(&named)).map(llm_providers::id) else {
         panic!("{brand_env}_LIVE_PROVIDER must name one of the native providers", brand_env = brand::ENV)
     };
     let default = match provider.id() {

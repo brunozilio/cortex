@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use agent_engine::model::chat::{Chat, Endpoint, Endpoints};
+use agent_engine::model::wires::chat::{Chat, Endpoint, Endpoints};
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::{Delta, ModelApi, ModelError, ToolSpec, TurnRequest};
 use agent_engine::transcript::{Block, Message, StopReason};
@@ -49,7 +49,7 @@ fn folds_thinking_text_and_a_call_from_a_streamed_answer() {
             Block::Thinking {
                 text: "Read it first.".into(),
                 signature: None,
-                origin: Some(agent_engine::transcript::ReasoningOrigin::Local)
+                origin: Some(agent_engine::model::wires::chat::ORIGIN)
             },
             Block::Text("Let me look.".into()),
             Block::ToolUse { id: "call_1".into(), name: "Read".into(), input: json!({"file_path": "src/main.rs"}) },
@@ -76,7 +76,7 @@ fn folds_a_recorded_chat_answer_with_reasoning_and_a_tool_call() {
                 text: "The user is asking me to list the files in the current directory. Let's run the ls command."
                     .into(),
                 signature: None,
-                origin: Some(agent_engine::transcript::ReasoningOrigin::Local)
+                origin: Some(agent_engine::model::wires::chat::ORIGIN)
             },
             Block::ToolUse {
                 id: "6a0e1e76-3e23-43de-b714-0892ec3343a0".into(),
@@ -96,7 +96,7 @@ fn asks_the_served_model_with_the_whole_conversation_and_the_tools() {
         Block::Thinking {
             text: "hm".into(),
             signature: None,
-            origin: Some(agent_engine::transcript::ReasoningOrigin::Local),
+            origin: Some(agent_engine::model::wires::chat::ORIGIN),
         },
         Block::Text("Reading.".into()),
         Block::ToolUse { id: "call_0".into(), name: "Read".into(), input: json!({"file_path": "a"}) },

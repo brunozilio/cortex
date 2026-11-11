@@ -21,7 +21,7 @@ pub struct BrowserSignIn;
 
 impl SignIn for BrowserSignIn {
     fn sign_in(&self, provider: ModelProvider, open: &mut dyn FnMut(String, Option<String>)) -> Result<Config, String> {
-        let provider = llm_providers::get(provider).map_err(|e| e.to_string())?;
+        let provider = agent_engine::providers::get(provider).map_err(|e| e.to_string())?;
         provider.sign_in(&NetHost { open: Mutex::new(open) }).map_err(|e| e.to_string())
     }
 }
@@ -115,7 +115,7 @@ impl ProviderKeyStore for AccountStore {
     }
 
     fn save(&self, value: &str) -> Result<(), String> {
-        let provider = llm_providers::get(self.provider).map_err(|e| e.to_string())?;
+        let provider = agent_engine::providers::get(self.provider).map_err(|e| e.to_string())?;
         Config::parse(provider, value).map_err(|e| e.to_string())?;
         let mut secrets = self.secrets.get(&self.owner, self.slot).ok_or("provider account disconnected")?;
         secrets.insert(CONFIG.into(), value.to_owned());

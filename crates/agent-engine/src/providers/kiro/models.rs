@@ -1,0 +1,86 @@
+use domain::ModelOption;
+use domain::model::ModelCapabilities;
+use serde_json::{Value, json};
+
+use llm_providers::Call;
+
+pub fn call(config: &llm_providers::Config, next: &str) -> Call {
+    let arn = config.account();
+    Call {
+        url: format!("{}/", super::management(arn)),
+        headers: super::headers(config.access_token(), super::MODELS),
+        body: Some(request(arn, next)),
+    }
+}
+
+pub fn request(profile_arn: &str, next: &str) -> String {
+    let mut body = json!({"origin": super::ORIGIN, "profileArn": profile_arn});
+    if !next.is_empty() {
+        body["nextToken"] = json!(next);
+    }
+    body.to_string()
+}
+
+pub fn page(value: &Value) -> Option<(Vec<ModelOption>, Option<String>)> {
+    let models = value["models"].as_array()?.iter().filter_map(model).collect();
+    let next = value["nextToken"].as_str().filter(|s| !s.is_empty()).map(str::to_owned);
+    Some((models, next))
+}
+
+fn model(item: &Value) -> Option<ModelOption> {
+    let id = item["modelId"].as_str().map(str::trim).filter(|id| !id.is_empty())?;
+    let label = item["modelName"].as_str().map(str::trim).filter(|name| !name.is_empty()).unwrap_or(id);
+    let mut model = llm_providers::catalog::option(&super::Provider, id, label.to_owned());
+    let limits = &item["tokenLimits"];
+    model.window = limits["maxInputTokens"].as_u64().filter(|n| *n > 0);
+    model.capabilities = Some(ModelCapabilities {
+        max_output_tokens: limits["maxOutputTokens"].as_u64().and_then(|n| u32::try_from(n).ok()).filter(|n| *n > 0),
+        ..ModelCapabilities::default()
+    });
+    Some(model)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_page_lists_ids_names_and_limits() {
+        let page = page(&json!({"defaultModel": {"modelId": "auto"}, "models": [
+            {"modelId": "auto", "modelName": "auto", "tokenLimits": {"maxInputTokens": 1000000, "maxOutputTokens": 64000}},
+            {"modelId": "glm-5", "modelName": "glm-5", "tokenLimits": {"maxInputTokens": 200000}},
+            {"modelName": "nameless"}
+        ], "nextToken": "n2"}));
+        let (models, next) = page.unwrap_or_default();
+        let ids: Vec<_> = models.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, ["kiro-subscription:auto", "kiro-subscription:glm-5"]);
+        assert_eq!(models[0].window, Some(1_000_000));
+        assert_eq!(models[0].capabilities.as_ref().and_then(|c| c.max_output_tokens), Some(64_000));
+        assert_eq!(next.as_deref(), Some("n2"));
+    }
+
+    #[test]
+    fn the_catalog_is_asked_of_the_profiles_management_service() {
+        let tokens = llm_providers::Tokens {
+            access_token: "tok".into(),
+            refresh_token: "r".into(),
+            account_id: "arn:aws:codewhisperer:us-east-1:1:profile/P".into(),
+            expires_at: None,
+            client: None,
+        };
+        let config = llm_providers::Config { auth: Some(tokens), ..llm_providers::Config::default() };
+        let call = call(&config, "");
+        assert_eq!(call.url, "https://management.us-east-1.kiro.dev/");
+        assert!(call.headers.contains(&("x-amz-target".into(), super::super::MODELS.into())));
+        assert!(call.headers.contains(&("authorization".into(), "Bearer tok".into())));
+    }
+
+    #[test]
+    fn the_request_names_the_cli_the_account_and_the_page() {
+        let first: Value = serde_json::from_str(&request("arn:p", "")).unwrap_or_default();
+        assert_eq!(first, json!({"origin": "KIRO_CLI", "profileArn": "arn:p"}));
+        let second: Value = serde_json::from_str(&request("arn:p", "n2")).unwrap_or_default();
+        assert_eq!(second["nextToken"], "n2");
+        assert!(page(&json!({})).is_none());
+    }
+}

@@ -1,7 +1,7 @@
 use crate::*;
 use agent_engine::model::ModelError;
 use agent_engine::model::http::ScriptedHttp;
-use agent_engine::model::providers::ProviderClient;
+use agent_engine::model::client::ProviderClient;
 use domain::provider::ProviderKey;
 use serde_json::json;
 use std::sync::Arc;
