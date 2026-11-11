@@ -85,7 +85,18 @@ mod tests {
         let text = String::from_utf8_lossy(skill);
         assert!(text.contains("name: configure\n"), "{text}");
         assert!(!text.contains("disable-model-invocation"), "the model may load it on its own");
-        for key in ["fallbackModel", "ModelRequest", "ModelError", "provider:model", "settings.local.json"] {
+        for key in [
+            "fallbackModel",
+            "ModelRequest",
+            "ModelError",
+            "provider:model",
+            "settings.local.json",
+            "mcp.json",
+            "{{COMMAND}} mcp add",
+            "\"type\": \"http\"",
+            "enabledMcpServers",
+            "{{COMMAND}} mcp login",
+        ] {
             assert!(text.contains(key), "configure explains {key}");
         }
     }

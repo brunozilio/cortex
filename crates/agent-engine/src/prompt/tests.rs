@@ -22,6 +22,17 @@ fn speaks_as_brand_and_never_as_another_product() {
 }
 
 #[test]
+fn knows_that_configuring_means_its_own_files() {
+    let prompt = system(&environment());
+    for file in ["settings.json", "mcp.json", "hooks/", "skills/"] {
+        assert!(prompt.contains(&format!("~/{}/", brand::DIR)), "names the user's folder");
+        assert!(prompt.contains(file), "names {file}");
+    }
+    assert!(prompt.contains("`configure` skill"));
+    assert!(prompt.contains("Never edit another app's configuration"));
+}
+
+#[test]
 fn offers_the_sections_of_the_tools_the_run_has() {
     assert!(!system(&environment()).contains("# Memory"));
     let mut granted = environment();

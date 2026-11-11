@@ -1,6 +1,6 @@
 ---
 name: configure
-description: Change how {{NAME}} itself behaves by editing its settings and hooks — model fallback between providers (e.g. "fall back from chatgpt to kiro"), routing sub-agents to another model, the small, advisor or judge model, permissions, and enabled providers. Use when the user asks to configure, set up or change {{NAME}}'s own models, fallback, routing or settings.
+description: Change how {{NAME}} itself behaves by editing its own settings, MCP servers and hooks — adding an MCP server (e.g. "configure the Jira MCP"), model fallback between providers (e.g. "fall back from chatgpt to kiro"), routing sub-agents to another model, the small, advisor or judge model, permissions, and enabled providers. Use whenever the user asks to configure, set up, add or change an MCP server, a model, fallback, routing, hook or setting without naming another app.
 ---
 
 # Configure {{NAME}}
@@ -96,6 +96,53 @@ export default () => ({ hookSpecificOutput: { model: "kiro:claude-haiku-5" } });
 
 Hooks can also live under `"hooks"` in a settings file, in the same
 shape as the other hook events.
+
+## MCP servers
+
+{{NAME}}'s own MCP servers live in `mcp.json`, never in another app's
+file:
+
+- `~/{{DIR}}/mcp.json`: the user's servers, every project. Start right
+  away.
+- `<project>/{{DIR}}/mcp.json`: the project's, checked in. Each one
+  starts only after the owner approves it: `{{COMMAND}} mcp approve
+  <name>`, or `"enabledMcpServers": ["<name>"]` in the user's own
+  settings (`"enableAllProjectMcpServers": true` approves them all).
+
+Prefer the command; it validates and writes the user's file:
+
+```bash
+{{COMMAND}} mcp add tracker https://mcp.example.com/mcp
+{{COMMAND}} mcp add -H "Authorization: Bearer ${API_TOKEN}" docs https://docs.example.com/mcp
+{{COMMAND}} mcp add -e GITHUB_TOKEN='${GITHUB_TOKEN}' github npx -y @modelcontextprotocol/server-github
+{{COMMAND}} mcp list
+```
+
+Editing the file by hand, keep this shape. A remote server needs
+`"type": "http"` (or `"sse"` for the older transport); a server with no
+type is a command, and an entry with only a `url` is left out:
+
+```json
+{
+  "mcpServers": {
+    "tracker": { "type": "http", "url": "https://mcp.example.com/mcp" },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "${GITHUB_TOKEN}" }
+    }
+  }
+}
+```
+
+`${VAR}` is read from the environment when the server starts: never
+write a secret into the file. A remote server that uses OAuth signs in
+with `{{COMMAND}} mcp login <name>` (or `/mcp login <name>` in the chat);
+the user does that, in their browser. Names starting with `{{COMMAND}}_`
+are reserved. New servers are picked up on the next prompt.
+
+Find the server's URL or package in the vendor's own documentation, and
+tell the user which one you used.
 
 ## Other model settings
 
