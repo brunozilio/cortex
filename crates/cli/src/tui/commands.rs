@@ -71,11 +71,6 @@ pub fn run(app: &mut App, command: Command) {
             let cwd = app.cwd.clone();
             app.spawn(move |sdk| Msg::Notice(crate::doctor::render(&crate::doctor::checks(sdk, &cwd))));
         }
-        Command::Feedback => app.transcript.notice(concat!(
-            "Report a problem or an idea at https://github.com/",
-            brand::repository!(),
-            "/issues (/status and /doctor show what to include)."
-        )),
         other @ (Command::Status
         | Command::Export(_)
         | Command::Copy

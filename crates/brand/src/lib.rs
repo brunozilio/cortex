@@ -17,7 +17,6 @@ pub fn text(template: &str) -> String {
         ("{{PLUGIN_DIR}}", PLUGIN_DIR),
         ("{{ENV}}", ENV),
         ("{{COMPANY}}", COMPANY),
-        ("{{REPOSITORY}}", REPOSITORY),
     ]
     .iter()
     .fold(template.to_owned(), |text, (placeholder, value)| text.replace(placeholder, value))

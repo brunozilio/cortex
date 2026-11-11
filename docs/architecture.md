@@ -25,7 +25,7 @@ cli ──► sdk ──► backend ──► agent-engine ──► (provider A
 
 ## Name
 
-The product's name, command, owner and repository live in
+The product's name, command, company and author live in
 `brand.toml`, read when the `brand` crate is built: `brand::NAME`,
 `brand::COMMAND`, `brand::DIR` (`.{command}`), `brand::INSTRUCTIONS`
 (`{COMMAND}.md`), `brand::env("X")` (`{COMMAND}_X`), and the same as

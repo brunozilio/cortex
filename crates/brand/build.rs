@@ -34,7 +34,6 @@ fn main() {
         ("ENV", env.clone()),
         ("COMPANY", get("company")),
         ("AUTHOR", get("author")),
-        ("REPOSITORY", get("repository")),
         ("DIR", format!(".{command}")),
         ("INSTRUCTIONS", format!("{env}.md")),
         ("LOCAL_INSTRUCTIONS", format!("{env}.local.md")),

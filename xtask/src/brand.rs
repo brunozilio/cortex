@@ -6,7 +6,6 @@ pub struct Brand {
     pub command: String,
     pub company: String,
     pub author: String,
-    pub repository: String,
 }
 
 impl Brand {
@@ -32,7 +31,6 @@ impl Brand {
             command: get("command")?,
             company: get("company")?,
             author: get("author")?,
-            repository: get("repository")?,
         })
     }
 
@@ -41,10 +39,7 @@ impl Brand {
     }
 
     pub fn words(&self) -> Vec<String> {
-        let mut words = vec![self.name.clone(), self.company.clone(), self.author.clone(), self.repository.clone()];
-        if let Some((owner, _)) = self.repository.split_once('/') {
-            words.push(owner.to_owned());
-        }
+        let mut words = vec![self.name.clone(), self.company.clone(), self.author.clone()];
         words.push(self.command.clone());
         words.push(self.env());
         words.retain(|word| word.len() >= 4);
@@ -185,7 +180,6 @@ mod tests {
             command: "nova".into(),
             company: "Acme".into(),
             author: "Ana Souza".into(),
-            repository: "acme/nova".into(),
         }
     }
 
@@ -195,9 +189,9 @@ mod tests {
     }
 
     #[test]
-    fn the_words_include_the_owner_but_not_short_ones() {
+    fn the_words_include_the_company_but_not_short_ones() {
         let words = brand().words();
-        assert!(words.contains(&"acme".to_owned()) && words.contains(&"NOVA".to_owned()));
+        assert!(words.contains(&"Acme".to_owned()) && words.contains(&"NOVA".to_owned()));
         assert!(words.iter().all(|word| word.len() >= 4));
     }
 }

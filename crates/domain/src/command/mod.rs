@@ -36,7 +36,6 @@ pub enum Command {
     Hooks,
     StatusLine(Option<String>),
     Doctor,
-    Feedback,
     Skills,
     Agents,
     NewAgent(String),
@@ -51,7 +50,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const HELP: [(&'static str, &'static str); 39] = [
+    pub const HELP: [(&'static str, &'static str); 38] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
@@ -87,7 +86,6 @@ impl Command {
         ("copy", "Copy the agent's last answer"),
         ("logout", "Forget a provider's credentials"),
         ("doctor", "Check that this installation can work here"),
-        ("feedback", "Where to report a problem or an idea"),
         ("terminal-setup", "How to make Shift+Enter add a line in this terminal"),
         ("login", "Connect a provider (API key or subscription)"),
         ("exit", "Quit (also /quit)"),
@@ -125,7 +123,6 @@ impl Command {
                 "login",
                 "logout",
                 "doctor",
-                "feedback",
                 "terminal-setup",
                 "help",
                 "exit",
@@ -190,7 +187,6 @@ impl Command {
             "hooks" => bare(Self::Hooks),
             "statusline" => Some(Self::StatusLine(argument)),
             "doctor" => bare(Self::Doctor),
-            "feedback" | "bug" => bare(Self::Feedback),
             "login" => bare(Self::Login),
             "exit" | "quit" => bare(Self::Exit),
             _ => None,
