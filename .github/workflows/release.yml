@@ -94,6 +94,14 @@ jobs:
             os: ubuntu-24.04-arm
           - target: aarch64-apple-darwin
             os: macos-latest
+          # Static builds for any Linux (RHEL 8/9's older glibc), without
+          # semantic memory: ONNX Runtime has no musl build.
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+            flags: --no-default-features
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            flags: --no-default-features
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -111,8 +119,8 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
-      - run: cargo build --release --locked -p superfik-cli --target ${{ matrix.target }}
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev musl-tools
+      - run: cargo build --release --locked -p superfik-cli --target ${{ matrix.target }} ${{ matrix.flags }}
       - name: Sign and notarize
         if: runner.os == 'macOS'
         env:

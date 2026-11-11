@@ -13,6 +13,11 @@ serde_json.workspace = true
 thiserror.workspace = true
 crossbeam-channel.workspace = true
 
+[features]
+default = ["embeddings"]
+# Semantic memory search (local embeddings through ONNX Runtime).
+embeddings = ["superfik-backend/embeddings"]
+
 [dev-dependencies]
 superfik-native = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true

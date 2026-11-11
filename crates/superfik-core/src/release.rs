@@ -28,13 +28,16 @@ pub fn newer(current: &str, latest_tag: &str) -> Option<Version> {
     (Version::parse(current).is_none_or(|current| latest > current)).then_some(latest)
 }
 
-/// The archive built for this platform (`std::env::consts::ARCH`, `OS`);
-/// `None` where no build is published.
-pub fn asset(version: Version, arch: &str, os: &str) -> Option<String> {
-    let target = match (arch, os) {
-        ("aarch64", "macos") => "aarch64-apple-darwin",
-        ("aarch64", "linux") => "aarch64-unknown-linux-gnu",
-        ("x86_64", "linux") => "x86_64-unknown-linux-gnu",
+/// The archive built for this platform (`std::env::consts::ARCH`, `OS`,
+/// and `cfg!(target_env)`: a static `musl` Linux build updates to the
+/// static build); `None` where no build is published.
+pub fn asset(version: Version, arch: &str, os: &str, libc: &str) -> Option<String> {
+    let target = match (arch, os, libc) {
+        ("aarch64", "macos", _) => "aarch64-apple-darwin",
+        ("aarch64", "linux", "musl") => "aarch64-unknown-linux-musl",
+        ("x86_64", "linux", "musl") => "x86_64-unknown-linux-musl",
+        ("aarch64", "linux", _) => "aarch64-unknown-linux-gnu",
+        ("x86_64", "linux", _) => "x86_64-unknown-linux-gnu",
         _ => return None,
     };
     Some(format!("superfik-{version}-{target}.tar.gz"))
@@ -58,11 +61,30 @@ mod tests {
     #[test]
     fn each_published_platform_has_its_archive() {
         let v = Version(0, 3, 1);
-        assert_eq!(asset(v, "aarch64", "macos").as_deref(), Some("superfik-0.3.1-aarch64-apple-darwin.tar.gz"));
-        assert_eq!(asset(v, "x86_64", "linux").as_deref(), Some("superfik-0.3.1-x86_64-unknown-linux-gnu.tar.gz"));
-        assert_eq!(asset(v, "aarch64", "linux").as_deref(), Some("superfik-0.3.1-aarch64-unknown-linux-gnu.tar.gz"));
-        assert_eq!(asset(v, "x86_64", "macos"), None, "no Intel Mac build");
-        assert_eq!(asset(v, "x86_64", "windows"), None);
+        assert_eq!(asset(v, "aarch64", "macos", "").as_deref(), Some("superfik-0.3.1-aarch64-apple-darwin.tar.gz"));
+        assert_eq!(
+            asset(v, "x86_64", "linux", "gnu").as_deref(),
+            Some("superfik-0.3.1-x86_64-unknown-linux-gnu.tar.gz")
+        );
+        assert_eq!(
+            asset(v, "aarch64", "linux", "gnu").as_deref(),
+            Some("superfik-0.3.1-aarch64-unknown-linux-gnu.tar.gz")
+        );
+        assert_eq!(asset(v, "x86_64", "macos", ""), None, "no Intel Mac build");
+        assert_eq!(asset(v, "x86_64", "windows", "msvc"), None);
+    }
+
+    #[test]
+    fn a_static_linux_build_updates_to_the_static_build() {
+        let v = Version(0, 6, 1);
+        assert_eq!(
+            asset(v, "x86_64", "linux", "musl").as_deref(),
+            Some("superfik-0.6.1-x86_64-unknown-linux-musl.tar.gz")
+        );
+        assert_eq!(
+            asset(v, "aarch64", "linux", "musl").as_deref(),
+            Some("superfik-0.6.1-aarch64-unknown-linux-musl.tar.gz")
+        );
     }
 
     #[test]

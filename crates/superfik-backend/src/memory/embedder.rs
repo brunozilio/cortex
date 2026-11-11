@@ -4,7 +4,7 @@
 //! words alone until it is ready or when there is none.
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Purpose {
@@ -66,6 +66,8 @@ pub fn local(choice: ModelChoice, cache: PathBuf) -> Arc<dyn Embedder> {
 
 #[cfg(feature = "embeddings")]
 mod fast {
+    use std::sync::Mutex;
+
     use super::*;
     use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions};
 

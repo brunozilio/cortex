@@ -21,16 +21,19 @@ pub trait Releases {
     fn download(&self, tag: &str, name: &str) -> Result<Vec<u8>, String>;
 }
 
-/// The platform the binary runs on (`std::env::consts::ARCH`, `OS`).
+/// The platform the binary runs on (`std::env::consts::ARCH`, `OS`, and
+/// the C library it was built for: `musl` for the static Linux build).
 #[derive(Debug, Clone, Copy)]
 pub struct Platform<'a> {
     pub arch: &'a str,
     pub os: &'a str,
+    pub libc: &'a str,
 }
 
 impl Platform<'static> {
     pub fn this() -> Self {
-        Self { arch: std::env::consts::ARCH, os: std::env::consts::OS }
+        let libc = if cfg!(target_env = "musl") { "musl" } else { "gnu" };
+        Self { arch: std::env::consts::ARCH, os: std::env::consts::OS, libc }
     }
 }
 
@@ -66,7 +69,7 @@ pub fn update(releases: &dyn Releases, current: &str, exe: &Path, platform: Plat
     let Some(version) = release::newer(current, &tag) else {
         return Ok(Updated::AlreadyLatest);
     };
-    let asset = release::asset(version, platform.arch, platform.os)
+    let asset = release::asset(version, platform.arch, platform.os, platform.libc)
         .ok_or_else(|| format!("no build of superfik is published for {} {}", platform.arch, platform.os))?;
     let sums = String::from_utf8_lossy(&releases.download(&tag, &format!("{asset}.sha256"))?).into_owned();
     let expected = release::checksum(&sums, &asset).ok_or_else(|| format!("{asset}.sha256 gives no checksum"))?;

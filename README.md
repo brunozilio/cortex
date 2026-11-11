@@ -5,10 +5,23 @@ Superfik's agent engine: a terminal chat
 (agents, commands, skills, memory, in-process MCP tools, MCP over HTTP and
 stdio).
 
+## Installing
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/brunozilio/lite/main/install.sh | bash
+```
+
+It installs the latest release in `~/.local/bin` (`SUPERFIK_INSTALL_DIR`
+to change it, `SUPERFIK_VERSION` for another release), checking its
+SHA-256. On Linux it takes the glibc build when the system's glibc is
+2.39 or newer, and the static musl build otherwise (RHEL 8/9, older
+Debian/Ubuntu; `SUPERFIK_LIBC=musl|gnu` to choose). The musl build has no
+semantic memory search: memory is searched by words. From source:
+`cargo install --path crates/superfik-cli`.
+
 ## Using it
 
 ```sh
-cargo install --path crates/superfik-cli   # installs `superfik`
 superfik login                             # API key, or Claude/ChatGPT/Copilot subscription
 superfik                                   # chat in the current project
 superfik -p "explain src/main.rs"          # one answer, printed
@@ -19,8 +32,9 @@ superfik rm Qwen3-8B-4bit                  # delete it again
 superfik update                            # replace this binary with the latest release
 ```
 
-Released binaries (macOS Apple silicon, Linux x86_64/arm64) are attached
-to each GitHub release; `superfik update` downloads this platform's,
+Released binaries (macOS Apple silicon, Linux x86_64/arm64 for glibc and
+static musl) are attached to each GitHub release; `superfik update`
+downloads this platform's (a musl build stays musl),
 checks its SHA-256 and replaces the running binary in place, wherever it
 was installed.
 

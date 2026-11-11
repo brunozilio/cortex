@@ -12,7 +12,9 @@ rust-version = "1.97"
 [workspace.dependencies]
 superfik-core = { path = "crates/superfik-core" }
 superfik-protocol = { path = "crates/superfik-protocol" }
-superfik-backend = { path = "crates/superfik-backend" }
+# Semantic memory (`embeddings`) is a feature each user turns on: the static
+# Linux build goes without it (ONNX Runtime has no musl build).
+superfik-backend = { path = "crates/superfik-backend", default-features = false }
 superfik-process = { path = "crates/superfik-process" }
 superfik-private-file = { path = "crates/superfik-private-file" }
 superfik-mlx = { path = "crates/superfik-mlx" }

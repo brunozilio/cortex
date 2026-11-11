@@ -9,8 +9,13 @@ publish.workspace = true
 name = "superfik"
 path = "src/main.rs"
 
+[features]
+default = ["embeddings"]
+# Semantic memory search; the static (musl) Linux build goes without it.
+embeddings = ["superfik-sdk/embeddings"]
+
 [dependencies]
-superfik-sdk.workspace = true
+superfik-sdk = { workspace = true, default-features = false }
 superfik-core.workspace = true
 serde_json.workspace = true
 crossbeam-channel.workspace = true
