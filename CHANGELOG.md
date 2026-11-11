@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/brunozilio/lite/compare/v0.7.0...v0.7.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* sign in to Kiro through an organization's IAM Identity Center ([#11](https://github.com/brunozilio/lite/issues/11)) ([abecba7](https://github.com/brunozilio/lite/commit/abecba746c318af69528703eaef2a2671046f094))
+
 ## [0.7.0](https://github.com/brunozilio/lite/compare/v0.6.0...v0.7.0) (2026-11-11)
 
 
