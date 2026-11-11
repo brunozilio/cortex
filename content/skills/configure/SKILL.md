@@ -1,6 +1,6 @@
 ---
 name: configure
-description: Change how {{NAME}} itself behaves by editing its own settings, MCP servers and hooks — adding an MCP server (e.g. "configure the Jira MCP"), model fallback between providers (e.g. "fall back from chatgpt to kiro"), routing sub-agents to another model, the small, advisor or judge model, permissions, and enabled providers. Use whenever the user asks to configure, set up, add or change an MCP server, a model, fallback, routing, hook or setting without naming another app.
+description: Change how {{NAME}} itself behaves by editing its own settings, MCP servers and hooks — adding an MCP server (e.g. "configure the Jira MCP"), model fallback between providers (e.g. "fall back to my other subscription"), routing sub-agents to another model, the small, advisor or judge model, permissions, and enabled providers. Use whenever the user asks to configure, set up, add or change an MCP server, a model, fallback, routing, hook or setting without naming another app.
 ---
 
 # Configure {{NAME}}
@@ -29,8 +29,8 @@ snippet you wrote and the file's path.
 
 ## Naming models
 
-A model is named `provider:model`, for example `chatgpt:gpt-6.1` or
-`kiro:claude-sonnet-5`. The provider is the id of a connected provider;
+A model is named `provider:model`, for example `main-provider:big-model` or
+`backup-provider:other-model` (ids from `{{COMMAND}} models`). The provider is the id of a connected provider;
 a name without a provider stays on the run's provider. Never guess a
 model id: run `{{COMMAND}} models` and pick from its list, or ask the
 user. If a provider is not connected, tell the user to run
@@ -41,7 +41,7 @@ user. If a provider is not connected, tell the user to run
 ### Simple: `fallbackModel`
 
 ```json
-{ "fallbackModel": ["kiro:claude-sonnet-5", "openai:gpt-6.1"] }
+{ "fallbackModel": ["backup-provider:other-model", "third-provider:model"] }
 ```
 
 One model or a list. When the run's model stays overloaded (after the
@@ -51,7 +51,7 @@ only overloads; for auth, network or provider errors use a hook.
 `--fallback-model` sets one model for one `{{COMMAND}} -p` run.
 
 Use it when the user's main model is on one provider and they want
-backups on others: main `chatgpt:…`, `fallbackModel` `["kiro:…"]`.
+backups on others: main `main-provider:…`, `fallbackModel` `["backup-provider:…"]`.
 
 ### Any error, any policy: a `ModelError` hook
 
@@ -63,14 +63,14 @@ A `ModelError` hook intercepts every failed model call, before the
 (models that failed since the last answer) and `fallbacks` (the
 settings' list). It answers one of:
 
-- `{ hookSpecificOutput: { model: "kiro:…" } }`: forward the call there.
+- `{ hookSpecificOutput: { model: "backup-provider:…" } }`: forward the call there.
 - `{ decision: "block", reason: "…" }`: stop, the run fails with the error.
 - nothing: the `fallbackModel` list decides.
 
 ```js
 export const event = "ModelError";
 export const matcher = "main";
-const chain = ["kiro:claude-sonnet-5", "openai:gpt-6.1"];
+const chain = ["backup-provider:other-model", "third-provider:model"];
 export default function (input) {
   if (input.errorKind === "too_long") return;
   const next = chain.find((model) => !input.tried.includes(model));
@@ -91,7 +91,7 @@ a cheaper provider:
 ```js
 export const event = "ModelRequest";
 export const matcher = "sub-agent";
-export default () => ({ hookSpecificOutput: { model: "kiro:claude-haiku-5" } });
+export default () => ({ hookSpecificOutput: { model: "cheap-provider:small-model" } });
 ```
 
 A `ModelRequest` hook may also answer `effort` (`low` … `max`),
@@ -184,7 +184,7 @@ user's own files can allow; the checked-in file can only restrict.
 ## After the change
 
 Confirm what will happen in one or two sentences, e.g. "From your next
-message, when chatgpt is overloaded the run continues on
-kiro:claude-sonnet-5." If the request cannot be expressed with these
+message, when main-provider is overloaded the run continues on
+backup-provider:other-model." If the request cannot be expressed with these
 settings and hooks, say exactly which part is not supported rather than
 writing something that will not take effect.

@@ -52,9 +52,8 @@ one starts only when the owner approves its id in their own settings
 A model named `provider:model` (the catalog's own id form) runs on that
 provider with the owner's key for it, wherever a model is named:
 
-- `fallbackModel` / `--fallback-model`: `"openai:gpt-6.1-sol"` takes over
-  when the run's model stays overloaded; a list (`["kiro:auto",
-  "openai:gpt-6.1-sol"]`) is tried in order.
+- `fallbackModel` / `--fallback-model`: `"<provider>:<model>"` takes over
+  when the run's model stays overloaded; a list of them is tried in order.
 - The `ModelRequest` hook runs before each model call and may answer
   `{"hookSpecificOutput": {"model": "groq:llama-4-scout"}}`. Its matcher
   is the kind of call, `main` or `sub-agent`, so sub-agents can go to a

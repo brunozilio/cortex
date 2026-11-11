@@ -5,49 +5,18 @@ Its architecture is in [architecture.md](architecture.md) (Engines).
 
 ## Providers
 
-| Provider | Id | Sign-in |
-| --- | --- | --- |
-| OpenAI API | `openai` | API key |
-| ChatGPT Subscription | `openai-subscription` | browser, callback `http://localhost:1455/auth/callback` |
-| Claude Subscription | `claude-subscription` | browser, callback `http://localhost:<free port>/callback` |
-| Anthropic API | `anthropic` | API key |
-| GitHub Copilot Subscription | `copilot-subscription` | GitHub device flow (code typed at `github.com/login/device`), or a GitHub token |
-| Kiro Subscription | `kiro-subscription` | browser via `app.kiro.dev/signin`, callback `http://localhost:49153/oauth/callback` |
-
-Kiro is spoken as Kiro CLI 3.1.0 does. Sign-in opens Kiro's portal with
-a PKCE challenge and `redirect_uri=http://localhost:49153` (Kiro's sign-in
-accepts only that port); the portal returns
-`/oauth/callback?login_option=…&code=…`, and Google or GitHub codes are
-exchanged at `prod.us-east-1.auth.desktop.kiro.dev/oauth/token` for the
-redirect including `?login_option=…`. The answer's `profileArn` names the
-account and its region; tokens refresh at `/refreshToken` (also on a 401
-or 403). Organization (IAM Identity Center) and Builder ID sign-ins are
-refused for now. Turns are `GenerateAssistantResponse` on
-`runtime.<region>.kiro.dev` (AWS JSON 1.0, `x-amz-target`), answered as
-AWS event-stream frames; the catalog is `ListAvailableModels` on
-`management.<region>.kiro.dev` with `origin: KIRO_CLI`. Kiro has no system
-field, so the system prompt opens the first user message, and it reports
-context use as a share of the window, from which the prompt's size is
-estimated.
-
-GitHub Copilot is spoken as the Copilot CLI does (client
-`Ov23ctDVkRmgkPke0Mmm`, `Copilot-Integration-Id: copilot-developer-cli`):
-the GitHub token goes as is to the Copilot API named by
-`copilot_internal/user` (`endpoints.api`); it is never exchanged or
-refreshed, and classic `ghp_` tokens are refused. `GET /models` lists what
-the picker shows; each model runs on the best API its
-`supported_endpoints` offer (`/v1/messages`, then `/responses`, then
-`/chat/completions`). Claude on `/v1/messages` follows the CLI's
-`getAnthropicRequestParams`: a model with reasoning effort gets adaptive
-thinking and `output_config.effort` (clamped to the levels it offers), one
-that only thinks gets a 1024/2048/4096/32000-token budget. `X-Initiator` is `user` only when the turn starts
-with the user's own message, so tool round-trips are not premium requests.
+Each provider is one folder, `agent-engine/src/providers/<name>/`, with a
+README saying how it signs in and what it speaks; `{command} login` lists
+the ones built in. A provider names its vendor (prices, short model names,
+reasoning rules in `llm-providers/src/vendors/<vendor>/`) and its wire (the
+shared ones in `agent-engine/src/model/wires/`, or its own `wire/`).
+Removing the folder removes the provider; nothing else names it.
 
 The browser must reach the machine running the backend; sign-in waits up to
 five minutes. Credentials stay in the backend's `SecretStore`; tokens are
-renewed before they expire (ChatGPT also once after a 401) and never reach
-the client. Contracts are pure in `llm-providers`; HTTP in
-`agent-engine/src/model/providers`; storage, sign-in and discovery in
+renewed before they expire and never reach the client. What providers
+share is in `llm-providers`; the client and transport in
+`agent-engine/src/model/client`; storage, sign-in and discovery in
 `backend/src/providers/`. HTTP or JSON errors never
 become a made-up catalog.
 
@@ -114,7 +83,7 @@ Their input has `model`, `kind` (`main` or `sub-agent`, also the
 matcher's subject), `mode` and `messages` (a count), plus:
 
 - ModelRequest: `effort`, `maxTokens`, `tools` (names). It may answer
-  `{"hookSpecificOutput": {"model": "openai:gpt-6.1-sol"}}` to route the
+  `{"hookSpecificOutput": {"model": "<provider>:<model>"}}` to route the
   call (see `domain::routing`), `"effort": "low"` to change the effort,
   `"additionalContext"` (or a top-level `systemMessage`) to append to the
   system prompt of this call, or `{"decision": "block"}` to stop the run.
@@ -142,7 +111,7 @@ asks a model.
 Ordinary tests are deterministic. With a provider connected (`{command} login`):
 
 ```sh
-{COMMAND}_LIVE_PROVIDER=claude-subscription [{COMMAND}_LIVE_MODEL=…] \
+{COMMAND}_LIVE_PROVIDER=<provider id> {COMMAND}_LIVE_MODEL=<model> \
   cargo test -p backend --test live_memory -- --ignored --nocapture
 ```
 

@@ -62,17 +62,22 @@ exactly one terminal event (`Completed`, `Failed`, `Cancelled`) ends a run.
 Recognised problems arrive first as `Diagnosed(EngineProblem)`.
 
 The native engine runs the loop in process behind `ModelApi`, one wire per
-protocol (`anthropic::Messages`, `openai::Responses`,
-`event_stream::Conversation`, `chat::Chat` for `/chat/completions`).
+protocol. A wire is a folder in `crates/agent-engine/src/model/wires/`
+(`messages`, `responses`, `chat`) with a `NAME`, a reasoning `ORIGIN` tag
+and `open`; `build.rs` gathers them, and a provider's own `wire/` folder too.
 
-A provider is a folder in `crates/llm-providers/src/providers/`: a
-`Provider` impl with its id, name, `Access` (key, browser or code), secret
-slot, default window, which `Wire` a model uses, base URL, headers, body
-shape, catalog call and page, token refresh and its own `sign_in` over the
-`Host` the backend gives it (HTTP, loopback listener, browser, clock).
-`ModelProvider` is only the id; `llm_providers::find` looks it up. Deleting a
-folder removes the provider and the rest still builds; nothing outside the
-folder names one.
+A provider is a folder in `crates/agent-engine/src/providers/`: a
+`Provider` impl (trait in `llm-providers`) with its id, name, vendor,
+`Access` (key, browser or code), secret slot, default window, which wire a
+model uses, base URL, headers, body shape, catalog call and page, token
+refresh and its own `sign_in` over the `Host` the backend gives it (HTTP,
+loopback listener, browser, clock), plus its README, its tests
+(`client_tests.rs`) and, when only it speaks one, its wire. A model family's
+prices, short names and reasoning rules are a vendor folder in
+`crates/llm-providers/src/vendors/`. `ModelProvider` is only the id;
+`agent_engine::providers::find` looks it up. Deleting a folder removes the
+provider; nothing outside the folder names one, and tests elsewhere use the
+test providers from `llm_providers::testing`.
 
 `ModelProviders` keeps one account per provider (`ConnectProvider` with an
 API key or token JSON, `SignInProvider` for a subscription's sign-in). The
@@ -162,7 +167,7 @@ Inbox notices are core (`TakeNotices`).
   environment.
 - **Tool calls**: consecutive read-only calls inside the project that no
   rule asks about run in parallel (`agent::call::batches`), the rest in
-  order. Anthropic and OpenAI stream a call's input
+  order. The messages and responses wires stream a call's input
   (`EngineEvent::ToolInputDelta`). `Bash` waits on a command through the
   background registry (`tools::shells::wait`), so `BackgroundRun`
   (Ctrl+B) leaves it running under its id; stdout and stderr share one
@@ -218,7 +223,7 @@ Inbox notices are core (`TakeNotices`).
   `allowed_tools`/`disallowed_tools` (rules for the run), `append_system`,
   `fallback_model` (or the settings' `fallbackModel`, one model or a
   chain: an overloaded model hands the run over, `EngineEvent::FellBack`;
-  `provider:model`, such as `openai:gpt-6.1-sol`, falls back to another
+  `provider:model` falls back to another
   connected provider; the `ModelError` hook intercepts any failure first,
   policy in `domain::fallback`) and `fork` (go on from
   `resume` under a new session). `{command} -p` maps them to flags and

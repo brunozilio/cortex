@@ -23,7 +23,7 @@ Nothing else is required. Some tools are used when present:
 ## Using it
 
 ```sh
-cortex login                             # API key, or Claude/ChatGPT/Copilot/Kiro subscription
+cortex login                             # API key or subscription; lists the providers
 cortex                                   # chat in the current project
 cortex -p "explain src/main.rs"          # one answer, printed
 cortex models                            # what the connected providers offer
@@ -57,10 +57,10 @@ you).
 | Crate | What it is |
 |---|---|
 | `domain` | Domain types and rules: requests, engine events, memory, `Principal`. Pure. |
-| `agent-engine` | The agent loop, tools, permissions, hooks, sub-agents, skill/agent discovery, MCP, sessions, compaction, provider APIs. |
+| `agent-engine` | The agent loop, tools, permissions, hooks, sub-agents, skill/agent discovery, MCP, sessions, compaction, wires and one folder per provider. |
 | `protocol` | `ClientCommand` / `ServerEvent` in an `Envelope`. |
 | `backend` | Command handler: runs, memory, settings, providers, secrets. |
-| `llm-providers` | LLM providers (Anthropic, OpenAI, Claude, ChatGPT, GitHub Copilot and Kiro subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
+| `llm-providers` | What providers share: the `Provider` trait, credentials, OAuth, sign-in, catalogs, declared providers and model-family vendor folders. Pure. |
 | `sdk` | The CLI's internal client to the backend. |
 | `cli` | The `cortex` binary: terminal chat (ratatui), `-p`, `login`, `models`, `mcp`, `config`, `doctor`. |
 | `brand` | The product's name and command, from `brand.toml`. |
