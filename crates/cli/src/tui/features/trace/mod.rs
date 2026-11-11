@@ -1,6 +1,7 @@
+pub(super) mod cli;
 mod page;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use domain::SessionId;
 use serde_json::{Value, json};
@@ -28,16 +29,18 @@ fn trace(app: &mut App, argument: Option<String>) {
         return app.transcript.notice("Nothing to trace yet: send a prompt first, or name a session: /trace <id>.");
     };
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.feature(NAME, json!({ "session": session.0, "cwd": cwd })) {
-        Ok(trace) => match keep(&session, &trace) {
-            Ok(path) => {
-                crate::login::open(&path.display().to_string());
-                Msg::Notice(format!("Trace opened in the browser: {}", path.display()))
-            }
-            Err(error) => Msg::Error(error),
-        },
-        Err(error) => Msg::Error(error.to_string()),
+    app.spawn(move |sdk| match export(sdk, &session, &cwd) {
+        Ok(path) => {
+            crate::login::open(&path.display().to_string());
+            Msg::Notice(format!("Trace opened in the browser: {}", path.display()))
+        }
+        Err(error) => Msg::Error(error),
     });
+}
+
+fn export(sdk: &sdk::Sdk, session: &SessionId, cwd: &Path) -> Result<PathBuf, String> {
+    let trace = sdk.feature(NAME, json!({ "session": session.0, "cwd": cwd })).map_err(|e| e.to_string())?;
+    keep(session, &trace)
 }
 
 fn keep(session: &SessionId, trace: &Value) -> Result<PathBuf, String> {

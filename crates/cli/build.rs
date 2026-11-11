@@ -20,6 +20,16 @@ fn features() {
     }
     let listed: Vec<String> = names.iter().map(|name| format!("{name}::feature()")).collect();
     registry.push_str(&format!("pub fn all() -> Vec<Feature> {{\n    vec![{}]\n}}\n", listed.join(", ")));
+    let commands: String = names
+        .iter()
+        .filter(|name| folder.join(name).join("cli.rs").is_file())
+        .map(|name| format!("        {name:?} => Some({name}::cli::run),\n"))
+        .collect();
+    registry.push_str(&format!(
+        "pub type Command = fn(&sdk::Sdk, &std::path::Path, Vec<String>) -> Result<String, String>;\n\
+         pub fn cli(name: &str) -> Option<Command> {{\n    \
+         match name {{\n{commands}        _ => None,\n    }}\n}}\n"
+    ));
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap_or_default()).join("features.rs");
     if let Err(error) = std::fs::write(&out, registry) {
         println!("cargo:warning=could not write the feature registry: {error}");

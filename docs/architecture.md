@@ -391,12 +391,23 @@ The file only grows: messages, `Truncated` (a rewind), `Restarted` (a
 compaction or any other rewrite of the history), the run's prompt
 (`Prompted`) and every engine event with its time (`Event`; the run gate's
 observer, `engine::record`, joins streamed text and drops partial tool
-input). Resume reads back from the last `Restarted`; nothing before it is
-deleted. Older JSON-array files load as before and are folded into the log
-on the next write.
+input). It also keeps each model call (`Called`: model, stop reason,
+effort, and the system prompt and tool definitions the first time each
+version appears, by fingerprint), how the run was set up (`Opened`: model,
+permission mode, folder, git snapshot) and a rewind's restored files. A
+sub-agent's calls and token usage are tagged with it: `agent::current`
+knows, per thread, which sub-agent is running, so only the log, not the
+events sent to the client, carries the tag. Resume reads back from the last
+`Restarted`; nothing before it is deleted. Older JSON-array files load as
+before and are folded into the log on the next write.
 
-`/trace [session]` (the `trace` feature) reads the whole file, builds a tree
-with `domain::trace::build` (prompts, model turns, tools called side by
-side, sub-agents' lanes under the tool that started them, compactions,
-rewinds, errors) and writes a self-contained HTML page to
-`~/.{command}/traces/<session>.html`, opened in the browser.
+`/trace [session]` in the chat, or `{command} trace [session] [--no-open]`
+(the `trace` feature; the CLI's `build.rs` registers a feature folder's
+`cli.rs` as its command), reads the whole file (`sessions::records`; a
+session saved before traces is replayed from its messages and marked
+partial), builds a tree with `domain::trace::build` (prompts with their
+run's setup, model turns with what the model received, tools called side by
+side with their permission asks, sub-agents' lanes under the tool that
+started them, background ones too, compactions, rewinds, fallbacks, errors)
+and writes a self-contained HTML page to `~/.{command}/traces/<session>.html`,
+opened in the browser.

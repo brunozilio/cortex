@@ -35,6 +35,15 @@ svg .sub { fill: var(--muted); font-size: 11px; }
 svg .badge { fill: var(--muted); font-size: 10px; }
 .edge { fill: none; stroke: var(--edge); stroke-width: 1.4; opacity: .8; }
 .edge.nested { stroke-dasharray: 4 4; opacity: .55; }
+.edge.link { stroke: var(--accent); stroke-dasharray: 2 5; opacity: .8; }
+#timeline { position: fixed; left: 0; right: 0; top: 46px; height: 40px; width: 100vw; z-index: 2;
+  background: var(--panel); border-bottom: 1px solid var(--line); }
+#timeline .spent { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+#timeline .mark { cursor: pointer; }
+#timeline .mark.turn { fill: var(--ok); }
+#timeline .mark.bad { fill: var(--bad); }
+#timeline .mark.warn { fill: var(--warn); }
+#timeline text { fill: var(--muted); font-size: 10px; }
 .node { cursor: pointer; }
 .node circle.body { fill: var(--ok); }
 .node.failed circle.body { fill: var(--bad); }
@@ -48,7 +57,7 @@ svg .badge { fill: var(--muted); font-size: 10px; }
 .toggle text { fill: var(--accent); font-size: 12px; text-anchor: middle; dominant-baseline: central; }
 .lanebg { fill: var(--panel); opacity: .45; stroke: var(--line); }
 aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); background: var(--panel);
-  border-left: 1px solid var(--line); overflow: auto; padding: 64px 18px 24px; transform: translateX(100%);
+  border-left: 1px solid var(--line); overflow: auto; padding: 100px 18px 24px; transform: translateX(100%);
   transition: transform .15s ease; z-index: 1; }
 aside.open { transform: none; }
 aside .crumbs { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
@@ -77,6 +86,7 @@ details summary { cursor: pointer; color: var(--muted); }
   <input id="search" type="search" placeholder="Search every node…" aria-label="Search">
 </header>
 <svg id="canvas" role="img" aria-label="Session trace"><g id="world"></g></svg>
+<svg id="timeline" role="img" aria-label="Cost over time"></svg>
 <aside id="panel" aria-live="polite"></aside>
 <div class="hint">Click a node for details · ←/→ step · ↓ into a sub-agent · ↑ out · Esc closes · scroll to zoom, drag to pan</div>
 <script type="application/json" id="trace">{{TRACE}}</script>
@@ -91,7 +101,9 @@ details summary { cursor: pointer; color: var(--muted); }
   const panel = document.getElementById('panel');
   const collapsed = new Set();
   const order = [];
-  let selected = null, view = { x: 40, y: 90, k: 1 };
+  const TOP = 96;
+  const boxes = {};
+  let selected = null, view = { x: 40, y: TOP, k: 1 };
 
   const GLYPH = { session: '◆', prompt: '❯', turn: '◉', tool: '⚒', agent: '✦', compacted: '⇊', rewound: '↺',
     steered: '➜', fell_back: '⇄', failed: '✕', cancelled: '■', completed: '✓', note: 'i' };
@@ -106,13 +118,28 @@ details summary { cursor: pointer; color: var(--muted); }
 
   function agentOf(n) { return n.kind === 'tool' ? n.agent : n.kind === 'agent' ? n : null; }
 
+  const SYSTEMS = {}, TOOLSETS = {};
+
+  function remember(call, seen) {
+    if (call.system != null) SYSTEMS[call.system_id] = call.system;
+    if (call.tools != null) TOOLSETS[call.tools_id] = call.tools;
+    call.previous_system = seen.system && seen.system !== call.system_id ? seen.system : null;
+    call.tools_changed = !!(seen.tools && seen.tools !== call.tools_id);
+    seen.system = call.system_id;
+    seen.tools = call.tools_id;
+  }
+
   function prepare(lane, parent, crumbs) {
     let turns = 0;
+    const seen = {};
     for (const step of lane.steps) for (const n of step.nodes) {
       n.parent = parent;
       n.id = order.length;
       order.push(n);
       if (n.kind === 'turn') n.turn = ++turns;
+      if (n.kind === 'turn' && n.call) remember(n.call, seen);
+      if (n.kind === 'note') n.topic = n.title;
+      if (n.kind === 'tool') (n.calls || []).forEach(c => remember(c, {}));
       n.title = title(n);
       n.crumbs = crumbs.concat(n.title);
       const agent = agentOf(n);
@@ -124,7 +151,7 @@ details summary { cursor: pointer; color: var(--muted); }
     switch (n.kind) {
       case 'session': return 'Session';
       case 'prompt': return n.parent ? 'Task: ' + short(n.text, 40) : short(n.text, 60);
-      case 'turn': return (n.usage && n.usage.model) || ('Turn ' + n.turn);
+      case 'turn': return (n.call && n.call.model) || (n.usage && n.usage.model) || ('Turn ' + n.turn);
       case 'tool': return n.call.summary || n.call.name;
       case 'agent': return n.name || 'agent';
       case 'compacted': return 'Compacted';
@@ -134,12 +161,24 @@ details summary { cursor: pointer; color: var(--muted); }
       case 'failed': return short(n.error, 40);
       case 'cancelled': return 'Cancelled';
       case 'completed': return 'Done in ' + span(n.duration_ms);
+      case 'note': return n.topic === 'partial' ? 'Partial trace' : n.topic;
       default: return n.title || n.kind;
     }
   }
 
+  function background(n) { return n.kind === 'tool' && n.call.input && n.call.input.run_in_background === true; }
+
+  function taskOf(n) {
+    try { return JSON.parse(n.output || '').task_id || null; } catch (e) { return null; }
+  }
+
+  function collector(n) {
+    const task = taskOf(n);
+    return task && order.find(o => o.kind === 'tool' && o !== n && o.call.input && o.call.input.task_id === task);
+  }
+
   function subtitle(n) {
-    if (n.kind === 'tool') return n.agent ? 'Agent · ' + (n.agent.name || '') : n.call.name;
+    if (n.kind === 'tool') return n.agent ? 'Agent · ' + (n.agent.name || '') + (background(n) ? ' · background' : '') : n.call.name;
     return { session: 'Session', prompt: n.parent ? 'Sub-agent prompt' : 'Prompt', turn: 'Model', agent: 'Agent',
       compacted: 'Compaction', rewound: 'Rewind', steered: 'Steered', fell_back: 'Fallback', failed: 'Error',
       cancelled: 'Run', completed: 'Run', note: 'Note' }[n.kind] || n.kind;
@@ -176,7 +215,7 @@ details summary { cursor: pointer; color: var(--muted); }
         const a = agentOf(n);
         if (a && a.lane && a.lane.steps.length && !collapsed.has(n.id)) {
           const sub = layout(a.lane, cx + INDENT, sy + ROW, out);
-          out.lanes.push({ x: cx + INDENT - 14, y: sy + ROW - 10, w: sub.w + 10, h: sub.h + 6 });
+          out.lanes.push({ owner: n.id, x: cx + INDENT - 14, y: sy + ROW - 10, w: sub.w + 10, h: sub.h + 6 });
           out.edges.push({ a: p, b: sub.first, nested: true });
           slot += sub.h + GAP;
           width = Math.max(width, sub.w + INDENT + 20);
@@ -202,20 +241,30 @@ details summary { cursor: pointer; color: var(--muted); }
     world.textContent = '';
     const out = { placed: [], edges: [], lanes: [] };
     layout(TRACE.lane, 0, 0, out);
-    for (const l of out.lanes) el('rect', { class: 'lanebg', x: l.x, y: l.y, width: l.w, height: l.h, rx: 12 }, world);
+    for (const l of out.lanes) {
+      boxes[l.owner] = l;
+      el('rect', { class: 'lanebg', x: l.x, y: l.y, width: l.w, height: l.h, rx: 12 }, world);
+    }
+    const at = new Map(out.placed.map(p => [p.n, p]));
+    for (const p of out.placed) {
+      const c = p.n.kind === 'tool' && collector(p.n);
+      if (c && at.has(c)) out.edges.push({ a: p, b: at.get(c), link: true });
+    }
     for (const e of out.edges) {
       const { a, b } = e;
       const d = e.nested
         ? `M${a.x},${a.y + R} C${a.x},${b.y} ${a.x},${b.y} ${b.x - R - 6},${b.y}`
-        : `M${a.x + R + 6},${a.y} C${(a.x + b.x) / 2},${a.y} ${(a.x + b.x) / 2},${b.y} ${b.x - R - 6},${b.y}`;
-      el('path', { class: 'edge' + (e.nested ? ' nested' : ''), d, 'marker-end': 'url(#arrow)' }, world);
+        : e.link
+          ? `M${a.x},${a.y - R} C${a.x},${a.y - 3 * R} ${b.x},${b.y - 3 * R} ${b.x},${b.y - R - 6}`
+          : `M${a.x + R + 6},${a.y} C${(a.x + b.x) / 2},${a.y} ${(a.x + b.x) / 2},${b.y} ${b.x - R - 6},${b.y}`;
+      el('path', { class: 'edge' + (e.nested ? ' nested' : '') + (e.link ? ' link' : ''), d, 'marker-end': 'url(#arrow)' }, world);
     }
     const query = document.getElementById('search').value.trim().toLowerCase();
     for (const p of out.placed) {
       const n = p.n;
       const cls = ['node'];
       if (n.failed) cls.push('failed');
-      else if (MARKERS.has(n.kind)) cls.push('marker');
+      else if (MARKERS.has(n.kind) || (n.kind === 'note' && n.topic === 'partial')) cls.push('marker');
       else if (n.kind === 'note') cls.push('note');
       if (selected === n) cls.push('selected');
       if (query && !n.haystack.includes(query)) cls.push('dim');
@@ -249,20 +298,28 @@ details summary { cursor: pointer; color: var(--muted); }
 
   function apply() { world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); }
 
-  function fit() {
-    const box = world.getBBox();
-    const w = svg.clientWidth, h = svg.clientHeight - 70;
+  function frame(box) {
+    const w = svg.clientWidth - (panel.classList.contains('open') ? panel.clientWidth : 0);
+    const h = svg.clientHeight - TOP - 30;
     view.k = Math.min(1.4, Math.max(0.15, Math.min(w / (box.width + 80), h / (box.height + 80))));
     view.x = (w - box.width * view.k) / 2 - box.x * view.k;
-    view.y = 70 + (h - box.height * view.k) / 2 - box.y * view.k;
+    view.y = TOP + (h - box.height * view.k) / 2 - box.y * view.k;
     apply();
+  }
+
+  function fit() { frame(world.getBBox()); }
+
+  function focus(n) {
+    if (collapsed.has(n.id)) { collapsed.delete(n.id); draw(); }
+    const box = boxes[n.id];
+    if (box) frame({ x: n.at.x - R - 10, y: n.at.y - R - 10, width: box.x + box.w - n.at.x + R + 20, height: box.y + box.h - n.at.y + R + 20 });
   }
 
   function reveal(n) {
     if (!n.at) return;
     const w = svg.clientWidth - (panel.classList.contains('open') ? panel.clientWidth : 0);
     const sx = view.x + n.at.x * view.k, sy = view.y + n.at.y * view.k;
-    if (sx < 60 || sx > w - 60 || sy < 90 || sy > svg.clientHeight - 60) {
+    if (sx < 60 || sx > w - 60 || sy < TOP + 20 || sy > svg.clientHeight - 60) {
       view.x = w / 2 - n.at.x * view.k; view.y = svg.clientHeight / 2 - n.at.y * view.k; apply();
     }
   }
@@ -322,15 +379,77 @@ details summary { cursor: pointer; color: var(--muted); }
     section('Input', i);
   }
 
+  function button(parent, label, run) {
+    const b = text(parent, 'button', label);
+    b.type = 'button';
+    b.onclick = run;
+    return b;
+  }
+
+  function foldable(name, value, open) {
+    if (value == null || value === '') return;
+    const d = document.createElement('details');
+    if (open) d.open = true;
+    text(d, 'summary', name);
+    text(d, 'pre', typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+    panel.appendChild(d);
+  }
+
+  function changed(name, before, after) {
+    const old = new Set(String(before).split('\n')), now = new Set(String(after).split('\n'));
+    const d = document.createElement('details');
+    text(d, 'summary', name);
+    const pre = document.createElement('pre');
+    [...old].filter(l => !now.has(l)).forEach(l => text(pre, 'span', '- ' + l, 'del'));
+    [...now].filter(l => !old.has(l)).forEach(l => text(pre, 'span', '+ ' + l, 'add'));
+    d.appendChild(pre);
+    panel.appendChild(d);
+  }
+
+  function callDetails(call, heading) {
+    rows(heading || 'Model call', [['model', call.model], ['stop reason', call.stop], ['effort', call.effort],
+      ['max tokens', call.max_tokens], ['messages sent', call.messages]]);
+    text(panel, 'h3', 'What the model received');
+    const system = SYSTEMS[call.system_id];
+    if (call.previous_system && SYSTEMS[call.previous_system] != null && system != null) {
+      changed('System prompt changed since the previous call', SYSTEMS[call.previous_system], system);
+    }
+    foldable('System prompt' + (system == null ? ' (not recorded)' : ''), system);
+    const tools = TOOLSETS[call.tools_id];
+    if (Array.isArray(tools)) {
+      foldable(`Tools offered (${tools.length})${call.tools_changed ? ' · changed' : ''}`, tools.map(t => t.name).join('\n'));
+      foldable('Tool definitions', tools);
+    }
+  }
+
+  function runDetails(run) {
+    if (!run) return;
+    rows('Run', [['model', run.model], ['provider', run.provider], ['permission mode', run.permission], ['effort', run.effort],
+      ['folder', run.cwd], ['branch', run.branch]]);
+    foldable('Recent commits', run.recent);
+    foldable('Working tree status', run.status);
+  }
+
+  function asksDetails(asks) {
+    for (const ask of asks || []) {
+      const p = ask.kind && ask.kind.Permission;
+      if (p) rows('Permission asked', [['tool', p.tool], ['subject', p.subject], ['rule offered', p.rule], ['rememberable', p.rememberable ? 'yes' : 'no']]);
+      else foldable('Asked', ask.kind, true);
+    }
+  }
+
   function agentDetails(n, a) {
-    rows('Sub-agent', [['type', a.name], ['task', a.summary], ['status', a.status ? Object.keys(a.status)[0] : null]]);
+    rows('Sub-agent', [['type', a.name], ['task', a.summary], ['status', a.status ? Object.keys(a.status)[0] : null],
+      ['runs', background(n) ? 'in the background' : null]]);
     section('Prompt', a.prompt);
     const s = inside(n, a);
     rows('Inside', [['tools', s.tools], ['turns', s.turns], ['cost', money(s.cost)]]);
     const bar = document.createElement('p');
-    const fold = text(bar, 'button', collapsed.has(n.id) ? 'Expand' : 'Collapse');
-    fold.type = 'button';
-    fold.onclick = () => { toggle(n); select(n); };
+    button(bar, collapsed.has(n.id) ? 'Expand' : 'Collapse', () => { toggle(n); select(n); });
+    text(bar, 'span', ' ');
+    button(bar, 'Focus', () => focus(n));
+    const c = collector(n);
+    if (c) { text(bar, 'span', ' '); button(bar, 'Report collected by ' + c.call.name, () => select(c)); }
     panel.appendChild(bar);
   }
 
@@ -364,6 +483,7 @@ details summary { cursor: pointer; color: var(--muted); }
     panel.appendChild(meta);
     switch (n.kind) {
       case 'session':
+        runDetails((order.find(o => o.kind === 'prompt' && o.run) || {}).run);
         rows('Totals', [['session', SESSION], ['started', clock(TRACE.totals.started_ms)], ['last event', clock(TRACE.totals.ended_ms)],
           ['input tokens', TRACE.totals.input], ['output tokens', TRACE.totals.output], ['cache read', TRACE.totals.cache_read],
           ['cache write', TRACE.totals.cache_write], ['cost', money(TRACE.totals.cost_usd)]]);
@@ -371,9 +491,10 @@ details summary { cursor: pointer; color: var(--muted); }
           ['turns', order.filter(o => o.kind === 'turn').length], ['tool calls', order.filter(o => o.kind === 'tool').length],
           ['compactions', order.filter(o => o.kind === 'compacted').length], ['failures', order.filter(o => o.failed).length]]);
         break;
-      case 'prompt': section('Text', n.text); break;
+      case 'prompt': section('Text', n.text); runDetails(n.run); break;
       case 'turn': {
         usageRows(n.usage);
+        if (n.call) callDetails(n.call);
         if (n.thinking) {
           const d = document.createElement('details');
           text(d, 'summary', 'Thinking');
@@ -386,11 +507,15 @@ details summary { cursor: pointer; color: var(--muted); }
       }
       case 'tool': {
         rows('Call', [['tool', n.call.name], ['id', n.call.id], ['summary', n.call.summary]]);
+        asksDetails(n.asks);
         input(n.call);
         section('Output', n.output);
         if (n.logs && n.logs.length) section('Logs', n.logs.join('\n'));
-        (n.usage || []).forEach(usageRows);
         if (n.agent) agentDetails(n, n.agent);
+        (n.usage || []).forEach(usageRows);
+        (n.calls || []).forEach((c, k) => callDetails(c, 'Model call ' + (k + 1) + ' made while it ran'));
+        const owner = order.find(o => o.kind === 'tool' && o !== n && collector(o) === n);
+        if (owner) { const p = document.createElement('p'); button(p, 'Collects the report of ' + owner.title, () => select(owner)); panel.appendChild(p); }
         break;
       }
       case 'agent': agentDetails(n, n); break;
@@ -398,12 +523,16 @@ details summary { cursor: pointer; color: var(--muted); }
         rows('Context', [['before', count(n.before) + ' tokens'], ['after', count(n.after) + ' tokens']]);
         section('Summary the model kept', n.summary);
         break;
-      case 'rewound': rows('Rewind', [['messages kept', n.keep]]); break;
+      case 'rewound':
+        rows('Rewind', [['back to checkpoint', n.checkpoint], ['messages kept', n.keep], ['files restored', (n.restored || []).length]]);
+        section('Prompt it went back to', n.prompt);
+        section('Files restored', (n.restored || []).join('\n'));
+        break;
       case 'steered': section('Message', n.text); break;
-      case 'fell_back': rows('Fallback', [['model', n.model]]); break;
+      case 'fell_back': rows('Fallback', [['from', n.from], ['to', n.model]]); break;
       case 'failed': section('Error', n.error); break;
       case 'completed': rows('Run', [['duration', span(n.duration_ms)], ['cost', n.cost_usd != null ? money(n.cost_usd) : null]]); break;
-      case 'note': section(n.title, n.text); break;
+      case 'note': section(n.topic, n.text); break;
     }
     draw();
     reveal(n);
@@ -472,8 +601,38 @@ details summary { cursor: pointer; color: var(--muted); }
     e.preventDefault();
   });
 
+  function timeline() {
+    const strip = document.getElementById('timeline');
+    strip.textContent = '';
+    const w = strip.clientWidth || window.innerWidth, h = 40, pad = 16;
+    const start = totals.started_ms, end = Math.max(totals.ended_ms, start + 1);
+    const timed = order.filter(n => n.at_ms && n.kind !== 'session');
+    if (!timed.length || !start) return;
+    const x = ms => pad + (w - 2 * pad) * (Math.min(Math.max(ms, start), end) - start) / (end - start);
+    const spent = order.filter(n => n.kind === 'turn' && n.usage).sort((a, b) => (a.until_ms || a.at_ms) - (b.until_ms || b.at_ms));
+    const top = Math.max(spent.reduce((t, n) => t + cost(n.usage), 0), 1e-9);
+    let sum = 0;
+    const points = [[x(start), h - 6]];
+    for (const n of spent) { sum += cost(n.usage); points.push([x(n.until_ms || n.at_ms), h - 6 - (h - 14) * sum / top]); }
+    points.push([x(end), points[points.length - 1][1]]);
+    el('polyline', { class: 'spent', points: points.map(p => p.join(',')).join(' ') }, strip);
+    for (const n of timed) {
+      const kind = n.failed ? 'bad' : (MARKERS.has(n.kind) ? 'warn' : n.kind === 'turn' ? 'turn' : null);
+      if (!kind) continue;
+      const dot = el('circle', { class: 'mark ' + kind, cx: x(n.at_ms), cy: h - 6, r: kind === 'turn' ? 2.5 : 4 }, strip);
+      el('title', {}, dot).textContent = `${clock(n.at_ms)} · ${n.title}`;
+      dot.addEventListener('click', () => {
+        for (let p = n.parent; p; p = p.parent) collapsed.delete(p.id);
+        select(n);
+      });
+    }
+    el('text', { x: pad, y: 11 }, strip).textContent = `cost so far · ${money(sum)}`;
+  }
+
   draw();
   fit();
+  timeline();
+  window.addEventListener('resize', timeline);
 })();
 </script>
 </body>

@@ -111,6 +111,14 @@ enum Action {
         #[arg(long, global = true)]
         project: bool,
     },
+    #[command(about = "Write a session's full trace as a web page and open it: the last one here, or the one named")]
+    Trace {
+        #[arg(help = "The session's id (the last one in this folder by default)")]
+        session: Option<String>,
+        #[arg(help = "Only write the page and print where it is")]
+        #[arg(long = "no-open")]
+        no_open: bool,
+    },
 }
 
 fn rule_list(text: &str) -> Vec<String> {
@@ -173,6 +181,12 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             plugin::run(&sdk, action.unwrap_or(plugin::PluginAction::List)).map(|()| ExitCode::SUCCESS)
         }
         Some(Action::Config { .. }) => Ok(ExitCode::SUCCESS),
+        Some(Action::Trace { session, no_open }) => {
+            let run = tui::feature_command("trace").ok_or("this build has no trace feature")?;
+            let args = session.into_iter().chain(no_open.then(|| "--no-open".to_owned())).collect();
+            println!("{}", run(&sdk, &cwd, args)?);
+            Ok(ExitCode::SUCCESS)
+        }
         None if cli.print => {
             let prompts = match cli.input_format.as_str() {
                 "stream-json" => print_output::prompts(std::io::stdin().lines().map_while(Result::ok))?,
