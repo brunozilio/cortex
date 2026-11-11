@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/brunozilio/lite/compare/v0.6.0...v0.7.0) (2026-11-11)
+
+
+### Features
+
+* static musl Linux builds and an install script ([#9](https://github.com/brunozilio/lite/issues/9)) ([d57fedf](https://github.com/brunozilio/lite/commit/d57fedf2f580bf66645c60c60e690bf37323aabf))
+
 ## [0.6.0](https://github.com/brunozilio/lite/compare/v0.5.0...v0.6.0) (2026-11-11)
 
 
