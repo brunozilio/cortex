@@ -27,7 +27,8 @@ export function run(input, ctx) {
 #[test]
 fn a_javascript_tool_reads_through_another_tool_and_asks_the_model() {
     let dir = tempfile::tempdir().expect("dir");
-    let tools = dir.path().join(brand::DIR).join("tools");
+    let home = tempfile::tempdir().expect("home");
+    let tools = home.path().join(brand::DIR).join("tools");
     std::fs::create_dir_all(&tools).expect("tools");
     std::fs::write(tools.join("summarize.js"), TOOL).expect("tool");
     std::fs::write(dir.path().join("notes.md"), "The codename is PERSIMMON.").expect("notes");
@@ -47,6 +48,7 @@ fn a_javascript_tool_reads_through_another_tool_and_asks_the_model() {
     let mut request = PromptRequest::plain(dir.path().into(), "Summarize the notes.", model());
     request.permission = PermissionMode::Bypass;
     request.safety_check = false;
+    request.extensions.get_or_insert_with(Default::default).home = Some(home.path().to_path_buf());
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let output = events

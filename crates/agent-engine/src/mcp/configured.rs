@@ -55,8 +55,15 @@ fn origins(cwd: &Path, sources: &McpSources) -> Vec<(McpOrigin, ServerSpec)> {
         .map(|home| read(&home.join(concat!(brand::dir!(), "/mcp.json")), "the user's"))
         .unwrap_or_default();
     let mut found: Vec<(McpOrigin, ServerSpec)> = Vec::new();
-    let own =
-        project.into_iter().map(|s| (McpOrigin::Project, s)).chain(user.into_iter().map(|s| (McpOrigin::User, s)));
+    let project_scripts = super::script_server::found(&cwd.join(brand::DIR).join("mcp"), cwd);
+    let user_scripts = sources
+        .home
+        .as_ref()
+        .map(|home| super::script_server::found(&home.join(brand::DIR).join("mcp"), cwd))
+        .unwrap_or_default();
+    let project = project.into_iter().chain(project_scripts);
+    let user = user.into_iter().chain(user_scripts);
+    let own = project.map(|s| (McpOrigin::Project, s)).chain(user.map(|s| (McpOrigin::User, s)));
     for (origin, server) in own {
         let taken = found.iter().any(|(known_origin, known)| {
             known.name() == server.name()

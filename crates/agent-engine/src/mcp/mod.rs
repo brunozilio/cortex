@@ -4,6 +4,7 @@ pub mod extras;
 mod http;
 mod http_listen;
 mod local;
+mod script_server;
 mod servers;
 mod sse;
 mod stdio;
@@ -93,6 +94,9 @@ impl McpServer {
             }
             ServerSpec::Sse { name, url, headers } => {
                 Box::new(sse::SseTransport::connect(name, url, headers, Arc::clone(http), stop, listener)?)
+            }
+            ServerSpec::Script { path, cwd, .. } => {
+                Box::new(LocalTransport::new(Arc::new(script_server::ScriptServer::open(spec.name(), path, cwd)?)))
             }
             ServerSpec::Stdio { name, command, args, env } => {
                 Box::new(StdioTransport::spawn_listening(name, command, args, env, listener)?)

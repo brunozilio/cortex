@@ -9,17 +9,21 @@ pub enum ServerSpec {
     Http { name: String, url: String, headers: Vec<(String, String)> },
     Sse { name: String, url: String, headers: Vec<(String, String)> },
     Stdio { name: String, command: String, args: Vec<String>, env: Vec<(String, String)> },
+    Script { name: String, path: std::path::PathBuf, cwd: std::path::PathBuf },
 }
 
 impl ServerSpec {
     pub fn name(&self) -> &str {
         match self {
-            Self::Http { name, .. } | Self::Sse { name, .. } | Self::Stdio { name, .. } => name,
+            Self::Http { name, .. } | Self::Sse { name, .. } | Self::Stdio { name, .. } | Self::Script { name, .. } => {
+                name
+            }
         }
     }
 
     pub(super) fn renamed(mut self, plugin: &Plugin) -> Self {
-        let (Self::Http { name, .. } | Self::Sse { name, .. } | Self::Stdio { name, .. }) = &mut self;
+        let (Self::Http { name, .. } | Self::Sse { name, .. } | Self::Stdio { name, .. } | Self::Script { name, .. }) =
+            &mut self;
         *name = plugin.server_name(name);
         self
     }
@@ -40,6 +44,7 @@ impl ServerSpec {
             Self::Stdio { command, args, .. } => {
                 std::iter::once(command).chain(args).cloned().collect::<Vec<_>>().join(" ")
             }
+            Self::Script { path, .. } => path.display().to_string(),
         }
     }
 }
@@ -61,6 +66,9 @@ impl std::fmt::Debug for ServerSpec {
                 .field("args", args)
                 .field("env", &keys(env))
                 .finish(),
+            Self::Script { name, path, .. } => {
+                f.debug_struct("Script").field("name", name).field("path", path).finish()
+            }
         }
     }
 }

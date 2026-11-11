@@ -93,7 +93,13 @@ fn evaluate<'js>(
     ctx.eval::<(), _>(PRELUDE)?;
     let (module, done) = Module::declare(ctx.clone(), name, source)?.eval()?;
     done.finish::<()>()?;
-    let function: Function = module.get(export)?;
+    let mut path = export.split('.');
+    let mut value: JsValue = module.get(path.next().unwrap_or(export))?;
+    for key in path {
+        let object = value.as_object().ok_or_else(|| rquickjs::Error::new_from_js("value", "object"))?.clone();
+        value = object.get(key)?;
+    }
+    let function: Function = value.into_function().ok_or_else(|| rquickjs::Error::new_from_js("value", "function"))?;
     let make: Function = ctx.globals().get("__ctx")?;
     let context: JsValue = make.call((json_to_js(ctx, data)?,))?;
     let mut list = rquickjs::function::Args::new(ctx.clone(), arguments.len() + 1);

@@ -74,7 +74,7 @@ impl Job {
         tools.push(Box::new(tools::subagent::AgentTool { agents: agents.clone() }));
         tools.push(Box::new(tools::send_message::SendMessageTool));
         tools.extend(tools::task::tools());
-        let home = workspace.home.clone();
+        let home = crate::brief::home(&self.request);
         for script in tools::script_tool::load(home.as_deref(), &self.request.cwd) {
             tools.retain(|tool| tool.spec().name != script.spec.name);
             tools.push(Box::new(script));
