@@ -141,9 +141,9 @@ Prefer the command; it validates and writes the user's file:
 {{COMMAND}} mcp list
 ```
 
-Editing the file by hand, keep this shape. A remote server needs
-`"type": "http"` (or `"sse"` for the older transport); a server with no
-type is a command, and an entry with only a `url` is left out:
+Editing the file by hand, keep this shape. A server with a `url` is
+remote (`"type": "http"`; write `"sse"` for the older transport); one
+with a `command` is a local process:
 
 ```json
 {

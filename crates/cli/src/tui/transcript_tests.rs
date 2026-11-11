@@ -133,3 +133,10 @@ fn passing_notices_give_way_to_the_next_one_and_all_go_when_cleared() {
     transcript.clear_passing();
     assert_eq!(transcript.entries, [Entry::Notice("kept".into())]);
 }
+
+#[test]
+fn a_model_switch_names_the_new_model_without_guessing_why() {
+    let mut transcript = Transcript::default();
+    transcript.apply(&EngineEvent::FellBack("kiro:auto".into()));
+    assert_eq!(transcript.entries, [Entry::Notice("The model call failed; going on with kiro:auto.".into())]);
+}

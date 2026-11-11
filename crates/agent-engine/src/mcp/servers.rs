@@ -126,7 +126,8 @@ pub fn parse_config(text: &str) -> Result<Vec<ServerSpec>, String> {
         .flatten()
         .filter_map(|(name, server)| {
             let name = name.clone();
-            match server["type"].as_str() {
+            let kind = server["type"].as_str().or_else(|| server["url"].is_string().then_some("http"));
+            match kind {
                 Some("http") => Some(ServerSpec::Http {
                     name,
                     url: server["url"].as_str()?.to_owned(),
@@ -221,6 +222,22 @@ mod tests {
                 env: Vec::new(),
             }],
             "namespaced, the plugin's root filled in, and it cannot pose as the app's own"
+        );
+    }
+
+    #[test]
+    fn a_server_with_only_a_url_is_an_http_server() {
+        let config = r#"{"mcpServers": {
+            "tracker": {"url": "https://mcp.example.com/mcp", "headers": {"X-Team": "a"}},
+            "nothing": {}
+        }}"#;
+        assert_eq!(
+            parse_config(config).expect("config"),
+            vec![ServerSpec::Http {
+                name: "tracker".into(),
+                url: "https://mcp.example.com/mcp".into(),
+                headers: vec![("X-Team".into(), "a".into())],
+            }]
         );
     }
 
