@@ -310,10 +310,10 @@ mod name_tests {
 
     #[test]
     fn a_name_counts_on_its_own_only() {
-        assert!(names("Run superfik login", "superfik"));
-        assert!(names("SUPERFIK_X=1", "superfik"));
-        assert!(names("brand::NAME and ~/.superfik/", "superfik"));
-        assert!(!names("superfiks", "superfik"));
+        assert!(names("Run acme login", "acme"));
+        assert!(names("ACME_X=1", "acme"));
+        assert!(names("brand::NAME and ~/.acme/", "acme"));
+        assert!(!names("acmes", "acme"));
         assert!(!names("satellite", "lite"));
     }
 }

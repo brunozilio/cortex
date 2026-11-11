@@ -1,6 +1,6 @@
 # Architecture
 
-the app is a Cargo workspace of small crates with one-way
+The app is a Cargo workspace of small crates with one-way
 dependencies. Business rules never depend on IO. Decisions are in
 `docs/decisions.md` (cited as `ADR NNNN`), vocabulary in `GLOSSARY.md`.
 
@@ -8,7 +8,7 @@ dependencies. Business rules never depend on IO. Decisions are in
 cli ──► sdk ──► backend ──► agent-engine ──► (provider APIs)
                                        │                    └──► llm-providers
                                        ├──► mlx ─► (mlx_lm.server)
-                                       └──► protocol ─► domain   (everything speaks core)
+                                       └──► protocol ─► domain   (everything speaks domain)
 ```
 
 | Crate | Responsibility |
@@ -23,6 +23,21 @@ cli ──► sdk ──► backend ──► agent-engine ──► (provider A
 | `llm-providers` | LLM provider contracts (ADR 0016): credential config, OAuth shapes, request and catalog shapes. Pure. |
 | `subprocess` | Child processes started the same everywhere; `Tree` ends a process with its children. |
 | `private-file` | Files only the current user can read. |
+
+## Name
+
+The product's name, command, owner and release repository live in
+`brand.toml`, read when the `brand` crate is built: `brand::NAME`,
+`brand::COMMAND`, `brand::DIR` (`.<command>`), `brand::INSTRUCTIONS`
+(`<COMMAND>.md`), `brand::env("X")` (`<COMMAND>_X`), and the same as
+literals (`brand::name!()`…) for `concat!` and format strings. Texts kept
+in files (prompts, built-in skills) say `{{NAME}}`, `{{DIR}}`… and are
+filled with `brand::text`. Files that must spell it out (the binary's name
+in `crates/cli/Cargo.toml`, the workspace's author, install.sh's defaults,
+README.md from `docs/README.template.md`, release-please's package name,
+the repository's own `.<command>/`) are written by `cargo run -p xtask --
+brand`; `xtask lint` fails when one is stale or another file names the
+product. The workflows read the command from `brand.toml`.
 
 ## Commands and events
 
