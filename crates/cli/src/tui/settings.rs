@@ -25,6 +25,10 @@ pub fn read(settings: &serde_json::Value) -> Saved {
     Saved { model: settings["model"].as_str().map(str::to_owned), mode, effort, problems }
 }
 
+pub fn mouse(settings: &serde_json::Value) -> bool {
+    settings["mouse"] != "off"
+}
+
 pub fn last_session(settings: &serde_json::Value, cwd: &Path) -> Option<SessionId> {
     settings["sessions"][cwd.to_string_lossy().as_ref()].as_str().map(|id| SessionId(id.to_owned()))
 }
@@ -138,6 +142,13 @@ mod tests {
             }
         );
         assert_eq!(read(&json!(null)), Saved::default());
+    }
+
+    #[test]
+    fn the_mouse_wheel_scrolls_unless_turned_off() {
+        assert!(mouse(&json!(null)));
+        assert!(mouse(&json!({"mouse": "on"})));
+        assert!(!mouse(&json!({"mouse": "off"})));
     }
 
     #[test]

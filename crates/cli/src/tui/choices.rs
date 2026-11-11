@@ -35,7 +35,7 @@ impl App {
             if saved["vim"] == "on" {
                 self.vim = Some(super::vim::Vim::default());
             }
-            self.mouse = saved["mouse"] == "on";
+            self.mouse = settings::mouse(saved);
             self.output_style = saved["outputStyle"].as_str().map(str::to_owned);
             self.status.command = saved["statusLine"].as_str().filter(|c| !c.is_empty()).map(str::to_owned);
             if let Some(id) = &self.resume {
