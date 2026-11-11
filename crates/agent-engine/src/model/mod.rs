@@ -11,6 +11,7 @@ pub mod routed;
 #[cfg(any(test, feature = "test-support"))]
 pub mod scripted;
 pub mod sse;
+mod sse_read;
 
 use std::sync::atomic::AtomicBool;
 

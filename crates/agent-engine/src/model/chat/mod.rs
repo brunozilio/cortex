@@ -2,14 +2,13 @@ mod body;
 mod stream;
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 pub use body::body;
 pub use stream::Folder;
 
 use super::http::Http;
-use super::sse::SseDecoder;
 use super::{Delta, ModelApi, ModelError, Reply, TurnRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,25 +50,16 @@ impl Chat {
         if response.status != 200 {
             return Err(status_error(response.status, &response.text_stopped(stop)?));
         }
-        let mut decoder = SseDecoder::new();
-        let mut folder = Folder::new();
-        let mut body = response.body;
-        let mut line = String::new();
-        loop {
-            if stop.load(Ordering::Relaxed) {
-                return Err(ModelError::Cancelled);
-            }
-            line.clear();
-            let read = crate::model::http::read_line_stopped(body.as_mut(), &mut line, stop)?;
-            let event = if read == 0 { decoder.finish() } else { decoder.line(line.trim_end_matches('\n')) };
-            if let Some(event) = event {
-                folder.event(&event.data, on)?;
-            }
-            if read == 0 {
-                break;
-            }
-        }
-        folder.finish(on)
+        super::sse_read::read_sse(response, Folder::new(), on, stop)
+    }
+}
+
+impl super::sse_read::SseFold for Folder {
+    fn event(&mut self, data: &str, on: &mut dyn FnMut(Delta)) -> Result<(), ModelError> {
+        Folder::event(self, data, on)
+    }
+    fn finish(self, on: &mut dyn FnMut(Delta)) -> Result<Reply, ModelError> {
+        Folder::finish(self, on)
     }
 }
 
