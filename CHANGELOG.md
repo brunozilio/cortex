@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/brunozilio/lite/compare/v0.7.2...v0.7.3) (2026-11-11)
+
+
+### Bug Fixes
+
+* Kiro's sign-in page names Kiro CLI, and the browser stays off the terminal ([#16](https://github.com/brunozilio/lite/issues/16)) ([7abaad0](https://github.com/brunozilio/lite/commit/7abaad0b4077f34758b2d6aca6a92cab268d67a8))
+
 ## [0.7.2](https://github.com/brunozilio/lite/compare/v0.7.1...v0.7.2) (2026-11-11)
 
 
