@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/brunozilio/lite/compare/v0.4.0...v0.5.0) (2026-11-11)
+
+
+### Features
+
+* Claude Code parity: steering, permission rules, worktrees, schedules, MCP OAuth and SSE, inline chat ([#4](https://github.com/brunozilio/lite/issues/4)) ([660a674](https://github.com/brunozilio/lite/commit/660a674a2021ac090ecbd00d3429094253765669))
+
 ## [0.4.0](https://github.com/brunozilio/lite/compare/v0.3.1...v0.4.0) (2026-11-11)
 
 
