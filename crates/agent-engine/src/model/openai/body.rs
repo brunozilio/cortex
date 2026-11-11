@@ -12,6 +12,7 @@ pub fn body(request: &TurnRequest) -> Value {
         "reasoning": { "effort": effort(request.effort), "summary": "auto" },
         "store": false,
         "stream": true,
+        "prompt_cache_key": crate::model::conversation_key::conversation_key(request).to_string(),
         "include": ["reasoning.encrypted_content"],
     });
     if !request.tools.is_empty() {
@@ -154,5 +155,7 @@ mod tests {
         );
         assert_eq!(input[4], json!({"type": "function_call_output", "call_id": "c1", "output": "Error: gone"}));
         assert!(body.get("max_output_tokens").is_none(), "the ChatGPT backend refuses it");
+        let key = crate::model::conversation_key::conversation_key(&request).to_string();
+        assert_eq!(body["prompt_cache_key"], key.as_str(), "turns of one conversation share a cache");
     }
 }

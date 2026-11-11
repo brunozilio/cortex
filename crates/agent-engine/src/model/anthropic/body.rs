@@ -15,12 +15,14 @@ pub fn body(request: &TurnRequest) -> Value {
         "system": [{ "type": "text", "text": request.system, "cache_control": { "type": "ephemeral" } }],
         "messages": request.messages.iter().filter_map(message).collect::<Vec<_>>(),
     });
-    if !request.tools.is_empty() {
-        body["tools"] = request
-            .tools
-            .iter()
-            .map(|tool| json!({ "name": tool.name, "description": tool.description, "input_schema": tool.schema }))
-            .collect();
+    let mut tools: Vec<Value> = request
+        .tools
+        .iter()
+        .map(|tool| json!({ "name": tool.name, "description": tool.description, "input_schema": tool.schema }))
+        .collect();
+    if let Some(last) = tools.last_mut() {
+        last["cache_control"] = json!({ "type": "ephemeral" });
+        body["tools"] = Value::Array(tools);
     }
     body
 }
@@ -133,6 +135,15 @@ mod tests {
         let result = &body["messages"][2]["content"][0];
         assert_eq!(result["tool_use_id"], "t1");
         assert_eq!(result["is_error"], false);
+    }
+
+    #[test]
+    fn the_last_tool_ends_its_own_cached_prefix() {
+        let mut request = request();
+        request.tools.push(ToolSpec { name: "Grep".into(), description: "Greps".into(), schema: json!({}) });
+        let body = body(&request);
+        assert!(body["tools"][0].get("cache_control").is_none());
+        assert_eq!(body["tools"][1]["cache_control"]["type"], "ephemeral", "tools stay cached when the system changes");
     }
 
     #[test]

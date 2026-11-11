@@ -41,8 +41,11 @@ impl Folder {
             return Err(ModelError::Provider(message(&chunk["error"])));
         }
         if let Some(usage) = chunk.get("usage").filter(|usage| usage.is_object()) {
-            self.usage.input = usage["prompt_tokens"].as_u64().unwrap_or_default();
+            let cached = usage["prompt_tokens_details"]["cached_tokens"].as_u64().unwrap_or_default();
+            let prompt = usage["prompt_tokens"].as_u64().unwrap_or_default();
+            self.usage.input = prompt.saturating_sub(cached);
             self.usage.output = usage["completion_tokens"].as_u64().unwrap_or_default();
+            self.usage.cache_read = cached;
         }
         let Some(choice) = chunk["choices"].get(0) else { return Ok(()) };
         let delta = &choice["delta"];
@@ -195,6 +198,16 @@ mod tests {
         assert_eq!(fold(&["<th", "ink>a</", "think>", "b"]), ("a".into(), "b".into()));
         assert_eq!(fold(&["no tags < here"]), (String::new(), "no tags < here".into()));
         assert_eq!(fold(&["ends with <"]), (String::new(), "ends with <".into()));
+    }
+
+    #[test]
+    fn cached_prompt_tokens_count_as_cache_reads_not_input() {
+        let mut folder = Folder::new();
+        let usage = r#"{"choices":[],"usage":{"prompt_tokens":1000,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":800}}}"#;
+        folder.event(usage, &mut |_| {}).expect("usage");
+        folder.event("[DONE]", &mut |_| {}).expect("done");
+        let reply = folder.finish(&mut |_| {}).expect("reply");
+        assert_eq!(reply.usage, Usage { input: 200, output: 20, cache_read: 800, cache_write: 0 });
     }
 
     #[test]

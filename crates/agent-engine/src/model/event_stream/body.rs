@@ -30,7 +30,7 @@ pub fn body(request: &TurnRequest) -> Value {
     }
     let mut state = json!({
         "chatTriggerType": "MANUAL",
-        "conversationId": uuid::Uuid::new_v4().to_string(),
+        "conversationId": crate::model::conversation_key::conversation_key(request).to_string(),
         "currentMessage": current,
     });
     if !messages.is_empty() {
@@ -154,6 +154,16 @@ mod tests {
             json!([{"toolUseId": "t1", "content": [{"text": "pineapple"}], "status": "error"}])
         );
         assert!(current["userInputMessageContext"]["tools"].is_array());
+    }
+
+    #[test]
+    fn a_conversation_keeps_one_id_across_turns() {
+        let id = |messages| body(&request(messages))["conversationState"]["conversationId"].clone();
+        let first = id(vec![Message::user("Read a")]);
+        let later = id(vec![Message::user("Read a"), Message::assistant(vec![]), Message::user("Now b")]);
+        assert!(first.is_string());
+        assert_eq!(first, later);
+        assert_ne!(first, id(vec![Message::user("Write c")]));
     }
 
     #[test]

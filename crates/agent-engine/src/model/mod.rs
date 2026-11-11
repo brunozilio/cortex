@@ -1,6 +1,7 @@
 pub mod anthropic;
 mod cancellable_http;
 pub mod chat;
+mod conversation_key;
 pub mod event_stream;
 pub mod http;
 pub mod openai;
