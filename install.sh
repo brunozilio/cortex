@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-NAME="Lite"
-COMMAND="lite"
+NAME="Cortex"
+COMMAND="cortex"
 REPO="brunozilio/cortex"
 
 ENV="$(printf '%s' "$COMMAND" | tr 'a-z-' 'A-Z_')"

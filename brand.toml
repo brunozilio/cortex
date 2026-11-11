@@ -1,6 +1,5 @@
-
-name = "Lite"
-command = "lite"
+name = "Cortex"
+command = "cortex"
 company = "brunozilio"
 author = "brunozilio"
 repository = "brunozilio/cortex"

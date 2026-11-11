@@ -59,7 +59,7 @@ provider resends only compatible reasoning signatures.
 ## Project settings
 
 `.{command}/settings.json` (project, then user; the project wins). Nothing
-in `.claude/` or `CLAUDE.md` is read (ADR 0021):
+in `.claude/` or `CLAUDE.md` is read:
 
 - `outputStyle`; custom styles in `.{command}/output-styles/<name>.md`
   (`keep-coding-instructions: true` keeps the engineering instructions).

@@ -1,6 +1,6 @@
 # Plugins and MCP servers
 
-The app is a platform (ADR 0019): a team's integrations and workflows live
+The app is a platform: a team's integrations and workflows live
 in plugins, kept in their own repositories, in the app's plugin format.
 
 ## A plugin
@@ -67,6 +67,5 @@ the project's `.{command}/settings.local.json`, never from a checked-in
 ```
 
 In the chat, `/mcp`, `/mcp approve <name>` and `/mcp deny <name>`; a
-change applies from the next message. Programs use
-`Sdk::mcp_servers`, `approve_mcp_server`, `add_mcp_server` and
-`remove_mcp_server` (`ClientCommand::ListMcpServers` and friends).
+change applies from the next message. Both go through
+`ClientCommand::ListMcpServers` and friends.

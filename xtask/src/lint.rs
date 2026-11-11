@@ -14,6 +14,7 @@ pub fn run(root: &Path, update_baseline: bool) -> Result<(), Box<dyn std::error:
         found.extend(check(&rel, &source));
     }
     found.extend(crate::brand::findings(root)?);
+    found.extend(crate::comments::findings(root)?);
     let baseline_path = root.join(BASELINE);
     if update_baseline {
         std::fs::write(&baseline_path, found.iter().map(|f| format!("{f}\n")).collect::<String>())?;

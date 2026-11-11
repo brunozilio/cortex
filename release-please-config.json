@@ -6,7 +6,7 @@
     ".": {
       "release-type": "simple",
       "initial-version": "0.1.0",
-      "package-name": "lite",
+      "package-name": "cortex",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         { "type": "toml", "path": "Cargo.toml", "jsonpath": "$.workspace.package.version" }

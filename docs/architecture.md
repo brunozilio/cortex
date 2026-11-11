@@ -1,28 +1,27 @@
 # Architecture
 
 The app is a Cargo workspace of small crates with one-way
-dependencies. Business rules never depend on IO. Decisions are in
-`docs/decisions.md` (cited as `ADR NNNN`), vocabulary in `GLOSSARY.md`.
+dependencies. Business rules never depend on IO. Vocabulary is in
+`GLOSSARY.md`.
 
 ```
 cli ──► sdk ──► backend ──► agent-engine ──► (provider APIs)
                                        │                    └──► llm-providers
-                                       ├──► mlx ─► (mlx_lm.server)
                                        └──► protocol ─► domain   (everything speaks domain)
 ```
 
 | Crate | Responsibility |
 |---|---|
-| `cli` | The `{command}` binary: a full-screen chat (ratatui) over the SDK, or with `--inline` one at the bottom whose conversation goes to the terminal's scrollback (`tui::inline`), `-p` print mode, `login`, `models`, `pull`/`rm`, `update` (the latest GitHub release, rules in `domain::release`, ADR 0024). Presentation only. |
-| `sdk` | `Sdk::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings; `LocalModels` (pull/remove local MLX models). |
+| `cli` | The `{command}` binary: a full-screen chat (ratatui) over the SDK, or with `--inline` one at the bottom whose conversation goes to the terminal's scrollback (`tui::inline`), `-p` print mode, `login`/`logout`, `models`, `mcp`, `config`, `doctor`, `update` (the latest GitHub release, rules in `domain::release`). Presentation only. |
+| `sdk` | The CLI's internal client to the backend, not a public product. `Sdk::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings. |
 | `domain` | Domain model: requests, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
-| `agent-engine` | The `AgentEngine` boundary (`models`, `start`) and the app's own engine behind it (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
-| `mlx` | Local MLX models on Apple silicon: pulled from Hugging Face (`pull`/`remove` behind a `Hub`), which are downloaded, and one `mlx_lm.server` started on demand. |
+| `agent-engine` | The `AgentEngine` boundary (`models`, `start`) and the app's own engine behind it: agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
 | `protocol` | Serialisable `ClientCommand` / `ServerEvent` in an `Envelope` carrying the `Principal`; the `Backend` trait. |
-| `backend` | `LocalBackend` (worker threads), `CommandHandler` and the daemon: runs, memory (+ its MCP tool), settings, model providers (and their browser sign-in: PKCE, loopback redirect), secrets, the host's `Extensions`. |
-| `llm-providers` | LLM provider contracts (ADR 0016): credential config, OAuth shapes, request and catalog shapes. Pure. |
+| `backend` | `LocalBackend` (worker threads), `CommandHandler`: runs, memory (+ its MCP tool), settings, model providers (and their browser sign-in: PKCE, loopback redirect), secrets, the host's `Extensions`. |
+| `llm-providers` | LLM provider contracts: credential config, OAuth shapes, request and catalog shapes. Pure. |
 | `subprocess` | Child processes started the same everywhere; `Tree` ends a process with its children. |
 | `private-file` | Files only the current user can read. |
+| `brand` | The product's name and command, from `brand.toml` (below). |
 
 ## Name
 
@@ -33,11 +32,20 @@ The product's name, command, owner and release repository live in
 literals (`brand::name!()`…) for `concat!` and format strings. Texts kept
 in files (prompts, built-in skills) say `{{NAME}}`, `{{DIR}}`… and are
 filled with `brand::text`. Files that must spell it out (the binary's name
-in `crates/cli/Cargo.toml`, the workspace's author, install.sh's defaults,
-README.md from `docs/README.template.md`, release-please's package name,
-the repository's own `.{command}/`) are written by `cargo run -p xtask --
-brand`; `xtask lint` fails when one is stale or another file names the
-product. The workflows read the command from `brand.toml`.
+in `crates/cli/Cargo.toml`, the workspace's authors, install.sh's defaults,
+release-please's package name, the repository's own `.{command}/`) are
+written by `cargo run -p xtask -- brand`; `xtask lint` fails when one is
+stale or another file names the product. README.md names the product too
+but is written by hand. The workflows read the command from `brand.toml`.
+
+## No comments in code
+
+Code carries no comments (a CLAUDE.md rule): no `//`, `///`, `//!` or
+`/* */` in Rust, no `#` comments in shell, Python or TOML. Names, types
+and tests say it; context belongs in docs/ or the commit message. `xtask
+lint` fails on a comment, and the
+`.claude/hooks/no-comments.sh` hook checks each edited file with `cargo
+run -p xtask -- comments <file>`.
 
 ## Commands and events
 
@@ -54,12 +62,12 @@ local owner); this is the seam for a future remote server.
 exactly one terminal event (`Completed`, `Failed`, `Cancelled`) ends a run.
 Recognised problems arrive first as `Diagnosed(EngineProblem)`.
 
-The native engine (ADR 0015) runs the loop in process behind `ModelApi`
+The native engine runs the loop in process behind `ModelApi`
 (`anthropic::Messages`, `openai::Responses`, `kiro::Conversation`,
-`chat::Chat` for local servers). `ModelProviders` keeps one account per
+`chat::Chat` for `/chat/completions`). `ModelProviders` keeps one account per
 provider (`ConnectProvider` with an API key or token JSON, `SignInProvider`
 for a subscription's browser sign-in). `ListModels` asks every connected
-provider's catalog and lists downloaded MLX models. A run uses its
+provider's catalog. A run uses its
 provider's key (`RunCredentials::model`, never serialized).
 
 - **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`.
@@ -146,7 +154,7 @@ provider's key (`RunCredentials::model`, never serialized).
   `experimental.claude/channel`, opened per client with `--channels`,
   `backend::channels`) push `notifications/claude/channel`; another session
   sends with `SendMessage` to its name (`tools::peers`, `ListSessions`, one
-  owner's sessions only). A run reads the inbox with its next tool results
+  owner's sessions in the same process only). A run reads the inbox with its next tool results
   (`EngineEvent::Notified`); an idle chat takes it with its schedule poll
   and sends it as a turn. A channel is a process, an SSE server or a
   streamable HTTP server (heard on its answers and on a GET stream it
@@ -193,7 +201,7 @@ provider's key (`RunCredentials::model`, never serialized).
 - **Safety check** (`guard/`): in Bypass, every editing or executing action
   is graded by the run's model before it runs.
 - **Verification** (`judge.rs`, `agent/verify.rs`; rules in
-  `domain::verification`, ADR 0020): a top-level run whose
+  `domain::verification`): a top-level run whose
   `PromptRequest.verification` holds criteria is graded by a judge agent
   before it completes. The judge has `Read`, `Glob`, `Grep`, `Bash` and
   `Skill` (it runs tests and lint, loads `verify`/`run`), never edits, and
@@ -207,17 +215,6 @@ provider's key (`RunCredentials::model`, never serialized).
 - **Built-in skills** (`crates/agent-engine/skills/`, embedded by
   `build.rs`).
 
-Local models (`mlx`) live in
-`<local data>/models/mlx/<org>/<name>/` on Apple silicon; one
-`mlx_lm.server` runs at a time and stops when idle. `{command} pull` fetches
-only the files `mlx_lm` reads (config, tokenizer, chat template,
-safetensors) from Hugging Face (`HF_TOKEN` for gated repos) into a hidden
-`.<name>.partial` folder renamed into place when complete, so a cancelled
-pull is never listed; `{command} rm` deletes one. They run in the CLI's own
-process through the SDK's `LocalModels` (the backend re-exports
-`mlx` as `local_models`), not as backend commands: they touch only
-this computer's folder, which `ListModels` reads on every call.
-
 ## Memory
 
 Agents remember a project between sessions. Memories
@@ -225,17 +222,18 @@ Agents remember a project between sessions. Memories
 and author. `MemoryStore` (`FileMemoryStore`, one JSON per project). A
 fresh session gets recalled memories plus instructions to write
 `{remember, forget, revise}` to a temp file, applied on `Completed`.
-Search is BM25 plus embedding similarity (fastembed/ONNX,
-`{COMMAND}_MEMORY_MODEL=minilm|mpnet|off`), fused by reciprocal rank; the
+Search is by words (BM25); the `Embedder` seam stays for a remote
+embedding service later (today `NoEmbedder`, so no vectors). The
 same function serves recall and the `memory_search` MCP tool (in process:
 each run gets a `{command}_memory` server on its credentials, bound to its
 owner and project).
 
-Memory is reversible and kept without an LLM (ADR 0022):
+Memory is reversible and kept without an LLM:
 - **Edits**: every change goes through `Memories::edit` (or the
-  optimizer's apply). Text passes `memory::sanitize`. A remembered memory
-  within cosine 0.92 of an older one of its kind revises it
-  (`MemoryBook::merge_near_duplicates`).
+  optimizer's apply). Text passes `memory::sanitize`. With an embedder, a
+  remembered memory within cosine 0.92 of an older one of its kind
+  revises it (`MemoryBook::merge_near_duplicates`); without vectors
+  nothing merges.
 - **Forgetting and revising**: `Forget` moves a memory to
   `MemoryBook::forgotten` (`Restore` for 30 days). `Revise` keeps the last
   five texts in `history`.
@@ -252,7 +250,7 @@ Memory is reversible and kept without an LLM (ADR 0022):
 
 ## Language servers
 
-The agent navigates code through language servers (ADR 0023). What they
+The agent navigates code through language servers. What they
 mean is pure in `domain::lsp`: the built-in servers and the
 `lspServers` layers (user, project, plugins' `.lsp.json`), the server and
 project root for a file, the `LSP` tool's questions and how answers and
@@ -267,15 +265,15 @@ installed; `Edit` and `Write` append the file's errors and warnings as
 
 ## Skills, agents and MCP
 
-The engine reads only the app's folders (ADR 0021): skills, commands,
+The engine reads only the app's folders: skills, commands,
 agents, rules and settings in the project's `.{command}/` (and its
-ancestors') and `~/.{command}/`, plus the SDK host's folders
+ancestors') and `~/.{command}/`, plus the backend host's folders
 (`Extensions::dirs`). Nothing in `.claude/`, `~/.claude` or `CLAUDE.md`.
 MCP servers come from the host: HTTP/stdio servers go in a run's private
 MCP config (`0600`, removed on the terminal event), in-process ones ride on
 the run's credentials.
 
-**Plugins** (ADR 0019) are the app's own format
+**Plugins** are the app's own format
 (`.{command}-plugin/plugin.json`) and reach a run
 whole (`agent_engine::plugins`): skills, commands and agents as
 `<plugin>:<name>`, `hooks/hooks.json` joined to the settings' hooks, and
@@ -288,9 +286,10 @@ rereads them; `/reload` refreshes what the chat keeps and lists them.
 
 ## The SDK and the CLI
 
-The SDK speaks only `ClientCommand`/`ServerEvent` (one dispatcher thread
-routes run events to their `Run`, other answers to the waiting call), so it
-can move to a remote backend unchanged. What a program adds reaches every
+The `sdk` crate is the CLI's internal client to the backend, not a
+public product. It speaks only `ClientCommand`/`ServerEvent` (one
+dispatcher thread routes run events to their `Run`, other answers to the
+waiting call), so it can move to a remote backend unchanged. What a host adds reaches every
 run through the backend's `Extensions`: its agents, skills and commands are
 written to `<data>/sdk/<name>/` and offered under their own names
 (`Extensions::dirs`); HTTP/stdio MCP servers join the run's private
@@ -299,23 +298,10 @@ MCP config; in-process servers (`McpServer`, closures behind
 called through `LocalTransport`, never over the wire. A typed
 `/name args` is expanded by the engine when it names a skill or command.
 
-### The daemon
-
-On Unix every `{command}` talks to one background daemon per computer
-(`backend::daemon`), started on first use (`{command} daemon
-serve`, detached) and gone 5 s after its last client leaves (so commands
-run one after another reuse it). It loads the services
-once (MLX servers, the embedding model, memory books) and gives each
-client connection its own `LocalBackend` on clones of them, so a client
-gets only its own runs' events and answers, and its runs end when it
-disconnects. The wire is newline-delimited JSON over `daemon.sock`
-(`0600`, in a `0700` folder): `Envelope<ClientCommand>` in, `ServerEvent`
-out. A lock file keeps one daemon per folder; `daemon.json` holds its pid
-and build so a newer `{command}` can say the daemon is stale (`{command}
-daemon stop`). `{COMMAND}_NO_DAEMON=1` (and Windows) run the backend in
-process. SDK programs embed their own backend by default (their
-in-process tools cannot cross processes); `Sdk::connect_daemon`
-joins the daemon instead.
+Each terminal runs its own backend in process: no daemon, nothing shared
+between terminals but the files on disk. `SendMessage` and
+`ListSessions` between sessions therefore reach only sessions in the
+same process.
 
 The CLI is a client of the SDK: `App` (state and effects, slow calls on
 threads), `Transcript` (events folded into what is shown), `Input`, `ask`,

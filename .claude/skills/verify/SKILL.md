@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run the full Superfik verification loop (tests, clippy, repo lint). Use before committing or when asked to verify/check a change.
+description: Run the full verification loop (tests, clippy, repo lint). Use before committing or when asked to verify/check a change.
 ---
 
 Set `CARGO_TARGET_DIR` to this task's directory (CLAUDE.md), then run in

@@ -1,6 +1,6 @@
 ---
 name: arch-guard
-description: Read-only reviewer that checks a diff against Superfik's architecture and CLAUDE.md rules. Use before committing non-trivial changes.
+description: Read-only reviewer that checks a diff against the app's architecture and CLAUDE.md rules. Use before committing non-trivial changes.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

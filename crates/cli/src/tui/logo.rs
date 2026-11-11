@@ -47,6 +47,7 @@ mod tests {
         assert!(logo.iter().any(|l| l.spans.iter().any(|s| !s.content.trim().is_empty())), "something is drawn");
         assert_eq!(logo[0].spans[1].style.fg, Some(Color::Rgb(198, 120, 221)));
         assert_eq!(logo[0].spans.last().and_then(|s| s.style.fg), Some(Color::Rgb(97, 175, 239)));
-        assert!(lines(20).is_none());
+        assert!(lines(usize::from(WIDTH) + 1).is_none());
+        assert!(lines(usize::from(WIDTH) + 2).is_some());
     }
 }

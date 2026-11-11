@@ -2,6 +2,10 @@
 set -euo pipefail
 
 BINARY="$1"
+if [[ -z "${MACOS_CERTIFICATE:-}" || -z "${APPLE_API_KEY:-}" ]]; then
+  echo "no signing secrets: $BINARY stays unsigned"
+  exit 0
+fi
 IDENTITY="Developer ID Application"
 WORK="$(mktemp -d "${RUNNER_TEMP:-/tmp}/sign.XXXXXX")"
 KEYCHAIN="$WORK/signing.keychain-db"

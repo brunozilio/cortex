@@ -1,9 +1,7 @@
-# Lite
+# Cortex
 
-Lite's agent engine: a terminal chat
-(CLI/TUI) for talking to a coding agent, and an SDK for building on top of it
-(agents, commands, skills, memory, in-process MCP tools, MCP over HTTP and
-stdio).
+A coding agent you talk to in the terminal: a chat (CLI/TUI) with agents,
+commands, skills, memory, plugins and MCP servers (HTTP and stdio).
 
 ## Installing
 
@@ -11,41 +9,38 @@ stdio).
 curl -fsSL https://raw.githubusercontent.com/brunozilio/cortex/main/install.sh | bash
 ```
 
-It installs the latest release in `~/.local/bin` (`LITE_INSTALL_DIR`
-to change it, `LITE_VERSION` for another release), checking its
-SHA-256. On Linux it takes the glibc build when the system's glibc is
-2.39 or newer, and the static musl build otherwise (RHEL 8/9, older
-Debian/Ubuntu; `LITE_LIBC=musl|gnu` to choose). The musl build has no
-semantic memory search: memory is searched by words. From source:
-`cargo install --path crates/cli`.
+It installs the latest release in `~/.local/bin` (`CORTEX_INSTALL_DIR`
+to change it, `CORTEX_VERSION` for another release), checking its
+SHA-256. Releases are built for macOS on Apple silicon and for Linux
+x86_64 and aarch64; the Linux build is static (musl) and runs on any
+distribution. From source: `cargo install --path crates/cli`. The
+version starts at 0.0.0; the first release is 0.1.0.
+
+Nothing else is required. Some tools are used when present:
+
+- `git`: `/diff` and worktrees.
+- `pdftotext`: reading PDFs.
+- `ripgrep`: optional; `Grep` works without it.
+- Language servers (rust-analyzer, clangd…): the `LSP` tool and
+  diagnostics after edits.
+- `node`/`npx`: only for MCP servers that need them.
 
 ## Using it
 
 ```sh
-lite login                             # API key, or Claude/ChatGPT/Copilot subscription
-lite                                   # chat in the current project
-lite -p "explain src/main.rs"          # one answer, printed
-lite models                            # what the connected providers offer
-lite pull Qwen3-8B-4bit                # a local MLX model (Apple silicon), from mlx-community
-lite pull org/Some-Model-4bit          # any MLX model on Hugging Face (HF_TOKEN for gated ones)
-lite rm Qwen3-8B-4bit                  # delete it again
-lite update                            # replace this binary with the latest release
+cortex login                             # API key, or Claude/ChatGPT/Copilot/Kiro subscription
+cortex                                   # chat in the current project
+cortex -p "explain src/main.rs"          # one answer, printed
+cortex models                            # what the connected providers offer
+cortex mcp                               # MCP servers: list, add, remove, approve
+cortex config                            # read or change the settings
+cortex doctor                            # check this installation in this folder
+cortex update                            # replace this binary with the latest release
 ```
 
-Released binaries (macOS Apple silicon, Linux x86_64/arm64 for glibc and
-static musl) are attached to each GitHub release; `lite update`
-downloads this platform's (a musl build stays musl),
-checks its SHA-256 and replaces the running binary in place, wherever it
-was installed.
-
-Every terminal shares one background daemon (local models, embeddings
-and memory load once); it leaves a few seconds after the last terminal
-closes. `lite daemon
-status|stop` manages it; `LITE_NO_DAEMON=1` runs everything in the
-terminal's own process. Data lives in `~/Library/Application
-Support/Lite` (macOS) or `~/.config/lite`. Keys and
-tokens are sealed in `secrets.json` there (its key in `secrets.key`, both
-readable only by you).
+`cortex update` downloads this platform's latest release, checks its
+SHA-256 and replaces the running binary in place, wherever it was
+installed.
 
 In the chat: Enter sends, Alt+Enter (or Ctrl+J) adds a line, Esc
 interrupts, Shift+Tab cycles ask → edits → plan → bypass, Ctrl+V attaches
@@ -54,53 +49,40 @@ the clipboard's image (or drop an image file on the terminal; it shows as
 the commands (`/model`, `/mode`, `/effort`, `/compact`, `/diff`, `/memory`,
 `/skills`, `/agents`, `/new`, `/cost`, `/exit`); any other `/name` runs a
 skill or custom command. Replies render as Markdown with highlighted code;
-`LITE_REDUCED_MOTION=1` turns the animations off.
+`CORTEX_REDUCED_MOTION=1` turns the animations off.
 
-## Building on it (SDK)
+Project settings, skills, agents and rules live in `.cortex/`, project
+instructions in `CORTEX.md` or `.cortex/CORTEX.md`, and your own in
+`~/.cortex/`. Plugins and MCP servers: [docs/plugins.md](docs/plugins.md).
 
-```rust
-use sdk::{Agent, Command, McpConnection, McpServer, Lite};
-use serde_json::json;
+## Where data lives
 
-let lite = Lite::builder()
-    .agent(Agent::new("reviewer", "Reviews a diff for bugs.").tools(["Read", "Grep"]))
-    .command(Command::new("audit", "Audits a path.", "Audit $ARGUMENTS for security issues."))
-    .mcp(McpServer::new("math").tool("add", "Adds a and b.", json!({"type": "object"}), |input| {
-        Ok(json!(input["a"].as_f64().unwrap_or(0.0) + input["b"].as_f64().unwrap_or(0.0)))
-    }))
-    .connect(McpConnection::http("docs", "https://example.com/mcp").header("Authorization", "Bearer …"))
-    .build()?;
-let model = lite.models()?.into_iter().next().ok_or(sdk::Error::NoModel)?;
-let session = lite.session(".", model);
-for event in session.send("/audit src")? { /* EngineEvent: text, tools, asks… */ }
-lite.memory(".").search("how do we deploy")?;
-```
-
-`Skill::new`, `McpConnection::stdio`, `Session::send_with_images`, `Run::answer`/`cancel`,
-`connect_provider`/`sign_in` and `memory(..).remember/forget` cover the
-rest; see `crates/sdk/src/lib.rs`.
+`~/Library/Application Support/Cortex` on macOS, `~/.config/cortex` on
+Linux: sessions, memory and settings. Keys and tokens are sealed in
+`secrets.json` there (its key in `secrets.key`, both readable only by
+you).
 
 ## Layout
 
 | Crate | What it is |
 |---|---|
-| `domain` | Domain types: requests, engine events, memory, `Principal`. Pure. |
-| `agent-engine` | The `AgentEngine` trait and the engine behind it: the agent loop, tools, permissions, hooks, sub-agents, skill/agent discovery, MCP, sessions, compaction, provider APIs. |
-| `mlx` | Local MLX models (Apple silicon). |
+| `domain` | Domain types and rules: requests, engine events, memory, `Principal`. Pure. |
+| `agent-engine` | The agent loop, tools, permissions, hooks, sub-agents, skill/agent discovery, MCP, sessions, compaction, provider APIs. |
 | `protocol` | `ClientCommand` / `ServerEvent` in an `Envelope`. |
-| `backend` | Command handler and daemon: runs, memory, settings, providers, secrets. |
-| `llm-providers` | LLM providers (Anthropic, OpenAI, Claude, ChatGPT and GitHub Copilot subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
-| `sdk` | The SDK: sessions and runs, agents, skills, commands, memory, in-process MCP tools, MCP over HTTP/stdio. |
-| `cli` | The `lite` binary: terminal chat (ratatui), `-p`, `login`, `models`, `pull`/`rm`. |
-| `subprocess`, `-private-file` | Small IO helpers. |
-
-Architecture: [docs/architecture.md](docs/architecture.md). Decisions:
-[docs/decisions.md](docs/decisions.md).
+| `backend` | Command handler: runs, memory, settings, providers, secrets. |
+| `llm-providers` | LLM providers (Anthropic, OpenAI, Claude, ChatGPT, GitHub Copilot and Kiro subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
+| `sdk` | The CLI's internal client to the backend. |
+| `cli` | The `cortex` binary: terminal chat (ratatui), `-p`, `login`, `models`, `mcp`, `config`, `doctor`, `update`. |
+| `brand` | The product's name and command, from `brand.toml`. |
+| `subprocess`, `private-file` | Small IO helpers. |
 
 ## Developing
 
+Read [CLAUDE.md](CLAUDE.md) (working rules, including how to run Cargo)
+and [docs/architecture.md](docs/architecture.md).
+
 ```sh
-export CARGO_TARGET_DIR="$PWD/target/agents/<task>"   # see .lite/LITE.md
+export CARGO_TARGET_DIR="$PWD/target/agents/<task>"
 cargo nextest run --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo run -q -p xtask -- lint

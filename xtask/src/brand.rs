@@ -50,24 +50,6 @@ impl Brand {
         words.retain(|word| word.len() >= 4);
         words
     }
-
-    pub fn fill(&self, template: &str) -> String {
-        let env = self.env();
-        [
-            ("{{NAME}}", self.name.clone()),
-            ("{{COMMAND}}", self.command.clone()),
-            ("{{DIR}}", format!(".{}", self.command)),
-            ("{{INSTRUCTIONS}}", format!("{env}.md")),
-            ("{{LOCAL_INSTRUCTIONS}}", format!("{env}.local.md")),
-            ("{{PLUGIN_DIR}}", format!(".{}-plugin", self.command)),
-            ("{{ENV}}", env.clone()),
-            ("{{COMPANY}}", self.company.clone()),
-            ("{{AUTHOR}}", self.author.clone()),
-            ("{{REPOSITORY}}", self.repository.clone()),
-        ]
-        .iter()
-        .fold(template.to_owned(), |text, (placeholder, value)| text.replace(placeholder, value))
-    }
 }
 
 struct Change {
@@ -119,7 +101,6 @@ fn changes(root: &Path, brand: &Brand) -> Result<Vec<Change>, String> {
         install = set_line(&install, key, &format!("{key}\"{value}\""));
     }
     wanted.push(("install.sh", install));
-    wanted.push(("README.md", brand.fill(&read("docs/README.template.md")?)));
     Ok(wanted
         .into_iter()
         .filter_map(|(path, content)| {
@@ -214,12 +195,6 @@ mod tests {
             author: "Ana Souza".into(),
             repository: "acme/nova".into(),
         }
-    }
-
-    #[test]
-    fn templates_are_filled_from_the_brand() {
-        let filled = brand().fill("{{NAME}}: `{{COMMAND}}`, {{DIR}}/{{INSTRUCTIONS}}, {{ENV}}_X, {{REPOSITORY}}");
-        assert_eq!(filled, "Nova: `nova`, .nova/NOVA.md, NOVA_X, acme/nova");
     }
 
     #[test]

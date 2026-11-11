@@ -132,9 +132,10 @@ fn release_notes() -> String {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn the_release_notes_are_the_newest_changelog_section() {
+    fn the_release_notes_are_the_newest_changelog_section_or_the_version() {
         let notes = super::release_notes();
-        assert!(notes.starts_with("## ") && !notes[3..].contains("\n## "), "{notes}");
+        let version = format!("{} {}", brand::NAME, env!("CARGO_PKG_VERSION"));
+        assert!(notes == version || (notes.starts_with("## ") && !notes[3..].contains("\n## ")), "{notes}");
         assert!(!notes.contains("](") && !notes.contains("https://"), "no links: {notes}");
     }
 }
