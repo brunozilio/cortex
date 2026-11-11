@@ -99,9 +99,11 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-24.04
             flags: --no-default-features
+            cargo: zigbuild
           - target: aarch64-unknown-linux-musl
             os: ubuntu-24.04-arm
             flags: --no-default-features
+            cargo: zigbuild
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -119,8 +121,12 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev musl-tools
-      - run: cargo build --release --locked -p superfik-cli --target ${{ matrix.target }} ${{ matrix.flags }}
+        # Usually on the image already: no apt (and its mirrors) unless missing.
+        run: dpkg -s pkg-config libssl-dev >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev)
+      # zig is the musl C toolchain (ring, oniguruma): from PyPI, not apt.
+      - if: matrix.cargo == 'zigbuild'
+        run: python3 -m pip install --user --break-system-packages ziglang cargo-zigbuild
+      - run: cargo ${{ matrix.cargo || 'build' }} --release --locked -p superfik-cli --target ${{ matrix.target }} ${{ matrix.flags }}
       - name: Sign and notarize
         if: runner.os == 'macOS'
         env:
