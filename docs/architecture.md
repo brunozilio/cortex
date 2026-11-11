@@ -13,7 +13,7 @@ superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfi
 
 | Crate | Responsibility |
 |---|---|
-| `superfik-cli` | The `superfik` binary: a full-screen chat (ratatui) over the SDK, `-p` print mode, `login`, `models`, `pull`/`rm`. Presentation only. |
+| `superfik-cli` | The `superfik` binary: a full-screen chat (ratatui) over the SDK, `-p` print mode, `login`, `models`, `pull`/`rm`, `update` (the latest GitHub release, rules in `superfik_core::release`, ADR 0024). Presentation only. |
 | `superfik-sdk` | `Superfik::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings; `LocalModels` (pull/remove local MLX models). |
 | `superfik-core` | Domain model: requests, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
 | `superfik-native` | The `AgentEngine` boundary (`models`, `start`) and Superfik's own engine behind it (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
@@ -190,7 +190,8 @@ called through `LocalTransport`, never over the wire. A typed
 
 On Unix every `superfik` talks to one background daemon per computer
 (`superfik_backend::daemon`), started on first use (`superfik daemon
-serve`, detached) and gone after 30 idle minutes. It loads the services
+serve`, detached) and gone 5 s after its last client leaves (so commands
+run one after another reuse it). It loads the services
 once (MLX servers, the embedding model, memory books) and gives each
 client connection its own `LocalBackend` on clones of them, so a client
 gets only its own runs' events and answers, and its runs end when it

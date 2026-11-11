@@ -16,10 +16,17 @@ superfik models                            # what the connected providers offer
 superfik pull Qwen3-8B-4bit                # a local MLX model (Apple silicon), from mlx-community
 superfik pull org/Some-Model-4bit          # any MLX model on Hugging Face (HF_TOKEN for gated ones)
 superfik rm Qwen3-8B-4bit                  # delete it again
+superfik update                            # replace this binary with the latest release
 ```
 
+Released binaries (macOS Apple silicon, Linux x86_64/arm64) are attached
+to each GitHub release; `superfik update` downloads this platform's,
+checks its SHA-256 and replaces the running binary in place, wherever it
+was installed.
+
 Every terminal shares one background daemon (local models, embeddings
-and memory load once); it leaves after 30 idle minutes. `superfik daemon
+and memory load once); it leaves a few seconds after the last terminal
+closes. `superfik daemon
 status|stop` manages it; `SUPERFIK_NO_DAEMON=1` runs everything in the
 terminal's own process. Data lives in `~/Library/Application
 Support/Superfik Lite` (macOS) or `~/.config/superfik-lite`. Keys and

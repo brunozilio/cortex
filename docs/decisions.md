@@ -45,7 +45,8 @@ and for connecting MCP servers over HTTP and stdio.
 - The `Principal`/`Envelope`/`Authorizer` seam stays so a remote backend
   can come back without reshaping the SDK.
 - Published as source (`brunozilio/superfik-lite`), with no license,
-  release pipeline or packaging: install it with `cargo install`.
+  release pipeline or packaging: install it with `cargo install` (amended
+  by ADR 0024).
 
 ## 0019 — A platform: Superfik plugins
 
@@ -153,3 +154,25 @@ share a process or its open documents.
 Rejected: an MCP server for LSP (one more process and protocol between the
 agent and the server, and no way to add diagnostics to an edit), and a
 server per run (rust-analyzer indexing anew on every prompt).
+
+## 0024 — Released binaries and `superfik update`
+
+Amends ADR 0018's "no release pipeline or packaging": release-please tags
+`vX.Y.Z` on `brunozilio/lite` and the release job attaches
+`superfik-X.Y.Z-<target>.tar.gz` and its `.sha256` for macOS (Apple
+silicon, signed and notarized) and Linux (x86_64, arm64). `cargo install`
+still works.
+
+- `superfik update` asks GitHub for the latest tag, installs it only when
+  it is newer than this build, and refuses an archive whose SHA-256 does
+  not match the published one. Which release and which archive are pure
+  rules in `superfik_core::release`; the download sits behind the CLI's
+  `Releases` trait.
+- The new binary is written beside the running one and renamed over it,
+  so the file is always the whole old or the whole new build.
+- It never stops the daemon (other terminals' runs would end); the daemon
+  leaves 5 s after its last client, so the next session starts the new
+  build.
+
+Rejected: a package manager formula (one more thing to publish) and
+stopping the daemon on update.

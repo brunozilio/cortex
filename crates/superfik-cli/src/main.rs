@@ -16,6 +16,7 @@ mod login;
 mod mcp;
 mod print;
 mod tui;
+mod update;
 mod verdict;
 
 use std::path::PathBuf;
@@ -70,6 +71,8 @@ enum Action {
         #[command(subcommand)]
         action: Option<mcp::McpAction>,
     },
+    /// Replace this binary with the latest release.
+    Update,
     /// The background daemon every terminal shares.
     #[command(hide = true)]
     Daemon {
@@ -80,7 +83,7 @@ enum Action {
 
 #[derive(Debug, Subcommand)]
 enum DaemonAction {
-    /// Serve this computer's terminals until idle.
+    /// Serve this computer's terminals until the last one leaves.
     Serve,
     /// Stop the running daemon (its terminals' runs end).
     Stop,
@@ -122,6 +125,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
     match &cli.command {
         Some(Action::Pull { model }) => return local_models::pull(model).map(|()| ExitCode::SUCCESS),
         Some(Action::Rm { model }) => return local_models::remove(model).map(|()| ExitCode::SUCCESS),
+        Some(Action::Update) => return update::run().map(|()| ExitCode::SUCCESS),
         _ => {}
     }
     let (superfik, stale) = daemon::connect()?;
@@ -139,7 +143,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             mcp::run(&superfik, &cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
         }
         Some(Action::Daemon { .. }) => Err("the daemon needs macOS or Linux".into()),
-        Some(Action::Pull { .. } | Action::Rm { .. }) => Ok(ExitCode::SUCCESS),
+        Some(Action::Pull { .. } | Action::Rm { .. } | Action::Update) => Ok(ExitCode::SUCCESS),
         None if cli.print => {
             if let Some(stale) = &stale {
                 eprintln!("superfik: {stale}");

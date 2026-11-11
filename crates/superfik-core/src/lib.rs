@@ -23,6 +23,7 @@ pub mod memory;
 pub mod model;
 pub mod principal;
 pub mod provider;
+pub mod release;
 pub mod request;
 pub mod skill;
 pub mod usage;
