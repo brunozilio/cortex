@@ -5,6 +5,7 @@ pub mod brief;
 pub mod checkpoints;
 pub mod chores;
 pub mod control;
+pub mod declared_providers;
 mod engine;
 #[cfg(any(test, feature = "test-support"))]
 pub mod fake;

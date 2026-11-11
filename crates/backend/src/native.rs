@@ -59,6 +59,25 @@ pub fn other_keys(
         .collect()
 }
 
+pub fn declare_providers(home: Option<&Path>, cwd: &Path) {
+    use agent_engine::declared_providers::{Loaded, load};
+    let approved = agent_engine::prompt::settings::load(cwd, home, &[])
+        .map(|settings| settings.enabled_providers)
+        .unwrap_or_default();
+    for loaded in load(home, cwd, &approved) {
+        match loaded {
+            Loaded::Ready(provider) => tracing::info!(%provider, "declared provider loaded"),
+            Loaded::Unapproved { path, id } => tracing::warn!(
+                path = %path.display(),
+                "the project's provider {id} waits for approval: add it to enabledProviders in your own settings"
+            ),
+            Loaded::Broken { path, why } => {
+                tracing::warn!(path = %path.display(), %why, "a declared provider was left out")
+            }
+        }
+    }
+}
+
 pub fn engine(data: &Path) -> NativeEngine {
     let apis = NativeApis::new(Arc::new(NetHttp));
     NativeEngine::new(Arc::new(apis), Arc::new(FileSessions::new(data.join("native-sessions"))))

@@ -1,5 +1,6 @@
 pub mod catalog;
 mod config;
+pub mod declared;
 pub mod oauth;
 pub mod request;
 pub mod sign_in;
@@ -94,12 +95,17 @@ pub trait Provider: Sync {
 
 pub fn all() -> Vec<&'static dyn Provider> {
     let mut all = providers::ALL.to_vec();
+    all.extend(declared::registered());
     all.sort_by_key(|provider| provider.rank());
     all
 }
 
 pub fn find(provider: ModelProvider) -> Option<&'static dyn Provider> {
-    providers::ALL.iter().copied().find(|known| known.id() == provider.id())
+    providers::ALL
+        .iter()
+        .copied()
+        .find(|known| known.id() == provider.id())
+        .or_else(|| declared::registered().into_iter().find(|known| known.id() == provider.id()))
 }
 
 pub fn get(provider: ModelProvider) -> Result<&'static dyn Provider, ProviderError> {
@@ -130,8 +136,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_provider_has_its_own_id_rank_and_secret_slot() {
-        let all = all();
+    fn every_built_in_provider_has_its_own_id_rank_and_secret_slot() {
+        let mut all = providers::ALL.to_vec();
+        all.sort_by_key(|provider| provider.rank());
         let mut ids: Vec<_> = all.iter().map(|p| p.id()).collect();
         let mut slots: Vec<_> = all.iter().map(|p| p.slot()).collect();
         ids.dedup();

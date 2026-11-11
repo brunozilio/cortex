@@ -28,6 +28,8 @@ pub struct Settings {
     #[serde(default)]
     pub small_model: Option<String>,
     #[serde(default)]
+    pub enabled_providers: Vec<String>,
+    #[serde(default)]
     pub mcp_approval: domain::mcp_config::McpApproval,
     #[serde(default)]
     pub lsp_servers: Vec<LspLayer>,
@@ -51,6 +53,7 @@ impl Default for Settings {
             judge: None,
             fallback: None,
             small_model: None,
+            enabled_providers: Vec::new(),
             mcp_approval: Default::default(),
             lsp_servers: Vec::new(),
             permissions: Default::default(),
@@ -78,6 +81,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut judge = None;
     let mut fallback = None;
     let mut small_model = None;
+    let mut enabled_providers = Vec::new();
     let mut hooks = crate::hooks::Hooks::default();
     let mut mcp_approval = domain::mcp_config::McpApproval::default();
     let mut lsp_servers = Vec::new();
@@ -111,6 +115,8 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
             let owners = is_user_root(root) || name == "settings.local.json";
             if owners {
                 mcp_approval.read(&settings);
+                let named = settings["enabledProviders"].as_array().into_iter().flatten();
+                enabled_providers.extend(named.filter_map(|id| id.as_str().map(str::to_owned)));
             }
             super::permissions::read(&settings, owners, &mut permissions, &mut added_dirs)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
@@ -204,6 +210,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 judge,
                 fallback,
                 small_model,
+                enabled_providers,
                 mcp_approval,
                 lsp_servers,
                 permissions,
@@ -222,6 +229,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         judge,
         fallback,
         small_model,
+        enabled_providers,
         mcp_approval,
         lsp_servers,
         permissions,

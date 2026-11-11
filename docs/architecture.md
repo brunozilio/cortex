@@ -84,6 +84,8 @@ and carries the owner's other connected providers' keys
 (`RunCredentials::other_models`). A model named `provider:model`, the
 catalog's own id form, goes to that provider through `model::routed::Routed`
 (rule in `domain::routing`); any other name stays on the run's provider.
+Providers declared in JavaScript and the routing hooks are in
+`docs/extending.md`.
 
 Built-in tools live in folders under `crates/agent-engine/src/tools/builtin/`
 (`files`: Read, Write, Edit, Glob, Grep, NotebookEdit; `shell`: Bash,
