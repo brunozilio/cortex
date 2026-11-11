@@ -4,6 +4,7 @@ mod job;
 mod moved;
 mod report;
 mod rewind;
+mod snapshot;
 
 use std::sync::Arc;
 

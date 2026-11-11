@@ -12,7 +12,7 @@ pub const CONTRACT_VERSION: &str = "agent-engine/1";
 use std::path::{Path, PathBuf};
 
 use domain::PromptRequest;
-pub use git::{GitSnapshot, snapshot};
+pub use git::{GitSnapshot, Snapshot, snapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Scope {

@@ -46,13 +46,15 @@ impl Job {
             git,
             instructions,
         } = prepared;
+        let git = runtime_guard.setup.context.as_ref().and_then(|b| b.git.clone()).or(git);
+        let snapshot = self.session_snapshot(&session, prompt::Snapshot { date: today(), git });
         let environment = Environment {
             cwd: self.workspace.cwd.clone(),
             added_dirs: self.workspace.added_dirs.clone(),
             platform: prompt::platform(),
-            date: today(),
+            date: snapshot.date,
             model: self.request.model.label.clone(),
-            git: runtime_guard.setup.context.as_ref().and_then(|b| b.git.clone()).or(git),
+            git: snapshot.git,
             instructions: runtime_guard.setup.context.as_ref().map(|b| b.instructions.clone()).unwrap_or(instructions),
             tools: tools.iter().map(|tool| tool.spec().name).collect(),
             skills: tools::skill::listing(&skills),

@@ -9,6 +9,7 @@ mod plugins;
 mod runs;
 mod scripts;
 mod sessions;
+mod stable_prompt;
 mod steering;
 mod verification;
 mod worktrees;

@@ -9,6 +9,12 @@ pub struct GitSnapshot {
     pub recent: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Snapshot {
+    pub date: String,
+    pub git: Option<GitSnapshot>,
+}
+
 pub fn snapshot(cwd: &Path) -> Option<GitSnapshot> {
     let never = std::sync::atomic::AtomicBool::new(false);
     let git = |args: &[&str]| -> Option<String> {

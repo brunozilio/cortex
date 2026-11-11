@@ -46,6 +46,17 @@ pub trait Sessions: Send + Sync {
     fn save_checkpoints(&self, _request: &PromptRequest, _id: &SessionId, _all: &[Checkpoint]) -> Result<(), String> {
         Ok(())
     }
+    fn load_snapshot(&self, _request: &PromptRequest, _id: &SessionId) -> Option<crate::prompt::Snapshot> {
+        None
+    }
+    fn save_snapshot(
+        &self,
+        _request: &PromptRequest,
+        _id: &SessionId,
+        _snapshot: &crate::prompt::Snapshot,
+    ) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 fn scoped_id(request: &PromptRequest, id: &SessionId) -> SessionId {
@@ -61,10 +72,23 @@ pub struct InMemorySessions {
     kept: Mutex<HashMap<SessionId, Vec<Message>>>,
     worktrees: Mutex<HashMap<SessionId, crate::agent_runtime::WorktreeState>>,
     checkpoints: Mutex<HashMap<SessionId, Vec<Checkpoint>>>,
+    snapshots: Mutex<HashMap<SessionId, crate::prompt::Snapshot>>,
 }
 
 #[cfg(any(test, feature = "test-support"))]
 impl Sessions for InMemorySessions {
+    fn load_snapshot(&self, request: &PromptRequest, id: &SessionId) -> Option<crate::prompt::Snapshot> {
+        self.snapshots.lock().ok()?.get(&scoped_id(request, id)).cloned()
+    }
+    fn save_snapshot(
+        &self,
+        request: &PromptRequest,
+        id: &SessionId,
+        snapshot: &crate::prompt::Snapshot,
+    ) -> Result<(), String> {
+        self.snapshots.lock().map_err(|_| "snapshots unavailable")?.insert(scoped_id(request, id), snapshot.clone());
+        Ok(())
+    }
     fn load_checkpoints(&self, request: &PromptRequest, id: &SessionId) -> Result<Vec<Checkpoint>, String> {
         let kept = self.checkpoints.lock().map_err(|_| "checkpoints unavailable")?;
         Ok(kept.get(&scoped_id(request, id)).cloned().unwrap_or_default())
@@ -173,6 +197,17 @@ impl Sessions for FileSessions {
     }
     fn save_checkpoints(&self, request: &PromptRequest, id: &SessionId, all: &[Checkpoint]) -> Result<(), String> {
         self.write_json(format!("checkpoints-{}.json", scoped_id(request, id).0), &all)
+    }
+    fn load_snapshot(&self, request: &PromptRequest, id: &SessionId) -> Option<crate::prompt::Snapshot> {
+        self.read_json(format!("snapshot-{}.json", scoped_id(request, id).0)).ok().flatten()
+    }
+    fn save_snapshot(
+        &self,
+        request: &PromptRequest,
+        id: &SessionId,
+        snapshot: &crate::prompt::Snapshot,
+    ) -> Result<(), String> {
+        self.write_json(format!("snapshot-{}.json", scoped_id(request, id).0), snapshot)
     }
     fn load_for(&self, request: &PromptRequest, id: &SessionId) -> Option<Vec<Message>> {
         self.load_for_checked(request, id).ok().flatten()
