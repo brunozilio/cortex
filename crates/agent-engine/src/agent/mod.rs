@@ -84,6 +84,7 @@ impl Agent<'_> {
         let mut structured = false;
         let mut recoveries = 0;
         let mut compacted_at = None;
+        let mut counted = crate::upkeep::Counted::default();
         let mut fell_back: Option<String> = None;
         let mut stop_hook_active = false;
         let (prompt_at, mut attempts) = (history.len().saturating_sub(1), 0);
@@ -98,10 +99,12 @@ impl Agent<'_> {
                 .as_ref()
                 .and_then(|c| c.auto_compact_token_limit)
                 .unwrap_or_else(|| measured.window.saturating_sub(measured.reserved));
-            if history.len() > 2 && measured.used >= threshold && compacted_at != Some(history.len()) {
+            let used = counted.used(measured.used, history);
+            if history.len() > 2 && used >= threshold && compacted_at != Some(history.len()) {
                 let template = self.turn_template(fell_back.as_ref());
                 let compaction = crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto")
                     .map_err(Ending::Failed)?;
+                counted.forget();
                 (self.emit)(EngineEvent::Compacted(compaction));
                 compacted_at = Some(history.len());
             }
@@ -129,6 +132,7 @@ impl Agent<'_> {
                     let compaction =
                         crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto")
                             .map_err(Ending::Failed)?;
+                    counted.forget();
                     (self.emit)(EngineEvent::Compacted(compaction));
                     compacted_at = Some(history.len());
                     continue;
@@ -145,6 +149,7 @@ impl Agent<'_> {
                 safety.observe(history);
             }
             history.push(reply.message);
+            counted.observe(reply.usage, history.len());
             match reply.stop {
                 StopReason::MaxTokens if calls.is_empty() => {
                     history.push(Message::user("Your output reached its token limit. Continue exactly at the cutoff without repeating prior text. New text is appended to the same response, so preserve code fences and machine-readable syntax. Finish the requested work."));

@@ -1,7 +1,8 @@
 use agent_engine::{
-    model::scripted::ScriptedModel,
+    model::{ModelError, Reply, scripted::ScriptedModel},
     prompt::{self, Environment, Instructions, Scope},
     tools::Workspace,
+    transcript::Usage,
 };
 use domain::PermissionMode;
 use serde_json::json;
@@ -54,17 +55,21 @@ fn configured_auto_compact_window_triggers_child_compaction_before_the_model_win
     let dir = tempfile::tempdir().expect("dir");
     std::fs::write(dir.path().join("small.txt"), "small result").expect("file");
     let workspace = Workspace::new(dir.path());
-    let model = ScriptedModel::new([
-        ScriptedModel::reply(vec![call(
-            "delegate",
-            "Agent",
-            json!({"description":"Review large input","prompt":"x".repeat(420_000),"subagent_type":"reviewer"}),
-        )]),
-        ScriptedModel::reply(vec![call("read", "Read", json!({"file_path":"small.txt"}))]),
-        done("Compact summary preserving the review task"),
-        done("Child reviewed"),
-        done("Parent done"),
-    ]);
+    let uncounted = |reply: Result<Reply, ModelError>| reply.map(|reply| Reply { usage: Usage::default(), ..reply });
+    let model = ScriptedModel::new(
+        [
+            ScriptedModel::reply(vec![call(
+                "delegate",
+                "Agent",
+                json!({"description":"Review large input","prompt":"x".repeat(420_000),"subagent_type":"reviewer"}),
+            )]),
+            ScriptedModel::reply(vec![call("read", "Read", json!({"file_path":"small.txt"}))]),
+            done("Compact summary preserving the review task"),
+            done("Child reviewed"),
+            done("Parent done"),
+        ]
+        .map(uncounted),
+    );
     run(json!({"autoCompactWindow":100_000}), &model, &workspace, PermissionMode::Bypass);
     let asked = model.asked();
     assert_eq!(asked.len(), 5);

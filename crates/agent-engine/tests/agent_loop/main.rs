@@ -1,3 +1,4 @@
+mod compaction;
 mod custom_agents;
 mod permission_rules;
 mod permissions;

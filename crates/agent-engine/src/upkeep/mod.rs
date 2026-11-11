@@ -1,8 +1,10 @@
 mod compact;
+mod counted;
 
 use domain::{ContextShare, ContextSlice, ContextUsage, ModelOption};
 
 pub use self::compact::{compact, compact_hooked, compact_hooked_on, compact_on, summary_text};
+pub use self::counted::Counted;
 use crate::model::ToolSpec;
 use crate::transcript::{Block, Message};
 
