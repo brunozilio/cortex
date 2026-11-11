@@ -1,0 +1,16 @@
+[package]
+name = "content"
+description = "The texts the agent reads (prompts, tool descriptions, agents, styles, skills): built in, and overridable from the user's folder."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[dependencies]
+brand.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

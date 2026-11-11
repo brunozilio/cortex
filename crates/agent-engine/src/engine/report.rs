@@ -24,7 +24,7 @@ impl Job {
         };
         let template = TurnRequest {
             model: self.request.model.id.clone(),
-            system: crate::chores::AGENT.into(),
+            system: crate::prompt::text("chores"),
             messages: Vec::new(),
             tools: Vec::new(),
             effort: domain::Effort::Low,

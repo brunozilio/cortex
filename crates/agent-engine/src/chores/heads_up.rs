@@ -5,8 +5,6 @@ use domain::HeadsUp;
 use crate::model::{ModelApi, ModelError, TurnRequest};
 use crate::transcript::Message;
 
-const ASK: &str = include_str!("heads_up.md");
-
 pub(super) fn look(
     api: &dyn ModelApi,
     template: &TurnRequest,
@@ -17,7 +15,7 @@ pub(super) fn look(
     while messages.last().is_some_and(|message| message.tool_uses().next().is_some()) {
         messages.pop();
     }
-    messages.push(Message::user(brand::text(ASK)));
+    messages.push(Message::user(crate::prompt::text("heads-up")));
     let request =
         TurnRequest { messages, tools: Vec::new(), max_tokens: template.max_tokens.min(1500), ..template.clone() };
     Ok(parse(&api.turn(&request, &mut |_| {}, stop)?.message.text()))
@@ -56,6 +54,7 @@ mod tests {
         assert!(found.learn.ends_with("leak to another."));
         assert_eq!(parse("learn: none"), None);
         assert_eq!(parse("learn: x\ntag: You should know\nexplain:\nno title"), None, "out of form");
-        assert!(!ASK.contains("Claude") && ASK.contains("learn: none"));
+        let ask = crate::prompt::text("heads-up");
+        assert!(!ask.contains("Claude") && ask.contains("learn: none"));
     }
 }

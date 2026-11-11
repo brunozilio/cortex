@@ -26,6 +26,7 @@ dependencies = [
  "base64 0.23.1",
  "brand",
  "chrono",
+ "content",
  "domain",
  "globset",
  "ignore",
@@ -580,6 +581,14 @@ dependencies = [
  "itoa",
  "static_assertions",
  "zmij",
+]
+
+[[package]]
+name = "content"
+version = "0.0.0"
+dependencies = [
+ "brand",
+ "tempfile",
 ]
 
 [[package]]

@@ -113,13 +113,6 @@ it asks you to.
 
 The question:";
 
-pub const AGENT: &str = concat!(
-    "\
-You are ",
-    brand::name!(),
-    ", an agent that helps users with software engineering tasks."
-);
-
 pub fn answer(
     command: SessionCommand,
     api: &dyn ModelApi,

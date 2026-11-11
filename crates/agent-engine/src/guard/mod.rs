@@ -6,8 +6,6 @@ use serde_json::{Value, json};
 use crate::model::{ModelApi, TurnRequest};
 use crate::transcript::{Block, Message, Role};
 
-const RULES: &str = include_str!("classifier.md");
-
 const BOUNDARY: u8 = 50;
 
 #[derive(Debug, Default)]
@@ -49,7 +47,7 @@ impl Safety {
             Message::user(format!("<transcript>\n{transcript}{action}\n</transcript>")),
         ];
         let request = TurnRequest {
-            system: brand::text(RULES),
+            system: crate::prompt::text("classifier"),
             messages,
             tools: Vec::new(),
             effort: domain::Effort::Low,

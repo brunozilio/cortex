@@ -2,7 +2,7 @@ mod compact;
 
 use domain::{ContextShare, ContextSlice, ContextUsage, ModelOption, ModelProvider};
 
-pub use self::compact::{CONTINUED, compact, compact_hooked, compact_hooked_on, compact_on, summary_text};
+pub use self::compact::{compact, compact_hooked, compact_hooked_on, compact_on, summary_text};
 use crate::model::ToolSpec;
 use crate::transcript::{Block, Message};
 
@@ -112,7 +112,10 @@ mod tests {
             ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("They asked for x; y is done.".into())])]);
         let compaction = compact(&model, &template(), &mut history, &AtomicBool::new(false)).expect("compact");
         assert_eq!(history.len(), 1);
-        assert!(history[0].text().starts_with(CONTINUED) && history[0].text().ends_with("y is done."));
+        assert!(
+            history[0].text().starts_with(&crate::prompt::text("continued"))
+                && history[0].text().ends_with("y is done.")
+        );
         assert_eq!(compaction.before, 2000);
         assert!(compaction.after < 50);
 
@@ -129,7 +132,11 @@ mod tests {
             .expect("focused");
         let asked = focused.asked()[0].messages.last().map(Message::text).unwrap_or_default();
         assert!(asked.ends_with("The user asks the summary to focus on: the API changes"), "{asked}");
-        assert_eq!(tagged[0].text(), format!("{CONTINUED}\n\n1. Primary request: x."), "the analysis is dropped");
+        assert_eq!(
+            tagged[0].text(),
+            format!("{}\n\n1. Primary request: x.", crate::prompt::text("continued")),
+            "the analysis is dropped"
+        );
 
         let mut kept = vec![Message::user("z")];
         let silent = ScriptedModel::new([ScriptedModel::reply(vec![])]);

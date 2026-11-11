@@ -5,7 +5,6 @@ pub(crate) mod permissions;
 pub mod rules;
 pub mod settings;
 pub mod styles;
-mod text;
 pub const CONTRACT_VERSION: &str = "agent-engine/1";
 
 use std::path::{Path, PathBuf};
@@ -57,17 +56,21 @@ impl Environment {
     }
 }
 
+pub fn text(name: &str) -> String {
+    content::text(&format!("prompts/{name}.md"))
+}
+
 pub fn system(environment: &Environment) -> String {
-    let mut sections = vec![text::ROLE, text::HARNESS];
+    let mut sections = vec![text("role"), text("harness")];
     if environment.has(concat!("mcp__", brand::command!(), "_memory__")) {
-        sections.push(text::MEMORY);
+        sections.push(text("memory"));
     }
-    sections.push(text::CONTEXT);
+    sections.push(text("context"));
     if environment.output_style.as_ref().is_none_or(|style| style.keep_coding) {
-        sections.extend([text::DELIVERY, text::WRITING]);
+        sections.extend([text("delivery"), text("writing")]);
     }
     if environment.tools.iter().any(|tool| tool == crate::tools::advisor::ADVISOR_TOOL) {
-        sections.push(crate::tools::advisor::GUIDE);
+        sections.push(text("advisor"));
     }
     let mut prompt = sections.join("\n\n");
     prompt.push_str(&format!("\n\nPrompt contract: {CONTRACT_VERSION}"));
@@ -76,12 +79,13 @@ pub fn system(environment: &Environment) -> String {
     }
     if !environment.skills.is_empty() {
         prompt.push_str("\n\n");
-        prompt.push_str(text::SKILLS);
+        prompt.push_str(&text("skills"));
+        prompt.push('\n');
         prompt.push_str(&environment.skills);
     }
     if !environment.instructions.is_empty() {
         prompt.push_str("\n\n");
-        prompt.push_str(text::INSTRUCTIONS);
+        prompt.push_str(&text("instructions"));
         for file in &environment.instructions {
             prompt.push_str(&format!(
                 "\n\nContents of {} ({}):\n\n{}",
@@ -132,28 +136,14 @@ mod tests;
 
 pub fn reminder(mode: domain::PermissionMode, depth: usize, style: Option<&str>) -> String {
     let mode = match mode {
-        domain::PermissionMode::Plan if depth == 0 => text::PLAN_MODE,
-        domain::PermissionMode::Plan => {
-            "Planning mode: only read/search tools are available. Report what you found; do not edit files, run commands or change external state."
-        }
-        domain::PermissionMode::Ask => {
-            "Ask mode: tool actions require the permissions enforced by the runtime. Respect denials and do not bypass them."
-        }
-        domain::PermissionMode::AcceptEdits => {
-            "Edits are allowed; commands and external actions still require approval."
-        }
-        domain::PermissionMode::Bypass => {
-            "The user enabled autonomous execution. Stay within the authorized task and verify the result."
-        }
+        domain::PermissionMode::Plan if depth == 0 => text("mode-plan"),
+        domain::PermissionMode::Plan => text("mode-plan-sub-agent"),
+        domain::PermissionMode::Ask => text("mode-ask"),
+        domain::PermissionMode::AcceptEdits => text("mode-edits"),
+        domain::PermissionMode::Bypass => text("mode-bypass"),
     };
-    let mut reminder = format!(
-        "\n\n# Runtime reminder\n{mode}\n{}",
-        if depth > 0 {
-            "You are a sub-agent; return your report and do not create other agents."
-        } else {
-            "Collect background agent reports before completing. Use TaskStop to cancel an unnecessary task."
-        }
-    );
+    let role = if depth > 0 { text("reminder-sub-agent") } else { text("reminder-main") };
+    let mut reminder = format!("\n\n# Runtime reminder\n{mode}\n{role}");
     if let Some(style) = style.filter(|_| depth == 0) {
         reminder.push('\n');
         reminder.push_str(style);

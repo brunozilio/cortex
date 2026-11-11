@@ -58,7 +58,7 @@ impl Agent<'_> {
             emit: &relay,
             request: TurnRequest {
                 model: verification.model.clone(),
-                system: format!("{}\n\n{}", self.request.system, judge::SYSTEM),
+                system: format!("{}\n\n{}", self.request.system, crate::prompt::text("judge")),
                 tools: specs.collect(),
                 ..self.request.clone()
             },

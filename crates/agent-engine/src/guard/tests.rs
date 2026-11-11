@@ -89,8 +89,9 @@ fn a_check_that_cannot_answer_holds_the_action_back() {
 
 #[test]
 fn the_rules_speak_of_brand() {
-    assert!(RULES.contains("<severity>"));
+    let rules = crate::prompt::text("classifier");
+    assert!(rules.contains("<severity>"));
     for other in ["Claude Code", "Anthropic", "claude.ai", "asgeirtj"] {
-        assert!(!RULES.contains(other), "{other}");
+        assert!(!rules.contains(other), "{other}");
     }
 }
