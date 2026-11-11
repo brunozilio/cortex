@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/brunozilio/lite/compare/v0.3.1...v0.4.0) (2026-11-11)
+
+
+### Features
+
+* **daemon:** leave 5 s after the last session closes instead of after 30 idle minutes ([e416da5](https://github.com/brunozilio/lite/commit/e416da588328a169295f370f3003d6cf0e015c03))
+* ExitPlanMode and EnterPlanMode — the agent puts its plan to the user in a box, approval picks the mode and implementation starts in the same run ([e8ee980](https://github.com/brunozilio/lite/commit/e8ee980d4af4cbf343850be32c0ec68e1e0e4104))
+* messages typed while the agent works reach it mid-run (SteerRun) ([5ce3567](https://github.com/brunozilio/lite/commit/5ce3567fbf96bd9a634bd7a768476c0960d49630))
+* superfik update — replace the binary with the latest GitHub release, checked against its SHA-256 ([c2ef33d](https://github.com/brunozilio/lite/commit/c2ef33db5b70ac369086abcd4ce4f23182f213db))
+
+
+### Bug Fixes
+
+* **tui:** the / suggestions scroll through every match, and ↑ from the first wraps to the last ([4542285](https://github.com/brunozilio/lite/commit/45422857a1a8100f91ba4eaa240735ca8c4b7e5f))
+
 ## [0.3.1](https://github.com/brunozilio/lite/compare/v0.3.0...v0.3.1) (2026-11-10)
 
 
