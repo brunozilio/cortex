@@ -2,6 +2,7 @@
 pub struct RunCredentials {
     pub owner: Option<crate::Principal>,
     pub model: Option<crate::provider::ProviderKey>,
+    pub other_models: Vec<(crate::ModelProvider, crate::provider::ProviderKey)>,
     pub mcp: Vec<crate::mcp::LocalMcp>,
     pub client: u64,
     pub mcp_tokens: Option<McpSignIns>,
@@ -32,6 +33,7 @@ impl std::fmt::Debug for RunCredentials {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RunCredentials")
             .field("model", &self.model.is_some())
+            .field("other_models", &self.other_models.iter().map(|(provider, _)| *provider).collect::<Vec<_>>())
             .field("mcp", &self.mcp)
             .field("client", &self.client)
             .field("mcp_tokens", &self.mcp_tokens.is_some())
@@ -45,8 +47,13 @@ mod tests {
 
     #[test]
     fn the_model_key_never_prints() {
-        let credentials =
-            RunCredentials { model: Some(crate::provider::ProviderKey::new("sk-ant-secret")), ..Default::default() };
-        assert!(!format!("{credentials:?}").contains("secret"));
+        let other = (crate::ModelProvider::new("openai"), crate::provider::ProviderKey::new("sk-other-secret"));
+        let credentials = RunCredentials {
+            model: Some(crate::provider::ProviderKey::new("sk-ant-secret")),
+            other_models: vec![other],
+            ..Default::default()
+        };
+        let shown = format!("{credentials:?}");
+        assert!(!shown.contains("secret") && shown.contains("openai"), "{shown}");
     }
 }

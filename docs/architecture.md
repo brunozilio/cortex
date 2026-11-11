@@ -79,7 +79,11 @@ folder names one.
 API key or token JSON, `SignInProvider` for a subscription's sign-in). The
 listed summaries carry each provider's name and `Access`, so the CLI's menus
 come from the server. `ListModels` asks every connected provider's catalog.
-A run uses its provider's key (`RunCredentials::model`, never serialized).
+A run uses its provider's key (`RunCredentials::model`, never serialized)
+and carries the owner's other connected providers' keys
+(`RunCredentials::other_models`). A model named `provider:model`, the
+catalog's own id form, goes to that provider through `model::routed::Routed`
+(rule in `domain::routing`); any other name stays on the run's provider.
 
 Built-in tools live in folders under `crates/agent-engine/src/tools/builtin/`
 (`files`: Read, Write, Edit, Glob, Grep, NotebookEdit; `shell`: Bash,
@@ -204,7 +208,8 @@ Removing the folders of one name removes the feature; CI checks every name.
 - **Runs from scripts**: `PromptRequest` carries `max_turns`,
   `allowed_tools`/`disallowed_tools` (rules for the run), `append_system`,
   `fallback_model` (or the settings' `fallbackModel`: an overloaded model
-  hands the run over, `EngineEvent::FellBack`) and `fork` (go on from
+  hands the run over, `EngineEvent::FellBack`; `provider:model`, such as
+  `openai:gpt-6.1-sol`, falls back to another connected provider) and `fork` (go on from
   `resume` under a new session). `{command} -p` maps them to flags and
   writes `text`, `json` or `stream-json` (`print_output`).
 - **Prompt**: planning mode, output styles, tool descriptions carrying the

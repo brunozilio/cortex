@@ -181,6 +181,7 @@ impl CommandHandler {
         let request = PromptRequest {
             credentials: domain::credentials::RunCredentials {
                 model,
+                other_models: crate::native::other_keys(&self.services.providers, owner, &request.model),
                 owner: Some(owner.clone()),
                 mcp: crate::channels::for_run(self.client),
                 client: self.client,

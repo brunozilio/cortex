@@ -4,7 +4,7 @@ use std::sync::Arc;
 use agent_engine::model::http::{Http, NetHttp};
 use agent_engine::model::providers::ProviderClient;
 use domain::provider::ProviderKey;
-use domain::{ModelOption, Principal, PromptRequest};
+use domain::{ModelOption, ModelProvider, Principal, PromptRequest};
 
 use agent_engine::model::{ModelApi, ModelError};
 use agent_engine::sessions::FileSessions;
@@ -32,12 +32,31 @@ impl ApiSource for NativeApis {
                 brand_command = brand::COMMAND
             ))
         })?;
-        Ok(Arc::new(ProviderClient::for_model(request.model.clone(), Arc::clone(&self.http), Arc::new(key))))
+        let main = Arc::new(ProviderClient::for_model(request.model.clone(), Arc::clone(&self.http), Arc::new(key)));
+        Ok(Arc::new(agent_engine::model::routed::Routed::new(
+            main,
+            provider,
+            Arc::clone(&self.http),
+            request.credentials.other_models.clone(),
+        )))
     }
 }
 
 pub fn key_for(providers: &ModelProviders, owner: &Principal, model: &ModelOption) -> Option<ProviderKey> {
     providers.key(owner, model.provider).ok()
+}
+
+pub fn other_keys(
+    providers: &ModelProviders,
+    owner: &Principal,
+    model: &ModelOption,
+) -> Vec<(ModelProvider, ProviderKey)> {
+    llm_providers::all()
+        .into_iter()
+        .map(|provider| ModelProvider::named(provider.id()))
+        .filter(|provider| *provider != model.provider)
+        .filter_map(|provider| providers.key(owner, provider).ok().map(|key| (provider, key)))
+        .collect()
 }
 
 pub fn engine(data: &Path) -> NativeEngine {
@@ -99,6 +118,38 @@ mod tests {
         let key = key_for(&providers, &owner, &native(ModelProvider::new("anthropic"))).expect("key");
         assert!(key.secret().contains("sk-ant-0123456789abcd"), "the provider's credential config");
         assert_eq!(key_for(&providers, &owner, &native(ModelProvider::new("openai"))), None, "not connected");
+    }
+
+    #[test]
+    fn a_provider_prefixed_model_goes_to_that_provider_with_its_own_key() {
+        let http = Arc::new(ScriptedHttp::new((0..3).map(|_| (400, "{}".to_owned()))));
+        let apis = NativeApis::new(http.clone());
+        let mut run = request(ModelProvider::new("anthropic"), Some("sk-ant"));
+        run.credentials.other_models = vec![(ModelProvider::new("openai"), ProviderKey::new("sk-openai"))];
+        let api = apis.api(&run).expect("api");
+        let ask = |model: &str| {
+            let turn = TurnRequest {
+                model: model.into(),
+                system: String::new(),
+                messages: Vec::new(),
+                tools: Vec::new(),
+                effort: domain::Effort::Low,
+                max_tokens: 1,
+            };
+            api.turn(&turn, &mut |_| {}, &AtomicBool::new(false))
+        };
+        let _ = ask("openai:gpt-6.1-sol");
+        let sent = http.sent();
+        assert_eq!(sent[0].url, "https://api.openai.com/v1/responses");
+        assert!(sent[0].body.contains("\"gpt-6.1-sol\""), "the prefix is not sent: {}", sent[0].body);
+        let _ = ask("claude-haiku-5-5");
+        assert_eq!(
+            http.sent()[1].url,
+            "https://api.anthropic.com/v1/messages",
+            "no prefix stays on the run's provider"
+        );
+        let missing = ask("kiro-subscription:auto").expect_err("not connected");
+        assert!(matches!(missing, ModelError::Unauthorized(ref why) if why.contains("Kiro")), "{missing:?}");
     }
 
     #[test]

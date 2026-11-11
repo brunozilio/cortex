@@ -23,6 +23,7 @@ pub mod principal;
 pub mod provider;
 pub mod release;
 pub mod request;
+pub mod routing;
 pub mod schedule;
 pub mod skill;
 pub mod usage;
