@@ -8,14 +8,21 @@ pub struct Saved {
     pub model: Option<String>,
     pub mode: Option<PermissionMode>,
     pub effort: Option<Effort>,
+    pub problems: Vec<String>,
 }
 
 pub fn read(settings: &serde_json::Value) -> Saved {
-    Saved {
-        model: settings["model"].as_str().map(str::to_owned),
-        mode: settings["mode"].as_str().and_then(mode_named),
-        effort: settings["effort"].as_str().and_then(level_named),
-    }
+    let mut problems = Vec::new();
+    let mut named = |key: &str, choices: &str, known: bool| {
+        if let Some(value) = settings[key].as_str().filter(|_| !known) {
+            problems.push(format!("The saved {key} {value:?} is not {choices}; using the default."));
+        }
+    };
+    let mode = settings["mode"].as_str().and_then(mode_named);
+    let effort = settings["effort"].as_str().and_then(level_named);
+    named("mode", "ask, edits, plan or bypass", mode.is_some());
+    named("effort", "low, medium, high, xhigh or max", effort.is_some());
+    Saved { model: settings["model"].as_str().map(str::to_owned), mode, effort, problems }
 }
 
 pub fn last_session(settings: &serde_json::Value, cwd: &Path) -> Option<SessionId> {
@@ -123,10 +130,27 @@ mod tests {
         let saved = read(&json!({"model": "anthropic:x", "mode": "plan", "effort": "max", "theme": "dark"}));
         assert_eq!(
             saved,
-            Saved { model: Some("anthropic:x".into()), mode: Some(PermissionMode::Plan), effort: Some(Effort::Max) }
+            Saved {
+                model: Some("anthropic:x".into()),
+                mode: Some(PermissionMode::Plan),
+                effort: Some(Effort::Max),
+                problems: Vec::new()
+            }
         );
-        assert_eq!(read(&json!({"mode": "sideways"})), Saved::default());
         assert_eq!(read(&json!(null)), Saved::default());
+    }
+
+    #[test]
+    fn a_saved_mode_or_effort_that_does_not_exist_is_reported() {
+        let saved = read(&json!({"mode": "sideways", "effort": "ultra"}));
+        assert_eq!((saved.mode, saved.effort), (None, None));
+        assert_eq!(
+            saved.problems,
+            [
+                "The saved mode \"sideways\" is not ask, edits, plan or bypass; using the default.",
+                "The saved effort \"ultra\" is not low, medium, high, xhigh or max; using the default.",
+            ]
+        );
     }
 
     #[test]

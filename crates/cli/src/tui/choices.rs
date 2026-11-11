@@ -41,7 +41,11 @@ impl App {
                 self.title = settings::title(saved, &self.cwd, id);
             }
         }
+        let first = self.models.is_empty() && self.session.is_none();
         let saved = settings::read(saved);
+        for problem in saved.problems.iter().filter(|_| first) {
+            self.transcript.notice(problem.clone());
+        }
         if !self.mode_given {
             self.mode = saved.mode.unwrap_or(self.mode);
         }
