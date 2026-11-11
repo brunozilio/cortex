@@ -1,6 +1,7 @@
 use crate::RunGate;
 use crate::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
-use domain::billing::{ModelUsage, PRICE_DATE, rates};
+use domain::billing::{ModelUsage, PRICE_DATE};
+use llm_providers::rates;
 use domain::{EngineEvent, ModelProvider};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};

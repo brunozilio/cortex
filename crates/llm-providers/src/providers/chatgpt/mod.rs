@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 use crate::catalog::{self, Call, Fields, Page};
 use crate::oauth::{self, Browser, TokenRequest, Tokens, form};
-use crate::request::{remove, responses_effort};
+use crate::request::remove;
 use crate::{Config, Host, Provider as Shape, ProviderError, Wire};
 
 pub const CLIENT: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -88,7 +88,7 @@ impl Shape for Provider {
                 }
             }
         }
-        responses_effort(body, model, effort, true)
+        crate::effort(self.vendor(), body, model, effort, true)
     }
     fn catalog(&self, config: &Config, _after: &str) -> Call {
         Call::get(self, config, "/codex/models?client_version=0.0.0")

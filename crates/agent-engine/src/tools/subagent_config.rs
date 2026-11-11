@@ -137,21 +137,14 @@ impl AgentConfig {
         let Some(model) = &self.model else {
             return Ok(parent.into());
         };
-        let claude = llm_providers::find(provider).is_some_and(|provider| provider.vendor() == "anthropic");
-        match model.as_str() {
-            "sonnet" if claude => Ok("claude-sonnet-5-5".into()),
-            "opus" if claude => Ok("claude-opus-5-5".into()),
-            "haiku" if claude => Ok("claude-haiku-5-5".into()),
-            _ if model == parent
-                || (claude && model.starts_with("claude-"))
-                || (!claude
-                    && (model.starts_with("gpt-")
-                        || model.starts_with("o1")
-                        || model.starts_with("o3")
-                        || model.starts_with("o4"))) =>
-            {
-                Ok(model.clone())
-            }
+        let provider = llm_providers::find(provider);
+        let vendor = provider.and_then(|provider| llm_providers::vendor(provider.vendor()));
+        if let Some(full) = vendor.and_then(|vendor| vendor.alias(model)) {
+            return Ok(full.into());
+        }
+        match provider {
+            _ if model == parent => Ok(model.clone()),
+            Some(provider) if provider.serves(model) => Ok(model.clone()),
             _ => Err(
                 "the custom agent model must use the current provider; cross-provider credentials are not inherited"
                     .into(),

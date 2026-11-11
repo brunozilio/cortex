@@ -6,10 +6,17 @@ pub mod request;
 pub mod sign_in;
 #[cfg(test)]
 mod testing;
+mod vendor;
 
 pub mod providers {
     include!(concat!(env!("OUT_DIR"), "/registry.rs"));
 }
+
+pub mod vendors {
+    include!(concat!(env!("OUT_DIR"), "/vendors.rs"));
+}
+
+pub use vendor::{Vendor, effort, owner, rated, rates, vendor};
 
 use domain::provider::ProviderInfo;
 use domain::{Access, ModelOption, ModelProvider};
@@ -61,6 +68,11 @@ pub trait Provider: Sync {
     }
 
     fn bind(&self, _config: &Config, _body: &mut Value) {}
+
+    fn serves(&self, model: &str) -> bool {
+        let model = model.rsplit(':').next().unwrap_or(model);
+        vendor(self.vendor()).map_or_else(|| owner(model).is_some(), |vendor| vendor.owns(model))
+    }
 
     fn turn_headers(&self, _model: Option<&ModelOption>, _body: &Value) -> Vec<(String, String)> {
         Vec::new()

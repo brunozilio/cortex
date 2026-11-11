@@ -2,7 +2,7 @@ use domain::{Access, ModelOption};
 use serde_json::{Value, json};
 
 use crate::catalog::{self, Call, Page, STANDARD};
-use crate::request::{messages_effort, remove};
+use crate::request::remove;
 use crate::{Config, Provider as Shape, ProviderError, Wire};
 
 pub const API: &str = "https://api.anthropic.com/v1";
@@ -67,7 +67,7 @@ impl Shape for Provider {
                 json!({"type":"enabled", "budget_tokens": if max_tokens <= 4096 { max_tokens / 2 } else { 4096 }})
             };
         }
-        messages_effort(body, model, effort)
+        crate::effort(self.vendor(), body, model, effort, false)
     }
     fn catalog(&self, config: &Config, after: &str) -> Call {
         Call::get(self, config, &models_path(after))

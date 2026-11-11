@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 use crate::catalog::{self, Call, Page, STANDARD};
 use crate::oauth::{self, Browser, TokenRequest, Tokens, form};
-use crate::request::{messages_effort, remove};
+use crate::request::remove;
 use crate::{Config, Host, Provider as Shape, ProviderError, Wire};
 
 pub const CLIENT: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
@@ -71,7 +71,7 @@ impl Shape for Provider {
         body["system"] = json!(blocks);
         body["max_tokens"] = json!(8192);
         remove(body, &["thinking", "output_config", "cache_control"]);
-        messages_effort(body, model, effort)
+        crate::effort(self.vendor(), body, model, effort, false)
     }
     fn catalog(&self, config: &Config, _after: &str) -> Call {
         Call::get(self, config, "/models?limit=1000")
@@ -173,7 +173,7 @@ mod tests {
         assert_eq!(models.len(), FALLBACK.len());
         assert!(catalog::collect(&Provider, |_| Ok::<_, ProviderError>(json!({}))).is_err());
         for id in FALLBACK {
-            assert!(domain::billing::rates(Provider.vendor(), id, 0).is_some(), "{id}");
+            assert!(crate::rates(Provider.vendor(), id, 0).is_some(), "{id}");
         }
     }
 

@@ -2,7 +2,7 @@ use domain::{Access, ModelOption};
 use serde_json::Value;
 
 use crate::catalog::{self, Call, Page, STANDARD};
-use crate::request::{REASONING_PREFIXES, remove, responses_effort};
+use crate::request::remove;
 use crate::{Config, Provider as Shape, ProviderError, Wire};
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -47,7 +47,7 @@ impl Shape for Provider {
     }
     fn shape(&self, model: Option<&ModelOption>, body: &mut Value, effort: &str) -> Result<(), ProviderError> {
         remove(body, &["reasoning", "tool_choice"]);
-        responses_effort(body, model, effort, false)
+        crate::effort(self.vendor(), body, model, effort, false)
     }
     fn catalog(&self, config: &Config, _after: &str) -> Call {
         Call::get(self, config, "/models")
@@ -60,8 +60,8 @@ impl Shape for Provider {
             .map(|mut model| {
                 let id = model.id.trim_start_matches("openai:").to_owned();
                 model.label = format!("{id} (OpenAI)");
-                let lower = id.to_ascii_lowercase();
-                catalog::reasoning(&mut model, REASONING_PREFIXES.iter().any(|p| lower.starts_with(p)));
+                let reasons = crate::vendor(self.vendor()).is_some_and(|vendor| vendor.reasons(&id));
+                catalog::reasoning(&mut model, reasons);
                 model
             });
         Ok(Page { models: models.collect(), next: None })
