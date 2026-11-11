@@ -78,7 +78,7 @@ fn the_code_and_later_the_refresh_token_go_to_the_region_s_token_endpoint() {
     let mut fresh = fresh.unwrap_or_else(|e| panic!("{e}"));
     assert_eq!((fresh.access_token.as_str(), fresh.refresh_token.as_str()), ("a", "r"));
     assert_eq!(fresh.expires_at, Some(now + Duration::seconds(900)));
-    assert_eq!(fresh.idc, Some(client()), "kept for refreshes");
+    assert_eq!(super::client(&fresh), Some(client()), "kept for refreshes");
 
     fresh.account_id = ARN.into();
     let refresh = refresh(&client(), &fresh);

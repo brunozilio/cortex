@@ -73,7 +73,7 @@ fn message(message: &Message, model: &str) -> Value {
 }
 
 fn user(model: &str, content: String, images: Vec<Value>, results: Vec<Value>) -> Value {
-    let mut input = json!({"content": content, "modelId": model, "origin": llm_providers::kiro::ORIGIN});
+    let mut input = json!({"content": content, "modelId": model});
     if !images.is_empty() {
         input["images"] = json!(images);
     }
@@ -120,7 +120,6 @@ mod tests {
         let state = &body["conversationState"];
         let current = &state["currentMessage"]["userInputMessage"];
         assert_eq!(current["content"], "Be terse.\n\nWhat is in a.txt?");
-        assert_eq!(current["origin"], "KIRO_CLI");
         assert_eq!(current["modelId"], "kiro-subscription:claude-haiku-4.5");
         let tool = &current["userInputMessageContext"]["tools"][0]["toolSpecification"];
         assert_eq!(tool["inputSchema"]["json"]["type"], "object");

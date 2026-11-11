@@ -159,9 +159,9 @@ fn providers_are_listed_and_a_bad_key_is_refused() {
     let engine = FakeEngine::new(vec![model()], Vec::new());
     let sdk = build(&engine, data.path());
     assert!(sdk.providers().expect("providers").iter().all(|p| p.account.is_none()));
-    assert!(sdk.connect_provider(ModelProvider::Anthropic, "  ").is_err());
-    let listed = sdk.connect_provider(ModelProvider::Anthropic, "sk-ant-0123456789abcd").expect("connect");
-    assert!(listed.iter().any(|p| p.provider == ModelProvider::Anthropic && p.account.is_some()));
+    assert!(sdk.connect_provider(ModelProvider::new("anthropic"), "  ").is_err());
+    let listed = sdk.connect_provider(ModelProvider::new("anthropic"), "sk-ant-0123456789abcd").expect("connect");
+    assert!(listed.iter().any(|p| p.provider == ModelProvider::new("anthropic") && p.account.is_some()));
 }
 
 #[test]

@@ -1,21 +1,14 @@
 use std::io::{BufRead, Write};
 
-use sdk::{ModelProvider, Sdk};
+use domain::Access;
+use domain::provider::ProviderSummary;
+use sdk::Sdk;
 
-pub const MENU: [ModelProvider; 6] = [
-    ModelProvider::Anthropic,
-    ModelProvider::ClaudeSubscription,
-    ModelProvider::OpenAi,
-    ModelProvider::ChatGptSubscription,
-    ModelProvider::CopilotSubscription,
-    ModelProvider::KiroSubscription,
-];
-
-pub fn how(provider: ModelProvider) -> &'static str {
-    match provider {
-        ModelProvider::CopilotSubscription => "sign in on GitHub with a code",
-        p if p.subscription() => "sign in with the browser",
-        _ => "paste an API key",
+pub fn how(access: Access) -> &'static str {
+    match access {
+        Access::Code => "sign in with a code",
+        Access::Browser => "sign in with the browser",
+        Access::Key => "paste an API key",
     }
 }
 
@@ -31,48 +24,44 @@ pub fn picked(answer: &str, count: usize) -> Option<usize> {
 }
 
 pub fn login(sdk: &Sdk) -> Result<(), String> {
+    let menu = sdk.providers().map_err(|e| e.to_string())?;
     eprintln!("Connect a provider:");
-    for (i, provider) in MENU.iter().enumerate() {
-        eprintln!("  {}. {} ({})", i + 1, provider.name(), how(*provider));
+    for (i, summary) in menu.iter().enumerate() {
+        eprintln!("  {}. {} ({})", i + 1, summary.name, how(summary.access));
     }
-    let provider =
-        MENU[picked(&ask(&format!("Choose 1-{}: ", MENU.len()))?, MENU.len()).ok_or("not one of the choices")?];
-    let listed = if provider.subscription() {
+    let choice = picked(&ask(&format!("Choose 1-{}: ", menu.len()))?, menu.len()).ok_or("not one of the choices")?;
+    let ProviderSummary { provider, name, access, .. } = menu[choice].clone();
+    let listed = if access.subscription() {
         sdk.sign_in(provider, |url, code| {
             eprintln!("{}", visit(url, code));
             open(url);
         })
         .map_err(|e| e.to_string())?
     } else {
-        let key = secret(&format!("{} API key (hidden): ", provider.name()))?;
+        let key = secret(&format!("{name} API key (hidden): "))?;
         sdk.connect_provider(provider, &key).map_err(|e| e.to_string())?
     };
     let account = listed.iter().find(|p| p.provider == provider).and_then(|p| p.account.as_ref());
     match account {
-        Some(account) => eprintln!("Connected {} ({}).", provider.name(), account.label),
-        None => return Err(format!("{} did not connect", provider.name())),
+        Some(account) => eprintln!("Connected {name} ({}).", account.label),
+        None => return Err(format!("{name} did not connect")),
     }
     Ok(())
 }
 
 pub fn logout(sdk: &Sdk) -> Result<(), String> {
-    let connected: Vec<ModelProvider> = sdk
-        .providers()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .filter(|p| p.account.is_some())
-        .map(|p| p.provider)
-        .collect();
+    let connected: Vec<ProviderSummary> =
+        sdk.providers().map_err(|e| e.to_string())?.into_iter().filter(|p| p.account.is_some()).collect();
     if connected.is_empty() {
         eprintln!("No provider is connected.");
         return Ok(());
     }
-    for (i, provider) in connected.iter().enumerate() {
-        eprintln!("  {}. {}", i + 1, provider.name());
+    for (i, summary) in connected.iter().enumerate() {
+        eprintln!("  {}. {}", i + 1, summary.name);
     }
     let index = picked(&ask("Forget which? ")?, connected.len()).ok_or("not one of the choices")?;
-    sdk.disconnect_provider(connected[index]).map_err(|e| e.to_string())?;
-    eprintln!("Forgot {}.", connected[index].name());
+    sdk.disconnect_provider(connected[index].provider).map_err(|e| e.to_string())?;
+    eprintln!("Forgot {}.", connected[index].name);
     Ok(())
 }
 
@@ -150,7 +139,7 @@ mod tests {
         assert_eq!(picked("0", 4), None);
         assert_eq!(picked("5", 4), None);
         assert_eq!(picked("two", 4), None);
-        assert!(MENU.iter().filter(|p| p.subscription()).count() == 4);
+        assert_eq!(how(Access::Key), "paste an API key");
     }
 
     #[cfg(unix)]

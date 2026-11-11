@@ -1,23 +1,14 @@
-use super::ProviderError;
-use base64::{
-    Engine,
-    engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
-};
+use super::sign_in::{Host, post};
+use super::{Provider, ProviderError};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Duration, Utc};
-use domain::ModelProvider;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
-pub const OPENAI_CLIENT: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
-pub const CLAUDE_CLIENT: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
-pub const OPENAI_REDIRECT: &str = "http://localhost:1455/auth/callback";
-pub const OPENAI_TOKEN: &str = "https://auth.openai.com/oauth/token";
-pub const CLAUDE_TOKEN: &str = "https://platform.claude.com/v1/oauth/token";
-pub const OPENAI_CALLBACK: (u16, &str) = (1455, "/auth/callback");
-pub const CLAUDE_CALLBACK: (u16, &str) = (0, "/callback");
 pub const TOKEN_LIMIT: u64 = 1 << 20;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Tokens {
     pub access_token: String,
     #[serde(default)]
@@ -27,7 +18,7 @@ pub struct Tokens {
     #[serde(default)]
     pub expires_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub idc: Option<super::kiro::idc::IdcClient>,
+    pub client: Option<Value>,
 }
 
 impl std::fmt::Debug for Tokens {
@@ -38,77 +29,11 @@ impl std::fmt::Debug for Tokens {
 
 impl Tokens {
     pub fn bearer(token: &str) -> Self {
-        Self {
-            access_token: token.to_owned(),
-            refresh_token: String::new(),
-            account_id: String::new(),
-            expires_at: None,
-            idc: None,
-        }
+        Self { access_token: token.to_owned(), ..Self::default() }
     }
 
     pub fn expired(&self) -> bool {
         self.expires_at.is_none_or(|at| Utc::now() + Duration::seconds(60) > at)
-    }
-}
-
-pub fn subscription_client(client: Option<&str>) -> Option<ModelProvider> {
-    match client {
-        Some(OPENAI_CLIENT) => Some(ModelProvider::ChatGptSubscription),
-        Some(CLAUDE_CLIENT) => Some(ModelProvider::ClaudeSubscription),
-        _ => None,
-    }
-}
-
-pub fn callback(provider: ModelProvider) -> (u16, &'static str) {
-    if provider == ModelProvider::KiroSubscription {
-        return super::kiro::auth::CALLBACK;
-    }
-    if provider == ModelProvider::ChatGptSubscription { OPENAI_CALLBACK } else { CLAUDE_CALLBACK }
-}
-
-pub fn state_bytes(provider: ModelProvider) -> usize {
-    if provider == ModelProvider::ChatGptSubscription { 16 } else { 32 }
-}
-
-pub fn form(pairs: &[(&str, &str)]) -> String {
-    url::form_urlencoded::Serializer::new(String::new()).extend_pairs(pairs.iter().copied()).finish()
-}
-
-pub fn authorize(provider: ModelProvider, challenge: &str, state: &str, redirect: &str) -> String {
-    if provider == ModelProvider::KiroSubscription {
-        return super::kiro::auth::portal(challenge, state, redirect);
-    }
-    if provider == ModelProvider::ChatGptSubscription {
-        format!(
-            "https://auth.openai.com/oauth/authorize?{}",
-            form(&[
-                ("response_type", "code"),
-                ("client_id", OPENAI_CLIENT),
-                ("redirect_uri", redirect),
-                ("scope", "openid profile email offline_access"),
-                ("code_challenge", challenge),
-                ("code_challenge_method", "S256"),
-                ("state", state),
-                ("id_token_add_organizations", "true"),
-                ("codex_cli_simplified_flow", "true"),
-                ("originator", "codex_cli_rs"),
-            ])
-        )
-    } else {
-        format!(
-            "https://claude.com/cai/oauth/authorize?{}",
-            form(&[
-                ("code", "true"),
-                ("client_id", CLAUDE_CLIENT),
-                ("response_type", "code"),
-                ("redirect_uri", redirect),
-                ("scope", "user:inference"),
-                ("code_challenge", challenge),
-                ("code_challenge_method", "S256"),
-                ("state", state),
-            ])
-        )
     }
 }
 
@@ -125,69 +50,36 @@ impl std::fmt::Debug for TokenRequest {
     }
 }
 
-pub fn exchange_redirect(provider: ModelProvider, redirect: &str, query: &str) -> Result<String, ProviderError> {
-    if provider == ModelProvider::KiroSubscription {
-        return super::kiro::auth::redirect(redirect, query);
+impl TokenRequest {
+    pub fn json(url: impl Into<String>, body: &Value) -> Self {
+        Self { url: url.into(), content_type: "application/json", body: body.to_string() }
     }
-    Ok(redirect.to_owned())
-}
 
-pub fn exchange(provider: ModelProvider, code: &str, state: &str, verifier: &str, redirect: &str) -> TokenRequest {
-    if provider == ModelProvider::KiroSubscription {
-        return super::kiro::auth::exchange(code, verifier, redirect);
+    pub fn form(url: impl Into<String>, pairs: &[(&str, &str)]) -> Self {
+        Self { url: url.into(), content_type: "application/x-www-form-urlencoded", body: form(pairs) }
     }
-    token_request(
-        provider,
-        &[
-            ("grant_type", "authorization_code"),
-            ("code", code),
-            ("code_verifier", verifier),
-            ("redirect_uri", redirect),
-            ("state", state),
-        ],
-    )
-}
 
-pub fn refresh(provider: ModelProvider, previous: &Tokens) -> TokenRequest {
-    if provider == ModelProvider::KiroSubscription {
-        return match &previous.idc {
-            Some(client) => super::kiro::idc::refresh(client, previous),
-            None => super::kiro::auth::refresh(previous),
-        };
-    }
-    token_request(provider, &[("grant_type", "refresh_token"), ("refresh_token", &previous.refresh_token)])
-}
-
-fn token_request(provider: ModelProvider, params: &[(&str, &str)]) -> TokenRequest {
-    let openai = provider == ModelProvider::ChatGptSubscription;
-    let mut params = params.to_vec();
-    params.push(("client_id", if openai { OPENAI_CLIENT } else { CLAUDE_CLIENT }));
-    if openai {
-        params.retain(|(key, _)| *key != "state");
-        TokenRequest {
-            url: OPENAI_TOKEN.into(),
-            content_type: "application/x-www-form-urlencoded",
-            body: form(&params),
-        }
-    } else {
-        let body = Value::Object(params.iter().map(|(key, value)| ((*key).to_owned(), json!(value))).collect());
-        TokenRequest { url: CLAUDE_TOKEN.into(), content_type: "application/json", body: body.to_string() }
+    pub fn pairs_json(url: impl Into<String>, pairs: &[(&str, &str)]) -> Self {
+        let body = Value::Object(pairs.iter().map(|(key, value)| ((*key).to_owned(), json!(value))).collect());
+        Self::json(url, &body)
     }
 }
 
-pub fn tokens(
-    provider: ModelProvider,
+pub fn form(pairs: &[(&str, &str)]) -> String {
+    url::form_urlencoded::Serializer::new(String::new()).extend_pairs(pairs.iter().copied()).finish()
+}
+
+pub fn challenge(verifier: &str) -> String {
+    URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
+}
+
+pub fn standard(
     status: u16,
     body: &str,
     previous: Option<&Tokens>,
     now: DateTime<Utc>,
+    account: impl FnOnce(&Value) -> Result<String, ProviderError>,
 ) -> Result<Tokens, ProviderError> {
-    if provider == ModelProvider::KiroSubscription {
-        return match previous.and_then(|previous| previous.idc.as_ref()) {
-            Some(client) => super::kiro::idc::tokens(client, status, body, previous, now),
-            None => super::kiro::auth::tokens(status, body, previous, now),
-        };
-    }
     let unauthorized = |why: String| ProviderError::Unauthorized(why);
     if status != 200 {
         return Err(unauthorized(format!("token endpoint returned HTTP {status}")));
@@ -197,14 +89,6 @@ pub fn tokens(
         .as_str()
         .filter(|s| !s.is_empty())
         .ok_or_else(|| unauthorized("token response has no access_token".into()))?;
-    let account_id = if provider == ModelProvider::ChatGptSubscription {
-        let id_token = value["id_token"].as_str().unwrap_or_default();
-        account_id(id_token)
-            .or_else(|_| account_id(access))
-            .or_else(|error| previous.map(|p| p.account_id.clone()).filter(|id| !id.is_empty()).ok_or(error))?
-    } else {
-        String::new()
-    };
     Ok(Tokens {
         access_token: access.to_owned(),
         refresh_token: value["refresh_token"]
@@ -213,31 +97,59 @@ pub fn tokens(
             .map(str::to_owned)
             .or_else(|| previous.map(|p| p.refresh_token.clone()))
             .unwrap_or_default(),
-        account_id,
+        account_id: account(&value)?,
         expires_at: Some(now + Duration::seconds(value["expires_in"].as_i64().unwrap_or(0))),
-        idc: None,
+        client: None,
     })
 }
 
-pub fn account_id(jwt: &str) -> Result<String, ProviderError> {
-    let invalid = || ProviderError::Unauthorized("ChatGPT access token has no account id".into());
-    let parts: Vec<_> = jwt.split('.').collect();
-    if parts.len() != 3 {
-        return Err(invalid());
+pub struct Browser<'a> {
+    pub callback: (u16, &'a str),
+    pub state_bytes: usize,
+    pub authorize: &'a dyn Fn(&str, &str, &str) -> String,
+    pub exchange: &'a dyn Fn(&str, &str, &str, &str) -> TokenRequest,
+}
+
+impl std::fmt::Debug for Browser<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Browser").field("callback", &self.callback).finish_non_exhaustive()
     }
-    let data = URL_SAFE_NO_PAD.decode(parts[1]).or_else(|_| URL_SAFE.decode(parts[1])).map_err(|_| invalid())?;
-    let value: Value = serde_json::from_slice(&data).map_err(|_| invalid())?;
-    [
-        &value["https://api.openai.com/auth"]["chatgpt_account_id"],
-        &value["chatgpt_account_id"],
-        &value["organizations"][0]["id"],
-    ]
-    .into_iter()
-    .find_map(|claim| claim.as_str().filter(|s| !s.is_empty()))
-    .map(str::to_owned)
-    .ok_or_else(invalid)
+}
+
+pub fn browser(provider: &dyn Provider, host: &dyn Host, flow: &Browser<'_>) -> Result<Tokens, ProviderError> {
+    let listener = host.listen(flow.callback.0, flow.callback.1)?;
+    let redirect = listener.redirect_uri();
+    let verifier = host.random(64)?;
+    let state = host.random(flow.state_bytes)?;
+    host.open((flow.authorize)(&challenge(&verifier), &state, &redirect), None);
+    let answer = listener.next(&state, &[])?;
+    let code = answer.code();
+    answer.finish(code.as_ref().map(|_| ()).map_err(ToString::to_string));
+    let (status, body) = post(host, &(flow.exchange)(&code?, &state, &verifier, &redirect))?;
+    provider.tokens(status, &body, None, host.now())
 }
 
 #[cfg(test)]
-#[path = "oauth_tests.rs"]
-mod tests;
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_challenge_matches_the_rfc_example() {
+        assert_eq!(
+            challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        );
+    }
+
+    #[test]
+    fn a_refresh_keeps_the_refresh_token_the_answer_omits() {
+        let previous = Tokens { refresh_token: "r0".into(), ..Tokens::bearer("old") };
+        let now = Utc::now();
+        let fresh =
+            standard(200, r#"{"access_token":"new","expires_in":60}"#, Some(&previous), now, |_| Ok("a".into()));
+        let fresh = fresh.unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!((fresh.refresh_token.as_str(), fresh.account_id.as_str()), ("r0", "a"));
+        assert_eq!(fresh.expires_at, Some(now + Duration::seconds(60)));
+        assert!(matches!(standard(400, "{}", None, now, |_| Ok(String::new())), Err(ProviderError::Unauthorized(_))));
+    }
+}

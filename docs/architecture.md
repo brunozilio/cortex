@@ -18,7 +18,7 @@ cli ──► sdk ──► backend ──► agent-engine ──► (provider A
 | `agent-engine` | The `AgentEngine` boundary (`models`, `start`) and the app's own engine behind it: agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
 | `protocol` | Serialisable `ClientCommand` / `ServerEvent` in an `Envelope` carrying the `Principal`; the `Backend` trait. |
 | `backend` | `LocalBackend` (worker threads), `CommandHandler`: runs, memory (+ its MCP tool), settings, model providers (and their browser sign-in: PKCE, loopback redirect), secrets, the host's `Extensions`. |
-| `llm-providers` | LLM provider contracts: credential config, OAuth shapes, request and catalog shapes. Pure. |
+| `llm-providers` | Model providers, one folder each under `src/providers/<name>/`, found by `build.rs` into a registry. Shared pieces: `Config`, OAuth (`oauth::browser`), request effort, catalog paging, the sign-in `Host`. No network of its own. |
 | `subprocess` | Child processes started the same everywhere; `Tree` ends a process with its children. |
 | `private-file` | Files only the current user can read. |
 | `brand` | The product's name and command, from `brand.toml` (below). |
@@ -62,13 +62,24 @@ local owner); this is the seam for a future remote server.
 exactly one terminal event (`Completed`, `Failed`, `Cancelled`) ends a run.
 Recognised problems arrive first as `Diagnosed(EngineProblem)`.
 
-The native engine runs the loop in process behind `ModelApi`
-(`anthropic::Messages`, `openai::Responses`, `kiro::Conversation`,
-`chat::Chat` for `/chat/completions`). `ModelProviders` keeps one account per
-provider (`ConnectProvider` with an API key or token JSON, `SignInProvider`
-for a subscription's browser sign-in). `ListModels` asks every connected
-provider's catalog. A run uses its
-provider's key (`RunCredentials::model`, never serialized).
+The native engine runs the loop in process behind `ModelApi`, one wire per
+protocol (`anthropic::Messages`, `openai::Responses`,
+`event_stream::Conversation`, `chat::Chat` for `/chat/completions`).
+
+A provider is a folder in `crates/llm-providers/src/providers/`: a
+`Provider` impl with its id, name, `Access` (key, browser or code), secret
+slot, default window, which `Wire` a model uses, base URL, headers, body
+shape, catalog call and page, token refresh and its own `sign_in` over the
+`Host` the backend gives it (HTTP, loopback listener, browser, clock).
+`ModelProvider` is only the id; `llm_providers::find` looks it up. Deleting a
+folder removes the provider and the rest still builds; nothing outside the
+folder names one.
+
+`ModelProviders` keeps one account per provider (`ConnectProvider` with an
+API key or token JSON, `SignInProvider` for a subscription's sign-in). The
+listed summaries carry each provider's name and `Access`, so the CLI's menus
+come from the server. `ListModels` asks every connected provider's catalog.
+A run uses its provider's key (`RunCredentials::model`, never serialized).
 
 - **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`.
   Project or user agents of the same name replace them.

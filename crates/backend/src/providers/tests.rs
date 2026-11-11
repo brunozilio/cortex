@@ -21,7 +21,9 @@ const OWNER: Principal = Principal::LocalOwner;
 
 fn api_key(rig: &Rig, provider: ModelProvider) -> String {
     let key = rig.providers.key(&OWNER, provider).expect("key");
-    Config::parse(provider, key.current().expect("load").secret()).expect("config").api_key
+    Config::parse(llm_providers::get(provider).expect("known"), key.current().expect("load").secret())
+        .expect("config")
+        .api_key
 }
 
 fn listed(event: &ServerEvent) -> Vec<ProviderSummary> {
@@ -29,6 +31,10 @@ fn listed(event: &ServerEvent) -> Vec<ProviderSummary> {
         ServerEvent::Providers(ProviderEvent::Listed { providers }) => providers.clone(),
         other => panic!("expected the list, got {other:?}"),
     }
+}
+
+fn account(event: &ServerEvent, provider: &str) -> Option<domain::provider::ProviderAccount> {
+    listed(event).into_iter().find(|s| s.provider.id() == provider).and_then(|s| s.account)
 }
 
 fn failure(event: &ServerEvent) -> String {
@@ -41,54 +47,58 @@ fn failure(event: &ServerEvent) -> String {
 #[test]
 fn an_empty_owner_lists_every_provider_with_an_account() {
     let list = listed(&rig().providers.list(&OWNER));
-    assert_eq!(list.iter().map(|s| s.provider).collect::<Vec<_>>(), ModelProvider::ACCOUNTS);
+    assert_eq!(
+        list.iter().map(|s| s.provider).collect::<Vec<_>>(),
+        llm_providers::all().into_iter().map(llm_providers::id).collect::<Vec<_>>()
+    );
+    assert!(list.iter().all(|s| !s.name.is_empty()));
     assert!(list.iter().all(|s| s.account.is_none()));
 }
 
 #[test]
 fn a_key_is_kept_as_a_secret_and_listed_only_by_its_end() {
     let rig = rig();
-    let event = rig.providers.connect(&OWNER, ModelProvider::OpenAi, "  sk-proj-0123456789abcd  ");
-    let account = listed(&event)[0].account.clone().expect("connected");
+    let event = rig.providers.connect(&OWNER, ModelProvider::new("openai"), "  sk-proj-0123456789abcd  ");
+    let account = account(&event, "openai").expect("connected");
     assert_eq!((account.label.as_str(), account.since_unix), ("…abcd", 1_000));
     let json = serde_json::to_string(&event).expect("json");
     assert!(!json.contains("sk-proj"), "the key never leaves: {json}");
-    assert_eq!(api_key(&rig, ModelProvider::OpenAi), "sk-proj-0123456789abcd");
+    assert_eq!(api_key(&rig, ModelProvider::new("openai")), "sk-proj-0123456789abcd");
 }
 
 #[test]
 fn a_blank_key_fails_and_keeps_nothing() {
     let rig = rig();
-    assert_eq!(failure(&rig.providers.connect(&OWNER, ModelProvider::Anthropic, "   ")), "the key is empty");
-    assert!(rig.secrets.get(&OWNER, secret_id(ModelProvider::Anthropic)).is_none());
-    let missing = rig.providers.key(&OWNER, ModelProvider::Anthropic).expect_err("no key");
+    assert_eq!(failure(&rig.providers.connect(&OWNER, ModelProvider::new("anthropic"), "   ")), "the key is empty");
+    assert!(rig.secrets.get(&OWNER, secret_id(ModelProvider::new("anthropic"))).is_none());
+    let missing = rig.providers.key(&OWNER, ModelProvider::new("anthropic")).expect_err("no key");
     assert!(missing.contains("not connected"), "{missing}");
 }
 
 #[test]
 fn a_new_key_replaces_the_old_and_disconnecting_forgets_it() {
     let rig = rig();
-    rig.providers.connect(&OWNER, ModelProvider::OpenAi, "sk-proj-0123456789abcd");
-    rig.providers.connect(&OWNER, ModelProvider::OpenAi, "sk-proj-0123456789wxyz");
-    assert_eq!(api_key(&rig, ModelProvider::OpenAi), "sk-proj-0123456789wxyz");
-    assert!(listed(&rig.providers.disconnect(&OWNER, ModelProvider::OpenAi))[0].account.is_none());
-    assert!(rig.secrets.get(&OWNER, secret_id(ModelProvider::OpenAi)).is_none());
+    rig.providers.connect(&OWNER, ModelProvider::new("openai"), "sk-proj-0123456789abcd");
+    rig.providers.connect(&OWNER, ModelProvider::new("openai"), "sk-proj-0123456789wxyz");
+    assert_eq!(api_key(&rig, ModelProvider::new("openai")), "sk-proj-0123456789wxyz");
+    assert!(account(&rig.providers.disconnect(&OWNER, ModelProvider::new("openai")), "openai").is_none());
+    assert!(rig.secrets.get(&OWNER, secret_id(ModelProvider::new("openai"))).is_none());
 }
 
 #[test]
 fn owners_keep_their_providers_apart() {
     let rig = rig();
-    rig.providers.connect(&OWNER, ModelProvider::OpenAi, "sk-proj-0123456789abcd");
+    rig.providers.connect(&OWNER, ModelProvider::new("openai"), "sk-proj-0123456789abcd");
     let member = Principal::member(domain::UserId::new(), domain::OrgId::new());
-    assert!(listed(&rig.providers.list(&member))[0].account.is_none());
-    assert!(rig.providers.key(&member, ModelProvider::OpenAi).is_err());
+    assert!(account(&rig.providers.list(&member), "openai").is_none());
+    assert!(rig.providers.key(&member, ModelProvider::new("openai")).is_err());
 }
 
 #[test]
 fn subscriptions_accept_upstream_token_json_and_never_list_tokens() {
     let rig = rig();
     let raw = r#"{"access_token":"access-secret","refresh_token":"refresh-secret","account_id":"acct","expires_at":"2099-01-01T00:00:00Z"}"#;
-    for provider in [ModelProvider::ChatGptSubscription, ModelProvider::ClaudeSubscription] {
+    for provider in [ModelProvider::new("openai-subscription"), ModelProvider::new("claude-subscription")] {
         let event = rig.providers.connect(&OWNER, provider, raw);
         assert!(listed(&event).iter().any(|p| p.provider == provider && p.account.is_some()));
         assert!(!serde_json::to_string(&event).expect("event").contains("secret"));
@@ -104,11 +114,11 @@ struct FakeSignIn(Result<(), String>);
 
 impl SignIn for FakeSignIn {
     fn sign_in(&self, provider: ModelProvider, open: &mut dyn FnMut(String, Option<String>)) -> Result<Config, String> {
-        let code = (provider == ModelProvider::CopilotSubscription).then(|| "AB12-CD34".to_owned());
+        let code = (provider == ModelProvider::new("copilot-subscription")).then(|| "AB12-CD34".to_owned());
         open(format!("https://auth.test/{}", provider.id()), code);
         self.0.clone()?;
         let raw = r#"{"access_token":"access-secret","refresh_token":"refresh-secret","account_id":"acct","expires_at":"2099-01-01T00:00:00Z"}"#;
-        Config::parse(provider, raw).map_err(|e| e.to_string())
+        Config::parse(llm_providers::get(provider).expect("known"), raw).map_err(|e| e.to_string())
     }
 }
 
@@ -126,15 +136,15 @@ fn signing_in_to_a_subscription_opens_the_browser_then_keeps_the_tokens() {
     let rig = rig();
     let providers = rig.providers.clone().with_sign_in(Arc::new(FakeSignIn(Ok(()))));
     let (outbox, rx) = outbox();
-    providers.sign_in(&OWNER, ModelProvider::ClaudeSubscription, &outbox);
+    providers.sign_in(&OWNER, ModelProvider::new("claude-subscription"), &outbox);
     assert!(matches!(
         next(&rx),
-        ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider: ModelProvider::ClaudeSubscription, url, code: None })
-            if url.ends_with("claude-subscription")
+        ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code: None })
+            if provider == ModelProvider::new("claude-subscription") && url.ends_with("claude-subscription")
     ));
     let listed = listed(&next(&rx));
-    assert!(listed.iter().any(|p| p.provider == ModelProvider::ClaudeSubscription && p.account.is_some()));
-    let key = providers.key(&OWNER, ModelProvider::ClaudeSubscription).expect("key");
+    assert!(listed.iter().any(|p| p.provider == ModelProvider::new("claude-subscription") && p.account.is_some()));
+    let key = providers.key(&OWNER, ModelProvider::new("claude-subscription")).expect("key");
     assert!(key.current().expect("load").secret().contains("access-secret"));
 }
 
@@ -143,16 +153,16 @@ fn copilot_signs_in_with_a_code_to_type_and_keeps_its_own_account() {
     let rig = rig();
     let providers = rig.providers.clone().with_sign_in(Arc::new(FakeSignIn(Ok(()))));
     let (outbox, rx) = outbox();
-    providers.sign_in(&OWNER, ModelProvider::CopilotSubscription, &outbox);
+    providers.sign_in(&OWNER, ModelProvider::new("copilot-subscription"), &outbox);
     assert!(matches!(
         next(&rx),
-        ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider: ModelProvider::CopilotSubscription, code: Some(code), .. })
-            if code == "AB12-CD34"
+        ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, code: Some(code), .. })
+            if provider == ModelProvider::new("copilot-subscription") && code == "AB12-CD34"
     ));
     let listed = listed(&next(&rx));
     let connected: Vec<_> = listed.iter().filter(|p| p.account.is_some()).map(|p| p.provider).collect();
-    assert_eq!(connected, [ModelProvider::CopilotSubscription]);
-    assert!(providers.key(&OWNER, ModelProvider::ClaudeSubscription).is_err());
+    assert_eq!(connected, [ModelProvider::new("copilot-subscription")]);
+    assert!(providers.key(&OWNER, ModelProvider::new("claude-subscription")).is_err());
 }
 
 #[test]
@@ -160,10 +170,10 @@ fn a_failed_sign_in_or_an_api_provider_keeps_nothing() {
     let rig = rig();
     let providers = rig.providers.clone().with_sign_in(Arc::new(FakeSignIn(Err("closed the tab".into()))));
     let (outbox, rx) = outbox();
-    providers.sign_in(&OWNER, ModelProvider::ChatGptSubscription, &outbox);
+    providers.sign_in(&OWNER, ModelProvider::new("openai-subscription"), &outbox);
     next(&rx);
     assert_eq!(failure(&next(&rx)), "closed the tab");
-    providers.sign_in(&OWNER, ModelProvider::Anthropic, &outbox);
+    providers.sign_in(&OWNER, ModelProvider::new("anthropic"), &outbox);
     assert!(failure(&next(&rx)).contains("API key"));
     assert!(listed(&providers.list(&OWNER)).iter().all(|p| p.account.is_none()));
 }
@@ -173,7 +183,8 @@ struct ByKey;
 impl ModelCatalog for ByKey {
     fn models(&self, provider: ModelProvider, key: ProviderKey) -> Result<Vec<domain::ModelOption>, String> {
         let secret = key.current()?.secret().to_owned();
-        let api_key = Config::parse(provider, &secret).map_err(|e| e.to_string())?.api_key;
+        let api_key =
+            Config::parse(llm_providers::get(provider).expect("known"), &secret).map_err(|e| e.to_string())?.api_key;
         match api_key.strip_suffix("-0123456789") {
             Some("sk-broken") => Err("401".into()),
             Some(name) => Ok(vec![domain::ModelOption::new(format!("{}:{name}", provider.id()), name)]),
@@ -198,15 +209,13 @@ fn discovered(providers: &ModelProviders, local: Vec<domain::ModelOption>) -> (V
 fn each_connected_provider_lists_its_models_and_the_engine_s_come_last() {
     let providers = rig().providers.with_catalog(Arc::new(ByKey));
     assert!(discovered(&providers, Vec::new()).0.is_empty(), "no fixed list without an account");
-    providers.connect(&OWNER, ModelProvider::Anthropic, "sk-ant-0123456789");
-    providers.connect(&OWNER, ModelProvider::OpenAi, "sk-broken-0123456789");
-    let fixture = domain::ModelOption::new("fixture", "Fixture").served_by(ModelProvider::OpenAi);
+    providers.connect(&OWNER, ModelProvider::new("anthropic"), "sk-ant-0123456789");
+    providers.connect(&OWNER, ModelProvider::new("openai"), "sk-broken-0123456789");
+    let fixture = domain::ModelOption::new("fixture", "Fixture").served_by(ModelProvider::new("openai"));
     let (models, events) = discovered(&providers, vec![fixture]);
     assert_eq!(models, ["anthropic:sk-ant", "fixture"]);
-    assert!(
-        events.iter().any(|e| matches!(
-            e,
-            ServerEvent::Providers(ProviderEvent::Failed { provider: ModelProvider::OpenAi, .. })
-        ))
-    );
+    assert!(events.iter().any(|e| matches!(
+        e,
+        ServerEvent::Providers(ProviderEvent::Failed { provider, .. }) if *provider == ModelProvider::new("openai")
+    )));
 }

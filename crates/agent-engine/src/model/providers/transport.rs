@@ -3,15 +3,14 @@ use super::super::{
     http::{Http, Response},
 };
 use super::{Config, oauth};
-use domain::ModelProvider;
-use llm_providers::{catalog, request};
+use llm_providers::{Provider, catalog, request};
 use serde_json::Value;
 use std::io::Read;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 pub(super) struct Transport {
-    pub provider: ModelProvider,
+    pub provider: &'static dyn Provider,
     pub http: Arc<dyn Http>,
     pub keys: Arc<dyn KeySource>,
     pub lock: Mutex<()>,
@@ -47,23 +46,15 @@ impl Transport {
     }
 
     pub(super) fn models(&self) -> Result<Vec<domain::ModelOption>, ModelError> {
-        if self.provider == ModelProvider::KiroSubscription {
-            return catalog::collect_pages(self.provider, |after| {
-                let _guard = self.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                let call = llm_providers::kiro::models::call(&self.config(false)?, after);
-                self.http
-                    .post(&call.url, &call.headers, &call.body)
-                    .map_err(ModelError::Network)
-                    .and_then(json_response)
-            });
-        }
-        catalog::collect(self.provider, |path| {
+        catalog::collect(self.provider, |after| {
             let _guard = self.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            let config = self.config(false)?;
-            self.http
-                .get(&format!("{}{path}", config.base(self.provider)), &config.headers(self.provider))
-                .map_err(ModelError::Network)
-                .and_then(json_response)
+            let call = self.provider.catalog(&self.config(false)?, after);
+            match &call.body {
+                Some(body) => self.http.post(&call.url, &call.headers, body),
+                None => self.http.get(&call.url, &call.headers),
+            }
+            .map_err(ModelError::Network)
+            .and_then(json_response)
         })
     }
 }
@@ -104,14 +95,14 @@ impl Transport {
         };
         let mut body: Value = serde_json::from_str(body).map_err(|e| ModelError::Provider(e.to_string()))?;
         request::shape(self.provider, self.model.as_ref(), &mut body)?;
-        let turn_headers = request::turn_headers(self.provider, self.model.as_ref(), &body);
+        let turn_headers = self.provider.turn_headers(self.model.as_ref(), &body);
         let shaped = body;
         let bound = |config: &Config| {
             let mut body = shaped.clone();
-            request::bind(self.provider, config, &mut body);
+            self.provider.bind(config, &mut body);
             body.to_string()
         };
-        let path = request::path(self.provider, self.model.as_ref());
+        let path = self.provider.path(self.model.as_ref());
         let headers = |config: &Config| {
             let mut headers = config.headers(self.provider);
             headers.extend(turn_headers.iter().cloned());
@@ -124,7 +115,7 @@ impl Transport {
             &bound(&config),
             stop,
         )?;
-        if request::retries_after_refresh(self.provider, response.status) {
+        if self.provider.retries_after_refresh(response.status) {
             drop(response);
             config = self.config_stopped(true, stop)?;
             response = self.http.post_stopped(

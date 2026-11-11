@@ -1,8 +1,8 @@
 pub mod anthropic;
 mod cancellable_http;
 pub mod chat;
+pub mod event_stream;
 pub mod http;
-pub mod kiro;
 pub mod openai;
 pub mod providers;
 #[cfg(any(test, feature = "test-support"))]

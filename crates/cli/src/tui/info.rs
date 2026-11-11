@@ -1,6 +1,6 @@
 use domain::Command;
 use domain::command::mode_label;
-use domain::provider::ModelProvider;
+use domain::provider::ProviderSummary;
 
 use super::app::{App, Msg};
 use super::choices::{Picker, PickerKind};
@@ -33,9 +33,7 @@ pub fn run(app: &mut App, command: Command) {
             None => app.transcript.notice("No answer to copy yet."),
         },
         Command::Logout => app.spawn(|sdk| match sdk.providers() {
-            Ok(providers) => {
-                Msg::Providers(providers.into_iter().filter(|p| p.account.is_some()).map(|p| p.provider).collect())
-            }
+            Ok(providers) => Msg::Providers(providers.into_iter().filter(|p| p.account.is_some()).collect()),
             Err(error) => Msg::Error(error.to_string()),
         }),
         Command::ReleaseNotes => app.transcript.notice(release_notes()),
@@ -87,20 +85,20 @@ impl App {
     }
 }
 
-pub fn connected(app: &mut App, providers: Vec<ModelProvider>) {
+pub fn connected(app: &mut App, providers: Vec<ProviderSummary>) {
     if providers.is_empty() {
         return app.transcript.notice("No provider is connected.");
     }
-    let items = providers.iter().map(|p| (p.name().to_owned(), String::new())).collect();
+    let items = providers.iter().map(|p| (p.name.clone(), String::new())).collect();
     app.connected = providers;
     app.picker = Some(Picker { kind: PickerKind::Logout, title: "Forget which provider?".into(), items, cursor: 0 });
 }
 
 impl App {
     pub(super) fn logout_picked(&mut self, cursor: usize) {
-        let Some(provider) = self.connected.get(cursor).copied() else { return };
-        self.spawn(move |sdk| match sdk.disconnect_provider(provider) {
-            Ok(_) => Msg::Notice(format!("Forgot {}.", provider.name())),
+        let Some(summary) = self.connected.get(cursor).cloned() else { return };
+        self.spawn(move |sdk| match sdk.disconnect_provider(summary.provider) {
+            Ok(_) => Msg::Notice(format!("Forgot {}.", summary.name)),
             Err(error) => Msg::Error(error.to_string()),
         });
     }

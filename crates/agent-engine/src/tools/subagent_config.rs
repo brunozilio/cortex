@@ -137,7 +137,7 @@ impl AgentConfig {
         let Some(model) = &self.model else {
             return Ok(parent.into());
         };
-        let claude = matches!(provider, ModelProvider::Anthropic | ModelProvider::ClaudeSubscription);
+        let claude = llm_providers::find(provider).is_some_and(|provider| provider.vendor() == "anthropic");
         match model.as_str() {
             "sonnet" if claude => Ok("claude-sonnet-5-5".into()),
             "opus" if claude => Ok("claude-opus-5-5".into()),

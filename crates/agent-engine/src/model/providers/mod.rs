@@ -1,5 +1,3 @@
-pub mod copilot;
-pub mod kiro_idc;
 pub mod oauth;
 mod transport;
 
@@ -10,7 +8,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 pub use llm_providers::Config;
-use llm_providers::copilot::Wire;
+use llm_providers::Wire;
 pub use llm_providers::oauth::Tokens;
 use transport::Transport;
 
@@ -22,24 +20,29 @@ impl super::chat::Endpoints for SameModel {
     }
 }
 
-pub struct ProviderClient {
+struct Ready {
     transport: Arc<Transport>,
     api: Arc<dyn ModelApi>,
 }
 
+pub struct ProviderClient {
+    ready: Result<Ready, ModelError>,
+}
+
 impl std::fmt::Debug for ProviderClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ProviderClient").field("provider", &self.transport.provider).finish_non_exhaustive()
+        let provider = self.ready.as_ref().map(|ready| ready.transport.provider.id());
+        f.debug_struct("ProviderClient").field("provider", &provider).finish_non_exhaustive()
     }
 }
 
 impl ProviderClient {
     pub fn new(provider: ModelProvider, http: Arc<dyn Http>, keys: Arc<dyn KeySource>) -> Self {
-        Self::configured(provider, http, keys, None)
+        Self { ready: Self::configured(provider, http, keys, None) }
     }
 
     pub fn for_model(model: ModelOption, http: Arc<dyn Http>, keys: Arc<dyn KeySource>) -> Self {
-        Self::configured(model.provider, http, keys, Some(model))
+        Self { ready: Self::configured(model.provider, http, keys, Some(model)) }
     }
 
     fn configured(
@@ -47,30 +50,29 @@ impl ProviderClient {
         http: Arc<dyn Http>,
         keys: Arc<dyn KeySource>,
         model: Option<ModelOption>,
-    ) -> Self {
+    ) -> Result<Ready, ModelError> {
+        let provider = llm_providers::get(provider)?;
         let transport =
             Arc::new(Transport { provider, http, keys, lock: Mutex::new(()), cached: Mutex::new(None), model });
-        if provider == ModelProvider::KiroSubscription {
-            let window = transport.model.as_ref().and_then(|model| model.window);
-            let api = Arc::new(super::kiro::Conversation::new(transport.clone(), window));
-            return Self { transport, api };
-        }
         let dummy = Arc::new(domain::provider::ProviderKey::new("transport-owned"));
-        let wire = match provider {
-            ModelProvider::OpenAi | ModelProvider::ChatGptSubscription => Wire::Responses,
-            ModelProvider::CopilotSubscription => llm_providers::copilot::wire(transport.model.as_ref()),
-            _ => Wire::Messages,
-        };
-        let api: Arc<dyn ModelApi> = match wire {
+        let api: Arc<dyn ModelApi> = match provider.wire(transport.model.as_ref()) {
             Wire::Responses => Arc::new(super::openai::Responses::new(transport.clone(), dummy)),
             Wire::Messages => Arc::new(super::anthropic::Messages::new(transport.clone(), dummy)),
             Wire::Chat => Arc::new(super::chat::Chat::new(transport.clone(), Arc::new(SameModel))),
+            Wire::EventStream => {
+                let window = transport.model.as_ref().and_then(|model| model.window);
+                Arc::new(super::event_stream::Conversation::new(transport.clone(), window))
+            }
         };
-        Self { transport, api }
+        Ok(Ready { transport, api })
+    }
+
+    fn ready(&self) -> Result<&Ready, ModelError> {
+        self.ready.as_ref().map_err(Clone::clone)
     }
 
     pub fn models(&self) -> Result<Vec<ModelOption>, ModelError> {
-        self.transport.models()
+        self.ready()?.transport.models()
     }
 }
 
@@ -79,10 +81,11 @@ impl ModelApi for ProviderClient {
         if stop.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(ModelError::Cancelled);
         }
+        let ready = self.ready()?;
         {
-            let _guard = self.transport.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.transport.config(false)?;
+            let _guard = ready.transport.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            ready.transport.config(false)?;
         }
-        self.api.turn(request, on, stop)
+        ready.api.turn(request, on, stop)
     }
 }

@@ -8,7 +8,19 @@ use agent_engine::model::TurnRequest;
 use agent_engine::transcript::Message;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use domain::{Effort, ModelProvider};
+use llm_providers::Provider;
 use serde_json::json;
+
+const OPENAI: ModelProvider = ModelProvider::new("openai");
+const ANTHROPIC: ModelProvider = ModelProvider::new("anthropic");
+const CHATGPT: ModelProvider = ModelProvider::new("openai-subscription");
+const CLAUDE: ModelProvider = ModelProvider::new("claude-subscription");
+const COPILOT: ModelProvider = ModelProvider::new("copilot-subscription");
+const KIRO: ModelProvider = ModelProvider::new("kiro-subscription");
+
+fn shape(provider: ModelProvider) -> &'static dyn Provider {
+    llm_providers::get(provider).expect("a provider folder")
+}
 
 fn request(id: &str) -> TurnRequest {
     TurnRequest {
@@ -27,7 +39,7 @@ fn token(account: &str) -> String {
     )
 }
 fn credentials(provider: ModelProvider) -> String {
-    if provider.subscription() {
+    if shape(provider).access().subscription() {
         json!({"auth":{"access_token":token("account-1"),"refresh_token":"refresh-1","account_id":"account-1","expires_at":"2099-01-01T00:00:00Z"}}).to_string()
     } else {
         json!({"api_key":"sk-test-key"}).to_string()

@@ -12,7 +12,7 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
     let files = super::mentions::offered(app);
     if let Some(secret) = &app.secret {
         let dots = "•".repeat(secret.text.chars().count());
-        lines.push(Line::from(vec![format!("{} API key: ", secret.provider.name()).bold(), dots.into()]));
+        lines.push(Line::from(vec![format!("{} API key: ", secret.name).bold(), dots.into()]));
         lines.push(Line::from("Paste or type it · Enter connects · Esc cancels").dim());
     } else if let Some(pending) = &app.ask {
         asking(pending, width, &mut lines);

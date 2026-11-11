@@ -225,6 +225,7 @@ dependencies = [
  "base64 0.23.1",
  "brand",
  "chacha20poly1305",
+ "chrono",
  "crossbeam-channel",
  "domain",
  "getrandom 0.3.4",
@@ -1695,6 +1696,7 @@ dependencies = [
  "domain",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.21",
  "url",
 ]

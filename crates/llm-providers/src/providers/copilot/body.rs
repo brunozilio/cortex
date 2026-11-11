@@ -11,7 +11,7 @@ pub fn shape(model: Option<&ModelOption>, body: &mut Value, effort: &str) -> Res
         asked.map_or(most, |asked| asked.min(most))
     };
     match wire(model) {
-        Wire::Chat => {
+        Wire::Chat | Wire::EventStream => {
             body["max_tokens"] = json!(limit(body["max_tokens"].as_u64(), 16_384));
         }
         Wire::Responses => {
@@ -77,7 +77,7 @@ mod tests {
     use domain::model::ModelCapabilities;
 
     use super::*;
-    use crate::copilot::served;
+    use super::super::served;
 
     fn shaped_messages(caps: ModelCapabilities, effort: &str) -> Value {
         let mut body = json!({"max_tokens": 64000, "thinking": {"type": "adaptive", "display": "summarized"},

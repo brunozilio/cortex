@@ -1,5 +1,5 @@
 use domain::model::ModelCapabilities;
-use domain::{ModelOption, ModelProvider};
+use domain::ModelOption;
 use serde_json::Value;
 
 pub fn model(item: &Value) -> Option<ModelOption> {
@@ -13,8 +13,7 @@ pub fn model(item: &Value) -> Option<ModelOption> {
     let limits = &caps["limits"];
     let supports = &caps["supports"];
     let label = item["name"].as_str().map(str::trim).filter(|name| !name.is_empty()).unwrap_or(id);
-    let provider = ModelProvider::CopilotSubscription;
-    let mut model = ModelOption::new(format!("{}:{id}", provider.id()), label).served_by(provider);
+    let mut model = crate::catalog::option(&super::Provider, id, label.to_owned());
     model.window = limits["max_context_window_tokens"].as_u64().filter(|n| *n > 0);
     let levels: Vec<String> = supports["reasoning_effort"]
         .as_array()

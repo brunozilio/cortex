@@ -47,7 +47,7 @@ impl ModelOption {
         Self {
             id: id.into(),
             label: label.into(),
-            provider: ModelProvider::Anthropic,
+            provider: ModelProvider::default(),
             window: None,
             capabilities: None,
         }
@@ -62,54 +62,61 @@ impl ModelOption {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
-pub enum ModelProvider {
-    #[default]
-    Anthropic,
-    OpenAi,
-    ChatGptSubscription,
-    ClaudeSubscription,
-    CopilotSubscription,
-    KiroSubscription,
-}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+pub struct ModelProvider(&'static str);
 
 impl ModelProvider {
-    pub const ACCOUNTS: [Self; 6] = [
-        Self::OpenAi,
-        Self::Anthropic,
-        Self::ChatGptSubscription,
-        Self::ClaudeSubscription,
-        Self::CopilotSubscription,
-        Self::KiroSubscription,
-    ];
+    pub const fn new(id: &'static str) -> Self {
+        Self(id)
+    }
 
-    pub const fn subscription(self) -> bool {
-        matches!(
-            self,
-            Self::ChatGptSubscription | Self::ClaudeSubscription | Self::CopilotSubscription | Self::KiroSubscription
-        )
+    pub fn named(id: &str) -> Self {
+        static KNOWN: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
+        let mut known = KNOWN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(found) = known.iter().find(|known| **known == id) {
+            return Self(found);
+        }
+        let leaked: &'static str = Box::leak(id.to_owned().into_boxed_str());
+        known.push(leaked);
+        Self(leaked)
     }
 
     pub const fn id(self) -> &'static str {
-        match self {
-            Self::OpenAi => "openai",
-            Self::Anthropic => "anthropic",
-            Self::ChatGptSubscription => "openai-subscription",
-            Self::ClaudeSubscription => "claude-subscription",
-            Self::CopilotSubscription => "copilot-subscription",
-            Self::KiroSubscription => "kiro-subscription",
-        }
+        self.0
     }
+}
 
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Anthropic => "Anthropic API",
-            Self::ChatGptSubscription => "ChatGPT Subscription",
-            Self::ClaudeSubscription => "Claude Subscription",
-            Self::CopilotSubscription => "GitHub Copilot Subscription",
-            Self::KiroSubscription => "Kiro Subscription",
-            Self::OpenAi => "OpenAI API",
-        }
+impl std::fmt::Display for ModelProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl Serialize for ModelProvider {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for ModelProvider {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let id = String::deserialize(deserializer)?;
+        Ok(Self::named(&id))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Access {
+    #[default]
+    Key,
+    Browser,
+    Code,
+}
+
+impl Access {
+    pub const fn subscription(self) -> bool {
+        !matches!(self, Self::Key)
     }
 }
 
@@ -148,8 +155,8 @@ mod tests {
     #[test]
     fn the_asked_model_wins_then_the_first() {
         let models = [
-            served("anthropic:claude-opus-5-5", ModelProvider::Anthropic),
-            served("openai:gpt-6", ModelProvider::OpenAi),
+            served("anthropic:claude-opus-5-5", ModelProvider::new("anthropic")),
+            served("openai:gpt-6", ModelProvider::new("openai")),
         ];
         assert_eq!(choose_model(&models, Some("gpt-6")).map(|m| m.id), Some("openai:gpt-6".into()));
         assert_eq!(choose_model(&models, Some("ANTHROPIC:claude-opus-5-5")).map(|m| m.id), Some(models[0].id.clone()));
@@ -159,8 +166,16 @@ mod tests {
 
     #[test]
     fn a_model_round_trips_with_its_provider() {
-        let model = ModelOption::new("gpt-6", "GPT-6").served_by(ModelProvider::OpenAi);
+        let model = ModelOption::new("gpt-6", "GPT-6").served_by(ModelProvider::new("openai"));
         let json = serde_json::to_string(&model).expect("serialize");
         assert_eq!(serde_json::from_str::<ModelOption>(&json).expect("round trip"), model);
+        assert!(json.contains(r#""provider":"openai""#), "{json}");
+    }
+
+    #[test]
+    fn a_provider_named_at_run_time_is_the_same_id() {
+        assert_eq!(ModelProvider::named("acme"), ModelProvider::named(&String::from("acme")));
+        assert_eq!(ModelProvider::named("openai"), ModelProvider::new("openai"));
+        assert!(Access::Browser.subscription() && !Access::Key.subscription());
     }
 }

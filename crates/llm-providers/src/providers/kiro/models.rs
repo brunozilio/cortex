@@ -1,26 +1,15 @@
+use domain::ModelOption;
 use domain::model::ModelCapabilities;
-use domain::{ModelOption, ModelProvider};
 use serde_json::{Value, json};
 
-#[derive(Clone, PartialEq, Eq)]
-pub struct Call {
-    pub url: String,
-    pub headers: Vec<(String, String)>,
-    pub body: String,
-}
-
-impl std::fmt::Debug for Call {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Call").field("url", &self.url).finish_non_exhaustive()
-    }
-}
+use crate::Call;
 
 pub fn call(config: &crate::Config, next: &str) -> Call {
-    let (token, arn) = config.auth.as_ref().map_or(("", ""), |t| (t.access_token.as_str(), t.account_id.as_str()));
+    let arn = config.account();
     Call {
         url: format!("{}/", super::management(arn)),
-        headers: super::headers(token, super::MODELS),
-        body: request(arn, next),
+        headers: super::headers(config.access_token(), super::MODELS),
+        body: Some(request(arn, next)),
     }
 }
 
@@ -41,8 +30,7 @@ pub fn page(value: &Value) -> Option<(Vec<ModelOption>, Option<String>)> {
 fn model(item: &Value) -> Option<ModelOption> {
     let id = item["modelId"].as_str().map(str::trim).filter(|id| !id.is_empty())?;
     let label = item["modelName"].as_str().map(str::trim).filter(|name| !name.is_empty()).unwrap_or(id);
-    let provider = ModelProvider::KiroSubscription;
-    let mut model = ModelOption::new(format!("{}:{id}", provider.id()), label).served_by(provider);
+    let mut model = crate::catalog::option(&super::Provider, id, label.to_owned());
     let limits = &item["tokenLimits"];
     model.window = limits["maxInputTokens"].as_u64().filter(|n| *n > 0);
     model.capabilities = Some(ModelCapabilities {
@@ -78,7 +66,7 @@ mod tests {
             refresh_token: "r".into(),
             account_id: "arn:aws:codewhisperer:us-east-1:1:profile/P".into(),
             expires_at: None,
-            idc: None,
+            client: None,
         };
         let config = crate::Config { auth: Some(tokens), ..crate::Config::default() };
         let call = call(&config, "");

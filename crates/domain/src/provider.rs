@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-pub use crate::model::ModelProvider;
+pub use crate::model::{Access, ModelProvider};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderAccount {
@@ -13,7 +13,16 @@ pub struct ProviderAccount {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderSummary {
     pub provider: ModelProvider,
+    pub name: String,
+    pub access: Access,
     pub account: Option<ProviderAccount>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderInfo {
+    pub provider: ModelProvider,
+    pub name: String,
+    pub access: Access,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,10 +44,15 @@ impl ProviderBook {
         self.accounts.remove(&provider)
     }
 
-    pub fn summaries(&self) -> Vec<ProviderSummary> {
-        ModelProvider::ACCOUNTS
+    pub fn summaries(&self, known: impl IntoIterator<Item = ProviderInfo>) -> Vec<ProviderSummary> {
+        known
             .into_iter()
-            .map(|provider| ProviderSummary { provider, account: self.get(provider).cloned() })
+            .map(|info| ProviderSummary {
+                account: self.get(info.provider).cloned(),
+                provider: info.provider,
+                name: info.name,
+                access: info.access,
+            })
             .collect()
     }
 }
@@ -136,28 +150,33 @@ mod tests {
     #[test]
     fn one_account_per_provider_and_the_new_one_replaces_the_old() {
         let mut book = ProviderBook::default();
-        assert_eq!(book.connect(ModelProvider::OpenAi, account("…ab12")), None);
-        let old = book.connect(ModelProvider::OpenAi, account("…cd34"));
+        assert_eq!(book.connect(ModelProvider::new("openai"), account("…ab12")), None);
+        let old = book.connect(ModelProvider::new("openai"), account("…cd34"));
         assert_eq!(old.map(|a| a.label), Some("…ab12".into()));
-        assert_eq!(book.get(ModelProvider::OpenAi).map(|a| a.label.as_str()), Some("…cd34"));
-        assert_eq!(book.disconnect(ModelProvider::OpenAi).map(|a| a.label), Some("…cd34".into()));
-        assert_eq!(book.get(ModelProvider::OpenAi), None);
+        assert_eq!(book.get(ModelProvider::new("openai")).map(|a| a.label.as_str()), Some("…cd34"));
+        assert_eq!(book.disconnect(ModelProvider::new("openai")).map(|a| a.label), Some("…cd34".into()));
+        assert_eq!(book.get(ModelProvider::new("openai")), None);
     }
 
     #[test]
     fn summaries_list_every_provider_with_an_account_in_order() {
         let mut book = ProviderBook::default();
-        book.connect(ModelProvider::Anthropic, account("…ff00"));
-        let summaries = book.summaries();
-        assert_eq!(summaries.iter().map(|s| s.provider).collect::<Vec<_>>(), ModelProvider::ACCOUNTS);
+        let (one, two) = (ModelProvider::new("one"), ModelProvider::new("two"));
+        book.connect(two, account("…ff00"));
+        let info = |provider, name: &str| ProviderInfo { provider, name: name.into(), access: Access::Key };
+        let summaries = book.summaries([info(one, "One"), info(two, "Two")]);
+        assert_eq!(summaries.iter().map(|s| s.provider).collect::<Vec<_>>(), [one, two]);
         assert_eq!(summaries[0].account, None);
-        assert_eq!(summaries[1].account.as_ref().map(|a| a.label.as_str()), Some("…ff00"));
+        assert_eq!(
+            (summaries[1].name.as_str(), summaries[1].account.as_ref().map(|a| a.label.as_str())),
+            ("Two", Some("…ff00"))
+        );
     }
 
     #[test]
     fn a_book_round_trips() {
         let mut book = ProviderBook::default();
-        book.connect(ModelProvider::Anthropic, account("x"));
+        book.connect(ModelProvider::new("anthropic"), account("x"));
         let back: ProviderBook = serde_json::from_str(&serde_json::to_string(&book).expect("json")).expect("parse");
         assert_eq!(back, book);
     }

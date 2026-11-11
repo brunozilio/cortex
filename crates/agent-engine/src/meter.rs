@@ -25,7 +25,9 @@ impl ModelApi for Metered {
     fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
         let reply = self.api.turn(request, on, stop)?;
         let u = reply.usage;
-        let cost = rates(self.provider, &request.model, u.prompt())
+        let provider = llm_providers::find(self.provider);
+        let vendor = provider.map_or("", |provider| provider.vendor());
+        let cost = rates(vendor, &request.model, u.prompt())
             .map(|rate| rate.estimate(u.input, u.output, u.cache_read, u.cache_write));
         self.ledger.costs.lock().map_err(|_| ModelError::Provider("usage ledger unavailable".into()))?.push(cost);
         self.gate.emit(EngineEvent::Usage(ModelUsage {
@@ -35,8 +37,12 @@ impl ModelApi for Metered {
             cache_read: u.cache_read,
             cache_write: u.cache_write,
             estimated_cost_usd: cost,
-            basis: if self.provider.subscription() { "subscription-api-equivalent" } else { "api-reference-estimate" }
-                .into(),
+            basis: if provider.is_some_and(|provider| provider.access().subscription()) {
+                "subscription-api-equivalent"
+            } else {
+                "api-reference-estimate"
+            }
+            .into(),
             price_date: PRICE_DATE.into(),
         }));
         Ok(reply)

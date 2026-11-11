@@ -56,7 +56,11 @@ fn signing_in_discovers_registers_and_keeps_tokens_that_are_refreshed_when_stale
     let exchange = &sent[3].body;
     assert!(exchange.contains("grant_type=authorization_code") && exchange.contains("code=xyz"), "{exchange}");
     let verifier = exchange.split('&').find_map(|pair| pair.strip_prefix("code_verifier=")).expect("verifier");
-    assert_eq!(query_value(&opened, "code_challenge"), pkce::challenge(verifier), "PKCE ties the two together");
+    assert_eq!(
+        query_value(&opened, "code_challenge"),
+        llm_providers::oauth::challenge(verifier),
+        "PKCE ties the two together"
+    );
     assert_eq!(auth.token(&owner, SERVER).as_deref(), Some("a-1"));
     assert_eq!(auth.token(&owner, "https://other.test/mcp"), None, "only the server signed in to");
 

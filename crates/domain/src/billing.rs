@@ -1,4 +1,3 @@
-use crate::ModelProvider;
 use serde::{Deserialize, Serialize};
 
 pub const PRICE_DATE: &str = "2026-11-07";
@@ -32,7 +31,7 @@ pub struct ModelUsage {
     pub price_date: String,
 }
 
-pub fn rates(provider: ModelProvider, model: &str, prompt_tokens: u64) -> Option<TokenRates> {
+pub fn rates(vendor: &str, model: &str, prompt_tokens: u64) -> Option<TokenRates> {
     let model = model.rsplit(':').next().unwrap_or(model);
     let tuple = match model {
         "claude-opus-5-5" => (4_000_000, 20_000_000, 200_000, 5_000_000),
@@ -53,26 +52,17 @@ pub fn rates(provider: ModelProvider, model: &str, prompt_tokens: u64) -> Option
         "gpt-5.3-codex" => (1_750_000, 14_000_000, 175_000, 0),
         _ => return None,
     };
-    let matches_provider = if model.starts_with("claude-") {
-        matches!(provider, ModelProvider::Anthropic | ModelProvider::ClaudeSubscription)
-    } else {
-        matches!(provider, ModelProvider::OpenAi | ModelProvider::ChatGptSubscription)
-    };
-    matches_provider.then_some(TokenRates {
-        input: tuple.0,
-        output: tuple.1,
-        cache_read: tuple.2,
-        cache_write: tuple.3,
-    })
+    let matches_vendor = vendor == if model.starts_with("claude-") { "anthropic" } else { "openai" };
+    matches_vendor.then_some(TokenRates { input: tuple.0, output: tuple.1, cache_read: tuple.2, cache_write: tuple.3 })
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn known_unknown_provider_and_cache_rates_are_explicit() {
-        let rate = rates(ModelProvider::Anthropic, "claude-sonnet-5-5", 100).expect("valid test fixture");
+        let rate = rates("anthropic", "claude-sonnet-5-5", 100).expect("valid test fixture");
         assert!((rate.estimate(100, 10, 20, 5) - 0.0003145).abs() < 1e-12);
-        assert!(rates(ModelProvider::OpenAi, "claude-sonnet-5-5", 1).is_none());
-        assert!(rates(ModelProvider::Anthropic, "unreviewed-model", 1).is_none());
+        assert!(rates("openai", "claude-sonnet-5-5", 1).is_none());
+        assert!(rates("anthropic", "unreviewed-model", 1).is_none());
     }
 }

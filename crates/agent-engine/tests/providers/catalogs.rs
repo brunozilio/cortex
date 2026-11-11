@@ -1,7 +1,7 @@
+use crate::*;
 use agent_engine::model::ModelError;
 use agent_engine::model::http::ScriptedHttp;
 use agent_engine::model::providers::ProviderClient;
-use domain::ModelProvider;
 use domain::provider::ProviderKey;
 use serde_json::json;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use crate::credentials;
 #[test]
 fn openai_catalog_filters_non_chat_models_and_sorts() {
     let http = Arc::new(ScriptedHttp::new([(200,json!({"data":[{"id":"gpt-z"},{"id":"text-embedding-3"},{"id":"gpt-a"},{"id":"gpt-codex"},{"id":"o3"},{"id":"gpt-audio"}]}).to_string())]));
-    let client = ProviderClient::new(ModelProvider::OpenAi, http, Arc::new(ProviderKey::new("sk-key")));
+    let client = ProviderClient::new(OPENAI, http, Arc::new(ProviderKey::new("sk-key")));
     assert_eq!(
         client.models().expect("models").iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
         ["openai:gpt-a", "openai:gpt-z", "openai:o3"]
@@ -21,11 +21,7 @@ fn openai_catalog_filters_non_chat_models_and_sorts() {
 #[test]
 fn codex_catalog_uses_account_and_client_version_and_preserves_metadata() {
     let http = Arc::new(ScriptedHttp::new([(200,json!({"models":[{"slug":"gpt-test","display_name":"GPT Test","context_window":400000,"auto_compact_token_limit":272000,"effective_context_window_percent":95,"supported_reasoning_levels":[{"effort":"high"}]}]}).to_string())]));
-    let client = ProviderClient::new(
-        ModelProvider::ChatGptSubscription,
-        http.clone(),
-        Arc::new(ProviderKey::new(credentials(ModelProvider::ChatGptSubscription))),
-    );
+    let client = ProviderClient::new(CHATGPT, http.clone(), Arc::new(ProviderKey::new(credentials(CHATGPT))));
     let models = client.models().expect("models");
     assert_eq!(models[0].id, "openai-subscription:gpt-test");
     assert_eq!(models[0].window, Some(400000));
@@ -43,13 +39,13 @@ fn anthropic_catalog_paginates_and_detects_stuck_cursors() {
         (200, page.clone()),
         (200, json!({"data":[{"id":"claude-2","display_name":"Claude 2"}],"has_more":false}).to_string()),
     ]));
-    let client = ProviderClient::new(ModelProvider::Anthropic, http.clone(), Arc::new(ProviderKey::new("sk-ant-key")));
+    let client = ProviderClient::new(ANTHROPIC, http.clone(), Arc::new(ProviderKey::new("sk-ant-key")));
     let models = client.models().expect("pages");
     assert_eq!(models.len(), 2);
     assert_eq!(models[0].capabilities.as_ref().expect("caps").max_output_tokens, Some(4096));
     assert!(http.sent()[1].url.ends_with("after_id=cursor-1"));
     let bad = ProviderClient::new(
-        ModelProvider::Anthropic,
+        ANTHROPIC,
         Arc::new(ScriptedHttp::new([(200, page.clone()), (200, page)])),
         Arc::new(ProviderKey::new("key")),
     );
@@ -60,9 +56,9 @@ fn anthropic_catalog_paginates_and_detects_stuck_cursors() {
 fn claude_fallback_requires_a_valid_empty_response() {
     let make = |status, body: &str| {
         ProviderClient::new(
-            ModelProvider::ClaudeSubscription,
+            CLAUDE,
             Arc::new(ScriptedHttp::new([(status, body.into())])),
-            Arc::new(ProviderKey::new(credentials(ModelProvider::ClaudeSubscription))),
+            Arc::new(ProviderKey::new(credentials(CLAUDE))),
         )
     };
     assert_eq!(make(200, "{\"data\":[]}").models().expect("fallback").len(), 4);

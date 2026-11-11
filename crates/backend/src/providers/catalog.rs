@@ -34,8 +34,9 @@ impl ModelProviders {
         };
         let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
         std::thread::spawn(move || {
-            let accounts: Vec<_> = ModelProvider::ACCOUNTS
+            let accounts: Vec<_> = llm_providers::all()
                 .into_iter()
+                .map(llm_providers::id)
                 .filter_map(|provider| Some((provider, this.key(&owner, provider).ok()?)))
                 .collect();
             let mut models = list(this.catalog.as_ref(), accounts, &outbox);

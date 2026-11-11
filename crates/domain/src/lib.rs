@@ -40,7 +40,7 @@ pub use memory::{
     Author, Forgotten, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, MemoryKind, Provenance, RecallBudget,
     Revision,
 };
-pub use model::{Effort, ModelOption, ModelProvider};
+pub use model::{Access, Effort, ModelOption, ModelProvider};
 pub use principal::{Member, Principal};
 pub use request::PromptRequest;
 pub use skill::Skill;

@@ -6,20 +6,13 @@ use agent_engine::{
 use domain::{ModelOption, ModelProvider, PromptRequest};
 use std::sync::Arc;
 pub fn model() -> ModelOption {
-    let provider = match std::env::var(concat!(brand::env_prefix!(), "_LIVE_PROVIDER"))
-        .unwrap_or_else(|_| "anthropic".into())
-        .as_str()
-    {
-        "openai" => ModelProvider::OpenAi,
-        "openai-subscription" => ModelProvider::ChatGptSubscription,
-        "claude-subscription" => ModelProvider::ClaudeSubscription,
-        "anthropic" => ModelProvider::Anthropic,
-        "kiro-subscription" => ModelProvider::KiroSubscription,
-        _ => panic!("{brand_env}_LIVE_PROVIDER must name one of the native providers", brand_env = brand::ENV),
+    let named = std::env::var(concat!(brand::env_prefix!(), "_LIVE_PROVIDER")).unwrap_or_else(|_| "anthropic".into());
+    let Some(provider) = llm_providers::find(ModelProvider::named(&named)).map(llm_providers::id) else {
+        panic!("{brand_env}_LIVE_PROVIDER must name one of the native providers", brand_env = brand::ENV)
     };
-    let default = match provider {
-        ModelProvider::OpenAi | ModelProvider::ChatGptSubscription => "gpt-6.1-sol",
-        ModelProvider::KiroSubscription => "kiro-subscription:claude-haiku-4.5",
+    let default = match provider.id() {
+        "openai" | "openai-subscription" => "gpt-6.1-sol",
+        "kiro-subscription" => "kiro-subscription:claude-haiku-4.5",
         _ => "claude-haiku-5-5",
     };
     ModelOption::new(

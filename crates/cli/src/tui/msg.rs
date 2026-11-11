@@ -13,7 +13,8 @@ pub enum Msg {
     Chore(Result<Option<sdk::ChoreAnswer>, String>),
     Files(Vec<String>),
     StatusLine(String),
-    Providers(Vec<domain::provider::ModelProvider>),
+    Providers(Vec<domain::provider::ProviderSummary>),
+    Menu(Vec<domain::provider::ProviderSummary>),
     Conversations(Vec<super::conversations::Conversation>),
     Context(domain::usage::ContextUsage),
     Shell { id: String, command: String, result: Result<(String, bool), String> },
@@ -48,6 +49,7 @@ impl super::app::App {
             Msg::Files(files) => self.files = Some(files),
             Msg::Conversations(found) => super::resume::listed(self, found),
             Msg::Providers(providers) => super::info::connected(self, providers),
+            Msg::Menu(providers) => self.menu(providers),
             Msg::StatusLine(line) => self.status.text = self.status.command.is_some().then_some(line),
             Msg::Context(usage) => {
                 self.window = Some(usage.window);

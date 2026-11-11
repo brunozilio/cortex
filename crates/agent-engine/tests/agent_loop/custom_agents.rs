@@ -14,7 +14,9 @@ fn configured_agent_filters_tools_enforces_runtime_denial_and_selects_model_effo
         subagent::{AgentTool, FoundAgent},
         subagent_config::AgentConfig,
     };
-    let rig = Rig::new(PermissionMode::Bypass);
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    rig.workspace.model = domain::ModelOption::new("anthropic:claude-opus-5-5", "Opus")
+        .served_by(domain::ModelProvider::new("anthropic"));
     let found = FoundAgent {
         name: "reviewer".into(),
         description: "Read-only review".into(),

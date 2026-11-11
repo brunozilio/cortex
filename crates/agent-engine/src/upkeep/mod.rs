@@ -1,6 +1,6 @@
 mod compact;
 
-use domain::{ContextShare, ContextSlice, ContextUsage, ModelOption, ModelProvider};
+use domain::{ContextShare, ContextSlice, ContextUsage, ModelOption};
 
 pub use self::compact::{compact, compact_hooked, compact_hooked_on, compact_on, summary_text};
 use crate::model::ToolSpec;
@@ -12,11 +12,7 @@ pub fn window(model: &ModelOption) -> u64 {
     if let Some(tokens) = model.window {
         return tokens;
     }
-    match model.provider {
-        ModelProvider::CopilotSubscription => 131_072,
-        ModelProvider::OpenAi | ModelProvider::ChatGptSubscription => 400_000,
-        ModelProvider::Anthropic | ModelProvider::ClaudeSubscription | ModelProvider::KiroSubscription => 200_000,
-    }
+    llm_providers::find(model.provider).map_or(200_000, |provider| provider.window())
 }
 
 pub fn tokens(text: &str) -> u64 {
@@ -69,7 +65,7 @@ mod tests {
     use crate::model::scripted::ScriptedModel;
 
     fn model() -> ModelOption {
-        ModelOption::new("gpt-5-mini", "GPT-5 mini").served_by(ModelProvider::CopilotSubscription)
+        ModelOption::new("gpt-5-mini", "GPT-5 mini").with_window(131_072)
     }
 
     fn template() -> TurnRequest {
@@ -101,6 +97,8 @@ mod tests {
         assert!(share(ContextSlice::Mcp).is_some_and(|t| t > 0));
         assert_eq!((usage.window, usage.reserved), (131_072, 13_107));
         assert_eq!(window(&model().with_window(262_144)), 262_144, "the model's own window wins");
+        let unknown = ModelOption::new("m", "M").served_by(domain::ModelProvider::new("nobody"));
+        assert_eq!(window(&unknown), 200_000, "a provider no folder knows gets the usual window");
         assert_eq!(usage.used, usage.shares.iter().map(|s| s.tokens).sum::<u64>());
     }
 

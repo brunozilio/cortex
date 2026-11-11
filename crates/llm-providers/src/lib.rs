@@ -1,13 +1,23 @@
 pub mod catalog;
-pub mod copilot;
-pub mod kiro;
+mod config;
 pub mod oauth;
 pub mod request;
+pub mod sign_in;
+#[cfg(test)]
+mod testing;
 
-use domain::ModelProvider;
-use serde::{Deserialize, Serialize};
+pub mod providers {
+    include!(concat!(env!("OUT_DIR"), "/registry.rs"));
+}
 
-pub use oauth::Tokens;
+use domain::provider::ProviderInfo;
+use domain::{Access, ModelOption, ModelProvider};
+use serde_json::Value;
+
+pub use catalog::{Call, Page};
+pub use config::Config;
+pub use oauth::{TokenRequest, Tokens};
+pub use sign_in::Host;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ProviderError {
@@ -17,233 +27,124 @@ pub enum ProviderError {
     Invalid(String),
 }
 
-#[derive(Clone, Default, Serialize, Deserialize)]
-pub struct Config {
-    #[serde(default)]
-    pub api_key: String,
-    #[serde(default)]
-    pub base_url: String,
-    #[serde(default)]
-    pub auth: Option<Tokens>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Wire {
+    Messages,
+    Responses,
+    Chat,
+    EventStream,
 }
 
-impl std::fmt::Debug for Config {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Config").field("base_url", &self.base_url).finish_non_exhaustive()
-    }
-}
+pub trait Provider: Sync {
+    fn id(&self) -> &'static str;
+    fn name(&self) -> &'static str;
+    fn vendor(&self) -> &'static str;
+    fn access(&self) -> Access;
+    fn rank(&self) -> u8;
+    fn slot(&self) -> u128;
+    fn window(&self) -> u64;
+    fn wire(&self, model: Option<&ModelOption>) -> Wire;
+    fn base(&self, config: &Config) -> String;
+    fn headers(&self, config: &Config) -> Vec<(String, String)>;
+    fn path(&self, model: Option<&ModelOption>) -> &'static str;
+    fn shape(&self, model: Option<&ModelOption>, body: &mut Value, effort: &str) -> Result<(), ProviderError>;
+    fn catalog(&self, config: &Config, after: &str) -> Call;
+    fn page(&self, value: &Value) -> Result<Page, ProviderError>;
 
-impl Config {
-    pub fn parse(provider: ModelProvider, raw: &str) -> Result<Self, ProviderError> {
-        let unauthorized = |why: &str| ProviderError::Unauthorized(why.to_owned());
-        let config = if raw.trim_start().starts_with('{') {
-            let mut value: serde_json::Value =
-                serde_json::from_str(raw).map_err(|_| unauthorized("invalid provider credential JSON"))?;
-            if let Some(raw_auth) = value["auth"].as_str() {
-                value["auth"] =
-                    serde_json::from_str(raw_auth).map_err(|_| unauthorized("invalid subscription token JSON"))?;
-            }
-            if value.get("access_token").is_some() {
-                Self {
-                    auth: Some(serde_json::from_value(value).map_err(|_| unauthorized("invalid subscription tokens"))?),
-                    ..Self::default()
-                }
-            } else {
-                serde_json::from_value(value).map_err(|_| unauthorized("invalid provider config"))?
-            }
-        } else if provider == ModelProvider::CopilotSubscription {
-            Self { auth: Some(Tokens::bearer(raw.trim())), ..Self::default() }
-        } else {
-            Self { api_key: raw.trim().to_owned(), ..Self::default() }
-        };
-        config.validate(provider)?;
-        Ok(config)
+    fn bare(&self, raw: &str) -> Config {
+        Config { api_key: raw.trim().to_owned(), ..Config::default() }
     }
 
-    pub fn validate(&self, provider: ModelProvider) -> Result<(), ProviderError> {
-        let invalid = |why: &str| ProviderError::Unauthorized(why.to_owned());
-        if provider.subscription() {
-            let tokens = self.auth.as_ref().ok_or_else(|| invalid("subscription credential is missing"))?;
-            if provider == ModelProvider::CopilotSubscription {
-                copilot_token(&tokens.access_token)?;
-            } else if tokens.access_token.is_empty() || tokens.refresh_token.is_empty() {
-                return Err(invalid("subscription needs access_token and refresh_token"));
-            }
-            if provider == ModelProvider::ChatGptSubscription && tokens.account_id.is_empty() {
-                return Err(invalid("ChatGPT account_id is missing"));
-            }
-            if provider == ModelProvider::KiroSubscription && tokens.account_id.is_empty() {
-                return Err(invalid("Kiro profile ARN is missing"));
-            }
-        } else if self.api_key.trim().is_empty() || self.api_key.chars().any(char::is_whitespace) {
-            return Err(invalid("API key is empty or contains whitespace"));
-        }
-        if !self.base_url.is_empty() {
-            let url = url::Url::parse(&self.base_url).map_err(|_| invalid("invalid API endpoint"))?;
-            if !matches!(url.scheme(), "https" | "http")
-                || url.host_str().is_none()
-                || !url.username().is_empty()
-                || url.password().is_some()
-                || url.query().is_some()
-                || url.fragment().is_some()
-            {
-                return Err(invalid("invalid API endpoint"));
-            }
-        }
+    fn check(&self, _config: &Config) -> Result<(), ProviderError> {
         Ok(())
     }
 
-    pub fn base(&self, provider: ModelProvider) -> String {
-        if !self.base_url.is_empty() {
-            return self.base_url.trim_end_matches('/').to_owned();
-        }
-        if provider == ModelProvider::KiroSubscription {
-            return kiro::runtime(self.auth.as_ref().map_or("", |tokens| tokens.account_id.as_str()));
-        }
-        match provider {
-            ModelProvider::OpenAi => "https://api.openai.com/v1",
-            ModelProvider::ChatGptSubscription => "https://chatgpt.com/backend-api",
-            ModelProvider::CopilotSubscription => copilot::API,
-            _ => "https://api.anthropic.com/v1",
-        }
-        .to_owned()
+    fn bind(&self, _config: &Config, _body: &mut Value) {}
+
+    fn turn_headers(&self, _model: Option<&ModelOption>, _body: &Value) -> Vec<(String, String)> {
+        Vec::new()
     }
 
-    pub fn headers(&self, provider: ModelProvider) -> Vec<(String, String)> {
-        if provider == ModelProvider::KiroSubscription {
-            return kiro::headers(self.auth.as_ref().map_or("", |tokens| tokens.access_token.as_str()), kiro::CHAT);
-        }
-        let mut headers: Vec<(String, String)> = vec![("accept".into(), "text/event-stream".into())];
-        match provider {
-            ModelProvider::ChatGptSubscription => {
-                if let Some(tokens) = &self.auth {
-                    headers.extend([
-                        ("authorization".into(), format!("Bearer {}", tokens.access_token)),
-                        ("chatgpt-account-id".into(), tokens.account_id.clone()),
-                        ("openai-beta".into(), "responses=experimental".into()),
-                        ("originator".into(), "codex_cli_rs".into()),
-                    ]);
-                }
-            }
-            ModelProvider::ClaudeSubscription => {
-                if let Some(tokens) = &self.auth {
-                    headers.extend([
-                        ("authorization".into(), format!("Bearer {}", tokens.access_token)),
-                        ("anthropic-version".into(), "2023-06-01".into()),
-                        ("anthropic-beta".into(), "claude-code-20250219,oauth-2025-04-20".into()),
-                        ("anthropic-dangerous-direct-browser-access".into(), "true".into()),
-                        ("x-app".into(), "cli".into()),
-                        ("user-agent".into(), "claude-cli/2.1.207 (external, cli)".into()),
-                    ]);
-                }
-            }
-            ModelProvider::CopilotSubscription => {
-                if let Some(tokens) = &self.auth {
-                    headers.extend(copilot::headers(&tokens.access_token));
-                }
-            }
-            ModelProvider::OpenAi => headers.push(("authorization".into(), format!("Bearer {}", self.api_key))),
-            _ => headers.extend([
-                ("x-api-key".into(), self.api_key.clone()),
-                ("anthropic-version".into(), "2023-06-01".into()),
-            ]),
-        }
-        headers
+    fn retries_after_refresh(&self, _status: u16) -> bool {
+        false
     }
 
-    pub fn needs_refresh(&self, provider: ModelProvider, force: bool) -> bool {
-        provider.subscription()
-            && provider != ModelProvider::CopilotSubscription
-            && self.auth.as_ref().is_some_and(|t| force || t.expired())
+    fn finish(&self, models: Vec<ModelOption>) -> Vec<ModelOption> {
+        models
+    }
+
+    fn refresh(&self, _previous: &Tokens) -> Option<TokenRequest> {
+        None
+    }
+
+    fn tokens(
+        &self,
+        status: u16,
+        _body: &str,
+        _previous: Option<&Tokens>,
+        _now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Tokens, ProviderError> {
+        Err(ProviderError::Unauthorized(format!("{} returned HTTP {status} and keeps no tokens", self.name())))
+    }
+
+    fn sign_in(&self, _host: &dyn Host) -> Result<Config, ProviderError> {
+        Err(ProviderError::Invalid(format!("{} connects with an API key", self.name())))
     }
 }
 
-fn copilot_token(token: &str) -> Result<(), ProviderError> {
-    let invalid = |why: &str| ProviderError::Unauthorized(why.to_owned());
-    if token.is_empty() || token.chars().any(char::is_whitespace) {
-        return Err(invalid("GitHub token is empty or contains whitespace"));
-    }
-    if token.starts_with("ghp_") {
-        return Err(invalid(
-            "classic personal access tokens (ghp_) do not work with Copilot; sign in, or use a fine-grained token with the Copilot Requests permission",
-        ));
-    }
-    Ok(())
+pub fn all() -> Vec<&'static dyn Provider> {
+    let mut all = providers::ALL.to_vec();
+    all.sort_by_key(|provider| provider.rank());
+    all
+}
+
+pub fn find(provider: ModelProvider) -> Option<&'static dyn Provider> {
+    providers::ALL.iter().copied().find(|known| known.id() == provider.id())
+}
+
+pub fn get(provider: ModelProvider) -> Result<&'static dyn Provider, ProviderError> {
+    find(provider).ok_or_else(|| ProviderError::Invalid(format!("no provider is called {provider}")))
+}
+
+pub fn id(provider: &dyn Provider) -> ModelProvider {
+    ModelProvider::new(provider.id())
+}
+
+pub fn infos() -> Vec<ProviderInfo> {
+    all()
+        .into_iter()
+        .map(|provider| ProviderInfo {
+            provider: id(provider),
+            name: provider.name().to_owned(),
+            access: provider.access(),
+        })
+        .collect()
+}
+
+pub fn name(provider: ModelProvider) -> String {
+    find(provider).map_or_else(|| provider.id().to_owned(), |known| known.name().to_owned())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn tokens(account: &str) -> Tokens {
-        Tokens {
-            access_token: "a".into(),
-            refresh_token: "r".into(),
-            account_id: account.into(),
-            expires_at: None,
-            idc: None,
-        }
+    #[test]
+    fn every_provider_has_its_own_id_rank_and_secret_slot() {
+        let all = all();
+        let mut ids: Vec<_> = all.iter().map(|p| p.id()).collect();
+        let mut slots: Vec<_> = all.iter().map(|p| p.slot()).collect();
+        ids.dedup();
+        slots.sort_unstable();
+        slots.dedup();
+        assert_eq!((ids.len(), slots.len()), (all.len(), all.len()));
+        assert!(all.windows(2).all(|pair| pair[0].rank() < pair[1].rank()));
     }
 
     #[test]
-    fn a_bare_key_is_an_api_key_and_whitespace_is_refused() {
-        assert_eq!(Config::parse(ModelProvider::OpenAi, " sk-1 ").map(|c| c.api_key), Ok("sk-1".into()));
-        assert!(Config::parse(ModelProvider::Anthropic, "sk ant").is_err());
-    }
-
-    #[test]
-    fn chatgpt_needs_its_account_id() {
-        let config = Config { auth: Some(tokens("")), ..Config::default() };
-        assert!(config.validate(ModelProvider::ChatGptSubscription).is_err());
-        assert!(config.validate(ModelProvider::ClaudeSubscription).is_ok());
-    }
-
-    #[test]
-    fn copilot_takes_a_bare_github_token_but_not_a_classic_one() {
-        let config = Config::parse(ModelProvider::CopilotSubscription, " gho_abc ").unwrap_or_else(|e| panic!("{e}"));
-        assert_eq!(config.auth.as_ref().map(|t| t.access_token.as_str()), Some("gho_abc"));
-        assert!(!config.needs_refresh(ModelProvider::CopilotSubscription, true), "GitHub tokens are not refreshed");
-        assert!(Config::parse(ModelProvider::CopilotSubscription, "ghp_classic").is_err());
-        assert!(Config::parse(ModelProvider::CopilotSubscription, "").is_err());
-        let headers = config.headers(ModelProvider::CopilotSubscription);
-        assert!(headers.contains(&("authorization".into(), "Bearer gho_abc".into())));
-        assert_eq!(config.base(ModelProvider::CopilotSubscription), "https://api.githubcopilot.com");
-    }
-
-    #[test]
-    fn kiro_is_served_from_its_profiles_region_with_its_token() {
-        let arn = "arn:aws:codewhisperer:eu-central-1:1:profile/P";
-        let config = Config { auth: Some(tokens(arn)), ..Config::default() };
-        assert!(config.validate(ModelProvider::KiroSubscription).is_ok());
-        assert_eq!(config.base(ModelProvider::KiroSubscription), "https://runtime.eu-central-1.kiro.dev");
-        let headers = config.headers(ModelProvider::KiroSubscription);
-        assert!(headers.contains(&("authorization".into(), "Bearer a".into())));
-        assert!(headers.contains(&("x-amz-target".into(), kiro::CHAT.into())));
-        let without_arn = Config { auth: Some(tokens("")), ..Config::default() };
-        assert!(without_arn.validate(ModelProvider::KiroSubscription).is_err());
-    }
-
-    #[test]
-    fn endpoints_with_credentials_or_queries_are_refused() {
-        for url in ["ftp://x", "https://u:p@x", "https://x/?q", "https://x/#f", "nope"] {
-            let config = Config { api_key: "k".into(), base_url: url.into(), auth: None };
-            assert!(config.validate(ModelProvider::OpenAi).is_err(), "{url}");
-        }
-    }
-
-    #[test]
-    fn the_debug_form_hides_secrets() {
-        let config = Config { api_key: "secret".into(), base_url: String::new(), auth: Some(tokens("acct")) };
-        let shown = format!("{config:?}");
-        assert!(!shown.contains("secret") && !shown.contains("acct"));
-    }
-
-    #[test]
-    fn each_provider_is_served_from_its_own_base() {
-        let config = Config::default();
-        assert_eq!(config.base(ModelProvider::ChatGptSubscription), "https://chatgpt.com/backend-api");
-        assert_eq!(config.base(ModelProvider::ClaudeSubscription), "https://api.anthropic.com/v1");
-        let own = Config { base_url: "http://localhost:9/v1/".into(), ..Config::default() };
-        assert_eq!(own.base(ModelProvider::OpenAi), "http://localhost:9/v1");
+    fn an_unknown_provider_is_named_by_its_id_and_cannot_be_used() {
+        let unknown = ModelProvider::new("nobody");
+        assert_eq!(name(unknown), "nobody");
+        assert!(get(unknown).is_err());
     }
 }

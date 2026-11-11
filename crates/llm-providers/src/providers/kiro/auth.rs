@@ -1,5 +1,5 @@
-use super::super::ProviderError;
-use super::super::oauth::{TokenRequest, Tokens, form};
+use crate::ProviderError;
+use crate::oauth::{TokenRequest, Tokens, form};
 use chrono::{DateTime, Duration, Utc};
 use serde_json::{Value, json};
 
@@ -68,7 +68,7 @@ pub fn tokens(status: u16, body: &str, previous: Option<&Tokens>, now: DateTime<
         refresh_token,
         account_id,
         expires_at: Some(now + Duration::seconds(lifetime)),
-        idc: None,
+        client: None,
     })
 }
 
@@ -127,7 +127,7 @@ mod tests {
             refresh_token: "r0".into(),
             account_id: ARN.into(),
             expires_at: None,
-            idc: None,
+            client: None,
         };
         assert_eq!(serde_json::from_str::<Value>(&refresh(&previous).body).ok(), Some(json!({"refreshToken": "r0"})));
         let fresh = tokens(200, r#"{"accessToken":"new"}"#, Some(&previous), Utc::now());

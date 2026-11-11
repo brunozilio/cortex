@@ -1,22 +1,97 @@
 mod body;
 pub mod device;
 pub mod models;
+mod sign_in;
 
 pub use body::shape;
 
-use domain::ModelOption;
+use domain::{Access, ModelOption};
 use serde_json::Value;
+
+use crate::catalog::{self, Call, Page};
+use crate::{Config, Host, Provider as Shape, ProviderError, Tokens};
+pub use crate::Wire;
 
 pub const API: &str = "https://api.githubcopilot.com";
 pub const VERSION: &str = "1.0.62";
 pub const API_VERSION: &str = "2026-06-01";
 pub const INTEGRATION: &str = "copilot-developer-cli";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Wire {
-    Messages,
-    Responses,
-    Chat,
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Provider;
+
+impl Shape for Provider {
+    fn id(&self) -> &'static str {
+        "copilot-subscription"
+    }
+    fn name(&self) -> &'static str {
+        "GitHub Copilot Subscription"
+    }
+    fn vendor(&self) -> &'static str {
+        "github"
+    }
+    fn access(&self) -> Access {
+        Access::Code
+    }
+    fn rank(&self) -> u8 {
+        50
+    }
+    fn slot(&self) -> u128 {
+        0x7072_6f76_6964_6572_0000_0000_0000_0006
+    }
+    fn window(&self) -> u64 {
+        131_072
+    }
+    fn wire(&self, model: Option<&ModelOption>) -> Wire {
+        wire(model)
+    }
+    fn bare(&self, raw: &str) -> Config {
+        Config { auth: Some(Tokens::bearer(raw.trim())), ..Config::default() }
+    }
+    fn check(&self, config: &Config) -> Result<(), ProviderError> {
+        token(config.access_token())
+    }
+    fn base(&self, _config: &Config) -> String {
+        API.to_owned()
+    }
+    fn headers(&self, config: &Config) -> Vec<(String, String)> {
+        let mut sent = vec![("accept".to_owned(), "text/event-stream".to_owned())];
+        if config.auth.is_some() {
+            sent.extend(headers(config.access_token()));
+        }
+        sent
+    }
+    fn path(&self, model: Option<&ModelOption>) -> &'static str {
+        path(wire(model))
+    }
+    fn turn_headers(&self, model: Option<&ModelOption>, body: &Value) -> Vec<(String, String)> {
+        turn_headers(wire(model), body)
+    }
+    fn shape(&self, model: Option<&ModelOption>, body: &mut Value, effort: &str) -> Result<(), ProviderError> {
+        shape(model, body, effort)
+    }
+    fn catalog(&self, config: &Config, _after: &str) -> Call {
+        Call::get(self, config, "/models")
+    }
+    fn page(&self, value: &Value) -> Result<Page, ProviderError> {
+        Ok(Page { models: catalog::items(value, "data")?.iter().filter_map(models::model).collect(), next: None })
+    }
+    fn sign_in(&self, host: &dyn Host) -> Result<Config, ProviderError> {
+        sign_in::sign_in(host)
+    }
+}
+
+fn token(token: &str) -> Result<(), ProviderError> {
+    let invalid = |why: &str| ProviderError::Unauthorized(why.to_owned());
+    if token.is_empty() || token.chars().any(char::is_whitespace) {
+        return Err(invalid("GitHub token is empty or contains whitespace"));
+    }
+    if token.starts_with("ghp_") {
+        return Err(invalid(
+            "classic personal access tokens (ghp_) do not work with Copilot; sign in, or use a fine-grained token with the Copilot Requests permission",
+        ));
+    }
+    Ok(())
 }
 
 pub fn wire(model: Option<&ModelOption>) -> Wire {
@@ -36,6 +111,7 @@ pub const fn path(wire: Wire) -> &'static str {
         Wire::Messages => "/v1/messages",
         Wire::Responses => "/responses",
         Wire::Chat => "/chat/completions",
+        Wire::EventStream => "/",
     }
 }
 
@@ -102,8 +178,7 @@ fn has_image(value: &Value) -> bool {
 
 #[cfg(test)]
 pub(crate) fn served(endpoints: &[&str], caps: domain::model::ModelCapabilities) -> ModelOption {
-    let mut model =
-        ModelOption::new("copilot-subscription:m", "M").served_by(domain::ModelProvider::CopilotSubscription);
+    let mut model = ModelOption::new("copilot-subscription:m", "M").served_by(crate::id(&Provider));
     model.capabilities = Some(domain::model::ModelCapabilities {
         endpoints: endpoints.iter().map(|e| (*e).to_owned()).collect(),
         ..caps
@@ -130,6 +205,27 @@ mod tests {
         assert_eq!(wire(Some(&served(&all[..1], ModelCapabilities::default()))), Wire::Chat);
         assert_eq!(wire(None), Wire::Chat);
         assert_eq!(path(Wire::Messages), "/v1/messages");
+    }
+
+    #[test]
+    fn a_bare_github_token_is_taken_but_not_a_classic_one() {
+        let config = Config::parse(&Provider, " gho_abc ").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(config.access_token(), "gho_abc");
+        assert!(!config.needs_refresh(&Provider, true), "GitHub tokens are not refreshed");
+        assert!(Config::parse(&Provider, "ghp_classic").is_err());
+        assert!(Config::parse(&Provider, "").is_err());
+        assert!(config.headers(&Provider).contains(&("authorization".into(), "Bearer gho_abc".into())));
+        assert_eq!(config.base(&Provider), "https://api.githubcopilot.com");
+    }
+
+    #[test]
+    fn the_catalog_lists_its_data_page_once() {
+        let page = json!({"data": [{"id": "claude-sonnet-4.5", "name": "Claude Sonnet 4.5"}, {"id": "x", "custom_model": true}]});
+        let models = catalog::collect(&Provider, |_| Ok::<_, ProviderError>(page.clone()));
+        assert_eq!(
+            models.map(|m| m.into_iter().map(|m| m.id).collect::<Vec<_>>()),
+            Ok(vec!["copilot-subscription:claude-sonnet-4.5".to_owned()])
+        );
     }
 
     #[test]

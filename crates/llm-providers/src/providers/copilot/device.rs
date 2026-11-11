@@ -1,5 +1,5 @@
-use super::super::ProviderError;
-use super::super::oauth::form;
+use crate::ProviderError;
+use crate::oauth::form;
 use serde_json::Value;
 
 pub const CLIENT: &str = "Ov23ctDVkRmgkPke0Mmm";

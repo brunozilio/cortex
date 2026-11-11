@@ -1,6 +1,5 @@
 mod account;
 mod catalog;
-mod kiro_sign_in;
 pub(crate) mod redirect;
 mod store;
 
@@ -18,15 +17,11 @@ pub use self::store::{FileProviderStore, InMemoryProviderStore, ProviderStore};
 use crate::outbox::Outbox;
 use crate::secrets::SecretStore;
 
-pub(crate) const fn secret_id(provider: ModelProvider) -> SecretId {
-    SecretId::from_uuid(uuid::Uuid::from_u128(match provider {
-        ModelProvider::OpenAi => 0x7072_6f76_6964_6572_0000_0000_0000_0001,
-        ModelProvider::Anthropic => 0x7072_6f76_6964_6572_0000_0000_0000_0002,
-        ModelProvider::ChatGptSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0004,
-        ModelProvider::ClaudeSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0005,
-        ModelProvider::CopilotSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0006,
-        ModelProvider::KiroSubscription => 0x7072_6f76_6964_6572_0000_0000_0000_0007,
-    }))
+const UNKNOWN_SLOT: u128 = 0x7072_6f76_6964_6572_ffff_ffff_ffff_ffff;
+
+pub(crate) fn secret_id(provider: ModelProvider) -> SecretId {
+    let slot = llm_providers::find(provider).map_or(UNKNOWN_SLOT, |known| known.slot());
+    SecretId::from_uuid(uuid::Uuid::from_u128(slot))
 }
 
 type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
@@ -100,7 +95,9 @@ impl ModelProviders {
     }
 
     pub fn list(&self, owner: &Principal) -> ServerEvent {
-        ServerEvent::Providers(ProviderEvent::Listed { providers: self.store.load(owner).summaries() })
+        ServerEvent::Providers(ProviderEvent::Listed {
+            providers: self.store.load(owner).summaries(llm_providers::infos()),
+        })
     }
 
     pub fn connect(&self, owner: &Principal, provider: ModelProvider, raw: &str) -> ServerEvent {
@@ -109,7 +106,8 @@ impl ModelProviders {
     }
 
     fn parse(&self, provider: ModelProvider, raw: &str) -> Result<(Config, String), String> {
-        if provider.subscription() {
+        let provider = llm_providers::get(provider).map_err(|e| e.to_string())?;
+        if provider.access().subscription() {
             let config = Config::parse(provider, raw).map_err(|e| e.to_string())?;
             return Ok((config, provider.name().to_owned()));
         }
@@ -120,8 +118,8 @@ impl ModelProviders {
     }
 
     pub fn sign_in(&self, owner: &Principal, provider: ModelProvider, outbox: &Outbox) {
-        if !provider.subscription() {
-            let message = format!("{} connects with an API key", provider.name());
+        if !llm_providers::find(provider).is_some_and(|known| known.access().subscription()) {
+            let message = format!("{} connects with an API key", llm_providers::name(provider));
             return outbox.send(ServerEvent::Providers(ProviderEvent::Failed { provider, message }));
         }
         let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
@@ -132,7 +130,7 @@ impl ModelProviders {
             let result = this
                 .sign_in
                 .sign_in(provider, &mut open)
-                .and_then(|config| this.keep(&owner, provider, provider.name().to_owned(), &config));
+                .and_then(|config| this.keep(&owner, provider, llm_providers::name(provider), &config));
             outbox.send(this.answer(&owner, provider, result));
         });
     }
@@ -151,7 +149,7 @@ impl ModelProviders {
     pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {
         use domain::provider::ProviderKeyStore;
         if self.store.load(owner).get(provider).is_none() {
-            return Err(format!("{} is not connected", provider.name()));
+            return Err(format!("{} is not connected", llm_providers::name(provider)));
         }
         let source = Arc::new(account::AccountStore {
             secrets: self.secrets.clone(),

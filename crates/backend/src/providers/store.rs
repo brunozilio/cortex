@@ -86,7 +86,7 @@ mod tests {
         assert_eq!(store.load(&owner), ProviderBook::default());
         let mut book = ProviderBook::default();
         let account = ProviderAccount { label: "…ab12".into(), since_unix: 5 };
-        book.connect(ModelProvider::OpenAi, account);
+        book.connect(ModelProvider::new("openai"), account);
         store.save(&owner, &book).expect("save");
         assert_eq!(store.load(&owner), book);
         let other = Principal::member(domain::UserId::new(), domain::OrgId::new());

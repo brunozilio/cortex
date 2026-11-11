@@ -1,16 +1,13 @@
+use crate::*;
 use agent_engine::model::ModelApi;
 use agent_engine::model::http::ScriptedHttp;
-use agent_engine::model::providers::{ProviderClient, copilot};
+use agent_engine::model::providers::ProviderClient;
+use domain::ModelOption;
 use domain::model::ModelCapabilities;
 use domain::provider::ProviderKey;
-use domain::{ModelOption, ModelProvider};
 use serde_json::{Value, json};
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
-
-use crate::{header, request};
-
-const COPILOT: ModelProvider = ModelProvider::CopilotSubscription;
 
 fn key() -> Arc<ProviderKey> {
     Arc::new(ProviderKey::new(
@@ -79,51 +76,4 @@ fn the_catalog_lists_what_the_picker_shows() {
     let sent = &http.sent()[0];
     assert_eq!(sent.url, "https://api.business.githubcopilot.com/models");
     assert_eq!(header(sent, "copilot-integration-id").as_deref(), Some("copilot-developer-cli"));
-}
-
-#[test]
-fn the_device_flow_waits_for_approval_and_finds_the_account_api() {
-    let http = ScriptedHttp::new([
-        (
-            200,
-            json!({"device_code": "dc", "user_code": "AB12-CD34", "verification_uri": "https://github.com/login/device",
-                "interval": 5, "expires_in": 900})
-            .to_string(),
-        ),
-        (200, json!({"error": "authorization_pending"}).to_string()),
-        (200, json!({"error": "slow_down", "interval": 10}).to_string()),
-        (200, json!({"access_token": "gho_new", "token_type": "bearer"}).to_string()),
-        (200, json!({"login": "u", "endpoints": {"api": "https://api.individual.githubcopilot.com"}}).to_string()),
-    ]);
-    let mut shown = Vec::new();
-    let slept = Mutex::new(Vec::new());
-    let config = copilot::sign_in(&http, &mut |url, code| shown.push((url, code)), &|d| {
-        slept.lock().expect("lock").push(d.as_secs());
-    })
-    .expect("signed in");
-    assert_eq!(shown, [("https://github.com/login/device".to_owned(), "AB12-CD34".to_owned())]);
-    assert_eq!(*slept.lock().expect("lock"), [6, 6, 15]);
-    assert_eq!(config.auth.as_ref().map(|t| t.access_token.as_str()), Some("gho_new"));
-    assert_eq!(config.base(COPILOT), "https://api.individual.githubcopilot.com");
-    let sent = http.sent();
-    assert_eq!(sent[0].body, "client_id=Ov23ctDVkRmgkPke0Mmm&scope=read%3Auser");
-    assert_eq!(header(&sent[0], "accept").as_deref(), Some("application/json"));
-    assert_eq!(sent[4].url, "https://api.github.com/copilot_internal/user");
-    assert_eq!(header(&sent[4], "authorization").as_deref(), Some("Bearer gho_new"));
-}
-
-#[test]
-fn a_refused_or_expired_code_ends_the_sign_in() {
-    let device = json!({"device_code": "dc", "user_code": "C", "verification_uri": "https://github.com/login/device",
-        "interval": 5, "expires_in": 10});
-    let denied = ScriptedHttp::new([
-        (200, device.to_string()),
-        (200, json!({"error": "access_denied", "error_description": "denied"}).to_string()),
-    ]);
-    let error = copilot::sign_in(&denied, &mut |_, _| {}, &|_| {}).expect_err("denied");
-    assert!(error.to_string().contains("denied"));
-    let pending = json!({"error": "authorization_pending"}).to_string();
-    let slow = ScriptedHttp::new([(200, device.to_string()), (200, pending.clone()), (200, pending)]);
-    let error = copilot::sign_in(&slow, &mut |_, _| {}, &|_| {}).expect_err("expired");
-    assert!(error.to_string().contains("expired"));
 }

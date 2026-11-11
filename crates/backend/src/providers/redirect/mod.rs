@@ -1,7 +1,6 @@
 mod loopback;
-pub mod pkce;
 
-pub use loopback::Loopback;
+pub use loopback::{Loopback, Pending};
 
 fn decode(text: &str) -> String {
     let bytes = text.as_bytes();

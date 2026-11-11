@@ -6,8 +6,9 @@ use domain::mcp_oauth::{self, AuthServer, Authorize, McpTokens};
 use domain::{Principal, SecretId};
 use serde_json::{Value, json};
 
-use crate::providers::redirect::{Loopback, pkce};
+use crate::providers::redirect::Loopback;
 use crate::secrets::SecretStore;
+use llm_providers::oauth::challenge;
 
 const SLOT: SecretId = SecretId::from_uuid(uuid::Uuid::from_u128(0x6d63_705f_6f61_7574_6800_0000_0000_0001));
 const FORM: &str = "application/x-www-form-urlencoded";
@@ -57,7 +58,7 @@ impl McpAuth {
         let (client_id, client_secret) = self.register(&auth, &redirect)?;
         let verifier = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
         let state = uuid::Uuid::new_v4().simple().to_string();
-        let challenge = pkce::challenge(&verifier);
+        let challenge = challenge(&verifier);
         let url = Authorize {
             server: &auth,
             client_id: &client_id,

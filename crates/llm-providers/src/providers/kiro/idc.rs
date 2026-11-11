@@ -2,8 +2,8 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::super::ProviderError;
-use super::super::oauth::{TokenRequest, Tokens, form};
+use crate::ProviderError;
+use crate::oauth::{TokenRequest, Tokens, form};
 
 pub const SCOPES: [&str; 3] = ["codewhisperer:completions", "codewhisperer:analysis", "codewhisperer:conversations"];
 pub const PROFILE_REGIONS: [&str; 2] = ["us-east-1", "eu-central-1"];
@@ -179,7 +179,7 @@ pub fn tokens(
         refresh_token,
         account_id: previous.map(|p| p.account_id.clone()).unwrap_or_default(),
         expires_at: Some(now + Duration::seconds(lifetime)),
-        idc: Some(client.clone()),
+        client: serde_json::to_value(client).ok(),
     })
 }
 
@@ -198,6 +198,10 @@ pub fn first_profile(status: u16, body: &str) -> Option<String> {
     }
     let value: Value = serde_json::from_str(body).ok()?;
     value["profiles"].as_array()?.iter().find_map(|profile| profile["arn"].as_str().map(str::to_owned))
+}
+
+pub fn client(tokens: &Tokens) -> Option<IdcClient> {
+    tokens.client.clone().and_then(|value| serde_json::from_value(value).ok())
 }
 
 #[cfg(test)]

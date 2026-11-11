@@ -22,7 +22,7 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
         "providers",
         sdk.providers().map_err(|e| e.to_string()).and_then(|providers| {
             let connected: Vec<&str> =
-                providers.iter().filter(|p| p.account.is_some()).map(|p| p.provider.name()).collect();
+                providers.iter().filter(|p| p.account.is_some()).map(|p| p.name.as_str()).collect();
             if connected.is_empty() {
                 Err(concat!("none connected: run `", brand::command!(), " login`").to_owned())
             } else {
