@@ -22,7 +22,7 @@ runs carry a redacted handle a client cannot supply. Subscription adapters
 apply their own preludes; the tools, loop and project instructions stay
 The app's.
 
-## 0018 — Lite: a CLI and an SDK
+## 0018 — A CLI and an SDK
 
 the app drops the desktop canvas, the web client, the team server and
 everything only they used (browser cards, voice, sound, haptics, notes,

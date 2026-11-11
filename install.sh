@@ -6,7 +6,7 @@
 # <ENV>_VERSION=0.6.1      a given release instead of the latest
 # <ENV>_INSTALL_DIR=/path  where the binary goes (~/.local/bin by default)
 # <ENV>_LIBC=musl|gnu      Linux: force the static (musl) or glibc build
-# (<ENV> is the command in capitals: LITE for `lite`.)
+# (<ENV> is the command in capitals, dashes as underscores.)
 #
 # On Linux the glibc build (with semantic memory) is used when the system's
 # glibc is new enough, the static musl build otherwise (RHEL 8/9, older

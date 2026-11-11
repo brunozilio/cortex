@@ -8,7 +8,8 @@ use domain::provider::ModelProvider;
 use super::app::{App, Msg};
 use super::choices::{Picker, PickerKind};
 
-const CHANGELOG: &str = include_str!("../../../../CHANGELOG.md");
+/// The newest CHANGELOG.md section, without links (`build.rs`).
+const RELEASE_NOTES: &str = include_str!(concat!(env!("OUT_DIR"), "/release_notes.md"));
 
 pub fn run(app: &mut App, command: Command) {
     match command {
@@ -129,10 +130,10 @@ fn status(app: &App) -> String {
 
 /// This version's section of the changelog.
 fn release_notes() -> String {
-    let mut sections = CHANGELOG.split("\n## ").skip(1);
-    match sections.next() {
-        Some(latest) => format!("## {}", latest.trim()),
-        None => format!("{brand_name} {}", env!("CARGO_PKG_VERSION"), brand_name = brand::NAME),
+    if RELEASE_NOTES.is_empty() {
+        format!("{} {}", brand::NAME, env!("CARGO_PKG_VERSION"))
+    } else {
+        RELEASE_NOTES.to_owned()
     }
 }
 
@@ -141,6 +142,7 @@ mod tests {
     #[test]
     fn the_release_notes_are_the_newest_changelog_section() {
         let notes = super::release_notes();
-        assert!(notes.starts_with("## [") && !notes[3..].contains("\n## ["), "{notes}");
+        assert!(notes.starts_with("## ") && !notes[3..].contains("\n## "), "{notes}");
+        assert!(!notes.contains("](") && !notes.contains("https://"), "no links: {notes}");
     }
 }
