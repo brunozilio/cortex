@@ -44,8 +44,14 @@ pub fn compact_on(
         Some(focus) => format!("{}\n\nThe user asks the summary to focus on: {focus}", crate::prompt::text("compact")),
         None => crate::prompt::text("compact"),
     }));
-    let request = TurnRequest { messages: asked, tools: Vec::new(), ..template.clone() };
-    let summary = match api.turn(&request, &mut |_| {}, stop) {
+    let request = TurnRequest { messages: asked, ..template.clone() };
+    let answered = match api.turn(&request, &mut |_| {}, stop) {
+        Ok(reply) if summary_text(&reply.message.text()).is_empty() && !request.tools.is_empty() => {
+            api.turn(&TurnRequest { tools: Vec::new(), ..request }, &mut |_| {}, stop)
+        }
+        other => other,
+    };
+    let summary = match answered {
         Ok(reply) => summary_text(&reply.message.text()),
         Err(ModelError::TooLong(_)) => bounded_summary(api, template, history, stop)?,
         Err(error) => return Err(error),
@@ -188,3 +194,7 @@ pub fn compact_hooked_on(
     }
     Ok(compaction)
 }
+
+#[cfg(test)]
+#[path = "compact_tests.rs"]
+mod tests;

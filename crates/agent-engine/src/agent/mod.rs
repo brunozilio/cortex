@@ -99,32 +99,13 @@ impl Agent<'_> {
                 .and_then(|c| c.auto_compact_token_limit)
                 .unwrap_or_else(|| measured.window.saturating_sub(measured.reserved));
             if history.len() > 2 && measured.used >= threshold && compacted_at != Some(history.len()) {
-                let compaction =
-                    crate::upkeep::compact_hooked(self.api, &self.request, history, self.workspace, "auto")
-                        .map_err(Ending::Failed)?;
+                let template = self.turn_template(fell_back.as_ref());
+                let compaction = crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto")
+                    .map_err(Ending::Failed)?;
                 (self.emit)(EngineEvent::Compacted(compaction));
                 compacted_at = Some(history.len());
             }
-            let request = TurnRequest {
-                messages: history.clone(),
-                system: format!(
-                    "{}{}{}",
-                    self.request.system,
-                    crate::prompt::reminder(
-                        self.control.mode(),
-                        self.depth,
-                        self.workspace
-                            .prompt_context
-                            .as_ref()
-                            .and_then(|context| context.output_style.as_ref())
-                            .and_then(|style| style.reminder.as_deref())
-                    ),
-                    self.workspace.rule_instructions()
-                ),
-                tools: self.offered(),
-                model: fell_back.clone().unwrap_or_else(|| self.request.model.clone()),
-                ..self.request.clone()
-            };
+            let request = TurnRequest { messages: history.clone(), ..self.turn_template(fell_back.as_ref()) };
             let mut on = |delta: Delta| match delta {
                 Delta::Text(text) => (self.emit)(EngineEvent::TextDelta(text)),
                 Delta::Thinking(text) => (self.emit)(EngineEvent::ThinkingDelta(text)),
@@ -144,8 +125,9 @@ impl Agent<'_> {
                 }
                 Err(ModelError::TooLong(_)) if recoveries < 2 => {
                     recoveries += 1;
+                    let template = self.turn_template(fell_back.as_ref());
                     let compaction =
-                        crate::upkeep::compact_hooked(self.api, &self.request, history, self.workspace, "auto")
+                        crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto")
                             .map_err(Ending::Failed)?;
                     (self.emit)(EngineEvent::Compacted(compaction));
                     compacted_at = Some(history.len());
@@ -231,6 +213,19 @@ impl Agent<'_> {
             }
         }
         Err(Ending::TooManyTurns)
+    }
+
+    fn turn_template(&self, fell_back: Option<&String>) -> TurnRequest {
+        let style = self.workspace.prompt_context.as_ref().and_then(|context| context.output_style.as_ref());
+        let reminder =
+            crate::prompt::reminder(self.control.mode(), self.depth, style.and_then(|s| s.reminder.as_deref()));
+        TurnRequest {
+            messages: Vec::new(),
+            system: format!("{}{reminder}{}", self.request.system, self.workspace.rule_instructions()),
+            tools: self.offered(),
+            model: fell_back.cloned().unwrap_or_else(|| self.request.model.clone()),
+            ..self.request.clone()
+        }
     }
 
     pub(super) fn offered(&self) -> Vec<crate::model::ToolSpec> {

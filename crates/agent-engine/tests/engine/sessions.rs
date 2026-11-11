@@ -71,7 +71,11 @@ fn measures_and_compacts_a_session() {
     compact.command = Some(domain::SessionCommand::Compact);
     let events = finish(&start(&engine, &compact));
     assert!(events.iter().any(|e| matches!(e, EngineEvent::Compacted(_))), "{events:?}");
-    assert!(summary.asked()[0].tools.is_empty(), "summarising calls no tools");
+    assert!(!summary.asked()[0].tools.is_empty(), "summarising keeps the tools so their cache is read");
+    assert!(
+        summary.asked()[0].messages.last().is_some_and(|m| m.text().contains("Do not call any tool")),
+        "the prompt still forbids calling them"
+    );
 
     let fresh = PromptRequest {
         command: Some(domain::SessionCommand::MeasureContext),

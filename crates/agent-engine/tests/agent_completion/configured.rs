@@ -68,7 +68,8 @@ fn configured_auto_compact_window_triggers_child_compaction_before_the_model_win
     run(json!({"autoCompactWindow":100_000}), &model, &workspace, PermissionMode::Bypass);
     let asked = model.asked();
     assert_eq!(asked.len(), 5);
-    assert!(asked[2].tools.is_empty(), "summary call must not expose tools");
+    assert_eq!(asked[2].tools, asked[1].tools, "the summary reuses the cached prefix of the turn before");
+    assert_eq!(asked[2].system, asked[1].system);
     assert!(
         asked[2].messages.last().expect("summary task").text().contains("Write a detailed summary of the conversation")
     );
