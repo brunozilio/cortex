@@ -23,7 +23,9 @@ impl Agent<'_> {
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind: AskKind::Questions(asked.clone()) }));
         match answer.recv() {
             Ok(Decision::Answer(picks)) => Outcome::ok(ask::answers(&asked, &picks)),
-            Ok(Decision::Allow | Decision::AllowAlways | Decision::Approve(_)) => Outcome::ok(ask::answers(&asked, &[])),
+            Ok(Decision::Allow | Decision::AllowAlways | Decision::Approve(_)) => {
+                Outcome::ok(ask::answers(&asked, &[]))
+            }
             Ok(Decision::Deny) => Outcome::error(
                 "The user declined to answer. Do not ask again; go on with your best judgement and say what you assumed.",
             ),
