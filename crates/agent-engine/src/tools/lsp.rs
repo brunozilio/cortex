@@ -17,14 +17,7 @@ impl Tool for Lsp {
         let operations: Vec<&str> = Operation::NAMES.iter().map(|(name, _)| *name).collect();
         ToolSpec {
             name: "LSP".into(),
-            description: "Ask the file's language server about code: `goToDefinition`, `findReferences`, \
-                          `goToImplementation`, `hover` (type and docs), `incomingCalls`/`outgoingCalls` (who \
-                          calls a function, what it calls) at a position; `documentSymbol` (a file's outline) or \
-                          `workspaceSymbol` (find a symbol by name across the project, with `query`). `line` and \
-                          `character` count from 1, as Read shows them; point at the symbol's name. Prefer this \
-                          over Grep to find where a symbol is defined or used: it follows the language's rules, \
-                          not the text. The first question to a project can wait while its server starts."
-                .into(),
+            description: crate::tools::describe("LSP", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": {

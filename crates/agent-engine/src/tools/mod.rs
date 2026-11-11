@@ -137,6 +137,14 @@ pub fn standard() -> Vec<Box<dyn Tool>> {
     ]
 }
 
+pub fn describe(name: &str, data: &Value) -> String {
+    let script = format!("tools/{name}.js");
+    if content::builtin(&script).is_some() || content::user_text(content::user_folder().as_deref(), &script).is_some() {
+        return crate::prompt::render(&script, data);
+    }
+    content::text(&format!("tools/{name}.md"))
+}
+
 pub(crate) fn field<'a>(input: &'a Value, name: &str) -> Option<&'a str> {
     input.get(name).and_then(Value::as_str)
 }

@@ -32,9 +32,7 @@ impl Tool for WebFetch {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "WebFetch".into(),
-            description: "Fetch a web page (http upgraded to https) and read it as text, with what you are \
-                          looking for in `prompt`. Long pages are cut; fetch a narrower page then."
-                .into(),
+            description: crate::tools::describe("WebFetch", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": {
@@ -93,9 +91,7 @@ impl Tool for WebSearch {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "WebSearch".into(),
-            description: "Search the web and get the top results: title, URL and a snippet each. Fetch a \
-                          result with WebFetch to read it."
-                .into(),
+            description: crate::tools::describe("WebSearch", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": { "query": { "type": "string", "description": "What to search for." } },

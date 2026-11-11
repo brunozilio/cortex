@@ -1,0 +1,1 @@
+Leave the worktree EnterWorktree made and go back to the project's checkout. action "keep" leaves the worktree on disk (its path is reported); "remove" deletes it, which is refused while it has uncommitted files or commits of its own unless discard_changes is true.

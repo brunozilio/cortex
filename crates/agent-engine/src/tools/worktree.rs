@@ -13,16 +13,7 @@ impl Tool for EnterWorktree {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: ENTER_WORKTREE.into(),
-            description: concat!(
-                "Move this session into a new git worktree of the project (a separate checkout of its \
-                          base branch under ",
-                brand::dir!(),
-                "/worktrees), to work on a change apart from the user's \
-                          checkout. From the next step on, files and commands are in the worktree, and later \
-                          prompts of the session too, until ExitWorktree. Use it only when the user asks for a \
-                          worktree or for working apart."
-            )
-            .into(),
+            description: crate::tools::describe("EnterWorktree", &serde_json::Value::Null),
             schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
         }
     }
@@ -47,11 +38,7 @@ impl Tool for ExitWorktree {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: EXIT_WORKTREE.into(),
-            description: "Leave the worktree EnterWorktree made and go back to the project's checkout. \
-                          action \"keep\" leaves the worktree on disk (its path is reported); \"remove\" deletes \
-                          it, which is refused while it has uncommitted files or commits of its own unless \
-                          discard_changes is true."
-                .into(),
+            description: crate::tools::describe("ExitWorktree", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": {

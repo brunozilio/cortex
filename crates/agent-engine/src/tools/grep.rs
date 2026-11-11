@@ -21,13 +21,7 @@ impl Tool for Grep {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "Grep".into(),
-            description: "Search file contents with a regular expression (Rust regex syntax, like ripgrep). \
-                          Files ignored by git are skipped. `output_mode` is `files_with_matches` (default: the \
-                          matching files), `content` (the matching lines; `-n` numbers them, `-A`/`-B`/`-C` add \
-                          context) or `count`. Narrow with `path` and `glob` (e.g. `*.rs`). `-i` ignores case, \
-                          `multiline` lets `.` and patterns span lines. `head_limit` keeps the first N results. \
-                          Always use this instead of running grep or rg through Bash."
-                .into(),
+            description: crate::tools::describe("Grep", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": {

@@ -7,19 +7,16 @@ impl Tool for TaskTool {
     fn spec(&self) -> ToolSpec {
         let (description, schema) = match self.0 {
             "TaskOutput" => (
-                "Collect a background agent's report. block defaults to true; false polls without waiting.",
+                "TaskOutput",
                 json!({"type":"object","properties":{"task_id":{"type":"string"},"block":{"type":"boolean"}},"required":["task_id"],"additionalProperties":false}),
             ),
             "TaskStop" => (
-                "Cancel a background agent and wait for its tools to stop.",
+                "TaskStop",
                 json!({"type":"object","properties":{"task_id":{"type":"string"}},"required":["task_id"],"additionalProperties":false}),
             ),
-            _ => (
-                "List the background agents started in this run and their current status.",
-                json!({"type":"object","properties":{},"additionalProperties":false}),
-            ),
+            _ => ("TaskList", json!({"type":"object","properties":{},"additionalProperties":false})),
         };
-        ToolSpec { name: self.0.into(), description: description.into(), schema }
+        ToolSpec { name: self.0.into(), description: crate::tools::describe(description, &Value::Null), schema }
     }
     fn access(&self) -> Access {
         Access::Reads
@@ -53,26 +50,20 @@ struct PlanTool {
 impl Tool for PlanTool {
     fn spec(&self) -> ToolSpec {
         let (description, properties, required) = match self.name {
-            "TaskCreate" => (
-                "Create a planning task with a subject and description. Returns a run-local task_id.",
-                json!({"subject":{"type":"string"},"description":{"type":"string"}}),
-                json!(["subject"]),
-            ),
+            "TaskCreate" => {
+                ("TaskCreate", json!({"subject":{"type":"string"},"description":{"type":"string"}}), json!(["subject"]))
+            }
             "TaskUpdate" => (
-                "Update a planning task. Status is pending, in_progress or completed. blocked_by contains task_ids that must be completed first.",
+                "TaskUpdate",
                 json!({"task_id":{"type":"string"},"status":{"enum":["pending","in_progress","completed"]},"description":{"type":"string"},"blocked_by":{"type":"array","items":{"type":"string"}}}),
                 json!(["task_id"]),
             ),
-            "TaskGet" => (
-                "Read a planning task's description, status and dependencies.",
-                json!({"task_id":{"type":"string"}}),
-                json!(["task_id"]),
-            ),
-            _ => ("List planning tasks and background agents for this run.", json!({}), json!([])),
+            "TaskGet" => ("TaskGet", json!({"task_id":{"type":"string"}}), json!(["task_id"])),
+            _ => ("TaskList", json!({}), json!([])),
         };
         ToolSpec {
             name: self.name.into(),
-            description: description.into(),
+            description: crate::tools::describe(description, &Value::Null),
             schema: json!({"type":"object","properties":properties,"required":required,"additionalProperties":false}),
         }
     }

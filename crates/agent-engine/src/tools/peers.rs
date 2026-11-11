@@ -98,13 +98,7 @@ impl Tool for ListSessions {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "ListSessions".into(),
-            description: concat!(
-                "List the user's other ",
-                brand::name!(),
-                " sessions open on this computer: their names and folders. \
-                          Send one a message with SendMessage (`to` its name); its answer reaches you as an event."
-            )
-            .into(),
+            description: crate::tools::describe("ListSessions", &serde_json::Value::Null),
             schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
         }
     }

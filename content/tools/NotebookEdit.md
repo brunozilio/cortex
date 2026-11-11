@@ -1,0 +1,1 @@
+Change one cell of a Jupyter notebook (.ipynb): `replace` its source (the default), `insert` a new cell after it (or first, without `cell_number`), or `delete` it. Cells are numbered from 0 as Read shows them. Read the notebook first.

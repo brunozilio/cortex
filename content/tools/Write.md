@@ -1,0 +1,1 @@
+Create a file, or replace one entirely, with `content`. Missing parent directories are created. An existing file must have been read with Read first. Prefer Edit to change part of a file; use Write for new files or complete rewrites.

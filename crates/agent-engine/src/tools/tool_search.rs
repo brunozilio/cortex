@@ -79,11 +79,7 @@ impl ToolSearch {
     fn spec_for(names: &[&str]) -> ToolSpec {
         ToolSpec {
             name: TOOL_SEARCH.into(),
-            description: format!(
-                "Load the schemas of tools that are listed here but not yet callable, then call them. Query \
-                 `select:name1,name2` for tools you know by name, or keywords to find them. Not loaded yet: {}",
-                names.join(", ")
-            ),
+            description: crate::tools::describe("ToolSearch", &serde_json::json!({ "not_loaded": names.join(", ") })),
             schema: json!({
                 "type": "object",
                 "properties": { "query": { "type": "string" } },

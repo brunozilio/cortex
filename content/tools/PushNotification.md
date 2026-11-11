@@ -1,0 +1,1 @@
+Show the user a desktop notification: when a long task finishes, when you need a decision, or when something they asked you to watch happens and they may be away. Keep it to one short sentence; do not use it for routine progress.

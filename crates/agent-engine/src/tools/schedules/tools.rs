@@ -7,11 +7,7 @@ impl Tool for CronCreate {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "CronCreate".into(),
-            description: "Schedule a prompt to be sent to this session later, on a cron expression in the user's \
-                          local time (minute hour day-of-month month day-of-week, e.g. \"*/10 * * * *\", \
-                          \"0 9 * * 1-5\"). It fires only while the session is open and idle. Recurring prompts \
-                          end after 7 days. Use it when the user asks for something periodic or at a set time."
-                .into(),
+            description: crate::tools::describe("CronCreate", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": {
@@ -56,10 +52,7 @@ impl Tool for ScheduleWakeup {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "ScheduleWakeup".into(),
-            description: "Send a prompt to this session once, after a delay (60 to 3600 seconds), to pick up \
-                          work later: check on a long build, a deploy, or repeat a task at your own pace by \
-                          scheduling the next wakeup each time. It fires only while the session is idle."
-                .into(),
+            description: crate::tools::describe("ScheduleWakeup", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": {
@@ -104,7 +97,7 @@ impl Tool for CronList {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "CronList".into(),
-            description: "List the prompts scheduled for this session (CronCreate, ScheduleWakeup).".into(),
+            description: crate::tools::describe("CronList", &serde_json::Value::Null),
             schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
         }
     }
@@ -130,7 +123,7 @@ impl Tool for CronDelete {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "CronDelete".into(),
-            description: "Remove a scheduled prompt by its id (CronList shows them).".into(),
+            description: crate::tools::describe("CronDelete", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": { "id": { "type": "string" } },

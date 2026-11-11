@@ -116,9 +116,7 @@ impl Tool for SkillTool {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: SKILL_TOOL.to_owned(),
-            description: "Loads a skill's instructions by its exact name from the list of available skills. When a \
-                          skill covers the task, call this first and follow what it returns."
-                .to_owned(),
+            description: crate::tools::describe("Skill", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": {

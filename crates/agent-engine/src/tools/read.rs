@@ -13,16 +13,9 @@ impl Tool for Read {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "Read".into(),
-            description: format!(
-                "Read a text file, a PNG, JPEG, GIF or WebP image, a PDF (as text; `pages` like \"1-5\" for a \
-                 long one) or a Jupyter notebook (its cells and outputs) from the machine. Images are sent \
-                 visually to the model. Give an absolute path, or one relative to the working \
-                 directory. Returns up to {DEFAULT_LINES} lines from the start, each prefixed with its line number \
-                 and a tab; pass `offset` (first line, from 1) and `limit` to read a part of a long file. Lines \
-                 longer than {LINE_CHARS} characters are cut. When you know which part of a file you need, read \
-                 only that part. Read a file before editing or overwriting it, but do not read it again to check \
-                 an edit: Edit and Write fail when a change does not apply. To find files, use Glob; to search \
-                 inside them, Grep. Several reads can be requested at once."
+            description: crate::tools::describe(
+                "Read",
+                &serde_json::json!({ "DEFAULT_LINES": DEFAULT_LINES, "LINE_CHARS": LINE_CHARS }),
             ),
             schema: json!({
                 "type": "object",

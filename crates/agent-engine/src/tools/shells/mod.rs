@@ -137,10 +137,7 @@ impl Tool for BashOutput {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "BashOutput".into(),
-            description: "Read what a background command (Bash with run_in_background) printed since you last \
-                          read it, and whether it is still running. Pass `filter` (a substring) to keep only \
-                          the lines that contain it."
-                .into(),
+            description: crate::tools::describe("BashOutput", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": {
@@ -203,7 +200,7 @@ impl Tool for KillShell {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "KillShell".into(),
-            description: "Stop a background command (and everything it started).".into(),
+            description: crate::tools::describe("KillShell", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": { "shell_id": { "type": "string", "description": "The id Bash returned." } },

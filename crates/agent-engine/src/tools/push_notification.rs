@@ -40,10 +40,7 @@ impl Tool for PushNotification {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "PushNotification".into(),
-            description: "Show the user a desktop notification: when a long task finishes, when you need a \
-                          decision, or when something they asked you to watch happens and they may be away. \
-                          Keep it to one short sentence; do not use it for routine progress."
-                .into(),
+            description: crate::tools::describe("PushNotification", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": {

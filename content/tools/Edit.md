@@ -1,0 +1,1 @@
+Replace `old_string` with `new_string` in a file read earlier with Read. `old_string` must match the file exactly, indentation included (without Read's line-number prefix), and appear only once unless `replace_all` is true; include surrounding lines to make it unique. To create a file, use Write.

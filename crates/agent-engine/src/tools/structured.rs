@@ -14,7 +14,11 @@ impl Structured {
 }
 impl Tool for Structured {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {name:"StructuredOutput".into(),description:"Deliver the final structured result. All fields must satisfy this schema. Call after doing the requested work and before completing the response. Validation errors must be corrected.".into(),schema:json!({"type":"object","properties":{"result":self.schema},"required":["result"],"additionalProperties":false})}
+        ToolSpec {
+            name: "StructuredOutput".into(),
+            description: crate::tools::describe("StructuredOutput", &serde_json::Value::Null),
+            schema: json!({"type":"object","properties":{"result":self.schema},"required":["result"],"additionalProperties":false}),
+        }
     }
     fn access(&self) -> Access {
         Access::Reads

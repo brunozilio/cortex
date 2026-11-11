@@ -1,0 +1,1 @@
+Schedule a prompt to be sent to this session later, on a cron expression in the user's local time (minute hour day-of-month month day-of-week, e.g. "*/10 * * * *", "0 9 * * 1-5"). It fires only while the session is open and idle. Recurring prompts end after 7 days. Use it when the user asks for something periodic or at a set time.

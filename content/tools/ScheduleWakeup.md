@@ -1,0 +1,1 @@
+Send a prompt to this session once, after a delay (60 to 3600 seconds), to pick up work later: check on a long build, a deploy, or repeat a task at your own pace by scheduling the next wakeup each time. It fires only while the session is idle.

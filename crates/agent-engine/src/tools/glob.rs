@@ -15,11 +15,7 @@ impl Tool for Glob {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "Glob".into(),
-            description: format!(
-                "Find files by name with a glob pattern such as `**/*.rs` or `src/**/mod.rs`, searching the \
-                 working directory or `path`. Files ignored by git are skipped. Returns up to {LIMIT} paths, most \
-                 recently modified first. Use Grep to search file contents."
-            ),
+            description: crate::tools::describe("Glob", &serde_json::json!({ "LIMIT": LIMIT })),
             schema: json!({
                 "type": "object",
                 "properties": {
