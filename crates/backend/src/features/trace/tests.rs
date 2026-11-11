@@ -1,4 +1,4 @@
-use agent_engine::sessions::Sessions;
+use agent_engine::sessions::{Entry, Sessions};
 use domain::{EngineEvent, OrgId, ToolCall, UserId};
 
 use super::*;

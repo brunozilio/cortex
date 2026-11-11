@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use agent_engine::sessions::{Entry, FileSessions};
+use agent_engine::sessions::{FileSessions, records};
 use domain::{ModelOption, Principal, PromptRequest, SessionId};
 use serde_json::Value;
 
@@ -17,7 +17,7 @@ pub fn forget(_client: u64) {}
 fn traced(store: &FileSessions, owner: &Principal, cwd: &Path, id: &SessionId) -> Result<Value, String> {
     let mut request = PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""));
     request.credentials.owner = Some(owner.clone());
-    let records: Vec<_> = store.entries(&request, id)?.into_iter().filter_map(Entry::record).collect();
+    let records = records(store.entries(&request, id)?);
     if records.is_empty() {
         return Err("this session has nothing to trace yet".into());
     }
