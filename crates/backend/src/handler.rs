@@ -19,7 +19,6 @@ pub struct CommandHandler {
 
 impl Drop for CommandHandler {
     fn drop(&mut self) {
-        crate::channels::close(self.client);
         agent_engine::tools::peers::forget(self.client);
         crate::features::forget(self.client);
         agent_engine::tools::inbox::forget_client(self.client);
@@ -129,13 +128,6 @@ impl CommandHandler {
             ClientCommand::SignOutMcpServer { path, name } => {
                 crate::mcp_auth::command::sign_out(&self.services, &principal, &path, &name, &self.outbox);
             }
-            ClientCommand::OpenChannels { path, names } => outbox.send(crate::channels::open_here(
-                self.client,
-                &path,
-                &names,
-                &self.services.extensions,
-                self.services.home.as_deref(),
-            )),
         }
     }
 
@@ -178,7 +170,7 @@ impl CommandHandler {
                 model,
                 other_models: crate::native::other_keys(&self.services.providers, owner, &request.model),
                 owner: Some(owner.clone()),
-                mcp: crate::channels::for_run(self.client),
+                mcp: Vec::new(),
                 client: self.client,
                 mcp_tokens: Some(self.services.mcp_auth.for_run(owner)),
             },

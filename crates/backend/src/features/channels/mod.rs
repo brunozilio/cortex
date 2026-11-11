@@ -6,27 +6,42 @@ use agent_engine::mcp::McpServer;
 use agent_engine::mcp::channel::{self, Bridge};
 use agent_engine::model::http::{Http, NetHttp};
 use domain::mcp::LocalMcp;
-use protocol::ServerEvent;
+use serde_json::{Value, json};
 
 use crate::extensions::Extensions;
+use crate::feature::Context;
+
+pub mod run;
+
+pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
+    let path = input["path"].as_str().map(std::path::PathBuf::from).ok_or("channels need a path")?;
+    let names: Vec<String> = serde_json::from_value(input["names"].clone()).map_err(|e| e.to_string())?;
+    let services = context.services;
+    let http: Arc<dyn Http> = Arc::new(NetHttp);
+    open(context.client, &path, &names, &services.extensions, services.home.as_deref(), &http)
+}
+
+pub fn forget(client: u64) {
+    lock().remove(&client);
+}
 
 fn lock() -> std::sync::MutexGuard<'static, HashMap<u64, Vec<Arc<McpServer>>>> {
     static OPEN: OnceLock<Mutex<HashMap<u64, Vec<Arc<McpServer>>>>> = OnceLock::new();
     OPEN.get_or_init(Mutex::default).lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-pub(crate) fn open(
+fn open(
     client: u64,
     path: &Path,
     names: &[String],
     extensions: &Extensions,
     home: Option<&Path>,
     http: &Arc<dyn Http>,
-) -> ServerEvent {
+) -> Result<Value, String> {
     let request = crate::mcp_admin::request_in(path, extensions, home);
     let sources = match agent_engine::mcp::sources(&request) {
         Ok(sources) => sources,
-        Err(error) => return ServerEvent::error(format!("Could not read the MCP servers: {error}")),
+        Err(error) => return Err(format!("Could not read the MCP servers: {error}")),
     };
     let specs = agent_engine::mcp::servers(&request, &sources);
     let mut failed = Vec::new();
@@ -43,27 +58,13 @@ pub(crate) fn open(
             Err(error) => failed.push(format!("{name}: {error}")),
         }
     }
-    let opened = lock().get(&client).map(|open| open.iter().map(|s| s.name().to_owned()).collect()).unwrap_or_default();
-    ServerEvent::Channels { opened, failed }
+    let opened: Vec<String> =
+        lock().get(&client).map(|open| open.iter().map(|s| s.name().to_owned()).collect()).unwrap_or_default();
+    Ok(json!({ "opened": opened, "failed": failed }))
 }
 
-pub(crate) fn open_here(
-    client: u64,
-    path: &Path,
-    names: &[String],
-    extensions: &Extensions,
-    home: Option<&Path>,
-) -> ServerEvent {
-    let http: Arc<dyn Http> = Arc::new(NetHttp);
-    open(client, path, names, extensions, home, &http)
-}
-
-pub(crate) fn for_run(client: u64) -> Vec<LocalMcp> {
+fn for_run(client: u64) -> Vec<LocalMcp> {
     lock().get(&client).map(|open| open.iter().map(Bridge::local).collect()).unwrap_or_default()
-}
-
-pub(crate) fn close(client: u64) {
-    lock().remove(&client);
 }
 
 #[cfg(all(test, unix))]
@@ -85,10 +86,9 @@ mod tests {
         std::fs::write(home.path().join(concat!(brand::dir!(), "/mcp.json")), config.to_string()).expect("config");
         let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
         let names = vec!["chat".to_owned(), "missing".to_owned()];
-        let opened = open(9601, project.path(), &names, &Extensions::default(), Some(home.path()), &http);
-        let ServerEvent::Channels { opened, failed } = opened else { panic!("{opened:?}") };
-        assert_eq!(opened, ["chat"]);
-        assert!(failed.len() == 1 && failed[0].starts_with("missing:"), "{failed:?}");
+        let opened = open(9601, project.path(), &names, &Extensions::default(), Some(home.path()), &http).expect("open");
+        assert_eq!(opened["opened"], json!(["chat"]));
+        assert!(opened["failed"][0].as_str().is_some_and(|failed| failed.starts_with("missing:")), "{opened}");
 
         let deadline = Instant::now() + Duration::from_secs(5);
         let mut notices = Vec::new();
@@ -99,8 +99,8 @@ mod tests {
         assert_eq!(notices[0].text, "hello from chat");
         assert_eq!(for_run(9601).iter().map(|local| local.name.as_str()).collect::<Vec<_>>(), ["chat"]);
         let again = open(9601, project.path(), &names[..1], &Extensions::default(), Some(home.path()), &http);
-        assert!(matches!(again, ServerEvent::Channels { ref opened, .. } if opened.len() == 1), "opened once");
-        close(9601);
+        assert_eq!(again.expect("again")["opened"], json!(["chat"]), "opened once");
+        forget(9601);
         assert!(for_run(9601).is_empty());
     }
 }

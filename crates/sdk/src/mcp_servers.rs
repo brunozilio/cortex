@@ -46,11 +46,9 @@ impl Sdk {
     }
 
     pub fn open_channels(&self, cwd: &Path, names: &[String]) -> Result<(Vec<String>, Vec<String>), Error> {
-        let command = ClientCommand::OpenChannels { path: cwd.to_path_buf(), names: names.to_vec() };
-        self.client.call(command, |event| match event {
-            ServerEvent::Channels { opened, failed } => Some(Ok((opened, failed))),
-            _ => None,
-        })
+        let answer = self.feature("channels", serde_json::json!({ "path": cwd, "names": names }))?;
+        let list = |key: &str| serde_json::from_value(answer[key].clone()).unwrap_or_default();
+        Ok((list("opened"), list("failed")))
     }
 
     pub fn sign_out_mcp_server(&self, cwd: &Path, name: &str) -> Result<Vec<McpServerInfo>, Error> {

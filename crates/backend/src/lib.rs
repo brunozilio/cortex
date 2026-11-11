@@ -1,5 +1,4 @@
 mod authorizer;
-mod channels;
 mod dirs;
 mod extensions;
 pub mod feature;

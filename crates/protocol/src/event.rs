@@ -12,7 +12,6 @@ pub enum ServerEvent {
     Skills(Vec<Skill>),
     Agents(Vec<CustomAgent>),
     McpServers { path: PathBuf, servers: Vec<domain::mcp_config::McpServerInfo> },
-    Channels { opened: Vec<String>, failed: Vec<String> },
     McpAuthorizeAt { name: String, url: String },
     Notices(Vec<domain::inbox::Notice>),
     Feature { feature: String, output: Result<serde_json::Value, String> },
