@@ -9,9 +9,11 @@ use serde_json::{Value, json};
 use crate::model::client::{Config, ProviderClient};
 use crate::model::http::ScriptedHttp;
 use crate::model::{ModelApi, ModelError};
-use crate::providers::testing::{RESPONSES, effort_body, header, request};
+use crate::providers::testing::{effort_body, header, request};
 
 const CHATGPT: ModelProvider = ModelProvider::new("openai-subscription");
+
+const RESPONSES: &str = include_str!("../../../tests/fixtures/responses_tool_use.sse");
 
 fn token(account: &str) -> String {
     let claims = json!({"https://api.openai.com/auth": {"chatgpt_account_id": account}});

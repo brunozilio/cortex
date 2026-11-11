@@ -1,9 +1,11 @@
 use domain::ModelProvider;
 
 use crate::model::ModelError;
-use crate::providers::testing::{MESSAGES, client, effort_body, header, sent_turn};
+use crate::providers::testing::{client, effort_body, header, sent_turn};
 
 const CLAUDE: ModelProvider = ModelProvider::new("claude-subscription");
+
+const MESSAGES: &str = include_str!("../../../tests/fixtures/messages_tool_use.sse");
 
 #[test]
 fn a_turn_goes_to_the_messages_api_signed_in() {

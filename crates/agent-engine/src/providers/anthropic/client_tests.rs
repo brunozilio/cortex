@@ -8,9 +8,11 @@ use serde_json::{Value, json};
 use crate::model::ModelApi;
 use crate::model::client::ProviderClient;
 use crate::model::http::ScriptedHttp;
-use crate::providers::testing::{MESSAGES, client, effort_body, header, request, sent_turn};
+use crate::providers::testing::{client, effort_body, header, request, sent_turn};
 
 const ANTHROPIC: ModelProvider = ModelProvider::new("anthropic");
+
+const MESSAGES: &str = include_str!("../../../tests/fixtures/messages_tool_use.sse");
 
 #[test]
 fn a_turn_goes_to_the_messages_api_with_the_key() {

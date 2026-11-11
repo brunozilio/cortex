@@ -2,9 +2,11 @@ use domain::ModelProvider;
 use serde_json::json;
 
 use crate::model::client::Config;
-use crate::providers::testing::{RESPONSES, client, effort_body, header, sent_turn};
+use crate::providers::testing::{client, effort_body, header, sent_turn};
 
 const OPENAI: ModelProvider = ModelProvider::new("openai");
+
+const RESPONSES: &str = include_str!("../../../tests/fixtures/responses_tool_use.sse");
 
 #[test]
 fn a_turn_goes_to_the_responses_api_with_the_key() {

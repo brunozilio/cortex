@@ -117,3 +117,6 @@ mod tests {
         assert!(matches!(status_error(400, bad), ModelError::Provider(why) if why == "unknown field"));
     }
 }
+
+#[cfg(test)]
+mod wire_tests;

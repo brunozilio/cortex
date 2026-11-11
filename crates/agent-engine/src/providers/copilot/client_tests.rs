@@ -10,9 +10,11 @@ use std::sync::atomic::AtomicBool;
 
 use domain::ModelProvider;
 
-use crate::providers::testing::{CHAT, header, request, sent_turn};
+use crate::providers::testing::{header, request, sent_turn};
 
 const COPILOT: ModelProvider = ModelProvider::new("copilot-subscription");
+
+const CHAT: &str = include_str!("../../../tests/fixtures/chat_tool_use.sse");
 
 fn key() -> Arc<ProviderKey> {
     Arc::new(ProviderKey::new(

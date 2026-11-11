@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use agent_engine::model::wires::messages::Messages;
-use agent_engine::model::http::ScriptedHttp;
-use agent_engine::model::{Delta, ModelApi, ModelError, TurnRequest};
-use agent_engine::transcript::{Block, Message, StopReason};
+use crate::model::wires::messages::Messages;
+use crate::model::http::ScriptedHttp;
+use crate::model::{Delta, ModelApi, ModelError, TurnRequest};
+use crate::transcript::{Block, Message, StopReason};
 use domain::Effort;
 use domain::provider::ProviderKey;
 use serde_json::json;
@@ -26,7 +26,7 @@ fn client(http: &Arc<ScriptedHttp>, key: &str) -> Messages {
 
 #[test]
 fn folds_thinking_text_and_a_tool_call() {
-    let stream = include_str!("fixtures/messages_tool_use.sse");
+    let stream = include_str!("../../../../tests/fixtures/messages_tool_use.sse");
     let http = Arc::new(ScriptedHttp::new([(200, stream.to_owned())]));
     let mut deltas = Vec::new();
     let reply = client(&http, "sk-test")
@@ -40,7 +40,7 @@ fn folds_thinking_text_and_a_tool_call() {
             Block::Thinking {
                 text: "I should read it.".into(),
                 signature: Some("EqQB".into()),
-                origin: Some(agent_engine::model::wires::messages::ORIGIN)
+                origin: Some(crate::model::wires::messages::ORIGIN)
             },
             Block::Text("Let me look.".into()),
             Block::ToolUse { id: "toolu_1".into(), name: "Read".into(), input: json!({"file_path": "src/main.rs"}) },
@@ -61,7 +61,7 @@ fn folds_thinking_text_and_a_tool_call() {
 
 #[test]
 fn sends_the_key_and_names_itself() {
-    let stream = include_str!("fixtures/messages_tool_use.sse").to_owned();
+    let stream = include_str!("../../../../tests/fixtures/messages_tool_use.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
     client(&http, "sk-test").turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("key");
 
@@ -77,7 +77,7 @@ fn sends_the_key_and_names_itself() {
 
 #[test]
 fn retries_when_busy_and_names_what_failed() {
-    let stream = include_str!("fixtures/messages_tool_use.sse").to_owned();
+    let stream = include_str!("../../../../tests/fixtures/messages_tool_use.sse").to_owned();
     let busy = r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#.to_owned();
     let http = Arc::new(ScriptedHttp::new([(529, busy), (200, stream)]));
     let reply = client(&http, "k").turn(&request(), &mut |_| {}, &AtomicBool::new(false));
@@ -93,14 +93,83 @@ fn retries_when_busy_and_names_what_failed() {
 
 #[test]
 fn a_cut_stream_is_an_error_and_cancelling_stops_reading() {
-    let cut = include_str!("fixtures/messages_tool_use.sse").replace("event: message_stop", "");
+    let cut = include_str!("../../../../tests/fixtures/messages_tool_use.sse").replace("event: message_stop", "");
     let cut = cut.replace(r#"data: {"type":"message_stop"}"#, "");
     let http = Arc::new(ScriptedHttp::new([(200, cut.clone()), (200, cut.clone()), (200, cut.clone()), (200, cut)]));
     let error = client(&http, "k").turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect_err("cut");
     assert!(matches!(error, ModelError::Network(_)), "{error:?}");
 
-    let stream = include_str!("fixtures/messages_tool_use.sse").to_owned();
+    let stream = include_str!("../../../../tests/fixtures/messages_tool_use.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
     let error = client(&http, "k").turn(&request(), &mut |_| {}, &AtomicBool::new(true)).expect_err("cancelled");
     assert_eq!(error, ModelError::Cancelled);
+}
+
+fn with_image(image: &domain::Image) -> TurnRequest {
+    TurnRequest {
+        model: "fixture".into(),
+        system: "system".into(),
+        messages: vec![
+            Message::user("inspect"),
+            Message::assistant(vec![Block::ToolUse {
+                id: "read".into(),
+                name: "Read".into(),
+                input: json!({"file_path":"image.png"}),
+            }]),
+            crate::transcript::Message {
+                role: crate::transcript::Role::User,
+                blocks: vec![Block::ToolResultRich {
+                    id: "read".into(),
+                    content: "screenshot".into(),
+                    images: vec![image.clone()],
+                    is_error: false,
+                }],
+            },
+        ],
+        tools: vec![],
+        effort: Effort::Low,
+        max_tokens: 100,
+    }
+}
+
+fn pixel() -> domain::Image {
+    domain::Image::from_mcp(
+        "image/png",
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6wAAAABJRU5ErkJggg==",
+    )
+    .expect("valid test fixture")
+}
+
+fn thought(signature: &str, origin: Option<crate::transcript::ReasoningOrigin>) -> TurnRequest {
+    TurnRequest {
+        model: "fixture".into(),
+        system: "system".into(),
+        messages: vec![
+            Message::user("question"),
+            Message::assistant(vec![
+                Block::Thinking { text: "private reasoning".into(), signature: Some(signature.into()), origin },
+                Block::Text("Visible answer".into()),
+            ]),
+            Message::user("continue"),
+        ],
+        tools: vec![],
+        effort: Effort::Low,
+        max_tokens: 100,
+    }
+}
+
+#[test]
+fn an_image_in_a_tool_result_is_sent_visually() {
+    let image = pixel();
+    let body = super::body(&with_image(&image));
+    assert_eq!(body["messages"][2]["content"][0]["content"][1]["source"]["data"], image.data);
+}
+
+#[test]
+fn only_its_own_reasoning_signatures_are_sent_back() {
+    let own = super::body(&thought("OWN-SIGNATURE", Some(super::ORIGIN))).to_string();
+    assert!(own.contains("OWN-SIGNATURE") && own.contains("Visible answer"));
+    let other = crate::transcript::ReasoningOrigin::of("other-wire");
+    assert!(!super::body(&thought("FOREIGN", Some(other))).to_string().contains("FOREIGN"));
+    assert!(!super::body(&thought("UNKNOWN", None)).to_string().contains("UNKNOWN"));
 }

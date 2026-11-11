@@ -95,3 +95,6 @@ fn status_error(status: u16, text: &str) -> ModelError {
         },
     }
 }
+
+#[cfg(test)]
+mod wire_tests;

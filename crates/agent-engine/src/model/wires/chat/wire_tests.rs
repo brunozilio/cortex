@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use agent_engine::model::wires::chat::{Chat, Endpoint, Endpoints};
-use agent_engine::model::http::ScriptedHttp;
-use agent_engine::model::{Delta, ModelApi, ModelError, ToolSpec, TurnRequest};
-use agent_engine::transcript::{Block, Message, StopReason};
+use crate::model::wires::chat::{Chat, Endpoint, Endpoints};
+use crate::model::http::ScriptedHttp;
+use crate::model::{Delta, ModelApi, ModelError, ToolSpec, TurnRequest};
+use crate::transcript::{Block, Message, StopReason};
 use domain::Effort;
 use serde_json::{Value, json};
 
@@ -37,7 +37,7 @@ fn request() -> TurnRequest {
 
 #[test]
 fn folds_thinking_text_and_a_call_from_a_streamed_answer() {
-    let http = Arc::new(ScriptedHttp::new([(200, include_str!("fixtures/chat_tool_use.sse").to_owned())]));
+    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../../../../tests/fixtures/chat_tool_use.sse").to_owned())]));
     let mut deltas = Vec::new();
     let reply = Chat::new(http.clone(), served())
         .turn(&request(), &mut |delta| deltas.push(delta), &AtomicBool::new(false))
@@ -49,7 +49,7 @@ fn folds_thinking_text_and_a_call_from_a_streamed_answer() {
             Block::Thinking {
                 text: "Read it first.".into(),
                 signature: None,
-                origin: Some(agent_engine::model::wires::chat::ORIGIN)
+                origin: Some(crate::model::wires::chat::ORIGIN)
             },
             Block::Text("Let me look.".into()),
             Block::ToolUse { id: "call_1".into(), name: "Read".into(), input: json!({"file_path": "src/main.rs"}) },
@@ -65,7 +65,7 @@ fn folds_thinking_text_and_a_call_from_a_streamed_answer() {
 
 #[test]
 fn folds_a_recorded_chat_answer_with_reasoning_and_a_tool_call() {
-    let stream = include_str!("fixtures/chat_reasoning_tool_call.sse").to_owned();
+    let stream = include_str!("../../../../tests/fixtures/chat_reasoning_tool_call.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
     let reply = Chat::new(http, served()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("reply");
     assert_eq!(reply.stop, StopReason::ToolUse);
@@ -76,7 +76,7 @@ fn folds_a_recorded_chat_answer_with_reasoning_and_a_tool_call() {
                 text: "The user is asking me to list the files in the current directory. Let's run the ls command."
                     .into(),
                 signature: None,
-                origin: Some(agent_engine::model::wires::chat::ORIGIN)
+                origin: Some(crate::model::wires::chat::ORIGIN)
             },
             Block::ToolUse {
                 id: "6a0e1e76-3e23-43de-b714-0892ec3343a0".into(),
@@ -90,19 +90,19 @@ fn folds_a_recorded_chat_answer_with_reasoning_and_a_tool_call() {
 
 #[test]
 fn asks_the_served_model_with_the_whole_conversation_and_the_tools() {
-    let http = Arc::new(ScriptedHttp::new([(200, include_str!("fixtures/chat_tool_use.sse").to_owned())]));
+    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../../../../tests/fixtures/chat_tool_use.sse").to_owned())]));
     let mut request = request();
     request.messages.push(Message::assistant(vec![
         Block::Thinking {
             text: "hm".into(),
             signature: None,
-            origin: Some(agent_engine::model::wires::chat::ORIGIN),
+            origin: Some(crate::model::wires::chat::ORIGIN),
         },
         Block::Text("Reading.".into()),
         Block::ToolUse { id: "call_0".into(), name: "Read".into(), input: json!({"file_path": "a"}) },
     ]));
-    request.messages.push(agent_engine::transcript::Message {
-        role: agent_engine::transcript::Role::User,
+    request.messages.push(crate::transcript::Message {
+        role: crate::transcript::Role::User,
         blocks: vec![Block::ToolResult { id: "call_0".into(), content: "no such file".into(), is_error: true }],
     });
     Chat::new(http.clone(), served()).turn(&request, &mut |_| {}, &AtomicBool::new(false)).expect("reply");
@@ -155,4 +155,48 @@ fn an_answer_cut_off_by_its_length_says_so() {
     let http = Arc::new(ScriptedHttp::new([(200, stream.to_owned())]));
     let reply = Chat::new(http, served()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("reply");
     assert_eq!((reply.stop, reply.message.text()), (StopReason::MaxTokens, "Half".to_owned()));
+}
+
+fn with_image(image: &domain::Image) -> TurnRequest {
+    TurnRequest {
+        model: "fixture".into(),
+        system: "system".into(),
+        messages: vec![
+            Message::user("inspect"),
+            Message::assistant(vec![Block::ToolUse {
+                id: "read".into(),
+                name: "Read".into(),
+                input: json!({"file_path":"image.png"}),
+            }]),
+            crate::transcript::Message {
+                role: crate::transcript::Role::User,
+                blocks: vec![Block::ToolResultRich {
+                    id: "read".into(),
+                    content: "screenshot".into(),
+                    images: vec![image.clone()],
+                    is_error: false,
+                }],
+            },
+        ],
+        tools: vec![],
+        effort: Effort::Low,
+        max_tokens: 100,
+    }
+}
+
+fn pixel() -> domain::Image {
+    domain::Image::from_mcp(
+        "image/png",
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6wAAAABJRU5ErkJggg==",
+    )
+    .expect("valid test fixture")
+}
+
+#[test]
+fn an_image_in_a_tool_result_is_sent_visually() {
+    let image = pixel();
+    let body = super::body(&with_image(&image), "fixture");
+    let visual = body["messages"].as_array().expect("messages").iter().find(|m| m["content"].is_array()).expect("parts");
+    let parts = visual["content"].as_array().expect("parts");
+    assert!(parts.iter().any(|part| part["type"] == "image_url" && part["image_url"]["url"] == image.data_url()));
 }

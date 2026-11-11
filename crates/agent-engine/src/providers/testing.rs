@@ -10,9 +10,6 @@ use crate::model::http::{ScriptedHttp, Sent};
 use crate::model::{ModelApi, TurnRequest};
 use crate::transcript::Message;
 
-pub const MESSAGES: &str = include_str!("../../tests/fixtures/messages_tool_use.sse");
-pub const RESPONSES: &str = include_str!("../../tests/fixtures/responses_tool_use.sse");
-pub const CHAT: &str = include_str!("../../tests/fixtures/chat_tool_use.sse");
 
 pub fn request(model: &str) -> TurnRequest {
     TurnRequest {

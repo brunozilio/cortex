@@ -94,3 +94,6 @@ fn status_error(status: u16, text: &str) -> ModelError {
         _ => ModelError::Provider(format!("HTTP {status}: {text}")),
     }
 }
+
+#[cfg(test)]
+mod wire_tests;
