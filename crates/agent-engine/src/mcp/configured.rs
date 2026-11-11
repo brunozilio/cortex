@@ -12,6 +12,8 @@ pub struct McpSources {
     pub home: Option<PathBuf>,
     pub plugins: Vec<Plugin>,
     pub approval: McpApproval,
+    #[serde(default)]
+    pub scripts: crate::tools::script_tool::ScriptAccess,
 }
 
 pub fn configured(cwd: &Path, sources: &McpSources) -> Vec<ServerSpec> {
@@ -55,11 +57,11 @@ fn origins(cwd: &Path, sources: &McpSources) -> Vec<(McpOrigin, ServerSpec)> {
         .map(|home| read(&home.join(concat!(brand::dir!(), "/mcp.json")), "the user's"))
         .unwrap_or_default();
     let mut found: Vec<(McpOrigin, ServerSpec)> = Vec::new();
-    let project_scripts = super::script_server::found(&cwd.join(brand::DIR).join("mcp"), cwd);
+    let project_scripts = super::script_server::found(&cwd.join(brand::DIR).join("mcp"), cwd, sources.scripts);
     let user_scripts = sources
         .home
         .as_ref()
-        .map(|home| super::script_server::found(&home.join(brand::DIR).join("mcp"), cwd))
+        .map(|home| super::script_server::found(&home.join(brand::DIR).join("mcp"), cwd, sources.scripts))
         .unwrap_or_default();
     let project = project.into_iter().chain(project_scripts);
     let user = user.into_iter().chain(user_scripts);

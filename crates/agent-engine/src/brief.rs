@@ -38,6 +38,7 @@ impl Brief {
             home: self.home.clone(),
             plugins: self.plugins.clone(),
             approval: self.settings.mcp_approval.clone(),
+            scripts: self.settings.scripts,
         }
     }
 }
@@ -45,8 +46,8 @@ impl Brief {
 pub fn mcp_sources(request: &PromptRequest) -> Result<crate::mcp::McpSources, String> {
     let home = home(request);
     let plugins = crate::plugins::found(request, home.as_deref());
-    let approval = prompt::settings::load(&request.cwd, home.as_deref(), &plugins)?.mcp_approval;
-    Ok(crate::mcp::McpSources { home, plugins, approval })
+    let settings = prompt::settings::load(&request.cwd, home.as_deref(), &plugins)?;
+    Ok(crate::mcp::McpSources { home, plugins, approval: settings.mcp_approval, scripts: settings.scripts })
 }
 
 pub fn permissions(request: &PromptRequest) -> Result<domain::permission_rules::PermissionsInfo, String> {

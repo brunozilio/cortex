@@ -95,8 +95,9 @@ impl McpServer {
             ServerSpec::Sse { name, url, headers } => {
                 Box::new(sse::SseTransport::connect(name, url, headers, Arc::clone(http), stop, listener)?)
             }
-            ServerSpec::Script { path, cwd, .. } => {
-                Box::new(LocalTransport::new(Arc::new(script_server::ScriptServer::open(spec.name(), path, cwd)?)))
+            ServerSpec::Script { path, cwd, access, .. } => {
+                let server = script_server::ScriptServer::open(spec.name(), path, cwd, *access)?;
+                Box::new(LocalTransport::new(Arc::new(server)))
             }
             ServerSpec::Stdio { name, command, args, env } => {
                 Box::new(StdioTransport::spawn_listening(name, command, args, env, listener)?)

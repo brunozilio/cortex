@@ -6,10 +6,28 @@ use domain::PromptRequest;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ServerSpec {
-    Http { name: String, url: String, headers: Vec<(String, String)> },
-    Sse { name: String, url: String, headers: Vec<(String, String)> },
-    Stdio { name: String, command: String, args: Vec<String>, env: Vec<(String, String)> },
-    Script { name: String, path: std::path::PathBuf, cwd: std::path::PathBuf },
+    Http {
+        name: String,
+        url: String,
+        headers: Vec<(String, String)>,
+    },
+    Sse {
+        name: String,
+        url: String,
+        headers: Vec<(String, String)>,
+    },
+    Stdio {
+        name: String,
+        command: String,
+        args: Vec<String>,
+        env: Vec<(String, String)>,
+    },
+    Script {
+        name: String,
+        path: std::path::PathBuf,
+        cwd: std::path::PathBuf,
+        access: crate::tools::script_tool::ScriptAccess,
+    },
 }
 
 impl ServerSpec {
