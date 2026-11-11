@@ -212,8 +212,12 @@ pub fn run(app: &mut App, command: Command) {
 pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, String)> {
     let builtin = Command::HELP
         .into_iter()
-        .chain(super::features::help())
-        .map(|(name, about)| (name.to_owned(), about.to_owned()));
+        .flat_map(|(name, about)| {
+            let aliases = Command::ALIASES.into_iter().filter(move |(_, of)| *of == name);
+            std::iter::once((name.to_owned(), about.to_owned()))
+                .chain(aliases.map(move |(alias, _)| (alias.to_owned(), format!("Same as /{name}: {about}"))))
+        })
+        .chain(super::features::help().into_iter().map(|(name, about)| (name.to_owned(), about.to_owned())));
     let skills = skills.iter().map(|(name, about)| (name.clone(), about.clone()));
     builtin.chain(skills).filter(|(name, _)| name.starts_with(typed)).collect()
 }
@@ -242,9 +246,12 @@ mod tests {
         let skills = [("memo".to_owned(), "Writes a memo".to_owned()), ("audit".to_owned(), "Audits".to_owned())];
         let names: Vec<String> = suggestions("me", &skills).into_iter().map(|(name, _)| name).collect();
         assert_eq!(names, ["memory", "memo"]);
+        let cleared: Vec<(String, String)> = suggestions("", &[]).into_iter().filter(|(_, about)| about.contains("/clear")).collect();
+        assert_eq!(cleared.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["new", "reset"], "aliases follow");
+        assert_eq!(suggestions("res", &[]).iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["reset", "resume"]);
         assert_eq!(
             suggestions("", &skills).len(),
-            Command::HELP.len() + super::super::features::help().len() + 2,
+            Command::HELP.len() + Command::ALIASES.len() + super::super::features::help().len() + 2,
             "every match, not just a screenful"
         );
     }

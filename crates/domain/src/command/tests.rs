@@ -118,3 +118,11 @@ fn help_names_only_commands_that_parse() {
         assert!(Command::parse(&format!("/{name}")).is_some(), "{name}");
     }
 }
+
+#[test]
+fn every_alias_runs_the_command_it_names() {
+    for (alias, name) in Command::ALIASES {
+        assert!(Command::HELP.iter().any(|(listed, _)| *listed == name), "/{name}");
+        assert_eq!(Command::parse(&format!("/{alias}")), Command::parse(&format!("/{name}")), "/{alias}");
+    }
+}

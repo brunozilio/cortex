@@ -91,6 +91,21 @@ impl Command {
         ("exit", "Quit (also /quit)"),
     ];
 
+    pub const ALIASES: [(&'static str, &'static str); 12] = [
+        ("new", "clear"),
+        ("reset", "clear"),
+        ("continue", "resume"),
+        ("branch", "fork"),
+        ("undo", "rewind"),
+        ("allowed-tools", "permissions"),
+        ("tasks", "todos"),
+        ("commands", "skills"),
+        ("settings", "config"),
+        ("usage", "cost"),
+        ("quit", "exit"),
+        ("?", "help"),
+    ];
+
     pub const GROUPS: [(&'static str, &'static [&'static str]); 4] = [
         ("Conversation", &["clear", "resume", "fork", "compact", "rewind", "retry", "btw", "export", "copy"]),
         ("Model and mode", &["model", "mode", "effort", "output-style", "verification"]),
