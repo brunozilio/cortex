@@ -180,3 +180,6 @@ pub fn account_id(jwt: &str) -> Result<String, ProviderError> {
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod client_tests;

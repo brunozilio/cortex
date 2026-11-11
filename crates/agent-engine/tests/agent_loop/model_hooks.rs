@@ -18,10 +18,10 @@ fn answering(event: &str, matcher: &str, model: &str) -> serde_json::Value {
 #[test]
 fn a_model_request_hook_picks_the_model_of_each_turn() {
     let mut rig = Rig::new(PermissionMode::Bypass);
-    rig.workspace.hooks = Hooks::parse(&answering("ModelRequest", "main", "openai:gpt-6.1-sol")).expect("hooks");
+    rig.workspace.hooks = Hooks::parse(&answering("ModelRequest", "main", "keyed:model-b")).expect("hooks");
     let model = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done.".into())])]);
     rig.run(&model, &mut vec![Message::user("hi")]).expect("run");
-    assert_eq!(model.asked()[0].model, "openai:gpt-6.1-sol");
+    assert_eq!(model.asked()[0].model, "keyed:model-b");
     let input = std::fs::read_to_string(rig.dir.path().join("ModelRequest.json")).expect("input");
     let input: serde_json::Value = serde_json::from_str(&input).expect("json");
     assert_eq!((input["model"].as_str(), input["kind"].as_str()), (Some("m"), Some("main")));
@@ -32,13 +32,13 @@ fn a_model_request_hook_picks_the_model_of_each_turn() {
 #[test]
 fn a_model_error_hook_names_the_model_to_try_next() {
     let mut rig = Rig::new(PermissionMode::Bypass);
-    rig.workspace.hooks = Hooks::parse(&answering("ModelError", "", "kiro-subscription:auto")).expect("hooks");
+    rig.workspace.hooks = Hooks::parse(&answering("ModelError", "", "keyed-too:auto")).expect("hooks");
     let model = ScriptedModel::new([
         Err(ModelError::Overloaded("busy".into())),
         ScriptedModel::reply(vec![Block::Text("Done.".into())]),
     ]);
     rig.run(&model, &mut vec![Message::user("hi")]).expect("run");
-    assert_eq!(model.asked()[1].model, "kiro-subscription:auto");
+    assert_eq!(model.asked()[1].model, "keyed-too:auto");
     let input = std::fs::read_to_string(rig.dir.path().join("ModelError.json")).expect("input");
     assert!(input.contains("busy"), "{input}");
 }
@@ -51,7 +51,7 @@ fn a_model_error_hook_intercepts_every_failure_and_chains_models() {
     std::fs::write(
         folder.join("chain.js"),
         r#"export const event = "ModelError";
-const chain = ["kiro:a", "openai:b"];
+const chain = ["first:a", "second:b"];
 export default (input) => ({ hookSpecificOutput: { model: chain[input.attempt - 1] } });"#,
     )
     .expect("hook");
@@ -63,7 +63,7 @@ export default (input) => ({ hookSpecificOutput: { model: chain[input.attempt - 
     ]);
     rig.run(&model, &mut vec![Message::user("hi")]).expect("run");
     let models: Vec<String> = model.asked().into_iter().map(|asked| asked.model).collect();
-    assert_eq!(models, ["m", "kiro:a", "openai:b"]);
+    assert_eq!(models, ["m", "first:a", "second:b"]);
 }
 
 #[cfg(unix)]

@@ -1,8 +1,7 @@
-use crate::*;
-use agent_engine::model::http::{Http, Response, Sent};
-use agent_engine::model::client::ProviderClient;
-use agent_engine::model::{ModelApi, ModelError};
-use agent_engine::transcript::Block;
+use crate::model::http::{Http, Response, Sent};
+use crate::model::client::ProviderClient;
+use crate::model::{ModelApi, ModelError};
+use crate::transcript::Block;
 use domain::provider::{ProviderKey, ProviderKeyStore};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -10,10 +9,15 @@ use std::io::Cursor;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-use crate::request;
+use domain::ModelProvider;
+
+use crate::providers::testing::request;
+
+const KIRO: ModelProvider = ModelProvider::new("kiro-subscription");
+
 
 const ARN: &str = "arn:aws:codewhisperer:eu-central-1:699475941385:profile/EHGA3GRVQMUK";
-const TOOL_USE: &[u8] = include_bytes!("../../src/providers/kiro/wire/testdata/tool_use.bin");
+const TOOL_USE: &[u8] = include_bytes!("wire/testdata/tool_use.bin");
 
 #[derive(Default)]
 struct Wire {

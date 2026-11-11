@@ -10,13 +10,14 @@ use crate::{Rig, request, tool_use};
 
 #[test]
 fn configured_agent_filters_tools_enforces_runtime_denial_and_selects_model_effort() {
+    agent_engine::providers::install_testing();
     use agent_engine::tools::{
         subagent::{AgentTool, FoundAgent},
         subagent_config::AgentConfig,
     };
     let mut rig = Rig::new(PermissionMode::Bypass);
-    rig.workspace.model = domain::ModelOption::new("anthropic:claude-opus-5-5", "Opus")
-        .served_by(domain::ModelProvider::new("anthropic"));
+    rig.workspace.model = domain::ModelOption::new("family-key:claude-opus-5-5", "Opus")
+        .served_by(domain::ModelProvider::new("family-key"));
     let found = FoundAgent {
         name: "reviewer".into(),
         description: "Read-only review".into(),

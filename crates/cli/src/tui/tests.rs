@@ -67,7 +67,7 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
         EngineEvent::TextDelta("All tests pass.".into()),
         EngineEvent::Completed { duration_ms: 5, cost_usd: Some(0.5) },
     ];
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(60));
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
@@ -92,7 +92,7 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
 #[test]
 fn shift_tab_and_commands_change_the_chat_without_the_agent() {
     let data = tempfile::tempdir().expect("data");
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
     until(&mut app, |app| app.session.is_some());
@@ -145,7 +145,7 @@ fn preview() {
         EngineEvent::ToolFinished { id: "t2".into() },
         EngineEvent::Asked(ask),
     ];
-    let model = Model::new("anthropic:claude-opus-5-5", "Opus 5.5");
+    let model = Model::new("keyed:model-opus", "Opus 5.5");
     let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(5));
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
@@ -166,7 +166,7 @@ fn a_dropped_image_is_attached_to_the_prompt_that_names_it() {
     let data = tempfile::tempdir().expect("data");
     let png = b"\x89PNG\r\n\x1a\n pixels";
     std::fs::write(data.path().join("shot one.png"), png).expect("png");
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![model], done);
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
@@ -192,7 +192,7 @@ fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() 
     script.extend((0..6).map(|_| EngineEvent::TextDelta("…".into())));
     script.push(EngineEvent::TextDelta("All done.".into()));
     script.push(EngineEvent::Completed { duration_ms: 1, cost_usd: None });
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(40));
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
@@ -235,7 +235,7 @@ fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
     git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a"]);
     std::fs::write(repo.path().join("a.txt"), "two\n").expect("edit");
     std::fs::write(repo.path().join("new.txt"), "new\n").expect("new");
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), repo.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
@@ -263,7 +263,7 @@ fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
 #[test]
 fn ctrl_o_unfolds_a_long_output() {
     let data = tempfile::tempdir().expect("data");
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());

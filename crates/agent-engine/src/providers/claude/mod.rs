@@ -185,3 +185,6 @@ mod tests {
         assert!(Config { auth: Some(tokens), ..Config::default() }.validate(&Provider).is_ok());
     }
 }
+
+#[cfg(test)]
+mod client_tests;

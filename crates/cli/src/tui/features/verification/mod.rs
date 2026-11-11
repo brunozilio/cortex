@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn verification_is_set_shown_sent_with_the_next_prompt_and_cleared() {
         let data = tempfile::tempdir().expect("data");
-        let model = Model::new("anthropic:scripted", "Scripted");
+        let model = Model::new("keyed:scripted", "Scripted");
         let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
         let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
         until(&mut app, |app| app.session.is_some());

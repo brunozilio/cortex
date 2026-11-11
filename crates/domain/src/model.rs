@@ -155,10 +155,10 @@ mod tests {
     #[test]
     fn the_asked_model_wins_then_the_first() {
         let models = [
-            served("anthropic:claude-opus-5-5", ModelProvider::new("anthropic")),
-            served("openai:gpt-6", ModelProvider::new("openai")),
+            served("zenith:claude-opus-5-5", ModelProvider::new("zenith")),
+            served("acme:gpt-6", ModelProvider::new("acme")),
         ];
-        assert_eq!(choose_model(&models, Some("gpt-6")).map(|m| m.id), Some("openai:gpt-6".into()));
+        assert_eq!(choose_model(&models, Some("gpt-6")).map(|m| m.id), Some("acme:gpt-6".into()));
         assert_eq!(choose_model(&models, Some("ANTHROPIC:claude-opus-5-5")).map(|m| m.id), Some(models[0].id.clone()));
         assert_eq!(choose_model(&models, Some("gone")).map(|m| m.id), Some(models[0].id.clone()), "the first");
         assert_eq!(choose_model(&[], Some("x")), None);
@@ -166,16 +166,16 @@ mod tests {
 
     #[test]
     fn a_model_round_trips_with_its_provider() {
-        let model = ModelOption::new("gpt-6", "GPT-6").served_by(ModelProvider::new("openai"));
+        let model = ModelOption::new("gpt-6", "GPT-6").served_by(ModelProvider::new("acme"));
         let json = serde_json::to_string(&model).expect("serialize");
         assert_eq!(serde_json::from_str::<ModelOption>(&json).expect("round trip"), model);
-        assert!(json.contains(r#""provider":"openai""#), "{json}");
+        assert!(json.contains(r#""provider":"acme""#), "{json}");
     }
 
     #[test]
     fn a_provider_named_at_run_time_is_the_same_id() {
         assert_eq!(ModelProvider::named("acme"), ModelProvider::named(&String::from("acme")));
-        assert_eq!(ModelProvider::named("openai"), ModelProvider::new("openai"));
+        assert_eq!(ModelProvider::named("acme"), ModelProvider::new("acme"));
         assert!(Access::Browser.subscription() && !Access::Key.subscription());
     }
 }

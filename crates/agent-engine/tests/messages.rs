@@ -26,7 +26,7 @@ fn client(http: &Arc<ScriptedHttp>, key: &str) -> Messages {
 
 #[test]
 fn folds_thinking_text_and_a_tool_call() {
-    let stream = include_str!("fixtures/anthropic_tool_use.sse");
+    let stream = include_str!("fixtures/messages_tool_use.sse");
     let http = Arc::new(ScriptedHttp::new([(200, stream.to_owned())]));
     let mut deltas = Vec::new();
     let reply = client(&http, "sk-test")
@@ -61,7 +61,7 @@ fn folds_thinking_text_and_a_tool_call() {
 
 #[test]
 fn sends_the_key_and_names_itself() {
-    let stream = include_str!("fixtures/anthropic_tool_use.sse").to_owned();
+    let stream = include_str!("fixtures/messages_tool_use.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
     client(&http, "sk-test").turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("key");
 
@@ -77,7 +77,7 @@ fn sends_the_key_and_names_itself() {
 
 #[test]
 fn retries_when_busy_and_names_what_failed() {
-    let stream = include_str!("fixtures/anthropic_tool_use.sse").to_owned();
+    let stream = include_str!("fixtures/messages_tool_use.sse").to_owned();
     let busy = r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#.to_owned();
     let http = Arc::new(ScriptedHttp::new([(529, busy), (200, stream)]));
     let reply = client(&http, "k").turn(&request(), &mut |_| {}, &AtomicBool::new(false));
@@ -93,13 +93,13 @@ fn retries_when_busy_and_names_what_failed() {
 
 #[test]
 fn a_cut_stream_is_an_error_and_cancelling_stops_reading() {
-    let cut = include_str!("fixtures/anthropic_tool_use.sse").replace("event: message_stop", "");
+    let cut = include_str!("fixtures/messages_tool_use.sse").replace("event: message_stop", "");
     let cut = cut.replace(r#"data: {"type":"message_stop"}"#, "");
     let http = Arc::new(ScriptedHttp::new([(200, cut.clone()), (200, cut.clone()), (200, cut.clone()), (200, cut)]));
     let error = client(&http, "k").turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect_err("cut");
     assert!(matches!(error, ModelError::Network(_)), "{error:?}");
 
-    let stream = include_str!("fixtures/anthropic_tool_use.sse").to_owned();
+    let stream = include_str!("fixtures/messages_tool_use.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
     let error = client(&http, "k").turn(&request(), &mut |_| {}, &AtomicBool::new(true)).expect_err("cancelled");
     assert_eq!(error, ModelError::Cancelled);

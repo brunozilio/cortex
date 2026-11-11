@@ -190,3 +190,6 @@ mod tests {
         assert!(without_arn.validate(&Provider).is_err());
     }
 }
+
+#[cfg(test)]
+mod client_tests;

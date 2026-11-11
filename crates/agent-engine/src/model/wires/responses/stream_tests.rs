@@ -1,6 +1,6 @@
 use super::*;
 
-const RECORDED: &str = include_str!("../../../../tests/fixtures/openai_tool_use.sse");
+const RECORDED: &str = include_str!("../../../../tests/fixtures/responses_tool_use.sse");
 
 fn fold(lines: &[&str]) -> (Result<Reply, ModelError>, Vec<Delta>) {
     let mut folder = Folder::new();
@@ -83,4 +83,31 @@ fn failures_say_what_kind_of_failure_it_was() {
 fn an_empty_answer_is_refused() {
     let (reply, _) = fold(&[r#"{"type":"response.completed","response":{"status":"completed"}}"#]);
     assert!(matches!(reply, Err(ModelError::Provider(why)) if why == "empty_response"));
+}
+
+#[test]
+fn done_only_events_and_final_output_fold_without_duplicates() {
+    use crate::transcript::Block;
+    use serde_json::json;
+    let mut folder = Folder::new();
+    let mut observed = Vec::new();
+    folder
+        .event(&json!({"type":"response.output_text.done","text":"done-only"}).to_string(), &mut |_| {})
+        .expect("done text");
+    folder
+        .event(
+            &json!({"type":"response.done","response":{"output":[],"usage":{"input_tokens":12,"output_tokens":2}}})
+                .to_string(),
+            &mut |delta| observed.push(delta),
+        )
+        .expect("done");
+    assert_eq!(observed, vec![Delta::Text("done-only".into())]);
+    assert_eq!(folder.finish().expect("reply").message.blocks, vec![Block::Text("done-only".into())]);
+    let item = json!({"id":"fc1","type":"function_call","call_id":"call1","name":"Read","arguments":"{}"});
+    let mut folder = Folder::new();
+    folder.event(&json!({"type":"response.output_item.done","item":item}).to_string(), &mut |_| {}).expect("item");
+    folder
+        .event(&json!({"type":"response.completed","response":{"output":[item],"usage":{}}}).to_string(), &mut |_| {})
+        .expect("completed");
+    assert_eq!(folder.finish().expect("reply").message.tool_uses().count(), 1);
 }

@@ -156,12 +156,13 @@ fn memory_is_optimized_by_a_run() {
 #[test]
 fn providers_are_listed_and_a_bad_key_is_refused() {
     let data = tempfile::tempdir().expect("data");
+    agent_engine::providers::install_testing();
     let engine = FakeEngine::new(vec![model()], Vec::new());
     let sdk = build(&engine, data.path());
     assert!(sdk.providers().expect("providers").iter().all(|p| p.account.is_none()));
-    assert!(sdk.connect_provider(ModelProvider::new("anthropic"), "  ").is_err());
-    let listed = sdk.connect_provider(ModelProvider::new("anthropic"), "sk-ant-0123456789abcd").expect("connect");
-    assert!(listed.iter().any(|p| p.provider == ModelProvider::new("anthropic") && p.account.is_some()));
+    assert!(sdk.connect_provider(ModelProvider::new("keyed"), "  ").is_err());
+    let listed = sdk.connect_provider(ModelProvider::new("keyed"), "sk-key-0123456789abcd").expect("connect");
+    assert!(listed.iter().any(|p| p.provider == ModelProvider::new("keyed") && p.account.is_some()));
 }
 
 #[test]

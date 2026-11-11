@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn memory_is_listed_forgotten_restored_and_optimized() {
         let data = tempfile::tempdir().expect("data");
-        let model = Model::new("anthropic:scripted", "Scripted");
+        let model = Model::new("keyed:scripted", "Scripted");
         let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
         let sdk = sdk(&engine, data.path());
         let memory = sdk.memory(data.path());
@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn a_hash_note_is_remembered_and_a_bang_command_runs_for_the_next_prompt() {
         let data = tempfile::tempdir().expect("data");
-        let model = Model::new("anthropic:scripted", "Scripted");
+        let model = Model::new("keyed:scripted", "Scripted");
         let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
         let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
         until(&mut app, |app| app.session.is_some());

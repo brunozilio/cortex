@@ -85,7 +85,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Action {
-    #[command(about = "Connect an LLM provider: an API key, or a Claude, ChatGPT, Copilot or Kiro subscription")]
+    #[command(about = "Connect an LLM provider with an API key or a subscription; it lists the providers to pick from")]
     Login,
     #[command(about = "Forget a provider's credentials")]
     Logout,

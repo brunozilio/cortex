@@ -6,55 +6,55 @@ fn chain(models: &[&str]) -> Fallback {
 
 #[test]
 fn an_overloaded_model_goes_down_the_chain_in_order() {
-    let mut fallback = chain(&["kiro:a", "openai:b"]);
-    assert_eq!(fallback.next("chatgpt:x", Failure::Overloaded, Verdict::Pass), Some("kiro:a".into()));
-    assert_eq!(fallback.next("kiro:a", Failure::Overloaded, Verdict::Pass), Some("openai:b".into()));
-    assert_eq!(fallback.next("openai:b", Failure::Overloaded, Verdict::Pass), None);
-    assert_eq!(fallback.tried(), ["chatgpt:x", "kiro:a", "openai:b"]);
+    let mut fallback = chain(&["orbit:a", "acme:b"]);
+    assert_eq!(fallback.next("nova:x", Failure::Overloaded, Verdict::Pass), Some("orbit:a".into()));
+    assert_eq!(fallback.next("orbit:a", Failure::Overloaded, Verdict::Pass), Some("acme:b".into()));
+    assert_eq!(fallback.next("acme:b", Failure::Overloaded, Verdict::Pass), None);
+    assert_eq!(fallback.tried(), ["nova:x", "orbit:a", "acme:b"]);
 }
 
 #[test]
 fn the_chain_alone_answers_only_overload() {
-    let mut fallback = chain(&["kiro:a"]);
+    let mut fallback = chain(&["orbit:a"]);
     for failure in [Failure::Unauthorized, Failure::Network, Failure::Provider, Failure::TooLong] {
-        assert_eq!(fallback.next("chatgpt:x", failure, Verdict::Pass), None, "{failure:?}");
+        assert_eq!(fallback.next("nova:x", failure, Verdict::Pass), None, "{failure:?}");
     }
 }
 
 #[test]
 fn a_hook_forwards_any_failure_to_the_model_it_names() {
     let mut fallback = chain(&[]);
-    let forward = Verdict::Forward("kiro:a".into());
-    assert_eq!(fallback.next("chatgpt:x", Failure::Unauthorized, forward), Some("kiro:a".into()));
+    let forward = Verdict::Forward("orbit:a".into());
+    assert_eq!(fallback.next("nova:x", Failure::Unauthorized, forward), Some("orbit:a".into()));
 }
 
 #[test]
 fn a_hook_overrides_the_chain() {
-    let mut fallback = chain(&["kiro:a"]);
-    let forward = Verdict::Forward("openai:b".into());
-    assert_eq!(fallback.next("chatgpt:x", Failure::Overloaded, forward), Some("openai:b".into()));
-    let mut stopped = chain(&["kiro:a"]);
-    assert_eq!(stopped.next("chatgpt:x", Failure::Overloaded, Verdict::Stop), None);
+    let mut fallback = chain(&["orbit:a"]);
+    let forward = Verdict::Forward("acme:b".into());
+    assert_eq!(fallback.next("nova:x", Failure::Overloaded, forward), Some("acme:b".into()));
+    let mut stopped = chain(&["orbit:a"]);
+    assert_eq!(stopped.next("nova:x", Failure::Overloaded, Verdict::Stop), None);
 }
 
 #[test]
 fn a_model_that_already_failed_is_never_tried_again_in_the_same_streak() {
-    let mut fallback = chain(&["chatgpt:x", "kiro:a"]);
-    assert_eq!(fallback.next("chatgpt:x", Failure::Overloaded, Verdict::Pass), Some("kiro:a".into()));
-    let back = Verdict::Forward("chatgpt:x".into());
-    assert_eq!(fallback.next("kiro:a", Failure::Network, back), None);
-    let same = Verdict::Forward("kiro:a".into());
-    assert_eq!(chain(&[]).next("kiro:a", Failure::Network, same), None);
+    let mut fallback = chain(&["nova:x", "orbit:a"]);
+    assert_eq!(fallback.next("nova:x", Failure::Overloaded, Verdict::Pass), Some("orbit:a".into()));
+    let back = Verdict::Forward("nova:x".into());
+    assert_eq!(fallback.next("orbit:a", Failure::Network, back), None);
+    let same = Verdict::Forward("orbit:a".into());
+    assert_eq!(chain(&[]).next("orbit:a", Failure::Network, same), None);
 }
 
 #[test]
 fn a_success_ends_the_streak_so_a_later_failure_may_switch_again() {
-    let mut fallback = chain(&["kiro:a"]);
-    assert_eq!(fallback.next("chatgpt:x", Failure::Overloaded, Verdict::Pass), Some("kiro:a".into()));
+    let mut fallback = chain(&["orbit:a"]);
+    assert_eq!(fallback.next("nova:x", Failure::Overloaded, Verdict::Pass), Some("orbit:a".into()));
     fallback.succeeded();
     assert!(fallback.tried().is_empty());
-    let back = Verdict::Forward("chatgpt:x".into());
-    assert_eq!(fallback.next("kiro:a", Failure::Overloaded, back), Some("chatgpt:x".into()));
+    let back = Verdict::Forward("nova:x".into());
+    assert_eq!(fallback.next("orbit:a", Failure::Overloaded, back), Some("nova:x".into()));
 }
 
 #[test]

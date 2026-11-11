@@ -36,7 +36,7 @@ fn planning(engine: &FakeEngine, data: &std::path::Path) -> App {
 fn the_plan_shows_in_a_box_and_approving_it_switches_the_mode() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(
-        vec![Model::new("anthropic:scripted", "Scripted")],
+        vec![Model::new("keyed:scripted", "Scripted")],
         script(vec![
             EngineEvent::ModeChanged(PermissionMode::AcceptEdits),
             EngineEvent::ToolResult { id: "p1".into(), output: "approved".into(), failed: false },
@@ -67,7 +67,7 @@ fn the_plan_shows_in_a_box_and_approving_it_switches_the_mode() {
 fn keeping_on_planning_is_marked_on_the_plan() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(
-        vec![Model::new("anthropic:scripted", "Scripted")],
+        vec![Model::new("keyed:scripted", "Scripted")],
         script(vec![EngineEvent::ToolResult { id: "p1".into(), output: "keep planning".into(), failed: true }]),
     )
     .with_delay(Duration::from_millis(60));
@@ -83,7 +83,7 @@ fn keeping_on_planning_is_marked_on_the_plan() {
 fn the_chat_follows_the_agent_into_plan_mode() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(
-        vec![Model::new("anthropic:scripted", "Scripted")],
+        vec![Model::new("keyed:scripted", "Scripted")],
         vec![
             EngineEvent::SessionStarted(SessionId("s".into())),
             EngineEvent::ToolStarted(ToolCall::new("e1", "EnterPlanMode", "")),

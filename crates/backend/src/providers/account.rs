@@ -134,6 +134,7 @@ mod tests {
 
     #[test]
     fn rotated_subscription_tokens_are_saved_and_loaded_back() {
+        llm_providers::testing::install();
         let secrets = Arc::new(InMemorySecretStore::default());
         let slot = SecretId::new();
         let original = r#"{"auth":{"access_token":"access-secret","refresh_token":"refresh-secret","expires_at":"2099-01-01T00:00:00Z","account_id":"acct"}}"#;
@@ -142,7 +143,7 @@ mod tests {
             secrets,
             owner: Principal::LocalOwner,
             slot,
-            provider: ModelProvider::new("openai-subscription"),
+            provider: ModelProvider::new("browser-sub"),
         };
         source.save(&original.replace("refresh-secret", "refresh-rotated")).expect("rotate");
         assert!(source.load().expect("load").contains("refresh-rotated"));

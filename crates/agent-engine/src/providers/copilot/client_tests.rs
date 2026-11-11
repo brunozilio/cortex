@@ -1,13 +1,18 @@
-use crate::*;
-use agent_engine::model::ModelApi;
-use agent_engine::model::http::ScriptedHttp;
-use agent_engine::model::client::ProviderClient;
+use crate::model::ModelApi;
+use crate::model::http::ScriptedHttp;
+use crate::model::client::ProviderClient;
 use domain::ModelOption;
 use domain::model::ModelCapabilities;
 use domain::provider::ProviderKey;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+
+use domain::ModelProvider;
+
+use crate::providers::testing::{CHAT, header, request, sent_turn};
+
+const COPILOT: ModelProvider = ModelProvider::new("copilot-subscription");
 
 fn key() -> Arc<ProviderKey> {
     Arc::new(ProviderKey::new(
@@ -30,7 +35,7 @@ fn claude_goes_to_messages_on_the_account_api() {
         &["/chat/completions", "/v1/messages"],
         ModelCapabilities { adaptive_thinking: true, ..ModelCapabilities::default() },
     );
-    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../fixtures/anthropic_tool_use.sse").into())]));
+    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../../../tests/fixtures/messages_tool_use.sse").into())]));
     let client = ProviderClient::for_model(claude, http.clone(), key());
     client
         .turn(&request("copilot-subscription:claude-sonnet-4.5"), &mut |_| {}, &AtomicBool::new(false))
@@ -52,7 +57,7 @@ fn gpt_goes_to_responses_with_an_offered_effort() {
         &["/chat/completions", "/responses"],
         ModelCapabilities { reasoning_levels: vec!["low".into(), "medium".into()], ..ModelCapabilities::default() },
     );
-    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../fixtures/openai_tool_use.sse").into())]));
+    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../../../tests/fixtures/responses_tool_use.sse").into())]));
     ProviderClient::for_model(gpt, http.clone(), key())
         .turn(&request("copilot-subscription:gpt-5"), &mut |_| {}, &AtomicBool::new(false))
         .expect("turn");
@@ -76,4 +81,15 @@ fn the_catalog_lists_what_the_picker_shows() {
     let sent = &http.sent()[0];
     assert_eq!(sent.url, "https://api.business.githubcopilot.com/models");
     assert_eq!(header(sent, "copilot-integration-id").as_deref(), Some("copilot-developer-cli"));
+}
+
+#[test]
+fn a_turn_without_known_endpoints_goes_to_chat_completions() {
+    let (sent, body) = sent_turn(COPILOT, CHAT);
+    assert_eq!(body["model"], "model-1");
+    assert_eq!(sent.url, "https://api.githubcopilot.com/chat/completions");
+    assert_eq!(header(&sent, "authorization").as_deref(), Some("Bearer access-1"));
+    assert_eq!(header(&sent, "copilot-integration-id").as_deref(), Some("copilot-developer-cli"));
+    assert_eq!(header(&sent, "x-initiator").as_deref(), Some("user"));
+    assert_eq!(body["messages"][0], json!({"role": "system", "content": "Help the user."}));
 }

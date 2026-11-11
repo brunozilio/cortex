@@ -95,7 +95,7 @@ fn native_backend_searches_memory_and_learns() {
     backend
         .send(Envelope::local(ClientCommand::Feature { feature: "memory".into(), input }))
         .expect("valid test fixture");
-    let model = ModelOption::new("fixture", "Fixture inference").served_by(ModelProvider::new("openai"));
+    let model = ModelOption::new("fixture", "Fixture inference").served_by(ModelProvider::new("keyed"));
     let mut request = PromptRequest::plain(dir.path().into(), "Look it up and remember the tabs preference.", model);
     request.permission = PermissionMode::Bypass;
     request.memory = Some(MemoryBrief::new(Some("Native integration".into())));

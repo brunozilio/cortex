@@ -17,7 +17,7 @@ fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
         EngineEvent::Chore(ChoreAnswer::Suggestion("run the tests".into())),
         EngineEvent::Completed { duration_ms: 1, cost_usd: None },
     ];
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
@@ -45,7 +45,7 @@ fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
 #[test]
 fn a_rewind_cuts_the_chat_before_its_prompt_and_gives_the_prompt_back() {
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], Vec::new());
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     app.transcript.push(Entry::User("write the notes".into()));
     app.checkpointed(0);
@@ -72,7 +72,7 @@ fn a_rewind_cuts_the_chat_before_its_prompt_and_gives_the_prompt_back() {
 fn the_sign_in_notices_go_once_connected_and_connected_goes_with_the_first_prompt() {
     let data = tempfile::tempdir().expect("data");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app.transcript.passing("Signing in to Scripted…");
@@ -90,7 +90,7 @@ fn the_sign_in_notices_go_once_connected_and_connected_goes_with_the_first_promp
 #[test]
 fn effort_without_a_level_opens_a_picker_at_the_current_one() {
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], Vec::new());
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/effort");

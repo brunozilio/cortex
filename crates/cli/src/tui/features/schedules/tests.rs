@@ -35,7 +35,7 @@ fn app(engine: &FakeEngine, data: &std::path::Path) -> App {
 #[test]
 fn a_due_prompt_is_sent_while_the_chat_is_idle() {
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script());
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
     let mut app = app(&engine, data.path());
     arrived(&mut app, vec![due("cron_1", "check the build")]);
     until(&mut app, |app| !app.busy() && !prompts(&engine).is_empty());
@@ -46,7 +46,7 @@ fn a_due_prompt_is_sent_while_the_chat_is_idle() {
 #[test]
 fn a_prompt_due_while_the_agent_works_waits_for_the_run_to_end() {
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script())
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script())
         .with_delay(Duration::from_millis(40));
     let mut app = app(&engine, data.path());
     type_text(&mut app, "first");
@@ -62,7 +62,7 @@ fn a_prompt_due_while_the_agent_works_waits_for_the_run_to_end() {
 #[test]
 fn loop_asks_the_agent_to_schedule_the_task() {
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script());
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
     let mut app = app(&engine, data.path());
     type_text(&mut app, "/loop 5m check the deploy");
     press(&mut app, KeyCode::Enter);

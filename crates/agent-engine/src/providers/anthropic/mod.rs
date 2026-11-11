@@ -128,3 +128,6 @@ mod tests {
         assert_eq!(config.base(&Provider), API);
     }
 }
+
+#[cfg(test)]
+mod client_tests;

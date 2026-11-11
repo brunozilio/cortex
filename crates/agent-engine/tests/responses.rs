@@ -26,7 +26,7 @@ fn key() -> Arc<ProviderKey> {
 
 #[test]
 fn folds_reasoning_text_and_a_call() {
-    let stream = include_str!("fixtures/openai_tool_use.sse").to_owned();
+    let stream = include_str!("fixtures/responses_tool_use.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
     let mut deltas = Vec::new();
     let reply = Responses::new(http.clone(), key())
@@ -59,7 +59,7 @@ fn folds_reasoning_text_and_a_call() {
 
 #[test]
 fn the_key_goes_to_the_api() {
-    let stream = include_str!("fixtures/openai_tool_use.sse").to_owned();
+    let stream = include_str!("fixtures/responses_tool_use.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
     Responses::new(http.clone(), key()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("key");
     let sent = http.sent();

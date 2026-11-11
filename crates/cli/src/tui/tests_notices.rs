@@ -20,7 +20,7 @@ fn prompts(engine: &FakeEngine) -> Vec<String> {
 #[test]
 fn events_that_reached_the_inbox_are_sent_as_a_turn_when_idle() {
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script());
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let notice = domain::inbox::Notice::new("monitor bash_4", "ERROR: disk full");

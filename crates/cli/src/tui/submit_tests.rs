@@ -14,7 +14,7 @@ fn ready(data: &std::path::Path, engine: &FakeEngine) -> App {
 
 fn engine() -> FakeEngine {
     let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
-    FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], done)
+    FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], done)
 }
 
 fn submit(app: &mut App, text: &str) -> String {

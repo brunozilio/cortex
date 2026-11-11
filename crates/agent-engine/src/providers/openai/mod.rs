@@ -116,3 +116,6 @@ mod tests {
         assert!(body.get("reasoning").is_none() && body.get("tool_choice").is_none());
     }
 }
+
+#[cfg(test)]
+mod client_tests;

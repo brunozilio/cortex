@@ -6,20 +6,15 @@ use agent_engine::{
 use domain::{ModelOption, ModelProvider, PromptRequest};
 use std::sync::Arc;
 pub fn model() -> ModelOption {
-    let named = std::env::var(concat!(brand::env_prefix!(), "_LIVE_PROVIDER")).unwrap_or_else(|_| "anthropic".into());
+    let wanted = |name: &str| {
+        std::env::var(format!("{}_{name}", brand::ENV))
+            .unwrap_or_else(|_| panic!("{}_{name} must be set for a live run", brand::ENV))
+    };
+    let named = wanted("LIVE_PROVIDER");
     let Some(provider) = agent_engine::providers::find(ModelProvider::named(&named)).map(llm_providers::id) else {
-        panic!("{brand_env}_LIVE_PROVIDER must name one of the native providers", brand_env = brand::ENV)
+        panic!("{}_LIVE_PROVIDER must name one of the native providers", brand::ENV)
     };
-    let default = match provider.id() {
-        "openai" | "openai-subscription" => "gpt-6.1-sol",
-        "kiro-subscription" => "kiro-subscription:claude-haiku-4.5",
-        _ => "claude-haiku-5-5",
-    };
-    ModelOption::new(
-        std::env::var(concat!(brand::env_prefix!(), "_LIVE_MODEL")).unwrap_or_else(|_| default.into()),
-        "Live native model",
-    )
-    .served_by(provider)
+    ModelOption::new(wanted("LIVE_MODEL"), "Live native model").served_by(provider)
 }
 struct Source;
 impl ApiSource for Source {

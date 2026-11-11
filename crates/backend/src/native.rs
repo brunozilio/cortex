@@ -106,7 +106,11 @@ mod tests {
 
     use super::*;
 
+    const KEYED: ModelProvider = ModelProvider::new("keyed");
+    const KEYED_TOO: ModelProvider = ModelProvider::new("keyed-too");
+
     fn request(provider: ModelProvider, key: Option<&str>) -> PromptRequest {
+        llm_providers::testing::install();
         let model = ModelOption::new("m", "M").served_by(provider);
         let mut request = PromptRequest::plain("/repo".into(), "hi", model);
         request.credentials.model = key.map(ProviderKey::new);
@@ -131,10 +135,10 @@ mod tests {
     fn each_provider_is_called_through_its_own_api() {
         let http = Arc::new(ScriptedHttp::new((0..2).map(|_| (400, "{}".to_owned()))));
         let apis = NativeApis::new(http.clone());
-        let anthropic = calls(&apis, &http, &request(ModelProvider::new("anthropic"), Some("sk-ant")));
-        let openai = calls(&apis, &http, &request(ModelProvider::new("openai"), Some("sk")));
-        assert_eq!(anthropic, "https://api.anthropic.com/v1/messages");
-        assert_eq!(openai, "https://api.openai.com/v1/responses");
+        let first = calls(&apis, &http, &request(KEYED, Some("sk-one")));
+        let second = calls(&apis, &http, &request(KEYED_TOO, Some("sk-two")));
+        assert_eq!(first, "https://keyed.test/chat");
+        assert_eq!(second, "https://keyed-too.test/chat");
     }
 
     #[test]
@@ -144,19 +148,20 @@ mod tests {
             Arc::new(crate::secrets::InMemorySecretStore::default()),
         );
         let owner = Principal::LocalOwner;
-        providers.connect(&owner, ModelProvider::new("anthropic"), "sk-ant-0123456789abcd");
+        llm_providers::testing::install();
+        providers.connect(&owner, KEYED, "sk-key-0123456789abcd");
         let native = |provider| ModelOption::new("m", "M").served_by(provider);
-        let key = key_for(&providers, &owner, &native(ModelProvider::new("anthropic"))).expect("key");
-        assert!(key.secret().contains("sk-ant-0123456789abcd"), "the provider's credential config");
-        assert_eq!(key_for(&providers, &owner, &native(ModelProvider::new("openai"))), None, "not connected");
+        let key = key_for(&providers, &owner, &native(KEYED)).expect("key");
+        assert!(key.secret().contains("sk-key-0123456789abcd"), "the provider's credential config");
+        assert_eq!(key_for(&providers, &owner, &native(KEYED_TOO)), None, "not connected");
     }
 
     #[test]
     fn a_provider_prefixed_model_goes_to_that_provider_with_its_own_key() {
         let http = Arc::new(ScriptedHttp::new((0..3).map(|_| (400, "{}".to_owned()))));
         let apis = NativeApis::new(http.clone());
-        let mut run = request(ModelProvider::new("anthropic"), Some("sk-ant"));
-        run.credentials.other_models = vec![(ModelProvider::new("openai"), ProviderKey::new("sk-openai"))];
+        let mut run = request(KEYED, Some("sk-one"));
+        run.credentials.other_models = vec![(KEYED_TOO, ProviderKey::new("sk-two"))];
         let api = apis.api(&run).expect("api");
         let ask = |model: &str| {
             let turn = TurnRequest {
@@ -169,24 +174,20 @@ mod tests {
             };
             api.turn(&turn, &mut |_| {}, &AtomicBool::new(false))
         };
-        let _ = ask("openai:gpt-6.1-sol");
+        let _ = ask("keyed-too:model-b");
         let sent = http.sent();
-        assert_eq!(sent[0].url, "https://api.openai.com/v1/responses");
-        assert!(sent[0].body.contains("\"gpt-6.1-sol\""), "the prefix is not sent: {}", sent[0].body);
-        let _ = ask("claude-haiku-5-5");
-        assert_eq!(
-            http.sent()[1].url,
-            "https://api.anthropic.com/v1/messages",
-            "no prefix stays on the run's provider"
-        );
-        let missing = ask("kiro-subscription:auto").expect_err("not connected");
-        assert!(matches!(missing, ModelError::Unauthorized(ref why) if why.contains("Kiro")), "{missing:?}");
+        assert_eq!(sent[0].url, "https://keyed-too.test/chat");
+        assert!(sent[0].body.contains("\"model-b\""), "the prefix is not sent: {}", sent[0].body);
+        let _ = ask("model-a");
+        assert_eq!(http.sent()[1].url, "https://keyed.test/chat", "no prefix stays on the run's provider");
+        let missing = ask("device-sub:auto").expect_err("not connected");
+        assert!(matches!(missing, ModelError::Unauthorized(ref why) if why.contains("Device")), "{missing:?}");
     }
 
     #[test]
     fn a_provider_without_a_key_says_so() {
         let apis = NativeApis::new(Arc::new(ScriptedHttp::new([])));
-        let missing = apis.api(&request(ModelProvider::new("openai"), None)).err().expect("no key");
-        assert!(matches!(missing, ModelError::Unauthorized(ref why) if why.contains("OpenAI")), "{missing:?}");
+        let missing = apis.api(&request(KEYED, None)).err().expect("no key");
+        assert!(matches!(missing, ModelError::Unauthorized(ref why) if why.contains("Keyed")), "{missing:?}");
     }
 }

@@ -23,7 +23,7 @@ fn script() -> Vec<EngineEvent> {
 #[test]
 fn a_message_typed_while_the_agent_works_reaches_it_in_the_same_run() {
     let data = tempfile::tempdir().expect("data");
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script()).with_delay(Duration::from_millis(60));
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
@@ -47,7 +47,7 @@ fn a_message_typed_while_the_agent_works_reaches_it_in_the_same_run() {
 #[test]
 fn up_takes_back_a_message_not_handed_over_yet_to_edit_it() {
     let data = tempfile::tempdir().expect("data");
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script()).with_delay(Duration::from_millis(60)).holding_steers();
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
@@ -68,7 +68,7 @@ fn up_takes_back_a_message_not_handed_over_yet_to_edit_it() {
 #[test]
 fn the_bell_rings_when_the_agent_finishes_while_the_terminal_is_elsewhere() {
     let data = tempfile::tempdir().expect("data");
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
@@ -86,7 +86,7 @@ fn the_bell_rings_when_the_agent_finishes_while_the_terminal_is_elsewhere() {
 #[test]
 fn a_long_paste_shows_folded_and_goes_whole() {
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script());
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "explain ");
@@ -103,7 +103,7 @@ fn a_long_paste_shows_folded_and_goes_whole() {
 fn ctrl_r_finds_an_earlier_prompt_and_esc_twice_opens_rewind() {
     use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script());
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     for prompt in ["run the tests", "explain main"] {
@@ -136,7 +136,7 @@ fn prompts(engine: &FakeEngine) -> Vec<String> {
 #[test]
 fn a_message_the_engine_never_took_is_sent_as_the_next_prompt() {
     let data = tempfile::tempdir().expect("data");
-    let model = Model::new("anthropic:scripted", "Scripted");
+    let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script()).with_delay(Duration::from_millis(30)).without_steering();
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());

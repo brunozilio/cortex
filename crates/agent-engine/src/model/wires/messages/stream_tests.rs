@@ -1,6 +1,6 @@
 use super::*;
 
-const RECORDED: &str = include_str!("../../../../tests/fixtures/anthropic_tool_use.sse");
+const RECORDED: &str = include_str!("../../../../tests/fixtures/messages_tool_use.sse");
 
 fn fold(lines: &[&str]) -> (Result<Reply, ModelError>, Vec<Delta>) {
     let mut folder = Folder::new();

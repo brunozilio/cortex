@@ -4,28 +4,43 @@ use serde_json::Value;
 use super::{Call, Config, Page, Provider, ProviderError};
 
 #[derive(Debug)]
-pub struct Keyed;
+pub struct Stand {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub vendor: &'static str,
+    pub access: Access,
+    pub rank: u8,
+}
 
-pub const KEYED: Keyed = Keyed;
+pub static KEYED: Stand = Stand { id: "keyed", name: "Keyed", vendor: "keyed", access: Access::Key, rank: 200 };
+pub static KEYED_TOO: Stand = Stand { id: "keyed-too", name: "Keyed Too", vendor: "keyed-too", access: Access::Key, rank: 201 };
+pub static BROWSER: Stand = Stand { id: "browser-sub", name: "Browser Subscription", vendor: "browser-sub", access: Access::Browser, rank: 202 };
+pub static DEVICE: Stand =
+    Stand { id: "device-sub", name: "Device Subscription", vendor: "device-sub", access: Access::Code, rank: 203 };
+pub static FAMILY: Stand = Stand { id: "family-key", name: "Family Key", vendor: "anthropic", access: Access::Key, rank: 204 };
 
-impl Provider for Keyed {
+pub fn install() {
+    crate::declared::install(&[&KEYED, &KEYED_TOO, &BROWSER, &DEVICE, &FAMILY]);
+}
+
+impl Provider for Stand {
     fn id(&self) -> &'static str {
-        "keyed"
+        self.id
     }
     fn name(&self) -> &'static str {
-        "Keyed"
+        self.name
     }
     fn vendor(&self) -> &'static str {
-        "keyed"
+        self.vendor
     }
     fn access(&self) -> Access {
-        Access::Key
+        self.access
     }
     fn rank(&self) -> u8 {
-        0
+        self.rank
     }
     fn slot(&self) -> u128 {
-        0
+        0x7465_7374_0000_0000_0000_0000_0000_0000 + u128::from(self.rank)
     }
     fn window(&self) -> u64 {
         1000
@@ -34,7 +49,7 @@ impl Provider for Keyed {
         "chat"
     }
     fn base(&self, _config: &Config) -> String {
-        "https://keyed.test".into()
+        format!("https://{}.test", self.id)
     }
     fn headers(&self, config: &Config) -> Vec<(String, String)> {
         vec![("authorization".into(), format!("Bearer {}", config.api_key))]

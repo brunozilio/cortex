@@ -4,6 +4,14 @@ use llm_providers::{Provider, ProviderError, declared};
 
 include!(concat!(env!("OUT_DIR"), "/providers.rs"));
 
+#[cfg(test)]
+mod testing;
+
+#[cfg(any(test, feature = "test-support"))]
+pub fn install_testing() {
+    llm_providers::testing::install();
+}
+
 pub fn all() -> Vec<&'static dyn Provider> {
     let mut all = ALL.to_vec();
     all.extend(declared::registered());

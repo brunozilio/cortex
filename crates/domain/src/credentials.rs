@@ -47,13 +47,13 @@ mod tests {
 
     #[test]
     fn the_model_key_never_prints() {
-        let other = (crate::ModelProvider::new("openai"), crate::provider::ProviderKey::new("sk-other-secret"));
+        let other = (crate::ModelProvider::new("acme"), crate::provider::ProviderKey::new("sk-other-secret"));
         let credentials = RunCredentials {
             model: Some(crate::provider::ProviderKey::new("sk-ant-secret")),
             other_models: vec![other],
             ..Default::default()
         };
         let shown = format!("{credentials:?}");
-        assert!(!shown.contains("secret") && shown.contains("openai"), "{shown}");
+        assert!(!shown.contains("secret") && shown.contains("acme"), "{shown}");
     }
 }

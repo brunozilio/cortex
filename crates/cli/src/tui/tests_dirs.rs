@@ -14,7 +14,7 @@ fn an_added_folder_goes_with_every_prompt_even_after_new() {
         EngineEvent::SessionStarted(SessionId("s".into())),
         EngineEvent::Completed { duration_ms: 1, cost_usd: None },
     ];
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let real = shared.path().canonicalize().expect("real");
@@ -41,7 +41,7 @@ fn permissions_lists_the_project_s_rules() {
         r#"{"permissions": {"deny": ["Read(.env)"], "ask": ["Bash(git push:*)"]}}"#,
     )
     .expect("write");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], Vec::new());
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/permissions");
@@ -60,7 +60,7 @@ fn an_at_mention_completes_a_project_file_and_sends_its_text() {
     let init = std::process::Command::new("git").arg("init").arg("-q").current_dir(project.path()).status();
     assert!(init.is_ok_and(|status| status.success()), "git is needed for this test");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
     let mut app = App::new(sdk(&engine, data.path()), project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
@@ -80,7 +80,7 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
     let data = tempfile::tempdir().expect("data");
     let project = tempfile::tempdir().expect("project");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
     let sdk = sdk(&engine, data.path());
     let mut settings = serde_json::json!({});
     let now = super::conversations::now();
@@ -112,7 +112,7 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
 fn the_output_style_picked_goes_with_the_next_prompt() {
     let data = tempfile::tempdir().expect("data");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], script);
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/output-style");
@@ -130,7 +130,7 @@ fn the_output_style_picked_goes_with_the_next_prompt() {
 #[test]
 fn a_missing_folder_is_refused() {
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("anthropic:scripted", "Scripted")], Vec::new());
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/add-dir nowhere/at/all");

@@ -150,12 +150,12 @@ mod tests {
     #[test]
     fn one_account_per_provider_and_the_new_one_replaces_the_old() {
         let mut book = ProviderBook::default();
-        assert_eq!(book.connect(ModelProvider::new("openai"), account("…ab12")), None);
-        let old = book.connect(ModelProvider::new("openai"), account("…cd34"));
+        assert_eq!(book.connect(ModelProvider::new("acme"), account("…ab12")), None);
+        let old = book.connect(ModelProvider::new("acme"), account("…cd34"));
         assert_eq!(old.map(|a| a.label), Some("…ab12".into()));
-        assert_eq!(book.get(ModelProvider::new("openai")).map(|a| a.label.as_str()), Some("…cd34"));
-        assert_eq!(book.disconnect(ModelProvider::new("openai")).map(|a| a.label), Some("…cd34".into()));
-        assert_eq!(book.get(ModelProvider::new("openai")), None);
+        assert_eq!(book.get(ModelProvider::new("acme")).map(|a| a.label.as_str()), Some("…cd34"));
+        assert_eq!(book.disconnect(ModelProvider::new("acme")).map(|a| a.label), Some("…cd34".into()));
+        assert_eq!(book.get(ModelProvider::new("acme")), None);
     }
 
     #[test]
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn a_book_round_trips() {
         let mut book = ProviderBook::default();
-        book.connect(ModelProvider::new("anthropic"), account("x"));
+        book.connect(ModelProvider::new("zenith"), account("x"));
         let back: ProviderBook = serde_json::from_str(&serde_json::to_string(&book).expect("json")).expect("parse");
         assert_eq!(back, book);
     }

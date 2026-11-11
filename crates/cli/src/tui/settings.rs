@@ -127,11 +127,11 @@ mod tests {
 
     #[test]
     fn saved_choices_read_back_and_unknown_ones_are_ignored() {
-        let saved = read(&json!({"model": "anthropic:x", "mode": "plan", "effort": "max", "theme": "dark"}));
+        let saved = read(&json!({"model": "keyed:x", "mode": "plan", "effort": "max", "theme": "dark"}));
         assert_eq!(
             saved,
             Saved {
-                model: Some("anthropic:x".into()),
+                model: Some("keyed:x".into()),
                 mode: Some(PermissionMode::Plan),
                 effort: Some(Effort::Max),
                 problems: Vec::new()

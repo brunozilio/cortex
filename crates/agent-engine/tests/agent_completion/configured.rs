@@ -25,10 +25,11 @@ fn dont_ask_denies_unapproved_commands_without_a_prompt() {
 }
 #[test]
 fn explore_runs_on_the_small_model_unless_it_names_its_own() {
+    agent_engine::providers::install_testing();
     let dir = tempfile::tempdir().expect("dir");
     let mut workspace = Workspace::new(dir.path());
     workspace.model =
-        domain::ModelOption::new("claude-opus-5-5", "Opus").served_by(domain::ModelProvider::new("anthropic"));
+        domain::ModelOption::new("claude-opus-5-5", "Opus").served_by(domain::ModelProvider::new("family-key"));
     workspace.small_model = Some("claude-haiku-5-5".into());
     let explore = |model: serde_json::Value| {
         ScriptedModel::reply(vec![call(

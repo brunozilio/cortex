@@ -49,6 +49,16 @@ pub fn registered() -> Vec<&'static dyn Provider> {
     REGISTERED.read().unwrap_or_else(PoisonError::into_inner).clone()
 }
 
+#[cfg(any(test, feature = "test-support"))]
+pub fn install(providers: &[&'static dyn Provider]) {
+    let mut registered = REGISTERED.write().unwrap_or_else(PoisonError::into_inner);
+    for provider in providers {
+        if !registered.iter().any(|known| known.id() == provider.id()) {
+            registered.push(*provider);
+        }
+    }
+}
+
 pub fn find(provider: ModelProvider) -> Option<&'static dyn Provider> {
     registered().into_iter().find(|known| known.id() == provider.id())
 }

@@ -68,8 +68,9 @@ fn a_sub_agent_works_in_its_own_conversation_and_reports_back() {
 
 #[test]
 fn a_call_can_pick_the_sub_agent_s_model() {
+    agent_engine::providers::install_testing();
     let mut rig = Rig::new(PermissionMode::AcceptEdits);
-    rig.workspace.model.provider = domain::provider::ModelProvider::new("anthropic");
+    rig.workspace.model.provider = domain::provider::ModelProvider::new("family-key");
     let model = ScriptedModel::new([
         ScriptedModel::reply(vec![tool_use(
             "a1",
