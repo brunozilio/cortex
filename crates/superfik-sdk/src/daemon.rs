@@ -6,8 +6,9 @@ use std::time::Duration;
 use superfik_backend::LocalServices;
 use superfik_backend::daemon::{Daemon, DaemonDir, DaemonOptions};
 
-/// How long the daemon stays up with no client.
-pub const IDLE: Duration = Duration::from_secs(30 * 60);
+/// How long the daemon stays up with no client: it leaves with the last
+/// session, after a moment so commands run one after another reuse it.
+pub const IDLE: Duration = Duration::from_secs(5);
 
 /// Serves this computer's clients until idle; returns at once when a
 /// daemon is already running. `build` names this build, so clients can
