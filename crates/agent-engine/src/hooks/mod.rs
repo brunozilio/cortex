@@ -1,6 +1,7 @@
 mod handlers;
 mod model;
 mod scripts;
+mod validate;
 
 pub use self::handlers::{command, http, script};
 use crate::tools::Workspace;
@@ -84,50 +85,12 @@ impl Hooks {
     pub fn parse(value: &Value) -> Result<Self, String> {
         let events: BTreeMap<String, Vec<Group>> = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         for (event, groups) in &events {
-            if !matches!(
-                event.as_str(),
-                "PreToolUse"
-                    | "PostToolUse"
-                    | "PostToolUseFailure"
-                    | "Stop"
-                    | "SubagentStart"
-                    | "SubagentStop"
-                    | "PreCompact"
-                    | "PostCompact"
-                    | "UserPromptSubmit"
-                    | "SessionStart"
-                    | "SessionEnd"
-                    | "PermissionRequest"
-                    | "Notification"
-            ) {
-                return Err(format!("unsupported hook event: {event}"));
-            }
+            validate::event(event)?;
             for group in groups {
-                if !group.matcher.is_empty() && group.matcher != "*" {
-                    regex::Regex::new(&group.matcher).map_err(|e| e.to_string())?;
-                }
-                for hook in &group.hooks {
-                    let valid = match hook.kind.as_str() {
-                        "command" => !hook.command.trim().is_empty(),
-                        "script" => hook.command.ends_with(".js"),
-                        "http" => hook.url.as_deref().and_then(|url| url::Url::parse(url).ok()).is_some_and(|url| {
-                            matches!(url.scheme(), "http" | "https")
-                                && url.username().is_empty()
-                                && url.password().is_none()
-                        }),
-                        "prompt" | "agent" => {
-                            hook.prompt.as_deref().is_some_and(|p| !p.trim().is_empty())
-                                && !matches!(
-                                    event.as_str(),
-                                    "SessionStart" | "SessionEnd" | "SubagentStart" | "PreCompact" | "PostCompact"
-                                )
-                        }
-                        _ => false,
-                    };
-                    if !valid || !(1..=600).contains(&hook.timeout) {
-                        return Err("invalid hook type, event, payload or timeout (1..600 seconds)".into());
-                    }
-                }
+                validate::matcher(event, &group.matcher)?;
+            }
+            for (at, hook) in groups.iter().flat_map(|group| &group.hooks).enumerate() {
+                validate::hook(event, at, hook)?;
             }
         }
         Ok(Self(events))

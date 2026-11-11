@@ -140,7 +140,8 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 small_model = model_name(value, "smallModel")?;
             }
             if let Some(value) = settings.get("hooks") {
-                hooks.extend(&crate::hooks::Hooks::parse(value)?);
+                hooks
+                    .extend(&crate::hooks::Hooks::parse(value).map_err(|e| format!("{}: hooks: {e}", path.display()))?);
             }
             if let Some(value) = settings.get("lspServers") {
                 let layer: LspLayer = serde_json::from_value(value.clone())
