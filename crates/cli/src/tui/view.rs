@@ -130,17 +130,13 @@ pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
         Some(rest) if !home.is_empty() => format!("~{rest}"),
         _ => cwd,
     };
-    let mut lines = vec![Line::from("")];
-    lines.extend(
-        super::logo::lines(width).unwrap_or_else(|| vec![Line::from(concat!(" ✻ ", brand::name!())).magenta().bold()]),
-    );
-    lines.push(Line::from(""));
-    lines.push(Line::from(vec![
-        concat!(" ", brand::name!()).bold(),
-        format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim(),
-    ]));
-    lines.push(Line::from(" /help commands · /login connects a provider · ↑ earlier prompts · Ctrl+V an image").dim());
-    lines
+    vec![
+        Line::from(""),
+        Line::from(vec![
+            concat!(" ", brand::name!()).bold(),
+            format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim(),
+        ]),
+    ]
 }
 
 fn prompt(frame: &mut Frame, app: &App, area: Rect) {

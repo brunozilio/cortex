@@ -24,7 +24,6 @@ mod inline;
 mod input;
 mod keys;
 mod login;
-mod logo;
 mod markdown;
 mod memory;
 mod mentions;

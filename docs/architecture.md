@@ -364,7 +364,7 @@ The CLI is a client of the SDK: `App` (state and effects, slow calls on
 threads), `Transcript` (events folded into what is shown), `Input`, `ask`,
 `view` (drawing), `markdown` (`tui-markdown`, renders kept per text and
 width), `diffs` (edits and `git diff`, folded until Ctrl+O), `attach`
-(images for the prompt), `logo` (`tui-big-text`) and `motion`
+(images for the prompt) and `motion`
 (`tachyonfx` effects over the drawn frame: colour only, never
 characters). Its own `/commands` parse in
 `domain::command`; model, mode and effort persist in the owner's
