@@ -2,6 +2,7 @@ mod custom_agents;
 mod permission_rules;
 mod permissions;
 mod plan_mode;
+mod scripts;
 mod send_message;
 mod steering;
 mod sub_agents;
@@ -50,7 +51,17 @@ impl Rig {
     }
 
     fn run(&self, model: &ScriptedModel, history: &mut Vec<Message>) -> Result<(), Ending> {
-        let tools = tools::standard();
+        self.run_with(model, history, Vec::new())
+    }
+
+    fn run_with(
+        &self,
+        model: &ScriptedModel,
+        history: &mut Vec<Message>,
+        extra: Vec<Box<dyn tools::Tool>>,
+    ) -> Result<(), Ending> {
+        let mut tools = tools::standard();
+        tools.extend(extra);
         let events = Arc::clone(&self.events);
         let emit = move |event: EngineEvent| events.lock().expect("events").push(event);
         let agent = Agent {

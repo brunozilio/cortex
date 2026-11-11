@@ -38,6 +38,7 @@ pub struct ScriptTool {
     pub access: Access,
     pub source: String,
     pub path: PathBuf,
+    pub trusted: bool,
 }
 
 fn access_named(name: Option<&str>) -> Access {
@@ -66,6 +67,7 @@ fn parse(path: &Path, trusted: bool) -> Result<ScriptTool, String> {
         access,
         source,
         path: path.to_path_buf(),
+        trusted,
     })
 }
 

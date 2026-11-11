@@ -40,6 +40,10 @@ pub enum EngineEvent {
         piece: String,
     },
     ToolStarted(ToolCall),
+    ToolLog {
+        id: String,
+        text: String,
+    },
     ToolFinished {
         id: String,
     },

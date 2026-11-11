@@ -39,6 +39,7 @@ struct ScriptCall<'a, 'b> {
     agent: &'a Agent<'b>,
     tool: &'a ScriptTool,
     parent: &'a [Message],
+    id: &'a str,
 }
 
 impl Tool for ScriptCall<'_, '_> {
@@ -55,7 +56,7 @@ impl Tool for ScriptCall<'_, '_> {
     }
 
     fn run(&self, input: &Value, _workspace: &Workspace) -> Outcome {
-        self.agent.run_script(self.tool, input, self.parent)
+        self.agent.run_script(self.id, self.tool, input, self.parent)
     }
 }
 
@@ -79,7 +80,13 @@ impl Agent<'_> {
         parent: &[Message],
         permission: Option<&str>,
     ) -> Outcome {
-        let call = ScriptCall { agent: self, tool, parent };
+        let call = ScriptCall { agent: self, tool, parent, id };
+        let name = &tool.spec.name;
+        let approved = matches!(
+            self.workspace.ruling(name, summary, input).or_else(|| self.remembered_rule(name, summary, input)),
+            Some((domain::permission_rules::RuleKind::Allow, _))
+        );
+        let permission = if tool.trusted || approved { permission } else { Some("ask") };
         self.permitted(id, &call, summary, input, permission)
     }
 
@@ -101,7 +108,7 @@ impl Agent<'_> {
         })
     }
 
-    fn run_script(&self, tool: &ScriptTool, input: &Value, parent: &[Message]) -> Outcome {
+    fn run_script(&self, id: &str, tool: &ScriptTool, input: &Value, parent: &[Message]) -> Outcome {
         let depth = DEPTH.with(Cell::get);
         if depth >= DEEPEST {
             return Outcome::error(format!("{} called tools {DEEPEST} levels deep; stopped", tool.spec.name));
@@ -117,7 +124,7 @@ impl Agent<'_> {
             loop {
                 match requests.recv_timeout(Duration::from_millis(25)) {
                     Ok(request) => {
-                        let answer = self.serve(&request.function, request.arguments, parent);
+                        let answer = self.serve(id, &request.function, request.arguments, parent);
                         let _ = request.reply.send(answer);
                     }
                     Err(RecvTimeoutError::Timeout) if !running.is_finished() => {}
@@ -135,7 +142,7 @@ impl Agent<'_> {
         }
     }
 
-    fn serve(&self, function: &str, arguments: Value, parent: &[Message]) -> Result<Value, String> {
+    fn serve(&self, id: &str, function: &str, arguments: Value, parent: &[Message]) -> Result<Value, String> {
         let access = self.workspace.scripts;
         let text = |key: &str| arguments.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
         match function {
@@ -148,7 +155,8 @@ impl Agent<'_> {
             "llm" => self.script_llm(&arguments),
             "text" => Ok(Value::String(content::text(arguments.as_str().unwrap_or_default()))),
             "log" => {
-                tracing::info!(message = arguments.as_str().unwrap_or_default(), "script");
+                let text = arguments.as_str().map_or_else(|| arguments.to_string(), str::to_owned);
+                (self.emit)(domain::EngineEvent::ToolLog { id: id.to_owned(), text });
                 Ok(Value::Null)
             }
             "readFile" if access.files => {
