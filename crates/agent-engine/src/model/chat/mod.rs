@@ -85,7 +85,28 @@ fn status_error(status: u16, text: &str) -> ModelError {
         .filter(|value| value["error"].is_object())
         .map_or_else(|| text.to_owned(), |value| stream::message(&value["error"]));
     match status {
-        503 | 429 => ModelError::Overloaded(reason),
+        401 | 403 => ModelError::Unauthorized(reason),
+        413 => ModelError::TooLong(reason),
+        _ if reason.contains("context length") || reason.contains("context_length") => ModelError::TooLong(reason),
+        429 | 500..=599 => ModelError::Overloaded(reason),
         _ => ModelError::Provider(reason),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn statuses_say_what_kind_of_failure_it_was() {
+        assert!(matches!(status_error(401, "{}"), ModelError::Unauthorized(_)));
+        assert!(matches!(status_error(403, "no"), ModelError::Unauthorized(_)));
+        assert!(matches!(status_error(413, "big"), ModelError::TooLong(_)));
+        let long = r#"{"error":{"message":"This model's maximum context length is 8192 tokens"}}"#;
+        assert!(matches!(status_error(400, long), ModelError::TooLong(_)));
+        assert!(matches!(status_error(502, "starting"), ModelError::Overloaded(_)));
+        assert!(matches!(status_error(429, "slow down"), ModelError::Overloaded(_)));
+        let bad = r#"{"error":{"message":"unknown field"}}"#;
+        assert!(matches!(status_error(400, bad), ModelError::Provider(why) if why == "unknown field"));
     }
 }

@@ -142,7 +142,7 @@ fn a_model_still_loading_is_busy_and_a_refused_request_says_why() {
     let refused = r#"{"error":{"message":"context length exceeded"}}"#;
     let http = Arc::new(ScriptedHttp::new([(400, refused.to_owned())]));
     let error = Chat::new(http, served()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect_err("refused");
-    assert_eq!(error, ModelError::Provider("context length exceeded".into()));
+    assert_eq!(error, ModelError::TooLong("context length exceeded".into()), "so the run compacts and goes on");
 }
 
 #[test]
