@@ -93,6 +93,9 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut seen = std::collections::HashSet::new();
     roots.retain(|root| seen.insert(root.canonicalize().unwrap_or_else(|_| root.clone())));
     for root in &roots {
+        hooks.extend(&crate::hooks::Hooks::from_scripts(&root.join("hooks")));
+    }
+    for root in &roots {
         for name in ["settings.json", "settings.local.json"] {
             let path = root.join(name);
             let text = match std::fs::read_to_string(&path) {

@@ -109,3 +109,24 @@ pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<C
         })
     })
 }
+
+pub fn script(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, String> {
+    let path = std::path::PathBuf::from(&handler.command);
+    let source = std::fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let host: std::sync::Arc<dyn script::Host> = std::sync::Arc::new(crate::tools::script_io::StandaloneHost {
+        cwd: workspace.cwd.clone(),
+        access: workspace.scripts,
+        stop: std::sync::Arc::clone(&workspace.stop),
+    });
+    let data =
+        serde_json::json!({ "cwd": workspace.cwd, "session": workspace.session_id, "agent": workspace.agent_name });
+    let limit = std::time::Duration::from_secs(handler.timeout);
+    let stop = std::sync::Arc::clone(&workspace.stop);
+    let shown = path.display().to_string();
+    Ok(match script::run_within(&shown, &source, "default", &[input.clone()], &data, host, stop, Some(limit)) {
+        Ok(Value::Null) => CommandOutput { code: Some(0), stdout: String::new(), stderr: String::new() },
+        Ok(Value::String(text)) => CommandOutput { code: Some(0), stdout: text, stderr: String::new() },
+        Ok(value) => CommandOutput { code: Some(0), stdout: value.to_string(), stderr: String::new() },
+        Err(error) => CommandOutput { code: Some(1), stdout: String::new(), stderr: error },
+    })
+}

@@ -53,3 +53,44 @@ pub fn fetch(arguments: &Value) -> Result<Value, String> {
     let body = response.text_stopped(&AtomicBool::new(false)).map_err(|error| error.to_string())?;
     Ok(json!({ "status": status, "body": body }))
 }
+
+pub struct StandaloneHost {
+    pub cwd: std::path::PathBuf,
+    pub access: super::script_tool::ScriptAccess,
+    pub stop: std::sync::Arc<AtomicBool>,
+}
+
+impl script::Host for StandaloneHost {
+    fn call(&self, function: &str, arguments: Value) -> Result<Value, String> {
+        let text = |key: &str| arguments.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
+        let resolve = |path: &str| {
+            let path = std::path::Path::new(path);
+            if path.is_absolute() { path.to_path_buf() } else { self.cwd.join(path) }
+        };
+        match function {
+            "text" => Ok(Value::String(content::text(arguments.as_str().unwrap_or_default()))),
+            "log" => {
+                tracing::info!(message = arguments.as_str().unwrap_or_default(), "script");
+                Ok(Value::Null)
+            }
+            "readFile" if self.access.files => {
+                let path = resolve(arguments.as_str().unwrap_or_default());
+                std::fs::read_to_string(&path)
+                    .map(Value::String)
+                    .map_err(|error| format!("{}: {error}", path.display()))
+            }
+            "writeFile" if self.access.files => {
+                let path = resolve(&text("path"));
+                std::fs::write(&path, text("text"))
+                    .map(|()| Value::Null)
+                    .map_err(|error| format!("{}: {error}", path.display()))
+            }
+            "exec" if self.access.processes => exec(&self.cwd, &arguments, &self.stop),
+            "fetch" if self.access.network => fetch(&arguments),
+            "readFile" | "writeFile" => Err("scripts may not touch files here (settings: scripts.files)".into()),
+            "exec" => Err("scripts may not start processes here (settings: scripts.processes)".into()),
+            "fetch" => Err("scripts may not reach the network here (settings: scripts.network)".into()),
+            other => Err(format!("ctx.{other} is not available here")),
+        }
+    }
+}

@@ -1,7 +1,8 @@
 mod handlers;
 mod model;
+mod scripts;
 
-pub use self::handlers::{command, http};
+pub use self::handlers::{command, http, script};
 use crate::tools::Workspace;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -108,6 +109,7 @@ impl Hooks {
                 for hook in &group.hooks {
                     let valid = match hook.kind.as_str() {
                         "command" => !hook.command.trim().is_empty(),
+                        "script" => hook.command.ends_with(".js"),
                         "http" => hook.url.as_deref().and_then(|url| url::Url::parse(url).ok()).is_some_and(|url| {
                             matches!(url.scheme(), "http" | "https")
                                 && url.username().is_empty()
@@ -159,11 +161,11 @@ impl Hooks {
                 continue;
             }
             for handler in &group.hooks {
-                let result: CommandOutput = if matches!(handler.kind.as_str(), "command" | "http") {
-                    if handler.kind == "http" {
-                        http(handler, &input, workspace)?
-                    } else {
-                        command(handler, &input, workspace)?
+                let result: CommandOutput = if matches!(handler.kind.as_str(), "command" | "http" | "script") {
+                    match handler.kind.as_str() {
+                        "http" => http(handler, &input, workspace)?,
+                        "script" => script(handler, &input, workspace)?,
+                        _ => command(handler, &input, workspace)?,
                     }
                 } else {
                     let (api, template) = model.ok_or("model hook requires an active model context")?;
