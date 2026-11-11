@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::Instant;
 
+use platform::Tree;
 use serde_json::{Value, json};
-use subprocess::Tree;
 
 use super::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;

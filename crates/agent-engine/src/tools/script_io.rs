@@ -2,8 +2,8 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
+use platform::bounded::{Bounds, Ended};
 use serde_json::{Value, json};
-use subprocess::bounded::{Bounds, Ended};
 
 use crate::model::http::{Http, NetHttp};
 
@@ -13,19 +13,11 @@ pub fn exec(cwd: &Path, arguments: &Value, stop: &AtomicBool) -> Result<Value, S
     let command =
         arguments["command"].as_str().filter(|command| !command.trim().is_empty()).ok_or("ctx.exec needs a command")?;
     let seconds = arguments["timeout"].as_u64().unwrap_or(120);
-    let mut process = if cfg!(windows) {
-        let mut process = subprocess::command("cmd");
-        process.args(["/C", command]);
-        process
-    } else {
-        let mut process = subprocess::command("sh");
-        process.args(["-c", command]);
-        process
-    };
+    let mut process = platform::script_shell(command);
     process.current_dir(cwd);
     let input = arguments["input"].as_str().map(|text| text.as_bytes().to_vec());
     let bounds = Bounds { timeout: Duration::from_secs(seconds), max_output: OUTPUT, stop, input };
-    let done = subprocess::bounded::run(&mut process, bounds).map_err(|error| error.to_string())?;
+    let done = platform::bounded::run(&mut process, bounds).map_err(|error| error.to_string())?;
     let code = match done.ended {
         Ended::Exited(status) => status.code().map_or(Value::Null, |code| json!(code)),
         Ended::Stopped => return Err("cancelled".into()),

@@ -103,19 +103,11 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
         let name_key = format!("{}-{:x}", name.replace(':', "--"), Sha256::digest(name.as_bytes()));
         let dir = base.join(owner).join(name_key);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
-        }
+        platform::make_private_dir(&dir).map_err(|e| e.to_string())?;
         let mut bytes = Vec::new();
         let mut options = std::fs::OpenOptions::new();
         options.read(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.custom_flags(libc::O_NONBLOCK);
-        }
+        platform::nonblocking(&mut options);
         match options.open(dir.join("MEMORY.md")) {
             Ok(file) => {
                 if !file.metadata().map_err(|e| e.to_string())?.is_file() {

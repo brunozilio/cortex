@@ -10,7 +10,6 @@ pub const ADVISOR_TOOL: &str = "Advisor";
 
 const RESULT_CHARS: usize = 4000;
 
-
 #[derive(Debug, Clone, Default)]
 pub struct Advisor;
 

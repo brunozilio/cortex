@@ -1,28 +1,21 @@
+use platform::{Bounds, Ended};
 use serde_json::Value;
 use std::{
     sync::atomic::Ordering,
     time::{Duration, Instant},
 };
-use subprocess::{Bounds, Ended};
 
 use super::{CommandOutput, Handler};
 use crate::tools::Workspace;
 
 pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, String> {
-    #[cfg(windows)]
-    let mut cmd = subprocess::WindowsShell::detect().command(&handler.command);
-    #[cfg(not(windows))]
-    let mut cmd = {
-        let mut cmd = subprocess::command("/bin/sh");
-        cmd.args(["-c", &handler.command]);
-        cmd
-    };
+    let mut cmd = platform::script_shell(&handler.command);
     cmd.env(concat!(brand::env_prefix!(), "_PROJECT_DIR"), &workspace.cwd);
     cmd.current_dir(&workspace.cwd);
     let input = Some(serde_json::to_vec(input).map_err(|e| e.to_string())?);
     let bounds =
         Bounds { timeout: Duration::from_secs(handler.timeout), max_output: 64 * 1024, stop: &workspace.stop, input };
-    let done = subprocess::bounded::run(&mut cmd, bounds).map_err(|e| e.to_string())?;
+    let done = platform::bounded::run(&mut cmd, bounds).map_err(|e| e.to_string())?;
     match done.ended {
         Ended::Exited(status) => Ok(CommandOutput { code: status.code(), stdout: done.stdout, stderr: done.stderr }),
         Ended::Stopped | Ended::TimedOut => Err("hook cancelled or timed out".into()),

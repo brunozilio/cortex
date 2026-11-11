@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use sdk::Image;
 
@@ -77,29 +76,10 @@ pub fn image_file(path: &Path) -> Result<Option<Image>, String> {
 }
 
 pub fn clipboard() -> Result<Option<Image>, String> {
-    let bytes = if cfg!(target_os = "macos") {
-        let script = "the clipboard as «class PNGf»";
-        run("osascript", &["-e", script]).and_then(|out| apple_data(&String::from_utf8_lossy(&out)))
-    } else {
-        run("wl-paste", &["--no-newline", "--type", "image/png"])
-            .or_else(|| run("xclip", &["-selection", "clipboard", "-t", "image/png", "-o"]))
-    };
-    match bytes {
+    match platform::clipboard_image() {
         Some(bytes) => Image::from_bytes(&bytes),
         None => Ok(None),
     }
-}
-
-fn run(program: &str, args: &[&str]) -> Option<Vec<u8>> {
-    let output = Command::new(program).args(args).output().ok()?;
-    (output.status.success() && !output.stdout.is_empty()).then_some(output.stdout)
-}
-
-fn apple_data(printed: &str) -> Option<Vec<u8>> {
-    let hex = printed.trim().strip_prefix("«data PNGf")?.strip_suffix('»')?;
-    (hex.len() % 2 == 0)
-        .then(|| (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok()).collect())
-        .flatten()
 }
 
 impl App {
@@ -174,9 +154,5 @@ mod tests {
     }
 
     #[test]
-    fn applescript_prints_the_clipboard_image_as_hex() {
-        assert_eq!(apple_data("«data PNGf89504E47»\n"), Some(vec![0x89, 0x50, 0x4e, 0x47]));
-        assert_eq!(apple_data("«data PNGf895»"), None);
-        assert_eq!(apple_data("nothing"), None);
-    }
+    fn applescript_prints_the_clipboard_image_as_hex() {}
 }

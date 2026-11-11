@@ -73,7 +73,7 @@ fn rewrite(file: &Path, change: impl FnOnce(Value) -> Result<Value, String>) -> 
         std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
     }
     let text = serde_json::to_string_pretty(&changed).map_err(|error| error.to_string())?;
-    private_file::write(file, text.as_bytes()).map_err(|error| format!("{}: {error}", file.display()))
+    platform::private_file::write(file, text.as_bytes()).map_err(|error| format!("{}: {error}", file.display()))
 }
 
 #[cfg(test)]

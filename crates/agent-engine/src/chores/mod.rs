@@ -10,11 +10,6 @@ pub use self::clean::{clean_suggestion, clean_title, conversation_text, kebab, s
 use crate::model::{ModelApi, ModelError, TurnRequest};
 use crate::transcript::Message;
 
-
-
-
-
-
 pub fn answer(
     command: SessionCommand,
     api: &dyn ModelApi,

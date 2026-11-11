@@ -125,24 +125,19 @@ pub fn open(url: &str) {
 }
 
 fn browser(url: &str) -> std::process::Command {
-    let program = if cfg!(target_os = "macos") {
-        "open"
-    } else if cfg!(windows) {
-        "explorer"
-    } else {
-        "xdg-open"
-    };
-    launcher(program, url)
+    quiet(platform::open_url(url))
 }
 
+fn quiet(mut command: std::process::Command) -> std::process::Command {
+    command.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    command
+}
+
+#[cfg(test)]
 fn launcher(program: &str, url: &str) -> std::process::Command {
     let mut command = std::process::Command::new(program);
-    command
-        .arg(url)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    command
+    command.arg(url);
+    quiet(command)
 }
 
 #[cfg(test)]

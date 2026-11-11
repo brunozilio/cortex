@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 
-const MAC: Platform<'static> = Platform { arch: "aarch64", os: "macos" };
+const MAC: Platform<'static> = Platform { target: Some("aarch64-apple-darwin") };
 const ASSET: &str = concat!(brand::command!(), "-0.4.0-aarch64-apple-darwin.tar.gz");
 
 struct Fake {
@@ -98,7 +98,7 @@ fn the_latest_release_leaves_the_binary_alone() {
 fn a_platform_without_a_build_says_so() {
     let dir = tempfile::tempdir().expect("dir");
     let exe = installed(&dir);
-    let intel = Platform { arch: "x86_64", os: "macos" };
-    assert!(update(&release(b"new", None), "0.3.1", &exe, intel).is_err_and(|e| e.contains("x86_64")));
+    let unpublished = Platform { target: None };
+    assert!(update(&release(b"new", None), "0.3.1", &exe, unpublished).is_err_and(|e| e.contains("this computer")));
     assert_eq!(std::fs::read(&exe).expect("read"), b"old");
 }

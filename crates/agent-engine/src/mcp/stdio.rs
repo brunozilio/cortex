@@ -6,8 +6,8 @@ use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use platform::Tree;
 use serde_json::{Value, json};
-use subprocess::Tree;
 
 use super::{Listener, Transport};
 
@@ -47,7 +47,7 @@ impl StdioTransport {
         env: &[(String, String)],
         listener: Option<Listener>,
     ) -> Result<Self, String> {
-        let mut process = subprocess::command(command);
+        let mut process = platform::command(command);
         process.args(args).envs(env.iter().cloned());
         process.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         let mut tree = Tree::spawn(&mut process).map_err(|error| format!("{name} could not start: {error}"))?;

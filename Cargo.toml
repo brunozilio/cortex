@@ -16,8 +16,7 @@ script = { path = "crates/script" }
 domain = { path = "crates/domain" }
 protocol = { path = "crates/protocol" }
 backend = { path = "crates/backend" }
-subprocess = { path = "crates/subprocess" }
-private-file = { path = "crates/private-file" }
+platform = { path = "crates/platform" }
 agent-engine = { path = "crates/agent-engine" }
 llm-providers = { path = "crates/llm-providers" }
 sdk = { path = "crates/sdk" }

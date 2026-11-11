@@ -119,7 +119,7 @@ fn unhex(text: &str) -> Option<Vec<u8>> {
 }
 
 fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
-    private_file::replace(path, text.as_bytes())
+    platform::private_file::replace(path, text.as_bytes())
 }
 
 #[cfg(test)]

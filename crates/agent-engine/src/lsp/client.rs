@@ -8,8 +8,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use domain::lsp::{ServerSpec, uri::uri_of};
+use platform::Tree;
 use serde_json::{Value, json};
-use subprocess::Tree;
 
 use super::framing::{read_message, write_message};
 
@@ -47,7 +47,7 @@ impl std::fmt::Debug for LspClient {
 
 impl LspClient {
     pub fn spawn(spec: &ServerSpec, program: &Path, root: &Path, stop: &AtomicBool) -> Result<Self, String> {
-        let mut command = subprocess::command(program);
+        let mut command = platform::command(program);
         command.args(&spec.args).envs(&spec.env).current_dir(root);
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         let mut tree = Tree::spawn(&mut command).map_err(|error| format!("{} could not start: {error}", spec.name))?;

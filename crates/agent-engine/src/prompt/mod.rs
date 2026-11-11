@@ -102,13 +102,7 @@ pub fn instructions(cwd: &Path, home: Option<&Path>) -> Vec<Instructions> {
 }
 
 pub const fn platform() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "macOS"
-    } else if cfg!(windows) {
-        "Windows"
-    } else {
-        "Linux"
-    }
+    platform::NAME
 }
 
 #[cfg(test)]

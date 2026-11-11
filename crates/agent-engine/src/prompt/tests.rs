@@ -110,7 +110,7 @@ fn reads_a_real_repository() {
     let repo = tempfile::tempdir().expect("repo");
     assert_eq!(snapshot(repo.path()), None, "not a repository");
     let git = |args: &[&str]| {
-        let ok = subprocess::command("git").arg("-C").arg(repo.path()).args(args).output().expect("git");
+        let ok = platform::command("git").arg("-C").arg(repo.path()).args(args).output().expect("git");
         assert!(ok.status.success(), "{args:?}: {}", String::from_utf8_lossy(&ok.stderr));
     };
     git(&["init", "-q", "-b", "main"]);

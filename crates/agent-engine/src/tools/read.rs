@@ -107,11 +107,7 @@ pub(crate) fn read_bytes(path: &std::path::Path, stop: &std::sync::atomic::Atomi
     use std::io::Read;
     let mut options = std::fs::OpenOptions::new();
     options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NONBLOCK);
-    }
+    platform::nonblocking(&mut options);
     let mut file = options.open(path)?;
     let metadata = file.metadata()?;
     const MAX: u64 = 64 * 1024 * 1024;

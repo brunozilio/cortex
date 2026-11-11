@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use subprocess::bounded::{Bounds, Ended};
+use platform::bounded::{Bounds, Ended};
 
 const SHOWN: usize = 100_000;
 
@@ -18,7 +18,7 @@ pub fn range(pages: &str) -> Result<(u32, u32), String> {
 }
 
 pub fn text(path: &Path, pages: Option<&str>, stop: &AtomicBool) -> Result<String, String> {
-    let mut command = subprocess::command("pdftotext");
+    let mut command = platform::command("pdftotext");
     command.arg("-layout");
     if let Some(pages) = pages {
         let (first, last) = range(pages)?;
@@ -26,7 +26,7 @@ pub fn text(path: &Path, pages: Option<&str>, stop: &AtomicBool) -> Result<Strin
     }
     command.arg(path).arg("-");
     let bounds = Bounds { timeout: Duration::from_secs(60), max_output: 8 << 20, stop, input: None };
-    let output = subprocess::bounded::run(&mut command, bounds).map_err(|_| {
+    let output = platform::bounded::run(&mut command, bounds).map_err(|_| {
         "Reading a PDF needs `pdftotext` (poppler: `brew install poppler`, `apt install poppler-utils`).".to_owned()
     })?;
     match output.ended {

@@ -15,13 +15,12 @@ pub trait Releases {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Platform<'a> {
-    pub arch: &'a str,
-    pub os: &'a str,
+    pub target: Option<&'a str>,
 }
 
 impl Platform<'static> {
     pub fn this() -> Self {
-        Self { arch: std::env::consts::ARCH, os: std::env::consts::OS }
+        Self { target: platform::release_target() }
     }
 }
 
@@ -54,14 +53,9 @@ pub fn update(releases: &dyn Releases, current: &str, exe: &Path, platform: Plat
     let Some(version) = release::newer(current, &tag) else {
         return Ok(Updated::AlreadyLatest);
     };
-    let asset = release::asset(version, platform.arch, platform.os).ok_or_else(|| {
-        format!(
-            "no build of {brand_command} is published for {} {}",
-            platform.arch,
-            platform.os,
-            brand_command = brand::COMMAND
-        )
-    })?;
+    let target =
+        platform.target.ok_or_else(|| format!("no build of {} is published for this computer", brand::COMMAND))?;
+    let asset = release::asset(version, target);
     let sums = String::from_utf8_lossy(&releases.download(&tag, &format!("{asset}.sha256"))?).into_owned();
     let expected = release::checksum(&sums, &asset).ok_or_else(|| format!("{asset}.sha256 gives no checksum"))?;
     let archive = releases.download(&tag, &asset)?;
@@ -102,11 +96,7 @@ fn write_executable(path: &Path, binary: &[u8]) -> std::io::Result<()> {
     let mut file = std::fs::File::create(path)?;
     file.write_all(binary)?;
     file.sync_all()?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        file.set_permissions(std::fs::Permissions::from_mode(0o755))?;
-    }
+    platform::make_executable(&file)?;
     Ok(())
 }
 

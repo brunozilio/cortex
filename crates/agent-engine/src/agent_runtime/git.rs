@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use subprocess::{Bounds, Ended};
+use platform::{Bounds, Ended};
 
 use crate::tools::Workspace;
 
@@ -19,10 +19,10 @@ pub(crate) fn git_stopped(workspace: &Workspace, cwd: &Path, args: &[&OsStr]) ->
 }
 
 pub(crate) fn output(cwd: &Path, args: &[&OsStr], stop: &AtomicBool) -> Result<String, String> {
-    let mut command = subprocess::command("git");
+    let mut command = platform::command("git");
     command.arg("-C").arg(cwd).args(args);
     let bounds = Bounds { timeout: TIMEOUT, max_output: MAX_OUTPUT, stop, input: None };
-    let done = subprocess::bounded::run(&mut command, bounds).map_err(|e| e.to_string())?;
+    let done = platform::bounded::run(&mut command, bounds).map_err(|e| e.to_string())?;
     match done.ended {
         Ended::Exited(status) if status.success() => Ok(done.stdout),
         Ended::Exited(_) => Err(format!("git failed: {}", done.stderr)),

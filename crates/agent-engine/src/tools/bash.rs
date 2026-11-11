@@ -15,10 +15,7 @@ pub struct Bash;
 
 impl Tool for Bash {
     fn spec(&self) -> ToolSpec {
-        #[cfg(windows)]
-        let shell = subprocess::WindowsShell::detect().name();
-        #[cfg(not(windows))]
-        let shell = "the user's shell";
+        let shell = platform::shell_name();
         ToolSpec {
             name: "Bash".into(),
             description: crate::tools::describe(
@@ -101,17 +98,8 @@ impl Tool for Bash {
     }
 }
 
-#[cfg(unix)]
 pub(super) fn shell(command: &str) -> std::process::Command {
-    let program = std::env::var("SHELL").ok().filter(|shell| !shell.is_empty()).unwrap_or_else(|| "/bin/sh".into());
-    let mut shell = subprocess::command(program);
-    shell.arg("-c").arg(command);
-    shell
-}
-
-#[cfg(windows)]
-pub(super) fn shell(command: &str) -> std::process::Command {
-    subprocess::WindowsShell::detect().command(command)
+    platform::shell(command)
 }
 
 #[cfg(all(test, unix))]

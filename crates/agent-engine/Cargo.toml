@@ -13,8 +13,7 @@ script.workspace = true
 content.workspace = true
 brand.workspace = true
 domain.workspace = true
-private-file.workspace = true
-subprocess.workspace = true
+platform.workspace = true
 llm-providers.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -39,6 +38,3 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
-
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"

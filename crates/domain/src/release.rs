@@ -21,14 +21,8 @@ pub fn newer(current: &str, latest_tag: &str) -> Option<Version> {
     (Version::parse(current).is_none_or(|current| latest > current)).then_some(latest)
 }
 
-pub fn asset(version: Version, arch: &str, os: &str) -> Option<String> {
-    let target = match (arch, os) {
-        ("aarch64", "macos") => "aarch64-apple-darwin",
-        ("aarch64", "linux") => "aarch64-unknown-linux-musl",
-        ("x86_64", "linux") => "x86_64-unknown-linux-musl",
-        _ => return None,
-    };
-    Some(format!("{brand_command}-{version}-{target}.tar.gz", brand_command = brand::COMMAND))
+pub fn asset(version: Version, target: &str) -> String {
+    format!("{}-{version}-{target}.tar.gz", brand::COMMAND)
 }
 
 pub fn checksum(text: &str, asset: &str) -> Option<String> {
@@ -47,12 +41,8 @@ mod tests {
     #[test]
     fn each_published_platform_has_its_archive() {
         let v = Version(0, 3, 1);
-        let name = |arch, os| asset(v, arch, os).map(|asset| asset.replacen(brand::COMMAND, "app", 1));
-        assert_eq!(name("aarch64", "macos").as_deref(), Some("app-0.3.1-aarch64-apple-darwin.tar.gz"));
-        assert_eq!(name("x86_64", "linux").as_deref(), Some("app-0.3.1-x86_64-unknown-linux-musl.tar.gz"));
-        assert_eq!(name("aarch64", "linux").as_deref(), Some("app-0.3.1-aarch64-unknown-linux-musl.tar.gz"));
-        assert_eq!(asset(v, "x86_64", "macos"), None, "no Intel Mac build");
-        assert_eq!(asset(v, "x86_64", "windows"), None);
+        let name = asset(v, "aarch64-apple-darwin").replacen(brand::COMMAND, "app", 1);
+        assert_eq!(name, "app-0.3.1-aarch64-apple-darwin.tar.gz");
     }
 
     #[test]

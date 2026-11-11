@@ -135,7 +135,7 @@ impl FileSessions {
         let partial = path.with_extension(format!("{}.partial", uuid::Uuid::new_v4()));
         let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
         let result = (|| {
-            private_file::write(&partial, &bytes)?;
+            platform::private_file::write(&partial, &bytes)?;
             std::fs::rename(&partial, &path)
         })();
         if result.is_err() {
@@ -201,7 +201,7 @@ impl Sessions for FileSessions {
         let json = serde_json::to_string(history).map_err(|error| error.to_string())?;
         let partial = path.with_extension(format!("{}.partial", uuid::Uuid::new_v4()));
         let result = (|| {
-            private_file::write(&partial, json.as_bytes())?;
+            platform::private_file::write(&partial, json.as_bytes())?;
             std::fs::rename(&partial, &path)
         })();
         if result.is_err() {

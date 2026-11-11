@@ -11,7 +11,6 @@ pub enum WindowsShell {
 }
 
 impl WindowsShell {
-    #[cfg(windows)]
     pub fn detect() -> Self {
         git_bash_candidates(|name| std::env::var_os(name))
             .into_iter()
@@ -120,7 +119,6 @@ mod tests {
         assert!(paths.iter().all(|path| !path.to_string_lossy().contains("System32")));
     }
 
-    #[cfg(windows)]
     #[test]
     fn redirected_powershell_round_trips_portuguese_and_reports_failure() {
         let output =

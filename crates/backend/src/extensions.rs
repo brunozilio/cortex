@@ -49,7 +49,7 @@ impl Extensions {
             let path =
                 std::env::temp_dir().join(format!("{brand_command}-mcp-{run}.json", brand_command = brand::COMMAND));
             let text = json!({ "mcpServers": servers }).to_string();
-            private_file::write(&path, text.as_bytes()).map_err(|error| error.to_string())?;
+            platform::private_file::write(&path, text.as_bytes()).map_err(|error| error.to_string())?;
             extensions.mcp_config = Some(path);
         }
         let mut credentials = request.credentials.clone();
