@@ -4,6 +4,7 @@ mod custom_agents;
 mod permissions;
 mod plan_mode;
 mod send_message;
+mod steering;
 mod sub_agents;
 mod turns;
 

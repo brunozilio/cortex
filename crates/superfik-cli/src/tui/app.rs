@@ -225,7 +225,9 @@ impl App {
         if let Some(command) = Command::parse(&text) {
             return super::commands::run(self, command);
         }
-        if self.busy() {
+        if let Some(run) = &self.run {
+            // Not handed over (`Steered` never comes), it is sent when the run ends.
+            let _ = run.steer(&text);
             self.queued.push(text);
             return;
         }

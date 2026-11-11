@@ -20,11 +20,33 @@ pub struct FakeEngine {
     delay: Duration,
     answers: Arc<Mutex<Vec<(AskId, Decision)>>>,
     requests: Arc<Mutex<Vec<PromptRequest>>>,
+    steers: Arc<Mutex<Vec<String>>>,
+    steering: bool,
 }
 
 impl FakeEngine {
     pub fn new(models: Vec<ModelOption>, script: Vec<EngineEvent>) -> Self {
-        Self { models, script, delay: Duration::ZERO, answers: Arc::default(), requests: Arc::default() }
+        Self {
+            models,
+            script,
+            delay: Duration::ZERO,
+            answers: Arc::default(),
+            requests: Arc::default(),
+            steers: Arc::default(),
+            steering: true,
+        }
+    }
+
+    /// The messages steered into its runs, each handed over at once.
+    pub fn steers(&self) -> Vec<String> {
+        self.steers.lock().map(|steers| steers.clone()).unwrap_or_default()
+    }
+
+    /// Like an engine that cannot take messages mid-run: it never hands
+    /// them over.
+    pub fn without_steering(mut self) -> Self {
+        self.steering = false;
+        self
     }
 
     pub fn requests(&self) -> Vec<PromptRequest> {
@@ -78,7 +100,8 @@ impl AgentEngine for FakeEngine {
             .name("superfik-fake-engine".into())
             .spawn(move || replay(script, delay, &replay_gate, &replay_cancelled))
             .map_err(|source| EngineError::Spawn { engine: "fake engine", source })?;
-        Ok(Box::new(FakeHandle { gate, cancelled, answers: Arc::clone(&self.answers) }))
+        let steers = self.steering.then(|| Arc::clone(&self.steers));
+        Ok(Box::new(FakeHandle { gate, cancelled, answers: Arc::clone(&self.answers), steers }))
     }
 }
 
@@ -99,9 +122,21 @@ struct FakeHandle {
     gate: RunGate,
     cancelled: Arc<AtomicBool>,
     answers: Arc<Mutex<Vec<(AskId, Decision)>>>,
+    steers: Option<Arc<Mutex<Vec<String>>>>,
 }
 
 impl RunHandle for FakeHandle {
+    fn steer(&mut self, text: String) {
+        let Some(steers) = &self.steers else { return };
+        if self.cancelled.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Ok(mut steers) = steers.lock() {
+            steers.push(text.clone());
+        }
+        self.gate.emit(EngineEvent::Steered(text));
+    }
+
     fn cancel(&mut self) {
         self.cancelled.store(true, Ordering::SeqCst);
         self.gate.emit(EngineEvent::Cancelled);

@@ -219,7 +219,7 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
         .collect();
     if app.input.is_empty() && app.ask.is_none() && app.secret.is_none() {
         let hint = match &app.ghost {
-            _ if app.busy() => "Type to queue a message · esc interrupts".to_owned(),
+            _ if app.busy() => "Type to message the agent as it works · esc interrupts".to_owned(),
             Some(ghost) => format!("{ghost}  (tab)"),
             None => "Try \"explain this project\" · / for commands".to_owned(),
         };

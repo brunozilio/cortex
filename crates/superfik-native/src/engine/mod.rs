@@ -112,4 +112,8 @@ impl RunHandle for Handle {
     fn set_mode(&mut self, mode: PermissionMode) {
         self.control.set_mode(mode);
     }
+
+    fn steer(&mut self, text: String) {
+        self.control.steer(text);
+    }
 }

@@ -20,6 +20,11 @@ impl App {
             EngineEvent::SessionStarted(id) => self.saver.remember_session(&self.cwd, id),
             EngineEvent::Checkpoint(index) => self.checkpointed(*index),
             EngineEvent::Rewound(rewound) => self.rewound = Some(rewound.clone()),
+            EngineEvent::Steered(text) => {
+                if let Some(at) = self.queued.iter().position(|queued| queued == text) {
+                    self.queued.remove(at);
+                }
+            }
             EngineEvent::ModeChanged(mode) => self.set_mode(*mode),
             _ => {}
         }

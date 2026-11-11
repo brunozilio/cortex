@@ -31,6 +31,10 @@ pub trait RunHandle: Send {
     fn answer(&mut self, _ask: &AskId, _decision: &Decision) {}
 
     fn set_mode(&mut self, _mode: PermissionMode) {}
+
+    /// Hands the model a message at its next turn. Engines that cannot
+    /// never announce it, and the client sends it as the next prompt.
+    fn steer(&mut self, _text: String) {}
 }
 
 pub trait AgentEngine: Send + Sync {

@@ -36,6 +36,8 @@ mod tests;
 mod tests_going_on;
 #[cfg(test)]
 mod tests_plan;
+#[cfg(test)]
+mod tests_steering;
 
 use std::path::PathBuf;
 use std::time::Duration;

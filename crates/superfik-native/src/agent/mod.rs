@@ -163,6 +163,11 @@ impl Agent<'_> {
                 }
                 StopReason::Refusal => return Err(Ending::Refused),
                 _ if calls.is_empty() => {
+                    let steered = self.steered();
+                    if !steered.is_empty() && !self.control.is_stopped() {
+                        history.push(Message { role: Role::User, blocks: steered });
+                        continue;
+                    }
                     let pending: Vec<_> = tasks.background.lock().expect("tasks").values().cloned().collect();
                     let mut reports = Vec::new();
                     for task in pending {
@@ -204,15 +209,29 @@ impl Agent<'_> {
                 _ => {}
             }
             let new_rules = self.pending_rules(&calls)?;
-            let results: Vec<Block> = self.results(&calls, &new_rules, tasks, history, spawn);
+            let mut results: Vec<Block> = self.results(&calls, &new_rules, tasks, history, spawn);
             for ((_, name, input), result) in calls.iter().zip(&results) {
                 if name == "StructuredOutput" && matches!(result, Block::ToolResult { is_error: false, .. }) {
                     structured = true;
                     (self.emit)(EngineEvent::StructuredOutput(input["result"].clone()));
                 }
             }
+            results.extend(self.steered());
             history.push(Message { role: Role::User, blocks: results });
         }
         Err(Ending::TooManyTurns)
+    }
+
+    /// What the user sent while the run worked, as text for the model's
+    /// next turn; each message is announced as it is handed over.
+    fn steered(&self) -> Vec<Block> {
+        self.control
+            .take_steered()
+            .into_iter()
+            .map(|text| {
+                (self.emit)(EngineEvent::Steered(text.clone()));
+                Block::Text(format!("The user sent this message while you were working:\n{text}"))
+            })
+            .collect()
     }
 }

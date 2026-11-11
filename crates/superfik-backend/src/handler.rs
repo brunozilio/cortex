@@ -62,6 +62,10 @@ impl CommandHandler {
                 let reach = self.runs.control(run, &principal, |handle| handle.set_mode(mode));
                 Self::reached(&principal, outbox, "set_permission_mode", run, reach);
             }
+            ClientCommand::SteerRun { run, text } => {
+                let reach = self.runs.control(run, &principal, |handle| handle.steer(text));
+                Self::reached(&principal, outbox, "steer_run", run, reach);
+            }
             ClientCommand::ListModels => {
                 let mut models = self.services.engine.models();
                 if let Some(folder) = &self.services.local_models {

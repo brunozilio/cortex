@@ -100,6 +100,11 @@ impl Run {
         self.control().set_permission(mode)
     }
 
+    /// See [`RunControl::steer`].
+    pub fn steer(&self, text: &str) -> Result<(), Error> {
+        self.control().steer(text)
+    }
+
     /// A handle that answers, cancels or changes this run's mode while
     /// another thread reads its events.
     pub fn control(&self) -> RunControl {
@@ -152,6 +157,12 @@ impl RunControl {
 
     pub fn set_permission(&self, mode: PermissionMode) -> Result<(), Error> {
         self.client.send(ClientCommand::SetPermissionMode { run: self.id, mode })
+    }
+
+    /// Sends the run's model a message at its next turn;
+    /// `EngineEvent::Steered` arrives once it was handed over.
+    pub fn steer(&self, text: &str) -> Result<(), Error> {
+        self.client.send(ClientCommand::SteerRun { run: self.id, text: text.to_owned() })
     }
 }
 

@@ -26,6 +26,12 @@ pub enum ClientCommand {
         run: RunId,
         mode: PermissionMode,
     },
+    /// A message for run `run`'s model, handed over at its next turn
+    /// (`EngineEvent::Steered` says when).
+    SteerRun {
+        run: RunId,
+        text: String,
+    },
     ListModels,
     ListSkills {
         path: PathBuf,
@@ -105,6 +111,7 @@ impl ClientCommand {
             Self::CancelRun { .. } => "cancel_run",
             Self::AnswerAsk { .. } => "answer_ask",
             Self::SetPermissionMode { .. } => "set_permission_mode",
+            Self::SteerRun { .. } => "steer_run",
             Self::ListModels => "list_models",
             Self::ListSkills { .. } => "list_skills",
             Self::ListAgents { .. } => "list_agents",
@@ -140,6 +147,7 @@ mod tests {
             ClientCommand::CancelRun { run },
             ClientCommand::AnswerAsk { run, ask: AskId("a".into()), decision: Decision::Answer(vec![vec![0]]) },
             ClientCommand::SetPermissionMode { run, mode: PermissionMode::Plan },
+            ClientCommand::SteerRun { run, text: "use tabs".into() },
             ClientCommand::ListModels,
             ClientCommand::ListSkills { path: "/repo".into() },
             ClientCommand::ListAgents { path: "/repo".into() },

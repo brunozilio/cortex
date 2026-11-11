@@ -161,6 +161,10 @@ impl Transcript {
                 let line = crate::verdict::line(verdict);
                 if verdict.passed { self.notice(line) } else { self.error(line) }
             }
+            EngineEvent::Steered(text) => {
+                self.close_thinking();
+                self.push(Entry::User(text.clone()));
+            }
             EngineEvent::Completed { cost_usd, .. } => {
                 self.cost += cost_usd.unwrap_or(0.0);
                 self.settle(ToolState::Done);

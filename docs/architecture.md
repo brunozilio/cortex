@@ -54,6 +54,12 @@ provider's key (`RunCredentials::model`, never serialized).
   conversation intact, on its original card. Agents last for the run (one
   prompt); a background one takes messages once collected, a worktree one
   never (its folder is gone), and only the top-level agent sends them.
+- **Steering**: `ClientCommand::SteerRun` (`Run::steer`) leaves a message
+  on the run's `Control`; the loop hands it to the model with the next
+  tool results, or as one more turn when the model was about to finish,
+  and emits `EngineEvent::Steered`. The chat steers what is typed while
+  the agent works and shows it as queued until `Steered`; a message never
+  handed over (the run ended first) is sent as the next prompt.
 - **Prompt**: planning mode, output styles, tool descriptions carrying the
   working rules; project instructions and rules (`docs/native-engine.md`).
 - **Plan mode** (`agent/plan_mode.rs`): the top-level agent presents its

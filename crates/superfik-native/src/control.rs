@@ -19,6 +19,7 @@ pub struct Control {
     no_prompts: bool,
     remembered: Mutex<Remembered>,
     asks: Mutex<HashMap<AskId, Sender<Decision>>>,
+    steered: Mutex<Vec<String>>,
     spawned: AtomicUsize,
     children: Mutex<Vec<Weak<Control>>>,
 }
@@ -32,6 +33,7 @@ impl Control {
             no_prompts: false,
             remembered: Mutex::default(),
             asks: Mutex::default(),
+            steered: Mutex::default(),
             spawned: AtomicUsize::new(0),
             children: Mutex::default(),
         }
@@ -108,6 +110,19 @@ impl Control {
         if let Ok(mut remembered) = self.remembered.lock() {
             apply(&mut remembered);
         }
+    }
+
+    /// Keeps a message the user sent while the run works, for the loop to
+    /// hand the model at its next turn.
+    pub fn steer(&self, text: String) {
+        if let Ok(mut steered) = self.steered.lock() {
+            steered.push(text);
+        }
+    }
+
+    /// The messages steered since the last call, oldest first.
+    pub fn take_steered(&self) -> Vec<String> {
+        self.steered.lock().map(|mut steered| std::mem::take(&mut *steered)).unwrap_or_default()
     }
 
     pub fn open(&self, id: AskId) -> Receiver<Decision> {
