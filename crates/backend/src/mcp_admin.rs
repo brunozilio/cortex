@@ -1,7 +1,7 @@
 //! The owner's MCP servers: what a run in a folder can use (the host's,
 //! the project's, the owner's, installed plugins'), approving a project's
-//! server or turning it off (the project's `.<command>/settings.local.json`),
-//! and adding or removing the owner's own (`~/.<command>/mcp.json`). The
+//! server or turning it off (the project's `.{command}/settings.local.json`),
+//! and adding or removing the owner's own (`~/.{command}/mcp.json`). The
 //! rules are `domain::mcp_config`'s; this is their IO. Both files
 //! are written readable only by the owner: they may hold tokens.
 

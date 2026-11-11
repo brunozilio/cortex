@@ -1,11 +1,11 @@
-//! `<command>`: talk to the app's agent in a terminal.
+//! `{command}`: talk to the app's agent in a terminal.
 //!
-//! - `<command> [prompt]` opens the chat (sending `prompt` first).
-//! - `<command> -p <prompt>` answers once and prints the reply.
-//! - `<command> login` / `logout` connect or forget an LLM provider.
-//! - `<command> models` lists what the connected providers offer.
-//! - `<command> pull <model>` / `rm <model>` download or delete a local MLX model.
-//! - `<command> mcp …` lists, adds, removes and approves MCP servers.
+//! - `{command} [prompt]` opens the chat (sending `prompt` first).
+//! - `{command} -p <prompt>` answers once and prints the reply.
+//! - `{command} login` / `logout` connect or forget an LLM provider.
+//! - `{command} models` lists what the connected providers offer.
+//! - `{command} pull <model>` / `rm <model>` download or delete a local MLX model.
+//! - `{command} mcp …` lists, adds, removes and approves MCP servers.
 //!
 //! Every terminal talks to one background daemon per computer (Unix), so
 //! local models, embeddings and memory load once.
@@ -124,7 +124,7 @@ enum Action {
     Config {
         #[command(subcommand)]
         action: config::ConfigAction,
-        /// This project's .<command>/settings.local.json instead.
+        /// This project's .{command}/settings.local.json instead.
         #[arg(long, global = true)]
         project: bool,
     },

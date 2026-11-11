@@ -1,5 +1,5 @@
-//! Which published build replaces this one (`<command> update`): releases
-//! are tagged `vX.Y.Z` and carry one `<command>-X.Y.Z-<target>.tar.gz` per
+//! Which published build replaces this one (`{command} update`): releases
+//! are tagged `vX.Y.Z` and carry one `{command}-X.Y.Z-<target>.tar.gz` per
 //! platform, with its SHA-256 beside it in `<asset>.sha256`.
 
 /// A release's `X.Y.Z`, compared numerically.

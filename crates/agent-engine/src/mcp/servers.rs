@@ -88,7 +88,7 @@ impl std::fmt::Debug for ServerSpec {
 }
 
 /// The servers a run reaches over HTTP or stdio. The app's own (named
-/// `<command>_…`) come in process on the run's credentials, so none of
+/// `{command}_…`) come in process on the run's credentials, so none of
 /// these may take such a name.
 pub fn servers(request: &PromptRequest, sources: &McpSources) -> Vec<ServerSpec> {
     let mut servers: Vec<ServerSpec> = Vec::new();

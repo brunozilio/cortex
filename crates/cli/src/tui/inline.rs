@@ -1,4 +1,4 @@
-//! The inline chat (`<command> --inline`): no alternate screen. The prompt,
+//! The inline chat (`{command} --inline`): no alternate screen. The prompt,
 //! status and the run at work live in a small area at the bottom; once the
 //! agent is idle, the conversation's new entries are printed above it into
 //! the terminal's own scrollback, where the terminal scrolls, selects and

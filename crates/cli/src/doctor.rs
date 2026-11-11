@@ -1,4 +1,4 @@
-//! `<command> doctor` and `/doctor`: whether this installation can work in a
+//! `{command} doctor` and `/doctor`: whether this installation can work in a
 //! folder, check by check, with what to do about each problem.
 
 use std::path::Path;

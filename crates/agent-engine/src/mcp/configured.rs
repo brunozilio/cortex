@@ -1,7 +1,7 @@
 //! MCP servers a person or a project configures: the project's
-//! `.<command>/mcp.json` (the nearest up from the run's folder; a server
+//! `.{command}/mcp.json` (the nearest up from the run's folder; a server
 //! starts only once the owner approved it) and the user's
-//! `~/.<command>/mcp.json`. `${VAR}` and `${VAR:-default}` come from the
+//! `~/.{command}/mcp.json`. `${VAR}` and `${VAR:-default}` come from the
 //! environment. On a clash of names the project's wins over the user's.
 //! Installed plugins' servers follow, as `plugin_<plugin>_<server>`.
 
@@ -50,7 +50,7 @@ pub fn list(request: &PromptRequest) -> Result<Vec<McpServerInfo>, String> {
         .collect())
 }
 
-/// The project's `.<command>/mcp.json`: the nearest up from `cwd`, never the
+/// The project's `.{command}/mcp.json`: the nearest up from `cwd`, never the
 /// home folder's, which is the user's own.
 pub fn project_config(cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
     cwd.ancestors()

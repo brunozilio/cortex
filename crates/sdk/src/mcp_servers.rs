@@ -112,7 +112,7 @@ fn listed(event: ServerEvent) -> Option<Result<Vec<McpServerInfo>, String>> {
     }
 }
 
-/// What [`the app::schedules`] answers.
+/// What [`Sdk::schedules`] answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schedules {
     pub due: Vec<domain::schedule::Scheduled>,

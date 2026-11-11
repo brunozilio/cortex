@@ -1,7 +1,7 @@
 //! Animations (`tachyonfx`) drawn over what the chat already drew: the
 //! conversation sweeps in at start, new parts of it and the panels fade
 //! in, and "Working…" shimmers while the agent works. They change colours
-//! only, never characters, and `<COMMAND>_REDUCED_MOTION=1` turns them off.
+//! only, never characters, and `{COMMAND}_REDUCED_MOTION=1` turns them off.
 
 use std::time::{Duration, Instant};
 

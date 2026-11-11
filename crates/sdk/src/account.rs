@@ -1,4 +1,4 @@
-//! What one [`the app`](crate::the app) can ask besides running the
+//! What one [`Sdk`](crate::Sdk) can ask besides running the
 //! agent: models, LLM providers, a project's memory, skills and agents.
 
 use std::path::{Path, PathBuf};

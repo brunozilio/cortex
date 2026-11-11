@@ -30,7 +30,7 @@ pub fn read(settings: &Value, owners: bool, rules: &mut PermissionRules, dirs: &
     Ok(())
 }
 
-/// Keeps allow rule `rule` in the project's `.<command>/settings.local.json`
+/// Keeps allow rule `rule` in the project's `.{command}/settings.local.json`
 /// (the owner's, never checked in), next to what the file already holds.
 pub fn keep_allow(project: &std::path::Path, rule: &str) -> Result<(), String> {
     let path = project.join(brand::DIR).join("settings.local.json");

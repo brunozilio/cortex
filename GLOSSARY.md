@@ -28,8 +28,8 @@ _Avoid_: Plugin (for providers)
 
 **Local model**:
 An open model run on this computer by MLX (Apple silicon), named by its
-Hugging Face id (`mlx-community/Qwen3-8B-4bit`). `<command> pull` downloads
-it into `<local data>/models/mlx/<org>/<name>`, `<command> rm` deletes it.
+Hugging Face id (`mlx-community/Qwen3-8B-4bit`). `{command} pull` downloads
+it into `<local data>/models/mlx/<org>/<name>`, `{command} rm` deletes it.
 
 **Extensions**:
 What an SDK host adds to every run: folders of skills, commands and agents,
@@ -37,7 +37,7 @@ and MCP servers (HTTP, stdio or in-process).
 _Avoid_: Plugin (that is an installed package, below)
 
 **Plugin**:
-A folder with `.<command>-plugin/plugin.json`, put in `~/.<command>/plugins/`:
+A folder with `.{command}-plugin/plugin.json`, put in `~/.{command}/plugins/`:
 skills, commands, agents, hooks and MCP servers under one name (ADR 0019).
 
 **Verification**:

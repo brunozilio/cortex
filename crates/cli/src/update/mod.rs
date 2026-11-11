@@ -1,4 +1,4 @@
-//! `<command> update`: replaces this binary with the latest release's build
+//! `{command} update`: replaces this binary with the latest release's build
 //! for this platform, checked against its published SHA-256. Which
 //! release and which archive is `domain::release`; the download is
 //! behind [`Releases`] so the replacement is testable.
@@ -45,7 +45,7 @@ pub enum Updated {
     To(Version),
 }
 
-/// `<command> update`: this binary, from GitHub.
+/// `{command} update`: this binary, from GitHub.
 pub fn run() -> Result<(), String> {
     let current = env!("CARGO_PKG_VERSION");
     let exe = std::env::current_exe().and_then(std::fs::canonicalize).map_err(|e| e.to_string())?;
@@ -94,7 +94,7 @@ pub fn update(releases: &dyn Releases, current: &str, exe: &Path, platform: Plat
     Ok(Updated::To(version))
 }
 
-/// The `<command>` file inside a release archive.
+/// The `{command}` file inside a release archive.
 fn binary_in(archive: &[u8]) -> Result<Vec<u8>, String> {
     let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(archive));
     for entry in tar.entries().map_err(|e| e.to_string())? {

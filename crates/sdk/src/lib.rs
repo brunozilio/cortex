@@ -1,11 +1,11 @@
 //! The app's SDK: talk to the agent from your own program and extend it.
 //!
 //! ```no_run
-//! use sdk::{Agent, Command, McpConnection, McpServer, the app};
+//! use sdk::{Agent, Command, McpConnection, McpServer, Sdk};
 //! use serde_json::json;
 //!
 //! # fn main() -> Result<(), sdk::Error> {
-//! let <command> = the app::builder()
+//! let sdk = Sdk::builder()
 //!     .agent(Agent::new("reviewer", "Reviews a diff for bugs.").tools(["Read", "Grep"]))
 //!     .command(Command::new("audit", "Audits a path.", "Audit $ARGUMENTS for security issues."))
 //!     .mcp(McpServer::new("math").tool("add", "Adds a and b.", json!({"type": "object"}), |input| {
@@ -13,8 +13,8 @@
 //!     }))
 //!     .connect(McpConnection::stdio("files", "npx").arg("-y").arg("@modelcontextprotocol/server-filesystem"))
 //!     .build()?;
-//! let model = <command>.models()?.into_iter().next().ok_or(sdk::Error::NoModel)?;
-//! let session = <command>.session(".", model);
+//! let model = sdk.models()?.into_iter().next().ok_or(sdk::Error::NoModel)?;
+//! let session = sdk.session(".", model);
 //! println!("{}", session.send("What does this project do?")?.text()?);
 //! # Ok(()) }
 //! ```
@@ -126,7 +126,7 @@ impl Sdk {
     }
 }
 
-/// Sets up a [`the app`]: what it adds to every run, and where it keeps
+/// Sets up an [`Sdk`]: what it adds to every run, and where it keeps
 /// its data.
 #[derive(Default)]
 pub struct Builder {

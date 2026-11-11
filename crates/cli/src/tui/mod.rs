@@ -88,7 +88,7 @@ const ANIMATING: Duration = Duration::from_millis(33);
 pub struct Start {
     pub resume: Option<sdk::SessionId>,
     pub add_dirs: Vec<PathBuf>,
-    /// Open `/resume`'s picker once the chat is ready (`<command> -r`).
+    /// Open `/resume`'s picker once the chat is ready (`{command} -r`).
     pub pick: bool,
     /// `--allowedTools`, `--disallowedTools`, `--append-system-prompt`.
     pub headless: sdk::Headless,

@@ -1,4 +1,4 @@
-//! How `<command> -p` writes a run: `text` (the reply on stdout, steps on
+//! How `{command} -p` writes a run: `text` (the reply on stdout, steps on
 //! stderr), `json` (one result object at the end) or `stream-json` (every
 //! event as a line, then the result).
 

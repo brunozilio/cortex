@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Installs the latest release of this app for this computer:
 #
-#   curl -fsSL https://raw.githubusercontent.com/<repository>/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/{repository}/main/install.sh | bash
 #
-# <ENV>_VERSION=0.6.1      a given release instead of the latest
-# <ENV>_INSTALL_DIR=/path  where the binary goes (~/.local/bin by default)
-# <ENV>_LIBC=musl|gnu      Linux: force the static (musl) or glibc build
-# (<ENV> is the command in capitals, dashes as underscores.)
+# {ENV}_VERSION=0.6.1      a given release instead of the latest
+# {ENV}_INSTALL_DIR=/path  where the binary goes (~/.local/bin by default)
+# {ENV}_LIBC=musl|gnu      Linux: force the static (musl) or glibc build
+# ({ENV} is the command in capitals, dashes as underscores.)
 #
 # On Linux the glibc build (with semantic memory) is used when the system's
 # glibc is new enough, the static musl build otherwise (RHEL 8/9, older
-# Debian/Ubuntu). `<command> update` keeps to the build installed.
+# Debian/Ubuntu). `{command} update` keeps to the build installed.
 
 set -euo pipefail
 
@@ -23,7 +23,7 @@ ENV="$(printf '%s' "$COMMAND" | tr 'a-z-' 'A-Z_')"
 # The glibc the published glibc builds need (they are built on Ubuntu 24.04).
 MIN_GLIBC="2.39"
 
-# The value of the environment variable <ENV>_$1, or $2.
+# The value of the environment variable {ENV}_$1, or $2.
 setting() {
     local name="${ENV}_$1"
     printf '%s' "${!name:-${2:-}}"

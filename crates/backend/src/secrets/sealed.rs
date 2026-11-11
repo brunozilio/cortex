@@ -3,7 +3,7 @@
 //! XChaCha20-Poly1305: a fresh random nonce each time, and the
 //! connection's key as associated data, so an entry moved to another
 //! connection fails to open. The key is 32 bytes kept apart from the file
-//! (`secrets.key`, `0600`), or handed in (`<COMMAND>_SECRET_KEY`, e.g. from
+//! (`secrets.key`, `0600`), or handed in (`{COMMAND}_SECRET_KEY`, e.g. from
 //! a KMS).
 
 use std::collections::BTreeMap;

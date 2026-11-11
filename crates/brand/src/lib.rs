@@ -5,7 +5,7 @@
 
 include!(concat!(env!("OUT_DIR"), "/brand.rs"));
 
-/// The environment variable `key` of this product (`<ENV>_<key>`).
+/// The environment variable `key` of this product (`{ENV}_<key>`).
 pub fn env(key: &str) -> String {
     format!("{ENV}_{key}")
 }

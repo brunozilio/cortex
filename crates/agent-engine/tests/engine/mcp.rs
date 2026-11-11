@@ -1,4 +1,4 @@
-//! A project's `.<command>/mcp.json` servers reach a run once the owner approved them.
+//! A project's `.{command}/mcp.json` servers reach a run once the owner approved them.
 
 use std::sync::{Arc, Mutex};
 

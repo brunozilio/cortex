@@ -1,4 +1,4 @@
-//! `/statusline <command>`: a command of the user's draws the status line.
+//! `/statusline {command}`: a command of the user's draws the status line.
 //! It reads the session's state as JSON on stdin and its first line of
 //! output is shown, refreshed every few seconds.
 

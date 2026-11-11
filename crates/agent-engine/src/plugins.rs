@@ -1,8 +1,8 @@
-//! The app plugins (ADR 0019): a folder with `.<command>-plugin/plugin.json`,
+//! The app plugins (ADR 0019): a folder with `.{command}-plugin/plugin.json`,
 //! `skills/`, `agents/`, `commands/`, `hooks/hooks.json` and `.mcp.json`.
 //! They come from the backend (`Extensions::plugins`), then from the
-//! folders a person puts in `~/.<command>/plugins/`; on a clash of names the
-//! first wins. `${<COMMAND>_PLUGIN_ROOT}` in a plugin's hooks and MCP servers
+//! folders a person puts in `~/.{command}/plugins/`; on a clash of names the
+//! first wins. `${{COMMAND}_PLUGIN_ROOT}` in a plugin's hooks and MCP servers
 //! is its folder.
 
 use std::path::{Path, PathBuf};

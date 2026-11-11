@@ -1,4 +1,4 @@
-//! `<command> pull` / `<command> rm`: local MLX models, like ollama's.
+//! `{command} pull` / `{command} rm`: local MLX models, like ollama's.
 //! Presentation only: the progress line and the messages; the download
 //! and the folder are `sdk::LocalModels`'.
 

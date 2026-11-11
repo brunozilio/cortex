@@ -1,6 +1,6 @@
 //! The native engine's system prompt (ADR 0015): the app's own text
 //! ([`text`]), the sections for the tools the run was granted, the
-//! instruction files (`<COMMAND>.md` first) and where the agent runs.
+//! instruction files (`{COMMAND}.md` first) and where the agent runs.
 
 mod git;
 mod instruction_files;

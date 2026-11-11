@@ -1,7 +1,7 @@
 //! `xtask brand`: spells `brand.toml` out where a file cannot read it: the
 //! binary's name, the workspace's author, release-please's package name,
 //! install.sh's defaults, README.md (from docs/README.template.md) and the
-//! repository's own project folder (`.<command>/`, renamed with its
+//! repository's own project folder (`.{command}/`, renamed with its
 //! references). `xtask lint` checks they are current, and that nothing
 //! else names the product.
 

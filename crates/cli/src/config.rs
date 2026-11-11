@@ -1,6 +1,6 @@
-//! `<command> config`: reading and changing the settings the engine reads,
-//! the user's (`~/.<command>/settings.json`) or, with `--project`, this
-//! project's own (`.<command>/settings.local.json`, never checked in).
+//! `{command} config`: reading and changing the settings the engine reads,
+//! the user's (`~/.{command}/settings.json`) or, with `--project`, this
+//! project's own (`.{command}/settings.local.json`, never checked in).
 //!
 //! It edits files on this computer, like `git config`, and so needs no
 //! backend: a remote server keeps its own settings, changed through its own

@@ -1,11 +1,11 @@
 //! How the CLI reaches its backend: this computer's shared daemon (Unix),
 //! started in the background on first use, or one in this process
-//! (`<COMMAND>_NO_DAEMON=1`, or Windows).
+//! (`{COMMAND}_NO_DAEMON=1`, or Windows).
 
 use sdk::Sdk;
 
 /// This build: the version and when the binary was written, so a client
-/// can tell that the running daemon is an older `<command>`.
+/// can tell that the running daemon is an older `{command}`.
 pub fn build() -> String {
     let written = std::env::current_exe()
         .and_then(std::fs::metadata)

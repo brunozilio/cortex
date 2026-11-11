@@ -44,7 +44,7 @@ impl McpState {
     }
 }
 
-/// A server as `<command> mcp list` shows it: never its headers or env.
+/// A server as `{command} mcp list` shows it: never its headers or env.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpServerInfo {
     pub name: String,

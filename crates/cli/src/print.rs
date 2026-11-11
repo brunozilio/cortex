@@ -1,4 +1,4 @@
-//! `<command> -p`: one prompt, the reply on stdout, the agent's steps on
+//! `{command} -p`: one prompt, the reply on stdout, the agent's steps on
 //! stderr. Nobody is there to answer, so whatever the agent asks is
 //! denied (pick `--mode bypass` or `edits` to let it act).
 

@@ -12,7 +12,7 @@ pub struct Extensions {
     pub dirs: Vec<PathBuf>,
     #[serde(default)]
     pub mcp_config: Option<PathBuf>,
-    /// The app plugins' folders (ADR 0019: `.<command>-plugin/plugin.json`,
+    /// The app plugins' folders (ADR 0019: `.{command}-plugin/plugin.json`,
     /// `skills/`, `agents/`, `commands/`, `hooks/hooks.json`, `.mcp.json`).
     #[serde(default)]
     pub plugins: Vec<PathBuf>,

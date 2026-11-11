@@ -1,4 +1,4 @@
-//! `<command> login` and `logout`: pick a provider on the terminal; an API
+//! `{command} login` and `logout`: pick a provider on the terminal; an API
 //! key is pasted, a subscription signs in in the browser.
 
 use std::io::{BufRead, Write};

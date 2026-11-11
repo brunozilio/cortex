@@ -13,7 +13,7 @@ cli ──► sdk ──► backend ──► agent-engine ──► (provider A
 
 | Crate | Responsibility |
 |---|---|
-| `cli` | The `<command>` binary: a full-screen chat (ratatui) over the SDK, or with `--inline` one at the bottom whose conversation goes to the terminal's scrollback (`tui::inline`), `-p` print mode, `login`, `models`, `pull`/`rm`, `update` (the latest GitHub release, rules in `domain::release`, ADR 0024). Presentation only. |
+| `cli` | The `{command}` binary: a full-screen chat (ratatui) over the SDK, or with `--inline` one at the bottom whose conversation goes to the terminal's scrollback (`tui::inline`), `-p` print mode, `login`, `models`, `pull`/`rm`, `update` (the latest GitHub release, rules in `domain::release`, ADR 0024). Presentation only. |
 | `sdk` | `Sdk::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings; `LocalModels` (pull/remove local MLX models). |
 | `domain` | Domain model: requests, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
 | `agent-engine` | The `AgentEngine` boundary (`models`, `start`) and the app's own engine behind it (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
@@ -28,14 +28,14 @@ cli ──► sdk ──► backend ──► agent-engine ──► (provider A
 
 The product's name, command, owner and release repository live in
 `brand.toml`, read when the `brand` crate is built: `brand::NAME`,
-`brand::COMMAND`, `brand::DIR` (`.<command>`), `brand::INSTRUCTIONS`
-(`<COMMAND>.md`), `brand::env("X")` (`<COMMAND>_X`), and the same as
+`brand::COMMAND`, `brand::DIR` (`.{command}`), `brand::INSTRUCTIONS`
+(`{COMMAND}.md`), `brand::env("X")` (`{COMMAND}_X`), and the same as
 literals (`brand::name!()`…) for `concat!` and format strings. Texts kept
 in files (prompts, built-in skills) say `{{NAME}}`, `{{DIR}}`… and are
 filled with `brand::text`. Files that must spell it out (the binary's name
 in `crates/cli/Cargo.toml`, the workspace's author, install.sh's defaults,
 README.md from `docs/README.template.md`, release-please's package name,
-the repository's own `.<command>/`) are written by `cargo run -p xtask --
+the repository's own `.{command}/`) are written by `cargo run -p xtask --
 brand`; `xtask lint` fails when one is stale or another file names the
 product. The workflows read the command from `brand.toml`.
 
@@ -87,7 +87,7 @@ provider's key (`RunCredentials::model`, never serialized).
   and program paths stripped) and paths in any case; allow sees it as
   written and never covers `$(…)`, backticks, `<(…)`, `>`, `bash -c`,
   `eval`, `xargs` or unclosed quotes, which ask instead when a deny or ask
-  rule exists. Only the owner's files (`~/.<command>/settings.json`,
+  rule exists. Only the owner's files (`~/.{command}/settings.json`,
   `settings.local.json`) can allow; a checked-in file only restricts.
   `permission::ruled` puts them over the mode: a deny refuses even in
   Bypass; an ask or allow never lifts Bypass or Plan, and a hook's allow
@@ -98,7 +98,7 @@ provider's key (`RunCredentials::model`, never serialized).
 - **Asking**: a permission ask carries the rule "don't ask again" would
   keep (`permission_rules::suggest`: `Bash(cargo test:*)`, or the folder
   of a read outside, `Read(//dir/**)`). `AllowAlways` writes it to the
-  project's `.<command>/settings.local.json` (`prompt::permissions::
+  project's `.{command}/settings.local.json` (`prompt::permissions::
   keep_allow`) and to the run's remembered rules; without one the call is
   remembered for the session. `Decision::DenyWith(note)` hands the agent
   what to do instead (the chat's "No, and tell the agent…").
@@ -122,7 +122,7 @@ provider's key (`RunCredentials::model`, never serialized).
   check command), and `ToolSearch`: past 20 MCP tools their schemas wait
   until loaded (`tools::tool_search`). `Agent` takes `model` and
   `isolation: worktree` per call. MCP servers initialize once per run;
-  Remote servers sign in with OAuth (`/mcp login <name>`, `<command> mcp
+  Remote servers sign in with OAuth (`/mcp login <name>`, `{command} mcp
   login`): discovery, dynamic registration and PKCE rules in
   `domain::mcp_oauth`, the flow and refresh in the backend's
   `mcp_auth` (tokens in the secrets store by server URL); runs read them
@@ -133,7 +133,7 @@ provider's key (`RunCredentials::model`, never serialized).
   those with resources add `ListMcpResources`/`ReadMcpResource`, and a
   prompt typed as `/mcp__server__prompt args` is filled by `prompts/get`.
 - **Session worktrees**: `EnterWorktree` makes a worktree under
-  `.<command>/worktrees` and `ExitWorktree` (`keep`/`remove`, refused with
+  `.{command}/worktrees` and `ExitWorktree` (`keep`/`remove`, refused with
   changes unless `discard_changes`) goes back. The loop asks for the move
   (`Control::move_to`), ends the turn with `Ending::Moved`, and the run
   goes on in the new folder with a rebuilt prompt (`engine/moved.rs`),
@@ -165,7 +165,7 @@ provider's key (`RunCredentials::model`, never serialized).
   `allowed_tools`/`disallowed_tools` (rules for the run), `append_system`,
   `fallback_model` (or the settings' `fallbackModel`: an overloaded model
   hands the run over, `EngineEvent::FellBack`) and `fork` (go on from
-  `resume` under a new session). `<command> -p` maps them to flags and
+  `resume` under a new session). `{command} -p` maps them to flags and
   writes `text`, `json` or `stream-json` (`print_output`).
 - **Prompt**: planning mode, output styles, tool descriptions carrying the
   working rules; project instructions and rules (`docs/native-engine.md`).
@@ -182,7 +182,7 @@ provider's key (`RunCredentials::model`, never serialized).
   conversation. The SDK exposes them on `Session` (`title`, `suggest`,
   `recap`, `heads_up`, `side`). The chat names a conversation after its
   first run, offers the next prompt (Tab takes it), shows a heads-up when
-  there is one, recaps on `<command> -c`, and answers `/btw`.
+  there is one, recaps on `{command} -c`, and answers `/btw`.
 - **Checkpoints** (`checkpoints.rs`, `engine/rewind.rs`): each prompt opens
   one (`EngineEvent::Checkpoint(n)`); `Edit`/`Write` keep a file's content
   before its first change in the run. `SessionCommand::Rewind(n)`
@@ -209,11 +209,11 @@ provider's key (`RunCredentials::model`, never serialized).
 
 Local models (`mlx`) live in
 `<local data>/models/mlx/<org>/<name>/` on Apple silicon; one
-`mlx_lm.server` runs at a time and stops when idle. `<command> pull` fetches
+`mlx_lm.server` runs at a time and stops when idle. `{command} pull` fetches
 only the files `mlx_lm` reads (config, tokenizer, chat template,
 safetensors) from Hugging Face (`HF_TOKEN` for gated repos) into a hidden
 `.<name>.partial` folder renamed into place when complete, so a cancelled
-pull is never listed; `<command> rm` deletes one. They run in the CLI's own
+pull is never listed; `{command} rm` deletes one. They run in the CLI's own
 process through the SDK's `LocalModels` (the backend re-exports
 `mlx` as `local_models`), not as backend commands: they touch only
 this computer's folder, which `ListModels` reads on every call.
@@ -226,9 +226,9 @@ and author. `MemoryStore` (`FileMemoryStore`, one JSON per project). A
 fresh session gets recalled memories plus instructions to write
 `{remember, forget, revise}` to a temp file, applied on `Completed`.
 Search is BM25 plus embedding similarity (fastembed/ONNX,
-`<COMMAND>_MEMORY_MODEL=minilm|mpnet|off`), fused by reciprocal rank; the
+`{COMMAND}_MEMORY_MODEL=minilm|mpnet|off`), fused by reciprocal rank; the
 same function serves recall and the `memory_search` MCP tool (in process:
-each run gets a `<command>_memory` server on its credentials, bound to its
+each run gets a `{command}_memory` server on its credentials, bound to its
 owner and project).
 
 Memory is reversible and kept without an LLM (ADR 0022):
@@ -268,21 +268,21 @@ installed; `Edit` and `Write` append the file's errors and warnings as
 ## Skills, agents and MCP
 
 The engine reads only the app's folders (ADR 0021): skills, commands,
-agents, rules and settings in the project's `.<command>/` (and its
-ancestors') and `~/.<command>/`, plus the SDK host's folders
+agents, rules and settings in the project's `.{command}/` (and its
+ancestors') and `~/.{command}/`, plus the SDK host's folders
 (`Extensions::dirs`). Nothing in `.claude/`, `~/.claude` or `CLAUDE.md`.
 MCP servers come from the host: HTTP/stdio servers go in a run's private
 MCP config (`0600`, removed on the terminal event), in-process ones ride on
 the run's credentials.
 
 **Plugins** (ADR 0019) are the app's own format
-(`.<command>-plugin/plugin.json`) and reach a run
+(`.{command}-plugin/plugin.json`) and reach a run
 whole (`agent_engine::plugins`): skills, commands and agents as
 `<plugin>:<name>`, `hooks/hooks.json` joined to the settings' hooks, and
 `.mcp.json` servers as `plugin_<plugin>_<server>`, with
-`${<COMMAND>_PLUGIN_ROOT}` filled in. They come from the backend
+`${{COMMAND}_PLUGIN_ROOT}` filled in. They come from the backend
 (`Extensions::plugins`, never from a client) and from the folders in
-`~/.<command>/plugins/`; a plugin whose
+`~/.{command}/plugins/`; a plugin whose
 hooks or servers do not parse is left out, the run goes on. Every run
 rereads them; `/reload` refreshes what the chat keeps and lists them.
 
@@ -301,8 +301,8 @@ called through `LocalTransport`, never over the wire. A typed
 
 ### The daemon
 
-On Unix every `<command>` talks to one background daemon per computer
-(`backend::daemon`), started on first use (`<command> daemon
+On Unix every `{command}` talks to one background daemon per computer
+(`backend::daemon`), started on first use (`{command} daemon
 serve`, detached) and gone 5 s after its last client leaves (so commands
 run one after another reuse it). It loads the services
 once (MLX servers, the embedding model, memory books) and gives each
@@ -311,8 +311,8 @@ gets only its own runs' events and answers, and its runs end when it
 disconnects. The wire is newline-delimited JSON over `daemon.sock`
 (`0600`, in a `0700` folder): `Envelope<ClientCommand>` in, `ServerEvent`
 out. A lock file keeps one daemon per folder; `daemon.json` holds its pid
-and build so a newer `<command>` can say the daemon is stale (`<command>
-daemon stop`). `<COMMAND>_NO_DAEMON=1` (and Windows) run the backend in
+and build so a newer `{command}` can say the daemon is stale (`{command}
+daemon stop`). `{COMMAND}_NO_DAEMON=1` (and Windows) run the backend in
 process. SDK programs embed their own backend by default (their
 in-process tools cannot cross processes); `Sdk::connect_daemon`
 joins the daemon instead.

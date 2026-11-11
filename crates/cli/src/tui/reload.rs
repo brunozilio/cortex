@@ -1,4 +1,4 @@
-//! `/reload`: the engine rereads `~/.<command>` and the project on every
+//! `/reload`: the engine rereads `~/.{command}` and the project on every
 //! message, so reloading means refreshing what the chat keeps (the skills
 //! it completes, the settings and models) and saying what is there now.
 

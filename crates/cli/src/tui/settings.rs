@@ -21,7 +21,7 @@ pub fn read(settings: &serde_json::Value) -> Saved {
     }
 }
 
-/// The conversation last had in `cwd`, for `<command> -c`.
+/// The conversation last had in `cwd`, for `{command} -c`.
 pub fn last_session(settings: &serde_json::Value, cwd: &Path) -> Option<SessionId> {
     settings["sessions"][cwd.to_string_lossy().as_ref()].as_str().map(|id| SessionId(id.to_owned()))
 }

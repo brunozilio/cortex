@@ -9,7 +9,7 @@ No agent CLI runs underneath. The agent loop is ours (`agent-engine`): it calls 
 Rust functions, and emits `EngineEvent`s, so clients are engine-agnostic.
 Providers sit behind `ModelApi`, tested against captured streams; local
 models run on MLX as Chat Completions. The system prompt, tools, sessions
-and compaction are ours; the prompt loads `<COMMAND>.md` and names the app.
+and compaction are ours; the prompt loads `{COMMAND}.md` and names the app.
 
 ## 0016 — API keys and subscriptions are separate providers
 
@@ -54,11 +54,11 @@ The app is a general platform; a company's integrations and workflows
 (Jira, GitHub, Sonar, Veracode, Datadog, its own skills) live in plugins
 kept in their own repositories, never in this workspace. This amends
 ADR 0018's "no plugin system of our own". The plugin format is the app's:
-`.<command>-plugin/plugin.json`, `skills/`, `agents/`, `commands/`,
-`hooks/hooks.json`, `.mcp.json`, with `${<COMMAND>_PLUGIN_ROOT}` for the
+`.{command}-plugin/plugin.json`, `skills/`, `agents/`, `commands/`,
+`hooks/hooks.json`, `.mcp.json`, with `${{COMMAND}_PLUGIN_ROOT}` for the
 plugin's folder. Claude Code's plugins and installs are not read. There is
 no installer or marketplace: a person puts a plugin's folder in
-`~/.<command>/plugins/` (a clone they `git pull`), and `/reload` shows what
+`~/.{command}/plugins/` (a clone they `git pull`), and `/reload` shows what
 is there. MCP servers also come from the project and the user.
 
 ## 0020 — Verification: a judge agent grades a run against criteria
@@ -79,14 +79,14 @@ judge uses.
 
 ## 0021 — Only the app's folders
 
-The app reads only its own files: `<COMMAND>.md` (and `.<command>/<COMMAND>.md`,
-`<COMMAND>.local.md`, `~/.<command>/<COMMAND>.md`), and skills, commands,
+The app reads only its own files: `{COMMAND}.md` (and `.{command}/{COMMAND}.md`,
+`{COMMAND}.local.md`, `~/.{command}/{COMMAND}.md`), and skills, commands,
 agents, rules, output styles, settings and MCP servers in the project's
-`.<command>/` and `~/.<command>/`. The project's MCP servers are in
-`.<command>/mcp.json`, approved with `enabledMcpServers` /
+`.{command}/` and `~/.{command}/`. The project's MCP servers are in
+`.{command}/mcp.json`, approved with `enabledMcpServers` /
 `disabledMcpServers`. Nothing in `.claude/`, `~/.claude`, `CLAUDE.md` or a
 root `.mcp.json` is read; `AGENTS.md`, which no single tool owns, still is.
-Hooks get `<COMMAND>_PROJECT_DIR`.
+Hooks get `{COMMAND}_PROJECT_DIR`.
 
 ## 0022 — Memory is reversible and kept without an LLM
 
@@ -155,15 +155,15 @@ Rejected: an MCP server for LSP (one more process and protocol between the
 agent and the server, and no way to add diagnostics to an edit), and a
 server per run (rust-analyzer indexing anew on every prompt).
 
-## 0024 — Released binaries and `<command> update`
+## 0024 — Released binaries and `{command} update`
 
 Amends ADR 0018's "no release pipeline or packaging": release-please tags
 `vX.Y.Z` on the repository and the release job attaches
-`<command>-X.Y.Z-<target>.tar.gz` and its `.sha256` for macOS (Apple
+`{command}-X.Y.Z-<target>.tar.gz` and its `.sha256` for macOS (Apple
 silicon, signed and notarized) and Linux (x86_64, arm64). `cargo install`
 still works.
 
-- `<command> update` asks GitHub for the latest tag, installs it only when
+- `{command} update` asks GitHub for the latest tag, installs it only when
   it is newer than this build, and refuses an archive whose SHA-256 does
   not match the published one. Which release and which archive are pure
   rules in `domain::release`; the download sits behind the CLI's

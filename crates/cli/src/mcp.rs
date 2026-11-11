@@ -1,4 +1,4 @@
-//! `<command> mcp`: the MCP servers a session in this folder can use, and
+//! `{command} mcp`: the MCP servers a session in this folder can use, and
 //! the owner's say over them. Presentation only; the rules are
 //! `domain::mcp_config`'s and the files the backend's.
 

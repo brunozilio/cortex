@@ -26,7 +26,7 @@ pub enum MemoryCommand {
     Undo,
     Forgotten,
     Restore(MemoryId),
-    /// The project's <COMMAND>.md, opened in the user's editor.
+    /// The project's {COMMAND}.md, opened in the user's editor.
     Edit,
 }
 

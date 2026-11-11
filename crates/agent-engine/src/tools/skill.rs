@@ -1,6 +1,6 @@
 //! Skills: `SKILL.md` instructions the agent loads by name with the `Skill`
-//! tool. Found in the project's `.<command>/skills`, the user's
-//! `~/.<command>/skills`, the app plugins and the SDK host's folders.
+//! tool. Found in the project's `.{command}/skills`, the user's
+//! `~/.{command}/skills`, the app plugins and the SDK host's folders.
 //! On a clash of names the first found wins.
 
 use std::path::{Path, PathBuf};

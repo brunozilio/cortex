@@ -1,5 +1,5 @@
 //! The conversations had in each folder, newest first, for `/resume` and
-//! `<command> --resume`: their session, title and when they were last used.
+//! `{command} --resume`: their session, title and when they were last used.
 
 use std::path::Path;
 

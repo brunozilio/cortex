@@ -185,7 +185,7 @@ impl App {
         app
     }
 
-    /// Continues `session` (from `<command> -c`) once a model is chosen.
+    /// Continues `session` (from `{command} -c`) once a model is chosen.
     pub fn resuming(mut self, session: Option<SessionId>) -> Self {
         if session.is_some() {
             self.transcript.notice("Continuing the last conversation in this folder.");

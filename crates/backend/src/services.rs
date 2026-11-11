@@ -24,7 +24,7 @@ pub struct LocalServices {
     pub authorizer: Arc<dyn Authorizer>,
     /// Where downloaded MLX models are, on Apple silicon.
     pub local_models: Option<PathBuf>,
-    /// The owner's home, whose `.<command>/mcp.json` holds their own MCP
+    /// The owner's home, whose `.{command}/mcp.json` holds their own MCP
     /// servers (the process's home; tests name another).
     pub home: Option<PathBuf>,
     /// The owner's sign-ins to remote MCP servers (`/mcp login`).

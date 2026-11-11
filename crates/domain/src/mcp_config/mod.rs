@@ -1,5 +1,5 @@
 //! Rules for MCP servers a person or a project configures
-//! (`.<command>/mcp.json`): which of a project's servers may start, and how
+//! (`.{command}/mcp.json`): which of a project's servers may start, and how
 //! `${VAR}` and `${VAR:-default}` in a config are filled in.
 
 mod edit;
@@ -17,7 +17,7 @@ pub fn is_free_name(name: &str) -> bool {
     !RESERVED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }
 
-/// What the owner said about a project's `.<command>/mcp.json` servers
+/// What the owner said about a project's `.{command}/mcp.json` servers
 /// (`enableAllProjectMcpServers`, `enabledMcpServers`,
 /// `disabledMcpServers`). A repository cannot say it for itself.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

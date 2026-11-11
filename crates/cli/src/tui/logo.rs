@@ -1,4 +1,4 @@
-//! "<command>" in big letters (`tui-big-text`, a quadrant per font pixel),
+//! "{command}" in big letters (`tui-big-text`, a quadrant per font pixel),
 //! coloured from magenta to blue across its width, as lines the
 //! conversation starts with.
 

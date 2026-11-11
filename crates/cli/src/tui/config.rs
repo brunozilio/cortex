@@ -64,8 +64,8 @@ pub fn create(app: &mut App, agent: bool, what: &str) {
     app.send(prompt);
 }
 
-/// The project's instructions file: <COMMAND>.md at its root, else
-/// .<command>/<COMMAND>.md, else a new <COMMAND>.md.
+/// The project's instructions file: {COMMAND}.md at its root, else
+/// .{command}/{COMMAND}.md, else a new {COMMAND}.md.
 pub fn instructions_file(cwd: &std::path::Path) -> PathBuf {
     let root = cwd.join(brand::INSTRUCTIONS);
     let nested = cwd.join(brand::DIR).join(brand::INSTRUCTIONS);

@@ -1,4 +1,4 @@
-//! The channels each client opened (`<command> --channels telegram`): MCP
+//! The channels each client opened (`{command} --channels telegram`): MCP
 //! servers kept up while the client is, whose messages reach its inbox and
 //! whose tools its runs reach through that same connection. The rules and
 //! the bridge are `agent_engine::mcp::channel`'s; this keeps them per

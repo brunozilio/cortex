@@ -32,7 +32,7 @@ pub struct Session {
     fork: std::sync::atomic::AtomicBool,
 }
 
-/// What a scripted session sets for every run (`<command> -p`'s flags).
+/// What a scripted session sets for every run (`{command} -p`'s flags).
 #[derive(Debug, Clone, Default)]
 pub struct Headless {
     /// The most model turns a run may take.
@@ -161,7 +161,7 @@ impl Session {
         self.resume.lock().unwrap_or_else(PoisonError::into_inner).clone()
     }
 
-    /// Sends a prompt (or `/<command> <arguments>`) and starts a run.
+    /// Sends a prompt (or `/{command} <arguments>`) and starts a run.
     pub fn send(&self, prompt: &str) -> Result<Run, Error> {
         self.send_with_images(prompt, Vec::new())
     }

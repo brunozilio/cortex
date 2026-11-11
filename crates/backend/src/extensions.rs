@@ -64,7 +64,7 @@ impl Extensions {
             extensions.mcp_config = Some(path);
         }
         let mut credentials = request.credentials.clone();
-        // `<command>_…` names are the app's own servers (its memory search).
+        // `{command}_…` names are the app's own servers (its memory search).
         credentials.mcp.extend(
             self.local.iter().filter(|server| !server.name.starts_with(concat!(brand::command!(), "_"))).cloned(),
         );

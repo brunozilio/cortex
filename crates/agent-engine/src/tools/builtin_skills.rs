@@ -1,6 +1,6 @@
 //! The skills the app ships (`crates/agent-engine/skills/`), embedded
 //! at build time. A skill reads its own files by path, so they are written
-//! once per build to `~/.<command>/builtin-skills/<hash>/` and found after
+//! once per build to `~/.{command}/builtin-skills/<hash>/` and found after
 //! the project's and the user's skills: one of theirs with the same name
 //! wins.
 
