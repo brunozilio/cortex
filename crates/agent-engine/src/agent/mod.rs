@@ -99,7 +99,12 @@ impl Agent<'_> {
                 .as_ref()
                 .and_then(|c| c.auto_compact_token_limit)
                 .unwrap_or_else(|| measured.window.saturating_sub(measured.reserved));
-            let used = counted.used(measured.used, history);
+            let mut used = counted.used(measured.used, history);
+            if used >= threshold && crate::upkeep::clear_old_results(history) > 0 {
+                counted.forget();
+                self.workspace.forget_seen_files();
+                used = crate::upkeep::measure(model, &self.request.system, &self.request.tools, history).used;
+            }
             if history.len() > 2 && used >= threshold && compacted_at != Some(history.len()) {
                 let template = self.turn_template(fell_back.as_ref());
                 let compaction = crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto")
