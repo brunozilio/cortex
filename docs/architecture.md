@@ -12,7 +12,7 @@ cli ──► sdk ──► backend ──► agent-engine ──► (provider A
 
 | Crate | Responsibility |
 |---|---|
-| `cli` | The `{command}` binary: a full-screen chat (ratatui) over the SDK, or with `--inline` one at the bottom whose conversation goes to the terminal's scrollback (`tui::inline`), `-p` print mode, `login`/`logout`, `models`, `mcp`, `config`, `doctor`, `update` (the latest GitHub release, rules in `domain::release`). Presentation only. |
+| `cli` | The `{command}` binary: a full-screen chat (ratatui) over the SDK, or with `--inline` one at the bottom whose conversation goes to the terminal's scrollback (`tui::inline`), `-p` print mode, `login`/`logout`, `models`, `mcp`, `config`, `doctor`. Presentation only. |
 | `sdk` | The CLI's internal client to the backend, not a public product. `Sdk::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings. |
 | `domain` | Domain model: requests, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
 | `agent-engine` | The `AgentEngine` boundary (`models`, `start`) and the app's own engine behind it: agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
@@ -25,18 +25,17 @@ cli ──► sdk ──► backend ──► agent-engine ──► (provider A
 
 ## Name
 
-The product's name, command, owner and release repository live in
+The product's name, command, owner and repository live in
 `brand.toml`, read when the `brand` crate is built: `brand::NAME`,
 `brand::COMMAND`, `brand::DIR` (`.{command}`), `brand::INSTRUCTIONS`
 (`{COMMAND}.md`), `brand::env("X")` (`{COMMAND}_X`), and the same as
 literals (`brand::name!()`…) for `concat!` and format strings. Texts kept
 in files (prompts, built-in skills) say `{{NAME}}`, `{{DIR}}`… and are
 filled with `brand::text`. Files that must spell it out (the binary's name
-in `crates/cli/Cargo.toml`, the workspace's authors, install.sh's defaults,
-release-please's package name, the repository's own `.{command}/`) are
+in `crates/cli/Cargo.toml`, the workspace's authors, the repository's own `.{command}/`) are
 written by `cargo run -p xtask -- brand`; `xtask lint` fails when one is
 stale or another file names the product. README.md names the product too
-but is written by hand. The workflows read the command from `brand.toml`.
+but is written by hand.
 
 ## No comments in code
 

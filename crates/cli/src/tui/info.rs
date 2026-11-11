@@ -5,8 +5,6 @@ use domain::provider::ProviderSummary;
 use super::app::{App, Msg};
 use super::choices::{Picker, PickerKind};
 
-const RELEASE_NOTES: &str = include_str!(concat!(env!("OUT_DIR"), "/release_notes.md"));
-
 pub fn run(app: &mut App, command: Command) {
     match command {
         Command::Status => {
@@ -36,7 +34,6 @@ pub fn run(app: &mut App, command: Command) {
             Ok(providers) => Msg::Providers(providers.into_iter().filter(|p| p.account.is_some()).collect()),
             Err(error) => Msg::Error(error.to_string()),
         }),
-        Command::ReleaseNotes => app.transcript.notice(release_notes()),
         Command::OutputStyle(named) => output_style(app, named),
         Command::TerminalSetup => app.transcript.notice(concat!(
             "New lines: Alt+Enter or Ctrl+J work everywhere. For Shift+Enter, use a terminal that reports it \
@@ -122,23 +119,4 @@ fn status(app: &App) -> String {
         text.push_str(&format!("\n  Cost     ${:.4}", app.transcript.cost));
     }
     text
-}
-
-fn release_notes() -> String {
-    if RELEASE_NOTES.is_empty() {
-        format!("{} {}", brand::NAME, env!("CARGO_PKG_VERSION"))
-    } else {
-        RELEASE_NOTES.to_owned()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn the_release_notes_are_the_newest_changelog_section_or_the_version() {
-        let notes = super::release_notes();
-        let version = format!("{} {}", brand::NAME, env!("CARGO_PKG_VERSION"));
-        assert!(notes == version || (notes.starts_with("## ") && !notes[3..].contains("\n## ")), "{notes}");
-        assert!(!notes.contains("](") && !notes.contains("https://"), "no links: {notes}");
-    }
 }

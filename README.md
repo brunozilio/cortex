@@ -5,16 +5,11 @@ commands, skills, memory, plugins and MCP servers (HTTP and stdio).
 
 ## Installing
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/brunozilio/cortex/main/install.sh | bash
-```
+From source:
 
-It installs the latest release in `~/.local/bin` (`CORTEX_INSTALL_DIR`
-to change it, `CORTEX_VERSION` for another release), checking its
-SHA-256. Releases are built for macOS on Apple silicon and for Linux
-x86_64 and aarch64; the Linux build is static (musl) and runs on any
-distribution. From source: `cargo install --path crates/cli`. The
-version starts at 0.0.0; the first release is 0.1.0.
+```sh
+cargo install --path crates/cli
+```
 
 Nothing else is required. Some tools are used when present:
 
@@ -35,12 +30,7 @@ cortex models                            # what the connected providers offer
 cortex mcp                               # MCP servers: list, add, remove, approve
 cortex config                            # read or change the settings
 cortex doctor                            # check this installation in this folder
-cortex update                            # replace this binary with the latest release
 ```
-
-`cortex update` downloads this platform's latest release, checks its
-SHA-256 and replaces the running binary in place, wherever it was
-installed.
 
 In the chat: Enter sends, Alt+Enter (or Ctrl+J) adds a line, Esc
 interrupts, Shift+Tab cycles ask → edits → plan → bypass, Ctrl+V attaches
@@ -72,7 +62,7 @@ you).
 | `backend` | Command handler: runs, memory, settings, providers, secrets. |
 | `llm-providers` | LLM providers (Anthropic, OpenAI, Claude, ChatGPT, GitHub Copilot and Kiro subscriptions): credentials, sign-in, request and catalog shapes. Pure. |
 | `sdk` | The CLI's internal client to the backend. |
-| `cli` | The `cortex` binary: terminal chat (ratatui), `-p`, `login`, `models`, `mcp`, `config`, `doctor`, `update`. |
+| `cli` | The `cortex` binary: terminal chat (ratatui), `-p`, `login`, `models`, `mcp`, `config`, `doctor`. |
 | `brand` | The product's name and command, from `brand.toml`. |
 | `subprocess`, `private-file` | Small IO helpers. |
 

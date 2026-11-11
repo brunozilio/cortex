@@ -80,7 +80,6 @@ pub fn run(app: &mut App, command: Command) {
         | Command::Export(_)
         | Command::Copy
         | Command::Logout
-        | Command::ReleaseNotes
         | Command::TerminalSetup
         | Command::OutputStyle(_)) => super::info::run(app, other),
         Command::Mouse => {

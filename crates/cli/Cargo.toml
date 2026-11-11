@@ -24,10 +24,6 @@ tui-markdown = "0.3.13"
 syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "default-themes", "plist-load", "regex-onig"] }
 tachyonfx = { version = "0.25.2", default-features = false, features = ["std", "std-duration"] }
 tui-big-text = "0.8.10"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "rustls-tls-native-roots"] }
-sha2 = "0.10"
-flate2 = "1.1"
-tar = "0.4"
 
 [dev-dependencies]
 tempfile.workspace = true

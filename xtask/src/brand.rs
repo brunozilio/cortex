@@ -93,14 +93,6 @@ fn changes(root: &Path, brand: &Brand) -> Result<Vec<Change>, String> {
         "Cargo.toml",
         set_line(&read("Cargo.toml")?, "authors = ", &format!("authors = [\"{}\"]", brand.author)),
     ));
-    let config = read("release-please-config.json")?;
-    let config = set_line(&config, "\"package-name\"", &format!("      \"package-name\": \"{}\",", brand.command));
-    wanted.push(("release-please-config.json", config));
-    let mut install = read("install.sh")?;
-    for (key, value) in [("NAME=", &brand.name), ("COMMAND=", &brand.command), ("REPO=", &brand.repository)] {
-        install = set_line(&install, key, &format!("{key}\"{value}\""));
-    }
-    wanted.push(("install.sh", install));
     Ok(wanted
         .into_iter()
         .filter_map(|(path, content)| {
@@ -212,7 +204,7 @@ mod tests {
 
 fn allowed(path: &str, brand: &Brand) -> bool {
     let own = format!(".{}/", brand.command);
-    ["brand.toml", "CHANGELOG.md", "Cargo.lock", "Cargo.toml", "crates/cli/Cargo.toml", "release-please-config.json"]
+    ["brand.toml", "Cargo.lock", "Cargo.toml", "crates/cli/Cargo.toml"]
         .contains(&path)
         || ["README.md", "CLAUDE.md", "AGENTS.md"].contains(&path)
         || path.starts_with(&own)
@@ -238,14 +230,6 @@ pub fn findings(root: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> 
             continue;
         }
         let Ok(text) = std::fs::read_to_string(root.join(path)) else { continue };
-        let text: String = if path == "install.sh" {
-            text.lines()
-                .filter(|line| !["NAME=", "COMMAND=", "REPO="].iter().any(|key| line.starts_with(key)))
-                .collect::<Vec<_>>()
-                .join("\n")
-        } else {
-            text
-        };
         if words.iter().any(|word| names(&text, word)) {
             found.push(format!("brand-name {path}"));
         }

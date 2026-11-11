@@ -31,7 +31,6 @@ pub enum Command {
     Copy,
     Status,
     Logout,
-    ReleaseNotes,
     TerminalSetup,
     OutputStyle(Option<String>),
     Hooks,
@@ -52,7 +51,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const HELP: [(&'static str, &'static str); 40] = [
+    pub const HELP: [(&'static str, &'static str); 39] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
@@ -87,7 +86,6 @@ impl Command {
         ("export", "Write the conversation as Markdown, /export <path>"),
         ("copy", "Copy the agent's last answer"),
         ("logout", "Forget a provider's credentials"),
-        ("release-notes", "What changed in this version"),
         ("doctor", "Check that this installation can work here"),
         ("feedback", "Where to report a problem or an idea"),
         ("terminal-setup", "How to make Shift+Enter add a line in this terminal"),
@@ -128,7 +126,6 @@ impl Command {
                 "logout",
                 "doctor",
                 "feedback",
-                "release-notes",
                 "terminal-setup",
                 "help",
                 "exit",
@@ -188,7 +185,6 @@ impl Command {
             "export" => Some(Self::Export(argument)),
             "copy" => bare(Self::Copy),
             "logout" => bare(Self::Logout),
-            "release-notes" => bare(Self::ReleaseNotes),
             "terminal-setup" => bare(Self::TerminalSetup),
             "output-style" => Some(Self::OutputStyle(argument)),
             "hooks" => bare(Self::Hooks),

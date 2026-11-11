@@ -6,7 +6,6 @@ mod plugin;
 mod print;
 mod print_output;
 mod tui;
-mod update;
 mod verdict;
 
 use std::path::PathBuf;
@@ -102,8 +101,6 @@ enum Action {
         #[command(subcommand)]
         action: Option<plugin::PluginAction>,
     },
-    #[command(about = "Replace this binary with the latest release")]
-    Update,
     #[command(about = "Check that this installation can work in the folder")]
     Doctor,
     #[command(about = "Read or change the settings: the user's, or this project's with --project")]
@@ -141,13 +138,9 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         None => std::env::current_dir().map_err(|e| e.to_string())?,
     };
     let cwd = std::fs::canonicalize(&cwd).map_err(|e| format!("{}: {e}", cwd.display()))?;
-    match &cli.command {
-        Some(Action::Update) => return update::run().map(|()| ExitCode::SUCCESS),
-        Some(Action::Config { action, project }) => {
-            println!("{}", config::run(&config::file(&cwd, *project)?, action.clone())?);
-            return Ok(ExitCode::SUCCESS);
-        }
-        _ => {}
+    if let Some(Action::Config { action, project }) = &cli.command {
+        println!("{}", config::run(&config::file(&cwd, *project)?, action.clone())?);
+        return Ok(ExitCode::SUCCESS);
     }
     let sdk = Sdk::builder().build().map_err(|e| e.to_string())?;
     let prompt = (!cli.prompt.is_empty()).then(|| cli.prompt.join(" "));
@@ -179,7 +172,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         Some(Action::Plugin { action }) => {
             plugin::run(&sdk, action.unwrap_or(plugin::PluginAction::List)).map(|()| ExitCode::SUCCESS)
         }
-        Some(Action::Update | Action::Config { .. }) => Ok(ExitCode::SUCCESS),
+        Some(Action::Config { .. }) => Ok(ExitCode::SUCCESS),
         None if cli.print => {
             let prompts = match cli.input_format.as_str() {
                 "stream-json" => print_output::prompts(std::io::stdin().lines().map_while(Result::ok))?,
