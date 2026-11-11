@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/brunozilio/lite/compare/v0.5.0...v0.6.0) (2026-11-11)
+
+
+### Features
+
+* event inbox, streaming Monitor, MCP channels, messages between sessions and PushNotification ([#6](https://github.com/brunozilio/lite/issues/6)) ([fdc2ffe](https://github.com/brunozilio/lite/commit/fdc2ffec48947e91ff29632da14faaf132b2e50c))
+* MCP channels over streamable HTTP, and cancelling a channel call without ending it ([#8](https://github.com/brunozilio/lite/issues/8)) ([e9acb7d](https://github.com/brunozilio/lite/commit/e9acb7d7e764e0f9cf983644d40cb47a778fe500))
+
 ## [0.5.0](https://github.com/brunozilio/lite/compare/v0.4.0...v0.5.0) (2026-11-11)
 
 
