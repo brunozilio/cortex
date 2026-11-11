@@ -1,15 +1,24 @@
 use sdk::{EngineEvent, Model};
 
 pub enum Msg {
-    Ready { models: Result<Vec<Model>, String>, settings: serde_json::Value },
+    Ready {
+        models: Result<Vec<Model>, String>,
+        settings: serde_json::Value,
+    },
     Event(domain::RunId, EngineEvent),
     Skills(Vec<(String, String)>),
-    Reloaded { skills: Vec<(String, String)>, summary: String },
+    Reloaded {
+        skills: Vec<(String, String)>,
+        summary: String,
+    },
     Connected(String),
     Clipboard(Result<Option<sdk::Image>, String>),
     Changes(Result<super::git::Changes, String>),
     Diffs(super::git::Scope, Result<super::git::Changes, String>),
-    Side { question: String, answer: Result<String, String> },
+    Side {
+        question: String,
+        answer: Result<String, String>,
+    },
     Chore(Result<Option<sdk::ChoreAnswer>, String>),
     Files(Vec<String>),
     StatusLine(String),
@@ -17,7 +26,11 @@ pub enum Msg {
     Menu(Vec<domain::provider::ProviderSummary>),
     Conversations(Vec<super::conversations::Conversation>),
     Context(domain::usage::ContextUsage),
-    Shell { id: String, command: String, result: Result<(String, bool), String> },
+    Shell {
+        id: String,
+        command: String,
+        result: Result<(String, bool), String>,
+    },
     Notices(Vec<domain::inbox::Notice>),
     #[allow(dead_code, reason = "the feature folders send it, and any of them may be removed")]
     Feature(Box<dyn FnOnce(&mut super::app::App) + Send>),

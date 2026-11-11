@@ -21,7 +21,6 @@ pub struct CommandHandler {
 impl Drop for CommandHandler {
     fn drop(&mut self) {
         crate::channels::close(self.client);
-        agent_engine::tools::shells::kill_client(self.client);
         agent_engine::tools::peers::forget(self.client);
         crate::features::forget(self.client);
         agent_engine::tools::inbox::forget_client(self.client);
@@ -115,12 +114,6 @@ impl CommandHandler {
                 outbox.send(self.services.providers.disconnect(&principal, provider))
             }
             ClientCommand::ListMcpServers { path } => self.mcp_servers(&path, Ok(())),
-            ClientCommand::ListShells { kill } => {
-                if let Some(id) = kill {
-                    agent_engine::tools::shells::kill(self.client, &id);
-                }
-                outbox.send(ServerEvent::Shells(agent_engine::tools::shells::list(self.client)));
-            }
             ClientCommand::TakeNotices => {
                 outbox.send(ServerEvent::Notices(agent_engine::tools::inbox::take(self.client)));
             }

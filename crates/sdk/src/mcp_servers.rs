@@ -59,14 +59,6 @@ impl Sdk {
 }
 
 impl Sdk {
-    pub fn shells(&self, kill: Option<&str>) -> Result<Vec<(String, String, bool)>, Error> {
-        let command = ClientCommand::ListShells { kill: kill.map(str::to_owned) };
-        self.client.call(command, |event| match event {
-            ServerEvent::Shells(shells) => Some(Ok(shells)),
-            _ => None,
-        })
-    }
-
     pub fn notices(&self) -> Result<Vec<domain::inbox::Notice>, Error> {
         self.client.call(ClientCommand::TakeNotices, |event| match event {
             ServerEvent::Notices(notices) => Some(Ok(notices)),

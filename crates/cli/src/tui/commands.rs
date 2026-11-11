@@ -109,19 +109,6 @@ pub fn run(app: &mut App, command: Command) {
                 "Vim keys off."
             });
         }
-        Command::Bashes(kill) => app.spawn(move |sdk| match sdk.shells(kill.as_deref()) {
-            Ok(shells) if shells.is_empty() => Msg::Notice("No commands in the background.".into()),
-            Ok(shells) => {
-                let lines: Vec<String> = shells
-                    .iter()
-                    .map(|(id, command, running)| {
-                        format!("  {id:<10} {} {command}", if *running { "running " } else { "finished" })
-                    })
-                    .collect();
-                Msg::Notice(format!("In the background (/bashes kill <id> stops one):\n{}", lines.join("\n")))
-            }
-            Err(error) => Msg::Error(error.to_string()),
-        }),
         Command::Todos => {
             let tasks = &app.transcript.tasks;
             let text = if tasks.is_empty() {

@@ -49,8 +49,6 @@ fn commands_parse_with_their_arguments() {
     assert_eq!(Command::parse("/memory edit"), Some(Command::Memory(MemoryCommand::Edit)));
     assert_eq!(Command::parse("/config"), Some(Command::Config));
     assert_eq!(Command::parse("/compact the API work"), Some(Command::Compact(Some("the API work".into()))));
-    assert_eq!(Command::parse("/bashes"), Some(Command::Bashes(None)));
-    assert_eq!(Command::parse("/bashes kill bash_3"), Some(Command::Bashes(Some("bash_3".into()))));
     assert_eq!(Command::parse("/bashes kill"), None);
 }
 

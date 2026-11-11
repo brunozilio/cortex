@@ -7,7 +7,7 @@ use std::time::Instant;
 use platform::Tree;
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace, clip, field, required};
+use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
 
 mod wait;

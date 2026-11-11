@@ -21,7 +21,6 @@ pub enum Command {
     Permissions,
     Todos,
     Context,
-    Bashes(Option<String>),
     Vim,
     Mouse,
     Resume,
@@ -51,7 +50,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const HELP: [(&'static str, &'static str); 41] = [
+    pub const HELP: [(&'static str, &'static str); 40] = [
         ("help", "Show the commands and keys"),
         ("new", "Start a new conversation (also /clear)"),
         ("resume", "Go back to an earlier conversation of this folder"),
@@ -73,7 +72,6 @@ impl Command {
         ("statusline", "Draw the status line with your command, or /statusline off"),
         ("todos", "Show the agent's task list (Ctrl+T shows or hides it)"),
         ("context", "Show what fills the context window and what is left"),
-        ("bashes", "List commands left in the background, /bashes kill <id> stops one"),
         ("vim", "Turn vim keys in the prompt on or off"),
         ("mouse", "Let the mouse wheel scroll (select text with Shift/Option)"),
         ("skills", "List skills and commands, /skills new <what it does> writes one"),
@@ -128,11 +126,6 @@ impl Command {
             "mouse" => bare(Self::Mouse),
             "resume" | "continue" => bare(Self::Resume),
             "fork" | "branch" => bare(Self::Fork),
-            "bashes" => match argument.as_deref().map(|a| a.split_once(' ').unwrap_or((a, ""))) {
-                None => Some(Self::Bashes(None)),
-                Some(("kill", id)) if !id.trim().is_empty() => Some(Self::Bashes(Some(id.trim().to_owned()))),
-                Some(_) => None,
-            },
             "skills" | "commands" | "agents" => match argument.as_deref().map(|a| a.split_once(' ').unwrap_or((a, "")))
             {
                 None if name.eq_ignore_ascii_case("agents") => Some(Self::Agents),

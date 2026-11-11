@@ -28,7 +28,6 @@ pub enum ServerEvent {
         name: String,
         url: String,
     },
-    Shells(Vec<(String, String, bool)>),
     Notices(Vec<domain::inbox::Notice>),
     Feature {
         feature: String,
