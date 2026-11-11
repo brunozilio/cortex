@@ -38,7 +38,7 @@ impl Agent<'_> {
             Err(problem) => return Outcome::error(problem),
         };
         let forked = chosen.as_ref().is_some_and(|agent| {
-            agent.name == builtin_agents::FORK && agent.instructions == builtin_agents::FORK_PREAMBLE
+            agent.name == builtin_agents::FORK && agent.instructions == builtin_agents::fork_preamble()
         });
         if forked && parent.is_empty() && resume.is_none() {
             return Outcome::error("A fork needs the conversation it forks from; none was given.");

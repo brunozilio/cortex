@@ -51,21 +51,26 @@ pub fn run(app: &mut App, command: Command) {
     }
 }
 
-pub const STYLES: [(&str, &str); 5] = [
-    ("default", concat!(brand::name!(), "'s usual way: works, then reports")),
-    ("concise", "Leads with the result, skips narration"),
-    ("proactive", "Acts on its best judgement, asks less"),
-    ("explanatory", "Explains its choices and the codebase as it works"),
-    ("learning", "Leaves parts for you to write, to learn by doing"),
-];
+pub fn styles() -> Vec<(String, String)> {
+    let mut styles = vec![("default".to_owned(), format!("{}'s usual way: works, then reports", brand::NAME))];
+    for (path, _) in content::builtin_files("styles/") {
+        let Some(id) = path.strip_prefix("styles/").and_then(|name| name.strip_suffix(".md")) else { continue };
+        let text = content::text(path);
+        let about =
+            text.lines().find_map(|line| line.strip_prefix("description:")).unwrap_or_default().trim().to_owned();
+        styles.push((id.to_owned(), about));
+    }
+    styles
+}
 
 pub fn output_style(app: &mut App, named: Option<String>) {
     match named {
         Some(name) => app.set_output_style(name.to_lowercase()),
         None => {
             let current = app.output_style.as_deref().unwrap_or("default");
-            let cursor = STYLES.iter().position(|(id, _)| *id == current).unwrap_or(0);
-            let items = STYLES.iter().map(|(id, about)| ((*id).to_owned(), (*about).to_owned())).collect();
+            let styles = styles();
+            let cursor = styles.iter().position(|(id, _)| id == current).unwrap_or(0);
+            let items = styles;
             app.picker = Some(Picker { kind: PickerKind::OutputStyle, title: "Output style".into(), items, cursor });
         }
     }

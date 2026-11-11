@@ -184,20 +184,9 @@ pending agent's result; if the user asks before it arrives, say it is still runn
 );
 
 pub fn system(parent: &str, agent: Option<&FoundAgent>) -> String {
-    let mut system = format!(
-        "{parent}\n\n# You are a sub-agent\nAnother agent handed you the task in the user's message. Do it with \
-         your tools, without asking anyone: no one answers questions here. Finish with a concise report of what \
-         you found or did, with the paths that matter; it goes back to that agent, not to the user.\n\n{}",
-        super::builtin_agents::SHARED_NOTES
-    );
-    match agent.filter(|agent| !agent.instructions.is_empty()) {
-        Some(agent) => system.push_str(&format!("\n\n# Your instructions ({})\n{}", agent.name, agent.instructions)),
-        None if agent.is_none() => {
-            system.push_str(&format!("\n\n# Your instructions ({GENERAL})\n{}", super::builtin_agents::GENERAL))
-        }
-        None => {}
-    }
-    system
+    let agent = agent.map(|agent| serde_json::json!({ "name": agent.name, "instructions": agent.instructions }));
+    let data = serde_json::json!({ "parent": parent, "agent": agent, "general": GENERAL });
+    crate::prompt::render("prompts/sub-agent.js", &data)
 }
 
 #[cfg(test)]

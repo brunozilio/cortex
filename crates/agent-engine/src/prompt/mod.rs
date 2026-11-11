@@ -3,6 +3,7 @@ mod instruction_files;
 pub(crate) mod markdown;
 pub(crate) mod permissions;
 mod render;
+pub use render::render;
 pub mod rules;
 pub mod settings;
 pub mod styles;

@@ -534,6 +534,7 @@ dependencies = [
  "backend",
  "brand",
  "clap",
+ "content",
  "crossbeam-channel",
  "domain",
  "flate2",

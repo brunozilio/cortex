@@ -136,7 +136,7 @@ fn pick(app: &mut App, event: KeyEvent) {
                 PickerKind::Logout => app.logout_picked(cursor),
                 PickerKind::Config => super::config::picked(app, cursor),
                 PickerKind::OutputStyle => {
-                    if let Some((id, _)) = super::info::STYLES.get(cursor) {
+                    if let Some((id, _)) = super::info::styles().get(cursor) {
                         app.set_output_style((*id).to_owned());
                     }
                 }
