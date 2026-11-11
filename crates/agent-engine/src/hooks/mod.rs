@@ -49,6 +49,7 @@ pub struct Decision {
     pub updated_input: Option<Value>,
     pub permission: Option<String>,
     pub updated_output: Option<Value>,
+    pub model: Option<String>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommandOutput {
@@ -187,6 +188,9 @@ impl Hooks {
                     }
                     if event == "PostToolUse" {
                         decision.updated_output = specific.get("updatedToolOutput").cloned();
+                    }
+                    if decision.model.is_none() && matches!(event, "ModelRequest" | "ModelError") {
+                        decision.model = specific["model"].as_str().filter(|m| !m.trim().is_empty()).map(Into::into);
                     }
                     for text in
                         [value["systemMessage"].as_str(), specific["additionalContext"].as_str()].into_iter().flatten()

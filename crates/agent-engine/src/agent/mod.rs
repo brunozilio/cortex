@@ -1,6 +1,8 @@
 mod call;
 mod conversations;
 mod dispatch;
+mod incoming;
+mod model_hooks;
 mod permission;
 mod permission_ask;
 mod plan_mode;
@@ -86,6 +88,7 @@ impl Agent<'_> {
         let mut compacted_at = None;
         let mut counted = crate::upkeep::Counted::default();
         let mut fell_back: Option<String> = None;
+        let mut hook_fell_back = false;
         let mut stop_hook_active = false;
         let (prompt_at, mut attempts) = (history.len().saturating_sub(1), 0);
         for _ in 0..self.turn_limit.min(MAX_TURNS) {
@@ -113,7 +116,10 @@ impl Agent<'_> {
                 (self.emit)(EngineEvent::Compacted(compaction));
                 compacted_at = Some(history.len());
             }
-            let request = TurnRequest { messages: history.clone(), ..self.turn_template(fell_back.as_ref()) };
+            let mut request = TurnRequest { messages: history.clone(), ..self.turn_template(fell_back.as_ref()) };
+            if let Some(model) = self.hooked_model("ModelRequest", &request, serde_json::json!({})) {
+                request.model = model;
+            }
             let mut on = |delta: Delta| match delta {
                 Delta::Text(text) => (self.emit)(EngineEvent::TextDelta(text)),
                 Delta::Thinking(text) => (self.emit)(EngineEvent::ThinkingDelta(text)),
@@ -140,6 +146,19 @@ impl Agent<'_> {
                     counted.forget();
                     (self.emit)(EngineEvent::Compacted(compaction));
                     compacted_at = Some(history.len());
+                    continue;
+                }
+                Err(error)
+                    if !hook_fell_back
+                        && let Some(model) = self.hooked_model(
+                            "ModelError",
+                            &request,
+                            serde_json::json!({"error": error.to_string()}),
+                        ) =>
+                {
+                    hook_fell_back = true;
+                    (self.emit)(EngineEvent::FellBack(model.clone()));
+                    fell_back = Some(model);
                     continue;
                 }
                 Err(error) => return Err(Ending::Failed(error)),
@@ -244,36 +263,5 @@ impl Agent<'_> {
             tools.extend(deferred.loaded());
         }
         tools
-    }
-
-    fn steered(&self) -> Vec<Block> {
-        self.control
-            .take_steered()
-            .into_iter()
-            .map(|text| {
-                (self.emit)(EngineEvent::Steered(text.clone()));
-                Block::Text(format!("The user sent this message while you were working:\n{text}"))
-            })
-            .collect()
-    }
-
-    fn notices(&self) -> Option<Block> {
-        if self.depth > 0 {
-            return None;
-        }
-        let client = self.workspace.credentials.client;
-        let (notices, held) = domain::inbox::admitted(crate::tools::inbox::take(client), self.control.mode());
-        if !held.is_empty() {
-            (self.emit)(EngineEvent::TextDelta(format!(
-                "\n{} message(s) from channels or other sessions are held: bypass mode never lets them in.\n",
-                held.len()
-            )));
-        }
-        if notices.is_empty() {
-            return None;
-        }
-        let message = domain::inbox::as_message(&notices);
-        (self.emit)(EngineEvent::Notified(notices));
-        Some(Block::Text(message))
     }
 }

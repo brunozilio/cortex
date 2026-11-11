@@ -90,13 +90,22 @@ or the parent's permission ceiling. Before every model call (main,
 sub-agent, compaction, hook) the policy is checked again for the model
 actually used.
 
-Hook handlers `command`, `http`, `prompt` and `agent` run on PreToolUse,
-PostToolUse, PostToolUseFailure, PermissionRequest, Stop, SubagentStart,
-SubagentStop, PreCompact, PostCompact, UserPromptSubmit, SessionStart and
-SessionEnd; anything else is refused. Exit code 2 or a JSON decision
-blocks; PreToolUse may rewrite arguments (checked again); Stop may demand
-more work. Hooks run with the user's environment and limits on time,
-output and turns.
+Hook handlers `command`, `script`, `http`, `prompt` and `agent` run on
+PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop,
+SubagentStart, SubagentStop, PreCompact, PostCompact, UserPromptSubmit,
+SessionStart, SessionEnd, Notification, ModelRequest and ModelError;
+anything else is refused, and a refusal names the file, event, hook and
+reason. Exit code 2 or a JSON decision blocks; PreToolUse may rewrite
+arguments (checked again); Stop may demand more work. Hooks run with the
+user's environment and limits on time, output and turns.
+
+ModelRequest runs before each model call of the loop and ModelError when
+one fails (after the provider's own retries and `fallbackModel`). Their
+input has `model`, `kind` (`main` or `sub-agent`, also the matcher's
+subject), `mode`, `messages` and, for ModelError, `error`. Answering
+`{"hookSpecificOutput": {"model": "openai:gpt-6.1-sol"}}` routes the call
+(see `domain::routing`); ModelError tries that model once. Only command,
+script and http handlers run on them, so routing never asks a model.
 
 ## Tests against real accounts
 
