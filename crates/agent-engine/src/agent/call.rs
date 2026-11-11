@@ -118,7 +118,7 @@ impl Agent<'_> {
         tool.access() == crate::tools::Access::Reads
             && !SERIAL.contains(&name)
             && !name.starts_with("Task")
-            && name != crate::tools::advisor::ADVISOR_TOOL
+            && !tool.serial()
             && tool.reaches_outside(input, self.workspace).is_none()
             && self
                 .workspace

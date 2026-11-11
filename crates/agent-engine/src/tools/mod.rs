@@ -1,4 +1,3 @@
-pub mod advisor;
 pub mod ask;
 pub mod builtin {
     include!(concat!(env!("OUT_DIR"), "/builtin_tools.rs"));
@@ -69,6 +68,19 @@ impl Outcome {
     }
 }
 
+pub struct Consult<'a> {
+    pub api: &'a dyn crate::model::ModelApi,
+    pub request: &'a crate::model::TurnRequest,
+    pub conversation: &'a [crate::transcript::Message],
+    pub stop: &'a std::sync::atomic::AtomicBool,
+}
+
+impl std::fmt::Debug for Consult<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Consult").field("model", &self.request.model).finish_non_exhaustive()
+    }
+}
+
 pub trait Tool: Send + Sync {
     fn spec(&self) -> ToolSpec;
 
@@ -81,6 +93,18 @@ pub trait Tool: Send + Sync {
     fn summary(&self, input: &Value) -> String;
 
     fn run(&self, input: &Value, workspace: &Workspace) -> Outcome;
+
+    fn offered(&self, _workspace: &Workspace) -> bool {
+        true
+    }
+
+    fn serial(&self) -> bool {
+        false
+    }
+
+    fn consult(&self, _input: &Value, _workspace: &Workspace, _agent: &Consult<'_>) -> Option<Outcome> {
+        None
+    }
 
     fn script(&self) -> Option<&script_tool::ScriptTool> {
         None

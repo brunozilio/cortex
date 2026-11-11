@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicBool;
 
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace};
+use crate::tools::{Access, Consult, Outcome, Tool, Workspace};
 use crate::model::{ModelApi, ToolSpec, TurnRequest};
 use crate::transcript::{Block, Message, Role};
 
@@ -33,6 +33,25 @@ impl Tool for Advisor {
     fn run(&self, _input: &Value, _workspace: &Workspace) -> Outcome {
         Outcome::error("The advisor can only be consulted by the agent loop.")
     }
+
+    fn offered(&self, workspace: &Workspace) -> bool {
+        workspace.advisor.is_some()
+    }
+
+    fn serial(&self) -> bool {
+        true
+    }
+
+    fn consult(&self, _input: &Value, workspace: &Workspace, agent: &Consult<'_>) -> Option<Outcome> {
+        Some(match &workspace.advisor {
+            Some(model) => consult(agent.api, agent.request, model, agent.conversation, agent.stop),
+            None => Outcome::error("No advisor is configured."),
+        })
+    }
+}
+
+pub fn tools() -> Vec<Box<dyn Tool>> {
+    vec![Box::new(Advisor)]
 }
 
 pub fn transcript(history: &[Message]) -> String {
@@ -121,5 +140,50 @@ mod tests {
         assert!(text.contains("User: fix the parser\nAgent calls Read: {\"file_path\":\"p.rs\"}\nResult: "));
         assert!(text.contains(" […]") && !text.contains("hidden"));
         assert!(asked.system.starts_with("You are reviewing an agent's work"));
+    }
+
+    #[test]
+    fn the_agent_consults_the_advisor_only_when_one_is_configured() {
+        use std::sync::Arc;
+
+        use crate::agent::Agent;
+        use crate::control::Control;
+
+        let mut workspace = Workspace::new("/tmp");
+        assert!(!Advisor.offered(&workspace), "no advisor model, no tool");
+        workspace.advisor = Some("strong".into());
+        assert!(Advisor.offered(&workspace) && Advisor.serial());
+        let model = ScriptedModel::new([
+            ScriptedModel::reply(vec![Block::ToolUse { id: "a1".into(), name: ADVISOR_TOOL.into(), input: json!({}) }]),
+            ScriptedModel::reply(vec![Block::Text("Check the lexer first.".into())]),
+            ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+        ]);
+        let tools = tools();
+        let control = Control::new(domain::PermissionMode::Bypass, Arc::new(AtomicBool::new(false)));
+        let request = TurnRequest {
+            model: "m".into(),
+            system: "s".into(),
+            messages: Vec::new(),
+            tools: Agent::specs(&tools),
+            effort: Effort::Low,
+            max_tokens: 1000,
+        };
+        let agent = Agent {
+            api: &model,
+            tools: &tools,
+            workspace: &workspace,
+            control: &control,
+            emit: &|_| {},
+            request,
+            agents: &[],
+            depth: 0,
+            turn_limit: 10,
+        };
+        let mut history = vec![Message::user("fix the parser")];
+        agent.run(&mut history).unwrap_or_else(|_| panic!("run"));
+        let asked = model.asked();
+        assert_eq!(asked[1].model, "strong", "the advisor's own model");
+        let result = &asked[2].messages.last().unwrap_or_else(|| panic!("result")).blocks[0];
+        assert!(matches!(result, Block::ToolResult { content, is_error: false, .. } if content == "Check the lexer first."));
     }
 }

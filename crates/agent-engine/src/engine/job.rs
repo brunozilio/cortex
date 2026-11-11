@@ -114,13 +114,11 @@ impl Job {
         if let Some(name) = &settings.advisor {
             let config = tools::subagent_config::AgentConfig { model: Some(name.clone()), ..Default::default() };
             match config.model(&self.request.model.id, self.request.model.provider) {
-                Ok(model) => {
-                    workspace.advisor = Some(model);
-                    tools.push(Box::new(tools::advisor::Advisor));
-                }
+                Ok(model) => workspace.advisor = Some(model),
                 Err(error) => return self.fail(&format!("advisorModel: {error}"), FailureKind::Other),
             }
         }
+        tools.retain(|tool| tool.offered(workspace));
         if let Some(criteria) =
             self.request.verification.clone().filter(|_| self.request.permission != domain::PermissionMode::Plan)
         {

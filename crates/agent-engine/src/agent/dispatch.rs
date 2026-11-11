@@ -78,6 +78,16 @@ impl Agent<'_> {
                     .and_then(|out| serde_json::from_str::<Value>(&out.content).ok())
                     .unwrap_or_else(|| json!([]))
             })
+        } else if let Some(outcome) = tool.and_then(|tool| {
+            let agent = crate::tools::Consult {
+                api: self.api,
+                request: &self.request,
+                conversation: parent,
+                stop: self.control.stop_flag(),
+            };
+            tool.consult(input, self.workspace, &agent)
+        }) {
+            outcome
         } else {
             match tool {
                 None => Outcome::error(format!("There is no tool named {name}.")),
@@ -97,12 +107,6 @@ impl Agent<'_> {
                     self.permitted(id, &message, &summary, input, pre.permission.as_deref())
                 }
                 Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
-                Some(_) if name == crate::tools::advisor::ADVISOR_TOOL => match &self.workspace.advisor {
-                    Some(model) => {
-                        crate::tools::advisor::consult(self.api, &self.request, model, parent, self.control.stop_flag())
-                    }
-                    None => Outcome::error("No advisor is configured."),
-                },
                 Some(tool) if tool.script().is_some() => match tool.script() {
                     Some(script) => self.script_call(id, script, &summary, input, parent, pre.permission.as_deref()),
                     None => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),
