@@ -57,6 +57,17 @@ impl Superfik {
         })
     }
 
+    /// Keeps the MCP servers `names` up as this client's channels: their
+    /// messages reach its sessions as events. The channels open, and why
+    /// the others are not.
+    pub fn open_channels(&self, cwd: &Path, names: &[String]) -> Result<(Vec<String>, Vec<String>), Error> {
+        let command = ClientCommand::OpenChannels { path: cwd.to_path_buf(), names: names.to_vec() };
+        self.client.call(command, |event| match event {
+            ServerEvent::Channels { opened, failed } => Some(Ok((opened, failed))),
+            _ => None,
+        })
+    }
+
     pub fn sign_out_mcp_server(&self, cwd: &Path, name: &str) -> Result<Vec<McpServerInfo>, Error> {
         self.client.call(ClientCommand::SignOutMcpServer { path: cwd.to_path_buf(), name: name.to_owned() }, listed)
     }
@@ -79,7 +90,7 @@ impl Superfik {
     pub fn schedules(&self, delete: Option<&str>, take_due: bool) -> Result<Schedules, Error> {
         let command = ClientCommand::Schedules { delete: delete.map(str::to_owned), take_due };
         self.client.call(command, |event| match event {
-            ServerEvent::Schedules { due, scheduled } => Some(Ok(Schedules { due, scheduled })),
+            ServerEvent::Schedules { due, scheduled, notices } => Some(Ok(Schedules { due, scheduled, notices })),
             _ => None,
         })
     }
@@ -106,4 +117,6 @@ fn listed(event: ServerEvent) -> Option<Result<Vec<McpServerInfo>, String>> {
 pub struct Schedules {
     pub due: Vec<superfik_core::schedule::Scheduled>,
     pub scheduled: Vec<superfik_core::schedule::Scheduled>,
+    /// What reached the inbox, when `take_due`: send it as a turn.
+    pub notices: Vec<superfik_core::inbox::Notice>,
 }

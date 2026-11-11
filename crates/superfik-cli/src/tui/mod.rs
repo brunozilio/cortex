@@ -97,6 +97,9 @@ pub struct Start {
     /// Draw at the bottom and print the conversation into the terminal's
     /// scrollback (`--inline`), instead of full screen.
     pub inline: bool,
+    /// MCP servers kept up as channels (`--channels`): their messages reach
+    /// the chat as events.
+    pub channels: Vec<String>,
 }
 
 pub fn run(
@@ -118,6 +121,16 @@ pub fn run(
         app.transcript.notice(notice);
     }
     app.inline = start.inline.then_some(0);
+    if !start.channels.is_empty() {
+        let (cwd, names) = (app.cwd.clone(), start.channels.clone());
+        app.spawn(move |superfik| match superfik.open_channels(&cwd, &names) {
+            Ok((opened, failed)) if failed.is_empty() => {
+                app::Msg::Notice(format!("Channels open: {}.", opened.join(", ")))
+            }
+            Ok((_, failed)) => app::Msg::Error(format!("Some channels did not open:\n{}", failed.join("\n"))),
+            Err(error) => app::Msg::Error(error.to_string()),
+        });
+    }
     let mut terminal = inline::terminal(start.inline);
     if start.inline {
         let width = usize::from(terminal.size()?.width.saturating_sub(2)).max(10);

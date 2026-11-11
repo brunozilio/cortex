@@ -40,6 +40,11 @@ impl Conversations {
         id
     }
 
+    /// Whether `to` is a sub-agent kept here.
+    pub(super) fn has(&self, to: &str) -> bool {
+        self.0.lock().expect("conversations").contains_key(to)
+    }
+
     /// Takes a sub-agent out while it works on a message; `keep` puts it back.
     fn take(&self, to: &str) -> Option<Kept> {
         self.0.lock().expect("conversations").remove(to)
@@ -59,8 +64,8 @@ impl Agent<'_> {
         };
         let Some(kept) = conversations.take(to) else {
             return Outcome::error(format!(
-                "No agent {to} to continue in this request. Use the agent_id at the end of an Agent report; an \
-                 agent still running in the background takes messages once collected with TaskOutput."
+                "No agent or session {to}. Use the agent_id at the end of an Agent report (an agent still running \
+                 in the background takes messages once collected with TaskOutput), or a name ListSessions gives."
             ));
         };
         let resume = Resume { index: kept.index, history: kept.history.clone(), message: message.to_owned() };
@@ -70,5 +75,18 @@ impl Agent<'_> {
             conversations.keep(kept);
         }
         outcome
+    }
+}
+
+impl Agent<'_> {
+    /// Whether `SendMessage` with `input` goes to another of the user's
+    /// sessions: no sub-agent of this run by that name, and a session is.
+    pub(super) fn to_session(&self, input: &Value, conversations: &Conversations) -> bool {
+        let to = input["to"].as_str().map(str::trim).unwrap_or_default();
+        self.depth == 0
+            && !conversations.has(to)
+            && crate::tools::peers::of_owner(self.workspace.credentials.owner.as_ref())
+                .iter()
+                .any(|peer| peer.name == to)
     }
 }

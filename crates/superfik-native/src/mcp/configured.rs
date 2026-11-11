@@ -31,6 +31,11 @@ pub fn configured(cwd: &Path, sources: &McpSources) -> Vec<ServerSpec> {
         .collect()
 }
 
+/// Where a run in `request`'s folder would find its servers.
+pub fn sources(request: &PromptRequest) -> Result<McpSources, String> {
+    crate::brief::mcp_sources(request)
+}
+
 /// Every configured server, where it came from and whether it starts.
 pub fn list(request: &PromptRequest) -> Result<Vec<McpServerInfo>, String> {
     let sources = crate::brief::mcp_sources(request)?;

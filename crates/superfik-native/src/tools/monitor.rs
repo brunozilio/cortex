@@ -1,18 +1,14 @@
-//! `Monitor`: waits until a condition holds, running a check command every
-//! few seconds until it succeeds (a server answering, a file appearing, a
-//! build finishing) or the time is up. The wait never spins the model.
-
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+//! `Monitor`: a command left running whose every line of output is an
+//! event for the agent: a log tailed for errors, a watcher, a poll loop
+//! printing when something changes. The lines reach the agent with its next
+//! tool results, or wake the idle chat; it ends when the command does, or
+//! with `KillShell`.
 
 use serde_json::{Value, json};
 
-use super::shells::Waited;
-use super::{Access, Outcome, Tool, Workspace, clip, field, required};
+use super::shells::Watch;
+use super::{Access, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
-
-/// The longest wait.
-const MAX_WAIT: u64 = 3_600;
 
 #[derive(Debug)]
 pub struct Monitor;
@@ -21,19 +17,20 @@ impl Tool for Monitor {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "Monitor".into(),
-            description: "Wait until a condition holds: run `until` (a shell command) every `every_seconds` (5 by \
-                          default) until it exits successfully, or until `timeout_seconds` (600 by default, at most \
-                          3600). Use it instead of polling with repeated Bash calls; it returns the check's last \
-                          output."
+            description: "Start a background monitor: a shell command whose every line of output reaches you as \
+                          an event, while you go on working or when the chat is idle. Use it to follow a log \
+                          (`tail -f app.log | grep --line-buffered ERROR`), a watcher, or a loop that prints when \
+                          something changes (`while sleep 30; do gh pr checks 12 | grep -q fail && echo failed; \
+                          done`). Print only what matters: every line wakes you. It runs until the command ends \
+                          or you stop it with KillShell; you are told when it ends."
                 .into(),
             schema: json!({
                 "type": "object",
                 "properties": {
-                    "until": { "type": "string", "description": "The check, e.g. `curl -sf localhost:3000/health`." },
-                    "every_seconds": { "type": "integer", "minimum": 1, "maximum": 300 },
-                    "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": MAX_WAIT }
+                    "command": { "type": "string", "description": "The command; each line it prints is an event." },
+                    "description": { "type": "string", "description": "What it watches, in a few words." }
                 },
-                "required": ["until"],
+                "required": ["command"],
                 "additionalProperties": false
             }),
         }
@@ -44,84 +41,85 @@ impl Tool for Monitor {
     }
 
     fn summary(&self, input: &Value) -> String {
-        field(input, "until").unwrap_or_default().to_owned()
+        field(input, "description").or(field(input, "command")).unwrap_or_default().to_owned()
     }
 
     fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
-        let check = match required(input, "until") {
-            Ok(check) => check,
+        let command = match required(input, "command") {
+            Ok(command) => command,
             Err(error) => return error,
         };
-        let every = Duration::from_secs(input.get("every_seconds").and_then(Value::as_u64).unwrap_or(5).clamp(1, 300));
-        let limit =
-            Duration::from_secs(input.get("timeout_seconds").and_then(Value::as_u64).unwrap_or(600).min(MAX_WAIT));
-        let started = Instant::now();
-        let mut last = String::new();
-        let mut tries = 0;
-        while started.elapsed() < limit {
-            if workspace.stop.load(Ordering::Relaxed) {
-                return Outcome::error("The run was cancelled.");
+        let mut shell = super::bash::shell(command);
+        shell.current_dir(&workspace.cwd).stdin(std::process::Stdio::null());
+        let client = workspace.credentials.client;
+        match super::shells::start(client, command, &mut shell) {
+            Ok(id) => {
+                super::shells::watch(id.clone(), client, Watch::Lines);
+                Outcome::ok(format!(
+                    "Monitoring as {id}: each line it prints reaches you as an event. Stop it with KillShell."
+                ))
             }
-            tries += 1;
-            let mut shell = std::process::Command::new("/bin/sh");
-            shell.arg("-c").arg(check).current_dir(&workspace.cwd).stdin(std::process::Stdio::null());
-            let id = match super::shells::start(workspace.credentials.client, check, &mut shell) {
-                Ok(id) => id,
-                Err(error) => return Outcome::error(format!("Could not run the check: {error}")),
-            };
-            match super::shells::wait(&id, every.max(Duration::from_secs(30)), &workspace.stop, &AtomicBool::new(false))
-            {
-                Waited::Exited { output, success: true, .. } => {
-                    let waited = started.elapsed().as_secs();
-                    return Outcome::ok(format!(
-                        "The condition holds after {waited}s ({tries} checks):\n{}",
-                        clip(&output, 4_000)
-                    ));
-                }
-                Waited::Exited { output, .. } | Waited::TimedOut(output) => last = output,
-                Waited::Stopped(_) => return Outcome::error("The run was cancelled."),
-                Waited::Detached => {}
-            }
-            let next = Instant::now() + every;
-            while Instant::now() < next {
-                if workspace.stop.load(Ordering::Relaxed) {
-                    return Outcome::error("The run was cancelled.");
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
+            Err(error) => Outcome::error(format!("Could not start the monitor: {error}")),
         }
-        Outcome::error(format!(
-            "The condition did not hold within {}s ({tries} checks). The last check printed:\n{}",
-            limit.as_secs(),
-            clip(&last, 4_000)
-        ))
     }
 }
 
 #[cfg(all(test, unix))]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use super::*;
+    use crate::tools::inbox;
 
     #[test]
-    fn waits_until_the_check_succeeds_or_gives_up() {
+    fn each_line_a_monitor_prints_reaches_the_inbox_and_so_does_its_end() {
         let dir = tempfile::tempdir().expect("dir");
-        let workspace = Workspace::new(dir.path());
-        let flag = dir.path().join("ready");
-        let maker = std::thread::spawn({
-            let flag = flag.clone();
-            move || {
-                std::thread::sleep(Duration::from_millis(1_500));
-                std::fs::write(flag, "ok").expect("write");
+        let mut workspace = Workspace::new(dir.path());
+        workspace.credentials.client = 8901;
+        let started = Monitor.run(&json!({"command": "echo ready; sleep 0.7; echo ERROR boom"}), &workspace);
+        assert!(!started.is_error && started.content.contains("Monitoring as bash_"), "{started:?}");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut seen = Vec::new();
+        while !seen.iter().any(|n: &superfik_core::inbox::Notice| n.text.contains("finished")) {
+            assert!(Instant::now() < deadline, "{seen:?}");
+            std::thread::sleep(Duration::from_millis(100));
+            seen.extend(inbox::take(8901));
+        }
+        let texts: Vec<&str> = seen.iter().map(|n| n.text.as_str()).collect();
+        assert!(texts.contains(&"ready"), "{texts:?}");
+        assert!(texts.contains(&"ERROR boom"), "{texts:?}");
+        assert!(seen.iter().all(|n| n.source.starts_with("monitor bash_")));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod read_tests {
+    use std::time::{Duration, Instant};
+
+    use super::*;
+    use crate::tools::inbox;
+
+    #[test]
+    fn reading_a_monitor_with_bash_output_loses_or_repeats_no_line() {
+        let dir = tempfile::tempdir().expect("dir");
+        let mut workspace = Workspace::new(dir.path());
+        workspace.credentials.client = 8902;
+        let started = Monitor.run(&json!({"command": "echo one; sleep 1; echo two; sleep 1; echo three"}), &workspace);
+        let id = started.content.split_whitespace().nth(2).expect("id").trim_end_matches(':').to_owned();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut lines = Vec::new();
+        let mut read = false;
+        while !lines.iter().any(|text: &String| text.contains("finished")) {
+            assert!(Instant::now() < deadline, "{lines:?}");
+            std::thread::sleep(Duration::from_millis(100));
+            lines.extend(inbox::take(8902).into_iter().map(|notice| notice.text));
+            if !read && lines.iter().any(|text| text == "one") {
+                // The agent reads it meanwhile: the buffer loses what it read.
+                super::super::shells::BashOutput.run(&json!({ "bash_id": id }), &workspace);
+                read = true;
             }
-        });
-        let ok = Monitor.run(&json!({"until": "cat ready", "every_seconds": 1, "timeout_seconds": 10}), &workspace);
-        maker.join().expect("maker");
-        assert!(
-            !ok.is_error && ok.content.starts_with("The condition holds after") && ok.content.ends_with("ok"),
-            "{ok:?}"
-        );
-        let never = Monitor
-            .run(&json!({"until": "echo not yet; exit 1", "every_seconds": 1, "timeout_seconds": 2}), &workspace);
-        assert!(never.is_error && never.content.contains("not yet"), "{never:?}");
+        }
+        let events: Vec<&str> = lines.iter().map(String::as_str).filter(|text| !text.contains("finished")).collect();
+        assert_eq!(events, ["one", "two", "three"]);
     }
 }

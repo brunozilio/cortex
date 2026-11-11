@@ -5,6 +5,7 @@
 
 use std::time::{Duration, Instant};
 
+use superfik_core::inbox::Notice;
 use superfik_core::schedule::{Scheduled, When};
 
 use super::app::{App, Msg};
@@ -28,12 +29,36 @@ pub(super) fn poll(app: &mut App) {
         return;
     }
     app.schedules = Poll { last: Some(Instant::now()), asking: true };
-    app.spawn(|superfik| Msg::Due(superfik.schedules(None, true).map(|found| found.due).unwrap_or_default()));
+    app.spawn(|superfik| match superfik.schedules(None, true) {
+        Ok(found) => Msg::Due(found.due, found.notices),
+        Err(_) => Msg::Due(Vec::new(), Vec::new()),
+    });
 }
 
-/// Sends the due prompts, or queues them behind the working run.
-pub(super) fn due(app: &mut App, due: Vec<Scheduled>) {
+/// Sends the due prompts, or queues them behind the working run; the
+/// inbox's notices go as one turn (a run at work reads them itself).
+pub(super) fn due(app: &mut App, due: Vec<Scheduled>, notices: Vec<Notice>) {
     app.schedules.asking = false;
+    let (notices, held) = superfik_core::inbox::admitted(notices, app.mode());
+    for notice in &held {
+        app.transcript
+            .notice(format!("[{}] {} (held: bypass mode does not send it to the agent)", notice.source, notice.text));
+    }
+    if !notices.is_empty() {
+        let shown = notices
+            .iter()
+            .map(|n| format!("[{}] {}", n.source, n.text.lines().next().unwrap_or_default()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let message = superfik_core::inbox::as_message(&notices);
+        if let Some(run) = &app.run {
+            // Into the run at work, with its next tool results (sent after it, if never handed over).
+            let _ = run.steer(&message);
+            app.queued.push(message);
+        } else {
+            app.send_as(message, shown);
+        }
+    }
     for scheduled in due {
         app.transcript.notice(format!("Scheduled ({}): {}", scheduled.id, scheduled.prompt));
         if app.busy() {

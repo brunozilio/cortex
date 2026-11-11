@@ -141,6 +141,13 @@ pub enum ClientCommand {
         path: PathBuf,
         name: String,
     },
+    /// Keeps the MCP servers `names` (a run in `path` could use them) up as
+    /// this client's channels: their messages reach its inbox. Answered
+    /// with `ServerEvent::Channels`.
+    OpenChannels {
+        path: PathBuf,
+        names: Vec<String>,
+    },
 }
 
 impl ClientCommand {
@@ -176,6 +183,7 @@ impl ClientCommand {
             Self::RemoveMcpServer { .. } => "remove_mcp_server",
             Self::SignInMcpServer { .. } => "sign_in_mcp_server",
             Self::SignOutMcpServer { .. } => "sign_out_mcp_server",
+            Self::OpenChannels { .. } => "open_channels",
         }
     }
 }
@@ -223,6 +231,7 @@ mod tests {
             ClientCommand::RemoveMcpServer { path: "/repo".into(), name: "atlassian".into() },
             ClientCommand::SignInMcpServer { path: "/repo".into(), name: "linear".into() },
             ClientCommand::SignOutMcpServer { path: "/repo".into(), name: "linear".into() },
+            ClientCommand::OpenChannels { path: "/repo".into(), names: vec!["telegram".into()] },
         ];
         for command in commands {
             let json = serde_json::to_string(&command).expect("serialize");

@@ -14,13 +14,19 @@ use superfik_protocol::ServerEvent;
 
 use crate::extensions::{Extensions, McpServerSpec};
 
-pub(crate) fn list(path: &Path, extensions: &Extensions, home: Option<&Path>) -> ServerEvent {
+/// A request in `path` that reads the MCP servers a run there would.
+pub(crate) fn request_in(path: &Path, extensions: &Extensions, home: Option<&Path>) -> PromptRequest {
     let mut request = PromptRequest::plain(path.to_path_buf(), "", ModelOption::new("", ""));
     request.extensions = Some(superfik_core::Extensions {
         plugins: extensions.plugins.clone(),
         home: home.map(Path::to_path_buf),
         ..Default::default()
     });
+    request
+}
+
+pub(crate) fn list(path: &Path, extensions: &Extensions, home: Option<&Path>) -> ServerEvent {
+    let request = request_in(path, extensions, home);
     let host = extensions.mcp.iter().map(|spec| McpServerInfo {
         name: spec.name().to_owned(),
         origin: McpOrigin::Host,

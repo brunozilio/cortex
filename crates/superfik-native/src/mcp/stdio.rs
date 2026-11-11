@@ -1,26 +1,33 @@
 //! An MCP server run as a process: JSON-RPC messages one per line on its
-//! standard input and output. The process (and whatever it starts) ends
-//! with the run.
+//! standard input and output. A reader thread routes each answer to the
+//! request waiting for it, answers the server's own requests (`ping`), and
+//! hands its notifications to a [`Listener`] (a channel's messages). The
+//! process (and whatever it starts) ends with the transport.
 
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{ChildStdin, Stdio};
-use std::sync::Mutex;
-use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::Value;
 use superfik_process::Tree;
 
-use super::Transport;
+use super::{Listener, Transport};
 
 const ANSWER_WAIT: Duration = Duration::from_secs(600);
 
+type Waiting = Arc<Mutex<HashMap<String, Sender<Value>>>>;
+
 pub struct StdioTransport {
     name: String,
-    requests: Mutex<()>,
     tree: Mutex<Tree>,
-    input: Mutex<ChildStdin>,
-    lines: Mutex<Receiver<String>>,
+    input: Arc<Mutex<ChildStdin>>,
+    waiting: Waiting,
+    /// Set once the server's output ended.
+    ended: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for StdioTransport {
@@ -29,89 +36,109 @@ impl std::fmt::Debug for StdioTransport {
     }
 }
 
+fn write(input: &Mutex<ChildStdin>, name: &str, message: &Value) -> Result<(), String> {
+    let mut input = input.lock().map_err(|_| "the server's input is unavailable")?;
+    writeln!(input, "{message}").and_then(|()| input.flush()).map_err(|error| format!("{name}: {error}"))
+}
+
 impl StdioTransport {
     pub fn spawn(name: &str, command: &str, args: &[String], env: &[(String, String)]) -> Result<Self, String> {
+        Self::spawn_listening(name, command, args, env, None)
+    }
+
+    pub fn spawn_listening(
+        name: &str,
+        command: &str,
+        args: &[String],
+        env: &[(String, String)],
+        listener: Option<Listener>,
+    ) -> Result<Self, String> {
         let mut process = superfik_process::command(command);
         process.args(args).envs(env.iter().cloned());
         process.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         let mut tree = Tree::spawn(&mut process).map_err(|error| format!("{name} could not start: {error}"))?;
         let input = tree.child().stdin.take().ok_or_else(|| format!("{name} has no input"))?;
         let output = tree.child().stdout.take().ok_or_else(|| format!("{name} has no output"))?;
-        let output = BufReader::new(output);
-        let (send, lines) = channel();
+        let transport = Self {
+            name: name.to_owned(),
+            tree: Mutex::new(tree),
+            input: Arc::new(Mutex::new(input)),
+            waiting: Arc::default(),
+            ended: Arc::default(),
+        };
+        let (waiting, ended, input) =
+            (Arc::clone(&transport.waiting), Arc::clone(&transport.ended), Arc::clone(&transport.input));
+        let server = name.to_owned();
         std::thread::Builder::new()
             .name(format!("superfik-mcp-{name}"))
             .spawn(move || {
-                for line in output.lines().map_while(Result::ok) {
-                    if send.send(line).is_err() {
-                        return;
+                for line in BufReader::new(output).lines().map_while(Result::ok) {
+                    let Ok(message) = serde_json::from_str::<Value>(&line) else { continue };
+                    match (message.get("id"), message.get("method").and_then(Value::as_str)) {
+                        (Some(id), None) => {
+                            let sender = waiting.lock().ok().and_then(|mut waiting| waiting.remove(&id.to_string()));
+                            if let Some(sender) = sender {
+                                let _ = sender.send(message);
+                            }
+                        }
+                        (Some(id), Some(method)) => {
+                            let _ = write(&input, &server, &super::sse::client_answer(id, method));
+                        }
+                        (None, Some(method)) => {
+                            if let Some(listener) = &listener {
+                                listener(method, &message["params"]);
+                            }
+                        }
+                        (None, None) => {}
                     }
+                }
+                ended.store(true, Ordering::Relaxed);
+                if let Ok(mut waiting) = waiting.lock() {
+                    waiting.clear();
                 }
             })
             .map_err(|error| error.to_string())?;
-        Ok(Self {
-            requests: Mutex::new(()),
-            name: name.to_owned(),
-            tree: Mutex::new(tree),
-            input: Mutex::new(input),
-            lines: Mutex::new(lines),
-        })
-    }
-
-    fn write(&self, message: &Value) -> Result<(), String> {
-        let mut input = self.input.lock().map_err(|_| "the server's input is unavailable")?;
-        writeln!(input, "{message}").and_then(|()| input.flush()).map_err(|error| format!("{}: {error}", self.name))
+        Ok(transport)
     }
 }
 
 impl Transport for StdioTransport {
     fn request(&self, message: &Value) -> Result<Value, String> {
-        self.request_stopped(message, &std::sync::atomic::AtomicBool::new(false))
+        self.request_stopped(message, &AtomicBool::new(false))
     }
-    fn request_stopped(&self, message: &Value, stop: &std::sync::atomic::AtomicBool) -> Result<Value, String> {
-        let _request = loop {
-            if stop.load(std::sync::atomic::Ordering::Relaxed) {
-                return Err("MCP call cancelled".into());
-            }
-            match self.requests.try_lock() {
-                Ok(guard) => break guard,
-                Err(std::sync::TryLockError::WouldBlock) => std::thread::sleep(Duration::from_millis(25)),
-                Err(_) => return Err("MCP request queue unavailable".into()),
-            }
+
+    fn request_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<Value, String> {
+        let id = message.get("id").map(Value::to_string).unwrap_or_default();
+        let (send, receive) = channel();
+        self.waiting.lock().map_err(|_| "MCP request queue unavailable")?.insert(id.clone(), send);
+        let forget = || {
+            let _ = self.waiting.lock().map(|mut waiting| waiting.remove(&id));
         };
-        self.write(message)?;
+        if let Err(error) = write(&self.input, &self.name, message) {
+            forget();
+            return Err(error);
+        }
         let deadline = std::time::Instant::now() + ANSWER_WAIT;
-        let lines = self.lines.lock().map_err(|_| "the server's output is unavailable")?;
         loop {
-            if stop.load(std::sync::atomic::Ordering::Relaxed) || std::time::Instant::now() > deadline {
+            match receive.recv_timeout(Duration::from_millis(25)) {
+                Ok(reply) => return Ok(reply),
+                Err(RecvTimeoutError::Disconnected) => return Err(format!("{} stopped", self.name)),
+                Err(RecvTimeoutError::Timeout) => {}
+            }
+            if self.ended.load(Ordering::Relaxed) {
+                forget();
+                return Err(format!("{} stopped", self.name));
+            }
+            if stop.load(Ordering::Relaxed) || std::time::Instant::now() > deadline {
+                forget();
                 self.tree.lock().map_err(|_| "MCP process unavailable")?.kill();
                 return Err("MCP call cancelled or timed out".into());
-            }
-            let line = match lines.recv_timeout(Duration::from_millis(25)) {
-                Ok(line) => line,
-                Err(RecvTimeoutError::Timeout) => continue,
-                Err(_) => return Err(format!("{} stopped", self.name)),
-            };
-            let Ok(reply) = serde_json::from_str::<Value>(&line) else { continue };
-            if let Some(method) = reply.get("method").and_then(Value::as_str) {
-                if let Some(id) = reply.get("id") {
-                    let answer = if method == "ping" {
-                        serde_json::json!({"jsonrpc":"2.0","id":id,"result":{}})
-                    } else {
-                        serde_json::json!({"jsonrpc":"2.0","id":id,"error":{"code":-32601,"message":"Client method not supported"}})
-                    };
-                    self.write(&answer)?;
-                }
-                continue;
-            }
-            if reply.get("id") == message.get("id") && reply.get("method").is_none() {
-                return Ok(reply);
             }
         }
     }
 
     fn notify(&self, message: &Value) -> Result<(), String> {
-        self.write(message)
+        write(&self.input, &self.name, message)
     }
 }
 

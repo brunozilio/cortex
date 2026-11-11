@@ -42,8 +42,8 @@ pub enum Msg {
         command: String,
         result: Result<(String, bool), String>,
     },
-    /// Scheduled prompts now due, to send.
-    Due(Vec<superfik_core::schedule::Scheduled>),
+    /// Scheduled prompts now due, and what reached the inbox, to send.
+    Due(Vec<superfik_core::schedule::Scheduled>, Vec<superfik_core::inbox::Notice>),
     Notice(String),
     Error(String),
 }
@@ -81,7 +81,7 @@ impl super::app::App {
                 self.transcript.notice(super::context::view(&usage));
             }
             Msg::Shell { id, command, result } => super::shell::finished(self, &id, command, result),
-            Msg::Due(due) => super::schedules::due(self, due),
+            Msg::Due(due, notices) => super::schedules::due(self, due, notices),
             Msg::Notice(text) => self.transcript.notice(text),
             Msg::Error(text) => self.transcript.error(text),
         }

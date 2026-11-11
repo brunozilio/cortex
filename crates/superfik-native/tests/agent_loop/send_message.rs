@@ -97,7 +97,7 @@ fn an_unknown_agent_is_an_error_and_sub_agents_are_not_offered_the_tool() {
 
     let (error, failed) = result(&history, "m1");
     assert!(failed);
-    assert!(error.starts_with("No agent agent-9 to continue"), "{error}");
+    assert!(error.starts_with("No agent or session agent-9"), "{error}");
     let child = &model.asked()[2];
     assert!(!child.tools.iter().any(|spec| spec.name == "SendMessage" || spec.name == "Agent"));
 }

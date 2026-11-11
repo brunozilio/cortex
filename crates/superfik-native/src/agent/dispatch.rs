@@ -96,6 +96,11 @@ impl Agent<'_> {
                 Some(_) if name == AGENT_TOOL => {
                     self.sub_agent_with(input, self.control, self.workspace, parent, &tasks.conversations, None)
                 }
+                // To another session (not an agent of this run): an action, asked like one.
+                Some(_) if name == SEND_MESSAGE_TOOL && self.to_session(input, &tasks.conversations) => {
+                    let message = crate::tools::peers::SessionMessage;
+                    self.permitted(id, &message, &summary, input, pre.permission.as_deref())
+                }
                 Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
                 Some(_) if name == crate::tools::advisor::ADVISOR_TOOL => match &self.workspace.advisor {
                     Some(model) => {

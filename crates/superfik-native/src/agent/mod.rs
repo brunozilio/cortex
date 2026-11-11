@@ -237,6 +237,7 @@ impl Agent<'_> {
                 }
             }
             results.extend(self.steered());
+            results.extend(self.notices());
             history.push(Message { role: Role::User, blocks: results });
             if self.control.is_moving() {
                 return Err(Ending::Moved);
@@ -265,5 +266,27 @@ impl Agent<'_> {
                 Block::Text(format!("The user sent this message while you were working:\n{text}"))
             })
             .collect()
+    }
+
+    /// What reached the client's inbox meanwhile (the main agent's only),
+    /// as one message with the next tool results.
+    fn notices(&self) -> Option<Block> {
+        if self.depth > 0 {
+            return None;
+        }
+        let client = self.workspace.credentials.client;
+        let (notices, held) = superfik_core::inbox::admitted(crate::tools::inbox::take(client), self.control.mode());
+        if !held.is_empty() {
+            (self.emit)(EngineEvent::TextDelta(format!(
+                "\n{} message(s) from channels or other sessions are held: bypass mode never lets them in.\n",
+                held.len()
+            )));
+        }
+        if notices.is_empty() {
+            return None;
+        }
+        let message = superfik_core::inbox::as_message(&notices);
+        (self.emit)(EngineEvent::Notified(notices));
+        Some(Block::Text(message))
     }
 }

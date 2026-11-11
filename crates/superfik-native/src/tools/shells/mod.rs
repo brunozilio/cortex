@@ -20,7 +20,9 @@ use super::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
 
 mod wait;
+mod watch;
 pub(crate) use wait::{Waited, wait};
+pub(crate) use watch::{Watch, watch};
 
 /// What a shell keeps of its output (the newest part).
 const KEPT: usize = 1 << 20;
@@ -32,6 +34,9 @@ struct Shell {
     command: String,
     tree: Tree,
     output: Arc<Mutex<Vec<u8>>>,
+    /// How much of its output was dropped from the front so far (for
+    /// readers that keep their own place, like a monitor's watch).
+    dropped: Arc<std::sync::atomic::AtomicUsize>,
     read: usize,
     started: Instant,
     exit: Option<String>,
@@ -62,13 +67,15 @@ pub(crate) fn start(client: u64, summary: &str, command: &mut std::process::Comm
     let tree = spawned?;
     let output = Arc::new(Mutex::new(Vec::new()));
     let pipe = boxed(reader);
+    let dropped = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let readers = vec![{
-        let output = Arc::clone(&output);
-        std::thread::spawn(move || collect(pipe, &output))
+        let (output, dropped) = (Arc::clone(&output), Arc::clone(&dropped));
+        std::thread::spawn(move || collect(pipe, &output, &dropped))
     }];
     let id = format!("bash_{}", NEXT.fetch_add(1, Ordering::Relaxed));
     let started = Instant::now();
-    let shell = Shell { client, command: summary.to_owned(), tree, output, read: 0, started, exit: None, readers };
+    let shell =
+        Shell { client, command: summary.to_owned(), tree, output, dropped, read: 0, started, exit: None, readers };
     lock().insert(id.clone(), shell);
     Ok(id)
 }
@@ -77,7 +84,7 @@ fn boxed(pipe: impl std::io::Read + Send + 'static) -> Box<dyn std::io::Read + S
     Box::new(pipe)
 }
 
-fn collect(mut pipe: Box<dyn std::io::Read + Send>, output: &Mutex<Vec<u8>>) {
+fn collect(mut pipe: Box<dyn std::io::Read + Send>, output: &Mutex<Vec<u8>>, dropped: &std::sync::atomic::AtomicUsize) {
     let mut chunk = [0_u8; 8192];
     while let Ok(read) = pipe.read(&mut chunk) {
         if read == 0 {
@@ -85,18 +92,20 @@ fn collect(mut pipe: Box<dyn std::io::Read + Send>, output: &Mutex<Vec<u8>>) {
         }
         let mut kept = output.lock().unwrap_or_else(PoisonError::into_inner);
         kept.extend_from_slice(&chunk[..read]);
-        capped(&mut kept);
+        dropped.fetch_add(capped(&mut kept), Ordering::Relaxed);
     }
 }
 
 /// A command nobody reads keeps only its newest output: past twice
 /// [`KEPT`], the oldest goes (`BashOutput` then starts over from what is
 /// left).
-fn capped(kept: &mut Vec<u8>) {
-    if kept.len() > 2 * KEPT {
-        let drop = kept.len() - KEPT;
-        kept.drain(..drop);
+fn capped(kept: &mut Vec<u8>) -> usize {
+    if kept.len() <= 2 * KEPT {
+        return 0;
     }
+    let drop = kept.len() - KEPT;
+    kept.drain(..drop);
+    drop
 }
 
 /// Stops every background command of a client that left.
@@ -196,6 +205,7 @@ impl Tool for BashOutput {
             if kept.len() > KEPT {
                 let drop = kept.len() - KEPT;
                 kept.drain(..drop);
+                shell.dropped.fetch_add(drop, Ordering::Relaxed);
             }
             shell.read = kept.len();
             new

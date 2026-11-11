@@ -81,9 +81,13 @@ impl Tool for Bash {
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
             return match super::shells::start(workspace.credentials.client, command, &mut shell) {
-                Ok(id) => Outcome::ok(format!(
-                    "Started in the background as {id}. Read its output with BashOutput and stop it with KillShell."
-                )),
+                Ok(id) => {
+                    super::shells::watch(id.clone(), workspace.credentials.client, super::shells::Watch::End);
+                    Outcome::ok(format!(
+                        "Started in the background as {id}. Read its output with BashOutput and stop it with \
+                         KillShell; you will be told when it ends."
+                    ))
+                }
                 Err(error) => Outcome::error(format!("Could not start the shell: {error}")),
             };
         }
@@ -100,10 +104,13 @@ impl Tool for Bash {
                 let code = code.map_or_else(|| "a signal".to_owned(), |code| code.to_string());
                 Outcome::error(format!("{}\n(exit code {code})", clip(&output, OUTPUT)).trim_start().to_owned())
             }
-            Waited::Detached => Outcome::ok(format!(
-                "The user moved this command to the background, where it goes on as {id}. Read its output \
-                 with BashOutput and stop it with KillShell."
-            )),
+            Waited::Detached => {
+                super::shells::watch(id.clone(), workspace.credentials.client, super::shells::Watch::End);
+                Outcome::ok(format!(
+                    "The user moved this command to the background, where it goes on as {id}. Read its output \
+                     with BashOutput and stop it with KillShell; you will be told when it ends."
+                ))
+            }
             Waited::Stopped(output) => Outcome::error(format!("{}\n(cancelled)", clip(&output, OUTPUT))),
             Waited::TimedOut(output) => Outcome::error(
                 format!("{}\n(stopped after {} ms)", clip(&output, OUTPUT), timeout.as_millis())
@@ -115,7 +122,7 @@ impl Tool for Bash {
 }
 
 #[cfg(unix)]
-fn shell(command: &str) -> std::process::Command {
+pub(super) fn shell(command: &str) -> std::process::Command {
     let program = std::env::var("SHELL").ok().filter(|shell| !shell.is_empty()).unwrap_or_else(|| "/bin/sh".into());
     let mut shell = superfik_process::command(program);
     shell.arg("-c").arg(command);
@@ -123,7 +130,7 @@ fn shell(command: &str) -> std::process::Command {
 }
 
 #[cfg(windows)]
-fn shell(command: &str) -> std::process::Command {
+pub(super) fn shell(command: &str) -> std::process::Command {
     superfik_process::WindowsShell::detect().command(command)
 }
 

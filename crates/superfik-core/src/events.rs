@@ -84,6 +84,9 @@ pub enum EngineEvent {
     /// The run's model was overloaded; it goes on with this one
     /// (`fallbackModel`).
     FellBack(String),
+    /// Events from outside the conversation reached the agent (monitors,
+    /// background commands, channels, other sessions).
+    Notified(Vec<crate::inbox::Notice>),
     /// The session now works in this folder: a worktree the agent entered
     /// (`EnterWorktree`), or the project again (`ExitWorktree`).
     Moved(std::path::PathBuf),

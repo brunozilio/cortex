@@ -19,7 +19,7 @@ impl Tool for SendMessageTool {
             schema: json!({
                 "type": "object",
                 "properties": {
-                    "to": { "type": "string", "description": "The agent_id an Agent report gave, such as agent-1." },
+                    "to": { "type": "string", "description": "The agent_id an Agent report gave (agent-1), or another session's name (ListSessions)." },
                     "message": { "type": "string", "description": "What to tell or ask the agent." },
                 },
                 "required": ["to", "message"],
@@ -47,4 +47,6 @@ correction or the next step of the same work, instead of starting a fresh agent 
 agent answers with a new report, which, like the first, is not shown to the user.
 
 - An agent still running in the background cannot take a message: collect it with TaskOutput first.
-- Agents last for this request only; start a new one for later requests.";
+- Agents last for this request only; start a new one for later requests.
+- `to` can also name another of the user's open sessions (ListSessions lists them): the message waits in its inbox \
+and reaches its agent; any answer comes back to you as an event.";

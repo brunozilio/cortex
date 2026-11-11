@@ -10,12 +10,15 @@ pub mod builtin_skills;
 mod edit;
 mod glob;
 mod grep;
+pub mod inbox;
 mod lsp;
 mod monitor;
 pub mod notebook;
 mod outside;
 mod pdf;
+pub mod peers;
 pub mod plan_mode;
+pub mod push_notification;
 mod read;
 mod rule_target;
 pub mod schedules;
@@ -120,6 +123,8 @@ pub fn standard() -> Vec<Box<dyn Tool>> {
         Box::new(schedules::CronList),
         Box::new(schedules::CronDelete),
         Box::new(schedules::ScheduleWakeup),
+        Box::new(push_notification::PushNotification),
+        Box::new(peers::ListSessions),
         Box::new(notebook::NotebookEdit),
         Box::new(monitor::Monitor),
         Box::new(web::WebFetch),

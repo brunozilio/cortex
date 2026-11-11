@@ -70,6 +70,10 @@ struct Cli {
     /// scrollback, instead of full screen.
     #[arg(long)]
     inline: bool,
+    /// MCP servers to keep up as channels: what they send (a chat's
+    /// messages, a webhook) reaches the agent as an event. Comma-separated.
+    #[arg(long, value_delimiter = ',')]
+    channels: Vec<String>,
     /// The model to go on with when the chosen one is overloaded (same
     /// provider).
     #[arg(long = "fallback-model")]
@@ -258,7 +262,15 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 Some(_) => (resume, true),
                 None => (resume, false),
             };
-            let start = tui::Start { resume, add_dirs, pick, headless, fork: cli.fork_session, inline: cli.inline };
+            let start = tui::Start {
+                resume,
+                add_dirs,
+                pick,
+                headless,
+                fork: cli.fork_session,
+                inline: cli.inline,
+                channels: cli.channels,
+            };
             tui::run(superfik, cwd, cli.model, cli.mode, prompt, stale, start).map_err(|e| e.to_string())?;
             Ok(ExitCode::SUCCESS)
         }

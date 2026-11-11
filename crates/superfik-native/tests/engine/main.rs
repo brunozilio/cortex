@@ -3,6 +3,7 @@
 mod agents;
 mod checkpoints;
 mod headless;
+mod inbox;
 mod lsp;
 mod mcp;
 mod plugins;

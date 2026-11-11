@@ -22,6 +22,11 @@ pub enum ServerEvent {
         path: PathBuf,
         servers: Vec<superfik_core::mcp_config::McpServerInfo>,
     },
+    /// The client's open channels, and why those asked for are not.
+    Channels {
+        opened: Vec<String>,
+        failed: Vec<String>,
+    },
     /// Where to sign in to the MCP server `name` (open it in a browser).
     McpAuthorizeAt {
         name: String,
@@ -33,6 +38,10 @@ pub enum ServerEvent {
     Schedules {
         due: Vec<superfik_core::schedule::Scheduled>,
         scheduled: Vec<superfik_core::schedule::Scheduled>,
+        /// With `take_due`, what reached the client's inbox (monitors,
+        /// background commands, channels, other sessions), to send as a turn.
+        #[serde(default)]
+        notices: Vec<superfik_core::inbox::Notice>,
     },
     Permissions {
         path: PathBuf,

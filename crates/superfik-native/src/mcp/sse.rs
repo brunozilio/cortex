@@ -48,6 +48,7 @@ impl SseTransport {
         headers: &[(String, String)],
         http: Arc<dyn Http>,
         stop: &AtomicBool,
+        listener: Option<super::Listener>,
     ) -> Result<Self, String> {
         let mut asked = headers.to_vec();
         asked.push(("accept".into(), "text/event-stream".into()));
@@ -82,13 +83,13 @@ impl SseTransport {
             waiting: Arc::default(),
             closed: Arc::default(),
         };
-        transport.listen(stream, decoder);
+        transport.listen(stream, decoder, listener);
         Ok(transport)
     }
 
     /// Reads the stream on its own thread: answers go to their requests,
     /// the server's pings are answered.
-    fn listen(&self, mut stream: Response, mut decoder: SseDecoder) {
+    fn listen(&self, mut stream: Response, mut decoder: SseDecoder, listener: Option<super::Listener>) {
         let (waiting, closed) = (Arc::clone(&self.waiting), Arc::clone(&self.closed));
         let poster = self.poster();
         std::thread::spawn(move || {
@@ -110,7 +111,12 @@ impl SseTransport {
                     (Some(id), Some(method)) => {
                         let _ = poster.post(&client_answer(id, method), &closed);
                     }
-                    _ => {}
+                    (None, Some(method)) => {
+                        if let Some(listener) = &listener {
+                            listener(method, &message["params"]);
+                        }
+                    }
+                    (None, None) => {}
                 }
             }
             closed.store(true, Ordering::Relaxed);

@@ -4,6 +4,7 @@
 //! configured servers and installed plugins'; each tool is offered as
 //! `mcp__<server>__<tool>`.
 
+pub mod channel;
 mod configured;
 pub mod extras;
 mod http;
@@ -19,7 +20,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::{Value, json};
 use superfik_core::PromptRequest;
 
-pub use self::configured::{McpSources, list, project_config};
+pub use self::configured::{McpSources, list, project_config, sources};
 pub use self::http::{HttpTransport, parse};
 pub use self::local::LocalTransport;
 pub use self::servers::{ServerSpec, parse_config, servers};
@@ -31,6 +32,10 @@ use crate::model::http::Http;
 use crate::tools::{Outcome, Tool};
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
+
+/// What hears a server's notifications (method, params): a channel's
+/// messages.
+pub type Listener = Arc<dyn Fn(&str, &Value) + Send + Sync>;
 
 pub trait Transport: Send + Sync {
     fn request(&self, message: &Value) -> Result<Value, String>;
@@ -77,6 +82,18 @@ impl McpServer {
         http: &Arc<dyn Http>,
         stop: &std::sync::atomic::AtomicBool,
     ) -> Result<Self, String> {
+        Self::open_listening(spec, http, stop, None)
+    }
+
+    /// [`open_stopped`](Self::open_stopped), with `listener` hearing its
+    /// notifications (stdio and SSE servers; a streamable HTTP server's go
+    /// unheard).
+    pub fn open_listening(
+        spec: &ServerSpec,
+        http: &Arc<dyn Http>,
+        stop: &std::sync::atomic::AtomicBool,
+        listener: Option<Listener>,
+    ) -> Result<Self, String> {
         if stop.load(Ordering::Relaxed) {
             return Err("cancelled".into());
         }
@@ -85,10 +102,10 @@ impl McpServer {
                 Box::new(HttpTransport::new(name, url, headers, Arc::clone(http)))
             }
             ServerSpec::Sse { name, url, headers } => {
-                Box::new(sse::SseTransport::connect(name, url, headers, Arc::clone(http), stop)?)
+                Box::new(sse::SseTransport::connect(name, url, headers, Arc::clone(http), stop, listener)?)
             }
             ServerSpec::Stdio { name, command, args, env } => {
-                Box::new(StdioTransport::spawn(name, command, args, env)?)
+                Box::new(StdioTransport::spawn_listening(name, command, args, env, listener)?)
             }
         };
         Ok(Self::new(spec.name(), transport))
@@ -130,6 +147,11 @@ impl McpServer {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// What it said it offers when initialized.
+    pub fn capabilities(&self) -> Value {
+        self.capabilities.lock().map(|capabilities| capabilities.clone()).unwrap_or_default()
     }
 
     /// Whether it said it offers `capability` (`resources`, `prompts`).
@@ -222,8 +244,10 @@ pub fn connect_stopped(
         let transport = Box::new(LocalTransport::new(Arc::clone(&local.endpoint)));
         ready(&local.name, Ok(McpServer::new(local.name.clone(), transport)))
     });
+    // An open channel stands in for the configured server of its name.
     let remote = servers(request, sources)
         .into_iter()
+        .filter(|spec| !request.credentials.mcp.iter().any(|local| local.name == spec.name()))
         .take_while(|_| !stop.load(Ordering::Relaxed))
         .map(|spec| spec.signed_in(request.credentials.mcp_tokens.as_ref()))
         .filter_map(|spec| ready(spec.name(), McpServer::open_stopped(&spec, http, stop)));

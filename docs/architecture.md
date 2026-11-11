@@ -124,6 +124,18 @@ provider's key (`RunCredentials::model`, never serialized).
   goes on in the new folder with a rebuilt prompt (`engine/moved.rs`),
   emitting `EngineEvent::Moved`. The session store remembers the worktree,
   so later runs resume there.
+- **Events from outside the conversation**: each client has an inbox of
+  `superfik_core::inbox::Notice`s (`tools::inbox`). `Monitor` streams every
+  line a background command prints; every background command says when it
+  ends (`shells::watch`); channels (MCP servers declaring
+  `experimental.claude/channel`, opened per client with `--channels`,
+  `backend::channels`) push `notifications/claude/channel`; another session
+  sends with `SendMessage` to its name (`tools::peers`, `ListSessions`, one
+  owner's sessions only). A run reads the inbox with its next tool results
+  (`EngineEvent::Notified`); an idle chat takes it with its schedule poll
+  and sends it as a turn. Runs reach an open channel's tools through a
+  bridge to that same process. `PushNotification` shows a desktop
+  notification.
 - **Scheduled prompts**: `CronCreate`/`CronList`/`CronDelete` and
   `ScheduleWakeup` keep prompts per client (`tools::schedules`, like the
   background shells; cron parsing and matching in `superfik_core::schedule`,

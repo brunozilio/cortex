@@ -25,8 +25,12 @@ pub struct CommandHandler {
 
 impl Drop for CommandHandler {
     fn drop(&mut self) {
+        // What could still leave notices goes first; the inbox last.
+        crate::channels::close(self.client);
         superfik_native::tools::shells::kill_client(self.client);
+        superfik_native::tools::peers::forget(self.client);
         superfik_native::tools::schedules::forget_client(self.client);
+        superfik_native::tools::inbox::forget_client(self.client);
     }
 }
 
@@ -83,6 +87,8 @@ impl CommandHandler {
                 self.services.providers.discover_models(&principal, models, outbox);
             }
             ClientCommand::ListSkills { path } => {
+                // A chat asks for its folder's skills as it opens: other sessions can reach it from then on.
+                superfik_native::tools::peers::register(self.client, Some(&principal), &path);
                 outbox.send(ServerEvent::Skills(crate::extensions::skills(&path, &self.services.extensions)));
             }
             ClientCommand::ListAgents { path } => {
@@ -130,8 +136,15 @@ impl CommandHandler {
                 if let Some(id) = delete {
                     schedules::remove(self.client, &id);
                 }
-                let due = if take_due { schedules::take_due(self.client, schedules::now()) } else { Vec::new() };
-                outbox.send(ServerEvent::Schedules { due, scheduled: schedules::list(self.client) });
+                let (due, notices) = if take_due {
+                    (
+                        schedules::take_due(self.client, schedules::now()),
+                        superfik_native::tools::inbox::take(self.client),
+                    )
+                } else {
+                    (Vec::new(), Vec::new())
+                };
+                outbox.send(ServerEvent::Schedules { due, scheduled: schedules::list(self.client), notices });
             }
             ClientCommand::ListPermissions { path } => self.outbox.send(crate::permissions::list(
                 &path,
@@ -153,6 +166,13 @@ impl CommandHandler {
             ClientCommand::SignOutMcpServer { path, name } => {
                 crate::mcp_auth::command::sign_out(&self.services, &principal, &path, &name, &self.outbox);
             }
+            ClientCommand::OpenChannels { path, names } => outbox.send(crate::channels::open_here(
+                self.client,
+                &path,
+                &names,
+                &self.services.extensions,
+                self.services.home.as_deref(),
+            )),
         }
     }
 
@@ -180,13 +200,14 @@ impl CommandHandler {
     }
 
     fn start(&self, owner: &Principal, run: RunId, request: &PromptRequest) -> Result<(), String> {
+        superfik_native::tools::peers::register(self.client, Some(owner), &request.cwd);
         let outbox = self.outbox.clone();
         let model = crate::native::key_for(&self.services.providers, owner, &request.model);
         let request = PromptRequest {
             credentials: superfik_core::credentials::RunCredentials {
                 model,
                 owner: Some(owner.clone()),
-                mcp: Vec::new(),
+                mcp: crate::channels::for_run(self.client),
                 client: self.client,
                 mcp_tokens: Some(self.services.mcp_auth.for_run(owner)),
             },

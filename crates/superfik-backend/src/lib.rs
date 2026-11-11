@@ -8,6 +8,7 @@
 //! [`ServerEvent`]: superfik_protocol::ServerEvent
 
 mod authorizer;
+mod channels;
 #[cfg(unix)]
 pub mod daemon;
 mod dirs;

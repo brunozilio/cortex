@@ -176,6 +176,7 @@ impl Transcript {
             EngineEvent::Tasks(tasks) => self.tasks.clone_from(tasks),
             EngineEvent::FellBack(model) => self.notice(format!("The model was overloaded; going on with {model}.")),
             EngineEvent::Moved(path) => self.notice(format!("Now working in {}", path.display())),
+            EngineEvent::Notified(all) => all.iter().for_each(|n| self.notice(format!("[{}] {}", n.source, n.text))),
             EngineEvent::Steered(text) => {
                 self.close_thinking();
                 self.push(Entry::User(text.clone()));
