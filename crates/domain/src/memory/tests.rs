@@ -190,9 +190,20 @@ fn vectors_follow_the_model_and_the_text() {
 }
 
 #[test]
-fn a_search_tool_is_announced() {
+fn a_search_tool_is_announced_once_and_its_empty_answer_is_final() {
     let brief = MemoryBrief { tool: true, ..MemoryBrief::default() };
-    assert!(brief.instructions(false).expect("text").contains("`memory_search` tool"));
+    let fresh = brief.instructions(true).expect("text");
+    assert!(fresh.contains("`memory_search` tool") && fresh.contains("finds nothing is final"));
+    assert!(!fresh.contains("listed above"), "nothing is listed, so nothing is called an index");
+    assert_eq!(brief.instructions(false), None, "a resumed session is not told to search again");
+}
+
+#[test]
+fn search_is_worth_offering_only_beyond_what_is_recalled() {
+    let book = book();
+    assert!(!book.holds_more_than(&book.memories));
+    assert!(book.holds_more_than(&book.memories[..1]));
+    assert!(!MemoryBook::default().holds_more_than(&[]));
 }
 
 #[test]

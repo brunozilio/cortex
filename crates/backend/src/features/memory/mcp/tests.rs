@@ -39,8 +39,48 @@ fn listings_name_ids_kinds_and_sessions() {
         uses: 0,
         last_used: 0,
     };
-    assert_eq!(listing(&[memory]), "[3] procedural: Run clippy (from \"Lint\")");
-    assert_eq!(listing(&[]), "No memory matches.");
+    assert_eq!(answer(SearchAnswer::Found(vec![memory])), "[3] procedural: Run clippy (from \"Lint\")");
+}
+
+#[test]
+fn empty_answers_tell_the_agent_to_stop_searching() {
+    for empty in [SearchAnswer::Nothing, SearchAnswer::AlreadyShown, SearchAnswer::Exhausted] {
+        let text = answer(empty.clone());
+        assert!(text.contains("Do not search memory again"), "{empty:?}: {text}");
+    }
+    assert!(answer(SearchAnswer::Nothing).starts_with("Nothing in this project's memory matches"));
+    assert!(answer(SearchAnswer::AlreadyShown).contains("already in this conversation"));
+}
+
+fn search_call(query: &str) -> Value {
+    json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": MEMORY_SEARCH_TOOL, "arguments": { "query": query } } })
+}
+
+fn remembered(texts: &[&str]) -> Memories {
+    let memories = Memories::new(Arc::new(InMemoryStore::default()));
+    let by = Provenance { author: Author::User, now: 1, origin: None };
+    let edits: Vec<MemoryEdit> = texts
+        .iter()
+        .map(|text| MemoryEdit::Remember { kind: MemoryKind::Procedural, text: (*text).into(), tags: vec![] })
+        .collect();
+    memories.edit(&Principal::LocalOwner, std::path::Path::new("/repo"), &edits, by).expect("edit");
+    memories
+}
+
+fn text_of(server: &LocalMcp, query: &str) -> String {
+    let answer = server.endpoint.handle(&search_call(query)).expect("answer");
+    answer["result"]["content"][0]["text"].as_str().unwrap_or_default().to_owned()
+}
+
+#[test]
+fn a_run_never_gets_the_same_memory_twice_and_stops_searching_at_the_limit() {
+    let memories = remembered(&["Run clippy before committing", "Run nextest for tests"]);
+    let shown = MemorySearches::new([MemoryId(0)]);
+    let server = MemoryEndpoint::for_run(memories, Principal::LocalOwner, "/repo".into(), shown);
+    assert!(text_of(&server, "clippy").contains("already in this conversation"), "recalled into the prompt");
+    assert_eq!(text_of(&server, "run"), "[1] procedural: Run nextest for tests");
+    assert!(text_of(&server, "jira").starts_with("Nothing in this project's memory matches"));
+    assert!(text_of(&server, "nextest").contains("searched memory 3 times"));
 }
 
 #[test]
@@ -56,10 +96,11 @@ fn a_run_searches_only_its_own_project_s_memory() {
     memories.edit(&owner, std::path::Path::new("/repo"), &[edit], by).expect("edit");
     let call = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": MEMORY_SEARCH_TOOL, "arguments": { "query": "clippy" } } });
     let text = |project: &str| {
-        let server = MemoryEndpoint::for_run(memories.clone(), owner.clone(), project.into());
+        let server =
+            MemoryEndpoint::for_run(memories.clone(), owner.clone(), project.into(), MemorySearches::default());
         assert_eq!(server.name, MEMORY_SERVER);
         server.endpoint.handle(&call).expect("answer")["result"]["content"][0]["text"].as_str().map(str::to_owned)
     };
     assert_eq!(text("/repo").as_deref(), Some("[0] procedural: Run clippy before committing"));
-    assert_eq!(text("/other").as_deref(), Some("No memory matches."));
+    assert!(text("/other").is_some_and(|text| text.starts_with("Nothing in this project's memory matches")));
 }

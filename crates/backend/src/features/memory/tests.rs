@@ -139,8 +139,10 @@ fn what_an_agent_is_given_counts_as_used() {
 
     memories.brief(&owner, RunId::new(), &request(dir.path()), false);
     assert_eq!(uses(), vec![1, 1], "everything recalled");
-    memories.find(&owner, dir.path(), "wgpu", 5);
+    memories.find(&owner, dir.path(), "wgpu", 5, &mut MemorySearches::default());
     assert_eq!(uses(), vec![2, 1], "only what the search found");
+    memories.find(&owner, dir.path(), "wgpu", 5, &mut MemorySearches::new([MemoryId(0)]));
+    assert_eq!(uses(), vec![2, 1], "what was already shown is not counted again");
 }
 
 #[test]
@@ -198,6 +200,18 @@ fn a_tool_shortens_what_is_recalled() {
     let without = memories.brief(&owner, RunId::new(), &request(dir.path()), false).memory.expect("brief");
     assert_eq!((with.recalled.len(), without.recalled.len()), (RecallBudget::WITH_TOOL.facts, 30));
     assert!(with.tool);
+}
+
+#[test]
+fn memory_that_fits_in_the_prompt_offers_no_search() {
+    let memories = plain();
+    let owner = Principal::LocalOwner;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let empty = memories.brief(&owner, RunId::new(), &request(dir.path()), true).memory.expect("brief");
+    assert!(!empty.tool, "an empty memory has nothing to search");
+    memories.edit(&owner, dir.path(), &[remember("Uses wgpu")], by_user()).expect("edit");
+    let small = memories.brief(&owner, RunId::new(), &request(dir.path()), true).memory.expect("brief");
+    assert_eq!((small.recalled.len(), small.tool), (1, false), "everything is already recalled");
 }
 
 #[test]

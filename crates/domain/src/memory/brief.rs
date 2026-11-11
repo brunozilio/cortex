@@ -46,11 +46,12 @@ impl MemoryBrief {
             }
             out.push(listing);
         }
-        if self.tool {
+        if fresh && self.tool {
             out.push(format!(
-                "Search this project's memory with the `{MEMORY_SEARCH_TOOL}` tool whenever earlier work, \
-                 decisions or conventions might matter; sub-agents can use it too. What is listed above is only \
-                 a short index."
+                "This project's memory holds more than is shown here. Search it with the `{MEMORY_SEARCH_TOOL}` \
+                 tool when the user refers to earlier work or asks you to recall something, or when the task \
+                 hinges on a past decision or convention. Search once per topic: a search that finds nothing is \
+                 final, so carry on with the task."
             ));
         }
         if !self.output.as_os_str().is_empty() {

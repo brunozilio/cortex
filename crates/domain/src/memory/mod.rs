@@ -109,6 +109,10 @@ pub struct MemoryBook {
 }
 
 impl MemoryBook {
+    pub fn holds_more_than(&self, recalled: &[Memory]) -> bool {
+        self.memories.len() > recalled.len()
+    }
+
     pub fn apply(&mut self, edits: &[MemoryEdit], by: &Provenance) -> Vec<MemoryId> {
         let expiry = by.now - FORGOTTEN_KEPT_DAYS * 24 * 60 * 60;
         self.forgotten.retain(|f| f.at >= expiry);
@@ -231,14 +235,18 @@ mod optimize;
 mod recall;
 mod sanitize;
 pub mod search;
+mod searches;
 
 pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, parse_memory_edits};
 pub use optimize::optimize_prompt;
 pub use recall::{RecallBudget, links, recall};
 pub use sanitize::{REDACTED, Sanitized, sanitize};
 pub use search::{Semantic, activate, search};
+pub use searches::{MemorySearches, SearchAnswer};
 
 #[cfg(test)]
 mod lifecycle_tests;
+#[cfg(test)]
+mod searches_tests;
 #[cfg(test)]
 mod tests;

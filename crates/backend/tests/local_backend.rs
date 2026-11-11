@@ -165,7 +165,7 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
     assert!(optimizing.memory.as_ref().is_some_and(|brief| brief.optimizing && brief.recalled.is_empty()));
     assert!(optimizing.credentials.mcp.is_empty(), "no memory_search while tidying");
     assert!(!plain.memory.as_ref().is_some_and(|brief| brief.optimizing), "a client cannot ask for it");
-    assert_eq!(plain.credentials.mcp.len(), 1, "an ordinary run searches memory");
+    assert!(plain.credentials.mcp.is_empty(), "memory that fits in the prompt is not searched");
 
     send(&backend, memory(json!({ "op": "undo", "path": path })));
     let undo = collect(&backend, &woke, answered);

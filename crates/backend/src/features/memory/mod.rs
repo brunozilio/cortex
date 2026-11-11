@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use domain::memory::{recall, search};
+use domain::memory::{MemorySearches, SearchAnswer, recall, search};
 use domain::{
     Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, ModelOption, Principal, PromptRequest, Provenance,
     RecallBudget, RunId,
@@ -132,15 +132,25 @@ impl Memories {
         json!({ "path": project, "query": query, "scores": self.search(owner, project, query) })
     }
 
-    pub fn find(&self, owner: &Principal, project: &Path, query: &str, limit: usize) -> Vec<Memory> {
+    pub fn find(
+        &self,
+        owner: &Principal,
+        project: &Path,
+        query: &str,
+        limit: usize,
+        searches: &mut MemorySearches,
+    ) -> SearchAnswer {
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
         let scores = search(query, &book.memories, None);
         let mut order: Vec<usize> = (0..book.memories.len()).filter(|&i| scores[i] > 0.0).collect();
         order.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then(a.cmp(&b)));
-        let found: Vec<Memory> = order.into_iter().take(limit).map(|i| book.memories[i].clone()).collect();
-        self.mark_used(owner, project, book, &found);
-        found
+        let ranked: Vec<Memory> = order.into_iter().map(|i| book.memories[i].clone()).collect();
+        let answer = searches.answer(ranked, limit);
+        if let SearchAnswer::Found(found) = &answer {
+            self.mark_used(owner, project, book, found);
+        }
+        answer
     }
 
     fn mark_used(&self, owner: &Principal, project: &Path, book: &mut MemoryBook, given: &[Memory]) {
@@ -160,12 +170,13 @@ impl Memories {
             return self.brief_optimization(owner, run, request);
         }
         let budget = if tool { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
-        let recalled = {
+        let (recalled, tool) = {
             let mut books = self.lock();
             let book = self.book(&mut books, owner, &request.cwd);
             let recalled = recall(&request.prompt, &book.memories, None, budget, now());
             self.mark_used(owner, &request.cwd, book, &recalled);
-            recalled
+            let tool = tool && book.holds_more_than(&recalled);
+            (recalled, tool)
         };
         let output = edits_file(run);
         let brief = MemoryBrief { recalled, output, origin: brief.origin.clone(), tool, optimizing: false };
