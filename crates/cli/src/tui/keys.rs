@@ -55,7 +55,13 @@ pub fn paste(app: &mut App, text: &str) {
         return app.paste_secret(text);
     }
     if app.ask.is_none() && app.picker.is_none() && app.diffs.is_none() {
-        app.paste(text);
+        match text.strip_prefix('!').filter(|_| !app.shell && app.input.is_empty()) {
+            Some(command) => {
+                app.shell = true;
+                app.paste(command);
+            }
+            None => app.paste(text),
+        }
     }
 }
 
@@ -171,6 +177,8 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
         }
     }
     match event.code {
+        KeyCode::Char('!') if !ctrl && !app.shell && app.input.is_empty() => app.shell = true,
+        KeyCode::Backspace | KeyCode::Esc if app.shell && app.input.is_empty() => app.shell = false,
         KeyCode::Left if cmd => app.input.home(),
         KeyCode::Right if cmd => app.input.end(),
         KeyCode::Backspace if cmd => app.input.delete_to_line_start(),

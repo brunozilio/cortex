@@ -140,7 +140,13 @@ pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
 }
 
 fn prompt(frame: &mut Frame, app: &App, area: Rect) {
-    let border = if app.ask.is_some() || app.secret.is_some() { Color::Yellow } else { Color::DarkGray };
+    let shell = Color::Rgb(255, 105, 180);
+    let border = match () {
+        _ if app.ask.is_some() || app.secret.is_some() => Color::Yellow,
+        _ if app.shell => shell,
+        _ => Color::DarkGray,
+    };
+    let (mark, color) = if app.shell { ("! ", shell) } else { ("> ", Color::Magenta) };
     let block = Block::bordered().border_type(BorderType::Rounded).border_style(Style::new().fg(border));
     let inner = block.inner(area);
     let width = usize::from(inner.width).saturating_sub(PROMPT_MARK).max(1);
@@ -151,7 +157,7 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
         .into_iter()
         .enumerate()
         .skip(first)
-        .map(|(i, text)| Line::from(vec![if i == 0 { "> " } else { "  " }.fg(Color::Magenta), text.into()]))
+        .map(|(i, text)| Line::from(vec![if i == 0 { mark } else { "  " }.fg(color), text.into()]))
         .collect();
     if let Some(search) = &app.search {
         let found = search.shown(app.input.history()).unwrap_or("no match").replace('\n', " ");
@@ -163,12 +169,13 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
         frame.render_widget(Paragraph::new(line).block(block), area);
     } else if app.input.is_empty() && app.ask.is_none() && app.secret.is_none() {
         let hint = match &app.ghost {
+            _ if app.shell => "Run a shell command · its output goes with your next message · esc leaves".to_owned(),
             _ if app.busy() && !app.queued.is_empty() => "↑ edits what is queued · esc interrupts".to_owned(),
             _ if app.busy() => "Type to message the agent as it works · esc interrupts".to_owned(),
             Some(ghost) => format!("{ghost}  (tab)"),
             None => "Try \"explain this project\" · / for commands".to_owned(),
         };
-        let placeholder = Line::from(vec!["> ".fg(Color::Magenta), hint.dim()]);
+        let placeholder = Line::from(vec![mark.fg(color), hint.dim()]);
         frame.render_widget(Paragraph::new(placeholder).block(block), area);
     } else {
         frame.render_widget(Paragraph::new(shown).block(block), area);

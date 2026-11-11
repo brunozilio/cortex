@@ -59,6 +59,8 @@ mod tests_notices;
 #[cfg(test)]
 mod tests_plan;
 #[cfg(test)]
+mod tests_shell_mode;
+#[cfg(test)]
 mod tests_steering;
 
 use std::path::PathBuf;

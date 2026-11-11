@@ -4,10 +4,12 @@ use super::app::App;
 
 impl App {
     pub fn submit(&mut self) {
-        let text = self.input.text().trim().to_owned();
-        if text.is_empty() {
+        let typed = self.input.text().trim().to_owned();
+        if typed.is_empty() {
             return;
         }
+        let text = if std::mem::take(&mut self.shell) { format!("!{typed}") } else { typed };
+        self.input.set(&text);
         self.input.take();
         self.suggestion = 0;
         self.saver.remember_prompt(&self.cwd, &text);
