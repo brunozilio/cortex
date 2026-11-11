@@ -25,6 +25,7 @@ pub enum Entry {
 pub struct Transcript {
     pub entries: Vec<Entry>,
     pub cost: f64,
+    pub usage: domain::billing::SessionUsage,
     pub context: u64,
     pub written: u64,
     pub activity: Option<String>,
@@ -117,6 +118,7 @@ impl Transcript {
             EngineEvent::Usage(usage) => {
                 self.context = usage.input + usage.cache_read + usage.cache_write;
                 self.written += usage.output;
+                self.usage.add(usage);
             }
             EngineEvent::Compacted(compaction) => {
                 self.notice(format!("Compacted the conversation ({} tokens freed)", compaction.freed()));

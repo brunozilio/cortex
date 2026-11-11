@@ -205,8 +205,8 @@ pub fn run(app: &mut App, command: Command) {
             });
         }
         Command::Cost => {
-            let cost = app.transcript.cost;
-            app.transcript.notice(format!("This session cost ${cost:.4} (when the provider prices it)."));
+            let report = super::cost::report(app.transcript.cost, &app.transcript.usage);
+            app.transcript.notice(report);
         }
         Command::Login => app.login(),
         Command::Exit => app.quit = true,

@@ -7,6 +7,7 @@ mod commands;
 mod config;
 mod context;
 pub(crate) mod conversations;
+mod cost;
 mod diff_model;
 mod diff_view;
 mod diffs;
