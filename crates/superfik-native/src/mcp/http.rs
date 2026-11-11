@@ -1,16 +1,28 @@
 //! An MCP server over streamable HTTP: each message POSTed, the answer as
-//! JSON or as the first message of an event stream. A session id the server
-//! hands out is sent back with every later message.
+//! JSON or as an event stream that may carry the server's notifications
+//! before it. A session id the server hands out is sent back with every
+//! later message. A listened server (a channel) also keeps a GET stream
+//! open for what it says unasked ([`listen`](mod@super::http_listen)).
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 
-use super::{PROTOCOL_VERSION, Transport};
-use crate::model::http::Http;
+use super::{Listener, PROTOCOL_VERSION, Transport};
+use crate::model::http::{Http, Response};
 
 pub struct HttpTransport {
-    name: String,
+    shared: Arc<Shared>,
+    listener: Option<Listener>,
+    /// Set when dropped: the GET stream ends.
+    closed: Arc<AtomicBool>,
+    listening: AtomicBool,
+}
+
+/// What both the requests and the GET stream use.
+pub(super) struct Shared {
+    pub(super) name: String,
     url: String,
     headers: Vec<(String, String)>,
     http: Arc<dyn Http>,
@@ -19,26 +31,31 @@ pub struct HttpTransport {
 
 impl std::fmt::Debug for HttpTransport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HttpTransport").field("name", &self.name).field("url", &self.url).finish_non_exhaustive()
+        let shared = &self.shared;
+        f.debug_struct("HttpTransport").field("name", &shared.name).field("url", &shared.url).finish_non_exhaustive()
     }
 }
 
-impl HttpTransport {
-    pub fn new(name: &str, url: &str, headers: &[(String, String)], http: Arc<dyn Http>) -> Self {
-        Self { name: name.to_owned(), url: url.to_owned(), headers: headers.to_vec(), http, session: Mutex::new(None) }
+impl Drop for HttpTransport {
+    fn drop(&mut self) {
+        self.closed.store(true, Ordering::Relaxed);
     }
+}
 
-    fn response(
-        &self,
-        message: &Value,
-        stop: &std::sync::atomic::AtomicBool,
-    ) -> Result<crate::model::http::Response, String> {
+impl Shared {
+    /// The server's headers, what it may answer with and the session.
+    fn headers(&self, accept: &str) -> Vec<(String, String)> {
         let mut headers = self.headers.clone();
-        headers.push(("accept".to_owned(), "application/json, text/event-stream".to_owned()));
+        headers.push(("accept".to_owned(), accept.to_owned()));
         headers.push(("mcp-protocol-version".to_owned(), PROTOCOL_VERSION.to_owned()));
         if let Some(session) = self.session.lock().ok().and_then(|session| session.clone()) {
             headers.push(("mcp-session-id".to_owned(), session));
         }
+        headers
+    }
+
+    pub(super) fn post(&self, message: &Value, stop: &AtomicBool) -> Result<Response, String> {
+        let headers = self.headers("application/json, text/event-stream");
         let response =
             self.http.post_stopped(&self.url, &headers, &message.to_string(), stop).map_err(|e| e.to_string())?;
         let status = response.status;
@@ -55,15 +72,51 @@ impl HttpTransport {
         }
         Ok(response)
     }
+
+    /// The GET stream of what the server says unasked; `None` when it
+    /// offers none (HTTP 405).
+    pub(super) fn stream(&self, stop: &AtomicBool) -> Result<Option<Response>, String> {
+        let response = self.http.get_stream(&self.url, &self.headers("text/event-stream"), stop);
+        let response = response.map_err(|e| e.to_string())?;
+        match response.status {
+            405 => Ok(None),
+            status if (200..300).contains(&status) => Ok(Some(response)),
+            status => Err(format!("{} answered HTTP {status} to its stream", self.name)),
+        }
+    }
+}
+
+impl HttpTransport {
+    pub fn new(name: &str, url: &str, headers: &[(String, String)], http: Arc<dyn Http>) -> Self {
+        Self::listening(name, url, headers, http, None)
+    }
+
+    /// One whose notifications `listener` hears.
+    pub fn listening(
+        name: &str,
+        url: &str,
+        headers: &[(String, String)],
+        http: Arc<dyn Http>,
+        listener: Option<Listener>,
+    ) -> Self {
+        let shared = Shared {
+            name: name.to_owned(),
+            url: url.to_owned(),
+            headers: headers.to_vec(),
+            http,
+            session: Mutex::new(None),
+        };
+        Self { shared: Arc::new(shared), listener, closed: Arc::default(), listening: AtomicBool::new(false) }
+    }
 }
 
 impl Transport for HttpTransport {
     fn request(&self, message: &Value) -> Result<Value, String> {
-        self.request_stopped(message, &std::sync::atomic::AtomicBool::new(false))
+        self.request_stopped(message, &AtomicBool::new(false))
     }
 
-    fn request_stopped(&self, message: &Value, stop: &std::sync::atomic::AtomicBool) -> Result<Value, String> {
-        let mut response = self.response(message, stop)?;
+    fn request_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<Value, String> {
+        let mut response = self.shared.post(message, stop)?;
         let mut text = String::new();
         let mut decoder = crate::model::sse::SseDecoder::new();
         loop {
@@ -74,11 +127,17 @@ impl Transport for HttpTransport {
             if let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n']))
                 && let Ok(reply) = serde_json::from_str::<Value>(&event.data)
             {
-                if reply.get("id") == message.get("id") && reply.get("method").is_none() {
-                    return Ok(reply);
-                }
-                if let (Some(id), Some(method)) = (reply.get("id"), reply.get("method").and_then(Value::as_str)) {
-                    self.notify_stopped(&super::sse::client_answer(id, method), stop)?;
+                match (reply.get("id"), reply.get("method").and_then(Value::as_str)) {
+                    (id, None) if id == message.get("id") => return Ok(reply),
+                    (Some(id), Some(method)) => {
+                        self.notify_stopped(&super::sse::client_answer(id, method), stop)?;
+                    }
+                    (None, Some(method)) => {
+                        if let Some(listener) = &self.listener {
+                            listener(method, &reply["params"]);
+                        }
+                    }
+                    _ => {}
                 }
             }
             if text.len() > 16 * 1024 * 1024 {
@@ -89,15 +148,31 @@ impl Transport for HttpTransport {
                 return Ok(reply);
             }
             if read == 0 {
-                return Err(format!("{} sent an unreadable answer", self.name));
+                return Err(format!("{} sent an unreadable answer", self.shared.name));
             }
         }
     }
-    fn notify_stopped(&self, message: &Value, stop: &std::sync::atomic::AtomicBool) -> Result<(), String> {
-        self.response(message, stop).map(|_| ())
+
+    fn notify_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<(), String> {
+        self.shared.post(message, stop).map(|_| ())
     }
+
     fn notify(&self, message: &Value) -> Result<(), String> {
-        self.notify_stopped(message, &std::sync::atomic::AtomicBool::new(false))
+        self.notify_stopped(message, &AtomicBool::new(false))
+    }
+
+    fn listen(&self) {
+        let Some(listener) = &self.listener else { return };
+        if self.listening.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let (shared, listener, closed) = (Arc::clone(&self.shared), Arc::clone(listener), Arc::clone(&self.closed));
+        let spawned = std::thread::Builder::new()
+            .name(format!("superfik-mcp-{}-stream", shared.name))
+            .spawn(move || super::http_listen::run(&shared, &listener, &closed));
+        if let Err(error) = spawned {
+            tracing::warn!(%error, server = self.shared.name, "an MCP server's stream could not be opened");
+        }
     }
 }
 

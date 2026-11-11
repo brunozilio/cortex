@@ -8,6 +8,7 @@ pub mod channel;
 mod configured;
 pub mod extras;
 mod http;
+mod http_listen;
 mod local;
 mod servers;
 mod sse;
@@ -52,6 +53,9 @@ pub trait Transport: Send + Sync {
         }
         self.notify(message)
     }
+    /// Starts hearing what the server says unasked, once the session is
+    /// open (a streamable HTTP server's GET stream).
+    fn listen(&self) {}
 }
 
 pub struct McpServer {
@@ -86,8 +90,8 @@ impl McpServer {
     }
 
     /// [`open_stopped`](Self::open_stopped), with `listener` hearing its
-    /// notifications (stdio and SSE servers; a streamable HTTP server's go
-    /// unheard).
+    /// notifications. A listened server is shared (a channel): a call it
+    /// is asked to drop is cancelled, its process kept.
     pub fn open_listening(
         spec: &ServerSpec,
         http: &Arc<dyn Http>,
@@ -99,7 +103,7 @@ impl McpServer {
         }
         let transport: Box<dyn Transport> = match spec {
             ServerSpec::Http { name, url, headers } => {
-                Box::new(HttpTransport::new(name, url, headers, Arc::clone(http)))
+                Box::new(HttpTransport::listening(name, url, headers, Arc::clone(http), listener))
             }
             ServerSpec::Sse { name, url, headers } => {
                 Box::new(sse::SseTransport::connect(name, url, headers, Arc::clone(http), stop, listener)?)
@@ -142,7 +146,9 @@ impl McpServer {
         if let Ok(mut capabilities) = self.capabilities.lock() {
             *capabilities = answer["capabilities"].clone();
         }
-        self.transport.notify_stopped(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), stop)
+        self.transport.notify_stopped(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), stop)?;
+        self.transport.listen();
+        Ok(())
     }
 
     pub fn name(&self) -> &str {

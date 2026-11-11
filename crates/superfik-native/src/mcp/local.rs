@@ -27,6 +27,13 @@ impl Transport for LocalTransport {
         self.0.handle(message).ok_or_else(|| "the in-process MCP server did not reply".to_owned())
     }
 
+    fn request_stopped(&self, message: &Value, stop: &std::sync::atomic::AtomicBool) -> Result<Value, String> {
+        if stop.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err("cancelled".into());
+        }
+        self.0.handle_stopped(message, stop).ok_or_else(|| "the in-process MCP server did not reply".to_owned())
+    }
+
     fn notify(&self, message: &Value) -> Result<(), String> {
         self.0.handle(message);
         Ok(())

@@ -133,8 +133,11 @@ provider's key (`RunCredentials::model`, never serialized).
   sends with `SendMessage` to its name (`tools::peers`, `ListSessions`, one
   owner's sessions only). A run reads the inbox with its next tool results
   (`EngineEvent::Notified`); an idle chat takes it with its schedule poll
-  and sends it as a turn. Runs reach an open channel's tools through a
-  bridge to that same process. `PushNotification` shows a desktop
+  and sends it as a turn. A channel is a process, an SSE server or a
+  streamable HTTP server (heard on its answers and on a GET stream it
+  reopens, `mcp::http_listen`). Runs reach an open channel's tools through
+  a bridge to that same server; a cancelled run's call is cancelled there
+  (`notifications/cancelled`), the channel staying up. `PushNotification` shows a desktop
   notification.
 - **Scheduled prompts**: `CronCreate`/`CronList`/`CronDelete` and
   `ScheduleWakeup` keep prompts per client (`tools::schedules`, like the

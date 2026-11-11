@@ -11,6 +11,12 @@ use serde_json::{Value, json};
 /// for a notification.
 pub trait McpEndpoint: Send + Sync {
     fn handle(&self, message: &Value) -> Option<Value>;
+
+    /// [`handle`](Self::handle), giving up once `stop` is set (the run was
+    /// cancelled); one that cannot stop answers when done.
+    fn handle_stopped(&self, message: &Value, _stop: &std::sync::atomic::AtomicBool) -> Option<Value> {
+        self.handle(message)
+    }
 }
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";

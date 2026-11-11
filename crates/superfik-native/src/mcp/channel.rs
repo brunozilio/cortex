@@ -2,8 +2,8 @@
 //! webhook) with `notifications/claude/channel`. A client opens the ones it
 //! names (`superfik --channels telegram`); each stays up while the client
 //! does, its messages go to the client's inbox, and runs reach its tools
-//! (the replies) through a [`Bridge`] to that same process, never a second
-//! one.
+//! (the replies) through a [`Bridge`] to that same server, never a second
+//! one. A process, an SSE server or a streamable HTTP server can be one.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -74,13 +74,18 @@ impl Bridge {
 
 impl McpEndpoint for Bridge {
     fn handle(&self, message: &Value) -> Option<Value> {
+        self.handle_stopped(message, &AtomicBool::new(false))
+    }
+
+    /// A cancelled run's call is cancelled at the channel, which stays up.
+    fn handle_stopped(&self, message: &Value, stop: &AtomicBool) -> Option<Value> {
         let id = message.get("id")?.clone();
         let method = message["method"].as_str().unwrap_or_default();
         // The channel shook hands once, when it opened; each run only hears so.
         let answer = if method == "initialize" {
             Ok(json!({ "protocolVersion": super::PROTOCOL_VERSION, "capabilities": self.0.capabilities() }))
         } else {
-            self.0.ask(method, message["params"].clone(), &AtomicBool::new(false))
+            self.0.ask(method, message["params"].clone(), stop)
         };
         Some(match answer {
             Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
@@ -97,16 +102,22 @@ mod tests {
     use crate::model::http::ScriptedHttp;
 
     /// A channel server in shell: it answers the handshake, then pushes a
-    /// message and echoes the `reply` tool's text.
+    /// message; a `slow` call never answers, the others answer `sent` and
+    /// how many calls were cancelled.
     const SERVER: &str = r#"
 read init
 id=$(printf '%s' "$init" | sed 's/.*"id":\([0-9]*\).*/\1/')
 printf '{"jsonrpc":"2.0","id":%s,"result":{"capabilities":{"tools":{},"experimental":{"claude/channel":{}}}}}\n' "$id"
 read initialized
 printf '{"jsonrpc":"2.0","method":"notifications/claude/channel","params":{"content":"deploy please","meta":{"chat_id":"7"}}}\n'
+cancelled=0
 while read line; do
+  case "$line" in
+    *notifications/cancelled*) cancelled=$((cancelled+1)); continue ;;
+    *'"slow"'*) continue ;;
+  esac
   id=$(printf '%s' "$line" | sed 's/.*"id":\([0-9]*\).*/\1/')
-  printf '{"jsonrpc":"2.0","id":%s,"result":{"content":[{"type":"text","text":"sent"}]}}\n' "$id"
+  printf '{"jsonrpc":"2.0","id":%s,"result":{"content":[{"type":"text","text":"sent"}],"cancelled":%s}}\n' "$id" "$cancelled"
 done
 "#;
 
@@ -137,6 +148,37 @@ done
         let replied = bridge.handle(&call).expect("answer");
         assert_eq!(replied["id"], 9, "the run's own id comes back");
         assert_eq!(replied["result"]["content"][0]["text"], "sent");
+    }
+
+    #[test]
+    fn a_cancelled_run_s_call_is_cancelled_at_the_channel_which_stays_up() {
+        let spec = ServerSpec::Stdio {
+            name: "chat".into(),
+            command: "/bin/sh".into(),
+            args: vec!["-c".into(), SERVER.into()],
+            env: vec![],
+        };
+        let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
+        let bridge = Bridge(open(&spec, &http, 9503).expect("channel"));
+        let stop = AtomicBool::new(false);
+        let slow = json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": { "name": "slow" } });
+        let started = Instant::now();
+        let dropped = std::thread::scope(|scope| {
+            scope.spawn(|| {
+                std::thread::sleep(Duration::from_millis(150));
+                stop.store(true, Ordering::Relaxed);
+            });
+            bridge.handle_stopped(&slow, &stop).expect("answer")
+        });
+        assert!(started.elapsed() < Duration::from_secs(5), "the run stopped waiting");
+        assert_eq!(dropped["id"], 4);
+        assert!(dropped["error"]["message"].as_str().is_some_and(|error| error.contains("cancelled")), "{dropped}");
+
+        let call = json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": { "name": "reply" } });
+        let replied = bridge.handle(&call).expect("answer");
+        assert_eq!(replied["result"]["content"][0]["text"], "sent", "the channel is still up");
+        assert_eq!(replied["result"]["cancelled"], 1, "and was told the call was dropped");
+        let _ = inbox::take(9503);
     }
 
     #[test]

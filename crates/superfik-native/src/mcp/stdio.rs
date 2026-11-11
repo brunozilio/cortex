@@ -12,7 +12,7 @@ use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use superfik_process::Tree;
 
 use super::{Listener, Transport};
@@ -28,6 +28,9 @@ pub struct StdioTransport {
     waiting: Waiting,
     /// Set once the server's output ended.
     ended: Arc<AtomicBool>,
+    /// Listened to, so shared (a channel): a dropped call is cancelled
+    /// with `notifications/cancelled` instead of ending the process.
+    shared: bool,
 }
 
 impl std::fmt::Debug for StdioTransport {
@@ -65,6 +68,7 @@ impl StdioTransport {
             input: Arc::new(Mutex::new(input)),
             waiting: Arc::default(),
             ended: Arc::default(),
+            shared: listener.is_some(),
         };
         let (waiting, ended, input) =
             (Arc::clone(&transport.waiting), Arc::clone(&transport.ended), Arc::clone(&transport.input));
@@ -131,7 +135,17 @@ impl Transport for StdioTransport {
             }
             if stop.load(Ordering::Relaxed) || std::time::Instant::now() > deadline {
                 forget();
-                self.tree.lock().map_err(|_| "MCP process unavailable")?.kill();
+                if self.shared {
+                    let reason = if stop.load(Ordering::Relaxed) { "cancelled" } else { "timed out" };
+                    let params = json!({ "requestId": message.get("id"), "reason": reason });
+                    let _ = write(
+                        &self.input,
+                        &self.name,
+                        &json!({ "jsonrpc": "2.0", "method": "notifications/cancelled", "params": params }),
+                    );
+                } else {
+                    self.tree.lock().map_err(|_| "MCP process unavailable")?.kill();
+                }
                 return Err("MCP call cancelled or timed out".into());
             }
         }
