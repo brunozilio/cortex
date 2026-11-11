@@ -5,6 +5,7 @@
 mod git;
 mod instruction_files;
 pub(crate) mod markdown;
+pub(crate) mod permissions;
 pub mod rules;
 pub mod settings;
 pub mod styles;
@@ -43,6 +44,8 @@ pub struct Instructions {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Environment {
     pub cwd: PathBuf,
+    /// Folders added to the project (`/add-dir`, `additionalDirectories`).
+    pub added_dirs: Vec<PathBuf>,
     pub platform: &'static str,
     pub date: String,
     pub model: String,
@@ -95,6 +98,10 @@ pub fn system(environment: &Environment) -> String {
     }
     prompt.push_str("\n\n# Environment\n");
     prompt.push_str(&format!("- Working directory: {}\n", environment.cwd.display()));
+    if !environment.added_dirs.is_empty() {
+        let dirs: Vec<String> = environment.added_dirs.iter().map(|dir| dir.display().to_string()).collect();
+        prompt.push_str(&format!("- Additional working directories: {}\n", dirs.join(", ")));
+    }
     prompt.push_str(&format!("- Git repository: {}\n", if environment.git.is_some() { "yes" } else { "no" }));
     prompt.push_str(&format!("- Platform: {}\n", environment.platform));
     prompt.push_str(&format!("- Today: {}\n", environment.date));

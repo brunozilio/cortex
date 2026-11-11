@@ -2,13 +2,16 @@
 
 mod agents;
 mod checkpoints;
+mod headless;
 mod lsp;
 mod mcp;
 mod plugins;
 mod runs;
 mod sessions;
+mod steering;
 mod superfik_only;
 mod verification;
+mod worktrees;
 
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
@@ -34,6 +37,14 @@ impl ApiSource for Source {
 /// Runs a request with an empty home of its own, so the person's settings,
 /// skills and MCP servers stay out of the tests.
 fn start(engine: &NativeEngine, request: &PromptRequest) -> Receiver<EngineEvent> {
+    start_with_handle(engine, request).0
+}
+
+/// [`start`], keeping the handle to steer, answer or cancel the run.
+fn start_with_handle(
+    engine: &NativeEngine,
+    request: &PromptRequest,
+) -> (Receiver<EngineEvent>, Box<dyn superfik_native::RunHandle>) {
     static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
     let home = HOME.get_or_init(|| tempfile::tempdir().expect("home")).path().to_path_buf();
     let mut request = request.clone();
@@ -45,8 +56,8 @@ fn start(engine: &NativeEngine, request: &PromptRequest) -> Receiver<EngineEvent
     let sink = Arc::new(move |_run: RunId, event: EngineEvent| {
         let _ = send.lock().expect("send").send(event);
     });
-    engine.start(RunId::new(), request, sink).expect("start");
-    receive
+    let handle = engine.start(RunId::new(), request, sink).expect("start");
+    (receive, handle)
 }
 
 fn finish(events: &Receiver<EngineEvent>) -> Vec<EngineEvent> {

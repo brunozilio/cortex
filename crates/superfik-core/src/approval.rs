@@ -18,6 +18,11 @@ pub enum AskKind {
         tool: String,
         subject: String,
         rememberable: bool,
+        /// The allow rule [`Decision::AllowAlways`] keeps in the project's
+        /// `settings.local.json` (`Bash(cargo test:*)`); without one it
+        /// lasts the session.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rule: Option<String>,
     },
     Questions(Vec<Question>),
     /// The agent's plan, put to the user before it leaves plan mode:
@@ -47,6 +52,8 @@ pub enum Decision {
     Allow,
     AllowAlways,
     Deny,
+    /// Denied, with what the user wants the agent to do instead.
+    DenyWith(String),
     Answer(Vec<Vec<usize>>),
     /// A plan approved, to be carried out in this mode.
     Approve(PermissionMode),

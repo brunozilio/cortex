@@ -47,6 +47,9 @@ impl HttpTransport {
         {
             *kept = Some(session);
         }
+        if status == 401 {
+            return Err(format!("{} answered HTTP 401: sign in with /mcp login {}", self.name, self.name));
+        }
         if !(200..300).contains(&status) {
             return Err(format!("{} answered HTTP {status}", self.name));
         }
@@ -75,12 +78,7 @@ impl Transport for HttpTransport {
                     return Ok(reply);
                 }
                 if let (Some(id), Some(method)) = (reply.get("id"), reply.get("method").and_then(Value::as_str)) {
-                    let response = if method == "ping" {
-                        serde_json::json!({"jsonrpc":"2.0","id":id,"result":{}})
-                    } else {
-                        serde_json::json!({"jsonrpc":"2.0","id":id,"error":{"code":-32601,"message":"Client method not supported"}})
-                    };
-                    self.notify_stopped(&response, stop)?;
+                    self.notify_stopped(&super::sse::client_answer(id, method), stop)?;
                 }
             }
             if text.len() > 16 * 1024 * 1024 {

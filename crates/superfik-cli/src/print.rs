@@ -2,21 +2,40 @@
 //! stderr. Nobody is there to answer, so whatever the agent asks is
 //! denied (pick `--mode bypass` or `edits` to let it act).
 
-use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use superfik_sdk::{Decision, EngineEvent, PermissionMode, Superfik};
 
+use crate::print_output::{Format, Output};
+
 /// What the command line asked for besides the prompt.
+#[derive(Default)]
 pub struct Wanted<'a> {
     pub model: Option<&'a str>,
     pub mode: Option<PermissionMode>,
     pub verification: Option<String>,
+    /// Folders read like the project (`--add-dir`).
+    pub add_dirs: Vec<PathBuf>,
+    /// `--max-turns`, `--allowedTools`, `--disallowedTools`,
+    /// `--append-system-prompt`.
+    pub headless: superfik_sdk::Headless,
+    pub format: Format,
+    /// The conversation to go on with (`--resume <id>`, `-c`).
+    pub resume: Option<superfik_sdk::SessionId>,
+    /// Go on in a copy of it (`--fork-session`).
+    pub fork: bool,
 }
 
-pub fn print(superfik: &Superfik, cwd: PathBuf, wanted: Wanted<'_>, prompt: &str) -> Result<ExitCode, String> {
-    let Wanted { model: wanted, mode, verification } = wanted;
+/// Each prompt in turn, in one conversation (`--input-format stream-json`
+/// gives several).
+pub fn print_all(
+    superfik: &Superfik,
+    cwd: PathBuf,
+    wanted: Wanted<'_>,
+    prompts: &[String],
+) -> Result<ExitCode, String> {
+    let Wanted { model: wanted, mode, verification, add_dirs, headless, format, resume, fork } = wanted;
     let models = superfik.models().map_err(|e| e.to_string())?;
     let remembered = superfik.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
     let model = superfik_core::model::choose_model(&models, wanted.or(remembered.as_deref()))
@@ -27,47 +46,46 @@ pub fn print(superfik: &Superfik, cwd: PathBuf, wanted: Wanted<'_>, prompt: &str
         return Err(format!("no model named {wanted}: `superfik models` lists them"));
     }
     let mut session = superfik.session(cwd, model);
+    if let Some(id) = resume {
+        session = session.resume(id);
+    }
     if let Some(mode) = mode {
         session.set_permission(mode);
     }
     session.set_verification(verification);
-    let mut run = session.send(prompt).map_err(|e| e.to_string())?;
-    let mut out = std::io::stdout().lock();
-    let mut code = ExitCode::SUCCESS;
+    session.set_headless(headless);
+    if fork {
+        session.fork_next();
+    }
+    for dir in add_dirs {
+        session.add_dir(dir);
+    }
+    let mut output = Output::new(format, std::io::stdout().lock());
     let mut failed_verification = false;
-    while let Some(event) = run.next_event() {
-        match event {
-            EngineEvent::TextDelta(text) => {
-                let _ = out.write_all(text.as_bytes());
-                let _ = out.flush();
+    for prompt in prompts {
+        let mut run = session.send(prompt).map_err(|e| e.to_string())?;
+        while let Some(event) = run.next_event() {
+            output.event(&event);
+            match event {
+                EngineEvent::Asked(superfik_sdk::AgentAsk { id, kind: superfik_sdk::AskKind::Plan { plan } }) => {
+                    output.push_text(&plan);
+                    output.note("plan not carried out: run again with --mode edits to implement it");
+                    run.answer(id, Decision::Deny).map_err(|e| e.to_string())?;
+                }
+                EngineEvent::Asked(ask) => {
+                    output.note("denied: the agent asked for permission (use --mode or --allowedTools)");
+                    run.answer(ask.id, Decision::Deny).map_err(|e| e.to_string())?;
+                }
+                EngineEvent::Verified(verdict) => {
+                    output.note(&crate::verdict::line(&verdict));
+                    failed_verification |= !verdict.passed;
+                }
+                _ => {}
             }
-            EngineEvent::ToolStarted(call) => eprintln!("\x1b[2m● {}({})\x1b[0m", call.name, call.summary),
-            EngineEvent::Asked(superfik_sdk::AgentAsk { id, kind: superfik_sdk::AskKind::Plan { plan } }) => {
-                let _ = writeln!(out, "{plan}");
-                eprintln!("\x1b[2mplan not carried out: run again with --mode edits to implement it\x1b[0m");
-                run.answer(id, Decision::Deny).map_err(|e| e.to_string())?;
-            }
-            EngineEvent::Asked(ask) => {
-                eprintln!("\x1b[33mdenied: the agent asked for permission (use --mode)\x1b[0m");
-                run.answer(ask.id, Decision::Deny).map_err(|e| e.to_string())?;
-            }
-            EngineEvent::Failed(message) => {
-                eprintln!("superfik: {message}");
-                code = ExitCode::FAILURE;
-            }
-            EngineEvent::Cancelled => code = ExitCode::FAILURE,
-            EngineEvent::Verified(verdict) => {
-                eprintln!("{}", crate::verdict::line(&verdict));
-                failed_verification = !verdict.passed;
-            }
-            _ => {}
         }
     }
-    if failed_verification {
-        code = ExitCode::FAILURE;
-    }
-    let _ = writeln!(out);
-    Ok(code)
+    let failed = output.finish(failed_verification);
+    Ok(if failed { ExitCode::FAILURE } else { ExitCode::SUCCESS })
 }
 
 #[cfg(test)]
@@ -91,8 +109,8 @@ mod tests {
         services.memory_tool = false;
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
         let superfik = Superfik::builder().data_dir(data.path()).services(services).build().expect("superfik");
-        let wanted = Wanted { model: None, mode: None, verification: Some("tests pass".into()) };
-        (print(&superfik, data.path().into(), wanted, "fix it").expect("printed"), engine)
+        let wanted = Wanted { verification: Some("tests pass".into()), ..Wanted::default() };
+        (print_all(&superfik, data.path().into(), wanted, &["fix it".into()]).expect("printed"), engine)
     }
 
     #[test]

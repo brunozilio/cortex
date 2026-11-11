@@ -93,7 +93,9 @@ impl Saver {
             if !settings["sessions"].is_object() {
                 settings["sessions"] = serde_json::json!({});
             }
-            settings["sessions"][cwd] = serde_json::Value::String(session);
+            settings["sessions"][cwd.as_str()] = serde_json::Value::String(session.clone());
+            let now = super::conversations::now();
+            super::conversations::touch(settings, Path::new(&cwd), &SessionId(session), None, now);
         });
     }
 
@@ -104,7 +106,9 @@ impl Saver {
             if !settings["titles"].is_object() {
                 settings["titles"] = serde_json::json!({});
             }
-            settings["titles"][cwd] = serde_json::json!({ "session": session, "title": title });
+            settings["titles"][cwd.as_str()] = serde_json::json!({ "session": session, "title": title });
+            let now = super::conversations::now();
+            super::conversations::touch(settings, Path::new(&cwd), &SessionId(session), Some(&title), now);
         });
     }
 }

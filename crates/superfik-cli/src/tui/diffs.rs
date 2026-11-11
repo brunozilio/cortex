@@ -25,15 +25,17 @@ pub fn is_edit(output: &str) -> bool {
 
 pub fn edit(output: &str, width: usize, expanded: bool, out: &mut Vec<Line<'static>>) {
     let mut lines = output.lines();
-    if let Some(heading) = lines.next() {
+    let heading = lines.next();
+    if let Some(heading) = heading {
         out.push(Line::styled(format!("  ⎿ {heading}"), dim()));
     }
+    let ext = heading.and_then(super::highlight::extension);
     let body: Vec<&str> = lines.collect();
     for line in body.iter().take(if expanded { usize::MAX } else { FOLDED }) {
         let rest = line.trim_start();
         let digits = rest.len() - rest.trim_start_matches(|c: char| c.is_ascii_digit()).len();
         let mark = rest[digits..].chars().nth(1).unwrap_or(' ');
-        out.push(row(&rest[..digits], mark, rest.get(digits + 3..).unwrap_or(""), width));
+        out.push(row(&rest[..digits], mark, rest.get(digits + 3..).unwrap_or(""), width, ext));
     }
     more(body.len(), expanded, out);
 }
@@ -53,9 +55,10 @@ pub fn unified(diff: &str, width: usize, expanded: bool, out: &mut Vec<Line<'sta
             if i > 0 && (expanded || shown < FOLDED) {
                 out.push(Line::styled("          ⋮", dim()));
             }
+            let ext = file.path.rsplit_once('.').map(|(_, ext)| ext);
             for line in &hunk.lines {
                 if expanded || shown < FOLDED {
-                    out.push(numbered(line, width));
+                    out.push(row(&line.number.to_string(), mark(line.kind), &line.text, width, ext));
                     shown += 1;
                 }
             }
@@ -73,13 +76,8 @@ pub fn heading(file: &FileDiff) -> Line<'static> {
     Line::from(vec![Span::styled("● ", Style::new().fg(Color::Cyan)), Span::raw(name)])
 }
 
-/// One line of a hunk: its number, then its text on green or red, cut to
-/// one row.
-pub fn numbered(line: &DiffLine, width: usize) -> Line<'static> {
-    row(&line.number.to_string(), mark(line.kind), &line.text, width)
-}
-
-/// [`numbered`], with the whole text wrapped onto as many rows as it takes;
+/// One line of a hunk: its number, then its whole text on green or red,
+/// wrapped onto as many rows as it takes;
 /// the rows after the first keep the colour but not the number or mark.
 pub fn wrapped(line: &DiffLine, width: usize, out: &mut Vec<Line<'static>>) {
     let mark = mark(line.kind);
@@ -108,13 +106,16 @@ fn colour(mark: char) -> Style {
     }
 }
 
-/// A numbered row cut to one line of `width`.
-fn row(number: &str, mark: char, text: &str, width: usize) -> Line<'static> {
+/// A numbered row cut to one line of `width`, its code coloured by the
+/// language of extension `ext`.
+fn row(number: &str, mark: char, text: &str, width: usize, ext: Option<&str>) -> Line<'static> {
     let text = wrap(text, width.saturating_sub(12)).into_iter().next().unwrap_or_default();
-    Line::from(vec![
-        Span::styled(format!("    {number:>5} "), dim()),
-        Span::styled(format!("{mark} {}", fill(&text, width)), colour(mark)),
-    ])
+    let filled = fill(&text, width);
+    let mut spans =
+        vec![Span::styled(format!("    {number:>5} "), dim()), Span::styled(format!("{mark} "), colour(mark))];
+    spans.extend(super::highlight::spans(ext, &text, colour(mark)));
+    spans.push(Span::styled(filled[text.len()..].to_owned(), colour(mark)));
+    Line::from(spans)
 }
 
 /// `text` padded so its colour runs to the row's end.

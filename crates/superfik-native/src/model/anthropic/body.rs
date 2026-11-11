@@ -14,7 +14,10 @@ pub fn body(request: &TurnRequest) -> Value {
         "thinking": { "type": "adaptive", "display": "summarized" },
         "output_config": { "effort": effort(request.effort) },
         "cache_control": { "type": "ephemeral" },
-        "system": [{ "type": "text", "text": request.system }],
+        // A breakpoint of its own after the tools and system prompt, so they
+        // stay cached when the conversation changes under them (compaction,
+        // rewind); the top-level one caches up to the newest message.
+        "system": [{ "type": "text", "text": request.system, "cache_control": { "type": "ephemeral" } }],
         "messages": request.messages.iter().filter_map(message).collect::<Vec<_>>(),
     });
     if !request.tools.is_empty() {
@@ -121,6 +124,7 @@ mod tests {
         assert_eq!(body["output_config"]["effort"], "xhigh");
         assert_eq!(body["cache_control"]["type"], "ephemeral");
         assert_eq!(body["system"][0]["text"], "Be brief.");
+        assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral", "tools and system cached on their own");
         assert!(body.get("temperature").is_none(), "sampling settings are refused by the API");
         assert_eq!(body["tools"][0]["input_schema"]["type"], "object");
     }

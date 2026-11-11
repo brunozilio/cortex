@@ -21,7 +21,18 @@ pub struct FakeEngine {
     answers: Arc<Mutex<Vec<(AskId, Decision)>>>,
     requests: Arc<Mutex<Vec<PromptRequest>>>,
     steers: Arc<Mutex<Vec<String>>>,
-    steering: bool,
+    steering: Steering,
+}
+
+/// What a fake run does with a steered message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Steering {
+    /// Hands it over at once.
+    HandOver,
+    /// Keeps it until it is taken back.
+    Hold,
+    /// Ignores it, like an engine that cannot take messages mid-run.
+    Off,
 }
 
 impl FakeEngine {
@@ -33,11 +44,11 @@ impl FakeEngine {
             answers: Arc::default(),
             requests: Arc::default(),
             steers: Arc::default(),
-            steering: true,
+            steering: Steering::HandOver,
         }
     }
 
-    /// The messages steered into its runs, each handed over at once.
+    /// The messages its runs handed over (at once, unless held).
     pub fn steers(&self) -> Vec<String> {
         self.steers.lock().map(|steers| steers.clone()).unwrap_or_default()
     }
@@ -45,7 +56,14 @@ impl FakeEngine {
     /// Like an engine that cannot take messages mid-run: it never hands
     /// them over.
     pub fn without_steering(mut self) -> Self {
-        self.steering = false;
+        self.steering = Steering::Off;
+        self
+    }
+
+    /// Its runs keep steered messages, never handing them over, until they
+    /// are taken back.
+    pub fn holding_steers(mut self) -> Self {
+        self.steering = Steering::Hold;
         self
     }
 
@@ -100,8 +118,14 @@ impl AgentEngine for FakeEngine {
             .name("superfik-fake-engine".into())
             .spawn(move || replay(script, delay, &replay_gate, &replay_cancelled))
             .map_err(|source| EngineError::Spawn { engine: "fake engine", source })?;
-        let steers = self.steering.then(|| Arc::clone(&self.steers));
-        Ok(Box::new(FakeHandle { gate, cancelled, answers: Arc::clone(&self.answers), steers }))
+        Ok(Box::new(FakeHandle {
+            gate,
+            cancelled,
+            answers: Arc::clone(&self.answers),
+            steers: Arc::clone(&self.steers),
+            steering: self.steering,
+            held: Vec::new(),
+        }))
     }
 }
 
@@ -122,19 +146,32 @@ struct FakeHandle {
     gate: RunGate,
     cancelled: Arc<AtomicBool>,
     answers: Arc<Mutex<Vec<(AskId, Decision)>>>,
-    steers: Option<Arc<Mutex<Vec<String>>>>,
+    steers: Arc<Mutex<Vec<String>>>,
+    steering: Steering,
+    held: Vec<String>,
 }
 
 impl RunHandle for FakeHandle {
     fn steer(&mut self, text: String) {
-        let Some(steers) = &self.steers else { return };
         if self.cancelled.load(Ordering::SeqCst) {
             return;
         }
-        if let Ok(mut steers) = steers.lock() {
-            steers.push(text.clone());
+        match self.steering {
+            Steering::HandOver => {
+                if let Ok(mut steers) = self.steers.lock() {
+                    steers.push(text.clone());
+                }
+                self.gate.emit(EngineEvent::Steered(text));
+            }
+            Steering::Hold => self.held.push(text),
+            Steering::Off => {}
         }
-        self.gate.emit(EngineEvent::Steered(text));
+    }
+
+    fn unsteer(&mut self) {
+        if self.steering != Steering::Off {
+            self.gate.emit(EngineEvent::Unsteered(std::mem::take(&mut self.held)));
+        }
     }
 
     fn cancel(&mut self) {

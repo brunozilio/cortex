@@ -109,7 +109,7 @@ fn cancel_stops_a_slow_run() {
 fn answers_reach_the_run_that_asked() {
     let ask = AgentAsk {
         id: AskId("r1".into()),
-        kind: AskKind::Permission { tool: "Bash".into(), subject: "ls".into(), rememberable: false },
+        kind: AskKind::Permission { tool: "Bash".into(), subject: "ls".into(), rememberable: false, rule: None },
     };
     let engine = FakeEngine::new(vec![model()], vec![EngineEvent::Asked(ask.clone())]);
     let (backend, woke) = backend(engine.clone());

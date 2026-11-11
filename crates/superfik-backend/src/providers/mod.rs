@@ -7,7 +7,7 @@
 
 mod account;
 mod catalog;
-mod redirect;
+pub(crate) mod redirect;
 mod store;
 
 use std::collections::HashMap;

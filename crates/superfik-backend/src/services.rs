@@ -27,6 +27,8 @@ pub struct LocalServices {
     /// The owner's home, whose `.superfik/mcp.json` holds their own MCP
     /// servers (the process's home; tests name another).
     pub home: Option<PathBuf>,
+    /// The owner's sign-ins to remote MCP servers (`/mcp login`).
+    pub mcp_auth: crate::McpAuth,
 }
 
 impl std::fmt::Debug for LocalServices {
@@ -60,6 +62,7 @@ impl LocalServices {
             authorizer: Arc::new(LocalAuthorizer),
             local_models: None,
             home: std::env::home_dir(),
+            mcp_auth: crate::McpAuth::system(),
         }
     }
 

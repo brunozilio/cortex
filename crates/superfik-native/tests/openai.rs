@@ -48,7 +48,14 @@ fn folds_reasoning_text_and_a_call() {
         ]
     );
     assert_eq!(deltas[0], Delta::Thinking("Look first.".into()));
-    assert_eq!(&deltas[1..], &[Delta::Text("Let me ".into()), Delta::Text("look.".into())]);
+    assert_eq!(
+        &deltas[1..],
+        &[
+            Delta::Text("Let me ".into()),
+            Delta::Text("look.".into()),
+            Delta::ToolInput { name: "Read".into(), piece: "{\"file_path\":\"src/main.rs\"}".into() },
+        ]
+    );
     assert_eq!((reply.usage.input, reply.usage.cache_read, reply.usage.output), (12, 4000, 87));
 }
 

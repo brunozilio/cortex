@@ -178,9 +178,7 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
 /// it and says where.
 pub fn cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
     let Some(root) = &setup.worktree_root else { return Ok(None) };
-    if !setup.cwd.starts_with(root.join(".superfik/worktrees"))
-        || setup.cwd.file_name().and_then(|s| s.to_str()).and_then(|s| uuid::Uuid::parse_str(s).ok()).is_none()
-    {
+    if !managed(root, &setup.cwd) {
         return Err("invalid managed worktree".into());
     }
     let head = git(&setup.cwd, &["rev-parse".as_ref(), "HEAD".as_ref()])?;
@@ -194,5 +192,13 @@ pub fn cleanup(setup: &Setup) -> Result<Option<PathBuf>, String> {
     }
 }
 
+/// Whether `path` is a worktree Superfik made in `root`.
+fn managed(root: &std::path::Path, path: &std::path::Path) -> bool {
+    path.parent() == Some(root.join(".superfik/worktrees").as_path())
+        && path.file_name().and_then(|s| s.to_str()).and_then(|s| uuid::Uuid::parse_str(s).ok()).is_some()
+}
+
 mod guard;
+mod session_worktree;
 pub use guard::Guard;
+pub use session_worktree::{Relocation, enter, removable, remove};

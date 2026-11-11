@@ -58,7 +58,7 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
     let data = tempfile::tempdir().expect("data");
     let ask = AgentAsk {
         id: AskId("a-1".into()),
-        kind: AskKind::Permission { tool: "Bash".into(), subject: "cargo test".into(), rememberable: true },
+        kind: AskKind::Permission { tool: "Bash".into(), subject: "cargo test".into(), rememberable: true, rule: None },
     };
     let script = vec![
         EngineEvent::SessionStarted(SessionId("s".into())),
@@ -109,8 +109,12 @@ fn shift_tab_and_commands_change_the_chat_without_the_agent() {
     press(&mut app, KeyCode::Esc);
     type_text(&mut app, "/help");
     press(&mut app, KeyCode::Enter);
-    assert!(screen(&app).contains("/diff         Show"), "{}", screen(&app));
-    assert!(screen(&app).contains("/verification Judge"), "{}", screen(&app));
+    let help = match app.transcript.entries.last() {
+        Some(super::transcript::Entry::Notice(text)) => text.clone(),
+        other => panic!("no help: {other:?}"),
+    };
+    assert!(help.contains("/diff         Show") && help.contains("/verification Judge"), "{help}");
+    assert!(screen(&app).contains("Ctrl+C quits"), "{}", screen(&app));
     assert!(engine.requests().is_empty(), "nothing reached the agent");
 }
 
@@ -120,7 +124,12 @@ fn preview() {
     let data = tempfile::tempdir().expect("data");
     let ask = AgentAsk {
         id: AskId("a".into()),
-        kind: AskKind::Permission { tool: "Bash".into(), subject: "npm run dev".into(), rememberable: true },
+        kind: AskKind::Permission {
+            tool: "Bash".into(),
+            subject: "npm run dev".into(),
+            rememberable: true,
+            rule: None,
+        },
     };
     let edit = EngineEvent::ToolResult {
         id: "t2".into(),

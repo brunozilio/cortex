@@ -38,6 +38,12 @@ pub enum EngineEvent {
     TextDelta(String),
     /// The model's reasoning as it streams (when the provider shows it).
     ThinkingDelta(String),
+    /// A piece of the input of the tool call the model is writing, before
+    /// the call starts.
+    ToolInputDelta {
+        name: String,
+        piece: String,
+    },
     ToolStarted(ToolCall),
     ToolFinished {
         id: String,
@@ -75,6 +81,17 @@ pub enum EngineEvent {
     AskWithdrawn(AskId),
     /// A message the user sent while the run worked reached the model.
     Steered(String),
+    /// The run's model was overloaded; it goes on with this one
+    /// (`fallbackModel`).
+    FellBack(String),
+    /// The session now works in this folder: a worktree the agent entered
+    /// (`EnterWorktree`), or the project again (`ExitWorktree`).
+    Moved(std::path::PathBuf),
+    /// The agent's task list after it changed (`TaskCreate`, `TaskUpdate`).
+    Tasks(Vec<TaskItem>),
+    /// Steered messages taken back before the model saw them (the client
+    /// asked for them; empty when every one was already handed over).
+    Unsteered(Vec<String>),
     /// The agent left or entered plan mode (`ExitPlanMode` approved,
     /// `EnterPlanMode`); later runs of the conversation keep this mode.
     ModeChanged(crate::PermissionMode),
@@ -87,6 +104,15 @@ pub enum EngineEvent {
     Failure(FailureKind),
     Failed(String),
     Cancelled,
+}
+
+/// One task of the agent's list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskItem {
+    pub id: String,
+    pub subject: String,
+    /// `pending`, `in_progress` or `completed`.
+    pub status: String,
 }
 
 /// What a rewind did.

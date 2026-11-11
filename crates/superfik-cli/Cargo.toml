@@ -18,6 +18,8 @@ ratatui = "0.30.2"
 unicode-width = "0.2.3"
 clap = { version = "4.6.7", features = ["derive"] }
 tui-markdown = "0.3.13"
+# Already built for tui-markdown's code blocks; the same features.
+syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "default-themes", "plist-load", "regex-onig"] }
 tachyonfx = { version = "0.25.2", default-features = false, features = ["std", "std-duration"] }
 tui-big-text = "0.8.10"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }

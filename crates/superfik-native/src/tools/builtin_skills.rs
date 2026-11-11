@@ -70,6 +70,16 @@ mod tests {
     }
 
     #[test]
+    fn the_chat_s_review_and_init_commands_ship_as_skills() {
+        for name in ["init", "review", "code-review", "security-review"] {
+            let path = format!("{name}/SKILL.md");
+            let skill = embedded::FILES.iter().find(|(file, _)| *file == path).map(|(_, bytes)| *bytes);
+            let text = String::from_utf8_lossy(skill.unwrap_or_default());
+            assert!(text.contains(&format!("name: {name}\n")), "{path}: {text}");
+        }
+    }
+
+    #[test]
     fn every_shipped_skill_speaks_as_superfik() {
         for (path, bytes) in embedded::FILES {
             if path.ends_with("LICENSE.txt") || !path.ends_with(".md") {

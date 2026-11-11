@@ -54,6 +54,11 @@ impl Task {
 }
 
 impl Tasks {
+    /// Whether a background agent's work is still to come or uncollected.
+    pub(super) fn busy(&self) -> bool {
+        self.background.lock().is_ok_and(|tasks| tasks.values().any(|task| !task.collected.load(Ordering::Relaxed)))
+    }
+
     fn find(&self, input: &Value) -> Option<Arc<Task>> {
         self.background.lock().expect("tasks").get(input["task_id"].as_str().unwrap_or_default()).cloned()
     }

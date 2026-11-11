@@ -11,27 +11,54 @@ use superfik_core::PromptRequest;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ServerSpec {
-    Http { name: String, url: String, headers: Vec<(String, String)> },
-    Stdio { name: String, command: String, args: Vec<String>, env: Vec<(String, String)> },
+    Http {
+        name: String,
+        url: String,
+        headers: Vec<(String, String)>,
+    },
+    /// The older HTTP+SSE transport (`"type": "sse"`).
+    Sse {
+        name: String,
+        url: String,
+        headers: Vec<(String, String)>,
+    },
+    Stdio {
+        name: String,
+        command: String,
+        args: Vec<String>,
+        env: Vec<(String, String)>,
+    },
 }
 
 impl ServerSpec {
     pub fn name(&self) -> &str {
         match self {
-            Self::Http { name, .. } | Self::Stdio { name, .. } => name,
+            Self::Http { name, .. } | Self::Sse { name, .. } | Self::Stdio { name, .. } => name,
         }
     }
 
     pub(super) fn renamed(mut self, plugin: &Plugin) -> Self {
-        let (Self::Http { name, .. } | Self::Stdio { name, .. }) = &mut self;
+        let (Self::Http { name, .. } | Self::Sse { name, .. } | Self::Stdio { name, .. }) = &mut self;
         *name = plugin.server_name(name);
+        self
+    }
+
+    /// A remote server with the owner's token (`/mcp login`), unless its
+    /// configuration already sends an `Authorization` header.
+    pub fn signed_in(mut self, tokens: Option<&superfik_core::credentials::McpSignIns>) -> Self {
+        if let (Self::Http { url, headers, .. } | Self::Sse { url, headers, .. }, Some(tokens)) = (&mut self, tokens)
+            && !headers.iter().any(|(key, _)| key.eq_ignore_ascii_case("authorization"))
+            && let Some(token) = tokens.0.token(url)
+        {
+            headers.push(("Authorization".into(), format!("Bearer {token}")));
+        }
         self
     }
 
     /// The URL of an HTTP server, the command line of a stdio one.
     pub fn target(&self) -> String {
         match self {
-            Self::Http { url, .. } => url.clone(),
+            Self::Http { url, .. } | Self::Sse { url, .. } => url.clone(),
             Self::Stdio { command, args, .. } => {
                 std::iter::once(command).chain(args).cloned().collect::<Vec<_>>().join(" ")
             }
@@ -43,9 +70,12 @@ impl std::fmt::Debug for ServerSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let keys = |pairs: &[(String, String)]| pairs.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
         match self {
-            Self::Http { name, url, headers } => {
-                f.debug_struct("Http").field("name", name).field("url", url).field("headers", &keys(headers)).finish()
-            }
+            Self::Http { name, url, headers } | Self::Sse { name, url, headers } => f
+                .debug_struct(if matches!(self, Self::Sse { .. }) { "Sse" } else { "Http" })
+                .field("name", name)
+                .field("url", url)
+                .field("headers", &keys(headers))
+                .finish(),
             Self::Stdio { name, command, args, env } => f
                 .debug_struct("Stdio")
                 .field("name", name)
@@ -97,6 +127,11 @@ pub fn parse_config(text: &str) -> Result<Vec<ServerSpec>, String> {
             let name = name.clone();
             match server["type"].as_str() {
                 Some("http") => Some(ServerSpec::Http {
+                    name,
+                    url: server["url"].as_str()?.to_owned(),
+                    headers: pairs(&server["headers"]),
+                }),
+                Some("sse") => Some(ServerSpec::Sse {
                     name,
                     url: server["url"].as_str()?.to_owned(),
                     headers: pairs(&server["headers"]),

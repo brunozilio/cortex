@@ -1,6 +1,7 @@
 //! The agent loop against a scripted model and real tools in a temp dir.
 
 mod custom_agents;
+mod permission_rules;
 mod permissions;
 mod plan_mode;
 mod send_message;

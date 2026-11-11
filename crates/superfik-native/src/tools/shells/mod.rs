@@ -19,6 +19,9 @@ use superfik_process::Tree;
 use super::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
 
+mod wait;
+pub(crate) use wait::{Waited, wait};
+
 /// What a shell keeps of its output (the newest part).
 const KEPT: usize = 1 << 20;
 /// What one `BashOutput` returns at most.
@@ -32,6 +35,8 @@ struct Shell {
     read: usize,
     started: Instant,
     exit: Option<String>,
+    /// The threads reading its stdout and stderr.
+    readers: Vec<std::thread::JoinHandle<()>>,
 }
 
 fn shells() -> &'static Mutex<HashMap<String, Shell>> {
@@ -47,15 +52,23 @@ fn lock() -> std::sync::MutexGuard<'static, HashMap<String, Shell>> {
 /// background for `client`; returns its id.
 pub(crate) fn start(client: u64, summary: &str, command: &mut std::process::Command) -> std::io::Result<String> {
     static NEXT: AtomicU64 = AtomicU64::new(1);
-    let mut tree = Tree::spawn(command)?;
+    // One pipe for both stdout and stderr, so what it printed keeps its order.
+    let (reader, writer) = std::io::pipe()?;
+    command.stdout(writer.try_clone()?).stderr(writer);
+    let spawned = Tree::spawn(command);
+    // The command keeps its copies of the pipe's end until told otherwise;
+    // the reader only ends once every writer is gone.
+    command.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    let tree = spawned?;
     let output = Arc::new(Mutex::new(Vec::new()));
-    for pipe in [tree.child().stdout.take().map(boxed), tree.child().stderr.take().map(boxed)].into_iter().flatten() {
+    let pipe = boxed(reader);
+    let readers = vec![{
         let output = Arc::clone(&output);
-        std::thread::spawn(move || collect(pipe, &output));
-    }
+        std::thread::spawn(move || collect(pipe, &output))
+    }];
     let id = format!("bash_{}", NEXT.fetch_add(1, Ordering::Relaxed));
-    let shell =
-        Shell { client, command: summary.to_owned(), tree, output, read: 0, started: Instant::now(), exit: None };
+    let started = Instant::now();
+    let shell = Shell { client, command: summary.to_owned(), tree, output, read: 0, started, exit: None, readers };
     lock().insert(id.clone(), shell);
     Ok(id)
 }
@@ -72,6 +85,17 @@ fn collect(mut pipe: Box<dyn std::io::Read + Send>, output: &Mutex<Vec<u8>>) {
         }
         let mut kept = output.lock().unwrap_or_else(PoisonError::into_inner);
         kept.extend_from_slice(&chunk[..read]);
+        capped(&mut kept);
+    }
+}
+
+/// A command nobody reads keeps only its newest output: past twice
+/// [`KEPT`], the oldest goes (`BashOutput` then starts over from what is
+/// left).
+fn capped(kept: &mut Vec<u8>) {
+    if kept.len() > 2 * KEPT {
+        let drop = kept.len() - KEPT;
+        kept.drain(..drop);
     }
 }
 
@@ -86,6 +110,19 @@ pub fn kill_client(client: u64) {
             let _ = shell.tree.child().wait();
         }
     }
+}
+
+/// Stops background command `id` of `client`; whether there was one.
+pub fn kill(client: u64, id: &str) -> bool {
+    let mut shells = lock();
+    if !shells.get(id).is_some_and(|shell| shell.client == client) {
+        return false;
+    }
+    if let Some(mut shell) = shells.remove(id) {
+        shell.tree.kill();
+        let _ = shell.tree.child().wait();
+    }
+    true
 }
 
 /// The background commands of `client`: id, command, still running.
@@ -153,7 +190,9 @@ impl Tool for BashOutput {
         let exit = refresh(shell);
         let text = {
             let mut kept = shell.output.lock().unwrap_or_else(PoisonError::into_inner);
-            let new = String::from_utf8_lossy(&kept[shell.read.min(kept.len())..]).into_owned();
+            // Past the end when the reader dropped the oldest output.
+            let from = if shell.read > kept.len() { 0 } else { shell.read };
+            let new = String::from_utf8_lossy(&kept[from..]).into_owned();
             if kept.len() > KEPT {
                 let drop = kept.len() - KEPT;
                 kept.drain(..drop);
@@ -218,60 +257,4 @@ impl Tool for KillShell {
 }
 
 #[cfg(all(test, unix))]
-mod tests {
-    use std::process::Stdio;
-    use std::time::Duration;
-
-    use super::*;
-
-    fn workspace(client: u64) -> Workspace {
-        let mut workspace = Workspace::new(std::env::temp_dir());
-        workspace.credentials.client = client;
-        workspace
-    }
-
-    fn sh(script: &str) -> std::process::Command {
-        let mut command = std::process::Command::new("/bin/sh");
-        command.arg("-c").arg(script).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-        command
-    }
-
-    fn read(id: &str, client: u64) -> String {
-        BashOutput.run(&json!({ "bash_id": id }), &workspace(client)).content
-    }
-
-    #[test]
-    fn a_background_command_is_read_incrementally_and_stopped() {
-        let id = start(901, "server", &mut sh("echo ready; sleep 30")).expect("start");
-        let deadline = Instant::now() + Duration::from_secs(5);
-        let mut first = read(&id, 901);
-        while !first.contains("ready") {
-            assert!(Instant::now() < deadline, "{first}");
-            std::thread::sleep(Duration::from_millis(20));
-            first = read(&id, 901);
-        }
-        assert!(first.contains("running for"), "{first}");
-        assert!(read(&id, 901).contains("(no new output)"), "output is read once");
-        assert!(read(&id, 902).contains("No background command"), "another client cannot see it");
-        assert_eq!(list(901), [(id.clone(), "server".to_owned(), true)]);
-        let stopped = KillShell.run(&json!({ "shell_id": id }), &workspace(901));
-        assert!(stopped.content.starts_with("Stopped"), "{stopped:?}");
-        assert!(list(901).is_empty());
-    }
-
-    #[test]
-    fn a_finished_command_says_how_and_a_leaving_client_stops_its_own() {
-        let done = start(903, "build", &mut sh("echo built; exit 2")).expect("start");
-        let deadline = Instant::now() + Duration::from_secs(5);
-        let mut text = read(&done, 903);
-        while !text.contains("finished") {
-            assert!(Instant::now() < deadline, "{text}");
-            std::thread::sleep(Duration::from_millis(20));
-            text.push_str(&read(&done, 903));
-        }
-        assert!(text.contains("exit code 2") && text.contains("built"), "{text}");
-        start(904, "watch", &mut sh("sleep 30")).expect("start");
-        kill_client(904);
-        assert!(list(904).is_empty());
-    }
-}
+mod tests;

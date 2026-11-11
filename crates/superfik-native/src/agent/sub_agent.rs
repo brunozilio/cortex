@@ -17,8 +17,14 @@ use crate::transcript::{Message, Role};
 
 /// Tools only the top-level agent has: starting or messaging agents, and
 /// leaving or entering plan mode.
-const TOP_LEVEL_ONLY: [&str; 4] =
-    [AGENT_TOOL, SEND_MESSAGE_TOOL, crate::tools::plan_mode::EXIT_PLAN_TOOL, crate::tools::plan_mode::ENTER_PLAN_TOOL];
+const TOP_LEVEL_ONLY: [&str; 6] = [
+    AGENT_TOOL,
+    SEND_MESSAGE_TOOL,
+    crate::tools::plan_mode::EXIT_PLAN_TOOL,
+    crate::tools::plan_mode::ENTER_PLAN_TOOL,
+    crate::tools::worktree::ENTER_WORKTREE,
+    crate::tools::worktree::EXIT_WORKTREE,
+];
 
 impl Agent<'_> {
     pub(super) fn sub_agent_with(
@@ -47,6 +53,12 @@ impl Agent<'_> {
         if !workspace.auto_memory {
             config.memory = None;
         }
+        if let Some(model) = input.get("model").and_then(serde_json::Value::as_str).filter(|m| !m.is_empty()) {
+            config.model = Some(model.to_owned());
+        }
+        if input.get("isolation").and_then(serde_json::Value::as_str) == Some("worktree") {
+            config.worktree = true;
+        }
         let model = match config.model(&self.request.model, self.workspace.model.provider) {
             Ok(model) => model,
             Err(error) => return Outcome::error(error),
@@ -61,6 +73,8 @@ impl Agent<'_> {
         .min(config.max_turns.unwrap_or(MAX_TURNS));
         let child_control = control.child_configured(config.permission, config.dont_ask);
         let mut child_workspace = workspace.fork(child_control.shared_stop());
+        child_workspace.deferred =
+            workspace.deferred.as_ref().map(|deferred| std::sync::Arc::new(deferred.only(|name| config.allows(name))));
         if model != self.request.model {
             child_workspace.model.id = model.clone();
             child_workspace.model.window = None;

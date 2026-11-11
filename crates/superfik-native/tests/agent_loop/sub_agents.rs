@@ -68,6 +68,38 @@ fn a_sub_agent_works_in_its_own_conversation_and_reports_back() {
 }
 
 #[test]
+fn a_call_can_pick_the_sub_agent_s_model() {
+    let mut rig = Rig::new(PermissionMode::AcceptEdits);
+    rig.workspace.model.provider = superfik_core::provider::ModelProvider::Anthropic;
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use(
+            "a1",
+            "Agent",
+            json!({"description": "Quick look", "prompt": "Say hi", "model": "haiku"}),
+        )]),
+        ScriptedModel::reply(vec![Block::Text("hi".into())]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    let mut tools = tools::standard();
+    tools.push(Box::new(tools::subagent::AgentTool::default()));
+    let emit = |_: EngineEvent| {};
+    let agent = Agent {
+        api: &model,
+        tools: &tools,
+        workspace: &rig.workspace,
+        control: &rig.control,
+        emit: &emit,
+        request: TurnRequest { tools: Agent::specs(&tools), ..request() },
+        agents: &[],
+        depth: 0,
+        turn_limit: superfik_native::agent::MAX_TURNS,
+    };
+    agent.run(&mut vec![Message::user("go")]).expect("run");
+    assert_eq!(model.asked()[1].model, "claude-haiku-5-5", "the sub-agent's turn used the model it was given");
+    assert_eq!(model.asked()[2].model, "m", "the parent keeps its own");
+}
+
+#[test]
 fn background_agent_runs_concurrently_and_output_is_collected() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use superfik_native::model::{Delta, ModelApi, Reply};

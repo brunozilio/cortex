@@ -5,9 +5,11 @@
 //! `mcp__<server>__<tool>`.
 
 mod configured;
+pub mod extras;
 mod http;
 mod local;
 mod servers;
+mod sse;
 mod stdio;
 mod tool;
 
@@ -51,6 +53,8 @@ pub struct McpServer {
     name: String,
     transport: Box<dyn Transport>,
     next: AtomicU64,
+    /// What it said it offers (`resources`, `prompts`…) when initialized.
+    capabilities: std::sync::Mutex<Value>,
 }
 
 impl std::fmt::Debug for McpServer {
@@ -61,7 +65,7 @@ impl std::fmt::Debug for McpServer {
 
 impl McpServer {
     pub fn new(name: impl Into<String>, transport: Box<dyn Transport>) -> Self {
-        Self { name: name.into(), transport, next: AtomicU64::new(1) }
+        Self { name: name.into(), transport, next: AtomicU64::new(1), capabilities: std::sync::Mutex::default() }
     }
 
     pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>) -> Result<Self, String> {
@@ -79,6 +83,9 @@ impl McpServer {
         let transport: Box<dyn Transport> = match spec {
             ServerSpec::Http { name, url, headers } => {
                 Box::new(HttpTransport::new(name, url, headers, Arc::clone(http)))
+            }
+            ServerSpec::Sse { name, url, headers } => {
+                Box::new(sse::SseTransport::connect(name, url, headers, Arc::clone(http), stop)?)
             }
             ServerSpec::Stdio { name, command, args, env } => {
                 Box::new(StdioTransport::spawn(name, command, args, env)?)
@@ -103,13 +110,43 @@ impl McpServer {
         self.tools_stopped(&std::sync::atomic::AtomicBool::new(false))
     }
     pub fn tools_stopped(self: &Arc<Self>, stop: &std::sync::atomic::AtomicBool) -> Result<Vec<McpTool>, String> {
+        self.initialize_stopped(stop)?;
+        self.listed_tools_stopped(stop)
+    }
+
+    /// Opens the session: the handshake, keeping what the server offers.
+    pub fn initialize_stopped(&self, stop: &std::sync::atomic::AtomicBool) -> Result<(), String> {
         let client = json!({ "name": "superfik", "version": env!("CARGO_PKG_VERSION") });
-        self.rpc_stopped(
+        let answer = self.rpc_stopped(
             "initialize",
             json!({ "protocolVersion": PROTOCOL_VERSION, "capabilities": {}, "clientInfo": client }),
             stop,
         )?;
-        self.transport.notify_stopped(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), stop)?;
+        if let Ok(mut capabilities) = self.capabilities.lock() {
+            *capabilities = answer["capabilities"].clone();
+        }
+        self.transport.notify_stopped(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), stop)
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Whether it said it offers `capability` (`resources`, `prompts`).
+    pub fn offers(&self, capability: &str) -> bool {
+        self.capabilities.lock().is_ok_and(|capabilities| capabilities.get(capability).is_some_and(Value::is_object))
+    }
+
+    /// A request after the handshake, its `result`.
+    pub fn ask(&self, method: &str, params: Value, stop: &std::sync::atomic::AtomicBool) -> Result<Value, String> {
+        self.rpc_stopped(method, params, stop)
+    }
+
+    /// Its tools, once initialized.
+    pub fn listed_tools_stopped(
+        self: &Arc<Self>,
+        stop: &std::sync::atomic::AtomicBool,
+    ) -> Result<Vec<McpTool>, String> {
         let mut tools = Vec::new();
         let mut params = json!({});
         let mut cursors = std::collections::HashSet::new();
@@ -164,21 +201,49 @@ pub fn tools_stopped(
     http: &Arc<dyn Http>,
     stop: &std::sync::atomic::AtomicBool,
 ) -> Vec<Box<dyn Tool>> {
-    let listed = |name: &str, server: Result<McpServer, String>| {
-        server.and_then(|server| Arc::new(server).tools_stopped(stop)).unwrap_or_else(|error| {
-            tracing::warn!(%error, server = name, "an MCP server's tools are not available to this run");
-            Vec::new()
-        })
+    tools_of(&connect_stopped(request, sources, http, stop), stop)
+}
+
+/// Every server the run can use, opened and initialized; one that fails
+/// is left out.
+pub fn connect_stopped(
+    request: &PromptRequest,
+    sources: &McpSources,
+    http: &Arc<dyn Http>,
+    stop: &std::sync::atomic::AtomicBool,
+) -> Vec<Arc<McpServer>> {
+    let ready = |name: &str, server: Result<McpServer, String>| {
+        server
+            .and_then(|server| server.initialize_stopped(stop).map(|()| Arc::new(server)))
+            .inspect_err(|error| tracing::warn!(%error, server = name, "an MCP server is not available to this run"))
+            .ok()
     };
-    let local = request.credentials.mcp.iter().take_while(|_| !stop.load(Ordering::Relaxed)).flat_map(|local| {
+    let local = request.credentials.mcp.iter().take_while(|_| !stop.load(Ordering::Relaxed)).filter_map(|local| {
         let transport = Box::new(LocalTransport::new(Arc::clone(&local.endpoint)));
-        listed(&local.name, Ok(McpServer::new(local.name.clone(), transport)))
+        ready(&local.name, Ok(McpServer::new(local.name.clone(), transport)))
     });
     let remote = servers(request, sources)
         .into_iter()
         .take_while(|_| !stop.load(Ordering::Relaxed))
-        .flat_map(|spec| listed(spec.name(), McpServer::open_stopped(&spec, http, stop)));
-    local.chain(remote).map(|tool| Box::new(tool) as Box<dyn Tool>).collect()
+        .map(|spec| spec.signed_in(request.credentials.mcp_tokens.as_ref()))
+        .filter_map(|spec| ready(spec.name(), McpServer::open_stopped(&spec, http, stop)));
+    local.chain(remote).collect()
+}
+
+/// The servers' tools, and the resource tools when one offers resources.
+pub fn tools_of(servers: &[Arc<McpServer>], stop: &std::sync::atomic::AtomicBool) -> Vec<Box<dyn Tool>> {
+    let mut tools: Vec<Box<dyn Tool>> = servers
+        .iter()
+        .flat_map(|server| {
+            server.listed_tools_stopped(stop).unwrap_or_else(|error| {
+                tracing::warn!(%error, server = server.name(), "an MCP server's tools are not available to this run");
+                Vec::new()
+            })
+        })
+        .map(|tool| Box::new(tool) as Box<dyn Tool>)
+        .collect();
+    tools.extend(extras::resource_tools(servers));
+    tools
 }
 
 #[cfg(test)]

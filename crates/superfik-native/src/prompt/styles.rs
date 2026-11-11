@@ -30,6 +30,29 @@ pub fn builtin(name: &str) -> Option<Builtin> {
     BUILTIN.into_iter().find(|style| style.id.eq_ignore_ascii_case(name))
 }
 
+/// The style a run speaks in: the one its request picked (`default` for
+/// none) over the settings' `outputStyle`.
+pub fn picked(requested: Option<&str>, from_settings: Option<Style>) -> Option<Style> {
+    match requested {
+        Some(name) if name.eq_ignore_ascii_case("default") => None,
+        Some(name) => builtin(name).map(|style| style.style()).or(from_settings),
+        None => from_settings,
+    }
+}
+
+#[cfg(test)]
+mod picking {
+    #[test]
+    fn the_request_s_style_wins_over_the_settings() {
+        let settings = super::builtin("learning").map(|style| style.style());
+        let name = |style: Option<super::Style>| style.map(|style| style.name);
+        assert_eq!(name(super::picked(Some("concise"), settings.clone())).as_deref(), Some("Concise"));
+        assert_eq!(name(super::picked(Some("default"), settings.clone())), None);
+        assert_eq!(name(super::picked(None, settings.clone())).as_deref(), Some("Learning"));
+        assert_eq!(name(super::picked(Some("unknown"), settings)).as_deref(), Some("Learning"));
+    }
+}
+
 const CONCISE: Builtin = Builtin {
     id: "concise",
     name: "Concise",

@@ -191,6 +191,11 @@ impl Input {
         }
     }
 
+    /// The prompts sent before, oldest first.
+    pub fn history(&self) -> &[String] {
+        &self.history
+    }
+
     /// The `/word` being typed when the whole input is one, for completion.
     pub fn slash_word(&self) -> Option<&str> {
         let word = self.text.strip_prefix('/')?;

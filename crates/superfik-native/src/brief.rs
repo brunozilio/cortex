@@ -54,8 +54,74 @@ pub fn mcp_sources(request: &PromptRequest) -> Result<crate::mcp::McpSources, St
     Ok(crate::mcp::McpSources { home, plugins, approval })
 }
 
+/// The permission rules and added folders a run in `request.cwd` follows
+/// (`/permissions`).
+pub fn permissions(request: &PromptRequest) -> Result<superfik_core::permission_rules::PermissionsInfo, String> {
+    let home = home(request);
+    let plugins = crate::plugins::found(request, home.as_deref());
+    let settings = prompt::settings::load(&request.cwd, home.as_deref(), &plugins)?;
+    Ok(superfik_core::permission_rules::PermissionsInfo {
+        rules: settings.permissions.listed(),
+        added_dirs: settings.added_dirs,
+        hooks: settings.hooks.listed(),
+    })
+}
+
 /// The owner's home: the one the backend named for the run, else the
 /// process's.
 pub fn home(request: &PromptRequest) -> Option<PathBuf> {
     request.extensions.as_ref().and_then(|extensions| extensions.home.clone()).or_else(std::env::home_dir)
+}
+
+/// The folders read like the project's own: the session's (`/add-dir`)
+/// and the settings' `additionalDirectories`, from `~/`, the project or
+/// the root.
+pub fn added_dirs(request: &PromptRequest, settings: &[String], home: Option<&std::path::Path>) -> Vec<PathBuf> {
+    let from_settings = settings.iter().filter_map(|dir| match dir.strip_prefix("~/") {
+        Some(rest) => home.map(|home| home.join(rest)),
+        None => Some(request.cwd.join(dir)),
+    });
+    request.add_dirs.iter().map(|dir| request.cwd.join(dir)).chain(from_settings).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use superfik_core::{ModelOption, PromptRequest};
+
+    #[test]
+    fn added_folders_come_from_the_session_and_settings() {
+        let mut request = PromptRequest::plain("/work/rocket".into(), "hi", ModelOption::new("m", "M"));
+        request.add_dirs = vec!["/shared".into()];
+        let settings = ["~/notes".to_owned(), "../lib".to_owned(), "/opt/x".to_owned()];
+        let dirs = super::added_dirs(&request, &settings, Some(Path::new("/home/ana")));
+        let expected: Vec<PathBuf> =
+            ["/shared", "/home/ana/notes", "/work/rocket/../lib", "/opt/x"].iter().map(PathBuf::from).collect();
+        assert_eq!(dirs, expected);
+    }
+
+    #[test]
+    fn the_permissions_of_a_folder_are_its_settings_rules() {
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        std::fs::create_dir_all(repo.path().join(".superfik")).expect("dir");
+        std::fs::write(
+            repo.path().join(".superfik/settings.local.json"),
+            r#"{"permissions": {"allow": ["Bash(ls:*)"], "additionalDirectories": ["../lib"]},
+                "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "./check.sh"}]}]}}"#,
+        )
+        .expect("write");
+        let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
+        request.extensions = Some(superfik_core::Extensions { home: Some(home.path().into()), ..Default::default() });
+        let info = super::permissions(&request).expect("permissions");
+        assert_eq!(info.rules, [(superfik_core::permission_rules::RuleKind::Allow, "Bash(ls:*)".to_owned())]);
+        assert_eq!(info.added_dirs, ["../lib"]);
+        let hook = superfik_core::permission_rules::HookInfo {
+            event: "PreToolUse".into(),
+            matcher: "Bash".into(),
+            runs: "./check.sh".into(),
+        };
+        assert!(info.hooks.contains(&hook), "{:?}", info.hooks);
+    }
 }

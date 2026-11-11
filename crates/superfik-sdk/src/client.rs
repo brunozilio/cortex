@@ -97,7 +97,11 @@ fn dispatch(
     stop: &AtomicBool,
 ) {
     while !stop.load(Ordering::Relaxed) {
-        let _ = woken.recv_timeout(Duration::from_millis(250));
+        // Once nothing can wake it (the daemon's connection ended), the
+        // wait returns at once: poll at the same pace instead of spinning.
+        if let Err(crossbeam_channel::RecvTimeoutError::Disconnected) = woken.recv_timeout(Duration::from_millis(250)) {
+            std::thread::sleep(Duration::from_millis(250));
+        }
         loop {
             let event = backend.lock().unwrap_or_else(PoisonError::into_inner).try_recv();
             let Some(event) = event else { break };
@@ -117,5 +121,41 @@ fn dispatch(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicUsize;
+
+    use superfik_protocol::BackendError;
+
+    use super::*;
+
+    /// A backend whose connection is gone: nothing more ever comes.
+    struct Gone(Arc<AtomicUsize>);
+
+    impl Backend for Gone {
+        fn send(&self, _command: Envelope<ClientCommand>) -> Result<(), BackendError> {
+            Err(BackendError::Disconnected)
+        }
+
+        fn try_recv(&self) -> Option<ServerEvent> {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            None
+        }
+    }
+
+    #[test]
+    fn a_backend_that_stopped_waking_is_not_polled_in_a_busy_loop() {
+        let polled = Arc::new(AtomicUsize::new(0));
+        let (wake, woken) = crossbeam_channel::bounded(1);
+        // The daemon's connection ended: what woke the client is gone.
+        drop(wake);
+        let client = Client::new(Box::new(Gone(Arc::clone(&polled))), woken);
+        std::thread::sleep(Duration::from_millis(600));
+        drop(client);
+        let polls = polled.load(Ordering::Relaxed);
+        assert!(polls <= 6, "polled {polls} times in 600 ms");
     }
 }

@@ -8,8 +8,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use superfik_core::command::Command;
-use superfik_sdk::{Effort, EngineEvent, Model, PermissionMode, RunControl, Session, SessionId, Superfik};
+use superfik_sdk::{Effort, Model, PermissionMode, RunControl, Session, SessionId, Superfik};
 
 use super::ask::Pending;
 use super::choices::Picker;
@@ -17,33 +16,7 @@ use super::input::Input;
 use super::login::SecretPrompt;
 use super::transcript::Transcript;
 
-pub enum Msg {
-    Ready {
-        models: Result<Vec<Model>, String>,
-        settings: serde_json::Value,
-    },
-    Event(superfik_core::RunId, EngineEvent),
-    Skills(Vec<(String, String)>),
-    /// What `/reload` found: the skills to complete and what to say.
-    Reloaded {
-        skills: Vec<(String, String)>,
-        summary: String,
-    },
-    Connected(String),
-    /// What Ctrl+V found on the clipboard.
-    Clipboard(Result<Option<superfik_sdk::Image>, String>),
-    Changes(Result<super::git::Changes, String>),
-    /// What `/diffs` asked git for.
-    Diffs(super::git::Scope, Result<super::git::Changes, String>),
-    Side {
-        question: String,
-        answer: Result<String, String>,
-    },
-    /// A side call the chat made by itself (`chores`).
-    Chore(Result<Option<superfik_sdk::ChoreAnswer>, String>),
-    Notice(String),
-    Error(String),
-}
+pub use super::msg::Msg;
 
 /// How long a first Ctrl+C waits for the second that quits.
 const QUIT_WINDOW: Duration = Duration::from_secs(2);
@@ -57,6 +30,42 @@ pub struct App {
     /// Animations; a `RefCell` because drawing advances them.
     pub motion: std::cell::RefCell<super::motion::Motion>,
     pub attachments: super::attach::Attachments,
+    /// Long pastes folded in the prompt.
+    pub pastes: super::pastes::Pastes,
+    /// What `!commands` printed, for the next prompt.
+    pub shell_context: Vec<String>,
+    /// The project's files for `@` completion, once asked for.
+    pub files: Option<Vec<String>>,
+    /// Whether the agent's task list shows above the prompt (Ctrl+T).
+    pub show_tasks: bool,
+    /// Inline (`--inline`): how many entries went to the terminal's scrollback.
+    pub inline: Option<usize>,
+    /// The model's context window, once measured or known.
+    pub window: Option<u64>,
+    /// The conversations `/resume` offers, in the picker's order.
+    pub conversations: Vec<super::conversations::Conversation>,
+    /// The status line's command (`/statusline`), its output and last run.
+    pub status: super::statusline::Status,
+    /// The command line's rules and appended prompt, for every conversation.
+    pub headless: superfik_sdk::Headless,
+    /// The conversation resumed at launch goes on in a copy of itself.
+    pub fork_resumed: bool,
+    /// The output style picked with `/output-style`, kept between launches.
+    pub output_style: Option<String>,
+    /// The providers `/logout` offers, in the picker's order.
+    pub connected: Vec<superfik_core::provider::ModelProvider>,
+    /// Vim keys for the prompt (`/vim`).
+    pub vim: Option<super::vim::Vim>,
+    /// The wheel scrolls the conversation (`/mouse`); selecting needs Shift/Option.
+    pub mouse: bool,
+    /// Ctrl+R's search of the prompts sent before, while it runs.
+    pub search: Option<super::search::Search>,
+    /// Ctrl+G: edit the prompt in `$EDITOR` at the next frame.
+    pub external_edit: bool,
+    /// A file to open in `$EDITOR` at the next frame (`/memory edit`).
+    pub edit_file: Option<PathBuf>,
+    /// Ctrl+L: clear and redraw the screen at the next frame.
+    pub redraw: bool,
     /// Ctrl+O: reasoning, outputs and diffs shown in full.
     pub expanded: bool,
     pub ask: Option<Pending>,
@@ -64,6 +73,14 @@ pub struct App {
     pub run: Option<RunControl>,
     pub started: Option<Instant>,
     pub queued: Vec<String>,
+    /// Asking for scheduled prompts while idle.
+    pub schedules: super::schedules::Poll,
+    /// Folders read like the project (`/add-dir`, `--add-dir`), kept for every conversation.
+    pub added_dirs: Vec<PathBuf>,
+    /// Whether the terminal has focus (terminals that report it).
+    pub focused: bool,
+    /// Ring the bell at the next frame: the agent waits on an absent user.
+    pub bell: bool,
     pub models: Vec<Model>,
     pub skills: Vec<(String, String)>,
     pub picker: Option<Picker>,
@@ -111,12 +128,34 @@ impl App {
             input: Input::default(),
             motion: std::cell::RefCell::new(super::motion::Motion::from_env()),
             attachments: Default::default(),
+            pastes: Default::default(),
+            shell_context: Vec::new(),
+            files: None,
+            show_tasks: true,
+            inline: None,
+            window: None,
+            conversations: Vec::new(),
+            connected: Vec::new(),
+            output_style: None,
+            headless: Default::default(),
+            fork_resumed: false,
+            status: Default::default(),
+            vim: None,
+            mouse: false,
+            search: None,
+            external_edit: false,
+            edit_file: None,
+            redraw: false,
             expanded: false,
             ask: None,
             secret: None,
             run: None,
             started: None,
             queued: Vec::new(),
+            schedules: Default::default(),
+            added_dirs: Vec::new(),
+            focused: true,
+            bell: false,
             models: Vec::new(),
             skills: Vec::new(),
             picker: None,
@@ -155,6 +194,17 @@ impl App {
         self
     }
 
+    /// Lets the agent read `dir` like the project, in this conversation and
+    /// the next ones.
+    pub fn add_dir(&mut self, dir: PathBuf) {
+        if let Some(session) = &mut self.session {
+            session.add_dir(dir.clone());
+        }
+        if !self.added_dirs.contains(&dir) {
+            self.added_dirs.push(dir);
+        }
+    }
+
     /// Asks for the settings and models (and the skills, at first).
     pub(super) fn load(&mut self, skills: bool) {
         self.loading = true;
@@ -183,55 +233,6 @@ impl App {
 
     pub fn model(&self) -> Option<&Model> {
         self.session.as_ref().map(Session::model)
-    }
-
-    pub fn message(&mut self, msg: Msg) {
-        match msg {
-            Msg::Ready { models, settings } => self.ready(models, &settings),
-            Msg::Event(run, event) => self.event(run, event),
-            Msg::Skills(skills) => self.skills = skills,
-            Msg::Reloaded { skills, summary } => {
-                self.skills = skills;
-                self.transcript.notice(summary);
-            }
-            Msg::Connected(provider) => {
-                self.transcript.notice(format!("Connected {provider}."));
-                self.load(false);
-            }
-            Msg::Clipboard(found) => self.clipboard(found),
-            Msg::Changes(changes) => self.changes(changes),
-            Msg::Diffs(scope, changes) => {
-                if let Some(view) = &mut self.diffs {
-                    view.loaded(scope, changes);
-                }
-            }
-            Msg::Side { question, answer } => super::side::answered(self, &question, answer),
-            Msg::Chore(answer) => self.chore_answered(answer),
-            Msg::Notice(text) => self.transcript.notice(text),
-            Msg::Error(text) => self.transcript.error(text),
-        }
-    }
-
-    /// Sends what was typed: a chat command, or a prompt for the agent
-    /// (queued while it works).
-    pub fn submit(&mut self) {
-        let text = self.input.text().trim().to_owned();
-        if text.is_empty() {
-            return;
-        }
-        self.input.take();
-        self.suggestion = 0;
-        self.saver.remember_prompt(&self.cwd, &text);
-        if let Some(command) = Command::parse(&text) {
-            return super::commands::run(self, command);
-        }
-        if let Some(run) = &self.run {
-            // Not handed over (`Steered` never comes), it is sent when the run ends.
-            let _ = run.steer(&text);
-            self.queued.push(text);
-            return;
-        }
-        self.send(text);
     }
 
     /// Ctrl+C: stops the run, else clears the prompt, else quits on a

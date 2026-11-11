@@ -64,7 +64,13 @@ pub struct Transcript {
     pub background: Vec<String>,
     /// The `ExitPlanMode` call waiting on the user, by id.
     pub(super) plan_call: Option<String>,
+    /// The JSON input of the tool call the model is writing.
+    drafting: Option<String>,
+    /// The agent's task list, as it last showed it.
+    pub tasks: Vec<superfik_core::events::TaskItem>,
 }
+
+pub use super::drafted::drafted;
 
 fn user_text(entry: &Entry) -> Option<String> {
     match entry {
@@ -161,6 +167,15 @@ impl Transcript {
                 let line = crate::verdict::line(verdict);
                 if verdict.passed { self.notice(line) } else { self.error(line) }
             }
+            EngineEvent::ToolInputDelta { name, piece } => {
+                self.close_thinking();
+                let drafting = self.drafting.get_or_insert_with(String::new);
+                drafting.push_str(piece);
+                self.activity = Some(call(name, &drafted(drafting)));
+            }
+            EngineEvent::Tasks(tasks) => self.tasks.clone_from(tasks),
+            EngineEvent::FellBack(model) => self.notice(format!("The model was overloaded; going on with {model}.")),
+            EngineEvent::Moved(path) => self.notice(format!("Now working in {}", path.display())),
             EngineEvent::Steered(text) => {
                 self.close_thinking();
                 self.push(Entry::User(text.clone()));
@@ -189,6 +204,7 @@ impl Transcript {
 
     fn started(&mut self, started: &ToolCall) {
         self.close_thinking();
+        self.drafting = None;
         self.activity = Some(call(&started.name, &started.summary));
         self.push(Entry::Tool {
             id: started.id.clone(),

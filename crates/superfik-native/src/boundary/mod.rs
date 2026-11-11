@@ -35,6 +35,13 @@ pub trait RunHandle: Send {
     /// Hands the model a message at its next turn. Engines that cannot
     /// never announce it, and the client sends it as the next prompt.
     fn steer(&mut self, _text: String) {}
+
+    /// Takes back the steered messages not handed over yet, announced as
+    /// `EngineEvent::Unsteered`.
+    fn unsteer(&mut self) {}
+
+    /// Moves the command the run is waiting on to the background (Ctrl+B).
+    fn background(&mut self) {}
 }
 
 pub trait AgentEngine: Send + Sync {

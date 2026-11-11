@@ -13,7 +13,7 @@ superfik-cli ──► superfik-sdk ──► superfik-backend ──► superfi
 
 | Crate | Responsibility |
 |---|---|
-| `superfik-cli` | The `superfik` binary: a full-screen chat (ratatui) over the SDK, `-p` print mode, `login`, `models`, `pull`/`rm`, `update` (the latest GitHub release, rules in `superfik_core::release`, ADR 0024). Presentation only. |
+| `superfik-cli` | The `superfik` binary: a full-screen chat (ratatui) over the SDK, or with `--inline` one at the bottom whose conversation goes to the terminal's scrollback (`tui::inline`), `-p` print mode, `login`, `models`, `pull`/`rm`, `update` (the latest GitHub release, rules in `superfik_core::release`, ADR 0024). Presentation only. |
 | `superfik-sdk` | `Superfik::builder()`: a `LocalBackend` plus the host's `Extensions`; `Session`/`Run` over the protocol; memory, providers, models, settings; `LocalModels` (pull/remove local MLX models). |
 | `superfik-core` | Domain model: requests, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
 | `superfik-native` | The `AgentEngine` boundary (`models`, `start`) and Superfik's own engine behind it (ADR 0015): agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
@@ -60,6 +60,83 @@ provider's key (`RunCredentials::model`, never serialized).
   and emits `EngineEvent::Steered`. The chat steers what is typed while
   the agent works and shows it as queued until `Steered`; a message never
   handed over (the run ended first) is sent as the next prompt.
+  `ClientCommand::UnsteerRun` (`Run::unsteer`) takes back what was not
+  handed over yet, returned in `EngineEvent::Unsteered`; the chat's ↑ on an
+  empty prompt puts it back in the prompt to edit.
+- **Permission rules** (`superfik_core::permission_rules`, pure): the
+  settings' `permissions.allow/ask/deny` (`Bash`, `Bash(git diff:*)`,
+  `Bash(npm run *)`, `Edit(src/**)`, `Read(~/x)`, `Read(//etc/hosts)`,
+  `mcp__server[__tool]`). Deny wins over ask, ask over allow; a compound
+  command is allowed only when every part is. Matching errs toward
+  asking: deny/ask see a command as run (wrappers, assignments, quotes
+  and program paths stripped) and paths in any case; allow sees it as
+  written and never covers `$(…)`, backticks, `<(…)`, `>`, `bash -c`,
+  `eval`, `xargs` or unclosed quotes, which ask instead when a deny or ask
+  rule exists. Only the owner's files (`~/.superfik/settings.json`,
+  `settings.local.json`) can allow; a checked-in file only restricts.
+  `permission::ruled` puts them over the mode: a deny refuses even in
+  Bypass; an ask or allow never lifts Bypass or Plan, and a hook's allow
+  never skips an ask rule. `Workspace::ruling` names the target: the
+  command, the folder a `Glob`/`Grep` searches (a denied folder inside it
+  counts, best effort for bare names), or a path judged both as written
+  (`..` folded) and through links.
+- **Asking**: a permission ask carries the rule "don't ask again" would
+  keep (`permission_rules::suggest`: `Bash(cargo test:*)`, or the folder
+  of a read outside, `Read(//dir/**)`). `AllowAlways` writes it to the
+  project's `.superfik/settings.local.json` (`prompt::permissions::
+  keep_allow`) and to the run's remembered rules; without one the call is
+  remembered for the session. `Decision::DenyWith(note)` hands the agent
+  what to do instead (the chat's "No, and tell the agent…").
+- **Added folders**: `PromptRequest::add_dirs` (the SDK's
+  `Session::add_dir`; the chat's `/add-dir` and `--add-dir`) and the
+  owner's `permissions.additionalDirectories` are read like the project
+  (`Workspace::added_dirs`, `may_read`) and named in the prompt's
+  environment.
+- **Tool calls**: consecutive read-only calls inside the project that no
+  rule asks about run in parallel (`agent::call::batches`), the rest in
+  order. Anthropic and OpenAI stream a call's input
+  (`EngineEvent::ToolInputDelta`). `Bash` waits on a command through the
+  background registry (`tools::shells::wait`), so `BackgroundRun`
+  (Ctrl+B) leaves it running under its id; stdout and stderr share one
+  pipe. `TaskCreate`/`TaskUpdate` emit `EngineEvent::Tasks`. Asking the
+  user fires the `Notification` hooks.
+- **More tools**: `WebFetch` (through the engine's `Http`, rules as
+  `WebFetch(domain:host)`), `WebSearch` (Brave with
+  `BRAVE_SEARCH_API_KEY`, else DuckDuckGo's HTML page), `Read` of PDFs
+  (`pdftotext`) and notebooks, `NotebookEdit`, `Monitor` (waits for a
+  check command), and `ToolSearch`: past 20 MCP tools their schemas wait
+  until loaded (`tools::tool_search`). `Agent` takes `model` and
+  `isolation: worktree` per call. MCP servers initialize once per run;
+  Remote servers sign in with OAuth (`/mcp login <name>`, `superfik mcp
+  login`): discovery, dynamic registration and PKCE rules in
+  `superfik_core::mcp_oauth`, the flow and refresh in the backend's
+  `mcp_auth` (tokens in the secrets store by server URL); runs read them
+  through `RunCredentials::mcp_tokens`, and a 401 says how to sign in.
+  `"type": "sse"` servers use the older HTTP+SSE transport (`mcp/sse.rs`:
+  a stream names the POST endpoint, same site only; answers come back on
+  the stream).
+  those with resources add `ListMcpResources`/`ReadMcpResource`, and a
+  prompt typed as `/mcp__server__prompt args` is filled by `prompts/get`.
+- **Session worktrees**: `EnterWorktree` makes a worktree under
+  `.superfik/worktrees` and `ExitWorktree` (`keep`/`remove`, refused with
+  changes unless `discard_changes`) goes back. The loop asks for the move
+  (`Control::move_to`), ends the turn with `Ending::Moved`, and the run
+  goes on in the new folder with a rebuilt prompt (`engine/moved.rs`),
+  emitting `EngineEvent::Moved`. The session store remembers the worktree,
+  so later runs resume there.
+- **Scheduled prompts**: `CronCreate`/`CronList`/`CronDelete` and
+  `ScheduleWakeup` keep prompts per client (`tools::schedules`, like the
+  background shells; cron parsing and matching in `superfik_core::schedule`,
+  local time; recurring ones expire after 7 days). The chat asks for the due
+  ones each second while idle (`ClientCommand::Schedules { take_due }`) and
+  sends them, or queues them behind a working run; `/schedules` lists them
+  and `/loop [interval] <task>` asks the agent to schedule a task.
+- **Runs from scripts**: `PromptRequest` carries `max_turns`,
+  `allowed_tools`/`disallowed_tools` (rules for the run), `append_system`,
+  `fallback_model` (or the settings' `fallbackModel`: an overloaded model
+  hands the run over, `EngineEvent::FellBack`) and `fork` (go on from
+  `resume` under a new session). `superfik -p` maps them to flags and
+  writes `text`, `json` or `stream-json` (`print_output`).
 - **Prompt**: planning mode, output styles, tool descriptions carrying the
   working rules; project instructions and rules (`docs/native-engine.md`).
 - **Plan mode** (`agent/plan_mode.rs`): the top-level agent presents its

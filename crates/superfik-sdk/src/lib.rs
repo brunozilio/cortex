@@ -46,13 +46,15 @@ pub use self::account::ProjectMemory;
 pub use self::extensions::{Agent, Command, Skill};
 pub use self::local_models::{LocalModelError, LocalModels, PullProgress, Pulled, Removed};
 pub use self::mcp::{McpConnection, McpServer};
+pub use self::mcp_servers::Schedules;
 pub use self::run::{Run, RunControl};
-pub use self::session::Session;
+pub use self::session::{Headless, Session};
 use client::Client;
 use extensions::Definitions;
 pub use superfik_core::mcp_config::{McpOrigin, McpServerInfo, McpState};
 pub use superfik_core::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind, Revision};
 pub use superfik_core::provider::{ModelProvider, ProviderSummary};
+pub use superfik_core::schedule::{Scheduled, When};
 pub use superfik_core::{
     AgentAsk, AskId, AskKind, Choice, ChoreAnswer, Criteria, CriteriaSource, CustomAgent, Decision, Effort,
     EngineEvent, HeadsUp, Image, MAX_IMAGE_BYTES, ModelOption as Model, PermissionMode, Question, Rewound, SessionId,

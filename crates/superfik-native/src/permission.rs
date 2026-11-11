@@ -4,6 +4,7 @@
 use std::collections::HashSet;
 
 use superfik_core::PermissionMode;
+use superfik_core::permission_rules::{PermissionRules, RuleKind};
 
 use crate::tools::Access;
 
@@ -17,9 +18,19 @@ pub enum Verdict {
 #[derive(Debug, Default, Clone)]
 pub struct Remembered {
     rules: HashSet<String>,
+    /// Allow rules the user accepted during the run ("don't ask again").
+    allowed: PermissionRules,
 }
 
 impl Remembered {
+    pub fn allow_rule(&mut self, rule: &str) {
+        let _ = self.allowed.add(RuleKind::Allow, rule);
+    }
+
+    pub fn rules(&self) -> &PermissionRules {
+        &self.allowed
+    }
+
     fn rule(tool: &str, access: Access, subject: &str) -> String {
         match access {
             Access::Edits => tool.to_owned(),
@@ -50,9 +61,45 @@ pub fn verdict(mode: PermissionMode, access: Access, tool: &str, subject: &str, 
     }
 }
 
+/// The mode's `verdict` under the settings' permission rules: a deny rule
+/// refuses even when bypassing; otherwise bypassing allows and planning
+/// keeps refusing what is not a read, and past those an ask rule asks and an
+/// allow rule allows.
+pub fn ruled(mode: PermissionMode, access: Access, rule: Option<(RuleKind, String)>, by_mode: Verdict) -> Verdict {
+    let planning = mode == PermissionMode::Plan && matches!(access, Access::Edits | Access::Executes);
+    match rule {
+        Some((RuleKind::Deny, rule)) => Verdict::Deny(format!(
+            "The permission rule {rule} in settings refuses this. Do not retry it; take another approach or ask the user."
+        )),
+        _ if mode == PermissionMode::Bypass || planning => by_mode,
+        Some((RuleKind::Ask, _)) => Verdict::Ask,
+        Some((RuleKind::Allow, _)) => Verdict::Allow,
+        None => by_mode,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rules_refuse_ask_or_allow_over_the_mode_but_never_lift_planning() {
+        let deny = || Some((RuleKind::Deny, "Bash(rm:*)".to_owned()));
+        let ask = || Some((RuleKind::Ask, "Edit(docs/**)".to_owned()));
+        let allow = || Some((RuleKind::Allow, String::new()));
+        let bypass = PermissionMode::Bypass;
+        assert!(
+            matches!(ruled(bypass, Access::Executes, deny(), Verdict::Allow), Verdict::Deny(r) if r.contains("Bash(rm:*)"))
+        );
+        assert_eq!(ruled(bypass, Access::Edits, ask(), Verdict::Allow), Verdict::Allow);
+        assert_eq!(ruled(PermissionMode::AcceptEdits, Access::Edits, ask(), Verdict::Allow), Verdict::Ask);
+        assert_eq!(ruled(PermissionMode::Ask, Access::Reads, ask(), Verdict::Allow), Verdict::Ask);
+        assert_eq!(ruled(PermissionMode::Ask, Access::Executes, allow(), Verdict::Ask), Verdict::Allow);
+        let planning = Verdict::Deny("planning".into());
+        assert_eq!(ruled(PermissionMode::Plan, Access::Executes, allow(), planning.clone()), planning);
+        assert_eq!(ruled(PermissionMode::Plan, Access::ReadsOutside, allow(), Verdict::Ask), Verdict::Allow);
+        assert_eq!(ruled(PermissionMode::Ask, Access::Executes, None, Verdict::Ask), Verdict::Ask);
+    }
 
     #[test]
     fn each_mode_decides_by_access() {

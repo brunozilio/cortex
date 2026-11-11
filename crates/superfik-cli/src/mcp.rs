@@ -23,6 +23,9 @@ pub enum McpAction {
         /// A header for an HTTP server: "Name: value".
         #[arg(short = 'H', long = "header", value_parser = parse_pair(':'))]
         headers: Vec<(String, String)>,
+        /// `sse` for a server on the older HTTP+SSE transport.
+        #[arg(long, default_value = "http")]
+        transport: String,
     },
     /// Remove one of your own servers.
     Remove { name: String },
@@ -30,18 +33,30 @@ pub enum McpAction {
     Approve { name: String },
     /// Turn a server of this project's .mcp.json off.
     Deny { name: String },
+    /// Sign in to a remote server in the browser (OAuth).
+    Login { name: String },
+    /// Forget the sign-in to a remote server.
+    Logout { name: String },
 }
 
 pub fn run(superfik: &Superfik, cwd: &std::path::Path, action: McpAction) -> Result<(), String> {
     let servers = match action {
         McpAction::List => superfik.mcp_servers(cwd),
-        McpAction::Add { name, target, args, env, headers } => {
-            let server = superfik_core::mcp_config::server_from(&target, &args, &env, &headers);
+        McpAction::Add { name, target, args, env, headers, transport } => {
+            let mut server = superfik_core::mcp_config::server_from(&target, &args, &env, &headers);
+            if transport == "sse" && server.get("url").is_some() {
+                server["type"] = "sse".into();
+            }
             superfik.add_mcp_server(cwd, &name, server)
         }
         McpAction::Remove { name } => superfik.remove_mcp_server(cwd, &name),
         McpAction::Approve { name } => superfik.approve_mcp_server(cwd, &name, true),
         McpAction::Deny { name } => superfik.approve_mcp_server(cwd, &name, false),
+        McpAction::Login { name } => superfik.sign_in_mcp_server(cwd, &name, |url| {
+            eprintln!("Opening the sign-in page: {url}");
+            crate::login::open(url);
+        }),
+        McpAction::Logout { name } => superfik.sign_out_mcp_server(cwd, &name),
     }
     .map_err(|error| error.to_string())?;
     print!("{}", render(&servers));

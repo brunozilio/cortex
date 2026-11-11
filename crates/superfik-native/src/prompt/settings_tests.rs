@@ -1,0 +1,93 @@
+use super::*;
+
+#[test]
+fn project_overrides_user_and_claude_settings_are_not_read() {
+    let home = tempfile::tempdir().expect("valid test fixture");
+    let repo = tempfile::tempdir().expect("valid test fixture");
+    for (root, style) in [
+        (home.path().join(".superfik"), "Explanatory"),
+        (repo.path().join(".superfik"), "Concise"),
+        (repo.path().join(".claude"), "Learning"),
+    ] {
+        std::fs::create_dir_all(&root).expect("valid test fixture");
+        std::fs::write(root.join("settings.json"), serde_json::json!({"outputStyle":style}).to_string())
+            .expect("valid test fixture");
+    }
+    let config = load(repo.path(), Some(home.path()), &[]).expect("valid test fixture");
+    assert_eq!(config.style.expect("valid test fixture").name, "Concise");
+}
+
+#[test]
+fn custom_style_controls_coding_instructions_and_rejects_paths() {
+    let repo = tempfile::tempdir().expect("valid test fixture");
+    let root = repo.path().join(".superfik");
+    std::fs::create_dir_all(root.join("output-styles")).expect("valid test fixture");
+    std::fs::write(root.join("settings.json"), r#"{"outputStyle":"review"}"#).expect("valid test fixture");
+    std::fs::write(
+        root.join("output-styles/review.md"),
+        "---\nkeep-coding-instructions: false\n---\nReturn review findings.",
+    )
+    .expect("valid test fixture");
+    let style = load(repo.path(), None, &[]).expect("valid test fixture").style.expect("valid test fixture");
+    assert!(!style.keep_coding);
+    assert_eq!(style.instructions, "Return review findings.");
+    std::fs::write(root.join("settings.json"), r#"{"outputStyle":"../private"}"#).expect("valid test fixture");
+    assert!(load(repo.path(), None, &[]).is_err());
+}
+
+#[test]
+fn judge_and_fallback_models_are_model_names() {
+    let repo = tempfile::tempdir().expect("repo");
+    let root = repo.path().join(".superfik");
+    std::fs::create_dir_all(&root).expect("dir");
+    std::fs::write(
+        root.join("settings.json"),
+        r#"{"judgeModel":"claude-haiku-5-5","fallbackModel":"claude-sonnet-5-5"}"#,
+    )
+    .expect("write");
+    let settings = load(repo.path(), None, &[]).expect("settings");
+    assert_eq!(settings.judge.as_deref(), Some("claude-haiku-5-5"));
+    assert_eq!(settings.fallback.as_deref(), Some("claude-sonnet-5-5"));
+    std::fs::write(root.join("settings.json"), r#"{"judgeModel":"two words"}"#).expect("write");
+    assert!(load(repo.path(), None, &[]).is_err());
+}
+
+#[test]
+fn only_the_owner_approves_a_project_s_mcp_servers() {
+    let home = tempfile::tempdir().expect("home");
+    let repo = tempfile::tempdir().expect("repo");
+    let write = |path: std::path::PathBuf, text: &str| {
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+        std::fs::write(path, text).expect("write");
+    };
+    write(repo.path().join(".superfik/settings.json"), r#"{"enableAllProjectMcpServers": true}"#);
+    write(repo.path().join(".superfik/settings.local.json"), r#"{"enabledMcpServers": ["jira"]}"#);
+    write(home.path().join(".superfik/settings.json"), r#"{"disabledMcpServers": ["sonar"]}"#);
+    let approval = load(repo.path(), Some(home.path()), &[]).expect("settings").mcp_approval;
+    assert!(!approval.all, "a checked-in setting cannot approve its own servers");
+    assert_eq!(approval.enabled, ["jira"]);
+    assert_eq!(approval.disabled, ["sonar"]);
+}
+
+#[test]
+fn an_installed_plugin_adds_its_hooks_and_a_broken_one_is_left_out() {
+    let repo = tempfile::tempdir().expect("repo");
+    let good = tempfile::tempdir().expect("plugin");
+    let broken = tempfile::tempdir().expect("plugin");
+    std::fs::create_dir_all(good.path().join("hooks")).expect("hooks dir");
+    std::fs::write(
+        good.path().join("hooks/hooks.json"),
+        r#"{"description": "Checks", "hooks": {"PreToolUse": [{"matcher": "Bash",
+            "hooks": [{"type": "command", "command": "${SUPERFIK_PLUGIN_ROOT}/check.sh"}]}]}}"#,
+    )
+    .expect("hooks");
+    std::fs::create_dir_all(broken.path().join("hooks")).expect("hooks dir");
+    std::fs::write(broken.path().join("hooks/hooks.json"), r#"{"hooks": {"NoSuchEvent": []}}"#).expect("hooks");
+    let plugins = [crate::plugins::Plugin::at(good.path()), crate::plugins::Plugin::at(broken.path())];
+    let settings = load(repo.path(), None, &plugins).expect("a broken plugin does not stop the run");
+    let groups = &settings.hooks.0["PreToolUse"];
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].matcher, "Bash");
+    assert_eq!(groups[0].hooks[0].command, format!("{}/check.sh", good.path().display()));
+    assert!(!settings.hooks.0.contains_key("NoSuchEvent"));
+}

@@ -18,6 +18,13 @@ impl Guard {
         self.retained = true;
     }
 
+    /// The session moved: a worktree it entered is kept at the end, and the
+    /// one it left is no longer this guard's.
+    pub fn moved(&mut self, setup: Setup) {
+        self.retained = setup.worktree_root.is_some();
+        self.setup = setup;
+    }
+
     pub fn finish(&mut self) -> Result<Option<PathBuf>, String> {
         self.finished = true;
         if self.retained {

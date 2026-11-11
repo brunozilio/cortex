@@ -45,6 +45,13 @@ impl Job {
             },
             None => (SessionId(uuid::Uuid::new_v4().to_string()), Vec::new()),
         };
+        // A fork goes on from the conversation under a new id; the original
+        // stays as it was.
+        let session = if self.request.fork && self.request.command.is_none() {
+            SessionId(uuid::Uuid::new_v4().to_string())
+        } else {
+            session
+        };
         if let Some(command) = self.request.command.filter(|c| c.is_chore()) {
             return self.chore(command, &history, started);
         }
@@ -73,7 +80,13 @@ impl Job {
         tools.push(Box::new(tools::subagent::AgentTool { agents: agents.clone() }));
         tools.push(Box::new(tools::send_message::SendMessageTool));
         tools.extend(tools::task::tools());
-        tools.extend(crate::mcp::tools_stopped(&self.request, &mcp_sources, &self.mcp, self.control.stop_flag()));
+        let servers = crate::mcp::connect_stopped(&self.request, &mcp_sources, &self.mcp, self.control.stop_flag());
+        tools.extend(crate::mcp::tools_of(&servers, self.control.stop_flag()));
+        match crate::mcp::extras::expand_prompt(&servers, &self.request.prompt, self.control.stop_flag()) {
+            Some(Ok(expanded)) => self.request.prompt = expanded,
+            Some(Err(error)) => return self.fail(&error, FailureKind::Other),
+            None => {}
+        }
         let settings = brief.settings;
         let selected = if let Some(name) = &settings.agent {
             match (tools::subagent::AgentTool { agents: agents.clone() })
@@ -120,14 +133,27 @@ impl Job {
         workspace.agent_name = selected.as_ref().map_or("main", |a| a.name.as_str()).into();
         workspace.session_id = session.0.clone();
         workspace.hooks = settings.hooks.clone();
-        workspace.hooks.extend(&agent_config.hooks);
-        let previous = if agent_config.worktree {
-            match self.sessions.load_worktree(&self.request, &session) {
-                Ok(state) => state,
-                Err(error) => return self.fail(&error, FailureKind::Other),
+        workspace.permissions = settings.permissions.clone();
+        for (kind, rules) in [
+            (superfik_core::permission_rules::RuleKind::Allow, &self.request.allowed_tools),
+            (superfik_core::permission_rules::RuleKind::Deny, &self.request.disallowed_tools),
+        ] {
+            for rule in rules {
+                if let Err(error) = workspace.permissions.add(kind, rule) {
+                    return self.fail(&format!("--allowedTools/--disallowedTools: {error}"), FailureKind::Other);
+                }
             }
-        } else {
-            None
+        }
+        workspace.home = crate::brief::home(&self.request);
+        workspace.fallback = self.request.fallback_model.clone().or_else(|| settings.fallback.clone());
+        workspace.web = Some(tools::web::Web(Arc::clone(&self.mcp)));
+        workspace.added_dirs = crate::brief::added_dirs(&self.request, &settings.added_dirs, workspace.home.as_deref());
+        workspace.hooks.extend(&agent_config.hooks);
+        // A session goes on in the worktree it was in: its agent's
+        // (`isolation: worktree`) or the one it entered (`EnterWorktree`).
+        let previous = match self.sessions.load_worktree(&self.request, &session) {
+            Ok(state) => state,
+            Err(error) => return self.fail(&error, FailureKind::Other),
         };
         let resumed_worktree = previous.is_some();
         let name = selected.as_ref().map_or("main", |agent| agent.name.as_str());
@@ -140,6 +166,7 @@ impl Job {
             Err(error) => return self.fail(&error, FailureKind::Other),
         };
         workspace.cwd = setup.cwd.clone();
+        workspace.worktree = setup.worktree_state();
         if let Some(context) = &setup.context {
             workspace.rules = context.rules.clone();
         }

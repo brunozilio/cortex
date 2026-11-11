@@ -41,6 +41,11 @@ pub struct TurnRequest {
 pub enum Delta {
     Text(String),
     Thinking(String),
+    /// A piece of the JSON input of a tool call the model is writing.
+    ToolInput {
+        name: String,
+        piece: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

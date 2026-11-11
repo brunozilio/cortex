@@ -31,6 +31,10 @@ pub trait Sessions: Send + Sync {
     ) -> Result<(), String> {
         Err("session store does not support persistent worktrees".into())
     }
+    /// The session works in its project again (`ExitWorktree`).
+    fn forget_worktree(&self, _request: &PromptRequest, _id: &SessionId) -> Result<(), String> {
+        Ok(())
+    }
     fn load_for(&self, request: &PromptRequest, id: &SessionId) -> Option<Vec<Message>> {
         self.load(&scoped_id(request, id))
     }
@@ -89,6 +93,10 @@ impl Sessions for InMemorySessions {
         state: &crate::agent_runtime::WorktreeState,
     ) -> Result<(), String> {
         self.worktrees.lock().map_err(|_| "worktree store unavailable")?.insert(scoped_id(request, id), state.clone());
+        Ok(())
+    }
+    fn forget_worktree(&self, request: &PromptRequest, id: &SessionId) -> Result<(), String> {
+        self.worktrees.lock().map_err(|_| "worktree store unavailable")?.remove(&scoped_id(request, id));
         Ok(())
     }
     fn load(&self, id: &SessionId) -> Option<Vec<Message>> {
@@ -159,6 +167,13 @@ impl Sessions for FileSessions {
         state: &crate::agent_runtime::WorktreeState,
     ) -> Result<(), String> {
         self.write_json(format!("worktree-{}.json", scoped_id(request, id).0), state)
+    }
+    fn forget_worktree(&self, request: &PromptRequest, id: &SessionId) -> Result<(), String> {
+        let path = self.dir.join(format!("worktree-{}.json", scoped_id(request, id).0));
+        match std::fs::remove_file(path) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.to_string()),
+            _ => Ok(()),
+        }
     }
     fn load_checkpoints(&self, request: &PromptRequest, id: &SessionId) -> Result<Vec<Checkpoint>, String> {
         Ok(self.read_json(format!("checkpoints-{}.json", scoped_id(request, id).0))?.unwrap_or_default())

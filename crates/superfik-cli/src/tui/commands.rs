@@ -8,9 +8,10 @@ use superfik_core::command::mode_label;
 use super::app::{App, Msg};
 use super::choices::{Picker, PickerKind};
 
-const KEYS: &str = "Keys: Enter sends · Alt+Enter or Ctrl+J new line · Esc interrupts · Shift+Tab mode · \
-                    Ctrl+V pastes an image (or drop a file) · Ctrl+O expands output · PgUp/PgDn scroll · \
-                    Ctrl+C quits";
+const KEYS: &str = "Keys: Enter sends · Alt+Enter or Ctrl+J new line · Esc interrupts · Esc Esc rewinds · \
+                    Shift+Tab mode · Ctrl+R searches past prompts · Ctrl+G edits in $EDITOR · \
+                    Ctrl+V pastes an image (or drop a file) · Ctrl+O expands output · Ctrl+L redraws · \
+                    PgUp/PgDn scroll · Ctrl+C quits";
 
 pub fn run(app: &mut App, command: Command) {
     match command {
@@ -53,10 +54,101 @@ pub fn run(app: &mut App, command: Command) {
             app.transcript.notice(format!("Mode: {}", mode_label(mode)));
         }
         Command::Effort(effort) => app.set_effort_from(effort),
-        Command::Compact => app.compact(),
+        Command::Compact(focus) => app.compact(focus.as_deref().unwrap_or_default()),
         Command::Rewind => app.open_rewind(),
         Command::Retry => app.retry(),
         Command::Btw(question) => super::side::ask(app, question),
+        Command::AddDir(typed) => super::dirs::run(app, typed),
+        Command::Context => super::context::measure(app),
+        Command::Resume => super::resume::open(app),
+        Command::Fork => match app.session.as_ref().filter(|session| session.id().is_some()) {
+            Some(session) => {
+                session.fork_next();
+                app.transcript
+                    .notice("The next message goes on in a copy of this conversation; this one stays as it is.");
+            }
+            None => app.transcript.notice("Nothing to fork yet: send a message first."),
+        },
+        Command::Config => super::config::open(app),
+        Command::NewAgent(what) => super::config::create(app, true, &what),
+        Command::NewSkill(what) => super::config::create(app, false, &what),
+        Command::StatusLine(command) => super::statusline::set(app, command),
+        Command::Doctor => {
+            let cwd = app.cwd.clone();
+            app.spawn(move |superfik| Msg::Notice(crate::doctor::render(&crate::doctor::checks(superfik, &cwd))));
+        }
+        Command::Feedback => app.transcript.notice(
+            "Report a problem or an idea at https://github.com/brunozilio/lite/issues (/status and /doctor show \
+             what to include).",
+        ),
+        other @ (Command::Status
+        | Command::Export(_)
+        | Command::Copy
+        | Command::Logout
+        | Command::ReleaseNotes
+        | Command::TerminalSetup
+        | Command::OutputStyle(_)) => super::info::run(app, other),
+        Command::Mouse => {
+            app.mouse = !app.mouse;
+            app.saver.remember("mouse", if app.mouse { "on" } else { "off" });
+            app.transcript.notice(if app.mouse {
+                "The wheel scrolls now. Select text with Shift held (Option on macOS)."
+            } else {
+                "The wheel is the terminal's again."
+            });
+        }
+        Command::Vim => {
+            app.vim = if app.vim.is_some() { None } else { Some(super::vim::Vim::default()) };
+            app.saver.remember("vim", if app.vim.is_some() { "on" } else { "off" });
+            app.transcript.notice(if app.vim.is_some() {
+                "Vim keys on: Esc for normal mode, i to insert."
+            } else {
+                "Vim keys off."
+            });
+        }
+        Command::Schedules(delete) => super::schedules::list(app, delete),
+        Command::Loop(text) => super::schedules::looped(app, &text),
+        Command::Bashes(kill) => app.spawn(move |superfik| match superfik.shells(kill.as_deref()) {
+            Ok(shells) if shells.is_empty() => Msg::Notice("No commands in the background.".into()),
+            Ok(shells) => {
+                let lines: Vec<String> = shells
+                    .iter()
+                    .map(|(id, command, running)| {
+                        format!("  {id:<10} {} {command}", if *running { "running " } else { "finished" })
+                    })
+                    .collect();
+                Msg::Notice(format!("In the background (/bashes kill <id> stops one):\n{}", lines.join("\n")))
+            }
+            Err(error) => Msg::Error(error.to_string()),
+        }),
+        Command::Todos => {
+            let tasks = &app.transcript.tasks;
+            let text = if tasks.is_empty() {
+                "No tasks yet: the agent makes a list for work with several steps.".to_owned()
+            } else {
+                let lines: Vec<String> = tasks
+                    .iter()
+                    .map(|task| {
+                        let mark = match task.status.as_str() {
+                            "completed" => "☒",
+                            "in_progress" => "◼",
+                            _ => "☐",
+                        };
+                        format!("  {mark} {}", task.subject)
+                    })
+                    .collect();
+                format!("Tasks:\n{}", lines.join("\n"))
+            };
+            app.transcript.notice(text);
+        }
+        Command::Permissions | Command::Hooks => {
+            let (cwd, hooks) = (app.cwd.clone(), command == Command::Hooks);
+            app.spawn(move |superfik| match superfik.permissions(&cwd) {
+                Ok(info) if hooks => Msg::Notice(super::dirs::hooks(&info.hooks)),
+                Ok(info) => Msg::Notice(super::dirs::permissions(&info)),
+                Err(error) => Msg::Error(error.to_string()),
+            });
+        }
         Command::Verification(change) => super::verification::run(app, change),
         Command::Diffs => {
             app.diffs = Some(super::diff_view::DiffView::new(super::git::Scope::Uncommitted));
@@ -109,11 +201,16 @@ pub fn run(app: &mut App, command: Command) {
         }
         Command::Mcp(change) => {
             let cwd = app.cwd.clone();
+            if let McpCommand::Login(name) = &change {
+                app.transcript.notice(format!("Signing in to {name} in the browser…"));
+            }
             app.spawn(move |superfik| {
                 let servers = match &change {
                     McpCommand::List => superfik.mcp_servers(&cwd),
                     McpCommand::Approve(name) => superfik.approve_mcp_server(&cwd, name, true),
                     McpCommand::Deny(name) => superfik.approve_mcp_server(&cwd, name, false),
+                    McpCommand::Login(name) => superfik.sign_in_mcp_server(&cwd, name, crate::login::open),
+                    McpCommand::Logout(name) => superfik.sign_out_mcp_server(&cwd, name),
                 };
                 match servers {
                     Ok(servers) => {

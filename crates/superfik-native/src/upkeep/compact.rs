@@ -75,9 +75,23 @@ pub fn compact(
     history: &mut Vec<Message>,
     stop: &AtomicBool,
 ) -> Result<Compaction, ModelError> {
+    compact_on(api, template, history, stop, None)
+}
+
+/// [`compact`], the summary keeping what `focus` names (`/compact <focus>`).
+pub fn compact_on(
+    api: &dyn ModelApi,
+    template: &TurnRequest,
+    history: &mut Vec<Message>,
+    stop: &AtomicBool,
+    focus: Option<&str>,
+) -> Result<Compaction, ModelError> {
     let before: u64 = history.iter().map(message_tokens).sum();
     let mut asked = history.clone();
-    asked.push(Message::user(SUMMARY_ASK));
+    asked.push(Message::user(match focus.map(str::trim).filter(|focus| !focus.is_empty()) {
+        Some(focus) => format!("{SUMMARY_ASK}\n\nThe user asks the summary to focus on: {focus}"),
+        None => SUMMARY_ASK.to_owned(),
+    }));
     let request = TurnRequest { messages: asked, tools: Vec::new(), ..template.clone() };
     let summary = match api.turn(&request, &mut |_| {}, stop) {
         Ok(reply) => summary_text(&reply.message.text()),
@@ -188,7 +202,24 @@ pub fn compact_hooked(
     workspace: &crate::tools::Workspace,
     trigger: &str,
 ) -> Result<Compaction, ModelError> {
-    let input = serde_json::json!({"trigger":trigger,"context_tokens":history.iter().map(message_tokens).sum::<u64>()});
+    compact_hooked_on(api, template, history, workspace, trigger, None)
+}
+
+/// [`compact_hooked`] with the user's focus for the summary, which the
+/// hooks see as `custom_instructions`.
+pub fn compact_hooked_on(
+    api: &dyn ModelApi,
+    template: &TurnRequest,
+    history: &mut Vec<Message>,
+    workspace: &crate::tools::Workspace,
+    trigger: &str,
+    focus: Option<&str>,
+) -> Result<Compaction, ModelError> {
+    let input = serde_json::json!({
+        "trigger": trigger,
+        "custom_instructions": focus.unwrap_or_default(),
+        "context_tokens": history.iter().map(message_tokens).sum::<u64>(),
+    });
     let before = workspace
         .hooks
         .run_with_model("PreCompact", trigger, input.clone(), workspace, Some((api, template)))
@@ -196,7 +227,7 @@ pub fn compact_hooked(
     if let Some(reason) = before.blocked {
         return Err(ModelError::Provider(format!("Compaction blocked by hook: {reason}")));
     }
-    let compaction = compact(api, template, history, &workspace.stop)?;
+    let compaction = compact_on(api, template, history, &workspace.stop, focus)?;
     let after = workspace
         .hooks
         .run_with_model("PostCompact", trigger, input, workspace, Some((api, template)))

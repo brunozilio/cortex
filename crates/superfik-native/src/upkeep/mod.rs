@@ -6,7 +6,7 @@ mod compact;
 
 use superfik_core::{ContextShare, ContextSlice, ContextUsage, ModelOption, ModelProvider};
 
-pub use self::compact::{CONTINUED, compact, compact_hooked, summary_text};
+pub use self::compact::{CONTINUED, compact, compact_hooked, compact_hooked_on, compact_on, summary_text};
 use crate::model::ToolSpec;
 use crate::transcript::{Block, Message};
 
@@ -125,6 +125,14 @@ mod tests {
             "<analysis>They asked for x.</analysis>\n<summary>\n1. Primary request: x.\n</summary>".into(),
         )])]);
         compact(&model, &template(), &mut tagged, &AtomicBool::new(false)).expect("compact");
+        let focused = crate::model::scripted::ScriptedModel::new([crate::model::scripted::ScriptedModel::reply(vec![
+            crate::transcript::Block::Text("<summary>kept</summary>".into()),
+        ])]);
+        let mut history = vec![Message::user("one"), Message::user("two")];
+        compact_on(&focused, &template(), &mut history, &AtomicBool::new(false), Some("the API changes"))
+            .expect("focused");
+        let asked = focused.asked()[0].messages.last().map(Message::text).unwrap_or_default();
+        assert!(asked.ends_with("The user asks the summary to focus on: the API changes"), "{asked}");
         assert_eq!(tagged[0].text(), format!("{CONTINUED}\n\n1. Primary request: x."), "the analysis is dropped");
 
         let mut kept = vec![Message::user("z")];

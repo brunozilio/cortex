@@ -10,11 +10,14 @@
 
 mod call;
 mod conversations;
+mod dispatch;
 mod permission;
+mod permission_ask;
 mod plan_mode;
 mod sub_agent;
 mod tasks;
 mod verify;
+mod worktree;
 
 use serde_json::{Value, json};
 use std::sync::atomic::Ordering;
@@ -37,6 +40,9 @@ pub enum Ending {
     Failed(ModelError),
     Refused,
     TooManyTurns,
+    /// The session moves (`EnterWorktree`, `ExitWorktree`): the run goes on
+    /// in the new folder with the same conversation.
+    Moved,
 }
 
 pub struct Agent<'a> {
@@ -90,6 +96,8 @@ impl Agent<'_> {
         let mut structured = false;
         let mut recoveries = 0;
         let mut compacted_at = None;
+        // The model in use once the run's own was overloaded (`fallbackModel`).
+        let mut fell_back: Option<String> = None;
         let mut stop_hook_active = false;
         let (prompt_at, mut attempts) = (history.len().saturating_sub(1), 0);
         for _ in 0..self.turn_limit.min(MAX_TURNS) {
@@ -126,15 +134,27 @@ impl Agent<'_> {
                     ),
                     self.workspace.rule_instructions()
                 ),
+                tools: self.offered(),
+                model: fell_back.clone().unwrap_or_else(|| self.request.model.clone()),
                 ..self.request.clone()
             };
             let mut on = |delta: Delta| match delta {
                 Delta::Text(text) => (self.emit)(EngineEvent::TextDelta(text)),
                 Delta::Thinking(text) => (self.emit)(EngineEvent::ThinkingDelta(text)),
+                Delta::ToolInput { name, piece } => (self.emit)(EngineEvent::ToolInputDelta { name, piece }),
             };
             let reply = match self.api.turn(&request, &mut on, self.control.stop_flag()) {
                 Ok(reply) => reply,
                 Err(ModelError::Cancelled) => return Err(Ending::Cancelled),
+                Err(ModelError::Overloaded(_))
+                    if fell_back.is_none()
+                        && let Some(fallback) =
+                            self.workspace.fallback.as_ref().filter(|model| **model != self.request.model) =>
+                {
+                    fell_back = Some(fallback.clone());
+                    (self.emit)(EngineEvent::FellBack(fallback.clone()));
+                    continue;
+                }
                 Err(ModelError::TooLong(_)) if recoveries < 2 => {
                     recoveries += 1;
                     let compaction =
@@ -218,8 +238,20 @@ impl Agent<'_> {
             }
             results.extend(self.steered());
             history.push(Message { role: Role::User, blocks: results });
+            if self.control.is_moving() {
+                return Err(Ending::Moved);
+            }
         }
         Err(Ending::TooManyTurns)
+    }
+
+    /// The tools a turn offers: the request's, and those `ToolSearch` loaded.
+    pub(super) fn offered(&self) -> Vec<crate::model::ToolSpec> {
+        let mut tools = self.request.tools.clone();
+        if let Some(deferred) = &self.workspace.deferred {
+            tools.extend(deferred.loaded());
+        }
+        tools
     }
 
     /// What the user sent while the run worked, as text for the model's

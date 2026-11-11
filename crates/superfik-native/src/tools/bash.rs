@@ -3,11 +3,10 @@
 use std::process::Stdio;
 use std::time::Duration;
 
-use serde_json::{Value, json};
-use superfik_process::{Bounds, Ended};
-
+use super::shells::Waited;
 use super::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
+use serde_json::{Value, json};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_TIMEOUT: Duration = Duration::from_secs(600);
@@ -88,31 +87,29 @@ impl Tool for Bash {
                 Err(error) => Outcome::error(format!("Could not start the shell: {error}")),
             };
         }
-        let bounds = Bounds { timeout, max_output: OUTPUT * 4, stop: &workspace.stop, input: None };
-        let done = match superfik_process::bounded::run(&mut shell, bounds) {
-            Ok(done) => done,
+        let id = match super::shells::start(workspace.credentials.client, command, &mut shell) {
+            Ok(id) => id,
             Err(error) => return Outcome::error(format!("Could not start the shell: {error}")),
         };
-        let mut text = done.stdout.trim_end().to_owned();
-        if !done.stderr.trim().is_empty() {
-            if !text.is_empty() {
-                text.push('\n');
-            }
-            text.push_str(done.stderr.trim_end());
-        }
-        let text = clip(&text, OUTPUT);
-        match done.ended {
-            Ended::Exited(status) if status.success() => {
+        match super::shells::wait(&id, timeout, &workspace.stop, &workspace.detach) {
+            Waited::Exited { output, success: true, .. } => {
+                let text = clip(&output, OUTPUT);
                 Outcome::ok(if text.is_empty() { "(no output)".to_owned() } else { text })
             }
-            Ended::Exited(status) => {
-                let code = status.code().map_or_else(|| "a signal".to_owned(), |code| code.to_string());
-                Outcome::error(format!("{text}\n(exit code {code})").trim_start().to_owned())
+            Waited::Exited { output, code, .. } => {
+                let code = code.map_or_else(|| "a signal".to_owned(), |code| code.to_string());
+                Outcome::error(format!("{}\n(exit code {code})", clip(&output, OUTPUT)).trim_start().to_owned())
             }
-            Ended::Stopped => Outcome::error(format!("{text}\n(cancelled)")),
-            Ended::TimedOut => {
-                Outcome::error(format!("{text}\n(stopped after {} ms)", timeout.as_millis()).trim_start().to_owned())
-            }
+            Waited::Detached => Outcome::ok(format!(
+                "The user moved this command to the background, where it goes on as {id}. Read its output \
+                 with BashOutput and stop it with KillShell."
+            )),
+            Waited::Stopped(output) => Outcome::error(format!("{}\n(cancelled)", clip(&output, OUTPUT))),
+            Waited::TimedOut(output) => Outcome::error(
+                format!("{}\n(stopped after {} ms)", clip(&output, OUTPUT), timeout.as_millis())
+                    .trim_start()
+                    .to_owned(),
+            ),
         }
     }
 }

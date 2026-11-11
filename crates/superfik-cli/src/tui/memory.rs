@@ -6,6 +6,10 @@ use superfik_sdk::{Error, Forgotten, Memory, ProjectMemory};
 use super::app::{App, Msg};
 
 pub fn run(app: &mut App, command: MemoryCommand) {
+    if command == MemoryCommand::Edit {
+        app.edit_file = Some(super::config::instructions_file(&app.cwd));
+        return;
+    }
     let cwd = app.cwd.clone();
     let model = app.model().cloned();
     app.spawn(move |superfik| {
@@ -23,6 +27,7 @@ pub fn run(app: &mut App, command: MemoryCommand) {
             },
             MemoryCommand::Undo => memory.undo().map(|all| listing("Memory put back as it was", &all)),
             MemoryCommand::Forgotten => memory.forgotten().map(|forgotten| forgotten_listing(&forgotten)),
+            MemoryCommand::Edit => Ok(String::new()),
             MemoryCommand::Restore(id) => memory.restore(id).map(|all| match all.iter().find(|m| m.id == id) {
                 Some(m) => format!("Restored [{}] {}", id.0, m.text),
                 None => format!("Nothing forgotten has id {} (see /memory forgotten).", id.0),
@@ -30,6 +35,17 @@ pub fn run(app: &mut App, command: MemoryCommand) {
         };
         match answer {
             Ok(text) => Msg::Notice(text),
+            Err(error) => Msg::Error(error.to_string()),
+        }
+    });
+}
+
+/// `#note`: the project's memory keeps it, for every later conversation.
+pub fn remember(app: &mut App, note: String) {
+    let cwd = app.cwd.clone();
+    app.spawn(move |superfik| {
+        match superfik.memory(cwd).remember(superfik_sdk::MemoryKind::Semantic, &note, &["user"]) {
+            Ok(_) => Msg::Notice(format!("Remembered: {note}")),
             Err(error) => Msg::Error(error.to_string()),
         }
     });
@@ -100,5 +116,26 @@ mod tests {
         command(&mut app, "/memory restore 0", "Restored [0] Uses wgpu");
         command(&mut app, "/memory optimize", "Memory optimized: 2 → 2 memories");
         assert!(engine.requests().iter().any(|r| r.prompt.contains("[1] semantic: Inter is the font")));
+    }
+
+    #[test]
+    fn a_hash_note_is_remembered_and_a_bang_command_runs_for_the_next_prompt() {
+        let data = tempfile::tempdir().expect("data");
+        let model = Model::new("anthropic:scripted", "Scripted");
+        let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
+        let mut app = App::new(superfik(&engine, data.path()), data.path().into(), None, None);
+        until(&mut app, |app| app.session.is_some());
+
+        command(&mut app, "# tests run with cargo nextest", "Remembered: tests run with cargo nextest");
+        let memories = superfik(&engine, data.path()).memory(data.path()).list().expect("list");
+        assert!(memories.iter().any(|m| m.text == "tests run with cargo nextest"), "{memories:?}");
+
+        command(&mut app, "!echo from the shell", "from the shell");
+        until(&mut app, |app| !app.shell_context.is_empty());
+        type_text(&mut app, "what did it say?");
+        press(&mut app, KeyCode::Enter);
+        until(&mut app, |_| engine.requests().iter().any(|r| r.command.is_none()));
+        let sent = engine.requests().into_iter().find(|r| r.command.is_none()).expect("sent").prompt;
+        assert!(sent.contains("$ echo from the shell\nfrom the shell") && sent.ends_with("what did it say?"), "{sent}");
     }
 }

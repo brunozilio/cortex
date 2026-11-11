@@ -16,7 +16,9 @@ impl Tool for Read {
         ToolSpec {
             name: "Read".into(),
             description: format!(
-                "Read a text file or a PNG, JPEG, GIF or WebP image from the machine. Images are sent visually to the model. Give an absolute path, or one relative to the working \
+                "Read a text file, a PNG, JPEG, GIF or WebP image, a PDF (as text; `pages` like \"1-5\" for a \
+                 long one) or a Jupyter notebook (its cells and outputs) from the machine. Images are sent \
+                 visually to the model. Give an absolute path, or one relative to the working \
                  directory. Returns up to {DEFAULT_LINES} lines from the start, each prefixed with its line number \
                  and a tab; pass `offset` (first line, from 1) and `limit` to read a part of a long file. Lines \
                  longer than {LINE_CHARS} characters are cut. When you know which part of a file you need, read \
@@ -29,7 +31,8 @@ impl Tool for Read {
                 "properties": {
                     "file_path": { "type": "string", "description": "The file to read." },
                     "offset": { "type": "integer", "description": "First line to read, from 1." },
-                    "limit": { "type": "integer", "description": "How many lines to read." }
+                    "limit": { "type": "integer", "description": "How many lines to read." },
+                    "pages": { "type": "string", "description": "A PDF's pages, like \"3\" or \"1-5\"." }
                 },
                 "required": ["file_path"],
                 "additionalProperties": false
@@ -74,10 +77,18 @@ impl Tool for Read {
             Err(error) => return Outcome::error(error),
             Ok(None) => {}
         }
+        if bytes.starts_with(b"%PDF") {
+            workspace.mark_read(&path);
+            return super::pdf::text(&path, field(input, "pages"), &workspace.stop)
+                .map_or_else(Outcome::error, Outcome::ok);
+        }
         let Ok(text) = String::from_utf8(bytes) else {
             return Outcome::error(format!("{} is not a text file.", shown(&path, workspace)));
         };
         workspace.mark_read(&path);
+        if path.extension().is_some_and(|ext| ext == "ipynb") {
+            return super::notebook::render(&text).map_or_else(Outcome::error, Outcome::ok);
+        }
         if text.is_empty() {
             return Outcome::ok("(the file is empty)");
         }

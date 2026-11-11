@@ -9,6 +9,7 @@
 mod converse;
 mod date;
 mod job;
+mod moved;
 mod report;
 mod rewind;
 
@@ -69,6 +70,7 @@ impl AgentEngine for NativeEngine {
     ) -> Result<Box<dyn RunHandle>, EngineError> {
         let workspace = Arc::new(Workspace::for_request(request));
         let control = Arc::new(Control::new(request.permission, workspace.stop.clone()));
+        let detach = Arc::clone(&workspace.detach);
         let gate = RunGate::new(run, sink);
         let job = Job {
             source: Arc::clone(&self.source),
@@ -92,12 +94,14 @@ impl AgentEngine for NativeEngine {
                 }
             })
             .map_err(|source| EngineError::Spawn { engine: "the native engine", source })?;
-        Ok(Box::new(Handle { control }))
+        Ok(Box::new(Handle { control, gate, detach }))
     }
 }
 
 struct Handle {
     control: Arc<Control>,
+    gate: RunGate,
+    detach: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl RunHandle for Handle {
@@ -115,5 +119,13 @@ impl RunHandle for Handle {
 
     fn steer(&mut self, text: String) {
         self.control.steer(text);
+    }
+
+    fn unsteer(&mut self) {
+        self.gate.emit(EngineEvent::Unsteered(self.control.take_steered()));
+    }
+
+    fn background(&mut self) {
+        self.detach.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }

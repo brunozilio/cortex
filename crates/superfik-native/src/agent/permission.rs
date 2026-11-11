@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use superfik_core::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
 
 use super::Agent;
-use crate::permission::{Verdict, verdict};
+use crate::permission::{Verdict, ruled, verdict};
 use crate::tools::ask;
 use crate::tools::{Access, Outcome, Tool};
 
@@ -18,6 +18,7 @@ impl Agent<'_> {
             Ok(asked) => asked,
             Err(problem) => return Outcome::error(format!("The questions could not be asked: {problem}.")),
         };
+        self.notify("elicitation_dialog", "Superfik has questions for you");
         let ask = AskId(format!("ask-{}-{id}", uuid::Uuid::new_v4()));
         let answer = self.control.open(ask.clone());
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind: AskKind::Questions(asked.clone()) }));
@@ -29,6 +30,9 @@ impl Agent<'_> {
             Ok(Decision::Deny) => Outcome::error(
                 "The user declined to answer. Do not ask again; go on with your best judgement and say what you assumed.",
             ),
+            Ok(Decision::DenyWith(note)) => {
+                Outcome::error(format!("The user declined to answer the questions and said instead: {note}"))
+            }
             Err(_) => Outcome::error("The run was cancelled."),
         }
     }
@@ -54,11 +58,18 @@ impl Agent<'_> {
             Some(path) => (Access::ReadsOutside, path.as_str()),
             None => (tool.access(), subject),
         };
-        let original = verdict(self.control.mode(), access, &name, subject, &self.control.remembered());
+        let mode = self.control.mode();
+        let by_mode = verdict(mode, access, &name, subject, &self.control.remembered());
+        let rule = self.workspace.ruling(&name, subject, input).or_else(|| self.remembered_rule(&name, subject, input));
+        let rule_asks = matches!(rule, Some((superfik_core::permission_rules::RuleKind::Ask, _)));
+        let original = ruled(mode, access, rule, by_mode);
+        // An ask rule is the owner's say: a hook can refuse, never skip the question.
+        let rule_asks = rule_asks && original == Verdict::Ask;
         let verdict = match (original, hook_permission) {
             (Verdict::Deny(reason), _) => Verdict::Deny(reason),
             (_, Some("ask")) => Verdict::Ask,
             (_, Some("deny")) => Verdict::Deny("Hook denied the tool call".into()),
+            (verdict, Some("allow")) if rule_asks => verdict,
             (_, Some("allow")) => Verdict::Allow,
             (verdict, _) => verdict,
         };
@@ -87,7 +98,7 @@ impl Agent<'_> {
             ));
         }
         let verdict = match (verdict, permission_hook.permission.as_deref()) {
-            (Verdict::Ask, Some("allow")) => Verdict::Allow,
+            (Verdict::Ask, Some("allow")) if !rule_asks => Verdict::Allow,
             (verdict, _) => verdict,
         };
         match verdict {
@@ -106,23 +117,7 @@ impl Agent<'_> {
             Verdict::Ask if self.control.no_prompts() => {
                 Outcome::error(format!("{name} requires permission; dontAsk denies unapproved actions."))
             }
-            Verdict::Ask => {
-                let ask = AskId(format!("ask-{}-{id}", uuid::Uuid::new_v4()));
-                let answer = self.control.open(ask.clone());
-                let kind = AskKind::Permission { tool: name.clone(), subject: subject.to_owned(), rememberable: true };
-                (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind }));
-                match answer.recv() {
-                    Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => tool.run(input, self.workspace),
-                    Ok(Decision::AllowAlways) => {
-                        self.control.remember(|remembered| remembered.remember(&name, access, subject));
-                        tool.run(input, self.workspace)
-                    }
-                    Ok(Decision::Deny) => Outcome::error(format!(
-                        "The user did not allow {name} here. Do not retry it; ask them or take another approach."
-                    )),
-                    Err(_) => Outcome::error("The run was cancelled."),
-                }
-            }
+            Verdict::Ask => self.ask_permission(id, tool, access, subject, input),
         }
     }
 }

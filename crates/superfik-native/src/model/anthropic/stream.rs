@@ -76,7 +76,13 @@ impl Folder {
             (Open::Thinking { signature, .. }, "signature_delta") => {
                 signature.push_str(&self::text(&delta["signature"]))
             }
-            (Open::Tool { json, .. }, "input_json_delta") => json.push_str(&self::text(&delta["partial_json"])),
+            (Open::Tool { json, name, .. }, "input_json_delta") => {
+                let piece = self::text(&delta["partial_json"]);
+                json.push_str(&piece);
+                if !piece.is_empty() {
+                    on(Delta::ToolInput { name: name.clone(), piece });
+                }
+            }
             _ => {}
         }
     }

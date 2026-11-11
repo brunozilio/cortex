@@ -15,6 +15,8 @@ pub struct Folder {
     seen: HashSet<String>,
     streamed: String,
     final_text: Vec<String>,
+    /// The tool the call whose arguments stream now is for.
+    calling: Option<String>,
 }
 
 impl Folder {
@@ -37,6 +39,15 @@ impl Folder {
                 self.final_text(text(if part["type"] == "refusal" { &part["refusal"] } else { &part["text"] }));
             }
             "response.reasoning_summary_text.delta" => on(Delta::Thinking(text(&event["delta"]))),
+            "response.output_item.added" if event["item"]["type"] == "function_call" => {
+                self.calling = Some(text(&event["item"]["name"]));
+            }
+            "response.function_call_arguments.delta" => {
+                let piece = text(&event["delta"]);
+                if let Some(name) = self.calling.clone().filter(|_| !piece.is_empty()) {
+                    on(Delta::ToolInput { name, piece });
+                }
+            }
             "response.output_item.done" => self.item(&event["item"])?,
             "response.completed" | "response.done" => {
                 let response = &event["response"];

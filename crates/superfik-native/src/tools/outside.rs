@@ -1,5 +1,6 @@
 //! Where a run may look without asking: its project (the repository
-//! holding the working directory, or the working directory itself) and
+//! holding the working directory, or the working directory itself), the
+//! folders the user added to it (`/add-dir`, `additionalDirectories`) and
 //! the files the user referenced. A read anywhere else (`~/.ssh`, another
 //! project) is asked for like an edit, so an agent talked into it by what
 //! it read cannot quietly take a secret off the computer.
@@ -42,7 +43,7 @@ impl Workspace {
 
     pub fn may_read(&self, path: &Path) -> bool {
         let path = settled(&if path.is_absolute() { path.to_path_buf() } else { self.cwd.join(path) });
-        path.starts_with(self.project_root())
+        path.starts_with(self.project_root()) || self.added_dirs.iter().any(|dir| path.starts_with(settled(dir)))
     }
 
     pub fn outside<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Option<PathBuf> {
@@ -73,6 +74,19 @@ mod tests {
         assert_eq!(outside, Some(PathBuf::from("/etc/hosts")));
         #[cfg(windows)]
         assert!(outside.is_some_and(|path| path.ends_with("etc/hosts")));
+    }
+
+    #[test]
+    fn an_added_folder_is_inside_like_the_project() {
+        let home = tempfile::tempdir().expect("dir");
+        let (project, shared) = (home.path().join("rocket"), home.path().join("shared"));
+        std::fs::create_dir_all(&project).expect("project");
+        std::fs::create_dir_all(shared.join("lib")).expect("shared");
+        let mut workspace = Workspace::new(&project);
+        workspace.added_dirs = vec![shared.clone()];
+        assert!(workspace.may_read(&shared.join("lib/a.rs")));
+        assert!(!workspace.may_read(&home.path().join("other/a.rs")));
+        assert!(!workspace.may_read(&shared.join("../other/a.rs")), "no climbing out of it either");
     }
 
     #[cfg(unix)]

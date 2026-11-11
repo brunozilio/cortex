@@ -202,3 +202,34 @@ fn superfik_s_own_memory_search_runs_without_asking() {
     assert_eq!(tools[0].summary(&input), "renderer");
     assert_eq!(tools[0].run(&input, &Workspace::new("/repo")), Outcome::ok("[4] Uses wgpu"));
 }
+
+struct SignedIn;
+
+impl superfik_core::credentials::McpTokenSource for SignedIn {
+    fn token(&self, server_url: &str) -> Option<String> {
+        (server_url == "https://mcp.test/mcp").then(|| "oauth-1".to_owned())
+    }
+}
+
+#[test]
+fn a_server_the_owner_signed_in_to_gets_their_token_and_one_refusing_says_how_to_sign_in() {
+    let dir = tempfile::tempdir().expect("dir");
+    let config = dir.path().join("mcp.json");
+    let servers = r#"{"mcpServers": {"linear": {"type": "http", "url": "https://mcp.test/mcp"}}}"#;
+    std::fs::write(&config, servers).expect("config");
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
+    request.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
+    request.credentials.mcp_tokens = Some(superfik_core::credentials::McpSignIns(Arc::new(SignedIn)));
+    let initialized = json!({ "jsonrpc": "2.0", "id": 1, "result": { "capabilities": { "tools": {} } } });
+    let http = Arc::new(ScriptedHttp::new([(200, initialized.to_string()), (202, String::new()), (200, listed(2))]));
+    let shared: Arc<dyn Http> = http.clone();
+    assert_eq!(tools(&request, &shared).len(), 1);
+    assert!(http.sent().iter().all(|s| s.headers.contains(&("Authorization".to_owned(), "Bearer oauth-1".to_owned()))));
+
+    request.credentials.mcp_tokens = None;
+    let spec = super::servers(&request, &super::McpSources::default()).remove(0);
+    let refusing: Arc<dyn Http> = Arc::new(ScriptedHttp::new([(401, String::new())]));
+    let error =
+        McpServer::open(&spec, &refusing).expect("open").initialize_stopped(&std::sync::atomic::AtomicBool::new(false));
+    assert!(error.expect_err("refused").contains("/mcp login linear"));
+}

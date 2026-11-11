@@ -23,6 +23,33 @@ fn a_lost_session_is_diagnosed() {
 }
 
 #[test]
+fn a_fork_goes_on_under_a_new_session_and_leaves_the_original() {
+    let dir = tempfile::tempdir().expect("dir");
+    let first = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("One.".into())])]));
+    let forked = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Two.".into())])]));
+    let original = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Three.".into())])]));
+    let engine = NativeEngine::new(
+        Arc::new(Source(Mutex::new(vec![Arc::clone(&first), Arc::clone(&forked), Arc::clone(&original)]))),
+        Arc::new(InMemorySessions::default()),
+    );
+    let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "one", model())));
+    let Some(EngineEvent::SessionStarted(session)) = events.first().cloned() else { panic!("{events:?}") };
+
+    let mut fork = PromptRequest::plain(dir.path().into(), "two", model());
+    fork.resume = Some(session.clone());
+    fork.fork = true;
+    let events = finish(&start(&engine, &fork));
+    let Some(EngineEvent::SessionStarted(new)) = events.first().cloned() else { panic!("{events:?}") };
+    assert_ne!(new, session, "the fork has an id of its own");
+    assert_eq!(forked.asked()[0].messages.len(), 3, "it went on from the first conversation");
+
+    let mut again = PromptRequest::plain(dir.path().into(), "three", model());
+    again.resume = Some(session);
+    finish(&start(&engine, &again));
+    assert_eq!(original.asked()[0].messages.len(), 3, "the original never saw the fork's turn");
+}
+
+#[test]
 fn measures_and_compacts_a_session() {
     let dir = tempfile::tempdir().expect("dir");
     let talk = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hello there.".into())])]));

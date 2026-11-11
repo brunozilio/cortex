@@ -60,6 +60,32 @@ pub struct CommandOutput {
     pub stderr: String,
 }
 impl Hooks {
+    /// Every hook as `/hooks` shows it, by event.
+    pub fn listed(&self) -> Vec<superfik_core::permission_rules::HookInfo> {
+        let mut listed = Vec::new();
+        for (event, groups) in &self.0 {
+            for group in groups {
+                for handler in &group.hooks {
+                    let runs = match handler.kind.as_str() {
+                        "http" => handler.url.clone().unwrap_or_default(),
+                        "prompt" | "agent" => {
+                            let prompt: String =
+                                handler.prompt.as_deref().unwrap_or_default().chars().take(60).collect();
+                            format!("{}: {prompt}", handler.kind)
+                        }
+                        _ => handler.command.clone(),
+                    };
+                    listed.push(superfik_core::permission_rules::HookInfo {
+                        event: event.clone(),
+                        matcher: group.matcher.clone(),
+                        runs,
+                    });
+                }
+            }
+        }
+        listed
+    }
+
     pub fn parse(value: &Value) -> Result<Self, String> {
         let events: BTreeMap<String, Vec<Group>> = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         for (event, groups) in &events {
@@ -77,6 +103,7 @@ impl Hooks {
                     | "SessionStart"
                     | "SessionEnd"
                     | "PermissionRequest"
+                    | "Notification"
             ) {
                 return Err(format!("unsupported hook event: {event}"));
             }

@@ -22,6 +22,10 @@ pub struct PromptRequest {
     pub model: ModelOption,
     pub effort: Effort,
     pub resume: Option<SessionId>,
+    /// Go on from `resume` under a new session, leaving it as it was
+    /// (`--fork-session`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fork: bool,
     #[serde(default)]
     pub command: Option<SessionCommand>,
     #[serde(default)]
@@ -34,6 +38,26 @@ pub struct PromptRequest {
     pub safety_check: bool,
     #[serde(default)]
     pub extensions: Option<Extensions>,
+    /// Folders the user added to the project for this session (`/add-dir`,
+    /// `--add-dir`), read like its own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub add_dirs: Vec<PathBuf>,
+    /// The most model turns the run may take (`--max-turns`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_turns: Option<u32>,
+    /// Permission rules for this run only, on top of the settings'
+    /// (`--allowedTools`, `--disallowedTools`): allowed, then denied.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_tools: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disallowed_tools: Vec<String>,
+    /// The model to go on with when the run's is overloaded
+    /// (`--fallback-model`), over the settings' `fallbackModel`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_model: Option<String>,
+    /// Text added to the end of the system prompt (`--append-system-prompt`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub append_system: Option<String>,
     /// What the judge checks the run's work against before it completes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verification: Option<crate::verification::Criteria>,
@@ -54,12 +78,19 @@ impl PromptRequest {
             model,
             effort: Effort::Medium,
             resume: None,
+            fork: false,
             command: None,
             memory: None,
             permission: PermissionMode::default(),
             output_style: None,
             safety_check: true,
             extensions: None,
+            add_dirs: Vec::new(),
+            max_turns: None,
+            allowed_tools: Vec::new(),
+            disallowed_tools: Vec::new(),
+            fallback_model: None,
+            append_system: None,
             verification: None,
             credentials: Default::default(),
         }

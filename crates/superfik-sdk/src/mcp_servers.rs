@@ -37,6 +37,61 @@ impl Superfik {
     pub fn remove_mcp_server(&self, cwd: &Path, name: &str) -> Result<Vec<McpServerInfo>, Error> {
         self.client.call(ClientCommand::RemoveMcpServer { path: cwd.to_path_buf(), name: name.to_owned() }, listed)
     }
+
+    /// Signs in to the remote MCP server `name` in the browser: `open` gets
+    /// the address to visit; returns the listing once signed in. Runs then
+    /// send the server the owner's token, refreshed when stale.
+    pub fn sign_in_mcp_server(
+        &self,
+        cwd: &Path,
+        name: &str,
+        mut open: impl FnMut(&str),
+    ) -> Result<Vec<McpServerInfo>, Error> {
+        let command = ClientCommand::SignInMcpServer { path: cwd.to_path_buf(), name: name.to_owned() };
+        self.client.call(command, |event| {
+            if let ServerEvent::McpAuthorizeAt { url, .. } = &event {
+                open(url);
+                return None;
+            }
+            listed(event)
+        })
+    }
+
+    pub fn sign_out_mcp_server(&self, cwd: &Path, name: &str) -> Result<Vec<McpServerInfo>, Error> {
+        self.client.call(ClientCommand::SignOutMcpServer { path: cwd.to_path_buf(), name: name.to_owned() }, listed)
+    }
+}
+
+impl Superfik {
+    /// The commands this client's runs left in the background (id,
+    /// command, still running), after stopping `kill` when given.
+    pub fn shells(&self, kill: Option<&str>) -> Result<Vec<(String, String, bool)>, Error> {
+        let command = ClientCommand::ListShells { kill: kill.map(str::to_owned) };
+        self.client.call(command, |event| match event {
+            ServerEvent::Shells(shells) => Some(Ok(shells)),
+            _ => None,
+        })
+    }
+
+    /// The prompts this client's runs scheduled: those due now when
+    /// `take_due` (handed over once; send them), and all still waiting,
+    /// after deleting `delete` when given.
+    pub fn schedules(&self, delete: Option<&str>, take_due: bool) -> Result<Schedules, Error> {
+        let command = ClientCommand::Schedules { delete: delete.map(str::to_owned), take_due };
+        self.client.call(command, |event| match event {
+            ServerEvent::Schedules { due, scheduled } => Some(Ok(Schedules { due, scheduled })),
+            _ => None,
+        })
+    }
+
+    /// The permission rules (deny, ask, then allow, as written) and added
+    /// folders a session in `cwd` follows.
+    pub fn permissions(&self, cwd: &Path) -> Result<superfik_core::permission_rules::PermissionsInfo, Error> {
+        self.client.call(ClientCommand::ListPermissions { path: cwd.to_path_buf() }, |event| match event {
+            ServerEvent::Permissions { permissions, .. } => Some(Ok(permissions)),
+            _ => None,
+        })
+    }
 }
 
 fn listed(event: ServerEvent) -> Option<Result<Vec<McpServerInfo>, String>> {
@@ -44,4 +99,11 @@ fn listed(event: ServerEvent) -> Option<Result<Vec<McpServerInfo>, String>> {
         ServerEvent::McpServers { servers, .. } => Some(Ok(servers)),
         _ => None,
     }
+}
+
+/// What [`Superfik::schedules`] answers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Schedules {
+    pub due: Vec<superfik_core::schedule::Scheduled>,
+    pub scheduled: Vec<superfik_core::schedule::Scheduled>,
 }

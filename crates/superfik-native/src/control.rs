@@ -20,6 +20,9 @@ pub struct Control {
     remembered: Mutex<Remembered>,
     asks: Mutex<HashMap<AskId, Sender<Decision>>>,
     steered: Mutex<Vec<String>>,
+    /// Where the session moves once this turn's calls are done
+    /// (`EnterWorktree`, `ExitWorktree`).
+    moving: Mutex<Option<crate::agent_runtime::Relocation>>,
     spawned: AtomicUsize,
     children: Mutex<Vec<Weak<Control>>>,
 }
@@ -34,6 +37,7 @@ impl Control {
             remembered: Mutex::default(),
             asks: Mutex::default(),
             steered: Mutex::default(),
+            moving: Mutex::default(),
             spawned: AtomicUsize::new(0),
             children: Mutex::default(),
         }
@@ -118,6 +122,22 @@ impl Control {
         if let Ok(mut steered) = self.steered.lock() {
             steered.push(text);
         }
+    }
+
+    /// Moves the session to `setup`'s folder once this turn's calls are
+    /// done.
+    pub fn move_to(&self, setup: crate::agent_runtime::Relocation) {
+        if let Ok(mut moving) = self.moving.lock() {
+            *moving = Some(setup);
+        }
+    }
+
+    pub fn is_moving(&self) -> bool {
+        self.moving.lock().is_ok_and(|moving| moving.is_some())
+    }
+
+    pub fn take_move(&self) -> Option<crate::agent_runtime::Relocation> {
+        self.moving.lock().ok().and_then(|mut moving| moving.take())
     }
 
     /// The messages steered since the last call, oldest first.

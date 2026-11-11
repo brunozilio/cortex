@@ -25,6 +25,25 @@ pub struct Session {
     memory: bool,
     resume: Arc<Mutex<Option<SessionId>>>,
     verifications: Arc<Mutex<Verifications>>,
+    added_dirs: Vec<PathBuf>,
+    output_style: Option<String>,
+    headless: Headless,
+    /// The next prompt forks the conversation (`fork_next`).
+    fork: std::sync::atomic::AtomicBool,
+}
+
+/// What a scripted session sets for every run (`superfik -p`'s flags).
+#[derive(Debug, Clone, Default)]
+pub struct Headless {
+    /// The most model turns a run may take.
+    pub max_turns: Option<u32>,
+    /// Permission rules on top of the settings': allowed, then denied.
+    pub allowed_tools: Vec<String>,
+    pub disallowed_tools: Vec<String>,
+    /// Text added to the end of the system prompt.
+    pub append_system: Option<String>,
+    /// The model to go on with when the run's is overloaded.
+    pub fallback_model: Option<String>,
 }
 
 impl Session {
@@ -38,7 +57,42 @@ impl Session {
             memory: true,
             resume: Arc::default(),
             verifications: Arc::default(),
+            added_dirs: Vec::new(),
+            output_style: None,
+            headless: Headless::default(),
+            fork: std::sync::atomic::AtomicBool::new(false),
         }
+    }
+
+    /// The next prompt goes on from this conversation under a new session,
+    /// leaving this one as it is (`--fork-session`, `/fork`).
+    pub fn fork_next(&self) {
+        self.fork.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Turn limit, rules and appended prompt for every run from now on.
+    pub fn set_headless(&mut self, headless: Headless) {
+        self.headless = headless;
+    }
+
+    /// How the agent talks from the next run on: a built-in style's id
+    /// (`concise`, `proactive`, `explanatory`, `learning`), `default` for
+    /// none, or `None` for the settings' `outputStyle`.
+    pub fn set_output_style(&mut self, style: Option<String>) {
+        self.output_style = style;
+    }
+
+    /// Lets the agent read folder `dir` like the project's own, from the
+    /// next run on (absolute, or from the project).
+    pub fn add_dir(&mut self, dir: PathBuf) {
+        if !self.added_dirs.contains(&dir) {
+            self.added_dirs.push(dir);
+        }
+    }
+
+    /// The folders [`add_dir`](Self::add_dir) added.
+    pub fn added_dirs(&self) -> &[PathBuf] {
+        &self.added_dirs
     }
 
     pub fn effort(mut self, effort: Effort) -> Self {
@@ -121,14 +175,32 @@ impl Session {
         let mode = self.permission_mode();
         request.permission = mode;
         request.resume = self.id();
+        request.fork = request.resume.is_some() && self.fork.swap(false, std::sync::atomic::Ordering::SeqCst);
         request.memory = self.memory.then(|| MemoryBrief::new(None));
         request.verification = self.verifications.lock().unwrap_or_else(PoisonError::into_inner).for_run(mode);
         self.start(request)
     }
 
+    /// Measures what fills the context window now (system prompt, tools,
+    /// messages…), answered with [`EngineEvent::ContextMeasured`]; no model
+    /// call is made.
+    pub fn measure_context(&self) -> Result<Run, Error> {
+        let mut request = PromptRequest::plain(self.cwd.clone(), "", self.model.clone());
+        request.resume = self.id();
+        request.permission = self.permission_mode();
+        request.command = Some(superfik_core::SessionCommand::MeasureContext);
+        self.start(request)
+    }
+
     /// Compacts the conversation so far into a summary.
     pub fn compact(&self) -> Result<Run, Error> {
-        let mut request = PromptRequest::plain(self.cwd.clone(), "", self.model.clone());
+        self.compact_on("")
+    }
+
+    /// [`compact`](Self::compact), the summary keeping what `focus` names
+    /// ("the API changes and the failing test").
+    pub fn compact_on(&self, focus: &str) -> Result<Run, Error> {
+        let mut request = PromptRequest::plain(self.cwd.clone(), focus, self.model.clone());
         request.resume = Some(self.id().ok_or(Error::NothingToCompact)?);
         request.command = Some(superfik_core::SessionCommand::Compact);
         self.start(request)
@@ -149,7 +221,16 @@ impl Session {
         &self.cwd
     }
 
-    pub(crate) fn start(&self, request: PromptRequest) -> Result<Run, Error> {
+    pub(crate) fn start(&self, mut request: PromptRequest) -> Result<Run, Error> {
+        request.add_dirs = self.added_dirs.clone();
+        request.max_turns = self.headless.max_turns;
+        request.allowed_tools.clone_from(&self.headless.allowed_tools);
+        request.disallowed_tools.clone_from(&self.headless.disallowed_tools);
+        request.append_system.clone_from(&self.headless.append_system);
+        request.fallback_model.clone_from(&self.headless.fallback_model);
+        if request.output_style.is_none() {
+            request.output_style.clone_from(&self.output_style);
+        }
         // Only a run of the conversation itself can name its session; a
         // side call about it never does.
         let side_call = request.command.is_some_and(superfik_core::SessionCommand::is_chore);

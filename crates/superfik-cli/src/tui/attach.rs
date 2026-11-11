@@ -137,7 +137,11 @@ impl App {
                 Err(error) => return self.transcript.error(error),
             }
         }
-        self.input.insert_str(&text.replace("\r\n", "\n").replace('\r', "\n"));
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        match self.pastes.fold(&text) {
+            Some(placeholder) => self.input.insert_str(&placeholder),
+            None => self.input.insert_str(&text),
+        }
     }
 
     fn attach(&mut self, image: Image) {

@@ -110,12 +110,12 @@ pub fn add_server(config: Value, name: &str, server: Value) -> Result<Value, Str
         return Err(format!("`{name}` starts with a name Superfik keeps for itself"));
     }
     let valid = match server["type"].as_str() {
-        Some("http") => server["url"].is_string(),
+        Some("http" | "sse") => server["url"].is_string(),
         Some("stdio") | None => server["command"].is_string(),
         Some(_) => false,
     };
     if !valid {
-        return Err("a server needs a `command` (stdio) or `type: http` with a `url`".into());
+        return Err("a server needs a `command` (stdio) or `type: http` (or `sse`) with a `url`".into());
     }
     let mut config = into_object(config);
     let servers = config.entry("mcpServers").or_insert_with(|| json!({}));

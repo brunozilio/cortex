@@ -30,6 +30,17 @@ fn offers_the_sections_of_the_tools_the_run_has() {
 }
 
 #[test]
+fn names_the_folders_added_to_the_project() {
+    assert!(!system(&environment()).contains("Additional working directories"));
+    let mut added = environment();
+    added.added_dirs = vec!["/shared".into(), "/home/a/notes".into()];
+    assert!(
+        system(&added)
+            .contains("- Working directory: /repo\n- Additional working directories: /shared, /home/a/notes\n")
+    );
+}
+
+#[test]
 fn says_where_it_runs_and_what_git_looked_like() {
     let mut environment = environment();
     environment.git =

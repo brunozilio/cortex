@@ -20,6 +20,9 @@ pub struct Pending {
     pub cursor: usize,
     /// The choices picked for each question so far.
     pub picked: Vec<Vec<usize>>,
+    /// What the user is typing for the agent after "No" (`Some` once
+    /// picked): sent with the refusal.
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,11 +32,12 @@ pub enum Key {
     Down,
     Enter,
     Esc,
+    Backspace,
 }
 
 impl Pending {
     pub fn new(ask: AgentAsk) -> Self {
-        Self { ask, question: 0, cursor: 0, picked: Vec::new() }
+        Self { ask, question: 0, cursor: 0, picked: Vec::new(), note: None }
     }
 
     pub fn questions(&self) -> &[Question] {
@@ -47,10 +51,13 @@ impl Pending {
     /// carry out a plan.
     pub fn choices(&self) -> Vec<String> {
         match &self.ask.kind {
-            AskKind::Permission { rememberable, .. } => {
+            AskKind::Permission { rememberable, rule, .. } => {
                 let mut choices = vec!["Yes".to_owned()];
                 if *rememberable {
-                    choices.push("Yes, and don't ask again for this".to_owned());
+                    choices.push(match rule {
+                        Some(rule) => format!("Yes, and don't ask again for {rule} in this project"),
+                        None => "Yes, and don't ask again this session".to_owned(),
+                    });
                 }
                 choices.push("No, and tell the agent what to do instead".to_owned());
                 choices
@@ -69,9 +76,26 @@ impl Pending {
 
     /// Handles a key; `Some` once the ask is decided.
     pub fn key(&mut self, key: Key) -> Option<Decision> {
+        if let Some(note) = &mut self.note {
+            return match key {
+                Key::Char(c) => {
+                    note.push(c);
+                    None
+                }
+                Key::Backspace => {
+                    note.pop();
+                    None
+                }
+                Key::Enter if note.trim().is_empty() => Some(Decision::Deny),
+                Key::Enter => Some(Decision::DenyWith(note.trim().to_owned())),
+                Key::Esc => Some(Decision::Deny),
+                Key::Up | Key::Down => None,
+            };
+        }
         let count = self.choices().len();
         match key {
             Key::Esc => return Some(Decision::Deny),
+            Key::Backspace => {}
             Key::Up => self.cursor = self.cursor.checked_sub(1).unwrap_or(count.saturating_sub(1)),
             Key::Down => self.cursor = if self.cursor + 1 >= count { 0 } else { self.cursor + 1 },
             Key::Char(c) => match (&self.ask.kind, c) {
@@ -112,11 +136,14 @@ impl Pending {
 
     fn pick(&mut self) -> Option<Decision> {
         if let AskKind::Permission { rememberable, .. } = &self.ask.kind {
-            return Some(match (self.cursor, rememberable) {
-                (0, _) => Decision::Allow,
-                (1, true) => Decision::AllowAlways,
-                _ => Decision::Deny,
-            });
+            return match (self.cursor, rememberable) {
+                (0, _) => Some(Decision::Allow),
+                (1, true) => Some(Decision::AllowAlways),
+                _ => {
+                    self.note = Some(String::new());
+                    None
+                }
+            };
         }
         if let AskKind::Plan { .. } = &self.ask.kind {
             return Some(match PLAN_CHOICES.get(self.cursor) {
@@ -152,8 +179,37 @@ mod tests {
     fn permission(rememberable: bool) -> Pending {
         Pending::new(AgentAsk {
             id: AskId("a".into()),
-            kind: AskKind::Permission { tool: "Bash".into(), subject: "ls".into(), rememberable },
+            kind: AskKind::Permission { tool: "Bash".into(), subject: "ls".into(), rememberable, rule: None },
         })
+    }
+
+    fn command(rule: Option<&str>) -> Pending {
+        let rule = rule.map(str::to_owned);
+        let kind = AskKind::Permission { tool: "Bash".into(), subject: "cargo test".into(), rememberable: true, rule };
+        Pending::new(AgentAsk { id: AskId("a".into()), kind })
+    }
+
+    #[test]
+    fn always_names_the_rule_kept_in_the_project_or_says_it_lasts_the_session() {
+        let kept = command(Some("Bash(cargo test:*)")).choices();
+        assert_eq!(kept[1], "Yes, and don't ask again for Bash(cargo test:*) in this project");
+        assert_eq!(command(None).choices()[1], "Yes, and don't ask again this session");
+    }
+
+    #[test]
+    fn no_with_a_note_tells_the_agent_what_to_do_instead() {
+        let mut ask = command(None);
+        assert_eq!(ask.key(Key::Char('3')), None, "the note is typed next");
+        assert!(ask.note.is_some());
+        for c in "use nextest".chars() {
+            assert_eq!(ask.key(Key::Char(c)), None, "letters are the note, not shortcuts");
+        }
+        ask.key(Key::Backspace);
+        assert_eq!(ask.key(Key::Enter), Some(Decision::DenyWith("use nextes".into())));
+        let mut empty = command(None);
+        empty.key(Key::Char('3'));
+        assert_eq!(empty.key(Key::Enter), Some(Decision::Deny), "nothing typed is a plain no");
+        assert_eq!(command(None).key(Key::Char('n')), Some(Decision::Deny), "n still says no at once");
     }
 
     fn question(text: &str, multi: bool) -> Question {
@@ -171,6 +227,7 @@ mod tests {
         let mut ask = permission(false);
         assert_eq!(ask.choices().len(), 2);
         ask.key(Key::Down);
+        assert_eq!(ask.key(Key::Enter), None, "no opens the note");
         assert_eq!(ask.key(Key::Enter), Some(Decision::Deny));
     }
 

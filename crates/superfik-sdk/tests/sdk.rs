@@ -73,7 +73,7 @@ fn a_question_is_answered_through_the_run() {
     let data = tempfile::tempdir().expect("data");
     let ask = AgentAsk {
         id: AskId("a-1".into()),
-        kind: AskKind::Permission { tool: "Bash".into(), subject: "ls".into(), rememberable: false },
+        kind: AskKind::Permission { tool: "Bash".into(), subject: "ls".into(), rememberable: false, rule: None },
     };
     let engine = FakeEngine::new(vec![model()], script(vec![EngineEvent::Asked(ask)]))
         .with_delay(std::time::Duration::from_millis(40));

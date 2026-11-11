@@ -21,14 +21,23 @@ impl App {
             EngineEvent::Checkpoint(index) => self.checkpointed(*index),
             EngineEvent::Rewound(rewound) => self.rewound = Some(rewound.clone()),
             EngineEvent::Steered(text) => {
-                if let Some(at) = self.queued.iter().position(|queued| queued == text) {
-                    self.queued.remove(at);
+                self.dequeue(text);
+            }
+            EngineEvent::Unsteered(texts) => {
+                for text in texts {
+                    self.dequeue(text);
+                }
+                if !texts.is_empty() {
+                    self.back_in_prompt(texts.join("\n\n"));
                 }
             }
             EngineEvent::ModeChanged(mode) => self.set_mode(*mode),
             _ => {}
         }
         self.transcript.apply(&event);
+        if !self.focused && (matches!(event, EngineEvent::Asked(_)) || event.is_terminal()) {
+            self.bell = true;
+        }
         if event.is_terminal() {
             self.run = None;
             self.ask = None;
@@ -51,14 +60,35 @@ impl App {
     }
 
     pub(super) fn send(&mut self, text: String) {
+        self.send_as(text.clone(), text);
+    }
+
+    /// Sends `text`, shown in the conversation as `shown`.
+    pub(super) fn send_as(&mut self, text: String, shown: String) {
         self.ghost = None;
         let Some(session) = &self.session else {
             self.input.set(&text);
             return self.transcript.error("No model yet: /login connects a provider.");
         };
-        let started = session.send_with_images(&text, self.attachments.named_in(&text));
-        self.transcript.push(Entry::User(text));
+        let prompt = super::mentions::with_files(&self.cwd, &self.pastes.unfold(&text));
+        let prompt = super::shell::with_context(&mut self.shell_context, &prompt);
+        let started = session.send_with_images(&prompt, self.attachments.named_in(&text));
+        self.transcript.push(Entry::User(shown));
         self.follow(started);
+    }
+
+    /// ↑ while the agent works: asks for the messages it has not taken yet,
+    /// which come back (`Unsteered`) into the prompt to edit.
+    pub(super) fn take_back_queued(&mut self) {
+        if let Some(run) = &self.run {
+            let _ = run.unsteer();
+        }
+    }
+
+    fn dequeue(&mut self, text: &str) {
+        if let Some(at) = self.queued.iter().position(|queued| queued == text) {
+            self.queued.remove(at);
+        }
     }
 
     /// Puts what was queued back in the prompt, so an interrupt loses nothing.
@@ -66,7 +96,12 @@ impl App {
         if self.queued.is_empty() {
             return;
         }
-        let mut text = std::mem::take(&mut self.queued).join("\n\n");
+        let text = std::mem::take(&mut self.queued).join("\n\n");
+        self.back_in_prompt(text);
+    }
+
+    /// Puts `text` in the prompt, before what is typed there.
+    fn back_in_prompt(&mut self, mut text: String) {
         if !self.input.is_empty() {
             text = format!("{text}\n\n{}", self.input.text());
         }

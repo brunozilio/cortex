@@ -23,6 +23,7 @@ impl Agent<'_> {
         let Some(plan) = plan(input) else {
             return Outcome::error("Missing the plan: pass it, in markdown, as `plan`.");
         };
+        self.notify("plan_approval", "Superfik's plan is ready for your review");
         let ask = AskId(format!("ask-{}-{id}", uuid::Uuid::new_v4()));
         let answer = self.control.open(ask.clone());
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind: AskKind::Plan { plan: plan.to_owned() } }));
@@ -41,6 +42,10 @@ impl Agent<'_> {
                      following the plan. Track the steps with the task tools if there are several."
                 ))
             }
+            Ok(Decision::DenyWith(note)) => Outcome::error(format!(
+                "The user wants to keep planning and did not approve the plan. Do not implement anything. They \
+                 said: {note}"
+            )),
             Ok(
                 Decision::Approve(_) | Decision::Deny | Decision::Allow | Decision::AllowAlways | Decision::Answer(_),
             ) => Outcome::error(

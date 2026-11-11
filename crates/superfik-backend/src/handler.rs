@@ -26,6 +26,7 @@ pub struct CommandHandler {
 impl Drop for CommandHandler {
     fn drop(&mut self) {
         superfik_native::tools::shells::kill_client(self.client);
+        superfik_native::tools::schedules::forget_client(self.client);
     }
 }
 
@@ -65,6 +66,14 @@ impl CommandHandler {
             ClientCommand::SteerRun { run, text } => {
                 let reach = self.runs.control(run, &principal, |handle| handle.steer(text));
                 Self::reached(&principal, outbox, "steer_run", run, reach);
+            }
+            ClientCommand::UnsteerRun { run } => {
+                let reach = self.runs.control(run, &principal, |handle| handle.unsteer());
+                Self::reached(&principal, outbox, "unsteer_run", run, reach);
+            }
+            ClientCommand::BackgroundRun { run } => {
+                let reach = self.runs.control(run, &principal, |handle| handle.background());
+                Self::reached(&principal, outbox, "background_run", run, reach);
             }
             ClientCommand::ListModels => {
                 let mut models = self.services.engine.models();
@@ -110,6 +119,25 @@ impl CommandHandler {
                 outbox.send(self.services.providers.disconnect(&principal, provider))
             }
             ClientCommand::ListMcpServers { path } => self.mcp_servers(&path, Ok(())),
+            ClientCommand::ListShells { kill } => {
+                if let Some(id) = kill {
+                    superfik_native::tools::shells::kill(self.client, &id);
+                }
+                outbox.send(ServerEvent::Shells(superfik_native::tools::shells::list(self.client)));
+            }
+            ClientCommand::Schedules { delete, take_due } => {
+                use superfik_native::tools::schedules;
+                if let Some(id) = delete {
+                    schedules::remove(self.client, &id);
+                }
+                let due = if take_due { schedules::take_due(self.client, schedules::now()) } else { Vec::new() };
+                outbox.send(ServerEvent::Schedules { due, scheduled: schedules::list(self.client) });
+            }
+            ClientCommand::ListPermissions { path } => self.outbox.send(crate::permissions::list(
+                &path,
+                &self.services.extensions,
+                self.services.home.as_deref(),
+            )),
             ClientCommand::ApproveMcpServer { path, name, approve } => {
                 self.mcp_servers(&path, crate::mcp_admin::approve(&path, self.services.home.as_deref(), &name, approve))
             }
@@ -118,6 +146,12 @@ impl CommandHandler {
             }
             ClientCommand::RemoveMcpServer { path, name } => {
                 self.mcp_servers(&path, crate::mcp_admin::remove(self.services.home.as_deref(), &name))
+            }
+            ClientCommand::SignInMcpServer { path, name } => {
+                crate::mcp_auth::command::sign_in(&self.services, &principal, path, name, &self.outbox);
+            }
+            ClientCommand::SignOutMcpServer { path, name } => {
+                crate::mcp_auth::command::sign_out(&self.services, &principal, &path, &name, &self.outbox);
             }
         }
     }
@@ -154,6 +188,7 @@ impl CommandHandler {
                 owner: Some(owner.clone()),
                 mcp: Vec::new(),
                 client: self.client,
+                mcp_tokens: Some(self.services.mcp_auth.for_run(owner)),
             },
             ..request.clone()
         };

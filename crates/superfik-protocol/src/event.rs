@@ -22,6 +22,22 @@ pub enum ServerEvent {
         path: PathBuf,
         servers: Vec<superfik_core::mcp_config::McpServerInfo>,
     },
+    /// Where to sign in to the MCP server `name` (open it in a browser).
+    McpAuthorizeAt {
+        name: String,
+        url: String,
+    },
+    /// Background commands: id, command, still running.
+    Shells(Vec<(String, String, bool)>),
+    /// Scheduled prompts: those now due (to send), and all still waiting.
+    Schedules {
+        due: Vec<superfik_core::schedule::Scheduled>,
+        scheduled: Vec<superfik_core::schedule::Scheduled>,
+    },
+    Permissions {
+        path: PathBuf,
+        permissions: superfik_core::permission_rules::PermissionsInfo,
+    },
     /// The live memory, and what was forgotten but can still be restored.
     Memory {
         path: PathBuf,

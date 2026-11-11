@@ -3993,6 +3993,7 @@ dependencies = [
  "superfik-core",
  "superfik-native",
  "superfik-sdk",
+ "syntect",
  "tachyonfx",
  "tar",
  "tempfile",

@@ -36,6 +36,15 @@ pub trait Http: Send + Sync {
     fn get(&self, _url: &str, _headers: &[(String, String)]) -> Result<Response, String> {
         Err("GET is not supported by this HTTP transport".into())
     }
+    /// A GET whose body streams until `stop` (an event stream).
+    fn get_stream(
+        &self,
+        _url: &str,
+        _headers: &[(String, String)],
+        _stop: &std::sync::atomic::AtomicBool,
+    ) -> Result<Response, super::ModelError> {
+        Err(super::ModelError::Network("streaming GET is not supported by this HTTP transport".into()))
+    }
 
     fn post_model(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, super::ModelError> {
         self.post(url, headers, body).map_err(super::ModelError::Network)
@@ -76,6 +85,16 @@ impl Http for NetHttp {
 
     fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Response, String> {
         Self::short(url, headers, None)
+    }
+
+    fn get_stream(
+        &self,
+        url: &str,
+        headers: &[(String, String)],
+        stop: &std::sync::atomic::AtomicBool,
+    ) -> Result<Response, super::ModelError> {
+        // An MCP server's stream lasts as long as the run that opened it.
+        super::cancellable_http::send(url, headers, None, stop, std::time::Duration::from_secs(12 * 3600))
     }
 
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {

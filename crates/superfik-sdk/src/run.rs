@@ -164,6 +164,18 @@ impl RunControl {
     pub fn steer(&self, text: &str) -> Result<(), Error> {
         self.client.send(ClientCommand::SteerRun { run: self.id, text: text.to_owned() })
     }
+
+    /// Takes back what was steered and not handed over yet;
+    /// `EngineEvent::Unsteered` returns it.
+    pub fn unsteer(&self) -> Result<(), Error> {
+        self.client.send(ClientCommand::UnsteerRun { run: self.id })
+    }
+
+    /// Moves the command the run waits on to the background, where the
+    /// agent can read or stop it; the run goes on.
+    pub fn background(&self) -> Result<(), Error> {
+        self.client.send(ClientCommand::BackgroundRun { run: self.id })
+    }
 }
 
 impl Iterator for Run {

@@ -15,6 +15,10 @@ pub enum PickerKind {
     Mode,
     Login,
     Rewind,
+    Resume,
+    Logout,
+    OutputStyle,
+    Config,
 }
 
 /// A list the user picks one item of: a model, a mode or a provider.
@@ -31,6 +35,12 @@ impl App {
         self.loading = false;
         if self.models.is_empty() && self.session.is_none() {
             self.input.set_history(settings::history(saved, &self.cwd));
+            if saved["vim"] == "on" {
+                self.vim = Some(super::vim::Vim::default());
+            }
+            self.mouse = saved["mouse"] == "on";
+            self.output_style = saved["outputStyle"].as_str().map(str::to_owned);
+            self.status.command = saved["statusLine"].as_str().filter(|c| !c.is_empty()).map(str::to_owned);
             if let Some(id) = &self.resume {
                 self.title = settings::title(saved, &self.cwd, id);
             }
@@ -62,9 +72,17 @@ impl App {
         let resumed = self.resume.take();
         if let Some(id) = resumed.clone() {
             session = session.resume(id);
+            if std::mem::take(&mut self.fork_resumed) {
+                session.fork_next();
+            }
         }
         session.set_permission(self.mode);
         session.set_effort(self.effort);
+        for dir in &self.added_dirs {
+            session.add_dir(dir.clone());
+        }
+        session.set_output_style(self.output_style.clone());
+        session.set_headless(self.headless.clone());
         self.session = Some(session);
         if resumed.is_some() {
             self.recap();
@@ -115,12 +133,12 @@ impl App {
         self.scroll = 0;
     }
 
-    pub(super) fn compact(&mut self) {
+    pub(super) fn compact(&mut self, focus: &str) {
         if self.busy() {
             return self.transcript.notice("Wait for the agent to finish before compacting.");
         }
         let Some(session) = &self.session else { return };
-        let started = session.compact();
+        let started = session.compact_on(focus);
         self.transcript.notice("Compacting the conversation…");
         self.follow(started);
     }

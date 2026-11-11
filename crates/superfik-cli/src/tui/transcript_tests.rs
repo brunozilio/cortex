@@ -3,6 +3,32 @@ use superfik_core::billing::ModelUsage;
 use super::*;
 
 #[test]
+fn the_task_list_is_kept_as_the_agent_last_showed_it() {
+    let mut transcript = Transcript::default();
+    let item = |subject: &str, status: &str| superfik_core::events::TaskItem {
+        id: subject.into(),
+        subject: subject.into(),
+        status: status.into(),
+    };
+    transcript.apply(&EngineEvent::Tasks(vec![item("a", "pending")]));
+    transcript.apply(&EngineEvent::Tasks(vec![item("a", "completed"), item("b", "in_progress")]));
+    assert_eq!(transcript.tasks, [item("a", "completed"), item("b", "in_progress")]);
+}
+
+#[test]
+fn a_tool_call_being_written_shows_what_it_is_about() {
+    let mut transcript = Transcript::default();
+    for piece in ["{\"comm", "and\": \"cargo te", "st --work"] {
+        transcript.apply(&EngineEvent::ToolInputDelta { name: "Bash".into(), piece: piece.into() });
+    }
+    assert_eq!(transcript.activity.as_deref(), Some("Bash(cargo test --work…)"));
+    transcript.apply(&EngineEvent::ToolStarted(ToolCall::new("t1", "Bash", "cargo test --workspace")));
+    assert_eq!(transcript.activity.as_deref(), Some("Bash(cargo test --workspace)"));
+    assert_eq!(drafted(r#"{"file_path": "src/a\"b.rs", "old"#), "src/a\"b.rs…");
+    assert_eq!(drafted("{\"conte"), "", "nothing it is about yet");
+}
+
+#[test]
 fn reasoning_text_and_tools_stream_in_and_settle() {
     let mut transcript = Transcript::default();
     transcript.begin();

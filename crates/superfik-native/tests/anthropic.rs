@@ -50,7 +50,13 @@ fn folds_thinking_text_and_a_tool_call() {
     );
     assert_eq!(
         deltas,
-        vec![Delta::Thinking("I should read it.".into()), Delta::Text("Let me ".into()), Delta::Text("look.".into())]
+        vec![
+            Delta::Thinking("I should read it.".into()),
+            Delta::Text("Let me ".into()),
+            Delta::Text("look.".into()),
+            Delta::ToolInput { name: "Read".into(), piece: "{\"file_path\": \"src/".into() },
+            Delta::ToolInput { name: "Read".into(), piece: "main.rs\"}".into() },
+        ]
     );
     assert_eq!((reply.usage.input, reply.usage.cache_read, reply.usage.output), (12, 4000, 87));
 }

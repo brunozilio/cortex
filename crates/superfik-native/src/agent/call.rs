@@ -6,13 +6,13 @@ use serde_json::{Value, json};
 use superfik_core::{EngineEvent, ToolCall};
 
 use super::tasks::Tasks;
-use super::{Agent, Ending, SHOWN_OUTPUT};
+use super::{Agent, Ending};
 use crate::model::ModelError;
 use crate::tools::ask::ASK_TOOL;
 use crate::tools::plan_mode::{ENTER_PLAN_TOOL, EXIT_PLAN_TOOL};
 use crate::tools::send_message::SEND_MESSAGE_TOOL;
-use crate::tools::subagent::{AGENT_TOOL, AgentTool};
-use crate::tools::{Outcome, clip};
+use crate::tools::subagent::AGENT_TOOL;
+use crate::tools::worktree::{ENTER_WORKTREE, EXIT_WORKTREE};
 use crate::transcript::{Block, Message};
 
 impl Agent<'_> {
@@ -58,156 +58,102 @@ impl Agent<'_> {
                     Block::ToolResult { id: id.clone(), content, is_error: true }
                 })
                 .collect()
-        } else if calls.len() > 1 && calls.iter().all(|(_, name, _)| matches!(name.as_str(), "Read" | "Glob" | "Grep"))
-        {
-            let mut results = Vec::new();
-            for batch in calls.chunks(8) {
-                results.extend(std::thread::scope(|scope| {
-                    let handles: Vec<_> = batch
-                        .iter()
-                        .map(|(id, name, input)| {
-                            scope.spawn(move || {
-                                self.call(id, name, input, tasks, &[], &|_| {
-                                    unreachable!("read tool cannot spawn an agent")
+        } else {
+            let parallel: Vec<bool> = calls.iter().map(|(_, name, input)| self.concurrent(name, input)).collect();
+            let mut results = Vec::with_capacity(calls.len());
+            for range in batches(&parallel) {
+                let group = &calls[range.clone()];
+                if !parallel[range.start] || group.len() == 1 {
+                    results.extend(
+                        group.iter().map(|(id, name, input)| self.call(id, name, input, tasks, history, spawn)),
+                    );
+                    continue;
+                }
+                for chunk in group.chunks(8) {
+                    results.extend(std::thread::scope(|scope| {
+                        let handles: Vec<_> = chunk
+                            .iter()
+                            .map(|(id, name, input)| {
+                                scope.spawn(move || {
+                                    self.call(id, name, input, tasks, &[], &|_| {
+                                        unreachable!("a read-only tool cannot spawn an agent")
+                                    })
                                 })
                             })
-                        })
-                        .collect();
-                    handles.into_iter().map(|handle| handle.join().expect("read tool panicked")).collect::<Vec<_>>()
-                }));
+                            .collect();
+                        handles
+                            .into_iter()
+                            .map(|handle| handle.join().expect("a read-only tool panicked"))
+                            .collect::<Vec<_>>()
+                    }));
+                }
             }
             results
-        } else {
-            calls.iter().map(|(id, name, input)| self.call(id, name, input, tasks, history, spawn)).collect()
         }
     }
 
-    #[allow(clippy::needless_lifetimes)]
-    fn call<'env>(
-        &'env self,
-        id: &str,
-        name: &str,
-        input: &Value,
-        tasks: &Tasks,
-        parent: &[Message],
-        spawn: &dyn Fn(Box<dyn FnOnce() + Send + 'env>),
-    ) -> Block {
-        let tool = self.tools.iter().find(|tool| tool.spec().name == name);
-        let pre = if tool.is_some() && self.request.tools.iter().any(|s| s.name == name) && !self.control.is_stopped() {
-            self.workspace.hooks.run_with_model(
-                "PreToolUse",
-                name,
-                json!({"tool_name":name,"tool_use_id":id,"tool_input":input}),
-                self.workspace,
-                Some((self.api, &self.request)),
-            )
-        } else {
-            Ok(Default::default())
-        };
-        let pre = pre.unwrap_or_else(|error| crate::hooks::Decision { blocked: Some(error), ..Default::default() });
-        let input = pre.updated_input.as_ref().unwrap_or(input);
-        let mut rule_context = Vec::new();
-        if pre.updated_input.is_some() {
-            let path =
-                input["file_path"].as_str().or_else(|| input["path"].as_str()).map(|p| self.workspace.resolve(p));
-            let mut seen = self.workspace.seen_rules.lock().expect("project rules");
-            for rule in &self.workspace.rules {
-                match rule.applies(&self.workspace.cwd, path.as_deref()) {
-                    Ok(true) if !rule.patterns.is_empty() && seen.insert(rule.path.clone()) => {
-                        rule_context.push(rule.text.clone())
-                    }
-                    Err(error) => rule_context.push(error),
-                    _ => {}
-                }
-            }
-        }
-        let summary = tool.map(|tool| tool.summary(input)).unwrap_or_default();
-        (self.emit)(EngineEvent::ToolStarted(ToolCall::new(id, name, summary.clone())));
-        let mut outcome = if let Some(reason) = &pre.blocked {
-            Outcome::error(format!("Hook blocked {name}: {reason}"))
-        } else if !rule_context.is_empty() {
-            Outcome::error(format!(
-                "Hook changed input. Load these project instructions and reissue the tool call: {}",
-                rule_context.join("\n")
-            ))
-        } else if tool.is_some() && !self.request.tools.iter().any(|spec| spec.name == name) {
-            Outcome::error(format!("Tool {name} is not available to this agent."))
-        } else if self.control.is_stopped() {
-            Outcome::error("The run was cancelled.")
-        } else if name == "TaskOutput" {
-            tasks.output(input)
-        } else if name == "TaskStop" {
-            tasks.stop(input)
-        } else if name == "TaskList" {
-            tasks.list(|| {
-                tool.map(|tool| tool.run(input, self.workspace))
-                    .and_then(|out| serde_json::from_str::<Value>(&out.content).ok())
-                    .unwrap_or_else(|| json!([]))
+    /// Shows the user the task list as it now is.
+    pub(super) fn emit_tasks(&self) {
+        let Some(list) = self.tools.iter().find(|tool| tool.spec().name == "TaskList") else { return };
+        let listed = list.run(&json!({}), self.workspace);
+        let Ok(Value::Array(tasks)) = serde_json::from_str::<Value>(&listed.content) else { return };
+        let tasks = tasks
+            .iter()
+            .map(|task| superfik_core::events::TaskItem {
+                id: task["task_id"].as_str().unwrap_or_default().to_owned(),
+                subject: task["subject"].as_str().unwrap_or_default().to_owned(),
+                status: task["status"].as_str().unwrap_or("pending").to_owned(),
             })
-        } else {
-            match tool {
-                None => Outcome::error(format!("There is no tool named {name}.")),
-                Some(_) if name == ASK_TOOL => self.ask_user(id, input),
-                Some(_) if name == EXIT_PLAN_TOOL => self.exit_plan_mode(id, input),
-                Some(_) if name == ENTER_PLAN_TOOL => self.enter_plan_mode(),
-                Some(_) if name == AGENT_TOOL && (AgentTool { agents: self.agents.to_vec() }).background(input) => {
-                    self.start_background(input, tasks, parent, spawn)
-                }
-                Some(_) if name == AGENT_TOOL => {
-                    self.sub_agent_with(input, self.control, self.workspace, parent, &tasks.conversations, None)
-                }
-                Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
-                Some(_) if name == crate::tools::advisor::ADVISOR_TOOL => match &self.workspace.advisor {
-                    Some(model) => {
-                        crate::tools::advisor::consult(self.api, &self.request, model, parent, self.control.stop_flag())
-                    }
-                    None => Outcome::error("No advisor is configured."),
-                },
-                Some(tool) => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),
-            }
-        };
-        if !pre.context.is_empty() {
-            outcome.content.push_str(&format!("\nHook context: {}", pre.context));
+            .collect();
+        (self.emit)(EngineEvent::Tasks(tasks));
+    }
+
+    /// Whether a call can run beside others: a read-only tool inside the
+    /// project that no rule asks about (one question at a time), and none
+    /// of the tools that talk to the user or start agents.
+    fn concurrent(&self, name: &str, input: &Value) -> bool {
+        const SERIAL: [&str; 8] = [
+            ASK_TOOL,
+            EXIT_PLAN_TOOL,
+            ENTER_PLAN_TOOL,
+            AGENT_TOOL,
+            SEND_MESSAGE_TOOL,
+            "Skill",
+            ENTER_WORKTREE,
+            EXIT_WORKTREE,
+        ];
+        let Some(tool) = self.tools.iter().find(|tool| tool.spec().name == name) else { return false };
+        tool.access() == crate::tools::Access::Reads
+            && !SERIAL.contains(&name)
+            && !name.starts_with("Task")
+            && name != crate::tools::advisor::ADVISOR_TOOL
+            && tool.reaches_outside(input, self.workspace).is_none()
+            && self
+                .workspace
+                .ruling(name, &tool.summary(input), input)
+                .is_none_or(|(kind, _)| kind == superfik_core::permission_rules::RuleKind::Allow)
+    }
+}
+
+/// The calls of a turn in groups that keep their order: each run of calls
+/// that may go in parallel together, the others one by one.
+fn batches(parallel: &[bool]) -> Vec<std::ops::Range<usize>> {
+    let mut groups: Vec<std::ops::Range<usize>> = Vec::new();
+    for (at, &together) in parallel.iter().enumerate() {
+        match groups.last_mut() {
+            Some(last) if together && parallel[last.start] => last.end = at + 1,
+            _ => groups.push(at..at + 1),
         }
-        let event = if outcome.is_error { "PostToolUseFailure" } else { "PostToolUse" };
-        match self.workspace.hooks.run_with_model(
-            event,
-            name,
-            json!({"tool_name":name,"tool_use_id":id,"tool_input":input,"tool_response":outcome.content}),
-            self.workspace,
-            Some((self.api, &self.request)),
-        ) {
-            Ok(hook) => {
-                if let Some(output) = hook.updated_output {
-                    outcome.content = output.as_str().map(str::to_owned).unwrap_or_else(|| output.to_string());
-                    outcome.images.clear();
-                }
-                if let Some(reason) = hook.blocked {
-                    outcome.is_error = true;
-                    outcome.content.push_str(&format!("\nHook feedback: {reason}"));
-                }
-                outcome.content.push_str(&hook.context);
-            }
-            Err(error) => {
-                outcome.is_error = true;
-                outcome.content.push_str(&format!("\nHook failed: {error}"));
-            }
-        }
-        (self.emit)(EngineEvent::ToolFinished { id: id.to_owned() });
-        (self.emit)(EngineEvent::ToolResult {
-            id: id.to_owned(),
-            output: clip(outcome.shown.as_deref().unwrap_or(&outcome.content), SHOWN_OUTPUT),
-            failed: outcome.is_error,
-        });
-        if outcome.images.is_empty() {
-            Block::ToolResult { id: id.to_owned(), content: outcome.content, is_error: outcome.is_error }
-        } else {
-            Block::ToolResultRich {
-                id: id.to_owned(),
-                content: outcome.content,
-                images: outcome.images,
-                is_error: outcome.is_error,
-            }
-        }
+    }
+    groups
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn parallel_calls_group_between_the_serial_ones_in_order() {
+        let groups = super::batches(&[true, true, false, false, true, true, true]);
+        assert_eq!(groups, [0..2, 2..3, 3..4, 4..7]);
+        assert!(super::batches(&[]).is_empty());
     }
 }

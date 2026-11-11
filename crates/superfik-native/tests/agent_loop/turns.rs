@@ -49,6 +49,51 @@ fn reads_edits_and_answers() {
 }
 
 #[test]
+fn mixed_calls_run_reads_together_and_keep_their_order() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![
+            tool_use("r1", "Read", json!({"file_path": "notes.txt"})),
+            tool_use("g1", "Grep", json!({"pattern": "alpha"})),
+            tool_use("b1", "Bash", json!({"command": "echo made > made.txt"})),
+            tool_use("r2", "Read", json!({"file_path": "made.txt"})),
+            tool_use("g2", "Glob", json!({"pattern": "*.txt"})),
+        ]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    rig.run(&model, &mut vec![Message::user("go")]).expect("run");
+    let results = model.asked()[1].messages.last().cloned().expect("results");
+    let ids: Vec<&str> = results
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::ToolResult { id, .. } => Some(id.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ids, ["r1", "g1", "b1", "r2", "g2"]);
+    assert!(
+        matches!(&results.blocks[3], Block::ToolResult { content, is_error: false, .. } if content.contains("made")),
+        "the read after the command sees what it wrote: {results:?}"
+    );
+}
+
+#[test]
+fn an_overloaded_model_falls_back_once_for_the_rest_of_the_run() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    rig.workspace.fallback = Some("backup".into());
+    let model = ScriptedModel::new([
+        Err(ModelError::Overloaded("529".into())),
+        ScriptedModel::reply(vec![tool_use("r", "Read", json!({"file_path": "notes.txt"}))]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    rig.run(&model, &mut vec![Message::user("go")]).expect("run");
+    let models: Vec<String> = model.asked().into_iter().map(|asked| asked.model).collect();
+    assert_eq!(models, ["m", "backup", "backup"]);
+    assert!(rig.events().contains(&EngineEvent::FellBack("backup".into())));
+}
+
+#[test]
 fn unknown_tools_and_provider_errors() {
     let rig = Rig::new(PermissionMode::Bypass);
     let model = ScriptedModel::new([
