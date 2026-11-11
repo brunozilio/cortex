@@ -90,22 +90,30 @@ Built-in tools live in folders under `crates/agent-engine/src/tools/builtin/`
 (`files`: Read, Write, Edit, Glob, Grep, NotebookEdit; `shell`: Bash,
 BashOutput, KillShell, Monitor and the background-shell registry; `notify`:
 PushNotification; `web`: WebFetch, WebSearch over `Workspace::network`;
-`schedules`). Each folder's `tools()` is gathered by `build.rs`; deleting a
-folder drops its tools. Tools the agent loop acts on itself stay core and are
+`schedules`; `advisor`; `verification`, whose `review.rs` exports a
+`Review` the agent loop asks before a run completes). Each folder's `tools()`
+(and `review::reviewers()` when it has a `review.rs`) is gathered by
+`build.rs`; deleting a folder drops them. Tools the agent loop acts on itself stay core and are
 listed in `tools::standard()`: AskUserQuestion, Enter/ExitPlanMode (plan is
 a `PermissionMode`), Enter/ExitWorktree (session relocation) and
 ListSessions (peers, tied to SendMessage routing).
 
 A feature that spans layers is one folder per layer, with the same name:
 `crates/agent-engine/src/tools/builtin/<name>/` (its tools),
-`crates/backend/src/features/<name>/` (`handle` and `forget`, reached by the
-generic `ClientCommand::Feature { feature, input }` and answered with
-`ServerEvent::Feature`) and `crates/cli/src/tui/features/<name>/` (its `/`
-commands as `Slash`, an optional `tick`, state in `App::features`, results
-back through `Msg::Feature`). Each layer's `build.rs` gathers its folders.
-Removing the folders of one name removes the feature; CI checks every name.
-`schedules` is the first: CronCreate, CronList, CronDelete, ScheduleWakeup,
-`/schedules` and `/loop`. Inbox notices are core (`TakeNotices`).
+`crates/backend/src/features/<name>/` (`handle(&Context, input)` and
+`forget(client)`, reached by the generic `ClientCommand::Feature { feature,
+input }` and answered with `ServerEvent::Feature`; a `run.rs` with `prepare`
+changes each run's request and may return a `Finish` called when the run
+ends) and `crates/cli/src/tui/features/<name>/` (its `/` commands as `Slash`,
+an optional `tick`, a typed `prefix` such as `#`, a status-line marker and a
+`/config` entry; state in `App::features`, results back through
+`Msg::Feature`). `Context` carries the client, principal, `LocalServices`
+(with its `data` folder and the features turned `off`) and a way to start a
+run. Each layer's `build.rs` gathers its folders. Removing the folders of one
+name removes the feature. Features: `schedules`,
+`shell` (`/bashes`), `web`, `advisor`, `memory`, `verification`, `channels`,
+plus the backend's `plugins`, `trace`, `workspace` and `declared_providers`.
+Inbox notices are core (`TakeNotices`).
 
 - **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`.
   Project or user agents of the same name replace them.
@@ -251,7 +259,7 @@ Removing the folders of one name removes the feature; CI checks every name.
   before its first change in the run. `SessionCommand::Rewind(n)`
   (`Session::rewind`) restores those files and cuts the conversation before
   prompt `n` (only the files once the conversation was compacted). In a git
-  repository a foreground `Bash` command is tracked too (`shell_changes.rs`):
+  repository a foreground `Bash` command is tracked too (`shell/changes.rs`):
   `git stash create` names the tree before it, and the files `git status`
   then shows changed keep their content from that tree, or are deleted on
   rewind if they are new. Ignored files and files untracked before the
@@ -259,7 +267,7 @@ Removing the folders of one name removes the feature; CI checks every name.
   `/retry` rewinds to the last one and sends it again.
 - **Safety check** (`guard/`): in Bypass, every editing or executing action
   is graded by the run's model before it runs.
-- **Verification** (`judge.rs`, `agent/verify.rs`; rules in
+- **Verification** (`tools/builtin/verification/`; rules in
   `domain::verification`): a top-level run whose
   `PromptRequest.verification` holds criteria is graded by a judge agent
   before it completes. The judge has `Read`, `Glob`, `Grep`, `Bash` and
@@ -281,11 +289,13 @@ Agents remember a project between sessions. Memories
 and author. `MemoryStore` (`FileMemoryStore`, one JSON per project). A
 fresh session gets recalled memories plus instructions to write
 `{remember, forget, revise}` to a temp file, applied on `Completed`.
-Search is by words (BM25); the `Embedder` seam stays for a remote
-embedding service later (today `NoEmbedder`, so no vectors). The
-same function serves recall and the `memory_search` MCP tool (in process:
-each run gets a `{command}_memory` server on its credentials, bound to its
-owner and project).
+Search is by words (BM25). The same function serves recall and the
+`memory_search` MCP tool (in process: each run gets a `{command}_memory`
+server on its credentials, bound to its owner and project). All of it is the
+`memory` feature: `backend/src/features/memory` (store under the services'
+`data` folder, kept in the process when there is none; `run.rs` briefs a run
+and applies its edits when it ends; `memory_search` in `off` drops the tool)
+and `cli/src/tui/features/memory` (`/memory` and `# note`).
 
 Memory is reversible and kept without an LLM:
 - **Edits**: every change goes through `Memories::edit` (or the
