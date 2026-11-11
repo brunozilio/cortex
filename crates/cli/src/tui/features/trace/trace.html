@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session trace {{SESSION}}</title>
+<style>
+:root {
+  --bg: #1b1c1e; --panel: #232427; --line: #3a3c40; --text: #e8e8ea; --muted: #9a9ca3;
+  --ok: #43c6a3; --ok-ink: #0f2a23; --bad: #e5484d; --warn: #e8a33d; --note: #6b7280; --accent: #6aa8ff;
+  --edge: #d6d7da; --code: #16171a; --add: #1f3b2c; --del: #43201f;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f6f6f4; --panel: #ffffff; --line: #d9d9d6; --text: #1d1e20; --muted: #64666b;
+    --ok: #1f9d7c; --ok-ink: #ffffff; --edge: #5b5d62; --code: #f0f0ee; --add: #dff3e6; --del: #fbe3e2;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { position: fixed; inset: 0 0 auto 0; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); z-index: 2; }
+header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+header .stat { color: var(--muted); }
+header .stat b { color: var(--text); font-weight: 600; }
+header input { margin-left: auto; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 9px; min-width: 200px; }
+header button, aside button { background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 9px; cursor: pointer; }
+#canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; cursor: grab; touch-action: none; }
+#canvas.dragging { cursor: grabbing; }
+svg text { fill: var(--text); font-size: 12px; }
+svg .sub { fill: var(--muted); font-size: 11px; }
+svg .badge { fill: var(--muted); font-size: 10px; }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.4; opacity: .8; }
+.edge.nested { stroke-dasharray: 4 4; opacity: .55; }
+.node { cursor: pointer; }
+.node circle.body { fill: var(--ok); }
+.node.failed circle.body { fill: var(--bad); }
+.node.marker circle.body { fill: var(--warn); }
+.node.note circle.body { fill: var(--note); }
+.node .glyph { fill: var(--ok-ink); font-size: 17px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.node circle.ring { fill: none; }
+.node.selected circle.ring { stroke: var(--accent); stroke-width: 3; }
+.node.dim { opacity: .2; }
+.toggle circle { fill: var(--bg); stroke: var(--accent); stroke-width: 1.4; }
+.toggle text { fill: var(--accent); font-size: 12px; text-anchor: middle; dominant-baseline: central; }
+.lanebg { fill: var(--panel); opacity: .45; stroke: var(--line); }
+aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); background: var(--panel);
+  border-left: 1px solid var(--line); overflow: auto; padding: 64px 18px 24px; transform: translateX(100%);
+  transition: transform .15s ease; z-index: 1; }
+aside.open { transform: none; }
+aside .crumbs { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+aside h2 { font-size: 16px; margin: 0 0 4px; word-break: break-word; }
+aside .meta { color: var(--muted); margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+aside h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 6px; }
+aside pre { background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: 10px;
+  white-space: pre-wrap; word-break: break-word; margin: 0; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+aside pre .add { background: var(--add); display: block; }
+aside pre .del { background: var(--del); display: block; }
+aside table { border-collapse: collapse; }
+aside td { padding: 2px 14px 2px 0; }
+aside td:first-child { color: var(--muted); }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+.chip.bad { border-color: var(--bad); color: var(--bad); }
+details summary { cursor: pointer; color: var(--muted); }
+.hint { position: fixed; left: 16px; bottom: 12px; color: var(--muted); font-size: 11px; }
+@media (max-width: 640px) { header input { min-width: 0; width: 100%; margin-left: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Session trace</h1>
+  <span class="stat" id="totals"></span>
+  <button id="fit" type="button">Fit</button>
+  <input id="search" type="search" placeholder="Search every node…" aria-label="Search">
+</header>
+<svg id="canvas" role="img" aria-label="Session trace"><g id="world"></g></svg>
+<aside id="panel" aria-live="polite"></aside>
+<div class="hint">Click a node for details · ←/→ step · ↓ into a sub-agent · ↑ out · Esc closes · scroll to zoom, drag to pan</div>
+<script type="application/json" id="trace">{{TRACE}}</script>
+<script>
+(() => {
+  const TRACE = JSON.parse(document.getElementById('trace').textContent);
+  const SESSION = "{{SESSION}}";
+  const COL = 190, ROW = 112, R = 24, INDENT = 46, GAP = 26;
+  const NS = 'http://www.w3.org/2000/svg';
+  const world = document.getElementById('world');
+  const svg = document.getElementById('canvas');
+  const panel = document.getElementById('panel');
+  const collapsed = new Set();
+  const order = [];
+  let selected = null, view = { x: 40, y: 90, k: 1 };
+
+  const GLYPH = { session: '◆', prompt: '❯', turn: '◉', tool: '⚒', agent: '✦', compacted: '⇊', rewound: '↺',
+    steered: '➜', fell_back: '⇄', failed: '✕', cancelled: '■', completed: '✓', note: 'i' };
+  const MARKERS = new Set(['compacted', 'rewound', 'steered', 'fell_back', 'cancelled']);
+
+  const cost = u => (u && u.estimated_cost_usd) || 0;
+  const money = v => '$' + (v < 0.01 && v > 0 ? v.toFixed(4) : v.toFixed(2));
+  const count = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+  const short = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const span = ms => ms == null ? '' : ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1) + ' s';
+  const clock = ms => ms ? new Date(ms).toLocaleTimeString() : '';
+
+  function agentOf(n) { return n.kind === 'tool' ? n.agent : n.kind === 'agent' ? n : null; }
+
+  function prepare(lane, parent, crumbs) {
+    let turns = 0;
+    for (const step of lane.steps) for (const n of step.nodes) {
+      n.parent = parent;
+      n.id = order.length;
+      order.push(n);
+      if (n.kind === 'turn') n.turn = ++turns;
+      n.title = title(n);
+      n.crumbs = crumbs.concat(n.title);
+      const agent = agentOf(n);
+      if (agent && agent.lane) prepare(agent.lane, n, n.crumbs);
+    }
+  }
+
+  function title(n) {
+    switch (n.kind) {
+      case 'session': return 'Session';
+      case 'prompt': return n.parent ? 'Task: ' + short(n.text, 40) : short(n.text, 60);
+      case 'turn': return (n.usage && n.usage.model) || ('Turn ' + n.turn);
+      case 'tool': return n.call.summary || n.call.name;
+      case 'agent': return n.name || 'agent';
+      case 'compacted': return 'Compacted';
+      case 'rewound': return 'Rewound';
+      case 'steered': return short(n.text, 40);
+      case 'fell_back': return 'Fell back to ' + n.model;
+      case 'failed': return short(n.error, 40);
+      case 'cancelled': return 'Cancelled';
+      case 'completed': return 'Done in ' + span(n.duration_ms);
+      default: return n.title || n.kind;
+    }
+  }
+
+  function subtitle(n) {
+    if (n.kind === 'tool') return n.agent ? 'Agent · ' + (n.agent.name || '') : n.call.name;
+    return { session: 'Session', prompt: n.parent ? 'Sub-agent prompt' : 'Prompt', turn: 'Model', agent: 'Agent',
+      compacted: 'Compaction', rewound: 'Rewind', steered: 'Steered', fell_back: 'Fallback', failed: 'Error',
+      cancelled: 'Run', completed: 'Run', note: 'Note' }[n.kind] || n.kind;
+  }
+
+  function stats(lane) {
+    const s = { tools: 0, turns: 0, cost: 0, failed: false };
+    for (const step of lane.steps) for (const n of step.nodes) {
+      if (n.kind === 'tool') { s.tools++; (n.usage || []).forEach(u => s.cost += cost(u)); }
+      if (n.kind === 'turn') { s.turns++; s.cost += cost(n.usage); }
+      if (n.failed) s.failed = true;
+      const a = agentOf(n);
+      if (a && a.lane) { const t = stats(a.lane); s.tools += t.tools; s.turns += t.turns; s.cost += t.cost; s.failed = s.failed || t.failed; }
+    }
+    return s;
+  }
+
+  function inside(n, a) {
+    const s = stats(a.lane);
+    (n.usage || []).forEach(u => s.cost += cost(u));
+    return s;
+  }
+
+  function layout(lane, x, y, out) {
+    let cx = x, height = ROW, prev = [], first = null;
+    for (const step of lane.steps) {
+      let width = COL, sy = y;
+      const here = [];
+      for (const n of step.nodes) {
+        const p = { n, x: cx + COL / 2, y: sy + R + 8 };
+        out.placed.push(p); here.push(p);
+        if (!first) first = p;
+        let slot = ROW;
+        const a = agentOf(n);
+        if (a && a.lane && a.lane.steps.length && !collapsed.has(n.id)) {
+          const sub = layout(a.lane, cx + INDENT, sy + ROW, out);
+          out.lanes.push({ x: cx + INDENT - 14, y: sy + ROW - 10, w: sub.w + 10, h: sub.h + 6 });
+          out.edges.push({ a: p, b: sub.first, nested: true });
+          slot += sub.h + GAP;
+          width = Math.max(width, sub.w + INDENT + 20);
+        }
+        sy += slot;
+      }
+      for (const a of prev) for (const b of here) out.edges.push({ a, b });
+      prev = here;
+      height = Math.max(height, sy - y);
+      cx += width;
+    }
+    return { w: cx - x, h: height, first };
+  }
+
+  function el(name, attrs, parent) {
+    const e = document.createElementNS(NS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  function draw() {
+    world.textContent = '';
+    const out = { placed: [], edges: [], lanes: [] };
+    layout(TRACE.lane, 0, 0, out);
+    for (const l of out.lanes) el('rect', { class: 'lanebg', x: l.x, y: l.y, width: l.w, height: l.h, rx: 12 }, world);
+    for (const e of out.edges) {
+      const { a, b } = e;
+      const d = e.nested
+        ? `M${a.x},${a.y + R} C${a.x},${b.y} ${a.x},${b.y} ${b.x - R - 6},${b.y}`
+        : `M${a.x + R + 6},${a.y} C${(a.x + b.x) / 2},${a.y} ${(a.x + b.x) / 2},${b.y} ${b.x - R - 6},${b.y}`;
+      el('path', { class: 'edge' + (e.nested ? ' nested' : ''), d, 'marker-end': 'url(#arrow)' }, world);
+    }
+    const query = document.getElementById('search').value.trim().toLowerCase();
+    for (const p of out.placed) {
+      const n = p.n;
+      const cls = ['node'];
+      if (n.failed) cls.push('failed');
+      else if (MARKERS.has(n.kind)) cls.push('marker');
+      else if (n.kind === 'note') cls.push('note');
+      if (selected === n) cls.push('selected');
+      if (query && !n.haystack.includes(query)) cls.push('dim');
+      const g = el('g', { class: cls.join(' '), transform: `translate(${p.x},${p.y})`, tabindex: 0 }, world);
+      n.at = p;
+      el('circle', { class: 'ring', r: R + 5 }, g);
+      el('circle', { class: 'body', r: R }, g);
+      el('text', { class: 'glyph' }, g).textContent = GLYPH[n.kind] || '•';
+      const t1 = el('text', { y: R + 18, 'text-anchor': 'middle' }, g);
+      t1.textContent = short(n.title, 26);
+      el('text', { class: 'sub', y: R + 33, 'text-anchor': 'middle' }, g).textContent = subtitle(n);
+      g.addEventListener('click', ev => { ev.stopPropagation(); select(n); });
+      const a = agentOf(n);
+      if (a && a.lane && a.lane.steps.length) {
+        const open = !collapsed.has(n.id);
+        const tg = el('g', { class: 'toggle', transform: `translate(${R + 4},${R - 2})` }, g);
+        el('circle', { r: 8 }, tg);
+        el('text', {}, tg).textContent = open ? '−' : '+';
+        tg.addEventListener('click', ev => { ev.stopPropagation(); toggle(n); });
+        if (!open) {
+          const s = inside(n, a);
+          el('text', { class: 'badge', y: R + 47, 'text-anchor': 'middle', fill: s.failed ? 'var(--bad)' : '' }, g)
+            .textContent = `${s.tools} tools · ${s.turns} turns · ${money(s.cost)}`;
+        }
+      }
+    }
+    apply();
+  }
+
+  function toggle(n) { collapsed.has(n.id) ? collapsed.delete(n.id) : collapsed.add(n.id); draw(); }
+
+  function apply() { world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); }
+
+  function fit() {
+    const box = world.getBBox();
+    const w = svg.clientWidth, h = svg.clientHeight - 70;
+    view.k = Math.min(1.4, Math.max(0.15, Math.min(w / (box.width + 80), h / (box.height + 80))));
+    view.x = (w - box.width * view.k) / 2 - box.x * view.k;
+    view.y = 70 + (h - box.height * view.k) / 2 - box.y * view.k;
+    apply();
+  }
+
+  function reveal(n) {
+    if (!n.at) return;
+    const w = svg.clientWidth - (panel.classList.contains('open') ? panel.clientWidth : 0);
+    const sx = view.x + n.at.x * view.k, sy = view.y + n.at.y * view.k;
+    if (sx < 60 || sx > w - 60 || sy < 90 || sy > svg.clientHeight - 60) {
+      view.x = w / 2 - n.at.x * view.k; view.y = svg.clientHeight / 2 - n.at.y * view.k; apply();
+    }
+  }
+
+  function text(parent, tag, value, cls) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    e.textContent = value;
+    parent.appendChild(e);
+    return e;
+  }
+
+  function section(name, value) {
+    if (value == null || value === '') return;
+    text(panel, 'h3', name);
+    text(panel, 'pre', typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+  }
+
+  function rows(name, pairs) {
+    const shown = pairs.filter(p => p[1] != null && p[1] !== '');
+    if (!shown.length) return;
+    text(panel, 'h3', name);
+    const table = document.createElement('table');
+    for (const [k, v] of shown) { const tr = table.insertRow(); tr.insertCell().textContent = k; tr.insertCell().textContent = v; }
+    panel.appendChild(table);
+  }
+
+  function usageRows(u) {
+    if (!u) return;
+    rows('Tokens', [['model', u.model], ['input', u.input], ['output', u.output], ['cache read', u.cache_read],
+      ['cache write', u.cache_write], ['cost', u.estimated_cost_usd != null ? money(u.estimated_cost_usd) : null]]);
+  }
+
+  function diff(name, before, after) {
+    text(panel, 'h3', name);
+    const pre = document.createElement('pre');
+    String(before || '').split('\n').forEach(l => text(pre, 'span', '- ' + l, 'del'));
+    String(after || '').split('\n').forEach(l => text(pre, 'span', '+ ' + l, 'add'));
+    panel.appendChild(pre);
+  }
+
+  function input(call) {
+    const i = call.input;
+    if (!i) return section('Input', call.summary);
+    if (call.name === 'Edit' && 'old_string' in i) {
+      rows('File', [['path', i.file_path], ['replace all', i.replace_all ? 'yes' : null]]);
+      return diff('Change', i.old_string, i.new_string);
+    }
+    if (call.name === 'MultiEdit' && Array.isArray(i.edits)) {
+      rows('File', [['path', i.file_path]]);
+      return i.edits.forEach((e, k) => diff('Change ' + (k + 1), e.old_string, e.new_string));
+    }
+    if (call.name === 'Write' && 'content' in i) {
+      rows('File', [['path', i.file_path]]);
+      return diff('Content', '', i.content);
+    }
+    section('Input', i);
+  }
+
+  function agentDetails(n, a) {
+    rows('Sub-agent', [['type', a.name], ['task', a.summary], ['status', a.status ? Object.keys(a.status)[0] : null]]);
+    section('Prompt', a.prompt);
+    const s = inside(n, a);
+    rows('Inside', [['tools', s.tools], ['turns', s.turns], ['cost', money(s.cost)]]);
+    const bar = document.createElement('p');
+    const fold = text(bar, 'button', collapsed.has(n.id) ? 'Expand' : 'Collapse');
+    fold.type = 'button';
+    fold.onclick = () => { toggle(n); select(n); };
+    panel.appendChild(bar);
+  }
+
+  function plain(n) {
+    const copy = {};
+    for (const k in n) if (!['parent', 'at', 'crumbs', 'haystack', 'id', 'title', 'turn'].includes(k)) copy[k] = n[k];
+    if (copy.agent) copy.agent = Object.assign({}, copy.agent, { lane: '…' });
+    if (copy.lane) copy.lane = '…';
+    return copy;
+  }
+
+  function select(n) {
+    selected = n;
+    panel.textContent = '';
+    panel.classList.add('open');
+    text(panel, 'div', n.crumbs.join(' › '), 'crumbs');
+    text(panel, 'h2', n.kind === 'prompt' ? 'Prompt' : n.title);
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    text(meta, 'span', subtitle(n), 'chip' + (n.failed ? ' bad' : ''));
+    if (n.failed) text(meta, 'span', 'failed', 'chip bad');
+    if (n.at_ms) text(meta, 'span', clock(n.at_ms));
+    if (n.until_ms) text(meta, 'span', span(n.until_ms - n.at_ms));
+    const copy = text(meta, 'button', 'Copy JSON');
+    copy.type = 'button';
+    copy.onclick = () => navigator.clipboard && navigator.clipboard.writeText(JSON.stringify(plain(n), null, 2))
+      .then(() => { copy.textContent = 'Copied'; });
+    const close = text(meta, 'button', 'Close');
+    close.type = 'button';
+    close.onclick = closePanel;
+    panel.appendChild(meta);
+    switch (n.kind) {
+      case 'session':
+        rows('Totals', [['session', SESSION], ['started', clock(TRACE.totals.started_ms)], ['last event', clock(TRACE.totals.ended_ms)],
+          ['input tokens', TRACE.totals.input], ['output tokens', TRACE.totals.output], ['cache read', TRACE.totals.cache_read],
+          ['cache write', TRACE.totals.cache_write], ['cost', money(TRACE.totals.cost_usd)]]);
+        rows('Shape', [['prompts', order.filter(o => o.kind === 'prompt' && !o.parent).length],
+          ['turns', order.filter(o => o.kind === 'turn').length], ['tool calls', order.filter(o => o.kind === 'tool').length],
+          ['compactions', order.filter(o => o.kind === 'compacted').length], ['failures', order.filter(o => o.failed).length]]);
+        break;
+      case 'prompt': section('Text', n.text); break;
+      case 'turn': {
+        usageRows(n.usage);
+        if (n.thinking) {
+          const d = document.createElement('details');
+          text(d, 'summary', 'Thinking');
+          text(d, 'pre', n.thinking);
+          text(panel, 'h3', 'Reasoning');
+          panel.appendChild(d);
+        }
+        section('Answer', n.text);
+        break;
+      }
+      case 'tool': {
+        rows('Call', [['tool', n.call.name], ['id', n.call.id], ['summary', n.call.summary]]);
+        input(n.call);
+        section('Output', n.output);
+        if (n.logs && n.logs.length) section('Logs', n.logs.join('\n'));
+        (n.usage || []).forEach(usageRows);
+        if (n.agent) agentDetails(n, n.agent);
+        break;
+      }
+      case 'agent': agentDetails(n, n); break;
+      case 'compacted':
+        rows('Context', [['before', count(n.before) + ' tokens'], ['after', count(n.after) + ' tokens']]);
+        section('Summary the model kept', n.summary);
+        break;
+      case 'rewound': rows('Rewind', [['messages kept', n.keep]]); break;
+      case 'steered': section('Message', n.text); break;
+      case 'fell_back': rows('Fallback', [['model', n.model]]); break;
+      case 'failed': section('Error', n.error); break;
+      case 'completed': rows('Run', [['duration', span(n.duration_ms)], ['cost', n.cost_usd != null ? money(n.cost_usd) : null]]); break;
+      case 'note': section(n.title, n.text); break;
+    }
+    draw();
+    reveal(n);
+  }
+
+  function closePanel() { panel.classList.remove('open'); selected = null; draw(); }
+
+  function visible(n) {
+    for (let p = n.parent; p; p = p.parent) if (collapsed.has(p.id)) return false;
+    return true;
+  }
+
+  function step(delta) {
+    const shown = order.filter(visible);
+    const at = selected ? shown.indexOf(selected) : -1;
+    const next = shown[Math.min(shown.length - 1, Math.max(0, at + delta))];
+    if (next) select(next);
+  }
+
+  function into() {
+    const a = selected && agentOf(selected);
+    if (!a || !a.lane || !a.lane.steps.length) return;
+    collapsed.delete(selected.id);
+    select(a.lane.steps[0].nodes[0]);
+  }
+
+  const totals = TRACE.totals;
+  document.getElementById('totals').innerHTML = '';
+  const tl = document.getElementById('totals');
+  [['in', count(totals.input)], ['out', count(totals.output)], ['cache', count(totals.cache_read)],
+    ['cost', money(totals.cost_usd)], ['time', span(totals.ended_ms - totals.started_ms)]].forEach(([k, v]) => {
+    text(tl, 'span', k + ' ');
+    text(tl, 'b', v + '   ');
+  });
+
+  TRACE.lane.steps.unshift({ nodes: [{ kind: 'session', at_ms: totals.started_ms, until_ms: totals.ended_ms, failed: false }] });
+  prepare(TRACE.lane, null, []);
+  for (const n of order) n.haystack = JSON.stringify(plain(n)).toLowerCase();
+
+  const defs = el('defs', {}, svg);
+  const marker = el('marker', { id: 'arrow', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+  el('path', { d: 'M0,0 L10,5 L0,10 z', fill: 'var(--edge)' }, marker);
+
+  let drag = null;
+  svg.addEventListener('pointerdown', e => { drag = { x: e.clientX - view.x, y: e.clientY - view.y }; svg.classList.add('dragging'); });
+  window.addEventListener('pointermove', e => { if (drag) { view.x = e.clientX - drag.x; view.y = e.clientY - drag.y; apply(); } });
+  window.addEventListener('pointerup', () => { drag = null; svg.classList.remove('dragging'); });
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const k = Math.min(3, Math.max(0.1, view.k * Math.exp(-e.deltaY * 0.0015)));
+    view.x = e.clientX - (e.clientX - view.x) * (k / view.k);
+    view.y = e.clientY - (e.clientY - view.y) * (k / view.k);
+    view.k = k;
+    apply();
+  }, { passive: false });
+  document.getElementById('fit').onclick = fit;
+  document.getElementById('search').addEventListener('input', draw);
+  window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'ArrowRight') step(1);
+    else if (e.key === 'ArrowLeft') step(-1);
+    else if (e.key === 'ArrowDown') into();
+    else if (e.key === 'ArrowUp' && selected && selected.parent) select(selected.parent);
+    else if (e.key === 'Escape') closePanel();
+    else return;
+    e.preventDefault();
+  });
+
+  draw();
+  fit();
+})();
+</script>
+</body>
+</html>

@@ -88,9 +88,11 @@ pub fn declare_providers(home: Option<&Path>, cwd: &Path) -> Vec<String> {
     described.into_iter().map(|(_, line)| line).collect()
 }
 
+pub const SESSIONS: &str = "native-sessions";
+
 pub fn engine(data: &Path) -> NativeEngine {
     let apis = NativeApis::new(Arc::new(NetHttp));
-    NativeEngine::new(Arc::new(apis), Arc::new(FileSessions::new(data.join("native-sessions"))))
+    NativeEngine::new(Arc::new(apis), Arc::new(FileSessions::new(data.join(SESSIONS))))
 }
 
 #[cfg(test)]

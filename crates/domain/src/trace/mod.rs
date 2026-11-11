@@ -63,7 +63,7 @@ pub struct Node {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Agent {
-    pub kind: String,
+    pub name: String,
     pub summary: String,
     pub prompt: String,
     pub status: Option<AgentStatus>,

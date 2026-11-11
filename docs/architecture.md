@@ -384,5 +384,18 @@ allow each new unsigned build of the binary.
 
 ## Sessions
 
-The engine keeps each session's transcript (`FileSessions`, one JSON per
-owner, folder and session) so `resume` continues it after a restart.
+The engine keeps each session's transcript (`FileSessions`, one JSONL file
+per owner, folder and session) so `resume` continues it after a restart.
+The file only grows: messages, `Truncated` (a rewind), `Restarted` (a
+compaction or any other rewrite of the history), the run's prompt
+(`Prompted`) and every engine event with its time (`Event`; the run gate's
+observer, `engine::record`, joins streamed text and drops partial tool
+input). Resume reads back from the last `Restarted`; nothing before it is
+deleted. Older JSON-array files load as before and are folded into the log
+on the next write.
+
+`/trace [session]` (the `trace` feature) reads the whole file, builds a tree
+with `domain::trace::build` (prompts, model turns, tools called side by
+side, sub-agents' lanes under the tool that started them, compactions,
+rewinds, errors) and writes a self-contained HTML page to
+`~/.{command}/traces/<session>.html`, opened in the browser.

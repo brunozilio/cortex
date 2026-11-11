@@ -1,4 +1,5 @@
 use domain::EngineEvent;
+use domain::trace::Record;
 use serde::{Deserialize, Serialize};
 
 use crate::transcript::Message;
@@ -14,6 +15,18 @@ pub enum Entry {
 }
 
 const CONVERSATION: [&str; 3] = ["message", "truncated", "restarted"];
+
+impl Entry {
+    pub fn record(self) -> Option<Record> {
+        match self {
+            Entry::Message(_) => None,
+            Entry::Truncated { keep } => Some(Record::Truncated { keep }),
+            Entry::Restarted => Some(Record::Restarted),
+            Entry::Event { at_ms, event } => Some(Record::Event { at_ms, event }),
+            Entry::Prompted { at_ms, prompt } => Some(Record::Prompted { at_ms, prompt }),
+        }
+    }
+}
 
 #[derive(Deserialize)]
 struct Kind {

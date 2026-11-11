@@ -211,7 +211,7 @@ impl Builder<'_> {
         let spawn = self.agents.remove(&index).unwrap_or_default();
         let failed = spawn.status == Some(AgentStatus::Failed);
         let agent = Box::new(Agent {
-            kind: spawn.kind,
+            name: spawn.kind,
             summary: spawn.summary,
             prompt: spawn.prompt,
             status: spawn.status,

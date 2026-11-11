@@ -131,7 +131,7 @@ fn a_sub_agent_opens_its_own_lane_under_the_tool_that_started_it_and_can_nest() 
     let agent_tool = tools(&trace.lane)[0];
     let Kind::Tool { agent: Some(agent), usage, .. } = &agent_tool.kind else { panic!("{agent_tool:?}") };
     assert_eq!(usage.iter().map(|u| u.output).sum::<u64>(), 2);
-    assert_eq!((agent.kind.as_str(), agent.prompt.as_str()), ("Explore", "find main"));
+    assert_eq!((agent.name.as_str(), agent.prompt.as_str()), ("Explore", "find main"));
     assert_eq!(agent.status, Some(AgentStatus::Done { seconds: 1 }));
     assert_eq!(kinds(&agent.lane), vec!["prompt", "turn", "tool Glob"]);
 
@@ -164,6 +164,17 @@ fn compaction_rewind_and_interruptions_stay_in_the_timeline() {
     assert_eq!(node.kind, Kind::Compacted(compaction));
     let failed = only(&trace.lane.steps[5]);
     assert!(failed.failed);
+}
+
+#[test]
+fn a_standalone_agent_keeps_its_name_beside_the_node_kind_in_json() {
+    let trace = build(vec![at(
+        1,
+        EngineEvent::AgentSpawned { index: 0, kind: "verify".into(), summary: String::new(), prompt: "check".into() },
+    )]);
+    let json = serde_json::to_value(&trace).expect("json");
+    let node = &json["lane"]["steps"][0]["nodes"][0];
+    assert_eq!((node["kind"].as_str(), node["name"].as_str()), (Some("agent"), Some("verify")));
 }
 
 #[test]
