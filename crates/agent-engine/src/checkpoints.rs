@@ -55,6 +55,14 @@ impl FileHistory {
         files.insert(path.to_owned(), before);
     }
 
+    pub fn record(&self, path: &Path, before: Option<Vec<u8>>) {
+        if before.as_ref().is_some_and(|bytes| bytes.len() as u64 > MAX_FILE) {
+            return;
+        }
+        let mut files = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        files.entry(path.to_owned()).or_insert_with(|| before.map(|bytes| STANDARD.encode(bytes)));
+    }
+
     pub fn take(&self) -> BTreeMap<PathBuf, Option<String>> {
         std::mem::take(&mut *self.0.lock().unwrap_or_else(PoisonError::into_inner))
     }

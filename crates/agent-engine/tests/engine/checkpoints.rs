@@ -20,6 +20,45 @@ fn writes(file: &str, content: &str) -> Arc<ScriptedModel> {
     ]))
 }
 
+#[cfg(unix)]
+#[test]
+fn a_rewind_also_undoes_what_a_shell_command_changed_in_the_repository() {
+    let dir = tempfile::tempdir().expect("dir");
+    let git = |args: &[&str]| {
+        let done = std::process::Command::new("git").args(args).current_dir(dir.path()).output().expect("git");
+        assert!(done.status.success(), "{}", String::from_utf8_lossy(&done.stderr));
+    };
+    git(&["init", "-q"]);
+    std::fs::write(dir.path().join("a.txt"), "one\n").expect("write");
+    std::fs::write(dir.path().join(".gitignore"), "build/\n").expect("ignore");
+    git(&["add", "."]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "start"]);
+    let shell = Arc::new(ScriptedModel::new([
+        ScriptedModel::reply(vec![Block::ToolUse {
+            id: "b".into(),
+            name: "Bash".into(),
+            input: json!({"command": "printf 'two\\n' > a.txt && printf new > b.txt && mkdir -p build && printf x > build/out"}),
+        }]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]));
+    let sessions = Arc::new(InMemorySessions::default());
+    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![shell]))), sessions);
+    let mut request = PromptRequest::plain(dir.path().into(), "change things", model());
+    request.allowed_tools = vec!["Bash".into()];
+    let events = finish(&start(&engine, &request));
+    let Some(EngineEvent::SessionStarted(session)) = events.first().cloned() else { panic!("{events:?}") };
+    assert_eq!(std::fs::read_to_string(dir.path().join("a.txt")).expect("a"), "two\n");
+
+    let mut rewind = PromptRequest::plain(dir.path().into(), "", model());
+    rewind.resume = Some(session);
+    rewind.command = Some(SessionCommand::Rewind(0));
+    let events = finish(&start(&engine, &rewind));
+    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+    assert_eq!(std::fs::read_to_string(dir.path().join("a.txt")).expect("a"), "one\n", "the tracked file is back");
+    assert!(!dir.path().join("b.txt").exists(), "the new file is gone");
+    assert!(dir.path().join("build/out").exists(), "ignored build output is left alone");
+}
+
 #[test]
 fn a_rewind_puts_files_back_and_cuts_the_conversation() {
     let dir = tempfile::tempdir().expect("dir");

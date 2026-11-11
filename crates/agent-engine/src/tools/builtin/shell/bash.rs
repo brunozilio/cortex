@@ -68,11 +68,16 @@ impl Tool for Bash {
                 Err(error) => Outcome::error(format!("Could not start the shell: {error}")),
             };
         }
+        let watched = crate::shell_changes::before(workspace);
         let id = match super::shells::start(workspace.credentials.client, command, &mut shell) {
             Ok(id) => id,
             Err(error) => return Outcome::error(format!("Could not start the shell: {error}")),
         };
-        match super::shells::wait(&id, timeout, &workspace.stop, &workspace.detach) {
+        let waited = super::shells::wait(&id, timeout, &workspace.stop, &workspace.detach);
+        if let Some(watched) = watched {
+            watched.after(workspace);
+        }
+        match waited {
             Waited::Exited { output, success: true, .. } => {
                 let text = clip_middle(&output, OUTPUT);
                 Outcome::ok(if text.is_empty() { "(no output)".to_owned() } else { text })

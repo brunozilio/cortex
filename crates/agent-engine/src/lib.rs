@@ -21,6 +21,7 @@ pub mod permission;
 pub mod plugins;
 pub mod prompt;
 pub mod sessions;
+mod shell_changes;
 pub mod tools;
 pub mod transcript;
 pub mod upkeep;

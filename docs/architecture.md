@@ -245,8 +245,12 @@ Removing the folders of one name removes the feature; CI checks every name.
   one (`EngineEvent::Checkpoint(n)`); `Edit`/`Write` keep a file's content
   before its first change in the run. `SessionCommand::Rewind(n)`
   (`Session::rewind`) restores those files and cuts the conversation before
-  prompt `n` (only the files once the conversation was compacted). Changes
-  made with `Bash` are not tracked. The chat's `/rewind` picks a prompt;
+  prompt `n` (only the files once the conversation was compacted). In a git
+  repository a foreground `Bash` command is tracked too (`shell_changes.rs`):
+  `git stash create` names the tree before it, and the files `git status`
+  then shows changed keep their content from that tree, or are deleted on
+  rewind if they are new. Ignored files and files untracked before the
+  command are left alone. The chat's `/rewind` picks a prompt;
   `/retry` rewinds to the last one and sends it again.
 - **Safety check** (`guard/`): in Bypass, every editing or executing action
   is graded by the run's model before it runs.
