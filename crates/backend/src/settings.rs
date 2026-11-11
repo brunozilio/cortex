@@ -32,7 +32,17 @@ impl FileSettingsStore {
 
 impl SettingsStore for FileSettingsStore {
     fn load(&self, owner: &Principal) -> Option<serde_json::Value> {
-        serde_json::from_slice(&std::fs::read(self.path(owner)).ok()?).ok()
+        let path = self.path(owner);
+        let bytes = std::fs::read(&path).ok()?;
+        match serde_json::from_slice(&bytes) {
+            Ok(settings) => Some(settings),
+            Err(error) => {
+                let aside = path.with_extension("json.broken");
+                let moved = std::fs::rename(&path, &aside);
+                tracing::warn!(%error, aside = %aside.display(), moved = moved.is_ok(), "the settings did not parse; kept aside");
+                None
+            }
+        }
     }
 
     fn save(&self, owner: &Principal, settings: &serde_json::Value) -> Result<(), String> {
@@ -69,5 +79,20 @@ mod tests {
         let huge = serde_json::json!({ "x": "a".repeat(AT_MOST) });
         assert!(store.save(&ana, &huge).is_err());
         assert_eq!(store.load(&ana), Some(serde_json::json!({"theme": "dark"})), "a refused save keeps the last");
+    }
+
+    #[test]
+    fn a_settings_file_that_does_not_parse_is_kept_aside_not_overwritten() {
+        let root = tempfile::tempdir().expect("root");
+        let store = FileSettingsStore::new(root.path().to_path_buf());
+        let owner = Principal::LocalOwner;
+        let path = store.path(&owner);
+        std::fs::create_dir_all(path.parent().expect("folder")).expect("folder");
+        std::fs::write(&path, "{\"model\": \"opus\", oops").expect("write");
+        assert_eq!(store.load(&owner), None);
+        store.save(&owner, &serde_json::json!({"vim": true})).expect("save");
+        let kept = std::fs::read_to_string(path.with_extension("json.broken")).expect("kept aside");
+        assert_eq!(kept, "{\"model\": \"opus\", oops");
+        assert_eq!(store.load(&owner), Some(serde_json::json!({"vim": true})));
     }
 }
