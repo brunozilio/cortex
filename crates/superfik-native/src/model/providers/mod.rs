@@ -2,6 +2,7 @@
 //! and expects is in `superfik_providers`; this module does the IO.
 
 pub mod copilot;
+pub mod kiro_idc;
 pub mod oauth;
 mod transport;
 

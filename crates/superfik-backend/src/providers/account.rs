@@ -34,6 +34,12 @@ impl SignIn for BrowserSignIn {
         }
         let (port, path) = superfik_providers::oauth::callback(provider);
         let listener = super::redirect::Loopback::bind_on(port, path, true)?;
+        if provider == ModelProvider::KiroSubscription {
+            let tokens = super::kiro_sign_in::sign_in(&NetHttp, &listener, open, &random)?;
+            let config = Config { auth: Some(tokens), ..Config::default() };
+            config.validate(provider).map_err(|e| e.to_string())?;
+            return Ok(config);
+        }
         let redirect = listener.redirect_uri();
         let verifier = random(64)?;
         let state = random(superfik_providers::oauth::state_bytes(provider))?;

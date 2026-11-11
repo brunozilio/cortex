@@ -30,7 +30,7 @@ fn post(
     previous: Option<&Tokens>,
 ) -> Result<Tokens, ModelError> {
     let response = http
-        .post(request.url, &[("content-type".into(), request.content_type.into())], &request.body)
+        .post(&request.url, &[("content-type".into(), request.content_type.into())], &request.body)
         .map_err(ModelError::Network)?;
     let status = response.status;
     let body = if status == 200 { super::transport::read(response, TOKEN_LIMIT)? } else { String::new() };

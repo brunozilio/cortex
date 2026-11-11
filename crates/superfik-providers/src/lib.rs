@@ -184,7 +184,13 @@ mod tests {
     use super::*;
 
     fn tokens(account: &str) -> Tokens {
-        Tokens { access_token: "a".into(), refresh_token: "r".into(), account_id: account.into(), expires_at: None }
+        Tokens {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            account_id: account.into(),
+            expires_at: None,
+            idc: None,
+        }
     }
 
     #[test]

@@ -28,6 +28,9 @@ pub struct Tokens {
     pub account_id: String,
     #[serde(default)]
     pub expires_at: Option<DateTime<Utc>>,
+    /// The Identity Center client a Kiro organization sign-in registered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idc: Option<super::kiro::idc::IdcClient>,
 }
 
 impl std::fmt::Debug for Tokens {
@@ -44,6 +47,7 @@ impl Tokens {
             refresh_token: String::new(),
             account_id: String::new(),
             expires_at: None,
+            idc: None,
         }
     }
 
@@ -114,7 +118,7 @@ pub fn authorize(provider: ModelProvider, challenge: &str, state: &str, redirect
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct TokenRequest {
-    pub url: &'static str,
+    pub url: String,
     pub content_type: &'static str,
     pub body: String,
 }
@@ -153,7 +157,10 @@ pub fn exchange(provider: ModelProvider, code: &str, state: &str, verifier: &str
 
 pub fn refresh(provider: ModelProvider, previous: &Tokens) -> TokenRequest {
     if provider == ModelProvider::KiroSubscription {
-        return super::kiro::auth::refresh(previous);
+        return match &previous.idc {
+            Some(client) => super::kiro::idc::refresh(client, previous),
+            None => super::kiro::auth::refresh(previous),
+        };
     }
     token_request(provider, &[("grant_type", "refresh_token"), ("refresh_token", &previous.refresh_token)])
 }
@@ -164,10 +171,14 @@ fn token_request(provider: ModelProvider, params: &[(&str, &str)]) -> TokenReque
     params.push(("client_id", if openai { OPENAI_CLIENT } else { CLAUDE_CLIENT }));
     if openai {
         params.retain(|(key, _)| *key != "state");
-        TokenRequest { url: OPENAI_TOKEN, content_type: "application/x-www-form-urlencoded", body: form(&params) }
+        TokenRequest {
+            url: OPENAI_TOKEN.into(),
+            content_type: "application/x-www-form-urlencoded",
+            body: form(&params),
+        }
     } else {
         let body = Value::Object(params.iter().map(|(key, value)| ((*key).to_owned(), json!(value))).collect());
-        TokenRequest { url: CLAUDE_TOKEN, content_type: "application/json", body: body.to_string() }
+        TokenRequest { url: CLAUDE_TOKEN.into(), content_type: "application/json", body: body.to_string() }
     }
 }
 
@@ -179,7 +190,10 @@ pub fn tokens(
     now: DateTime<Utc>,
 ) -> Result<Tokens, ProviderError> {
     if provider == ModelProvider::KiroSubscription {
-        return super::kiro::auth::tokens(status, body, previous, now);
+        return match previous.and_then(|previous| previous.idc.as_ref()) {
+            Some(client) => super::kiro::idc::tokens(client, status, body, previous, now),
+            None => super::kiro::auth::tokens(status, body, previous, now),
+        };
     }
     let unauthorized = |why: String| ProviderError::Unauthorized(why);
     if status != 200 {
@@ -208,6 +222,7 @@ pub fn tokens(
             .unwrap_or_default(),
         account_id,
         expires_at: Some(now + Duration::seconds(value["expires_in"].as_i64().unwrap_or(0))),
+        idc: None,
     })
 }
 
@@ -231,61 +246,5 @@ pub fn account_id(jwt: &str) -> Result<String, ProviderError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn jwt(claims: Value) -> String {
-        format!("h.{}.s", URL_SAFE_NO_PAD.encode(claims.to_string()))
-    }
-
-    #[test]
-    fn the_account_comes_from_any_of_the_three_claims() {
-        let nested = jwt(json!({"https://api.openai.com/auth": {"chatgpt_account_id": "a1"}}));
-        assert_eq!(account_id(&nested), Ok("a1".into()));
-        assert_eq!(account_id(&jwt(json!({"chatgpt_account_id": "a2"}))), Ok("a2".into()));
-        assert_eq!(account_id(&jwt(json!({"organizations": [{"id": "a3"}]}))), Ok("a3".into()));
-        assert!(account_id("not-a-jwt").is_err());
-    }
-
-    #[test]
-    fn openai_posts_a_form_without_state_and_claude_json_with_it() {
-        let openai = exchange(ModelProvider::ChatGptSubscription, "c", "s", "v", OPENAI_REDIRECT);
-        assert_eq!(openai.url, OPENAI_TOKEN);
-        assert!(openai.body.contains("client_id=app_EMoamEEZ73f0CkXaXp7hrann") && !openai.body.contains("state"));
-        let claude = exchange(ModelProvider::ClaudeSubscription, "c", "s", "v", "http://localhost:9/callback");
-        let body: Value = serde_json::from_str(&claude.body).unwrap_or_default();
-        assert_eq!((body["state"].as_str(), body["client_id"].as_str()), (Some("s"), Some(CLAUDE_CLIENT)));
-    }
-
-    #[test]
-    fn a_refresh_keeps_what_the_answer_omits() {
-        let previous = Tokens {
-            access_token: "old".into(),
-            refresh_token: "r0".into(),
-            account_id: "acct".into(),
-            expires_at: None,
-        };
-        let now = Utc::now();
-        let fresh = tokens(
-            ModelProvider::ChatGptSubscription,
-            200,
-            r#"{"access_token":"new","expires_in":60}"#,
-            Some(&previous),
-            now,
-        );
-        let fresh = fresh.unwrap_or_else(|e| panic!("{e}"));
-        assert_eq!((fresh.refresh_token.as_str(), fresh.account_id.as_str()), ("r0", "acct"));
-        assert_eq!(fresh.expires_at, Some(now + Duration::seconds(60)));
-        assert!(matches!(
-            tokens(ModelProvider::ClaudeSubscription, 400, "{}", None, now),
-            Err(ProviderError::Unauthorized(_))
-        ));
-    }
-
-    #[test]
-    fn each_client_id_names_its_subscription() {
-        assert_eq!(subscription_client(Some(OPENAI_CLIENT)), Some(ModelProvider::ChatGptSubscription));
-        assert_eq!(subscription_client(Some(CLAUDE_CLIENT)), Some(ModelProvider::ClaudeSubscription));
-        assert_eq!(subscription_client(Some("other")), None);
-    }
-}
+#[path = "oauth_tests.rs"]
+mod tests;

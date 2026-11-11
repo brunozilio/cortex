@@ -7,6 +7,7 @@
 
 mod account;
 mod catalog;
+mod kiro_sign_in;
 pub(crate) mod redirect;
 mod store;
 

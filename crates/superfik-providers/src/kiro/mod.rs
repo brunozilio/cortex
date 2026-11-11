@@ -4,6 +4,7 @@
 //! `ListAvailableModels` on the management service for the catalog. Both
 //! are AWS JSON 1.0 calls picked by `x-amz-target`.
 pub mod auth;
+pub mod idc;
 pub mod models;
 
 use serde_json::{Value, json};

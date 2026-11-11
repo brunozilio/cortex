@@ -39,6 +39,10 @@ impl Loopback {
         Ok(Self { server, port, path: path.to_owned(), localhost })
     }
 
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
     pub fn redirect_uri(&self) -> String {
         format!("http://{}:{}{}", if self.localhost { "localhost" } else { "127.0.0.1" }, self.port, self.path)
     }
@@ -60,6 +64,22 @@ impl Loopback {
     }
 
     fn wait_query(&self, state: &str, timeout: Duration) -> Result<(String, String), String> {
+        let pending = self.next_within(state, &[], timeout)?;
+        let query = pending.query.clone();
+        let result = pending.code();
+        pending.finish(result.as_ref().map(|_| ()));
+        result.map(|code| (code, query))
+    }
+
+    /// The next request for this sign-in (`state`) on the callback path or
+    /// one of `others`, left unanswered: the browser waits until the
+    /// sign-in says where it goes next ([`Pending::redirect`]) or how it
+    /// ended ([`Pending::finish`]).
+    pub fn next(&self, state: &str, others: &[&str]) -> Result<Pending, String> {
+        self.next_within(state, others, SIGN_IN_TIMEOUT)
+    }
+
+    fn next_within(&self, state: &str, others: &[&str], timeout: Duration) -> Result<Pending, String> {
         let deadline = Instant::now() + timeout;
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
@@ -69,23 +89,69 @@ impl Loopback {
             let Some(request) = self.server.recv_timeout(left).map_err(|error| error.to_string())? else { continue };
             let url = request.url().to_owned();
             let (path, query) = url.split_once('?').unwrap_or((&url, ""));
-            if path != self.path {
-                let _ = request.respond(tiny_http::Response::empty(404));
+            if path != self.path && !others.contains(&path) {
+                let _ = request.respond(page("<p>Superfik is not waiting for this address.</p>".into(), 404));
                 continue;
             }
             if state_of(query).as_deref() != Some(state) {
                 let _ = request.respond(page("<p>This is not the sign-in Superfik is waiting for.</p>".into(), 400));
                 continue;
             }
-            let result = callback(query).and_then(|(code, _)| {
-                if code.is_empty() { Err("the sign-in returned no code".into()) } else { Ok((code, query.to_owned())) }
-            });
-            let body = match &result {
-                Ok(_) => DONE_PAGE.to_owned(),
-                Err(error) => format!("<!doctype html><meta charset=utf-8><p>Sign-in failed: {}</p>", html(error)),
-            };
-            let _ = request.respond(page(body, 200));
-            return result;
+            return Ok(Pending { path: path.to_owned(), query: query.to_owned(), request: Some(request) });
+        }
+    }
+}
+
+/// A browser request the sign-in has not answered yet. One dropped
+/// unanswered is told the sign-in failed.
+pub struct Pending {
+    pub path: String,
+    pub query: String,
+    request: Option<tiny_http::Request>,
+}
+
+impl std::fmt::Debug for Pending {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pending").field("path", &self.path).finish_non_exhaustive()
+    }
+}
+
+impl Pending {
+    /// The code it carries, or the error the provider sent instead.
+    pub fn code(&self) -> Result<String, String> {
+        callback(&self.query)
+            .and_then(|(code, _)| if code.is_empty() { Err("the sign-in returned no code".into()) } else { Ok(code) })
+    }
+
+    /// Sends the browser on to `to` (the next sign-in step).
+    pub fn redirect(mut self, to: &str) {
+        let Some(request) = self.request.take() else { return };
+        let response = tiny_http::Response::empty(302);
+        match tiny_http::Header::from_bytes("Location", to) {
+            Ok(location) => {
+                let _ = request.respond(response.with_header(location));
+            }
+            Err(()) => {
+                let _ = request.respond(page("<p>Sign-in failed: an invalid next address.</p>".into(), 500));
+            }
+        }
+    }
+
+    /// Tells the browser the sign-in is done, or why it failed.
+    pub fn finish(mut self, result: Result<(), &String>) {
+        let Some(request) = self.request.take() else { return };
+        let body = match result {
+            Ok(()) => DONE_PAGE.to_owned(),
+            Err(error) => format!("<!doctype html><meta charset=utf-8><p>Sign-in failed: {}</p>", html(error)),
+        };
+        let _ = request.respond(page(body, 200));
+    }
+}
+
+impl Drop for Pending {
+    fn drop(&mut self) {
+        if let Some(request) = self.request.take() {
+            let _ = request.respond(page("<p>Sign-in failed; see the terminal.</p>".into(), 200));
         }
     }
 }

@@ -43,6 +43,7 @@ fn a_refresh_without_an_account_keeps_the_one_it_had() {
         refresh_token: "r".into(),
         account_id: "acct-kept".into(),
         expires_at: None,
+        idc: None,
     };
     let body = json!({"access_token":claims(json!({})),"expires_in":3600}).to_string();
     let tokens = oauth::refresh(&ScriptedHttp::new([(200, body)]), ModelProvider::ChatGptSubscription, &previous)

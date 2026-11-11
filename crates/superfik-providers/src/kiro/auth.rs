@@ -3,7 +3,8 @@
 //! portal returns `/oauth/callback?login_option=…&code=…&state=…` to a
 //! loopback on port 49153 (the only port Kiro's sign-in accepts). Google
 //! and GitHub codes are exchanged at Kiro's auth service, which also
-//! refreshes the tokens and names the account's profile ARN.
+//! refreshes the tokens and names the account's profile ARN. An
+//! organization's sign-in (Identity Center) is in [`super::idc`].
 use super::super::ProviderError;
 use super::super::oauth::{TokenRequest, Tokens, form};
 use chrono::{DateTime, Duration, Utc};
@@ -50,12 +51,12 @@ pub fn redirect(callback: &str, query: &str) -> Result<String, ProviderError> {
 
 pub fn exchange(code: &str, verifier: &str, redirect: &str) -> TokenRequest {
     let body = json!({"code": code, "code_verifier": verifier, "redirect_uri": redirect});
-    TokenRequest { url: TOKEN, content_type: "application/json", body: body.to_string() }
+    TokenRequest { url: TOKEN.into(), content_type: "application/json", body: body.to_string() }
 }
 
 pub fn refresh(previous: &Tokens) -> TokenRequest {
     let body = json!({"refreshToken": previous.refresh_token});
-    TokenRequest { url: REFRESH, content_type: "application/json", body: body.to_string() }
+    TokenRequest { url: REFRESH.into(), content_type: "application/json", body: body.to_string() }
 }
 
 /// Kiro's token answer; the profile ARN is kept as the account id.
@@ -75,7 +76,13 @@ pub fn tokens(status: u16, body: &str, previous: Option<&Tokens>, now: DateTime<
     let account_id =
         kept("profileArn", |t| &t.account_id).ok_or_else(|| unauthorized("Kiro returned no profile ARN".into()))?;
     let lifetime = value["expiresIn"].as_i64().filter(|s| *s > 0).unwrap_or(LIFETIME);
-    Ok(Tokens { access_token, refresh_token, account_id, expires_at: Some(now + Duration::seconds(lifetime)) })
+    Ok(Tokens {
+        access_token,
+        refresh_token,
+        account_id,
+        expires_at: Some(now + Duration::seconds(lifetime)),
+        idc: None,
+    })
 }
 
 #[cfg(test)]
@@ -110,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn organization_and_builder_id_sign_ins_are_refused_with_a_reason() {
+    fn only_google_and_github_codes_go_to_kiros_auth_service() {
         let refused = super::redirect("http://x/oauth/callback", "login_option=awsIdc&code=c");
         assert!(matches!(refused, Err(ProviderError::Unauthorized(why)) if why.contains("awsIdc")));
         assert!(super::redirect("http://x/oauth/callback", "code=c").is_err());
@@ -128,8 +135,13 @@ mod tests {
 
     #[test]
     fn a_refresh_keeps_what_the_answer_omits_and_failures_sign_out() {
-        let previous =
-            Tokens { access_token: "old".into(), refresh_token: "r0".into(), account_id: ARN.into(), expires_at: None };
+        let previous = Tokens {
+            access_token: "old".into(),
+            refresh_token: "r0".into(),
+            account_id: ARN.into(),
+            expires_at: None,
+            idc: None,
+        };
         assert_eq!(serde_json::from_str::<Value>(&refresh(&previous).body).ok(), Some(json!({"refreshToken": "r0"})));
         let fresh = tokens(200, r#"{"accessToken":"new"}"#, Some(&previous), Utc::now());
         let fresh = fresh.unwrap_or_else(|e| panic!("{e}"));

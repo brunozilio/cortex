@@ -86,6 +86,7 @@ mod tests {
             refresh_token: "r".into(),
             account_id: "arn:aws:codewhisperer:us-east-1:1:profile/P".into(),
             expires_at: None,
+            idc: None,
         };
         let config = crate::Config { auth: Some(tokens), ..crate::Config::default() };
         let call = call(&config, "");
