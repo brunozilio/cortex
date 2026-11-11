@@ -1,7 +1,8 @@
 use super::Handler;
 
-const EVENTS: [&str; 15] = [
+const EVENTS: [&str; 16] = [
     "ModelRequest",
+    "ModelResponse",
     "ModelError",
     "PreToolUse",
     "PostToolUse",
@@ -17,8 +18,16 @@ const EVENTS: [&str; 15] = [
     "PermissionRequest",
     "Notification",
 ];
-const NO_MODEL_HOOKS: [&str; 7] =
-    ["SessionStart", "SessionEnd", "SubagentStart", "PreCompact", "PostCompact", "ModelRequest", "ModelError"];
+const NO_MODEL_HOOKS: [&str; 8] = [
+    "SessionStart",
+    "SessionEnd",
+    "SubagentStart",
+    "PreCompact",
+    "PostCompact",
+    "ModelRequest",
+    "ModelResponse",
+    "ModelError",
+];
 
 pub fn event(event: &str) -> Result<(), String> {
     match EVENTS.contains(&event) {

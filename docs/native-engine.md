@@ -93,7 +93,8 @@ actually used.
 Hook handlers `command`, `script`, `http`, `prompt` and `agent` run on
 PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Stop,
 SubagentStart, SubagentStop, PreCompact, PostCompact, UserPromptSubmit,
-SessionStart, SessionEnd, Notification, ModelRequest and ModelError;
+SessionStart, SessionEnd, Notification, ModelRequest, ModelResponse and
+ModelError;
 anything else is refused, and a refusal names the file, event, hook and
 reason. Exit code 2 or a JSON decision blocks; PreToolUse may rewrite
 arguments (checked again); Stop may demand more work. Hooks run with the
@@ -106,20 +107,35 @@ read-only tool (Read, Grep, Glob, LSP…) inside the project; anything else
 is refused. The script runs on its own thread and each such call is served
 by the caller (`hooks/script_hook.rs`, `tools/script_bridge.rs`).
 
-ModelRequest runs before each model call of the loop and ModelError on
-every failed call (after the provider's own retries). Their input has
-`model`, `kind` (`main` or `sub-agent`, also the matcher's subject),
-`mode`, `messages` and, for ModelError, `error`, `errorKind`
-(`overloaded`, `unauthorized`, `network`, `provider`, `too_long`),
-`attempt`, `tried` (the models that failed since the last answer) and
-`fallbacks` (the settings' chain). Answering
-`{"hookSpecificOutput": {"model": "openai:gpt-6.1-sol"}}` routes the call
-(see `domain::routing`). On ModelError it forwards the failed call to that
-model, `{"decision": "block"}` ends the run with the error, and no answer
-leaves it to the `fallbackModel` chain, which takes only overloads. The
-policy is `domain::fallback`: a model is not tried twice before an answer
-arrives, and at most `MAX_SWITCHES` models are tried in a row. Only command,
-script and http handlers run on them, so routing never asks a model.
+The three model hooks intercept every model call of the loop, like a
+proxy: ModelRequest before it is sent, ModelResponse when a reply
+arrives, ModelError when it fails (after the provider's own retries).
+Their input has `model`, `kind` (`main` or `sub-agent`, also the
+matcher's subject), `mode` and `messages` (a count), plus:
+
+- ModelRequest: `effort`, `maxTokens`, `tools` (names). It may answer
+  `{"hookSpecificOutput": {"model": "openai:gpt-6.1-sol"}}` to route the
+  call (see `domain::routing`), `"effort": "low"` to change the effort,
+  `"additionalContext"` (or a top-level `systemMessage`) to append to the
+  system prompt of this call, or `{"decision": "block"}` to stop the run.
+- ModelResponse: `text`, `toolCalls` (`name`, `input`), `stopReason`,
+  `usage` and `rejections`. `"text"` replaces the reply's text (tool calls
+  are kept); `{"decision": "block", "reason": …}` drops the reply and asks
+  again with the reason added to the system prompt, at most
+  `domain::interception::MAX_REJECTIONS` times before the run fails. While
+  a ModelResponse hook is configured, reply text is shown when the hook
+  has answered, not streamed.
+- ModelError: `error`, `errorKind` (`overloaded`, `unauthorized`,
+  `network`, `provider`, `too_long`), `attempt`, `tried` (the models that
+  failed since the last answer) and `fallbacks` (the settings' chain).
+  `"model"` forwards the failed call to that model, `{"decision":
+  "block"}` ends the run with the error, and no answer leaves it to the
+  `fallbackModel` chain, which takes only overloads. The policy is
+  `domain::fallback`: a model is not tried twice before an answer arrives,
+  and at most `MAX_SWITCHES` models are tried in a row.
+
+Only command, script and http handlers run on them, so a model hook never
+asks a model.
 
 ## Tests against real accounts
 

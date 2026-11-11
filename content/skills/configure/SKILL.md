@@ -94,6 +94,29 @@ export const matcher = "sub-agent";
 export default () => ({ hookSpecificOutput: { model: "kiro:claude-haiku-5" } });
 ```
 
+A `ModelRequest` hook may also answer `effort` (`low` … `max`),
+`additionalContext` (appended to the system prompt of that call) or
+`{ decision: "block", reason }` to stop the run.
+
+### Checking replies: a `ModelResponse` hook
+
+`ModelResponse` runs when a reply arrives, before it is shown or acted
+on. Its input adds `text`, `toolCalls` (`name`, `input`), `stopReason`,
+`usage` and `rejections`. It may answer `{ hookSpecificOutput: { text } }`
+to replace the text (for example to redact a secret), or
+`{ decision: "block", reason }` to drop the reply and have the model
+answer again with that reason; after a couple of rejections the run
+fails. While one is configured, reply text appears when the hook has
+answered instead of streaming.
+
+```js
+export const event = "ModelResponse";
+export default (input) => {
+  const text = input.text.replace(/sk-[A-Za-z0-9]{8,}/g, "[redacted]");
+  if (text !== input.text) return { hookSpecificOutput: { text } };
+};
+```
+
 Hooks can also live under `"hooks"` in a settings file, in the same
 shape as the other hook events.
 

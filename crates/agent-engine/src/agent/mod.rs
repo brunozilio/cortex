@@ -3,6 +3,7 @@ mod conversations;
 pub mod current;
 mod dispatch;
 mod incoming;
+mod interception;
 mod model_hooks;
 mod permission;
 mod permission_ask;
@@ -95,6 +96,7 @@ impl Agent<'_> {
         let mut reminders = reminders::Reminders::default();
         let mut fell_back: Option<String> = None;
         let mut fallback = domain::fallback::Fallback::new(self.workspace.fallbacks.clone());
+        let mut rejections = domain::interception::Rejections::default();
         let mut stop_hook_active = false;
         let (prompt_at, mut attempts) = (history.len().saturating_sub(1), 0);
         for _ in 0..self.turn_limit.min(MAX_TURNS) {
@@ -125,10 +127,10 @@ impl Agent<'_> {
             }
             reminders.deliver(self.runtime_reminder(), history);
             let mut request = TurnRequest { messages: history.clone(), ..self.turn_template(fell_back.as_ref()) };
-            if let Some(model) = self.hooked_model("ModelRequest", &request, serde_json::json!({})) {
-                request.model = model;
-            }
+            self.intercept_request(&mut request, &rejections)?;
+            let holds_text = self.holds_text();
             let mut on = |delta: Delta| match delta {
+                Delta::Text(_) if holds_text => {}
                 Delta::Text(text) => (self.emit)(EngineEvent::TextDelta(text)),
                 Delta::Thinking(text) => (self.emit)(EngineEvent::ThinkingDelta(text)),
                 Delta::ToolInput { name, piece } => (self.emit)(EngineEvent::ToolInputDelta { name, piece }),
@@ -159,6 +161,10 @@ impl Agent<'_> {
                 Err(error) => return Err(Ending::Failed(error)),
             };
             usage.add(reply.usage);
+            let reply = match self.intercept_reply(reply, &request, &mut rejections)? {
+                interception::Intercepted::Accepted(reply) => reply,
+                interception::Intercepted::Rejected => continue,
+            };
             let calls: Vec<(String, String, Value)> = reply
                 .message
                 .tool_uses()

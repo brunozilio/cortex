@@ -52,6 +52,10 @@ pub struct Decision {
     pub permission: Option<String>,
     pub updated_output: Option<Value>,
     pub model: Option<String>,
+    #[serde(default)]
+    pub effort: Option<domain::Effort>,
+    #[serde(default)]
+    pub text: Option<String>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommandOutput {
@@ -193,6 +197,12 @@ impl Hooks {
                     }
                     if decision.model.is_none() && matches!(event, "ModelRequest" | "ModelError") {
                         decision.model = specific["model"].as_str().filter(|m| !m.trim().is_empty()).map(Into::into);
+                    }
+                    if decision.effort.is_none() && event == "ModelRequest" {
+                        decision.effort = specific["effort"].as_str().and_then(domain::interception::effort);
+                    }
+                    if decision.text.is_none() && event == "ModelResponse" {
+                        decision.text = specific["text"].as_str().map(Into::into);
                     }
                     for text in
                         [value["systemMessage"].as_str(), specific["additionalContext"].as_str()].into_iter().flatten()

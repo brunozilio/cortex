@@ -1,5 +1,6 @@
 mod compaction;
 mod custom_agents;
+mod interception;
 mod model_hooks;
 mod permission_rules;
 mod permissions;

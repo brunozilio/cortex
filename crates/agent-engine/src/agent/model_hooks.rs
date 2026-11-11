@@ -6,11 +6,6 @@ use crate::hooks::Decision;
 use crate::model::{ModelError, TurnRequest};
 
 impl Agent<'_> {
-    pub(super) fn hooked_model(&self, event: &str, request: &TurnRequest, extra: Value) -> Option<String> {
-        let decision = self.model_hook(event, request, extra)?;
-        decision.model.filter(|model| *model != request.model)
-    }
-
     pub(super) fn next_model(
         &self,
         fallback: &mut Fallback,
@@ -34,7 +29,7 @@ impl Agent<'_> {
         fallback.next(&request.model, failure, verdict)
     }
 
-    fn model_hook(&self, event: &str, request: &TurnRequest, extra: Value) -> Option<Decision> {
+    pub(super) fn model_hook(&self, event: &str, request: &TurnRequest, extra: Value) -> Option<Decision> {
         if !self.workspace.hooks.0.contains_key(event) {
             return None;
         }

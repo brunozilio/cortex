@@ -58,7 +58,10 @@ provider with the owner's key for it, wherever a model is named:
 - The `ModelRequest` hook runs before each model call and may answer
   `{"hookSpecificOutput": {"model": "groq:llama-4-scout"}}`. Its matcher
   is the kind of call, `main` or `sub-agent`, so sub-agents can go to a
-  cheaper provider.
+  cheaper provider. It may also change the effort, add to the system
+  prompt or block the call.
+- The `ModelResponse` hook sees each reply and may rewrite its text or
+  reject it so the model answers again.
 - The `ModelError` hook intercepts every failed call: it sees the error,
   its kind and the models already tried, and may forward the call to
   another model, block (end the run) or stay silent (the `fallbackModel`
