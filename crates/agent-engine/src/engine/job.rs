@@ -144,6 +144,7 @@ impl Job {
         }
         workspace.home = crate::brief::home(&self.request);
         workspace.fallback = self.request.fallback_model.clone().or_else(|| settings.fallback.clone());
+        workspace.small_model = settings.small_model.clone();
         workspace.network = Some(tools::Network(Arc::clone(&self.mcp)));
         workspace.added_dirs = crate::brief::added_dirs(&self.request, &settings.added_dirs, workspace.home.as_deref());
         workspace.hooks.extend(&agent_config.hooks);

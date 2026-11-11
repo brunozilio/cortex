@@ -22,8 +22,17 @@ fn call(id: &str, name: &str, input: serde_json::Value) -> Block {
     Block::ToolUse { id: id.into(), name: name.into(), input }
 }
 fn run(config: serde_json::Value, model: &ScriptedModel, workspace: &Workspace, mode: PermissionMode) -> Vec<Message> {
+    run_named("reviewer", config, model, workspace, mode)
+}
+fn run_named(
+    name: &str,
+    config: serde_json::Value,
+    model: &ScriptedModel,
+    workspace: &Workspace,
+    mode: PermissionMode,
+) -> Vec<Message> {
     let found = FoundAgent {
-        name: "reviewer".into(),
+        name: name.into(),
         description: "Review".into(),
         instructions: "Do the review.".into(),
         config: AgentConfig::parse(&config).expect("config"),

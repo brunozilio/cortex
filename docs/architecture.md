@@ -209,6 +209,17 @@ Removing the folders of one name removes the feature; CI checks every name.
   writes `text`, `json` or `stream-json` (`print_output`).
 - **Prompt**: planning mode, output styles, tool descriptions carrying the
   working rules; project instructions and rules (`docs/native-engine.md`).
+- **Keeping the context small and cached**: a session keeps the date and
+  git snapshot of its first prompt (`Sessions::load_snapshot`), so later
+  prompts reuse the cached prefix; providers keep one cache key per
+  conversation (`model/conversation_key.rs`). Read sends a note for an
+  unchanged range already read (`tools/seen_files.rs`) and stops before
+  100k characters; long Bash output keeps its start and end. At the
+  compaction threshold, judged by the provider's token count
+  (`upkeep::Counted`), old tool results are cleared first
+  (`upkeep::clear_old_results`) and only then is the conversation
+  summarised, with the last turn's tools and system so its cache is read.
+  The settings' `smallModel` runs `Explore` when it names no model.
 - **Plan mode** (`agent/plan_mode.rs`): the top-level agent presents its
   plan with `ExitPlanMode` (`AskKind::Plan`); `Decision::Approve(mode)`
   switches the run's mode and the agent implements the plan in the same

@@ -7,7 +7,7 @@ use agent_engine::{
 use domain::PermissionMode;
 use serde_json::json;
 
-use crate::{call, delegated, done, run};
+use crate::{call, delegated, done, run, run_named};
 
 #[test]
 fn dont_ask_denies_unapproved_commands_without_a_prompt() {
@@ -23,6 +23,28 @@ fn dont_ask_denies_unapproved_commands_without_a_prompt() {
     assert!(!dir.path().join("forbidden").exists());
     assert!(format!("{:?}", model.asked()[2].messages).contains("dontAsk denies"));
 }
+#[test]
+fn explore_runs_on_the_small_model_unless_it_names_its_own() {
+    let dir = tempfile::tempdir().expect("dir");
+    let mut workspace = Workspace::new(dir.path());
+    workspace.model =
+        domain::ModelOption::new("claude-opus-5-5", "Opus").served_by(domain::ModelProvider::new("anthropic"));
+    workspace.small_model = Some("claude-haiku-5-5".into());
+    let explore = |model: serde_json::Value| {
+        ScriptedModel::reply(vec![call(
+            "e",
+            "Agent",
+            json!({"description":"Find","prompt":"find x","subagent_type":"Explore","model":model}),
+        )])
+    };
+    let model =
+        ScriptedModel::new([explore(json!(null)), done("Found"), explore(json!("opus")), done("Found"), done("Done")]);
+    run_named("Explore", json!({}), &model, &workspace, PermissionMode::Bypass);
+    let asked = model.asked();
+    assert_eq!(asked[1].model, "claude-haiku-5-5");
+    assert_eq!(asked[3].model, "claude-opus-5-5", "an explicit model wins");
+}
+
 #[test]
 fn child_omits_initial_instruction_files_and_parent_output_style() {
     let dir = tempfile::tempdir().expect("dir");
