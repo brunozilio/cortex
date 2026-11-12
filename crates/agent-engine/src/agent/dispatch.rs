@@ -145,6 +145,12 @@ impl Agent<'_> {
                 outcome.content.push_str(&format!("\nHook failed: {error}"));
             }
         }
+        if name != "Read" {
+            let dir = crate::tools::persisted::results_dir(&self.workspace.session_id);
+            if let Some(short) = crate::tools::persisted::persist(&outcome.content, &dir, id) {
+                outcome.content = short;
+            }
+        }
         if matches!(name, "TaskCreate" | "TaskUpdate") && !outcome.is_error {
             self.emit_tasks();
         }

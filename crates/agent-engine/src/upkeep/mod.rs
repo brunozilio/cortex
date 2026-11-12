@@ -1,6 +1,7 @@
 mod clear;
 mod compact;
 mod counted;
+mod retained;
 
 use domain::{ContextShare, ContextSlice, ContextUsage, ModelOption};
 

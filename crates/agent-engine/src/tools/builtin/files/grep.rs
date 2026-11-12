@@ -2,10 +2,10 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required, shown};
 use crate::model::ToolSpec;
+use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required, shown};
 
-const OUTPUT: usize = 30_000;
+const OUTPUT: usize = 2_000_000;
 
 #[derive(Debug)]
 pub struct Grep;

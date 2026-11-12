@@ -23,9 +23,63 @@ impl Reminders {
     }
 }
 
+impl super::Agent<'_> {
+    pub(super) fn runtime_reminder(&self, used: u64, threshold: u64) -> String {
+        let context = self.workspace.prompt_context.as_ref();
+        let style = context.and_then(|context| context.output_style.as_ref());
+        let reminder =
+            crate::prompt::reminder(self.control.mode(), self.depth, style.and_then(|s| s.reminder.as_deref()));
+        let today = crate::engine::date::today();
+        let notes: String =
+            [context.and_then(|context| date_changed(&context.date, &today)), context_left(used, threshold)]
+                .into_iter()
+                .flatten()
+                .map(|note| format!("\n\n{note}"))
+                .collect();
+        format!("{reminder}{}{notes}", self.workspace.rule_instructions())
+    }
+}
+
+pub fn date_changed(session_date: &str, today: &str) -> Option<String> {
+    (!session_date.is_empty() && session_date != today)
+        .then(|| format!("The date has changed. Today's date is now {today}. No need to announce it."))
+}
+
+pub fn context_left(used: u64, threshold: u64) -> Option<String> {
+    if threshold == 0 {
+        return None;
+    }
+    let left = threshold.saturating_sub(used) * 100 / threshold;
+    let shown = match left {
+        0..=10 => 10,
+        11..=25 => 25,
+        _ => return None,
+    };
+    Some(format!(
+        "Less than {shown}% of the context is left before older messages are summarized. Finish the current step \
+         and keep tool output small."
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_day_is_told_once_it_differs_from_the_session_s() {
+        assert_eq!(date_changed("2026-11-11", "2026-11-11"), None);
+        assert!(date_changed("2026-11-11", "2026-11-12").is_some_and(|text| text.contains("now 2026-11-12")));
+        assert_eq!(date_changed("", "2026-11-12"), None);
+    }
+
+    #[test]
+    fn the_context_left_is_told_in_steps_so_the_reminder_stays_the_same() {
+        assert_eq!(context_left(10, 100), None);
+        assert_eq!(context_left(76, 100), context_left(80, 100));
+        assert!(context_left(80, 100).is_some_and(|text| text.contains("25%")));
+        assert!(context_left(95, 100).is_some_and(|text| text.contains("10%")));
+        assert_eq!(context_left(5, 0), None);
+    }
 
     #[test]
     fn a_reminder_rides_on_the_latest_user_message_and_only_when_it_changes() {

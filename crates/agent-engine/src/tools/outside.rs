@@ -36,7 +36,9 @@ impl Workspace {
 
     pub fn may_read(&self, path: &Path) -> bool {
         let path = settled(&if path.is_absolute() { path.to_path_buf() } else { self.cwd.join(path) });
-        path.starts_with(self.project_root()) || self.added_dirs.iter().any(|dir| path.starts_with(settled(dir)))
+        path.starts_with(self.project_root())
+            || self.added_dirs.iter().any(|dir| path.starts_with(settled(dir)))
+            || path.starts_with(settled(&super::persisted::results_dir(&self.session_id)))
     }
 
     pub fn outside<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Option<PathBuf> {
@@ -67,6 +69,15 @@ mod tests {
         assert_eq!(outside, Some(PathBuf::from("/etc/hosts")));
         #[cfg(windows)]
         assert!(outside.is_some_and(|path| path.ends_with("etc/hosts")));
+    }
+
+    #[test]
+    fn this_session_s_saved_outputs_are_inside_but_another_session_s_are_not() {
+        let project = tempfile::tempdir().expect("dir");
+        let workspace = Workspace::new(project.path());
+        let saved = super::super::persisted::results_dir(&workspace.session_id).join("call_1.txt");
+        assert!(workspace.may_read(&saved));
+        assert!(!workspace.may_read(&super::super::persisted::results_dir("another").join("call_1.txt")));
     }
 
     #[test]

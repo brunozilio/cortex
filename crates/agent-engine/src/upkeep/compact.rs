@@ -6,6 +6,8 @@ use super::message_tokens;
 use crate::model::{ModelApi, ModelError, TurnRequest};
 use crate::transcript::{Block, Message};
 
+const KEPT_SHARE: u64 = 5;
+
 pub fn summary_text(answer: &str) -> String {
     let inner = |tag: &str| {
         let open = format!("<{tag}>");
@@ -39,7 +41,8 @@ pub fn compact_on(
     focus: Option<&str>,
 ) -> Result<Compaction, ModelError> {
     let before: u64 = history.iter().map(message_tokens).sum();
-    let mut asked = history.clone();
+    let kept_from = super::retained::split(history, before / KEPT_SHARE);
+    let mut asked = history[..kept_from.unwrap_or(history.len())].to_vec();
     asked.push(Message::user(match focus.map(str::trim).filter(|focus| !focus.is_empty()) {
         Some(focus) => format!("{}\n\nThe user asks the summary to focus on: {focus}", crate::prompt::text("compact")),
         None => crate::prompt::text("compact"),
@@ -58,6 +61,18 @@ pub fn compact_on(
     };
     if summary.trim().is_empty() {
         return Err(ModelError::Provider("the model wrote no summary".into()));
+    }
+    if let Some(from) = kept_from {
+        let kept = history.split_off(from);
+        *history = vec![Message::user(format!(
+            "{}\n\n{}\n\n{}",
+            crate::prompt::text("continued"),
+            summary.trim(),
+            crate::prompt::text("continued_kept")
+        ))];
+        history.extend(kept);
+        let after = history.iter().map(message_tokens).sum();
+        return Ok(Compaction { before, after, summary: summary.trim().to_owned() });
     }
     let latest = history
         .last()
@@ -83,25 +98,7 @@ fn bounded_summary(
     history: &[Message],
     stop: &AtomicBool,
 ) -> Result<String, ModelError> {
-    let mut text = String::new();
-    for message in history {
-        text.push_str(&format!("\n{:?}:\n", message.role));
-        for block in &message.blocks {
-            match block {
-                Block::Text(s) | Block::Thinking { text: s, .. } => text.push_str(s),
-                Block::Reminder(_) => {}
-                Block::ToolUse { id, name, input } => text.push_str(&format!("Tool {id} {name}: {input}")),
-                Block::ToolResult { id, content, is_error } | Block::ToolResultRich { id, content, is_error, .. } => {
-                    text.push_str(&format!("Result {id} (error={is_error}): {content}"))
-                }
-                Block::Image(image) => text.push_str(&format!(
-                    "[Visual attachment: {}. Re-open the original reference if needed.]",
-                    image.media_type
-                )),
-            }
-            text.push('\n');
-        }
-    }
+    let mut text = super::retained::records(history);
     let mut calls = 0;
     let mut chunk_chars = 32_000;
     loop {
@@ -188,8 +185,20 @@ pub fn compact_hooked_on(
     if let Some(reason) = before.blocked {
         return Err(ModelError::Provider(format!("Compaction blocked by hook: {reason}")));
     }
+    let earlier = history.clone();
     let compaction = compact_on(api, template, history, &workspace.stop, focus)?;
     workspace.forget_seen_files();
+    let dir = crate::tools::persisted::results_dir(&workspace.session_id);
+    if let Some(path) = super::retained::save_transcript(&earlier, &dir)
+        && let Some(first) = history.first_mut()
+    {
+        first.blocks.push(Block::Text(super::retained::transcript_pointer(&path)));
+    }
+    if let Some(skills) = super::retained::invoked_skills(&earlier, history)
+        && let Some(first) = history.first_mut()
+    {
+        first.blocks.push(Block::Text(skills));
+    }
     let after = workspace
         .hooks
         .run_with_model("PostCompact", trigger, input, workspace, Some((api, template)))

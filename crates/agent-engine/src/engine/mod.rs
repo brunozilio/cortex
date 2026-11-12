@@ -1,5 +1,5 @@
 mod converse;
-mod date;
+pub(crate) mod date;
 mod job;
 mod moved;
 mod record;

@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_TIMEOUT: Duration = Duration::from_secs(600);
-const OUTPUT: usize = 30_000;
+const OUTPUT: usize = 2_000_000;
 
 #[derive(Debug)]
 pub struct Bash;

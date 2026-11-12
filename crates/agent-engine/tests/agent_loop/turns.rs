@@ -9,6 +9,23 @@ use serde_json::json;
 use crate::{Rig, request, tool_use};
 
 #[test]
+fn a_long_output_is_saved_to_a_file_the_agent_may_read() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("big", "Bash", json!({"command": "yes line | head -n 20000"}))]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    rig.run(&model, &mut vec![Message::user("print a lot")]).expect("run");
+    let result = model.asked()[1].messages.last().map(Message::text).unwrap_or_default();
+    let results = model.asked()[1].messages.last().cloned().expect("results");
+    let Block::ToolResult { content, .. } = &results.blocks[0] else { panic!("{results:?}") };
+    assert!(content.contains("Full output saved to: ") && content.len() < 10_000, "{result}");
+    let path = content.split("Full output saved to: ").nth(1).and_then(|rest| rest.lines().next()).expect("path");
+    assert_eq!(std::fs::read_to_string(path).expect("saved").lines().count(), 20_000);
+    assert!(rig.workspace.may_read(std::path::Path::new(path)));
+}
+
+#[test]
 fn an_empty_reply_is_asked_for_once_more() {
     let rig = Rig::new(PermissionMode::AcceptEdits);
     let model =

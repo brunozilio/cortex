@@ -8,6 +8,7 @@ pub mod inbox;
 mod lsp;
 mod outside;
 pub mod peers;
+pub mod persisted;
 pub mod plan_mode;
 pub mod read_files;
 mod rule_target;

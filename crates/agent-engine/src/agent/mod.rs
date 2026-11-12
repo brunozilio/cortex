@@ -127,7 +127,7 @@ impl Agent<'_> {
                 (self.emit)(EngineEvent::Compacted(compaction));
                 compacted_at = Some(history.len());
             }
-            reminders.deliver(self.runtime_reminder(), history);
+            reminders.deliver(self.runtime_reminder(used, threshold), history);
             let mut request = TurnRequest { messages: history.clone(), ..self.turn_template(fell_back.as_ref()) };
             self.intercept_request(&mut request, &rejections)?;
             let holds_text = self.holds_text();
@@ -264,13 +264,6 @@ impl Agent<'_> {
             }
         }
         Ok(None)
-    }
-
-    fn runtime_reminder(&self) -> String {
-        let style = self.workspace.prompt_context.as_ref().and_then(|context| context.output_style.as_ref());
-        let reminder =
-            crate::prompt::reminder(self.control.mode(), self.depth, style.and_then(|s| s.reminder.as_deref()));
-        format!("{reminder}{}", self.workspace.rule_instructions())
     }
 
     fn turn_template(&self, fell_back: Option<&String>) -> TurnRequest {
