@@ -9,6 +9,26 @@ use serde_json::json;
 use crate::{Rig, request, tool_use};
 
 #[test]
+fn an_empty_reply_is_asked_for_once_more() {
+    let rig = Rig::new(PermissionMode::AcceptEdits);
+    let model =
+        ScriptedModel::new([ScriptedModel::reply(vec![]), ScriptedModel::reply(vec![Block::Text("Done.".into())])]);
+    let mut history = vec![Message::user("Say done")];
+    rig.run(&model, &mut history).expect("run");
+    assert_eq!(model.asked().len(), 2);
+    assert_eq!(history.last().map(Message::text).as_deref(), Some("Done."));
+    assert_eq!(history.len(), 2, "the empty reply is not kept");
+}
+
+#[test]
+fn a_reply_that_stays_empty_ends_the_turn_after_one_retry() {
+    let rig = Rig::new(PermissionMode::AcceptEdits);
+    let model = ScriptedModel::new([ScriptedModel::reply(vec![]), ScriptedModel::reply(vec![])]);
+    rig.run(&model, &mut vec![Message::user("Say done")]).expect("run");
+    assert_eq!(model.asked().len(), 2);
+}
+
+#[test]
 fn reads_edits_and_answers() {
     let rig = Rig::new(PermissionMode::AcceptEdits);
     let model = ScriptedModel::new([
@@ -136,6 +156,33 @@ fn a_cancelled_run_stops_before_calling_the_model() {
     let model = ScriptedModel::new([]);
     assert_eq!(rig.run(&model, &mut vec![Message::user("go")]), Err(Ending::Cancelled));
     assert!(model.asked().is_empty());
+}
+
+fn cut(blocks: Vec<Block>) -> Result<agent_engine::model::Reply, ModelError> {
+    Ok(agent_engine::model::Reply {
+        message: Message::assistant(blocks),
+        stop: agent_engine::transcript::StopReason::MaxTokens,
+        usage: agent_engine::transcript::Usage::default(),
+    })
+}
+
+#[test]
+fn a_reply_cut_while_thinking_is_told_to_think_less() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    let thinking = Block::Thinking { text: "long".into(), signature: None, origin: None };
+    let model = ScriptedModel::new([cut(vec![thinking]), ScriptedModel::reply(vec![Block::Text("Done.".into())])]);
+    rig.run(&model, &mut vec![Message::user("finish")]).expect("continued");
+    assert!(model.asked()[1].messages.last().expect("continuation").text().contains("Reason much more briefly"));
+}
+
+#[test]
+fn continuations_after_the_output_limit_are_capped() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    let part = || cut(vec![Block::Text("part ".into())]);
+    let model = ScriptedModel::new([part(), part(), part(), part(), part()]);
+    let ending = rig.run(&model, &mut vec![Message::user("finish")]).expect_err("gave up");
+    assert!(format!("{ending:?}").contains("output limit"), "{ending:?}");
+    assert_eq!(model.asked().len(), 4);
 }
 
 #[test]

@@ -12,7 +12,8 @@ pub struct Verification {
 #[derive(Debug)]
 pub struct Workspace {
     pub cwd: PathBuf,
-    pub(crate) read: Arc<Mutex<HashSet<PathBuf>>>,
+    pub(crate) read: Arc<super::read_files::ReadFiles>,
+    pub(crate) refusals: Mutex<domain::interception::Refusals>,
     pub(crate) seen_files: Arc<super::seen_files::SeenFiles>,
     pub stop: Arc<AtomicBool>,
     pub detach: Arc<AtomicBool>,
@@ -46,6 +47,7 @@ impl Workspace {
         Self {
             cwd: cwd.into(),
             read: Arc::default(),
+            refusals: Mutex::default(),
             seen_files: Arc::default(),
             stop: Arc::new(AtomicBool::new(false)),
             detach: Arc::default(),
@@ -92,6 +94,7 @@ impl Workspace {
         Self {
             cwd: self.cwd.clone(),
             read: self.read.clone(),
+            refusals: Mutex::default(),
             seen_files: Arc::default(),
             stop,
             detach: Arc::clone(&self.detach),
@@ -148,17 +151,32 @@ impl Workspace {
     }
 
     pub fn mark_read(&self, path: &Path) {
-        if let Ok(mut read) = self.read.lock() {
-            read.insert(path.to_path_buf());
-        }
+        self.read.mark(path, true);
+    }
+
+    pub fn mark_partly_read(&self, path: &Path) {
+        self.read.mark(path, false);
+    }
+
+    pub fn freshness(&self, path: &Path) -> super::read_files::Freshness {
+        self.read.freshness(path)
     }
 
     pub fn forget_seen_files(&self) {
         self.seen_files.forget();
     }
 
+    pub fn count_refusal(&self, refused: bool) {
+        let mut refusals = self.refusals.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if refused { refusals.refused() } else { refusals.went_ahead() }
+    }
+
+    pub fn refusals_stop(&self) -> Option<String> {
+        self.refusals.lock().unwrap_or_else(std::sync::PoisonError::into_inner).stop()
+    }
+
     pub fn has_read(&self, path: &Path) -> bool {
-        self.read.lock().map(|read| read.contains(path)).unwrap_or(false)
+        self.read.freshness(path) != super::read_files::Freshness::Unread
     }
 }
 

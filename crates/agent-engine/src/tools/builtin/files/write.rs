@@ -1,7 +1,8 @@
 use serde_json::{Value, json};
 
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
 use crate::model::ToolSpec;
+use crate::tools::read_files::Freshness;
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
 
 #[derive(Debug)]
 pub struct Write;
@@ -38,8 +39,20 @@ impl Tool for Write {
         };
         let name = shown(&path, workspace);
         let existed = path.exists();
-        if existed && !workspace.has_read(&path) {
-            return Outcome::error(format!("{name} already exists; Read it before overwriting it."));
+        if existed {
+            match workspace.freshness(&path) {
+                Freshness::Unread => {
+                    return Outcome::error(format!("{name} already exists; Read it before overwriting it."));
+                }
+                Freshness::Changed => return Outcome::error(super::changed_since_read(&name)),
+                Freshness::Partial => {
+                    return Outcome::error(format!(
+                        "You read only part of {name}, and Write replaces all of it, so the rest would be lost. \
+                         Read the whole file first, or change it with Edit."
+                    ));
+                }
+                Freshness::Current => {}
+            }
         }
         if let Some(parent) = path.parent()
             && let Err(error) = std::fs::create_dir_all(parent)
@@ -83,6 +96,22 @@ mod tests {
 
         workspace.mark_read(&dir.path().join("old.txt"));
         assert!(!Write.run(&json!({"file_path": "old.txt", "content": "x"}), &workspace).is_error);
+    }
+
+    #[test]
+    fn a_part_read_or_changed_file_is_not_overwritten() {
+        let dir = tempfile::tempdir().expect("dir");
+        let workspace = Workspace::new(dir.path());
+        let path = dir.path().join("big.txt");
+        std::fs::write(&path, "head\ntail\n").expect("write");
+        workspace.mark_partly_read(&path);
+        let partial = Write.run(&json!({"file_path": "big.txt", "content": "x"}), &workspace);
+        assert!(partial.is_error && partial.content.contains("only part of big.txt"), "{partial:?}");
+        workspace.mark_read(&path);
+        std::fs::write(&path, "head\ntail\nmore\n").expect("the user edits");
+        let changed = Write.run(&json!({"file_path": "big.txt", "content": "x"}), &workspace);
+        assert!(changed.is_error && changed.content.contains("changed on disk"), "{changed:?}");
+        assert_eq!(std::fs::read_to_string(&path).expect("read"), "head\ntail\nmore\n");
     }
 
     #[test]

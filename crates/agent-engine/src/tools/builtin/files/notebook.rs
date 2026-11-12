@@ -1,7 +1,8 @@
 use serde_json::{Value, json};
 
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
+use crate::tools::read_files::Freshness;
+use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 
 const OUTPUT: usize = 4_000;
 
@@ -76,8 +77,10 @@ impl Tool for NotebookEdit {
             Ok(path) => workspace.resolve(path),
             Err(error) => return error,
         };
-        if !workspace.has_read(&path) {
-            return Outcome::error("Read the notebook before editing it.");
+        match workspace.freshness(&path) {
+            Freshness::Unread => return Outcome::error("Read the notebook before editing it."),
+            Freshness::Changed => return Outcome::error(super::changed_since_read(&path.display().to_string())),
+            Freshness::Partial | Freshness::Current => {}
         }
         let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
@@ -89,7 +92,10 @@ impl Tool for NotebookEdit {
         };
         workspace.before_write(&path);
         match std::fs::write(&path, edited) {
-            Ok(()) => Outcome::ok(format!("Updated {}.", path.display())),
+            Ok(()) => {
+                workspace.mark_read(&path);
+                Outcome::ok(format!("Updated {}.", path.display()))
+            }
             Err(error) => Outcome::error(format!("Could not write {}: {error}", path.display())),
         }
     }

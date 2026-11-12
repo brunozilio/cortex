@@ -1,7 +1,8 @@
 use serde_json::{Value, json};
 
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
 use crate::model::ToolSpec;
+use crate::tools::read_files::Freshness;
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
 
 #[derive(Debug)]
 pub struct Edit;
@@ -44,8 +45,10 @@ impl Tool for Edit {
         if old == new {
             return Outcome::error("`old_string` and `new_string` are the same; nothing to change.");
         }
-        if !workspace.has_read(&path) {
-            return Outcome::error(format!("Read {name} before editing it."));
+        match workspace.freshness(&path) {
+            Freshness::Unread => return Outcome::error(format!("Read {name} before editing it.")),
+            Freshness::Changed => return Outcome::error(super::changed_since_read(&name)),
+            Freshness::Partial | Freshness::Current => {}
         }
         let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
@@ -71,6 +74,7 @@ impl Tool for Edit {
         workspace.before_write(&path);
         match std::fs::write(&path, &changed) {
             Ok(()) => {
+                workspace.mark_read(&path);
                 let said = if count == 1 {
                     format!("Edited {name}.")
                 } else {
@@ -123,6 +127,18 @@ mod tests {
         std::fs::write(dir.path().join("g.rs"), "x").expect("write");
         let unread = Edit.run(&json!({"file_path": "g.rs", "old_string": "x", "new_string": "y"}), &workspace);
         assert!(unread.content.starts_with("Read g.rs"));
+    }
+
+    #[test]
+    fn a_file_changed_since_it_was_read_must_be_read_again_but_its_own_edits_do_not_count() {
+        let (dir, workspace) = setup("a = 1\n");
+        let first = Edit.run(&json!({"file_path": "f.rs", "old_string": "1", "new_string": "2"}), &workspace);
+        let second = Edit.run(&json!({"file_path": "f.rs", "old_string": "2", "new_string": "3"}), &workspace);
+        assert!(!first.is_error && !second.is_error, "{second:?}");
+        std::fs::write(dir.path().join("f.rs"), "a = 3\nb = 4\n").expect("the user edits");
+        let stale = Edit.run(&json!({"file_path": "f.rs", "old_string": "3", "new_string": "5"}), &workspace);
+        assert!(stale.is_error && stale.content.contains("changed on disk since you last read it"), "{stale:?}");
+        assert_eq!(content(&dir), "a = 3\nb = 4\n");
     }
 
     #[test]

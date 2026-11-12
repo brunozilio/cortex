@@ -94,7 +94,9 @@ impl Tool for Bash {
                      with BashOutput and stop it with KillShell; you will be told when it ends."
                 ))
             }
-            Waited::Stopped(output) => Outcome::error(format!("{}\n(cancelled)", clip_middle(&output, OUTPUT))),
+            Waited::Stopped(output) => {
+                Outcome::error(crate::tools::stopped::while_running(&clip_middle(&output, OUTPUT)))
+            }
             Waited::TimedOut(output) => Outcome::error(
                 format!("{}\n(stopped after {} ms)", clip_middle(&output, OUTPUT), timeout.as_millis())
                     .trim_start()

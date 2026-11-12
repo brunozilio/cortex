@@ -192,3 +192,34 @@ fn a_denied_read_is_refused_inside_the_project() {
     let result = model.asked()[1].messages.last().cloned().expect("results");
     assert!(matches!(&result.blocks[0], Block::ToolResult { is_error: true, .. }), "{result:?}");
 }
+
+#[test]
+fn an_agent_whose_actions_keep_being_refused_is_stopped() {
+    let rig = rig(PermissionMode::Bypass, PermissionRules::default().with(RuleKind::Deny, "Bash(rm:*)"));
+    let refused = |id: &str| ScriptedModel::reply(vec![tool_use(id, "Bash", json!({"command": "rm notes.txt"}))]);
+    let model = ScriptedModel::new([
+        refused("a"),
+        refused("b"),
+        refused("c"),
+        ScriptedModel::reply(vec![Block::Text("never asked".into())]),
+    ]);
+    let ending = rig.run(&model, &mut vec![Message::user("clean up")]).expect_err("stopped");
+    assert!(format!("{ending:?}").contains("3 actions in a row were refused"), "{ending:?}");
+    assert_eq!(model.asked().len(), 3, "the model is not asked again");
+}
+
+#[test]
+fn work_in_between_refusals_keeps_the_agent_going() {
+    let rig = rig(PermissionMode::Bypass, PermissionRules::default().with(RuleKind::Deny, "Bash(rm:*)"));
+    let refused = |id: &str| ScriptedModel::reply(vec![tool_use(id, "Bash", json!({"command": "rm notes.txt"}))]);
+    let model = ScriptedModel::new([
+        refused("a"),
+        refused("b"),
+        ScriptedModel::reply(vec![tool_use("c", "Bash", json!({"command": "touch made.txt"}))]),
+        refused("d"),
+        refused("e"),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    rig.run(&model, &mut vec![Message::user("clean up")]).expect("run");
+    assert!(rig.dir.path().join("made.txt").exists());
+}

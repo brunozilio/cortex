@@ -30,7 +30,7 @@ impl Agent<'_> {
             Ok(Decision::DenyWith(note)) => {
                 Outcome::error(format!("The user declined to answer the questions and said instead: {note}"))
             }
-            Err(_) => Outcome::error("The run was cancelled."),
+            Err(_) => Outcome::error(crate::tools::stopped::while_asking("the question")),
         }
     }
 
@@ -84,7 +84,7 @@ impl Agent<'_> {
             Default::default()
         };
         if let Some(reason) = permission_hook.blocked {
-            return Outcome::error(reason);
+            return self.refused(reason);
         }
         if let Some(updated) = permission_hook.updated_input
             && updated != *input
@@ -104,16 +104,26 @@ impl Agent<'_> {
                     safety.check(self.api, &self.request, &instructions, &name, input, self.control.stop_flag())
                 });
                 match checked {
-                    Ok(()) => tool.run(input, self.workspace),
-                    Err(reason) => Outcome::error(reason),
+                    Ok(()) => self.went_ahead(tool, input),
+                    Err(reason) => self.refused(reason),
                 }
             }
-            Verdict::Allow => tool.run(input, self.workspace),
-            Verdict::Deny(reason) => Outcome::error(reason),
+            Verdict::Allow => self.went_ahead(tool, input),
+            Verdict::Deny(reason) => self.refused(reason),
             Verdict::Ask if self.control.no_prompts() => {
-                Outcome::error(format!("{name} requires permission; dontAsk denies unapproved actions."))
+                self.refused(format!("{name} requires permission; dontAsk denies unapproved actions."))
             }
             Verdict::Ask => self.ask_permission(id, tool, access, subject, input),
         }
+    }
+
+    pub(super) fn went_ahead(&self, tool: &dyn Tool, input: &Value) -> Outcome {
+        self.workspace.count_refusal(false);
+        tool.run(input, self.workspace)
+    }
+
+    pub(super) fn refused(&self, reason: impl Into<String>) -> Outcome {
+        self.workspace.count_refusal(true);
+        Outcome::error(reason)
     }
 }

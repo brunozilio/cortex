@@ -1,6 +1,7 @@
 mod call;
 mod conversations;
 pub mod current;
+mod cutoffs;
 mod dispatch;
 mod incoming;
 mod interception;
@@ -98,6 +99,7 @@ impl Agent<'_> {
         let mut fallback = domain::fallback::Fallback::new(self.workspace.fallbacks.clone());
         let mut rejections = domain::interception::Rejections::default();
         let mut stop_hook_active = false;
+        let mut cutoffs = cutoffs::Cutoffs::default();
         let (prompt_at, mut attempts) = (history.len().saturating_sub(1), 0);
         for _ in 0..self.turn_limit.min(MAX_TURNS) {
             if self.control.is_stopped() {
@@ -170,14 +172,21 @@ impl Agent<'_> {
                 .tool_uses()
                 .map(|(id, name, input)| (id.to_owned(), name.to_owned(), input.clone()))
                 .collect();
+            if cutoffs.ask_again_for_empty(&reply, !calls.is_empty()) {
+                continue;
+            }
             if let Some(safety) = &self.workspace.safety {
                 safety.observe(history);
             }
             history.push(reply.message);
             counted.observe(reply.usage, history.len());
+            if reply.stop != StopReason::MaxTokens {
+                cutoffs.answered();
+            }
             match reply.stop {
                 StopReason::MaxTokens if calls.is_empty() => {
-                    history.push(Message::user("Your output reached its token limit. Continue exactly at the cutoff without repeating prior text. New text is appended to the same response, so preserve code fences and machine-readable syntax. Finish the requested work."));
+                    let continuation = cutoffs.continuation(history.last().unwrap_or(&Message::user("")))?;
+                    history.push(continuation);
                     continue;
                 }
                 StopReason::Refusal => return Err(Ending::Refused),
@@ -238,6 +247,9 @@ impl Agent<'_> {
             results.extend(self.steered());
             results.extend(self.notices());
             history.push(Message { role: Role::User, blocks: results });
+            if let Some(why) = self.workspace.refusals_stop() {
+                return Err(Ending::Failed(ModelError::Provider(why)));
+            }
             if self.control.is_moving() {
                 return Err(Ending::Moved);
             }

@@ -48,7 +48,7 @@ impl Agent<'_> {
                 "The user wants to keep planning and did not approve the plan. Do not implement anything. Stop \
                      here and wait for them to say what to change.",
             ),
-            Err(_) => Outcome::error("The run was cancelled."),
+            Err(_) => Outcome::error(crate::tools::stopped::while_asking("the plan")),
         }
     }
 

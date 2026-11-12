@@ -67,7 +67,7 @@ impl Agent<'_> {
                 "Tool {name} is not available to this agent (load it with ToolSearch if listed there)."
             ))
         } else if self.control.is_stopped() {
-            Outcome::error("The run was cancelled.")
+            Outcome::error(crate::tools::stopped::before_start())
         } else if tool.is_some()
             && !tasks.admit(name, input, tool.is_some_and(|tool| tool.access() != crate::tools::Access::Reads))
         {

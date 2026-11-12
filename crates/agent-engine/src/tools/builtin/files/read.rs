@@ -77,7 +77,11 @@ impl Tool for Read {
         let Ok(text) = String::from_utf8(bytes) else {
             return Outcome::error(format!("{} is not a text file.", shown(&path, workspace)));
         };
-        workspace.mark_read(&path);
+        if offset == 1 && text.lines().count() <= limit && text.len() <= MAX_CHARS {
+            workspace.mark_read(&path);
+        } else {
+            workspace.mark_partly_read(&path);
+        }
         if path.extension().is_some_and(|ext| ext == "ipynb") {
             return super::notebook::render(&text).map_or_else(Outcome::error, Outcome::ok);
         }
@@ -163,6 +167,17 @@ mod tests {
 
         let part = Read.run(&json!({"file_path": "a.txt", "offset": 2, "limit": 1}), &workspace);
         assert_eq!(part.content, "     2\ttwo\n… [1 more lines; read on from offset 3]\n");
+    }
+
+    #[test]
+    fn a_slice_counts_as_a_partial_read() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join("a.txt"), "one\ntwo\nthree\n").expect("write");
+        let workspace = Workspace::new(dir.path());
+        Read.run(&json!({"file_path": "a.txt", "limit": 2}), &workspace);
+        assert_eq!(workspace.freshness(&dir.path().join("a.txt")), crate::tools::read_files::Freshness::Partial);
+        Read.run(&json!({"file_path": "a.txt"}), &workspace);
+        assert_eq!(workspace.freshness(&dir.path().join("a.txt")), crate::tools::read_files::Freshness::Current);
     }
 
     #[test]

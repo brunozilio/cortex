@@ -30,7 +30,7 @@ impl Agent<'_> {
         };
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind }));
         match answer.recv() {
-            Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => tool.run(input, self.workspace),
+            Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => self.went_ahead(tool, input),
             Ok(Decision::AllowAlways) => {
                 match rule {
                     Some(rule) => {
@@ -41,15 +41,15 @@ impl Agent<'_> {
                     }
                     None => self.control.remember(|remembered| remembered.remember(&name, access, subject)),
                 }
-                tool.run(input, self.workspace)
+                self.went_ahead(tool, input)
             }
-            Ok(Decision::Deny) => Outcome::error(format!(
+            Ok(Decision::Deny) => self.refused(format!(
                 "The user did not allow {name} here. Do not retry it; ask them or take another approach."
             )),
             Ok(Decision::DenyWith(note)) => {
-                Outcome::error(format!("The user did not allow {name} here and said what to do instead: {note}"))
+                self.refused(format!("The user did not allow {name} here and said what to do instead: {note}"))
             }
-            Err(_) => Outcome::error("The run was cancelled."),
+            Err(_) => Outcome::error(crate::tools::stopped::while_asking(&name)),
         }
     }
 
