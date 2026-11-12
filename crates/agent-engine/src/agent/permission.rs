@@ -46,6 +46,18 @@ impl Agent<'_> {
         input: &Value,
         hook_permission: Option<&str>,
     ) -> Outcome {
+        self.permitted_as(id, tool, subject, None, input, hook_permission)
+    }
+
+    pub(super) fn permitted_as(
+        &self,
+        id: &str,
+        tool: &dyn Tool,
+        subject: &str,
+        shown: Option<&str>,
+        input: &Value,
+        hook_permission: Option<&str>,
+    ) -> Outcome {
         let name = tool.spec().name;
         let outside = (tool.access() == Access::Reads)
             .then(|| tool.reaches_outside(input, self.workspace))
@@ -120,7 +132,7 @@ impl Agent<'_> {
             Verdict::Ask if self.control.no_prompts() => {
                 self.refused(format!("{name} requires permission; dontAsk denies unapproved actions."))
             }
-            Verdict::Ask => self.ask_permission(id, tool, access, subject, input),
+            Verdict::Ask => self.ask_permission(id, tool, access, subject, shown.unwrap_or(subject), input),
         }
     }
 

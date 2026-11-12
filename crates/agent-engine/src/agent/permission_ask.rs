@@ -12,6 +12,7 @@ impl Agent<'_> {
         tool: &dyn Tool,
         access: Access,
         subject: &str,
+        shown: &str,
         input: &Value,
     ) -> Outcome {
         let name = tool.spec().name;
@@ -24,7 +25,7 @@ impl Agent<'_> {
         let answer = self.control.open(ask.clone());
         let kind = AskKind::Permission {
             tool: name.clone(),
-            subject: subject.to_owned(),
+            subject: shown.to_owned(),
             rememberable: true,
             rule: rule.clone(),
         };

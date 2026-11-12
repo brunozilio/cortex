@@ -6,6 +6,7 @@ use agent_engine::model::ToolSpec;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::tools::{Access, Outcome, Tool, Workspace, inbox};
 use agent_engine::transcript::{Block, Message};
+use domain::permission_rules::{PermissionRules, RuleKind};
 use domain::{AskKind, Decision, EngineEvent, PermissionMode};
 use serde_json::{Value, json};
 
@@ -98,8 +99,8 @@ fn a_read_only_tool_is_checked_once_now_and_then_watched_without_the_model() {
 }
 
 #[test]
-fn a_tool_that_may_change_things_is_asked_about_every_time_and_a_met_condition_starts_nothing() {
-    let mut rig = Rig::new(PermissionMode::Bypass);
+fn without_a_rule_a_tool_that_may_change_things_is_asked_about_every_time_and_a_met_condition_starts_nothing() {
+    let mut rig = Rig::new(PermissionMode::Ask);
     rig.workspace.credentials.client = 9402;
     let calls = Arc::new(AtomicUsize::new(0));
     let issue = Issue { read_only: false, calls: Arc::clone(&calls), statuses: &["Concluído"] };
@@ -144,13 +145,121 @@ fn a_tool_that_may_change_things_is_asked_about_every_time_and_a_met_condition_s
             _ => None,
         })
         .collect();
-    assert_eq!(asked.len(), 2, "asked even in Bypass: {asked:?}");
+    assert_eq!(asked.len(), 2, "a one-off Allow does not cover the next watch: {asked:?}");
     assert!(asked[0].starts_with("mcp__jira__getIssue every 60s until"), "{asked:?}");
     let results = results(&rig);
     assert!(results[0].0 && results[0].1.contains("nothing is watched"), "{results:?}");
     assert!(!results[1].0 && results[1].1.starts_with("Already true on the first check"), "{results:?}");
     assert_eq!(calls.load(Ordering::Relaxed), 1, "a denied watch never called the tool");
     assert!(agent_engine::tools::watch::list(9402).is_empty());
+}
+
+fn asked(rig: &Rig) -> bool {
+    rig.events().iter().any(|event| matches!(event, EngineEvent::Asked(_)))
+}
+
+fn watch_once(mode: PermissionMode, client: u64, rules: PermissionRules) -> (Rig, Arc<AtomicUsize>) {
+    let mut rig = Rig::new(mode);
+    rig.workspace.credentials.client = client;
+    rig.workspace.permissions = rules;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let issue = Issue { read_only: false, calls: Arc::clone(&calls), statuses: &["Em análise"] };
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![watch("w1", "mcp__jira__getIssue")]),
+        ScriptedModel::reply(vec![Block::Text("Ok.".into())]),
+    ]);
+    let denier = deny_every_ask_after(&rig, 0);
+    rig.run_with(&model, &mut vec![Message::user("watch it")], vec![Box::new(issue)]).expect("run");
+    denier.store(true, Ordering::Relaxed);
+    (rig, calls)
+}
+
+fn deny_every_ask_after(rig: &Rig, skipped: usize) -> Arc<std::sync::atomic::AtomicBool> {
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (control, events, stop) = (Arc::clone(&rig.control), Arc::clone(&rig.events), Arc::clone(&done));
+    std::thread::spawn(move || {
+        let mut answered = skipped;
+        while !stop.load(Ordering::Relaxed) {
+            let asks: Vec<_> = events
+                .lock()
+                .expect("events")
+                .iter()
+                .filter_map(|event| match event {
+                    EngineEvent::Asked(ask) => Some(ask.id.clone()),
+                    _ => None,
+                })
+                .collect();
+            for ask in asks.iter().skip(answered) {
+                control.answer(ask, Decision::Deny);
+            }
+            answered = answered.max(asks.len());
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    });
+    done
+}
+
+#[test]
+fn a_deny_rule_refuses_the_watch_without_asking_or_calling_the_tool() {
+    let rules = PermissionRules::default().with(RuleKind::Deny, "mcp__jira__getIssue");
+    let (rig, calls) = watch_once(PermissionMode::Ask, 9404, rules);
+
+    let results = results(&rig);
+    assert!(results[0].0 && results[0].1.contains("refuses this"), "{results:?}");
+    assert!(!asked(&rig));
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
+    assert!(agent_engine::tools::watch::list(9404).is_empty());
+}
+
+#[test]
+fn an_allow_rule_starts_the_watch_without_asking() {
+    let rules = PermissionRules::default().with(RuleKind::Allow, "mcp__jira__getIssue");
+    let (rig, calls) = watch_once(PermissionMode::Ask, 9405, rules);
+
+    let results = results(&rig);
+    assert!(!results[0].0 && results[0].1.starts_with("Watching as watch_"), "{results:?}");
+    assert!(!asked(&rig));
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    agent_engine::tools::watch::forget_client(9405);
+}
+
+#[test]
+fn allowing_a_tool_always_also_lets_a_watch_of_it_start_without_asking_again() {
+    let mut rig = Rig::new(PermissionMode::Ask);
+    rig.workspace.credentials.client = 9406;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let issue = Issue { read_only: false, calls: Arc::clone(&calls), statuses: &["Em análise"] };
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("g1", "mcp__jira__getIssue", json!({ "key": "KAN-1" }))]),
+        ScriptedModel::reply(vec![watch("w1", "mcp__jira__getIssue")]),
+        ScriptedModel::reply(vec![Block::Text("Watching.".into())]),
+    ]);
+    let control = Arc::clone(&rig.control);
+    let events = Arc::clone(&rig.events);
+    let answerer = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline {
+            let first = events.lock().expect("events").iter().find_map(|event| match event {
+                EngineEvent::Asked(ask) => Some(ask.id.clone()),
+                _ => None,
+            });
+            if let Some(ask) = first {
+                control.answer(&ask, Decision::AllowAlways);
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    });
+    let denier = deny_every_ask_after(&rig, 1);
+    rig.run_with(&model, &mut vec![Message::user("watch KAN-1")], vec![Box::new(issue)]).expect("run");
+    denier.store(true, Ordering::Relaxed);
+    answerer.join().expect("answerer");
+
+    let asks = rig.events().iter().filter(|event| matches!(event, EngineEvent::Asked(_))).count();
+    assert_eq!(asks, 1, "only the direct call was asked about");
+    let results = results(&rig);
+    assert!(results[1].1.starts_with("Watching as watch_"), "{results:?}");
+    agent_engine::tools::watch::forget_client(9406);
 }
 
 #[test]

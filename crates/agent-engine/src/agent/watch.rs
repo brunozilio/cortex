@@ -45,14 +45,8 @@ impl Agent<'_> {
             ));
         };
         let summary = target.summary(&plan.input);
-        let first = if target.access() == Access::Reads || target.declared_read_only() {
-            self.permitted(id, target.as_ref(), &summary, &plan.input, None)
-        } else if self.control.no_prompts() {
-            return self.refused(format!("Watching {name} needs the user's permission; dontAsk denies it."));
-        } else {
-            let subject = format!("{}: {summary}", plan.explained());
-            self.ask_permission(id, target.as_ref(), Access::Executes, &subject, &plan.input)
-        };
+        let shown = format!("{}: {summary}", plan.explained());
+        let first = self.permitted_as(id, target.as_ref(), &summary, Some(&shown), &plan.input, None);
         if first.is_error {
             return Outcome::error(format!("The first check failed, so nothing is watched: {}", first.content));
         }
