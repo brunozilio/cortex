@@ -1,8 +1,8 @@
 pub mod auth;
 pub mod idc;
 pub mod models;
-pub mod wire;
 mod sign_in;
+pub mod wire;
 
 use chrono::{DateTime, Utc};
 use domain::{Access, ModelOption};
@@ -27,6 +27,9 @@ impl Shape for Provider {
     }
     fn vendor(&self) -> &'static str {
         "kiro"
+    }
+    fn small_model(&self) -> Option<&'static str> {
+        Some("claude-haiku-4.5")
     }
     fn access(&self) -> Access {
         Access::Browser
@@ -186,7 +189,8 @@ mod tests {
         let headers = config.headers(&Provider);
         assert!(headers.contains(&("authorization".into(), "Bearer a".into())));
         assert!(headers.contains(&("x-amz-target".into(), CHAT.into())));
-        let without_arn = Config { auth: Some(Tokens { refresh_token: "r".into(), ..Tokens::bearer("a") }), ..Config::default() };
+        let without_arn =
+            Config { auth: Some(Tokens { refresh_token: "r".into(), ..Tokens::bearer("a") }), ..Config::default() };
         assert!(without_arn.validate(&Provider).is_err());
     }
 }

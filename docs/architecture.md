@@ -257,8 +257,10 @@ Inbox notices are core (`TakeNotices`).
   separate page reader (`tools/builtin/web/guarded.rs`). Each run picks it
   for the session's provider (`engine/small_model.rs`, rule in
   `domain::small_model`): the settings' `smallModel` if the provider offers
-  it, else the vendor's `small()`, else the cheapest priced model in the
-  account's catalog (`ApiSource::catalog`, cached per provider), else the
+  it, else the provider's `small_model()` (its vendor's `small()` unless the
+  provider names its own, as Kiro does), else the cheapest model in the
+  account's catalog, priced by whichever vendor makes it (Copilot and Kiro
+  list several vendors' models, with dotted versions) (`ApiSource::catalog`, cached per provider), else the
   session's model. A small model that fails hands WebFetch's page to the
   session's model.
 - **Plan mode** (`agent/plan_mode.rs`): the top-level agent presents its
