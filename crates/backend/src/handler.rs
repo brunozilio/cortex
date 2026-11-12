@@ -22,6 +22,7 @@ impl Drop for CommandHandler {
         agent_engine::tools::peers::forget(self.client);
         crate::features::forget(self.client);
         agent_engine::tools::inbox::forget_client(self.client);
+        agent_engine::tools::watch::forget_client(self.client);
     }
 }
 

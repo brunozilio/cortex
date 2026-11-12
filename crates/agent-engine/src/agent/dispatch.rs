@@ -111,6 +111,7 @@ impl Agent<'_> {
                     self.permitted(id, &message, &summary, input, pre.permission.as_deref())
                 }
                 Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
+                Some(_) if name == crate::tools::watch::WATCH_TOOL => self.watch(id, input),
                 Some(tool) if tool.script().is_some() => match tool.script() {
                     Some(script) => self.script_call(id, script, &summary, input, parent, pre.permission.as_deref()),
                     None => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),

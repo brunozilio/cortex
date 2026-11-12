@@ -1,13 +1,18 @@
 use agent_engine::tools::builtin::shell::shells;
+use agent_engine::tools::watch;
 use serde_json::{Value, json};
 
 use crate::feature::Context;
 
 pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
-    if let Some(id) = input["kill"].as_str() {
+    if let Some(id) = input["kill"].as_str()
+        && watch::stop(context.client, id).is_none()
+    {
         shells::kill(context.client, id);
     }
-    Ok(json!({ "shells": shells::list(context.client) }))
+    let watches = watch::list(context.client).into_iter().map(|(id, explained)| (id, explained, true));
+    let listed: Vec<_> = shells::list(context.client).into_iter().chain(watches).collect();
+    Ok(json!({ "shells": listed }))
 }
 
 pub fn forget(client: u64) {

@@ -13,6 +13,7 @@ mod reminders;
 mod script_call;
 mod sub_agent;
 mod tasks;
+mod watch;
 mod worktree;
 
 use domain::EngineEvent;

@@ -100,8 +100,9 @@ PushNotification; `web`: WebFetch, WebSearch over `Workspace::network`;
 (and `review::reviewers()` when it has a `review.rs`) is gathered by
 `build.rs`; deleting a folder drops them. Tools the agent loop acts on itself stay core and are
 listed in `tools::standard()`: AskUserQuestion, Enter/ExitPlanMode (plan is
-a `PermissionMode`), Enter/ExitWorktree (session relocation) and
-ListSessions (peers, tied to SendMessage routing).
+a `PermissionMode`), Enter/ExitWorktree (session relocation),
+ListSessions (peers, tied to SendMessage routing) and Watch (calls another
+of the run's tools).
 
 A feature that spans layers is one folder per layer, with the same name:
 `crates/agent-engine/src/tools/builtin/<name>/` (its tools),
@@ -221,6 +222,19 @@ Inbox notices are core (`TakeNotices`).
   a bridge to that same server; a cancelled run's call is cancelled there
   (`notifications/cancelled`), the channel staying up. `PushNotification` shows a desktop
   notification.
+- **Watches** (`Watch`, `tools::watch`, rules in `domain::watch`): the
+  app calls a tool on a fixed pace (60 s to a day, default 5 min) and
+  compares one value of its result (a dot `path` into its JSON; `equals`,
+  `contains`, or any change), without model turns; one inbox notice
+  (`watch watch_N`) says when it is met or why it gave up (three failed
+  checks in a row, or 7 days). The loop runs the first check as an
+  ordinary call (`agent/watch.rs`): read-only tools and MCP tools whose
+  `readOnlyHint` is true go through the usual permission; any other MCP
+  tool is asked about every time, even in Bypass. Shell commands are
+  `Monitor`'s; loop-run tools cannot be watched. An MCP tool keeps its
+  server (`Tool::kept`) after the run ends, with the run's sign-in, so a
+  token that expires ends the watch with the failure. `KillShell` and
+  `/bashes` stop and list watches; a client's go when it does.
 - **Scheduled prompts**: `CronCreate`/`CronList`/`CronDelete` and
   `ScheduleWakeup` keep prompts per client (`tools::schedules`, like the
   background shells; cron parsing and matching in `domain::schedule`,

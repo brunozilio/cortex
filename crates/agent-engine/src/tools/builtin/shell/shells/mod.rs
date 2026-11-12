@@ -7,8 +7,8 @@ use std::time::Instant;
 use platform::Tree;
 use serde_json::{Value, json};
 
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
+use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 
 mod wait;
 mod watch;
@@ -203,7 +203,7 @@ impl Tool for KillShell {
             description: crate::tools::describe("KillShell", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
-                "properties": { "shell_id": { "type": "string", "description": "The id Bash returned." } },
+                "properties": { "shell_id": { "type": "string", "description": "The id Bash, Monitor or Watch returned." } },
                 "required": ["shell_id"],
                 "additionalProperties": false
             }),
@@ -223,6 +223,9 @@ impl Tool for KillShell {
             Ok(id) => id,
             Err(error) => return error,
         };
+        if let Some(explained) = crate::tools::watch::stop(workspace.credentials.client, id) {
+            return Outcome::ok(format!("Stopped {id} ({explained})."));
+        }
         let mut shells = lock();
         if !shells.get(id).is_some_and(|shell| shell.client == workspace.credentials.client) {
             return Outcome::error(format!("No background command `{id}`."));

@@ -26,6 +26,7 @@ pub mod subagent;
 pub mod subagent_config;
 pub mod task;
 pub mod tool_search;
+pub mod watch;
 mod workspace;
 pub mod worktree;
 
@@ -119,6 +120,14 @@ pub trait Tool: Send + Sync {
     fn skills(&self) -> &[skill::FoundSkill] {
         &[]
     }
+
+    fn kept(&self) -> Option<std::sync::Arc<dyn Tool>> {
+        None
+    }
+
+    fn declared_read_only(&self) -> bool {
+        false
+    }
 }
 
 pub fn standard() -> Vec<Box<dyn Tool>> {
@@ -129,6 +138,7 @@ pub fn standard() -> Vec<Box<dyn Tool>> {
         Box::new(worktree::EnterWorktree),
         Box::new(worktree::ExitWorktree),
         Box::new(peers::ListSessions),
+        Box::new(watch::Watch),
     ];
     builtin::tools().into_iter().chain(features).collect()
 }

@@ -13,6 +13,7 @@ mod steering;
 mod sub_agent_fallbacks;
 mod sub_agents;
 mod turns;
+mod watch;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};

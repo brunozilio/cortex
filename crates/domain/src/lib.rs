@@ -34,6 +34,7 @@ pub mod trace;
 pub mod untrusted;
 pub mod usage;
 pub mod verification;
+pub mod watch;
 
 pub use agents::{AgentStatus, CustomAgent};
 pub use approval::{AgentAsk, AskId, AskKind, Choice, Decision, PermissionMode, Question};
