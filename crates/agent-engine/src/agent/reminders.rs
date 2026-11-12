@@ -30,8 +30,11 @@ impl super::Agent<'_> {
         let reminder =
             crate::prompt::reminder(self.control.mode(), self.depth, style.and_then(|s| s.reminder.as_deref()));
         let today = crate::engine::date::today();
+        let offers_search = self.request.tools.iter().any(|spec| spec.name == crate::tools::tool_search::TOOL_SEARCH);
+        let deferred =
+            self.workspace.deferred.as_ref().filter(|_| offers_search).map(|deferred| deferred.announcement());
         let notes: String =
-            [context.and_then(|context| date_changed(&context.date, &today)), context_left(used, threshold)]
+            [deferred, context.and_then(|context| date_changed(&context.date, &today)), context_left(used, threshold)]
                 .into_iter()
                 .flatten()
                 .map(|note| format!("\n\n{note}"))

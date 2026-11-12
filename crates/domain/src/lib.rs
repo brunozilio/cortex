@@ -30,6 +30,7 @@ pub mod routing;
 pub mod schedule;
 pub mod skill;
 pub mod trace;
+pub mod untrusted;
 pub mod usage;
 pub mod verification;
 

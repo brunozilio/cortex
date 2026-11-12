@@ -242,6 +242,11 @@ impl Agent<'_> {
             .find(|m| m.role == Role::Assistant)
             .map(Message::text)
             .unwrap_or_default();
+        let read_outside = history.get(own.min(history.len())..).unwrap_or_default().iter().flat_map(|m| &m.blocks).any(
+            |b| matches!(b, crate::transcript::Block::ToolUse { name, .. } if domain::untrusted::reads_outside(name)),
+        );
+        let report =
+            if read_outside && !report.trim().is_empty() { domain::untrusted::relayed(&report) } else { report };
         let report = match cleanup {
             Ok(Some(path)) => format!("{report}\n\nChanges retained in worktree: {}", path.display()),
             Ok(None) => report,

@@ -1,3 +1,4 @@
+pub mod guarded;
 mod html;
 mod search;
 
@@ -5,8 +6,8 @@ use std::io::Read as _;
 
 use serde_json::{Value, json};
 
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 use crate::model::ToolSpec;
+use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 
 const SHOWN: usize = 60_000;
 const READ: u64 = 5 << 20;
@@ -72,8 +73,7 @@ impl Tool for WebFetch {
         }
         let body = String::from_utf8_lossy(&bytes).into_owned();
         let text = if html { html::text(&body) } else { body };
-        let prompt = field(input, "prompt").unwrap_or_default();
-        Outcome::ok(format!("Content of {url} (you were looking for: {prompt}):\n\n{}", clip(&text, SHOWN)))
+        Outcome::ok(clip(&text, SHOWN))
     }
 }
 
@@ -135,8 +135,7 @@ mod tests {
         let workspace = workspace(vec![(200, "<h1>Serde</h1><p>A framework.</p>".into())]);
         let out = WebFetch.run(&json!({"url": "http://serde.rs/", "prompt": "what it is"}), &workspace);
         assert!(!out.is_error, "{out:?}");
-        assert!(out.content.starts_with("Content of https://serde.rs/ (you were looking for: what it is)"));
-        assert!(out.content.ends_with("# Serde\nA framework."), "{}", out.content);
+        assert_eq!(out.content, "# Serde\nA framework.", "the loop hands the page to a separate reader");
         let missing = workspace_answer(404);
         assert!(WebFetch.run(&json!({"url": "https://x.dev/a", "prompt": "p"}), &missing).is_error);
         assert!(WebFetch.run(&json!({"url": "file:///etc/passwd", "prompt": "p"}), &missing).is_error);

@@ -145,6 +145,18 @@ impl Agent<'_> {
                 outcome.content.push_str(&format!("\nHook failed: {error}"));
             }
         }
+        outcome.content = domain::untrusted::neutralize(&outcome.content);
+        if name == "WebFetch" && !outcome.is_error {
+            let (url, looking_for) = (crate::tools::field(input, "url"), crate::tools::field(input, "prompt"));
+            outcome.content = crate::tools::builtin::web::guarded::digest(
+                self.api,
+                &self.request,
+                url.unwrap_or_default(),
+                looking_for.unwrap_or_default(),
+                &outcome.content,
+                self.control.stop_flag(),
+            );
+        }
         if name != "Read" {
             let dir = crate::tools::persisted::results_dir(&self.workspace.session_id);
             if let Some(short) = crate::tools::persisted::persist(&outcome.content, &dir, id) {

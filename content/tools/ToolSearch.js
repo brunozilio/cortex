@@ -1,1 +1,1 @@
-export default (ctx) => `Load the schemas of tools that are listed here but not yet callable, then call them. Query \`select:name1,name2\` for tools you know by name, or keywords to find them. Not loaded yet: ${ctx.not_loaded}`;
+export default (ctx) => `Load the schemas of tools that are listed in a system reminder but not yet callable, then call them. Query \`select:name1,name2\` for tools you know by name, or keywords to find them.`;

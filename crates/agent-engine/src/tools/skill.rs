@@ -94,14 +94,7 @@ fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
     skills
 }
 
-pub fn listing(skills: &[FoundSkill]) -> String {
-    skills
-        .iter()
-        .filter(|skill| skill.model_invocation)
-        .map(|skill| format!("- {}: {}", skill.name, skill.description))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+pub use super::skill_listing::listing;
 
 #[derive(Debug, Clone, Default)]
 pub struct SkillTool {

@@ -6,6 +6,7 @@ mod permission_rules;
 mod permissions;
 mod plan_mode;
 mod repeats;
+mod safeguards;
 mod scripts;
 mod send_message;
 mod steering;

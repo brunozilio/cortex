@@ -18,6 +18,7 @@ pub mod script_tool;
 pub mod seen_files;
 pub mod send_message;
 pub mod skill;
+mod skill_listing;
 mod skill_script;
 pub mod stopped;
 pub mod structured;

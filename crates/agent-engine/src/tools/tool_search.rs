@@ -29,6 +29,14 @@ impl Deferred {
         Self { specs, loaded: Mutex::default() }
     }
 
+    pub fn announcement(&self) -> String {
+        let names: Vec<&str> = self.specs.iter().map(|spec| spec.name.as_str()).collect();
+        format!(
+            "These tools can be loaded with ToolSearch (query \"select:<name>[,<name>]\") before you call them: {}",
+            names.join(", ")
+        )
+    }
+
     pub fn waiting(&self) -> Vec<&str> {
         let loaded = self.loaded.lock().map(|loaded| loaded.clone()).unwrap_or_default();
         self.specs.iter().map(|spec| spec.name.as_str()).filter(|name| !loaded.contains(*name)).collect()
@@ -89,8 +97,7 @@ pub fn defer(specs: Vec<ToolSpec>) -> (Vec<ToolSpec>, Option<Deferred>) {
         return (specs, None);
     }
     let (deferred, mut kept): (Vec<ToolSpec>, Vec<ToolSpec>) = specs.into_iter().partition(deferrable);
-    let names: Vec<&str> = deferred.iter().map(|spec| spec.name.as_str()).collect();
-    kept.push(ToolSearch::spec_for(&names));
+    kept.push(ToolSearch.spec());
     (kept, Some(Deferred { specs: deferred, loaded: Mutex::default() }))
 }
 
@@ -98,10 +105,10 @@ pub fn defer(specs: Vec<ToolSpec>) -> (Vec<ToolSpec>, Option<Deferred>) {
 pub struct ToolSearch;
 
 impl ToolSearch {
-    fn spec_for(names: &[&str]) -> ToolSpec {
+    fn spec_for() -> ToolSpec {
         ToolSpec {
             name: TOOL_SEARCH.into(),
-            description: crate::tools::describe("ToolSearch", &serde_json::json!({ "not_loaded": names.join(", ") })),
+            description: crate::tools::describe("ToolSearch", &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": { "query": { "type": "string" } },
@@ -114,7 +121,7 @@ impl ToolSearch {
 
 impl Tool for ToolSearch {
     fn spec(&self) -> ToolSpec {
-        Self::spec_for(&[])
+        Self::spec_for()
     }
 
     fn access(&self) -> Access {
@@ -172,7 +179,8 @@ mod tests {
         let (kept, deferred) = defer(specs);
         let deferred = deferred.expect("deferred");
         assert_eq!(kept.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Read", TOOL_SEARCH]);
-        assert!(kept[1].description.contains("mcp__jira__create_issue"));
+        assert!(!kept[1].description.contains("mcp__jira__"), "the tools block stays the same as servers come and go");
+        assert!(deferred.announcement().contains("mcp__jira__create_issue"));
         assert!(deferred.loaded().is_empty());
 
         let found = deferred.search("create issue");

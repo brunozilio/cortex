@@ -4,8 +4,8 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
-const MAX_FILE: usize = 1024 * 1024;
-const MAX_TOTAL: usize = 4 * 1024 * 1024;
+const MAX_FILE: usize = 100_000;
+const MAX_TOTAL: usize = 250_000;
 const NAMES: [&str; 4] =
     [brand::INSTRUCTIONS, concat!(brand::dir!(), "/", brand::instructions!()), "AGENTS.md", brand::LOCAL_INSTRUCTIONS];
 fn network(path: &Path) -> bool {
@@ -122,13 +122,14 @@ pub fn load(cwd: &Path, home: Option<&Path>) -> Vec<Instructions> {
             } else {
                 directory.canonicalize().unwrap_or_else(|_| directory.into())
             };
+            let scope = if name.ends_with(".local.md") { Scope::Local } else { Scope::Project };
             match loader.read(&path, &allowed, 0) {
-                Ok(text) if !text.trim().is_empty() => result.push(Instructions {
-                    path,
-                    scope: if name.ends_with(".local.md") { Scope::Local } else { Scope::Project },
-                    text,
-                }),
-                _ => {}
+                Ok(text) if !text.trim().is_empty() => result.push(Instructions { path, scope, text }),
+                Ok(_) => {}
+                Err(error) => {
+                    let text = format!("[Not loaded: {error}. Tell the user so they can shorten it.]");
+                    result.push(Instructions { path, scope, text });
+                }
             }
         }
     }
@@ -235,6 +236,15 @@ mod regression_tests {
         assert!(text.contains("`<!-- @hidden.md -->`"));
         assert!(!text.contains("SHOULD_NOT_BE_IMPORTED"));
         assert!(!text.contains("Imported instructions"));
+    }
+
+    #[test]
+    fn an_instruction_file_too_big_to_load_is_named_instead_of_dropped() {
+        let repo = tempfile::tempdir().expect("repo");
+        std::fs::write(repo.path().join(brand::INSTRUCTIONS), "x".repeat(MAX_FILE + 1)).expect("instructions");
+        let loaded = load(repo.path(), None);
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded[0].text.starts_with("[Not loaded:") && loaded[0].text.len() < 300, "{}", &loaded[0].text[..80]);
     }
 }
 
