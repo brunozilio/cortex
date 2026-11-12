@@ -4,6 +4,7 @@ use sdk::{EngineEvent, Run};
 
 use super::app::{App, Msg};
 use super::ask::Pending;
+use super::stopwatch::Stopwatch;
 use super::transcript::Entry;
 
 impl App {
@@ -12,8 +13,13 @@ impl App {
             return;
         }
         match &event {
-            EngineEvent::Asked(ask) => self.ask = Some(Pending::new(ask.clone())),
-            EngineEvent::AskWithdrawn(id) if self.ask.as_ref().is_some_and(|p| &p.ask.id == id) => self.ask = None,
+            EngineEvent::Asked(ask) => {
+                self.ask = Some(Pending::new(ask.clone()));
+                if let Some(watch) = &mut self.started {
+                    watch.pause(Instant::now());
+                }
+            }
+            EngineEvent::AskWithdrawn(id) if self.ask.as_ref().is_some_and(|p| &p.ask.id == id) => self.ask_closed(),
             EngineEvent::SessionStarted(id) => self.saver.remember_session(&self.cwd, id),
             EngineEvent::Checkpoint(index) => self.checkpointed(*index),
             EngineEvent::Rewound(rewound) => self.rewound = Some(rewound.clone()),
@@ -105,7 +111,7 @@ impl App {
         match started {
             Ok(run) => {
                 self.run = Some(run.control());
-                self.started = Some(Instant::now());
+                self.started = Some(Stopwatch::start(Instant::now()));
                 self.transcript.begin();
                 self.scroll = 0;
                 let tx = self.tx.clone();
@@ -131,10 +137,19 @@ impl App {
     }
 
     pub fn answer(&mut self, decision: sdk::Decision) {
-        if let (Some(pending), Some(run)) = (self.ask.take(), &self.run)
+        let pending = self.ask.take();
+        self.ask_closed();
+        if let (Some(pending), Some(run)) = (pending, &self.run)
             && let Err(error) = run.answer(pending.ask.id, decision)
         {
             self.transcript.error(error.to_string());
+        }
+    }
+
+    fn ask_closed(&mut self) {
+        self.ask = None;
+        if let Some(watch) = &mut self.started {
+            watch.resume(Instant::now());
         }
     }
 }

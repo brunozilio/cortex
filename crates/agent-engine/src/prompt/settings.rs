@@ -135,7 +135,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                     .map_err(|e| format!("{}: {e}", path.display()))?;
             }
             if let Some(value) = settings.get("scripts") {
-                scripts = crate::tools::script_tool::ScriptAccess::read(value)?;
+                scripts = scripts.layered(value, owners)?;
             }
             if let Some(value) = settings.get("autoMemoryEnabled") {
                 auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;

@@ -116,6 +116,14 @@ impl Agent<'_> {
                 }
                 Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
                 Some(_) if name == crate::tools::watch::WATCH_TOOL => self.watch(id, input, tasks),
+                Some(tool) if self.project_skill(tool.as_ref(), input).is_some() => {
+                    match self.project_skill(tool.as_ref(), input) {
+                        Some(skill) => {
+                            self.skill_call(id, tool.as_ref(), skill, &summary, input, pre.permission.as_deref())
+                        }
+                        None => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),
+                    }
+                }
                 Some(tool) if tool.script().is_some() => match tool.script() {
                     Some(script) => self.script_call(id, script, &summary, input, parent, pre.permission.as_deref()),
                     None => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),

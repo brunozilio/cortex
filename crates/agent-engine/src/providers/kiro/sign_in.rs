@@ -1,6 +1,6 @@
 use super::idc::{self, IdcClient, PROFILE_REGIONS, PortalAnswer};
-use llm_providers::oauth::{Tokens, challenge};
 use llm_providers::ProviderError;
+use llm_providers::oauth::{Tokens, challenge};
 use llm_providers::sign_in::{Host, post};
 
 const PORTAL_CALLBACK: &str = "/signin/callback";

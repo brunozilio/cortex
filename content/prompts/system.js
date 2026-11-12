@@ -40,9 +40,9 @@ export default function system(ctx) {
   prompt += `- Today: ${ctx.date}\n`;
   if (ctx.top_level && ctx.top_level.length === 0) {
     prompt +=
-      "- The working directory is empty (no files or folders except hidden ones starting with `.`); do not list it before starting.\n";
+      "- The working directory was empty when the conversation started (no files or folders except hidden ones starting with `.`); this is not updated as you work.\n";
   } else if (ctx.top_level) {
-    prompt += `- Top level of the working directory, hidden entries left out: ${ctx.top_level.join(", ")}\n`;
+    prompt += `- Top level of the working directory when the conversation started (hidden entries left out, not updated as you work): ${ctx.top_level.join(", ")}\n`;
   }
   if (ctx.model) {
     prompt += `- Model: ${ctx.model}\n`;

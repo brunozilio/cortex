@@ -13,11 +13,19 @@ pub struct Stand {
 }
 
 pub static KEYED: Stand = Stand { id: "keyed", name: "Keyed", vendor: "keyed", access: Access::Key, rank: 200 };
-pub static KEYED_TOO: Stand = Stand { id: "keyed-too", name: "Keyed Too", vendor: "keyed-too", access: Access::Key, rank: 201 };
-pub static BROWSER: Stand = Stand { id: "browser-sub", name: "Browser Subscription", vendor: "browser-sub", access: Access::Browser, rank: 202 };
+pub static KEYED_TOO: Stand =
+    Stand { id: "keyed-too", name: "Keyed Too", vendor: "keyed-too", access: Access::Key, rank: 201 };
+pub static BROWSER: Stand = Stand {
+    id: "browser-sub",
+    name: "Browser Subscription",
+    vendor: "browser-sub",
+    access: Access::Browser,
+    rank: 202,
+};
 pub static DEVICE: Stand =
     Stand { id: "device-sub", name: "Device Subscription", vendor: "device-sub", access: Access::Code, rank: 203 };
-pub static FAMILY: Stand = Stand { id: "family-key", name: "Family Key", vendor: "anthropic", access: Access::Key, rank: 204 };
+pub static FAMILY: Stand =
+    Stand { id: "family-key", name: "Family Key", vendor: "anthropic", access: Access::Key, rank: 204 };
 
 pub fn install() {
     crate::declared::install(&[&KEYED, &KEYED_TOO, &BROWSER, &DEVICE, &FAMILY]);

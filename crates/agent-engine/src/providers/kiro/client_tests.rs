@@ -1,5 +1,5 @@
-use crate::model::http::{Http, Response, Sent};
 use crate::model::client::ProviderClient;
+use crate::model::http::{Http, Response, Sent};
 use crate::model::{ModelApi, ModelError};
 use crate::transcript::Block;
 use domain::provider::{ProviderKey, ProviderKeyStore};
@@ -14,7 +14,6 @@ use domain::ModelProvider;
 use crate::providers::testing::request;
 
 const KIRO: ModelProvider = ModelProvider::new("kiro-subscription");
-
 
 const ARN: &str = "arn:aws:codewhisperer:eu-central-1:699475941385:profile/EHGA3GRVQMUK";
 const TOOL_USE: &[u8] = include_bytes!("wire/testdata/tool_use.bin");

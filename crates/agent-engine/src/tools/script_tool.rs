@@ -19,13 +19,22 @@ impl Default for ScriptAccess {
 }
 
 impl ScriptAccess {
+    pub fn none() -> Self {
+        Self { files: false, processes: false, network: false }
+    }
+
     pub fn read(value: &Value) -> Result<Self, String> {
-        let mut access = Self::default();
+        Self::default().layered(value, true)
+    }
+
+    pub fn layered(self, value: &Value, owners: bool) -> Result<Self, String> {
+        let mut access = self;
         for (key, slot) in
             [("files", &mut access.files), ("processes", &mut access.processes), ("network", &mut access.network)]
         {
             if let Some(flag) = value.get(key) {
-                *slot = flag.as_bool().ok_or_else(|| format!("scripts.{key} must be true or false"))?;
+                let flag = flag.as_bool().ok_or_else(|| format!("scripts.{key} must be true or false"))?;
+                *slot = if owners { flag } else { *slot && flag };
             }
         }
         Ok(access)
@@ -96,6 +105,9 @@ pub fn load(home: Option<&Path>, cwd: &Path) -> Vec<ScriptTool> {
     for (folder, trusted) in folders {
         for file in files(&folder) {
             match parse(&file, trusted) {
+                Ok(tool) if !trusted && tools.iter().any(|known| known.spec.name == tool.spec.name) => {
+                    tracing::warn!(name = %tool.spec.name, "a project script tool with the owner's tool's name is left out")
+                }
                 Ok(tool) => {
                     tools.retain(|known| known.spec.name != tool.spec.name);
                     tools.push(tool);
@@ -105,6 +117,18 @@ pub fn load(home: Option<&Path>, cwd: &Path) -> Vec<ScriptTool> {
         }
     }
     tools
+}
+
+pub fn join(tools: &mut Vec<Box<dyn Tool>>, scripts: Vec<ScriptTool>) {
+    for script in scripts {
+        let taken = tools.iter().any(|tool| tool.spec().name == script.spec.name);
+        if taken && !script.trusted {
+            tracing::warn!(name = %script.spec.name, "a project script tool with an existing tool's name is left out");
+            continue;
+        }
+        tools.retain(|tool| tool.spec().name != script.spec.name);
+        tools.push(Box::new(script));
+    }
 }
 
 impl Tool for ScriptTool {
@@ -161,5 +185,45 @@ mod tests {
         let off = ScriptAccess::read(&serde_json::json!({ "network": false })).expect("read");
         assert!(off.files && off.processes && !off.network);
         assert!(ScriptAccess::read(&serde_json::json!({ "files": "no" })).is_err());
+    }
+}
+
+#[cfg(test)]
+mod join_tests {
+    use super::*;
+
+    #[test]
+    fn a_project_s_tool_never_takes_the_name_of_a_tool_that_is_already_there() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        let user_tools = home.path().join(brand::DIR).join("tools");
+        let project_tools = project.path().join(brand::DIR).join("tools");
+        std::fs::create_dir_all(&user_tools).expect("dir");
+        std::fs::create_dir_all(&project_tools).expect("dir");
+        let spec = |name: &str, description: &str| {
+            format!(r#"export const spec = {{ name: "{name}", description: "{description}" }};"#)
+        };
+        std::fs::write(user_tools.join("echo.js"), spec("Echo", "The owner's.")).expect("write");
+        std::fs::write(user_tools.join("grep.js"), spec("Grep", "The owner's.")).expect("write");
+        std::fs::write(project_tools.join("bash.js"), spec("Bash", "The project's.")).expect("write");
+        std::fs::write(project_tools.join("echo.js"), spec("Echo", "The project's.")).expect("write");
+        std::fs::write(project_tools.join("deploy.js"), spec("Deploy", "The project's.")).expect("write");
+
+        let mut tools = crate::tools::standard();
+        join(&mut tools, load(Some(home.path()), project.path()));
+
+        let described = |name: &str| -> Vec<(String, bool)> {
+            tools
+                .iter()
+                .filter(|tool| tool.spec().name == name)
+                .map(|tool| (tool.spec().description, tool.script().is_some()))
+                .collect()
+        };
+        let bash = described("Bash");
+        assert_eq!(bash.len(), 1);
+        assert!(!bash[0].1, "the built-in Bash stays: {bash:?}");
+        assert_eq!(described("Echo"), [("The owner's.".to_owned(), true)]);
+        assert_eq!(described("Grep"), [("The owner's.".to_owned(), true)], "the owner may replace a built-in");
+        assert_eq!(described("Deploy"), [("The project's.".to_owned(), true)]);
     }
 }

@@ -47,8 +47,11 @@ impl Job {
             instructions,
         } = prepared;
         let git = runtime_guard.setup.context.as_ref().and_then(|b| b.git.clone()).or(git);
-        let top_level = prompt::top_level(&self.workspace.cwd);
-        let snapshot = self.session_snapshot(&session, prompt::Snapshot { date: today(), git, top_level });
+        let snapshot = self.session_snapshot(&session, || prompt::Snapshot {
+            date: today(),
+            git,
+            top_level: prompt::top_level(&self.workspace.cwd),
+        });
         if let Some(recorder) = &self.recorder {
             recorder.opened(domain::trace::RunInfo {
                 model: self.request.model.id.clone(),
@@ -72,7 +75,7 @@ impl Job {
                 .workspace
                 .lsp
                 .as_ref()
-                .map(|lsp| lsp.specs.iter().map(prompt::LanguageServer::of).collect())
+                .map(|lsp| lsp.available().iter().map(prompt::LanguageServer::of).collect())
                 .unwrap_or_default(),
             git: snapshot.git,
             instructions: runtime_guard.setup.context.as_ref().map(|b| b.instructions.clone()).unwrap_or(instructions),
@@ -160,11 +163,12 @@ impl Job {
             .unwrap_or(crate::agent::MAX_TURNS);
         let mut template = template;
         let initial = if history.is_empty() { agent_config.initial_prompt.as_deref().unwrap_or_default() } else { "" };
-        let initial = match tools::skill::expand_initial(initial, &skills, &self.request.cwd) {
+        let scripts = self.workspace.scripts;
+        let initial = match tools::skill::expand_initial(initial, &skills, &self.request.cwd, scripts) {
             Ok(initial) => initial,
             Err(error) => return self.fail(&error, FailureKind::Other),
         };
-        let typed = match tools::skill::expand_command(&self.request.prompt, &skills, &self.request.cwd) {
+        let typed = match tools::skill::expand_command(&self.request.prompt, &skills, &self.request.cwd, scripts) {
             Some(Ok(prompt)) => prompt::user_message(&PromptRequest { prompt, ..self.request.clone() }),
             Some(Err(error)) => return self.fail(&error, FailureKind::Other),
             None => prompt::user_message(&self.request),

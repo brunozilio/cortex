@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
 use super::shells::Watch;
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 
 #[derive(Debug)]
 pub struct Monitor;

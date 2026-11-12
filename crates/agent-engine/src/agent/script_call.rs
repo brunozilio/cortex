@@ -10,6 +10,7 @@ use super::tasks::Tasks;
 use crate::model::ToolSpec;
 use crate::tools::script_bridge::{Bridge, Request};
 use crate::tools::script_tool::ScriptTool;
+use crate::tools::skill::FoundSkill;
 use crate::tools::{Access, Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message};
 
@@ -65,13 +66,34 @@ impl Agent<'_> {
         permission: Option<&str>,
     ) -> Outcome {
         let call = ScriptCall { agent: self, tool, parent, id };
-        let name = &tool.spec.name;
-        let approved = matches!(
+        let approved = tool.trusted || self.approved(&tool.spec.name, summary, input);
+        self.permitted(id, &call, summary, input, if approved { permission } else { Some("ask") })
+    }
+
+    fn approved(&self, name: &str, summary: &str, input: &Value) -> bool {
+        matches!(
             self.workspace.ruling(name, summary, input).or_else(|| self.remembered_rule(name, summary, input)),
             Some((domain::permission_rules::RuleKind::Allow, _))
-        );
-        let permission = if tool.trusted || approved { permission } else { Some("ask") };
-        self.permitted(id, &call, summary, input, permission)
+        )
+    }
+
+    pub(super) fn project_skill<'t>(&self, tool: &'t dyn Tool, input: &Value) -> Option<&'t FoundSkill> {
+        let name = input["skill"].as_str()?.trim_start_matches('/');
+        tool.skills().iter().find(|skill| skill.name == name && skill.project_script())
+    }
+
+    pub(super) fn skill_call(
+        &self,
+        id: &str,
+        tool: &dyn Tool,
+        skill: &FoundSkill,
+        summary: &str,
+        input: &Value,
+        permission: Option<&str>,
+    ) -> Outcome {
+        let approved = self.approved(&tool.spec().name, summary, input);
+        let shown = format!("{summary}, the project's script {}", skill.file.display());
+        self.permitted_as(id, tool, summary, Some(&shown), input, if approved { permission } else { Some("ask") })
     }
 
     fn script_context(&self) -> Value {

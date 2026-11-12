@@ -100,7 +100,14 @@ fn keep_watching(mut watching: Watching, tool: &dyn Tool, workspace: &Workspace,
             return watching.told(&Step::GaveUp("watches end after 7 days".into()));
         }
         workspace.forget_seen_files();
-        let outcome = tool.run(&watching.plan.input, workspace);
+        let name = watching.plan.tool.as_str();
+        let outcome = match before(name, &watching.plan.input, workspace, None) {
+            Ok(hook) => {
+                let input = hook.updated_input.as_ref().unwrap_or(&watching.plan.input);
+                after(name, input, tool.run(input, workspace), workspace, None)
+            }
+            Err(refusal) => Outcome::error(refusal),
+        };
         if stop.load(Ordering::Relaxed) {
             return None;
         }
@@ -110,6 +117,45 @@ fn keep_watching(mut watching: Watching, tool: &dyn Tool, workspace: &Workspace,
             return watching.told(&step);
         }
     }
+}
+
+type Model<'a> = Option<(&'a dyn crate::model::ModelApi, &'a crate::model::TurnRequest)>;
+
+pub fn before(
+    name: &str,
+    input: &Value,
+    workspace: &Workspace,
+    model: Model<'_>,
+) -> Result<crate::hooks::Decision, String> {
+    let payload = json!({ "tool_name": name, "tool_input": input });
+    let blocked = |reason: String| format!("Hook blocked {name}: {reason}");
+    let hook = workspace.hooks.run_with_model("PreToolUse", name, payload, workspace, model).map_err(blocked)?;
+    match hook.blocked {
+        Some(reason) => Err(blocked(reason)),
+        None => Ok(hook),
+    }
+}
+
+pub fn after(name: &str, input: &Value, mut outcome: Outcome, workspace: &Workspace, model: Model<'_>) -> Outcome {
+    let event = if outcome.is_error { "PostToolUseFailure" } else { "PostToolUse" };
+    let payload = json!({ "tool_name": name, "tool_input": input, "tool_response": outcome.content });
+    match workspace.hooks.run_with_model(event, name, payload, workspace, model) {
+        Ok(hook) => {
+            if let Some(output) = hook.updated_output {
+                outcome.content = output.as_str().map(str::to_owned).unwrap_or_else(|| output.to_string());
+                outcome.images.clear();
+            }
+            if let Some(reason) = hook.blocked {
+                outcome.is_error = true;
+                outcome.content.push_str(&format!("\nHook feedback: {reason}"));
+            }
+        }
+        Err(error) => {
+            outcome.is_error = true;
+            outcome.content.push_str(&format!("\nHook failed: {error}"));
+        }
+    }
+    outcome
 }
 
 pub fn stop(client: u64, id: &str) -> Option<String> {

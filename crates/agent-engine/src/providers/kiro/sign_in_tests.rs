@@ -25,7 +25,11 @@ fn an_organization_sign_in_goes_on_to_its_identity_center_in_the_same_tab() {
     assert!(idc::client(&tokens).is_some(), "kept for refreshes");
     let log = host.log.borrow();
     assert!(log.opened[0].0.starts_with("https://app.kiro.dev/signin?"), "{:?}", log.opened);
-    assert!(log.answered[0].starts_with("redirect https://oidc.eu-west-1.amazonaws.com/authorize?"), "{:?}", log.answered);
+    assert!(
+        log.answered[0].starts_with("redirect https://oidc.eu-west-1.amazonaws.com/authorize?"),
+        "{:?}",
+        log.answered
+    );
     assert_eq!(log.answered[1], "done");
     let urls: Vec<_> = log.sent.iter().map(|(url, _)| url.as_str()).collect();
     assert_eq!(
@@ -42,7 +46,10 @@ fn an_organization_sign_in_goes_on_to_its_identity_center_in_the_same_tab() {
 
 #[test]
 fn an_organization_answer_without_its_start_url_fails_in_the_tab_and_the_terminal() {
-    let host = ScriptedHost::new([], [("/signin/callback", "login_option=awsidc&issuer_url=&amplitude_device_id=&state=r2x32")]);
+    let host = ScriptedHost::new(
+        [],
+        [("/signin/callback", "login_option=awsidc&issuer_url=&amplitude_device_id=&state=r2x32")],
+    );
     let error = sign_in(&host).map(|_| ()).err().unwrap_or_else(|| panic!("refused"));
     assert!(error.to_string().contains("issuer_url"), "{error}");
     assert!(host.log.borrow().answered[0].starts_with("failed"), "the tab is answered");
@@ -58,10 +65,7 @@ fn an_account_without_a_profile_is_told_so() {
             (403, String::new()),
             (200, r#"{"profiles":[]}"#.to_owned()),
         ],
-        [
-            ("/signin/callback", "login_option=builderid&state=r2x32"),
-            ("/oauth/callback", "code=c&state=r4x32"),
-        ],
+        [("/signin/callback", "login_option=builderid&state=r2x32"), ("/oauth/callback", "code=c&state=r4x32")],
     );
     let error = sign_in(&host).map(|_| ()).err().unwrap_or_else(|| panic!("refused"));
     assert!(error.to_string().contains("no Kiro profile"), "{error}");

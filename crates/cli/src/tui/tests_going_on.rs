@@ -1,9 +1,9 @@
 use std::time::{Duration, Instant};
 
 use agent_engine::fake::FakeEngine;
-use domain::{ChoreAnswer, Rewound, SessionCommand, SessionId};
+use domain::{AgentAsk, AskId, AskKind, ChoreAnswer, Rewound, SessionCommand, SessionId};
 use ratatui::crossterm::event::KeyCode;
-use sdk::{EngineEvent, Model};
+use sdk::{Decision, EngineEvent, Model};
 
 use super::app::App;
 use super::tests::{press, screen, sdk, type_text, until};
@@ -102,4 +102,49 @@ fn effort_without_a_level_opens_a_picker_at_the_current_one() {
     press(&mut app, KeyCode::Enter);
     assert!(app.picker.is_none());
     assert_eq!(app.effort(), sdk::Effort::High, "the level after medium");
+}
+
+fn asking_script(then: EngineEvent) -> Vec<EngineEvent> {
+    let ask = AgentAsk { id: AskId("q".into()), kind: AskKind::Questions(Vec::new()) };
+    vec![
+        EngineEvent::Asked(ask),
+        then,
+        EngineEvent::TextDelta("ok".into()),
+        EngineEvent::Completed { duration_ms: 1, cost_usd: None },
+    ]
+}
+
+fn asked_app(script: Vec<EngineEvent>, data: &std::path::Path) -> App {
+    let engine =
+        FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script).with_delay(Duration::from_millis(60));
+    let mut app = App::new(sdk(&engine, data), data.into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    type_text(&mut app, "ask me");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.ask.is_some());
+    assert!(app.started.is_some_and(|watch| watch.is_paused()), "the clock stops while the agent waits for an answer");
+    app
+}
+
+#[test]
+fn the_working_clock_stops_while_a_question_waits_and_runs_again_once_answered() {
+    let data = tempfile::tempdir().expect("data");
+    let mut app = asked_app(asking_script(EngineEvent::TextDelta("thanks".into())), data.path());
+    app.answer(Decision::Deny);
+    assert!(app.started.is_some_and(|watch| !watch.is_paused()));
+}
+
+#[test]
+fn the_working_clock_runs_again_when_the_question_is_withdrawn() {
+    let data = tempfile::tempdir().expect("data");
+    let mut app = asked_app(asking_script(EngineEvent::AskWithdrawn(AskId("q".into()))), data.path());
+    until(&mut app, |app| app.ask.is_none());
+    assert!(app.started.is_some_and(|watch| !watch.is_paused()));
+}
+
+#[test]
+fn a_waiting_question_shows_the_keys_that_answer_it() {
+    let data = tempfile::tempdir().expect("data");
+    let app = asked_app(asking_script(EngineEvent::TextDelta("thanks".into())), data.path());
+    assert!(screen(&app).contains("space toggles a multiple choice · esc skips"), "{}", screen(&app));
 }

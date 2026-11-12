@@ -18,7 +18,6 @@ pub fn open(http: Arc<dyn Http>, model: Option<&domain::ModelOption>) -> Arc<dyn
     Arc::new(Conversation::new(http, model.and_then(|model| model.window)))
 }
 
-
 pub struct Conversation {
     http: Arc<dyn Http>,
     window: Option<u64>,

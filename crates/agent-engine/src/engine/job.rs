@@ -66,9 +66,9 @@ impl Job {
         workspace.rules = brief.rules;
         let mut tools = tools::standard();
         let specs = domain::lsp::servers(domain::lsp::defaults(), &brief.settings.lsp_servers);
-        let usable = self.lsp.available(&specs);
-        if !usable.is_empty() {
-            workspace.lsp = Some(crate::lsp::Lsp { servers: Arc::clone(&self.lsp), specs: Arc::new(usable) });
+        let lsp = crate::lsp::Lsp { servers: Arc::clone(&self.lsp), specs: Arc::new(specs) };
+        if !lsp.available().is_empty() {
+            workspace.lsp = Some(lsp);
             tools.push(Box::new(tools::Lsp));
         }
         let skills = brief.skills;
@@ -79,13 +79,10 @@ impl Job {
         tools.push(Box::new(tools::subagent::AgentTool { agents: agents.clone() }));
         tools.push(Box::new(tools::send_message::SendMessageTool));
         tools.extend(tools::task::tools());
-        let home = crate::brief::home(&self.request);
-        for script in tools::script_tool::load(home.as_deref(), &self.request.cwd) {
-            tools.retain(|tool| tool.spec().name != script.spec.name);
-            tools.push(Box::new(script));
-        }
         let servers = crate::mcp::connect_stopped(&self.request, &mcp_sources, &self.mcp, self.control.stop_flag());
         tools.extend(crate::mcp::tools_of(&servers, self.control.stop_flag()));
+        let home = crate::brief::home(&self.request);
+        tools::script_tool::join(&mut tools, tools::script_tool::load(home.as_deref(), &self.request.cwd));
         match crate::mcp::extras::expand_prompt(&servers, &self.request.prompt, self.control.stop_flag()) {
             Some(Ok(expanded)) => self.request.prompt = expanded,
             Some(Err(error)) => return self.fail(&error, FailureKind::Other),

@@ -39,6 +39,7 @@ mod tests {
             description: description.into(),
             file: Default::default(),
             model_invocation: true,
+            trusted: true,
         }
     }
 

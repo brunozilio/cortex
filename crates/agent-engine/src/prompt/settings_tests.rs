@@ -131,3 +131,22 @@ fn an_installed_plugin_adds_its_hooks_and_a_broken_one_is_left_out() {
     assert_eq!(groups[0].hooks[0].command, format!("{}/check.sh", good.path().display()));
     assert!(!settings.hooks.0.contains_key("NoSuchEvent"));
 }
+
+#[test]
+fn a_checked_in_file_can_only_take_script_access_away() {
+    let home = tempfile::tempdir().expect("home");
+    let repo = tempfile::tempdir().expect("repo");
+    let write = |root: std::path::PathBuf, name: &str, scripts: serde_json::Value| {
+        std::fs::create_dir_all(&root).expect("dir");
+        std::fs::write(root.join(name), serde_json::json!({ "scripts": scripts }).to_string()).expect("write");
+    };
+    write(home.path().join(brand::DIR), "settings.json", serde_json::json!({ "processes": false }));
+    write(repo.path().join(brand::DIR), "settings.json", serde_json::json!({ "processes": true, "network": false }));
+    let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts;
+    assert!(!scripts.processes, "the repository cannot turn back on what the owner turned off");
+    assert!(!scripts.network && scripts.files);
+
+    write(repo.path().join(brand::DIR), "settings.local.json", serde_json::json!({ "processes": true }));
+    let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts;
+    assert!(scripts.processes, "the owner's local file may");
+}

@@ -121,6 +121,9 @@ impl Inner {
     fn sweep(&self, now: Instant) {
         let Ok(mut slots) = self.slots.lock() else { return };
         slots.retain(|_, slot| {
+            if Arc::strong_count(slot) > 1 {
+                return true;
+            }
             let Ok(slot) = slot.try_lock() else { return true };
             let since = match &*slot {
                 Slot::Empty => return false,
@@ -184,14 +187,11 @@ impl LanguageServers for LspPool {
     }
 
     fn available(&self, specs: &[ServerSpec]) -> Vec<ServerSpec> {
-        let installing = self.inner.installs.is_some();
-        specs
-            .iter()
-            .filter(|spec| {
-                (installing && Installs::can_install(spec)) || self.inner.starter.find(&spec.command).is_some()
-            })
-            .cloned()
-            .collect()
+        let on_path = |command: &str| self.inner.starter.find(command).is_some();
+        let installable = |spec: &ServerSpec| {
+            self.inner.installs.as_ref().is_some_and(|installs| installs.can_install(spec, on_path))
+        };
+        specs.iter().filter(|spec| on_path(&spec.command) || installable(spec)).cloned().collect()
     }
 
     fn installing(&self, file: &Path, specs: &[ServerSpec]) -> Option<String> {

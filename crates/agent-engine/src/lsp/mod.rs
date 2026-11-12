@@ -1,9 +1,10 @@
 mod client;
-mod installer;
-mod installs;
+mod download;
 #[cfg(any(test, feature = "test-support"))]
 pub mod fake;
 pub mod framing;
+mod installer;
+mod installs;
 mod pool;
 
 use std::path::{Path, PathBuf};
@@ -54,13 +55,18 @@ pub struct Lsp {
 }
 
 impl Lsp {
+    pub fn available(&self) -> Vec<ServerSpec> {
+        self.servers.available(&self.specs)
+    }
+
     pub fn open(&self, file: &Path, cwd: &Path, stop: &AtomicBool) -> Result<(Opened, Option<String>), String> {
         match self.servers.open(file, &self.specs, cwd, stop, Wait::Never) {
             Ok(opened) => Ok((opened, None)),
-            Err(error) => match self.servers.installing(file, &self.specs) {
-                Some(name) => self.servers.open(file, &self.specs, cwd, stop, Wait::ForInstall).map(|opened| (opened, Some(name))),
-                None => Err(error),
-            },
+            Err(_) => {
+                let opened = self.servers.open(file, &self.specs, cwd, stop, Wait::ForInstall)?;
+                let installed = domain::lsp::server_for(file, &self.specs).map(|(spec, _)| spec.name.clone());
+                Ok((opened, installed))
+            }
         }
     }
 
@@ -68,7 +74,12 @@ impl Lsp {
         domain::lsp::server_for(file, &self.specs)?;
         let opened = match self.servers.open(file, &self.specs, cwd, stop, Wait::Never) {
             Ok(opened) => opened,
-            Err(_) => return self.servers.installing(file, &self.specs).map(|name| domain::lsp::diagnostics::installing(&name)),
+            Err(_) => {
+                return self
+                    .servers
+                    .installing(file, &self.specs)
+                    .map(|name| domain::lsp::diagnostics::installing(&name));
+            }
         };
         let version = opened.server.sync(file, &opened.language, text).ok()?;
         let found = opened.server.diagnostics(file, version, DIAGNOSTICS_WAIT)?;
@@ -78,8 +89,14 @@ impl Lsp {
 }
 
 pub trait LanguageServers: Send + Sync + std::fmt::Debug {
-    fn open(&self, file: &Path, specs: &[ServerSpec], cwd: &Path, stop: &AtomicBool, wait: Wait)
-    -> Result<Opened, String>;
+    fn open(
+        &self,
+        file: &Path,
+        specs: &[ServerSpec],
+        cwd: &Path,
+        stop: &AtomicBool,
+        wait: Wait,
+    ) -> Result<Opened, String>;
     fn available(&self, specs: &[ServerSpec]) -> Vec<ServerSpec>;
     fn installing(&self, file: &Path, specs: &[ServerSpec]) -> Option<String>;
 }

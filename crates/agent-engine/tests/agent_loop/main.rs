@@ -7,6 +7,7 @@ mod permissions;
 mod plan_mode;
 mod repeats;
 mod safeguards;
+mod script_skills;
 mod scripts;
 mod send_message;
 mod steering;
@@ -14,6 +15,7 @@ mod sub_agent_fallbacks;
 mod sub_agents;
 mod turns;
 mod watch;
+mod watch_hooks;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};

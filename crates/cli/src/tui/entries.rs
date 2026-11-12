@@ -5,6 +5,7 @@ use ratatui::text::{Line, Span};
 
 use super::diffs;
 use super::markdown;
+use super::stopwatch::Stopwatch;
 use super::transcript::{Entry, ToolState, Transcript, call};
 use super::wrap::wrap;
 
@@ -111,11 +112,12 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
     }
 }
 
-pub fn working(started: Instant, transcript: &Transcript, width: usize) -> Line<'static> {
-    let tick = usize::try_from(started.elapsed().as_millis() / 120).unwrap_or(0);
+pub fn working(started: Stopwatch, transcript: &Transcript, width: usize) -> Line<'static> {
+    let elapsed = started.elapsed(Instant::now());
+    let tick = usize::try_from(elapsed.as_millis() / 120).unwrap_or(0);
     let doing = transcript.activity.clone().unwrap_or_else(|| "Working".into());
     let doing = wrap(&doing, width.saturating_sub(40).max(10)).into_iter().next().unwrap_or_default();
-    let mut detail = format!("{}s", started.elapsed().as_secs());
+    let mut detail = format!("{}s", elapsed.as_secs());
     if transcript.written > 0 {
         detail.push_str(&format!(" · ↓ {} tokens", tokens(transcript.written)));
     }

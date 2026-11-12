@@ -228,9 +228,13 @@ Inbox notices are core (`TakeNotices`).
   `contains`, or any change), without model turns; one inbox notice
   (`watch watch_N`) says when it is met or why it gave up (three failed
   checks in a row, or 7 days). The loop runs the first check as an
-  ordinary call (`agent/watch.rs`): read-only tools and MCP tools whose
-  `readOnlyHint` is true go through the usual permission; any other MCP
-  tool is asked about every time, even in Bypass. Shell commands are
+  ordinary call (`agent/watch.rs`) through the usual permission path, with
+  the watched tool's own rules and remembered approvals. Every check, the
+  first and the later ones, runs the watched tool's `PreToolUse` and
+  `PostToolUse` hooks under that tool's name (`tools::watch::before`,
+  `after`): a hook that blocks it fails the check, one that rewrites its
+  input or output is obeyed. Later checks have no model, so a model hook
+  fails them. Shell commands are
   `Monitor`'s; loop-run tools cannot be watched. An MCP tool keeps its
   server (`Tool::kept`) after the run ends, with the run's sign-in, so a
   token that expires ends the watch with the failure. `KillShell` and
@@ -239,6 +243,19 @@ Inbox notices are core (`TakeNotices`).
   `CronCreate`, and a second watch of the same tool and input is refused
   (`domain::watch::while_watching`, `duplicate`): the agent is told to
   end its turn and wait for the event.
+- **A project's scripts**: JavaScript checked into a project is not the
+  owner's. A script tool in the project's `.{command}/tools` asks before
+  it runs, even in Bypass, and is left out when its name is already
+  taken by a built-in, MCP or the owner's tool (`script_tool::load`,
+  `join`); the owner's own may replace one. A script skill or command
+  from the project's folders asks the same way when the agent loads it
+  (`Agent::skill_call`, the ask names the file), never takes the place of
+  the owner's, a plugin's or a built-in skill of that name
+  (`skill::discover`), and gets no file, process or network access from
+  an agent's initial prompt; typed by the user it runs with the
+  settings' `scripts` access. The `scripts` setting follows the
+  permission rules' rule: the owner's files set it, a checked-in file
+  only turns access off (`ScriptAccess::layered`).
 - **Scheduled prompts**: `CronCreate`/`CronList`/`CronDelete` and
   `ScheduleWakeup` keep prompts per client (`tools::schedules`, like the
   background shells; cron parsing and matching in `domain::schedule`,
@@ -380,21 +397,29 @@ by the `NativeEngine` across runs, ended after 10 idle minutes), behind
 `LanguageServers` so tests script them (`lsp::fake`).
 
 A built-in server missing from PATH is installed on first use:
-`domain::lsp::install` says how for each platform (rust-analyzer's and
-clangd's GitHub releases, `npm install` for typescript, pinned to
-TypeScript 6 because 7 has no `tsserver`, and pyright, `go install` for
-gopls) and `lsp::Downloads` does it into `<local data>/lsp/<server>/`,
-staging in a sibling folder and renaming it into place. The backend's
+`domain::lsp::install` says how for each platform, every server at a
+pinned version (rust-analyzer's and clangd's GitHub releases, each with
+the SHA-256 its download must have, or nothing is installed; `npm
+install` for typescript, on TypeScript 6 because 7 has no `tsserver`,
+and pyright; `go install` for gopls) and `lsp::Downloads` does it into
+`<local data>/lsp/<server>/`,
+staging in a sibling folder and renaming it into place; an install
+another process finished meanwhile is kept as it is. The backend's
 engine turns it on (`LspPool::installing`); without it only PATH
-counts. An install runs once, in the background: the `LSP` tool waits for
-it (`Wait::ForInstall`), `Edit`/`Write` diagnostics don't (`Wait::Never`),
-and a failure is kept and repeated until the pool's idle sweep forgets it.
-While one runs, an edit's `<diagnostics>` say the server is still
-installing, and the `LSP` answer that waited for it starts with
-"Installed the <server> language server on first use."
+counts. Only the `LSP` tool starts an install and waits for it
+(`Wait::ForInstall`); `Edit`/`Write` diagnostics never start or wait for
+one (`Wait::Never`). An install runs once, on its own thread, and a
+failure (a crashed installer too) is kept and repeated until the pool's
+idle sweep forgets it. While one runs, an edit's `<diagnostics>` say the
+server is still installing, and the `LSP` answer that waited for it starts
+with "Installed the <server> language server on first use."
 A run gets `Workspace::lsp` and the `LSP` tool when one of its servers is
-available (on PATH or installable), and the system prompt's environment
-names those servers and their extensions; `Edit` and `Write` append the
+available: on PATH, already installed, or installable, which needs the
+recipe's tool on PATH (`Recipe::tool`: `npm`, `go`; none for a download)
+and no failed install still remembered. The system prompt's environment
+names the available servers and their extensions, while the tool knows
+every configured one, so a file whose server is missing is answered with
+what is not installed; `Edit` and `Write` append the
 file's errors and warnings as `<diagnostics>`. `tests/real_lsp.rs`
 (ignored) runs against clangd and installs rust-analyzer, typescript and
 clangd from the network.

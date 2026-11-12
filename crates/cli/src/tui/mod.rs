@@ -42,6 +42,7 @@ mod shell;
 mod side;
 mod slash;
 mod statusline;
+mod stopwatch;
 mod submit;
 mod transcript;
 mod view;

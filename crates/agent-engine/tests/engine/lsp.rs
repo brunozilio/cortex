@@ -76,6 +76,17 @@ impl Starter for NothingInstalled {
     }
 }
 
+struct Only(&'static str);
+
+impl Starter for Only {
+    fn find(&self, command: &str) -> Option<PathBuf> {
+        (command == self.0).then(|| PathBuf::from("/bin").join(command))
+    }
+    fn start(&self, _: &ServerSpec, _: &Path, _: &Path, _: &AtomicBool) -> Result<Arc<dyn LanguageServer>, String> {
+        Err("not installed".into())
+    }
+}
+
 #[test]
 fn without_an_installed_server_the_tool_is_not_offered() {
     let dir = tempfile::tempdir().expect("dir");
@@ -100,11 +111,32 @@ fn servers_it_can_install_are_offered_and_named_in_the_environment() {
     let dir = tempfile::tempdir().expect("dir");
     let data = tempfile::tempdir().expect("data");
     let agent = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));
-    let pool = LspPool::installing(NothingInstalled, Duration::from_secs(60), data.path().into(), Offline);
+    let pool = LspPool::installing(Only("npm"), Duration::from_secs(60), data.path().into(), Offline);
     let engine = engine(vec![agent.clone()]).with_language_servers(Arc::new(pool));
     finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "hi", model())));
     assert!(offered(&agent).contains(&"LSP".to_owned()), "{:?}", offered(&agent));
     let system = &agent.asked()[0].system;
     let line = system.lines().find(|line| line.starts_with("- Language servers")).expect("named");
     assert!(line.contains("rust-analyzer (.rs)") && line.contains(".tsx"), "{line}");
+}
+
+#[test]
+fn a_file_whose_server_is_missing_is_answered_with_what_to_install() {
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::write(dir.path().join("a.rs"), "struct Grep;\n").expect("file");
+    let agent = Arc::new(ScriptedModel::new([
+        ScriptedModel::reply(vec![Block::ToolUse {
+            id: "l".into(),
+            name: "LSP".into(),
+            input: json!({"operation": "documentSymbol", "file_path": "a.rs"}),
+        }]),
+        ScriptedModel::reply(vec![Block::Text("No server.".into())]),
+    ]));
+    let pool = Arc::new(LspPool::new(Only("gopls"), Duration::from_secs(60)));
+    let engine = engine(vec![agent.clone()]).with_language_servers(pool);
+    finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "outline a.rs", model())));
+    assert!(results(&agent).contains("rust-analyzer is not installed"), "{}", results(&agent));
+    let system = &agent.asked()[0].system;
+    let line = system.lines().find(|line| line.starts_with("- Language servers")).expect("named");
+    assert!(line.contains("gopls") && !line.contains("rust-analyzer"), "{line}");
 }

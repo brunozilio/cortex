@@ -8,6 +8,7 @@ use super::ask::Pending;
 use super::choices::Picker;
 use super::input::Input;
 use super::login::SecretPrompt;
+use super::stopwatch::Stopwatch;
 use super::transcript::Transcript;
 
 pub use super::msg::Msg;
@@ -45,7 +46,7 @@ pub struct App {
     pub ask: Option<Pending>,
     pub secret: Option<SecretPrompt>,
     pub run: Option<RunControl>,
-    pub started: Option<Instant>,
+    pub started: Option<Stopwatch>,
     pub queued: Vec<String>,
     pub notices: super::notices::Poll,
     #[allow(dead_code, reason = "the feature folders use it, and any of them may be removed")]

@@ -24,7 +24,7 @@ const RUN_BY_THE_LOOP: [&str; 11] = [
 
 impl Agent<'_> {
     pub(super) fn watch(&self, id: &str, input: &Value, tasks: &Tasks) -> Outcome {
-        let plan = match Plan::parse(input) {
+        let mut plan = match Plan::parse(input) {
             Ok(plan) => plan,
             Err(error) => return Outcome::error(error),
         };
@@ -44,9 +44,19 @@ impl Agent<'_> {
                 "{name} cannot be watched: Watch calls read-only tools and MCP tools. Use Monitor for a shell command."
             ));
         };
+        let model = Some((self.api, &self.request));
+        let hook = match crate::tools::watch::before(name, &plan.input, self.workspace, model) {
+            Ok(hook) => hook,
+            Err(refusal) => return Outcome::error(format!("Nothing is watched. {refusal}")),
+        };
+        if let Some(updated) = hook.updated_input {
+            plan.input = updated;
+        }
         let summary = target.summary(&plan.input);
         let shown = format!("{}: {summary}", plan.explained());
-        let first = self.permitted_as(id, target.as_ref(), &summary, Some(&shown), &plan.input, None);
+        let first =
+            self.permitted_as(id, target.as_ref(), &summary, Some(&shown), &plan.input, hook.permission.as_deref());
+        let first = crate::tools::watch::after(name, &plan.input, first, self.workspace, model);
         if first.is_error {
             return Outcome::error(format!("The first check failed, so nothing is watched: {}", first.content));
         }

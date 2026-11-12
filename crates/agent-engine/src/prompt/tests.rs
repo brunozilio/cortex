@@ -58,12 +58,12 @@ fn shows_the_top_level_of_the_working_directory_when_known() {
     let mut empty = environment();
     empty.top_level = Some(Vec::new());
     assert!(system(&empty).contains(
-        "- Today: 2026-11-07\n- The working directory is empty (no files or folders except hidden ones starting with `.`); do not list it before starting.\n"
+        "- Today: 2026-11-07\n- The working directory was empty when the conversation started (no files or folders except hidden ones starting with `.`); this is not updated as you work.\n"
     ));
     let mut listed = environment();
     listed.top_level = Some(vec!["README.md".into(), "src/".into()]);
     assert!(system(&listed).contains(
-        "- Today: 2026-11-07\n- Top level of the working directory, hidden entries left out: README.md, src/\n"
+        "- Today: 2026-11-07\n- Top level of the working directory when the conversation started (hidden entries left out, not updated as you work): README.md, src/\n"
     ));
 }
 

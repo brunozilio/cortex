@@ -127,6 +127,9 @@ fn typescript() -> Install {
     install_for(&spec, std::env::consts::OS, std::env::consts::ARCH).expect("installable")
 }
 
+#[path = "pool_install_tests.rs"]
+mod installing;
+
 fn names(specs: &[ServerSpec]) -> Vec<&str> {
     specs.iter().map(|spec| spec.name.as_str()).collect()
 }
@@ -134,15 +137,22 @@ fn names(specs: &[ServerSpec]) -> Vec<&str> {
 #[test]
 fn a_missing_server_is_installed_once_in_the_background_and_used_after() {
     let data = tempfile::tempdir().expect("data");
-    let starts = Starts::default();
+    let starts = Starts { installed: vec!["npm"], ..Default::default() };
     let installs = Installs::held();
-    let pool = LspPool::installing(starts.clone(), IDLE, data.path().into(), installs.clone());
+    let pool = Arc::new(LspPool::installing(starts.clone(), IDLE, data.path().into(), installs.clone()));
     assert!(names(&pool.available(&defaults())).contains(&"typescript"));
-    let busy = open_waiting(&pool, "/no-such-w/app.ts", Wait::Never).expect_err("still installing");
+    let absent = open_waiting(&pool, "/no-such-w/app.ts", Wait::Never).expect_err("not installed");
+    assert!(absent.contains("typescript") && absent.contains("not installed"), "{absent}");
+    assert_eq!(installs.count(), 0, "only a caller that waits starts an install");
+    let asking = {
+        let pool = Arc::clone(&pool);
+        std::thread::spawn(move || open(&pool, "/no-such-w/app.ts"))
+    };
+    installing::until("the install started", || installs.count() == 1);
+    let busy = open_waiting(&pool, "/no-such-w/b.ts", Wait::Never).expect_err("still installing");
     assert!(busy.contains("typescript") && busy.contains("installing"), "{busy}");
-    assert!(open_waiting(&pool, "/no-such-w/b.ts", Wait::Never).is_err());
     installs.release();
-    let opened = open(&pool, "/no-such-w/app.ts").expect("installed");
+    let opened = asking.join().expect("joined").expect("installed");
     assert_eq!(opened.language, "typescript");
     let home = data.path().join("typescript");
     assert_eq!(*installs.asked.lock().expect("asked"), [(typescript().recipe, home.clone())]);
@@ -160,6 +170,7 @@ fn a_failed_install_says_why_and_is_tried_again_only_after_a_while() {
     assert!(failed.contains("typescript") && failed.contains("npm was not found"), "{failed}");
     assert!(open(&pool, "/no-such-w/app.ts").expect_err("still").contains("npm was not found"));
     assert_eq!(installs.count(), 1);
+    assert!(!names(&pool.available(&defaults())).contains(&"typescript"), "a failed install is not offered");
     pool.sweep(Instant::now() + IDLE * 2);
     assert!(open(&pool, "/no-such-w/app.ts").is_err());
     assert_eq!(installs.count(), 2);
@@ -222,19 +233,21 @@ fn an_edit_says_its_server_is_installing_and_the_tool_says_it_installed_one() {
     let pool = LspPool::installing(Starts::default(), IDLE, data.path().into(), installs.clone());
     let lsp = crate::lsp::Lsp { servers: Arc::new(pool), specs: Arc::new(defaults()) };
     let (file, cwd, stop) = (Path::new("/no-such-w/app.ts"), Path::new("/no-such-w"), AtomicBool::new(false));
+    assert_eq!(lsp.problems(file, "", cwd, &stop), None);
+    assert_eq!(installs.count(), 0, "an edit never starts an install");
+    let asking = {
+        let lsp = lsp.clone();
+        std::thread::spawn(move || lsp.open(file, cwd, &AtomicBool::new(false)).map(|(_, installed)| installed))
+    };
+    installing::until("the install started", || installs.count() == 1);
     assert_eq!(
         lsp.problems(file, "", cwd, &stop).as_deref(),
-        Some("<diagnostics>\ntypescript is still installing, so this file was not checked; later edits will be.\n</diagnostics>")
+        Some(
+            "<diagnostics>\ntypescript is still installing, so this file was not checked; later edits will be.\n</diagnostics>"
+        )
     );
-    let waiting = {
-        let installs = installs.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(50));
-            installs.release();
-        })
-    };
-    let (_, installed) = lsp.open(file, cwd, &stop).expect("installed");
-    waiting.join().expect("released");
+    installs.release();
+    let installed = asking.join().expect("joined").expect("installed");
     assert_eq!(installed.as_deref(), Some("typescript"));
     let (_, again) = lsp.open(file, cwd, &stop).expect("ready");
     assert_eq!(again, None);

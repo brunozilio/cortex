@@ -35,6 +35,10 @@ pub(super) fn missing(spec: &ServerSpec) -> String {
     format!("{} is not installed (no `{}` on PATH).", spec.name, spec.command)
 }
 
+fn not_yet(spec: &ServerSpec) -> String {
+    format!("{} is not installed yet; the LSP tool installs it on first use.", spec.name)
+}
+
 fn recipe(spec: &ServerSpec) -> Option<Install> {
     install_for(spec, std::env::consts::OS, std::env::consts::ARCH)
 }
@@ -44,8 +48,19 @@ impl Installs {
         Self { dir, installer, known: Mutex::default() }
     }
 
-    pub(super) fn can_install(spec: &ServerSpec) -> bool {
-        recipe(spec).is_some()
+    pub(super) fn can_install(&self, spec: &ServerSpec, on_path: impl Fn(&str) -> bool) -> bool {
+        let Some(install) = recipe(spec) else { return false };
+        if self.dir.join(&spec.name).join(&install.program).is_file() {
+            return true;
+        }
+        install.recipe.tool().is_none_or(|(tool, _)| on_path(tool)) && !self.failed(&spec.name)
+    }
+
+    fn failed(&self, name: &str) -> bool {
+        let Ok(known) = self.known.lock() else { return false };
+        known.get(name).is_some_and(|installation| {
+            installation.state.lock().is_ok_and(|state| matches!(*state, State::Done { outcome: Err(_), .. }))
+        })
     }
 
     pub(super) fn program(&self, spec: &ServerSpec, wait: Wait, stop: &AtomicBool) -> Result<PathBuf, String> {
@@ -57,6 +72,7 @@ impl Installs {
             match known.get(&spec.name) {
                 Some(installation) => Arc::clone(installation),
                 None if program.is_file() => return Ok(program),
+                None if wait == Wait::Never => return Err(not_yet(spec)),
                 None => {
                     let installation =
                         Arc::new(Installation { state: Mutex::new(State::Running), done: Condvar::new() });
@@ -74,12 +90,15 @@ impl Installs {
         let server = name.to_owned();
         let unstarted = Arc::clone(&installation);
         let work = move || {
-            let outcome = match installer.install(&install, &home) {
-                Ok(()) if program.is_file() => Ok(program),
-                Ok(()) => {
+            let installed =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| installer.install(&install, &home)));
+            let outcome = match installed {
+                Ok(Ok(())) if program.is_file() => Ok(program),
+                Ok(Ok(())) => {
                     Err(format!("Could not install {server}: {} was not found after installing.", program.display()))
                 }
-                Err(reason) => Err(format!("Could not install {server}: {reason}")),
+                Ok(Err(reason)) => Err(format!("Could not install {server}: {reason}")),
+                Err(_) => Err(format!("Could not install {server}: the installer crashed.")),
             };
             installation.finish(outcome);
         };
@@ -91,9 +110,9 @@ impl Installs {
 
     pub(super) fn running(&self, name: &str) -> bool {
         let Ok(known) = self.known.lock() else { return false };
-        known.get(name).is_some_and(|installation| {
-            installation.state.lock().is_ok_and(|state| matches!(*state, State::Running))
-        })
+        known
+            .get(name)
+            .is_some_and(|installation| installation.state.lock().is_ok_and(|state| matches!(*state, State::Running)))
     }
 
     pub(super) fn sweep(&self, now: Instant, idle: Duration) {

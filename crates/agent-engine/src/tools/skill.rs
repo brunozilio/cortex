@@ -16,6 +16,14 @@ pub struct FoundSkill {
     pub file: PathBuf,
     #[serde(default = "invocation_enabled")]
     pub model_invocation: bool,
+    #[serde(default = "invocation_enabled")]
+    pub trusted: bool,
+}
+
+impl FoundSkill {
+    pub fn project_script(&self) -> bool {
+        !self.trusted && super::skill_script::is_script(&self.file)
+    }
 }
 
 fn invocation_enabled() -> bool {
@@ -23,30 +31,34 @@ fn invocation_enabled() -> bool {
 }
 pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill> {
     let cwd = &request.cwd;
-    let mut sources: Vec<(PathBuf, Option<String>)> = Vec::new();
+    let mut sources: Vec<(PathBuf, Option<String>, bool)> = Vec::new();
     for directory in cwd.ancestors() {
-        sources.push((directory.join(concat!(brand::dir!(), "/skills")), None));
+        let owners = home.is_some_and(|home| home == directory);
+        sources.push((directory.join(concat!(brand::dir!(), "/skills")), None, owners));
     }
     if let Some(home) = home {
-        sources.push((home.join(concat!(brand::dir!(), "/skills")), None));
+        sources.push((home.join(concat!(brand::dir!(), "/skills")), None, true));
     }
     for plugin in crate::plugins::found(request, home) {
-        sources.push((plugin.root.join("skills"), Some(plugin.name)));
+        sources.push((plugin.root.join("skills"), Some(plugin.name), true));
     }
     for dir in request.extensions.iter().flat_map(|extensions| &extensions.dirs) {
-        sources.push((dir.join("skills"), None));
+        sources.push((dir.join("skills"), None, true));
     }
     if let Some(builtin) = home.and_then(super::builtin_skills::dir) {
-        sources.push((builtin, None));
+        sources.push((builtin, None, true));
     }
     let mut found: Vec<FoundSkill> = Vec::new();
-    for (dir, namespace) in sources {
+    for (dir, namespace, trusted) in sources {
         for skill in scan(&dir, namespace.as_deref())
             .into_iter()
             .chain(scan_commands(&dir.with_file_name("commands"), namespace.as_deref()))
         {
-            if !found.iter().any(|known| known.name == skill.name) {
-                found.push(skill);
+            let skill = FoundSkill { trusted, ..skill };
+            match found.iter().position(|known| known.name == skill.name) {
+                None => found.push(skill),
+                Some(at) if skill.trusted && found[at].project_script() => found[at] = skill,
+                Some(_) => {}
             }
         }
     }
@@ -74,6 +86,7 @@ fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
                     description: described.description,
                     file,
                     model_invocation: described.model_invocation,
+                    trusted: true,
                 });
             }
             let text = std::fs::read_to_string(&file).ok()?;
@@ -87,7 +100,7 @@ fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
                 None => bare,
             };
             let model_invocation = front.get("disable-model-invocation").is_none_or(|v| v != "true");
-            Some(FoundSkill { name, description: description.trim().to_owned(), file, model_invocation })
+            Some(FoundSkill { name, description: description.trim().to_owned(), file, model_invocation, trusted: true })
         })
         .collect();
     skills.sort_by(|a, b| a.name.cmp(&b.name));
@@ -144,7 +157,7 @@ impl Tool for SkillTool {
     }
 }
 
-fn load(skill: &FoundSkill, args: &str, cwd: &Path, access: super::script_tool::ScriptAccess) -> Outcome {
+fn load(skill: &FoundSkill, args: &str, cwd: &Path, access: ScriptAccess) -> Outcome {
     let name = &skill.name;
     if super::skill_script::is_script(&skill.file) {
         return match super::skill_script::render(&skill.file, args, cwd, access) {
@@ -164,20 +177,42 @@ fn load(skill: &FoundSkill, args: &str, cwd: &Path, access: super::script_tool::
     }
     Outcome::ok(out)
 }
-pub fn expand_initial(initial: &str, skills: &[FoundSkill], cwd: &Path) -> Result<String, String> {
+use super::script_tool::ScriptAccess;
+
+pub fn expand_initial(
+    initial: &str,
+    skills: &[FoundSkill],
+    cwd: &Path,
+    access: ScriptAccess,
+) -> Result<String, String> {
     let initial = initial.trim();
     let Some(command) = initial.strip_prefix('/') else { return Ok(initial.into()) };
-    expand_command(initial, skills, cwd).unwrap_or_else(|| {
+    let unattended = |skill: &FoundSkill| if skill.project_script() { ScriptAccess::none() } else { access };
+    expand(initial, skills, cwd, unattended).unwrap_or_else(|| {
         let name = command.split_whitespace().next().unwrap_or_default();
         Err(format!("Initial command /{name} is not an available skill or custom command"))
     })
 }
 
-pub fn expand_command(prompt: &str, skills: &[FoundSkill], cwd: &Path) -> Option<Result<String, String>> {
+pub fn expand_command(
+    prompt: &str,
+    skills: &[FoundSkill],
+    cwd: &Path,
+    access: ScriptAccess,
+) -> Option<Result<String, String>> {
+    expand(prompt, skills, cwd, |_| access)
+}
+
+fn expand(
+    prompt: &str,
+    skills: &[FoundSkill],
+    cwd: &Path,
+    access: impl Fn(&FoundSkill) -> ScriptAccess,
+) -> Option<Result<String, String>> {
     let command = prompt.trim().strip_prefix('/')?;
     let (name, args) = command.split_once(char::is_whitespace).unwrap_or((command, ""));
     let skill = skills.iter().find(|skill| skill.name == name)?;
-    let loaded = load(skill, args.trim(), cwd, Default::default());
+    let loaded = load(skill, args.trim(), cwd, access(skill));
     Some(if loaded.is_error { Err(loaded.content) } else { Ok(loaded.content) })
 }
 fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
@@ -216,6 +251,7 @@ fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
             description,
             file: entry.path().into(),
             model_invocation: front.get("disable-model-invocation").is_none_or(|value| value != "true"),
+            trusted: true,
         });
     }
     found.sort_by(|a, b| a.name.cmp(&b.name));
@@ -223,49 +259,5 @@ fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
 }
 
 #[cfg(test)]
-mod tests {
-    use domain::{Extensions, ModelOption};
-
-    use super::*;
-
-    fn skill(dir: &Path, name: &str, description: &str) {
-        std::fs::create_dir_all(dir.join(name)).expect("dir");
-        let text = format!("---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n\nDo the {name} thing.\n");
-        std::fs::write(dir.join(name).join("SKILL.md"), text).expect("write");
-    }
-
-    #[test]
-    fn finds_the_project_s_the_user_s_and_the_host_s_skills() {
-        let repo = tempfile::tempdir().expect("repo");
-        let home = tempfile::tempdir().expect("home");
-        let plugin = tempfile::tempdir().expect("plugin");
-        skill(&repo.path().join(concat!(brand::dir!(), "/skills")), "release", "Cuts a release.");
-        skill(&home.path().join(concat!(brand::dir!(), "/skills")), "release", "The user's copy.");
-        skill(&home.path().join(concat!(brand::dir!(), "/skills")), "morning", "The morning briefing.");
-        skill(&plugin.path().join("skills"), "dataviz", "Charts.");
-        let model = ModelOption::new("m", "M");
-        let mut request = PromptRequest::plain(repo.path().to_path_buf(), "hi", model);
-        request.extensions = Some(Extensions { dirs: vec![plugin.path().to_path_buf()], ..Extensions::default() });
-        let found = discover(&request, Some(home.path()));
-        let names: Vec<(&str, &str)> = found.iter().map(|s| (s.name.as_str(), s.description.as_str())).collect();
-        assert_eq!(
-            &names[..3],
-            [("release", "Cuts a release."), ("morning", "The morning briefing."), ("dataviz", "Charts.")],
-            "the project's, the user's and the host's first"
-        );
-        assert!(
-            names[3..].iter().any(|(name, _)| *name == "code-review"),
-            "then {brand_name}'s own",
-            brand_name = brand::NAME
-        );
-        assert_eq!(listing(&found[..1]), "- release: Cuts a release.");
-
-        let tool = SkillTool { skills: found };
-        let loaded = tool.run(&json!({ "skill": "/dataviz", "args": "bar chart" }), &Workspace::new("/"));
-        assert!(!loaded.is_error);
-        assert!(loaded.content.starts_with("Skill dataviz (base directory for its files: "));
-        assert!(loaded.content.contains("Do the dataviz thing.") && loaded.content.ends_with("Arguments: bar chart"));
-        assert!(!loaded.content.contains("description:"), "the frontmatter stays behind");
-        assert!(tool.run(&json!({ "skill": "missing" }), &Workspace::new("/")).is_error);
-    }
-}
+#[path = "skill_tests.rs"]
+mod tests;
