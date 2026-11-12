@@ -170,8 +170,11 @@ tell the user which one you used.
 ## Other model settings
 
 - `smallModel`: runs the `Explore` agent when it names no model, and reads
-  the pages WebFetch fetches. It must be served by the session's provider
-  (an alias such as `haiku` works); otherwise the session's model is used.
+  the pages WebFetch fetches. Usually leave it unset: each run picks the
+  small model of the session's provider (the vendor's own, such as Haiku,
+  if the account offers it, else the cheapest priced model it lists).
+  Set it only to override that; an alias such as `haiku` works, and a model
+  the provider does not offer is ignored with a warning in the log.
 - `advisorModel`, `judgeModel`: the advisor and the verification judge.
 - `enabledProviders`: `["groq"]` lets a provider declared by the project
   in `{{DIR}}/providers/*.js` start. Only the user's own files

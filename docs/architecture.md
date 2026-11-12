@@ -253,8 +253,14 @@ Inbox notices are core (`TakeNotices`).
   (`upkeep::Counted`), old tool results are cleared first
   (`upkeep::clear_old_results`) and only then is the conversation
   summarised, with the last turn's tools and system so its cache is read.
-  The settings' `smallModel` runs `Explore` when it names no model and is
-  WebFetch's separate page reader (`tools/builtin/web/guarded.rs`).
+  The small model runs `Explore` when it names no model and is WebFetch's
+  separate page reader (`tools/builtin/web/guarded.rs`). Each run picks it
+  for the session's provider (`engine/small_model.rs`, rule in
+  `domain::small_model`): the settings' `smallModel` if the provider offers
+  it, else the vendor's `small()`, else the cheapest priced model in the
+  account's catalog (`ApiSource::catalog`, cached per provider), else the
+  session's model. A small model that fails hands WebFetch's page to the
+  session's model.
 - **Plan mode** (`agent/plan_mode.rs`): the top-level agent presents its
   plan with `ExitPlanMode` (`AskKind::Plan`); `Decision::Approve(mode)`
   switches the run's mode and the agent implements the plan in the same

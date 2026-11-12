@@ -48,6 +48,10 @@ impl Family for Vendor {
         }
     }
 
+    fn small(&self) -> Option<&'static str> {
+        Some("claude-haiku-5-5")
+    }
+
     fn effort(
         &self,
         body: &mut Value,

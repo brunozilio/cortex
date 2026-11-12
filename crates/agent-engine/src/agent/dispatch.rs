@@ -156,6 +156,7 @@ impl Agent<'_> {
             outcome.content = crate::tools::builtin::web::guarded::digest(
                 self.api,
                 &guarded,
+                &self.request.model,
                 url.unwrap_or_default(),
                 looking_for.unwrap_or_default(),
                 &outcome.content,

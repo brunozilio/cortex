@@ -61,6 +61,10 @@ pub trait Provider: Sync {
         vendor(self.vendor()).map_or_else(|| owner(model).is_some(), |vendor| vendor.owns(model))
     }
 
+    fn small_model(&self) -> Option<&'static str> {
+        vendor(self.vendor()).and_then(Vendor::small)
+    }
+
     fn turn_headers(&self, _model: Option<&ModelOption>, _body: &Value) -> Vec<(String, String)> {
         Vec::new()
     }

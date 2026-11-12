@@ -28,6 +28,10 @@ impl Family for Vendor {
         model.starts_with("gpt-") || ["o1", "o3", "o4"].iter().any(|prefix| model.starts_with(prefix))
     }
 
+    fn small(&self) -> Option<&'static str> {
+        Some("gpt-6-luna")
+    }
+
     fn reasons(&self, model: &str) -> bool {
         let lower = model.to_ascii_lowercase();
         REASONING.iter().any(|prefix| lower.starts_with(prefix))

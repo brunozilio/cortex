@@ -154,7 +154,16 @@ impl Job {
             Some(model) => vec![model.clone()],
             None => settings.fallbacks.clone(),
         };
-        workspace.small_model = settings.small_model.clone();
+        let small = super::small_model::pick(
+            self.request.model.provider,
+            &self.request.model.id,
+            settings.small_model.as_deref(),
+            &self.source.catalog(&self.request),
+        );
+        if let Some(why) = &small.ignored {
+            tracing::warn!("{why}");
+        }
+        workspace.small_model = small.model;
         workspace.network = Some(tools::Network(Arc::clone(&self.mcp)));
         workspace.added_dirs = crate::brief::added_dirs(&self.request, &settings.added_dirs, workspace.home.as_deref());
         workspace.hooks.extend(&agent_config.hooks);

@@ -29,6 +29,7 @@ pub mod request;
 pub mod routing;
 pub mod schedule;
 pub mod skill;
+pub mod small_model;
 pub mod trace;
 pub mod untrusted;
 pub mod usage;

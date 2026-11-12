@@ -5,6 +5,7 @@ mod moved;
 mod record;
 mod report;
 mod rewind;
+mod small_model;
 mod snapshot;
 
 use std::sync::Arc;
@@ -23,6 +24,10 @@ const MAX_OUTPUT: u32 = 64_000;
 
 pub trait ApiSource: Send + Sync {
     fn api(&self, request: &PromptRequest) -> Result<Arc<dyn ModelApi>, ModelError>;
+
+    fn catalog(&self, _request: &PromptRequest) -> Vec<ModelOption> {
+        Vec::new()
+    }
 }
 
 pub struct NativeEngine {

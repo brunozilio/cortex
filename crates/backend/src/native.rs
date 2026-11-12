@@ -1,8 +1,9 @@
+use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use agent_engine::model::http::{Http, NetHttp};
 use agent_engine::model::client::ProviderClient;
+use agent_engine::model::http::{Http, NetHttp};
 use domain::provider::ProviderKey;
 use domain::{ModelOption, ModelProvider, Principal, PromptRequest};
 
@@ -14,11 +15,12 @@ use crate::providers::ModelProviders;
 
 pub struct NativeApis {
     http: Arc<dyn Http>,
+    catalogs: Mutex<HashMap<ModelProvider, Vec<ModelOption>>>,
 }
 
 impl NativeApis {
     pub fn new(http: Arc<dyn Http>) -> Self {
-        Self { http }
+        Self { http, catalogs: Mutex::default() }
     }
 }
 
@@ -39,6 +41,22 @@ impl ApiSource for NativeApis {
             Arc::clone(&self.http),
             request.credentials.other_models.clone(),
         )))
+    }
+
+    fn catalog(&self, request: &PromptRequest) -> Vec<ModelOption> {
+        let provider = request.model.provider;
+        let mut catalogs = self.catalogs.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(known) = catalogs.get(&provider) {
+            return known.clone();
+        }
+        let Some(key) = request.credentials.model.clone() else { return Vec::new() };
+        let listed =
+            ProviderClient::new(provider, Arc::clone(&self.http), Arc::new(key)).models().unwrap_or_else(|error| {
+                tracing::warn!(%error, "could not list the provider's models to pick a small one");
+                Vec::new()
+            });
+        catalogs.insert(provider, listed.clone());
+        listed
     }
 }
 
@@ -182,6 +200,18 @@ mod tests {
         assert_eq!(http.sent()[1].url, "https://keyed.test/chat", "no prefix stays on the run's provider");
         let missing = ask("device-sub:auto").expect_err("not connected");
         assert!(matches!(missing, ModelError::Unauthorized(ref why) if why.contains("Device")), "{missing:?}");
+    }
+
+    #[test]
+    fn a_provider_s_catalog_is_listed_once_and_only_with_its_key() {
+        let page = r#"{"data":[{"id":"big"},{"id":"tiny"}]}"#.to_owned();
+        let http = Arc::new(ScriptedHttp::new([(200, page)]));
+        let apis = NativeApis::new(http.clone());
+        assert!(apis.catalog(&request(KEYED, None)).is_empty(), "no key, no listing");
+        let ids = |listed: Vec<ModelOption>| listed.into_iter().map(|m| m.id).collect::<Vec<_>>();
+        assert_eq!(ids(apis.catalog(&request(KEYED, Some("sk-one")))), ["keyed:big", "keyed:tiny"]);
+        assert_eq!(ids(apis.catalog(&request(KEYED, Some("sk-one")))), ["keyed:big", "keyed:tiny"]);
+        assert_eq!(http.sent().len(), 1, "the second run reads the cache");
     }
 
     #[test]

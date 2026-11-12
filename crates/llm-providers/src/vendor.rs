@@ -13,6 +13,10 @@ pub trait Vendor: Sync {
         None
     }
 
+    fn small(&self) -> Option<&'static str> {
+        None
+    }
+
     fn reasons(&self, _model: &str) -> bool {
         false
     }
