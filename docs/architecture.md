@@ -253,7 +253,8 @@ Inbox notices are core (`TakeNotices`).
   (`upkeep::Counted`), old tool results are cleared first
   (`upkeep::clear_old_results`) and only then is the conversation
   summarised, with the last turn's tools and system so its cache is read.
-  The settings' `smallModel` runs `Explore` when it names no model.
+  The settings' `smallModel` runs `Explore` when it names no model and is
+  WebFetch's separate page reader (`tools/builtin/web/guarded.rs`).
 - **Plan mode** (`agent/plan_mode.rs`): the top-level agent presents its
   plan with `ExitPlanMode` (`AskKind::Plan`); `Decision::Approve(mode)`
   switches the run's mode and the agent implements the plan in the same
