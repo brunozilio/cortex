@@ -63,7 +63,7 @@ fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
     let file = workspace.resolve(&query.file);
     let text =
         std::fs::read_to_string(&file).map_err(|error| format!("Cannot read {}: {error}", shown(&file, workspace)))?;
-    let opened = lsp.open(&file, &workspace.cwd, &workspace.stop)?;
+    let (opened, installed) = lsp.open(&file, &workspace.cwd, &workspace.stop)?;
     let server = &opened.server;
     server.sync(&file, &opened.language, &text)?;
     let line = text.lines().nth(query.line as usize - 1).unwrap_or_default();
@@ -77,7 +77,11 @@ fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
         read?.lines().nth(number as usize).map(str::to_owned)
     };
     let real = workspace.cwd.canonicalize().unwrap_or_else(|_| workspace.cwd.clone());
-    Ok(describe(query.operation, &answer, &[&workspace.cwd, &real], lines))
+    let described = describe(query.operation, &answer, &[&workspace.cwd, &real], lines);
+    Ok(match installed {
+        Some(name) => format!("Installed the {name} language server on first use.\n\n{described}"),
+        None => described,
+    })
 }
 
 #[cfg(test)]

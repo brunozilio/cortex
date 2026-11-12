@@ -377,10 +377,27 @@ diagnostics read. `agent_engine::lsp` runs them: `LspClient` (one
 process, `Content-Length` framing, a reader thread routing answers and
 published diagnostics) and `LspPool` (one server per name and root, kept
 by the `NativeEngine` across runs, ended after 10 idle minutes), behind
-`LanguageServers` so tests script them (`lsp::fake`). A run gets
-`Workspace::lsp` and the `LSP` tool only when one of its servers is
-installed; `Edit` and `Write` append the file's errors and warnings as
-`<diagnostics>`. `tests/real_lsp.rs` (ignored) runs against clangd.
+`LanguageServers` so tests script them (`lsp::fake`).
+
+A built-in server missing from PATH is installed on first use:
+`domain::lsp::install` says how for each platform (rust-analyzer's and
+clangd's GitHub releases, `npm install` for typescript, pinned to
+TypeScript 6 because 7 has no `tsserver`, and pyright, `go install` for
+gopls) and `lsp::Downloads` does it into `<local data>/lsp/<server>/`,
+staging in a sibling folder and renaming it into place. The backend's
+engine turns it on (`LspPool::installing`); without it only PATH
+counts. An install runs once, in the background: the `LSP` tool waits for
+it (`Wait::ForInstall`), `Edit`/`Write` diagnostics don't (`Wait::Never`),
+and a failure is kept and repeated until the pool's idle sweep forgets it.
+While one runs, an edit's `<diagnostics>` say the server is still
+installing, and the `LSP` answer that waited for it starts with
+"Installed the <server> language server on first use."
+A run gets `Workspace::lsp` and the `LSP` tool when one of its servers is
+available (on PATH or installable), and the system prompt's environment
+names those servers and their extensions; `Edit` and `Write` append the
+file's errors and warnings as `<diagnostics>`. `tests/real_lsp.rs`
+(ignored) runs against clangd and installs rust-analyzer, typescript and
+clangd from the network.
 
 ## Skills, agents and MCP
 

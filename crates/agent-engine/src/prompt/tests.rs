@@ -52,6 +52,29 @@ fn names_the_folders_added_to_the_project() {
 }
 
 #[test]
+fn shows_the_top_level_of_the_working_directory_when_known() {
+    let unknown = system(&environment());
+    assert!(!unknown.contains("is empty") && !unknown.contains("Top level"));
+    let mut empty = environment();
+    empty.top_level = Some(Vec::new());
+    assert!(system(&empty).contains(
+        "- Today: 2026-11-07\n- The working directory is empty (no files or folders except hidden ones starting with `.`); do not list it before starting.\n"
+    ));
+    let mut listed = environment();
+    listed.top_level = Some(vec!["README.md".into(), "src/".into()]);
+    assert!(system(&listed).contains(
+        "- Today: 2026-11-07\n- Top level of the working directory, hidden entries left out: README.md, src/\n"
+    ));
+}
+
+#[test]
+fn says_when_the_repository_has_no_commits_yet() {
+    let mut environment = environment();
+    environment.git = Some(GitSnapshot { branch: "main".into(), status: String::new(), recent: String::new() });
+    assert!(system(&environment).contains("Recent commits: (none yet)\n"));
+}
+
+#[test]
 fn says_where_it_runs_and_what_git_looked_like() {
     let mut environment = environment();
     environment.git =
@@ -125,6 +148,8 @@ fn reads_a_real_repository() {
         assert!(ok.status.success(), "{args:?}: {}", String::from_utf8_lossy(&ok.stderr));
     };
     git(&["init", "-q", "-b", "main"]);
+    let fresh = snapshot(repo.path()).expect("a repository without commits");
+    assert_eq!((fresh.branch.as_str(), fresh.recent.as_str()), ("main", ""));
     git(&["-c", "user.name=T", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "first"]);
     std::fs::write(repo.path().join("a.txt"), "a").expect("write");
     let found = snapshot(repo.path()).expect("snapshot");
@@ -189,4 +214,17 @@ fn the_turn_reminder_guides_planning_and_repeats_the_style() {
     let sub_agent = reminder(PermissionMode::Plan, 1, Some("Be concise."));
     assert!(!sub_agent.contains("Planning mode is on.") && !sub_agent.contains("Be concise."));
     assert!(!reminder(PermissionMode::Ask, 0, None).contains("Planning"));
+}
+
+#[test]
+fn names_the_language_servers_so_the_agent_reaches_for_the_lsp_tool() {
+    assert!(!system(&environment()).contains("Language servers"));
+    let mut served = environment();
+    served.language_servers = vec![
+        LanguageServer { name: "rust-analyzer".into(), extensions: vec![".rs".into()] },
+        LanguageServer { name: "typescript".into(), extensions: vec![".js".into(), ".ts".into()] },
+    ];
+    assert!(system(&served).contains(
+        "- Model: Qwen3.8 27B 8-bit\n- Language servers (the LSP tool; prefer it to Grep for definitions, references, callers and symbols): rust-analyzer (.rs), typescript (.js, .ts)\n"
+    ));
 }

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use agent_engine::lsp::{Downloads, IDLE, LspPool, Processes};
 use agent_engine::model::client::ProviderClient;
 use agent_engine::model::http::{Http, NetHttp};
 use domain::provider::ProviderKey;
@@ -107,10 +108,13 @@ pub fn declare_providers(home: Option<&Path>, cwd: &Path) -> Vec<String> {
 }
 
 pub const SESSIONS: &str = "native-sessions";
+pub const LANGUAGE_SERVERS: &str = "lsp";
 
 pub fn engine(data: &Path) -> NativeEngine {
     let apis = NativeApis::new(Arc::new(NetHttp));
+    let servers = LspPool::installing(Processes, IDLE, data.join(LANGUAGE_SERVERS), Downloads);
     NativeEngine::new(Arc::new(apis), Arc::new(FileSessions::new(data.join(SESSIONS))))
+        .with_language_servers(Arc::new(servers))
 }
 
 #[cfg(test)]

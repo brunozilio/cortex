@@ -1,5 +1,6 @@
 pub mod answer;
 pub mod diagnostics;
+pub mod install;
 pub mod operation;
 pub mod roots;
 pub mod servers;

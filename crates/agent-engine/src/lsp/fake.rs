@@ -7,7 +7,7 @@ use std::time::Duration;
 use domain::lsp::ServerSpec;
 use serde_json::Value;
 
-use super::{LanguageServer, LanguageServers, Lsp, Opened};
+use super::{LanguageServer, LanguageServers, Lsp, Opened, Wait};
 
 #[derive(Debug, Default)]
 pub struct ScriptedServer {
@@ -58,13 +58,17 @@ impl LanguageServer for ScriptedServer {
 struct ScriptedServers(Arc<ScriptedServer>);
 
 impl LanguageServers for ScriptedServers {
-    fn open(&self, file: &Path, specs: &[ServerSpec], cwd: &Path, _: &AtomicBool) -> Result<Opened, String> {
+    fn open(&self, file: &Path, specs: &[ServerSpec], cwd: &Path, _: &AtomicBool, _: Wait) -> Result<Opened, String> {
         let (_, language) = domain::lsp::server_for(file, specs).ok_or("No language server handles it.")?;
         let server: Arc<dyn LanguageServer> = self.0.clone();
         Ok(Opened { server, language: language.to_owned(), root: cwd.to_path_buf() })
     }
 
-    fn any_installed(&self, specs: &[ServerSpec]) -> bool {
-        !specs.is_empty()
+    fn available(&self, specs: &[ServerSpec]) -> Vec<ServerSpec> {
+        specs.to_vec()
+    }
+
+    fn installing(&self, _: &Path, _: &[ServerSpec]) -> Option<String> {
+        None
     }
 }

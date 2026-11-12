@@ -5,11 +5,12 @@ use std::time::Duration;
 
 use agent_engine::NativeEngine;
 use agent_engine::lsp::fake::ScriptedServer;
-use agent_engine::lsp::{LanguageServer, LspPool, Starter};
+use agent_engine::lsp::{Installer, LanguageServer, LspPool, Starter};
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
 use domain::lsp::ServerSpec;
+use domain::lsp::install::Install;
 use domain::{EngineEvent, PromptRequest};
 use serde_json::json;
 
@@ -83,4 +84,27 @@ fn without_an_installed_server_the_tool_is_not_offered() {
     let engine = engine(vec![agent.clone()]).with_language_servers(pool);
     finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "hi", model())));
     assert!(!offered(&agent).contains(&"LSP".to_owned()), "{:?}", offered(&agent));
+    assert!(!agent.asked()[0].system.contains("Language servers"));
+}
+
+struct Offline;
+
+impl Installer for Offline {
+    fn install(&self, _: &Install, _: &Path) -> Result<(), String> {
+        Err("offline".into())
+    }
+}
+
+#[test]
+fn servers_it_can_install_are_offered_and_named_in_the_environment() {
+    let dir = tempfile::tempdir().expect("dir");
+    let data = tempfile::tempdir().expect("data");
+    let agent = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));
+    let pool = LspPool::installing(NothingInstalled, Duration::from_secs(60), data.path().into(), Offline);
+    let engine = engine(vec![agent.clone()]).with_language_servers(Arc::new(pool));
+    finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "hi", model())));
+    assert!(offered(&agent).contains(&"LSP".to_owned()), "{:?}", offered(&agent));
+    let system = &agent.asked()[0].system;
+    let line = system.lines().find(|line| line.starts_with("- Language servers")).expect("named");
+    assert!(line.contains("rust-analyzer (.rs)") && line.contains(".tsx"), "{line}");
 }

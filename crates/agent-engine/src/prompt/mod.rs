@@ -3,6 +3,7 @@ mod instruction_files;
 pub(crate) mod markdown;
 pub(crate) mod permissions;
 mod render;
+mod top_level;
 pub use render::render;
 pub mod rules;
 pub mod settings;
@@ -13,6 +14,7 @@ use std::path::{Path, PathBuf};
 
 use domain::PromptRequest;
 pub use git::{GitSnapshot, Snapshot, snapshot};
+pub use top_level::top_level;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Scope {
@@ -39,12 +41,26 @@ pub struct Instructions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LanguageServer {
+    pub name: String,
+    pub extensions: Vec<String>,
+}
+
+impl LanguageServer {
+    pub fn of(spec: &domain::lsp::ServerSpec) -> Self {
+        Self { name: spec.name.clone(), extensions: spec.extension_to_language.keys().cloned().collect() }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Environment {
     pub cwd: PathBuf,
     pub added_dirs: Vec<PathBuf>,
     pub platform: &'static str,
     pub date: String,
+    pub top_level: Option<Vec<String>>,
     pub model: String,
+    pub language_servers: Vec<LanguageServer>,
     pub git: Option<GitSnapshot>,
     pub instructions: Vec<Instructions>,
     pub tools: Vec<String>,
@@ -60,7 +76,11 @@ impl Environment {
             "added_dirs": self.added_dirs.iter().map(|dir| shown(dir)).collect::<Vec<_>>(),
             "platform": self.platform,
             "date": self.date,
+            "top_level": self.top_level,
             "model": self.model,
+            "language_servers": self.language_servers.iter().map(|server| serde_json::json!({
+                "name": server.name, "extensions": server.extensions,
+            })).collect::<Vec<_>>(),
             "git": self.git.as_ref().map(|git| serde_json::json!({
                 "branch": git.branch, "status": git.status, "recent": git.recent,
             })),

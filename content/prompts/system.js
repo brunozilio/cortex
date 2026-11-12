@@ -38,8 +38,18 @@ export default function system(ctx) {
   prompt += `- Git repository: ${ctx.git ? "yes" : "no"}\n`;
   prompt += `- Platform: ${ctx.platform}\n`;
   prompt += `- Today: ${ctx.date}\n`;
+  if (ctx.top_level && ctx.top_level.length === 0) {
+    prompt +=
+      "- The working directory is empty (no files or folders except hidden ones starting with `.`); do not list it before starting.\n";
+  } else if (ctx.top_level) {
+    prompt += `- Top level of the working directory, hidden entries left out: ${ctx.top_level.join(", ")}\n`;
+  }
   if (ctx.model) {
     prompt += `- Model: ${ctx.model}\n`;
+  }
+  if (ctx.language_servers.length > 0) {
+    const servers = ctx.language_servers.map((server) => `${server.name} (${server.extensions.join(", ")})`);
+    prompt += `- Language servers (the LSP tool; prefer it to Grep for definitions, references, callers and symbols): ${servers.join(", ")}\n`;
   }
   if (ctx.git) {
     prompt += ctx.include("prompts/git.js");

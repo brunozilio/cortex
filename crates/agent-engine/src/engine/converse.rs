@@ -47,7 +47,8 @@ impl Job {
             instructions,
         } = prepared;
         let git = runtime_guard.setup.context.as_ref().and_then(|b| b.git.clone()).or(git);
-        let snapshot = self.session_snapshot(&session, prompt::Snapshot { date: today(), git });
+        let top_level = prompt::top_level(&self.workspace.cwd);
+        let snapshot = self.session_snapshot(&session, prompt::Snapshot { date: today(), git, top_level });
         if let Some(recorder) = &self.recorder {
             recorder.opened(domain::trace::RunInfo {
                 model: self.request.model.id.clone(),
@@ -65,7 +66,14 @@ impl Job {
             added_dirs: self.workspace.added_dirs.clone(),
             platform: prompt::platform(),
             date: snapshot.date,
+            top_level: snapshot.top_level,
             model: self.request.model.label.clone(),
+            language_servers: self
+                .workspace
+                .lsp
+                .as_ref()
+                .map(|lsp| lsp.specs.iter().map(prompt::LanguageServer::of).collect())
+                .unwrap_or_default(),
             git: snapshot.git,
             instructions: runtime_guard.setup.context.as_ref().map(|b| b.instructions.clone()).unwrap_or(instructions),
             tools: tools.iter().map(|tool| tool.spec().name).collect(),

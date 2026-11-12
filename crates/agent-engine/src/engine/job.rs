@@ -65,9 +65,10 @@ impl Job {
         let workspace = Arc::get_mut(&mut self.workspace).expect("workspace is not shared before starting tools");
         workspace.rules = brief.rules;
         let mut tools = tools::standard();
-        let specs = Arc::new(domain::lsp::servers(domain::lsp::defaults(), &brief.settings.lsp_servers));
-        if self.lsp.any_installed(&specs) {
-            workspace.lsp = Some(crate::lsp::Lsp { servers: Arc::clone(&self.lsp), specs });
+        let specs = domain::lsp::servers(domain::lsp::defaults(), &brief.settings.lsp_servers);
+        let usable = self.lsp.available(&specs);
+        if !usable.is_empty() {
+            workspace.lsp = Some(crate::lsp::Lsp { servers: Arc::clone(&self.lsp), specs: Arc::new(usable) });
             tools.push(Box::new(tools::Lsp));
         }
         let skills = brief.skills;
