@@ -152,3 +152,27 @@ fn a_tool_that_may_change_things_is_asked_about_every_time_and_a_met_condition_s
     assert_eq!(calls.load(Ordering::Relaxed), 1, "a denied watch never called the tool");
     assert!(agent_engine::tools::watch::list(9402).is_empty());
 }
+
+#[test]
+fn after_starting_a_watch_the_run_cannot_schedule_wakeups_or_watch_the_same_call_again() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    rig.workspace.credentials.client = 9403;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let issue = Issue { read_only: true, calls: Arc::clone(&calls), statuses: &["Em análise"] };
+    let wakeup = json!({ "delaySeconds": 120, "prompt": "check KAN-1", "reason": "waiting" });
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![watch("w1", "mcp__jira__getIssue")]),
+        ScriptedModel::reply(vec![tool_use("s1", "ScheduleWakeup", wakeup)]),
+        ScriptedModel::reply(vec![watch("w2", "mcp__jira__getIssue")]),
+        ScriptedModel::reply(vec![Block::Text("Waiting for the watch.".into())]),
+    ]);
+    rig.run_with(&model, &mut vec![Message::user("commit when KAN-1 is done")], vec![Box::new(issue)]).expect("run");
+
+    let results = results(&rig);
+    assert!(results[0].1.starts_with("Watching as watch_"), "{results:?}");
+    assert!(results[1].0 && results[1].1.contains("already checks for you"), "{results:?}");
+    assert!(results[2].0 && results[2].1.contains("already watches mcp__jira__getIssue"), "{results:?}");
+    assert_eq!(calls.load(Ordering::Relaxed), 1, "neither refusal called the tool");
+    assert!(agent_engine::tools::builtin::schedules::list(9403).is_empty(), "no wakeup was kept");
+    agent_engine::tools::watch::forget_client(9403);
+}

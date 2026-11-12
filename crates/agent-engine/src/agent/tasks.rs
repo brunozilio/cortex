@@ -15,11 +15,24 @@ pub(super) struct Tasks {
     pub(super) background: Mutex<BTreeMap<String, Arc<Task>>>,
     pub(super) conversations: Conversations,
     pub(super) repeats: Mutex<domain::repeats::Repeats>,
+    pub(super) watches: Mutex<Vec<String>>,
 }
 
 impl Tasks {
     pub(super) fn admit(&self, name: &str, input: &Value, may_change: bool) -> bool {
         self.repeats.lock().map_or(true, |mut repeats| repeats.admit(name, &input.to_string(), may_change))
+    }
+
+    pub(super) fn watched(&self, id: String) {
+        if let Ok(mut watches) = self.watches.lock() {
+            watches.push(id);
+        }
+    }
+
+    pub(super) fn still_watching(&self, client: u64) -> Vec<String> {
+        let active = crate::tools::watch::active(client);
+        let started = self.watches.lock().map(|watches| watches.clone()).unwrap_or_default();
+        started.into_iter().filter(|id| active.iter().any(|watch| watch.id == *id)).collect()
     }
 }
 

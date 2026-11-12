@@ -55,6 +55,8 @@ struct Entry {
     client: u64,
     stop: Arc<AtomicBool>,
     explained: String,
+    tool: String,
+    input: Value,
 }
 
 fn lock() -> std::sync::MutexGuard<'static, HashMap<String, Entry>> {
@@ -69,7 +71,8 @@ pub fn start(watching: Watching, tool: Arc<dyn Tool>, workspace: &Workspace) -> 
     let stop = Arc::new(AtomicBool::new(false));
     let workspace = workspace.fork(Arc::clone(&stop));
     let explained = watching.plan.explained();
-    lock().insert(id.clone(), Entry { client, stop: Arc::clone(&stop), explained });
+    let (tool_name, input) = (watching.plan.tool.clone(), watching.plan.input.clone());
+    lock().insert(id.clone(), Entry { client, stop: Arc::clone(&stop), explained, tool: tool_name, input });
     let source = format!("watch {id}");
     let thread_id = id.clone();
     std::thread::spawn(move || {
@@ -127,6 +130,18 @@ pub fn list(client: u64) -> Vec<(String, String)> {
         .collect();
     listed.sort();
     listed
+}
+
+pub fn active(client: u64) -> Vec<domain::watch::Active> {
+    lock()
+        .iter()
+        .filter(|(_, entry)| entry.client == client)
+        .map(|(id, entry)| domain::watch::Active {
+            id: id.clone(),
+            tool: entry.tool.clone(),
+            input: entry.input.clone(),
+        })
+        .collect()
 }
 
 pub fn forget_client(client: u64) {

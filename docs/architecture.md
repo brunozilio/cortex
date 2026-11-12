@@ -234,7 +234,11 @@ Inbox notices are core (`TakeNotices`).
   `Monitor`'s; loop-run tools cannot be watched. An MCP tool keeps its
   server (`Tool::kept`) after the run ends, with the run's sign-in, so a
   token that expires ends the watch with the failure. `KillShell` and
-  `/bashes` stop and list watches; a client's go when it does.
+  `/bashes` stop and list watches; a client's go when it does. A run
+  that started a watch still running cannot call `ScheduleWakeup` or
+  `CronCreate`, and a second watch of the same tool and input is refused
+  (`domain::watch::while_watching`, `duplicate`): the agent is told to
+  end its turn and wait for the event.
 - **Scheduled prompts**: `CronCreate`/`CronList`/`CronDelete` and
   `ScheduleWakeup` keep prompts per client (`tools::schedules`, like the
   background shells; cron parsing and matching in `domain::schedule`,

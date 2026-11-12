@@ -72,6 +72,10 @@ impl Agent<'_> {
             && !tasks.admit(name, input, tool.is_some_and(|tool| tool.access() != crate::tools::Access::Reads))
         {
             Outcome::error(domain::repeats::refused(name))
+        } else if let Some(refusal) =
+            domain::watch::while_watching(name, &tasks.still_watching(self.workspace.credentials.client))
+        {
+            Outcome::error(refusal)
         } else if name == "TaskOutput" {
             tasks.output(input)
         } else if name == "TaskStop" {
@@ -111,7 +115,7 @@ impl Agent<'_> {
                     self.permitted(id, &message, &summary, input, pre.permission.as_deref())
                 }
                 Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
-                Some(_) if name == crate::tools::watch::WATCH_TOOL => self.watch(id, input),
+                Some(_) if name == crate::tools::watch::WATCH_TOOL => self.watch(id, input, tasks),
                 Some(tool) if tool.script().is_some() => match tool.script() {
                     Some(script) => self.script_call(id, script, &summary, input, parent, pre.permission.as_deref()),
                     None => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),

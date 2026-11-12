@@ -4,6 +4,7 @@ use domain::watch::{Plan, Step, Watching};
 use serde_json::Value;
 
 use super::Agent;
+use super::tasks::Tasks;
 use crate::tools::watch::WATCH_TOOL;
 use crate::tools::{Access, Outcome, Tool};
 
@@ -22,11 +23,15 @@ const RUN_BY_THE_LOOP: [&str; 11] = [
 ];
 
 impl Agent<'_> {
-    pub(super) fn watch(&self, id: &str, input: &Value) -> Outcome {
+    pub(super) fn watch(&self, id: &str, input: &Value, tasks: &Tasks) -> Outcome {
         let plan = match Plan::parse(input) {
             Ok(plan) => plan,
             Err(error) => return Outcome::error(error),
         };
+        let active = crate::tools::watch::active(self.workspace.credentials.client);
+        if let Some(refusal) = domain::watch::duplicate(&plan.tool, &plan.input, &active) {
+            return Outcome::error(refusal);
+        }
         let name = plan.tool.as_str();
         let Some(target) = self.tools.iter().find(|tool| tool.spec().name == name) else {
             return Outcome::error(format!("There is no tool named {name} to watch."));
@@ -58,6 +63,7 @@ impl Agent<'_> {
         }
         let explained = watching.plan.explained();
         let watch = crate::tools::watch::start(watching, kept, self.workspace);
+        tasks.watched(watch.clone());
         Outcome::ok(format!(
             "Watching as {watch}: {explained}. Checks run without you; you are told once, when it is met or if the \
              watch gives up, and that event reaches you as a new message even while the chat is idle. End your turn \
