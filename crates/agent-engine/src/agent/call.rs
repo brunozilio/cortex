@@ -88,6 +88,22 @@ impl Agent<'_> {
         }
     }
 
+    pub(super) fn open_tasks(&self) -> Vec<String> {
+        let Some(list) = self.tools.iter().find(|tool| tool.spec().name == "TaskList") else { return Vec::new() };
+        let Ok(Value::Array(tasks)) = serde_json::from_str::<Value>(&list.run(&json!({}), self.workspace).content)
+        else {
+            return Vec::new();
+        };
+        tasks
+            .iter()
+            .filter(|task| task["status"].as_str() != Some("completed"))
+            .map(|task| {
+                let status = task["status"].as_str().unwrap_or("pending");
+                format!("{} ({status})", task["subject"].as_str().unwrap_or_default())
+            })
+            .collect()
+    }
+
     pub(super) fn emit_tasks(&self) {
         let Some(list) = self.tools.iter().find(|tool| tool.spec().name == "TaskList") else { return };
         let listed = list.run(&json!({}), self.workspace);

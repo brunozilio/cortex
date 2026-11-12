@@ -3,9 +3,22 @@ use crate::transcript::{Block, Message, Role};
 #[derive(Debug, Default)]
 pub struct Reminders {
     sent: Option<String>,
+    quiet_tasks: usize,
 }
 
 impl Reminders {
+    pub fn observe(&mut self, calls: &[(String, String, serde_json::Value)]) {
+        if calls.iter().any(|(_, name, _)| name.starts_with("Task") && name != "TaskOutput" && name != "TaskStop") {
+            self.quiet_tasks = 0;
+        } else if !calls.is_empty() {
+            self.quiet_tasks += 1;
+        }
+    }
+
+    pub fn quiet_tasks(&self) -> usize {
+        self.quiet_tasks
+    }
+
     pub fn deliver(&mut self, current: String, history: &mut Vec<Message>) {
         if self.sent.as_ref() == Some(&current) || current.trim().is_empty() {
             return;
@@ -24,7 +37,7 @@ impl Reminders {
 }
 
 impl super::Agent<'_> {
-    pub(super) fn runtime_reminder(&self, used: u64, threshold: u64) -> String {
+    pub(super) fn runtime_reminder(&self, used: u64, threshold: u64, quiet_tasks: usize) -> String {
         let context = self.workspace.prompt_context.as_ref();
         let style = context.and_then(|context| context.output_style.as_ref());
         let reminder =
@@ -33,14 +46,32 @@ impl super::Agent<'_> {
         let offers_search = self.request.tools.iter().any(|spec| spec.name == crate::tools::tool_search::TOOL_SEARCH);
         let deferred =
             self.workspace.deferred.as_ref().filter(|_| offers_search).map(|deferred| deferred.announcement());
-        let notes: String =
-            [deferred, context.and_then(|context| date_changed(&context.date, &today)), context_left(used, threshold)]
-                .into_iter()
-                .flatten()
-                .map(|note| format!("\n\n{note}"))
-                .collect();
+        let tasks = if quiet_tasks >= QUIET_TURNS { self.open_tasks() } else { Vec::new() };
+        let notes: String = [
+            deferred,
+            context.and_then(|context| date_changed(&context.date, &today)),
+            context_left(used, threshold),
+            tasks_left_alone(quiet_tasks, &tasks),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|note| format!("\n\n{note}"))
+        .collect();
         format!("{reminder}{}{notes}", self.workspace.rule_instructions())
     }
+}
+
+pub const QUIET_TURNS: usize = 10;
+
+pub fn tasks_left_alone(quiet_turns: usize, open: &[String]) -> Option<String> {
+    if quiet_turns < QUIET_TURNS || open.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "The task tools have not been used for a while. If the list below is stale, update it: mark finished tasks \
+         completed and drop the ones that no longer apply. Do not mention this reminder to the user.\n{}",
+        open.iter().map(|task| format!("- {task}")).collect::<Vec<_>>().join("\n")
+    ))
 }
 
 pub fn date_changed(session_date: &str, today: &str) -> Option<String> {
@@ -67,6 +98,28 @@ pub fn context_left(used: u64, threshold: u64) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn turns_with_tools_but_no_task_tool_count_as_quiet() {
+        let call = |name: &str| vec![("1".to_owned(), name.to_owned(), serde_json::Value::Null)];
+        let mut reminders = Reminders::default();
+        reminders.observe(&call("Read"));
+        reminders.observe(&call("TaskOutput"));
+        reminders.observe(&[]);
+        assert_eq!(reminders.quiet_tasks(), 2, "a final answer is not a quiet turn");
+        reminders.observe(&call("TaskUpdate"));
+        assert_eq!(reminders.quiet_tasks(), 0);
+    }
+
+    #[test]
+    fn open_tasks_are_recalled_only_after_the_task_tools_went_quiet() {
+        let open = vec!["Write the test (in_progress)".to_owned()];
+        assert_eq!(tasks_left_alone(QUIET_TURNS - 1, &open), None);
+        assert_eq!(tasks_left_alone(QUIET_TURNS, &[]), None, "nothing open, nothing to say");
+        let note = tasks_left_alone(QUIET_TURNS, &open).expect("note");
+        assert!(note.contains("- Write the test (in_progress)"));
+        assert_eq!(tasks_left_alone(QUIET_TURNS + 5, &open), Some(note), "the same text, so it is sent once");
+    }
 
     #[test]
     fn a_new_day_is_told_once_it_differs_from_the_session_s() {

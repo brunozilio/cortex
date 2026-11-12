@@ -127,7 +127,7 @@ impl Agent<'_> {
                 (self.emit)(EngineEvent::Compacted(compaction));
                 compacted_at = Some(history.len());
             }
-            reminders.deliver(self.runtime_reminder(used, threshold), history);
+            reminders.deliver(self.runtime_reminder(used, threshold, reminders.quiet_tasks()), history);
             let mut request = TurnRequest { messages: history.clone(), ..self.turn_template(fell_back.as_ref()) };
             self.intercept_request(&mut request, &rejections)?;
             let holds_text = self.holds_text();
@@ -175,6 +175,7 @@ impl Agent<'_> {
             if cutoffs.ask_again_for_empty(&reply, !calls.is_empty()) {
                 continue;
             }
+            reminders.observe(&calls);
             if let Some(safety) = &self.workspace.safety {
                 safety.observe(history);
             }

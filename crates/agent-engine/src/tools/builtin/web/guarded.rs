@@ -15,6 +15,19 @@ pub fn fenced(page: &str) -> String {
     )
 }
 
+pub fn reader(small_model: Option<&str>, parent: &TurnRequest, provider: domain::ModelProvider) -> TurnRequest {
+    let config =
+        crate::tools::subagent_config::AgentConfig { model: small_model.map(str::to_owned), ..Default::default() };
+    TurnRequest {
+        model: config.model(&parent.model, provider).unwrap_or_else(|_| parent.model.clone()),
+        system: String::new(),
+        messages: Vec::new(),
+        tools: Vec::new(),
+        effort: parent.effort,
+        max_tokens: parent.max_tokens,
+    }
+}
+
 pub fn request(template: &TurnRequest, url: &str, looking_for: &str, page: &str) -> TurnRequest {
     TurnRequest {
         system: crate::prompt::text("web-reader"),
@@ -62,6 +75,21 @@ mod tests {
             effort: domain::Effort::High,
             max_tokens: 32_000,
         }
+    }
+
+    #[test]
+    fn the_page_goes_to_the_small_model_when_one_is_set() {
+        let provider = domain::ModelProvider::new("anthropic");
+        let parent = template();
+        assert_eq!(reader(None, &parent, provider).model, "m");
+        assert_eq!(reader(Some("haiku"), &parent, provider).model, "claude-haiku-5-5");
+        let unknown = domain::ModelProvider::new("nobody");
+        assert_eq!(
+            reader(Some("elsewhere"), &parent, unknown).model,
+            "m",
+            "a model the provider cannot serve falls back"
+        );
+        assert!(reader(None, &parent, provider).messages.is_empty(), "the conversation is not copied");
     }
 
     #[test]

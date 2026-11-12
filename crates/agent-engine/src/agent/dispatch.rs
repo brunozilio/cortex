@@ -148,9 +148,14 @@ impl Agent<'_> {
         outcome.content = domain::untrusted::neutralize(&outcome.content);
         if name == "WebFetch" && !outcome.is_error {
             let (url, looking_for) = (crate::tools::field(input, "url"), crate::tools::field(input, "prompt"));
+            let guarded = crate::tools::builtin::web::guarded::reader(
+                self.workspace.small_model.as_deref(),
+                &self.request,
+                self.workspace.model.provider,
+            );
             outcome.content = crate::tools::builtin::web::guarded::digest(
                 self.api,
-                &self.request,
+                &guarded,
                 url.unwrap_or_default(),
                 looking_for.unwrap_or_default(),
                 &outcome.content,
