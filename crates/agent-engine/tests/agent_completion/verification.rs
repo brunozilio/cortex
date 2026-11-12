@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use agent_engine::{
     agent::Agent,
     control::Control,
-
     model::{TurnRequest, scripted::ScriptedModel},
     tools::{self, Verification, Workspace, subagent::AgentTool},
     transcript::Message,
@@ -16,6 +15,10 @@ use super::{call, done};
 const PASS: &str = r#"{"passed":true,"checks":[{"criterion":"hello.txt says oi","passed":true,"evidence":"cat: oi"}]}"#;
 const FAIL: &str =
     r#"{"passed":false,"checks":[{"criterion":"hello.txt says oi","passed":false,"evidence":"cat: ola"}]}"#;
+
+fn wrote(text: &str) -> Result<agent_engine::model::Reply, agent_engine::model::ModelError> {
+    ScriptedModel::reply(vec![call("w", "Write", json!({"file_path":"hello.txt","content":text}))])
+}
 
 fn judged(workspace: &mut Workspace) {
     workspace.verification =
@@ -64,19 +67,19 @@ fn a_failed_verification_sends_the_agent_back_with_the_judges_reasons() {
     let dir = tempfile::tempdir().expect("dir");
     let mut workspace = Workspace::new(dir.path());
     judged(&mut workspace);
-    let model = ScriptedModel::new([done("Wrote ola"), done(FAIL), done("Fixed to oi"), done(PASS)]);
+    let model = ScriptedModel::new([wrote("ola"), done("Wrote ola"), done(FAIL), done("Fixed to oi"), done(PASS)]);
     let events = run(&model, &workspace);
     let verdicts = verdicts(&events);
     assert_eq!(verdicts.iter().map(|v| (v.passed, v.attempt)).collect::<Vec<_>>(), vec![(false, 1), (true, 2)]);
     let asked = model.asked();
-    assert_eq!(asked.len(), 4);
-    let judge = &asked[1];
+    assert_eq!(asked.len(), 5);
+    let judge = &asked[2];
     let mut tools: Vec<_> = judge.tools.iter().map(|spec| spec.name.as_str()).collect();
     tools.sort_unstable();
     assert_eq!(tools, ["Bash", "Glob", "Grep", "Read", "Skill"], "the judge checks, it never edits");
     let brief = judge.messages[0].text();
     assert!(brief.contains("hello.txt says oi") && brief.contains("Wrote ola"), "{brief}");
-    let retry = asked[2].messages.last().expect("feedback").text();
+    let retry = asked[3].messages.last().expect("feedback").text();
     assert!(retry.contains("Verification failed (attempt 1/3)") && retry.contains("cat: ola"), "{retry}");
 }
 
@@ -85,11 +88,36 @@ fn the_run_completes_after_the_last_failed_attempt() {
     let dir = tempfile::tempdir().expect("dir");
     let mut workspace = Workspace::new(dir.path());
     judged(&mut workspace);
-    let model = ScriptedModel::new([done("a"), done(FAIL), done("b"), done(FAIL), done("c"), done(FAIL)]);
+    let model = ScriptedModel::new([wrote("a"), done("a"), done(FAIL), done("b"), done(FAIL), done("c"), done(FAIL)]);
     let verdicts = verdicts(&run(&model, &workspace));
     assert_eq!(verdicts.iter().map(|v| v.attempt).collect::<Vec<_>>(), vec![1, 2, 3]);
     assert!(verdicts.iter().all(|v| !v.passed));
-    assert_eq!(model.asked().len(), 6);
+    assert_eq!(model.asked().len(), 7);
+}
+
+#[test]
+fn an_answer_that_used_no_tool_is_not_judged() {
+    let dir = tempfile::tempdir().expect("dir");
+    let mut workspace = Workspace::new(dir.path());
+    judged(&mut workspace);
+    let model = ScriptedModel::new([done("It is a REST API")]);
+    assert!(verdicts(&run(&model, &workspace)).is_empty());
+    assert_eq!(model.asked().len(), 1);
+}
+
+#[test]
+fn what_the_judge_leaves_running_in_the_background_is_stopped() {
+    let dir = tempfile::tempdir().expect("dir");
+    let mut workspace = Workspace::new(dir.path());
+    judged(&mut workspace);
+    let serve = call("serve", "Bash", json!({"command":"sleep 30","run_in_background":true}));
+    let model = ScriptedModel::new([wrote("oi"), done("Done"), ScriptedModel::reply(vec![serve]), done(PASS)]);
+    run(&model, &workspace);
+    let running: Vec<_> = tools::builtin::shell::shells::list(workspace.credentials.client)
+        .into_iter()
+        .filter(|(_, _, running)| *running)
+        .collect();
+    assert!(running.is_empty(), "{running:?}");
 }
 
 #[test]
@@ -106,11 +134,11 @@ fn a_judge_without_a_verdict_fails_the_check_but_not_the_run() {
     let dir = tempfile::tempdir().expect("dir");
     let mut workspace = Workspace::new(dir.path());
     judged(&mut workspace);
-    let model = ScriptedModel::new([done("Done"), done("Looks fine to me")]);
+    let model = ScriptedModel::new([wrote("oi"), done("Done"), done("Looks fine to me")]);
     let verdicts = verdicts(&run(&model, &workspace));
     assert_eq!(verdicts.len(), 1);
     assert!(!verdicts[0].passed && verdicts[0].checks[0].evidence.contains("no JSON verdict"));
-    assert_eq!(model.asked().len(), 2, "an unusable judge is not retried");
+    assert_eq!(model.asked().len(), 3, "an unusable judge is not retried");
 }
 
 #[test]
@@ -119,6 +147,7 @@ fn the_judge_runs_commands_and_the_user_watches_it_as_an_agent() {
     let mut workspace = Workspace::new(dir.path());
     judged(&mut workspace);
     let model = ScriptedModel::new([
+        wrote("oi"),
         done("Done"),
         ScriptedModel::reply(vec![call("check", "Bash", json!({"command":"echo checked"}))]),
         done(PASS),

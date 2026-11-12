@@ -9,6 +9,8 @@ use crate::model::ToolSpec;
 pub const TOOL_SEARCH: &str = "ToolSearch";
 const DEFER_OVER: usize = 20;
 const FOUND: usize = 5;
+const MIN_WORD: usize = 3;
+const NAME_WEIGHT: usize = 3;
 
 #[derive(Debug, Default)]
 pub struct Deferred {
@@ -27,6 +29,11 @@ impl Deferred {
         Self { specs, loaded: Mutex::default() }
     }
 
+    pub fn waiting(&self) -> Vec<&str> {
+        let loaded = self.loaded.lock().map(|loaded| loaded.clone()).unwrap_or_default();
+        self.specs.iter().map(|spec| spec.name.as_str()).filter(|name| !loaded.contains(*name)).collect()
+    }
+
     pub fn is_loaded(&self, name: &str) -> bool {
         self.loaded.lock().is_ok_and(|loaded| loaded.contains(name))
     }
@@ -38,13 +45,28 @@ impl Deferred {
                 self.specs.iter().filter(|spec| names.contains(&spec.name.as_str())).collect()
             }
             None => {
-                let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+                let words: Vec<String> = query
+                    .split_whitespace()
+                    .map(str::to_lowercase)
+                    .filter(|word| word.chars().count() >= MIN_WORD)
+                    .collect();
                 let mut scored: Vec<(usize, &ToolSpec)> = self
                     .specs
                     .iter()
                     .map(|spec| {
-                        let text = format!("{} {}", spec.name, spec.description).to_lowercase();
-                        (words.iter().filter(|word| text.contains(word.as_str())).count(), spec)
+                        let name = spec.name.to_lowercase();
+                        let description = spec.description.to_lowercase();
+                        let score = words
+                            .iter()
+                            .map(|word| {
+                                if name.contains(word.as_str()) {
+                                    NAME_WEIGHT
+                                } else {
+                                    usize::from(description.contains(word.as_str()))
+                                }
+                            })
+                            .sum();
+                        (score, spec)
                     })
                     .filter(|(score, _)| *score > 0)
                     .collect();
@@ -117,8 +139,18 @@ impl Tool for ToolSearch {
             .iter()
             .map(|spec| json!({ "name": spec.name, "description": spec.description, "parameters": spec.schema }))
             .collect();
+        let waiting = deferred.waiting();
+        let rest = if waiting.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\nNot loaded yet: {}. If none above is the tool you need, load it by exact name with the query \
+                 \"select:<name>[,<name>]\" instead of calling a loaded tool that does something else.",
+                waiting.join(", ")
+            )
+        };
         Outcome::ok(format!(
-            "Loaded; call them from now on:\n{}",
+            "Loaded; call them from now on:\n{}{rest}",
             serde_json::to_string_pretty(&shown).unwrap_or_default()
         ))
     }
@@ -162,6 +194,35 @@ mod tests {
         assert!(!child.is_loaded("mcp__github__delete_repo"), "the parent's loads stay the parent's");
         assert!(child.search("select:mcp__github__delete_repo").is_empty(), "not a tool it may use");
         assert_eq!(child.search("select:mcp__jira__tool1").len(), 1);
+    }
+
+    fn jira() -> Deferred {
+        let mut specs: Vec<ToolSpec> = (0..25).map(|n| spec(&format!("mcp__jira__tool{n}"), "")).collect();
+        specs.extend([
+            spec("mcp__jira__getJiraIssue", "Get a Jira issue by key. Reports how many comments it has."),
+            spec("mcp__jira__editJiraIssue", "Edit an existing Jira issue. Change status with transitionJiraIssue."),
+            spec("mcp__jira__transitionJiraIssue", "Move a Jira issue through its workflow."),
+            spec("mcp__jira__addCommentToJiraIssue", "Add a comment to a Jira issue."),
+        ]);
+        defer(specs).1.expect("deferred")
+    }
+
+    #[test]
+    fn short_words_do_not_match_and_a_name_outweighs_a_description() {
+        let found = jira().search("transition de issue e jira");
+        assert_eq!(found[0].name, "mcp__jira__transitionJiraIssue", "{found:?}");
+        assert!(jira().search("e de").is_empty(), "words under three letters match nothing");
+    }
+
+    #[test]
+    fn a_search_names_the_tools_still_waiting_so_the_next_one_can_select_them() {
+        let mut workspace = Workspace::new(".");
+        workspace.deferred = Some(std::sync::Arc::new(jira()));
+        let outcome = ToolSearch.run(&json!({"query": "get issue"}), &workspace);
+        assert!(!outcome.is_error, "{}", outcome.content);
+        assert!(outcome.content.contains("Not loaded yet"), "{}", outcome.content);
+        assert!(outcome.content.contains("mcp__jira__transitionJiraIssue"), "{}", outcome.content);
+        assert!(outcome.content.contains("select:"), "{}", outcome.content);
     }
 
     #[test]

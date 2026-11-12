@@ -68,6 +68,10 @@ impl Agent<'_> {
             ))
         } else if self.control.is_stopped() {
             Outcome::error("The run was cancelled.")
+        } else if tool.is_some()
+            && !tasks.admit(name, input, tool.is_some_and(|tool| tool.access() != crate::tools::Access::Reads))
+        {
+            Outcome::error(domain::repeats::refused(name))
         } else if name == "TaskOutput" {
             tasks.output(input)
         } else if name == "TaskStop" {

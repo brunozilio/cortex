@@ -48,7 +48,11 @@ impl Agent<'_> {
             config.memory = None;
         }
         if let Some(model) = input.get("model").and_then(serde_json::Value::as_str).filter(|m| !m.is_empty()) {
-            config.model = Some(model.to_owned());
+            let asked =
+                crate::tools::subagent_config::AgentConfig { model: Some(model.to_owned()), ..Default::default() };
+            if asked.model(&self.request.model, self.workspace.model.provider).is_ok() {
+                config.model = asked.model;
+            }
         }
         let explores = chosen.as_ref().is_some_and(|agent| agent.name == "Explore");
         if config.model.is_none() && explores {

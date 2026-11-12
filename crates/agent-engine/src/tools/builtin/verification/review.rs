@@ -4,6 +4,7 @@ use super::{KIND, TOOLS, brief};
 use crate::agent::{Agent, Ending, Review};
 use crate::model::TurnRequest;
 use crate::tools::Verification;
+use crate::tools::builtin::shell::shells;
 use crate::transcript::{Message, Role};
 
 const JUDGE_TURNS: usize = 50;
@@ -19,8 +20,18 @@ impl Review for Judge {
         let Some(verification) = agent.workspace.verification.as_ref().filter(|_| agent.depth == 0) else {
             return Ok(None);
         };
+        if !run.iter().any(|message| message.tool_uses().next().is_some()) {
+            return Ok(None);
+        }
         *attempts += 1;
+        let client = agent.workspace.credentials.client;
+        let before: Vec<String> = shells::list(client).into_iter().map(|(id, _, _)| id).collect();
         let verdict = verify(agent, verification, run, *attempts);
+        for (id, _, running) in shells::list(client) {
+            if running && !before.contains(&id) {
+                shells::kill(client, &id);
+            }
+        }
         (agent.emit)(EngineEvent::Verified(verdict.clone()));
         if agent.control.is_stopped() {
             return Err(Ending::Cancelled);

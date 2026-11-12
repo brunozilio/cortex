@@ -178,8 +178,17 @@ Inbox notices are core (`TakeNotices`).
   `BRAVE_SEARCH_API_KEY`, else DuckDuckGo's HTML page), `Read` of PDFs
   (`pdftotext`) and notebooks, `NotebookEdit`, `Monitor` (waits for a
   check command), and `ToolSearch`: past 20 MCP tools their schemas wait
-  until loaded (`tools::tool_search`). `Agent` takes `model` and
-  `isolation: worktree` per call. MCP servers initialize once per run;
+  until loaded (`tools::tool_search`). A free query ignores words under
+  three letters and ranks a word in a tool's name above one in its
+  description; every answer names the tools still waiting, to load by
+  `select:`. `Agent` takes `model` and `isolation: worktree` per call; a
+  model the run's provider does not serve is ignored (the agent's own or
+  the run's is used), and a worktree needs a repository with a commit.
+- **Repeated calls** (`domain::repeats`): a third call with the same tool
+  and input in one run is not run, unless another tool that may change
+  something ran in between; the agent is told its earlier result holds and
+  how to load another tool. Tools that wait on something running (`Bash`,
+  `BashOutput`, `TaskOutput`, `TaskList`, `TaskGet`, `Monitor`) may repeat. MCP servers initialize once per run;
   Remote servers sign in with OAuth (`/mcp login <name>`, `{command} mcp
   login`): discovery, dynamic registration and PKCE rules in
   `domain::mcp_oauth`, the flow and refresh in the backend's
@@ -274,8 +283,10 @@ Inbox notices are core (`TakeNotices`).
   is graded by the run's model before it runs.
 - **Verification** (`tools/builtin/verification/`; rules in
   `domain::verification`): a top-level run whose
-  `PromptRequest.verification` holds criteria is graded by a judge agent
-  before it completes. The judge has `Read`, `Glob`, `Grep`, `Bash` and
+  `PromptRequest.verification` holds criteria and that used a tool is
+  graded by a judge agent before it completes (an answer with no tool call
+  is not judged). Background shells the judge leaves running are killed
+  when it ends. The judge has `Read`, `Glob`, `Grep`, `Bash` and
   `Skill` (it runs tests and lint, loads `verify`/`run`), never edits, and
   shows as a `verification` sub-agent. It ends with
   `EngineEvent::Verified(Verdict)`; a failed verdict sends the agent back

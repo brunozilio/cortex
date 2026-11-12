@@ -19,7 +19,12 @@ fn engine(model: &Arc<ScriptedModel>) -> NativeEngine {
 #[test]
 fn a_request_with_criteria_is_judged_before_it_completes() {
     let dir = tempfile::tempdir().expect("dir");
-    let scripted = Arc::new(ScriptedModel::new([said("Done"), said(r#"{"passed":true,"checks":[]}"#)]));
+    let look = Block::ToolUse { id: "g".into(), name: "Glob".into(), input: serde_json::json!({"pattern": "*"}) };
+    let scripted = Arc::new(ScriptedModel::new([
+        ScriptedModel::reply(vec![look]),
+        said("Done"),
+        said(r#"{"passed":true,"checks":[]}"#),
+    ]));
     let request = PromptRequest {
         verification: Some(Criteria::user("it is done")),
         permission: PermissionMode::Bypass,
@@ -28,7 +33,7 @@ fn a_request_with_criteria_is_judged_before_it_completes() {
     let events = finish(&start(&engine(&scripted), &request));
     assert!(events.iter().any(|e| matches!(e, EngineEvent::Verified(v) if v.passed)), "{events:?}");
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })));
-    assert!(scripted.asked()[1].messages[0].text().contains("it is done"));
+    assert!(scripted.asked()[2].messages[0].text().contains("it is done"));
 }
 
 #[test]

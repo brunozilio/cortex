@@ -24,6 +24,7 @@ pub mod model;
 pub mod permission_rules;
 pub mod principal;
 pub mod provider;
+pub mod repeats;
 pub mod request;
 pub mod routing;
 pub mod schedule;

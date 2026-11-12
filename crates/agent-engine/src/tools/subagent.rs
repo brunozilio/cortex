@@ -125,7 +125,7 @@ impl Tool for AgentTool {
                     "max_turns":{"type":"integer","minimum":1,"maximum":200},
                     "run_in_background": { "type": "boolean", "description": "Run concurrently and return a task_id. Collect its report with TaskOutput." },
                     "subagent_type": { "type": "string", "description": "The kind of agent; general-purpose when left out." },
-                    "model": { "type": "string", "description": "A model for this agent (sonnet, opus, haiku, or an id of the same provider); the agent's own or yours when left out." },
+                    "model": { "type": "string", "description": "A model for this agent: an id or short name your own provider serves. One it does not serve is ignored and the agent's own or yours is used, as when left out." },
                     "isolation": { "enum": ["worktree"], "description": "worktree: work in a git worktree of its own, kept when it changed something." },
                 },
                 "required": ["description", "prompt"],

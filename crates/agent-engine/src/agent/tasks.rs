@@ -14,6 +14,13 @@ use crate::transcript::Message;
 pub(super) struct Tasks {
     pub(super) background: Mutex<BTreeMap<String, Arc<Task>>>,
     pub(super) conversations: Conversations,
+    pub(super) repeats: Mutex<domain::repeats::Repeats>,
+}
+
+impl Tasks {
+    pub(super) fn admit(&self, name: &str, input: &Value, may_change: bool) -> bool {
+        self.repeats.lock().map_or(true, |mut repeats| repeats.admit(name, &input.to_string(), may_change))
+    }
 }
 
 pub(super) struct StopTasksOnDrop<'a>(pub(super) &'a Tasks);

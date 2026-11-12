@@ -5,9 +5,11 @@ mod model_hooks;
 mod permission_rules;
 mod permissions;
 mod plan_mode;
+mod repeats;
 mod scripts;
 mod send_message;
 mod steering;
+mod sub_agent_fallbacks;
 mod sub_agents;
 mod turns;
 

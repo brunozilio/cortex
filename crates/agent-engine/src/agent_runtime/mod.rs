@@ -122,6 +122,13 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
         setup.memory_dir = Some(dir.canonicalize().map_err(|e| e.to_string())?);
     }
     if config.worktree {
+        git_stopped(workspace, &workspace.cwd, &["rev-parse".as_ref(), "--verify".as_ref(), "HEAD".as_ref()]).map_err(
+            |_| {
+                "isolation: worktree needs a git repository with at least one commit, and this folder has none; \
+                 call again without isolation"
+                    .to_owned()
+            },
+        )?;
         let root =
             PathBuf::from(git_stopped(workspace, &workspace.cwd, &["rev-parse".as_ref(), "--show-toplevel".as_ref()])?);
         let base = git_stopped(workspace, &root, &["symbolic-ref".as_ref(), "refs/remotes/origin/HEAD".as_ref()])
