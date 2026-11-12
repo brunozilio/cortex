@@ -286,7 +286,14 @@ Inbox notices are core (`TakeNotices`).
   `PromptRequest.verification` holds criteria and that used a tool is
   graded by a judge agent before it completes (an answer with no tool call
   is not judged). Background shells the judge leaves running are killed
-  when it ends. The judge has `Read`, `Glob`, `Grep`, `Bash` and
+  when it ends. The judge never asks the user: commands the criteria
+  name (code spans and code-block lines) and the owner's
+  `verification.allow` rules (permission-rule syntax, read only from
+  `~/.{command}/settings.json` and `settings.local.json`) run without
+  asking and without the safety check (`domain::verification::judge_rules`,
+  `Workspace::pre_approved`); a deny or ask rule still wins. Any other
+  command goes to the safety check in Bypass and is refused in the other
+  modes. The judge has `Read`, `Glob`, `Grep`, `Bash` and
   `Skill` (it runs tests and lint, loads `verify`/`run`), never edits, and
   shows as a `verification` sub-agent. It ends with
   `EngineEvent::Verified(Verdict)`; a failed verdict sends the agent back

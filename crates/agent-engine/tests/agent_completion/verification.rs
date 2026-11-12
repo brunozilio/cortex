@@ -21,8 +21,11 @@ fn wrote(text: &str) -> Result<agent_engine::model::Reply, agent_engine::model::
 }
 
 fn judged(workspace: &mut Workspace) {
-    workspace.verification =
-        Some(Verification { criteria: Criteria::user("hello.txt says oi"), model: "claude-opus-5-5".into() });
+    workspace.verification = Some(Verification {
+        criteria: Criteria::user("hello.txt says oi"),
+        model: "claude-opus-5-5".into(),
+        allow: Default::default(),
+    });
 }
 
 fn run(model: &ScriptedModel, workspace: &Workspace) -> Vec<EngineEvent> {

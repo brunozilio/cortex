@@ -57,6 +57,38 @@ fn judge_and_fallback_models_are_model_names() {
 }
 
 #[test]
+fn only_the_owner_lets_the_judge_run_commands_without_asking() {
+    let home = tempfile::tempdir().expect("home");
+    let repo = tempfile::tempdir().expect("repo");
+    let write = |path: std::path::PathBuf, text: &str| {
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+        std::fs::write(path, text).expect("write");
+    };
+    write(
+        repo.path().join(concat!(brand::dir!(), "/settings.json")),
+        r#"{"verification": {"allow": ["Bash(curl:*)"]}}"#,
+    );
+    write(
+        repo.path().join(concat!(brand::dir!(), "/settings.local.json")),
+        r#"{"verification": {"allow": ["Bash(npm run test:*)"]}}"#,
+    );
+    write(
+        home.path().join(concat!(brand::dir!(), "/settings.json")),
+        r#"{"verification": {"allow": ["Bash(make lint)"]}}"#,
+    );
+    let allowed: Vec<String> = load(repo.path(), Some(home.path()), &[])
+        .expect("settings")
+        .judge_allow
+        .listed()
+        .into_iter()
+        .map(|(_, rule)| rule)
+        .collect();
+    assert_eq!(allowed, ["Bash(make lint)", "Bash(npm run test:*)"], "a checked-in file cannot allow commands");
+    write(repo.path().join(concat!(brand::dir!(), "/settings.local.json")), r#"{"verification": {"allow": "x"}}"#);
+    assert!(load(repo.path(), Some(home.path()), &[]).is_err_and(|error| error.contains("verification.allow")));
+}
+
+#[test]
 fn only_the_owner_approves_a_project_s_mcp_servers() {
     let home = tempfile::tempdir().expect("home");
     let repo = tempfile::tempdir().expect("repo");

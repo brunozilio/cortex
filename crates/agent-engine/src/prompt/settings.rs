@@ -35,6 +35,8 @@ pub struct Settings {
     pub lsp_servers: Vec<LspLayer>,
     #[serde(skip)]
     pub permissions: domain::permission_rules::PermissionRules,
+    #[serde(skip)]
+    pub judge_allow: domain::permission_rules::PermissionRules,
     #[serde(default)]
     pub added_dirs: Vec<String>,
     pub scripts: crate::tools::script_tool::ScriptAccess,
@@ -57,6 +59,7 @@ impl Default for Settings {
             mcp_approval: Default::default(),
             lsp_servers: Vec::new(),
             permissions: Default::default(),
+            judge_allow: Default::default(),
             added_dirs: Vec::new(),
             scripts: Default::default(),
         }
@@ -92,6 +95,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut mcp_approval = domain::mcp_config::McpApproval::default();
     let mut lsp_servers = Vec::new();
     let mut permissions = domain::permission_rules::PermissionRules::default();
+    let mut judge_allow = domain::permission_rules::PermissionRules::default();
     let mut added_dirs = Vec::new();
     let mut scripts = crate::tools::script_tool::ScriptAccess::default();
     let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(brand::DIR));
@@ -126,6 +130,10 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
             }
             super::permissions::read(&settings, owners, &mut permissions, &mut added_dirs)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
+            if owners {
+                super::permissions::read_judge(&settings, &mut judge_allow)
+                    .map_err(|e| format!("{}: {e}", path.display()))?;
+            }
             if let Some(value) = settings.get("scripts") {
                 scripts = crate::tools::script_tool::ScriptAccess::read(value)?;
             }
@@ -220,6 +228,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 mcp_approval,
                 lsp_servers,
                 permissions,
+                judge_allow,
                 added_dirs,
                 scripts,
             });
@@ -239,6 +248,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         mcp_approval,
         lsp_servers,
         permissions,
+        judge_allow,
         added_dirs,
         scripts,
     })

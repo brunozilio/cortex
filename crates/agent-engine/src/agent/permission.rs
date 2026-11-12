@@ -69,6 +69,13 @@ impl Agent<'_> {
             (_, Some("allow")) => Verdict::Allow,
             (verdict, _) => verdict,
         };
+        let pre_approved = matches!(
+            self.workspace.ruling_with(&self.workspace.pre_approved, &name, subject, input),
+            Some((domain::permission_rules::RuleKind::Allow, _))
+        );
+        if pre_approved && !rule_asks && !matches!(verdict, Verdict::Deny(_)) && hook_permission != Some("ask") {
+            return self.went_ahead(tool, input);
+        }
         let permission_hook = if matches!(verdict, Verdict::Ask) {
             match self.workspace.hooks.run_with_model(
                 "PermissionRequest",

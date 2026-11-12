@@ -128,7 +128,10 @@ impl Job {
         {
             let config = tools::subagent_config::AgentConfig { model: settings.judge.clone(), ..Default::default() };
             match config.model(&self.request.model.id, self.request.model.provider) {
-                Ok(model) => workspace.verification = Some(tools::Verification { criteria, model }),
+                Ok(model) => {
+                    let allow = domain::verification::judge_rules(&criteria.text, &settings.judge_allow);
+                    workspace.verification = Some(tools::Verification { criteria, model, allow })
+                }
                 Err(error) => return self.fail(&format!("judgeModel: {error}"), FailureKind::Other),
             }
         }

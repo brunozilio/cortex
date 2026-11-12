@@ -1,5 +1,6 @@
 mod configured;
 mod hooks;
+mod judge_permissions;
 mod runtime;
 mod verification;
 

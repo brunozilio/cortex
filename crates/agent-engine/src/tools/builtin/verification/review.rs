@@ -42,8 +42,9 @@ impl Review for Judge {
 
 fn verify(agent: &Agent<'_>, verification: &Verification, run: &[Message], attempt: u8) -> Verdict {
     let specs = agent.request.tools.iter().filter(|spec| TOOLS.contains(&spec.name.as_str())).cloned();
-    let control = agent.control.child_configured(None, false);
+    let control = agent.control.child_configured(None, true);
     let mut workspace = agent.workspace.fork(control.shared_stop());
+    workspace.pre_approved = verification.allow.clone();
     workspace.hooks = Default::default();
     workspace.agent_name = KIND.into();
     if verification.model != agent.request.model {

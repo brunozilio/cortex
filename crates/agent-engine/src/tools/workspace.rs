@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 pub struct Verification {
     pub criteria: domain::Criteria,
     pub model: String,
+    pub allow: domain::permission_rules::PermissionRules,
 }
 
 #[derive(Debug)]
@@ -22,6 +23,7 @@ pub struct Workspace {
     pub prompt_context: Option<crate::prompt::Environment>,
     pub hooks: crate::hooks::Hooks,
     pub permissions: domain::permission_rules::PermissionRules,
+    pub pre_approved: domain::permission_rules::PermissionRules,
     pub home: Option<PathBuf>,
     pub added_dirs: Vec<PathBuf>,
     pub fallbacks: Vec<String>,
@@ -55,6 +57,7 @@ impl Workspace {
             prompt_context: None,
             hooks: Default::default(),
             permissions: Default::default(),
+            pre_approved: Default::default(),
             home: None,
             added_dirs: Vec::new(),
             fallbacks: Vec::new(),
@@ -103,6 +106,7 @@ impl Workspace {
             prompt_context: self.prompt_context.clone(),
             hooks: self.hooks.clone(),
             permissions: self.permissions.clone(),
+            pre_approved: Default::default(),
             home: self.home.clone(),
             added_dirs: self.added_dirs.clone(),
             fallbacks: self.fallbacks.clone(),

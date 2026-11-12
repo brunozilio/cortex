@@ -24,6 +24,18 @@ pub fn read(settings: &Value, owners: bool, rules: &mut PermissionRules, dirs: &
     Ok(())
 }
 
+pub fn read_judge(settings: &Value, rules: &mut PermissionRules) -> Result<(), String> {
+    let Some(list) = settings.get("verification").and_then(|verification| verification.get("allow")) else {
+        return Ok(());
+    };
+    let list = list.as_array().ok_or("verification.allow must be a list of rules")?;
+    for rule in list {
+        let rule = rule.as_str().ok_or("verification.allow must be a list of rules")?;
+        rules.add(RuleKind::Allow, rule).map_err(|error| format!("verification.allow: {error}"))?;
+    }
+    Ok(())
+}
+
 pub fn keep_allow(project: &std::path::Path, rule: &str) -> Result<(), String> {
     let path = project.join(brand::DIR).join("settings.local.json");
     let mut settings: Value = match std::fs::read_to_string(&path) {
