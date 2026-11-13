@@ -186,7 +186,7 @@ Inbox notices are core (`TakeNotices`).
   user fires the `Notification` hooks.
 - **More tools**: `WebFetch` (through the engine's `Http`, rules as
   `WebFetch(domain:host)`), `WebSearch` (Brave with
-  `BRAVE_SEARCH_API_KEY`, else DuckDuckGo's HTML page), `Read` of PDFs
+  `BRAVE_SEARCH_API_KEY`; without it the tool says so and fetches nothing), `Read` of PDFs
   (`pdftotext`) and notebooks, `NotebookEdit`, `Monitor` (waits for a
   check command), and `ToolSearch`: past 20 MCP tools their schemas wait
   until loaded (`tools::tool_search`). A free query ignores words under

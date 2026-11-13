@@ -2,7 +2,7 @@ use std::io::Read as _;
 
 use serde_json::Value;
 
-use super::html::{decode, text};
+use super::html::text;
 use crate::model::http::Http;
 
 const RESULTS: usize = 8;
@@ -14,28 +14,14 @@ pub struct Found {
     pub snippet: String,
 }
 
+pub const NO_SEARCH: &str = "no search service is set up: set BRAVE_SEARCH_API_KEY to a Brave Search API key";
+
 pub fn search(http: &dyn Http, query: &str, brave_key: Option<&str>) -> Result<Vec<Found>, String> {
-    let encoded = encode(query);
-    match brave_key {
-        Some(key) => {
-            let url = format!("https://api.search.brave.com/res/v1/web/search?q={encoded}&count={RESULTS}");
-            let headers = [
-                ("Accept".to_owned(), "application/json".to_owned()),
-                ("X-Subscription-Token".to_owned(), key.to_owned()),
-            ];
-            let body = fetched(http, &url, &headers)?;
-            brave(&body)
-        }
-        None => {
-            let url = format!("https://html.duckduckgo.com/html/?q={encoded}");
-            let body = fetched(
-                http,
-                &url,
-                &[("User-Agent".to_owned(), concat!("Mozilla/5.0 (", brand::name!(), ")").to_owned())],
-            )?;
-            Ok(duckduckgo(&body))
-        }
-    }
+    let key = brave_key.ok_or(NO_SEARCH)?;
+    let url = format!("https://api.search.brave.com/res/v1/web/search?q={}&count={RESULTS}", encode(query));
+    let headers =
+        [("Accept".to_owned(), "application/json".to_owned()), ("X-Subscription-Token".to_owned(), key.to_owned())];
+    brave(&fetched(http, &url, &headers)?)
 }
 
 fn fetched(http: &dyn Http, url: &str, headers: &[(String, String)]) -> Result<String, String> {
@@ -63,31 +49,6 @@ fn brave(body: &str) -> Result<Vec<Found>, String> {
         .collect())
 }
 
-fn duckduckgo(page: &str) -> Vec<Found> {
-    let mut found = Vec::new();
-    for block in page.split("class=\"result__a\"").skip(1) {
-        let Some(href) = block.split("href=\"").nth(1).and_then(|rest| rest.split('"').next()) else { continue };
-        let url = match href.split("uddg=").nth(1) {
-            Some(target) => decode_percent(target.split('&').next().unwrap_or_default()),
-            None => decode(href),
-        };
-        let title = block.split_once('>').map(|(_, rest)| rest.split("</a>").next().unwrap_or_default()).unwrap_or("");
-        let snippet = block
-            .split("class=\"result__snippet\"")
-            .nth(1)
-            .and_then(|rest| rest.split_once('>'))
-            .map(|(_, rest)| rest.split("</a>").next().unwrap_or_default())
-            .unwrap_or("");
-        if url.starts_with("http") {
-            found.push(Found { title: text(title), url, snippet: text(snippet) });
-        }
-        if found.len() == RESULTS {
-            break;
-        }
-    }
-    found
-}
-
 pub fn render(query: &str, results: &[Found]) -> String {
     let mut out = format!("Results for \"{query}\":");
     for (at, result) in results.iter().enumerate() {
@@ -106,58 +67,19 @@ fn encode(text: &str) -> String {
         .collect()
 }
 
-fn decode_percent(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut at = 0;
-    while at < bytes.len() {
-        match bytes[at] {
-            b'%' if at + 2 < bytes.len() => match u8::from_str_radix(&text[at + 1..at + 3], 16) {
-                Ok(byte) => {
-                    out.push(byte);
-                    at += 3;
-                }
-                Err(_) => {
-                    out.push(b'%');
-                    at += 1;
-                }
-            },
-            b'+' => {
-                out.push(b' ');
-                at += 1;
-            }
-            byte => {
-                out.push(byte);
-                at += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const PAGE: &str = r#"<div class="result"><h2><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fserde.rs%2F&amp;rut=x">Serde &amp; you</a></h2>
-        <a class="result__snippet" href="x">A <b>framework</b> for serializing.</a></div>
-        <div class="result"><a class="result__a" href="https://docs.rs/serde">serde - Rust</a>
-        <a class="result__snippet" href="y">Docs.</a></div>"#;
+    #[test]
+    fn a_query_is_sent_url_encoded() {
+        assert_eq!(encode("rust serde & co"), "rust+serde+%26+co");
+    }
 
     #[test]
-    fn duckduckgo_results_are_read_with_their_real_addresses() {
-        assert_eq!(
-            duckduckgo(PAGE),
-            [
-                Found {
-                    title: "Serde & you".into(),
-                    url: "https://serde.rs/".into(),
-                    snippet: "A framework for serializing.".into()
-                },
-                Found { title: "serde - Rust".into(), url: "https://docs.rs/serde".into(), snippet: "Docs.".into() },
-            ]
-        );
-        assert_eq!(encode("rust serde & co"), "rust+serde+%26+co");
+    fn without_a_search_service_nothing_is_fetched() {
+        let http = crate::model::http::ScriptedHttp::new(Vec::new());
+        assert_eq!(search(&http, "serde", None), Err(NO_SEARCH.to_owned()));
     }
 
     #[test]
