@@ -5,10 +5,16 @@ dependencies. Business rules never depend on IO. Vocabulary is in
 `GLOSSARY.md`.
 
 ```
-cli ──► sdk ──► backend ──► agent-engine ──► (provider APIs)
-                                       │                    └──► llm-providers
-                                       └──► protocol ─► domain   (everything speaks domain)
+cli ──► sdk ──► backend ──► agent-engine ──► llm-providers ──► domain
+         │        │              │
+         └────────┴──► protocol ─┴─────────────────────────────► domain
+
+leaf crates: brand (everyone), content (cli, agent-engine),
+             platform (cli, backend, agent-engine), script (agent-engine)
 ```
+
+`domain` is the only crate every layer shares; nothing below `sdk` knows
+the CLI, and `cli` reaches `backend` and `agent-engine` only in tests.
 
 | Crate | Responsibility |
 |---|---|
@@ -19,8 +25,9 @@ cli ──► sdk ──► backend ──► agent-engine ──► (provider A
 | `protocol` | Serialisable `ClientCommand` / `ServerEvent` in an `Envelope` carrying the `Principal`; the `Backend` trait. |
 | `backend` | `LocalBackend` (worker threads), `CommandHandler`: runs, memory (+ its MCP tool), settings, model providers (and their browser sign-in: PKCE, loopback redirect), secrets, the host's `Extensions`. |
 | `llm-providers` | Model providers, one folder each under `src/providers/<name>/`, found by `build.rs` into a registry. Shared pieces: `Config`, OAuth (`oauth::browser`), request effort, catalog paging, the sign-in `Host`. No network of its own. |
-| `subprocess` | Child processes started the same everywhere; `Tree` ends a process with its children. |
-| `private-file` | Files only the current user can read. |
+| `platform` | What differs per operating system: child processes started the same everywhere (`command`), `Tree` ending a process with its children, `bounded` waits, `private_file` (files only the current user can read), the data folders. |
+| `content` | Prompts, built-in skills, agents, styles and tool texts from `content/`, embedded at build time; a user's `~/.{command}/` copy overrides one. |
+| `script` | The QuickJS runtime that runs JavaScript tools, skills and declared providers against a `Host`. |
 | `brand` | The product's name and command, from `brand.toml` (below). |
 
 ## Name
