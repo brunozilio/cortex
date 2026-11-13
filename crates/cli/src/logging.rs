@@ -40,7 +40,17 @@ pub fn install() -> Option<PathBuf> {
         .with_thread_names(true)
         .try_init()
         .ok()?;
+    log_panics();
     Some(path)
+}
+
+fn log_panics() {
+    let earlier = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic| {
+        let thread = std::thread::current();
+        tracing::error!(thread = thread.name().unwrap_or("unnamed"), "{panic}");
+        earlier(panic);
+    }));
 }
 
 #[cfg(test)]
