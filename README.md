@@ -64,6 +64,7 @@ you).
 | `sdk` | The CLI's internal client to the backend. |
 | `cli` | The `cortex` binary: terminal chat (ratatui), `-p`, `login`, `models`, `mcp`, `config`, `doctor`. |
 | `brand` | The product's name and command, from `brand.toml`. |
+| `language-servers` | Runs language servers for the `LSP` tool and edit diagnostics: client, pool, first-use installs. |
 | `platform` | Per-OS IO: child processes and their trees, private files, data folders. |
 | `content` | Prompts, built-in skills and agents, embedded at build time. |
 | `script` | The QuickJS runtime for JavaScript tools, skills and providers. |

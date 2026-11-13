@@ -8,6 +8,7 @@ use domain::lsp::install::{Install, Recipe};
 use platform::{Bounds, Ended};
 
 use super::Starter;
+use super::Fetch;
 use super::download::Download;
 use super::installs::Installer;
 
@@ -15,12 +16,12 @@ const TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const OUTPUT: usize = 64 * 1024;
 
 #[derive(Debug, Default)]
-pub struct Downloads;
+pub struct Downloads<F>(pub F);
 
-impl Installer for Downloads {
+impl<F: Fetch> Installer for Downloads<F> {
     fn install(&self, install: &Install, home: &Path) -> Result<(), String> {
         settle(home, &install.program, |staging| {
-            fill(install, staging).and_then(|()| executable(&staging.join(&install.program)))
+            fill(&self.0, install, staging).and_then(|()| executable(&staging.join(&install.program)))
         })
     }
 }
@@ -52,7 +53,7 @@ fn place(staging: &Path, home: &Path, program: &Path, replaced: &Path) -> Result
     }
 }
 
-fn fill(install: &Install, staging: &Path) -> Result<(), String> {
+fn fill(fetch: &dyn Fetch, install: &Install, staging: &Path) -> Result<(), String> {
     match &install.recipe {
         Recipe::Npm { packages } => {
             let mut command = platform::command(tool(&install.recipe)?);
@@ -64,7 +65,7 @@ fn fill(install: &Install, staging: &Path) -> Result<(), String> {
             run(command.arg("install").arg(module).env("GOBIN", staging.join("bin")))
         }
         Recipe::Download { url, archive, sha256 } => {
-            Download { url, archive: *archive, sha256 }.unpack_into(staging, &staging.join(&install.program))
+            Download { fetch, url, archive: *archive, sha256 }.unpack_into(staging, &staging.join(&install.program))
         }
     }
 }

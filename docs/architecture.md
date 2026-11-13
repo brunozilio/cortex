@@ -9,7 +9,7 @@ cli ──► sdk ──► backend ──► agent-engine ──► llm-provide
          │        │              │
          └────────┴──► protocol ─┴─────────────────────────────► domain
 
-leaf crates: brand (everyone), content (cli, agent-engine),
+leaf crates: brand (everyone), content (cli, agent-engine), language-servers (agent-engine),
              platform (cli, backend, agent-engine), script (agent-engine)
 ```
 
@@ -25,6 +25,7 @@ the CLI, and `cli` reaches `backend` and `agent-engine` only in tests.
 | `protocol` | Serialisable `ClientCommand` / `ServerEvent` in an `Envelope` carrying the `Principal`; the `Backend` trait. |
 | `backend` | `LocalBackend` (worker threads), `CommandHandler`: runs, memory (+ its MCP tool), settings, model providers (and their browser sign-in: PKCE, loopback redirect), secrets, the host's `Extensions`. |
 | `llm-providers` | Model providers, one folder each under `src/providers/<name>/`, found by `build.rs` into a registry. Shared pieces: `Config`, OAuth (`oauth::browser`), request effort, catalog paging, the sign-in `Host`. No network of its own. |
+| `language-servers` | Language servers: `LspClient` (one process), `LspPool` (kept per name and root), first-use installs; downloads through a `Fetch` the engine gives it (`agent_engine::NetFetch`). Re-exported as `agent_engine::lsp`. |
 | `platform` | What differs per operating system: child processes started the same everywhere (`command`), `Tree` ending a process with its children, `bounded` waits, `private_file` (files only the current user can read), the data folders. |
 | `content` | Prompts, built-in skills, agents, styles and tool texts from `content/`, embedded at build time; a user's `~/.{command}/` copy overrides one. |
 | `script` | The QuickJS runtime that runs JavaScript tools, skills and declared providers against a `Host`. |
@@ -399,7 +400,7 @@ The agent navigates code through language servers. What they
 mean is pure in `domain::lsp`: the built-in servers and the
 `lspServers` layers (user, project, plugins' `.lsp.json`), the server and
 project root for a file, the `LSP` tool's questions and how answers and
-diagnostics read. `agent_engine::lsp` runs them: `LspClient` (one
+diagnostics read. The `language-servers` crate (`agent_engine::lsp`) runs them: `LspClient` (one
 process, `Content-Length` framing, a reader thread routing answers and
 published diagnostics) and `LspPool` (one server per name and root, kept
 by the `NativeEngine` across runs, ended after 10 idle minutes), behind

@@ -113,7 +113,7 @@ pub const LANGUAGE_SERVERS: &str = "lsp";
 
 pub fn engine(data: &Path) -> NativeEngine {
     let apis = NativeApis::new(Arc::new(NetHttp));
-    let servers = LspPool::installing(Processes, IDLE, data.join(LANGUAGE_SERVERS), Downloads);
+    let servers = LspPool::installing(Processes, IDLE, data.join(LANGUAGE_SERVERS), Downloads(agent_engine::NetFetch));
     NativeEngine::new(Arc::new(apis), Arc::new(FileSessions::new(data.join(SESSIONS))))
         .with_language_servers(Arc::new(servers))
 }

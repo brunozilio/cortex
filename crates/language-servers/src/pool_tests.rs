@@ -8,7 +8,7 @@ use domain::lsp::{ServerSpec, defaults};
 use serde_json::Value;
 
 use super::{Installer, LspPool, Starter};
-use crate::lsp::{LanguageServer, LanguageServers, Wait};
+use crate::{LanguageServer, LanguageServers, Wait};
 
 const IDLE: Duration = Duration::from_secs(600);
 
@@ -74,11 +74,11 @@ fn pool(starts: &Starts) -> LspPool {
     LspPool::new(starts.clone(), IDLE)
 }
 
-fn open(pool: &LspPool, file: &str) -> Result<crate::lsp::Opened, String> {
+fn open(pool: &LspPool, file: &str) -> Result<crate::Opened, String> {
     open_waiting(pool, file, Wait::ForInstall)
 }
 
-fn open_waiting(pool: &LspPool, file: &str, wait: Wait) -> Result<crate::lsp::Opened, String> {
+fn open_waiting(pool: &LspPool, file: &str, wait: Wait) -> Result<crate::Opened, String> {
     pool.open(Path::new(file), &defaults(), Path::new("/no-such-w"), &AtomicBool::new(false), wait)
 }
 
@@ -231,7 +231,7 @@ fn an_edit_says_its_server_is_installing_and_the_tool_says_it_installed_one() {
     let data = tempfile::tempdir().expect("data");
     let installs = Installs::held();
     let pool = LspPool::installing(Starts::default(), IDLE, data.path().into(), installs.clone());
-    let lsp = crate::lsp::Lsp { servers: Arc::new(pool), specs: Arc::new(defaults()) };
+    let lsp = crate::Lsp { servers: Arc::new(pool), specs: Arc::new(defaults()) };
     let (file, cwd, stop) = (Path::new("/no-such-w/app.ts"), Path::new("/no-such-w"), AtomicBool::new(false));
     assert_eq!(lsp.problems(file, "", cwd, &stop), None);
     assert_eq!(installs.count(), 0, "an edit never starts an install");

@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use super::LspClient;
-use crate::lsp::framing::{read_message, write_message};
+use crate::framing::{read_message, write_message};
 
 const WAIT: Duration = Duration::from_secs(5);
 

@@ -26,6 +26,10 @@ pub enum Wait {
     Never,
 }
 
+pub trait Fetch: Send + Sync {
+    fn get(&self, url: &str) -> Result<(u16, Box<dyn std::io::Read + Send>), String>;
+}
+
 pub trait LanguageServer: Send + Sync {
     fn request(&self, method: &str, params: Value, stop: &AtomicBool, wait: Duration) -> Result<Value, String>;
     fn sync(&self, file: &Path, language: &str, text: &str) -> Result<i64, String>;

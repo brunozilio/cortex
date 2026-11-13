@@ -1,17 +1,17 @@
 use std::fs::File;
 use std::io;
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use domain::lsp::install::Archive;
 use sha2::{Digest, Sha256};
 
-use crate::model::http::{Http, NetHttp};
+use super::Fetch;
 
 const QUIET: Duration = Duration::from_secs(60);
 
 pub(super) struct Download<'a> {
+    pub fetch: &'a dyn Fetch,
     pub url: &'a str,
     pub archive: Archive,
     pub sha256: &'a str,
@@ -19,12 +19,11 @@ pub(super) struct Download<'a> {
 
 impl Download<'_> {
     pub(super) fn unpack_into(&self, staging: &Path, program: &Path) -> Result<(), String> {
-        let never = AtomicBool::new(false);
-        let response = NetHttp.get_stream(self.url, &[], &never).map_err(|error| error.to_string())?;
-        if response.status != 200 {
-            return Err(format!("{} answered {}", self.url, response.status));
+        let (status, body) = self.fetch.get(self.url)?;
+        if status != 200 {
+            return Err(format!("{} answered {status}", self.url));
         }
-        unpack(Patient::new(response.body, QUIET), self.archive, self.sha256, staging, program)
+        unpack(Patient::new(body, QUIET), self.archive, self.sha256, staging, program)
             .map_err(|error| format!("{}: {error}", self.url))
     }
 }

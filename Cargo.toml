@@ -18,6 +18,7 @@ protocol = { path = "crates/protocol" }
 backend = { path = "crates/backend" }
 platform = { path = "crates/platform" }
 agent-engine = { path = "crates/agent-engine" }
+language-servers = { path = "crates/language-servers" }
 llm-providers = { path = "crates/llm-providers" }
 sdk = { path = "crates/sdk" }
 

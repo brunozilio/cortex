@@ -59,7 +59,7 @@ impl Starter for NothingOnPath {
 fn a_missing_server_is_installed_and_then_answers() {
     let data = tempfile::tempdir().expect("data");
     let pool = Arc::new(
-        LspPool::installing(NothingOnPath, Duration::from_secs(600), data.path().into(), Downloads),
+        LspPool::installing(NothingOnPath, Duration::from_secs(600), data.path().into(), Downloads(agent_engine::NetFetch)),
     );
     let cases = [
         ("rust-analyzer", "Cargo.toml", "[package]\nname = \"w\"\nversion = \"0.1.0\"\n", "lib.rs", "pub fn add() {}\n"),
