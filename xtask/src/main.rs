@@ -1,5 +1,6 @@
 mod brand;
 mod comments;
+mod crate_table;
 mod lint;
 
 use std::path::PathBuf;
