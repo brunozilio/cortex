@@ -69,3 +69,31 @@ fn a_call_with_broken_json_is_refused() {
     ]);
     assert!(matches!(reply, Err(ModelError::Provider(why)) if why.contains("Read")));
 }
+
+#[test]
+fn a_server_search_is_kept_whole_and_shown_as_a_search() {
+    let lines = [
+        r#"{"type":"message_start","message":{"usage":{"input_tokens":10,"output_tokens":1}}}"#,
+        r#"{"type":"content_block_start","index":0,"content_block":{"type":"server_tool_use","id":"srvtoolu_1","name":"web_search","input":{}}}"#,
+        r#"{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"query\": \"rust 2026\"}"}}"#,
+        r#"{"type":"content_block_stop","index":0}"#,
+        r#"{"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_1","content":[{"type":"web_search_result","title":"Rust","url":"https://rust-lang.org","encrypted_content":"EqgB"}]}}"#,
+        r#"{"type":"content_block_stop","index":1}"#,
+        r#"{"type":"message_delta","delta":{"stop_reason":"pause_turn"},"usage":{"output_tokens":5}}"#,
+        r#"{"type":"message_stop"}"#,
+    ];
+    let (reply, seen) = fold(&lines);
+    let reply = reply.expect("reply");
+    assert_eq!(reply.stop, StopReason::PauseTurn);
+    let Block::Native { item: call, .. } = &reply.message.blocks[0] else { panic!("{:?}", reply.message.blocks) };
+    assert_eq!(call["input"]["query"], "rust 2026");
+    let Block::Native { item: found, .. } = &reply.message.blocks[1] else { panic!("{:?}", reply.message.blocks) };
+    assert_eq!(found["content"][0]["encrypted_content"], "EqgB");
+    assert_eq!(
+        seen,
+        [
+            Delta::Searching { id: "srvtoolu_1".into(), query: "rust 2026".into() },
+            Delta::Searched { id: "srvtoolu_1".into(), found: "Rust\nhttps://rust-lang.org".into() },
+        ]
+    );
+}

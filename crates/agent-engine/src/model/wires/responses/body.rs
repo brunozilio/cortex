@@ -86,6 +86,11 @@ fn items(message: &Message) -> Vec<Value> {
                 items.push(json!({ "type": "reasoning", "summary": [], "encrypted_content": encrypted }));
             }
             Block::Thinking { .. } => {}
+            Block::Native { origin, item } if *origin == super::ORIGIN => {
+                flush(&mut text, &mut items);
+                items.push(item.clone());
+            }
+            Block::Native { .. } => {}
             Block::ToolUse { id, name, input } => {
                 flush(&mut text, &mut items);
                 items.push(
@@ -107,6 +112,20 @@ fn items(message: &Message) -> Vec<Value> {
 mod tests {
     use super::*;
     use crate::model::ToolSpec;
+
+    #[test]
+    fn a_web_search_call_goes_back_as_it_came_only_to_its_own_wire() {
+        let call = json!({"type": "web_search_call", "id": "ws_1", "status": "completed"});
+        let message = Message::assistant(vec![
+            Block::Native { origin: super::super::ORIGIN, item: call.clone() },
+            Block::Native { origin: crate::transcript::ReasoningOrigin::of("messages"), item: json!({"type": "x"}) },
+            Block::Text("Found it.".into()),
+        ]);
+        let sent = items(&message);
+        assert_eq!(sent.len(), 2);
+        assert_eq!(sent[0], call);
+        assert_eq!(sent[1]["role"], "assistant");
+    }
 
     #[test]
     fn translates_the_transcript_into_items() {

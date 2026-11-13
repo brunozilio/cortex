@@ -33,6 +33,7 @@ pub fn records(history: &[Message]) -> String {
             match block {
                 Block::Text(s) | Block::Thinking { text: s, .. } => text.push_str(s),
                 Block::Reminder(_) => {}
+                Block::Native { item, .. } => text.push_str(&format!("Searched the web: {item}")),
                 Block::ToolUse { id, name, input } => text.push_str(&format!("Tool {id} {name}: {input}")),
                 Block::ToolResult { id, content, is_error } | Block::ToolResultRich { id, content, is_error, .. } => {
                     text.push_str(&format!("Result {id} (error={is_error}): {content}"))

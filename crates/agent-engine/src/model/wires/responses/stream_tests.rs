@@ -111,3 +111,21 @@ fn done_only_events_and_final_output_fold_without_duplicates() {
         .expect("completed");
     assert_eq!(folder.finish().expect("reply").message.tool_uses().count(), 1);
 }
+
+#[test]
+fn a_web_search_call_is_kept_whole_and_shown_as_a_search() {
+    let lines = [
+        r#"{"type":"response.output_item.done","item":{"type":"web_search_call","id":"ws_1","status":"completed","action":{"type":"search","query":"rust 2026"}}}"#,
+        r#"{"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":3,"output_tokens":2}}}"#,
+    ];
+    let (reply, seen) = fold(&lines);
+    let reply = reply.expect("reply");
+    assert!(matches!(&reply.message.blocks[0], Block::Native { item, .. } if item["id"] == "ws_1"));
+    assert_eq!(
+        seen,
+        [
+            Delta::Searching { id: "ws_1".into(), query: "rust 2026".into() },
+            Delta::Searched { id: "ws_1".into(), found: "completed".into() },
+        ]
+    );
+}

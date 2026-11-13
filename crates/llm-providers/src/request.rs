@@ -15,6 +15,8 @@ pub fn shape(provider: &dyn Provider, model: Option<&ModelOption>, body: &mut Va
         .or_else(|| body["output_config"]["effort"].as_str())
         .unwrap_or("medium")
         .to_owned();
+    let named = body["model"].as_str().unwrap_or_default().to_owned();
+    crate::web_search::put(provider.web_search(&named), body);
     provider.shape(model, body, &effort)
 }
 

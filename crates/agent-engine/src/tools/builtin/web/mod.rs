@@ -1,6 +1,5 @@
 pub mod guarded;
 mod html;
-mod search;
 
 use std::io::Read as _;
 
@@ -85,8 +84,8 @@ pub struct WebSearch;
 impl Tool for WebSearch {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
-            name: "WebSearch".into(),
-            description: crate::tools::describe("WebSearch", &serde_json::Value::Null),
+            name: crate::tools::WEB_SEARCH.into(),
+            description: crate::tools::describe(crate::tools::WEB_SEARCH, &serde_json::Value::Null),
             schema: json!({
                 "type": "object",
                 "properties": { "query": { "type": "string", "description": "What to search for." } },
@@ -94,6 +93,11 @@ impl Tool for WebSearch {
                 "additionalProperties": false
             }),
         }
+    }
+
+    fn offered(&self, workspace: &Workspace) -> bool {
+        let model = &workspace.models.model;
+        crate::providers::find(model.provider).is_some_and(|provider| provider.web_search(&model.id).is_some())
     }
 
     fn access(&self) -> Access {
@@ -104,20 +108,8 @@ impl Tool for WebSearch {
         field(input, "query").unwrap_or_default().to_owned()
     }
 
-    fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
-        let query = match required(input, "query") {
-            Ok(query) => query,
-            Err(error) => return error,
-        };
-        let Some(web) = &workspace.services.network else {
-            return Outcome::error("The web is not available to this run.");
-        };
-        let key = std::env::var("BRAVE_SEARCH_API_KEY").ok().filter(|key| !key.is_empty());
-        match search::search(web.0.as_ref(), query, key.as_deref()) {
-            Ok(results) if results.is_empty() => Outcome::ok(format!("No results for \"{query}\".")),
-            Ok(results) => Outcome::ok(search::render(query, &results)),
-            Err(error) => Outcome::error(format!("The search failed: {error}")),
-        }
+    fn run(&self, _input: &Value, _workspace: &Workspace) -> Outcome {
+        Outcome::error("Web search runs inside the model provider, and this model's provider has none.")
     }
 }
 
@@ -156,5 +148,27 @@ mod tests {
             let out = WebFetch.run(&json!({"url": url, "prompt": "p"}), &workspace);
             assert!(out.is_error && out.content.contains("private network"), "{url}: {out:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod offered_tests {
+    use super::*;
+
+    fn on(provider: &'static str, model: &str) -> Workspace {
+        let mut workspace = Workspace::new("/tmp");
+        workspace.models.model =
+            domain::ModelOption { provider: domain::ModelProvider::new(provider), ..domain::ModelOption::new(model, model) };
+        workspace
+    }
+
+    #[test]
+    fn web_search_is_offered_only_where_the_provider_searches_itself() {
+        assert!(WebSearch.offered(&on("anthropic", "claude-opus-5-5")));
+        assert!(WebSearch.offered(&on("openai", "gpt-5.5")));
+        assert!(!WebSearch.offered(&on("kiro", "claude-sonnet-4-6")));
+        assert!(!WebSearch.offered(&on("nobody", "m")));
+        let called = WebSearch.run(&json!({"query": "rust"}), &on("kiro", "m"));
+        assert!(called.is_error && called.content.contains("has none"), "{}", called.content);
     }
 }

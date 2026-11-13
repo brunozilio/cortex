@@ -49,6 +49,7 @@ fn message(message: &Message) -> Option<Value> {
             Block::Thinking { origin, signature, .. } => {
                 *origin == Some(super::ORIGIN) && signature.is_some()
             }
+            Block::Native { origin, .. } => *origin == super::ORIGIN,
             _ => true,
         })
         .map(block)
@@ -73,6 +74,7 @@ fn block(block: &Block) -> Value {
         Block::ToolResult { id, content, is_error } => {
             json!({ "type": "tool_result", "tool_use_id": id, "content": content, "is_error": is_error })
         }
+        Block::Native { item, .. } => item.clone(),
     }
 }
 
@@ -145,6 +147,19 @@ mod tests {
         let body = body(&request);
         assert!(body["tools"][0].get("cache_control").is_none());
         assert_eq!(body["tools"][1]["cache_control"]["type"], "ephemeral", "tools stay cached when the system changes");
+    }
+
+    #[test]
+    fn a_server_search_goes_back_as_it_came_only_to_its_own_wire() {
+        let mut request = request();
+        let searched = json!({"type": "web_search_tool_result", "tool_use_id": "s1", "content": [{"encrypted_content": "Eq"}]});
+        let elsewhere = crate::transcript::ReasoningOrigin::of("responses");
+        request.messages[1].blocks.push(Block::Native { origin: super::super::ORIGIN, item: searched.clone() });
+        request.messages[1].blocks.push(Block::Native { origin: elsewhere, item: json!({"type": "web_search_call"}) });
+        let body = body(&request);
+        let assistant = body["messages"][1]["content"].as_array().cloned().unwrap_or_default();
+        assert_eq!(assistant.len(), 3);
+        assert_eq!(assistant[2], searched);
     }
 
     #[test]

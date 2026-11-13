@@ -44,6 +44,10 @@ pub enum Block {
         is_error: bool,
     },
     Reminder(String),
+    Native {
+        origin: ReasoningOrigin,
+        item: Value,
+    },
 }
 
 impl Block {
@@ -95,6 +99,7 @@ pub enum StopReason {
     ToolUse,
     MaxTokens,
     Refusal,
+    PauseTurn,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

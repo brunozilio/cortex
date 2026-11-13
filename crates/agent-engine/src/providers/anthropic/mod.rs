@@ -36,6 +36,10 @@ impl Shape for Provider {
     fn wire(&self, _model: Option<&ModelOption>) -> &'static str {
         "messages"
     }
+
+    fn web_search(&self, model: &str) -> Option<serde_json::Value> {
+        Some(llm_providers::web_search::anthropic(model))
+    }
     fn base(&self, _config: &Config) -> String {
         API.to_owned()
     }

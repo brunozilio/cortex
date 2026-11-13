@@ -43,6 +43,8 @@ pub enum Delta {
     Text(String),
     Thinking(String),
     ToolInput { name: String, piece: String },
+    Searching { id: String, query: String },
+    Searched { id: String, found: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]

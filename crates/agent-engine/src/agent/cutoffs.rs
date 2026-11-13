@@ -13,9 +13,9 @@ pub(super) struct Cutoffs {
 impl Cutoffs {
     pub(super) fn ask_again_for_empty(&mut self, reply: &Reply, has_calls: bool) -> bool {
         let empty = !has_calls
-            && reply.stop != StopReason::MaxTokens
+            && !matches!(reply.stop, StopReason::MaxTokens | StopReason::PauseTurn)
             && reply.message.text().trim().is_empty()
-            && !reply.message.blocks.iter().any(|b| matches!(b, Block::Image(_)));
+            && !reply.message.blocks.iter().any(|b| matches!(b, Block::Image(_) | Block::Native { .. }));
         if empty && !self.retried_empty {
             self.retried_empty = true;
             return true;

@@ -94,6 +94,7 @@ fn stop_label(stop: StopReason) -> &'static str {
         StopReason::ToolUse => "tool_use",
         StopReason::MaxTokens => "max_tokens",
         StopReason::Refusal => "refusal",
+        StopReason::PauseTurn => "pause_turn",
     }
 }
 

@@ -40,6 +40,10 @@ impl Shape for Provider {
     fn wire(&self, _model: Option<&ModelOption>) -> &'static str {
         "messages"
     }
+
+    fn web_search(&self, model: &str) -> Option<serde_json::Value> {
+        Some(llm_providers::web_search::anthropic(model))
+    }
     fn check(&self, config: &Config) -> Result<(), ProviderError> {
         config.refreshable().map(|_| ())
     }

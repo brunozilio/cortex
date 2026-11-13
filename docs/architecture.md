@@ -185,8 +185,13 @@ Inbox notices are core (`TakeNotices`).
   pipe. `TaskCreate`/`TaskUpdate` emit `EngineEvent::Tasks`. Asking the
   user fires the `Notification` hooks.
 - **More tools**: `WebFetch` (through the engine's `Http`, rules as
-  `WebFetch(domain:host)`), `WebSearch` (Brave with
-  `BRAVE_SEARCH_API_KEY`; without it the tool says so and fetches nothing), `Read` of PDFs
+  `WebFetch(domain:host)`), `WebSearch` (the provider's own search, offered only where
+  `Provider::web_search` names one: Anthropic and Claude get the
+  `web_search` server tool, OpenAI, ChatGPT and Grok the Responses
+  `web_search` tool; `llm_providers::web_search::put` swaps it in for the
+  function tool. Its blocks come back as `Block::Native`, sent back unchanged
+  only to the wire that made them, and show as a `WebSearch` call; a
+  `pause_turn` stop goes on with no new prompt), `Read` of PDFs
   (`pdftotext`) and notebooks, `NotebookEdit`, `Monitor` (waits for a
   check command), and `ToolSearch`: past 20 MCP tools their schemas wait
   until loaded (`tools::tool_search`). A free query ignores words under

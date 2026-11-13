@@ -3,6 +3,7 @@ mod config;
 pub mod declared;
 pub mod oauth;
 pub mod request;
+pub mod web_search;
 pub mod sign_in;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
@@ -63,6 +64,10 @@ pub trait Provider: Sync {
 
     fn small_model(&self) -> Option<&'static str> {
         vendor(self.vendor()).and_then(Vendor::small)
+    }
+
+    fn web_search(&self, _model: &str) -> Option<Value> {
+        None
     }
 
     fn turn_headers(&self, _model: Option<&ModelOption>, _body: &Value) -> Vec<(String, String)> {

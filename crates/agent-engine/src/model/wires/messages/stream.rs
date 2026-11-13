@@ -8,6 +8,7 @@ enum Open {
     Text(String),
     Thinking { text: String, signature: String },
     Tool { id: String, name: String, json: String },
+    Server { block: Value, json: String },
     Other,
 }
 
@@ -38,12 +39,13 @@ impl Folder {
                     "tool_use" => {
                         Open::Tool { id: text(&block["id"]), name: text(&block["name"]), json: String::new() }
                     }
-                    _ => Open::Other,
+                    "redacted_thinking" => Open::Other,
+                    _ => Open::Server { block: block.clone(), json: String::new() },
                 };
                 self.open.push((index, open));
             }
             "content_block_delta" => self.delta(&event, on),
-            "content_block_stop" => self.close(event["index"].as_u64().unwrap_or_default())?,
+            "content_block_stop" => self.close(event["index"].as_u64().unwrap_or_default(), on)?,
             "message_delta" => {
                 self.stop = event["delta"]["stop_reason"].as_str().map(stop_reason).or(self.stop);
                 self.usage(&event["usage"]);
@@ -73,6 +75,7 @@ impl Folder {
             (Open::Thinking { signature, .. }, "signature_delta") => {
                 signature.push_str(&self::text(&delta["signature"]))
             }
+            (Open::Server { json, .. }, "input_json_delta") => json.push_str(&self::text(&delta["partial_json"])),
             (Open::Tool { json, name, .. }, "input_json_delta") => {
                 let piece = self::text(&delta["partial_json"]);
                 json.push_str(&piece);
@@ -84,7 +87,7 @@ impl Folder {
         }
     }
 
-    fn close(&mut self, index: u64) -> Result<(), ModelError> {
+    fn close(&mut self, index: u64, on: &mut dyn FnMut(Delta)) -> Result<(), ModelError> {
         let Some(at) = self.open.iter().position(|(open, _)| *open == index) else { return Ok(()) };
         let (_, open) = self.open.remove(at);
         let block = match open {
@@ -103,6 +106,15 @@ impl Folder {
                     })?
                 };
                 Block::ToolUse { id, name, input }
+            }
+            Open::Server { mut block, json } => {
+                if let Ok(input) = serde_json::from_str::<Value>(&json) {
+                    block["input"] = input;
+                }
+                if let Some(seen) = searching(&block) {
+                    on(seen);
+                }
+                Block::Native { origin: super::ORIGIN, item: block }
             }
             Open::Other => return Ok(()),
         };
@@ -144,7 +156,27 @@ fn stop_reason(reason: &str) -> StopReason {
         "tool_use" => StopReason::ToolUse,
         "max_tokens" | "model_context_window_exceeded" => StopReason::MaxTokens,
         "refusal" => StopReason::Refusal,
+        "pause_turn" => StopReason::PauseTurn,
         _ => StopReason::EndTurn,
+    }
+}
+
+fn searching(block: &Value) -> Option<Delta> {
+    match block["type"].as_str()? {
+        "server_tool_use" if block["name"] == "web_search" => {
+            Some(Delta::Searching { id: text(&block["id"]), query: text(&block["input"]["query"]) })
+        }
+        "web_search_tool_result" => {
+            let found: Vec<String> = block["content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|result| Some(format!("{}\n{}", result["title"].as_str()?, result["url"].as_str()?)))
+                .collect();
+            let found = if found.is_empty() { text(&block["content"]["error_code"]) } else { found.join("\n\n") };
+            Some(Delta::Searched { id: text(&block["tool_use_id"]), found })
+        }
+        _ => None,
     }
 }
 

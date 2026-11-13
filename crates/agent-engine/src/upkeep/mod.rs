@@ -35,6 +35,7 @@ fn message_tokens(message: &Message) -> u64 {
             Block::ToolResult { content, .. } => tokens(content),
             Block::ToolResultRich { content, images, .. } => tokens(content) + images.len() as u64 * 1600,
             Block::Image(_) => 1600,
+            Block::Native { item, .. } => tokens(&item.to_string()),
         })
         .sum()
 }

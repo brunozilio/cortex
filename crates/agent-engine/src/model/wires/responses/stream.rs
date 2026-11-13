@@ -45,7 +45,7 @@ impl Folder {
                     on(Delta::ToolInput { name, piece });
                 }
             }
-            "response.output_item.done" => self.item(&event["item"])?,
+            "response.output_item.done" => self.item(&event["item"], on)?,
             "response.completed" | "response.done" => {
                 let response = &event["response"];
                 if response["error"].is_object() {
@@ -56,7 +56,7 @@ impl Folder {
                 }
                 if let Some(items) = response["output"].as_array() {
                     for item in items {
-                        self.item(item)?;
+                        self.item(item, on)?;
                     }
                 }
                 self.usage(&event["response"]["usage"]);
@@ -89,7 +89,7 @@ impl Folder {
         Ok(())
     }
 
-    fn item(&mut self, item: &Value) -> Result<(), ModelError> {
+    fn item(&mut self, item: &Value, on: &mut dyn FnMut(Delta)) -> Result<(), ModelError> {
         let id = item["id"].as_str().filter(|id| !id.is_empty()).map(str::to_owned).unwrap_or_else(|| item.to_string());
         if !self.seen.insert(id) {
             return Ok(());
@@ -119,6 +119,14 @@ impl Folder {
                     signature: encrypted,
                     origin: Some(super::ORIGIN),
                 });
+            }
+            "web_search_call" => {
+                let id = text(&item["id"]);
+                let action = &item["action"];
+                let query = action["query"].as_str().or_else(|| action["url"].as_str()).unwrap_or_default();
+                on(Delta::Searching { id: id.clone(), query: query.to_owned() });
+                on(Delta::Searched { id, found: text(&item["status"]) });
+                self.blocks.push(Block::Native { origin: super::ORIGIN, item: item.clone() });
             }
             "function_call" => {
                 let name = text(&item["name"]);

@@ -57,7 +57,7 @@ fn message(message: &Message, model: &str) -> Value {
             Block::ToolUse { id, name, input } => {
                 calls.push(json!({"toolUseId": id, "name": name, "input": input}));
             }
-            Block::Thinking { .. } => {}
+            Block::Thinking { .. } | Block::Native { .. } => {}
         }
     }
     let content = texts.join("\n\n");

@@ -55,7 +55,7 @@ fn user(message: &Message, messages: &mut Vec<Value>) {
                 messages.push(json!({"role":"tool", "tool_call_id":id, "content":if *is_error {format!("Error: {content}")} else {content.clone()}}));
                 images.extend(found.iter().cloned());
             }
-            Block::Thinking { .. } | Block::ToolUse { .. } => {}
+            Block::Thinking { .. } | Block::ToolUse { .. } | Block::Native { .. } => {}
         }
     }
     if !images.is_empty() {

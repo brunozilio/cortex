@@ -138,6 +138,13 @@ impl Agent<'_> {
                 Delta::Text(text) => (self.emit)(EngineEvent::TextDelta(text)),
                 Delta::Thinking(text) => (self.emit)(EngineEvent::ThinkingDelta(text)),
                 Delta::ToolInput { name, piece } => (self.emit)(EngineEvent::ToolInputDelta { name, piece }),
+                Delta::Searching { id, query } => {
+                    (self.emit)(EngineEvent::ToolStarted(domain::ToolCall::new(id, crate::tools::WEB_SEARCH, query)));
+                }
+                Delta::Searched { id, found } => {
+                    (self.emit)(EngineEvent::ToolResult { id: id.clone(), output: found, failed: false });
+                    (self.emit)(EngineEvent::ToolFinished { id });
+                }
             };
             let reply = match self.api.turn(&request, &mut on, self.control.stop_flag()) {
                 Ok(reply) => {
@@ -193,6 +200,7 @@ impl Agent<'_> {
                     continue;
                 }
                 StopReason::Refusal => return Err(Ending::Refused),
+                StopReason::PauseTurn if calls.is_empty() => continue,
                 _ if calls.is_empty() => {
                     let steered = self.steered();
                     if !steered.is_empty() && !self.control.is_stopped() {

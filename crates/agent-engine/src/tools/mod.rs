@@ -34,6 +34,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+pub use llm_providers::web_search::WEB_SEARCH;
 pub use lsp::Lsp;
 pub use workspace::{Network, Verification, Workspace};
 

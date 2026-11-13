@@ -4,6 +4,7 @@ mod compaction;
 mod custom_agents;
 mod interception;
 mod model_hooks;
+mod native_search;
 mod permission_rules;
 mod permissions;
 mod plan_mode;
