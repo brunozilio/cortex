@@ -26,12 +26,7 @@ impl Brand {
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| format!("brand.toml has no `{key}`"))
         };
-        Ok(Self {
-            name: get("name")?,
-            command: get("command")?,
-            company: get("company")?,
-            author: get("author")?,
-        })
+        Ok(Self { name: get("name")?, command: get("command")?, company: get("company")?, author: get("author")? })
     }
 
     pub fn env(&self) -> String {
@@ -175,12 +170,7 @@ mod tests {
     use super::*;
 
     fn brand() -> Brand {
-        Brand {
-            name: "Nova".into(),
-            command: "nova".into(),
-            company: "Acme".into(),
-            author: "Ana Souza".into(),
-        }
+        Brand { name: "Nova".into(), command: "nova".into(), company: "Acme".into(), author: "Ana Souza".into() }
     }
 
     #[test]
@@ -198,8 +188,7 @@ mod tests {
 
 fn allowed(path: &str, brand: &Brand) -> bool {
     let own = format!(".{}/", brand.command);
-    ["brand.toml", "Cargo.lock", "Cargo.toml", "crates/cli/Cargo.toml"]
-        .contains(&path)
+    ["brand.toml", "Cargo.lock", "Cargo.toml", "crates/cli/Cargo.toml"].contains(&path)
         || ["README.md", "CLAUDE.md", "AGENTS.md"].contains(&path)
         || path.starts_with(&own)
         || path.starts_with(".claude/")

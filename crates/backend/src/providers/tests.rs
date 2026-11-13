@@ -184,8 +184,9 @@ struct ByKey;
 impl ModelCatalog for ByKey {
     fn models(&self, provider: ModelProvider, key: ProviderKey) -> Result<Vec<domain::ModelOption>, String> {
         let secret = key.current()?.secret().to_owned();
-        let api_key =
-            Config::parse(agent_engine::providers::get(provider).expect("known"), &secret).map_err(|e| e.to_string())?.api_key;
+        let api_key = Config::parse(agent_engine::providers::get(provider).expect("known"), &secret)
+            .map_err(|e| e.to_string())?
+            .api_key;
         match api_key.strip_suffix("-0123456789") {
             Some("sk-broken") => Err("401".into()),
             Some(name) => Ok(vec![domain::ModelOption::new(format!("{}:{name}", provider.id()), name)]),

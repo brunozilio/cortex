@@ -50,7 +50,8 @@ fn run(cwd: &Path, command: &str) -> Result<(String, bool), String> {
     shell.arg("-c").arg(format!("exec 2>&1\n{command}")).current_dir(cwd);
     let never = AtomicBool::new(false);
     let bounds = Bounds { timeout: LIMIT, max_output: usize::MAX, stop: &never, input: None };
-    let finished = platform::bounded::run(&mut shell, bounds).map_err(|error| format!("could not start the shell: {error}"))?;
+    let finished =
+        platform::bounded::run(&mut shell, bounds).map_err(|error| format!("could not start the shell: {error}"))?;
     let mut out = finished.stdout;
     match finished.ended {
         Ended::Exited(status) => Ok((out.trim_end().to_owned(), !status.success())),
