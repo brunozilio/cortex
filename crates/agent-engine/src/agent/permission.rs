@@ -72,6 +72,15 @@ impl Agent<'_> {
         let rule = self.workspace.ruling(&name, subject, input).or_else(|| self.remembered_rule(&name, subject, input));
         let rule_asks = matches!(rule, Some((domain::permission_rules::RuleKind::Ask, _)));
         let original = ruled(mode, access, rule, by_mode);
+        if !matches!(original, Verdict::Deny(_))
+            && let Some(concern) = self.package_concerns(&name, input)
+        {
+            if self.control.no_prompts() {
+                return self.refused(&name, format!("Not run: {concern}. Ask the user before installing it."));
+            }
+            let shown = format!("Check the package first: {concern}\n{}", shown.unwrap_or(subject));
+            return self.ask_permission(id, tool, access, subject, &shown, input);
+        }
         let rule_asks = rule_asks && original == Verdict::Ask;
         let verdict = match (original, hook_permission) {
             (Verdict::Deny(reason), _) => Verdict::Deny(reason),
@@ -134,6 +143,13 @@ impl Agent<'_> {
             }
             Verdict::Ask => self.ask_permission(id, tool, access, subject, shown.unwrap_or(subject), input),
         }
+    }
+
+    fn package_concerns(&self, name: &str, input: &Value) -> Option<String> {
+        let network = self.workspace.services.network.as_ref().filter(|_| self.workspace.policy.dependency_guard)?;
+        let command = input["command"].as_str().filter(|_| name == "Bash")?;
+        let found = crate::guard::packages::concerns(&*network.0, command, crate::guard::packages::today());
+        (!found.is_empty()).then(|| found.join("; "))
     }
 
     pub(super) fn went_ahead(&self, tool: &dyn Tool, input: &Value) -> Outcome {

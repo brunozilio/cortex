@@ -2,6 +2,7 @@
 
 mod compaction;
 mod custom_agents;
+mod dependency_guard;
 mod interception;
 mod model_hooks;
 mod native_search;

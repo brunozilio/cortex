@@ -6,8 +6,9 @@ pub const SANDBOX: &str = "experimental-sandbox";
 
 pub const REDACT_SECRETS: &str = "redact-secrets";
 pub const DESTRUCTIVE_SNAPSHOT: &str = "destructive-snapshot";
+pub const DEPENDENCY_GUARD: &str = "experimental-dependency-guard";
 
-const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS];
+const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS, DEPENDENCY_GUARD];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Flag {
@@ -24,6 +25,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: DESTRUCTIVE_SNAPSHOT,
         about: "Before rm -r, git clean, git reset --hard and the like, keep untracked files so /rewind can bring them back",
+    },
+    Flag {
+        name: DEPENDENCY_GUARD,
+        about: "Before npm, cargo or pip installs a package that is missing, brand new or a typo of a popular one, ask you",
     },
 ];
 

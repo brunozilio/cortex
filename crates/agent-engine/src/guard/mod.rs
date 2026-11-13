@@ -105,5 +105,7 @@ pub fn render(history: &[Message]) -> String {
     lines
 }
 
+pub mod packages;
+
 #[cfg(test)]
 mod tests;

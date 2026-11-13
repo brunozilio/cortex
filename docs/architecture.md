@@ -176,6 +176,17 @@ Inbox notices are core (`TakeNotices`).
   keeps its parent's. Unlike `memory::sanitize`, which uses the same
   word rules, it keeps the text's layout. What the model itself writes
   in a tool call is not changed.
+- **Dependency guard** (`experimental-dependency-guard`, a security
+  flag): before a `Bash` command that installs packages (`npm`/`pnpm`/
+  `bun`/`yarn add`, `cargo add`, `pip`/`uv`/`poetry` installs; rule in
+  `domain::dependencies`), `agent/permission.rs` looks each package up in
+  its registry through `Workspace.services.network`
+  (`guard::packages`). A package the registry does not know, one first
+  published under 30 days ago, or one a letter away from a popular name
+  makes the call an ask that says why, in every mode, Bypass included,
+  before any rule or hook could allow it; a deny rule still wins, and
+  dontAsk refuses it. A registry that does not answer leaves the command
+  to the usual checks.
 - **What the loop decided**: besides the tool events, the loop records
   what it decided so traces and later features need not read it out of
   free text: `Answered { ask, decision }` once the user answers a

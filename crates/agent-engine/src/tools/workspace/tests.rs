@@ -24,13 +24,14 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         sandbox: Some(domain::sandbox::Sandbox { network: false, ..Default::default() }),
         redact: Some(Arc::new(domain::redact::Known::default())),
         snapshots: true,
+        dependency_guard: true,
     };
 
     let fork = policy.fork();
 
     assert_eq!(fork.sandbox, policy.sandbox, "a sub-agent's commands stay as confined as its parent's");
     assert!(fork.redact.is_some(), "a sub-agent's output is redacted like its parent's");
-    assert!(fork.snapshots);
+    assert!(fork.snapshots && fork.dependency_guard);
     assert_eq!(fork.permissions, policy.permissions);
     assert_eq!(fork.scripts, ScriptAccess::none());
     assert!(fork.pre_approved.is_empty());

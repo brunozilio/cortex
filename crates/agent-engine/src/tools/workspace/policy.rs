@@ -17,6 +17,7 @@ pub struct Policy {
     pub sandbox: Option<Sandbox>,
     pub redact: Option<Arc<Known>>,
     pub snapshots: bool,
+    pub dependency_guard: bool,
 }
 
 impl Policy {
@@ -29,6 +30,7 @@ impl Policy {
             sandbox: self.sandbox.clone(),
             redact: self.redact.clone(),
             snapshots: self.snapshots,
+            dependency_guard: self.dependency_guard,
         }
     }
 
