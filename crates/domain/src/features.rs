@@ -15,6 +15,7 @@ pub const PROJECT_CRITERIA: &str = "project-criteria";
 pub const AUTO_REVIEW: &str = "auto-review";
 pub const AFFECTED_TESTS: &str = "experimental-affected-tests";
 pub const PR_FOLLOW: &str = "experimental-pr-follow";
+pub const SESSION_CLAIMS: &str = "experimental-session-claims";
 
 pub fn skill_flag(skill: &str) -> Option<&'static str> {
     (skill == "follow-pr").then_some(PR_FOLLOW)
@@ -51,6 +52,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: ESCALATION,
         about: "When the agent fails the same call again and again, send it to the Advisor or to escalationModel",
+    },
+    Flag {
+        name: SESSION_CLAIMS,
+        about: "Warn the agent when another session in the same folder edited the file it is changing",
     },
     Flag {
         name: PR_FOLLOW,

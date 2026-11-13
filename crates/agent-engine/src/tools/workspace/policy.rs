@@ -21,6 +21,7 @@ pub struct Policy {
     pub escalation: bool,
     pub auto_review: bool,
     pub affected_tests: bool,
+    pub session_claims: bool,
 }
 
 impl Policy {
@@ -37,6 +38,7 @@ impl Policy {
             escalation: self.escalation,
             auto_review: self.auto_review,
             affected_tests: self.affected_tests,
+            session_claims: self.session_claims,
         }
     }
 

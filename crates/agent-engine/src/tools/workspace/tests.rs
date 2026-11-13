@@ -28,6 +28,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         escalation: true,
         auto_review: true,
         affected_tests: true,
+        session_claims: true,
     };
 
     let fork = policy.fork();

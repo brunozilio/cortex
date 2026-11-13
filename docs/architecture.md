@@ -185,6 +185,16 @@ Inbox notices are core (`TakeNotices`).
   plus the run's priced calls reach the limit, so the run fails saying
   how to raise it; calls without a price count as nothing. The status
   line shows spent against the limit.
+- **Sessions in one folder** (`experimental-session-claims`; rule in
+  `domain::claims`): every `Edit` or `Write` records which session (and
+  process) changed which file in a registry shared by all the terminals
+  open on that folder (`tools/workspace/claims.rs`: a JSON file in the
+  temporary folder named after the folder, under
+  `platform::file_lock`). When another live session changed the same
+  file in the last ten minutes, the result says so in `<other-session>`
+  and asks the agent to re-read before editing again. Entries of ended
+  processes (`platform::alive`) and those older than an hour are
+  dropped.
 - **Following a PR** (`experimental-pr-follow`): the built-in
   `follow-pr` skill (`content/skills/follow-pr/`) has the agent start one
   `Monitor` over a `gh pr view` loop that prints a line only when the

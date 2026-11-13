@@ -1,3 +1,4 @@
+mod claims;
 mod confined;
 mod models;
 mod policy;

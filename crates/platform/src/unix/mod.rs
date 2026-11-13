@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 pub use private::{keep_owner, restrict, restrict_open};
-pub use tree::Tree;
+pub use tree::{Tree, alive};
 
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     Command::new(program)

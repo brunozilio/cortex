@@ -26,6 +26,15 @@ impl Tree {
     }
 }
 
+pub fn alive(pid: u32) -> bool {
+    let Ok(pid) = i32::try_from(pid) else { return false };
+    if pid <= 0 {
+        return false;
+    }
+    let answered = unsafe { libc::kill(pid, 0) };
+    answered == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

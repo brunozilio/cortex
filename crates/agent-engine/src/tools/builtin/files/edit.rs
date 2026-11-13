@@ -82,7 +82,10 @@ impl Tool for Edit {
                 };
                 let edited = domain::changes::Edited::replaced(path.clone(), before, old, new);
                 let tests = crate::tools::builtin::shell::affected::start(workspace, &path);
-                Outcome::ok(said + &workspace.diagnosed(&path, &changed) + &tests).showing(shown).editing(edited)
+                let others = workspace.claim(&path);
+                Outcome::ok(said + &workspace.diagnosed(&path, &changed) + &tests + &others)
+                    .showing(shown)
+                    .editing(edited)
             }
             Err(error) => Outcome::error(format!("Could not write {name}: {error}")),
         }
