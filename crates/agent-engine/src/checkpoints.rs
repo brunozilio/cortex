@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use platform::sync::Locked;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -40,7 +41,7 @@ pub struct FileHistory(Mutex<BTreeMap<PathBuf, Option<String>>>);
 
 impl FileHistory {
     pub fn before_write(&self, path: &Path) {
-        let mut files = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut files = self.0.locked();
         if files.contains_key(path) {
             return;
         }
@@ -59,12 +60,12 @@ impl FileHistory {
         if before.as_ref().is_some_and(|bytes| bytes.len() as u64 > MAX_FILE) {
             return;
         }
-        let mut files = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut files = self.0.locked();
         files.entry(path.to_owned()).or_insert_with(|| before.map(|bytes| STANDARD.encode(bytes)));
     }
 
     pub fn take(&self) -> BTreeMap<PathBuf, Option<String>> {
-        std::mem::take(&mut *self.0.lock().unwrap_or_else(PoisonError::into_inner))
+        std::mem::take(&mut *self.0.locked())
     }
 }
 
