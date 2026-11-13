@@ -51,6 +51,9 @@ fn run(app: &mut App, command: MemoryCommand) {
                 Some(m) => format!("Restored [{}] {}", id.0, m.text),
                 None => format!("Nothing forgotten has id {} (see /memory forgotten).", id.0),
             }),
+            MemoryCommand::Share(id) => memory
+                .share(id)
+                .map(|file| format!("Shared [{}] as {file}: commit it and the team's agents recall it too.", id.0)),
         };
         match answer {
             Ok(text) => Msg::Notice(text),

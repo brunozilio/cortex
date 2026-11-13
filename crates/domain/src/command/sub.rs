@@ -17,6 +17,7 @@ pub enum MemoryCommand {
     Undo,
     Forgotten,
     Restore(MemoryId),
+    Share(MemoryId),
     Edit,
 }
 
@@ -32,6 +33,7 @@ impl MemoryCommand {
             ("forgotten", []) => Some(Self::Forgotten),
             ("edit", []) => Some(Self::Edit),
             ("restore", [id]) => id.parse().ok().map(|id| Self::Restore(MemoryId(id))),
+            ("share", [id]) => id.parse().ok().map(|id| Self::Share(MemoryId(id))),
             ("restore", []) => None,
             _ => Some(Self::Search(text)),
         }

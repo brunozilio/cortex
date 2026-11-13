@@ -236,6 +236,7 @@ mod recall;
 mod sanitize;
 pub mod search;
 mod searches;
+pub mod team;
 
 pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, parse_memory_edits};
 pub use optimize::optimize_prompt;

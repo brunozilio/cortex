@@ -564,6 +564,14 @@ Memory is reversible and kept without an LLM:
   `optimize_prompt`, with no recall and no search tool. `UndoMemory` puts
   the book back until the next edit. The CLI's `/memory
   optimize|undo|forgotten|restore <id>`.
+- **Team memory** (`team-memory`; rules in `domain::memory::team`): a
+  project may check in `.{command}/memory/*.md`, one memory per file
+  with optional `kind` and `tags` front matter. They are read on every
+  brief and search (`features/memory/team.rs`), sanitized, given ids
+  from 1,000,000 up and an origin `team:<file>`, and recalled and found
+  next to the owner's own; they are never marked used or changed by the
+  agent. `/memory share <id>` writes one of the owner's memories there
+  to commit for the team.
 - **Store**: an unreadable book is renamed `.json.corrupt-<secs>`, never
   overwritten. Saves `fsync` before the rename. Without an app data folder
   memory lives only in the process.

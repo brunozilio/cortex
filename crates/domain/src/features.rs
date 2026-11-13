@@ -17,6 +17,7 @@ pub const AFFECTED_TESTS: &str = "experimental-affected-tests";
 pub const PR_FOLLOW: &str = "experimental-pr-follow";
 pub const SESSION_CLAIMS: &str = "experimental-session-claims";
 pub const BRANCHES: &str = "branches";
+pub const TEAM_MEMORY: &str = "team-memory";
 
 pub fn skill_flag(skill: &str) -> Option<&'static str> {
     (skill == "follow-pr").then_some(PR_FOLLOW)
@@ -53,6 +54,14 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: ESCALATION,
         about: "When the agent fails the same call again and again, send it to the Advisor or to escalationModel",
+    },
+    Flag {
+        name: TEAM_MEMORY,
+        about: concat!(
+            "Recall the project's checked-in memories in ",
+            brand::dir!(),
+            "/memory and share yours there with /memory share <id>"
+        ),
     },
     Flag { name: BRANCHES, about: "/branch starts a new conversation from before an earlier prompt, keeping this one" },
     Flag {

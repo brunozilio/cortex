@@ -2,6 +2,7 @@ pub mod mcp;
 mod optimize;
 pub mod run;
 mod store;
+mod team;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -51,6 +52,11 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
             memories.edit(owner, &path, &edits, Provenance { author: Author::User, now: now(), origin: None })
         }
         "undo" => memories.undo(owner, &path),
+        "share" => {
+            let id = MemoryId(input["id"].as_u64().and_then(|id| u32::try_from(id).ok()).ok_or("say which memory")?);
+            let shared = memories.shared(owner, &path, id)?;
+            Ok(json!({ "path": path, "file": shared }))
+        }
         "optimize" => {
             let run: RunId = serde_json::from_value(input["run"].clone()).map_err(|e| e.to_string())?;
             let model: ModelOption = serde_json::from_value(input["model"].clone()).map_err(|e| e.to_string())?;
@@ -145,17 +151,30 @@ impl Memories {
         limit: usize,
         searches: &mut MemorySearches,
     ) -> SearchAnswer {
+        let shared = team::load(project);
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
-        let scores = search(query, &book.memories, None);
-        let mut order: Vec<usize> = (0..book.memories.len()).filter(|&i| scores[i] > 0.0).collect();
+        let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
+        let scores = search(query, &known, None);
+        let mut order: Vec<usize> = (0..known.len()).filter(|&i| scores[i] > 0.0).collect();
         order.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then(a.cmp(&b)));
-        let ranked: Vec<Memory> = order.into_iter().map(|i| book.memories[i].clone()).collect();
+        let ranked: Vec<Memory> = order.into_iter().map(|i| known[i].clone()).collect();
         let answer = searches.answer(ranked, limit);
         if let SearchAnswer::Found(found) = &answer {
-            self.mark_used(owner, project, book, found);
+            let personal: Vec<Memory> =
+                found.iter().filter(|memory| !domain::memory::team::is_team(memory.id)).cloned().collect();
+            self.mark_used(owner, project, book, &personal);
         }
         answer
+    }
+
+    pub fn shared(&self, owner: &Principal, project: &Path, id: MemoryId) -> Result<PathBuf, String> {
+        let memory = {
+            let mut books = self.lock();
+            let book = self.book(&mut books, owner, project);
+            book.memories.iter().find(|memory| memory.id == id).cloned()
+        };
+        team::share(project, &memory.ok_or("there is no such memory")?)
     }
 
     fn mark_used(&self, owner: &Principal, project: &Path, book: &mut MemoryBook, given: &[Memory]) {
@@ -179,11 +198,15 @@ impl Memories {
             return self.brief_optimization(owner, run, request);
         }
         let budget = if tool { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
+        let shared = team::load(&request.cwd);
         let (recalled, tool) = {
             let mut books = self.lock();
             let book = self.book(&mut books, owner, &request.cwd);
-            let recalled = recall(&request.prompt, &book.memories, None, budget, now());
-            self.mark_used(owner, &request.cwd, book, &recalled);
+            let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
+            let recalled = recall(&request.prompt, &known, None, budget, now());
+            let personal: Vec<Memory> =
+                recalled.iter().filter(|memory| !domain::memory::team::is_team(memory.id)).cloned().collect();
+            self.mark_used(owner, &request.cwd, book, &personal);
             let tool = tool && book.holds_more_than(&recalled);
             (recalled, tool)
         };

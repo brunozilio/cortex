@@ -122,6 +122,11 @@ impl ProjectMemory<'_> {
         self.edit(vec![MemoryEdit::Restore { id }])
     }
 
+    pub fn share(&self, id: MemoryId) -> Result<String, Error> {
+        let answer = self.ask(json!({ "op": "share", "id": id.0 }), "file")?;
+        Ok(answer["file"].as_str().unwrap_or_default().to_owned())
+    }
+
     pub fn forgotten(&self) -> Result<Vec<Forgotten>, Error> {
         self.answer(json!({ "op": "list" })).map(|(_, forgotten)| forgotten)
     }
