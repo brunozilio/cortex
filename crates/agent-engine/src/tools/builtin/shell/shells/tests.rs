@@ -3,10 +3,23 @@ use std::time::Duration;
 
 use super::*;
 
-fn workspace(client: u64) -> Workspace {
+pub(super) fn of_client(client: u64) -> Workspace {
     let mut workspace = Workspace::new(std::env::temp_dir());
     workspace.credentials.client = client;
     workspace
+}
+
+fn workspace(client: u64) -> Workspace {
+    of_client(client)
+}
+
+#[test]
+fn a_started_command_is_remembered_by_the_agent_that_started_it() {
+    let starter = of_client(906);
+    let id = start(&starter, "quick", &mut sh("true")).expect("start");
+    assert_eq!(starter.tracking.started_shells(), std::slice::from_ref(&id));
+    assert!(starter.fork(Arc::default()).tracking.started_shells().is_empty());
+    assert!(kill(906, &id));
 }
 
 fn sh(script: &str) -> std::process::Command {
@@ -21,7 +34,7 @@ fn read(id: &str, client: u64) -> String {
 
 #[test]
 fn a_background_command_is_read_incrementally_and_stopped() {
-    let id = start(901, "server", &mut sh("echo ready; sleep 30")).expect("start");
+    let id = start(&of_client(901), "server", &mut sh("echo ready; sleep 30")).expect("start");
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut first = read(&id, 901);
     while !first.contains("ready") {
@@ -40,7 +53,7 @@ fn a_background_command_is_read_incrementally_and_stopped() {
 
 #[test]
 fn a_finished_command_says_how_and_a_leaving_client_stops_its_own() {
-    let done = start(903, "build", &mut sh("echo built; exit 2")).expect("start");
+    let done = start(&of_client(903), "build", &mut sh("echo built; exit 2")).expect("start");
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut text = read(&done, 903);
     while !text.contains("finished") {
@@ -49,7 +62,7 @@ fn a_finished_command_says_how_and_a_leaving_client_stops_its_own() {
         text.push_str(&read(&done, 903));
     }
     assert!(text.contains("exit code 2") && text.contains("built"), "{text}");
-    start(904, "watch", &mut sh("sleep 30")).expect("start");
+    start(&of_client(904), "watch", &mut sh("sleep 30")).expect("start");
     kill_client(904);
     assert!(list(904).is_empty());
 }
@@ -57,7 +70,7 @@ fn a_finished_command_says_how_and_a_leaving_client_stops_its_own() {
 #[test]
 fn stdout_and_stderr_keep_the_order_they_were_printed_in() {
     let (stop, detach) = (std::sync::atomic::AtomicBool::new(false), std::sync::atomic::AtomicBool::new(false));
-    let id = start(905, "both", &mut sh("echo one; echo two >&2; echo three")).expect("start");
+    let id = start(&of_client(905), "both", &mut sh("echo one; echo two >&2; echo three")).expect("start");
     let Waited::Exited { output, .. } = wait(&id, Duration::from_secs(5), &stop, &detach) else { panic!("ended") };
     assert_eq!(output, "one\ntwo\nthree");
 }

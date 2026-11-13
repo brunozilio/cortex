@@ -69,7 +69,7 @@ mod tests {
     fn started(script: &str, client: u64) -> String {
         let mut command = std::process::Command::new("/bin/sh");
         command.arg("-c").arg(script).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-        super::super::start(client, script, &mut command).expect("start")
+        super::super::start(&super::super::tests::of_client(client), script, &mut command).expect("start")
     }
 
     #[test]

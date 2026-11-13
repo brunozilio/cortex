@@ -39,7 +39,12 @@ fn lock() -> std::sync::MutexGuard<'static, HashMap<String, Shell>> {
     shells().lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-pub(crate) fn start(client: u64, summary: &str, command: &mut std::process::Command) -> std::io::Result<String> {
+pub(crate) fn start(
+    workspace: &Workspace,
+    summary: &str,
+    command: &mut std::process::Command,
+) -> std::io::Result<String> {
+    let client = workspace.credentials.client;
     static NEXT: AtomicU64 = AtomicU64::new(1);
     let (reader, writer) = std::io::pipe()?;
     command.stdout(writer.try_clone()?).stderr(writer);
@@ -58,6 +63,7 @@ pub(crate) fn start(client: u64, summary: &str, command: &mut std::process::Comm
     let shell =
         Shell { client, command: summary.to_owned(), tree, output, dropped, read: 0, started, exit: None, readers };
     lock().insert(id.clone(), shell);
+    workspace.tracking.started_shell(&id);
     Ok(id)
 }
 

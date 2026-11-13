@@ -24,14 +24,7 @@ impl Review for Judge {
             return Ok(None);
         }
         *attempts += 1;
-        let client = agent.workspace.credentials.client;
-        let before: Vec<String> = shells::list(client).into_iter().map(|(id, _, _)| id).collect();
         let verdict = verify(agent, verification, run, *attempts);
-        for (id, _, running) in shells::list(client) {
-            if running && !before.contains(&id) {
-                shells::kill(client, &id);
-            }
-        }
         (agent.emit)(EngineEvent::Verified(verdict.clone()));
         if agent.control.is_stopped() {
             return Err(Ending::Cancelled);
@@ -94,6 +87,9 @@ fn verify(agent: &Agent<'_>, verification: &Verification, run: &[Message], attem
         }
         Err(ending) => Verdict::unavailable(format!("the judge stopped: {ending:?}"), attempt),
     };
+    for id in workspace.tracking.started_shells() {
+        shells::kill(workspace.credentials.client, &id);
+    }
     let seconds = u32::try_from(started.elapsed().as_secs()).unwrap_or(u32::MAX);
     let status = if verdict.passed { AgentStatus::Done { seconds } } else { AgentStatus::Failed };
     (agent.emit)(EngineEvent::AgentUpdate { index, status, summary: Some(format!("score {:.2}", verdict.score)) });

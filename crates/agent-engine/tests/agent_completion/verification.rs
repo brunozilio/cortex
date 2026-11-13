@@ -166,6 +166,39 @@ fn the_judge_runs_commands_and_the_user_watches_it_as_an_agent() {
 }
 
 #[test]
+fn the_judge_leaves_the_clients_other_commands_running() {
+    const CLIENT: u64 = 4242;
+    let dir = tempfile::tempdir().expect("dir");
+    let mut busy = Workspace::new(dir.path());
+    busy.credentials.client = CLIENT;
+    let long = ScriptedModel::new([
+        ScriptedModel::reply(vec![call("long", "Bash", json!({"command":"sleep 2; echo survived"}))]),
+        done("Done"),
+    ]);
+    let mut judged_run = Workspace::new(dir.path());
+    judged_run.credentials.client = CLIENT;
+    judged(&mut judged_run);
+    let quick = ScriptedModel::new([
+        wrote("oi"),
+        done("Done"),
+        ScriptedModel::reply(vec![call("check", "Bash", json!({"command":"sleep 1; echo checked"}))]),
+        done(PASS),
+    ]);
+    let events = std::thread::scope(|scope| {
+        let judging = scope.spawn(|| verdicts(&run(&quick, &judged_run)));
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let events = run(&long, &busy);
+        assert!(judging.join().expect("the judged run")[0].passed);
+        events
+    });
+    let output = events.iter().find_map(|event| match event {
+        EngineEvent::ToolResult { output, .. } => Some(output.clone()),
+        _ => None,
+    });
+    assert!(output.as_deref().is_some_and(|output| output.contains("survived")), "{output:?}");
+}
+
+#[test]
 fn a_sub_agents_work_is_not_judged_on_its_own() {
     let dir = tempfile::tempdir().expect("dir");
     let mut workspace = Workspace::new(dir.path());

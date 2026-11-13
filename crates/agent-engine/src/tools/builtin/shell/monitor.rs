@@ -40,7 +40,7 @@ impl Tool for Monitor {
         let mut shell = super::bash::shell(command);
         shell.current_dir(&workspace.cwd).stdin(std::process::Stdio::null());
         let client = workspace.credentials.client;
-        match super::shells::start(client, command, &mut shell) {
+        match super::shells::start(workspace, command, &mut shell) {
             Ok(id) => {
                 super::shells::watch(id.clone(), client, Watch::Lines);
                 Outcome::ok(format!(

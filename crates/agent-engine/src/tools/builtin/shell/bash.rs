@@ -58,7 +58,7 @@ impl Tool for Bash {
         let mut shell = shell(command);
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
-            return match super::shells::start(workspace.credentials.client, command, &mut shell) {
+            return match super::shells::start(workspace, command, &mut shell) {
                 Ok(id) => {
                     super::shells::watch(id.clone(), workspace.credentials.client, super::shells::Watch::End);
                     Outcome::ok(format!(
@@ -70,7 +70,7 @@ impl Tool for Bash {
             };
         }
         let watched = super::changes::before(workspace);
-        let id = match super::shells::start(workspace.credentials.client, command, &mut shell) {
+        let id = match super::shells::start(workspace, command, &mut shell) {
             Ok(id) => id,
             Err(error) => return Outcome::error(format!("Could not start the shell: {error}")),
         };
