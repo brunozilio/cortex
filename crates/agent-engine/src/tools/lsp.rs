@@ -49,7 +49,7 @@ impl Tool for Lsp {
     fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
         match ask(input, workspace) {
             Ok(answer) => Outcome::ok(clip(&answer, OUTPUT)),
-            Err(error) => Outcome::error(explain(&error)),
+            Err(error) => Outcome::error(error),
         }
     }
 }
@@ -68,9 +68,9 @@ fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
     server.sync(&file, &opened.language, &text)?;
     let line = text.lines().nth(query.line as usize - 1).unwrap_or_default();
     let (method, params) = query.request(&uri_of(&file), line);
-    let mut answer = server.request(method, params, &workspace.stop, ANSWER_WAIT)?;
+    let mut answer = server.request(method, params, &workspace.stop, ANSWER_WAIT).map_err(|error| explain(&error))?;
     if let Some((method, params)) = query.follow_up(&answer) {
-        answer = server.request(method, params, &workspace.stop, ANSWER_WAIT)?;
+        answer = server.request(method, params, &workspace.stop, ANSWER_WAIT).map_err(|error| explain(&error))?;
     }
     let lines = |path: &Path, number: u32| {
         let read = if path == file { Some(text.clone()) } else { std::fs::read_to_string(path).ok() };

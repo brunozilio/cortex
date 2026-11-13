@@ -7,6 +7,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
+use domain::lsp::answer::RequestError;
 use domain::lsp::{ServerSpec, uri::uri_of};
 use platform::Tree;
 use serde_json::{Value, json};
@@ -16,7 +17,7 @@ use super::framing::{read_message, write_message};
 const STARTUP: Duration = Duration::from_secs(60);
 const TICK: Duration = Duration::from_millis(25);
 
-type Answer = Result<Value, String>;
+type Answer = Result<Value, RequestError>;
 
 struct Published {
     version: Option<i64>,
@@ -104,33 +105,47 @@ impl LspClient {
         Ok(client)
     }
 
-    pub fn request(&self, method: &str, params: Value, stop: &AtomicBool, wait: Duration) -> Result<Value, String> {
+    pub fn request(
+        &self,
+        method: &str,
+        params: Value,
+        stop: &AtomicBool,
+        wait: Duration,
+    ) -> Result<Value, RequestError> {
         let shared = &self.shared;
         if !self.is_alive() {
-            return Err(format!("{} stopped", shared.name));
+            return Err(RequestError::Failed(format!("{} stopped", shared.name)));
         }
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let (send, answer) = channel();
-        shared.pending.lock().map_err(|_| "the server's requests are unavailable")?.insert(id, send);
+        shared
+            .pending
+            .lock()
+            .map_err(|_| RequestError::Failed("the server's requests are unavailable".into()))?
+            .insert(id, send);
         let sent = shared.send(&json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
-        let answered = sent.and_then(|()| self.wait(&answer, stop, wait));
+        let answered = sent.map_err(RequestError::Failed).and_then(|()| self.wait(&answer, stop, wait));
         if let Ok(mut pending) = shared.pending.lock() {
             pending.remove(&id);
         }
         answered
     }
 
-    fn wait(&self, answer: &Receiver<Answer>, stop: &AtomicBool, wait: Duration) -> Result<Value, String> {
+    fn wait(&self, answer: &Receiver<Answer>, stop: &AtomicBool, wait: Duration) -> Result<Value, RequestError> {
         let name = &self.shared.name;
         let deadline = Instant::now() + wait;
         loop {
             match answer.recv_timeout(TICK) {
-                Ok(answer) => return answer.map_err(|error| format!("{name}: {error}")),
-                Err(RecvTimeoutError::Disconnected) => return Err(format!("{name} stopped")),
-                Err(RecvTimeoutError::Timeout) if !self.is_alive() => return Err(format!("{name} stopped")),
-                Err(RecvTimeoutError::Timeout) if stop.load(Ordering::Relaxed) => return Err("cancelled".into()),
+                Ok(answer) => return answer,
+                Err(RecvTimeoutError::Disconnected) => return Err(RequestError::Failed(format!("{name} stopped"))),
+                Err(RecvTimeoutError::Timeout) if !self.is_alive() => {
+                    return Err(RequestError::Failed(format!("{name} stopped")));
+                }
+                Err(RecvTimeoutError::Timeout) if stop.load(Ordering::Relaxed) => {
+                    return Err(RequestError::Failed("cancelled".into()));
+                }
                 Err(RecvTimeoutError::Timeout) if Instant::now() > deadline => {
-                    return Err(format!("{name} did not answer in {}s", wait.as_secs()));
+                    return Err(RequestError::Busy(format!("{name} did not answer in {}s", wait.as_secs())));
                 }
                 Err(RecvTimeoutError::Timeout) => {}
             }
@@ -226,7 +241,11 @@ impl Shared {
             (None, Some(id)) => {
                 let Some(id) = id.as_u64() else { return };
                 let answer = match message.get("error") {
-                    Some(error) => Err(error["message"].as_str().unwrap_or("failed").to_owned()),
+                    Some(error) => Err(RequestError::answered(
+                        &self.name,
+                        error["code"].as_i64(),
+                        error["message"].as_str().unwrap_or("failed"),
+                    )),
                     None => Ok(message.get("result").cloned().unwrap_or(Value::Null)),
                 };
                 let waiting = self.pending.lock().ok().and_then(|mut pending| pending.remove(&id));

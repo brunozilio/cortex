@@ -18,7 +18,7 @@ struct Fake {
 }
 
 impl LanguageServer for Fake {
-    fn request(&self, _: &str, _: Value, _: &AtomicBool, _: Duration) -> Result<Value, String> {
+    fn request(&self, _: &str, _: Value, _: &AtomicBool, _: Duration) -> Result<Value, domain::lsp::answer::RequestError> {
         Ok(Value::Null)
     }
     fn sync(&self, _: &Path, _: &str, _: &str) -> Result<i64, String> {

@@ -4,6 +4,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use domain::lsp::answer::RequestError;
 use domain::lsp::ServerSpec;
 use serde_json::Value;
 
@@ -11,14 +12,14 @@ use super::{LanguageServer, LanguageServers, Lsp, Opened, Wait};
 
 #[derive(Debug, Default)]
 pub struct ScriptedServer {
-    pub answers: Mutex<VecDeque<Result<Value, String>>>,
+    pub answers: Mutex<VecDeque<Result<Value, RequestError>>>,
     pub asked: Mutex<Vec<(String, Value)>>,
     pub synced: Mutex<Vec<(PathBuf, String, String)>>,
     pub diagnostics: Mutex<Option<Vec<Value>>>,
 }
 
 impl ScriptedServer {
-    pub fn answering(answers: impl IntoIterator<Item = Result<Value, String>>) -> Arc<Self> {
+    pub fn answering(answers: impl IntoIterator<Item = Result<Value, RequestError>>) -> Arc<Self> {
         Arc::new(Self { answers: Mutex::new(answers.into_iter().collect()), ..Default::default() })
     }
 
@@ -32,7 +33,7 @@ impl ScriptedServer {
 }
 
 impl LanguageServer for ScriptedServer {
-    fn request(&self, method: &str, params: Value, _: &AtomicBool, _: Duration) -> Result<Value, String> {
+    fn request(&self, method: &str, params: Value, _: &AtomicBool, _: Duration) -> Result<Value, RequestError> {
         if let Ok(mut asked) = self.asked.lock() {
             asked.push((method.to_owned(), params));
         }

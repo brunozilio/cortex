@@ -44,11 +44,43 @@ pub fn describe(
 
 const MAX_ENTRIES: usize = 100;
 
-pub fn explain(error: &str) -> String {
-    if error.contains("content modified") || error.contains("did not answer") {
-        format!("{error}. The language server is still indexing the project; try again shortly.")
-    } else {
-        error.to_owned()
+const CONTENT_MODIFIED: i64 = -32801;
+const SERVER_CANCELLED: i64 = -32802;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RequestError {
+    Busy(String),
+    Failed(String),
+}
+
+impl RequestError {
+    pub fn answered(server: &str, code: Option<i64>, message: &str) -> Self {
+        let text = format!("{server}: {message}");
+        match code {
+            Some(CONTENT_MODIFIED | SERVER_CANCELLED) => Self::Busy(text),
+            _ => Self::Failed(text),
+        }
+    }
+}
+
+impl std::fmt::Display for RequestError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Busy(text) | Self::Failed(text) => f.write_str(text),
+        }
+    }
+}
+
+impl From<RequestError> for String {
+    fn from(error: RequestError) -> Self {
+        error.to_string()
+    }
+}
+
+pub fn explain(error: &RequestError) -> String {
+    match error {
+        RequestError::Busy(text) => format!("{text}. The language server is still indexing the project; try again shortly."),
+        RequestError::Failed(text) => text.clone(),
     }
 }
 
@@ -222,10 +254,11 @@ mod tests {
 
     #[test]
     fn a_server_still_indexing_is_told_apart_from_a_failure() {
-        let busy = explain("rust-analyzer: content modified");
+        let busy = explain(&RequestError::answered("rust-analyzer", Some(-32801), "content modified"));
         assert!(busy.starts_with("rust-analyzer: content modified. ") && busy.contains("still indexing"), "{busy}");
-        assert!(explain("rust-analyzer did not answer in 60s").contains("try again shortly"));
-        assert_eq!(explain("gopls stopped"), "gopls stopped");
+        assert!(explain(&RequestError::Busy("rust-analyzer did not answer in 60s".into())).contains("try again shortly"));
+        let failed = RequestError::answered("gopls", Some(-32603), "content modified elsewhere");
+        assert_eq!(explain(&failed), "gopls: content modified elsewhere");
     }
 
     #[test]

@@ -52,7 +52,7 @@ fn calls_are_asked_in_two_steps() {
 
 #[test]
 fn what_cannot_be_asked_is_an_error_that_says_why() {
-    let server = ScriptedServer::answering([Err("fake: content modified".to_owned())]);
+    let server = ScriptedServer::answering([Err(domain::lsp::answer::RequestError::Busy("fake: content modified".into()))]);
     let (_dir, workspace) = project(&server);
     let ask = |input: Value| Lsp.run(&input, &workspace);
     let busy = ask(json!({"operation": "hover", "file_path": "src/main.rs", "line": 1, "character": 1}));

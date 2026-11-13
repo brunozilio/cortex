@@ -101,9 +101,9 @@ fn an_error_answer_and_a_server_that_ends_are_reported() {
         );
     });
     let error = client.request("textDocument/definition", json!({}), &AtomicBool::new(false), WAIT).expect_err("error");
-    assert!(error.contains("content modified"), "{error}");
+    assert_eq!(error, domain::lsp::answer::RequestError::Busy("fake: content modified".into()));
     server.join().expect("server");
     let gone = client.request("textDocument/definition", json!({}), &AtomicBool::new(false), WAIT).expect_err("gone");
-    assert!(gone.contains("fake stopped"), "{gone}");
+    assert!(gone.to_string().contains("fake stopped"), "{gone}");
     assert!(!client.is_alive());
 }

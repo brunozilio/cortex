@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
+use domain::lsp::answer::RequestError;
 use domain::lsp::ServerSpec;
 use serde_json::Value;
 
@@ -31,7 +32,7 @@ pub trait Fetch: Send + Sync {
 }
 
 pub trait LanguageServer: Send + Sync {
-    fn request(&self, method: &str, params: Value, stop: &AtomicBool, wait: Duration) -> Result<Value, String>;
+    fn request(&self, method: &str, params: Value, stop: &AtomicBool, wait: Duration) -> Result<Value, RequestError>;
     fn sync(&self, file: &Path, language: &str, text: &str) -> Result<i64, String>;
     fn diagnostics(&self, file: &Path, version: i64, wait: Duration) -> Option<Vec<Value>>;
     fn is_alive(&self) -> bool;
@@ -106,7 +107,7 @@ pub trait LanguageServers: Send + Sync + std::fmt::Debug {
 }
 
 impl LanguageServer for LspClient {
-    fn request(&self, method: &str, params: Value, stop: &AtomicBool, wait: Duration) -> Result<Value, String> {
+    fn request(&self, method: &str, params: Value, stop: &AtomicBool, wait: Duration) -> Result<Value, RequestError> {
         LspClient::request(self, method, params, stop, wait)
     }
     fn sync(&self, file: &Path, language: &str, text: &str) -> Result<i64, String> {
