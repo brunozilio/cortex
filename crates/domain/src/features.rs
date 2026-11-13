@@ -6,6 +6,46 @@ pub const SANDBOX: &str = "experimental-sandbox";
 
 const SECURITY: &[&str] = &[SANDBOX];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Flag {
+    pub name: &'static str,
+    pub about: &'static str,
+}
+
+pub const KNOWN: &[Flag] =
+    &[Flag { name: SANDBOX, about: "Confine Bash and Monitor commands to the project's folders (macOS)" }];
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Listed {
+    pub name: String,
+    pub about: String,
+    pub on: bool,
+    pub experimental: bool,
+    pub security: bool,
+}
+
+pub fn toggle(argument: Option<&str>) -> Result<Option<(String, bool)>, String> {
+    let words: Vec<&str> = argument.unwrap_or_default().split_whitespace().collect();
+    match words.as_slice() {
+        [] => Ok(None),
+        [name, "on"] => Ok(Some(((*name).to_owned(), true))),
+        [name, "off"] => Ok(Some(((*name).to_owned(), false))),
+        _ => Err("Use /features to list them, or /features <name> on|off.".into()),
+    }
+}
+
+pub fn known(name: &str) -> Option<Flag> {
+    KNOWN.iter().copied().find(|flag| flag.name == name)
+}
+
+pub fn with_flag(mut settings: Value, name: &str, on: bool) -> Result<Value, String> {
+    let root = settings.as_object_mut().ok_or("the settings are not a JSON object")?;
+    let features = root.entry("features").or_insert_with(|| Value::Object(Default::default()));
+    let features = features.as_object_mut().ok_or("features must be an object of true or false")?;
+    features.insert(name.to_owned(), Value::Bool(on));
+    Ok(settings)
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Features {
     set: BTreeMap<String, bool>,
@@ -14,6 +54,23 @@ pub struct Features {
 impl Features {
     pub fn on(&self, feature: &str) -> bool {
         self.set.get(feature).copied().unwrap_or(true)
+    }
+
+    pub fn listed(&self) -> Vec<Listed> {
+        KNOWN
+            .iter()
+            .map(|flag| Listed {
+                name: flag.name.to_owned(),
+                about: flag.about.to_owned(),
+                on: self.on(flag.name),
+                experimental: flag.name.starts_with("experimental-"),
+                security: SECURITY.contains(&flag.name),
+            })
+            .collect()
+    }
+
+    pub fn off(&self) -> impl Iterator<Item = &str> {
+        self.set.iter().filter(|(_, on)| !**on).map(|(name, _)| name.as_str())
     }
 
     pub fn layered(mut self, value: &Value, owners: bool) -> Result<Self, String> {
@@ -55,6 +112,40 @@ mod tests {
 
         let enforced = owners.layered(&json!({ SANDBOX: true }), false).expect("flags");
         assert!(enforced.on(SANDBOX), "a project may ask for a security feature");
+    }
+
+    #[test]
+    fn the_known_flags_are_listed_with_their_state() {
+        let features = Features::default().layered(&json!({ SANDBOX: false, "insights": false }), true).expect("flags");
+
+        let listed = features.listed();
+        let sandbox = listed.iter().find(|flag| flag.name == SANDBOX).expect("sandbox is known");
+        assert!(!sandbox.on && sandbox.experimental && sandbox.security);
+        assert!(!listed.iter().any(|flag| flag.name == "insights"), "only known flags are listed");
+        assert_eq!(features.off().collect::<Vec<_>>(), ["experimental-sandbox", "insights"]);
+    }
+
+    #[test]
+    fn a_flag_is_written_into_the_settings_keeping_the_rest() {
+        let settings = json!({ "model": "x", "features": { "insights": false } });
+
+        let written = with_flag(settings, SANDBOX, false).expect("written");
+
+        assert_eq!(written, json!({ "model": "x", "features": { "insights": false, SANDBOX: false } }));
+        assert!(with_flag(json!([]), SANDBOX, true).is_err());
+        assert!(with_flag(json!({ "features": 1 }), SANDBOX, true).is_err());
+        assert_eq!(known(SANDBOX).map(|flag| flag.name), Some(SANDBOX));
+        assert!(known("nothing").is_none());
+    }
+
+    #[test]
+    fn the_command_lists_or_turns_one_flag_on_or_off() {
+        assert_eq!(toggle(None), Ok(None));
+        assert_eq!(toggle(Some("  ")), Ok(None));
+        assert_eq!(toggle(Some("experimental-sandbox off")), Ok(Some((SANDBOX.into(), false))));
+        assert_eq!(toggle(Some("insights on")), Ok(Some(("insights".into(), true))));
+        assert!(toggle(Some("insights maybe")).is_err());
+        assert!(toggle(Some("insights")).is_err());
     }
 
     #[test]

@@ -278,7 +278,15 @@ Inbox notices are core (`TakeNotices`).
   feature still being tried carries `experimental-` in its name. The
   owner's files set a flag either way. A checked-in file only restricts:
   it may turn an ordinary feature off, never back on, and may turn a
-  security feature on, never off (`Features::layered`).
+  security feature on, never off (`Features::layered`). `KNOWN` lists the
+  flags a person can switch, with what each does. The chat's `/features`
+  (the `flags` feature: CLI and backend folders) lists them and turns one
+  on or off in the owner's `~/.{command}/settings.json`
+  (`prompt::owner_settings::keep_feature`); `{command} doctor` says
+  whether the sandbox confines commands. The backend reads the same flags
+  at start (`LocalServices::turned_off_in`), so a backend feature folder
+  turned off in the settings joins `off` and its `handle` and `run.rs`
+  are skipped.
 - **Sandbox** (`experimental-sandbox`, macOS only): `Bash` and `Monitor`
   commands run confined by the operating system. The rule is pure in
   `domain::sandbox`: a command reads anything but writes only inside the

@@ -48,6 +48,10 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
         sdk.mcp_servers(cwd).map(|servers| format!("{} configured", servers.len())).map_err(|e| e.to_string()),
     ));
     found.push(check("declared providers", declared(sdk, cwd)));
+    found.push(check(
+        "sandbox",
+        sandbox(sdk.feature("flags", serde_json::json!({ "cwd": cwd })).map_err(|e| e.to_string())),
+    ));
     found.push(check("git", program("git", &["--version"])));
     found.push(check(
         "ripgrep",
@@ -59,6 +63,17 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
 fn declared(sdk: &Sdk, cwd: &Path) -> Result<String, String> {
     let lines = sdk.feature("declared_providers", serde_json::json!({ "path": cwd })).map_err(|e| e.to_string())?;
     summarize(&serde_json::from_value::<Vec<String>>(lines).map_err(|e| e.to_string())?)
+}
+
+fn sandbox(flags: Result<serde_json::Value, String>) -> Result<String, String> {
+    let flags = flags?;
+    let flag = flags.as_array().into_iter().flatten().find(|flag| flag["name"] == domain::features::SANDBOX);
+    let Some(flag) = flag else { return Ok("not offered".into()) };
+    Ok(match (flag["available"] == true, flag["on"] == true) {
+        (false, _) => "not on this system: commands run unconfined".into(),
+        (true, true) => "on: commands write only inside the project, added folders, temp and caches".into(),
+        (true, false) => "off in your settings (/features experimental-sandbox on)".into(),
+    })
 }
 
 fn summarize(lines: &[String]) -> Result<String, String> {
@@ -119,5 +134,16 @@ mod tests {
         assert_eq!(summarize(&lines(&["groq loaded", "local loaded"])), Ok("2 loaded".into()));
         let mixed = lines(&["groq loaded", "/p/x.js: left out: bad wire"]);
         assert_eq!(summarize(&mixed), Err("/p/x.js: left out: bad wire".into()));
+    }
+
+    #[test]
+    fn the_sandbox_line_says_whether_commands_are_confined() {
+        let flag = |on: bool, available: bool| {
+            Ok(serde_json::json!([{ "name": domain::features::SANDBOX, "on": on, "available": available }]))
+        };
+        assert!(sandbox(flag(true, true)).is_ok_and(|text| text.starts_with("on:")));
+        assert!(sandbox(flag(false, true)).is_ok_and(|text| text.contains("/features experimental-sandbox on")));
+        assert!(sandbox(flag(true, false)).is_ok_and(|text| text.starts_with("not on this system")));
+        assert_eq!(sandbox(Err("down".into())), Err("down".into()));
     }
 }

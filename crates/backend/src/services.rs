@@ -30,10 +30,21 @@ impl std::fmt::Debug for LocalServices {
 impl LocalServices {
     pub fn detect() -> Self {
         let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
-        if let Ok(cwd) = std::env::current_dir() {
-            let _ = crate::native::declare_providers(std::env::home_dir().as_deref(), &cwd);
+        let services = Self::with_engine(Arc::new(crate::native::engine(&data)));
+        match std::env::current_dir() {
+            Ok(cwd) => {
+                let _ = crate::native::declare_providers(std::env::home_dir().as_deref(), &cwd);
+                services.turned_off_in(&cwd)
+            }
+            Err(_) => services,
         }
-        Self::with_engine(Arc::new(crate::native::engine(&data)))
+    }
+
+    pub fn turned_off_in(mut self, cwd: &Path) -> Self {
+        if let Ok(settings) = agent_engine::prompt::settings::load(cwd, self.home.as_deref(), &[]) {
+            self.off.extend(settings.features.off().map(str::to_owned));
+        }
+        self
     }
 
     pub fn with_engine(engine: Arc<dyn AgentEngine>) -> Self {
@@ -77,5 +88,21 @@ mod tests {
         let owner = domain::Principal::LocalOwner;
         services.settings.save(&owner, &serde_json::json!({"model": "m"})).expect("save");
         assert!(data.path().join("users").exists());
+    }
+
+    #[test]
+    fn a_feature_the_owner_turned_off_is_off_for_the_backend_too() {
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        std::fs::create_dir_all(home.path().join(brand::DIR)).expect("dir");
+        let settings = serde_json::json!({ "features": { "trace": false, "memory": true } });
+        std::fs::write(home.path().join(brand::DIR).join("settings.json"), settings.to_string()).expect("write");
+        let mut services = LocalServices::with_engine(Arc::new(FakeEngine::new(Vec::new(), Vec::new())));
+        services.home = Some(home.path().to_path_buf());
+
+        let services = services.turned_off_in(repo.path());
+
+        assert!(services.off.contains("trace"));
+        assert!(!services.off.contains("memory"));
     }
 }
