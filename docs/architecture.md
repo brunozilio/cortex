@@ -176,6 +176,15 @@ Inbox notices are core (`TakeNotices`).
   keeps its parent's. Unlike `memory::sanitize`, which uses the same
   word rules, it keeps the text's layout. What the model itself writes
   in a tool call is not changed.
+- **Budget** (`budget`; rule in `domain::budget`): the chat's `/budget
+  <dollars>|off` (the SDK's `Session::set_budget`) caps what a session
+  spends. The SDK `Session` adds up every `Usage` event of its runs,
+  sub-agents' and side calls' included (`Spending`), and sends the limit
+  and what was spent before with each run as `PromptRequest::budget`.
+  `Metered::turn` refuses the next model call once what was spent before
+  plus the run's priced calls reach the limit, so the run fails saying
+  how to raise it; calls without a price count as nothing. The status
+  line shows spent against the limit.
 - **Suggested rules** (`suggested-rules`; rule in
   `domain::suggested_rules`): the chat's `/rules` reads the `Asked` and
   `Answered` events of the project's recent sessions (the owner's

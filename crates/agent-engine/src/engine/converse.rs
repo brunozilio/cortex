@@ -144,6 +144,7 @@ impl Job {
             gate: self.gate.clone(),
             model: self.request.model.clone(),
             calls: self.recorder.as_ref().map(|recorder| recorder.calls()),
+            budget: self.request.budget,
         };
         if self.request.command == Some(SessionCommand::Compact) {
             let focus = Some(self.request.prompt.as_str()).filter(|focus| !focus.trim().is_empty());

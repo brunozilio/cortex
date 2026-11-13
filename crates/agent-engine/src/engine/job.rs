@@ -122,6 +122,9 @@ impl Job {
             .then(|| Arc::new(tools::env_secrets(&workspace.cwd)));
         workspace.policy.snapshots = settings.features.on(domain::features::DESTRUCTIVE_SNAPSHOT);
         workspace.policy.dependency_guard = settings.features.on(domain::features::DEPENDENCY_GUARD);
+        if !settings.features.on(domain::features::BUDGET) {
+            self.request.budget = None;
+        }
         workspace.services.files = Some(Arc::default());
         if self.request.safety_check {
             workspace.policy.safety = Some(Arc::new(crate::guard::Safety::default()));

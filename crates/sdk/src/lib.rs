@@ -19,7 +19,7 @@ pub use self::account::ProjectMemory;
 pub use self::extensions::{Agent, Command, Skill};
 pub use self::mcp::{McpConnection, McpServer};
 pub use self::run::{Run, RunControl};
-pub use self::session::{Headless, Session};
+pub use self::session::{Headless, Session, Spending};
 use client::Client;
 pub use domain::mcp_config::{McpOrigin, McpServerInfo, McpState};
 pub use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind, Revision};

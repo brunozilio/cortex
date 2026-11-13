@@ -1,8 +1,8 @@
 use crate::RunGate;
 use crate::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
 use domain::billing::{ModelUsage, PRICE_DATE};
-use llm_providers::rates;
 use domain::{EngineEvent, ModelProvider};
+use llm_providers::rates;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -14,6 +14,10 @@ impl Ledger {
     pub fn cost(&self) -> Option<f64> {
         self.costs.lock().ok()?.iter().copied().sum()
     }
+
+    pub fn known_cost(&self) -> f64 {
+        self.costs.lock().map(|costs| costs.iter().flatten().sum()).unwrap_or(0.0)
+    }
 }
 pub type Calls = Arc<dyn Fn(&TurnRequest, &Reply) + Send + Sync>;
 
@@ -24,9 +28,16 @@ pub struct Metered {
     pub gate: RunGate,
     pub model: domain::ModelOption,
     pub calls: Option<Calls>,
+    pub budget: Option<domain::budget::Budget>,
 }
 impl ModelApi for Metered {
     fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
+        if let Some(budget) = &self.budget {
+            let run_cost = self.ledger.known_cost();
+            if !budget.allows(run_cost) {
+                return Err(ModelError::Provider(budget.refusal(run_cost)));
+            }
+        }
         let reply = self.api.turn(request, on, stop)?;
         if let Some(calls) = &self.calls {
             calls(request, &reply);
@@ -34,8 +45,8 @@ impl ModelApi for Metered {
         let u = reply.usage;
         let provider = crate::providers::find(self.provider);
         let vendor = provider.map_or("", |provider| provider.vendor());
-        let searched = llm_providers::search_price(vendor)
-            .map_or(0.0, |price| domain::billing::searches_cost(price, u.searches));
+        let searched =
+            llm_providers::search_price(vendor).map_or(0.0, |price| domain::billing::searches_cost(price, u.searches));
         let cost = rates(vendor, &request.model, u.prompt())
             .map(|rate| rate.estimate(u.input, u.output, u.cache_read, u.cache_write) + searched);
         self.ledger.costs.lock().map_err(|_| ModelError::Provider("usage ledger unavailable".into()))?.push(cost);
@@ -61,5 +72,54 @@ impl ModelApi for Metered {
 impl std::fmt::Debug for Metered {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Metered").field("provider", &self.provider).finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use domain::budget::Budget;
+
+    use super::*;
+    use crate::boundary::EventSink;
+    use crate::model::scripted::ScriptedModel;
+    use crate::transcript::Block;
+
+    struct Quiet;
+
+    impl EventSink for Quiet {
+        fn emit(&self, _run: domain::RunId, _event: EngineEvent) {}
+    }
+
+    fn metered(budget: Option<Budget>) -> Metered {
+        Metered {
+            api: Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("ok".into())])])),
+            ledger: Arc::default(),
+            provider: ModelProvider::named("scripted"),
+            gate: RunGate::new(domain::RunId::new(), Arc::new(Quiet)),
+            model: domain::ModelOption::new("m", "M"),
+            calls: None,
+            budget,
+        }
+    }
+
+    #[test]
+    fn a_spent_budget_stops_the_next_call_before_it_is_made() {
+        let request = TurnRequest {
+            model: "m".into(),
+            system: String::new(),
+            messages: Vec::new(),
+            tools: Vec::new(),
+            effort: domain::Effort::Medium,
+            max_tokens: 100,
+        };
+        let stop = AtomicBool::new(false);
+
+        let spent = metered(Some(Budget { limit_usd: 1.0, spent_usd: 1.0 }));
+        let refused = spent.turn(&request, &mut |_| {}, &stop).expect_err("refused");
+        assert!(refused.to_string().contains("budget"), "{refused}");
+
+        let within = metered(Some(Budget { limit_usd: 1.0, spent_usd: 0.5 }));
+        assert!(within.turn(&request, &mut |_| {}, &stop).is_ok());
+        assert!(metered(None).turn(&request, &mut |_| {}, &stop).is_ok());
     }
 }

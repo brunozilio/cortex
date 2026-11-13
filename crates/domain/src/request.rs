@@ -47,6 +47,8 @@ pub struct PromptRequest {
     pub append_system: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verification: Option<crate::verification::Criteria>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget: Option<crate::budget::Budget>,
     #[serde(skip)]
     pub credentials: crate::credentials::RunCredentials,
 }
@@ -78,6 +80,7 @@ impl PromptRequest {
             fallback_model: None,
             append_system: None,
             verification: None,
+            budget: None,
             credentials: Default::default(),
         }
     }

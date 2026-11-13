@@ -18,6 +18,7 @@ pub struct Run {
     pub(crate) resume: Arc<Mutex<Option<SessionId>>>,
     pub(crate) mode: Arc<Mutex<PermissionMode>>,
     pub(crate) plan: Option<PlanWatch>,
+    pub(crate) spending: Arc<Mutex<crate::session::Spending>>,
     done: bool,
 }
 
@@ -36,6 +37,7 @@ impl Run {
             resume: Arc::default(),
             mode: Arc::default(),
             plan: None,
+            spending: Arc::default(),
             done: false,
         })
     }
@@ -72,6 +74,7 @@ impl Run {
         if let Some(plan) = &mut self.plan {
             plan.observe(event);
         }
+        self.spending.locked().spent_usd += domain::budget::spent(event);
         self.done = event.is_terminal();
     }
 

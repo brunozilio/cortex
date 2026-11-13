@@ -22,6 +22,7 @@ impl Job {
             gate: self.gate.clone(),
             model: self.request.model.clone(),
             calls: None,
+            budget: None,
         };
         let template = TurnRequest {
             model: self.request.model.id.clone(),

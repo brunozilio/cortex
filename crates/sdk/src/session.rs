@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use platform::sync::Locked;
 
+use domain::budget::Budget;
 use domain::memory::MemoryBrief;
 use domain::{Criteria, Effort, ModelOption, PermissionMode, PromptRequest, SessionId, Verifications};
 use protocol::ClientCommand;
@@ -26,6 +27,13 @@ pub struct Session {
     output_style: Option<String>,
     headless: Headless,
     fork: std::sync::atomic::AtomicBool,
+    spending: Arc<Mutex<Spending>>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Spending {
+    pub limit_usd: Option<f64>,
+    pub spent_usd: f64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -52,7 +60,16 @@ impl Session {
             output_style: None,
             headless: Headless::default(),
             fork: std::sync::atomic::AtomicBool::new(false),
+            spending: Arc::default(),
         }
+    }
+
+    pub fn set_budget(&self, limit_usd: Option<f64>) {
+        self.spending.locked().limit_usd = limit_usd;
+    }
+
+    pub fn spending(&self) -> Spending {
+        *self.spending.locked()
     }
 
     pub fn fork_next(&self) {
@@ -195,7 +212,10 @@ impl Session {
         let conversation = request.command.is_none();
         let planning = request.permission == PermissionMode::Plan;
         let plan = conversation.then(|| PlanWatch::new(Arc::clone(&self.verifications), planning));
+        let spending = self.spending();
+        request.budget = spending.limit_usd.map(|limit_usd| Budget { limit_usd, spent_usd: spending.spent_usd });
         let mut run = Run::start(&self.client, |run| ClientCommand::SubmitPrompt { run, request })?;
+        run.spending = Arc::clone(&self.spending);
         run.resume = resume;
         run.plan = plan;
         if conversation {

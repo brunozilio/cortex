@@ -23,7 +23,7 @@ pub fn searches_cost(micro_per_search: u64, searches: u64) -> f64 {
     (u128::from(micro_per_search) * u128::from(searches)) as f64 / 1_000_000.0
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ModelUsage {
     pub model: String,
     pub input: u64,
