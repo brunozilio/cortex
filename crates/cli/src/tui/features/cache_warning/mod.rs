@@ -6,7 +6,7 @@ pub fn feature() -> Feature {
 }
 
 fn status(app: &App) -> Option<String> {
-    if app.busy() || !super::flags::on(app, domain::features::CACHE_WARNING) {
+    if app.busy() || !super::on(app, domain::features::CACHE_WARNING) {
         return None;
     }
     let last = app.transcript.last_call.as_ref()?;

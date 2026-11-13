@@ -30,6 +30,10 @@ pub fn status(app: &App) -> Vec<String> {
     all().into_iter().filter_map(|feature| feature.status).filter_map(|status| status(app)).collect()
 }
 
+pub fn on(app: &App, flag: &str) -> bool {
+    !app.turned_off.contains(flag)
+}
+
 pub fn settings() -> Vec<Setting> {
     all().into_iter().filter_map(|feature| feature.setting).collect()
 }

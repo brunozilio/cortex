@@ -14,7 +14,7 @@ pub fn feature() -> Feature {
 }
 
 fn run(app: &mut App, argument: Option<String>) {
-    if !super::flags::on(app, domain::features::BRANCHES) {
+    if !super::on(app, domain::features::BRANCHES) {
         return app.transcript.notice("Branches are turned off in your settings (/features branches on).");
     }
     if app.busy() {

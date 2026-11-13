@@ -27,6 +27,7 @@ pub fn answer(
         SessionCommand::Rename => {
             branch_name(api, template, history, stop)?.map(|name| ChoreAnswer::Title(spoken(&name)))
         }
+        SessionCommand::Learn => lesson(api, template, history, prompt, stop)?.map(ChoreAnswer::Learned),
         SessionCommand::MeasureContext
         | SessionCommand::Compact
         | SessionCommand::Rewind(_)
@@ -100,6 +101,22 @@ pub fn suggestion(
     messages.push(Message::user(crate::prompt::text("chore-suggest")));
     let answer = ask(api, template, template.system.clone(), messages, 60, stop)?;
     Ok(clean_suggestion(&answer))
+}
+
+pub fn lesson(
+    api: &dyn ModelApi,
+    template: &TurnRequest,
+    history: &[Message],
+    signals: &str,
+    stop: &AtomicBool,
+) -> Result<Option<domain::learning::Proposal>, ModelError> {
+    let mut messages = history.to_vec();
+    while messages.last().is_some_and(|message| message.tool_uses().next().is_some()) {
+        messages.pop();
+    }
+    messages.push(Message::user(format!("{signals}\n\n{}", crate::prompt::text("chore-learn"))));
+    let answer = ask(api, template, template.system.clone(), messages, 600, stop)?;
+    Ok(domain::learning::parse(&answer))
 }
 
 pub fn side_answer(

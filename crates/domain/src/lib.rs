@@ -21,6 +21,7 @@ pub mod ids;
 pub mod image;
 pub mod inbox;
 pub mod interception;
+pub mod learning;
 pub mod looping;
 pub mod lsp;
 pub mod mcp;

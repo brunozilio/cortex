@@ -482,6 +482,17 @@ Inbox notices are core (`TakeNotices`).
   `recap`, `heads_up`, `side`). The chat names a conversation after its
   first run, offers the next prompt (Tab takes it), shows a heads-up when
   there is one, recaps on `{command} -c`, and answers `/btw`.
+- **Learning from corrections** (`experimental-learning`; rules in
+  `domain::learning`): the SDK `Session` collects, from its conversation
+  runs, what the user corrected (a denial with a note, a steer, repeats
+  held back, a failed verification). After a run with two or more,
+  `Session::learn` sends them as the `Learn` side call
+  (`chores::lesson`, `content/prompts/chore-learn.md`), which proposes at
+  most one lasting lesson as JSON: a memory, a skill or a permission
+  rule, with why. The chat shows it; `/learn keep` saves it (the memory
+  through project memory, the rule through `suggested_rules`, the skill
+  by asking the agent to write it with skill-creator) and `/learn skip`
+  drops it. Nothing is kept without the user.
 - **Checkpoints** (`checkpoints.rs`, `engine/rewind.rs`): each prompt opens
   one (`EngineEvent::Checkpoint(n)`); `Edit`/`Write` keep a file's content
   before its first change in the run. `SessionCommand::Rewind(n)`

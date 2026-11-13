@@ -13,8 +13,12 @@ impl App {
         }
         if let Some(session) = &self.session {
             let (suggest, heads_up) = (session.suggest(), session.heads_up());
+            let learn = super::features::on(self, domain::features::LEARNING).then(|| session.learn()).flatten();
             self.chore(suggest);
             self.chore(heads_up);
+            if let Some(learn) = learn {
+                self.chore(learn);
+            }
         }
     }
 
@@ -46,6 +50,14 @@ impl App {
             }
             Ok(Some(ChoreAnswer::Recap(text))) => self.transcript.notice(format!("Where you left off: {text}")),
             Ok(Some(ChoreAnswer::HeadsUp(heads_up))) => self.transcript.notice(heads_up_text(&heads_up)),
+            Ok(Some(ChoreAnswer::Learned(proposal))) => {
+                self.transcript.notice(domain::learning::offered(&proposal));
+                if let Some(waiting) =
+                    self.features.get::<Option<domain::learning::Proposal>>(domain::learning::WAITING)
+                {
+                    *waiting = Some(proposal);
+                }
+            }
             Ok(_) | Err(_) => {}
         }
     }

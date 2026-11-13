@@ -19,6 +19,7 @@ pub struct Run {
     pub(crate) mode: Arc<Mutex<PermissionMode>>,
     pub(crate) plan: Option<PlanWatch>,
     pub(crate) spending: Arc<Mutex<crate::session::Spending>>,
+    pub(crate) signals: Arc<Mutex<domain::learning::Signals>>,
     done: bool,
 }
 
@@ -38,6 +39,7 @@ impl Run {
             mode: Arc::default(),
             plan: None,
             spending: Arc::default(),
+            signals: Arc::default(),
             done: false,
         })
     }
@@ -75,6 +77,7 @@ impl Run {
             plan.observe(event);
         }
         self.spending.locked().spent_usd += domain::budget::spent(event);
+        self.signals.locked().observe(event);
         self.done = event.is_terminal();
     }
 

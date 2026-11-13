@@ -28,6 +28,7 @@ pub struct Session {
     headless: Headless,
     fork: std::sync::atomic::AtomicBool,
     spending: Arc<Mutex<Spending>>,
+    signals: Arc<Mutex<domain::learning::Signals>>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -61,7 +62,25 @@ impl Session {
             headless: Headless::default(),
             fork: std::sync::atomic::AtomicBool::new(false),
             spending: Arc::default(),
+            signals: Arc::default(),
         }
+    }
+
+    pub fn learn(&self) -> Option<Result<Run, Error>> {
+        let signals = {
+            let mut kept = self.signals.locked();
+            if !kept.worth_learning() {
+                return None;
+            }
+            kept.take()
+        };
+        let mut request = PromptRequest::plain(self.cwd.clone(), domain::learning::brief(&signals), self.model.clone());
+        request.resume = Some(match self.id() {
+            Some(id) => id,
+            None => return Some(Err(Error::NothingToAsk)),
+        });
+        request.command = Some(domain::SessionCommand::Learn);
+        Some(self.start(request))
     }
 
     pub fn set_budget(&self, limit_usd: Option<f64>) {
@@ -223,6 +242,9 @@ impl Session {
         request.budget = spending.limit_usd.map(|limit_usd| Budget { limit_usd, spent_usd: spending.spent_usd });
         let mut run = Run::start(&self.client, |run| ClientCommand::SubmitPrompt { run, request })?;
         run.spending = Arc::clone(&self.spending);
+        if conversation {
+            run.signals = Arc::clone(&self.signals);
+        }
         run.resume = resume;
         run.plan = plan;
         if conversation {

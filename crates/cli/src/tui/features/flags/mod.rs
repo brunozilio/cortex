@@ -23,10 +23,6 @@ pub fn feature() -> Feature {
     }
 }
 
-pub fn on(app: &App, name: &str) -> bool {
-    !app.turned_off.contains(name)
-}
-
 fn load_once(app: &mut App) {
     let Some(loaded) = app.features.get::<Loaded>(NAME) else { return };
     if std::mem::replace(&mut loaded.0, true) {

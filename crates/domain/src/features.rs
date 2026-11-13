@@ -18,6 +18,7 @@ pub const PR_FOLLOW: &str = "experimental-pr-follow";
 pub const SESSION_CLAIMS: &str = "experimental-session-claims";
 pub const BRANCHES: &str = "branches";
 pub const TEAM_MEMORY: &str = "team-memory";
+pub const LEARNING: &str = "experimental-learning";
 
 pub fn skill_flag(skill: &str) -> Option<&'static str> {
     (skill == "follow-pr").then_some(PR_FOLLOW)
@@ -54,6 +55,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: ESCALATION,
         about: "When the agent fails the same call again and again, send it to the Advisor or to escalationModel",
+    },
+    Flag {
+        name: LEARNING,
+        about: "After a run where you corrected the agent, offer one lesson to keep: a memory, a skill or a rule",
     },
     Flag {
         name: TEAM_MEMORY,
