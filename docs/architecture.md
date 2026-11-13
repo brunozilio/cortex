@@ -483,6 +483,14 @@ settings. `/diff` runs `git` in the client's folder, the one place the CLI
 reads the project itself. Attached images travel in
 `PromptRequest::images` and open the first user message.
 
+## Logs
+
+The binary installs a `tracing` subscriber at start (`cli::logging`) that
+writes to `<local data>/logs/{command}.log`, never to the terminal the chat
+draws on. `{COMMAND}_LOG` takes an `EnvFilter` (`backend=debug`, `info`);
+warnings and errors are kept otherwise. A log past 5 MB is moved to
+`.log.1` when the next process starts.
+
 ## Secrets
 
 Provider keys and subscription tokens live in one

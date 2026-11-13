@@ -1,5 +1,6 @@
 mod config;
 mod doctor;
+mod logging;
 mod login;
 mod mcp;
 mod plugin;
@@ -131,6 +132,7 @@ fn parse_mode(text: &str) -> Result<PermissionMode, String> {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    logging::install();
     match run(cli) {
         Ok(code) => code,
         Err(message) => {
