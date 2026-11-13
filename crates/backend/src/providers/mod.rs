@@ -4,7 +4,9 @@ pub(crate) mod redirect;
 mod store;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
+
+use platform::sync::Locked;
 
 use domain::provider::{ModelProvider, ProviderAccount, ProviderKey, clean_key, key_hint};
 use domain::{Principal, SecretId};
@@ -137,11 +139,13 @@ impl ModelProviders {
 
     pub fn disconnect(&self, owner: &Principal, provider: ModelProvider) -> ServerEvent {
         let result = {
-            let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+            let _guard = self.lock.locked();
             self.secrets.delete(owner, secret_id(provider));
-            self.store.update(owner, &mut |book| {
-                book.disconnect(provider);
-            }).map_err(|error| error.to_string())
+            self.store
+                .update(owner, &mut |book| {
+                    book.disconnect(provider);
+                })
+                .map_err(|error| error.to_string())
         };
         self.answer(owner, provider, result)
     }
@@ -165,12 +169,14 @@ impl ModelProviders {
     }
 
     fn keep(&self, owner: &Principal, provider: ModelProvider, label: String, config: &Config) -> Result<(), String> {
-        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let _guard = self.lock.locked();
         self.secrets.set(owner, secret_id(provider), &account::secrets(config)?)?;
         let account = ProviderAccount { label, since_unix: self.now() };
-        self.store.update(owner, &mut |book| {
-            book.connect(provider, account.clone());
-        }).map_err(|error| error.to_string())
+        self.store
+            .update(owner, &mut |book| {
+                book.connect(provider, account.clone());
+            })
+            .map_err(|error| error.to_string())
     }
 
     fn answer(&self, owner: &Principal, provider: ModelProvider, result: Result<(), String>) -> ServerEvent {

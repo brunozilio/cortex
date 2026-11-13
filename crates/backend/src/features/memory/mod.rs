@@ -13,6 +13,7 @@ use domain::{
     Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, ModelOption, Principal, PromptRequest, Provenance,
     RecallBudget, RunId,
 };
+use platform::sync::Locked;
 use serde_json::{Value, json};
 #[cfg(test)]
 use store::{FileMemoryStore, InMemoryStore};
@@ -64,7 +65,7 @@ pub fn forget(_client: u64) {}
 
 pub fn of(services: &LocalServices) -> Memories {
     static ALL: LazyLock<Mutex<HashMap<Option<PathBuf>, Memories>>> = LazyLock::new(Mutex::default);
-    let mut all = ALL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut all = ALL.locked();
     all.entry(services.data.clone()).or_insert_with(|| Memories::new(memory_store_in(services.data.clone()))).clone()
 }
 
@@ -84,7 +85,7 @@ impl Memories {
     }
 
     fn lock(&self) -> MutexGuard<'_, HashMap<BookKey, MemoryBook>> {
-        self.books.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.books.locked()
     }
 
     pub fn load(&self, owner: &Principal, project: &Path) -> Value {
