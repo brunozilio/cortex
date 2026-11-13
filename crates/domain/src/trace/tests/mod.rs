@@ -18,6 +18,7 @@ fn usage(output: u64) -> EngineEvent {
         output,
         cache_read: 0,
         cache_write: 0,
+        searches: 0,
         estimated_cost_usd: Some(0.01),
         basis: String::new(),
         price_date: String::new(),

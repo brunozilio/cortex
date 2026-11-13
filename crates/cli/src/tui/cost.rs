@@ -25,8 +25,13 @@ pub fn report(cost: f64, usage: &SessionUsage) -> String {
 fn line(usage: &ModelUsage) -> String {
     let hit = cache_hit_rate(usage).map(|rate| format!(" ({:.0}% hit)", rate * 100.0)).unwrap_or_default();
     let cost = usage.estimated_cost_usd.map_or_else(|| "not priced".to_owned(), |cost| format!("${cost:.4}"));
+    let searched = match usage.searches {
+        0 => String::new(),
+        1 => " · 1 web search".to_owned(),
+        count => format!(" · {count} web searches"),
+    };
     format!(
-        "in {} · out {} · cache read {}{hit} · cache write {} · {cost}",
+        "in {} · out {} · cache read {}{hit} · cache write {}{searched} · {cost}",
         tokens(usage.input),
         tokens(usage.output),
         tokens(usage.cache_read),
@@ -53,6 +58,7 @@ mod tests {
             output: 300,
             cache_read: 10_800,
             cache_write: 0,
+            searches: 0,
             estimated_cost_usd: cost,
             basis: String::new(),
             price_date: String::new(),
@@ -71,6 +77,13 @@ mod tests {
         );
         assert!(text.contains("local            in 1.2k"), "{text}");
         assert!(text.contains("not priced"), "{text}");
+    }
+
+    #[test]
+    fn web_searches_are_counted_with_the_tokens() {
+        let mut usage = SessionUsage::default();
+        usage.add(&ModelUsage { searches: 2, ..call("claude-opus-5-5", Some(0.02)) });
+        assert!(report(0.02, &usage).contains("cache write 0 · 2 web searches · $0.0200"), "{}", report(0.02, &usage));
     }
 
     #[test]

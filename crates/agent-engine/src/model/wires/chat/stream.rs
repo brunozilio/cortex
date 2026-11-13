@@ -207,7 +207,7 @@ mod tests {
         folder.event(usage, &mut |_| {}).expect("usage");
         folder.event("[DONE]", &mut |_| {}).expect("done");
         let reply = folder.finish(&mut |_| {}).expect("reply");
-        assert_eq!(reply.usage, Usage { input: 200, output: 20, cache_read: 800, cache_write: 0 });
+        assert_eq!(reply.usage, Usage { input: 200, output: 20, cache_read: 800, cache_write: 0, searches: 0 });
     }
 
     #[test]

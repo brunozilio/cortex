@@ -108,6 +108,7 @@ pub struct Usage {
     pub output: u64,
     pub cache_read: u64,
     pub cache_write: u64,
+    pub searches: u64,
 }
 
 impl Usage {
@@ -120,6 +121,7 @@ impl Usage {
         self.output += other.output;
         self.cache_read += other.cache_read;
         self.cache_write += other.cache_write;
+        self.searches += other.searches;
     }
 }
 
@@ -141,8 +143,8 @@ mod tests {
 
     #[test]
     fn usage_adds_up() {
-        let mut total = Usage { input: 1, output: 2, cache_read: 3, cache_write: 4 };
-        total.add(Usage { input: 1, output: 1, cache_read: 1, cache_write: 1 });
+        let mut total = Usage { input: 1, output: 2, cache_read: 3, cache_write: 4, searches: 0 };
+        total.add(Usage { input: 1, output: 1, cache_read: 1, cache_write: 1, searches: 0 });
         assert_eq!(total.prompt(), 2 + 4 + 5);
         assert_eq!(total.output, 3);
     }

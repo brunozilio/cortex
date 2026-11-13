@@ -39,7 +39,7 @@ fn a_recorded_answer_folds_into_reasoning_text_and_a_call() {
 #[test]
 fn cached_input_counts_as_cache_reads_not_input() {
     let (reply, _) = fold(&recorded());
-    assert_eq!(reply.expect("reply").usage, Usage { input: 12, output: 87, cache_read: 4000, cache_write: 0 });
+    assert_eq!(reply.expect("reply").usage, Usage { input: 12, output: 87, cache_read: 4000, cache_write: 0, searches: 0 });
 }
 
 #[test]
@@ -121,6 +121,7 @@ fn a_web_search_call_is_kept_whole_and_shown_as_a_search() {
     let (reply, seen) = fold(&lines);
     let reply = reply.expect("reply");
     assert!(matches!(&reply.message.blocks[0], Block::Native { item, .. } if item["id"] == "ws_1"));
+    assert_eq!(reply.usage.searches, 1);
     assert_eq!(
         seen,
         [

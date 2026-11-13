@@ -136,6 +136,9 @@ impl Folder {
         if let Some(written) = read("cache_creation_input_tokens") {
             self.usage.cache_write = written;
         }
+        if let Some(searches) = usage["server_tool_use"]["web_search_requests"].as_u64() {
+            self.usage.searches = searches;
+        }
     }
 
     pub fn finish(self) -> Result<Reply, ModelError> {

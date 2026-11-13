@@ -28,7 +28,7 @@ mod tests {
     use super::*;
 
     fn usage(prompt: u64) -> Usage {
-        Usage { input: prompt, output: 100, cache_read: 0, cache_write: 0 }
+        Usage { input: prompt, output: 100, cache_read: 0, cache_write: 0, searches: 0 }
     }
 
     #[test]

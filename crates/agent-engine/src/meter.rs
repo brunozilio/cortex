@@ -34,8 +34,10 @@ impl ModelApi for Metered {
         let u = reply.usage;
         let provider = crate::providers::find(self.provider);
         let vendor = provider.map_or("", |provider| provider.vendor());
+        let searched = llm_providers::search_price(vendor)
+            .map_or(0.0, |price| domain::billing::searches_cost(price, u.searches));
         let cost = rates(vendor, &request.model, u.prompt())
-            .map(|rate| rate.estimate(u.input, u.output, u.cache_read, u.cache_write));
+            .map(|rate| rate.estimate(u.input, u.output, u.cache_read, u.cache_write) + searched);
         self.ledger.costs.lock().map_err(|_| ModelError::Provider("usage ledger unavailable".into()))?.push(cost);
         self.gate.emit(EngineEvent::Usage(ModelUsage {
             model: request.model.clone(),
@@ -43,6 +45,7 @@ impl ModelApi for Metered {
             output: u.output,
             cache_read: u.cache_read,
             cache_write: u.cache_write,
+            searches: u.searches,
             estimated_cost_usd: cost,
             basis: if provider.is_some_and(|provider| provider.access().subscription()) {
                 "subscription-api-equivalent"

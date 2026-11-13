@@ -9,6 +9,10 @@ pub trait Vendor: Sync {
     fn owns(&self, model: &str) -> bool;
     fn rates(&self, model: &str, prompt_tokens: u64) -> Option<TokenRates>;
 
+    fn search_price(&self) -> Option<u64> {
+        None
+    }
+
     fn alias(&self, _name: &str) -> Option<&'static str> {
         None
     }
@@ -44,6 +48,10 @@ pub fn owner(model: &str) -> Option<&'static dyn Vendor> {
 pub fn rates(vendor_id: &str, model: &str, prompt_tokens: u64) -> Option<TokenRates> {
     let model = bare(model);
     vendor(vendor_id).filter(|vendor| vendor.owns(model)).and_then(|vendor| vendor.rates(model, prompt_tokens))
+}
+
+pub fn search_price(vendor_id: &str) -> Option<u64> {
+    vendor(vendor_id).and_then(Vendor::search_price)
 }
 
 pub fn effort(

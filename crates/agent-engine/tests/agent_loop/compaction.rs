@@ -15,7 +15,7 @@ fn measured(blocks: Vec<Block>, prompt: u64) -> Result<Reply, ModelError> {
     Ok(Reply {
         message: Message::assistant(blocks),
         stop,
-        usage: Usage { input: 1_000, output: 50, cache_read: prompt - 1_000, cache_write: 0 },
+        usage: Usage { input: 1_000, output: 50, cache_read: prompt - 1_000, cache_write: 0, searches: 0 },
     })
 }
 

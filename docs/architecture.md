@@ -191,7 +191,8 @@ Inbox notices are core (`TakeNotices`).
   `web_search` tool; `llm_providers::web_search::put` swaps it in for the
   function tool. Its blocks come back as `Block::Native`, sent back unchanged
   only to the wire that made them, and show as a `WebSearch` call; a
-  `pause_turn` stop goes on with no new prompt), `Read` of PDFs
+  `pause_turn` stop goes on with no new prompt; each search is counted in
+  `Usage::searches` and priced by `Vendor::search_price` into the run's cost), `Read` of PDFs
   (`pdftotext`) and notebooks, `NotebookEdit`, `Monitor` (waits for a
   check command), and `ToolSearch`: past 20 MCP tools their schemas wait
   until loaded (`tools::tool_search`). A free query ignores words under

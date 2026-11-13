@@ -39,7 +39,7 @@ fn a_recorded_answer_folds_into_signed_thinking_text_and_a_call() {
 #[test]
 fn usage_keeps_cache_reads_and_writes_apart_from_input() {
     let (reply, _) = fold(&recorded());
-    assert_eq!(reply.expect("reply").usage, Usage { input: 12, output: 87, cache_read: 4000, cache_write: 0 });
+    assert_eq!(reply.expect("reply").usage, Usage { input: 12, output: 87, cache_read: 4000, cache_write: 0, searches: 0 });
 }
 
 #[test]
@@ -79,12 +79,13 @@ fn a_server_search_is_kept_whole_and_shown_as_a_search() {
         r#"{"type":"content_block_stop","index":0}"#,
         r#"{"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_1","content":[{"type":"web_search_result","title":"Rust","url":"https://rust-lang.org","encrypted_content":"EqgB"}]}}"#,
         r#"{"type":"content_block_stop","index":1}"#,
-        r#"{"type":"message_delta","delta":{"stop_reason":"pause_turn"},"usage":{"output_tokens":5}}"#,
+        r#"{"type":"message_delta","delta":{"stop_reason":"pause_turn"},"usage":{"output_tokens":5,"server_tool_use":{"web_search_requests":1}}}"#,
         r#"{"type":"message_stop"}"#,
     ];
     let (reply, seen) = fold(&lines);
     let reply = reply.expect("reply");
     assert_eq!(reply.stop, StopReason::PauseTurn);
+    assert_eq!(reply.usage.searches, 1);
     let Block::Native { item: call, .. } = &reply.message.blocks[0] else { panic!("{:?}", reply.message.blocks) };
     assert_eq!(call["input"]["query"], "rust 2026");
     let Block::Native { item: found, .. } = &reply.message.blocks[1] else { panic!("{:?}", reply.message.blocks) };

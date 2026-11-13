@@ -9,6 +9,8 @@ use crate::{ProviderError, Vendor as Family};
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Vendor;
 
+const SEARCH: u64 = 10_000;
+
 const PRICES: &[Price] = &[
     (&["claude-opus-5-5"], per(4_000_000, 20_000_000, 200_000, 5_000_000)),
     (&["claude-sonnet-5-5"], per(2_000_000, 10_000_000, 100_000, 2_500_000)),
@@ -29,6 +31,10 @@ impl Family for Vendor {
 
     fn owns(&self, model: &str) -> bool {
         model.starts_with("claude-")
+    }
+
+    fn search_price(&self) -> Option<u64> {
+        Some(SEARCH)
     }
 
     fn rates(&self, model: &str, prompt_tokens: u64) -> Option<TokenRates> {

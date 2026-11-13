@@ -75,6 +75,7 @@ fn a_sub_agent_shows_its_own_steps_and_usage_counts_tokens() {
         output: 40,
         cache_read: 500,
         cache_write: 0,
+        searches: 0,
         estimated_cost_usd: None,
         basis: String::new(),
         price_date: String::new(),

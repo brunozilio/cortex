@@ -11,6 +11,8 @@ pub struct Vendor;
 
 const REASONING: [&str; 5] = ["o1", "o3", "o4", "gpt-5", "gpt-6"];
 
+const SEARCH: u64 = 10_000;
+
 const PRICES: &[Price] = &[
     (&["gpt-6-astra"], per(10_000_000, 50_000_000, 1_000_000, 12_500_000)),
     (&["gpt-6.1-sol"], per(2_000_000, 10_000_000, 100_000, 2_500_000)),
@@ -35,6 +37,10 @@ impl Family for Vendor {
     fn reasons(&self, model: &str) -> bool {
         let lower = model.to_ascii_lowercase();
         REASONING.iter().any(|prefix| lower.starts_with(prefix))
+    }
+
+    fn search_price(&self) -> Option<u64> {
+        Some(SEARCH)
     }
 
     fn rates(&self, model: &str, _prompt_tokens: u64) -> Option<TokenRates> {

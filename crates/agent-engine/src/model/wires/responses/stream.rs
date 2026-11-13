@@ -126,6 +126,7 @@ impl Folder {
                 let query = action["query"].as_str().or_else(|| action["url"].as_str()).unwrap_or_default();
                 on(Delta::Searching { id: id.clone(), query: query.to_owned() });
                 on(Delta::Searched { id, found: text(&item["status"]) });
+                self.usage.searches += 1;
                 self.blocks.push(Block::Native { origin: super::ORIGIN, item: item.clone() });
             }
             "function_call" => {
@@ -165,6 +166,7 @@ impl Folder {
             output: usage["output_tokens"].as_u64().unwrap_or_default(),
             cache_read: cached,
             cache_write: 0,
+            searches: self.usage.searches,
         };
     }
 

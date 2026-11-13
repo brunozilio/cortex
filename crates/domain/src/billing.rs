@@ -19,6 +19,10 @@ impl TokenRates {
     }
 }
 
+pub fn searches_cost(micro_per_search: u64, searches: u64) -> f64 {
+    (u128::from(micro_per_search) * u128::from(searches)) as f64 / 1_000_000.0
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModelUsage {
     pub model: String,
@@ -26,6 +30,8 @@ pub struct ModelUsage {
     pub output: u64,
     pub cache_read: u64,
     pub cache_write: u64,
+    #[serde(default)]
+    pub searches: u64,
     pub estimated_cost_usd: Option<f64>,
     pub basis: String,
     pub price_date: String,
@@ -45,6 +51,7 @@ impl SessionUsage {
         kept.output += call.output;
         kept.cache_read += call.cache_read;
         kept.cache_write += call.cache_write;
+        kept.searches += call.searches;
         kept.estimated_cost_usd = match (kept.estimated_cost_usd, call.estimated_cost_usd) {
             (None, None) => None,
             (kept, call) => Some(kept.unwrap_or(0.0) + call.unwrap_or(0.0)),
@@ -67,6 +74,7 @@ mod tests {
             output: 10,
             cache_read,
             cache_write: 0,
+            searches: 1,
             estimated_cost_usd: cost,
             basis: String::new(),
             price_date: String::new(),
@@ -84,6 +92,15 @@ mod tests {
         assert_eq!((opus.model.as_str(), opus.input, opus.output, opus.cache_read), ("opus", 200, 20, 1800));
         assert_eq!(opus.estimated_cost_usd, Some(0.75));
         assert_eq!(session.models[1].estimated_cost_usd, None, "an unpriced model stays unpriced");
+    }
+
+    #[test]
+    fn a_search_costs_its_price_on_top_of_tokens() {
+        assert_eq!(searches_cost(10_000, 3), 0.03);
+        let mut session = SessionUsage::default();
+        session.add(&call("opus", 1, 0, Some(0.01)));
+        session.add(&call("opus", 1, 0, Some(0.01)));
+        assert_eq!(session.models[0].searches, 2);
     }
 
     #[test]

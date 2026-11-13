@@ -13,7 +13,7 @@ pub mod vendors {
     include!(concat!(env!("OUT_DIR"), "/vendors.rs"));
 }
 
-pub use vendor::{Vendor, effort, owner, rated, rates, vendor};
+pub use vendor::{Vendor, effort, owner, rated, rates, search_price, vendor};
 
 use domain::{Access, ModelOption};
 use serde_json::Value;
