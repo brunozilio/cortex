@@ -9,7 +9,7 @@ use super::{CommandOutput, Handler};
 use crate::tools::Workspace;
 
 pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, String> {
-    let mut cmd = platform::script_shell(&handler.command);
+    let mut cmd = workspace.confined(platform::script_shell(&handler.command));
     cmd.env(concat!(brand::env_prefix!(), "_PROJECT_DIR"), &workspace.cwd);
     cmd.current_dir(&workspace.cwd);
     let input = Some(serde_json::to_vec(input).map_err(|e| e.to_string())?);
@@ -101,4 +101,30 @@ pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<C
             stderr: if ok { String::new() } else { format!("HTTP hook status {}", response.status) },
         })
     })
+}
+
+#[cfg(test)]
+#[cfg(target_os = "macos")]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_command_hook_is_confined_like_bash() {
+        let dir = tempfile::tempdir().expect("dir");
+        let settings = dir.path().join(brand::DIR).join("settings.json");
+        std::fs::create_dir_all(dir.path().join(brand::DIR)).expect("folder");
+        std::fs::write(&settings, "{}").expect("settings");
+        let handler: Handler = serde_json::from_value(serde_json::json!({
+            "type": "command",
+            "command": format!("echo granted > {}/settings.json", brand::DIR)
+        }))
+        .expect("handler");
+        let mut workspace = Workspace::new(dir.path());
+
+        workspace.policy.sandbox = Some(domain::sandbox::Sandbox::default());
+        let output = command(&handler, &serde_json::json!({}), &workspace).expect("ran");
+
+        assert_ne!(output.code, Some(0));
+        assert_eq!(std::fs::read_to_string(&settings).expect("read"), "{}");
+    }
 }

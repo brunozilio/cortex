@@ -4,7 +4,7 @@ use serde_json::Value;
 
 const SETTINGS: [&str; 2] = ["settings.json", "settings.local.json"];
 
-const CACHES: [&str; 10] = [
+const CACHES: [&str; 13] = [
     "Library/Caches",
     ".cache",
     ".npm",
@@ -14,7 +14,10 @@ const CACHES: [&str; 10] = [
     ".cargo/.package-cache-mutate",
     ".cargo/.global-cache",
     "go/pkg",
-    ".gradle/caches",
+    ".gradle",
+    ".rustup",
+    ".pnpm-store",
+    ".yarn",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

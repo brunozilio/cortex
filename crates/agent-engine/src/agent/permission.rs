@@ -72,6 +72,13 @@ impl Agent<'_> {
         let rule = self.workspace.ruling(&name, subject, input).or_else(|| self.remembered_rule(&name, subject, input));
         let rule_asks = matches!(rule, Some((domain::permission_rules::RuleKind::Ask, _)));
         let original = ruled(mode, access, rule, by_mode);
+        if !matches!(original, Verdict::Deny(_)) && name == "Bash" && self.leaves_the_sandbox(input) {
+            if self.control.no_prompts() {
+                return self.refused(&name, "Not run: leaving the sandbox needs the user, who cannot be asked here.");
+            }
+            let shown = format!("Run OUTSIDE the sandbox (it may write anywhere):\n{}", shown.unwrap_or(subject));
+            return self.ask_permission(id, tool, access, subject, &shown, input);
+        }
         if !matches!(original, Verdict::Deny(_))
             && let Some(concern) = self.package_concerns(&name, input)
         {
@@ -143,6 +150,10 @@ impl Agent<'_> {
             }
             Verdict::Ask => self.ask_permission(id, tool, access, subject, shown.unwrap_or(subject), input),
         }
+    }
+
+    fn leaves_the_sandbox(&self, input: &Value) -> bool {
+        self.workspace.sandboxed() && input["unsandboxed"].as_bool() == Some(true)
     }
 
     fn package_concerns(&self, name: &str, input: &Value) -> Option<String> {

@@ -345,7 +345,13 @@ Inbox notices are core (`TakeNotices`).
   parent's) and `Workspace::confined` joins the two for each command, so
   a session that moved to a worktree is confined to it. A command the
   sandbox refused ends with a note saying so and how the owner widens it.
-  Hooks, MCP servers, script tools and language servers are not confined.
+  Command hooks are confined the same way (`hooks/handlers.rs`); MCP
+  servers, script tools (which have their own `scripts` access) and
+  language servers are not. The agent may ask to run one `Bash` command
+  with `unsandboxed: true`: when the sandbox is on, that call is always
+  an ask that says so, in every mode, Bypass included, before any rule,
+  hook or pre-approval could allow it (`agent/permission.rs`); dontAsk
+  refuses it.
 - **Scheduled prompts**: `CronCreate`/`CronList`/`CronDelete` and
   `ScheduleWakeup` keep prompts per client (`tools::schedules`, like the
   background shells; cron parsing and matching in `domain::schedule`,

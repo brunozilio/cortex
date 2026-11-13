@@ -29,6 +29,7 @@ impl Tool for Bash {
                     "command": { "type": "string", "description": "The command to run." },
                     "timeout": { "type": "integer", "description": "Milliseconds before it is stopped." },
                     "run_in_background": { "type": "boolean", "description": "Leave it running and return its id at once." },
+                    "unsandboxed": { "type": "boolean", "description": "Run outside the sandbox. Only after the sandbox refused a command the task truly needs; the user is always asked." },
                     "description": { "type": "string", "description": "What the command does, in plain active words the user reads, often without seeing the command: do not echo its text, flags or paths. Five to ten words for simple commands (`git status` → \"Show working tree status\"); more context for pipes or obscure flags (`git reset --hard origin/main` → \"Discard all local changes and match remote main\"). Never call a command \"complex\" or \"risky\": say what it does." }
                 },
                 "required": ["command"],
@@ -56,7 +57,11 @@ impl Tool for Bash {
             .map_or(DEFAULT_TIMEOUT, Duration::from_millis)
             .min(MAX_TIMEOUT);
         let kept = super::snapshot::keep(workspace, command);
-        let mut shell = shell(command, workspace);
+        let mut shell = if input["unsandboxed"].as_bool() == Some(true) {
+            platform::shell(command)
+        } else {
+            shell(command, workspace)
+        };
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
             return match super::shells::start(workspace, command, &mut shell) {

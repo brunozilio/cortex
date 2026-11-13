@@ -19,6 +19,7 @@ mod steering;
 mod sub_agent_fallbacks;
 mod sub_agents;
 mod turns;
+mod unsandboxed;
 mod watch;
 mod watch_hooks;
 
