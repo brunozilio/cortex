@@ -19,6 +19,7 @@ pub struct Policy {
     pub snapshots: bool,
     pub dependency_guard: bool,
     pub escalation: bool,
+    pub auto_review: bool,
 }
 
 impl Policy {
@@ -33,6 +34,7 @@ impl Policy {
             snapshots: self.snapshots,
             dependency_guard: self.dependency_guard,
             escalation: self.escalation,
+            auto_review: self.auto_review,
         }
     }
 

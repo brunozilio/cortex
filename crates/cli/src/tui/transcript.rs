@@ -136,6 +136,7 @@ impl Transcript {
                 self.written += usage.output;
                 self.usage.add(usage);
             }
+            EngineEvent::Reviewed(findings) => self.notice(domain::review::summary(findings)),
             EngineEvent::Compacted(compaction) => {
                 self.notice(format!("Compacted the conversation ({} tokens freed)", compaction.freed()));
             }

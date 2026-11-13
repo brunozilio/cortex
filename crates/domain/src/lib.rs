@@ -32,6 +32,7 @@ pub mod provider;
 pub mod redact;
 pub mod repeats;
 pub mod request;
+pub mod review;
 pub mod routing;
 pub mod sandbox;
 pub mod schedule;

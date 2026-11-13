@@ -102,6 +102,7 @@ pub enum EngineEvent {
         tool: String,
     },
     Edited(crate::changes::Edited),
+    Reviewed(Vec<crate::review::Finding>),
     Completed {
         duration_ms: u64,
         cost_usd: Option<f64>,

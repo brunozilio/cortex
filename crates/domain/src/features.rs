@@ -12,6 +12,7 @@ pub const BUDGET: &str = "budget";
 pub const CACHE_WARNING: &str = "cache-warning";
 pub const ESCALATION: &str = "experimental-escalation";
 pub const PROJECT_CRITERIA: &str = "project-criteria";
+pub const AUTO_REVIEW: &str = "auto-review";
 
 const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS, DEPENDENCY_GUARD];
 
@@ -44,6 +45,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: ESCALATION,
         about: "When the agent fails the same call again and again, send it to the Advisor or to escalationModel",
+    },
+    Flag {
+        name: AUTO_REVIEW,
+        about: "When a run changed files, a read-only reviewer checks the changes and the docs before it finishes",
     },
     Flag {
         name: PROJECT_CRITERIA,

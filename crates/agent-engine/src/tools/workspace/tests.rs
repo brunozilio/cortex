@@ -26,6 +26,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         snapshots: true,
         dependency_guard: true,
         escalation: true,
+        auto_review: true,
     };
 
     let fork = policy.fork();

@@ -185,6 +185,18 @@ Inbox notices are core (`TakeNotices`).
   plus the run's priced calls reach the limit, so the run fails saying
   how to raise it; calls without a price count as nothing. The status
   line shows spent against the limit.
+- **Automatic review** (`auto-review`; folder
+  `tools/builtin/code_review/`, rules in `domain::review`): a reviewer
+  next to the judge. When a top-level run changed files inside its
+  folder (`Edit`, `Write`, `NotebookEdit`; a memory file in the
+  temporary folder does not count) and is about to finish, a read-only child
+  agent (`Read`, `Glob`, `Grep`, the run's system prompt with its
+  instructions, plus `content/prompts/reviewer.md`) reviews the changed
+  files for defects and for docs or instructions the change made untrue,
+  and answers JSON findings. `EngineEvent::Reviewed` carries them to the
+  chat; a `high` finding sends the agent back once with a message that
+  starts `# Code review`, and a run that has one is not reviewed again.
+  A reviewer that gives no findings lets the run finish.
 - **Project criteria** (`project-criteria`): a project may check in
   `.{command}/verification.md`; the nearest one above the folder (never
   the owner's own) becomes `Settings::project_criteria`
