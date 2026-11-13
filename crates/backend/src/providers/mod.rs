@@ -125,7 +125,7 @@ impl ModelProviders {
             return outbox.send(ServerEvent::Providers(ProviderEvent::Failed { provider, message }));
         }
         let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
-        std::thread::spawn(move || {
+        platform::named::spawn("provider-sign-in", move || {
             let mut open = |url: String, code: Option<String>| {
                 outbox.send(ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code }));
             };

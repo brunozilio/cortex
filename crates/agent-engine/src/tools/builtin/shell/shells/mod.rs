@@ -51,7 +51,7 @@ pub(crate) fn start(client: u64, summary: &str, command: &mut std::process::Comm
     let dropped = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let readers = vec![{
         let (output, dropped) = (Arc::clone(&output), Arc::clone(&dropped));
-        std::thread::spawn(move || collect(pipe, &output, &dropped))
+        platform::named::spawn("shell-output", move || collect(pipe, &output, &dropped))
     }];
     let id = format!("bash_{}", NEXT.fetch_add(1, Ordering::Relaxed));
     let started = Instant::now();

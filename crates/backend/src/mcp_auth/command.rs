@@ -28,7 +28,7 @@ pub(crate) fn sign_in(services: &LocalServices, owner: &Principal, path: PathBuf
     };
     let (auth, owner, outbox) = (services.mcp_auth.clone(), owner.clone(), outbox.clone());
     let (extensions, home) = (services.extensions.clone(), services.home.clone());
-    std::thread::spawn(move || {
+    platform::named::spawn("mcp-sign-in", move || {
         let mut open = |at: &str| outbox.send(ServerEvent::McpAuthorizeAt { name: name.clone(), url: at.to_owned() });
         match auth.sign_in(&owner, &url, &mut open) {
             Ok(()) => outbox.send(crate::mcp_admin::list(&path, &extensions, home.as_deref())),

@@ -34,7 +34,7 @@ impl Client {
         let (reply_tx, replies) = crossbeam_channel::unbounded();
         let stop = Arc::new(AtomicBool::new(false));
         let (b, r, s) = (Arc::clone(&backend), Arc::clone(&routes), Arc::clone(&stop));
-        std::thread::spawn(move || dispatch(&b, &r, &reply_tx, &woken, &s));
+        platform::named::spawn("sdk-dispatch", move || dispatch(&b, &r, &reply_tx, &woken, &s));
         Self { backend, routes, replies, calls: Mutex::new(()), stop }
     }
 

@@ -15,7 +15,7 @@ pub(crate) enum Watch {
 }
 
 pub(crate) fn watch(id: String, client: u64, what: Watch) {
-    std::thread::spawn(move || {
+    platform::named::spawn("shell-watch", move || {
         let mut seen: usize = 0;
         let mut partial = String::new();
         loop {

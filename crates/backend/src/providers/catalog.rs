@@ -34,7 +34,7 @@ impl ModelProviders {
             *value
         };
         let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
-        std::thread::spawn(move || {
+        platform::named::spawn("model-catalog", move || {
             let accounts: Vec<_> = agent_engine::providers::all()
                 .into_iter()
                 .map(llm_providers::id)

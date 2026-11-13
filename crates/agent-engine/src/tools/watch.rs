@@ -75,7 +75,7 @@ pub fn start(watching: Watching, tool: Arc<dyn Tool>, workspace: &Workspace) -> 
     lock().insert(id.clone(), Entry { client, stop: Arc::clone(&stop), explained, tool: tool_name, input });
     let source = format!("watch {id}");
     let thread_id = id.clone();
-    std::thread::spawn(move || {
+    platform::named::spawn("watch", move || {
         let told = keep_watching(watching, tool.as_ref(), &workspace, &stop);
         if lock().remove(&thread_id).is_some()
             && let Some(told) = told

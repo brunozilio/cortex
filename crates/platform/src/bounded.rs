@@ -44,7 +44,7 @@ pub fn run(command: &mut Command, bounds: Bounds<'_>) -> io::Result<Finished> {
     command.stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut tree = Tree::spawn(command)?;
     let writer = match (bounds.input, tree.child().stdin.take()) {
-        (Some(input), Some(mut stdin)) => Some(std::thread::spawn(move || {
+        (Some(input), Some(mut stdin)) => Some(crate::named::spawn("process-input", move || {
             let _ = stdin.write_all(&input);
         })),
         _ => None,
@@ -74,7 +74,7 @@ pub fn run(command: &mut Command, bounds: Bounds<'_>) -> io::Result<Finished> {
 }
 
 fn reader(pipe: Option<impl Read + Send + 'static>, cap: usize) -> JoinHandle<String> {
-    std::thread::spawn(move || {
+    crate::named::spawn("process-output", move || {
         let mut bytes = Vec::new();
         if let Some(mut pipe) = pipe {
             let _ = (&mut pipe).take(cap as u64).read_to_end(&mut bytes);

@@ -1,5 +1,6 @@
 pub mod bounded;
 pub mod file_lock;
+pub mod named;
 pub mod private_file;
 pub mod sync;
 

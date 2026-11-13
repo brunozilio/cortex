@@ -87,7 +87,7 @@ impl SseTransport {
     fn listen(&self, mut stream: Response, mut decoder: SseDecoder, listener: Option<super::Listener>) {
         let (waiting, closed) = (Arc::clone(&self.waiting), Arc::clone(&self.closed));
         let poster = self.poster();
-        std::thread::spawn(move || {
+        platform::named::spawn("mcp-sse", move || {
             loop {
                 let mut line = String::new();
                 match read_line_stopped(stream.body.as_mut(), &mut line, &closed) {
