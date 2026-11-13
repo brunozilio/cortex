@@ -43,6 +43,14 @@ fn asks_before_commands_and_honours_the_answer() {
         EngineEvent::Asked(ask) if matches!(&ask.kind, AskKind::Permission { tool, subject, .. } if tool == "Bash" && subject == "echo hi > out.txt")
     )));
     assert!(events.iter().any(|event| matches!(event, EngineEvent::ToolResult { failed: true, .. })));
+    assert!(
+        events.iter().any(|event| matches!(event, EngineEvent::Answered { decision: Decision::Deny, .. })),
+        "the answer is kept so a trace can tell approvals from denials"
+    );
+    assert!(events.iter().any(|event| matches!(
+        event,
+        EngineEvent::Refused { tool, reason } if tool == "Bash" && reason.starts_with("The user did not allow Bash")
+    )));
 }
 
 #[test]

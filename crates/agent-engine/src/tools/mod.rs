@@ -55,11 +55,13 @@ pub struct Outcome {
     pub images: Vec<domain::Image>,
     #[serde(default)]
     pub shown: Option<String>,
+    #[serde(default)]
+    pub edited: Option<Box<domain::changes::Edited>>,
 }
 
 impl Outcome {
     pub fn ok(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: false, images: Vec::new(), shown: None }
+        Self { content: content.into(), is_error: false, images: Vec::new(), shown: None, edited: None }
     }
 
     pub fn showing(mut self, shown: impl Into<String>) -> Self {
@@ -67,12 +69,18 @@ impl Outcome {
         self
     }
 
+    pub fn editing(mut self, edited: domain::changes::Edited) -> Self {
+        self.edited = Some(Box::new(edited));
+        self
+    }
+
     pub fn image(image: domain::Image) -> Self {
-        Self { content: format!("Image ({})", image.media_type), is_error: false, images: vec![image], shown: None }
+        let content = format!("Image ({})", image.media_type);
+        Self { content, is_error: false, images: vec![image], shown: None, edited: None }
     }
 
     pub fn error(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: true, images: Vec::new(), shown: None }
+        Self { content: content.into(), is_error: true, images: Vec::new(), shown: None, edited: None }
     }
 }
 

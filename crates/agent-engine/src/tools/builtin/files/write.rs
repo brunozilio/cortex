@@ -59,6 +59,7 @@ impl Tool for Write {
         {
             return Outcome::error(format!("Could not create {}: {error}", parent.display()));
         }
+        let previous = existed.then(|| std::fs::read_to_string(&path).unwrap_or_default());
         workspace.before_write(&path);
         match std::fs::write(&path, content) {
             Ok(()) => {
@@ -72,6 +73,7 @@ impl Tool for Write {
                 let heading = if existed { format!("Replaced {name}") } else { format!("Created {name}") };
                 Outcome::ok(said + &workspace.diagnosed(&path, content))
                     .showing(super::shown_diff::created(&heading, content))
+                    .editing(domain::changes::Edited::written(path.clone(), previous.as_deref(), content))
             }
             Err(error) => Outcome::error(format!("Could not write {name}: {error}")),
         }

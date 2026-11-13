@@ -72,6 +72,7 @@ impl Agent<'_> {
         } else if tool.is_some()
             && !tasks.admit(name, input, tool.is_some_and(|tool| tool.access() != crate::tools::Access::Reads))
         {
+            (self.emit)(EngineEvent::Repeated { tool: name.to_owned() });
             Outcome::error(domain::repeats::refused(name))
         } else if let Some(refusal) =
             domain::watch::while_watching(name, &tasks.still_watching(self.workspace.credentials.client))
@@ -185,6 +186,9 @@ impl Agent<'_> {
         }
         if matches!(name, "TaskCreate" | "TaskUpdate") && !outcome.is_error {
             self.emit_tasks();
+        }
+        if let Some(edited) = outcome.edited.take() {
+            (self.emit)(EngineEvent::Edited(*edited));
         }
         (self.emit)(EngineEvent::ToolFinished { id: id.to_owned() });
         (self.emit)(EngineEvent::ToolResult {

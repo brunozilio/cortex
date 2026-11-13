@@ -103,7 +103,7 @@ impl Agent<'_> {
             Default::default()
         };
         if let Some(reason) = permission_hook.blocked {
-            return self.refused(reason);
+            return self.refused(&name, reason);
         }
         if let Some(updated) = permission_hook.updated_input
             && updated != *input
@@ -124,13 +124,13 @@ impl Agent<'_> {
                 });
                 match checked {
                     Ok(()) => self.went_ahead(tool, input),
-                    Err(reason) => self.refused(reason),
+                    Err(reason) => self.refused(&name, reason),
                 }
             }
             Verdict::Allow => self.went_ahead(tool, input),
-            Verdict::Deny(reason) => self.refused(reason),
+            Verdict::Deny(reason) => self.refused(&name, reason),
             Verdict::Ask if self.control.no_prompts() => {
-                self.refused(format!("{name} requires permission; dontAsk denies unapproved actions."))
+                self.refused(&name, format!("{name} requires permission; dontAsk denies unapproved actions."))
             }
             Verdict::Ask => self.ask_permission(id, tool, access, subject, shown.unwrap_or(subject), input),
         }
@@ -141,8 +141,10 @@ impl Agent<'_> {
         tool.run(input, self.workspace)
     }
 
-    pub(super) fn refused(&self, reason: impl Into<String>) -> Outcome {
+    pub(super) fn refused(&self, tool: &str, reason: impl Into<String>) -> Outcome {
         self.workspace.tracking.count_refusal(true);
+        let reason = reason.into();
+        (self.emit)(EngineEvent::Refused { tool: tool.to_owned(), reason: reason.clone() });
         Outcome::error(reason)
     }
 }

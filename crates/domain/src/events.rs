@@ -90,6 +90,18 @@ pub enum EngineEvent {
     Unsteered(Vec<String>),
     ModeChanged(crate::PermissionMode),
     Verified(crate::verification::Verdict),
+    Answered {
+        ask: crate::AskId,
+        decision: crate::Decision,
+    },
+    Refused {
+        tool: String,
+        reason: String,
+    },
+    Repeated {
+        tool: String,
+    },
+    Edited(crate::changes::Edited),
     Completed {
         duration_ms: u64,
         cost_usd: Option<f64>,

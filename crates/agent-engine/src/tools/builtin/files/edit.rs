@@ -80,7 +80,8 @@ impl Tool for Edit {
                 } else {
                     format!("Edited {name} ({count} replacements).")
                 };
-                Outcome::ok(said + &workspace.diagnosed(&path, &changed)).showing(shown)
+                let edited = domain::changes::Edited::replaced(path.clone(), before, old, new);
+                Outcome::ok(said + &workspace.diagnosed(&path, &changed)).showing(shown).editing(edited)
             }
             Err(error) => Outcome::error(format!("Could not write {name}: {error}")),
         }

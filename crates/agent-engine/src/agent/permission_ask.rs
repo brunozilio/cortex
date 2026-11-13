@@ -29,8 +29,12 @@ impl Agent<'_> {
             rememberable: true,
             rule: rule.clone(),
         };
-        (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind }));
-        match answer.recv() {
+        (self.emit)(EngineEvent::Asked(AgentAsk { id: ask.clone(), kind }));
+        let answer = answer.recv();
+        if let Ok(decision) = &answer {
+            (self.emit)(EngineEvent::Answered { ask, decision: decision.clone() });
+        }
+        match answer {
             Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => self.went_ahead(tool, input),
             Ok(Decision::AllowAlways) => {
                 match rule {
@@ -44,11 +48,12 @@ impl Agent<'_> {
                 }
                 self.went_ahead(tool, input)
             }
-            Ok(Decision::Deny) => self.refused(format!(
-                "The user did not allow {name} here. Do not retry it; ask them or take another approach."
-            )),
+            Ok(Decision::Deny) => self.refused(
+                &name,
+                format!("The user did not allow {name} here. Do not retry it; ask them or take another approach."),
+            ),
             Ok(Decision::DenyWith(note)) => {
-                self.refused(format!("The user did not allow {name} here and said what to do instead: {note}"))
+                self.refused(&name, format!("The user did not allow {name} here and said what to do instead: {note}"))
             }
             Err(_) => Outcome::error(crate::tools::stopped::while_asking(&name)),
         }

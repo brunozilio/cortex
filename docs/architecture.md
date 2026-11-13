@@ -164,6 +164,15 @@ Inbox notices are core (`TakeNotices`).
   command, the folder a `Glob`/`Grep` searches (a denied folder inside it
   counts, best effort for bare names), or a path judged both as written
   (`..` folded) and through links.
+- **What the loop decided**: besides the tool events, the loop records
+  what it decided so traces and later features need not read it out of
+  free text: `Answered { ask, decision }` once the user answers a
+  permission ask, `Refused { tool, reason }` whenever a call is refused
+  (a rule, the mode, a hook, the safety check, dontAsk or the user),
+  `Repeated { tool }` when `domain::repeats` holds back a call, and
+  `Edited` (`domain::changes::Edited`: path, first line, lines removed
+  and added) after an `Edit` or `Write`, carried out of the tool on
+  `Outcome::editing`.
 - **Asking**: a permission ask carries the rule "don't ask again" would
   keep (`permission_rules::suggest`: `Bash(cargo test:*)`, or the folder
   of a read outside, `Read(//dir/**)`). `AllowAlways` writes it to the

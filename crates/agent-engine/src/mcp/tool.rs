@@ -83,7 +83,7 @@ pub(super) fn outcome(result: &Value) -> Outcome {
             format!("{} image(s) returned", images.len())
         });
     }
-    Outcome { content: text.join("\n\n"), is_error: failed, images, shown: None }
+    Outcome { content: text.join("\n\n"), is_error: failed, images, shown: None, edited: None }
 }
 
 #[derive(Clone)]
