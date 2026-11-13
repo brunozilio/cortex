@@ -2,6 +2,7 @@ pub mod agents;
 pub mod approval;
 pub mod billing;
 pub mod budget;
+pub mod cache_window;
 pub mod changes;
 pub mod command;
 pub mod credentials;

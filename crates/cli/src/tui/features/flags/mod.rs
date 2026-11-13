@@ -1,9 +1,14 @@
+use std::collections::BTreeSet;
+
 use serde_json::{Value, json};
 
 use super::{Feature, Setting, Slash};
 use crate::tui::app::{App, Msg};
 
 const NAME: &str = "flags";
+
+#[derive(Default)]
+struct Loaded(bool);
 
 pub fn feature() -> Feature {
     Feature {
@@ -12,9 +17,36 @@ pub fn feature() -> Feature {
             about: "List the features you can turn off, or switch one: /features <name> on|off",
             run,
         }],
+        tick: Some(load_once),
         setting: Some(Setting { name: "Features", value: |_| String::new(), run }),
         ..Feature::default()
     }
+}
+
+pub fn on(app: &App, name: &str) -> bool {
+    !app.turned_off.contains(name)
+}
+
+fn load_once(app: &mut App) {
+    let Some(loaded) = app.features.get::<Loaded>(NAME) else { return };
+    if std::mem::replace(&mut loaded.0, true) {
+        return;
+    }
+    let input = json!({ "cwd": app.cwd });
+    app.spawn(move |sdk| match sdk.feature(NAME, input) {
+        Ok(listed) => remember(&listed),
+        Err(_) => Msg::Feature(Box::new(|_| {})),
+    });
+}
+
+fn remember(listed: &Value) -> Msg {
+    let off = turned_off(listed);
+    Msg::Feature(Box::new(move |app| app.turned_off = off))
+}
+
+fn turned_off(listed: &Value) -> BTreeSet<String> {
+    let flags = listed.as_array().into_iter().flatten();
+    flags.filter(|flag| flag["on"] == false).filter_map(|flag| flag["name"].as_str().map(str::to_owned)).collect()
 }
 
 fn run(app: &mut App, argument: Option<String>) {
@@ -28,7 +60,13 @@ fn run(app: &mut App, argument: Option<String>) {
         input["on"] = json!(on);
     }
     app.spawn(move |sdk| match sdk.feature(NAME, input) {
-        Ok(listed) => Msg::Notice(shown(&listed, toggle.is_some())),
+        Ok(listed) => {
+            let (off, text) = (turned_off(&listed), shown(&listed, toggle.is_some()));
+            Msg::Feature(Box::new(move |app| {
+                app.turned_off = off;
+                app.transcript.notice(text);
+            }))
+        }
         Err(error) => Msg::Error(error.to_string()),
     });
 }
@@ -63,5 +101,6 @@ mod tests {
         assert!(text.starts_with("Saved in your settings"));
         assert!(text.contains("  off  experimental-sandbox (not on this system)\n       Confine commands"));
         assert!(text.contains("  on   budget\n       Spend limit"));
+        assert_eq!(turned_off(&listed), BTreeSet::from(["experimental-sandbox".to_owned()]));
     }
 }

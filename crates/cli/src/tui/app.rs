@@ -46,6 +46,7 @@ pub struct App {
     pub notices: super::notices::Poll,
     #[allow(dead_code, reason = "the feature folders use it, and any of them may be removed")]
     pub features: super::features::States,
+    pub turned_off: std::collections::BTreeSet<String>,
     pub added_dirs: Vec<PathBuf>,
     pub focused: bool,
     pub bell: bool,
@@ -101,6 +102,7 @@ impl App {
             ask: None,
             notices: Default::default(),
             features: Default::default(),
+            turned_off: Default::default(),
             added_dirs: Vec::new(),
             focused: true,
             bell: false,

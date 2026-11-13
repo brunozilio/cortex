@@ -9,6 +9,7 @@ pub const DESTRUCTIVE_SNAPSHOT: &str = "destructive-snapshot";
 pub const DEPENDENCY_GUARD: &str = "experimental-dependency-guard";
 pub const SUGGESTED_RULES: &str = "suggested-rules";
 pub const BUDGET: &str = "budget";
+pub const CACHE_WARNING: &str = "cache-warning";
 
 const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS, DEPENDENCY_GUARD];
 
@@ -34,6 +35,10 @@ pub const KNOWN: &[Flag] = &[
     },
     Flag { name: SUGGESTED_RULES, about: "/rules offers permission rules from answers you keep giving" },
     Flag { name: BUDGET, about: "/budget stops a session's model calls once it has spent what you allow" },
+    Flag {
+        name: CACHE_WARNING,
+        about: "The status line counts down the prompt cache's last two minutes and says when it has gone cold",
+    },
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

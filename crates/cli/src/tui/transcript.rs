@@ -28,6 +28,7 @@ pub struct Transcript {
     pub cost: f64,
     pub usage: domain::billing::SessionUsage,
     pub context: u64,
+    pub last_call: Option<domain::cache_window::LastCall>,
     pub written: u64,
     pub activity: Option<String>,
     pub background: Vec<String>,
@@ -131,6 +132,7 @@ impl Transcript {
             EngineEvent::AgentUpdate { index, status, summary } => self.agent(*index, status, summary.as_deref()),
             EngineEvent::Usage(usage) => {
                 self.context = usage.input + usage.cache_read + usage.cache_write;
+                self.last_call = Some(domain::cache_window::LastCall::of(usage, super::conversations::now()));
                 self.written += usage.output;
                 self.usage.add(usage);
             }

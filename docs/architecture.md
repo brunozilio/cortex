@@ -185,6 +185,14 @@ Inbox notices are core (`TakeNotices`).
   plus the run's priced calls reach the limit, so the run fails saying
   how to raise it; calls without a price count as nothing. The status
   line shows spent against the limit.
+- **Cache warning** (`cache-warning`; rule in `domain::cache_window`): the
+  chat keeps when the last model call was made and how many tokens it
+  read from or wrote to the prompt cache; while idle, with 10k or more
+  cached tokens, the status line counts down the last two of the cache's
+  five minutes and then says the next turn rewrites it. The chat learns
+  which flags are off once at start, through the `flags` feature
+  (`App::turned_off`, `features::flags::on`), so a flag also turns off
+  what only the chat shows.
 - **Suggested rules** (`suggested-rules`; rule in
   `domain::suggested_rules`): the chat's `/rules` reads the `Asked` and
   `Answered` events of the project's recent sessions (the owner's
