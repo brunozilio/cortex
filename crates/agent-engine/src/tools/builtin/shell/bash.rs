@@ -55,7 +55,7 @@ impl Tool for Bash {
             .and_then(Value::as_u64)
             .map_or(DEFAULT_TIMEOUT, Duration::from_millis)
             .min(MAX_TIMEOUT);
-        let mut shell = shell(command);
+        let mut shell = shell(command, workspace);
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
             return match super::shells::start(workspace, command, &mut shell) {
@@ -85,7 +85,11 @@ impl Tool for Bash {
             }
             Waited::Exited { output, code, .. } => {
                 let code = code.map_or_else(|| "a signal".to_owned(), |code| code.to_string());
-                Outcome::error(format!("{}\n(exit code {code})", clip_middle(&output, OUTPUT)).trim_start().to_owned())
+                let refused = workspace.sandboxed() && domain::sandbox::blocked(&output);
+                let hint = if refused { format!("\n{}", domain::sandbox::hint(brand::DIR)) } else { String::new() };
+                Outcome::error(
+                    format!("{}\n(exit code {code}){hint}", clip_middle(&output, OUTPUT)).trim_start().to_owned(),
+                )
             }
             Waited::Detached => {
                 super::shells::watch(id.clone(), workspace.credentials.client, super::shells::Watch::End);
@@ -106,8 +110,8 @@ impl Tool for Bash {
     }
 }
 
-pub(super) fn shell(command: &str) -> std::process::Command {
-    platform::shell(command)
+pub(super) fn shell(command: &str, workspace: &Workspace) -> std::process::Command {
+    workspace.confined(platform::shell(command))
 }
 
 #[cfg(all(test, unix))]
@@ -126,6 +130,28 @@ mod tests {
         let failed = Bash.run(&json!({"command": "echo out; echo err >&2; exit 3"}), &workspace);
         assert_eq!(failed, Outcome::error("out\nerr\n(exit code 3)"));
         assert_eq!(Bash.run(&json!({"command": "true"}), &workspace).content, "(no output)");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_sandboxed_command_writes_in_the_project_only_and_is_told_why_it_failed() {
+        let dir = tempfile::tempdir().expect("dir");
+        let settings = dir.path().join(brand::DIR).join("settings.json");
+        std::fs::create_dir(dir.path().join(brand::DIR)).expect("folder");
+        let mut workspace = Workspace::new(dir.path());
+        let grant = json!({"command": format!("echo granted > {}/settings.json", brand::DIR)});
+        assert!(!Bash.run(&grant, &workspace).is_error, "nothing confines a run without the sandbox");
+        std::fs::write(&settings, "{}").expect("settings");
+
+        workspace.policy.sandbox = Some(domain::sandbox::Sandbox { allow_write: Vec::new(), network: true });
+        let inside = Bash.run(&json!({"command": "echo kept > kept.txt && cat kept.txt"}), &workspace);
+        assert_eq!(inside, Outcome::ok("kept"));
+        let refused = Bash.run(&grant, &workspace);
+        assert!(refused.is_error && refused.content.contains("sandbox.allowWrite"), "{refused:?}");
+        assert_eq!(std::fs::read_to_string(&settings).expect("read"), "{}");
+
+        let failed = Bash.run(&json!({"command": "exit 3"}), &workspace);
+        assert_eq!(failed, Outcome::error("(exit code 3)"));
     }
 
     #[test]

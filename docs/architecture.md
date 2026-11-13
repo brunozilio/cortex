@@ -271,6 +271,31 @@ Inbox notices are core (`TakeNotices`).
   settings' `scripts` access. The `scripts` setting follows the
   permission rules' rule: the owner's files set it, a checked-in file
   only turns access off (`ScriptAccess::layered`).
+- **Feature flags** (`domain::features`, pure): the settings' `features`
+  object turns a feature that is not core off (`"features": {
+  "experimental-sandbox": false }`). Every feature is on until turned off; a
+  feature still being tried carries `experimental-` in its name. The
+  owner's files set a flag either way. A checked-in file only restricts:
+  it may turn an ordinary feature off, never back on, and may turn a
+  security feature on, never off (`Features::layered`).
+- **Sandbox** (`experimental-sandbox`, macOS only): `Bash` and `Monitor`
+  commands run confined by the operating system. The rule is pure in
+  `domain::sandbox`: a command reads anything but writes only inside the
+  project, the added folders, a session worktree's repository, the
+  temporary folders, a short list of package caches under the home folder
+  and the owner's `sandbox.allowWrite`; the project's and added folders'
+  `.{command}/settings.json` and `settings.local.json` stay unwritable, so
+  a command cannot grant itself permissions; `sandbox.network: false`
+  cuts the network. Only the owner's files widen it; a checked-in file
+  can only cut the network. `platform::sandbox::confined` enforces a
+  `Confinement` (on macOS `sandbox-exec` with a generated Seatbelt profile,
+  `macos/seatbelt.rs`; elsewhere the command runs as it is, `SUPPORTED`
+  says which) and knows nothing of the domain. `Policy::sandbox` holds the
+  run's settings (`None` when the flag is off; a sub-agent keeps its
+  parent's) and `Workspace::confined` joins the two for each command, so
+  a session that moved to a worktree is confined to it. A command the
+  sandbox refused ends with a note saying so and how the owner widens it.
+  Hooks, MCP servers, script tools and language servers are not confined.
 - **Scheduled prompts**: `CronCreate`/`CronList`/`CronDelete` and
   `ScheduleWakeup` keep prompts per client (`tools::schedules`, like the
   background shells; cron parsing and matching in `domain::schedule`,

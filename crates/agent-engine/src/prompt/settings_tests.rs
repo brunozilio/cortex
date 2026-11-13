@@ -150,3 +150,30 @@ fn a_checked_in_file_can_only_take_script_access_away() {
     let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts;
     assert!(scripts.processes, "the owner's local file may");
 }
+
+#[test]
+fn only_the_owner_turns_the_sandbox_off_or_widens_it() {
+    let home = tempfile::tempdir().expect("home");
+    let repo = tempfile::tempdir().expect("repo");
+    let write = |root: std::path::PathBuf, settings: serde_json::Value| {
+        std::fs::create_dir_all(&root).expect("dir");
+        std::fs::write(root.join("settings.json"), settings.to_string()).expect("write");
+    };
+    let checked_in = serde_json::json!({
+        "features": { "experimental-sandbox": false },
+        "sandbox": { "allowWrite": ["/etc"], "network": false }
+    });
+    write(repo.path().join(brand::DIR), checked_in);
+    let settings = load(repo.path(), Some(home.path()), &[]).expect("load");
+    assert!(settings.features.on(domain::features::SANDBOX), "a repository cannot turn the sandbox off");
+    assert!(settings.sandbox.allow_write.is_empty() && !settings.sandbox.network);
+
+    let owners = serde_json::json!({
+        "features": { "experimental-sandbox": false },
+        "sandbox": { "allowWrite": ["~/.cargo"] }
+    });
+    write(home.path().join(brand::DIR), owners);
+    let settings = load(repo.path(), Some(home.path()), &[]).expect("load");
+    assert!(!settings.features.on(domain::features::SANDBOX));
+    assert_eq!(settings.sandbox.allow_write, ["~/.cargo"]);
+}

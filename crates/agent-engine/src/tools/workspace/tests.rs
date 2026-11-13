@@ -21,10 +21,12 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         pre_approved: rules("Bash(cargo test)"),
         scripts: ScriptAccess::none(),
         safety: None,
+        sandbox: Some(domain::sandbox::Sandbox { network: false, ..Default::default() }),
     };
 
     let fork = policy.fork();
 
+    assert_eq!(fork.sandbox, policy.sandbox, "a sub-agent's commands stay as confined as its parent's");
     assert_eq!(fork.permissions, policy.permissions);
     assert_eq!(fork.scripts, ScriptAccess::none());
     assert!(fork.pre_approved.is_empty());

@@ -1,9 +1,10 @@
+mod confined;
 mod models;
 mod policy;
 mod services;
-mod tracking;
 #[cfg(test)]
 mod tests;
+mod tracking;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

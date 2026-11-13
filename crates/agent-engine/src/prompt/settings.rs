@@ -40,6 +40,10 @@ pub struct Settings {
     #[serde(default)]
     pub added_dirs: Vec<String>,
     pub scripts: crate::tools::script_tool::ScriptAccess,
+    #[serde(default)]
+    pub features: domain::features::Features,
+    #[serde(default)]
+    pub sandbox: domain::sandbox::Sandbox,
 }
 
 pub type LspLayer = std::collections::BTreeMap<String, domain::lsp::ServerConfig>;
@@ -62,6 +66,8 @@ impl Default for Settings {
             judge_allow: Default::default(),
             added_dirs: Vec::new(),
             scripts: Default::default(),
+            features: Default::default(),
+            sandbox: Default::default(),
         }
     }
 }
@@ -98,6 +104,8 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut judge_allow = domain::permission_rules::PermissionRules::default();
     let mut added_dirs = Vec::new();
     let mut scripts = crate::tools::script_tool::ScriptAccess::default();
+    let mut features = domain::features::Features::default();
+    let mut sandbox = domain::sandbox::Sandbox::default();
     let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(brand::DIR));
     let mut roots = Vec::new();
     if let Some(home) = home {
@@ -136,6 +144,12 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
             }
             if let Some(value) = settings.get("scripts") {
                 scripts = scripts.layered(value, owners)?;
+            }
+            if let Some(value) = settings.get("features") {
+                features = features.layered(value, owners).map_err(|e| format!("{}: {e}", path.display()))?;
+            }
+            if let Some(value) = settings.get("sandbox") {
+                sandbox = sandbox.layered(value, owners).map_err(|e| format!("{}: {e}", path.display()))?;
             }
             if let Some(value) = settings.get("autoMemoryEnabled") {
                 auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;
@@ -231,6 +245,8 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 judge_allow,
                 added_dirs,
                 scripts,
+                features,
+                sandbox,
             });
         }
     };
@@ -251,6 +267,8 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         judge_allow,
         added_dirs,
         scripts,
+        features,
+        sandbox,
     })
 }
 #[cfg(test)]

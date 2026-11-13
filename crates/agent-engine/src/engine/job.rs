@@ -115,6 +115,7 @@ impl Job {
         workspace.stop = self.control.shared_stop();
         workspace.auto_memory = settings.auto_memory;
         workspace.policy.scripts = settings.scripts;
+        workspace.policy.sandbox = settings.features.on(domain::features::SANDBOX).then(|| settings.sandbox.clone());
         workspace.services.files = Some(Arc::default());
         if self.request.safety_check {
             workspace.policy.safety = Some(Arc::new(crate::guard::Safety::default()));

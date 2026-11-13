@@ -37,7 +37,7 @@ impl Tool for Monitor {
             Ok(command) => command,
             Err(error) => return error,
         };
-        let mut shell = super::bash::shell(command);
+        let mut shell = super::bash::shell(command, workspace);
         shell.current_dir(&workspace.cwd).stdin(std::process::Stdio::null());
         let client = workspace.credentials.client;
         match super::shells::start(workspace, command, &mut shell) {
