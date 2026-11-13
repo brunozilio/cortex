@@ -17,6 +17,16 @@ pub fn open(app: &mut App, query: Option<String>) {
     });
 }
 
+pub fn fork(app: &mut App) {
+    match app.session.as_ref().filter(|session| session.id().is_some()) {
+        Some(session) => {
+            session.fork_next();
+            app.transcript.notice("The next message goes on in a copy of this conversation; this one stays as it is.");
+        }
+        None => app.transcript.notice("Nothing to fork yet: send a message first."),
+    }
+}
+
 fn titled(conversation: &Conversation, query: &str) -> bool {
     let title = conversation.title.as_deref().unwrap_or_default().to_lowercase();
     query.split_whitespace().all(|word| title.contains(&word.to_lowercase()))
@@ -34,7 +44,8 @@ pub fn listed(app: &mut App, found: Vec<Conversation>) {
         .map(|c| (c.title.clone().unwrap_or_else(|| "Untitled".to_owned()), conversations::ago(c.at, now)))
         .collect();
     app.conversations = found;
-    app.picker = Some(Picker { kind: PickerKind::Resume, title: "Resume a conversation".into(), items, cursor: 0 });
+    app.overlays.picker =
+        Some(Picker { kind: PickerKind::Resume, title: "Resume a conversation".into(), items, cursor: 0 });
 }
 
 impl App {

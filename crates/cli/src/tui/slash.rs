@@ -24,7 +24,7 @@ pub fn help(app: &mut App, name: Option<String>, keys: &str) {
         text.push_str(keys);
         return app.transcript.notice(text);
     };
-    let text = match (about(&name), app.skills.iter().find(|(skill, _)| skill.eq_ignore_ascii_case(&name))) {
+    let text = match (about(&name), app.catalog.skills.iter().find(|(skill, _)| skill.eq_ignore_ascii_case(&name))) {
         (Some((name, about)), _) => format!("/{name}  {about}"),
         (None, Some((skill, about))) => format!("/{skill}  {about}"),
         (None, None) => unknown(app, &name),
@@ -34,8 +34,8 @@ pub fn help(app: &mut App, name: Option<String>, keys: &str) {
 
 pub fn refused(app: &mut App, text: &str) -> bool {
     let Some(name) = slash_name(text) else { return false };
-    let skills_known = !app.skills.is_empty();
-    let is_skill = app.skills.iter().any(|(skill, _)| skill.eq_ignore_ascii_case(name));
+    let skills_known = !app.catalog.skills.is_empty();
+    let is_skill = app.catalog.skills.iter().any(|(skill, _)| skill.eq_ignore_ascii_case(name));
     let notice = if Command::parse(&format!("/{name}")).is_some() {
         match about(name) {
             Some((name, about)) => format!("/{name} can't take that. {about}"),
@@ -52,7 +52,7 @@ pub fn refused(app: &mut App, text: &str) -> bool {
 }
 
 fn unknown(app: &App, name: &str) -> String {
-    let known = builtin().map(|(name, _)| name).chain(app.skills.iter().map(|(skill, _)| skill.as_str()));
+    let known = builtin().map(|(name, _)| name).chain(app.catalog.skills.iter().map(|(skill, _)| skill.as_str()));
     match closest(name, known) {
         Some(near) => format!("/{name} is not a command or skill. Did you mean /{near}?"),
         None => format!("/{name} is not a command or skill. /help lists them."),

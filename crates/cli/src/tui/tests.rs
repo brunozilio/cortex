@@ -208,13 +208,13 @@ fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() 
     press(&mut app, KeyCode::Enter);
     assert!(screen(&app).contains("which file?") && screen(&app).contains("answering…"), "{}", screen(&app));
     press(&mut app, KeyCode::Esc);
-    assert!(app.side.is_none() && app.busy(), "Esc closed the answer, not the run");
+    assert!(app.overlays.side.is_none() && app.busy(), "Esc closed the answer, not the run");
     until(&mut app, |app| !app.busy());
     assert!(screen(&app).contains("All done."), "the run finished: {}", screen(&app));
 
     type_text(&mut app, "/btw which file?");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |app| app.side.as_ref().is_some_and(|side| side.answer.is_some()));
+    until(&mut app, |app| app.overlays.side.as_ref().is_some_and(|side| side.answer.is_some()));
     let shown = screen(&app);
     assert!(shown.contains("It edits main.rs."), "{shown}");
     press(&mut app, KeyCode::Esc);
@@ -239,7 +239,7 @@ fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
     let engine = FakeEngine::new(vec![model], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), repo.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
-    let loaded = |app: &App| app.diffs.as_ref().is_some_and(|view| !view.loading());
+    let loaded = |app: &App| app.overlays.diffs.as_ref().is_some_and(|view| !view.loading());
 
     type_text(&mut app, "/diffs");
     press(&mut app, KeyCode::Enter);
@@ -256,7 +256,7 @@ fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
     until(&mut app, loaded);
     assert!(screen(&app).contains("No staged changes."), "{}", screen(&app));
     press(&mut app, KeyCode::Char('q'));
-    assert!(app.diffs.is_none() && screen(&app).contains(brand::NAME), "{}", screen(&app));
+    assert!(app.overlays.diffs.is_none() && screen(&app).contains(brand::NAME), "{}", screen(&app));
     assert!(engine.requests().is_empty(), "nothing reached the agent");
 }
 

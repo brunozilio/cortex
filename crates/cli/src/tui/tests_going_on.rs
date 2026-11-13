@@ -56,7 +56,7 @@ fn a_rewind_cuts_the_chat_before_its_prompt_and_gives_the_prompt_back() {
 
     type_text(&mut app, "/rewind");
     press(&mut app, KeyCode::Enter);
-    let picker = app.picker.as_ref().expect("picker");
+    let picker = app.overlays.picker.as_ref().expect("picker");
     assert_eq!(picker.items[0].0, "add more", "newest first");
 
     let restored = vec![data.path().join("more.txt")];
@@ -65,7 +65,7 @@ fn a_rewind_cuts_the_chat_before_its_prompt_and_gives_the_prompt_back() {
     assert!(shown.contains("Written.") && !shown.contains("Added."), "{shown}");
     assert!(shown.contains("Rewound: 1 file restored"), "{shown}");
     assert_eq!(app.input.text(), "add more", "the prompt is back to edit");
-    assert_eq!(app.checkpoints.iter().map(|c| c.index).collect::<Vec<_>>(), [0]);
+    assert_eq!(app.turn.checkpoints.iter().map(|c| c.index).collect::<Vec<_>>(), [0]);
 }
 
 #[test]
@@ -95,12 +95,12 @@ fn effort_without_a_level_opens_a_picker_at_the_current_one() {
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/effort");
     press(&mut app, KeyCode::Enter);
-    let picker = app.picker.as_ref().expect("a picker");
+    let picker = app.overlays.picker.as_ref().expect("a picker");
     assert_eq!(picker.items[picker.cursor].0, app.effort().cli_value());
     assert!(screen(&app).contains("xhigh"), "{}", screen(&app));
     press(&mut app, KeyCode::Down);
     press(&mut app, KeyCode::Enter);
-    assert!(app.picker.is_none());
+    assert!(app.overlays.picker.is_none());
     assert_eq!(app.effort(), sdk::Effort::High, "the level after medium");
 }
 
@@ -122,7 +122,10 @@ fn asked_app(script: Vec<EngineEvent>, data: &std::path::Path) -> App {
     type_text(&mut app, "ask me");
     press(&mut app, KeyCode::Enter);
     until(&mut app, |app| app.ask.is_some());
-    assert!(app.started.is_some_and(|watch| watch.is_paused()), "the clock stops while the agent waits for an answer");
+    assert!(
+        app.turn.started.is_some_and(|watch| watch.is_paused()),
+        "the clock stops while the agent waits for an answer"
+    );
     app
 }
 
@@ -131,7 +134,7 @@ fn the_working_clock_stops_while_a_question_waits_and_runs_again_once_answered()
     let data = tempfile::tempdir().expect("data");
     let mut app = asked_app(asking_script(EngineEvent::TextDelta("thanks".into())), data.path());
     app.answer(Decision::Deny);
-    assert!(app.started.is_some_and(|watch| !watch.is_paused()));
+    assert!(app.turn.started.is_some_and(|watch| !watch.is_paused()));
 }
 
 #[test]
@@ -139,7 +142,7 @@ fn the_working_clock_runs_again_when_the_question_is_withdrawn() {
     let data = tempfile::tempdir().expect("data");
     let mut app = asked_app(asking_script(EngineEvent::AskWithdrawn(AskId("q".into()))), data.path());
     until(&mut app, |app| app.ask.is_none());
-    assert!(app.started.is_some_and(|watch| !watch.is_paused()));
+    assert!(app.turn.started.is_some_and(|watch| !watch.is_paused()));
 }
 
 #[test]

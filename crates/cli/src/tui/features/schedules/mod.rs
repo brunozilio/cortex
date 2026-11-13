@@ -59,7 +59,7 @@ fn arrived(app: &mut App, due: Vec<Scheduled>) {
     for scheduled in due {
         app.transcript.notice(format!("Scheduled ({}): {}", scheduled.id, scheduled.prompt));
         if app.busy() {
-            app.queued.push(scheduled.prompt);
+            app.turn.queued.push(scheduled.prompt);
         } else {
             app.send(scheduled.prompt);
         }

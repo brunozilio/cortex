@@ -65,7 +65,7 @@ fn an_at_mention_completes_a_project_file_and_sends_its_text() {
     until(&mut app, |app| app.session.is_some());
 
     type_text(&mut app, "explain @mai");
-    until(&mut app, |app| app.files.as_ref().is_some_and(|files| !files.is_empty()));
+    until(&mut app, |app| app.catalog.files.as_ref().is_some_and(|files| !files.is_empty()));
     assert!(screen(&app).contains("@src/main.rs"), "{}", screen(&app));
     press(&mut app, KeyCode::Tab);
     assert_eq!(app.input.text(), "explain @src/main.rs ");
@@ -97,7 +97,7 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
 
     type_text(&mut app, "/resume");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |app| app.picker.is_some());
+    until(&mut app, |app| app.overlays.picker.is_some());
     assert!(screen(&app).contains("Login page") && screen(&app).contains("2h ago"), "{}", screen(&app));
     press(&mut app, KeyCode::Enter);
     assert_eq!(app.title.as_deref(), Some("Login page"));

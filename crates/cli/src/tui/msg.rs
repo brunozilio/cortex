@@ -44,9 +44,9 @@ impl super::app::App {
         match msg {
             Msg::Ready { models, settings } => self.ready(models, &settings),
             Msg::Event(run, event) => self.event(run, event),
-            Msg::Skills(skills) => self.skills = skills,
+            Msg::Skills(skills) => self.catalog.skills = skills,
             Msg::Reloaded { skills, summary } => {
-                self.skills = skills;
+                self.catalog.skills = skills;
                 self.transcript.notice(summary);
             }
             Msg::Connected(provider) => {
@@ -56,13 +56,13 @@ impl super::app::App {
             Msg::Clipboard(found) => self.clipboard(found),
             Msg::Changes(changes) => self.changes(changes),
             Msg::Diffs(scope, changes) => {
-                if let Some(view) = &mut self.diffs {
+                if let Some(view) = &mut self.overlays.diffs {
                     view.loaded(scope, changes);
                 }
             }
             Msg::Side { question, answer } => super::side::answered(self, &question, answer),
             Msg::Chore(answer) => self.chore_answered(answer),
-            Msg::Files(files) => self.files = Some(files),
+            Msg::Files(files) => self.catalog.files = Some(files),
             Msg::Conversations(found) => super::resume::listed(self, found),
             Msg::Providers(providers) => super::info::connected(self, providers),
             Msg::Menu(providers) => self.menu(providers),

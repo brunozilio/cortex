@@ -8,7 +8,7 @@ use super::super::transcript::Entry;
 
 fn ready(data: &std::path::Path, engine: &FakeEngine) -> App {
     let mut app = App::new(sdk(engine, data), data.into(), None, Some(PermissionMode::Ask));
-    until(&mut app, |app| app.session.is_some() && !app.skills.is_empty());
+    until(&mut app, |app| app.session.is_some() && !app.catalog.skills.is_empty());
     app
 }
 
@@ -52,7 +52,7 @@ fn skills_and_paths_still_reach_the_agent() {
     let data = tempfile::tempdir().expect("data");
     let engine = engine();
     let mut app = ready(data.path(), &engine);
-    let skill = app.skills[0].0.clone();
+    let skill = app.catalog.skills[0].0.clone();
     for text in [format!("/{skill} src"), "/etc/hosts has a typo?".to_owned()] {
         type_text(&mut app, &text);
         press(&mut app, KeyCode::Enter);

@@ -23,38 +23,38 @@ pub fn key(app: &mut App, event: KeyEvent) {
         return;
     }
     if ctrl && event.code == KeyCode::Char('b') {
-        if let Some(run) = &app.run {
+        if let Some(run) = &app.turn.run {
             let _ = run.background();
         }
         return;
     }
-    if app.secret.is_some() {
+    if app.overlays.secret.is_some() {
         return secret(app, event);
     }
-    if app.search.is_some() {
+    if app.overlays.search.is_some() {
         return search(app, event, ctrl);
     }
     if app.ask.is_some() {
         return answer(app, event);
     }
-    if app.diffs.is_some() {
+    if app.overlays.diffs.is_some() {
         return diffs(app, event);
     }
-    if app.picker.is_some() {
+    if app.overlays.picker.is_some() {
         return pick(app, event);
     }
-    if app.side.is_some() && matches!(event.code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ')) {
-        app.side = None;
+    if app.overlays.side.is_some() && matches!(event.code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ')) {
+        app.overlays.side = None;
         return;
     }
     edit(app, event, ctrl);
 }
 
 pub fn paste(app: &mut App, text: &str) {
-    if app.secret.is_some() {
+    if app.overlays.secret.is_some() {
         return app.paste_secret(text);
     }
-    if app.ask.is_none() && app.picker.is_none() && app.diffs.is_none() {
+    if app.ask.is_none() && app.overlays.picker.is_none() && app.overlays.diffs.is_none() {
         match text.strip_prefix('!').filter(|_| !app.shell && app.input.is_empty()) {
             Some(command) => {
                 app.shell = true;
@@ -81,8 +81,8 @@ fn diffs(app: &mut App, event: KeyEvent) {
         KeyCode::Esc | KeyCode::Char('q') => Key::Close,
         _ => return,
     };
-    match app.diffs.as_mut().map(|view| view.key(key)) {
-        Some(Action::Close) => app.diffs = None,
+    match app.overlays.diffs.as_mut().map(|view| view.key(key)) {
+        Some(Action::Close) => app.overlays.diffs = None,
         Some(Action::Load(scope)) => app.load_diffs(scope),
         Some(Action::Stay) | None => {}
     }
@@ -118,18 +118,18 @@ fn answer(app: &mut App, event: KeyEvent) {
 }
 
 fn pick(app: &mut App, event: KeyEvent) {
-    let Some(picker) = &mut app.picker else { return };
+    let Some(picker) = &mut app.overlays.picker else { return };
     let count = picker.items.len();
     match event.code {
         KeyCode::Up => picker.cursor = picker.cursor.checked_sub(1).unwrap_or(count.saturating_sub(1)),
         KeyCode::Down => picker.cursor = if picker.cursor + 1 >= count { 0 } else { picker.cursor + 1 },
-        KeyCode::Esc => app.picker = None,
+        KeyCode::Esc => app.overlays.picker = None,
         KeyCode::Enter => {
             let (kind, cursor) = (picker.kind, picker.cursor);
-            app.picker = None;
+            app.overlays.picker = None;
             match kind {
                 PickerKind::Model => {
-                    if let Some(model) = app.models.get(cursor).cloned() {
+                    if let Some(model) = app.catalog.models.get(cursor).cloned() {
                         app.set_model(model);
                     }
                 }
@@ -163,7 +163,7 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
     let offered = if mentioned > 0 {
         mentioned
     } else {
-        app.input.slash_word().map_or(0, |typed| super::commands::suggestions(typed, &app.skills).len())
+        app.input.slash_word().map_or(0, |typed| super::commands::suggestions(typed, &app.catalog.skills).len())
     };
     let completing = offered > 0;
     if event.code != KeyCode::Esc {
@@ -190,7 +190,7 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
         KeyCode::Delete if alt || ctrl => app.input.delete_word_forward(),
         KeyCode::Up if completing => app.suggestion = super::commands::step(app.suggestion, offered, false),
         KeyCode::Down if completing => app.suggestion = super::commands::step(app.suggestion, offered, true),
-        KeyCode::Up if app.busy() && app.input.is_empty() && !app.queued.is_empty() => app.take_back_queued(),
+        KeyCode::Up if app.busy() && app.input.is_empty() && !app.turn.queued.is_empty() => app.take_back_queued(),
         KeyCode::Up if app.input.on_first_line() => app.input.older(),
         KeyCode::Down if app.input.on_last_line() => app.input.newer(),
         KeyCode::Up => app.input.line(true),
@@ -213,7 +213,7 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
         KeyCode::Char('r') if ctrl => {
             let mut found = super::search::Search::default();
             found.find(app.input.history(), false);
-            app.search = Some(found);
+            app.overlays.search = Some(found);
         }
         KeyCode::Char('g') if ctrl => app.external_edit = true,
         KeyCode::Char('l') if ctrl => app.redraw = true,
@@ -247,7 +247,7 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
 }
 
 fn search(app: &mut App, event: KeyEvent, ctrl: bool) {
-    let Some(search) = &mut app.search else { return };
+    let Some(search) = &mut app.overlays.search else { return };
     let history = app.input.history();
     match event.code {
         KeyCode::Char('r') if ctrl => search.find(history, true),
@@ -261,13 +261,13 @@ fn search(app: &mut App, event: KeyEvent, ctrl: bool) {
         }
         KeyCode::Enter | KeyCode::Tab | KeyCode::Right => {
             let found = search.shown(history).map(str::to_owned);
-            app.search = None;
+            app.overlays.search = None;
             if let Some(found) = found {
                 app.input.set(&found);
             }
         }
-        KeyCode::Esc => app.search = None,
-        KeyCode::Char('c' | 'g') if ctrl => app.search = None,
+        KeyCode::Esc => app.overlays.search = None,
+        KeyCode::Char('c' | 'g') if ctrl => app.overlays.search = None,
         _ => {}
     }
 }
@@ -279,7 +279,7 @@ fn complete(app: &mut App) {
         return super::mentions::complete(app, file);
     }
     let Some(typed) = app.input.slash_word() else { return };
-    let found = super::commands::suggestions(typed, &app.skills);
+    let found = super::commands::suggestions(typed, &app.catalog.skills);
     if let Some((name, _)) = found.get(app.suggestion % found.len().max(1)) {
         app.input.set(&format!("/{name} "));
     }

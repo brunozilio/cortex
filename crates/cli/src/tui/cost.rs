@@ -1,5 +1,10 @@
 use domain::billing::{ModelUsage, SessionUsage, cache_hit_rate};
 
+pub fn show(app: &mut super::app::App) {
+    let text = report(app.transcript.cost, &app.transcript.usage);
+    app.transcript.notice(text);
+}
+
 pub fn report(cost: f64, usage: &SessionUsage) -> String {
     if usage.models.is_empty() {
         return "No model calls yet in this session.".into();

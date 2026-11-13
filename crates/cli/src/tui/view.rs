@@ -14,9 +14,9 @@ use super::wrap::{layout, wrap};
 const PROMPT_MARK: usize = 2;
 
 pub fn draw(frame: &mut Frame, app: &App) {
-    if let Some(diffs) = &app.diffs
+    if let Some(diffs) = &app.overlays.diffs
         && app.ask.is_none()
-        && app.secret.is_none()
+        && app.overlays.secret.is_none()
     {
         return super::diff_view::draw(frame, diffs);
     }
@@ -25,7 +25,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let input_width = usize::from(area.width.saturating_sub(2)).saturating_sub(PROMPT_MARK).max(1);
     let (rows, _) = layout(app.input.text(), app.input.cursor(), input_width);
     let input_lines = u16::try_from(rows.len()).unwrap_or(u16::MAX).clamp(1, 10);
-    let boxed = app.ask.is_some() || app.secret.is_some() || app.picker.is_some() || app.side.is_some();
+    let boxed = app.ask.is_some()
+        || app.overlays.secret.is_some()
+        || app.overlays.picker.is_some()
+        || app.overlays.side.is_some();
     let frame_rows = if boxed { 2 } else { 0 };
     let panel_height = (u16::try_from(panel.len()).unwrap_or(u16::MAX) + frame_rows).min(area.height / 2);
     let [body, panel_area, input_area, status_area] = Layout::vertical([
@@ -37,9 +40,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
     .areas(area);
     let shown = conversation(frame, app, body);
     if boxed {
-        let color = if app.picker.is_some() {
+        let color = if app.overlays.picker.is_some() {
             Color::DarkGray
-        } else if app.ask.is_some() || app.secret.is_some() {
+        } else if app.ask.is_some() || app.overlays.secret.is_some() {
             Color::Yellow
         } else {
             Color::Cyan
@@ -86,12 +89,12 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
     }
     let added = added.map(|first| first..lines.len());
     let mut working = None;
-    if let Some(started) = app.started {
+    if let Some(started) = app.turn.started {
         lines.push(Line::from(""));
         working = Some(lines.len()..lines.len() + 1);
         lines.push(entries::working(started, &app.transcript, width));
     }
-    for queued in &app.queued {
+    for queued in &app.turn.queued {
         let text = wrap(queued, width.saturating_sub(4)).into_iter().next().unwrap_or_default();
         lines.push(Line::from(format!("  › {text}  (queued)")).dim());
     }
@@ -142,7 +145,7 @@ pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
 fn prompt(frame: &mut Frame, app: &App, area: Rect) {
     let shell = Color::Rgb(255, 105, 180);
     let border = match () {
-        _ if app.ask.is_some() || app.secret.is_some() => Color::Yellow,
+        _ if app.ask.is_some() || app.overlays.secret.is_some() => Color::Yellow,
         _ if app.shell => shell,
         _ => Color::DarkGray,
     };
@@ -159,7 +162,7 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
         .skip(first)
         .map(|(i, text)| Line::from(vec![if i == 0 { mark } else { "  " }.fg(color), text.into()]))
         .collect();
-    if let Some(search) = &app.search {
+    if let Some(search) = &app.overlays.search {
         let found = search.shown(app.input.history()).unwrap_or("no match").replace('\n', " ");
         let line = Line::from(vec![
             format!("search '{}': ", search.query).fg(Color::Magenta),
@@ -167,10 +170,10 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
             "  ctrl+r older · enter takes · esc leaves".dim(),
         ]);
         frame.render_widget(Paragraph::new(line).block(block), area);
-    } else if app.input.is_empty() && app.ask.is_none() && app.secret.is_none() {
+    } else if app.input.is_empty() && app.ask.is_none() && app.overlays.secret.is_none() {
         let hint = match &app.ghost {
             _ if app.shell => "Run a shell command · its output goes with your next message · esc leaves".to_owned(),
-            _ if app.busy() && !app.queued.is_empty() => "↑ edits what is queued · esc interrupts".to_owned(),
+            _ if app.busy() && !app.turn.queued.is_empty() => "↑ edits what is queued · esc interrupts".to_owned(),
             _ if app.busy() => "Type to message the agent as it works · esc interrupts".to_owned(),
             Some(ghost) => format!("{ghost}  (tab)"),
             None => "Try \"explain this project\" · / for commands".to_owned(),
@@ -180,7 +183,7 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
     } else {
         frame.render_widget(Paragraph::new(shown).block(block), area);
     }
-    if app.ask.is_none() && app.picker.is_none() && app.secret.is_none() {
+    if app.ask.is_none() && app.overlays.picker.is_none() && app.overlays.secret.is_none() {
         let x = inner.x.saturating_add(u16::try_from(column + PROMPT_MARK).unwrap_or(u16::MAX));
         let y = inner.y.saturating_add(u16::try_from(row - first).unwrap_or(0));
         frame.set_cursor_position(Position::new(x.min(inner.right().saturating_sub(1)), y));
@@ -190,7 +193,7 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
 fn status(app: &App) -> Line<'static> {
     let model = match app.model() {
         Some(model) => model.label.clone(),
-        None if app.loading => "loading models…".to_owned(),
+        None if app.catalog.loading => "loading models…".to_owned(),
         None => "no model".to_owned(),
     };
     let mode_color = match app.mode() {

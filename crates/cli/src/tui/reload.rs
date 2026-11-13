@@ -1,5 +1,25 @@
 use sdk::{CustomAgent, McpOrigin, McpServerInfo, McpState};
 
+use super::app::{App, Msg};
+
+pub fn run(app: &mut App) {
+    app.load(false);
+    let cwd = app.cwd.clone();
+    app.spawn(move |sdk| {
+        let _ = sdk.feature("declared_providers", serde_json::json!({ "path": cwd }));
+        let found =
+            (|| -> Result<_, sdk::Error> { Ok((sdk.skills(&cwd)?, sdk.agents(&cwd)?, sdk.mcp_servers(&cwd)?)) })();
+        match found {
+            Ok((skills, agents, servers)) => {
+                let names: Vec<String> = skills.iter().map(|s| s.name.clone()).collect();
+                let summary = summary(&names, &agents, &servers);
+                Msg::Reloaded { skills: skills.into_iter().map(|s| (s.name, s.description)).collect(), summary }
+            }
+            Err(error) => Msg::Error(error.to_string()),
+        }
+    });
+}
+
 pub fn summary(skills: &[String], agents: &[CustomAgent], servers: &[McpServerInfo]) -> String {
     let namespace = |name: &str| name.split_once(':').map(|(plugin, _)| plugin.to_owned());
     let mut plugins: Vec<String> = skills

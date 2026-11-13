@@ -10,13 +10,13 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
     let width = usize::from(width).saturating_sub(4).max(10);
     let mut lines = Vec::new();
     let files = super::mentions::offered(app);
-    if let Some(secret) = &app.secret {
+    if let Some(secret) = &app.overlays.secret {
         let dots = "•".repeat(secret.text.chars().count());
         lines.push(Line::from(vec![format!("{} API key: ", secret.name).bold(), dots.into()]));
         lines.push(Line::from("Paste or type it · Enter connects · Esc cancels").dim());
     } else if let Some(pending) = &app.ask {
         asking(pending, width, &mut lines);
-    } else if let Some(picker) = &app.picker {
+    } else if let Some(picker) = &app.overlays.picker {
         lines.push(Line::from(picker.title.clone()).bold());
         for (i, (name, about)) in picker.items.iter().enumerate() {
             let marker = if i == picker.cursor { "❯ " } else { "  " };
@@ -24,7 +24,7 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
             lines.push(Line::from(vec![Span::styled(format!("{marker}{name}"), style), format!("  {about}").dim()]));
         }
         lines.push(Line::from("↑↓ Enter picks · esc closes").dim());
-    } else if let Some(side) = &app.side {
+    } else if let Some(side) = &app.overlays.side {
         super::side::lines(side, app.busy(), width, &mut lines);
     } else if !files.is_empty() {
         let chosen = app.suggestion % files.len();
@@ -34,7 +34,7 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
         }
         lines.push(Line::from("  ↑↓ picks · tab completes").dim());
     } else if let Some(typed) = app.input.slash_word() {
-        let found = super::commands::suggestions(typed, &app.skills);
+        let found = super::commands::suggestions(typed, &app.catalog.skills);
         let total = found.len();
         let chosen = app.suggestion % total.max(1);
         let window = super::commands::shown(total, chosen);

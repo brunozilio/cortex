@@ -4,12 +4,16 @@ const OFFERED: usize = 8;
 
 pub(super) fn offered(app: &super::app::App) -> Vec<String> {
     let Some((_, query)) = typing(app.input.text(), app.input.cursor()) else { return Vec::new() };
-    app.files.as_deref().map(|files| rank(query, files).into_iter().map(str::to_owned).collect()).unwrap_or_default()
+    app.catalog
+        .files
+        .as_deref()
+        .map(|files| rank(query, files).into_iter().map(str::to_owned).collect())
+        .unwrap_or_default()
 }
 
 pub(super) fn load(app: &mut super::app::App) {
-    if app.files.is_none() && typing(app.input.text(), app.input.cursor()).is_some() {
-        app.files = Some(Vec::new());
+    if app.catalog.files.is_none() && typing(app.input.text(), app.input.cursor()).is_some() {
+        app.catalog.files = Some(Vec::new());
         let cwd = app.cwd.clone();
         app.spawn(move |sdk| super::app::Msg::Files(list(sdk, &cwd)));
     }

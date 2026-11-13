@@ -23,7 +23,7 @@ fn entries(app: &App) -> Vec<(String, String, Command)> {
 pub fn open(app: &mut App) {
     let mut items: Vec<(String, String)> = entries(app).into_iter().map(|(name, value, _)| (name, value)).collect();
     items.extend(super::features::settings().into_iter().map(|setting| (setting.name.into(), (setting.value)(app))));
-    app.picker = Some(Picker { kind: PickerKind::Config, title: "Settings".into(), items, cursor: 0 });
+    app.overlays.picker = Some(Picker { kind: PickerKind::Config, title: "Settings".into(), items, cursor: 0 });
 }
 
 pub fn picked(app: &mut App, cursor: usize) {

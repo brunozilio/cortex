@@ -21,12 +21,12 @@ pub fn ask(app: &mut App, question: Option<String>) {
         Ok(run) => run,
         Err(error) => return app.transcript.error(error.to_string()),
     };
-    app.side = Some(Side { question: question.clone(), answer: None });
+    app.overlays.side = Some(Side { question: question.clone(), answer: None });
     app.spawn(move |_| Msg::Side { question, answer: started.side_answer().map_err(|e| e.to_string()) });
 }
 
 pub fn answered(app: &mut App, question: &str, answer: Result<String, String>) {
-    if let Some(side) = &mut app.side
+    if let Some(side) = &mut app.overlays.side
         && side.question == question
         && side.answer.is_none()
     {

@@ -56,7 +56,7 @@ fn the_plan_shows_in_a_box_and_approving_it_switches_the_mode() {
     assert!(!shown.contains("ExitPlanMode"), "the plan stands for the tool call:\n{shown}");
 
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |app| app.run.is_none());
+    until(&mut app, |app| !app.turn.busy());
     assert_eq!(app.mode(), PermissionMode::AcceptEdits);
     let shown = screen(&app);
     assert!(shown.contains("User approved the plan"), "{shown}");
@@ -104,7 +104,7 @@ fn keeping_on_planning_is_marked_on_the_plan() {
     let mut app = planning(&engine, data.path());
 
     press(&mut app, KeyCode::Char('3'));
-    until(&mut app, |app| app.run.is_none());
+    until(&mut app, |app| !app.turn.busy());
     assert_eq!(app.mode(), PermissionMode::Plan);
     assert!(screen(&app).contains("Kept planning"), "{}", screen(&app));
 }
@@ -126,7 +126,7 @@ fn the_chat_follows_the_agent_into_plan_mode() {
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "big change");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |app| app.run.is_none());
+    until(&mut app, |app| !app.turn.busy());
     assert_eq!(app.mode(), PermissionMode::Plan);
     assert!(screen(&app).contains("Entered plan mode"), "{}", screen(&app));
 }

@@ -14,6 +14,16 @@ pub fn changes_in(sdk: &sdk::Sdk, cwd: &Path, scope: Scope) -> Result<Changes, S
 }
 
 impl super::app::App {
+    pub(super) fn open_diffs(&mut self) {
+        self.overlays.diffs = Some(super::diff_view::DiffView::new(Scope::Uncommitted));
+        self.load_diffs(Scope::Uncommitted);
+    }
+
+    pub(super) fn show_changes(&self) {
+        let cwd = self.cwd.clone();
+        self.spawn(move |sdk| super::app::Msg::Changes(changes(sdk, &cwd)));
+    }
+
     pub(super) fn load_diffs(&self, scope: Scope) {
         let cwd = self.cwd.clone();
         self.spawn(move |sdk| super::app::Msg::Diffs(scope, changes_in(sdk, &cwd, scope)));

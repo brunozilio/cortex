@@ -2,14 +2,14 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
-use sdk::{Effort, Model, PermissionMode, RunControl, Sdk, Session, SessionId};
+use sdk::{Effort, Model, PermissionMode, Sdk, Session, SessionId};
 
 use super::ask::Pending;
-use super::choices::Picker;
+use super::catalog::Catalog;
 use super::input::Input;
-use super::login::SecretPrompt;
-use super::stopwatch::Stopwatch;
+use super::overlays::Overlays;
 use super::transcript::Transcript;
+use super::turn::Turn;
 
 pub use super::msg::Msg;
 
@@ -25,7 +25,9 @@ pub struct App {
     pub attachments: super::attach::Attachments,
     pub pastes: super::pastes::Pastes,
     pub shell_context: Vec<String>,
-    pub files: Option<Vec<String>>,
+    pub catalog: Catalog,
+    pub overlays: Overlays,
+    pub turn: Turn,
     pub show_tasks: bool,
     pub inline: Option<usize>,
     pub window: Option<u64>,
@@ -34,43 +36,27 @@ pub struct App {
     pub headless: sdk::Headless,
     pub fork_resumed: bool,
     pub output_style: Option<String>,
-    pub connected: Vec<domain::provider::ProviderSummary>,
-    pub menu: Vec<domain::provider::ProviderSummary>,
     pub vim: Option<super::vim::Vim>,
     pub mouse: bool,
-    pub search: Option<super::search::Search>,
     pub external_edit: bool,
     pub edit_file: Option<PathBuf>,
     pub redraw: bool,
     pub expanded: bool,
     pub ask: Option<Pending>,
-    pub secret: Option<SecretPrompt>,
-    pub run: Option<RunControl>,
-    pub started: Option<Stopwatch>,
-    pub queued: Vec<String>,
     pub notices: super::notices::Poll,
     #[allow(dead_code, reason = "the feature folders use it, and any of them may be removed")]
     pub features: super::features::States,
     pub added_dirs: Vec<PathBuf>,
     pub focused: bool,
     pub bell: bool,
-    pub models: Vec<Model>,
-    pub skills: Vec<(String, String)>,
-    pub picker: Option<Picker>,
-    pub side: Option<super::side::Side>,
     pub title: Option<String>,
     pub ghost: Option<String>,
-    pub checkpoints: Vec<super::rewind::Checkpoint>,
-    pub(super) rewound: Option<domain::Rewound>,
-    pub(super) retrying: bool,
-    pub diffs: Option<super::diff_view::DiffView>,
     pub scroll: u16,
     pub quit: bool,
     pub quit_armed: Option<Instant>,
     pub clear_armed: Option<Instant>,
     pub shell: bool,
     pub suggestion: usize,
-    pub loading: bool,
     pub(super) wanted: Option<String>,
     pub(super) resume: Option<SessionId>,
     pub(super) mode_given: bool,
@@ -95,51 +81,37 @@ impl App {
             attachments: Default::default(),
             pastes: Default::default(),
             shell_context: Vec::new(),
-            files: None,
+            catalog: Catalog { loading: true, ..Default::default() },
+            overlays: Overlays::default(),
+            turn: Turn::default(),
             show_tasks: true,
             inline: None,
             window: None,
             conversations: Vec::new(),
-            connected: Vec::new(),
-            menu: Vec::new(),
             output_style: None,
             headless: Default::default(),
             fork_resumed: false,
             status: Default::default(),
             vim: None,
             mouse: false,
-            search: None,
             external_edit: false,
             edit_file: None,
             redraw: false,
             expanded: false,
             ask: None,
-            secret: None,
-            run: None,
-            started: None,
-            queued: Vec::new(),
             notices: Default::default(),
             features: Default::default(),
             added_dirs: Vec::new(),
             focused: true,
             bell: false,
-            models: Vec::new(),
-            skills: Vec::new(),
-            picker: None,
-            side: None,
             title: None,
             ghost: None,
-            checkpoints: Vec::new(),
-            rewound: None,
-            retrying: false,
-            diffs: None,
             scroll: 0,
             quit: false,
             quit_armed: None,
             clear_armed: None,
             shell: false,
             suggestion: 0,
-            loading: true,
             wanted,
             resume: None,
             mode_given: mode.is_some(),
@@ -171,7 +143,7 @@ impl App {
     }
 
     pub(super) fn load(&mut self, skills: bool) {
-        self.loading = true;
+        self.catalog.loading = true;
         let (sdk, tx, cwd) = (self.sdk.clone(), self.tx.clone(), self.cwd.clone());
         std::thread::spawn(move || {
             let settings = sdk.settings().unwrap_or_else(|_| serde_json::json!({}));
@@ -184,7 +156,7 @@ impl App {
     }
 
     pub fn busy(&self) -> bool {
-        self.run.is_some()
+        self.turn.busy()
     }
 
     pub fn mode(&self) -> PermissionMode {

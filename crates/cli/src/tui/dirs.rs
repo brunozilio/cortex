@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use super::app::App;
+use super::app::{App, Msg};
 
 pub fn run(app: &mut App, typed: Option<String>) {
     let Some(typed) = typed else {
@@ -18,6 +18,15 @@ pub fn run(app: &mut App, typed: Option<String>) {
         }
         Err(error) => app.transcript.error(error),
     }
+}
+
+pub fn show_rules(app: &App, hooks_only: bool) {
+    let cwd = app.cwd.clone();
+    app.spawn(move |sdk| match sdk.permissions(&cwd) {
+        Ok(info) if hooks_only => Msg::Notice(hooks(&info.hooks)),
+        Ok(info) => Msg::Notice(permissions(&info)),
+        Err(error) => Msg::Error(error.to_string()),
+    });
 }
 
 pub fn permissions(info: &domain::permission_rules::PermissionsInfo) -> String {

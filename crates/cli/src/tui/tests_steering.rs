@@ -34,7 +34,7 @@ fn a_message_typed_while_the_agent_works_reaches_it_in_the_same_run() {
     type_text(&mut app, "also check the docs");
     press(&mut app, KeyCode::Enter);
     assert!(screen(&app).contains("also check the docs  (queued)"), "{}", screen(&app));
-    until(&mut app, |app| app.queued.is_empty());
+    until(&mut app, |app| app.turn.queued.is_empty());
     let handed = screen(&app);
     assert!(handed.contains("> also check the docs") && !handed.contains("(queued)"), "{handed}");
     assert!(app.busy(), "handed over within the run");
@@ -58,7 +58,7 @@ fn up_takes_back_a_message_not_handed_over_yet_to_edit_it() {
     press(&mut app, KeyCode::Enter);
 
     press(&mut app, KeyCode::Up);
-    until(&mut app, |app| app.queued.is_empty());
+    until(&mut app, |app| app.turn.queued.is_empty());
     assert_eq!(app.input.text(), "also check the docs");
     assert!(!screen(&app).contains("(queued)"), "{}", screen(&app));
     until(&mut app, |app| !app.busy());
@@ -117,7 +117,7 @@ fn ctrl_r_finds_an_earlier_prompt_and_esc_twice_opens_rewind() {
     assert!(screen(&app).contains("search 'tests': run the tests"), "{}", screen(&app));
     press(&mut app, KeyCode::Enter);
     assert_eq!(app.input.text(), "run the tests");
-    assert!(app.search.is_none());
+    assert!(app.overlays.search.is_none());
 
     app.input.clear();
     press(&mut app, KeyCode::Esc);

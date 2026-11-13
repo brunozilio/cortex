@@ -46,6 +46,11 @@ pub fn run(app: &mut App, command: Command) {
     }
 }
 
+pub fn doctor(app: &App) {
+    let cwd = app.cwd.clone();
+    app.spawn(move |sdk| Msg::Notice(crate::doctor::render(&crate::doctor::checks(sdk, &cwd))));
+}
+
 pub fn styles() -> Vec<(String, String)> {
     let mut styles = vec![("default".to_owned(), format!("{}'s usual way: works, then reports", brand::NAME))];
     for (path, _) in content::builtin_files("styles/") {
@@ -66,7 +71,8 @@ pub fn output_style(app: &mut App, named: Option<String>) {
             let styles = styles();
             let cursor = styles.iter().position(|(id, _)| id == current).unwrap_or(0);
             let items = styles;
-            app.picker = Some(Picker { kind: PickerKind::OutputStyle, title: "Output style".into(), items, cursor });
+            app.overlays.picker =
+                Some(Picker { kind: PickerKind::OutputStyle, title: "Output style".into(), items, cursor });
         }
     }
 }
@@ -87,13 +93,14 @@ pub fn connected(app: &mut App, providers: Vec<ProviderSummary>) {
         return app.transcript.notice("No provider is connected.");
     }
     let items = providers.iter().map(|p| (p.name.clone(), String::new())).collect();
-    app.connected = providers;
-    app.picker = Some(Picker { kind: PickerKind::Logout, title: "Forget which provider?".into(), items, cursor: 0 });
+    app.catalog.connected = providers;
+    app.overlays.picker =
+        Some(Picker { kind: PickerKind::Logout, title: "Forget which provider?".into(), items, cursor: 0 });
 }
 
 impl App {
     pub(super) fn logout_picked(&mut self, cursor: usize) {
-        let Some(summary) = self.connected.get(cursor).cloned() else { return };
+        let Some(summary) = self.catalog.connected.get(cursor).cloned() else { return };
         self.spawn(move |sdk| match sdk.disconnect_provider(summary.provider) {
             Ok(_) => Msg::Notice(format!("Forgot {}.", summary.name)),
             Err(error) => Msg::Error(error.to_string()),

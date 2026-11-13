@@ -40,9 +40,9 @@ pub(super) fn arrived(app: &mut App, notices: Vec<Notice>) {
         .collect::<Vec<_>>()
         .join("\n");
     let message = domain::inbox::as_message(&notices);
-    if let Some(run) = &app.run {
+    if let Some(run) = &app.turn.run {
         let _ = run.steer(&message);
-        app.queued.push(message);
+        app.turn.queued.push(message);
     } else {
         app.send_as(message, shown);
     }

@@ -9,20 +9,20 @@ use super::transcript::Entry;
 
 impl App {
     pub(super) fn event(&mut self, run: domain::RunId, event: EngineEvent) {
-        if self.run.as_ref().is_none_or(|current| current.id() != run) {
+        if self.turn.run.as_ref().is_none_or(|current| current.id() != run) {
             return;
         }
         match &event {
             EngineEvent::Asked(ask) => {
                 self.ask = Some(Pending::new(ask.clone()));
-                if let Some(watch) = &mut self.started {
+                if let Some(watch) = &mut self.turn.started {
                     watch.pause(Instant::now());
                 }
             }
             EngineEvent::AskWithdrawn(id) if self.ask.as_ref().is_some_and(|p| &p.ask.id == id) => self.ask_closed(),
             EngineEvent::SessionStarted(id) => self.saver.remember_session(&self.cwd, id),
             EngineEvent::Checkpoint(index) => self.checkpointed(*index),
-            EngineEvent::Rewound(rewound) => self.rewound = Some(rewound.clone()),
+            EngineEvent::Rewound(rewound) => self.turn.rewound = Some(rewound.clone()),
             EngineEvent::Steered(text) => {
                 self.dequeue(text);
             }
@@ -42,19 +42,19 @@ impl App {
             self.bell = true;
         }
         if event.is_terminal() {
-            self.run = None;
+            self.turn.run = None;
             self.ask = None;
-            self.started = None;
-            if let Some(rewound) = self.rewound.take() {
+            self.turn.started = None;
+            if let Some(rewound) = self.turn.rewound.take() {
                 self.rewound(rewound);
             } else if matches!(event, EngineEvent::Cancelled) {
-                self.retrying = false;
+                self.turn.retrying = false;
                 self.unqueue();
-            } else if matches!(event, EngineEvent::Failed(_)) && self.queued.is_empty() {
-                self.retrying = false;
+            } else if matches!(event, EngineEvent::Failed(_)) && self.turn.queued.is_empty() {
+                self.turn.retrying = false;
                 self.transcript.notice("/retry sends it again from where it started.");
-            } else if !self.queued.is_empty() {
-                let next = self.queued.remove(0);
+            } else if !self.turn.queued.is_empty() {
+                let next = self.turn.queued.remove(0);
                 self.send(next);
             } else if matches!(event, EngineEvent::Completed { .. }) {
                 self.after_run();
@@ -81,22 +81,22 @@ impl App {
     }
 
     pub(super) fn take_back_queued(&mut self) {
-        if let Some(run) = &self.run {
+        if let Some(run) = &self.turn.run {
             let _ = run.unsteer();
         }
     }
 
     fn dequeue(&mut self, text: &str) {
-        if let Some(at) = self.queued.iter().position(|queued| queued == text) {
-            self.queued.remove(at);
+        if let Some(at) = self.turn.queued.iter().position(|queued| queued == text) {
+            self.turn.queued.remove(at);
         }
     }
 
     fn unqueue(&mut self) {
-        if self.queued.is_empty() {
+        if self.turn.queued.is_empty() {
             return;
         }
-        let text = std::mem::take(&mut self.queued).join("\n\n");
+        let text = std::mem::take(&mut self.turn.queued).join("\n\n");
         self.back_in_prompt(text);
     }
 
@@ -110,8 +110,8 @@ impl App {
     pub(super) fn follow(&mut self, started: Result<Run, sdk::Error>) {
         match started {
             Ok(run) => {
-                self.run = Some(run.control());
-                self.started = Some(Stopwatch::start(Instant::now()));
+                self.turn.run = Some(run.control());
+                self.turn.started = Some(Stopwatch::start(Instant::now()));
                 self.transcript.begin();
                 self.scroll = 0;
                 let tx = self.tx.clone();
@@ -129,7 +129,7 @@ impl App {
     }
 
     pub fn cancel(&mut self) {
-        if let Some(run) = &self.run
+        if let Some(run) = &self.turn.run
             && let Err(error) = run.cancel()
         {
             self.transcript.error(error.to_string());
@@ -139,7 +139,7 @@ impl App {
     pub fn answer(&mut self, decision: sdk::Decision) {
         let pending = self.ask.take();
         self.ask_closed();
-        if let (Some(pending), Some(run)) = (pending, &self.run)
+        if let (Some(pending), Some(run)) = (pending, &self.turn.run)
             && let Err(error) = run.answer(pending.ask.id, decision)
         {
             self.transcript.error(error.to_string());
@@ -148,7 +148,7 @@ impl App {
 
     fn ask_closed(&mut self) {
         self.ask = None;
-        if let Some(watch) = &mut self.started {
+        if let Some(watch) = &mut self.turn.started {
             watch.resume(Instant::now());
         }
     }

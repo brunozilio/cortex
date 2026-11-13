@@ -46,14 +46,14 @@ fn a_due_prompt_is_sent_while_the_chat_is_idle() {
 #[test]
 fn a_prompt_due_while_the_agent_works_waits_for_the_run_to_end() {
     let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script())
-        .with_delay(Duration::from_millis(40));
+    let engine =
+        FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script()).with_delay(Duration::from_millis(40));
     let mut app = app(&engine, data.path());
     type_text(&mut app, "first");
     press(&mut app, KeyCode::Enter);
     until(&mut app, |app| app.busy());
     arrived(&mut app, vec![due("cron_2", "later")]);
-    assert_eq!(app.queued, ["later"]);
+    assert_eq!(app.turn.queued, ["later"]);
     until(&mut app, |app| prompts(&engine).len() == 2 && !app.busy());
     assert_eq!(prompts(&engine), ["first", "later"]);
     assert!(engine.steers().is_empty(), "never pushed into the running turn");
@@ -75,4 +75,3 @@ fn loop_asks_the_agent_to_schedule_the_task() {
     press(&mut app, KeyCode::Enter);
     assert!(screen(&app).contains("/loop [5m|2h|1d] <task>"), "{}", screen(&app));
 }
-

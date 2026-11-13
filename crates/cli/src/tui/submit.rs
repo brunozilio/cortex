@@ -28,10 +28,10 @@ impl App {
         if let Some((run, argument)) = super::features::prefixed(&text) {
             return run(self, argument);
         }
-        if let Some(run) = &self.run {
+        if let Some(run) = &self.turn.run {
             let text = super::mentions::with_files(&self.sdk, &self.cwd, &self.pastes.unfold(&text));
             let _ = run.steer(&text);
-            self.queued.push(text);
+            self.turn.queued.push(text);
             return;
         }
         self.send(text);
