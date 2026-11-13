@@ -185,6 +185,13 @@ Inbox notices are core (`TakeNotices`).
   plus the run's priced calls reach the limit, so the run fails saying
   how to raise it; calls without a price count as nothing. The status
   line shows spent against the limit.
+- **Following a PR** (`experimental-pr-follow`): the built-in
+  `follow-pr` skill (`content/skills/follow-pr/`) has the agent start one
+  `Monitor` over a `gh pr view` loop that prints a line only when the
+  PR's state, failing checks, reviews or comments change, so each change
+  wakes it to fix CI or answer a review, until the PR is merged or
+  closed. A skill behind a flag is left out of the run's skills while
+  the flag is off (`domain::features::skill_flag`, `Brief::load`).
 - **Affected tests** (`experimental-affected-tests`; rule in
   `domain::affected`): after an `Edit` or `Write` inside the project,
   `shell/affected.rs` starts the tests that cover the file as a

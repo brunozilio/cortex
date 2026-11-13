@@ -14,6 +14,11 @@ pub const ESCALATION: &str = "experimental-escalation";
 pub const PROJECT_CRITERIA: &str = "project-criteria";
 pub const AUTO_REVIEW: &str = "auto-review";
 pub const AFFECTED_TESTS: &str = "experimental-affected-tests";
+pub const PR_FOLLOW: &str = "experimental-pr-follow";
+
+pub fn skill_flag(skill: &str) -> Option<&'static str> {
+    (skill == "follow-pr").then_some(PR_FOLLOW)
+}
 
 const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS, DEPENDENCY_GUARD];
 
@@ -46,6 +51,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: ESCALATION,
         about: "When the agent fails the same call again and again, send it to the Advisor or to escalationModel",
+    },
+    Flag {
+        name: PR_FOLLOW,
+        about: "The follow-pr skill watches a pull request and wakes the agent on failing checks and new reviews",
     },
     Flag {
         name: AFFECTED_TESTS,

@@ -21,10 +21,13 @@ impl Brief {
         let home = home(request);
         let home = home.as_deref();
         let plugins = crate::plugins::found(request, home);
+        let settings = prompt::settings::load(&request.cwd, home, &plugins)?;
+        let mut skills = tools::skill::discover(request, home);
+        skills.retain(|skill| domain::features::skill_flag(&skill.name).is_none_or(|flag| settings.features.on(flag)));
         Ok(Self {
-            skills: tools::skill::discover(request, home),
+            skills,
             agents: tools::subagent::discover(request, home),
-            settings: prompt::settings::load(&request.cwd, home, &plugins)?,
+            settings,
             rules: prompt::rules::discover(&request.cwd, home),
             git: prompt::snapshot(&request.cwd),
             instructions: prompt::instructions(&request.cwd, home),
@@ -112,5 +115,22 @@ mod tests {
             runs: "./check.sh".into(),
         };
         assert!(info.hooks.contains(&hook), "{:?}", info.hooks);
+    }
+
+    #[test]
+    fn a_skill_behind_a_flag_is_offered_until_the_owner_turns_the_flag_off() {
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
+        request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+        let offered = |request: &PromptRequest| {
+            super::Brief::load(request).expect("brief").skills.iter().any(|skill| skill.name == "follow-pr")
+        };
+        assert!(offered(&request));
+
+        std::fs::create_dir_all(home.path().join(brand::DIR)).expect("dir");
+        let off = serde_json::json!({ "features": { domain::features::PR_FOLLOW: false } });
+        std::fs::write(home.path().join(brand::DIR).join("settings.json"), off.to_string()).expect("settings");
+        assert!(!offered(&request));
     }
 }
