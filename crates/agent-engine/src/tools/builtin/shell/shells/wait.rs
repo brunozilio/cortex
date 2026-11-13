@@ -1,4 +1,4 @@
-use std::sync::PoisonError;
+use platform::sync::Locked;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -56,7 +56,7 @@ fn taken(shell: Option<Shell>) -> String {
     while !shell.readers.iter().all(std::thread::JoinHandle::is_finished) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
     }
-    let kept = shell.output.lock().unwrap_or_else(PoisonError::into_inner);
+    let kept = shell.output.locked();
     String::from_utf8_lossy(&kept).trim_end().to_owned()
 }
 

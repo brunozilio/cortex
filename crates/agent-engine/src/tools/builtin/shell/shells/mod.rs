@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::io::Read as _;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use platform::sync::Locked;
 use std::time::Instant;
 
 use platform::Tree;
@@ -36,7 +38,7 @@ fn shells() -> &'static Mutex<HashMap<String, Shell>> {
 }
 
 fn lock() -> std::sync::MutexGuard<'static, HashMap<String, Shell>> {
-    shells().lock().unwrap_or_else(PoisonError::into_inner)
+    shells().locked()
 }
 
 pub(crate) fn start(
@@ -77,7 +79,7 @@ fn collect(mut pipe: Box<dyn std::io::Read + Send>, output: &Mutex<Vec<u8>>, dro
         if read == 0 {
             return;
         }
-        let mut kept = output.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut kept = output.locked();
         kept.extend_from_slice(&chunk[..read]);
         dropped.fetch_add(capped(&mut kept), Ordering::Relaxed);
     }
@@ -175,7 +177,7 @@ impl Tool for BashOutput {
         };
         let exit = refresh(shell);
         let text = {
-            let mut kept = shell.output.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut kept = shell.output.locked();
             let from = if shell.read > kept.len() { 0 } else { shell.read };
             let new = String::from_utf8_lossy(&kept[from..]).into_owned();
             if kept.len() > KEPT {

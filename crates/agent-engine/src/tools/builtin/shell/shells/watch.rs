@@ -24,7 +24,7 @@ pub(crate) fn watch(id: String, client: u64, what: Watch) {
                 let mut shells = lock();
                 let Some(shell) = shells.get_mut(&id) else { return };
                 let exit = refresh(shell);
-                let kept = shell.output.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let kept = platform::sync::Locked::locked(&*shell.output);
                 let dropped = shell.dropped.load(std::sync::atomic::Ordering::Relaxed);
                 let from = seen.saturating_sub(dropped).min(kept.len());
                 let new = String::from_utf8_lossy(&kept[from..]).into_owned();
