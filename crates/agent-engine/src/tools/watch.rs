@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use platform::sync::Locked;
 use std::time::{Duration, Instant};
 
 use domain::inbox::Notice;
@@ -61,7 +63,7 @@ struct Entry {
 
 fn lock() -> std::sync::MutexGuard<'static, HashMap<String, Entry>> {
     static ALL: OnceLock<Mutex<HashMap<String, Entry>>> = OnceLock::new();
-    ALL.get_or_init(Mutex::default).lock().unwrap_or_else(PoisonError::into_inner)
+    ALL.get_or_init(Mutex::default).locked()
 }
 
 pub fn start(watching: Watching, tool: Arc<dyn Tool>, workspace: &Workspace) -> String {

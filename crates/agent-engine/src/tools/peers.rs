@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
+
+use platform::sync::Locked;
 
 use domain::Principal;
 use domain::inbox::Notice;
@@ -19,7 +21,7 @@ pub struct Peer {
 
 fn lock() -> std::sync::MutexGuard<'static, BTreeMap<u64, Peer>> {
     static ALL: OnceLock<Mutex<BTreeMap<u64, Peer>>> = OnceLock::new();
-    ALL.get_or_init(Mutex::default).lock().unwrap_or_else(PoisonError::into_inner)
+    ALL.get_or_init(Mutex::default).locked()
 }
 
 fn owner_key(owner: Option<&Principal>) -> String {

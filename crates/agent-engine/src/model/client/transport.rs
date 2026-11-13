@@ -9,6 +9,8 @@ use std::io::Read;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
+use platform::sync::Locked;
+
 pub(super) struct Transport {
     pub provider: &'static dyn Provider,
     pub http: Arc<dyn Http>,
@@ -26,7 +28,7 @@ impl Transport {
     fn config_stopped(&self, force: bool, stop: &AtomicBool) -> Result<Config, ModelError> {
         let key = self.keys.key()?;
         let raw = key.secret();
-        let mut cached = self.cached.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cached = self.cached.locked();
         let mut config = match cached.as_ref() {
             Some((old, config)) if old == raw => config.clone(),
             _ => Config::parse(self.provider, raw)?,

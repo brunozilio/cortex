@@ -1,5 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
+
+use platform::sync::Locked;
 use std::time::Duration;
 
 const STOP_CHECK: Duration = Duration::from_millis(25);
@@ -15,13 +17,13 @@ pub(super) struct Turn<'a>(&'a Turns);
 
 impl Turns {
     fn busy(&self) -> MutexGuard<'_, bool> {
-        self.busy.lock().unwrap_or_else(PoisonError::into_inner)
+        self.busy.locked()
     }
 
     pub(super) fn take(&self) -> Turn<'_> {
         let mut busy = self.busy();
         while *busy {
-            busy = self.freed.wait(busy).unwrap_or_else(PoisonError::into_inner);
+            busy = platform::sync::wait(&self.freed, busy);
         }
         *busy = true;
         Turn(self)

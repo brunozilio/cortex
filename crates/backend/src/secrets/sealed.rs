@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard};
+
+use platform::sync::Locked;
 
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
@@ -52,7 +54,7 @@ impl SealedSecretStore {
     }
 
     fn entries(&self) -> MutexGuard<'_, BTreeMap<String, Sealed>> {
-        let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut entries = self.entries.locked();
         if let Ok(json) = std::fs::read_to_string(&self.path)
             && let Ok(fresh) = serde_json::from_str(&json)
         {

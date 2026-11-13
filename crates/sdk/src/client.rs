@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
+
+use platform::sync::Locked;
 use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender};
@@ -39,7 +41,7 @@ impl Client {
     }
 
     pub(crate) fn send(&self, command: ClientCommand) -> Result<(), Error> {
-        let backend = self.backend.lock().unwrap_or_else(PoisonError::into_inner);
+        let backend = self.backend.locked();
         backend.send(Envelope::local(command)).map_err(|error| Error::Backend(error.to_string()))
     }
 
@@ -48,7 +50,7 @@ impl Client {
         command: ClientCommand,
         mut pick: impl FnMut(ServerEvent) -> Option<Result<T, String>>,
     ) -> Result<T, Error> {
-        let _one_at_a_time = self.calls.lock().unwrap_or_else(PoisonError::into_inner);
+        let _one_at_a_time = self.calls.locked();
         while self.replies.try_recv().is_ok() {}
         self.send(command)?;
         loop {
@@ -66,12 +68,12 @@ impl Client {
 
     pub(crate) fn follow(&self, run: RunId) -> Receiver<EngineEvent> {
         let (tx, rx) = crossbeam_channel::unbounded();
-        self.routes.lock().unwrap_or_else(PoisonError::into_inner).insert(run, tx);
+        self.routes.locked().insert(run, tx);
         rx
     }
 
     pub(crate) fn forget(&self, run: RunId) {
-        self.routes.lock().unwrap_or_else(PoisonError::into_inner).remove(&run);
+        self.routes.locked().remove(&run);
     }
 }
 
@@ -93,11 +95,11 @@ fn dispatch(
             std::thread::sleep(Duration::from_millis(250));
         }
         loop {
-            let event = backend.lock().unwrap_or_else(PoisonError::into_inner).try_recv();
+            let event = backend.locked().try_recv();
             let Some(event) = event else { break };
             match event {
                 ServerEvent::Run { run, event } => {
-                    let mut routes = routes.lock().unwrap_or_else(PoisonError::into_inner);
+                    let mut routes = routes.locked();
                     let terminal = event.is_terminal();
                     if let Some(route) = routes.get(&run) {
                         let _ = route.send(event);

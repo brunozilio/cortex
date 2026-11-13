@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use platform::sync::Locked;
 
 use agent_engine::mcp::McpServer;
 use agent_engine::mcp::channel::{self, Bridge};
@@ -27,7 +29,7 @@ pub fn forget(client: u64) {
 
 fn lock() -> std::sync::MutexGuard<'static, HashMap<u64, Vec<Arc<McpServer>>>> {
     static OPEN: OnceLock<Mutex<HashMap<u64, Vec<Arc<McpServer>>>>> = OnceLock::new();
-    OPEN.get_or_init(Mutex::default).lock().unwrap_or_else(PoisonError::into_inner)
+    OPEN.get_or_init(Mutex::default).locked()
 }
 
 fn open(
@@ -86,7 +88,8 @@ mod tests {
         std::fs::write(home.path().join(concat!(brand::dir!(), "/mcp.json")), config.to_string()).expect("config");
         let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
         let names = vec!["chat".to_owned(), "missing".to_owned()];
-        let opened = open(9601, project.path(), &names, &Extensions::default(), Some(home.path()), &http).expect("open");
+        let opened =
+            open(9601, project.path(), &names, &Extensions::default(), Some(home.path()), &http).expect("open");
         assert_eq!(opened["opened"], json!(["chat"]));
         assert!(opened["failed"][0].as_str().is_some_and(|failed| failed.starts_with("missing:")), "{opened}");
 

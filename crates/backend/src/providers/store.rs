@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use platform::sync::Locked;
+
 use domain::Principal;
 use domain::provider::ProviderBook;
 
@@ -69,12 +71,12 @@ pub struct InMemoryProviderStore {
 
 impl ProviderStore for InMemoryProviderStore {
     fn load(&self, owner: &Principal) -> ProviderBook {
-        let books = self.books.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let books = self.books.locked();
         books.get(&owner_key(owner)).cloned().unwrap_or_default()
     }
 
     fn save(&self, owner: &Principal, book: &ProviderBook) -> std::io::Result<()> {
-        let mut books = self.books.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut books = self.books.locked();
         books.insert(owner_key(owner), book.clone());
         Ok(())
     }

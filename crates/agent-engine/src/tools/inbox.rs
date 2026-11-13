@@ -1,11 +1,13 @@
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
+
+use platform::sync::Locked;
 
 use domain::inbox::{self, Notice};
 
 fn lock() -> std::sync::MutexGuard<'static, HashMap<u64, Vec<Notice>>> {
     static ALL: OnceLock<Mutex<HashMap<u64, Vec<Notice>>>> = OnceLock::new();
-    ALL.get_or_init(Mutex::default).lock().unwrap_or_else(PoisonError::into_inner)
+    ALL.get_or_init(Mutex::default).locked()
 }
 
 pub fn push(client: u64, notice: Notice) {

@@ -3,6 +3,8 @@ mod sealed;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
+use platform::sync::Locked;
+
 use domain::{Principal, SecretId};
 
 use crate::dirs::owner_key;
@@ -42,18 +44,18 @@ pub struct InMemorySecretStore {
 
 impl SecretStore for InMemorySecretStore {
     fn get(&self, owner: &Principal, connection: SecretId) -> Option<Secrets> {
-        let secrets = self.secrets.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let secrets = self.secrets.locked();
         secrets.get(&(owner_key(owner), connection)).cloned()
     }
 
     fn set(&self, owner: &Principal, connection: SecretId, secrets: &Secrets) -> Result<(), String> {
-        let mut map = self.secrets.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut map = self.secrets.locked();
         map.insert((owner_key(owner), connection), secrets.clone());
         Ok(())
     }
 
     fn delete(&self, owner: &Principal, connection: SecretId) {
-        let mut map = self.secrets.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut map = self.secrets.locked();
         map.remove(&(owner_key(owner), connection));
     }
 }

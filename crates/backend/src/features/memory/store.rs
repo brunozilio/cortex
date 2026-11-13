@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use platform::sync::Locked;
+
 use domain::{MemoryBook, Principal};
 
 pub trait MemoryStore: Send + Sync {
@@ -91,12 +93,12 @@ pub struct InMemoryStore {
 
 impl MemoryStore for InMemoryStore {
     fn load(&self, owner: &Principal, project: &Path) -> MemoryBook {
-        let books = self.books.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let books = self.books.locked();
         books.get(&(owner_key(owner), project.to_path_buf())).cloned().unwrap_or_default()
     }
 
     fn save(&self, owner: &Principal, project: &Path, book: &MemoryBook) -> std::io::Result<()> {
-        let mut books = self.books.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut books = self.books.locked();
         books.insert((owner_key(owner), project.to_path_buf()), book.clone());
         Ok(())
     }

@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
+
+use platform::sync::Locked;
 
 use domain::provider::ProviderKey;
 use domain::{ModelOption, ModelProvider};
 
-use super::http::Http;
 use super::client::ProviderClient;
+use super::http::Http;
 use super::{Delta, ModelApi, ModelError, Reply, TurnRequest};
 
 pub struct Routed {
@@ -35,7 +37,7 @@ impl Routed {
     }
 
     fn other(&self, provider: ModelProvider, model: &str) -> Result<Arc<dyn ModelApi>, ModelError> {
-        let mut built = self.built.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut built = self.built.locked();
         if let Some(api) = built.get(&(provider, model.to_owned())) {
             return Ok(Arc::clone(api));
         }

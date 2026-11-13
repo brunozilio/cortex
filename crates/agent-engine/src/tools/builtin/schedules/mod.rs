@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
+
+use platform::sync::Locked;
 
 use chrono::{DateTime, Datelike, Local, TimeZone, Timelike};
 use domain::schedule::{MOST, Moment, Scheduled, When};
 use serde_json::{Value, json};
 
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 
 struct Entry {
     scheduled: Scheduled,
@@ -16,7 +18,7 @@ struct Entry {
 
 fn lock() -> std::sync::MutexGuard<'static, HashMap<u64, Vec<Entry>>> {
     static ALL: OnceLock<Mutex<HashMap<u64, Vec<Entry>>>> = OnceLock::new();
-    ALL.get_or_init(Mutex::default).lock().unwrap_or_else(PoisonError::into_inner)
+    ALL.get_or_init(Mutex::default).locked()
 }
 
 fn moment(secs: i64) -> Option<Moment> {
