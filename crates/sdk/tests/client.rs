@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;

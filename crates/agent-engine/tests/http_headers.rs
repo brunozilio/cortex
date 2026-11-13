@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+
 use agent_engine::model::http::{Http, NetHttp};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;

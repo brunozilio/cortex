@@ -56,11 +56,11 @@ pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<C
     let url = handler.url.as_deref().ok_or("HTTP hook requires url")?;
     let mut headers = Vec::new();
     let variables =
-        regex::Regex::new(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)").expect("static env pattern");
+        regex::Regex::new(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)").map_err(|e| e.to_string())?;
     for (name, value) in &handler.headers {
         let value = variables
             .replace_all(value, |captures: &regex::Captures<'_>| {
-                let key = captures.get(1).or_else(|| captures.get(2)).expect("variable").as_str();
+                let key = captures.get(1).or_else(|| captures.get(2)).map_or("", |found| found.as_str());
                 if handler.allowed_env_vars.iter().any(|allowed| allowed == key) {
                     std::env::var(key).unwrap_or_default()
                 } else {

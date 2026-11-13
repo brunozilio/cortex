@@ -36,38 +36,37 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
 
 pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
     let width = width.max(1);
-    let mut rows: Vec<Vec<(String, Style)>> = vec![Vec::new()];
+    let mut rows: Vec<Vec<(String, Style)>> = Vec::new();
+    let mut row: Vec<(String, Style)> = Vec::new();
     let mut used = 0;
-    let push = |rows: &mut Vec<Vec<(String, Style)>>, text: &str, style: Style| {
-        let row = rows.last_mut().expect("rows start with one");
-        match row.last_mut() {
-            Some((last, kept)) if *kept == style => last.push_str(text),
-            _ => row.push((text.to_owned(), style)),
-        }
+    let push = |row: &mut Vec<(String, Style)>, text: &str, style: Style| match row.last_mut() {
+        Some((last, kept)) if *kept == style => last.push_str(text),
+        _ => row.push((text.to_owned(), style)),
     };
     for span in &line.spans {
         for word in span.content.split_inclusive(' ') {
             let size = word.trim_end().width();
             if used > 0 && used + size > width {
-                rows.push(Vec::new());
+                rows.push(std::mem::take(&mut row));
                 used = 0;
             }
             if size > width {
                 for c in word.chars() {
                     let w = c.width().unwrap_or(0);
                     if used + w > width {
-                        rows.push(Vec::new());
+                        rows.push(std::mem::take(&mut row));
                         used = 0;
                     }
-                    push(&mut rows, c.encode_utf8(&mut [0; 4]), span.style);
+                    push(&mut row, c.encode_utf8(&mut [0; 4]), span.style);
                     used += w;
                 }
             } else {
-                push(&mut rows, word, span.style);
+                push(&mut row, word, span.style);
                 used += word.width();
             }
         }
     }
+    rows.push(row);
     rows.into_iter()
         .map(|row| {
             let mut spans: Vec<Span<'static>> =

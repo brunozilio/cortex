@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+
 mod compaction;
 mod custom_agents;
 mod interception;

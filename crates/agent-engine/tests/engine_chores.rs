@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

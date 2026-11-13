@@ -64,7 +64,8 @@ pub trait Sessions: Send + Sync {
 fn scoped_id(request: &PromptRequest, id: &SessionId) -> SessionId {
     let cwd = request.cwd.canonicalize().unwrap_or_else(|_| request.cwd.clone());
     let owner = request.credentials.owner.as_ref().unwrap_or(&Principal::LocalOwner);
-    let bytes = serde_json::to_vec(&(owner, cwd, id)).expect("session scope serialization");
+    let scope = (owner, cwd.to_string_lossy(), id);
+    let bytes = serde_json::to_vec(&scope).unwrap_or_else(|_| format!("{scope:?}").into_bytes());
     SessionId(format!("{:x}", Sha256::digest(bytes)))
 }
 
@@ -137,3 +138,31 @@ mod records;
 pub use file::FileSessions;
 pub use log::Entry;
 pub use records::records;
+
+#[cfg(test)]
+mod scope_tests {
+    use super::*;
+
+    fn request(cwd: std::path::PathBuf) -> PromptRequest {
+        PromptRequest::plain(cwd, "", domain::ModelOption::new("m", "M"))
+    }
+
+    #[test]
+    fn a_session_keeps_the_id_it_was_saved_under() {
+        let dir = std::env::temp_dir();
+        let id = SessionId("s".into());
+        let canonical = dir.canonicalize().unwrap_or_else(|_| dir.clone());
+        let saved = serde_json::to_vec(&(&Principal::LocalOwner, &canonical, &id)).unwrap_or_default();
+        let expected = SessionId(format!("{:x}", Sha256::digest(saved)));
+        assert_eq!(scoped_id(&request(dir), &id), expected);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_whose_name_is_not_utf8_still_has_a_session() {
+        use std::os::unix::ffi::OsStrExt;
+        let odd = std::path::PathBuf::from(std::ffi::OsStr::from_bytes(b"/tmp/odd-\xff"));
+        let id = SessionId("s".into());
+        assert_eq!(scoped_id(&request(odd.clone()), &id), scoped_id(&request(odd), &id));
+    }
+}

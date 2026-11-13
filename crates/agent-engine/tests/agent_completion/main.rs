@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+
 mod configured;
 mod hooks;
 mod judge_permissions;

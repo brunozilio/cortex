@@ -84,7 +84,10 @@ impl Job {
             skills: tools::skill::listing(&skills),
             output_style: prompt::styles::picked(self.request.output_style.as_deref(), style),
         };
-        Arc::get_mut(&mut self.workspace).expect("unshared context").prompt_context = Some(environment.clone());
+        let Some(workspace) = Arc::get_mut(&mut self.workspace) else {
+            return self.fail(super::job::SHARED_TOO_EARLY, FailureKind::Other);
+        };
+        workspace.prompt_context = Some(environment.clone());
         let mut main_system = prompt::system(&environment);
         let mut extra = String::new();
         if let Some(agent) = &selected {
@@ -110,7 +113,10 @@ impl Job {
         let (offered, deferred) = tools::tool_search::defer(offered);
         if let Some(deferred) = deferred {
             tools.push(Box::new(tools::tool_search::ToolSearch));
-            Arc::get_mut(&mut self.workspace).expect("unshared context").services.deferred = Some(Arc::new(deferred));
+            let Some(workspace) = Arc::get_mut(&mut self.workspace) else {
+                return self.fail(super::job::SHARED_TOO_EARLY, FailureKind::Other);
+            };
+            workspace.services.deferred = Some(Arc::new(deferred));
         }
         main_system.push_str(&extra);
         let template = TurnRequest {

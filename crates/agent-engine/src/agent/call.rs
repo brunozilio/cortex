@@ -80,7 +80,7 @@ impl Agent<'_> {
                             .collect();
                         handles
                             .into_iter()
-                            .map(|handle| handle.join().expect("a read-only tool panicked"))
+                            .map(|handle| handle.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic)))
                             .collect::<Vec<_>>()
                     }));
                 }

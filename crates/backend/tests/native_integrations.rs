@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+
 use agent_engine::{
     ApiSource, NativeEngine,
     model::{Delta, ModelApi, ModelError, Reply, TurnRequest, scripted::ScriptedModel},

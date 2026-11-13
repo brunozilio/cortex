@@ -10,6 +10,8 @@ use crate::sessions::Sessions;
 use crate::tools::{self, Workspace};
 use domain::{EngineEvent, EngineProblem, FailureKind, PromptRequest, SessionCommand, SessionId};
 
+pub(super) const SHARED_TOO_EARLY: &str = "The run's workspace was shared before its setup finished.";
+
 pub(super) struct Job {
     pub(super) source: Arc<dyn ApiSource>,
     pub(super) sessions: Arc<dyn Sessions>,
@@ -62,7 +64,9 @@ impl Job {
             Err(error) => return self.fail(&error, FailureKind::Other),
         };
         let mcp_sources = brief.mcp();
-        let workspace = Arc::get_mut(&mut self.workspace).expect("workspace is not shared before starting tools");
+        let Some(workspace) = Arc::get_mut(&mut self.workspace) else {
+            return self.fail(SHARED_TOO_EARLY, FailureKind::Other);
+        };
         workspace.rules = brief.rules;
         let mut tools = tools::standard();
         let specs = domain::lsp::servers(domain::lsp::defaults(), &brief.settings.lsp_servers);
@@ -105,7 +109,9 @@ impl Job {
             agent_config.memory = None;
         }
         self.control = self.control.child_configured(agent_config.permission, agent_config.dont_ask);
-        let workspace = Arc::get_mut(&mut self.workspace).expect("unshared setup");
+        let Some(workspace) = Arc::get_mut(&mut self.workspace) else {
+            return self.fail(SHARED_TOO_EARLY, FailureKind::Other);
+        };
         workspace.stop = self.control.shared_stop();
         workspace.auto_memory = settings.auto_memory;
         workspace.policy.scripts = settings.scripts;

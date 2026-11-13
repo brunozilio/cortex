@@ -45,7 +45,7 @@ impl Loader {
         }
         self.bytes += bytes.len();
         let text = String::from_utf8(bytes).map_err(|_| "instruction file is not UTF-8")?;
-        let import = regex::Regex::new(r#"(?:^|\s)@("[^"]+"|[^\s`]+)"#).expect("static import expression");
+        let import = regex::Regex::new(r#"(?:^|\s)@("[^"]+"|[^\s`]+)"#).map_err(|e| e.to_string())?;
         let mut output = String::new();
         let mut fence: Option<(char, usize)> = None;
         let mut comment = false;
@@ -208,7 +208,7 @@ fn visible(line: &str, comment: &mut bool, keep_code: bool) -> String {
             }
             offset += count;
         } else {
-            let c = tail.chars().next().expect("nonempty remainder");
+            let Some(c) = tail.chars().next() else { break };
             if keep_code || ticks == 0 {
                 output.push(c);
             } else {

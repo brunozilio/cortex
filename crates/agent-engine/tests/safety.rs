@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 

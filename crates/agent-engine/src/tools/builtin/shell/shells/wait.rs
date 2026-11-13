@@ -60,7 +60,8 @@ fn taken(shell: Option<Shell>) -> String {
     String::from_utf8_lossy(&kept).trim_end().to_owned()
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use std::process::Stdio;
 

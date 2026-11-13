@@ -1,3 +1,5 @@
+use platform::sync::Locked;
+
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 use serde_json::{Value, json};
@@ -74,7 +76,7 @@ impl Tool for PlanTool {
         input["subject"].as_str().or_else(|| input["task_id"].as_str()).unwrap_or_default().into()
     }
     fn run(&self, input: &Value, _: &Workspace) -> Outcome {
-        let mut board = self.board.lock().expect("task board");
+        let mut board = self.board.locked();
         if self.name == "TaskList" {
             return Outcome::ok(json!(board.tasks.values().collect::<Vec<_>>()).to_string());
         }

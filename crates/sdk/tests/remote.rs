@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
@@ -58,9 +60,6 @@ fn a_session_runs_over_a_backend_that_only_sees_serialized_messages() {
 
 #[test]
 fn in_process_servers_need_the_local_backend() {
-    let built = Sdk::builder()
-        .mcp(McpServer::new("tools"))
-        .backend(|_| Err(BackendError::Disconnected))
-        .build();
+    let built = Sdk::builder().mcp(McpServer::new("tools")).backend(|_| Err(BackendError::Disconnected)).build();
     assert!(matches!(built, Err(Error::Backend(message)) if message.contains("only the local backend")));
 }

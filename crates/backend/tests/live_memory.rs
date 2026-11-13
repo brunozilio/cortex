@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
