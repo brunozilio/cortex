@@ -4,7 +4,9 @@ use serde_json::Value;
 
 pub const SANDBOX: &str = "experimental-sandbox";
 
-const SECURITY: &[&str] = &[SANDBOX];
+pub const REDACT_SECRETS: &str = "redact-secrets";
+
+const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Flag {
@@ -12,8 +14,13 @@ pub struct Flag {
     pub about: &'static str,
 }
 
-pub const KNOWN: &[Flag] =
-    &[Flag { name: SANDBOX, about: "Confine Bash and Monitor commands to the project's folders (macOS)" }];
+pub const KNOWN: &[Flag] = &[
+    Flag { name: SANDBOX, about: "Confine Bash and Monitor commands to the project's folders (macOS)" },
+    Flag {
+        name: REDACT_SECRETS,
+        about: "Hide tokens, keys and the project's .env values in tool output before the model and the log see them",
+    },
+];
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Listed {

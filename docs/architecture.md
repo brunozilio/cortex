@@ -164,6 +164,18 @@ Inbox notices are core (`TakeNotices`).
   command, the folder a `Glob`/`Grep` searches (a denied folder inside it
   counts, best effort for bare names), or a path judged both as written
   (`..` folded) and through links.
+- **Secret redaction** (`redact-secrets`, a security flag): every tool
+  result is passed through `domain::redact` right after
+  `untrusted::neutralize` (`agent/dispatch.rs`), so the model, the
+  client, a persisted long result and the session log never get the
+  secret; the shown diff and the `ToolStarted` summary and input are
+  redacted too. It hides known token shapes (`ghp_`, `sk-`, AWS keys,
+  JWTs, `Bearer x`, `password=x`) and every value of eight characters
+  or more from the project's `.env` and `.env.*` files (not `.example`
+  or `.sample`), read once per run into `Policy::redact`; a sub-agent
+  keeps its parent's. Unlike `memory::sanitize`, which uses the same
+  word rules, it keeps the text's layout. What the model itself writes
+  in a tool call is not changed.
 - **What the loop decided**: besides the tool events, the loop records
   what it decided so traces and later features need not read it out of
   free text: `Answered { ask, decision }` once the user answers a

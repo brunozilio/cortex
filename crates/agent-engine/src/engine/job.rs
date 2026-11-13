@@ -116,6 +116,10 @@ impl Job {
         workspace.auto_memory = settings.auto_memory;
         workspace.policy.scripts = settings.scripts;
         workspace.policy.sandbox = settings.features.on(domain::features::SANDBOX).then(|| settings.sandbox.clone());
+        workspace.policy.redact = settings
+            .features
+            .on(domain::features::REDACT_SECRETS)
+            .then(|| Arc::new(tools::env_secrets(&workspace.cwd)));
         workspace.services.files = Some(Arc::default());
         if self.request.safety_check {
             workspace.policy.safety = Some(Arc::new(crate::guard::Safety::default()));

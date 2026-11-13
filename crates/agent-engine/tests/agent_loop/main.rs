@@ -8,6 +8,7 @@ mod native_search;
 mod permission_rules;
 mod permissions;
 mod plan_mode;
+mod redaction;
 mod repeats;
 mod safeguards;
 mod script_skills;

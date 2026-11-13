@@ -55,7 +55,9 @@ impl Agent<'_> {
             }
         }
         let summary = tool.map(|tool| tool.summary(input)).unwrap_or_default();
-        (self.emit)(EngineEvent::ToolStarted(ToolCall::new(id, name, summary.clone()).with_input(input.clone())));
+        let shown_summary = self.workspace.policy.redacted(&summary);
+        let shown_input = redacted_value(input, &|text| self.workspace.policy.redacted(text));
+        (self.emit)(EngineEvent::ToolStarted(ToolCall::new(id, name, shown_summary).with_input(shown_input)));
         let mut outcome = if let Some(reason) = &pre.blocked {
             Outcome::error(format!("Hook blocked {name}: {reason}"))
         } else if !rule_context.is_empty() {
@@ -160,7 +162,8 @@ impl Agent<'_> {
                 outcome.content.push_str(&format!("\nHook failed: {error}"));
             }
         }
-        outcome.content = domain::untrusted::neutralize(&outcome.content);
+        outcome.content = self.workspace.policy.redacted(&domain::untrusted::neutralize(&outcome.content));
+        outcome.shown = outcome.shown.map(|shown| self.workspace.policy.redacted(&shown));
         if name == "WebFetch" && !outcome.is_error {
             let (url, looking_for) = (crate::tools::field(input, "url"), crate::tools::field(input, "prompt"));
             let guarded = crate::tools::builtin::web::guarded::reader(
@@ -206,5 +209,16 @@ impl Agent<'_> {
                 is_error: outcome.is_error,
             }
         }
+    }
+}
+
+fn redacted_value(value: &Value, redact: &dyn Fn(&str) -> String) -> Value {
+    match value {
+        Value::String(text) => Value::String(redact(text)),
+        Value::Array(items) => Value::Array(items.iter().map(|item| redacted_value(item, redact)).collect()),
+        Value::Object(fields) => {
+            Value::Object(fields.iter().map(|(key, item)| (key.clone(), redacted_value(item, redact))).collect())
+        }
+        other => other.clone(),
     }
 }

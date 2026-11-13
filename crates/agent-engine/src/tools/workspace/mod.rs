@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 pub use models::Models;
-pub use policy::Policy;
+pub use policy::{Policy, env_secrets};
 pub use services::{Network, Services};
 pub(crate) use tracking::Tracking;
 
