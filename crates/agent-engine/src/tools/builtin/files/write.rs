@@ -71,7 +71,8 @@ impl Tool for Write {
                     format!("Created {name} ({lines} lines).")
                 };
                 let heading = if existed { format!("Replaced {name}") } else { format!("Created {name}") };
-                Outcome::ok(said + &workspace.diagnosed(&path, content))
+                let tests = crate::tools::builtin::shell::affected::start(workspace, &path);
+                Outcome::ok(said + &workspace.diagnosed(&path, content) + &tests)
                     .showing(super::shown_diff::created(&heading, content))
                     .editing(domain::changes::Edited::written(path.clone(), previous.as_deref(), content))
             }

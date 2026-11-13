@@ -1,3 +1,4 @@
+pub mod affected;
 mod bash;
 mod changes;
 mod monitor;

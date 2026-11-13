@@ -124,6 +124,7 @@ impl Job {
         workspace.policy.dependency_guard = settings.features.on(domain::features::DEPENDENCY_GUARD);
         workspace.policy.escalation = settings.features.on(domain::features::ESCALATION);
         workspace.policy.auto_review = settings.features.on(domain::features::AUTO_REVIEW);
+        workspace.policy.affected_tests = settings.features.on(domain::features::AFFECTED_TESTS);
         workspace.models.escalation.clone_from(&settings.escalation);
         if !settings.features.on(domain::features::BUDGET) {
             self.request.budget = None;

@@ -1,3 +1,4 @@
+pub mod affected;
 pub mod agents;
 pub mod approval;
 pub mod billing;

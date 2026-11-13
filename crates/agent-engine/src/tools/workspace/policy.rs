@@ -20,6 +20,7 @@ pub struct Policy {
     pub dependency_guard: bool,
     pub escalation: bool,
     pub auto_review: bool,
+    pub affected_tests: bool,
 }
 
 impl Policy {
@@ -35,6 +36,7 @@ impl Policy {
             dependency_guard: self.dependency_guard,
             escalation: self.escalation,
             auto_review: self.auto_review,
+            affected_tests: self.affected_tests,
         }
     }
 

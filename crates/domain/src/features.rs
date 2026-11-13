@@ -13,6 +13,7 @@ pub const CACHE_WARNING: &str = "cache-warning";
 pub const ESCALATION: &str = "experimental-escalation";
 pub const PROJECT_CRITERIA: &str = "project-criteria";
 pub const AUTO_REVIEW: &str = "auto-review";
+pub const AFFECTED_TESTS: &str = "experimental-affected-tests";
 
 const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS, DEPENDENCY_GUARD];
 
@@ -45,6 +46,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: ESCALATION,
         about: "When the agent fails the same call again and again, send it to the Advisor or to escalationModel",
+    },
+    Flag {
+        name: AFFECTED_TESTS,
+        about: "After an edit, run the tests that cover the changed file in the background and tell the agent",
     },
     Flag {
         name: AUTO_REVIEW,

@@ -185,6 +185,16 @@ Inbox notices are core (`TakeNotices`).
   plus the run's priced calls reach the limit, so the run fails saying
   how to raise it; calls without a price count as nothing. The status
   line shows spent against the limit.
+- **Affected tests** (`experimental-affected-tests`; rule in
+  `domain::affected`): after an `Edit` or `Write` inside the project,
+  `shell/affected.rs` starts the tests that cover the file as a
+  background command (confined like `Bash`), unless the same command is
+  still running, and the result says so in `<tests>`; the command's end
+  reaches the agent through the inbox. A Rust file runs `cargo test -p`
+  of its crate with `CARGO_TARGET_DIR` at `target/agent-tests`, so it
+  never waits on the user's own build; Go tests its package; Python and
+  JavaScript run the test file beside the source (`test_<name>.py`,
+  `<name>.test.ts`), JavaScript only with a `package.json`.
 - **Automatic review** (`auto-review`; folder
   `tools/builtin/code_review/`, rules in `domain::review`): a reviewer
   next to the judge. When a top-level run changed files inside its
