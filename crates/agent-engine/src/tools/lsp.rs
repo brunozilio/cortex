@@ -58,7 +58,7 @@ const OUTPUT: usize = 30_000;
 const ANSWER_WAIT: Duration = Duration::from_secs(60);
 
 fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
-    let lsp = workspace.lsp.as_ref().ok_or("No language servers are available in this run.")?;
+    let lsp = workspace.services.lsp.as_ref().ok_or("No language servers are available in this run.")?;
     let query = Query::parse(input)?;
     let file = workspace.resolve(&query.file);
     let text =

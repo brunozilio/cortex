@@ -78,7 +78,7 @@ impl Agent<'_> {
 
     fn offers(&self, name: &str) -> bool {
         self.request.tools.iter().any(|spec| spec.name == name)
-            || self.workspace.deferred.as_ref().is_some_and(|deferred| deferred.is_loaded(name))
+            || self.workspace.services.deferred.as_ref().is_some_and(|deferred| deferred.is_loaded(name))
     }
 }
 

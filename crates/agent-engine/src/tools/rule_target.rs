@@ -9,7 +9,7 @@ type Ruling = Option<(RuleKind, String)>;
 
 impl Workspace {
     pub fn ruling(&self, name: &str, subject: &str, input: &Value) -> Ruling {
-        self.ruling_with(&self.permissions, name, subject, input)
+        self.ruling_with(&self.policy.permissions, name, subject, input)
     }
 
     pub fn ruling_with(&self, rules: &PermissionRules, name: &str, subject: &str, input: &Value) -> Ruling {
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn a_path_cannot_climb_around_a_rule() {
         let mut workspace = Workspace::new("/work/rocket");
-        workspace.permissions = PermissionRules::default().with(RuleKind::Deny, "Read(secrets/**)");
+        workspace.policy.permissions = PermissionRules::default().with(RuleKind::Deny, "Read(secrets/**)");
         let read = |path: &str| kind(workspace.ruling("Read", path, &json!({ "file_path": path })));
         assert_eq!(read("src/../secrets/key"), Some(RuleKind::Deny));
         assert_eq!(read("/work/rocket/./secrets/key"), Some(RuleKind::Deny));
@@ -122,7 +122,7 @@ mod tests {
         std::fs::create_dir_all(project.join("src")).expect("src");
         std::os::unix::fs::symlink(project.join("secrets"), project.join("src/link")).expect("link");
         let mut workspace = Workspace::new(&project);
-        workspace.permissions =
+        workspace.policy.permissions =
             PermissionRules::default().with(RuleKind::Deny, "Read(secrets/**)").with(RuleKind::Allow, "Edit(src/**)");
         let call = |tool: &str| kind(workspace.ruling(tool, "", &json!({ "file_path": "src/link/key" })));
         assert_eq!(call("Read"), Some(RuleKind::Deny), "the link leads into the denied folder");
@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn a_search_is_judged_by_the_folder_it_searches() {
         let mut workspace = Workspace::new("/work/rocket");
-        workspace.permissions = PermissionRules::default().with(RuleKind::Deny, "Read(secrets/**)");
+        workspace.policy.permissions = PermissionRules::default().with(RuleKind::Deny, "Read(secrets/**)");
         let grep = |input| kind(workspace.ruling("Grep", "key", &input));
         assert_eq!(grep(json!({ "pattern": "key" })), Some(RuleKind::Deny), "the project holds the denied folder");
         assert_eq!(grep(json!({ "pattern": "key", "path": "src" })), None);

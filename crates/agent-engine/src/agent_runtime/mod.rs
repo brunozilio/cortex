@@ -67,7 +67,7 @@ pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace
     setup.cwd = actual;
     setup.worktree_root = Some(root);
     setup.base_commit = Some(state.base_commit.clone());
-    let request = domain::PromptRequest::plain(setup.cwd.clone(), "", workspace.model.clone());
+    let request = domain::PromptRequest::plain(setup.cwd.clone(), "", workspace.models.model.clone());
     setup.context = Some(crate::brief::Brief::load(&request)?);
     Ok(setup)
 }
@@ -158,7 +158,7 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
                 Err(cleanup) => format!("{error}; inspect partial checkout {}: {cleanup}", target.display()),
             });
         }
-        let request = domain::PromptRequest::plain(setup.cwd.clone(), "", workspace.model.clone());
+        let request = domain::PromptRequest::plain(setup.cwd.clone(), "", workspace.models.model.clone());
         setup.context = match crate::brief::Brief::load(&request) {
             Ok(brief) => Some(brief),
             Err(error) => {

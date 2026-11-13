@@ -148,7 +148,7 @@ mod tests {
         *server.diagnostics.lock().expect("diagnostics") =
             Some(vec![json!({"severity": 1, "message": "mismatched types",
             "range": {"start": {"line": 0, "character": 13}, "end": {"line": 0, "character": 16}}})]);
-        workspace.lsp = Some(server.lsp());
+        workspace.services.lsp = Some(server.lsp());
         let edit = json!({"file_path": "f.rs", "old_string": "1", "new_string": "\"one\""});
         let outcome = Edit.run(&edit, &workspace);
         assert_eq!(outcome.content, "Edited f.rs.\n\n<diagnostics>\nf.rs:1:14 error: mismatched types\n</diagnostics>");

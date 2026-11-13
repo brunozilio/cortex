@@ -25,8 +25,11 @@ pub fn script(
         data: serde_json::json!({ "cwd": workspace.cwd, "session": workspace.session_id, "agent": workspace.agent_name }),
         limit: Duration::from_secs(handler.timeout),
     };
-    let standalone =
-        StandaloneHost { cwd: workspace.cwd.clone(), access: workspace.scripts, stop: Arc::clone(&workspace.stop) };
+    let standalone = StandaloneHost {
+        cwd: workspace.cwd.clone(),
+        access: workspace.policy.scripts,
+        stop: Arc::clone(&workspace.stop),
+    };
     let result = match model {
         None => hook.run(Arc::new(standalone), workspace),
         Some((api, template)) => bridged(hook, &standalone, workspace, api, template),

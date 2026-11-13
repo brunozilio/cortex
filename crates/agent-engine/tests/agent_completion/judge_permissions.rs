@@ -99,7 +99,7 @@ fn outside_bypass_the_judge_is_refused_any_other_command_without_asking() {
 fn in_bypass_a_command_the_criteria_name_skips_the_safety_check() {
     let dir = tempfile::tempdir().expect("dir");
     let mut workspace = judged(dir.path());
-    workspace.safety = Some(Arc::new(agent_engine::guard::Safety::default()));
+    workspace.policy.safety = Some(Arc::new(agent_engine::guard::Safety::default()));
     let events = judge_runs("echo checked", PermissionMode::Bypass, &workspace);
     let (failed, output) = judge_result(&events);
     assert!(!failed && output.contains("checked"), "{output}");

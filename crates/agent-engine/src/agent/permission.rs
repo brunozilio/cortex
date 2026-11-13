@@ -82,7 +82,7 @@ impl Agent<'_> {
             (verdict, _) => verdict,
         };
         let pre_approved = matches!(
-            self.workspace.ruling_with(&self.workspace.pre_approved, &name, subject, input),
+            self.workspace.ruling_with(&self.workspace.policy.pre_approved, &name, subject, input),
             Some((domain::permission_rules::RuleKind::Allow, _))
         );
         if pre_approved && !rule_asks && !matches!(verdict, Verdict::Deny(_)) && hook_permission != Some("ask") {
@@ -119,7 +119,7 @@ impl Agent<'_> {
         match verdict {
             Verdict::Allow if self.unattended(access) => {
                 let instructions = self.workspace.instructions_text();
-                let checked = self.workspace.safety.as_deref().map_or(Ok(()), |safety| {
+                let checked = self.workspace.policy.safety.as_deref().map_or(Ok(()), |safety| {
                     safety.check(self.api, &self.request, &instructions, &name, input, self.control.stop_flag())
                 });
                 match checked {
@@ -137,12 +137,12 @@ impl Agent<'_> {
     }
 
     pub(super) fn went_ahead(&self, tool: &dyn Tool, input: &Value) -> Outcome {
-        self.workspace.count_refusal(false);
+        self.workspace.tracking.count_refusal(false);
         tool.run(input, self.workspace)
     }
 
     pub(super) fn refused(&self, reason: impl Into<String>) -> Outcome {
-        self.workspace.count_refusal(true);
+        self.workspace.tracking.count_refusal(true);
         Outcome::error(reason)
     }
 }

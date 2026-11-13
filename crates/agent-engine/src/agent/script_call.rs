@@ -149,7 +149,7 @@ impl Agent<'_> {
     }
 
     fn serve(&self, id: &str, function: &str, arguments: Value, parent: &[Message]) -> Result<Value, String> {
-        let access = self.workspace.scripts;
+        let access = self.workspace.policy.scripts;
         let text = |key: &str| arguments.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
         match function {
             "tool" => {

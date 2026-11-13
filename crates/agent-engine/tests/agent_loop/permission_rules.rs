@@ -8,7 +8,7 @@ use crate::{Rig, tool_use};
 
 fn rig(mode: PermissionMode, rules: PermissionRules) -> Rig {
     let mut rig = Rig::new(mode);
-    rig.workspace.permissions = rules;
+    rig.workspace.policy.permissions = rules;
     rig
 }
 

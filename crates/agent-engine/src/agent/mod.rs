@@ -98,7 +98,7 @@ impl Agent<'_> {
         let mut counted = crate::upkeep::Counted::default();
         let mut reminders = reminders::Reminders::default();
         let mut fell_back: Option<String> = None;
-        let mut fallback = domain::fallback::Fallback::new(self.workspace.fallbacks.clone());
+        let mut fallback = domain::fallback::Fallback::new(self.workspace.models.fallbacks.clone());
         let mut rejections = domain::interception::Rejections::default();
         let mut stop_hook_active = false;
         let mut cutoffs = cutoffs::Cutoffs::default();
@@ -107,7 +107,7 @@ impl Agent<'_> {
             if self.control.is_stopped() {
                 return Err(Ending::Cancelled);
             }
-            let model = &self.workspace.model;
+            let model = &self.workspace.models.model;
             let measured = crate::upkeep::measure(model, &self.request.system, &self.request.tools, history);
             let threshold = model
                 .capabilities
@@ -178,7 +178,7 @@ impl Agent<'_> {
                 continue;
             }
             reminders.observe(&calls);
-            if let Some(safety) = &self.workspace.safety {
+            if let Some(safety) = &self.workspace.policy.safety {
                 safety.observe(history);
             }
             history.push(reply.message);
@@ -250,7 +250,7 @@ impl Agent<'_> {
             results.extend(self.steered());
             results.extend(self.notices());
             history.push(Message { role: Role::User, blocks: results });
-            if let Some(why) = self.workspace.refusals_stop() {
+            if let Some(why) = self.workspace.tracking.refusals_stop() {
                 return Err(Ending::Failed(ModelError::Provider(why)));
             }
             if self.control.is_moving() {
@@ -281,7 +281,7 @@ impl Agent<'_> {
 
     pub(super) fn offered(&self) -> Vec<crate::model::ToolSpec> {
         let mut tools = self.request.tools.clone();
-        if let Some(deferred) = &self.workspace.deferred {
+        if let Some(deferred) = &self.workspace.services.deferred {
             tools.extend(deferred.loaded());
         }
         tools

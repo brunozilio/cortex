@@ -21,7 +21,7 @@ fn calls(name: &str, input: serde_json::Value) -> Result<agent_engine::model::Re
 
 fn run(mode: PermissionMode, model: &ScriptedModel, dir: &std::path::Path) -> (String, Vec<TurnRequest>) {
     let mut workspace = Workspace::new(dir);
-    workspace.safety = Some(Arc::new(Safety::default()));
+    workspace.policy.safety = Some(Arc::new(Safety::default()));
     let control = Arc::new(Control::new(mode, Arc::new(AtomicBool::new(false))));
     let events: Arc<Mutex<Vec<EngineEvent>>> = Arc::default();
     let sink = Arc::clone(&events);

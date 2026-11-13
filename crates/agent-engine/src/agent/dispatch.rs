@@ -25,7 +25,7 @@ impl Agent<'_> {
     ) -> Block {
         let tool = self.tools.iter().find(|tool| tool.spec().name == name);
         let offered = self.request.tools.iter().any(|spec| spec.name == name)
-            || self.workspace.deferred.as_ref().is_some_and(|deferred| deferred.is_loaded(name));
+            || self.workspace.services.deferred.as_ref().is_some_and(|deferred| deferred.is_loaded(name));
         let pre = if tool.is_some() && offered && !self.control.is_stopped() {
             self.workspace.hooks.run_with_model(
                 "PreToolUse",
@@ -43,7 +43,7 @@ impl Agent<'_> {
         if pre.updated_input.is_some() {
             let path =
                 input["file_path"].as_str().or_else(|| input["path"].as_str()).map(|p| self.workspace.resolve(p));
-            let mut seen = self.workspace.seen_rules.locked();
+            let mut seen = self.workspace.tracking.seen_rules.locked();
             for rule in &self.workspace.rules {
                 match rule.applies(&self.workspace.cwd, path.as_deref()) {
                     Ok(true) if !rule.patterns.is_empty() && seen.insert(rule.path.clone()) => {
@@ -163,9 +163,9 @@ impl Agent<'_> {
         if name == "WebFetch" && !outcome.is_error {
             let (url, looking_for) = (crate::tools::field(input, "url"), crate::tools::field(input, "prompt"));
             let guarded = crate::tools::builtin::web::guarded::reader(
-                self.workspace.small_model.as_deref(),
+                self.workspace.models.small_model.as_deref(),
                 &self.request,
-                self.workspace.model.provider,
+                self.workspace.models.model.provider,
             );
             outcome.content = crate::tools::builtin::web::guarded::digest(
                 self.api,

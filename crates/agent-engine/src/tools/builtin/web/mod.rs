@@ -58,7 +58,9 @@ impl Tool for WebFetch {
         if is_private(&site) {
             return Outcome::error(format!("{site} is this computer or its private network; WebFetch reads the web."));
         }
-        let Some(web) = &workspace.network else { return Outcome::error("The web is not available to this run.") };
+        let Some(web) = &workspace.services.network else {
+            return Outcome::error("The web is not available to this run.");
+        };
         let response = match web.0.get(&url, &[("User-Agent".into(), brand::NAME.into())]) {
             Ok(response) => response,
             Err(error) => return Outcome::error(format!("Could not fetch {url}: {error}")),
@@ -107,7 +109,9 @@ impl Tool for WebSearch {
             Ok(query) => query,
             Err(error) => return error,
         };
-        let Some(web) = &workspace.network else { return Outcome::error("The web is not available to this run.") };
+        let Some(web) = &workspace.services.network else {
+            return Outcome::error("The web is not available to this run.");
+        };
         let key = std::env::var("BRAVE_SEARCH_API_KEY").ok().filter(|key| !key.is_empty());
         match search::search(web.0.as_ref(), query, key.as_deref()) {
             Ok(results) if results.is_empty() => Outcome::ok(format!("No results for \"{query}\".")),
@@ -126,7 +130,7 @@ mod tests {
 
     fn workspace(answers: Vec<(u16, String)>) -> Workspace {
         let mut workspace = Workspace::new("/tmp");
-        workspace.network = Some(Network(Arc::new(ScriptedHttp::new(answers))));
+        workspace.services.network = Some(Network(Arc::new(ScriptedHttp::new(answers))));
         workspace
     }
 

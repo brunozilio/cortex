@@ -16,7 +16,7 @@ fn configured_agent_filters_tools_enforces_runtime_denial_and_selects_model_effo
         subagent_config::AgentConfig,
     };
     let mut rig = Rig::new(PermissionMode::Bypass);
-    rig.workspace.model = domain::ModelOption::new("family-key:claude-opus-5-5", "Opus")
+    rig.workspace.models.model = domain::ModelOption::new("family-key:claude-opus-5-5", "Opus")
         .served_by(domain::ModelProvider::new("family-key"));
     let found = FoundAgent {
         name: "reviewer".into(),

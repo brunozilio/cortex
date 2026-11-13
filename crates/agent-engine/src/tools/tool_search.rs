@@ -137,7 +137,9 @@ impl Tool for ToolSearch {
             Ok(query) => query,
             Err(error) => return error,
         };
-        let Some(deferred) = &workspace.deferred else { return Outcome::error("Every tool is already loaded.") };
+        let Some(deferred) = &workspace.services.deferred else {
+            return Outcome::error("Every tool is already loaded.");
+        };
         let found = deferred.search(query);
         if found.is_empty() {
             return Outcome::error(format!("No tool matches \"{query}\"."));
@@ -225,7 +227,7 @@ mod tests {
     #[test]
     fn a_search_names_the_tools_still_waiting_so_the_next_one_can_select_them() {
         let mut workspace = Workspace::new(".");
-        workspace.deferred = Some(std::sync::Arc::new(jira()));
+        workspace.services.deferred = Some(std::sync::Arc::new(jira()));
         let outcome = ToolSearch.run(&json!({"query": "get issue"}), &workspace);
         assert!(!outcome.is_error, "{}", outcome.content);
         assert!(outcome.content.contains("Not loaded yet"), "{}", outcome.content);

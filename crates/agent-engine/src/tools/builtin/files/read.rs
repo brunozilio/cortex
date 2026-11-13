@@ -88,7 +88,7 @@ impl Tool for Read {
         if text.is_empty() {
             return Outcome::ok("(the file is empty)");
         }
-        if workspace.seen_files.seen_again(&path, offset, limit) {
+        if workspace.tracking.seen_files.seen_again(&path, offset, limit) {
             return Outcome::ok(format!(
                 "{} is unchanged since you last read these lines in this conversation; that text is still current.",
                 shown(&path, workspace)

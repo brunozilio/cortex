@@ -153,7 +153,7 @@ impl Tool for SkillTool {
         if !skill.model_invocation {
             return Outcome::error(format!("Skill {name} requires explicit user invocation."));
         }
-        load(skill, input["args"].as_str().unwrap_or_default(), &workspace.cwd, workspace.scripts)
+        load(skill, input["args"].as_str().unwrap_or_default(), &workspace.cwd, workspace.policy.scripts)
     }
 }
 

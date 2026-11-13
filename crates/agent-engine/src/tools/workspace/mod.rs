@@ -1,7 +1,18 @@
-use std::collections::HashSet;
+mod models;
+mod policy;
+mod services;
+mod tracking;
+#[cfg(test)]
+mod tests;
+
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+
+pub use models::Models;
+pub use policy::Policy;
+pub use services::{Network, Services};
+pub(crate) use tracking::Tracking;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verification {
@@ -13,70 +24,46 @@ pub struct Verification {
 #[derive(Debug)]
 pub struct Workspace {
     pub cwd: PathBuf,
-    pub(crate) read: Arc<super::read_files::ReadFiles>,
-    pub(crate) refusals: Mutex<domain::interception::Refusals>,
-    pub(crate) seen_files: Arc<super::seen_files::SeenFiles>,
     pub stop: Arc<AtomicBool>,
     pub detach: Arc<AtomicBool>,
     pub credentials: domain::credentials::RunCredentials,
-    pub model: domain::ModelOption,
     pub prompt_context: Option<crate::prompt::Environment>,
     pub hooks: crate::hooks::Hooks,
-    pub permissions: domain::permission_rules::PermissionRules,
-    pub pre_approved: domain::permission_rules::PermissionRules,
     pub home: Option<PathBuf>,
     pub added_dirs: Vec<PathBuf>,
-    pub fallbacks: Vec<String>,
-    pub small_model: Option<String>,
-    pub network: Option<Network>,
-    pub deferred: Option<Arc<super::tool_search::Deferred>>,
     pub agent_name: String,
     pub session_id: String,
     pub auto_memory: bool,
     pub rules: Vec<crate::prompt::rules::Rule>,
-    pub(crate) seen_rules: Arc<Mutex<HashSet<PathBuf>>>,
-    pub safety: Option<Arc<crate::guard::Safety>>,
-    pub advisor: Option<String>,
     pub verification: Option<Verification>,
-    pub files: Option<Arc<crate::checkpoints::FileHistory>>,
-    pub lsp: Option<crate::lsp::Lsp>,
     pub worktree: Option<crate::agent_runtime::WorktreeState>,
-    pub scripts: super::script_tool::ScriptAccess,
+    pub policy: Policy,
+    pub models: Models,
+    pub services: Services,
+    pub(crate) tracking: Tracking,
 }
 
 impl Workspace {
     pub fn new(cwd: impl Into<PathBuf>) -> Self {
         Self {
             cwd: cwd.into(),
-            read: Arc::default(),
-            refusals: Mutex::default(),
-            seen_files: Arc::default(),
             stop: Arc::new(AtomicBool::new(false)),
             detach: Arc::default(),
             credentials: Default::default(),
             prompt_context: None,
             hooks: Default::default(),
-            permissions: Default::default(),
-            pre_approved: Default::default(),
             home: None,
             added_dirs: Vec::new(),
-            fallbacks: Vec::new(),
-            small_model: None,
-            network: None,
-            deferred: None,
             agent_name: "main".into(),
             session_id: uuid::Uuid::new_v4().to_string(),
             auto_memory: true,
             rules: Vec::new(),
-            seen_rules: Arc::default(),
-            model: domain::ModelOption::new("unknown", "Unknown"),
-            safety: None,
-            advisor: None,
             verification: None,
-            files: None,
-            lsp: None,
             worktree: None,
-            scripts: super::script_tool::ScriptAccess::default(),
+            policy: Policy::default(),
+            models: Models::default(),
+            services: Services::default(),
+            tracking: Tracking::default(),
         }
     }
 
@@ -90,63 +77,49 @@ impl Workspace {
     }
 
     pub fn for_request(request: &domain::PromptRequest) -> Self {
-        Self { credentials: request.credentials.clone(), model: request.model.clone(), ..Self::new(&request.cwd) }
+        Self {
+            credentials: request.credentials.clone(),
+            models: Models::new(request.model.clone()),
+            ..Self::new(&request.cwd)
+        }
     }
 
     pub fn fork(&self, stop: Arc<AtomicBool>) -> Self {
         Self {
             cwd: self.cwd.clone(),
-            read: self.read.clone(),
-            refusals: Mutex::default(),
-            seen_files: Arc::default(),
             stop,
             detach: Arc::clone(&self.detach),
             credentials: self.credentials.clone(),
-            model: self.model.clone(),
             prompt_context: self.prompt_context.clone(),
             hooks: self.hooks.clone(),
-            permissions: self.permissions.clone(),
-            pre_approved: Default::default(),
             home: self.home.clone(),
             added_dirs: self.added_dirs.clone(),
-            fallbacks: self.fallbacks.clone(),
-            small_model: self.small_model.clone(),
-            network: self.network.clone(),
-            deferred: self.deferred.clone(),
             agent_name: self.agent_name.clone(),
             session_id: self.session_id.clone(),
             auto_memory: self.auto_memory,
             rules: self.rules.clone(),
-            seen_rules: Arc::default(),
-            safety: self.safety.as_ref().map(|safety| Arc::new(safety.fork())),
-            advisor: self.advisor.clone(),
             verification: None,
-            files: self.files.clone(),
-            lsp: self.lsp.clone(),
             worktree: None,
-            scripts: self.scripts,
+            policy: self.policy.fork(),
+            models: self.models.clone(),
+            services: self.services.clone(),
+            tracking: self.tracking.fork(),
         }
     }
 
-    pub fn before_write(&self, path: &std::path::Path) {
-        if let Some(files) = &self.files {
+    pub fn before_write(&self, path: &Path) {
+        if let Some(files) = &self.services.files {
             files.before_write(path);
         }
     }
 
     pub fn diagnosed(&self, path: &Path, text: &str) -> String {
-        let problems = self.lsp.as_ref().and_then(|lsp| lsp.problems(path, text, &self.cwd, &self.stop));
+        let problems = self.services.lsp.as_ref().and_then(|lsp| lsp.problems(path, text, &self.cwd, &self.stop));
         problems.map(|block| format!("\n\n{block}")).unwrap_or_default()
     }
 
     pub fn rule_instructions(&self) -> String {
-        let seen = self.seen_rules.lock().expect("project rules");
-        self.rules
-            .iter()
-            .filter(|r| r.patterns.is_empty() || seen.contains(&r.path))
-            .map(|r| format!("\n\n# Project rule: {}\n{}", r.path.display(), r.text))
-            .collect::<Vec<_>>()
-            .join("")
+        self.tracking.rule_instructions(&self.rules)
     }
 
     pub fn resolve(&self, path: &str) -> PathBuf {
@@ -155,40 +128,22 @@ impl Workspace {
     }
 
     pub fn mark_read(&self, path: &Path) {
-        self.read.mark(path, true);
+        self.tracking.mark_read(path);
     }
 
     pub fn mark_partly_read(&self, path: &Path) {
-        self.read.mark(path, false);
+        self.tracking.mark_partly_read(path);
     }
 
-    pub fn freshness(&self, path: &Path) -> super::read_files::Freshness {
-        self.read.freshness(path)
+    pub fn freshness(&self, path: &Path) -> crate::tools::read_files::Freshness {
+        self.tracking.freshness(path)
     }
 
     pub fn forget_seen_files(&self) {
-        self.seen_files.forget();
-    }
-
-    pub fn count_refusal(&self, refused: bool) {
-        let mut refusals = self.refusals.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if refused { refusals.refused() } else { refusals.went_ahead() }
-    }
-
-    pub fn refusals_stop(&self) -> Option<String> {
-        self.refusals.lock().unwrap_or_else(std::sync::PoisonError::into_inner).stop()
+        self.tracking.forget_seen_files();
     }
 
     pub fn has_read(&self, path: &Path) -> bool {
-        self.read.freshness(path) != super::read_files::Freshness::Unread
-    }
-}
-
-#[derive(Clone)]
-pub struct Network(pub std::sync::Arc<dyn crate::model::http::Http>);
-
-impl std::fmt::Debug for Network {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Network")
+        self.tracking.has_read(path)
     }
 }

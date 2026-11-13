@@ -50,24 +50,24 @@ impl Agent<'_> {
         if let Some(model) = input.get("model").and_then(serde_json::Value::as_str).filter(|m| !m.is_empty()) {
             let asked =
                 crate::tools::subagent_config::AgentConfig { model: Some(model.to_owned()), ..Default::default() };
-            if asked.model(&self.request.model, self.workspace.model.provider).is_ok() {
+            if asked.model(&self.request.model, self.workspace.models.model.provider).is_ok() {
                 config.model = asked.model;
             }
         }
         let explores = chosen.as_ref().is_some_and(|agent| agent.name == "Explore");
         if config.model.is_none() && explores {
             let small = crate::tools::subagent_config::AgentConfig {
-                model: workspace.small_model.clone(),
+                model: workspace.models.small_model.clone(),
                 ..Default::default()
             };
-            if small.model.is_some() && small.model(&self.request.model, self.workspace.model.provider).is_ok() {
+            if small.model.is_some() && small.model(&self.request.model, self.workspace.models.model.provider).is_ok() {
                 config.model = small.model;
             }
         }
         if input.get("isolation").and_then(serde_json::Value::as_str) == Some("worktree") {
             config.worktree = true;
         }
-        let model = match config.model(&self.request.model, self.workspace.model.provider) {
+        let model = match config.model(&self.request.model, self.workspace.models.model.provider) {
             Ok(model) => model,
             Err(error) => return Outcome::error(error),
         };
@@ -81,16 +81,20 @@ impl Agent<'_> {
         .min(config.max_turns.unwrap_or(MAX_TURNS));
         let child_control = control.child_configured(config.permission, config.dont_ask);
         let mut child_workspace = workspace.fork(child_control.shared_stop());
-        child_workspace.deferred =
-            workspace.deferred.as_ref().map(|deferred| std::sync::Arc::new(deferred.only(|name| config.allows(name))));
+        child_workspace.services.deferred = workspace
+            .services
+            .deferred
+            .as_ref()
+            .map(|deferred| std::sync::Arc::new(deferred.only(|name| config.allows(name))));
         if model != self.request.model {
-            child_workspace.model.id = model.clone();
-            child_workspace.model.window = None;
-            child_workspace.model.capabilities = None;
+            let child_model = &mut child_workspace.models.model;
+            child_model.id = model.clone();
+            child_model.window = None;
+            child_model.capabilities = None;
         }
         if let Some(window) = config.compact_window {
-            let measured = crate::upkeep::window(&child_workspace.model);
-            let caps = child_workspace.model.capabilities.get_or_insert_with(Default::default);
+            let measured = crate::upkeep::window(&child_workspace.models.model);
+            let caps = child_workspace.models.model.capabilities.get_or_insert_with(Default::default);
             caps.auto_compact_token_limit =
                 Some(caps.auto_compact_token_limit.unwrap_or(measured * 9 / 10).min(window));
         }

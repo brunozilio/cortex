@@ -70,7 +70,7 @@ export default (input) => ({ hookSpecificOutput: { model: chain[input.attempt - 
 #[test]
 fn a_model_error_hook_sees_the_failure_the_models_tried_and_the_fallbacks() {
     let mut rig = Rig::new(PermissionMode::Bypass);
-    rig.workspace.fallbacks = vec!["backup".into()];
+    rig.workspace.models.fallbacks = vec!["backup".into()];
     let command = "cat > ModelError.json";
     rig.workspace.hooks =
         Hooks::parse(&json!({"ModelError": [{"hooks": [{"type": "command", "command": command}]}]})).expect("hooks");
@@ -92,7 +92,7 @@ fn a_model_error_hook_sees_the_failure_the_models_tried_and_the_fallbacks() {
 #[test]
 fn a_model_error_hook_may_stop_the_fallback() {
     let mut rig = Rig::new(PermissionMode::Bypass);
-    rig.workspace.fallbacks = vec!["backup".into()];
+    rig.workspace.models.fallbacks = vec!["backup".into()];
     let command = r#"printf '%s' '{"decision":"block","reason":"stay on m"}'"#;
     rig.workspace.hooks =
         Hooks::parse(&json!({"ModelError": [{"hooks": [{"type": "command", "command": command}]}]})).expect("hooks");

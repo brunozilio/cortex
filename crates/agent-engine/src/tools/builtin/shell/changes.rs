@@ -12,7 +12,7 @@ pub struct Watched {
 }
 
 pub fn before(workspace: &Workspace) -> Option<Watched> {
-    workspace.files.as_ref()?;
+    workspace.services.files.as_ref()?;
     let root = PathBuf::from(text(&workspace.cwd, &["rev-parse", "--show-toplevel"])?.trim());
     let stashed = text(&root, &["stash", "create"])?.trim().to_owned();
     let base = if stashed.is_empty() { text(&root, &["rev-parse", "HEAD"])?.trim().to_owned() } else { stashed };
@@ -22,7 +22,7 @@ pub fn before(workspace: &Workspace) -> Option<Watched> {
 
 impl Watched {
     pub fn after(self, workspace: &Workspace) {
-        let (Some(files), Some(now)) = (workspace.files.as_ref(), changed(&self.root)) else { return };
+        let (Some(files), Some(now)) = (workspace.services.files.as_ref(), changed(&self.root)) else { return };
         for (_, path) in now.into_iter().filter(|(_, path)| !self.untracked.contains(path)) {
             let before = bytes(&self.root, &["show", &format!("{}:{path}", self.base)]);
             files.record(&self.root.join(&path), before);

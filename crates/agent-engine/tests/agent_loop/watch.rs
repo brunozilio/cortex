@@ -161,7 +161,7 @@ fn asked(rig: &Rig) -> bool {
 fn watch_once(mode: PermissionMode, client: u64, rules: PermissionRules) -> (Rig, Arc<AtomicUsize>) {
     let mut rig = Rig::new(mode);
     rig.workspace.credentials.client = client;
-    rig.workspace.permissions = rules;
+    rig.workspace.policy.permissions = rules;
     let calls = Arc::new(AtomicUsize::new(0));
     let issue = Issue { read_only: false, calls: Arc::clone(&calls), statuses: &["Em análise"] };
     let model = ScriptedModel::new([

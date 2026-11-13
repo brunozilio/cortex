@@ -15,7 +15,7 @@ use crate::transcript::{Block, Message};
 impl Agent<'_> {
     pub(super) fn pending_rules(&self, calls: &[(String, String, Value)]) -> Result<Vec<String>, Ending> {
         let mut new_rules = Vec::new();
-        let mut seen = self.workspace.seen_rules.locked();
+        let mut seen = self.workspace.tracking.seen_rules.locked();
         for (_, _, input) in calls {
             let path =
                 input["file_path"].as_str().or_else(|| input["path"].as_str()).map(|p| self.workspace.resolve(p));

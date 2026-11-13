@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use agent_engine::lsp::{Downloads, LanguageServer, LanguageServers, Lsp, LspPool, Processes, Starter};
-use domain::lsp::ServerSpec;
 use agent_engine::tools::{self, Tool, Workspace};
+use domain::lsp::ServerSpec;
 use serde_json::json;
 
 #[test]
@@ -19,7 +19,7 @@ fn clangd_answers_symbols_and_reports_an_edit_s_error() {
     std::fs::write(&file, "int add(int a, int b) { return a + b; }\nint main(void) { return add(1, 2); }\n")
         .expect("file");
     let mut workspace = Workspace::new(dir.path());
-    workspace.lsp = Some(Lsp { servers: pool, specs });
+    workspace.services.lsp = Some(Lsp { servers: pool, specs });
 
     let outline = tools::Lsp.run(&json!({"operation": "documentSymbol", "file_path": "main.c"}), &workspace);
     assert!(outline.content.contains("function add"), "{}", outline.content);
@@ -58,11 +58,20 @@ impl Starter for NothingOnPath {
 #[ignore = "downloads every built-in server from the network"]
 fn a_missing_server_is_installed_and_then_answers() {
     let data = tempfile::tempdir().expect("data");
-    let pool = Arc::new(
-        LspPool::installing(NothingOnPath, Duration::from_secs(600), data.path().into(), Downloads(agent_engine::NetFetch)),
-    );
+    let pool = Arc::new(LspPool::installing(
+        NothingOnPath,
+        Duration::from_secs(600),
+        data.path().into(),
+        Downloads(agent_engine::NetFetch),
+    ));
     let cases = [
-        ("rust-analyzer", "Cargo.toml", "[package]\nname = \"w\"\nversion = \"0.1.0\"\n", "lib.rs", "pub fn add() {}\n"),
+        (
+            "rust-analyzer",
+            "Cargo.toml",
+            "[package]\nname = \"w\"\nversion = \"0.1.0\"\n",
+            "lib.rs",
+            "pub fn add() {}\n",
+        ),
         ("typescript", "package.json", "{}\n", "app.ts", "export function add() {}\n"),
         ("clangd", "CMakeLists.txt", "\n", "main.c", "int add(void) { return 0; }\n"),
         ("pyright", "pyproject.toml", "\n", "app.py", "def add():\n    return 0\n"),
@@ -74,7 +83,7 @@ fn a_missing_server_is_installed_and_then_answers() {
         std::fs::write(dir.path().join(file), source).expect("file");
         let mut workspace = Workspace::new(dir.path());
         let specs = Arc::new(domain::lsp::defaults());
-        workspace.lsp = Some(Lsp { servers: pool.clone(), specs });
+        workspace.services.lsp = Some(Lsp { servers: pool.clone(), specs });
         let outline = tools::Lsp.run(&json!({"operation": "documentSymbol", "file_path": file}), &workspace);
         assert!(!outline.is_error && outline.content.contains("add"), "{server}: {}", outline.content);
         assert!(outline.content.starts_with(&format!("Installed the {server} language server")), "{}", outline.content);

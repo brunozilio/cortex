@@ -45,7 +45,7 @@ impl super::Agent<'_> {
         let today = crate::engine::date::today();
         let offers_search = self.request.tools.iter().any(|spec| spec.name == crate::tools::tool_search::TOOL_SEARCH);
         let deferred =
-            self.workspace.deferred.as_ref().filter(|_| offers_search).map(|deferred| deferred.announcement());
+            self.workspace.services.deferred.as_ref().filter(|_| offers_search).map(|deferred| deferred.announcement());
         let tasks = if quiet_tasks >= QUIET_TURNS { self.open_tasks() } else { Vec::new() };
         let notes: String = [
             deferred,

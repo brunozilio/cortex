@@ -13,7 +13,7 @@ fn project(server: &Arc<ScriptedServer>) -> (tempfile::TempDir, Workspace) {
         .expect("main");
     std::fs::write(dir.path().join("src/tools.rs"), "/// Runs.\npub fn run(a: &str, b: u8) {}\n").expect("tools");
     let mut workspace = Workspace::new(dir.path());
-    workspace.lsp = Some(server.lsp());
+    workspace.services.lsp = Some(server.lsp());
     (dir, workspace)
 }
 
@@ -52,7 +52,8 @@ fn calls_are_asked_in_two_steps() {
 
 #[test]
 fn what_cannot_be_asked_is_an_error_that_says_why() {
-    let server = ScriptedServer::answering([Err(domain::lsp::answer::RequestError::Busy("fake: content modified".into()))]);
+    let server =
+        ScriptedServer::answering([Err(domain::lsp::answer::RequestError::Busy("fake: content modified".into()))]);
     let (_dir, workspace) = project(&server);
     let ask = |input: Value| Lsp.run(&input, &workspace);
     let busy = ask(json!({"operation": "hover", "file_path": "src/main.rs", "line": 1, "character": 1}));

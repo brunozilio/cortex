@@ -121,7 +121,7 @@ mod tests {
         let server = crate::lsp::fake::ScriptedServer::answering([]);
         *server.diagnostics.lock().expect("diagnostics") = Some(vec![json!({"severity": 2, "message": "unused",
             "range": {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 3}}})]);
-        workspace.lsp = Some(server.lsp());
+        workspace.services.lsp = Some(server.lsp());
         let written = Write.run(&json!({"file_path": "src/a.py", "content": "import os\nx = 1\n"}), &workspace);
         assert_eq!(
             written.content,

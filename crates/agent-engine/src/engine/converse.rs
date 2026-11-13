@@ -73,6 +73,7 @@ impl Job {
             model: self.request.model.label.clone(),
             language_servers: self
                 .workspace
+                .services
                 .lsp
                 .as_ref()
                 .map(|lsp| lsp.available().iter().map(prompt::LanguageServer::of).collect())
@@ -109,7 +110,7 @@ impl Job {
         let (offered, deferred) = tools::tool_search::defer(offered);
         if let Some(deferred) = deferred {
             tools.push(Box::new(tools::tool_search::ToolSearch));
-            Arc::get_mut(&mut self.workspace).expect("unshared context").deferred = Some(Arc::new(deferred));
+            Arc::get_mut(&mut self.workspace).expect("unshared context").services.deferred = Some(Arc::new(deferred));
         }
         main_system.push_str(&extra);
         let template = TurnRequest {
@@ -163,7 +164,7 @@ impl Job {
             .unwrap_or(crate::agent::MAX_TURNS);
         let mut template = template;
         let initial = if history.is_empty() { agent_config.initial_prompt.as_deref().unwrap_or_default() } else { "" };
-        let scripts = self.workspace.scripts;
+        let scripts = self.workspace.policy.scripts;
         let initial = match tools::skill::expand_initial(initial, &skills, &self.request.cwd, scripts) {
             Ok(initial) => initial,
             Err(error) => return self.fail(&error, FailureKind::Other),

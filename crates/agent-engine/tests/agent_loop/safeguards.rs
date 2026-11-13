@@ -38,7 +38,7 @@ fn tools_waiting_behind_tool_search_are_named_in_a_reminder() {
         description: String::new(),
         schema: json!({}),
     });
-    rig.workspace.deferred = defer(specs.collect()).1.map(std::sync::Arc::new);
+    rig.workspace.services.deferred = defer(specs.collect()).1.map(std::sync::Arc::new);
     let model = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done.".into())])]);
     rig.run_with(&model, &mut vec![Message::user("hi")], vec![Box::new(ToolSearch)]).expect("run");
     let sent = &model.asked()[0].messages[0];

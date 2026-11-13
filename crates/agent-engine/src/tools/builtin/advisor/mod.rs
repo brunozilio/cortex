@@ -2,8 +2,8 @@ use std::sync::atomic::AtomicBool;
 
 use serde_json::{Value, json};
 
-use crate::tools::{Access, Consult, Outcome, Tool, Workspace};
 use crate::model::{ModelApi, ToolSpec, TurnRequest};
+use crate::tools::{Access, Consult, Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message, Role};
 
 pub const ADVISOR_TOOL: &str = "Advisor";
@@ -35,7 +35,7 @@ impl Tool for Advisor {
     }
 
     fn offered(&self, workspace: &Workspace) -> bool {
-        workspace.advisor.is_some()
+        workspace.models.advisor.is_some()
     }
 
     fn serial(&self) -> bool {
@@ -43,7 +43,7 @@ impl Tool for Advisor {
     }
 
     fn consult(&self, _input: &Value, workspace: &Workspace, agent: &Consult<'_>) -> Option<Outcome> {
-        Some(match &workspace.advisor {
+        Some(match &workspace.models.advisor {
             Some(model) => consult(agent.api, agent.request, model, agent.conversation, agent.stop),
             None => Outcome::error("No advisor is configured."),
         })
@@ -151,7 +151,7 @@ mod tests {
 
         let mut workspace = Workspace::new("/tmp");
         assert!(!Advisor.offered(&workspace), "no advisor model, no tool");
-        workspace.advisor = Some("strong".into());
+        workspace.models.advisor = Some("strong".into());
         assert!(Advisor.offered(&workspace) && Advisor.serial());
         let model = ScriptedModel::new([
             ScriptedModel::reply(vec![Block::ToolUse { id: "a1".into(), name: ADVISOR_TOOL.into(), input: json!({}) }]),
@@ -184,6 +184,8 @@ mod tests {
         let asked = model.asked();
         assert_eq!(asked[1].model, "strong", "the advisor's own model");
         let result = &asked[2].messages.last().unwrap_or_else(|| panic!("result")).blocks[0];
-        assert!(matches!(result, Block::ToolResult { content, is_error: false, .. } if content == "Check the lexer first."));
+        assert!(
+            matches!(result, Block::ToolResult { content, is_error: false, .. } if content == "Check the lexer first.")
+        );
     }
 }

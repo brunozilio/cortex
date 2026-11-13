@@ -68,7 +68,7 @@ impl Job {
         let specs = domain::lsp::servers(domain::lsp::defaults(), &brief.settings.lsp_servers);
         let lsp = crate::lsp::Lsp { servers: Arc::clone(&self.lsp), specs: Arc::new(specs) };
         if !lsp.available().is_empty() {
-            workspace.lsp = Some(lsp);
+            workspace.services.lsp = Some(lsp);
             tools.push(Box::new(tools::Lsp));
         }
         let skills = brief.skills;
@@ -108,15 +108,15 @@ impl Job {
         let workspace = Arc::get_mut(&mut self.workspace).expect("unshared setup");
         workspace.stop = self.control.shared_stop();
         workspace.auto_memory = settings.auto_memory;
-        workspace.scripts = settings.scripts;
-        workspace.files = Some(Arc::default());
+        workspace.policy.scripts = settings.scripts;
+        workspace.services.files = Some(Arc::default());
         if self.request.safety_check {
-            workspace.safety = Some(Arc::new(crate::guard::Safety::default()));
+            workspace.policy.safety = Some(Arc::new(crate::guard::Safety::default()));
         }
         if let Some(name) = &settings.advisor {
             let config = tools::subagent_config::AgentConfig { model: Some(name.clone()), ..Default::default() };
             match config.model(&self.request.model.id, self.request.model.provider) {
-                Ok(model) => workspace.advisor = Some(model),
+                Ok(model) => workspace.models.advisor = Some(model),
                 Err(error) => return self.fail(&format!("advisorModel: {error}"), FailureKind::Other),
             }
         }
@@ -136,19 +136,19 @@ impl Job {
         workspace.agent_name = selected.as_ref().map_or("main", |a| a.name.as_str()).into();
         workspace.session_id = session.0.clone();
         workspace.hooks = settings.hooks.clone();
-        workspace.permissions = settings.permissions.clone();
+        workspace.policy.permissions = settings.permissions.clone();
         for (kind, rules) in [
             (domain::permission_rules::RuleKind::Allow, &self.request.allowed_tools),
             (domain::permission_rules::RuleKind::Deny, &self.request.disallowed_tools),
         ] {
             for rule in rules {
-                if let Err(error) = workspace.permissions.add(kind, rule) {
+                if let Err(error) = workspace.policy.permissions.add(kind, rule) {
                     return self.fail(&format!("--allowedTools/--disallowedTools: {error}"), FailureKind::Other);
                 }
             }
         }
         workspace.home = crate::brief::home(&self.request);
-        workspace.fallbacks = match &self.request.fallback_model {
+        workspace.models.fallbacks = match &self.request.fallback_model {
             Some(model) => vec![model.clone()],
             None => settings.fallbacks.clone(),
         };
@@ -161,8 +161,8 @@ impl Job {
         if let Some(why) = &small.ignored {
             tracing::warn!("{why}");
         }
-        workspace.small_model = small.model;
-        workspace.network = Some(tools::Network(Arc::clone(&self.mcp)));
+        workspace.models.small_model = small.model;
+        workspace.services.network = Some(tools::Network(Arc::clone(&self.mcp)));
         workspace.added_dirs = crate::brief::added_dirs(&self.request, &settings.added_dirs, workspace.home.as_deref());
         workspace.hooks.extend(&agent_config.hooks);
         let previous = match self.sessions.load_worktree(&self.request, &session) {
@@ -209,9 +209,9 @@ impl Job {
         match agent_config.model(&self.request.model.id, self.request.model.provider) {
             Ok(model) if model != self.request.model.id => {
                 self.request.model.id = model.clone();
-                workspace.model.id = model;
-                workspace.model.capabilities = None;
-                workspace.model.window = None;
+                workspace.models.model.id = model;
+                workspace.models.model.capabilities = None;
+                workspace.models.model.window = None;
             }
             Err(error) => return self.fail(&error, FailureKind::Other),
             _ => {}
