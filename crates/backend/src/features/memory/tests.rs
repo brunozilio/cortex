@@ -243,3 +243,16 @@ fn the_feature_keeps_memory_in_the_data_folder_and_starts_optimisations() {
     assert_eq!(started[0].0, run);
     assert!(started[0].1.memory.as_ref().is_some_and(|brief| brief.optimizing));
 }
+
+#[test]
+fn two_processes_on_one_project_keep_each_others_memories() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = Memories::new(Arc::new(FileMemoryStore::new(dir.path().to_path_buf())));
+    let second = Memories::new(Arc::new(FileMemoryStore::new(dir.path().to_path_buf())));
+    let (owner, project) = (Principal::LocalOwner, Path::new("/repo"));
+    second.load(&owner, project);
+    first.edit(&owner, project, &[remember("Uses wgpu")], by_user()).expect("first");
+    let answer = second.edit(&owner, project, &[remember("Ships on Linux")], by_user()).expect("second");
+    let texts: Vec<String> = listed(&answer).into_iter().map(|memory| memory.text).collect();
+    assert_eq!(texts, ["Uses wgpu", "Ships on Linux"]);
+}

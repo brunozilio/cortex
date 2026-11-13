@@ -138,10 +138,10 @@ impl ModelProviders {
     pub fn disconnect(&self, owner: &Principal, provider: ModelProvider) -> ServerEvent {
         let result = {
             let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
-            let mut book = self.store.load(owner);
-            book.disconnect(provider);
             self.secrets.delete(owner, secret_id(provider));
-            self.store.save(owner, &book).map_err(|error| error.to_string())
+            self.store.update(owner, &mut |book| {
+                book.disconnect(provider);
+            }).map_err(|error| error.to_string())
         };
         self.answer(owner, provider, result)
     }
@@ -167,9 +167,10 @@ impl ModelProviders {
     fn keep(&self, owner: &Principal, provider: ModelProvider, label: String, config: &Config) -> Result<(), String> {
         let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         self.secrets.set(owner, secret_id(provider), &account::secrets(config)?)?;
-        let mut book = self.store.load(owner);
-        book.connect(provider, ProviderAccount { label, since_unix: self.now() });
-        self.store.save(owner, &book).map_err(|error| error.to_string())
+        let account = ProviderAccount { label, since_unix: self.now() };
+        self.store.update(owner, &mut |book| {
+            book.connect(provider, account.clone());
+        }).map_err(|error| error.to_string())
     }
 
     fn answer(&self, owner: &Principal, provider: ModelProvider, result: Result<(), String>) -> ServerEvent {

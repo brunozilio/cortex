@@ -496,8 +496,11 @@ warnings and errors are kept otherwise. A log past 5 MB is moved to
 Provider keys and subscription tokens live in one
 sealed file (`backend::system_secrets`): `secrets.json`, each
 entry encrypted with XChaCha20-Poly1305 under a key in `secrets.key`
-(both `0600`), re-read on every access so two processes never drop each
-other's entries. The system keychain is not used: macOS would ask to
+(both `0600`), re-read on every access and changed only under an exclusive
+lock (`platform::file_lock`, a hidden `.secrets.json.lock` beside it), so two
+processes never drop each other's entries. The provider book and the memory
+book change the same way (`ProviderStore::update`, `MemoryStore::update`), and
+every store writes through a unique temporary file and a rename. The system keychain is not used: macOS would ask to
 allow each new unsigned build of the binary.
 
 ## Sessions

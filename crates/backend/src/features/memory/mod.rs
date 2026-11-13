@@ -105,15 +105,19 @@ impl Memories {
 
     fn apply(&self, owner: &Principal, project: &Path, edits: &[MemoryEdit], by: Provenance) -> Result<Value, String> {
         let mut books = self.lock();
+        let changed = self.store.update(owner, project, &mut |book| {
+            let since = book.next_id();
+            book.apply(edits, &by);
+            book.merge_near_duplicates(since, by.now);
+        });
+        let changed = match changed {
+            Ok(changed) => changed,
+            Err(error) => {
+                tracing::warn!(%error, "could not save memory");
+                return Err(format!("could not save memory: {error}"));
+            }
+        };
         let book = self.book(&mut books, owner, project);
-        let mut changed = book.clone();
-        let since = changed.next_id();
-        changed.apply(edits, &by);
-        changed.merge_near_duplicates(since, by.now);
-        if let Err(error) = self.store.save(owner, project, &changed) {
-            tracing::warn!(%error, "could not save memory");
-            return Err(format!("could not save memory: {error}"));
-        }
         *book = changed;
         Ok(listing(project, book))
     }
@@ -158,9 +162,13 @@ impl Memories {
             return;
         }
         let ids: Vec<MemoryId> = given.iter().map(|m| m.id).collect();
-        book.mark_used(&ids, now());
-        if let Err(error) = self.store.save(owner, project, book) {
-            tracing::warn!(%error, "could not save memory use");
+        let at = now();
+        match self.store.update(owner, project, &mut |stored| stored.mark_used(&ids, at)) {
+            Ok(stored) => *book = stored,
+            Err(error) => {
+                book.mark_used(&ids, at);
+                tracing::warn!(%error, "could not save memory use");
+            }
         }
     }
 

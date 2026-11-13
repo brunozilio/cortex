@@ -7,6 +7,18 @@ use domain::{MemoryBook, Principal};
 pub trait MemoryStore: Send + Sync {
     fn load(&self, owner: &Principal, project: &Path) -> MemoryBook;
     fn save(&self, owner: &Principal, project: &Path, book: &MemoryBook) -> std::io::Result<()>;
+
+    fn update(
+        &self,
+        owner: &Principal,
+        project: &Path,
+        change: &mut dyn FnMut(&mut MemoryBook),
+    ) -> std::io::Result<MemoryBook> {
+        let mut book = self.load(owner, project);
+        change(&mut book);
+        self.save(owner, project, &book)?;
+        Ok(book)
+    }
 }
 
 use crate::dirs::{owner_key, project_key};
@@ -54,17 +66,21 @@ impl MemoryStore for FileMemoryStore {
     }
 
     fn save(&self, owner: &Principal, project: &Path, book: &MemoryBook) -> std::io::Result<()> {
-        use std::io::Write;
-        let path = self.path(owner, project);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let json = serde_json::to_vec_pretty(book).map_err(std::io::Error::other)?;
-        let partial = path.with_extension("json.partial");
-        let mut file = std::fs::File::create(&partial)?;
-        file.write_all(&json)?;
-        file.sync_all()?;
-        std::fs::rename(partial, path)
+        platform::private_file::replace(&self.path(owner, project), &json)
+    }
+
+    fn update(
+        &self,
+        owner: &Principal,
+        project: &Path,
+        change: &mut dyn FnMut(&mut MemoryBook),
+    ) -> std::io::Result<MemoryBook> {
+        let _held = platform::file_lock::Exclusive::on(&self.path(owner, project))?;
+        let mut book = self.load(owner, project);
+        change(&mut book);
+        self.save(owner, project, &book)?;
+        Ok(book)
     }
 }
 

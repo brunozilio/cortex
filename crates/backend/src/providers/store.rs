@@ -10,6 +10,12 @@ use crate::dirs::{app_data_dir, owner_key};
 pub trait ProviderStore: Send + Sync {
     fn load(&self, owner: &Principal) -> ProviderBook;
     fn save(&self, owner: &Principal, book: &ProviderBook) -> std::io::Result<()>;
+
+    fn update(&self, owner: &Principal, change: &mut dyn FnMut(&mut ProviderBook)) -> std::io::Result<()> {
+        let mut book = self.load(owner);
+        change(&mut book);
+        self.save(owner, &book)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -44,13 +50,15 @@ impl ProviderStore for FileProviderStore {
     }
 
     fn save(&self, owner: &Principal, book: &ProviderBook) -> std::io::Result<()> {
-        let path = self.book(owner);
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let partial = path.with_extension("json.partial");
-        std::fs::write(&partial, serde_json::to_vec_pretty(book).map_err(std::io::Error::other)?)?;
-        std::fs::rename(partial, path)
+        let json = serde_json::to_vec_pretty(book).map_err(std::io::Error::other)?;
+        platform::private_file::replace(&self.book(owner), &json)
+    }
+
+    fn update(&self, owner: &Principal, change: &mut dyn FnMut(&mut ProviderBook)) -> std::io::Result<()> {
+        let _held = platform::file_lock::Exclusive::on(&self.book(owner))?;
+        let mut book = self.load(owner);
+        change(&mut book);
+        self.save(owner, &book)
     }
 }
 

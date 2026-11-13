@@ -50,12 +50,7 @@ impl SettingsStore for FileSettingsStore {
         if json.len() > AT_MOST {
             return Err("these settings are too large to keep".to_owned());
         }
-        let path = self.path(owner);
-        let folder = path.parent().ok_or("no folder")?;
-        std::fs::create_dir_all(folder).map_err(|error| error.to_string())?;
-        let partial = path.with_extension("json.partial");
-        std::fs::write(&partial, json).map_err(|error| error.to_string())?;
-        std::fs::rename(&partial, &path).map_err(|error| error.to_string())
+        platform::private_file::replace(&self.path(owner), &json).map_err(|error| error.to_string())
     }
 }
 

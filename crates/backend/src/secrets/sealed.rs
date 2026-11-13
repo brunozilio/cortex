@@ -92,12 +92,20 @@ impl SecretStore for SealedSecretStore {
             .cipher
             .encrypt(XNonce::from_slice(&nonce), Payload { msg: &json, aad: name.as_bytes() })
             .map_err(|_| "could not seal the secrets".to_owned())?;
+        let _held = platform::file_lock::Exclusive::on(&self.path).map_err(|error| error.to_string())?;
         let mut entries = self.entries();
         entries.insert(name, Sealed { nonce: hex(&nonce), sealed: hex(&sealed) });
         self.save(&entries)
     }
 
     fn delete(&self, owner: &Principal, connection: SecretId) {
+        let _held = match platform::file_lock::Exclusive::on(&self.path) {
+            Ok(held) => held,
+            Err(error) => {
+                tracing::error!(%error, "could not lock the secrets to forget one");
+                return;
+            }
+        };
         let mut entries = self.entries();
         if entries.remove(&name(owner, connection)).is_some()
             && let Err(error) = self.save(&entries)
@@ -144,6 +152,24 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             assert_eq!(std::fs::metadata(&file).expect("meta").permissions().mode() & 0o777, 0o600);
         }
+    }
+
+    #[test]
+    fn writers_at_once_lose_nothing() {
+        let dir = tempfile::tempdir().expect("dir");
+        let key = SealedSecretStore::key_at(&dir.path().join("secrets.key")).expect("key");
+        let file = dir.path().join("secrets.json");
+        let owner = Principal::LocalOwner;
+        let ids: Vec<SecretId> = (0..8).map(|_| SecretId::new()).collect();
+        std::thread::scope(|scope| {
+            for id in &ids {
+                let store = SealedSecretStore::open(&file, key).expect("store");
+                let owner = owner.clone();
+                scope.spawn(move || store.set(&owner, *id, &secrets()).expect("set"));
+            }
+        });
+        let reader = SealedSecretStore::open(&file, key).expect("reader");
+        assert!(ids.iter().all(|id| reader.get(&owner, *id).is_some()));
     }
 
     fn secrets() -> Secrets {
