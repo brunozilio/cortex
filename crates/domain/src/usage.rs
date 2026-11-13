@@ -70,6 +70,7 @@ pub enum SessionCommand {
     HeadsUp,
     Rename,
     Rewind(u32),
+    Branch(u32),
 }
 
 impl SessionCommand {

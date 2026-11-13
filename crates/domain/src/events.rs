@@ -103,6 +103,11 @@ pub enum EngineEvent {
     },
     Edited(crate::changes::Edited),
     Reviewed(Vec<crate::review::Finding>),
+    Branched {
+        from: SessionId,
+        checkpoint: u32,
+        prompt: String,
+    },
     Completed {
         duration_ms: u64,
         cost_usd: Option<f64>,

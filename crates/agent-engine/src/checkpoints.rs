@@ -96,6 +96,19 @@ pub fn rewind(
     Ok((target, restored, intact))
 }
 
+pub fn branch(
+    checkpoints: &[Checkpoint],
+    index: usize,
+    history: &[Message],
+) -> Result<(String, Vec<Message>, Vec<Checkpoint>), String> {
+    let target = checkpoints.get(index).ok_or("there is no such checkpoint in this conversation")?;
+    let intact = history.len() >= target.history_len && hash(&history[..target.history_len]) == target.history_hash;
+    if !intact {
+        return Err("the conversation was compacted since then, so it cannot branch there".into());
+    }
+    Ok((target.prompt.clone(), history[..target.history_len].to_vec(), checkpoints[..index].to_vec()))
+}
+
 fn restore(path: &Path, before: Option<&str>) -> Result<(), String> {
     let failed = |error: std::io::Error| format!("could not restore {}: {error}", path.display());
     match before {
@@ -163,6 +176,29 @@ mod tests {
         assert_eq!(history, [Message::user("summary of everything")]);
         assert_eq!(std::fs::read_to_string(dir.path().join("a.txt")).expect("a"), "one");
         assert!(rewind(&mut checkpoints, 0, &mut history).is_err(), "nothing left to rewind to");
+    }
+
+    #[test]
+    fn a_branch_takes_the_conversation_before_a_prompt_and_leaves_the_files_alone() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join("a.txt"), "one").expect("write");
+        let mut history = Vec::new();
+        let first = run(dir.path(), &mut history, "edit a", &[("a.txt", "two")]);
+        let second = run(dir.path(), &mut history, "edit a again", &[("a.txt", "three")]);
+        let checkpoints = vec![first, second];
+
+        let (prompt, kept, carried) = branch(&checkpoints, 1, &history).expect("branch");
+
+        assert_eq!(prompt, "edit a again");
+        assert_eq!(kept, history[..2]);
+        assert_eq!(carried, checkpoints[..1]);
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("a.txt")).expect("a"),
+            "three",
+            "the files stay as they are"
+        );
+        assert!(branch(&checkpoints, 2, &history).is_err());
+        assert!(branch(&checkpoints, 1, &[Message::user("summary")]).is_err(), "a compacted history cannot branch");
     }
 
     #[test]

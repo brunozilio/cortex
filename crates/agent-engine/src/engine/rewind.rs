@@ -24,6 +24,24 @@ impl Job {
         }
     }
 
+    pub(super) fn branch(&self, session: &SessionId, history: &[Message], index: u32, started: Instant) {
+        let branched = SessionId(uuid::Uuid::new_v4().to_string());
+        let made = self.sessions.load_checkpoints(&self.request, session).and_then(|all| {
+            let (prompt, kept, carried) = checkpoints::branch(&all, index as usize, history)?;
+            self.sessions.save_for(&self.request, &branched, &kept)?;
+            self.sessions.save_checkpoints(&self.request, &branched, &carried)?;
+            Ok(prompt)
+        });
+        match made {
+            Ok(prompt) => {
+                self.gate.emit(EngineEvent::SessionStarted(branched.clone()));
+                self.gate.emit(EngineEvent::Branched { from: session.clone(), checkpoint: index, prompt });
+                self.completed(started, None);
+            }
+            Err(error) => self.fail(&format!("Could not branch: {error}"), FailureKind::Other),
+        }
+    }
+
     pub(super) fn rewind(&self, session: &SessionId, mut history: Vec<Message>, index: u32, started: Instant) {
         let rewound = self.sessions.load_checkpoints(&self.request, session).and_then(|mut all| {
             let (target, restored, conversation) = checkpoints::rewind(&mut all, index as usize, &mut history)?;

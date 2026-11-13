@@ -96,3 +96,32 @@ fn a_rewind_puts_files_back_and_cuts_the_conversation() {
     assert!(!notes.exists());
     assert_eq!(history(&session), 0);
 }
+
+#[test]
+fn a_branch_starts_a_new_conversation_before_a_prompt_and_keeps_the_original_and_the_files() {
+    let dir = tempfile::tempdir().expect("dir");
+    let (notes, more) = (dir.path().join("notes.txt"), dir.path().join("more.txt"));
+    let models = vec![writes(&notes.display().to_string(), "v1"), writes(&more.display().to_string(), "x")];
+    let sessions = Arc::new(InMemorySessions::default());
+    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(models))), sessions.clone());
+    let first = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "write the notes", model())));
+    let Some(EngineEvent::SessionStarted(session)) = first.first().cloned() else { panic!("{first:?}") };
+    let mut second = PromptRequest::plain(dir.path().into(), "add more", model());
+    second.resume = Some(session.clone());
+    finish(&start(&engine, &second));
+    let request = PromptRequest::plain(dir.path().into(), "", model());
+    let original = sessions.load_for(&request, &session).map(|history| history.len());
+
+    let mut branch = PromptRequest::plain(dir.path().into(), "", model());
+    branch.resume = Some(session.clone());
+    branch.command = Some(SessionCommand::Branch(1));
+    let events = finish(&start(&engine, &branch));
+
+    let Some(EngineEvent::SessionStarted(branched)) = events.first().cloned() else { panic!("{events:?}") };
+    assert_ne!(branched, session);
+    assert!(events.iter().any(|event| matches!(event, EngineEvent::Branched { checkpoint: 1, prompt, .. } if prompt == "add more")));
+    let kept = sessions.load_for(&request, &branched).map(|history| history.len());
+    assert!(kept.is_some_and(|kept| original.is_some_and(|original| kept < original)), "{kept:?} {original:?}");
+    assert_eq!(sessions.load_for(&request, &session).map(|history| history.len()), original, "the original is kept");
+    assert!(notes.exists() && more.exists(), "a branch leaves the files as they are");
+}

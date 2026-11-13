@@ -193,6 +193,13 @@ impl Session {
         self.start(request)
     }
 
+    pub fn branch(&self, index: u32) -> Result<Run, Error> {
+        let mut request = PromptRequest::plain(self.cwd.clone(), "", self.model.clone());
+        request.resume = Some(self.id().ok_or(Error::NothingToAsk)?);
+        request.command = Some(domain::SessionCommand::Branch(index));
+        self.start(request)
+    }
+
     pub(crate) fn cwd(&self) -> &std::path::Path {
         &self.cwd
     }

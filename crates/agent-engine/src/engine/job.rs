@@ -55,6 +55,9 @@ impl Job {
         if let Some(SessionCommand::Rewind(index)) = self.request.command {
             return self.rewind(&session, history, index, started);
         }
+        if let Some(SessionCommand::Branch(index)) = self.request.command {
+            return self.branch(&session, &history, index, started);
+        }
         let recorder = super::record::Recorder::start(Arc::clone(&self.sessions), &self.request, &session);
         self.gate.observe(recorder.observer());
         self.recorder = Some(recorder);

@@ -23,6 +23,7 @@ impl App {
             EngineEvent::SessionStarted(id) => self.saver.remember_session(&self.cwd, id),
             EngineEvent::Checkpoint(index) => self.checkpointed(*index),
             EngineEvent::Rewound(rewound) => self.turn.rewound = Some(rewound.clone()),
+            EngineEvent::Branched { checkpoint, prompt, .. } => self.branched(*checkpoint, prompt),
             EngineEvent::Steered(text) => {
                 self.dequeue(text);
             }

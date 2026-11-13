@@ -500,6 +500,13 @@ Inbox notices are core (`TakeNotices`).
   run's file history before the command starts, up to 5,000 files and
   200 MB; the result says how many were left out. The chat's `/rewind` picks a prompt;
   `/retry` rewinds to the last one and sends it again.
+  `SessionCommand::Branch(n)` (`branches`; `Session::branch`, the chat's
+  `/branch [n]`) instead starts a new session holding the conversation
+  before prompt `n` and the checkpoints before it (`checkpoints::branch`,
+  refused once the conversation was compacted past it), leaves the
+  original session and the files as they are, and emits `SessionStarted`
+  for the new id and `Branched`; the chat cuts its transcript there and
+  puts the prompt back to edit.
 - **Safety check** (`guard/`): in Bypass, every editing or executing action
   is graded by the run's model before it runs.
 - **Verification** (`tools/builtin/verification/`; rules in

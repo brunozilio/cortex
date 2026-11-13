@@ -70,6 +70,20 @@ impl App {
         self.follow(started);
     }
 
+    pub(super) fn branched(&mut self, checkpoint: u32, prompt: &str) {
+        let at = self.turn.checkpoints.iter().position(|known| known.index == checkpoint);
+        if let Some(at) = at {
+            let entry = self.turn.checkpoints[at].entry;
+            self.transcript.entries.truncate(entry);
+            self.turn.checkpoints.truncate(at);
+        }
+        self.transcript.notice(
+            "Branched: this is a new conversation from before that prompt; the files are as they were. The \
+             original stays in /resume.",
+        );
+        self.input.set(prompt);
+    }
+
     pub(super) fn rewound(&mut self, rewound: Rewound) {
         let at = self.turn.checkpoints.iter().position(|known| known.index == rewound.checkpoint);
         if let Some(at) = at {
