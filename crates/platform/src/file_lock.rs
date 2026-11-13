@@ -18,7 +18,8 @@ impl Exclusive {
         if let Some(parent) = lock.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let file = crate::private_file::open(OpenOptions::new().read(true).write(true).create(true).truncate(false), &lock)?;
+        let file =
+            crate::private_file::open(OpenOptions::new().read(true).write(true).create(true).truncate(false), &lock)?;
         file.lock()?;
         Ok(Self { _held: file })
     }

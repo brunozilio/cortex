@@ -79,7 +79,9 @@ impl From<RequestError> for String {
 
 pub fn explain(error: &RequestError) -> String {
     match error {
-        RequestError::Busy(text) => format!("{text}. The language server is still indexing the project; try again shortly."),
+        RequestError::Busy(text) => {
+            format!("{text}. The language server is still indexing the project; try again shortly.")
+        }
         RequestError::Failed(text) => text.clone(),
     }
 }
@@ -256,7 +258,9 @@ mod tests {
     fn a_server_still_indexing_is_told_apart_from_a_failure() {
         let busy = explain(&RequestError::answered("rust-analyzer", Some(-32801), "content modified"));
         assert!(busy.starts_with("rust-analyzer: content modified. ") && busy.contains("still indexing"), "{busy}");
-        assert!(explain(&RequestError::Busy("rust-analyzer did not answer in 60s".into())).contains("try again shortly"));
+        assert!(
+            explain(&RequestError::Busy("rust-analyzer did not answer in 60s".into())).contains("try again shortly")
+        );
         let failed = RequestError::answered("gopls", Some(-32603), "content modified elsewhere");
         assert_eq!(explain(&failed), "gopls: content modified elsewhere");
     }

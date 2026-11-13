@@ -3,7 +3,9 @@ use serde_json::Value;
 pub const MAX_PROBLEMS: usize = 20;
 
 pub fn installing(server: &str) -> String {
-    format!("<diagnostics>\n{server} is still installing, so this file was not checked; later edits will be.\n</diagnostics>")
+    format!(
+        "<diagnostics>\n{server} is still installing, so this file was not checked; later edits will be.\n</diagnostics>"
+    )
 }
 
 pub fn report(file: &str, diagnostics: &[Value]) -> Option<String> {
