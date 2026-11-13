@@ -176,6 +176,15 @@ Inbox notices are core (`TakeNotices`).
   keeps its parent's. Unlike `memory::sanitize`, which uses the same
   word rules, it keeps the text's layout. What the model itself writes
   in a tool call is not changed.
+- **Suggested rules** (`suggested-rules`; rule in
+  `domain::suggested_rules`): the chat's `/rules` reads the `Asked` and
+  `Answered` events of the project's recent sessions (the owner's
+  `conversations` list) and offers a rule asked about and allowed five
+  times with no denial as `allow`, or denied three times with no approval
+  as `deny`, unless a rule with that text is already kept; `/rules keep
+  <n>` writes it to the project's `settings.local.json`
+  (`prompt::permissions::keep_rule`). A flag named with hyphens turns off
+  the feature folder named with underscores.
 - **Dependency guard** (`experimental-dependency-guard`, a security
   flag): before a `Bash` command that installs packages (`npm`/`pnpm`/
   `bun`/`yarn add`, `cargo add`, `pip`/`uv`/`poetry` installs; rule in

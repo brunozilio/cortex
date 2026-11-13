@@ -7,6 +7,7 @@ pub const SANDBOX: &str = "experimental-sandbox";
 pub const REDACT_SECRETS: &str = "redact-secrets";
 pub const DESTRUCTIVE_SNAPSHOT: &str = "destructive-snapshot";
 pub const DEPENDENCY_GUARD: &str = "experimental-dependency-guard";
+pub const SUGGESTED_RULES: &str = "suggested-rules";
 
 const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS, DEPENDENCY_GUARD];
 
@@ -30,6 +31,7 @@ pub const KNOWN: &[Flag] = &[
         name: DEPENDENCY_GUARD,
         about: "Before npm, cargo or pip installs a package that is missing, brand new or a typo of a popular one, ask you",
     },
+    Flag { name: SUGGESTED_RULES, about: "/rules offers permission rules from answers you keep giving" },
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

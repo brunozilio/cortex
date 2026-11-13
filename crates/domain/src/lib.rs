@@ -35,6 +35,7 @@ pub mod sandbox;
 pub mod schedule;
 pub mod skill;
 pub mod small_model;
+pub mod suggested_rules;
 pub mod trace;
 pub mod untrusted;
 pub mod usage;

@@ -37,6 +37,15 @@ pub fn read_judge(settings: &Value, rules: &mut PermissionRules) -> Result<(), S
 }
 
 pub fn keep_allow(project: &std::path::Path, rule: &str) -> Result<(), String> {
+    keep_rule(project, RuleKind::Allow, rule)
+}
+
+pub fn keep_rule(project: &std::path::Path, kind: RuleKind, rule: &str) -> Result<(), String> {
+    let list = match kind {
+        RuleKind::Allow => "allow",
+        RuleKind::Ask => "ask",
+        RuleKind::Deny => "deny",
+    };
     let path = project.join(brand::DIR).join("settings.local.json");
     let mut settings: Value = match std::fs::read_to_string(&path) {
         Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
@@ -45,15 +54,15 @@ pub fn keep_allow(project: &std::path::Path, rule: &str) -> Result<(), String> {
     };
     let root = settings.as_object_mut().ok_or(format!("{} is not a JSON object", path.display()))?;
     let permissions = root.entry("permissions").or_insert_with(|| Value::Object(Default::default()));
-    let allow = permissions
+    let rules = permissions
         .as_object_mut()
         .ok_or("permissions must be an object")?
-        .entry("allow")
+        .entry(list)
         .or_insert_with(|| Value::Array(Vec::new()))
         .as_array_mut()
-        .ok_or("permissions.allow must be a list of rules")?;
-    if !allow.iter().any(|kept| kept.as_str() == Some(rule)) {
-        allow.push(Value::String(rule.to_owned()));
+        .ok_or(format!("permissions.{list} must be a list of rules"))?;
+    if !rules.iter().any(|kept| kept.as_str() == Some(rule)) {
+        rules.push(Value::String(rule.to_owned()));
     }
     let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
     let folder = path.parent().ok_or("no settings folder")?;

@@ -1,7 +1,7 @@
 mod git;
 mod instruction_files;
 pub(crate) mod markdown;
-pub(crate) mod permissions;
+pub mod permissions;
 mod render;
 mod top_level;
 pub use render::render;

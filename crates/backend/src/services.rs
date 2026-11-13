@@ -42,7 +42,7 @@ impl LocalServices {
 
     pub fn turned_off_in(mut self, cwd: &Path) -> Self {
         if let Ok(settings) = agent_engine::prompt::settings::load(cwd, self.home.as_deref(), &[]) {
-            self.off.extend(settings.features.off().map(str::to_owned));
+            self.off.extend(settings.features.off().flat_map(|name| [name.to_owned(), name.replace('-', "_")]));
         }
         self
     }
@@ -95,7 +95,7 @@ mod tests {
         let home = tempfile::tempdir().expect("home");
         let repo = tempfile::tempdir().expect("repo");
         std::fs::create_dir_all(home.path().join(brand::DIR)).expect("dir");
-        let settings = serde_json::json!({ "features": { "trace": false, "memory": true } });
+        let settings = serde_json::json!({ "features": { "trace": false, "memory": true, "suggested-rules": false } });
         std::fs::write(home.path().join(brand::DIR).join("settings.json"), settings.to_string()).expect("write");
         let mut services = LocalServices::with_engine(Arc::new(FakeEngine::new(Vec::new(), Vec::new())));
         services.home = Some(home.path().to_path_buf());
@@ -104,5 +104,6 @@ mod tests {
 
         assert!(services.off.contains("trace"));
         assert!(!services.off.contains("memory"));
+        assert!(services.off.contains("suggested_rules"), "a flag names its feature folder with hyphens");
     }
 }
