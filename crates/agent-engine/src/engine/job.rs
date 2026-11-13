@@ -120,6 +120,7 @@ impl Job {
             .features
             .on(domain::features::REDACT_SECRETS)
             .then(|| Arc::new(tools::env_secrets(&workspace.cwd)));
+        workspace.policy.snapshots = settings.features.on(domain::features::DESTRUCTIVE_SNAPSHOT);
         workspace.services.files = Some(Arc::default());
         if self.request.safety_check {
             workspace.policy.safety = Some(Arc::new(crate::guard::Safety::default()));

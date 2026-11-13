@@ -391,7 +391,14 @@ Inbox notices are core (`TakeNotices`).
   `git stash create` names the tree before it, and the files `git status`
   then shows changed keep their content from that tree, or are deleted on
   rewind if they are new. Ignored files and files untracked before the
-  command are left alone. The chat's `/rewind` picks a prompt;
+  command are left alone, except before a command that destroys work
+  git cannot bring back (`destructive-snapshot`; rule in
+  `domain::destructive`: `rm` with paths, `git clean`, `git reset
+  --hard`, `git checkout -- …`/`git restore .`, `git stash -u`): then
+  `shell/snapshot.rs` keeps every file under the removed paths, and the
+  untracked files (ignored ones too for `git clean -x`/`-X`), in the
+  run's file history before the command starts, up to 5,000 files and
+  200 MB; the result says how many were left out. The chat's `/rewind` picks a prompt;
   `/retry` rewinds to the last one and sends it again.
 - **Safety check** (`guard/`): in Bypass, every editing or executing action
   is graded by the run's model before it runs.

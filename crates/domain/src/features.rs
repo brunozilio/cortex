@@ -5,6 +5,7 @@ use serde_json::Value;
 pub const SANDBOX: &str = "experimental-sandbox";
 
 pub const REDACT_SECRETS: &str = "redact-secrets";
+pub const DESTRUCTIVE_SNAPSHOT: &str = "destructive-snapshot";
 
 const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS];
 
@@ -19,6 +20,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: REDACT_SECRETS,
         about: "Hide tokens, keys and the project's .env values in tool output before the model and the log see them",
+    },
+    Flag {
+        name: DESTRUCTIVE_SNAPSHOT,
+        about: "Before rm -r, git clean, git reset --hard and the like, keep untracked files so /rewind can bring them back",
     },
 ];
 

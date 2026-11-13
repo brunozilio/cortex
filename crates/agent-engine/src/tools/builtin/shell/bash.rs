@@ -55,6 +55,7 @@ impl Tool for Bash {
             .and_then(Value::as_u64)
             .map_or(DEFAULT_TIMEOUT, Duration::from_millis)
             .min(MAX_TIMEOUT);
+        let kept = super::snapshot::keep(workspace, command);
         let mut shell = shell(command, workspace);
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
@@ -78,7 +79,7 @@ impl Tool for Bash {
         if let Some(watched) = watched {
             watched.after(workspace);
         }
-        match waited {
+        let mut outcome = match waited {
             Waited::Exited { output, success: true, .. } => {
                 let text = clip_middle(&output, OUTPUT);
                 Outcome::ok(if text.is_empty() { "(no output)".to_owned() } else { text })
@@ -106,7 +107,11 @@ impl Tool for Bash {
                     .trim_start()
                     .to_owned(),
             ),
+        };
+        if let Some(note) = kept.note() {
+            outcome.content = format!("{}\n{note}", outcome.content);
         }
+        outcome
     }
 }
 

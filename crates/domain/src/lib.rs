@@ -4,6 +4,7 @@ pub mod billing;
 pub mod changes;
 pub mod command;
 pub mod credentials;
+pub mod destructive;
 pub mod engines;
 pub mod events;
 pub mod executable;

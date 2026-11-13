@@ -16,6 +16,7 @@ pub struct Policy {
     pub safety: Option<Arc<Safety>>,
     pub sandbox: Option<Sandbox>,
     pub redact: Option<Arc<Known>>,
+    pub snapshots: bool,
 }
 
 impl Policy {
@@ -27,6 +28,7 @@ impl Policy {
             safety: self.safety.as_ref().map(|safety| Arc::new(safety.fork())),
             sandbox: self.sandbox.clone(),
             redact: self.redact.clone(),
+            snapshots: self.snapshots,
         }
     }
 

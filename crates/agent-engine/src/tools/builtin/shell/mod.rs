@@ -2,6 +2,7 @@ mod bash;
 mod changes;
 mod monitor;
 pub mod shells;
+mod snapshot;
 
 use crate::tools::Tool;
 use shells::{BashOutput, KillShell};
