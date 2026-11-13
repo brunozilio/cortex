@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use domain::mcp::{LocalMcp, McpEndpoint, RpcError, text_result};
 use domain::memory::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemorySearches, SearchAnswer};
 use domain::{Memory, MemoryKind, Principal};
+use platform::sync::Locked;
 use serde_json::{Value, json};
 
 use super::Memories;
@@ -98,7 +99,7 @@ impl MemoryEndpoint {
 impl McpEndpoint for MemoryEndpoint {
     fn handle(&self, message: &Value) -> Option<Value> {
         respond(message, |query, limit| {
-            let mut searches = self.searches.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut searches = self.searches.locked();
             answer(self.memories.find(&self.owner, &self.project, query, limit, &mut searches))
         })
     }

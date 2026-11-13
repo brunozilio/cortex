@@ -7,6 +7,7 @@ use agent_engine::model::client::ProviderClient;
 use agent_engine::model::http::{Http, NetHttp};
 use domain::provider::ProviderKey;
 use domain::{ModelOption, ModelProvider, Principal, PromptRequest};
+use platform::sync::Locked;
 
 use agent_engine::model::{ModelApi, ModelError};
 use agent_engine::sessions::FileSessions;
@@ -46,7 +47,7 @@ impl ApiSource for NativeApis {
 
     fn catalog(&self, request: &PromptRequest) -> Vec<ModelOption> {
         let provider = request.model.provider;
-        let mut catalogs = self.catalogs.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut catalogs = self.catalogs.locked();
         if let Some(known) = catalogs.get(&provider) {
             return known.clone();
         }

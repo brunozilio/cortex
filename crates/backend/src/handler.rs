@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use agent_engine::EventSink;
 use domain::{EngineEvent, Principal, PromptRequest, RunId};
+use platform::sync::Locked;
 use protocol::{ClientCommand, Envelope, ServerEvent};
 
 use crate::feature::{Context, Finish};
@@ -227,8 +228,7 @@ impl EventSink for RunSink {
             self.runs.finish(run);
             crate::extensions::discard(self.extensions.as_ref());
             let completed = matches!(event, EngineEvent::Completed { .. });
-            let finishes =
-                std::mem::take(&mut *self.finishes.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+            let finishes = std::mem::take(&mut *self.finishes.locked());
             for finished in finishes.into_iter().filter_map(|finish| finish(completed)) {
                 self.outbox.send(finished);
             }

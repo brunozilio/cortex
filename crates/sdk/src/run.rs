@@ -1,4 +1,6 @@
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
+
+use platform::sync::Locked;
 
 use crossbeam_channel::Receiver;
 use domain::{AskId, Decision, EngineEvent, PermissionMode, RunId, SessionId};
@@ -62,10 +64,10 @@ impl Run {
 
     fn observe(&mut self, event: &EngineEvent) {
         if let EngineEvent::SessionStarted(id) = event {
-            *self.resume.lock().unwrap_or_else(PoisonError::into_inner) = Some(id.clone());
+            *self.resume.locked() = Some(id.clone());
         }
         if let EngineEvent::ModeChanged(mode) = event {
-            *self.mode.lock().unwrap_or_else(PoisonError::into_inner) = *mode;
+            *self.mode.locked() = *mode;
         }
         if let Some(plan) = &mut self.plan {
             plan.observe(event);

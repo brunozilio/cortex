@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use domain::{MemoryBook, MemoryBrief, ModelOption, Principal, PromptRequest, RunId};
+use platform::sync::Locked;
 use serde_json::Value;
 
 use super::{Memories, edits_file, listing};
@@ -48,6 +49,6 @@ impl Memories {
     }
 
     fn undo_points(&self) -> std::sync::MutexGuard<'_, std::collections::HashMap<super::BookKey, MemoryBook>> {
-        self.before_optimizing.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.before_optimizing.locked()
     }
 }

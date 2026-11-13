@@ -1,5 +1,7 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
+
+use platform::sync::Locked;
 
 use domain::memory::MemoryBrief;
 use domain::{Criteria, Effort, ModelOption, PermissionMode, PromptRequest, SessionId, Verifications};
@@ -81,7 +83,7 @@ impl Session {
     }
 
     pub fn permission(self, mode: PermissionMode) -> Self {
-        *self.permission.lock().unwrap_or_else(PoisonError::into_inner) = mode;
+        *self.permission.locked() = mode;
         self
     }
 
@@ -91,7 +93,7 @@ impl Session {
     }
 
     pub fn resume(self, session: SessionId) -> Self {
-        *self.resume.lock().unwrap_or_else(PoisonError::into_inner) = Some(session);
+        *self.resume.locked() = Some(session);
         self
     }
 
@@ -100,7 +102,7 @@ impl Session {
     }
 
     pub fn set_permission(&mut self, mode: PermissionMode) {
-        *self.permission.lock().unwrap_or_else(PoisonError::into_inner) = mode;
+        *self.permission.locked() = mode;
     }
 
     pub fn set_effort(&mut self, effort: Effort) {
@@ -116,19 +118,19 @@ impl Session {
     }
 
     pub fn permission_mode(&self) -> PermissionMode {
-        *self.permission.lock().unwrap_or_else(PoisonError::into_inner)
+        *self.permission.locked()
     }
 
     pub fn set_verification(&mut self, criteria: Option<String>) {
-        self.verifications.lock().unwrap_or_else(PoisonError::into_inner).set_user(criteria);
+        self.verifications.locked().set_user(criteria);
     }
 
     pub fn verification(&self) -> Option<Criteria> {
-        self.verifications.lock().unwrap_or_else(PoisonError::into_inner).current()
+        self.verifications.locked().current()
     }
 
     pub fn id(&self) -> Option<SessionId> {
-        self.resume.lock().unwrap_or_else(PoisonError::into_inner).clone()
+        self.resume.locked().clone()
     }
 
     pub fn send(&self, prompt: &str) -> Result<Run, Error> {
@@ -144,7 +146,7 @@ impl Session {
         request.resume = self.id();
         request.fork = request.resume.is_some() && self.fork.swap(false, std::sync::atomic::Ordering::SeqCst);
         request.memory = self.memory.then(|| MemoryBrief::new(None));
-        request.verification = self.verifications.lock().unwrap_or_else(PoisonError::into_inner).for_run(mode);
+        request.verification = self.verifications.locked().for_run(mode);
         self.start(request)
     }
 

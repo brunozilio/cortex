@@ -5,6 +5,7 @@ use domain::provider::ProviderKeyStore;
 use domain::{ModelProvider, Principal, SecretId};
 use llm_providers::sign_in::{Answer, Host, Listener};
 use llm_providers::{Config, ProviderError};
+use platform::sync::Locked;
 
 use super::redirect::{Loopback, Pending};
 use crate::secrets::{SecretStore, Secrets};
@@ -52,7 +53,7 @@ impl Host for NetHost<'_> {
         read(agent_engine::model::http::NetHttp.get(url, headers).map_err(ProviderError::Invalid)?)
     }
     fn open(&self, url: String, code: Option<String>) {
-        let mut open = self.open.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut open = self.open.locked();
         open(url, code);
     }
     fn listen(&self, port: u16, path: &str) -> Result<Box<dyn Listener>, ProviderError> {
@@ -139,12 +140,8 @@ mod tests {
         let slot = SecretId::new();
         let original = r#"{"auth":{"access_token":"access-secret","refresh_token":"refresh-secret","expires_at":"2099-01-01T00:00:00Z","account_id":"acct"}}"#;
         secrets.set(&Principal::LocalOwner, slot, &Secrets::from([(CONFIG.into(), original.into())])).expect("save");
-        let source = AccountStore {
-            secrets,
-            owner: Principal::LocalOwner,
-            slot,
-            provider: ModelProvider::new("browser-sub"),
-        };
+        let source =
+            AccountStore { secrets, owner: Principal::LocalOwner, slot, provider: ModelProvider::new("browser-sub") };
         source.save(&original.replace("refresh-secret", "refresh-rotated")).expect("rotate");
         assert!(source.load().expect("load").contains("refresh-rotated"));
         assert!(source.save("not a credential").is_err(), "a broken credential is never kept");

@@ -1,4 +1,6 @@
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
+
+use platform::sync::Locked;
 
 use domain::{AskKind, EngineEvent, PermissionMode, Verifications};
 
@@ -30,7 +32,7 @@ impl PlanWatch {
                     None if self.planning => &self.text,
                     None => return,
                 };
-                self.verifications.lock().unwrap_or_else(PoisonError::into_inner).plan_finished(plan);
+                self.verifications.locked().plan_finished(plan);
             }
             _ => {}
         }

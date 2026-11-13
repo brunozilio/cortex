@@ -3,6 +3,7 @@ use std::sync::Arc;
 use agent_engine::model::http::NetHttp;
 use domain::provider::ProviderKey;
 use domain::{ModelOption, ModelProvider, Principal};
+use platform::sync::Locked;
 use protocol::{ProviderEvent, ServerEvent};
 
 use super::ModelProviders;
@@ -27,7 +28,7 @@ impl ModelProviders {
     pub(crate) fn discover_models(&self, owner: &Principal, engine_models: Vec<ModelOption>, outbox: &Outbox) {
         let owner_key = crate::dirs::owner_key(owner);
         let generation = {
-            let mut generations = self.generations.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut generations = self.generations.locked();
             let value = generations.entry(owner_key.clone()).or_default();
             *value = value.wrapping_add(1);
             *value
@@ -41,8 +42,7 @@ impl ModelProviders {
                 .collect();
             let mut models = list(this.catalog.as_ref(), accounts, &outbox);
             models.extend(engine_models);
-            let latest = this.generations.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(&owner_key)
-                == Some(&generation);
+            let latest = this.generations.locked().get(&owner_key) == Some(&generation);
             if latest {
                 outbox.send(ServerEvent::Models(models));
             }

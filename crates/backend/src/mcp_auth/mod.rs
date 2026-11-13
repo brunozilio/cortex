@@ -1,4 +1,6 @@
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
+
+use platform::sync::Locked;
 
 use agent_engine::model::http::Http;
 use domain::credentials::{McpSignIns, McpTokenSource};
@@ -92,12 +94,12 @@ impl McpAuth {
             resource: server.to_owned(),
         };
         let tokens = blank.answered(&answer, (self.clock)())?;
-        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let _guard = self.lock.locked();
         self.save(owner, server, Some(&tokens))
     }
 
     pub fn sign_out(&self, owner: &Principal, server: &str) -> Result<bool, String> {
-        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let _guard = self.lock.locked();
         let had = self.load(owner, server).is_some();
         self.save(owner, server, None)?;
         Ok(had)
@@ -105,7 +107,7 @@ impl McpAuth {
 
     pub fn token(&self, owner: &Principal, server: &str) -> Option<String> {
         let tokens = {
-            let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+            let _guard = self.lock.locked();
             self.load(owner, server)?
         };
         let now = (self.clock)();
@@ -127,7 +129,7 @@ impl McpAuth {
             .and_then(|answer| tokens.answered(&answer, now))
             .inspect_err(|error| tracing::warn!(%error, server, "an MCP sign-in could not be refreshed"))
             .ok()?;
-        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let _guard = self.lock.locked();
         match self.load(owner, server) {
             Some(kept) if kept.access_token != tokens.access_token && kept.fresh(now) => Some(kept.access_token),
             None => None,

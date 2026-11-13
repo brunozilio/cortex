@@ -3,6 +3,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use agent_engine::RunHandle;
 use domain::{Principal, RunId};
+use platform::sync::Locked;
 
 enum Slot {
     Active(Principal, Box<dyn RunHandle>),
@@ -103,7 +104,7 @@ impl RunTable {
     }
 
     fn lock(&self) -> MutexGuard<'_, HashMap<RunId, Slot>> {
-        self.slots.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.slots.locked()
     }
 }
 
