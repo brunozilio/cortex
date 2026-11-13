@@ -37,8 +37,13 @@ impl CommandHandler {
     }
 
     pub fn handle(&self, envelope: Envelope<ClientCommand>) {
-        let Envelope { principal, payload: command } = envelope;
         let outbox = &self.outbox;
+        if let Err(error) = envelope.spoken() {
+            tracing::warn!(%error, "command in another protocol version");
+            outbox.send(ServerEvent::error(error));
+            return;
+        }
+        let Envelope { principal, payload: command, .. } = envelope;
         if let Err(error) = self.services.authorizer.authorize(&principal, &command) {
             tracing::warn!(%error, "command rejected");
             outbox.send(ServerEvent::error(error.to_string()));

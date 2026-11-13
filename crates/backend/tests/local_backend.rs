@@ -203,3 +203,15 @@ fn dropping_the_backend_cancels_runs() {
     drop(backend);
     assert!(started.elapsed() < Duration::from_secs(2));
 }
+
+#[test]
+fn a_command_in_another_protocol_version_is_refused() {
+    let (backend, woke) = backend(scripted());
+    let newer = Envelope { version: protocol::VERSION + 1, ..Envelope::local(ClientCommand::LoadSettings) };
+    backend.send(newer).expect("send");
+    let events = collect(&backend, &woke, |event| matches!(event, ServerEvent::Error { .. }));
+    assert!(
+        matches!(events.as_slice(), [ServerEvent::Error { message }] if message.contains("protocol version")),
+        "{events:?}"
+    );
+}

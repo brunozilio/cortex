@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use backend::{Extensions, LocalBackend, LocalServices};
 use domain::ModelOption;
+use protocol::{Backend, BackendError, Wake};
 
 pub use self::account::ProjectMemory;
 pub use self::extensions::{Agent, Command, Skill};
@@ -30,6 +31,9 @@ pub use domain::{
     ToolCall, Verdict,
 };
 use extensions::Definitions;
+pub use protocol;
+
+type Connect = Box<dyn FnOnce(Wake) -> Result<Box<dyn Backend>, BackendError> + Send>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -74,6 +78,7 @@ pub struct Builder {
     definitions: Definitions,
     connections: Vec<McpConnection>,
     servers: Vec<McpServer>,
+    connect: Option<Connect>,
 }
 
 impl std::fmt::Debug for Builder {
@@ -118,6 +123,14 @@ impl Builder {
         self
     }
 
+    pub fn backend(
+        mut self,
+        connect: impl FnOnce(Wake) -> Result<Box<dyn Backend>, BackendError> + Send + 'static,
+    ) -> Self {
+        self.connect = Some(Box::new(connect));
+        self
+    }
+
     #[doc(hidden)]
     pub fn services(mut self, services: LocalServices) -> Self {
         self.services = Some(services);
@@ -125,6 +138,19 @@ impl Builder {
     }
 
     pub fn build(self) -> Result<Sdk, Error> {
+        let (wake_tx, woken) = crossbeam_channel::bounded(1);
+        let wake: Wake = Arc::new(move || {
+            let _ = wake_tx.try_send(());
+        });
+        if let Some(connect) = self.connect {
+            if !self.definitions.is_empty() || !self.connections.is_empty() || !self.servers.is_empty() {
+                return Err(Error::Backend(
+                    "agents, skills, commands and MCP servers given to the builder reach only the local backend".into(),
+                ));
+            }
+            let backend = connect(wake).map_err(|error| Error::Backend(error.to_string()))?;
+            return Ok(Sdk { client: Arc::new(Client::new(backend, woken)) });
+        }
         let mut services = self.services.unwrap_or_else(LocalServices::detect);
         if let Some(data) = &self.data {
             services = services.kept_in(data);
@@ -143,10 +169,6 @@ impl Builder {
             .map(|server| domain::mcp::LocalMcp::new(server.name().to_owned(), Arc::new(server)))
             .collect();
         services.extensions = extensions;
-        let (wake_tx, woken) = crossbeam_channel::bounded(1);
-        let wake = Arc::new(move || {
-            let _ = wake_tx.try_send(());
-        });
         let backend = LocalBackend::new(services, wake).map_err(|error| Error::Backend(error.to_string()))?;
         Ok(Sdk { client: Arc::new(Client::new(Box::new(backend), woken)) })
     }

@@ -60,7 +60,9 @@ A client sends `Envelope<ClientCommand>` to a `Backend` and polls
 in process on three worker threads (run control, skill and agent
 queries, memory), so a slow scan never delays a cancel. Every command carries a
 `Principal` and passes an `Authorizer` (`LocalAuthorizer` accepts only the
-local owner); this is the seam for a future remote server.
+local owner); this is the seam for a future remote server. An
+`Envelope` also names its `protocol::VERSION`; the handler refuses another
+(or none) with `ServerEvent::Error` before authorizing it.
 
 ## Engines
 
@@ -457,7 +459,11 @@ rereads them; `/reload` refreshes what the chat keeps and lists them.
 The `sdk` crate is the CLI's internal client to the backend, not a
 public product. It speaks only `ClientCommand`/`ServerEvent` (one
 dispatcher thread routes run events to their `Run`, other answers to the
-waiting call), so it can move to a remote backend unchanged. What a host adds reaches every
+waiting call), so it can move to a remote backend unchanged.
+`Builder::backend` takes any `protocol::Backend` instead of the in-process
+one (`tests/remote.rs` runs a session through a backend that only sees
+JSON); what the builder adds itself (agents, skills, commands, MCP
+servers) needs the local backend and is refused otherwise. What a host adds reaches every
 run through the backend's `Extensions`: its agents, skills and commands are
 written to `<data>/sdk/<name>/` and offered under their own names
 (`Extensions::dirs`); HTTP/stdio MCP servers join the run's private
