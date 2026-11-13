@@ -50,20 +50,26 @@ impl SseTransport {
         }
         let mut decoder = SseDecoder::new();
         let given_up = AtomicBool::new(false);
-        let found = AtomicBool::new(false);
+        let (found, waiting) = std::sync::mpsc::channel::<()>();
         let endpoint = std::thread::scope(|scope| {
-            scope.spawn(|| {
-                let started = std::time::Instant::now();
-                while !found.load(Ordering::Relaxed) {
-                    if stop.load(Ordering::Relaxed) || started.elapsed() > ENDPOINT_WAIT {
-                        given_up.store(true, Ordering::Relaxed);
-                        return;
+            let given_up = &given_up;
+            scope.spawn(move || {
+                let deadline = std::time::Instant::now() + ENDPOINT_WAIT;
+                loop {
+                    let left = deadline.saturating_duration_since(std::time::Instant::now());
+                    match waiting.recv_timeout(left.min(STOP_CHECK)) {
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+                            if !stop.load(Ordering::Relaxed) && !left.is_zero() => {}
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                            given_up.store(true, Ordering::Relaxed);
+                            return;
+                        }
+                        _ => return,
                     }
-                    std::thread::sleep(Duration::from_millis(25));
                 }
             });
-            let endpoint = endpoint_of(name, url, &mut stream, &mut decoder, &given_up);
-            found.store(true, Ordering::Relaxed);
+            let endpoint = endpoint_of(name, url, &mut stream, &mut decoder, given_up);
+            drop(found);
             endpoint
         })?;
         let transport = Self {
@@ -179,6 +185,7 @@ impl Transport for SseTransport {
 }
 
 const ENDPOINT_WAIT: Duration = Duration::from_secs(30);
+const STOP_CHECK: Duration = Duration::from_millis(25);
 
 fn endpoint_of(
     name: &str,

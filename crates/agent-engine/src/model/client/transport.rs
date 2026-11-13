@@ -13,7 +13,7 @@ pub(super) struct Transport {
     pub provider: &'static dyn Provider,
     pub http: Arc<dyn Http>,
     pub keys: Arc<dyn KeySource>,
-    pub lock: Mutex<()>,
+    pub turns: super::turns::Turns,
     pub cached: Mutex<Option<(String, Config)>>,
     pub model: Option<domain::ModelOption>,
 }
@@ -47,7 +47,7 @@ impl Transport {
 
     pub(super) fn models(&self) -> Result<Vec<domain::ModelOption>, ModelError> {
         catalog::collect(self.provider, |after| {
-            let _guard = self.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let _turn = self.turns.take();
             let call = self.provider.catalog(&self.config(false)?, after);
             match &call.body {
                 Some(body) => self.http.post(&call.url, &call.headers, body),
@@ -83,16 +83,7 @@ impl Transport {
     }
 
     fn send_stopped(&self, body: &str, stop: &AtomicBool) -> Result<Response, ModelError> {
-        let _guard = loop {
-            if stop.load(std::sync::atomic::Ordering::Relaxed) {
-                return Err(ModelError::Cancelled);
-            }
-            match self.lock.try_lock() {
-                Ok(guard) => break guard,
-                Err(std::sync::TryLockError::WouldBlock) => std::thread::sleep(std::time::Duration::from_millis(25)),
-                Err(std::sync::TryLockError::Poisoned(error)) => break error.into_inner(),
-            }
-        };
+        let Some(_turn) = self.turns.take_unless(stop) else { return Err(ModelError::Cancelled) };
         let mut body: Value = serde_json::from_str(body).map_err(|e| ModelError::Provider(e.to_string()))?;
         request::shape(self.provider, self.model.as_ref(), &mut body)?;
         let turn_headers = self.provider.turn_headers(self.model.as_ref(), &body);

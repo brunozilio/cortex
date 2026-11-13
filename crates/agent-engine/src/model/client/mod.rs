@@ -1,5 +1,6 @@
 pub mod oauth;
 mod transport;
+mod turns;
 
 use super::http::Http;
 use super::{Delta, KeySource, ModelApi, ModelError, Reply, TurnRequest};
@@ -44,7 +45,7 @@ impl ProviderClient {
     ) -> Result<Ready, ModelError> {
         let provider = crate::providers::get(provider)?;
         let transport =
-            Arc::new(Transport { provider, http, keys, lock: Mutex::new(()), cached: Mutex::new(None), model });
+            Arc::new(Transport { provider, http, keys, turns: Default::default(), cached: Mutex::new(None), model });
         let wire = provider.wire(transport.model.as_ref());
         let api = super::wires::open(wire, transport.clone(), transport.model.as_ref()).ok_or_else(|| {
             ModelError::Provider(format!("{} speaks {wire}, which this build does not have", provider.name()))
@@ -68,7 +69,7 @@ impl ModelApi for ProviderClient {
         }
         let ready = self.ready()?;
         {
-            let _guard = ready.transport.lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let _turn = ready.transport.turns.take();
             ready.transport.config(false)?;
         }
         ready.api.turn(request, on, stop)

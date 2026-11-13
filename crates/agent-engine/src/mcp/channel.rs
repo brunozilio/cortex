@@ -19,21 +19,18 @@ pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>, client: u64) -> Result<Arc<
             inbox::push(client, notice);
         }
     });
-    let (given_up, opened) = (AtomicBool::new(false), AtomicBool::new(false));
+    let given_up = AtomicBool::new(false);
+    let (opened, waiting) = std::sync::mpsc::channel::<()>();
     let server = std::thread::scope(|scope| {
-        scope.spawn(|| {
-            let started = std::time::Instant::now();
-            while !opened.load(Ordering::Relaxed) {
-                if started.elapsed() > OPEN_WAIT {
-                    given_up.store(true, Ordering::Relaxed);
-                    return;
-                }
-                std::thread::sleep(Duration::from_millis(25));
+        let given_up = &given_up;
+        scope.spawn(move || {
+            if let Err(std::sync::mpsc::RecvTimeoutError::Timeout) = waiting.recv_timeout(OPEN_WAIT) {
+                given_up.store(true, Ordering::Relaxed);
             }
         });
-        let server = McpServer::open_listening(spec, http, &given_up, Some(listener))
-            .and_then(|server| server.initialize_stopped(&given_up).map(|()| server));
-        opened.store(true, Ordering::Relaxed);
+        let server = McpServer::open_listening(spec, http, given_up, Some(listener))
+            .and_then(|server| server.initialize_stopped(given_up).map(|()| server));
+        drop(opened);
         server
     })
     .map_err(|error| {
