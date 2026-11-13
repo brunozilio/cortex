@@ -1,4 +1,5 @@
 use domain::{EngineEvent, ToolCall};
+use platform::sync::Locked;
 use serde_json::{Value, json};
 
 use super::tasks::Tasks;
@@ -42,7 +43,7 @@ impl Agent<'_> {
         if pre.updated_input.is_some() {
             let path =
                 input["file_path"].as_str().or_else(|| input["path"].as_str()).map(|p| self.workspace.resolve(p));
-            let mut seen = self.workspace.seen_rules.lock().expect("project rules");
+            let mut seen = self.workspace.seen_rules.locked();
             for rule in &self.workspace.rules {
                 match rule.applies(&self.workspace.cwd, path.as_deref()) {
                     Ok(true) if !rule.patterns.is_empty() && seen.insert(rule.path.clone()) => {

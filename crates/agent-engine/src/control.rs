@@ -4,6 +4,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, Weak};
 
 use domain::{AskId, Decision, PermissionMode};
+use platform::sync::Locked;
 
 use crate::permission::Remembered;
 
@@ -41,13 +42,13 @@ impl Control {
         self.child_configured(None, false)
     }
     pub fn child_configured(&self, ceiling: Option<PermissionMode>, no_prompts: bool) -> Arc<Self> {
-        let mut children = self.children.lock().expect("child controls");
-        let mut child = Self::new(self.mode(), Arc::default());
-        child.ceiling = ceiling;
-        child.no_prompts = self.no_prompts || no_prompts;
-        *child.mode.get_mut().expect("new mode") = self.mode().capped(ceiling);
-        *child.remembered.get_mut().expect("new permissions") = self.remembered();
-        let child = Arc::new(child);
+        let mut children = self.children.locked();
+        let child = Arc::new(Self {
+            ceiling,
+            no_prompts: self.no_prompts || no_prompts,
+            remembered: Mutex::new(self.remembered()),
+            ..Self::new(self.mode().capped(ceiling), Arc::default())
+        });
         children.push(Arc::downgrade(&child));
         if self.is_stopped() {
             child.cancel();
@@ -77,61 +78,51 @@ impl Control {
 
     pub fn cancel(&self) {
         self.stop.store(true, Ordering::Relaxed);
-        for child in self.children.lock().expect("children").iter().filter_map(Weak::upgrade) {
+        for child in self.children.locked().iter().filter_map(Weak::upgrade) {
             child.cancel();
         }
-        if let Ok(mut asks) = self.asks.lock() {
-            asks.clear();
-        }
+        self.asks.locked().clear();
     }
 
     pub fn mode(&self) -> PermissionMode {
-        self.mode.lock().map(|mode| *mode).unwrap_or_default()
+        *self.mode.locked()
     }
 
     pub fn set_mode(&self, mode: PermissionMode) {
-        let children = self.children.lock().expect("child controls");
+        let children = self.children.locked();
         let mode = mode.capped(self.ceiling);
-        if let Ok(mut current) = self.mode.lock() {
-            *current = mode;
-        }
+        *self.mode.locked() = mode;
         for child in children.iter().filter_map(Weak::upgrade) {
             child.set_mode(mode);
         }
     }
 
     pub fn remembered(&self) -> Remembered {
-        self.remembered.lock().map(|remembered| remembered.clone()).unwrap_or_default()
+        self.remembered.locked().clone()
     }
 
     pub fn remember(&self, apply: impl FnOnce(&mut Remembered)) {
-        if let Ok(mut remembered) = self.remembered.lock() {
-            apply(&mut remembered);
-        }
+        apply(&mut self.remembered.locked());
     }
 
     pub fn steer(&self, text: String) {
-        if let Ok(mut steered) = self.steered.lock() {
-            steered.push(text);
-        }
+        self.steered.locked().push(text);
     }
 
     pub fn move_to(&self, setup: crate::agent_runtime::Relocation) {
-        if let Ok(mut moving) = self.moving.lock() {
-            *moving = Some(setup);
-        }
+        *self.moving.locked() = Some(setup);
     }
 
     pub fn is_moving(&self) -> bool {
-        self.moving.lock().is_ok_and(|moving| moving.is_some())
+        self.moving.locked().is_some()
     }
 
     pub fn take_move(&self) -> Option<crate::agent_runtime::Relocation> {
-        self.moving.lock().ok().and_then(|mut moving| moving.take())
+        self.moving.locked().take()
     }
 
     pub fn take_steered(&self) -> Vec<String> {
-        self.steered.lock().map(|mut steered| std::mem::take(&mut *steered)).unwrap_or_default()
+        std::mem::take(&mut *self.steered.locked())
     }
 
     pub fn open(&self, id: AskId) -> Receiver<Decision> {
@@ -139,18 +130,17 @@ impl Control {
         if self.is_stopped() {
             return receive;
         }
-        if let Ok(mut asks) = self.asks.lock() {
-            if self.is_stopped() {
-                return receive;
-            }
-            asks.insert(id, send);
+        let mut asks = self.asks.locked();
+        if self.is_stopped() {
+            return receive;
         }
+        asks.insert(id, send);
         receive
     }
 
     pub fn answer(&self, id: &AskId, decision: Decision) {
-        let sender = self.asks.lock().ok().and_then(|mut asks| asks.remove(id));
-        for child in self.children.lock().expect("children").iter().filter_map(Weak::upgrade) {
+        let sender = self.asks.locked().remove(id);
+        for child in self.children.locked().iter().filter_map(Weak::upgrade) {
             child.answer(id, decision.clone());
         }
         if let Some(sender) = sender {
@@ -172,6 +162,41 @@ mod tests {
         control.answer(&id, Decision::Deny);
         assert_eq!(waiting.recv(), Ok(Decision::Allow));
         assert!(waiting.try_recv().is_err());
+    }
+
+    fn poison<T: Send>(lock: &Mutex<T>) {
+        let crashed = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _held = lock.lock();
+                    panic!("poison the lock");
+                })
+                .join()
+        });
+        assert!(crashed.is_err() && lock.is_poisoned());
+    }
+
+    #[test]
+    fn a_crashed_thread_never_loosens_the_permission_mode() {
+        let control = Control::new(PermissionMode::Plan, Arc::default());
+        poison(&control.mode);
+        assert_eq!(control.mode(), PermissionMode::Plan);
+        control.set_mode(PermissionMode::Ask);
+        assert_eq!(control.mode(), PermissionMode::Ask);
+    }
+
+    #[test]
+    fn a_crashed_thread_still_lets_a_run_be_cancelled_and_answered() {
+        let control = Control::new(PermissionMode::Ask, Arc::default());
+        let child = control.child();
+        let id = AskId("a".into());
+        let waiting = control.open(id.clone());
+        poison(&control.children);
+        poison(&control.asks);
+        control.answer(&id, Decision::Allow);
+        assert_eq!(waiting.recv(), Ok(Decision::Allow));
+        control.cancel();
+        assert!(child.is_stopped());
     }
 
     #[test]

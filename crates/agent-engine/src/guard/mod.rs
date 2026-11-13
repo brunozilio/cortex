@@ -1,6 +1,8 @@
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 
+use platform::sync::Locked;
+
 use serde_json::{Value, json};
 
 use crate::model::{ModelApi, TurnRequest};
@@ -15,13 +17,11 @@ pub struct Safety {
 
 impl Safety {
     pub fn observe(&self, history: &[Message]) {
-        if let Ok(mut transcript) = self.transcript.lock() {
-            *transcript = render(history);
-        }
+        *self.transcript.locked() = render(history);
     }
 
     pub fn fork(&self) -> Self {
-        Self { transcript: Mutex::new(self.transcript.lock().map(|t| t.clone()).unwrap_or_default()) }
+        Self { transcript: Mutex::new(self.transcript.locked().clone()) }
     }
 
     pub fn check(
@@ -33,7 +33,7 @@ impl Safety {
         input: &Value,
         stop: &AtomicBool,
     ) -> Result<(), String> {
-        let transcript = self.transcript.lock().map(|t| t.clone()).unwrap_or_default();
+        let transcript = self.transcript.locked().clone();
         let action = json!({ tool: input }).to_string();
         let messages = vec![
             Message::user(format!(

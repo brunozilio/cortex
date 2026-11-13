@@ -17,6 +17,7 @@ mod watch;
 mod worktree;
 
 use domain::EngineEvent;
+use platform::sync::Locked;
 use serde_json::{Value, json};
 use std::sync::atomic::Ordering;
 
@@ -75,7 +76,7 @@ impl Agent<'_> {
             };
             let outcome = self.run_loop(history, &tasks, &spawn);
             if outcome.is_err() {
-                for task in tasks.background.lock().expect("tasks").values() {
+                for task in tasks.background.locked().values() {
                     task.control.cancel();
                 }
             }
@@ -198,7 +199,7 @@ impl Agent<'_> {
                         history.push(Message { role: Role::User, blocks: steered });
                         continue;
                     }
-                    let pending: Vec<_> = tasks.background.lock().expect("tasks").values().cloned().collect();
+                    let pending: Vec<_> = tasks.background.locked().values().cloned().collect();
                     let mut reports = Vec::new();
                     for task in pending {
                         if !task.collected.load(Ordering::Relaxed) {

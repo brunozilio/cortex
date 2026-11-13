@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use domain::{EngineEvent, RunId};
+use platform::sync::Locked;
 
 use super::EventSink;
 
@@ -27,9 +28,7 @@ impl RunGate {
     }
 
     pub fn observe(&self, observer: Observer) {
-        if let Ok(mut slot) = self.observer.lock() {
-            *slot = Some(observer);
-        }
+        *self.observer.locked() = Some(observer);
     }
 
     pub fn is_closed(&self) -> bool {
@@ -44,7 +43,7 @@ impl RunGate {
         } else if self.is_closed() {
             return false;
         }
-        let observer = self.observer.lock().ok().and_then(|slot| slot.clone());
+        let observer = self.observer.locked().clone();
         if let Some(observer) = observer {
             observer(&event);
         }

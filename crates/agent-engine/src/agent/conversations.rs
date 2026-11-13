@@ -2,6 +2,8 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
+use platform::sync::Locked;
+
 use super::Agent;
 use crate::tools::Outcome;
 use crate::transcript::Message;
@@ -28,16 +30,16 @@ impl Conversations {
 
     pub(super) fn keep(&self, kept: Kept) -> String {
         let id = Self::id(kept.index);
-        self.0.lock().expect("conversations").insert(id.clone(), kept);
+        self.0.locked().insert(id.clone(), kept);
         id
     }
 
     pub(super) fn has(&self, to: &str) -> bool {
-        self.0.lock().expect("conversations").contains_key(to)
+        self.0.locked().contains_key(to)
     }
 
     fn take(&self, to: &str) -> Option<Kept> {
-        self.0.lock().expect("conversations").remove(to)
+        self.0.locked().remove(to)
     }
 }
 

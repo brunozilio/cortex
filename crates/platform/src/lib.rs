@@ -1,5 +1,6 @@
 pub mod bounded;
 pub mod private_file;
+pub mod sync;
 
 #[cfg(unix)]
 mod unix;

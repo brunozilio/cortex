@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
+use platform::sync::Locked;
+
 use super::Agent;
 use super::conversations::Conversations;
 use crate::control::Control;
@@ -20,18 +22,16 @@ pub(super) struct Tasks {
 
 impl Tasks {
     pub(super) fn admit(&self, name: &str, input: &Value, may_change: bool) -> bool {
-        self.repeats.lock().map_or(true, |mut repeats| repeats.admit(name, &input.to_string(), may_change))
+        self.repeats.locked().admit(name, &input.to_string(), may_change)
     }
 
     pub(super) fn watched(&self, id: String) {
-        if let Ok(mut watches) = self.watches.lock() {
-            watches.push(id);
-        }
+        self.watches.locked().push(id);
     }
 
     pub(super) fn still_watching(&self, client: u64) -> Vec<String> {
         let active = crate::tools::watch::active(client);
-        let started = self.watches.lock().map(|watches| watches.clone()).unwrap_or_default();
+        let started = self.watches.locked().clone();
         started.into_iter().filter(|id| active.iter().any(|watch| watch.id == *id)).collect()
     }
 }
@@ -40,10 +40,8 @@ pub(super) struct StopTasksOnDrop<'a>(pub(super) &'a Tasks);
 
 impl Drop for StopTasksOnDrop<'_> {
     fn drop(&mut self) {
-        if let Ok(tasks) = self.0.background.lock() {
-            for task in tasks.values() {
-                task.control.cancel();
-            }
+        for task in self.0.background.locked().values() {
+            task.control.cancel();
         }
     }
 }
@@ -57,9 +55,9 @@ pub(super) struct Task {
 
 impl Task {
     pub(super) fn output(&self, block: bool) -> Outcome {
-        let mut result = self.result.lock().expect("task result");
+        let mut result = self.result.locked();
         while block && result.is_none() {
-            result = self.ready.wait(result).expect("task result");
+            result = platform::sync::wait(&self.ready, result);
         }
         if result.is_some() {
             self.collected.store(true, Ordering::Relaxed);
@@ -70,11 +68,11 @@ impl Task {
 
 impl Tasks {
     pub(super) fn busy(&self) -> bool {
-        self.background.lock().is_ok_and(|tasks| tasks.values().any(|task| !task.collected.load(Ordering::Relaxed)))
+        self.background.locked().values().any(|task| !task.collected.load(Ordering::Relaxed))
     }
 
     fn find(&self, input: &Value) -> Option<Arc<Task>> {
-        self.background.lock().expect("tasks").get(input["task_id"].as_str().unwrap_or_default()).cloned()
+        self.background.locked().get(input["task_id"].as_str().unwrap_or_default()).cloned()
     }
 
     pub(super) fn output(&self, input: &Value) -> Outcome {
@@ -96,9 +94,16 @@ impl Tasks {
     }
 
     pub(super) fn list(&self, planning: impl FnOnce() -> Value) -> Outcome {
-        let tasks = self.background.lock().expect("tasks");
+        let tasks = self.background.locked();
         let planning = planning();
-        Outcome::ok(json!({"planning":planning,"background":tasks.iter().map(|(id,t)| json!({"task_id":id,"status":if t.result.lock().expect("task").is_some(){"completed"}else{"running"}})).collect::<Vec<_>>()}).to_string())
+        let background: Vec<Value> = tasks
+            .iter()
+            .map(|(id, task)| {
+                let status = if task.result.locked().is_some() { "completed" } else { "running" };
+                json!({"task_id": id, "status": status})
+            })
+            .collect();
+        Outcome::ok(json!({"planning": planning, "background": background}).to_string())
     }
 }
 
@@ -112,7 +117,7 @@ impl Agent<'_> {
         spawn: &dyn Fn(Box<dyn FnOnce() + Send + 'env>),
     ) -> Outcome {
         let conversations = tasks.conversations.clone();
-        let mut tasks = tasks.background.lock().expect("tasks");
+        let mut tasks = tasks.background.locked();
         if self.depth > 0 || tasks.len() >= 16 {
             return Outcome::error("Background agent limit reached (16 per run; no nested agents).");
         }
@@ -133,7 +138,7 @@ impl Agent<'_> {
                 self.sub_agent_with(&input, &control, &workspace, &parent, &conversations, None)
             }))
             .unwrap_or_else(|_| Outcome::error("Background agent panicked."));
-            *task.result.lock().expect("task result") = Some(result);
+            *task.result.locked() = Some(result);
             task.ready.notify_all();
         }));
         Outcome::ok(json!({"task_id":id,"status":"running","instructions":"Use TaskOutput to collect the report before completing the request."}).to_string())
