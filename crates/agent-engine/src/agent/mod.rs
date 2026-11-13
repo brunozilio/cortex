@@ -11,8 +11,10 @@ mod permission_ask;
 mod plan_mode;
 mod reminders;
 mod script_call;
+mod stuck;
 mod sub_agent;
 mod tasks;
+mod template;
 mod watch;
 mod worktree;
 
@@ -255,6 +257,9 @@ impl Agent<'_> {
                     (self.emit)(EngineEvent::StructuredOutput(input["result"].clone()));
                 }
             }
+            if let Some(model) = self.help_when_stuck(&calls, &mut results, tasks) {
+                fell_back = Some(model);
+            }
             results.extend(self.steered());
             results.extend(self.notices());
             history.push(Message { role: Role::User, blocks: results });
@@ -275,23 +280,5 @@ impl Agent<'_> {
             }
         }
         Ok(None)
-    }
-
-    fn turn_template(&self, fell_back: Option<&String>) -> TurnRequest {
-        TurnRequest {
-            messages: Vec::new(),
-            system: self.request.system.clone(),
-            tools: self.offered(),
-            model: fell_back.cloned().unwrap_or_else(|| self.request.model.clone()),
-            ..self.request.clone()
-        }
-    }
-
-    pub(super) fn offered(&self) -> Vec<crate::model::ToolSpec> {
-        let mut tools = self.request.tools.clone();
-        if let Some(deferred) = &self.workspace.services.deferred {
-            tools.extend(deferred.loaded());
-        }
-        tools
     }
 }

@@ -25,6 +25,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         redact: Some(Arc::new(domain::redact::Known::default())),
         snapshots: true,
         dependency_guard: true,
+        escalation: true,
     };
 
     let fork = policy.fork();

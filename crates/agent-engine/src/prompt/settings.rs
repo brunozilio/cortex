@@ -24,6 +24,8 @@ pub struct Settings {
     #[serde(default)]
     pub judge: Option<String>,
     #[serde(default)]
+    pub escalation: Option<String>,
+    #[serde(default)]
     pub fallbacks: Vec<String>,
     #[serde(default)]
     pub small_model: Option<String>,
@@ -57,6 +59,7 @@ impl Default for Settings {
             auto_memory: true,
             advisor: None,
             judge: None,
+            escalation: None,
             fallbacks: Vec::new(),
             small_model: None,
             enabled_providers: Vec::new(),
@@ -94,6 +97,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut auto_memory = true;
     let mut advisor = None;
     let mut judge = None;
+    let mut escalation = None;
     let mut fallbacks = Vec::new();
     let mut small_model = None;
     let mut enabled_providers = Vec::new();
@@ -167,6 +171,9 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
             if let Some(value) = settings.get("judgeModel") {
                 judge = model_name(value, "judgeModel")?;
             }
+            if owners && let Some(value) = settings.get("escalationModel") {
+                escalation = model_name(value, "escalationModel")?;
+            }
             if let Some(value) = settings.get("fallbackModel") {
                 fallbacks = model_names(value, "fallbackModel")?;
             }
@@ -236,6 +243,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 auto_memory,
                 advisor,
                 judge,
+                escalation,
                 fallbacks,
                 small_model,
                 enabled_providers,
@@ -258,6 +266,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         auto_memory,
         advisor,
         judge,
+        escalation,
         fallbacks,
         small_model,
         enabled_providers,

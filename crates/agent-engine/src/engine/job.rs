@@ -122,6 +122,8 @@ impl Job {
             .then(|| Arc::new(tools::env_secrets(&workspace.cwd)));
         workspace.policy.snapshots = settings.features.on(domain::features::DESTRUCTIVE_SNAPSHOT);
         workspace.policy.dependency_guard = settings.features.on(domain::features::DEPENDENCY_GUARD);
+        workspace.policy.escalation = settings.features.on(domain::features::ESCALATION);
+        workspace.models.escalation.clone_from(&settings.escalation);
         if !settings.features.on(domain::features::BUDGET) {
             self.request.budget = None;
         }

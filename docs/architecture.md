@@ -185,6 +185,15 @@ Inbox notices are core (`TakeNotices`).
   plus the run's priced calls reach the limit, so the run fails saying
   how to raise it; calls without a price count as nothing. The status
   line shows spent against the limit.
+- **Escalation when stuck** (`experimental-escalation`; rule in
+  `domain::stuck`): the loop counts, per run, the same call (tool and
+  input) failing and calls `domain::repeats` holds back
+  (`agent/stuck.rs`). Three failures of one call, or two held back,
+  count as stuck, at most twice a run. Then the last result tells the
+  agent to call the Advisor when the run has one (`advisorModel`), or
+  else the rest of the run goes to the owner's `escalationModel` (only
+  the owner's files set it), emitting `FellBack`, with a note saying
+  why.
 - **Cache warning** (`cache-warning`; rule in `domain::cache_window`): the
   chat keeps when the last model call was made and how many tokens it
   read from or wrote to the prompt cache; while idle, with 10k or more

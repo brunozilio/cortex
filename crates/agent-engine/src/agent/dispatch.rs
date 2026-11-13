@@ -75,6 +75,9 @@ impl Agent<'_> {
             && !tasks.admit(name, input, tool.is_some_and(|tool| tool.access() != crate::tools::Access::Reads))
         {
             (self.emit)(EngineEvent::Repeated { tool: name.to_owned() });
+            if tasks.stuck.locked().held_back() {
+                tasks.help_due.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             Outcome::error(domain::repeats::refused(name))
         } else if let Some(refusal) =
             domain::watch::while_watching(name, &tasks.still_watching(self.workspace.credentials.client))

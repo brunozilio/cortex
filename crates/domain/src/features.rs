@@ -10,6 +10,7 @@ pub const DEPENDENCY_GUARD: &str = "experimental-dependency-guard";
 pub const SUGGESTED_RULES: &str = "suggested-rules";
 pub const BUDGET: &str = "budget";
 pub const CACHE_WARNING: &str = "cache-warning";
+pub const ESCALATION: &str = "experimental-escalation";
 
 const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS, DEPENDENCY_GUARD];
 
@@ -38,6 +39,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: CACHE_WARNING,
         about: "The status line counts down the prompt cache's last two minutes and says when it has gone cold",
+    },
+    Flag {
+        name: ESCALATION,
+        about: "When the agent fails the same call again and again, send it to the Advisor or to escalationModel",
     },
 ];
 

@@ -18,6 +18,7 @@ pub struct Policy {
     pub redact: Option<Arc<Known>>,
     pub snapshots: bool,
     pub dependency_guard: bool,
+    pub escalation: bool,
 }
 
 impl Policy {
@@ -31,6 +32,7 @@ impl Policy {
             redact: self.redact.clone(),
             snapshots: self.snapshots,
             dependency_guard: self.dependency_guard,
+            escalation: self.escalation,
         }
     }
 

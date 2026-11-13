@@ -18,6 +18,8 @@ pub(super) struct Tasks {
     pub(super) conversations: Conversations,
     pub(super) repeats: Mutex<domain::repeats::Repeats>,
     pub(super) watches: Mutex<Vec<String>>,
+    pub(super) stuck: Mutex<domain::stuck::Stuck>,
+    pub(super) help_due: AtomicBool,
 }
 
 impl Tasks {
