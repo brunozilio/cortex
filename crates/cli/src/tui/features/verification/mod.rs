@@ -55,6 +55,7 @@ fn source(criteria: &Criteria) -> &'static str {
     match criteria.source {
         CriteriaSource::User => "yours",
         CriteriaSource::Plan => "plan",
+        CriteriaSource::Project => "project",
     }
 }
 

@@ -26,6 +26,8 @@ pub struct Settings {
     #[serde(default)]
     pub escalation: Option<String>,
     #[serde(default)]
+    pub project_criteria: Option<String>,
+    #[serde(default)]
     pub fallbacks: Vec<String>,
     #[serde(default)]
     pub small_model: Option<String>,
@@ -60,6 +62,7 @@ impl Default for Settings {
             advisor: None,
             judge: None,
             escalation: None,
+            project_criteria: None,
             fallbacks: Vec::new(),
             small_model: None,
             enabled_providers: Vec::new(),
@@ -125,6 +128,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     for root in &roots {
         hooks.extend(&crate::hooks::Hooks::from_scripts(&root.join("hooks")));
     }
+    let project_criteria = super::criteria_file::nearest(roots.iter().filter(|root| !is_user_root(root)));
     for root in &roots {
         for name in ["settings.json", "settings.local.json"] {
             let path = root.join(name);
@@ -244,6 +248,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 advisor,
                 judge,
                 escalation,
+                project_criteria,
                 fallbacks,
                 small_model,
                 enabled_providers,
@@ -267,6 +272,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         advisor,
         judge,
         escalation,
+        project_criteria,
         fallbacks,
         small_model,
         enabled_providers,

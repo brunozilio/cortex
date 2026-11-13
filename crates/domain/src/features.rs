@@ -11,6 +11,7 @@ pub const SUGGESTED_RULES: &str = "suggested-rules";
 pub const BUDGET: &str = "budget";
 pub const CACHE_WARNING: &str = "cache-warning";
 pub const ESCALATION: &str = "experimental-escalation";
+pub const PROJECT_CRITERIA: &str = "project-criteria";
 
 const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS, DEPENDENCY_GUARD];
 
@@ -43,6 +44,14 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: ESCALATION,
         about: "When the agent fails the same call again and again, send it to the Advisor or to escalationModel",
+    },
+    Flag {
+        name: PROJECT_CRITERIA,
+        about: concat!(
+            "Judge every run against the project's checked-in ",
+            brand::dir!(),
+            "/verification.md when you set no criteria"
+        ),
     },
 ];
 

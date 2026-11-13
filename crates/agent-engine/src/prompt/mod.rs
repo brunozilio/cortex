@@ -1,3 +1,4 @@
+mod criteria_file;
 mod git;
 mod instruction_files;
 pub(crate) mod markdown;

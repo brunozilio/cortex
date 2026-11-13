@@ -13,9 +13,24 @@ pub struct Criteria {
 pub enum CriteriaSource {
     User,
     Plan,
+    Project,
 }
 
 impl Criteria {
+    pub fn project(text: impl Into<String>) -> Self {
+        Self { text: text.into(), source: CriteriaSource::Project }
+    }
+
+    pub fn judge_allow(
+        &self,
+        owner: &crate::permission_rules::PermissionRules,
+    ) -> crate::permission_rules::PermissionRules {
+        match self.source {
+            CriteriaSource::Project => owner.clone(),
+            CriteriaSource::User | CriteriaSource::Plan => judge_rules(&self.text, owner),
+        }
+    }
+
     pub fn user(text: impl Into<String>) -> Self {
         Self { text: text.into(), source: CriteriaSource::User }
     }

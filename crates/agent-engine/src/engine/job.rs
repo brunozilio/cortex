@@ -139,13 +139,22 @@ impl Job {
             }
         }
         tools.retain(|tool| tool.offered(workspace));
-        if let Some(criteria) =
-            self.request.verification.clone().filter(|_| self.request.permission != domain::PermissionMode::Plan)
+        let project_criteria = settings
+            .project_criteria
+            .clone()
+            .filter(|_| settings.features.on(domain::features::PROJECT_CRITERIA))
+            .map(domain::Criteria::project);
+        if let Some(criteria) = self
+            .request
+            .verification
+            .clone()
+            .or(project_criteria)
+            .filter(|_| self.request.permission != domain::PermissionMode::Plan)
         {
             let config = tools::subagent_config::AgentConfig { model: settings.judge.clone(), ..Default::default() };
             match config.model(&self.request.model.id, self.request.model.provider) {
                 Ok(model) => {
-                    let allow = domain::verification::judge_rules(&criteria.text, &settings.judge_allow);
+                    let allow = criteria.judge_allow(&settings.judge_allow);
                     workspace.verification = Some(tools::Verification { criteria, model, allow })
                 }
                 Err(error) => return self.fail(&format!("judgeModel: {error}"), FailureKind::Other),

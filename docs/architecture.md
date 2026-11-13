@@ -185,6 +185,15 @@ Inbox notices are core (`TakeNotices`).
   plus the run's priced calls reach the limit, so the run fails saying
   how to raise it; calls without a price count as nothing. The status
   line shows spent against the limit.
+- **Project criteria** (`project-criteria`): a project may check in
+  `.{command}/verification.md`; the nearest one above the folder (never
+  the owner's own) becomes `Settings::project_criteria`
+  (`prompt/criteria_file.rs`, 64 KiB at most), and a run outside Plan
+  mode with no criteria of its own is judged against it
+  (`CriteriaSource::Project`; the user's and the plan's win). Because
+  the file is not the owner's, the commands it names get no
+  pre-approval: the judge runs only what the owner's
+  `verification.allow` rules allow (`Criteria::judge_allow`).
 - **Escalation when stuck** (`experimental-escalation`; rule in
   `domain::stuck`): the loop counts, per run, the same call (tool and
   input) failing and calls `domain::repeats` holds back
