@@ -188,15 +188,16 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
             "  ctrl+r older · enter takes · esc leaves".dim(),
         ]);
         frame.render_widget(Paragraph::new(line).block(block), area);
+    } else if app.input.is_empty() && app.ask.is_some() {
+        let waiting = Line::from(vec![mark.dark_gray(), "Answer the question above first".dark_gray()]);
+        frame.render_widget(Paragraph::new(waiting).block(block), area);
     } else if app.input.is_empty() && app.ask.is_none() && app.overlays.secret.is_none() {
         let hint = match &app.ghost {
             _ if app.shell => "Run a shell command · its output goes with your next message · esc leaves".to_owned(),
             _ if app.busy() && !app.turn.queued.is_empty() => "↑ edits what is queued · esc interrupts".to_owned(),
             _ if app.busy() => "Type to message the agent as it works · esc interrupts".to_owned(),
             Some(ghost) => format!("{ghost}  (tab)"),
-            None if app.transcript.entries.iter().rev().take(2).any(|e| matches!(e, Entry::Error(_))) => {
-                "Say what to do next, or /retry".to_owned()
-            }
+            None if failed_last(app) => "Say what to do next, or /retry".to_owned(),
             None if app.transcript.entries.is_empty() => "Try \"explain this project\" · / for commands".to_owned(),
             None => "Reply to go on · / for commands".to_owned(),
         };
@@ -244,6 +245,9 @@ fn status(app: &App) -> Line<'static> {
         " · ".dim(),
         app.effort().cli_value().dim(),
     ]);
+    if !app.busy() && failed_last(app) {
+        spans.extend([" · ".dim(), "✗ last run failed".fg(Color::Red)]);
+    }
     for marker in super::features::status(app) {
         spans.push(" · ".dim());
         spans.push(marker.fg(Color::Green));
@@ -262,6 +266,10 @@ fn status(app: &App) -> Line<'static> {
         spans.push(format!(" · ${:.2}", app.transcript.cost).dim());
     }
     Line::from(spans)
+}
+
+fn failed_last(app: &App) -> bool {
+    app.transcript.entries.iter().rev().take(2).any(|entry| matches!(entry, Entry::Error(_)))
 }
 
 const HINT: &str = "shift+tab mode · /help ";

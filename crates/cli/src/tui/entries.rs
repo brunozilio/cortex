@@ -46,7 +46,7 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
         }
         Entry::Tool { name, summary, state, output, .. } => {
             let (mark, color) = match state {
-                ToolState::Running => ("○ ", Color::Reset),
+                ToolState::Running => ("○ ", Color::Cyan),
                 ToolState::Done => ("● ", Color::Green),
                 ToolState::Failed => ("● ", Color::Red),
             };
@@ -107,8 +107,14 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
         Entry::Error(text) => {
             out.push(Line::from(""));
             for (i, line) in wrap(text, width.saturating_sub(2)).into_iter().enumerate() {
-                let mark = if i == 0 { "✗ ".fg(Color::Red).bold() } else { "  ".into() };
-                out.push(Line::from(vec![mark, line.into()]));
+                let mut spans = vec![if i == 0 { "✗ ".fg(Color::Red).bold() } else { "  ".into() }];
+                match line.split_once(": ").filter(|(label, _)| i == 0 && label.len() <= 48) {
+                    Some((label, detail)) => {
+                        spans.extend([format!("{label}:").fg(Color::Red).bold(), format!(" {detail}").into()]);
+                    }
+                    None => spans.push(line.into()),
+                }
+                out.push(Line::from(spans));
             }
         }
     }

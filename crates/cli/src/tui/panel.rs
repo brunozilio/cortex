@@ -70,6 +70,7 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
 
 fn tasks(tasks: &[domain::events::TaskItem], width: usize, lines: &mut Vec<Line<'static>>) {
     let done = tasks.iter().filter(|task| task.status == "completed").count();
+    lines.push(Line::from(""));
     lines.push(Line::from(vec![
         " Tasks".bold(),
         format!("  {done} of {} done · ctrl+t hides", tasks.len()).dark_gray(),
@@ -91,7 +92,7 @@ fn asking(pending: &Pending, width: usize, lines: &mut Vec<Line<'static>>) {
         AskKind::Questions(questions) => questions.get(pending.question).map(|q| q.text.clone()).unwrap_or_default(),
     };
     for line in wrap(&title, width) {
-        lines.push(Line::from(line).bold().fg(Color::Yellow));
+        lines.push(Line::from(line).bold());
     }
     let picked = pending.picked.get(pending.question);
     let choices = pending.choices();
@@ -124,7 +125,7 @@ fn asking(pending: &Pending, width: usize, lines: &mut Vec<Line<'static>>) {
     }
     let hint = match &pending.ask.kind {
         _ if pending.note.is_some() => "Tell the agent what to do instead · Enter sends · esc just says no",
-        AskKind::Permission { .. } => "↑↓ Enter or the key · esc denies",
+        AskKind::Permission { .. } => "↑↓ select · enter confirms · esc denies",
         AskKind::Questions(_) => "number or ↑↓ Enter · space toggles a multiple choice · esc skips",
         AskKind::Plan { .. } => "number or ↑↓ Enter · esc keeps planning · type after to say what to change",
     };
