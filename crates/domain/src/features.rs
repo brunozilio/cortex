@@ -2,6 +2,10 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
+mod learnings;
+
+pub use learnings::{BLAST_RADIUS, CODE_MAP, LEARNING_CHECK, MEMORY_ANCHORS, MEMORY_SEED, STRUCTURED_LEARNINGS};
+
 pub const SANDBOX: &str = "experimental-sandbox";
 
 pub const REDACT_SECRETS: &str = "redact-secrets";
@@ -145,7 +149,11 @@ pub fn toggle(argument: Option<&str>) -> Result<Option<(String, bool)>, String> 
 }
 
 pub fn known(name: &str) -> Option<Flag> {
-    KNOWN.iter().copied().find(|flag| flag.name == name)
+    every().find(|flag| flag.name == name)
+}
+
+fn every() -> impl Iterator<Item = Flag> {
+    KNOWN.iter().chain(learnings::KNOWN).copied()
 }
 
 pub fn with_flag(mut settings: Value, name: &str, on: bool) -> Result<Value, String> {
@@ -167,8 +175,7 @@ impl Features {
     }
 
     pub fn listed(&self) -> Vec<Listed> {
-        KNOWN
-            .iter()
+        every()
             .map(|flag| Listed {
                 name: flag.name.to_owned(),
                 about: flag.about.to_owned(),

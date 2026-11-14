@@ -14,6 +14,7 @@ pub(crate) struct Tracking {
     pub(crate) refusals: Mutex<domain::interception::Refusals>,
     pub(crate) seen_files: Arc<SeenFiles>,
     pub(crate) seen_rules: Arc<Mutex<HashSet<PathBuf>>>,
+    pub(crate) seen_memories: Arc<Mutex<HashSet<domain::MemoryId>>>,
     pub(crate) shells: Mutex<Vec<String>>,
 }
 

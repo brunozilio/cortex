@@ -1,4 +1,5 @@
 pub mod answer;
+pub mod blast;
 pub mod diagnostics;
 pub mod install;
 pub mod operation;

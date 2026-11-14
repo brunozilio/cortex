@@ -38,6 +38,8 @@ fn listings_name_ids_kinds_and_sessions() {
         history: Vec::new(),
         uses: 0,
         last_used: 0,
+        touches: Vec::new(),
+        credit: None,
     };
     assert_eq!(answer(SearchAnswer::Found(vec![memory])), "[3] procedural: Run clippy (from \"Lint\")");
 }
@@ -61,7 +63,12 @@ fn remembered(texts: &[&str]) -> Memories {
     let by = Provenance { author: Author::User, now: 1, origin: None };
     let edits: Vec<MemoryEdit> = texts
         .iter()
-        .map(|text| MemoryEdit::Remember { kind: MemoryKind::Procedural, text: (*text).into(), tags: vec![] })
+        .map(|text| MemoryEdit::Remember {
+            kind: MemoryKind::Procedural,
+            text: (*text).into(),
+            tags: vec![],
+            touches: vec![],
+        })
         .collect();
     memories.edit(&Principal::LocalOwner, std::path::Path::new("/repo"), &edits, by).expect("edit");
     memories
@@ -92,6 +99,7 @@ fn a_run_searches_only_its_own_project_s_memory() {
         kind: MemoryKind::Procedural,
         text: "Run clippy before committing".into(),
         tags: vec![],
+        touches: vec![],
     };
     memories.edit(&owner, std::path::Path::new("/repo"), &[edit], by).expect("edit");
     let call = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": MEMORY_SEARCH_TOOL, "arguments": { "query": "clippy" } } });

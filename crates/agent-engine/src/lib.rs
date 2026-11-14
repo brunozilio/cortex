@@ -28,4 +28,5 @@ pub mod transcript;
 pub mod upkeep;
 
 pub use boundary::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};
+pub use engine::date::today;
 pub use engine::{ApiSource, NativeEngine};

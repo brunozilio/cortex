@@ -114,6 +114,10 @@ fn memory_commands_parse_from_their_argument() {
     assert_eq!(MemoryCommand::parse(Some("restore 12".into())), Some(MemoryCommand::Restore(MemoryId(12))));
     assert_eq!(MemoryCommand::parse(Some("share 7".into())), Some(MemoryCommand::Share(MemoryId(7))));
     assert_eq!(MemoryCommand::parse(Some("restore".into())), None, "restore needs an id");
+    assert_eq!(MemoryCommand::parse(Some("seed".into())), Some(MemoryCommand::Seed));
+    assert_eq!(MemoryCommand::parse(Some("seed keep 1 3".into())), Some(MemoryCommand::SeedKeep(vec![1, 3])));
+    assert_eq!(MemoryCommand::parse(Some("seed keep".into())), None, "keep needs numbers");
+    assert_eq!(MemoryCommand::parse(Some("seed keep one".into())), None);
     assert_eq!(
         MemoryCommand::parse(Some("undo the font".into())),
         Some(MemoryCommand::Search("undo the font".into())),

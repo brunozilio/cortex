@@ -56,6 +56,10 @@ pub struct Memory {
     pub uses: u32,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub last_used: i64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub touches: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credit: Option<String>,
 }
 
 fn is_zero<T: Default + PartialEq>(value: &T) -> bool {
@@ -80,11 +84,27 @@ pub struct Forgotten {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum MemoryEdit {
-    Remember { kind: MemoryKind, text: String, tags: Vec<String> },
-    Forget { id: MemoryId },
-    Revise { id: MemoryId, text: String },
-    Reclassify { id: MemoryId, kind: MemoryKind },
-    Restore { id: MemoryId },
+    Remember {
+        kind: MemoryKind,
+        text: String,
+        tags: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        touches: Vec<String>,
+    },
+    Forget {
+        id: MemoryId,
+    },
+    Revise {
+        id: MemoryId,
+        text: String,
+    },
+    Reclassify {
+        id: MemoryId,
+        kind: MemoryKind,
+    },
+    Restore {
+        id: MemoryId,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,9 +139,14 @@ impl MemoryBook {
         let mut touched = Vec::new();
         for edit in edits {
             match edit {
-                MemoryEdit::Remember { kind, text, tags } => {
+                MemoryEdit::Remember { kind, text, tags, touches } => {
                     let Some(text) = clean_text(text) else { continue };
-                    if self.memories.iter().any(|m| m.kind == *kind && same_text(&m.text, &text)) {
+                    let touches = anchors::clean(touches);
+                    if let Some(same) = self.memories.iter_mut().find(|m| m.kind == *kind && same_text(&m.text, &text))
+                    {
+                        if anchors::widen(&mut same.touches, &touches) {
+                            touched.push(same.id);
+                        }
                         continue;
                     }
                     let id = MemoryId(self.next.max(self.after_highest()));
@@ -137,6 +162,8 @@ impl MemoryBook {
                         history: Vec::new(),
                         uses: 0,
                         last_used: 0,
+                        touches,
+                        credit: None,
                     });
                     touched.push(id);
                 }
@@ -229,13 +256,17 @@ fn clean_tags(tags: &[String]) -> Vec<String> {
         .collect()
 }
 
+pub mod anchors;
 mod brief;
+pub mod check;
+pub mod decision;
 mod dedup;
 mod optimize;
 mod recall;
 mod sanitize;
 pub mod search;
 mod searches;
+pub mod seed;
 pub mod team;
 
 pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, parse_memory_edits};

@@ -49,6 +49,8 @@ pub struct PromptRequest {
     pub verification: Option<crate::verification::Criteria>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget: Option<crate::budget::Budget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_map: Option<String>,
     #[serde(skip)]
     pub credentials: crate::credentials::RunCredentials,
 }
@@ -81,12 +83,17 @@ impl PromptRequest {
             append_system: None,
             verification: None,
             budget: None,
+            code_map: None,
             credentials: Default::default(),
         }
     }
 
     pub fn compose(&self) -> String {
         let mut out = self.prompt.trim().to_owned();
+        if let Some(map) = self.code_map.as_deref().map(str::trim).filter(|map| !map.is_empty()) {
+            out.push_str("\n\n");
+            out.push_str(map);
+        }
         if let Some(memory) = self.memory.as_ref().and_then(|memory| memory.instructions(self.resume.is_none())) {
             out.push_str("\n\n");
             out.push_str(&memory);
@@ -103,6 +110,15 @@ mod tests {
     fn the_typed_prompt_is_trimmed() {
         let request = PromptRequest::plain("/tmp".into(), "  Fix the bug. ", ModelOption::new("m", "M"));
         assert_eq!(request.compose(), "Fix the bug.");
+    }
+
+    #[test]
+    fn the_code_map_follows_the_typed_prompt() {
+        let mut request = PromptRequest::plain("/tmp".into(), "Fix retry", ModelOption::new("m", "M"));
+        request.code_map = Some("<code-map>\n- src/a.rs: fn retry (L3)\n</code-map>\n".into());
+        assert_eq!(request.compose(), "Fix retry\n\n<code-map>\n- src/a.rs: fn retry (L3)\n</code-map>");
+        request.code_map = Some("  ".into());
+        assert_eq!(request.compose(), "Fix retry");
     }
 
     #[test]

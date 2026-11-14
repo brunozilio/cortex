@@ -86,12 +86,14 @@ fn native_backend_searches_memory_and_learns() {
         kind: MemoryKind::Semantic,
         text: "The release codename is PERSIMMON.".into(),
         tags: vec!["release".into()],
+        touches: vec![],
     };
     let mut edits = vec![fact];
     edits.extend((0..20).map(|n| MemoryEdit::Remember {
         kind: MemoryKind::Semantic,
         text: format!("Service s{n} listens on port {}.", 9000 + n),
         tags: vec![],
+        touches: vec![],
     }));
     let input = serde_json::json!({ "op": "edit", "path": dir.path(), "edits": edits });
     backend

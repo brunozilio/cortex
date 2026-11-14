@@ -149,8 +149,12 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
     let (backend, woke) = backend_with(engine.clone(), true);
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().to_path_buf();
-    let fact =
-        domain::MemoryEdit::Remember { kind: domain::MemoryKind::Semantic, text: "Uses wgpu".into(), tags: vec![] };
+    let fact = domain::MemoryEdit::Remember {
+        kind: domain::MemoryKind::Semantic,
+        text: "Uses wgpu".into(),
+        tags: vec![],
+        touches: vec![],
+    };
     send(&backend, memory(json!({ "op": "edit", "path": path, "edits": [fact] })));
     collect(&backend, &woke, answered);
 

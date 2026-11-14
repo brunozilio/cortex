@@ -8,7 +8,7 @@ pub fn feature() -> Feature {
     Feature {
         commands: vec![Slash {
             names: &["memory"],
-            about: "List the project's memory, /memory <search>|optimize|undo|forgotten|restore <id>|edit",
+            about: "List the project's memory, /memory <search>|optimize|undo|forgotten|restore <id>|edit|seed",
             run: memory,
         }],
         tick: None,
@@ -28,6 +28,12 @@ fn run(app: &mut App, command: MemoryCommand) {
     if command == MemoryCommand::Edit {
         app.edit_file = Some(instructions_file(&app.cwd));
         return;
+    }
+    let seeding = matches!(command, MemoryCommand::Seed | MemoryCommand::SeedKeep(_));
+    if seeding && !super::on(app, domain::features::MEMORY_SEED) {
+        return app
+            .transcript
+            .notice(format!("/memory seed is turned off ({}); /features turns it on.", domain::features::MEMORY_SEED));
     }
     let cwd = app.cwd.clone();
     let model = app.model().cloned();
@@ -54,6 +60,8 @@ fn run(app: &mut App, command: MemoryCommand) {
             MemoryCommand::Share(id) => memory
                 .share(id)
                 .map(|file| format!("Shared [{}] as {file}: commit it and the team's agents recall it too.", id.0)),
+            MemoryCommand::Seed => memory.seed().map(|offered| seed_listing(&offered)),
+            MemoryCommand::SeedKeep(picked) => memory.keep_seeds(&picked).map(|all| listing("Kept. Memory", &all)),
         };
         match answer {
             Ok(text) => Msg::Notice(text),
@@ -92,6 +100,18 @@ fn listing(title: &str, memories: &[Memory]) -> String {
     }
     let lines: Vec<String> = memories.iter().map(|m| format!("  [{}] {}", m.id.0, m.text)).collect();
     format!("{title}:\n{}", lines.join("\n"))
+}
+
+fn seed_listing(offered: &[sdk::SeedCandidate]) -> String {
+    if offered.is_empty() {
+        return "Nothing you asked for in two or more past sessions is left to remember.".to_owned();
+    }
+    let lines: Vec<String> = offered
+        .iter()
+        .enumerate()
+        .map(|(at, candidate)| format!("  {}. {} ({} sessions)", at + 1, candidate.text, candidate.sessions))
+        .collect();
+    format!("Said in two or more past sessions (/memory seed keep <n> [<n>…] remembers them):\n{}", lines.join("\n"))
 }
 
 fn forgotten_listing(forgotten: &[Forgotten]) -> String {
@@ -153,6 +173,18 @@ mod tests {
         command(&mut app, "/memory restore 0", "Restored [0] Uses wgpu");
         command(&mut app, "/memory optimize", "Memory optimized: 2 → 2 memories");
         assert!(engine.requests().iter().any(|r| r.prompt.contains("[1] semantic: Inter is the font")));
+    }
+
+    #[test]
+    fn with_no_past_sessions_there_is_nothing_to_seed_and_keeping_needs_an_offer() {
+        let data = tempfile::tempdir().expect("data");
+        let model = Model::new("keyed:scripted", "Scripted");
+        let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
+        let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+        until(&mut app, |app| app.session.is_some());
+
+        command(&mut app, "/memory seed", "Nothing you asked for in two or more past sessions");
+        command(&mut app, "/memory seed keep 1", "None of those numbers is offered");
     }
 
     #[test]

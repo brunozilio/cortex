@@ -5,7 +5,12 @@ pub(super) fn by_agent(now: i64) -> Provenance {
 }
 
 pub(super) fn remember(kind: MemoryKind, text: &str, tags: &[&str]) -> MemoryEdit {
-    MemoryEdit::Remember { kind, text: text.into(), tags: tags.iter().map(|t| (*t).to_owned()).collect() }
+    MemoryEdit::Remember {
+        kind,
+        text: text.into(),
+        tags: tags.iter().map(|t| (*t).to_owned()).collect(),
+        touches: Vec::new(),
+    }
 }
 
 pub(super) fn book() -> MemoryBook {
@@ -128,7 +133,7 @@ fn edit_files_parse_strictly() {
         vec![
             MemoryEdit::Revise { id: MemoryId(1), text: "New".into() },
             MemoryEdit::Forget { id: MemoryId(3) },
-            MemoryEdit::Remember { kind: MemoryKind::Semantic, text: "Uses wgpu".into(), tags: vec!["render".into()] },
+            remember(MemoryKind::Semantic, "Uses wgpu", &["render"]),
         ]
     );
     assert_eq!(parse_memory_edits("{}"), Some(vec![]));

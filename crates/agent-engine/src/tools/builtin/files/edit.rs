@@ -83,7 +83,9 @@ impl Tool for Edit {
                 let edited = domain::changes::Edited::replaced(path.clone(), before, old, new);
                 let tests = crate::tools::builtin::shell::affected::start(workspace, &path);
                 let others = workspace.claim(&path);
-                Outcome::ok(said + &workspace.diagnosed(&path, &changed) + &tests + &others)
+                let remembered = workspace.anchored(&path);
+                let callers = workspace.callers(&path, &text, &changed);
+                Outcome::ok(said + &workspace.diagnosed(&path, &changed) + &callers + &tests + &others + &remembered)
                     .showing(shown)
                     .editing(edited)
             }

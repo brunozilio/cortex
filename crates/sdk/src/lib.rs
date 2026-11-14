@@ -22,6 +22,7 @@ pub use self::run::{Run, RunControl};
 pub use self::session::{Headless, Session, Spending};
 use client::Client;
 pub use domain::mcp_config::{McpOrigin, McpServerInfo, McpState};
+pub use domain::memory::seed::Candidate as SeedCandidate;
 pub use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind, Revision};
 pub use domain::provider::{ModelProvider, ProviderSummary};
 pub use domain::schedule::{Scheduled, When};

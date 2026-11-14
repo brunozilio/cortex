@@ -12,6 +12,8 @@ fn memory(id: u32) -> Memory {
         history: Vec::new(),
         uses: 0,
         last_used: 0,
+        touches: Vec::new(),
+        credit: None,
     }
 }
 

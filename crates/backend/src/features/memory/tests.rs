@@ -23,7 +23,7 @@ fn request(cwd: &Path) -> PromptRequest {
 }
 
 fn remember(text: &str) -> MemoryEdit {
-    MemoryEdit::Remember { kind: MemoryKind::Semantic, text: text.into(), tags: vec!["render".into()] }
+    MemoryEdit::Remember { kind: MemoryKind::Semantic, text: text.into(), tags: vec!["render".into()], touches: vec![] }
 }
 
 fn by_user() -> Provenance {
@@ -133,7 +133,12 @@ fn what_an_agent_is_given_counts_as_used() {
     let dir = tempfile::tempdir().expect("tempdir");
     let memories = plain();
     let owner = Principal::LocalOwner;
-    let font = MemoryEdit::Remember { kind: MemoryKind::Semantic, text: "Inter is the font".into(), tags: vec![] };
+    let font = MemoryEdit::Remember {
+        kind: MemoryKind::Semantic,
+        text: "Inter is the font".into(),
+        tags: vec![],
+        touches: vec![],
+    };
     memories.edit(&owner, dir.path(), &[remember("The renderer uses wgpu"), font], by_user()).expect("edit");
     let uses = || listed(&memories.load(&owner, dir.path())).iter().map(|m| m.uses).collect::<Vec<_>>();
 

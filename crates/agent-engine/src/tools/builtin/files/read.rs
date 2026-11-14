@@ -49,74 +49,83 @@ impl Tool for Read {
             Ok(path) => workspace.resolve(path),
             Err(error) => return error,
         };
-        let offset = input.get("offset").and_then(Value::as_u64).unwrap_or(1).max(1) as usize;
-        let limit = input.get("limit").and_then(Value::as_u64).map_or(DEFAULT_LINES, |limit| limit as usize);
-        if path.is_dir() {
-            return Outcome::error(format!(
-                "{} is a directory; use Glob or Bash `ls` to list it.",
-                shown(&path, workspace)
-            ));
+        let mut outcome = read(&path, input, workspace);
+        if !outcome.is_error {
+            outcome.content.push_str(&workspace.anchored(&path));
         }
-        let bytes = match read_bytes(&path, &workspace.stop) {
-            Ok(bytes) => bytes,
-            Err(error) => return Outcome::error(format!("Could not read {}: {error}", shown(&path, workspace))),
-        };
-        match domain::Image::from_bytes(&bytes) {
-            Ok(Some(image)) => {
-                workspace.mark_read(&path);
-                return Outcome::image(image);
-            }
-            Err(error) => return Outcome::error(error),
-            Ok(None) => {}
-        }
-        if bytes.starts_with(b"%PDF") {
-            workspace.mark_read(&path);
-            return super::pdf::text(&path, field(input, "pages"), &workspace.stop)
-                .map_or_else(Outcome::error, Outcome::ok);
-        }
-        let Ok(text) = String::from_utf8(bytes) else {
-            return Outcome::error(format!("{} is not a text file.", shown(&path, workspace)));
-        };
-        if offset == 1 && text.lines().count() <= limit && text.len() <= MAX_CHARS {
-            workspace.mark_read(&path);
-        } else {
-            workspace.mark_partly_read(&path);
-        }
-        if path.extension().is_some_and(|ext| ext == "ipynb") {
-            return super::notebook::render(&text).map_or_else(Outcome::error, Outcome::ok);
-        }
-        if text.is_empty() {
-            return Outcome::ok("(the file is empty)");
-        }
-        if workspace.tracking.seen_files.seen_again(&path, offset, limit) {
-            return Outcome::ok(format!(
-                "{} is unchanged since you last read these lines in this conversation; that text is still current.",
-                shown(&path, workspace)
-            ));
-        }
-        let total = text.lines().count();
-        if offset > total {
-            return Outcome::error(format!("The file has {total} lines; offset {offset} is past its end."));
-        }
-        let mut out = String::new();
-        let mut last = (offset - 1 + limit).min(total);
-        for (number, line) in text.lines().enumerate().skip(offset - 1).take(limit) {
-            let line = match line.char_indices().nth(LINE_CHARS) {
-                Some((at, _)) => format!("{}… [line cut]", &line[..at]),
-                None => line.to_owned(),
-            };
-            let numbered = format!("{:>6}\t{line}\n", number + 1);
-            if out.len() + numbered.len() > MAX_CHARS && !out.is_empty() {
-                last = number;
-                break;
-            }
-            out.push_str(&numbered);
-        }
-        if last < total {
-            out.push_str(&format!("… [{} more lines; read on from offset {}]\n", total - last, last + 1));
-        }
-        Outcome::ok(out)
+        outcome
     }
+}
+
+fn read(file: &std::path::Path, input: &Value, workspace: &Workspace) -> Outcome {
+    let path = file.to_path_buf();
+    let offset = input.get("offset").and_then(Value::as_u64).unwrap_or(1).max(1) as usize;
+    let limit = input.get("limit").and_then(Value::as_u64).map_or(DEFAULT_LINES, |limit| limit as usize);
+    if path.is_dir() {
+        return Outcome::error(format!(
+            "{} is a directory; use Glob or Bash `ls` to list it.",
+            shown(&path, workspace)
+        ));
+    }
+    let bytes = match read_bytes(&path, &workspace.stop) {
+        Ok(bytes) => bytes,
+        Err(error) => return Outcome::error(format!("Could not read {}: {error}", shown(&path, workspace))),
+    };
+    match domain::Image::from_bytes(&bytes) {
+        Ok(Some(image)) => {
+            workspace.mark_read(&path);
+            return Outcome::image(image);
+        }
+        Err(error) => return Outcome::error(error),
+        Ok(None) => {}
+    }
+    if bytes.starts_with(b"%PDF") {
+        workspace.mark_read(&path);
+        return super::pdf::text(&path, field(input, "pages"), &workspace.stop)
+            .map_or_else(Outcome::error, Outcome::ok);
+    }
+    let Ok(text) = String::from_utf8(bytes) else {
+        return Outcome::error(format!("{} is not a text file.", shown(&path, workspace)));
+    };
+    if offset == 1 && text.lines().count() <= limit && text.len() <= MAX_CHARS {
+        workspace.mark_read(&path);
+    } else {
+        workspace.mark_partly_read(&path);
+    }
+    if path.extension().is_some_and(|ext| ext == "ipynb") {
+        return super::notebook::render(&text).map_or_else(Outcome::error, Outcome::ok);
+    }
+    if text.is_empty() {
+        return Outcome::ok("(the file is empty)");
+    }
+    if workspace.tracking.seen_files.seen_again(&path, offset, limit) {
+        return Outcome::ok(format!(
+            "{} is unchanged since you last read these lines in this conversation; that text is still current.",
+            shown(&path, workspace)
+        ));
+    }
+    let total = text.lines().count();
+    if offset > total {
+        return Outcome::error(format!("The file has {total} lines; offset {offset} is past its end."));
+    }
+    let mut out = String::new();
+    let mut last = (offset - 1 + limit).min(total);
+    for (number, line) in text.lines().enumerate().skip(offset - 1).take(limit) {
+        let line = match line.char_indices().nth(LINE_CHARS) {
+            Some((at, _)) => format!("{}… [line cut]", &line[..at]),
+            None => line.to_owned(),
+        };
+        let numbered = format!("{:>6}\t{line}\n", number + 1);
+        if out.len() + numbered.len() > MAX_CHARS && !out.is_empty() {
+            last = number;
+            break;
+        }
+        out.push_str(&numbered);
+    }
+    if last < total {
+        out.push_str(&format!("… [{} more lines; read on from offset {}]\n", total - last, last + 1));
+    }
+    Outcome::ok(out)
 }
 
 pub(crate) fn read_bytes(path: &std::path::Path, stop: &std::sync::atomic::AtomicBool) -> std::io::Result<Vec<u8>> {

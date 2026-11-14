@@ -1,6 +1,8 @@
+mod check;
 pub mod mcp;
 mod optimize;
 pub mod run;
+mod seed;
 mod store;
 mod team;
 
@@ -56,6 +58,12 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
             let id = MemoryId(input["id"].as_u64().and_then(|id| u32::try_from(id).ok()).ok_or("say which memory")?);
             let shared = memories.shared(owner, &path, id)?;
             Ok(json!({ "path": path, "file": shared }))
+        }
+        "check" => memories.check(owner, &path),
+        "seed" => memories.seed(context, &path),
+        "seed_keep" => {
+            let picked: Vec<usize> = serde_json::from_value(input["picked"].clone()).map_err(|e| e.to_string())?;
+            memories.keep_seeds(context, &path, &picked)
         }
         "optimize" => {
             let run: RunId = serde_json::from_value(input["run"].clone()).map_err(|e| e.to_string())?;
@@ -198,8 +206,10 @@ impl Memories {
             return self.brief_optimization(owner, run, request);
         }
         let budget = if tool { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
-        let shared = team::load(&request.cwd);
-        let (recalled, tool) = {
+        let features = team::features(&request.cwd);
+        let anchors = features.on(domain::features::MEMORY_ANCHORS);
+        let shared = team::load_if(&request.cwd, &features);
+        let (recalled, tool, anchored) = {
             let mut books = self.lock();
             let book = self.book(&mut books, owner, &request.cwd);
             let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
@@ -208,10 +218,25 @@ impl Memories {
                 recalled.iter().filter(|memory| !domain::memory::team::is_team(memory.id)).cloned().collect();
             self.mark_used(owner, &request.cwd, book, &personal);
             let tool = tool && book.holds_more_than(&recalled);
-            (recalled, tool)
+            let anchored: Vec<Memory> = if anchors {
+                let unseen: Vec<Memory> =
+                    known.into_iter().filter(|memory| !recalled.iter().any(|r| r.id == memory.id)).collect();
+                domain::memory::anchors::anchored(&unseen)
+            } else {
+                Vec::new()
+            };
+            (recalled, tool, anchored)
         };
-        let output = edits_file(run);
-        let brief = MemoryBrief { recalled, output, origin: brief.origin.clone(), tool, optimizing: false };
+        let brief = MemoryBrief {
+            recalled,
+            output: edits_file(run),
+            origin: brief.origin.clone(),
+            tool,
+            optimizing: false,
+            anchored,
+            anchors,
+            structured: features.on(domain::features::STRUCTURED_LEARNINGS),
+        };
         PromptRequest { memory: Some(brief), ..request.clone() }
     }
 
@@ -251,5 +276,7 @@ pub fn now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
+#[cfg(test)]
+mod anchors_tests;
 #[cfg(test)]
 mod tests;

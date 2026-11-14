@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use super::decision::Decision;
 use super::{Memory, MemoryEdit, MemoryId, MemoryKind};
 
 pub const MEMORY_SERVER: &str = concat!(brand::command!(), "_memory");
@@ -19,6 +20,12 @@ pub struct MemoryBrief {
     pub tool: bool,
     #[serde(default)]
     pub optimizing: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub anchored: Vec<Memory>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub anchors: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub structured: bool,
 }
 
 impl MemoryBrief {
@@ -41,7 +48,7 @@ impl MemoryBrief {
                 }
                 listing.push_str(&format!("\n{title}:"));
                 for memory in group {
-                    listing.push_str(&format!("\n- [{}] {}", memory.id.0, memory.text));
+                    listing.push_str(&format!("\n- {}", super::anchors::line(memory)));
                 }
             }
             out.push(listing);
@@ -68,6 +75,23 @@ impl MemoryBrief {
                  with the Write tool and do not mention it in your answer.",
                 path = self.output.display()
             ));
+            if self.anchors {
+                out.push(
+                    "A remember entry may add \"touches\": [\"<file or folder, relative to the project>\"]: the \
+                     files the memory is about. Later sessions are shown it when they read or edit them, so name \
+                     them whenever a memory is about specific code."
+                        .to_owned(),
+                );
+            }
+            if self.structured {
+                out.push(
+                    "To keep a decision, write a remember entry with \"decided\": \"<what was decided and why>\", \
+                     \"ruled_out\": [\"<what was tried or considered, and why it was dropped>\"] and \
+                     \"watch_out\": [\"<a trap to keep in mind>\"] in place of \"text\". What was ruled out is \
+                     what saves the next session from trying it again."
+                        .to_owned(),
+                );
+            }
         }
         (!out.is_empty()).then(|| out.join("\n\n"))
     }
@@ -100,6 +124,27 @@ struct RememberEntry {
     text: String,
     #[serde(default)]
     tags: Vec<String>,
+    #[serde(default)]
+    touches: Vec<String>,
+    #[serde(default)]
+    decided: String,
+    #[serde(default)]
+    ruled_out: Vec<String>,
+    #[serde(default)]
+    watch_out: Vec<String>,
+}
+
+impl RememberEntry {
+    fn edit(self) -> Option<MemoryEdit> {
+        let decision = Decision::new(&self.decided, &self.ruled_out, &self.watch_out);
+        let kind = match (MemoryKind::from_key(&self.kind), &decision) {
+            (Some(kind), _) => kind,
+            (None, Some(_)) => MemoryKind::Semantic,
+            (None, None) => return None,
+        };
+        let text = decision.map_or(self.text, |decision| decision.text());
+        (!text.trim().is_empty()).then_some(MemoryEdit::Remember { kind, text, tags: self.tags, touches: self.touches })
+    }
 }
 
 #[derive(Deserialize)]
@@ -117,10 +162,7 @@ pub fn parse_memory_edits(json: &str) -> Option<Vec<MemoryEdit>> {
         .filter(|r| !r.text.trim().is_empty())
         .map(|r| MemoryEdit::Revise { id: MemoryId(r.id), text: r.text });
     let forget = file.forget.into_iter().map(|id| MemoryEdit::Forget { id: MemoryId(id) });
-    let remember = file.remember.into_iter().filter_map(|r| {
-        let kind = MemoryKind::from_key(&r.kind)?;
-        (!r.text.trim().is_empty()).then_some(MemoryEdit::Remember { kind, text: r.text, tags: r.tags })
-    });
+    let remember = file.remember.into_iter().filter_map(RememberEntry::edit);
     let reclassify = file
         .reclassify
         .into_iter()

@@ -9,7 +9,7 @@ cli ──► sdk ──► backend ──► agent-engine ──► llm-provide
          │        │              │
          └────────┴──► protocol ─┴─────────────────────────────► domain
 
-leaf crates: brand (everyone), content (cli, agent-engine), language-servers (agent-engine),
+leaf crates: brand (everyone), code-map (backend), content (cli, agent-engine), language-servers (agent-engine),
              platform (cli, backend, agent-engine), script (agent-engine)
 ```
 
@@ -30,6 +30,7 @@ the CLI, and `cli` reaches `backend` and `agent-engine` only in tests.
 | `content` | Prompts, built-in skills, agents, styles and tool texts from `content/`, embedded at build time; a user's `~/.{command}/` copy overrides one. |
 | `script` | The QuickJS runtime that runs JavaScript tools, skills and declared providers against a `Host`. |
 | `brand` | The product's name and command, from `brand.toml` (below). |
+| `code-map` | Experimental tree-sitter index of a repository (Rust, TypeScript/TSX, JavaScript, Python, Go): its functions and types and who calls whom (`extract`), ranked against a prompt into a short `<code-map>` block of pointers (`map`, pure), refreshed incrementally from a JSON cache keyed by path, size and mtime (`scan`, IO behind `Source`). |
 
 ## Name
 
@@ -630,6 +631,49 @@ install` for typescript, on TypeScript 6 because 7 has no `tsserver`,
 and pyright; `go install` for gopls) and `lsp::Downloads` does it into
 `<local data>/lsp/<server>/`,
 staging in a sibling folder and renaming it into place; an install
+Context features (each `experimental-`, flags in `domain::features::learnings`;
+on until turned off, like every flag):
+- **Memories about files** (`experimental-memory-anchors`; rules in
+  `domain::memory::anchors`): a memory may name the files or folders it is
+  about (`Memory::touches`, project-relative, at most eight; a checked-in
+  file's `touches: [..]` front matter). The brief tells the agent it may
+  add `"touches"` to a `remember` entry and hands the run every anchored
+  memory its prompt did not recall (`MemoryBrief::anchored`). The engine
+  keeps them in `Workspace::anchored_memories`; `Read`, `Edit` and `Write`
+  append the memories about the file as `<memory>`, each once per run
+  (`Tracking::seen_memories`), with whose it is when the file says so.
+- **Decisions** (`experimental-structured-learnings`; rules in
+  `domain::memory::decision`): a `remember` entry may carry `decided`,
+  `ruled_out` and `watch_out` in place of `text`; it is kept as one line
+  (`Decided: … Ruled out: …; … Watch out: ….`). `/memory share` writes such
+  a memory as `## Decided`, `## Tried and ruled out` and `## Watch out`
+  sections, with `author` (`git config user.name`) and `date`, and reads
+  them back the same (`Memory::credit`).
+- **Checking a change** (`experimental-learning-check`; rules in
+  `domain::memory::check`): `/check` (CLI folder `learning_check`) asks
+  the memory feature for `check`: the backend finds the changes
+  (`features/memory/check.rs`: since the merge base with `origin/HEAD`,
+  `main` or `master`, or since `HEAD` on that branch, plus untracked
+  files), picks the memories about the changed files and those the
+  diff's words find, and returns a prompt the chat sends as the user's
+  own. The agent reads the diff, changes nothing, and lists each conflict
+  with the memory it goes against.
+- **Seeding from past sessions** (`experimental-memory-seed`; rules in
+  `domain::memory::seed`): `/memory seed` reads the prompts of the
+  project's recent sessions (`features/memory/seed.rs`, the same list
+  `/rules` reads) and offers, numbered, the sentences said in two or more
+  of them that no memory already holds; `/memory seed keep <n>…` keeps
+  them as the user's procedural memories, tagged `seeded`.
+- **Code map** (`experimental-code-map`; crate `code-map`, backend folder
+  `code_map`): inside a git repository (never the home folder) each
+  prompt refreshes the project's tree-sitter index, cached in the data
+  folder's `code-map/<project>.json` and re-parsed only for files whose
+  size or time changed, and `run.rs` puts the files and symbols that
+  match the prompt, with how many places call them, in
+  `PromptRequest::code_map`, which `compose` adds after the prompt as a
+  `<code-map>` block. Calls are matched by name, so common names gather
+  callers from unrelated types.
+
 another process finished meanwhile is kept as it is. The backend's
 engine turns it on (`LspPool::installing`); without it only PATH
 counts. Only the `LSP` tool starts an install and waits for it
@@ -670,6 +714,15 @@ whole (`agent_engine::plugins`): skills, commands and agents as
 `~/.{command}/plugins/`; a plugin whose
 hooks or servers do not parse is left out, the run goes on. Every run
 rereads them; `/reload` refreshes what the chat keeps and lists them.
+With `experimental-blast-radius` (`Workspace::blast_radius`; rules in
+`domain::lsp::blast`), `Edit` and `Write` also tell the agent who uses
+what it changed: the lines between the unchanged head and tail of the
+file, the innermost functions, methods, types and constants around them
+(`textDocument/documentSymbol`, at most three) and their references
+outside the file (`textDocument/references`, two seconds each), grouped
+by file in `<callers>`. Like diagnostics it never starts or waits for an
+install (`Lsp::callers`).
+
 
 ## The SDK and the CLI
 

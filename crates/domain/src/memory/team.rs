@@ -1,4 +1,5 @@
-use super::{Author, Memory, MemoryId, MemoryKind, sanitize};
+use super::decision::Decision;
+use super::{Author, Memory, MemoryId, MemoryKind, anchors, sanitize};
 
 pub const FIRST_ID: u32 = 1_000_000;
 const MOST_CHARS: usize = 2_000;
@@ -20,18 +21,29 @@ pub fn parse(at: usize, name: &str, text: &str) -> Option<Memory> {
         Some("episodic") => MemoryKind::Episodic,
         _ => MemoryKind::Semantic,
     };
-    let tags = field("tags")
-        .map(|tags| {
-            tags.trim()
-                .trim_matches(['[', ']'])
-                .split(',')
-                .map(|tag| tag.trim().to_owned())
-                .filter(|tag| !tag.is_empty())
-                .collect()
-        })
-        .unwrap_or_default();
-    let text: String = sanitize(body.trim()).into_inner().chars().take(MOST_CHARS).collect();
+    let list = |key: &str| -> Vec<String> {
+        field(key)
+            .map(|items| {
+                items
+                    .trim()
+                    .trim_matches(['[', ']'])
+                    .split(',')
+                    .map(|item| item.trim().to_owned())
+                    .filter(|item| !item.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let body = Decision::from_markdown(body).map_or_else(|| body.trim().to_owned(), |decision| decision.text());
+    let text: String = sanitize(&body).into_inner().chars().take(MOST_CHARS).collect();
     let id = MemoryId(FIRST_ID + u32::try_from(at).ok()?);
+    let said = |key: &str| field(key).map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let credit = match (said("author"), said("date")) {
+        (Some(author), Some(date)) => Some(format!("{author}, {date}")),
+        (author, date) => author.or(date),
+    };
+    let tags = list("tags");
+    let touches = anchors::clean(&list("touches"));
     (!text.is_empty()).then(|| Memory {
         id,
         kind,
@@ -43,10 +55,19 @@ pub fn parse(at: usize, name: &str, text: &str) -> Option<Memory> {
         history: Vec::new(),
         uses: 0,
         last_used: 0,
+        touches,
+        credit,
     })
 }
 
-pub fn file(memory: &Memory) -> (String, String) {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Sharer {
+    pub author: Option<String>,
+    pub date: Option<String>,
+    pub structured: bool,
+}
+
+pub fn file(memory: &Memory, by: &Sharer) -> (String, String) {
     let words: Vec<String> = memory
         .text
         .split(|c: char| !c.is_ascii_alphanumeric())
@@ -60,8 +81,20 @@ pub fn file(memory: &Memory) -> (String, String) {
         MemoryKind::Procedural => "procedural",
         MemoryKind::Episodic => "episodic",
     };
-    let text = format!("---\nkind: {kind}\ntags: [{}]\n---\n{}\n", memory.tags.join(", "), memory.text);
-    (name, text)
+    let mut front = format!("kind: {kind}\ntags: [{}]\n", memory.tags.join(", "));
+    if !memory.touches.is_empty() {
+        front.push_str(&format!("touches: [{}]\n", memory.touches.join(", ")));
+    }
+    for (key, value) in [("author", &by.author), ("date", &by.date)] {
+        if let Some(value) = value.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+            front.push_str(&format!("{key}: {value}\n"));
+        }
+    }
+    let body = match Decision::parse(&memory.text).filter(|_| by.structured) {
+        Some(decision) => decision.markdown(),
+        None => format!("{}\n", memory.text),
+    };
+    (name, format!("---\n{front}---\n{body}"))
 }
 
 #[cfg(test)]
@@ -95,10 +128,31 @@ mod tests {
         let original =
             parse(0, "x.md", "---\nkind: procedural\ntags: [ci]\n---\nRun the linter before pushing.").expect("memory");
 
-        let (name, text) = file(&original);
+        let (name, text) = file(&original, &Sharer::default());
         let back = parse(0, &name, &text).expect("back");
 
         assert_eq!(name, "1000000-run-the-linter-before-pushing.md");
         assert_eq!((back.kind, back.tags, back.text), (original.kind, original.tags, original.text));
+        assert_eq!(back.credit, None);
+    }
+
+    #[test]
+    fn a_shared_decision_keeps_its_files_author_and_sections() {
+        let mut decision = parse(0, "x.md", "Decided: Keep retries at 4. Ruled out: 10, one call could block an hour.")
+            .expect("memory");
+        decision.touches = vec!["client.go".into()];
+        let by = Sharer { author: Some("Maya".into()), date: Some("2026-10-09".into()), structured: true };
+
+        let (_, text) = file(&decision, &by);
+        let back = parse(0, "x.md", &text).expect("back");
+
+        assert!(text.contains("touches: [client.go]\nauthor: Maya\ndate: 2026-10-09\n---\n## Decided\n"), "{text}");
+        assert!(text.contains("## Tried and ruled out\n- 10, one call could block an hour\n"), "{text}");
+        assert_eq!(back.text, "Decided: Keep retries at 4. Ruled out: 10, one call could block an hour.");
+        assert_eq!(back.touches, ["client.go"]);
+        assert_eq!(back.credit.as_deref(), Some("Maya, 2026-10-09"));
+
+        let (_, plain) = file(&decision, &Sharer::default());
+        assert!(plain.ends_with("---\nDecided: Keep retries at 4. Ruled out: 10, one call could block an hour.\n"));
     }
 }

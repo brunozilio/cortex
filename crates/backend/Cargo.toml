@@ -13,6 +13,7 @@ protocol.workspace = true
 llm-providers.workspace = true
 crossbeam-channel.workspace = true
 agent-engine.workspace = true
+code-map.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

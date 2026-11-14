@@ -1,3 +1,5 @@
+mod anchors;
+mod blast;
 mod claims;
 mod confined;
 mod models;
@@ -37,6 +39,8 @@ pub struct Workspace {
     pub session_id: String,
     pub auto_memory: bool,
     pub rules: Vec<crate::prompt::rules::Rule>,
+    pub anchored_memories: Vec<domain::Memory>,
+    pub blast_radius: bool,
     pub verification: Option<Verification>,
     pub worktree: Option<crate::agent_runtime::WorktreeState>,
     pub policy: Policy,
@@ -60,6 +64,8 @@ impl Workspace {
             session_id: uuid::Uuid::new_v4().to_string(),
             auto_memory: true,
             rules: Vec::new(),
+            anchored_memories: Vec::new(),
+            blast_radius: false,
             verification: None,
             worktree: None,
             policy: Policy::default(),
@@ -100,6 +106,8 @@ impl Workspace {
             session_id: self.session_id.clone(),
             auto_memory: self.auto_memory,
             rules: self.rules.clone(),
+            anchored_memories: self.anchored_memories.clone(),
+            blast_radius: self.blast_radius,
             verification: None,
             worktree: None,
             policy: self.policy.fork(),

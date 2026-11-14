@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod callers_tests;
 mod client;
 mod download;
 #[cfg(any(test, feature = "test-support"))]
@@ -12,8 +14,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use domain::lsp::answer::RequestError;
 use domain::lsp::ServerSpec;
+use domain::lsp::answer::RequestError;
 use serde_json::Value;
 
 pub use client::LspClient;
@@ -91,7 +93,28 @@ impl Lsp {
         let shown = file.strip_prefix(cwd).unwrap_or(file).display().to_string();
         domain::lsp::diagnostics::report(&shown, &found)
     }
+
+    pub fn callers(&self, file: &Path, text: &str, lines: (u32, u32), cwd: &Path, stop: &AtomicBool) -> Option<String> {
+        use domain::lsp::blast;
+        domain::lsp::server_for(file, &self.specs)?;
+        let opened = self.servers.open(file, &self.specs, cwd, stop, Wait::Never).ok()?;
+        opened.server.sync(file, &opened.language, text).ok()?;
+        let uri = domain::lsp::uri::uri_of(file);
+        let (method, params) = blast::symbols_request(&uri);
+        let symbols = opened.server.request(method, params, stop, CALLERS_WAIT).ok()?;
+        let answers: Vec<(blast::Changed, Value)> = blast::changed_symbols(&symbols, lines)
+            .into_iter()
+            .filter_map(|symbol| {
+                let (method, params) = blast::references_request(&uri, &symbol);
+                let found = opened.server.request(method, params, stop, CALLERS_WAIT).ok()?;
+                Some((symbol, found))
+            })
+            .collect();
+        blast::report(file, cwd, &answers)
+    }
 }
+
+pub const CALLERS_WAIT: Duration = Duration::from_secs(2);
 
 pub trait LanguageServers: Send + Sync + std::fmt::Debug {
     fn open(

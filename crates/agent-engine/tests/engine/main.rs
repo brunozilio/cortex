@@ -1,6 +1,7 @@
 #![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
 
 mod agents;
+mod anchors;
 mod brand_only;
 mod checkpoints;
 mod headless;

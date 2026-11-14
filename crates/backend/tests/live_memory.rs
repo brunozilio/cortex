@@ -15,11 +15,13 @@ fn seed(backend: &LocalBackend, project: &Path) {
         kind: MemoryKind::Semantic,
         text: "The release codename of this project is PERSIMMON.".into(),
         tags: vec!["release".into()],
+        touches: vec![],
     }];
     edits.extend((0..30).map(|n| MemoryEdit::Remember {
         kind: MemoryKind::Semantic,
         text: format!("Module m{n} keeps its helpers in m{n}/util."),
         tags: vec![],
+        touches: vec![],
     }));
     let input = serde_json::json!({ "op": "edit", "path": project, "edits": edits });
     backend.send(Envelope::local(ClientCommand::Feature { feature: "memory".into(), input })).expect("seed");

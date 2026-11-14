@@ -19,6 +19,8 @@ pub enum MemoryCommand {
     Restore(MemoryId),
     Share(MemoryId),
     Edit,
+    Seed,
+    SeedKeep(Vec<usize>),
 }
 
 impl MemoryCommand {
@@ -35,6 +37,12 @@ impl MemoryCommand {
             ("restore", [id]) => id.parse().ok().map(|id| Self::Restore(MemoryId(id))),
             ("share", [id]) => id.parse().ok().map(|id| Self::Share(MemoryId(id))),
             ("restore", []) => None,
+            ("seed", []) => Some(Self::Seed),
+            ("seed", ["keep", picked @ ..]) => {
+                let picked: Option<Vec<usize>> = picked.iter().map(|n| n.parse().ok()).collect();
+                picked.filter(|picked| !picked.is_empty()).map(Self::SeedKeep)
+            }
+            ("seed", _) => None,
             _ => Some(Self::Search(text)),
         }
     }

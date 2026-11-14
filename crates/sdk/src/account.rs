@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use domain::memory::seed::Candidate;
 use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind};
 use domain::provider::{ModelProvider, ProviderSummary};
 use domain::{CustomAgent, ModelOption, Skill};
@@ -103,7 +104,21 @@ impl ProjectMemory<'_> {
 
     pub fn remember(&self, kind: MemoryKind, text: &str, tags: &[&str]) -> Result<Vec<Memory>, Error> {
         let tags = tags.iter().map(|tag| (*tag).to_owned()).collect();
-        self.edit(vec![MemoryEdit::Remember { kind, text: text.to_owned(), tags }])
+        self.edit(vec![MemoryEdit::Remember { kind, text: text.to_owned(), tags, touches: Vec::new() }])
+    }
+
+    pub fn check(&self) -> Result<Option<String>, Error> {
+        let answer = self.ask(json!({ "op": "check" }), "prompt")?;
+        Ok(answer["prompt"].as_str().map(str::to_owned))
+    }
+
+    pub fn seed(&self) -> Result<Vec<Candidate>, Error> {
+        let answer = self.ask(json!({ "op": "seed" }), "candidates")?;
+        parse(&answer["candidates"])
+    }
+
+    pub fn keep_seeds(&self, picked: &[usize]) -> Result<Vec<Memory>, Error> {
+        self.answer(json!({ "op": "seed_keep", "picked": picked })).map(|(memories, _)| memories)
     }
 
     pub fn forget(&self, id: MemoryId) -> Result<Vec<Memory>, Error> {

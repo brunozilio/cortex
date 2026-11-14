@@ -170,6 +170,14 @@ impl Job {
         workspace.agent_name = selected.as_ref().map_or("main", |a| a.name.as_str()).into();
         workspace.session_id = session.0.clone();
         workspace.hooks = settings.hooks.clone();
+        workspace.anchored_memories = self
+            .request
+            .memory
+            .as_ref()
+            .filter(|brief| brief.anchors && settings.features.on(domain::features::MEMORY_ANCHORS))
+            .map(|brief| brief.anchored.clone())
+            .unwrap_or_default();
+        workspace.blast_radius = settings.features.on(domain::features::BLAST_RADIUS);
         workspace.policy.permissions = settings.permissions.clone();
         for (kind, rules) in [
             (domain::permission_rules::RuleKind::Allow, &self.request.allowed_tools),
