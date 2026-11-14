@@ -15,10 +15,18 @@ pub(crate) enum Waited {
 pub(crate) fn wait(id: &str, timeout: Duration, stop: &AtomicBool, detach: &AtomicBool) -> Waited {
     let started = Instant::now();
     detach.store(false, Ordering::SeqCst);
+    let mut seen = 0;
     loop {
         let exited = {
             let mut shells = lock();
             let Some(shell) = shells.get_mut(id) else { return Waited::Stopped(String::new()) };
+            let output = shell.output.locked();
+            if output.len() != seen {
+                seen = output.len();
+                let tail = &output[output.len().saturating_sub(4096)..];
+                crate::tools::progress::report(&String::from_utf8_lossy(tail));
+            }
+            drop(output);
             if refresh(shell).is_some() {
                 let status = shell.tree.child().try_wait().ok().flatten();
                 Some((status, shells.remove(id)))

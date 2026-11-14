@@ -36,6 +36,7 @@ impl App {
                 }
             }
             EngineEvent::ModeChanged(mode) => self.set_mode(*mode),
+            EngineEvent::Failure(kind) => self.turn.transient = *kind == domain::FailureKind::Unavailable,
             _ => {}
         }
         self.transcript.apply(&event);
@@ -54,6 +55,7 @@ impl App {
             } else if matches!(event, EngineEvent::Failed(_)) && self.turn.queued.is_empty() {
                 self.turn.retrying = false;
                 self.transcript.notice("/retry sends it again from where it started.");
+                super::auto_retry::failed(self);
             } else if !self.turn.queued.is_empty() {
                 let next = self.turn.queued.remove(0);
                 self.send(next);
@@ -113,6 +115,7 @@ impl App {
             Ok(run) => {
                 self.turn.run = Some(run.control());
                 self.turn.started = Some(Stopwatch::start(Instant::now()));
+                self.turn.transient = false;
                 self.transcript.begin();
                 self.scroll = 0;
                 let tx = self.tx.clone();

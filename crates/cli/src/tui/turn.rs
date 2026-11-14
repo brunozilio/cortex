@@ -9,6 +9,9 @@ pub struct Turn {
     pub started: Option<Stopwatch>,
     pub queued: Vec<String>,
     pub(super) retrying: bool,
+    pub(super) transient: bool,
+    pub(super) auto_retried: bool,
+    pub auto_retry: Option<std::time::Instant>,
     pub(super) rewound: Option<domain::Rewound>,
     pub checkpoints: Vec<Checkpoint>,
 }

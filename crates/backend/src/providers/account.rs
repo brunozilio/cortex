@@ -100,6 +100,9 @@ impl Answer for Pending {
     fn finish(self: Box<Self>, result: Result<(), String>) {
         Pending::finish(*self, result.as_ref().map(|_| ()));
     }
+    fn signed_in(self: Box<Self>, account: Option<String>) {
+        Pending::signed_in(*self, account.as_deref());
+    }
 }
 
 pub(crate) struct AccountStore {

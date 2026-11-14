@@ -10,6 +10,7 @@ mod outside;
 pub mod peers;
 pub mod persisted;
 pub mod plan_mode;
+pub mod progress;
 pub mod read_files;
 mod rule_target;
 pub(crate) mod script_bridge;

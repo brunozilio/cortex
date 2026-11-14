@@ -1,6 +1,7 @@
 mod app;
 mod ask;
 mod attach;
+mod auto_retry;
 mod catalog;
 mod choices;
 mod chores;
@@ -62,6 +63,8 @@ mod shots;
 mod shots_html;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_auto_retry;
 #[cfg(test)]
 mod tests_dirs;
 #[cfg(test)]
@@ -174,6 +177,7 @@ pub fn run(
             }
             notices::poll(&mut app);
             features::tick(&mut app);
+            auto_retry::tick(&mut app);
             statusline::refresh(&mut app);
             inline::flush(&mut terminal, &mut app)?;
             terminal.draw(|frame| view::draw(frame, &app))?;

@@ -205,6 +205,7 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
         }
         KeyCode::BackTab => app.set_mode(app.mode().next()),
         KeyCode::Esc if app.busy() => app.cancel(),
+        KeyCode::Esc if app.input.is_empty() && super::auto_retry::cancel(app) => {}
         KeyCode::Esc if app.input.is_empty() && app.clear_armed.is_some_and(|at| at.elapsed().as_secs() < 1) => {
             app.clear_armed = None;
             app.open_rewind();

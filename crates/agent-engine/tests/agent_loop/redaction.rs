@@ -57,3 +57,28 @@ fn without_the_flag_output_is_left_as_it_is() {
 
     assert!(serde_json::to_string(&history).expect("history").contains(TOKEN));
 }
+
+#[test]
+fn a_command_s_lines_show_while_it_runs_and_keep_secrets_out() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    std::fs::write(rig.dir.path().join(".env"), format!("DATABASE_URL={DATABASE}\n")).expect("env");
+    rig.workspace.policy.redact = Some(Arc::new(agent_engine::tools::env_secrets(rig.dir.path())));
+    let command = format!("echo compiling one; sleep 0.5; echo url {DATABASE}; sleep 0.5; echo finished");
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("b", "Bash", json!({ "command": command }))]),
+        ScriptedModel::reply(vec![Block::Text("Done".into())]),
+    ]);
+    let mut history = vec![Message::user("build")];
+    rig.run(&model, &mut history).expect("run");
+
+    let lines: Vec<String> = rig
+        .events()
+        .into_iter()
+        .filter_map(|event| match event {
+            EngineEvent::ToolProgress { id, line } if id == "b" => Some(line),
+            _ => None,
+        })
+        .collect();
+    assert!(lines.iter().any(|line| line == "compiling one"), "{lines:?}");
+    assert!(lines.iter().all(|line| !line.contains(DATABASE)), "{lines:?}");
+}

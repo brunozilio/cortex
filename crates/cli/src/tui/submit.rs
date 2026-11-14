@@ -8,6 +8,7 @@ impl App {
         if typed.is_empty() {
             return;
         }
+        super::auto_retry::fresh_prompt(self);
         let text = if std::mem::take(&mut self.shell) { format!("!{typed}") } else { typed };
         self.input.set(&text);
         self.input.take();

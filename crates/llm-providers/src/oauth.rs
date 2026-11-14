@@ -123,15 +123,53 @@ pub fn browser(provider: &dyn Provider, host: &dyn Host, flow: &Browser<'_>) -> 
     let state = host.random(flow.state_bytes)?;
     host.open((flow.authorize)(&challenge(&verifier), &state, &redirect), None);
     let answer = listener.next(&state, &[])?;
-    let code = answer.code();
-    answer.finish(code.as_ref().map(|_| ()).map_err(ToString::to_string));
-    let (status, body) = post(host, &(flow.exchange)(&code?, &state, &verifier, &redirect))?;
-    provider.tokens(status, &body, None, host.now())
+    let exchanged = answer.code().and_then(|code| {
+        let (status, body) = post(host, &(flow.exchange)(&code, &state, &verifier, &redirect))?;
+        let tokens = provider.tokens(status, &body, None, host.now())?;
+        Ok((tokens, account_label(&body)))
+    });
+    match exchanged {
+        Ok((tokens, account)) => {
+            answer.signed_in(account);
+            Ok(tokens)
+        }
+        Err(error) => {
+            answer.finish(Err(error.to_string()));
+            Err(error)
+        }
+    }
+}
+
+pub fn account_label(body: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(body).ok()?;
+    let claims = value["id_token"].as_str().and_then(jwt_claims).unwrap_or(Value::Null);
+    [&value["account"]["email_address"], &value["account"]["email"], &value["email"], &claims["email"]]
+        .into_iter()
+        .find_map(|found| found.as_str().map(str::trim).filter(|text| text.contains('@') && text.len() <= 254))
+        .map(str::to_owned)
+}
+
+fn jwt_claims(jwt: &str) -> Option<Value> {
+    let payload = jwt.split('.').nth(1)?;
+    let data = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    serde_json::from_slice(&data).ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_signed_in_account_is_read_from_the_token_answer_when_it_names_one() {
+        let claims = URL_SAFE_NO_PAD.encode(r#"{"email":"dev@example.com"}"#);
+        let id_token = format!(r#"{{"access_token":"a","id_token":"h.{claims}.s"}}"#);
+        assert_eq!(account_label(&id_token).as_deref(), Some("dev@example.com"));
+        let nested = r#"{"access_token":"a","account":{"email_address":"me@example.org"}}"#;
+        assert_eq!(account_label(nested).as_deref(), Some("me@example.org"));
+        assert_eq!(account_label(r#"{"access_token":"a","account_id":"acct_123"}"#), None);
+        assert_eq!(account_label(r#"{"email":"not an address"}"#), None);
+        assert_eq!(account_label("not json"), None);
+    }
 
     #[test]
     fn the_challenge_matches_the_rfc_example() {

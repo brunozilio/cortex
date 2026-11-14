@@ -125,15 +125,23 @@ impl Pending {
         }
     }
 
-    pub fn finish(mut self, result: Result<(), &String>) {
-        let Some(request) = self.request.take() else { return };
-        let body = match result {
-            Ok(()) => {
-                screen(true, "Signed in", concat!("Return to ", brand::name!(), " in your terminal to keep working."))
-            }
-            Err(error) => screen(false, "Sign-in failed", error),
-        };
-        let _ = request.respond(page(body, 200));
+    pub fn finish(self, result: Result<(), &String>) {
+        match result {
+            Ok(()) => self.signed_in(None),
+            Err(error) => self.respond(screen(false, "Sign-in failed", error)),
+        }
+    }
+
+    pub fn signed_in(self, account: Option<&str>) {
+        let back = concat!("Return to ", brand::name!(), " in your terminal to keep working.");
+        let message = account.map_or_else(|| back.to_owned(), |account| format!("As {account}. {back}"));
+        self.respond(screen(true, "Signed in", &message));
+    }
+
+    fn respond(mut self, body: String) {
+        if let Some(request) = self.request.take() {
+            let _ = request.respond(page(body, 200));
+        }
     }
 }
 
@@ -188,6 +196,21 @@ mod tests {
         assert!(!failed.contains("{{"), "{failed}");
         assert!(screen(true, "Signed in", "ok").contains("class=\"ok\""));
         assert!(!TEMPLATE.contains("http"), "the page loads nothing from the network");
+    }
+
+    #[test]
+    fn the_page_names_the_account_that_signed_in() {
+        let loopback = Loopback::bind().expect("bind");
+        let uri = format!("{}?code=c&state=s", loopback.redirect_uri());
+        let hit = std::thread::spawn(move || {
+            let client = reqwest::blocking::Client::builder().no_proxy().build().expect("client");
+            client.get(uri).send().and_then(reqwest::blocking::Response::text).expect("page")
+        });
+        let pending = loopback.next_within("s", &[], Duration::from_secs(5)).expect("callback");
+        pending.signed_in(Some("dev@example.com"));
+        let page = hit.join().expect("join");
+        assert!(page.contains("As dev@example.com. Return to"), "{page}");
+        assert!(page.contains("class=\"ok\""));
     }
 
     #[test]

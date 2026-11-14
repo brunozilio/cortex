@@ -125,6 +125,11 @@ impl Transcript {
                     }
                 }
             }
+            EngineEvent::ToolProgress { id, line } => {
+                if let Some(Entry::Tool { state: ToolState::Running, output, .. }) = self.tool(id) {
+                    *output = Some(line.clone());
+                }
+            }
             EngineEvent::ToolFinished { id } => {
                 if let Some(Entry::Tool { state, .. }) = self.tool(id)
                     && *state == ToolState::Running

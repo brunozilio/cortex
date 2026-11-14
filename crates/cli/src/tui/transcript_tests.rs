@@ -143,6 +143,23 @@ fn a_model_switch_names_the_new_model_without_guessing_why() {
 }
 
 #[test]
+fn a_running_tool_shows_its_latest_line_until_its_result_comes() {
+    let mut transcript = Transcript::default();
+    transcript.apply(&EngineEvent::ToolStarted(ToolCall::new("t", "Bash", "cargo build")));
+    transcript.apply(&EngineEvent::ToolProgress { id: "t".into(), line: "Compiling serde".into() });
+    let output = |transcript: &Transcript| match transcript.entries.last() {
+        Some(Entry::Tool { output, .. }) => output.clone(),
+        _ => None,
+    };
+    assert_eq!(output(&transcript).as_deref(), Some("Compiling serde"));
+    transcript.apply(&EngineEvent::ToolResult { id: "t".into(), output: "Finished".into(), failed: false });
+    assert_eq!(output(&transcript).as_deref(), Some("Finished"));
+    transcript.apply(&EngineEvent::ToolFinished { id: "t".into() });
+    transcript.apply(&EngineEvent::ToolProgress { id: "t".into(), line: "late".into() });
+    assert_eq!(output(&transcript).as_deref(), Some("Finished"), "a line after the result changes nothing");
+}
+
+#[test]
 fn a_finished_run_says_how_long_it_took_and_what_it_cost() {
     let mut transcript = Transcript::default();
     transcript.apply(&EngineEvent::Completed { duration_ms: 72_400, cost_usd: Some(0.42) });

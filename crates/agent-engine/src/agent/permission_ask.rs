@@ -35,7 +35,7 @@ impl Agent<'_> {
             (self.emit)(EngineEvent::Answered { ask, decision: decision.clone() });
         }
         match answer {
-            Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => self.went_ahead(tool, input),
+            Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => self.went_ahead(id, tool, input),
             Ok(Decision::AllowAlways) => {
                 match rule {
                     Some(rule) => {
@@ -46,7 +46,7 @@ impl Agent<'_> {
                     }
                     None => self.control.remember(|remembered| remembered.remember(&name, access, subject)),
                 }
-                self.went_ahead(tool, input)
+                self.went_ahead(id, tool, input)
             }
             Ok(Decision::Deny) => self.refused(
                 &name,

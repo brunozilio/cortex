@@ -23,7 +23,7 @@ the CLI, and `cli` reaches `backend` and `agent-engine` only in tests.
 | `domain` | Domain model: requests, engine events, ids, `Principal`, memory rules, usage and cost. Pure. |
 | `agent-engine` | The `AgentEngine` boundary (`models`, `start`) and the app's own engine behind it: agent loop, tools, permissions, hooks, sub-agents, background tasks, MCP client, sessions, compaction, side calls, safety check; skill and agent discovery in Claude Code's layout; provider APIs behind `ModelApi`. Feature `test-support`: a scripted engine, model, HTTP and sessions for tests. |
 | `protocol` | Serialisable `ClientCommand` / `ServerEvent` in an `Envelope` carrying the `Principal`; the `Backend` trait. |
-| `backend` | `LocalBackend` (worker threads), `CommandHandler`: runs, memory (+ its MCP tool), settings, model providers (and their browser sign-in: PKCE, loopback redirect), secrets, the host's `Extensions`. |
+| `backend` | `LocalBackend` (worker threads), `CommandHandler`: runs, memory (+ its MCP tool), settings, model providers (and their browser sign-in: PKCE, loopback redirect whose page answers after the token exchange and names the account when the answer carries an email), secrets, the host's `Extensions`. |
 | `llm-providers` | Model providers, one folder each under `src/providers/<name>/`, found by `build.rs` into a registry. Shared pieces: `Config`, OAuth (`oauth::browser`), request effort, catalog paging, the sign-in `Host`. No network of its own. |
 | `language-servers` | Language servers: `LspClient` (one process), `LspPool` (kept per name and root), first-use installs; downloads through a `Fetch` the engine gives it (`agent_engine::NetFetch`). Re-exported as `agent_engine::lsp`. |
 | `platform` | What differs per operating system: child processes started the same everywhere (`command`), `Tree` ending a process with its children, `bounded` waits, `private_file` (files only the current user can read), the data folders. |
@@ -510,7 +510,15 @@ Inbox notices are core (`TakeNotices`).
   untracked files (ignored ones too for `git clean -x`/`-X`), in the
   run's file history before the command starts, up to 5,000 files and
   200 MB; the result says how many were left out. The chat's `/rewind` picks a prompt;
-  `/retry` rewinds to the last one and sends it again.
+  `/retry` rewinds to the last one and sends it again. When a run fails
+  because the provider stayed unavailable (`FailureKind::Unavailable`,
+  after the model's own retries), the chat counts down 30 s and retries
+  once by itself (`tui/auto_retry.rs`); Esc or a new prompt cancels it.
+- **Live output**: a tool that executes (Bash) runs inside
+  `tools::progress::watched`; the shell's wait loop reports the last line
+  of output and the agent emits it, redacted, as
+  `EngineEvent::ToolProgress`, which the chat shows under the running tool
+  until its result replaces it.
   `SessionCommand::Branch(n)` (`branches`; `Session::branch`, the chat's
   `/branch [n]`) instead starts a new session holding the conversation
   before prompt `n` and the checkpoints before it (`checkpoints::branch`,

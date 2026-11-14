@@ -87,6 +87,7 @@ fn scenes() -> Vec<Scene> {
     working.extend(tool("t1", "Read", "src/main.rs"));
     working.extend(tool("t3", "Grep", "\"bind(\" in src"));
     working.push(EngineEvent::ToolStarted(ToolCall::new("t4", "Bash", "cargo test -p server")));
+    working.push(EngineEvent::ToolProgress { id: "t4".into(), line: "Compiling server v0.4.0 (crates/server)".into() });
     let mut answered = vec![started()];
     answered.extend(tool("t1", "Read", "src/main.rs"));
     answered.push(EngineEvent::ToolStarted(ToolCall::new("t2", "Edit", "src/main.rs")));
@@ -99,7 +100,8 @@ fn scenes() -> Vec<Scene> {
     answered.push(EngineEvent::Completed { duration_ms: 48_000, cost_usd: Some(0.42) });
     let mut failed = vec![started()];
     failed.extend(tool("t1", "Read", "src/main.rs"));
-    failed.push(EngineEvent::Failed("The provider refused the request: rate limit reached, retry in 30s".into()));
+    failed.push(EngineEvent::Failure(domain::FailureKind::Unavailable));
+    failed.push(EngineEvent::Failed("rate limited: the provider is overloaded".into()));
     vec![
         Scene { name: "S01-welcome", events: Vec::new(), prompt: None, typed: None, settle: |_| true },
         Scene {

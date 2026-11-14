@@ -102,7 +102,7 @@ impl Agent<'_> {
             Some((domain::permission_rules::RuleKind::Allow, _))
         );
         if pre_approved && !rule_asks && !matches!(verdict, Verdict::Deny(_)) && hook_permission != Some("ask") {
-            return self.went_ahead(tool, input);
+            return self.went_ahead(id, tool, input);
         }
         let permission_hook = if matches!(verdict, Verdict::Ask) {
             match self.workspace.hooks.run_with_model(
@@ -139,11 +139,11 @@ impl Agent<'_> {
                     safety.check(self.api, &self.request, &instructions, &name, input, self.control.stop_flag())
                 });
                 match checked {
-                    Ok(()) => self.went_ahead(tool, input),
+                    Ok(()) => self.went_ahead(id, tool, input),
                     Err(reason) => self.refused(&name, reason),
                 }
             }
-            Verdict::Allow => self.went_ahead(tool, input),
+            Verdict::Allow => self.went_ahead(id, tool, input),
             Verdict::Deny(reason) => self.refused(&name, reason),
             Verdict::Ask if self.control.no_prompts() => {
                 self.refused(&name, format!("{name} requires permission; dontAsk denies unapproved actions."))
@@ -163,9 +163,16 @@ impl Agent<'_> {
         (!found.is_empty()).then(|| found.join("; "))
     }
 
-    pub(super) fn went_ahead(&self, tool: &dyn Tool, input: &Value) -> Outcome {
+    pub(super) fn went_ahead(&self, id: &str, tool: &dyn Tool, input: &Value) -> Outcome {
         self.workspace.tracking.count_refusal(false);
-        tool.run(input, self.workspace)
+        if tool.access() != crate::tools::Access::Executes {
+            return tool.run(input, self.workspace);
+        }
+        let show = |line: String| {
+            let line = self.workspace.policy.redacted(&line);
+            (self.emit)(EngineEvent::ToolProgress { id: id.to_owned(), line });
+        };
+        crate::tools::progress::watched(&show, || tool.run(input, self.workspace))
     }
 
     pub(super) fn refused(&self, tool: &str, reason: impl Into<String>) -> Outcome {

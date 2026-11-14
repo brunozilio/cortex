@@ -50,6 +50,10 @@ pub enum EngineEvent {
         id: String,
         text: String,
     },
+    ToolProgress {
+        id: String,
+        line: String,
+    },
     ToolFinished {
         id: String,
     },

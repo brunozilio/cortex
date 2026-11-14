@@ -102,6 +102,10 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
         working = Some(lines.len()..lines.len() + 1);
         lines.push(entries::working(started, &app.transcript, width));
     }
+    if let Some(at) = app.turn.auto_retry {
+        lines.push(Line::from(""));
+        lines.push(super::auto_retry::line(at, std::time::Instant::now()));
+    }
     for queued in &app.turn.queued {
         let text = wrap(queued, width.saturating_sub(4)).into_iter().next().unwrap_or_default();
         lines.push(Line::from(format!("  › {text}  (queued)")).dim());

@@ -25,6 +25,9 @@ pub trait Answer {
     fn code(&self) -> Result<String, ProviderError>;
     fn redirect(self: Box<Self>, to: &str);
     fn finish(self: Box<Self>, result: Result<(), String>);
+    fn signed_in(self: Box<Self>, _account: Option<String>) {
+        self.finish(Ok(()));
+    }
 }
 
 pub fn post(host: &dyn Host, request: &TokenRequest) -> Result<(u16, String), ProviderError> {
