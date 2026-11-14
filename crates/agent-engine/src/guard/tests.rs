@@ -75,6 +75,7 @@ fn a_routine_action_passes_and_a_harmful_one_is_held_back() {
     let harsh = says("<severity>91</severity><category>Irreversible Local Destruction</category>");
     let held = safety().check(&harsh, &template(), "", "Bash", &input, &no).expect_err("held back");
     assert!(held.contains("Irreversible Local Destruction"));
+    assert!(held.contains("tell the user"), "a hold the user never hears of cannot be approved: {held}");
 }
 
 #[test]

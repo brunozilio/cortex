@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 pub use self::report::{
     CheckKind, Checks, Day, DayModel, Finding, Insights, ModelStat, Report, SessionRuns, TimeShare, ToolStat, Totals,
 };
-use super::runs::{JUDGE, REVIEW, Run, Span, SpanKind};
+use super::runs::{JUDGE, REVIEW, Run, Span, SpanKind, dollars};
 
 pub const DAY_MS: u64 = 86_400_000;
 pub const WINDOW_DAYS: u64 = 30;
@@ -39,7 +39,7 @@ pub fn insights(runs: &[&Run], now_ms: u64) -> Insights {
         checks: checks(&runs),
         totals: Totals {
             runs: runs.len() as u64,
-            cost_usd: runs.iter().map(|run| run.cost_usd).sum(),
+            cost_usd: dollars(runs.iter().map(|run| run.cost_usd)),
             tokens: runs.iter().map(|run| run.tokens).sum(),
             waiting_ms: runs.iter().map(|run| run.waiting_ms).sum(),
             p95_run_ms: percentile(runs.iter().map(|run| run.duration_ms).collect(), 0.95),
@@ -65,7 +65,7 @@ fn days(runs: &[&Run], now_ms: u64) -> Vec<Day> {
                     let calls = || on.iter().flat_map(|run| run.calls()).filter(|(_, usage)| &usage.model == model);
                     DayModel {
                         model: model.clone(),
-                        cost_usd: calls().map(|(_, usage)| usage.cost_usd).sum(),
+                        cost_usd: dollars(calls().map(|(_, usage)| usage.cost_usd)),
                         tokens: calls().map(|(_, usage)| usage.prompt() + usage.output).sum(),
                         runs: on.iter().filter(|run| &run.model == model).count() as u64,
                     }
@@ -89,7 +89,7 @@ fn models(runs: &[&Run]) -> Vec<ModelStat> {
             p50_ms: percentile(calls.iter().map(|(span, ..)| span.duration()).collect(), 0.5),
             p95_ms: percentile(calls.iter().map(|(span, ..)| span.duration()).collect(), 0.95),
             cache_ratio: ratio(calls.iter().map(|c| c.1).sum(), calls.iter().map(|c| c.2).sum()),
-            cost_usd: calls.iter().map(|c| c.3).sum(),
+            cost_usd: dollars(calls.iter().map(|c| c.3)),
         })
         .collect();
     stats.sort_by(|a, b| b.cost_usd.total_cmp(&a.cost_usd));

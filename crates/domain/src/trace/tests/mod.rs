@@ -144,6 +144,54 @@ fn a_sub_agent_opens_its_own_lane_under_the_tool_that_started_it_and_can_nest() 
     assert_eq!(kinds(&deeper.lane), vec!["prompt", "tool Read"]);
 }
 
+fn review_run(start: u64, prompt: &str, read: &str) -> Vec<Record> {
+    let spawned = EngineEvent::AgentSpawned {
+        index: 0,
+        kind: "review".into(),
+        summary: "Reviewing the changes".into(),
+        prompt: prompt.into(),
+    };
+    vec![
+        Record::Prompted { at_ms: start, prompt: prompt.into() },
+        at(start + 1, usage(1)),
+        at(start + 2, spawned),
+        Record::Called {
+            at_ms: start + 3,
+            agent: Some(0),
+            call: ModelCall { model: "m".into(), ..ModelCall::default() },
+        },
+        at(start + 4, inside(0, tool(read, "Read"))),
+        at(start + 5, inside(0, result(read, "body", false))),
+        at(start + 6, EngineEvent::AgentUpdate { index: 0, status: AgentStatus::Done { seconds: 1 }, summary: None }),
+        at(start + 7, EngineEvent::Completed { duration_ms: 7, cost_usd: None }),
+    ]
+}
+
+#[test]
+fn each_run_keeps_its_own_sub_agent_although_every_run_numbers_its_agents_from_zero() {
+    let records = [review_run(100, "first", "a"), review_run(200, "second", "b")].concat();
+    let trace = build(records);
+
+    let agents: Vec<&Agent> = trace
+        .lane
+        .steps
+        .iter()
+        .flat_map(|step| &step.nodes)
+        .filter_map(|node| match &node.kind {
+            Kind::Agent(agent) => Some(agent.as_ref()),
+            _ => None,
+        })
+        .collect();
+    let seen: Vec<(&str, Vec<&Node>)> =
+        agents.iter().map(|agent| (agent.prompt.as_str(), tools(&agent.lane))).collect();
+    assert_eq!(seen.len(), 2, "one agent per run: {seen:?}");
+    assert_eq!(seen[0].0, "first");
+    assert_eq!(seen[1].0, "second");
+    let read_ids = |nodes: &[&Node]| nodes.iter().map(|node| node.at_ms).collect::<Vec<_>>();
+    assert_eq!(read_ids(&seen[0].1), vec![104]);
+    assert_eq!(read_ids(&seen[1].1), vec![204]);
+}
+
 #[test]
 fn compaction_rewind_and_interruptions_stay_in_the_timeline() {
     let compaction = Compaction { before: 900, after: 40, summary: "they debugged a lambda".into() };

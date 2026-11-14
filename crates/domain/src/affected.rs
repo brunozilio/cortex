@@ -7,6 +7,15 @@ pub struct TestRun {
     pub env: Vec<(String, String)>,
 }
 
+impl TestRun {
+    pub fn label(&self, project: &Path) -> String {
+        match self.folder.strip_prefix(project) {
+            Ok(inner) if !inner.as_os_str().is_empty() => format!("{} in {}", self.command, inner.display()),
+            _ => self.command.clone(),
+        }
+    }
+}
+
 pub fn tests_for(
     path: &Path,
     project: &Path,
@@ -145,5 +154,17 @@ mod tests {
     fn a_go_file_tests_its_package() {
         let run = planned(&tree(&[]), "/repo/pkg/store/db.go").expect("planned");
         assert_eq!((run.command.as_str(), run.folder), ("go test .", PathBuf::from("/repo/pkg/store")));
+    }
+
+    #[test]
+    fn the_label_names_the_folder_so_two_packages_running_the_same_command_stay_apart() {
+        let project = Path::new("/repo");
+        let store = planned(&tree(&[]), "/repo/pkg/store/db.go").expect("store");
+        let api = planned(&tree(&[]), "/repo/pkg/api/server.go").expect("api");
+        let root = planned(&tree(&[]), "/repo/main.go").expect("root");
+
+        assert_eq!(store.label(project), "go test . in pkg/store");
+        assert_eq!(api.label(project), "go test . in pkg/api");
+        assert_eq!(root.label(project), "go test .", "the project folder needs no name");
     }
 }

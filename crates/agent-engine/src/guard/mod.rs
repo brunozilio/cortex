@@ -63,7 +63,8 @@ impl Safety {
             Some((severity, _)) if severity <= BOUNDARY => Ok(()),
             Some((_, category)) => Err(format!(
                 "{brand_name}'s safety check held this action back{}. Ask the user to approve it explicitly, or \
-                 reach the goal another way.",
+                 reach the goal another way. Either way, tell the user in your answer what was held back and \
+                 why, and what you did instead, so they can approve it if it is what they need.",
                 category.map(|c| format!(" ({c})")).unwrap_or_default(),
                 brand_name = brand::NAME
             )),

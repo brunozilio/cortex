@@ -77,6 +77,17 @@ fn only_the_last_thirty_days_count_and_each_day_splits_by_model() {
 }
 
 #[test]
+fn a_day_without_calls_costs_a_plain_zero_never_a_negative_one() {
+    let today = run(100, 0, vec![call(2, "sonnet", 1_000, 0, 0.0)]);
+    let found = insights(&[&today], NOW);
+    let quiet = &found.days[0].models[0];
+    assert_eq!(quiet.cost_usd, 0.0);
+    assert!(quiet.cost_usd.is_sign_positive(), "{:?}", quiet.cost_usd);
+    assert!(found.totals.cost_usd.is_sign_positive());
+    assert!(insights(&[], NOW).totals.cost_usd.is_sign_positive());
+}
+
+#[test]
 fn tools_count_failures_and_the_permission_waits_under_them() {
     let mut wait = span(4, 2, SpanKind::Wait, "permission · Bash", 100, 600);
     wait.output = "allowed once".into();

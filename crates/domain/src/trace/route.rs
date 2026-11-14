@@ -27,28 +27,67 @@ pub(super) struct Spawn {
 struct Routed {
     main: Vec<(u64, Item)>,
     agents: HashMap<usize, Spawn>,
+    live: HashMap<usize, Lineage>,
+    next: usize,
     totals: Totals,
+}
+
+#[derive(Clone, Copy)]
+struct Lineage {
+    key: usize,
+    spawned: bool,
 }
 
 impl Routed {
     fn push(&mut self, owner: Option<usize>, at_ms: u64, item: Item) {
         match owner {
             None => self.main.push((at_ms, item)),
-            Some(index) => self.agents.entry(index).or_default().items.push((at_ms, item)),
+            Some(key) => self.agents.entry(key).or_default().items.push((at_ms, item)),
         }
+    }
+
+    fn fresh(&mut self, spawned: bool) -> Lineage {
+        let lineage = Lineage { key: self.next, spawned };
+        self.next += 1;
+        lineage
+    }
+
+    fn key(&mut self, index: usize) -> usize {
+        match self.live.get(&index) {
+            Some(lineage) => lineage.key,
+            None => {
+                let lineage = self.fresh(false);
+                self.live.insert(index, lineage);
+                lineage.key
+            }
+        }
+    }
+
+    fn spawn_key(&mut self, index: usize) -> usize {
+        let lineage = match self.live.get(&index) {
+            Some(lineage) if !lineage.spawned => Lineage { spawned: true, ..*lineage },
+            _ => self.fresh(true),
+        };
+        self.live.insert(index, lineage);
+        lineage.key
     }
 
     fn route(&mut self, owner: Option<usize>, at_ms: u64, event: EngineEvent) {
         match event {
-            EngineEvent::AgentEvent { index, event } => self.route(Some(index), at_ms, *event),
+            EngineEvent::AgentEvent { index, event } => {
+                let key = self.key(index);
+                self.route(Some(key), at_ms, *event)
+            }
             EngineEvent::AgentSpawned { index, kind, summary, prompt } => {
-                let spawn = self.agents.entry(index).or_default();
+                let key = self.spawn_key(index);
+                let spawn = self.agents.entry(key).or_default();
                 spawn.items.insert(0, (at_ms, Item::Prompt(prompt.clone())));
                 (spawn.kind, spawn.summary, spawn.prompt) = (kind, summary, prompt);
-                self.push(owner, at_ms, Item::Spawned(index));
+                self.push(owner, at_ms, Item::Spawned(key));
             }
             EngineEvent::AgentUpdate { index, status, .. } => {
-                self.agents.entry(index).or_default().status = Some(status)
+                let key = self.key(index);
+                self.agents.entry(key).or_default().status = Some(status)
             }
             EngineEvent::Usage(usage) => {
                 self.totals.add(&usage);
@@ -70,7 +109,10 @@ pub fn build(records: Vec<Record>) -> Trace {
         match record {
             Record::Prompted { at_ms, prompt } => routed.push(None, at(at_ms, &mut last), Item::Prompt(prompt)),
             Record::Event { at_ms, event } => routed.route(None, at(at_ms, &mut last), event),
-            Record::Called { at_ms, agent, call } => routed.push(agent, at(at_ms, &mut last), Item::Called(call)),
+            Record::Called { at_ms, agent, call } => {
+                let owner = agent.map(|index| routed.key(index));
+                routed.push(owner, at(at_ms, &mut last), Item::Called(call))
+            }
             Record::Opened { at_ms, run } => routed.push(None, at(at_ms, &mut last), Item::Opened(run)),
             Record::Truncated { keep } => routed.push(None, last.unwrap_or_default(), Item::Truncated(keep)),
             Record::Partial => routed.push(None, last.unwrap_or_default(), Item::Partial),

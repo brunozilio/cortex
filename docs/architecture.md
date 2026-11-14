@@ -206,9 +206,12 @@ Inbox notices are core (`TakeNotices`).
 - **Affected tests** (`experimental-affected-tests`; rule in
   `domain::affected`): after an `Edit` or `Write` inside the project,
   `shell/affected.rs` starts the tests that cover the file as a
-  background command (confined like `Bash`), unless the same command is
-  still running, and the result says so in `<tests>`; the command's end
-  reaches the agent through the inbox. A Rust file runs `cargo test -p`
+  background command (confined like `Bash`) named by `TestRun::label`
+  (the command and its folder, so `go test .` in two packages stays two
+  runs), and the result says so in `<tests>`. A run of the same label
+  still going is stopped first: it was started before this change, so
+  its result would be stale. The command's end reaches the agent through
+  the inbox. A Rust file runs `cargo test -p`
   of its crate with `CARGO_TARGET_DIR` at `target/agent-tests`, so it
   never waits on the user's own build; Go tests its package; Python and
   JavaScript run the test file beside the source (`test_<name>.py`,
@@ -805,7 +808,10 @@ partial), builds a tree with `domain::trace::build` (prompts with their
 run's setup, model turns with what the model received, tools called side by
 side with their permission asks and how long each waited for an answer,
 the notes a tool collected (repeated, refused, edited), sub-agents' lanes
-under the tool that started them, background ones too, compactions,
+under the tool that started them, background ones too (each run numbers
+its sub-agents from zero, so `trace::route` gives every `AgentSpawned` a
+key of its own and sends that index's later events and calls to it),
+compactions,
 rewinds, fallbacks, verdicts, review findings, errors). `trace::runs` then
 cuts that tree into one run per prompt, each a flat list of spans timed
 from the run's start (`run`, `llm`, `tool`, `agent`, `wait`, `eval`,

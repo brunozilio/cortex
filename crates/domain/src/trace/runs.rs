@@ -121,6 +121,10 @@ impl Run {
     }
 }
 
+pub fn dollars(costs: impl Iterator<Item = f64>) -> f64 {
+    costs.fold(0.0, |total, cost| total + cost)
+}
+
 pub fn runs(session: &str, trace: &Trace) -> Vec<Run> {
     let nodes: Vec<&Node> = trace.lane.steps.iter().flat_map(|step| &step.nodes).collect();
     let starts: Vec<usize> =
@@ -191,7 +195,7 @@ fn summarize(
         spans,
     };
     let calls: Vec<Usage> = run.calls().map(|(_, usage)| usage.clone()).collect();
-    run.cost_usd = cost.unwrap_or_else(|| calls.iter().map(|usage| usage.cost_usd).sum());
+    run.cost_usd = cost.unwrap_or_else(|| dollars(calls.iter().map(|usage| usage.cost_usd))) + 0.0;
     run.input = calls.iter().map(Usage::prompt).sum();
     run.cache_read = calls.iter().map(|usage| usage.cache_read).sum();
     run.tokens = run.input + calls.iter().map(|usage| usage.output).sum::<u64>();
