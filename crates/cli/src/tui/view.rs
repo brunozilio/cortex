@@ -48,10 +48,15 @@ pub fn draw(frame: &mut Frame, app: &App) {
         } else {
             Color::Cyan
         };
-        let block = Block::bordered()
+        let mut block = Block::bordered()
             .border_type(BorderType::Rounded)
             .border_style(Style::new().fg(color))
             .padding(ratatui::widgets::Padding::horizontal(1));
+        if let (Some(_), Some(started)) = (&app.ask, app.turn.started) {
+            let waited = started.elapsed(std::time::Instant::now()).as_secs();
+            block =
+                block.title_top(Line::from(format!(" the agent waits for your answer · {waited}s ")).right_aligned());
+        }
         frame.render_widget(Paragraph::new(panel).block(block), panel_area);
     } else {
         frame.render_widget(Paragraph::new(panel), panel_area);
@@ -90,10 +95,12 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
     }
     let added = added.map(|first| first..lines.len());
     let mut working = None;
-    if let Some(started) = app.turn.started {
+    if let Some(started) = app.turn.started
+        && app.ask.is_none()
+    {
         lines.push(Line::from(""));
         working = Some(lines.len()..lines.len() + 1);
-        lines.push(entries::working(started, &app.transcript, app.ask.is_some(), width));
+        lines.push(entries::working(started, &app.transcript, width));
     }
     for queued in &app.turn.queued {
         let text = wrap(queued, width.saturating_sub(4)).into_iter().next().unwrap_or_default();
@@ -141,7 +148,7 @@ pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
             format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim(),
         ]),
     ];
-    if app.transcript.entries.is_empty() && app.inline.is_none() {
+    if app.transcript.entries.is_empty() && app.inline.is_none() && app.input.is_empty() {
         lines.push(Line::from(""));
         for (key, what) in START {
             lines.push(Line::from(vec![format!("   {key:<11}").cyan(), what.dark_gray()]));
@@ -188,7 +195,7 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
             _ if app.busy() => "Type to message the agent as it works · esc interrupts".to_owned(),
             Some(ghost) => format!("{ghost}  (tab)"),
             None if app.transcript.entries.iter().rev().take(2).any(|e| matches!(e, Entry::Error(_))) => {
-                "/retry sends it again · or type what to do next".to_owned()
+                "Say what to do next, or /retry".to_owned()
             }
             None if app.transcript.entries.is_empty() => "Try \"explain this project\" · / for commands".to_owned(),
             None => "Reply to go on · / for commands".to_owned(),

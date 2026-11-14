@@ -62,6 +62,14 @@ impl Theme {
         self.pick((0xff, 0x8a, 0x8a, 210), (0xcf, 0x22, 0x2e, 160))
     }
 
+    pub fn selection_bg(self) -> Color {
+        self.pick((0x26, 0x2b, 0x36, 236), (0xe4, 0xe9, 0xf2, 254))
+    }
+
+    pub fn banded(self) -> bool {
+        self.truecolor || self.light()
+    }
+
     pub fn code_theme(self) -> &'static str {
         if self.light() { "InspiredGitHub" } else { "base16-ocean.dark" }
     }

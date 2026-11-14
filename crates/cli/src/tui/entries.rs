@@ -46,7 +46,7 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
         }
         Entry::Tool { name, summary, state, output, .. } => {
             let (mark, color) = match state {
-                ToolState::Running => ("● ", Color::Yellow),
+                ToolState::Running => ("○ ", Color::Reset),
                 ToolState::Done => ("● ", Color::Green),
                 ToolState::Failed => ("● ", Color::Red),
             };
@@ -102,26 +102,32 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
         Entry::Plan { plan, outcome } => super::plan::lines(plan, *outcome, width, out),
         Entry::Notice(text) | Entry::Passing(text) => {
             out.push(Line::from(""));
-            out.extend(wrap(text, width).into_iter().map(|line| Line::styled(line, dim)));
+            out.extend(wrap(text, width).into_iter().map(|line| notice(line, dim)));
         }
         Entry::Error(text) => {
             out.push(Line::from(""));
             for (i, line) in wrap(text, width.saturating_sub(2)).into_iter().enumerate() {
                 let mark = if i == 0 { "✗ ".fg(Color::Red).bold() } else { "  ".into() };
-                out.push(Line::from(vec![mark, line.fg(Color::Red)]));
+                out.push(Line::from(vec![mark, line.into()]));
             }
         }
     }
 }
 
-pub fn working(started: Stopwatch, transcript: &Transcript, waiting: bool, width: usize) -> Line<'static> {
-    let elapsed = started.elapsed(Instant::now());
-    if waiting {
-        return Line::from(vec![
-            "◆ Waiting for your answer".fg(Color::Yellow),
-            format!(" ({}s · the agent is paused)", elapsed.as_secs()).dim(),
-        ]);
+fn notice(line: String, dim: Style) -> Line<'static> {
+    if let Some(rest) = line.strip_prefix("✓ ") {
+        return Line::from(vec!["✓ ".green(), Span::styled(rest.to_owned(), dim)]);
     }
+    match line.split_once(' ') {
+        Some((command, rest)) if command.len() > 1 && command.starts_with('/') && !command[1..].contains('/') => {
+            Line::from(vec![command.to_owned().cyan(), Span::styled(format!(" {rest}"), dim)])
+        }
+        _ => Line::styled(line, dim),
+    }
+}
+
+pub fn working(started: Stopwatch, transcript: &Transcript, width: usize) -> Line<'static> {
+    let elapsed = started.elapsed(Instant::now());
     let tick = usize::try_from(elapsed.as_millis() / 120).unwrap_or(0);
     let shown_above = matches!(
         transcript.entries.last(),
@@ -156,5 +162,15 @@ mod tests {
     #[test]
     fn token_counts_read_short() {
         assert_eq!([tokens(950), tokens(1_234), tokens(34_567)], ["950", "1.2k", "34k"]);
+    }
+
+    #[test]
+    fn a_notice_that_opens_with_a_command_shows_the_command_apart() {
+        let dim = Style::new().fg(Color::DarkGray);
+        let line = notice("/retry sends it again".into(), dim);
+        assert_eq!(line.spans[0].content, "/retry");
+        assert_eq!(line.spans[0].style.fg, Some(Color::Cyan));
+        assert_eq!(notice("/usr/bin is a path".into(), dim).spans.len(), 1, "a path is not a command");
+        assert_eq!(notice("plain words".into(), dim).spans.len(), 1);
     }
 }

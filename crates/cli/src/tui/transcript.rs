@@ -46,6 +46,17 @@ fn user_text(entry: &Entry) -> Option<String> {
     }
 }
 
+pub const DONE: &str = "✓ Done in ";
+
+pub fn done(duration_ms: u64, cost: Option<f64>) -> String {
+    let seconds = duration_ms.div_ceil(1000);
+    let took = if seconds < 60 { format!("{seconds}s") } else { format!("{}m {:02}s", seconds / 60, seconds % 60) };
+    match cost.filter(|cost| *cost > 0.0) {
+        Some(cost) => format!("{DONE}{took} · ${cost:.2}"),
+        None => format!("{DONE}{took}"),
+    }
+}
+
 pub fn call(name: &str, summary: &str) -> String {
     if summary.is_empty() { name.to_owned() } else { format!("{name}({summary})") }
 }
@@ -160,9 +171,10 @@ impl Transcript {
                 self.close_thinking();
                 self.push(Entry::User(text.clone()));
             }
-            EngineEvent::Completed { cost_usd, .. } => {
+            EngineEvent::Completed { duration_ms, cost_usd } => {
                 self.cost += cost_usd.unwrap_or(0.0);
                 self.settle(ToolState::Done);
+                self.notice(done(*duration_ms, *cost_usd));
             }
             EngineEvent::Failed(message) => {
                 self.settle(ToolState::Failed);

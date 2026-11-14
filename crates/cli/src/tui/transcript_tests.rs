@@ -141,3 +141,12 @@ fn a_model_switch_names_the_new_model_without_guessing_why() {
     transcript.apply(&EngineEvent::FellBack("kiro:auto".into()));
     assert_eq!(transcript.entries, [Entry::Notice("The model call failed; going on with kiro:auto.".into())]);
 }
+
+#[test]
+fn a_finished_run_says_how_long_it_took_and_what_it_cost() {
+    let mut transcript = Transcript::default();
+    transcript.apply(&EngineEvent::Completed { duration_ms: 72_400, cost_usd: Some(0.42) });
+    assert_eq!(transcript.entries, [Entry::Notice("✓ Done in 1m 13s · $0.42".into())]);
+    assert_eq!(done(900, None), "✓ Done in 1s");
+    assert_eq!(done(5_000, Some(0.0)), "✓ Done in 5s", "a free run shows no cost");
+}

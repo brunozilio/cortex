@@ -47,10 +47,17 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
             let style = if picked { Style::new().fg(Color::Cyan).bold() } else { Style::new() };
             let about = clip(&about, width.saturating_sub(column + 2));
             let name = format!("{}/{name}", if picked { "› " } else { "  " });
-            lines.push(Line::from(vec![
-                Span::styled(format!("{name:<width$}", width = column + 1), style),
-                if picked { about.into() } else { about.dim() },
-            ]));
+            let name = format!("{name:<width$}", width = column + 2);
+            let used = name.chars().count() + about.chars().count();
+            let mut row = Line::from(vec![
+                Span::styled(name, style),
+                about.dark_gray(),
+                " ".repeat((width + 2).saturating_sub(used)).into(),
+            ]);
+            if picked {
+                row = row.bg(super::theme::current().selection_bg());
+            }
+            lines.push(row);
         }
         if more {
             lines.push(Line::from(format!("  {} of {total} · ↑↓ more · tab completes", chosen + 1)).dark_gray());
@@ -105,7 +112,8 @@ fn asking(pending: &Pending, width: usize, lines: &mut Vec<Line<'static>>) {
             } else {
                 "a"
             };
-            spans.push(format!("  {key}").dark_gray());
+            spans.push("  ".into());
+            spans.push(format!("({key})").cyan());
         }
         lines.push(Line::from(spans));
     }

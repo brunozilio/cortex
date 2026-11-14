@@ -107,7 +107,11 @@ fn row(number: &str, mark: char, text: &str, width: usize, ext: Option<&str>) ->
     let filled = fill(&text, width);
     let mut spans =
         vec![Span::styled(format!("    {number:>5} "), dim()), Span::styled(format!("{mark} "), sign(mark))];
-    spans.extend(super::highlight::spans(ext, &text, colour(mark)));
+    if mark == ' ' || super::theme::current().banded() {
+        spans.extend(super::highlight::spans(ext, &text, colour(mark)));
+    } else {
+        spans.push(Span::styled(text.clone(), sign(mark)));
+    }
     spans.push(Span::styled(filled[text.len()..].to_owned(), colour(mark)));
     Line::from(spans)
 }
