@@ -4,11 +4,13 @@ import { SIGNALS, SIGNAL_ORDER } from '@/lib/signals'
 import { cn } from '@/lib/utils'
 import type { Run, Signal } from '@/types'
 
-export function SignalBadges({ signals }: { signals: Signal[] }) {
+export function SignalBadges({ signals, limit }: { signals: Signal[]; limit?: number }) {
   const ordered = SIGNAL_ORDER.filter((signal) => signals.includes(signal))
+  const shown = limit === undefined ? ordered : ordered.slice(0, limit)
+  const hidden = ordered.slice(shown.length)
   return (
     <>
-      {ordered.map((signal) => {
+      {shown.map((signal) => {
         const style = SIGNALS[signal]
         const Icon = style.icon
         return (
@@ -18,6 +20,11 @@ export function SignalBadges({ signals }: { signals: Signal[] }) {
           </Badge>
         )
       })}
+      {hidden.length ? (
+        <Badge variant="secondary" title={hidden.map((signal) => SIGNALS[signal].label).join(', ')}>
+          +{hidden.length}
+        </Badge>
+      ) : null}
     </>
   )
 }

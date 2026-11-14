@@ -5,6 +5,7 @@ import { Button, type ButtonProps } from '@/components/ui/button'
 interface CopyButtonProps extends Omit<ButtonProps, 'onClick'> {
   text: string
   label: string
+  iconOnly?: boolean
 }
 
 async function writeClipboard(text: string): Promise<boolean> {
@@ -22,7 +23,7 @@ async function writeClipboard(text: string): Promise<boolean> {
   }
 }
 
-export function CopyButton({ text, label, ...props }: CopyButtonProps) {
+export function CopyButton({ text, label, iconOnly = false, ...props }: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
   const copy = async (event: MouseEvent) => {
     event.stopPropagation()
@@ -32,9 +33,9 @@ export function CopyButton({ text, label, ...props }: CopyButtonProps) {
     }
   }
   return (
-    <Button {...props} onClick={copy}>
+    <Button {...props} onClick={copy} aria-label={iconOnly ? label : undefined} title={iconOnly ? label : undefined}>
       {copied ? <Check /> : <Copy />}
-      {copied ? 'Copied' : label}
+      {iconOnly ? null : copied ? 'Copied' : label}
     </Button>
   )
 }

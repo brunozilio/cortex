@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -14,6 +13,7 @@ import { cn } from '@/lib/utils'
 import type { Run } from '@/types'
 
 const PAGE_SIZE = 10
+const MAX_SIGNALS = 2
 
 interface RunsTableProps {
   runs: Run[]
@@ -98,9 +98,7 @@ export function RunsTable({ runs, current, nowMs, selected, filters, query, onFi
                       {run.session === current ? ' (current)' : ''} · run {run.index} · {when(run.started_at_ms, nowMs)}
                     </div>
                   </TableCell>
-                  <TableCell className="px-3">
-                    <Badge>{run.model}</Badge>
-                  </TableCell>
+                  <TableCell className="whitespace-nowrap px-3 text-muted-foreground">{run.model}</TableCell>
                   <TableCell className="num whitespace-nowrap px-3 text-right">{ms(run.duration_ms)}</TableCell>
                   <TableCell className="num px-3 text-right">{tokens(run.tokens)}</TableCell>
                   <TableCell className="px-3">
@@ -112,11 +110,11 @@ export function RunsTable({ runs, current, nowMs, selected, filters, query, onFi
                     </div>
                   </TableCell>
                   <TableCell className={cn('num px-3 text-right', run.waste > 0.2 ? 'font-medium text-warning' : 'text-muted-foreground')}>
-                    {percent(run.waste)}
+                    {Math.round(run.waste * 100) === 0 ? <span aria-label="none">–</span> : percent(run.waste)}
                   </TableCell>
                   <TableCell className="px-3 pr-4">
-                    <div className="flex gap-1">
-                      <SignalBadges signals={run.signals} />
+                    <div className="flex gap-1 whitespace-nowrap">
+                      <SignalBadges signals={run.signals} limit={MAX_SIGNALS} />
                     </div>
                   </TableCell>
                 </TableRow>

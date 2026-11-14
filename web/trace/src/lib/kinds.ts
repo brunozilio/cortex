@@ -32,6 +32,6 @@ export const TIME_LABELS: Partial<Record<SpanKind, string>> = {
   eval: 'Evaluations',
 }
 
-export const MODEL_COLORS = ['hsl(var(--k-llm))', 'hsl(var(--k-agent))', 'hsl(var(--k-tool))', 'hsl(var(--k-eval))', 'hsl(var(--k-task))', 'hsl(var(--k-event))']
+export const MODEL_COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))']
 
 export const FallbackIcon = CircleDot

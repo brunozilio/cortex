@@ -11,15 +11,15 @@ export function usdShort(value: number): string {
 }
 
 export function ms(value: number): string {
-  if (value < 1000) return Math.round(value) + ' ms'
-  if (value < 60_000) return (value / 1000).toFixed(1) + ' s'
-  if (value < 3_600_000) {
-    const minutes = Math.floor(value / 60_000)
-    const seconds = Math.round((value % 60_000) / 1000)
-    return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+  if (value < 1000) return Math.round(value) + 'ms'
+  if (value < 10_000) return (value / 1000).toFixed(1) + 's'
+  if (value < 59_500) return Math.round(value / 1000) + 's'
+  const totalSeconds = Math.round(value / 1000)
+  if (totalSeconds < 3600) {
+    return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s`
   }
-  const hours = Math.floor(value / 3_600_000)
-  return `${hours}h ${String(Math.round((value % 3_600_000) / 60_000)).padStart(2, '0')}m`
+  const totalMinutes = Math.round(value / 60_000)
+  return `${Math.floor(totalMinutes / 60)}h ${String(totalMinutes % 60).padStart(2, '0')}m`
 }
 
 export function tokens(value: number): string {

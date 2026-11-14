@@ -55,7 +55,7 @@ export function MetricsTab({ run, span }: { run: Run; span: Span }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
-        <Tile label="Duration" value={span.kind === 'event' ? '—' : ms(span.end_ms - span.start_ms)} />
+        <Tile label="Duration" value={span.kind === 'event' ? '–' : ms(span.end_ms - span.start_ms)} />
         <Tile label="Starts at" value={ms(span.start_ms)} />
         {usage ? (
           <>

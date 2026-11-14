@@ -7,7 +7,7 @@ export function MetadataTab({ run, span }: { run: Run; span: Span }) {
   const rows: [string, string][] = [
     ['Kind', KINDS[span.kind].label],
     ['Span', `#${span.id}`],
-    ['Parent', parent ? `${parent.name} (#${parent.id})` : '—'],
+    ['Parent', parent ? `${parent.name} (#${parent.id})` : '–'],
   ]
   if (span.stop) rows.push(['Stop reason', span.stop])
   if (span.usage) rows.push(['Model', span.usage.model])
