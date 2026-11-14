@@ -69,7 +69,17 @@ pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
     let code = if theme.light() { BuiltinCodeTheme::InspiredGitHub } else { BuiltinCodeTheme::Base16OceanDark };
     let options = Options::new(Look).table_width(u16::try_from(width).unwrap_or(u16::MAX)).code_theme(code);
     let drawn = tui_markdown::from_str_with_options(text, &options).lines.into_iter().map(owned).collect();
-    let lines: Vec<Line<'static>> = dress(drawn).into_iter().flat_map(|line| wrap_line(line, width)).collect();
+    let band = theme.code_bg();
+    let lines: Vec<Line<'static>> = dress(drawn, band)
+        .into_iter()
+        .flat_map(|line| wrap_line(line, width))
+        .map(|mut line| {
+            if line.style.bg == Some(band) {
+                line.spans.push(Span::raw(" ".repeat(width.saturating_sub(line.width()))));
+            }
+            line
+        })
+        .collect();
     RENDERED.with(|kept| {
         let mut kept = kept.borrow_mut();
         if kept.len() >= KEPT {
@@ -82,7 +92,7 @@ pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
 
 const BAR: &str = "│ ";
 
-fn dress(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
+fn dress(lines: Vec<Line<'static>>, code_bg: Color) -> Vec<Line<'static>> {
     let faint = Style::new().fg(Color::DarkGray);
     let mut out = Vec::with_capacity(lines.len());
     let mut in_code = false;
@@ -98,6 +108,7 @@ fn dress(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
         }
         if in_code {
             line.spans.insert(0, Span::styled(BAR, faint));
+            line = line.patch_style(Style::new().bg(code_bg));
         } else if let Some(first) = line.spans.first_mut()
             && first.content.trim_start() == "- "
         {
@@ -131,7 +142,10 @@ mod tests {
         assert!(lines[0].spans[0].style.patch(lines[0].style).add_modifier.contains(Modifier::BOLD));
         assert!(text.iter().any(|l| l.starts_with("• run all")), "a bullet, not a dash: {text:?}");
         assert!(text.iter().any(|l| l == "rust"), "the language labels the block: {text:?}");
-        assert!(text.iter().any(|l| l == "│ fn main() {}"), "code sits behind a bar: {text:?}");
+        assert!(text.iter().any(|l| l.trim_end() == "│ fn main() {}"), "code sits behind a bar: {text:?}");
+        let code = lines.iter().find(|l| plain(std::slice::from_ref(l))[0].starts_with('│')).expect("code");
+        assert_eq!(code.width(), 14, "the block's band spans the width");
+        assert!(code.style.bg.is_some(), "and is tinted");
         assert!(!text.iter().any(|l| l.starts_with('─')), "no fence rules: {text:?}");
         assert!(lines.iter().all(|l| l.width() <= 14), "{text:?}");
     }

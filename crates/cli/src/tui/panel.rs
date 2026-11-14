@@ -64,9 +64,20 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
         }
     } else if app.show_tasks && !app.transcript.tasks.is_empty() {
         tasks(&app.transcript.tasks, width, &mut lines);
+    } else if app.transcript.entries.is_empty() && app.inline.is_none() && app.input.is_empty() && !app.busy() {
+        for (key, what) in START {
+            lines.push(Line::from(vec![format!("  {key:<10}").cyan(), what.dark_gray()]));
+        }
     }
     lines
 }
+
+const START: [(&str, &str); 4] = [
+    ("/resume", "pick up an earlier conversation"),
+    ("/model", "switch the model"),
+    ("@file", "point the agent at a file"),
+    ("!", "run a shell command yourself"),
+];
 
 fn tasks(tasks: &[domain::events::TaskItem], width: usize, lines: &mut Vec<Line<'static>>) {
     let done = tasks.iter().filter(|task| task.status == "completed").count();

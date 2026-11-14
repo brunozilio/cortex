@@ -66,6 +66,10 @@ impl Theme {
         self.pick((0x26, 0x2b, 0x36, 236), (0xe4, 0xe9, 0xf2, 254))
     }
 
+    pub fn code_bg(self) -> Color {
+        self.pick((0x1f, 0x22, 0x29, 235), (0xf1, 0xf3, 0xf6, 255))
+    }
+
     pub fn banded(self) -> bool {
         self.truecolor || self.light()
     }
