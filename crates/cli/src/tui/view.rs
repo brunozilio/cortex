@@ -134,14 +134,28 @@ pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
         Some(rest) if !home.is_empty() => format!("~{rest}"),
         _ => cwd,
     };
-    vec![
+    let mut lines = vec![
         Line::from(""),
         Line::from(vec![
             concat!(" ", brand::name!()).bold(),
             format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim(),
         ]),
-    ]
+    ];
+    if app.transcript.entries.is_empty() && app.inline.is_none() {
+        lines.push(Line::from(""));
+        for (key, what) in START {
+            lines.push(Line::from(vec![format!("   {key:<11}").cyan(), what.dark_gray()]));
+        }
+    }
+    lines
 }
+
+const START: [(&str, &str); 4] = [
+    ("/resume", "pick up an earlier conversation"),
+    ("/model", "switch the model"),
+    ("shift+tab", "cycle ask, edits, plan and bypass"),
+    ("@file", "point the agent at a file"),
+];
 
 fn prompt(frame: &mut Frame, app: &App, area: Rect) {
     let shell = Color::Rgb(255, 105, 180);
