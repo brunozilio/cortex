@@ -15,9 +15,10 @@ pub fn start(workspace: &Workspace, path: &Path) -> String {
     };
     let client = workspace.credentials.client;
     let label = run.label(&workspace.cwd);
-    let stale = shells::list(client).into_iter().filter(|(_, command, running)| *running && *command == label);
+    let stale = shells::list(client).into_iter().filter(|(_, command, _)| *command == label);
     for (id, _, _) in stale.collect::<Vec<_>>() {
         shells::kill(client, &id);
+        crate::tools::inbox::withdraw(client, &shells::ended_source(&id));
     }
     let mut shell = workspace.confined(platform::shell(&run.command));
     shell.current_dir(&run.folder).envs(run.env.iter().cloned()).stdin(Stdio::null());
@@ -88,5 +89,31 @@ mod tests {
         going.sort();
         assert!(going.len() <= 2, "{going:?}");
         shells::kill_client(9_302);
+    }
+
+    #[test]
+    fn a_finished_result_not_yet_delivered_is_withdrawn_when_a_newer_change_comes() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::create_dir(dir.path().join("store")).expect("package");
+        let mut workspace = Workspace::new(dir.path());
+        workspace.credentials.client = 9_303;
+        workspace.policy.affected_tests = true;
+        let store = dir.path().join("store/db.go");
+
+        let first = start(&workspace, &store);
+        let first_id =
+            first.split(" as ").nth(1).and_then(|rest| rest.split(' ').next()).unwrap_or_default().to_owned();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while !running(9_303).is_empty() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1_200));
+        start(&workspace, &store);
+
+        let notices = crate::tools::inbox::take(9_303);
+        let stale = format!("background {first_id}");
+        assert!(notices.iter().all(|notice| notice.source != stale), "{notices:?}");
+        shells::kill_client(9_303);
+        crate::tools::inbox::forget_client(9_303);
     }
 }

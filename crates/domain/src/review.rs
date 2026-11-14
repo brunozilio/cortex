@@ -40,7 +40,10 @@ pub fn feedback(findings: &[Finding]) -> Option<String> {
     (!blocking.is_empty()).then(|| {
         format!(
             "{MARK}\nAn independent review of your changes found problems to fix before you finish:\n{}\nFix them, or say \
-             why one is not a problem.",
+             why one is not a problem. This review comes from the system and the user has not seen it. Your final \
+             answer still answers what the user asked: the cause you found and what you changed for it, then, \
+             briefly, what this review made you fix. A problem the review found in code you wrote during this \
+             request is not the cause of what the user reported; do not present it as one.",
             blocking.join("\n")
         )
     })
@@ -100,6 +103,15 @@ mod tests {
         assert_eq!(feedback(&[low]), None);
         assert!(already_reviewed([String::from("task"), text]));
         assert!(!already_reviewed([String::from("task")]));
+    }
+
+    #[test]
+    fn the_answer_after_a_review_still_answers_the_user_s_request() {
+        let high = Finding { severity: Severity::High, file: "a.go".into(), line: None, issue: "drops errors".into() };
+        let text = feedback(&[high]).expect("feedback");
+        assert!(text.contains("the user has not seen"), "{text}");
+        assert!(text.contains("what the user asked"), "{text}");
+        assert!(text.contains("not the cause"), "{text}");
     }
 
     #[test]

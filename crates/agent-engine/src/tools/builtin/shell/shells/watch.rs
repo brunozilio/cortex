@@ -14,6 +14,10 @@ pub(crate) enum Watch {
     Lines,
 }
 
+pub(crate) fn ended_source(id: &str) -> String {
+    format!("background {id}")
+}
+
 pub(crate) fn watch(id: String, client: u64, what: Watch) {
     platform::named::spawn("shell-watch", move || {
         let mut seen: usize = 0;
@@ -33,7 +37,7 @@ pub(crate) fn watch(id: String, client: u64, what: Watch) {
             };
             let source = match what {
                 Watch::Lines => format!("monitor {id}"),
-                Watch::End => format!("background {id}"),
+                Watch::End => ended_source(&id),
             };
             if what == Watch::Lines {
                 partial.push_str(&new);

@@ -18,6 +18,12 @@ pub fn take(client: u64) -> Vec<Notice> {
     lock().remove(&client).unwrap_or_default()
 }
 
+pub fn withdraw(client: u64, source: &str) {
+    if let Some(notices) = lock().get_mut(&client) {
+        notices.retain(|notice| notice.source != source);
+    }
+}
+
 pub fn forget_client(client: u64) {
     lock().remove(&client);
 }
@@ -34,5 +40,13 @@ mod tests {
         assert!(take(8801).is_empty());
         forget_client(8802);
         assert!(take(8802).is_empty());
+    }
+
+    #[test]
+    fn a_notice_not_yet_taken_can_be_withdrawn_by_its_source() {
+        push(8803, Notice::new("background bash_7", "`go test .` finished (exit code 1)."));
+        push(8803, Notice::new("background bash_8", "`go test .` finished (exit code 0)."));
+        withdraw(8803, "background bash_7");
+        assert_eq!(take(8803), [Notice::new("background bash_8", "`go test .` finished (exit code 0).")]);
     }
 }

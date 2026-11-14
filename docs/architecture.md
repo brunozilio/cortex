@@ -209,8 +209,10 @@ Inbox notices are core (`TakeNotices`).
   background command (confined like `Bash`) named by `TestRun::label`
   (the command and its folder, so `go test .` in two packages stays two
   runs), and the result says so in `<tests>`. A run of the same label
-  still going is stopped first: it was started before this change, so
-  its result would be stale. The command's end reaches the agent through
+  still going is stopped first, and the result of one that already ended
+  is withdrawn from the inbox if the agent has not taken it yet
+  (`inbox::withdraw`): either was started before this change, so its
+  result would be stale. The command's end reaches the agent through
   the inbox. A Rust file runs `cargo test -p`
   of its crate with `CARGO_TARGET_DIR` at `target/agent-tests`, so it
   never waits on the user's own build; Go tests its package; Python and

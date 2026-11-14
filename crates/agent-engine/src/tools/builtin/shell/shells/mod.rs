@@ -15,7 +15,7 @@ use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
 mod wait;
 mod watch;
 pub(crate) use wait::{Waited, wait};
-pub(crate) use watch::{Watch, watch};
+pub(crate) use watch::{Watch, ended_source, watch};
 
 const KEPT: usize = 1 << 20;
 const SHOWN: usize = 30_000;
