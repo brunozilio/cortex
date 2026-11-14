@@ -66,7 +66,7 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
         tasks(&app.transcript.tasks, width, &mut lines);
     } else if app.transcript.entries.is_empty() && app.inline.is_none() && app.input.is_empty() && !app.busy() {
         for (key, what) in START {
-            lines.push(Line::from(vec![format!("  {key:<10}").cyan(), what.dark_gray()]));
+            lines.push(Line::from(vec![format!(" {key:<10}").cyan(), what.dark_gray()]));
         }
     }
     lines
@@ -76,7 +76,7 @@ const START: [(&str, &str); 4] = [
     ("/resume", "pick up an earlier conversation"),
     ("/model", "switch the model"),
     ("@file", "point the agent at a file"),
-    ("!", "run a shell command yourself"),
+    ("!cmd", "run a shell command yourself"),
 ];
 
 fn tasks(tasks: &[domain::events::TaskItem], width: usize, lines: &mut Vec<Line<'static>>) {
@@ -90,8 +90,8 @@ fn tasks(tasks: &[domain::events::TaskItem], width: usize, lines: &mut Vec<Line<
         let subject = clip(&task.subject, width.saturating_sub(5));
         lines.push(match task.status.as_str() {
             "completed" => Line::from(vec!["   ✓ ".green(), subject.dark_gray().crossed_out()]),
-            "in_progress" => Line::from(vec!["   ◼ ".cyan(), subject.bold()]),
-            _ => Line::from(vec!["   ☐ ".dark_gray(), subject.into()]),
+            "in_progress" => Line::from(vec!["   ● ".cyan(), subject.bold()]),
+            _ => Line::from(vec!["   ○ ".dark_gray(), subject.into()]),
         });
     }
 }

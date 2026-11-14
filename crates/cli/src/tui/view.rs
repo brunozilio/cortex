@@ -111,7 +111,10 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
     let end = lines.len().saturating_sub(scroll);
     let start = end.saturating_sub(height);
     let shown: Vec<Line> = lines.drain(start..end).collect();
-    let inner = area.inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 });
+    let mut inner = area.inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 });
+    let empty = u16::try_from(height.saturating_sub(shown.len())).unwrap_or(0);
+    inner.y += empty;
+    inner.height -= empty;
     frame.render_widget(Paragraph::new(shown), inner);
     let on_screen = |rows: std::ops::Range<usize>| {
         let (top, bottom) = (rows.start.max(start), rows.end.min(end));
@@ -143,10 +146,7 @@ pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
     };
     vec![
         Line::from(""),
-        Line::from(vec![
-            concat!(" ", brand::name!()).bold(),
-            format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim(),
-        ]),
+        Line::from(vec![brand::name!().bold(), format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim()]),
     ]
 }
 
@@ -181,10 +181,10 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
         let hint = match &app.ghost {
             _ if app.shell => "Run a shell command · its output goes with your next message · esc leaves".to_owned(),
             _ if app.busy() && !app.turn.queued.is_empty() => "↑ edits what is queued · esc interrupts".to_owned(),
-            _ if app.busy() => "Type to message the agent as it works · esc interrupts".to_owned(),
+            _ if app.busy() => "Type to message the agent as it works".to_owned(),
             Some(ghost) => format!("{ghost}  (tab)"),
             None if failed_last(app) => "Say what to do next, or /retry".to_owned(),
-            None if app.transcript.entries.is_empty() => "Try \"explain this project\" · / for commands".to_owned(),
+            None if app.transcript.entries.is_empty() => "Try \"explain this project\"".to_owned(),
             None => "Reply to go on · / for commands".to_owned(),
         };
         let placeholder = Line::from(vec![mark.fg(color), hint.dim()]);
@@ -229,7 +229,7 @@ fn status(app: &App) -> Line<'static> {
         " · ".dim(),
         Span::styled(mode_label(app.mode()), Style::new().fg(mode_color).add_modifier(Modifier::BOLD)),
         " · ".dim(),
-        app.effort().cli_value().dim(),
+        format!("{} effort", app.effort().cli_value()).dim(),
     ]);
     if !app.busy() && failed_last(app) {
         spans.extend([" · ".dim(), "✗ last run failed".fg(Color::Red)]);
