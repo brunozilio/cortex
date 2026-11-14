@@ -9,6 +9,7 @@ use sdk::PermissionMode;
 use super::app::App;
 use super::entries;
 use super::motion::Scene;
+use super::transcript::Entry;
 use super::wrap::{layout, wrap};
 
 const PROMPT_MARK: usize = 2;
@@ -56,7 +57,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         frame.render_widget(Paragraph::new(panel), panel_area);
     }
     prompt(frame, app, input_area);
-    frame.render_widget(Paragraph::new(status(app)), status_area);
+    status_bar(frame, app, status_area);
     let mut motion = app.motion.borrow_mut();
     motion.frame(Scene {
         conversation: body,
@@ -92,7 +93,7 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
     if let Some(started) = app.turn.started {
         lines.push(Line::from(""));
         working = Some(lines.len()..lines.len() + 1);
-        lines.push(entries::working(started, &app.transcript, width));
+        lines.push(entries::working(started, &app.transcript, app.ask.is_some(), width));
     }
     for queued in &app.turn.queued {
         let text = wrap(queued, width.saturating_sub(4)).into_iter().next().unwrap_or_default();
@@ -144,11 +145,7 @@ pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
 
 fn prompt(frame: &mut Frame, app: &App, area: Rect) {
     let shell = Color::Rgb(255, 105, 180);
-    let border = match () {
-        _ if app.ask.is_some() || app.overlays.secret.is_some() => Color::Yellow,
-        _ if app.shell => shell,
-        _ => Color::DarkGray,
-    };
+    let border = if app.shell { shell } else { Color::DarkGray };
     let (mark, color) = if app.shell { ("! ", shell) } else { ("> ", Color::Magenta) };
     let block = Block::bordered().border_type(BorderType::Rounded).border_style(Style::new().fg(border));
     let inner = block.inner(area);
@@ -176,7 +173,11 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
             _ if app.busy() && !app.turn.queued.is_empty() => "↑ edits what is queued · esc interrupts".to_owned(),
             _ if app.busy() => "Type to message the agent as it works · esc interrupts".to_owned(),
             Some(ghost) => format!("{ghost}  (tab)"),
-            None => "Try \"explain this project\" · / for commands".to_owned(),
+            None if app.transcript.entries.iter().rev().take(2).any(|e| matches!(e, Entry::Error(_))) => {
+                "/retry sends it again · or type what to do next".to_owned()
+            }
+            None if app.transcript.entries.is_empty() => "Try \"explain this project\" · / for commands".to_owned(),
+            None => "Reply to go on · / for commands".to_owned(),
         };
         let placeholder = Line::from(vec![mark.fg(color), hint.dim()]);
         frame.render_widget(Paragraph::new(placeholder).block(block), area);
@@ -216,7 +217,7 @@ fn status(app: &App) -> Line<'static> {
         spans.extend([format!(" {title}").bold(), " ·".dim()]);
     }
     spans.extend([
-        format!(" {model}").fg(Color::Magenta),
+        format!(" {model}").into(),
         " · ".dim(),
         Span::styled(mode_label(app.mode()), Style::new().fg(mode_color).add_modifier(Modifier::BOLD)),
         " · ".dim(),
@@ -239,6 +240,16 @@ fn status(app: &App) -> Line<'static> {
     if app.transcript.cost > 0.0 {
         spans.push(format!(" · ${:.2}", app.transcript.cost).dim());
     }
-    spans.push("  shift+tab mode · /help".dim());
     Line::from(spans)
+}
+
+const HINT: &str = "shift+tab mode · /help ";
+
+fn status_bar(frame: &mut Frame, app: &App, area: Rect) {
+    let line = status(app);
+    let room = usize::from(area.width).saturating_sub(line.width());
+    frame.render_widget(Paragraph::new(line), area);
+    if room >= HINT.len() + 2 && app.status.text.is_none() {
+        frame.render_widget(Paragraph::new(Line::from(HINT).dim().right_aligned()), area);
+    }
 }

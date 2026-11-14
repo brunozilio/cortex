@@ -34,6 +34,16 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
+pub fn clip(text: &str, width: usize) -> String {
+    let lines = wrap(text, width);
+    if lines.len() <= 1 {
+        return lines.into_iter().next().unwrap_or_default();
+    }
+    let mut first = wrap(text, width.saturating_sub(1)).into_iter().next().unwrap_or_default();
+    first.push('…');
+    first
+}
+
 pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
     let width = width.max(1);
     let mut rows: Vec<Vec<(String, Style)>> = Vec::new();

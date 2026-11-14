@@ -4,7 +4,7 @@ use sdk::AskKind;
 
 use super::app::App;
 use super::ask::Pending;
-use super::wrap::wrap;
+use super::wrap::{clip, wrap};
 
 pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
     let width = usize::from(width).saturating_sub(4).max(10);
@@ -39,13 +39,21 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
         let chosen = app.suggestion % total.max(1);
         let window = super::commands::shown(total, chosen);
         let more = window.len() < total;
-        for (i, (name, about)) in found.into_iter().enumerate().skip(window.start).take(window.len()) {
-            let style = if i == chosen { Style::new().fg(Color::Cyan) } else { Style::new() };
-            let about = wrap(&about, width.saturating_sub(24)).into_iter().next().unwrap_or_default();
-            lines.push(Line::from(vec![Span::styled(format!("  /{name:<20}"), style), about.dim()]));
+        let shown: Vec<(usize, (String, String))> =
+            found.into_iter().enumerate().skip(window.start).take(window.len()).collect();
+        let column = shown.iter().map(|(_, (name, _))| name.chars().count()).max().unwrap_or(0).clamp(6, 22) + 3;
+        for (i, (name, about)) in shown {
+            let picked = i == chosen;
+            let style = if picked { Style::new().fg(Color::Cyan).bold() } else { Style::new() };
+            let about = clip(&about, width.saturating_sub(column + 2));
+            let name = format!("{}/{name}", if picked { "› " } else { "  " });
+            lines.push(Line::from(vec![
+                Span::styled(format!("{name:<width$}", width = column + 1), style),
+                if picked { about.into() } else { about.dim() },
+            ]));
         }
         if more {
-            lines.push(Line::from(format!("  {}/{total} · ↑↓ for more · tab completes", chosen + 1)).dim());
+            lines.push(Line::from(format!("  {} of {total} · ↑↓ more · tab completes", chosen + 1)).dark_gray());
         }
     } else if app.show_tasks && !app.transcript.tasks.is_empty() {
         tasks(&app.transcript.tasks, width, &mut lines);
@@ -55,13 +63,16 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
 
 fn tasks(tasks: &[domain::events::TaskItem], width: usize, lines: &mut Vec<Line<'static>>) {
     let done = tasks.iter().filter(|task| task.status == "completed").count();
-    lines.push(Line::from(format!("Tasks {done}/{} · ctrl+t hides", tasks.len())).dim());
+    lines.push(Line::from(vec![
+        " Tasks".bold(),
+        format!("  {done} of {} done · ctrl+t hides", tasks.len()).dark_gray(),
+    ]));
     for task in tasks {
-        let subject = wrap(&task.subject, width.saturating_sub(4)).into_iter().next().unwrap_or_default();
+        let subject = clip(&task.subject, width.saturating_sub(5));
         lines.push(match task.status.as_str() {
-            "completed" => Line::from(format!("  ☒ {subject}")).dim().crossed_out(),
-            "in_progress" => Line::from(format!("  ◼ {subject}")).bold().fg(Color::Cyan),
-            _ => Line::from(format!("  ☐ {subject}")),
+            "completed" => Line::from(vec!["   ✓ ".green(), subject.dark_gray().crossed_out()]),
+            "in_progress" => Line::from(vec!["   ◼ ".cyan(), subject.bold()]),
+            _ => Line::from(vec!["   ☐ ".dark_gray(), subject.into()]),
         });
     }
 }
@@ -76,11 +87,27 @@ fn asking(pending: &Pending, width: usize, lines: &mut Vec<Line<'static>>) {
         lines.push(Line::from(line).bold().fg(Color::Yellow));
     }
     let picked = pending.picked.get(pending.question);
-    for (i, choice) in pending.choices().into_iter().enumerate() {
+    let choices = pending.choices();
+    let permission = matches!(pending.ask.kind, AskKind::Permission { .. });
+    for (i, choice) in choices.iter().enumerate() {
         let check = if picked.is_some_and(|p| p.contains(&i)) { "[x] " } else { "" };
-        let line = format!("{} {}. {check}{choice}", if i == pending.cursor { "❯" } else { " " }, i + 1);
-        let style = if i == pending.cursor { Style::new().fg(Color::Cyan) } else { Style::new() };
-        lines.push(Line::styled(line, style));
+        let here = i == pending.cursor;
+        let mut spans = vec![
+            if here { "❯ ".fg(Color::Yellow) } else { "  ".into() },
+            format!("{}. ", i + 1).dark_gray(),
+            Span::styled(format!("{check}{choice}"), if here { Style::new().bold() } else { Style::new() }),
+        ];
+        if permission {
+            let key = if i == 0 {
+                "y"
+            } else if i + 1 == choices.len() {
+                "n"
+            } else {
+                "a"
+            };
+            spans.push(format!("  {key}").dark_gray());
+        }
+        lines.push(Line::from(spans));
     }
     if let Some(note) = &pending.note {
         for line in wrap(&format!("> {note}▏"), width) {
@@ -89,7 +116,7 @@ fn asking(pending: &Pending, width: usize, lines: &mut Vec<Line<'static>>) {
     }
     let hint = match &pending.ask.kind {
         _ if pending.note.is_some() => "Tell the agent what to do instead · Enter sends · esc just says no",
-        AskKind::Permission { .. } => "y yes · a always · n no · esc denies",
+        AskKind::Permission { .. } => "↑↓ Enter or the key · esc denies",
         AskKind::Questions(_) => "number or ↑↓ Enter · space toggles a multiple choice · esc skips",
         AskKind::Plan { .. } => "number or ↑↓ Enter · esc keeps planning · type after to say what to change",
     };

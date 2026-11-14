@@ -68,7 +68,6 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
                         out.push(Line::styled(format!("    … +{more} lines ({})", diffs::EXPAND), dim));
                     }
                 }
-                None if *state == ToolState::Running => out.push(Line::styled("  ⎿ Running…", dim)),
                 None => {}
             }
         }
@@ -107,15 +106,29 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
         }
         Entry::Error(text) => {
             out.push(Line::from(""));
-            out.extend(wrap(text, width).into_iter().map(|line| Line::from(line).fg(Color::Red)));
+            for (i, line) in wrap(text, width.saturating_sub(2)).into_iter().enumerate() {
+                let mark = if i == 0 { "✗ ".fg(Color::Red).bold() } else { "  ".into() };
+                out.push(Line::from(vec![mark, line.fg(Color::Red)]));
+            }
         }
     }
 }
 
-pub fn working(started: Stopwatch, transcript: &Transcript, width: usize) -> Line<'static> {
+pub fn working(started: Stopwatch, transcript: &Transcript, waiting: bool, width: usize) -> Line<'static> {
     let elapsed = started.elapsed(Instant::now());
+    if waiting {
+        return Line::from(vec![
+            "◆ Waiting for your answer".fg(Color::Yellow),
+            format!(" ({}s · the agent is paused)", elapsed.as_secs()).dim(),
+        ]);
+    }
     let tick = usize::try_from(elapsed.as_millis() / 120).unwrap_or(0);
-    let doing = transcript.activity.clone().unwrap_or_else(|| "Working".into());
+    let shown_above = matches!(
+        transcript.entries.last(),
+        Some(Entry::Tool { name, summary, state: ToolState::Running, .. })
+            if transcript.activity.as_deref() == Some(call(name, summary).as_str())
+    );
+    let doing = transcript.activity.clone().filter(|_| !shown_above).unwrap_or_else(|| "Working".into());
     let doing = wrap(&doing, width.saturating_sub(40).max(10)).into_iter().next().unwrap_or_default();
     let mut detail = format!("{}s", elapsed.as_secs());
     if transcript.written > 0 {

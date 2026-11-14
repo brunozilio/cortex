@@ -20,7 +20,7 @@ struct Look;
 
 impl StyleSheet for Look {
     fn heading(&self, level: u8) -> Style {
-        let style = Style::new().fg(Color::Magenta).add_modifier(Modifier::BOLD);
+        let style = Style::new().add_modifier(Modifier::BOLD);
         if level == 1 { style.add_modifier(Modifier::UNDERLINED) } else { style }
     }
 
@@ -68,16 +68,8 @@ pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
     }
     let code = if theme.light() { BuiltinCodeTheme::InspiredGitHub } else { BuiltinCodeTheme::Base16OceanDark };
     let options = Options::new(Look).table_width(u16::try_from(width).unwrap_or(u16::MAX)).code_theme(code);
-    let lines: Vec<Line<'static>> = tui_markdown::from_str_with_options(text, &options)
-        .lines
-        .into_iter()
-        .map(|line| {
-            let line = owned(line);
-            let fence = line.spans.first().is_some_and(|span| span.content.starts_with(FENCE.trim_end()));
-            if fence { line.style(Style::new().fg(Color::DarkGray)) } else { line }
-        })
-        .flat_map(|line| wrap_line(line, width))
-        .collect();
+    let drawn = tui_markdown::from_str_with_options(text, &options).lines.into_iter().map(owned).collect();
+    let lines: Vec<Line<'static>> = dress(drawn).into_iter().flat_map(|line| wrap_line(line, width)).collect();
     RENDERED.with(|kept| {
         let mut kept = kept.borrow_mut();
         if kept.len() >= KEPT {
@@ -86,6 +78,35 @@ pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
         kept.insert(key, lines.clone());
     });
     lines
+}
+
+const BAR: &str = "│ ";
+
+fn dress(lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
+    let faint = Style::new().fg(Color::DarkGray);
+    let mut out = Vec::with_capacity(lines.len());
+    let mut in_code = false;
+    for mut line in lines {
+        let fence = line.spans.first().and_then(|span| span.content.strip_prefix(FENCE.trim_end()));
+        if let Some(rest) = fence {
+            let language = rest.trim().to_owned();
+            if !in_code && !language.is_empty() {
+                out.push(Line::styled(language, faint));
+            }
+            in_code = !in_code;
+            continue;
+        }
+        if in_code {
+            line.spans.insert(0, Span::styled(BAR, faint));
+        } else if let Some(first) = line.spans.first_mut()
+            && first.content.trim_start() == "- "
+        {
+            first.content = first.content.replacen('-', "•", 1).into();
+            first.style = faint;
+        }
+        out.push(line);
+    }
+    out
 }
 
 fn owned(line: Line<'_>) -> Line<'static> {
@@ -107,10 +128,11 @@ mod tests {
         let lines = render("## Plan\n\n- run **all** the tests\n\n```rust\nfn main() {}\n```", 14);
         let text = plain(&lines);
         assert_eq!(text[0], "Plan", "no # marker: {text:?}");
-        assert_eq!(lines[0].spans[0].style.fg.or(lines[0].style.fg), Some(Color::Magenta));
-        assert!(text.iter().any(|l| l.contains("run all the")), "{text:?}");
-        assert!(text.iter().any(|l| l == "─── rust"), "{text:?}");
-        assert!(text.iter().any(|l| l.contains("fn main() {}")), "{text:?}");
+        assert!(lines[0].spans[0].style.patch(lines[0].style).add_modifier.contains(Modifier::BOLD));
+        assert!(text.iter().any(|l| l.starts_with("• run all")), "a bullet, not a dash: {text:?}");
+        assert!(text.iter().any(|l| l == "rust"), "the language labels the block: {text:?}");
+        assert!(text.iter().any(|l| l == "│ fn main() {}"), "code sits behind a bar: {text:?}");
+        assert!(!text.iter().any(|l| l.starts_with('─')), "no fence rules: {text:?}");
         assert!(lines.iter().all(|l| l.width() <= 14), "{text:?}");
     }
 

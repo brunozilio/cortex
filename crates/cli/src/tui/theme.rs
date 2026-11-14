@@ -39,12 +39,19 @@ impl Theme {
         if self.truecolor { Color::Rgb(r, g, b) } else { Color::Indexed(indexed) }
     }
 
+    fn tint(self, dark: (u8, u8, u8), light: (u8, u8, u8, u8)) -> Color {
+        match (self.truecolor, self.light()) {
+            (false, false) => Color::Reset,
+            _ => self.pick((dark.0, dark.1, dark.2, 0), light),
+        }
+    }
+
     pub fn added_bg(self) -> Color {
-        self.pick((0x1d, 0x3b, 0x2a, 22), (0xda, 0xfb, 0xe1, 194))
+        self.tint((0x1d, 0x3b, 0x2a), (0xda, 0xfb, 0xe1, 194))
     }
 
     pub fn removed_bg(self) -> Color {
-        self.pick((0x45, 0x22, 0x28, 52), (0xff, 0xeb, 0xe9, 224))
+        self.tint((0x45, 0x22, 0x28), (0xff, 0xeb, 0xe9, 224))
     }
 
     pub fn added_mark(self) -> Color {
@@ -104,7 +111,8 @@ mod tests {
     fn diff_tints_are_true_colours_only_where_the_terminal_says_so() {
         let plain = detect(&[]);
         let rich = detect(&[("COLORTERM", "truecolor")]);
-        assert_eq!(plain.added_bg(), Color::Indexed(22));
+        assert_eq!(plain.added_bg(), Color::Reset, "256 colours have no dark tint subtle enough: only the marks");
+        assert_eq!(plain.added_mark(), Color::Indexed(114));
         assert!(matches!(rich.added_bg(), Color::Rgb(..)));
         let light = detect(&[("COLORFGBG", "0;15")]);
         assert_eq!(light.removed_bg(), Color::Indexed(224));

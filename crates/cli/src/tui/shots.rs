@@ -33,8 +33,21 @@ fn ask(subject: &str) -> EngineEvent {
     })
 }
 
-fn tool(id: &str, name: &str, input: &str) -> [EngineEvent; 2] {
-    [EngineEvent::ToolStarted(ToolCall::new(id, name, input)), EngineEvent::ToolFinished { id: id.into() }]
+fn result(id: &str, output: &str) -> EngineEvent {
+    EngineEvent::ToolResult { id: id.into(), output: output.into(), failed: false }
+}
+
+fn tool(id: &str, name: &str, input: &str) -> [EngineEvent; 3] {
+    let output = match name {
+        "Read" => "Read 42 lines",
+        "Grep" => "Found 3 matches in 2 files",
+        _ => "",
+    };
+    [
+        EngineEvent::ToolStarted(ToolCall::new(id, name, input)),
+        result(id, output),
+        EngineEvent::ToolFinished { id: id.into() },
+    ]
 }
 
 fn edit() -> EngineEvent {
@@ -45,7 +58,7 @@ fn edit() -> EngineEvent {
     }
 }
 
-const ANSWER: &str = "The server now reads its port from `PORT` and falls back to **3000**.\n\n## What changed\n\n- `src/main.rs` calls `env_port()` before binding\n- `src/config.rs` parses the variable and rejects values above 65535\n- a test covers the fallback\n\n```rust\nfn env_port() -> u16 {\n    std::env::var(\"PORT\").ok().and_then(|p| p.parse().ok()).unwrap_or(3000)\n}\n```\n\nRun `cargo test` to check it.";
+const ANSWER: &str = "The server now reads its port from `PORT` and falls back to **3000**.\n\n## What changed\n\n- `src/main.rs` calls `env_port()` before binding\n- `src/config.rs` parses the variable and rejects values above 65535\n- a test covers the fallback\n\n```rust\nfn env_port() -> u16 {\n    std::env::var(\"PORT\").ok().and_then(|p| p.parse().ok()).unwrap_or(3000)\n}\n```\n\n`cargo test` passes, including the new fallback test.";
 
 fn tasks() -> EngineEvent {
     let item = |id: &str, subject: &str, status: &str| TaskItem {
@@ -69,7 +82,7 @@ fn scenes() -> Vec<Scene> {
     asking.push(EngineEvent::ToolStarted(ToolCall::new("t2", "Edit", "src/main.rs")));
     asking.push(edit());
     asking.push(EngineEvent::ToolFinished { id: "t2".into() });
-    asking.push(ask("npm run dev"));
+    asking.push(ask("cargo test -p server"));
     let mut working = vec![started(), tasks()];
     working.extend(tool("t1", "Read", "src/main.rs"));
     working.extend(tool("t3", "Grep", "\"bind(\" in src"));
@@ -79,6 +92,9 @@ fn scenes() -> Vec<Scene> {
     answered.push(EngineEvent::ToolStarted(ToolCall::new("t2", "Edit", "src/main.rs")));
     answered.push(edit());
     answered.push(EngineEvent::ToolFinished { id: "t2".into() });
+    answered.push(EngineEvent::ToolStarted(ToolCall::new("t3", "Bash", "cargo test")));
+    answered.push(result("t3", "test result: ok. 12 passed; 0 failed"));
+    answered.push(EngineEvent::ToolFinished { id: "t3".into() });
     answered.push(EngineEvent::TextDelta(ANSWER.into()));
     answered.push(EngineEvent::Completed { duration_ms: 48_000, cost_usd: Some(0.42) });
     let mut failed = vec![started()];

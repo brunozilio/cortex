@@ -80,7 +80,7 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
     assert!(asking.contains("Allow Bash: cargo test?"), "{asking}");
     assert!(asking.contains("● Read(src/main.rs)"), "{asking}");
     assert!(asking.contains("✻ Thought"), "the reasoning shows, folded once a tool runs: {asking}");
-    assert!(asking.contains("Working…") && asking.contains("esc to interrupt"), "{asking}");
+    assert!(asking.contains("Waiting for your answer") && !asking.contains("Working…"), "{asking}");
     type_text(&mut app, "y");
     until(&mut app, |app| !app.busy());
     let done = screen(&app);

@@ -57,7 +57,8 @@ pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, Str
     let builtin = Command::HELP
         .into_iter()
         .flat_map(|(name, about)| {
-            let aliases = Command::ALIASES.into_iter().filter(move |(_, of)| *of == name);
+            let named = name.starts_with(typed);
+            let aliases = Command::ALIASES.into_iter().filter(move |(_, of)| *of == name && !named);
             std::iter::once((name.to_owned(), about.to_owned()))
                 .chain(aliases.map(move |(alias, _)| (alias.to_owned(), format!("Same as /{name}: {about}"))))
         })
@@ -90,20 +91,17 @@ mod tests {
         let skills = [("memo".to_owned(), "Writes a memo".to_owned()), ("audit".to_owned(), "Audits".to_owned())];
         let names: Vec<String> = suggestions("me", &skills).into_iter().map(|(name, _)| name).collect();
         assert_eq!(names, ["memory", "memo"]);
-        let cleared: Vec<(String, String)> =
-            suggestions("", &[]).into_iter().filter(|(_, about)| about.contains("/clear")).collect();
-        assert_eq!(
-            cleared.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(),
-            ["new", "reset"],
-            "aliases follow"
-        );
+        let aliases_of_clear =
+            |typed: &str| suggestions(typed, &[]).into_iter().filter(|(_, about)| about.starts_with("Same as /clear"));
+        assert_eq!(aliases_of_clear("").count(), 0, "an alias hides while its command is offered");
+        assert_eq!(aliases_of_clear("ne").map(|(name, _)| name).collect::<Vec<_>>(), ["new"]);
         assert_eq!(
             suggestions("res", &[]).iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(),
             ["reset", "resume"]
         );
         assert_eq!(
             suggestions("", &skills).len(),
-            Command::HELP.len() + Command::ALIASES.len() + super::super::features::help().len() + 2,
+            Command::HELP.len() + super::super::features::help().len() + 2,
             "every match, not just a screenful"
         );
     }
