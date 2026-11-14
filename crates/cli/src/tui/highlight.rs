@@ -12,11 +12,10 @@ fn syntaxes() -> &'static SyntaxSet {
 }
 
 fn theme() -> &'static Theme {
-    static THEME: OnceLock<Theme> = OnceLock::new();
-    THEME.get_or_init(|| {
-        let mut themes = ThemeSet::load_defaults().themes;
-        themes.remove("base16-ocean.dark").unwrap_or_default()
-    })
+    static THEMES: OnceLock<ThemeSet> = OnceLock::new();
+    static FALLBACK: OnceLock<Theme> = OnceLock::new();
+    let themes = THEMES.get_or_init(ThemeSet::load_defaults);
+    themes.themes.get(super::theme::current().code_theme()).unwrap_or_else(|| FALLBACK.get_or_init(Theme::default))
 }
 
 pub fn extension(heading: &str) -> Option<&str> {

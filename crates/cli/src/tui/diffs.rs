@@ -5,8 +5,6 @@ use super::diff_model::{self, DiffLine, FileDiff, Kind, Status};
 use super::wrap::wrap;
 
 const FOLDED: usize = 20;
-const ADDED: Color = Color::Indexed(22);
-const REMOVED: Color = Color::Indexed(52);
 pub const EXPAND: &str = "ctrl+o to expand";
 
 pub fn is_edit(output: &str) -> bool {
@@ -87,9 +85,19 @@ const fn mark(kind: Kind) -> char {
 }
 
 fn colour(mark: char) -> Style {
+    let theme = super::theme::current();
     match mark {
-        '+' => Style::new().bg(ADDED),
-        '-' => Style::new().bg(REMOVED),
+        '+' => Style::new().bg(theme.added_bg()),
+        '-' => Style::new().bg(theme.removed_bg()),
+        _ => Style::new(),
+    }
+}
+
+fn sign(mark: char) -> Style {
+    let theme = super::theme::current();
+    match mark {
+        '+' => colour(mark).fg(theme.added_mark()),
+        '-' => colour(mark).fg(theme.removed_mark()),
         _ => Style::new(),
     }
 }
@@ -98,7 +106,7 @@ fn row(number: &str, mark: char, text: &str, width: usize, ext: Option<&str>) ->
     let text = wrap(text, width.saturating_sub(12)).into_iter().next().unwrap_or_default();
     let filled = fill(&text, width);
     let mut spans =
-        vec![Span::styled(format!("    {number:>5} "), dim()), Span::styled(format!("{mark} "), colour(mark))];
+        vec![Span::styled(format!("    {number:>5} "), dim()), Span::styled(format!("{mark} "), sign(mark))];
     spans.extend(super::highlight::spans(ext, &text, colour(mark)));
     spans.push(Span::styled(filled[text.len()..].to_owned(), colour(mark)));
     Line::from(spans)
@@ -141,8 +149,10 @@ mod tests {
             text(&lines),
             ["  ⎿ Edited f.rs · Added 1 lines, removed 1", "        3 -     let x = 1;", "        3 +     let x = 2;"]
         );
-        assert_eq!(lines[1].spans[1].style.bg, Some(REMOVED));
-        assert_eq!(lines[2].spans[1].style.bg, Some(ADDED));
+        let theme = super::super::theme::current();
+        assert_eq!(lines[1].spans[1].style.bg, Some(theme.removed_bg()));
+        assert_eq!(lines[2].spans[1].style.bg, Some(theme.added_bg()));
+        assert_eq!(lines[2].spans[1].style.fg, Some(theme.added_mark()));
     }
 
     #[test]

@@ -4,15 +4,7 @@ use super::callback;
 
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(300);
 
-const DONE_PAGE: &str = concat!(
-    "<!doctype html><meta charset=utf-8><title>",
-    brand::name!(),
-    "</title>\
-<body style=\"font:16px -apple-system,system-ui,sans-serif;display:grid;place-items:center;height:90vh\">\
-<p>Signed in. You can close this tab and return to ",
-    brand::name!(),
-    ".</p>"
-);
+const TEMPLATE: &str = include_str!("done.html");
 
 pub struct Loopback {
     server: tiny_http::Server,
@@ -87,15 +79,13 @@ impl Loopback {
             let url = request.url().to_owned();
             let (path, query) = url.split_once('?').unwrap_or((&url, ""));
             if path != self.path && !others.contains(&path) {
-                let _ = request
-                    .respond(page(concat!("<p>", brand::name!(), " is not waiting for this address.</p>").into(), 404));
+                let message = concat!(brand::name!(), " is not waiting for this address.");
+                let _ = request.respond(page(screen(false, "Wrong address", message), 404));
                 continue;
             }
             if state_of(query).as_deref() != Some(state) {
-                let _ = request.respond(page(
-                    concat!("<p>This is not the sign-in ", brand::name!(), " is waiting for.</p>").into(),
-                    400,
-                ));
+                let message = concat!("This is not the sign-in ", brand::name!(), " is waiting for.");
+                let _ = request.respond(page(screen(false, "Not this sign-in", message), 400));
                 continue;
             }
             return Ok(Pending { path: path.to_owned(), query: query.to_owned(), request: Some(request) });
@@ -129,7 +119,8 @@ impl Pending {
                 let _ = request.respond(response.with_header(location));
             }
             Err(()) => {
-                let _ = request.respond(page("<p>Sign-in failed: an invalid next address.</p>".into(), 500));
+                let _ = request
+                    .respond(page(screen(false, "Sign-in failed", "The sign-in sent an invalid next address."), 500));
             }
         }
     }
@@ -137,8 +128,10 @@ impl Pending {
     pub fn finish(mut self, result: Result<(), &String>) {
         let Some(request) = self.request.take() else { return };
         let body = match result {
-            Ok(()) => DONE_PAGE.to_owned(),
-            Err(error) => format!("<!doctype html><meta charset=utf-8><p>Sign-in failed: {}</p>", html(error)),
+            Ok(()) => {
+                screen(true, "Signed in", concat!("Return to ", brand::name!(), " in your terminal to keep working."))
+            }
+            Err(error) => screen(false, "Sign-in failed", error),
         };
         let _ = request.respond(page(body, 200));
     }
@@ -147,7 +140,8 @@ impl Pending {
 impl Drop for Pending {
     fn drop(&mut self) {
         if let Some(request) = self.request.take() {
-            let _ = request.respond(page("<p>Sign-in failed; see the terminal.</p>".into(), 200));
+            let _ =
+                request.respond(page(screen(false, "Sign-in failed", "See the terminal for what went wrong."), 200));
         }
     }
 }
@@ -164,6 +158,14 @@ fn page(body: String, status: u16) -> tiny_http::Response<std::io::Cursor<Vec<u8
     }
 }
 
+fn screen(signed_in: bool, title: &str, message: &str) -> String {
+    TEMPLATE
+        .replace("{{STATE}}", if signed_in { "ok" } else { "failed" })
+        .replace("{{TITLE}}", title)
+        .replace("{{NAME}}", brand::name!())
+        .replace("{{MESSAGE}}", &html(message))
+}
+
 fn html(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
@@ -177,6 +179,16 @@ fn status(url: String) -> Result<u16, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_page_fills_every_slot_and_escapes_the_message() {
+        let failed = screen(false, "Sign-in failed", "<script>x</script>");
+        assert!(failed.contains("&lt;script&gt;x&lt;/script&gt;") && !failed.contains("<script>"), "{failed}");
+        assert!(failed.contains("class=\"failed\"") && failed.contains(brand::name!()), "{failed}");
+        assert!(!failed.contains("{{"), "{failed}");
+        assert!(screen(true, "Signed in", "ok").contains("class=\"ok\""));
+        assert!(!TEMPLATE.contains("http"), "the page loads nothing from the network");
+    }
 
     #[test]
     fn receives_the_code_for_the_right_state() {

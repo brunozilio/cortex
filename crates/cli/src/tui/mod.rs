@@ -48,6 +48,7 @@ mod slash;
 mod statusline;
 mod stopwatch;
 mod submit;
+mod theme;
 mod toggles;
 mod transcript;
 mod turn;
@@ -55,6 +56,10 @@ mod view;
 mod vim;
 mod wrap;
 
+#[cfg(test)]
+mod shots;
+#[cfg(test)]
+mod shots_html;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

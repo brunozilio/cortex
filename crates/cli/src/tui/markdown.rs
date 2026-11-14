@@ -4,7 +4,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use tui_markdown::{Options, StyleSheet};
+use tui_markdown::{BuiltinCodeTheme, Options, StyleSheet};
 
 use super::wrap::wrap_line;
 
@@ -60,11 +60,14 @@ impl StyleSheet for Look {
 pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
     let mut hasher = DefaultHasher::new();
     text.hash(&mut hasher);
+    let theme = super::theme::current();
+    theme.light().hash(&mut hasher);
     let key = (hasher.finish(), width);
     if let Some(kept) = RENDERED.with(|kept| kept.borrow().get(&key).cloned()) {
         return kept;
     }
-    let options = Options::new(Look).table_width(u16::try_from(width).unwrap_or(u16::MAX));
+    let code = if theme.light() { BuiltinCodeTheme::InspiredGitHub } else { BuiltinCodeTheme::Base16OceanDark };
+    let options = Options::new(Look).table_width(u16::try_from(width).unwrap_or(u16::MAX)).code_theme(code);
     let lines: Vec<Line<'static>> = tui_markdown::from_str_with_options(text, &options)
         .lines
         .into_iter()
@@ -118,6 +121,7 @@ mod tests {
         assert!(RENDERED.with(|kept| kept.borrow().contains_key(&{
             let mut h = DefaultHasher::new();
             "kept **once**".hash(&mut h);
+            super::super::theme::current().light().hash(&mut h);
             (h.finish(), 40)
         })));
     }

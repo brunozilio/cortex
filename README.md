@@ -39,7 +39,9 @@ the clipboard's image (or drop an image file on the terminal; it shows as
 the commands (`/model`, `/mode`, `/effort`, `/compact`, `/diff`, `/memory`,
 `/skills`, `/agents`, `/clear`, `/cost`, `/exit`); any other `/name` runs a
 skill or custom command. Replies render as Markdown with highlighted code;
-`CORTEX_REDUCED_MOTION=1` turns the animations off.
+`CORTEX_REDUCED_MOTION=1` turns the animations off. Colours follow the
+terminal's background (from `COLORFGBG`, or `CORTEX_THEME=light|dark`) and
+use true colour where `COLORTERM` says so.
 
 Project settings, skills, agents and rules live in `.cortex/`, project
 instructions in `CORTEX.md` or `.cortex/CORTEX.md`, and your own in
