@@ -15,7 +15,7 @@ pub fn feature() -> Feature {
     Feature {
         commands: vec![Slash {
             names: &["trace"],
-            about: "Open the session's trace in the browser: every prompt, turn, tool and sub-agent (/trace [session])",
+            about: "Open the trace in the browser: each run's spans, cost, waits and checks, plus the project's last 30 days (/trace [session])",
             run: trace,
         }],
         tick: None,

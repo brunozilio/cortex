@@ -1,5 +1,5 @@
 use super::{Builder, asked_tool, lane, node};
-use crate::trace::{Agent, Kind, ModelCall, Node, RunInfo};
+use crate::trace::{Agent, Kind, ModelCall, Node, RunInfo, Wait};
 use crate::{AgentAsk, AgentStatus, Rewound};
 
 impl Builder<'_> {
@@ -34,8 +34,11 @@ impl Builder<'_> {
                 tool.until_ms.is_none() && matches!(&tool.kind, Kind::Tool { call, .. } if call.name == name)
             });
         match running.map(|tool| &mut tool.kind) {
-            Some(Kind::Tool { asks, .. }) => asks.push(ask),
-            _ => self.asks.push(ask),
+            Some(Kind::Tool { asks, waits, .. }) => {
+                asks.push(ask);
+                waits.push(Wait { asked_ms: at, answered_ms: None, decision: None });
+            }
+            _ => self.asks.push((at, ask)),
         }
     }
 

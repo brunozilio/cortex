@@ -7,3 +7,6 @@
 
 # Agent worktrees
 .claude/worktrees/
+
+web/trace/node_modules
+web/trace/dist

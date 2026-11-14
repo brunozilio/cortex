@@ -1,13 +1,16 @@
 mod attach;
+mod signals;
 
 use std::collections::HashMap;
 
 use super::route::{Item, Spawn};
-use super::{Kind, Lane, ModelCall, Node, Step};
+use super::{Kind, Lane, ModelCall, Node, Step, Wait};
 use crate::billing::ModelUsage;
 use crate::{AgentAsk, AskKind, EngineEvent};
 
 const PARTIAL: &str = "This session started before traces were kept: only its saved messages are shown, without times, tokens, model calls or sub-agents.";
+
+type Pending = (u64, AgentAsk);
 
 #[derive(Default)]
 struct Draft {
@@ -20,7 +23,7 @@ struct Builder<'a> {
     draft: Option<Draft>,
     asked: Option<ModelCall>,
     model: Option<String>,
-    asks: Vec<AgentAsk>,
+    asks: Vec<Pending>,
     group: Vec<Node>,
     since: u64,
     agents: &'a mut HashMap<usize, Spawn>,
@@ -110,7 +113,12 @@ impl Builder<'_> {
             EngineEvent::Diagnosed(problem) => self.note(at, "diagnosed", format!("{problem:?}")),
             EngineEvent::ModeChanged(mode) => self.note(at, "mode", format!("{mode:?}")),
             EngineEvent::Moved(path) => self.note(at, "moved", path.display().to_string()),
-            EngineEvent::Verified(verdict) => self.note(at, "verified", format!("{verdict:?}")),
+            EngineEvent::Verified(verdict) => self.verified(at, &verdict),
+            EngineEvent::Reviewed(findings) => self.reviewed(at, &findings),
+            EngineEvent::Answered { ask, decision } => self.answered(at, &ask, &decision),
+            EngineEvent::Repeated { tool } => self.mark(at, &tool, "repeated".into()),
+            EngineEvent::Refused { tool, reason } => self.mark(at, &tool, format!("refused: {reason}")),
+            EngineEvent::Edited(edited) => self.mark(at, "", format!("edited {}", edited.path.display())),
             EngineEvent::Notified(notices) => {
                 let text = notices.iter().map(|n| format!("{}: {}", n.source, n.text)).collect::<Vec<_>>().join("\n");
                 self.note(at, "notified", text)
@@ -123,16 +131,20 @@ impl Builder<'_> {
         if self.draft.is_some() {
             self.finish_turn(at, None);
         }
-        let (mine, others): (Vec<AgentAsk>, Vec<AgentAsk>) =
-            std::mem::take(&mut self.asks).into_iter().partition(|ask| asked_tool(ask) == Some(call.name.as_str()));
+        let (mine, others): (Vec<Pending>, Vec<Pending>) = std::mem::take(&mut self.asks)
+            .into_iter()
+            .partition(|(_, ask)| asked_tool(ask) == Some(call.name.as_str()));
         self.asks = others;
+        let waits = mine.iter().map(|(asked_ms, _)| Wait { asked_ms: *asked_ms, answered_ms: None, decision: None });
         let tool = Kind::Tool {
             call,
             output: None,
             logs: Vec::new(),
             usage: Vec::new(),
             calls: Vec::new(),
-            asks: mine,
+            waits: waits.collect(),
+            asks: mine.into_iter().map(|(_, ask)| ask).collect(),
+            notes: Vec::new(),
             agent: None,
         };
         self.group.push(node(at, false, tool));

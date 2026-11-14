@@ -1,5 +1,7 @@
+pub mod insights;
 mod lane;
 mod route;
+pub mod runs;
 
 use serde::{Deserialize, Serialize};
 
@@ -96,6 +98,13 @@ pub struct Node {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Wait {
+    pub asked_ms: u64,
+    pub answered_ms: Option<u64>,
+    pub decision: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Agent {
     pub name: String,
     pub summary: String,
@@ -124,6 +133,8 @@ pub enum Kind {
         usage: Vec<ModelUsage>,
         calls: Vec<ModelCall>,
         asks: Vec<AgentAsk>,
+        waits: Vec<Wait>,
+        notes: Vec<String>,
         agent: Option<Box<Agent>>,
     },
     Agent(Box<Agent>),

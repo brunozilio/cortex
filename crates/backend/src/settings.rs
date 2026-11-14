@@ -6,6 +6,14 @@ use crate::dirs::{app_data_dir, owner_key};
 
 const AT_MOST: usize = 256 * 1024;
 
+pub(crate) fn recent_sessions(owner_settings: &serde_json::Value, cwd: &std::path::Path) -> Vec<domain::SessionId> {
+    let kept = owner_settings["conversations"][cwd.to_string_lossy().as_ref()].as_array();
+    kept.into_iter()
+        .flatten()
+        .filter_map(|c| c["session"].as_str().map(|id| domain::SessionId(id.to_owned())))
+        .collect()
+}
+
 pub trait SettingsStore: Send + Sync {
     fn load(&self, owner: &Principal) -> Option<serde_json::Value>;
     fn save(&self, owner: &Principal, settings: &serde_json::Value) -> Result<(), String>;

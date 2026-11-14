@@ -727,7 +727,27 @@ before and are folded into the log on the next write.
 session saved before traces is replayed from its messages and marked
 partial), builds a tree with `domain::trace::build` (prompts with their
 run's setup, model turns with what the model received, tools called side by
-side with their permission asks, sub-agents' lanes under the tool that
-started them, background ones too, compactions, rewinds, fallbacks, errors)
-and writes a self-contained HTML page to `~/.{command}/traces/<session>.html`,
-opened in the browser.
+side with their permission asks and how long each waited for an answer,
+the notes a tool collected (repeated, refused, edited), sub-agents' lanes
+under the tool that started them, background ones too, compactions,
+rewinds, fallbacks, verdicts, review findings, errors). `trace::runs` then
+cuts that tree into one run per prompt, each a flat list of spans timed
+from the run's start (`run`, `llm`, `tool`, `agent`, `wait`, `eval`,
+`event`) with its cost, tokens, cache share, waiting time, wasted time
+(failed tools) and signals; a model call's context split into system
+prompt, tool definitions and conversation is estimated from the recorded
+system prompt and tools. The backend's `trace` feature does this for the
+session and for the project's other conversations of the last 30 days
+(their texts cut shorter) and adds `trace::insights`: usage per day and
+model, latency and cache per model, calls, failures and asks per tool,
+where the time went, check counts and the latest findings. The CLI
+writes the report into `trace.html` and keeps the page at
+`~/.{command}/traces/<session>.html`, opened in the browser.
+
+`trace.html` is built, not written by hand: its source is the React,
+Tailwind and shadcn/ui app in `web/trace` (types in `src/types.ts` mirror
+`trace::insights::Report`). `npm run build` there type-checks, bundles it
+into one file with no network access at runtime and copies it over the
+CLI's template; the built file is committed so a Rust build never needs
+Node. The page reads the report from the `{{TRACE}}` JSON block and,
+when it is left unfilled, shows a sample report for development.

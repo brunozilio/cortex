@@ -20,17 +20,12 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
     let store = FileSessions::new(data.join(crate::native::SESSIONS));
     let owner_settings = context.services.settings.load(context.principal).unwrap_or_default();
-    let sessions = recent(&owner_settings, cwd);
+    let sessions = crate::settings::recent_sessions(&owner_settings, cwd);
     let kept = settings::load(cwd, context.services.home.as_deref(), &[])?.permissions.listed();
     serde_json::to_value(suggested(&store, context.principal, cwd, &sessions, &kept)).map_err(|e| e.to_string())
 }
 
 pub fn forget(_client: u64) {}
-
-fn recent(owner_settings: &Value, cwd: &Path) -> Vec<SessionId> {
-    let kept = owner_settings["conversations"][cwd.to_string_lossy().as_ref()].as_array();
-    kept.into_iter().flatten().filter_map(|c| c["session"].as_str().map(|id| SessionId(id.to_owned()))).collect()
-}
 
 fn suggested(
     store: &FileSessions,
@@ -91,7 +86,7 @@ mod tests {
         let settings =
             json!({ "conversations": { dir.path().to_string_lossy(): [{ "session": "one" }, { "session": "two" }] } });
 
-        let sessions = recent(&settings, dir.path());
+        let sessions = crate::settings::recent_sessions(&settings, dir.path());
         let found = suggested(&store, &Principal::LocalOwner, dir.path(), &sessions, &[]);
 
         assert_eq!(found, [Suggestion { rule: "Bash(cargo test:*)".into(), kind: RuleKind::Allow, times: 5 }]);
