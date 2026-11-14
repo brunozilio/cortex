@@ -1,15 +1,25 @@
+mod attrs;
+mod distill;
+mod feed;
 pub mod guarded;
 mod html;
+mod json;
+mod links;
+mod main_content;
+mod page;
+mod runs;
+mod tree;
 
 use std::io::Read as _;
 
 use serde_json::{Value, json};
 
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 
 const SHOWN: usize = 60_000;
 const READ: u64 = 5 << 20;
+const ACCEPT: &str = "text/markdown, text/plain;q=0.9, text/html;q=0.8, application/json;q=0.8, */*;q=0.5";
 
 use domain::permission_rules::is_private;
 use domain::permission_rules::site as host;
@@ -60,21 +70,23 @@ impl Tool for WebFetch {
         let Some(web) = &workspace.services.network else {
             return Outcome::error("The web is not available to this run.");
         };
-        let response = match web.0.get(&url, &[("User-Agent".into(), brand::NAME.into())]) {
+        let headers = [("User-Agent".into(), brand::NAME.into()), ("Accept".into(), ACCEPT.into())];
+        let response = match web.0.get(&url, &headers) {
             Ok(response) => response,
             Err(error) => return Outcome::error(format!("Could not fetch {url}: {error}")),
         };
         if !(200..300).contains(&response.status) {
             return Outcome::error(format!("{url} answered {}", response.status));
         }
-        let html = response.header("content-type").is_none_or(|kind| kind.contains("html"));
+        let content_type = response.header("content-type");
         let mut bytes = Vec::new();
         if let Err(error) = response.body.take(READ).read_to_end(&mut bytes) {
             return Outcome::error(format!("Could not read {url}: {error}"));
         }
-        let body = String::from_utf8_lossy(&bytes).into_owned();
-        let text = if html { html::text(&body) } else { body };
-        Outcome::ok(clip(&text, SHOWN))
+        match page::read(&String::from_utf8_lossy(&bytes), content_type.as_deref(), &url) {
+            Ok(text) => Outcome::ok(page::clipped(&text, SHOWN)),
+            Err(page::Unreadable(why)) => Outcome::error(why),
+        }
     }
 }
 
@@ -131,10 +143,29 @@ mod tests {
         let workspace = workspace(vec![(200, "<h1>Serde</h1><p>A framework.</p>".into())]);
         let out = WebFetch.run(&json!({"url": "http://serde.rs/", "prompt": "what it is"}), &workspace);
         assert!(!out.is_error, "{out:?}");
-        assert_eq!(out.content, "# Serde\nA framework.", "the loop hands the page to a separate reader");
+        assert_eq!(out.content, "# Serde\n\nA framework.", "the loop hands the page to a separate reader");
         let missing = workspace_answer(404);
         assert!(WebFetch.run(&json!({"url": "https://x.dev/a", "prompt": "p"}), &missing).is_error);
         assert!(WebFetch.run(&json!({"url": "file:///etc/passwd", "prompt": "p"}), &missing).is_error);
+    }
+
+    #[test]
+    fn markdown_is_asked_for_before_html() {
+        let http = Arc::new(ScriptedHttp::new([(200, "# Already markdown".to_owned())]));
+        let mut workspace = Workspace::new("/tmp");
+        workspace.services.network = Some(Network(http.clone()));
+        let out = WebFetch.run(&json!({"url": "https://docs.dev/a.md", "prompt": "p"}), &workspace);
+        assert_eq!(out.content, "# Already markdown");
+        let accept = http.sent()[0].headers.iter().find(|(key, _)| key == "Accept").map(|(_, value)| value.clone());
+        assert!(accept.is_some_and(|accept| accept.starts_with("text/markdown")));
+    }
+
+    #[test]
+    fn a_page_with_no_text_is_an_error_not_an_answer() {
+        let shell =
+            format!("<html><head>{}</head><body><div id='root'></div></body></html>", "<script>x</script>".repeat(800));
+        let out = WebFetch.run(&json!({"url": "https://app.dev/", "prompt": "p"}), &workspace(vec![(200, shell)]));
+        assert!(out.is_error && out.content.contains("JavaScript"), "{out:?}");
     }
 
     fn workspace_answer(status: u16) -> Workspace {
@@ -157,8 +188,10 @@ mod offered_tests {
 
     fn on(provider: &'static str, model: &str) -> Workspace {
         let mut workspace = Workspace::new("/tmp");
-        workspace.models.model =
-            domain::ModelOption { provider: domain::ModelProvider::new(provider), ..domain::ModelOption::new(model, model) };
+        workspace.models.model = domain::ModelOption {
+            provider: domain::ModelProvider::new(provider),
+            ..domain::ModelOption::new(model, model)
+        };
         workspace
     }
 

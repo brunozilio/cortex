@@ -467,7 +467,19 @@ Inbox notices are core (`TakeNotices`).
   account's catalog, priced by whichever vendor makes it (Copilot and Kiro
   list several vendors' models, with dotted versions) (`ApiSource::catalog`, cached per provider), else the
   session's model. A small model that fails hands WebFetch's page to the
-  session's model.
+  session's model. A page of 6,000 characters or less skips the reader and
+  arrives fenced as untrusted content.
+- **WebFetch's page** (`tools/builtin/web/page.rs`): asks for Markdown first,
+  then reads the body by kind. HTML is parsed into a tree (`tree.rs`), its
+  main content (`main`, `role=main`, a single `article`, else the column
+  holding most of the prose) leads and the rest follows a divider; hidden
+  parts, controls, labels repeated on every item and long runs of menu
+  links outside the content are dropped or shortened; links are numbered
+  once, deduplicated and listed at the end, same-site ones as paths. JSON
+  becomes one line per record with the fields every record shares said
+  once; RSS and Atom become their entries; Markdown and text pass through.
+  An HTML page with almost no text is an error (built by JavaScript, a
+  consent wall, a login, a bot check), not an empty answer.
 - **Plan mode** (`agent/plan_mode.rs`): the top-level agent presents its
   plan with `ExitPlanMode` (`AskKind::Plan`); `Decision::Approve(mode)`
   switches the run's mode and the agent implements the plan in the same
