@@ -60,7 +60,7 @@ function SpanTip({ span }: { span: Span }) {
   )
 }
 
-function Bar({ span, total }: { span: Span; total: number }) {
+function Bar({ span, total, running }: { span: Span; total: number; running: boolean }) {
   const left = (span.start_ms / total) * 100
   if (span.kind === 'event') {
     return (
@@ -74,7 +74,7 @@ function Bar({ span, total }: { span: Span; total: number }) {
   const cost = span.usage?.cost_usd ?? 0
   return (
     <>
-      <div className={cn('absolute top-1/2 h-4 -translate-y-1/2 rounded opacity-90', KINDS[span.kind].bar, span.failed && 'ring-err')} style={{ left: `${left}%`, width: `${width}%` }} />
+      <div className={cn('absolute top-1/2 h-4 -translate-y-1/2 rounded opacity-90', KINDS[span.kind].bar, span.failed && 'ring-err', running && 'animate-pulse')} style={{ left: `${left}%`, width: `${width}%` }} />
       {cost > 0.05 ? (
         <span className={cn('absolute top-1/2 ml-1.5 -translate-y-1/2 font-mono text-[11px] font-medium', KINDS[span.kind].text)} style={{ left: `${left + width}%` }}>
           {usd(cost)}
@@ -136,7 +136,7 @@ export function Waterfall({ run, selected, onSelect }: WaterfallProps) {
                       {span.failed && !isRepeated(span) && !refused ? <AlertCircle className="size-3.5 shrink-0 text-danger" /> : null}
                     </div>
                     <div className="relative h-full">
-                      <Bar span={span} total={total} />
+                      <Bar span={span} total={total} running={run.status === 'running' && span.parent === 0} />
                     </div>
                     <span className="whitespace-nowrap pr-4 text-right font-mono text-xs text-muted-foreground">
                       {span.kind === 'event' ? '·' : ms(span.end_ms - span.start_ms)}

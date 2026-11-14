@@ -742,7 +742,15 @@ session and for the project's other conversations of the last 30 days
 model, latency and cache per model, calls, failures and asks per tool,
 where the time went, check counts and the latest findings. The CLI
 writes the report into `trace.html` and keeps the page at
-`~/.{command}/traces/<session>.html`, opened in the browser.
+`~/.{command}/traces/<session>.html`. `{command} trace` opens that file;
+`/trace` in the chat serves the page live instead: `trace::live` listens
+on 127.0.0.1 on a free port, answers only requests carrying a random
+token, and streams Server-Sent Events. The feature's tick asks the
+backend once a second while a run is going (and once after it ends) for
+the followed session's runs alone (`"only": "current"`) and sends them
+when they changed; the page injects a `#live` block naming the stream,
+swaps that session in place and follows its newest run. The server lives
+as long as the chat; when it cannot start, `/trace` opens the file.
 
 `trace.html` is built, not written by hand: its source is the React,
 Tailwind and shadcn/ui app in `web/trace` (types in `src/types.ts` mirror

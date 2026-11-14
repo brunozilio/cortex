@@ -9,7 +9,9 @@ import type { InspectorTab } from '@/views/traces/inspector/Inspector'
 import type { Metric } from '@/lib/days'
 import { EMPTY_FILTERS, type Filters } from '@/lib/filters'
 import { allRuns, defaultRun, findRun, latestRun, type RunRef } from '@/lib/report'
-import type { Finding, Report, Run } from '@/types'
+import { followSelection, mergeSession } from '@/lib/live'
+import { useLiveFeed } from '@/lib/useLiveFeed'
+import type { Finding, Report, Run, SessionRuns } from '@/types'
 
 const VIEW_KEY = 'trace-view'
 
@@ -27,12 +29,25 @@ function refOf(run: Run | undefined): RunRef | null {
   return run ? { session: run.session, index: run.index } : null
 }
 
-export function App({ report }: { report: Report }) {
+export function App({ initial }: { initial: Report }) {
+  const [report, setReport] = useState(initial)
   const runs = useMemo(() => allRuns(report), [report])
   const [view, setViewState] = useState<View>(storedView)
   const [metric, setMetric] = useState<Metric>('cost')
-  const [selected, setSelected] = useState<RunRef | null>(() => refOf(defaultRun(report)))
+  const [selected, setSelected] = useState<RunRef | null>(() => refOf(defaultRun(initial)))
   const [spanId, setSpanId] = useState(1)
+  const latest = useRef({ report, selection: { run: selected, spanId } })
+  latest.current = { report, selection: { run: selected, spanId } }
+
+  const liveStatus = useLiveFeed((update: SessionRuns) => {
+    const before = latest.current.report
+    const after = mergeSession(before, update)
+    const next = followSelection(before, after, update, latest.current.selection)
+    latest.current = { report: after, selection: next }
+    setReport(after)
+    setSelected(next.run)
+    setSpanId(next.spanId)
+  })
   const [tab, setTab] = useState<InspectorTab>('io')
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [query, setQuery] = useState('')
@@ -100,7 +115,7 @@ export function App({ report }: { report: Report }) {
           onSession={openSession}
         />
         <main className="min-w-0 flex-1">
-          <Header ref={searchRef} project={report.project} current={report.current} view={view} query={query} onView={setView} onQuery={search} />
+          <Header ref={searchRef} project={report.project} current={report.current} live={liveStatus} view={view} query={query} onView={setView} onQuery={search} />
           <div className="px-4 py-6 md:px-6">
             {view === 'overview' ? <OverviewView report={report} metric={metric} onMetric={setMetric} /> : null}
             {view === 'traces' ? (

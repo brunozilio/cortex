@@ -17,6 +17,12 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let cwd = input["cwd"].as_str().ok_or("the trace feature needs the session's folder")?;
     let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
     let store = FileSessions::new(data.join(crate::native::SESSIONS));
+    if input["only"] == "current" {
+        let current = SessionId(session.into());
+        let mut runs = traced(&store, context.principal, Path::new(cwd), &current)?;
+        trim(&mut runs, CURRENT_TEXT);
+        return serde_json::to_value(SessionRuns { id: current.0, runs }).map_err(|e| e.to_string());
+    }
     let owner_settings = context.services.settings.load(context.principal).unwrap_or_default();
     let others = crate::settings::recent_sessions(&owner_settings, Path::new(cwd));
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64);

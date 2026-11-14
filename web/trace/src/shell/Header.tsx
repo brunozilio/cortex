@@ -4,18 +4,53 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { shortId } from '@/lib/format'
+import type { LiveStatus } from '@/lib/live'
 import { NAV, type View } from './Sidebar'
 
 interface HeaderProps {
   project: string
   current: string
+  live: LiveStatus
   view: View
   query: string
   onView: (view: View) => void
   onQuery: (query: string) => void
 }
 
-export const Header = forwardRef<HTMLInputElement, HeaderProps>(({ project, current, view, query, onView, onQuery }, searchRef) => (
+function LiveBadge({ status, current }: { status: LiveStatus; current: string }) {
+  if (status === 'reconnecting') {
+    return (
+      <Badge variant="warning" className="hidden sm:inline-flex">
+        <span className="size-1.5 animate-pulse rounded-full bg-warning" />
+        Reconnecting…
+      </Badge>
+    )
+  }
+  if (status === 'live') {
+    return (
+      <Badge variant="success" className="hidden sm:inline-flex">
+        <span className="pulse-dot size-1.5 rounded-full bg-success" />
+        Live
+      </Badge>
+    )
+  }
+  if (status === 'connecting') {
+    return (
+      <Badge variant="secondary" className="hidden sm:inline-flex">
+        <span className="size-1.5 rounded-full bg-muted-foreground" />
+        Connecting…
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="success" className="hidden sm:inline-flex">
+      <span className="pulse-dot size-1.5 rounded-full bg-success" />
+      current {shortId(current)}
+    </Badge>
+  )
+}
+
+export const Header = forwardRef<HTMLInputElement, HeaderProps>(({ project, current, live, view, query, onView, onQuery }, searchRef) => (
   <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
     <div className="flex h-14 items-center gap-3 px-4 md:px-6">
       <nav className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
@@ -33,10 +68,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(({ project, curr
           <Calendar className="!size-3.5" />
           <span className="hidden sm:inline">Last 30 days</span>
         </Badge>
-        <Badge variant="success" className="hidden sm:inline-flex">
-          <span className="pulse-dot size-1.5 rounded-full bg-success" />
-          current {shortId(current)}
-        </Badge>
+        <LiveBadge status={live} current={current} />
       </div>
     </div>
     <div className="px-4 pb-2 md:hidden">

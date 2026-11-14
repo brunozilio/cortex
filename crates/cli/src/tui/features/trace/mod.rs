@@ -1,4 +1,6 @@
 pub(super) mod cli;
+mod follow;
+mod live;
 mod page;
 
 use std::path::{Path, PathBuf};
@@ -15,10 +17,10 @@ pub fn feature() -> Feature {
     Feature {
         commands: vec![Slash {
             names: &["trace"],
-            about: "Open the trace in the browser: each run's spans, cost, waits and checks, plus the project's last 30 days (/trace [session])",
+            about: "Open the live trace in the browser: each run's spans, cost, waits and checks, plus the project's last 30 days (/trace [session])",
             run: trace,
         }],
-        tick: None,
+        tick: Some(follow::tick),
         ..Feature::default()
     }
 }
@@ -29,18 +31,18 @@ fn trace(app: &mut App, argument: Option<String>) {
         return app.transcript.notice("Nothing to trace yet: send a prompt first, or name a session: /trace <id>.");
     };
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match export(sdk, &session, &cwd) {
-        Ok(path) => {
-            crate::login::open(&path.display().to_string());
-            Msg::Notice(format!("Trace opened in the browser: {}", path.display()))
-        }
+    app.spawn(move |sdk| match report(sdk, &session, &cwd) {
+        Ok(report) => Msg::Feature(Box::new(move |app: &mut App| follow::open(app, &session, &report))),
         Err(error) => Msg::Error(error),
     });
 }
 
+fn report(sdk: &sdk::Sdk, session: &SessionId, cwd: &Path) -> Result<Value, String> {
+    sdk.feature(NAME, json!({ "session": session.0, "cwd": cwd })).map_err(|e| e.to_string())
+}
+
 fn export(sdk: &sdk::Sdk, session: &SessionId, cwd: &Path) -> Result<PathBuf, String> {
-    let trace = sdk.feature(NAME, json!({ "session": session.0, "cwd": cwd })).map_err(|e| e.to_string())?;
-    keep(session, &trace)
+    keep(session, &report(sdk, session, cwd)?)
 }
 
 fn keep(session: &SessionId, trace: &Value) -> Result<PathBuf, String> {

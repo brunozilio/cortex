@@ -7,6 +7,12 @@ pub fn page(session: &str, trace: &Value) -> String {
     TEMPLATE.replace("{{SESSION}}", &file_name(session)).replace("{{TRACE}}", &data)
 }
 
+pub fn live(session: &str, trace: &Value, events: &str) -> String {
+    let config = serde_json::json!({ "events": events }).to_string().replace('<', "\\u003c");
+    let script = format!("<script type=\"application/json\" id=\"live\">{config}</script></head>");
+    page(session, trace).replacen("</head>", &script, 1)
+}
+
 pub fn file_name(session: &str) -> String {
     session.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
@@ -43,6 +49,14 @@ mod tests {
         assert_eq!(embedded(&page), trace(hostile), "the text survives intact");
         assert_eq!(page.matches("</script>").count(), TEMPLATE.matches("</script>").count());
         assert!(!page.contains("<b>"));
+    }
+
+    #[test]
+    fn a_live_page_names_where_its_updates_come_from_inside_the_head() {
+        let page = live("s-1", &trace("x"), "/events?token=ab12");
+        let config = page.find("id=\"live\">{\"events\":\"/events?token=ab12\"}</script>").expect("live config");
+        assert!(config < page.find("</head>").expect("head"));
+        assert_eq!(embedded(&page), trace("x"));
     }
 
     #[test]

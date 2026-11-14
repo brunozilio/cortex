@@ -33,7 +33,7 @@ const STATUS_STYLE: Record<Run['status'], { icon: typeof CircleCheck; text: stri
   ok: { icon: CircleCheck, text: 'text-success', chip: 'bg-success/10 text-success' },
   failed: { icon: CircleX, text: 'text-danger', chip: 'bg-danger/10 text-danger' },
   cancelled: { icon: Ban, text: 'text-muted-foreground', chip: 'bg-muted text-muted-foreground' },
-  running: { icon: Loader, text: 'text-k-llm', chip: 'bg-k-llm/10 text-k-llm' },
+  running: { icon: Loader, text: 'text-k-llm animate-spin', chip: 'bg-k-llm/10 text-k-llm [&>svg]:animate-spin' },
 }
 
 export function StatusIcon({ status, chip = false }: { status: Run['status']; chip?: boolean }) {

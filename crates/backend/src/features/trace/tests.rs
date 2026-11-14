@@ -46,6 +46,18 @@ fn the_report_leads_with_the_session_and_adds_the_projects_recent_ones() {
 }
 
 #[test]
+fn a_live_update_carries_only_the_session_being_followed() {
+    let dir = tempfile::tempdir().expect("dir");
+    let store = FileSessions::new(dir.path().join("sessions"));
+    let id = record(&store, dir.path(), &Principal::LocalOwner, "s1", NOW);
+    let runs = traced(&store, &Principal::LocalOwner, dir.path(), &id).expect("runs");
+    let update = serde_json::to_value(SessionRuns { id: id.0.clone(), runs }).expect("json");
+    assert_eq!(update["id"], "s1");
+    assert_eq!(update["runs"][0]["prompt"], "read it in s1");
+    assert_eq!(update["runs"][0]["status"], "running");
+}
+
+#[test]
 fn another_principal_or_folder_finds_nothing_to_trace() {
     let dir = tempfile::tempdir().expect("dir");
     let store = FileSessions::new(dir.path().join("sessions"));
