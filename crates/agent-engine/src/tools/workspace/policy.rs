@@ -4,6 +4,7 @@ use std::sync::Arc;
 use domain::permission_rules::PermissionRules;
 use domain::redact::Known;
 use domain::sandbox::Sandbox;
+use domain::web_reading::WebReading;
 
 use crate::guard::Safety;
 use crate::tools::script_tool::ScriptAccess;
@@ -22,6 +23,7 @@ pub struct Policy {
     pub auto_review: bool,
     pub affected_tests: bool,
     pub session_claims: bool,
+    pub web: WebReading,
 }
 
 impl Policy {
@@ -39,6 +41,7 @@ impl Policy {
             auto_review: self.auto_review,
             affected_tests: self.affected_tests,
             session_claims: self.session_claims,
+            web: self.web,
         }
     }
 

@@ -468,8 +468,11 @@ Inbox notices are core (`TakeNotices`).
   list several vendors' models, with dotted versions) (`ApiSource::catalog`, cached per provider), else the
   session's model. A small model that fails hands WebFetch's page to the
   session's model. A page of 6,000 characters or less skips the reader and
-  arrives fenced as untrusted content.
-- **WebFetch's page** (`tools/builtin/web/page.rs`): asks for Markdown first,
+  arrives fenced as untrusted content (`experimental-web-small-pages-direct`).
+- **WebFetch's page** (`tools/builtin/web/page.rs`; each way of reading is
+  its own flag, gathered in `domain::web_reading::WebReading` and kept in
+  `Policy::web`: `experimental-web-main-content`, `-cleanup`, `-links`,
+  `-formats`, `-empty-page-error`): asks for Markdown first,
   then reads the body by kind. HTML is parsed into a tree (`tree.rs`), its
   main content (`main`, `role=main`, a single `article`, else the column
   holding most of the prose) leads and the rest follows a divider; hidden

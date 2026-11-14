@@ -41,7 +41,11 @@ impl Links {
         format!("{header}\n{}", rows.join("\n"))
     }
 
-    fn shown_form(&self, href: &str) -> Option<String> {
+    pub fn absolute(&self, href: &str) -> Option<String> {
+        self.resolved(href).map(String::from)
+    }
+
+    fn resolved(&self, href: &str) -> Option<Url> {
         let href = href.trim();
         let lower = href.to_ascii_lowercase();
         if href.is_empty() || href.starts_with('#') {
@@ -50,13 +54,15 @@ impl Links {
         if ["javascript:", "mailto:", "tel:", "data:"].iter().any(|scheme| lower.starts_with(scheme)) {
             return None;
         }
-        let mut target = match &self.page {
+        let target = match &self.page {
             Some(page) => page.join(href).ok()?,
             None => Url::parse(href).ok()?,
         };
-        if !matches!(target.scheme(), "http" | "https") {
-            return None;
-        }
+        matches!(target.scheme(), "http" | "https").then_some(target)
+    }
+
+    fn shown_form(&self, href: &str) -> Option<String> {
+        let mut target = self.resolved(href)?;
         target.set_fragment(None);
         let kept: Vec<(String, String)> = target
             .query_pairs()

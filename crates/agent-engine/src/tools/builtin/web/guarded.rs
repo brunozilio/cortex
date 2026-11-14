@@ -55,6 +55,18 @@ pub fn digest(
     if page.chars().count() <= READ_WHOLE {
         return whole(url, page);
     }
+    read_apart(api, template, session_model, url, looking_for, page, stop)
+}
+
+pub fn read_apart(
+    api: &dyn ModelApi,
+    template: &TurnRequest,
+    session_model: &str,
+    url: &str,
+    looking_for: &str,
+    page: &str,
+    stop: &AtomicBool,
+) -> String {
     let asked = request(template, url, looking_for, page);
     let mut answer = api.turn(&asked, &mut |_| {}, stop);
     if answer.is_err() && asked.model != session_model {
@@ -146,6 +158,15 @@ mod tests {
             digest(&model, &template(), "m", "https://x.dev", "the port", "Port 8080.", &AtomicBool::new(false));
         assert!(model.asked().is_empty(), "no model call for a short page");
         assert!(answer.contains("<untrusted-content>\nPort 8080.\n</untrusted-content>"), "{answer}");
+    }
+
+    #[test]
+    fn with_the_flag_off_even_a_short_page_goes_to_the_reader() {
+        let model = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Port 8080.".into())])]);
+        let answer =
+            read_apart(&model, &template(), "m", "https://x.dev", "the port", "Port 8080.", &AtomicBool::new(false));
+        assert_eq!(model.asked().len(), 1);
+        assert!(answer.contains("read by a separate reader"), "{answer}");
     }
 
     fn long(page: &str) -> String {

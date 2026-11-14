@@ -1,5 +1,9 @@
 use super::*;
 
+fn read(body: &str, content_type: Option<&str>, url: &str) -> Result<String, Unreadable> {
+    super::read(body, content_type, url, WebReading::default())
+}
+
 fn prose(words: usize) -> String {
     (0..words).map(|n| format!("word{n}")).collect::<Vec<_>>().join(" ")
 }

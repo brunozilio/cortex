@@ -1,25 +1,29 @@
 use std::collections::HashSet;
 
+use domain::web_reading::WebReading;
+
 use super::links::Links;
-use super::main_content::{DROPPED, FURNITURE, hidden, main_of};
+use super::main_content::{DROPPED, FURNITURE, NEVER_TEXT, hidden, main_of};
 use super::runs::{SHOWN_OF_A_RUN, link_run, repeated_labels};
 use super::tree::{Element, Node, Syntax, parse};
 
-pub fn distill(html: &str, url: &str) -> String {
+pub fn distill(html: &str, url: &str, reading: WebReading) -> String {
     let root = parse(html, Syntax::Html);
     let body = root.first("body").unwrap_or(&root);
     let mut writer = Writer {
         out: String::new(),
         links: Links::new(url),
-        repeated: repeated_labels(body),
+        repeated: if reading.cleanup { repeated_labels(body) } else { HashSet::new() },
         compact: false,
         addresses: true,
+        reading,
     };
-    let text = match main_of(body) {
+    let main = if reading.main_content { main_of(body) } else { None };
+    let text = match main {
         Some(main) => {
             writer.element(main, None);
             let lead = tidy(&std::mem::take(&mut writer.out));
-            writer.compact = true;
+            writer.compact = reading.cleanup;
             writer.addresses = false;
             writer.element(body, Some(main));
             let rest = tidy(&writer.out);
@@ -46,12 +50,15 @@ struct Writer {
     repeated: HashSet<String>,
     compact: bool,
     addresses: bool,
+    reading: WebReading,
 }
 
 impl Writer {
     fn element(&mut self, element: &Element, skip: Option<&Element>) {
         let name = element.name.as_str();
-        if skip.is_some_and(|skip| std::ptr::eq(skip, element)) || DROPPED.contains(&name) || hidden(element) {
+        let cleanup = self.reading.cleanup;
+        let dropped = if cleanup { DROPPED.contains(&name) || hidden(element) } else { NEVER_TEXT.contains(&name) };
+        if skip.is_some_and(|skip| std::ptr::eq(skip, element)) || dropped {
             return;
         }
         if self.compact
@@ -71,7 +78,7 @@ impl Writer {
             "td" | "th" => self.cell(element, skip),
             "tr" => self.wrapped(element, skip, "\n", ""),
             _ if FURNITURE.contains(&name) => {
-                let outer = std::mem::replace(&mut self.compact, true);
+                let outer = std::mem::replace(&mut self.compact, cleanup);
                 self.wrapped(element, skip, "\n", "\n");
                 self.compact = outer;
             }
@@ -108,7 +115,7 @@ impl Writer {
     fn link(&mut self, link: &Element) {
         let text = label(link);
         let footnote = text.starts_with('[') && link.attr("href").is_some_and(|href| href.starts_with('#'));
-        if text.is_empty() || footnote || self.repeated.contains(&text.to_lowercase()) {
+        if text.is_empty() || (footnote && self.reading.cleanup) || self.repeated.contains(&text.to_lowercase()) {
             return;
         }
         let numbered = self.numbered(link, text);
@@ -117,6 +124,12 @@ impl Writer {
 
     fn numbered(&mut self, link: &Element, text: String) -> String {
         let href = link.attr("href").filter(|_| self.addresses);
+        if !self.reading.links {
+            return match href.and_then(|href| self.links.absolute(href)) {
+                Some(address) => format!("{text} [{address}]"),
+                None => text,
+            };
+        }
         match href.and_then(|href| self.links.number(href)) {
             Some(number) => format!("{text} [{number}]"),
             None => text,

@@ -29,10 +29,12 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         auto_review: true,
         affected_tests: true,
         session_claims: true,
+        web: domain::web_reading::WebReading::none(),
     };
 
     let fork = policy.fork();
 
+    assert_eq!(fork.web, policy.web, "a sub-agent reads the web as its parent does");
     assert_eq!(fork.sandbox, policy.sandbox, "a sub-agent's commands stay as confined as its parent's");
     assert!(fork.redact.is_some(), "a sub-agent's output is redacted like its parent's");
     assert!(fork.snapshots && fork.dependency_guard);

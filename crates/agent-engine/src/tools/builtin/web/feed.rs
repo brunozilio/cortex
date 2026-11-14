@@ -1,3 +1,5 @@
+use domain::web_reading::WebReading;
+
 use super::tree::{Element, Syntax, parse};
 
 const SUMMARY: usize = 300;
@@ -42,7 +44,8 @@ fn entry(item: &Element) -> String {
 
 fn summary(element: &Element) -> String {
     let text = element.text();
-    let text = if text.contains('<') { super::distill::distill(&text, "") } else { text };
+    let inline = WebReading { main_content: false, links: false, ..WebReading::default() };
+    let text = if text.contains('<') { super::distill::distill(&text, "", inline) } else { text };
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
     match flat.char_indices().nth(SUMMARY) {
         Some((at, _)) => format!("{}…", &flat[..at]),

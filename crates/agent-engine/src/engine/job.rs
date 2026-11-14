@@ -129,6 +129,7 @@ impl Job {
         workspace.policy.auto_review = settings.features.on(domain::features::AUTO_REVIEW);
         workspace.policy.affected_tests = settings.features.on(domain::features::AFFECTED_TESTS);
         workspace.policy.session_claims = settings.features.on(domain::features::SESSION_CLAIMS);
+        workspace.policy.web = domain::web_reading::WebReading::from(&settings.features);
         workspace.models.escalation.clone_from(&settings.escalation);
         if !settings.features.on(domain::features::BUDGET) {
             self.request.budget = None;

@@ -8,6 +8,7 @@ const MAX_DEPTH: usize = 12;
 
 const COLUMNS: &[&str] = &["div", "section", "article", "main", "td", "center"];
 pub const FURNITURE: &[&str] = &["nav", "header", "footer", "aside"];
+pub const NEVER_TEXT: &[&str] = &["script", "style", "noscript", "svg", "head", "template"];
 pub const DROPPED: &[&str] = &[
     "script", "style", "noscript", "svg", "head", "template", "iframe", "button", "select", "input", "textarea",
     "canvas", "object", "embed",

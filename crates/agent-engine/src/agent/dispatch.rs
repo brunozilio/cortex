@@ -174,7 +174,12 @@ impl Agent<'_> {
                 &self.request,
                 self.workspace.models.model.provider,
             );
-            outcome.content = crate::tools::builtin::web::guarded::digest(
+            let read = if self.workspace.policy.web.small_pages_direct {
+                crate::tools::builtin::web::guarded::digest
+            } else {
+                crate::tools::builtin::web::guarded::read_apart
+            };
+            outcome.content = read(
                 self.api,
                 &guarded,
                 &self.request.model,

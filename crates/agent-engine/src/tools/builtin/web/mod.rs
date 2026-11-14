@@ -70,7 +70,11 @@ impl Tool for WebFetch {
         let Some(web) = &workspace.services.network else {
             return Outcome::error("The web is not available to this run.");
         };
-        let headers = [("User-Agent".into(), brand::NAME.into()), ("Accept".into(), ACCEPT.into())];
+        let reading = workspace.policy.web;
+        let mut headers = vec![("User-Agent".into(), brand::NAME.into())];
+        if reading.formats {
+            headers.push(("Accept".into(), ACCEPT.into()));
+        }
         let response = match web.0.get(&url, &headers) {
             Ok(response) => response,
             Err(error) => return Outcome::error(format!("Could not fetch {url}: {error}")),
@@ -83,7 +87,7 @@ impl Tool for WebFetch {
         if let Err(error) = response.body.take(READ).read_to_end(&mut bytes) {
             return Outcome::error(format!("Could not read {url}: {error}"));
         }
-        match page::read(&String::from_utf8_lossy(&bytes), content_type.as_deref(), &url) {
+        match page::read(&String::from_utf8_lossy(&bytes), content_type.as_deref(), &url, reading) {
             Ok(text) => Outcome::ok(page::clipped(&text, SHOWN)),
             Err(page::Unreadable(why)) => Outcome::error(why),
         }
@@ -158,6 +162,12 @@ mod tests {
         assert_eq!(out.content, "# Already markdown");
         let accept = http.sent()[0].headers.iter().find(|(key, _)| key == "Accept").map(|(_, value)| value.clone());
         assert!(accept.is_some_and(|accept| accept.starts_with("text/markdown")));
+
+        let http = Arc::new(ScriptedHttp::new([(200, "<p>Plain</p>".to_owned())]));
+        workspace.services.network = Some(Network(http.clone()));
+        workspace.policy.web.formats = false;
+        WebFetch.run(&json!({"url": "https://docs.dev/a", "prompt": "p"}), &workspace);
+        assert!(http.sent()[0].headers.iter().all(|(key, _)| key != "Accept"), "the flag turns it off");
     }
 
     #[test]

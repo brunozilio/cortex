@@ -19,6 +19,12 @@ pub const SESSION_CLAIMS: &str = "experimental-session-claims";
 pub const BRANCHES: &str = "branches";
 pub const TEAM_MEMORY: &str = "team-memory";
 pub const LEARNING: &str = "experimental-learning";
+pub const WEB_MAIN_CONTENT: &str = "experimental-web-main-content";
+pub const WEB_CLEANUP: &str = "experimental-web-cleanup";
+pub const WEB_LINKS: &str = "experimental-web-links";
+pub const WEB_SMALL_PAGES_DIRECT: &str = "experimental-web-small-pages-direct";
+pub const WEB_FORMATS: &str = "experimental-web-formats";
+pub const WEB_EMPTY_PAGE_ERROR: &str = "experimental-web-empty-page-error";
 
 pub fn skill_flag(skill: &str) -> Option<&'static str> {
     (skill == "follow-pr").then_some(PR_FOLLOW)
@@ -80,6 +86,30 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: AFFECTED_TESTS,
         about: "After an edit, run the tests that cover the changed file in the background and tell the agent",
+    },
+    Flag {
+        name: WEB_MAIN_CONTENT,
+        about: "WebFetch puts a page's main content first and its menus, header and footer after it",
+    },
+    Flag {
+        name: WEB_CLEANUP,
+        about: "WebFetch drops hidden parts, buttons, links repeated on every item and long runs of menu links",
+    },
+    Flag {
+        name: WEB_LINKS,
+        about: "WebFetch numbers a page's links and lists each address once at the end, same-site ones as paths",
+    },
+    Flag {
+        name: WEB_SMALL_PAGES_DIRECT,
+        about: "WebFetch hands a page of 6,000 characters or less to the agent fenced, without the separate reader",
+    },
+    Flag {
+        name: WEB_FORMATS,
+        about: "WebFetch asks for Markdown first and compacts JSON (one line per record) and RSS or Atom feeds",
+    },
+    Flag {
+        name: WEB_EMPTY_PAGE_ERROR,
+        about: "WebFetch reports a page with almost no text (built by JavaScript, a login, a bot check) as an error",
     },
     Flag {
         name: AUTO_REVIEW,
