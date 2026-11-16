@@ -10,12 +10,13 @@ interface OverviewViewProps {
   report: Report
   metric: Metric
   onMetric: (metric: Metric) => void
+  scope: 'all' | 'session'
 }
 
-export function OverviewView({ report, metric, onMetric }: OverviewViewProps) {
+export function OverviewView({ report, metric, onMetric, scope }: OverviewViewProps) {
   return (
     <section className="grid gap-4">
-      <PageTitle title="Overview" description="How the agent worked in this project over the last 30 days." />
+      <PageTitle title="Overview" description={scope === 'session' ? 'How the agent worked in this session over the last 30 days.' : 'How the agent worked across every session over the last 30 days.'} />
       <KpiCards report={report} />
       <UsageChart report={report} metric={metric} onMetric={onMetric} />
       <div className="grid gap-4 lg:grid-cols-3">

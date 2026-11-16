@@ -32,8 +32,7 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let store = FileSessions::new(data.join(crate::native::SESSIONS));
     if input["only"] == "current" {
         let current = SessionId(session.into());
-        let runs = traced(&store, context.principal, Path::new(cwd), &current)?;
-        return serde_json::to_value(SessionRuns { id: current.0, runs }).map_err(|e| e.to_string());
+        return followed(&store, context.principal, Path::new(cwd), &current, now_ms());
     }
     let owner_settings = context.services.settings.load(context.principal).unwrap_or_default();
     let others = crate::settings::recent_sessions(&owner_settings, Path::new(cwd));
@@ -42,6 +41,15 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
 }
 
 pub fn forget(_client: u64) {}
+
+fn followed(store: &FileSessions, owner: &Principal, cwd: &Path, id: &SessionId, now_ms: u64) -> Result<Value, String> {
+    let runs = traced(store, owner, cwd, id)?;
+    let recent_runs: Vec<&Run> = runs.iter().filter(|run| recent(run, now_ms)).collect();
+    let insights = serde_json::to_value(insights(&recent_runs, now_ms)).map_err(|e| e.to_string())?;
+    let mut update = serde_json::to_value(SessionRuns { id: id.0.clone(), runs }).map_err(|e| e.to_string())?;
+    update["insights"] = insights;
+    Ok(update)
+}
 
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64)

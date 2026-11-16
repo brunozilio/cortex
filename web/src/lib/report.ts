@@ -1,5 +1,6 @@
 import type { Report, Run } from '@/types'
 import { sampleReport } from '@/sample'
+import { sampleInsights } from '@/sample/insights'
 
 const WAIT_MS = 250
 const TRIES = 40
@@ -51,4 +52,17 @@ export function defaultRun(report: Report): Run | undefined {
 
 export function sessionCost(report: Report, session: string): number {
   return report.sessions.find((entry) => entry.id === session)?.runs.reduce((sum, run) => sum + run.cost_usd, 0) ?? 0
+}
+
+export interface Scoped {
+  report: Report
+  ready: boolean
+}
+
+export function scoped(report: Report, session: string, live: boolean): Scoped {
+  const entry = report.sessions.find((candidate) => candidate.id === session) ?? { id: session, runs: [] }
+  const own = entry.insights ?? (live ? undefined : sampleInsights([entry], report.generated_at_ms))
+  const findings = report.insights.findings.filter((finding) => finding.session === session)
+  const insights = own ?? { ...report.insights, findings }
+  return { report: { ...report, current: session, sessions: [entry], insights }, ready: own !== undefined }
 }

@@ -50,9 +50,9 @@ fn a_live_update_carries_only_the_session_being_followed() {
     let dir = tempfile::tempdir().expect("dir");
     let store = FileSessions::new(dir.path().join("sessions"));
     let id = record(&store, dir.path(), &Principal::LocalOwner, "s1", NOW);
-    let runs = traced(&store, &Principal::LocalOwner, dir.path(), &id).expect("runs");
-    let update = serde_json::to_value(SessionRuns { id: id.0.clone(), runs }).expect("json");
+    let update = followed(&store, &Principal::LocalOwner, dir.path(), &id, NOW).expect("update");
     assert_eq!(update["id"], "s1");
+    assert_eq!(update["insights"]["totals"]["runs"], 1, "the session's own overview comes with it");
     assert_eq!(update["runs"][0]["prompt"], "read it in s1");
     assert_eq!(update["runs"][0]["status"], "running");
 }

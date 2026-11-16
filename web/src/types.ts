@@ -4,7 +4,7 @@ export interface ContextSplit { system: number; tools: number; conversation: num
 export interface Span { id: number; parent: number; kind: SpanKind; name: string; start_ms: number; end_ms: number; failed: boolean; input: string; output: string; thinking: string; usage: Usage | null; context: ContextSplit | null; stop: string | null; attrs: [string, string][]; flags: string[]; request?: number[]; reply?: Message; system_id?: string; tools_id?: string }
 export type Signal = 'tool_error' | 'eval_failed' | 'review' | 'subagent' | 'waste' | 'repeated' | 'fell_back' | 'compacted' | 'refused';
 export interface Run { session: string; index: number; prompt: string; started_at_ms: number; duration_ms: number; waiting_ms: number; model: string; status: 'ok' | 'failed' | 'cancelled' | 'running'; cost_usd: number; tokens: number; input: number; cache_read: number; waste: number; signals: Signal[]; spans: Span[]; messages?: Message[]; systems?: Record<string, string>; tools?: Record<string, ToolSpec[]> }
-export interface SessionRuns { id: string; runs: Run[] }
+export interface SessionRuns { id: string; runs: Run[]; insights?: Insights }
 export interface Day { day: number; models: { model: string; cost_usd: number; tokens: number; runs: number }[] }
 export interface ModelStat { model: string; calls: number; p50_ms: number; p95_ms: number; cache_ratio: number; cost_usd: number }
 export interface ToolStat { name: string; calls: number; failed: number; p95_ms: number; asked: number }
