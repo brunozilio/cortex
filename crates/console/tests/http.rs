@@ -38,6 +38,13 @@ fn built() -> tempfile::TempDir {
 }
 
 #[tokio::test]
+async fn the_instance_names_the_product() {
+    let (status, _, body) = send(app(None), get("/api/instance")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(serde_json::from_str::<Value>(&body).expect("json")["name"], brand::NAME);
+}
+
+#[tokio::test]
 async fn health_answers_ok() {
     let (status, _, body) = send(app(None), get("/api/health")).await;
     assert_eq!(status, StatusCode::OK);

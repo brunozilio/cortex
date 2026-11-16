@@ -25,6 +25,7 @@ pub fn router(settings: Settings, live: Live) -> Router {
     let shared = Shared { token: settings.token.into(), live };
     let api = Router::new()
         .route("/api/health", get(|| async { axum::Json(json!({ "status": "ok" })) }))
+        .route("/api/instance", get(|| async { axum::Json(json!({ "name": brand::NAME })) }))
         .merge(crate::live::routes())
         .route("/api/{*rest}", any(|| async { failure(StatusCode::NOT_FOUND, "not_found", "No such endpoint.") }));
     let app = match settings.assets {
