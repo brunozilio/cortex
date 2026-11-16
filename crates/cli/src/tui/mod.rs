@@ -56,6 +56,7 @@ mod transcript;
 mod turn;
 mod view;
 mod vim;
+mod watchdog;
 mod wrap;
 
 #[cfg(test)]
@@ -161,7 +162,14 @@ pub fn run(
         let mut first = prompt;
         let mut named: Option<String> = None;
         let mut pick = start.pick;
+        let dog = watchdog::Dog::start();
+        let mark = |app: &mut App, step: &str| {
+            if let Some(stall) = dog.enter(step) {
+                app.transcript.notice(format!("{} Details are in the log.", stall.describe()));
+            }
+        };
         while !app.quit {
+            mark(&mut app, "handling messages");
             while let Ok(msg) = app.rx.try_recv() {
                 app.message(msg);
             }
@@ -183,19 +191,23 @@ pub fn run(
                 app.input.set(&prompt);
                 app.submit();
             }
+            mark(&mut app, "checking features and notices");
             notices::poll(&mut app);
             features::tick(&mut app);
             auto_retry::tick(&mut app);
             statusline::refresh(&mut app);
             inline::flush(&mut terminal, &mut app)?;
             let mut selected = None;
+            mark(&mut app, "drawing the screen");
             terminal.draw(|frame| {
                 view::draw(frame, &app);
                 selected = selection::show(frame.buffer_mut(), &app.selection);
             })?;
             selection::copied(&mut app, selected);
             let wait = if app.motion.borrow().animating() { ANIMATING } else { FRAME };
+            mark(&mut app, "reading the keyboard");
             if event::poll(wait)? {
+                mark(&mut app, "handling a key or paste");
                 match event::read()? {
                     Event::Key(key) => {
                         app.selection.clear();
@@ -212,6 +224,7 @@ pub fn run(
                 terminal.clear()?;
             }
             if std::mem::take(&mut app.external_edit) {
+                dog.pause();
                 let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange);
                 capture_mouse(false);
                 ratatui::restore();
@@ -225,6 +238,7 @@ pub fn run(
                 }
             }
             if let Some(path) = app.edit_file.take() {
+                dog.pause();
                 let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange);
                 capture_mouse(false);
                 ratatui::restore();
