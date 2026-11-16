@@ -26,12 +26,12 @@ fn planning_turns_use_the_plan_model_and_the_rest_use_the_session_model() {
 }
 
 #[test]
-fn the_plan_and_explore_agents_take_their_own_role_only() {
-    let set = roles(&[(ModelRole::Plan, "p"), (ModelRole::Small, "s")]);
-    assert_eq!(set.for_agent("Plan"), Some("p"));
-    assert_eq!(set.for_agent("Explore"), None);
-    assert_eq!(roles(&[(ModelRole::Explore, "e")]).for_agent("Explore"), Some("e"));
-    assert_eq!(set.for_agent("general-purpose"), None);
+fn the_plan_and_explore_agents_take_their_role_and_explore_falls_back_to_the_small_model() {
+    let set = roles(&[(ModelRole::Plan, "p")]);
+    assert_eq!(set.for_agent("Plan", Some("s")), Some("p"));
+    assert_eq!(set.for_agent("Explore", Some("s")), Some("s"));
+    assert_eq!(roles(&[(ModelRole::Explore, "e")]).for_agent("Explore", Some("s")), Some("e"));
+    assert_eq!(set.for_agent("general-purpose", Some("s")), None);
 }
 
 #[test]

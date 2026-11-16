@@ -74,10 +74,10 @@ impl ModelRoles {
         }
     }
 
-    pub fn for_agent(&self, agent: &str) -> Option<&str> {
+    pub fn for_agent<'a>(&'a self, agent: &str, small: Option<&'a str>) -> Option<&'a str> {
         match agent {
             "Plan" => self.get(ModelRole::Plan),
-            "Explore" => self.get(ModelRole::Explore),
+            "Explore" => self.get(ModelRole::Explore).or(small),
             _ => None,
         }
     }

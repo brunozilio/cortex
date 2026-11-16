@@ -25,9 +25,8 @@ pub fn choose(kind: &str, configured: Option<String>, input: &Value, parent: &st
     if choice.model.is_some() {
         return choice;
     }
-    let roles = &workspace.models.roles;
-    let fallback = (kind == "Explore").then(|| workspace.models.small_model.clone()).flatten();
-    let role = roles.for_agent(kind).map(str::to_owned).or(fallback);
+    let models = &workspace.models;
+    let role = models.roles.for_agent(kind, models.small_model.as_deref()).map(str::to_owned);
     if served(role.clone()) {
         choice.model = role;
     }
