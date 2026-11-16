@@ -27,6 +27,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         dependency_guard: true,
         escalation: true,
         auto_review: true,
+        follow_through: true,
         affected_tests: true,
         session_claims: true,
         web: domain::web_reading::WebReading::none(),

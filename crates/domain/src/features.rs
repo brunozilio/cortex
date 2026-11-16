@@ -17,6 +17,7 @@ pub const CACHE_WARNING: &str = "cache-warning";
 pub const ESCALATION: &str = "experimental-escalation";
 pub const PROJECT_CRITERIA: &str = "project-criteria";
 pub const AUTO_REVIEW: &str = "auto-review";
+pub const FOLLOW_THROUGH: &str = "experimental-follow-through";
 pub const AFFECTED_TESTS: &str = "experimental-affected-tests";
 pub const PR_FOLLOW: &str = "experimental-pr-follow";
 pub const SESSION_CLAIMS: &str = "experimental-session-claims";
@@ -135,6 +136,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: AUTO_REVIEW,
         about: "When a run changed files, a read-only reviewer checks the changes and the docs before it finishes",
+    },
+    Flag {
+        name: FOLLOW_THROUGH,
+        about: "When an answer ends the turn promising more work (\"now I'll run the tests\"), a small model checks it and sends the agent back to do it, twice at most",
     },
     Flag {
         name: PROJECT_CRITERIA,

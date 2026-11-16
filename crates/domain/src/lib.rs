@@ -22,6 +22,7 @@ pub mod extensions;
 pub mod failure;
 pub mod fallback;
 pub mod features;
+pub mod follow_through;
 pub mod git_offer;
 pub mod ids;
 pub mod image;

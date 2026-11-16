@@ -128,6 +128,7 @@ impl Job {
         workspace.policy.dependency_guard = settings.features.on(domain::features::DEPENDENCY_GUARD);
         workspace.policy.escalation = settings.features.on(domain::features::ESCALATION);
         workspace.policy.auto_review = settings.features.on(domain::features::AUTO_REVIEW);
+        workspace.policy.follow_through = settings.features.on(domain::features::FOLLOW_THROUGH);
         workspace.policy.affected_tests = settings.features.on(domain::features::AFFECTED_TESTS);
         workspace.policy.session_claims = settings.features.on(domain::features::SESSION_CLAIMS);
         workspace.policy.web = domain::web_reading::WebReading::from(&settings.features);
