@@ -17,6 +17,9 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
         permissions::keep_rule(cwd, kind, rule)?;
         return Ok(json!([]));
     }
+    if let Some(line) = input["keep"]["instruction"].as_str() {
+        return keep_instruction(cwd, line).map(|file| json!({ "file": file }));
+    }
     let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
     let store = FileSessions::new(data.join(crate::native::SESSIONS));
     let owner_settings = context.services.settings.load(context.principal).unwrap_or_default();
@@ -26,6 +29,20 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
 }
 
 pub fn forget(_client: u64) {}
+
+fn keep_instruction(cwd: &Path, line: &str) -> Result<std::path::PathBuf, String> {
+    let root = cwd.join(brand::INSTRUCTIONS);
+    let nested = cwd.join(brand::DIR).join(brand::INSTRUCTIONS);
+    let file = if !root.exists() && nested.exists() { nested } else { root };
+    let current = match std::fs::read_to_string(&file) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(format!("{}: {error}", file.display())),
+    };
+    let updated = domain::learning::with_learned(&current, line)?;
+    std::fs::write(&file, updated).map_err(|error| format!("{}: {error}", file.display()))?;
+    Ok(file)
+}
 
 fn suggested(
     store: &FileSessions,
@@ -102,5 +119,19 @@ mod tests {
         let kept = std::fs::read_to_string(dir.path().join(brand::DIR).join("settings.local.json")).expect("settings");
         let kept: Value = serde_json::from_str(&kept).expect("json");
         assert_eq!(kept["permissions"]["deny"], json!(["Bash(git push:*)"]));
+    }
+
+    #[test]
+    fn a_kept_instruction_lands_in_the_project_s_instructions() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join(brand::INSTRUCTIONS), "# Project\n").expect("instructions");
+        let keep = |line: &str| json!({ "cwd": dir.path(), "keep": { "instruction": line } });
+
+        crate::feature::testing::local(1, |context| handle(context, keep("Use pnpm."))).expect("kept");
+        let refused = crate::feature::testing::local(1, |context| handle(context, keep("password=hunter2")));
+
+        let kept = std::fs::read_to_string(dir.path().join(brand::INSTRUCTIONS)).expect("instructions");
+        assert_eq!(kept, "# Project\n\n## Learned\n- Use pnpm.\n");
+        assert!(refused.is_err());
     }
 }

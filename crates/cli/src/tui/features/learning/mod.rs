@@ -54,6 +54,13 @@ fn keep(app: &mut App, proposal: Proposal) {
                 Err(error) => Msg::Error(error.to_string()),
             });
         }
+        Keeping::Instruction(line) => {
+            let keep = json!({ "cwd": cwd, "keep": { "instruction": line } });
+            app.spawn(move |sdk| match sdk.feature("suggested_rules", keep) {
+                Ok(_) => Msg::Notice(format!("Added to {}: {line}", brand::INSTRUCTIONS)),
+                Err(error) => Msg::Error(error.to_string()),
+            });
+        }
         Keeping::Ask(prompt) => app.send(prompt),
     }
 }

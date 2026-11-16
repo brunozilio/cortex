@@ -13,6 +13,7 @@ pub fn offered(proposal: &Proposal) -> String {
         Lesson::Rule => {
             format!("keep the {} rule {}", if proposal.name == "deny" { "deny" } else { "allow" }, proposal.text)
         }
+        Lesson::Instruction => format!("add to {}: {}", brand::INSTRUCTIONS, proposal.text),
     };
     format!("Lesson from this run: {what}\nWhy: {}\n/learn keep saves it, /learn skip drops it.", proposal.why)
 }
@@ -56,6 +57,7 @@ pub enum Lesson {
     Memory,
     Skill,
     Rule,
+    Instruction,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,7 +72,32 @@ pub struct Proposal {
 pub enum Keeping {
     Remember(String),
     Rule { kind: &'static str, rule: String },
+    Instruction(String),
     Ask(String),
+}
+
+const LEARNED: &str = "## Learned";
+
+pub fn with_learned(instructions: &str, line: &str) -> Result<String, String> {
+    let line = line.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.is_empty() {
+        return Err("The instruction is empty.".into());
+    }
+    if crate::redact::redact(&line, &crate::redact::Known::default()) != line {
+        return Err("The instruction holds what looks like a secret, so it was not written.".into());
+    }
+    let bullet = format!("- {line}");
+    if instructions.lines().any(|existing| existing.trim() == bullet) {
+        return Ok(instructions.to_owned());
+    }
+    let mut text = instructions.trim_end().to_owned();
+    if !text.lines().any(|existing| existing.trim() == LEARNED) {
+        if !text.is_empty() {
+            text.push_str("\n\n");
+        }
+        text.push_str(LEARNED);
+    }
+    Ok(format!("{text}\n{bullet}\n"))
 }
 
 pub fn keeping(proposal: &Proposal) -> Keeping {
@@ -79,6 +106,7 @@ pub fn keeping(proposal: &Proposal) -> Keeping {
         Lesson::Rule => {
             Keeping::Rule { kind: if proposal.name == "deny" { "deny" } else { "allow" }, rule: proposal.text.clone() }
         }
+        Lesson::Instruction => Keeping::Instruction(proposal.text.clone()),
         Lesson::Skill => Keeping::Ask(format!(
             "Create or update the skill `{}` for this: {}\n\nLoad the skill-creator skill and follow it.",
             proposal.name, proposal.text
@@ -145,6 +173,27 @@ mod tests {
             panic!("a skill is asked for")
         };
         assert!(prompt.starts_with("Create or update the skill `release` for this: Tag then publish."));
+    }
+
+    #[test]
+    fn an_instruction_is_added_once_under_a_learned_section() {
+        let lesson = Proposal {
+            kind: Lesson::Instruction,
+            name: String::new(),
+            text: "Run cargo nextest, not cargo test.".into(),
+            why: "the user said so".into(),
+        };
+        assert_eq!(keeping(&lesson), Keeping::Instruction("Run cargo nextest, not cargo test.".into()));
+        assert!(offered(&lesson).contains(&format!("add to {}: Run cargo nextest", brand::INSTRUCTIONS)));
+
+        let first = with_learned("# Project\nUse Rust.\n", "Run cargo nextest.").expect("added");
+        assert_eq!(first, "# Project\nUse Rust.\n\n## Learned\n- Run cargo nextest.\n");
+        let second = with_learned(&first, "Keep commits small.").expect("added");
+        assert_eq!(second, "# Project\nUse Rust.\n\n## Learned\n- Run cargo nextest.\n- Keep commits small.\n");
+        assert_eq!(with_learned(&second, "Run cargo nextest.").as_deref(), Ok(second.as_str()), "once");
+        assert_eq!(with_learned("", "Be brief.").as_deref(), Ok("## Learned\n- Be brief.\n"));
+        assert!(with_learned("", "Use token=abc123 for the API.").is_err(), "no secrets in instructions");
+        assert!(with_learned("", "  ").is_err());
     }
 
     #[test]
