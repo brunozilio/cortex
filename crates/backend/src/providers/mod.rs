@@ -46,6 +46,7 @@ pub struct ModelProviders {
     sign_in: Arc<dyn SignIn>,
     catalog: Arc<dyn ModelCatalog>,
     generations: Arc<Mutex<HashMap<String, u64>>>,
+    runs: Arc<Mutex<HashMap<String, u64>>>,
     lock: Arc<Mutex<()>>,
     clock: Clock,
 }
@@ -69,6 +70,7 @@ impl ModelProviders {
             sign_in: Arc::new(BrowserSignIn),
             catalog: Arc::new(ProviderCatalog),
             generations: Arc::default(),
+            runs: Arc::default(),
             lock: Arc::default(),
             clock: Arc::new(system_clock),
         }
@@ -155,15 +157,19 @@ impl ModelProviders {
     }
 
     pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {
-        use domain::provider::ProviderKeyStore;
         let Some(holder) = self.holder(owner, provider) else {
             return Err(format!("{} is not connected", agent_engine::providers::name(provider)));
         };
         let id = self.store.load(&holder).get(provider).map(|account| account.id.clone()).unwrap_or_default();
+        self.account_key(holder, provider, &id)
+    }
+
+    fn account_key(&self, holder: Principal, provider: ModelProvider, id: &str) -> Result<ProviderKey, String> {
+        use domain::provider::ProviderKeyStore;
         let source = Arc::new(account::AccountStore {
             secrets: self.secrets.clone(),
             owner: holder,
-            slot: slot(provider, &id),
+            slot: slot(provider, id),
             provider,
         });
         Ok(ProviderKey::new(source.load()?).with_store(source))

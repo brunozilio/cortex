@@ -156,3 +156,14 @@ fn accounts_switches_or_removes_one_of_a_provider_s_accounts() {
     assert_eq!(Command::parse("/accounts other"), None);
     assert!(Command::HELP.iter().any(|(name, _)| *name == "accounts"));
 }
+
+#[test]
+fn accounts_balance_names_how_the_session_provider_s_accounts_share_the_work() {
+    use crate::account_pool::Balance;
+    assert_eq!(Command::parse("/accounts balance"), Some(Command::AccountsBalance(None)));
+    assert_eq!(
+        Command::parse("/accounts balance round-robin"),
+        Some(Command::AccountsBalance(Some(Balance::RoundRobin)))
+    );
+    assert_eq!(Command::parse("/accounts balance sometimes"), None);
+}

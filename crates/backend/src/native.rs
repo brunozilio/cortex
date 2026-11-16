@@ -36,7 +36,16 @@ impl ApiSource for NativeApis {
                 brand_command = brand::COMMAND
             ))
         })?;
-        let main = Arc::new(ProviderClient::for_model(request.model.clone(), Arc::clone(&self.http), Arc::new(key)));
+        let client = |key: ProviderKey| -> Arc<dyn ModelApi> {
+            Arc::new(ProviderClient::for_model(request.model.clone(), Arc::clone(&self.http), Arc::new(key)))
+        };
+        let pool = &request.credentials.model_pool;
+        let main = if pool.is_empty() {
+            client(key)
+        } else {
+            let accounts = std::iter::once(key).chain(pool.iter().cloned()).map(client).collect();
+            Arc::new(agent_engine::model::pooled::Pooled::new(accounts))
+        };
         Ok(Arc::new(agent_engine::model::routed::Routed::new(
             main,
             provider,
@@ -62,8 +71,8 @@ impl ApiSource for NativeApis {
     }
 }
 
-pub fn key_for(providers: &ModelProviders, owner: &Principal, model: &ModelOption) -> Option<ProviderKey> {
-    providers.key(owner, model.provider).ok()
+pub fn keys_for(providers: &ModelProviders, owner: &Principal, model: &ModelOption) -> Vec<ProviderKey> {
+    providers.keys(owner, model.provider).unwrap_or_default()
 }
 
 pub fn other_keys(
@@ -174,9 +183,9 @@ mod tests {
         llm_providers::testing::install();
         providers.connect(&owner, KEYED, "sk-key-0123456789abcd");
         let native = |provider| ModelOption::new("m", "M").served_by(provider);
-        let key = key_for(&providers, &owner, &native(KEYED)).expect("key");
+        let key = keys_for(&providers, &owner, &native(KEYED)).remove(0);
         assert!(key.secret().contains("sk-key-0123456789abcd"), "the provider's credential config");
-        assert_eq!(key_for(&providers, &owner, &native(KEYED_TOO)), None, "not connected");
+        assert!(keys_for(&providers, &owner, &native(KEYED_TOO)).is_empty(), "not connected");
     }
 
     #[test]
@@ -217,6 +226,27 @@ mod tests {
         assert_eq!(ids(apis.catalog(&request(KEYED, Some("sk-one")))), ["keyed:big", "keyed:tiny"]);
         assert_eq!(ids(apis.catalog(&request(KEYED, Some("sk-one")))), ["keyed:big", "keyed:tiny"]);
         assert_eq!(http.sent().len(), 1, "the second run reads the cache");
+    }
+
+    #[test]
+    fn a_signed_out_account_hands_the_turn_to_the_next_account_of_the_pool() {
+        let http = Arc::new(ScriptedHttp::new([(401, "{}".to_owned()), (400, "{}".to_owned())]));
+        let apis = NativeApis::new(http.clone());
+        let mut run = request(KEYED, Some("sk-one"));
+        run.credentials.model_pool = vec![ProviderKey::new("sk-two")];
+        let api = apis.api(&run).expect("api");
+        let turn = TurnRequest {
+            model: "model-a".into(),
+            system: String::new(),
+            messages: Vec::new(),
+            tools: Vec::new(),
+            effort: domain::Effort::Low,
+            max_tokens: 1,
+        };
+        let _ = api.turn(&turn, &mut |_| {}, &AtomicBool::new(false));
+        let keys: Vec<bool> =
+            http.sent().iter().map(|sent| sent.headers.iter().any(|(_, value)| value.contains("sk-two"))).collect();
+        assert_eq!(keys, [false, true], "the second account answered the same turn");
     }
 
     #[test]

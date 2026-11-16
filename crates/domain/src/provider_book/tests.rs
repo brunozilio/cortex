@@ -104,3 +104,18 @@ fn summaries_list_every_provider_with_its_active_account_and_all_of_them() {
     assert_eq!(summaries[1].account.as_ref().map(|a| a.label.as_str()), Some("…ee11"));
     assert_eq!(summaries[1].accounts.len(), 2);
 }
+
+#[test]
+fn each_provider_keeps_its_own_balance_and_where_the_account_in_use_sits() {
+    use crate::account_pool::Balance;
+    let mut book = ProviderBook::default();
+    book.connect(ACME, account("a", ""));
+    book.connect(ACME, account("b", "b"));
+    assert_eq!((book.balance(ACME), book.active_index(ACME)), (Balance::Off, 1));
+    book.set_balance(ACME, Balance::RoundRobin);
+    let back: ProviderBook = serde_json::from_str(&serde_json::to_string(&book).expect("json")).expect("parse");
+    assert_eq!(back.balance(ACME), Balance::RoundRobin);
+    assert_eq!(back.balance(ModelProvider::new("other")), Balance::Off);
+    let info = ProviderInfo { provider: ACME, name: "Acme".into(), access: Access::Key };
+    assert_eq!(book.summaries([info])[0].balance, Balance::RoundRobin);
+}

@@ -16,6 +16,7 @@ pub fn run(app: &mut App, command: Command) {
         Command::ModelRoles => app.list_roles(),
         Command::ModelRole(role, change) => app.change_role(role, change),
         Command::Accounts { removing } => app.accounts(removing),
+        Command::AccountsBalance(balance) => app.balance(balance),
         Command::Mode(None) => app.mode_picker(),
         Command::Mode(Some(mode)) => app.switch_mode(mode),
         Command::Effort(None) => app.effort_picker(),

@@ -119,6 +119,9 @@ impl CommandHandler {
             ClientCommand::RemoveProviderAccount { provider, account } => {
                 outbox.send(self.services.providers.remove_account(&principal, provider, &account))
             }
+            ClientCommand::SetProviderBalance { provider, balance } => {
+                outbox.send(self.services.providers.set_balance(&principal, provider, balance))
+            }
             ClientCommand::ListMcpServers { path } => self.mcp_servers(&principal, &path, Ok(())),
             ClientCommand::TakeNotices => {
                 outbox.send(ServerEvent::Notices(agent_engine::tools::inbox::take(self.client)));
@@ -191,10 +194,12 @@ impl CommandHandler {
     fn start(&self, owner: &Principal, run: RunId, request: &PromptRequest) -> Result<(), String> {
         agent_engine::tools::peers::register(self.client, Some(owner), &request.cwd);
         let outbox = self.outbox.clone();
-        let model = crate::native::key_for(&self.services.providers, owner, &request.model);
+        let mut keys = crate::native::keys_for(&self.services.providers, owner, &request.model);
+        let model = (!keys.is_empty()).then(|| keys.remove(0));
         let request = PromptRequest {
             credentials: domain::credentials::RunCredentials {
                 model,
+                model_pool: keys,
                 other_models: crate::native::other_keys(&self.services.providers, owner, &request.model),
                 owner: Some(owner.clone()),
                 mcp: Vec::new(),

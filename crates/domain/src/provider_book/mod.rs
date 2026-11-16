@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::account_pool::Balance;
 use crate::model::ModelProvider;
 use crate::provider::{ProviderAccount, ProviderInfo, ProviderSummary};
 
@@ -11,6 +12,8 @@ pub struct ProviderBook {
     accounts: BTreeMap<ModelProvider, Vec<ProviderAccount>>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     active: BTreeMap<ModelProvider, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    balance: BTreeMap<ModelProvider, Balance>,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +45,22 @@ impl ProviderBook {
         let all = self.accounts(provider);
         let chosen = self.active.get(&provider);
         chosen.and_then(|id| all.iter().find(|account| &account.id == id)).or_else(|| all.first())
+    }
+
+    pub fn active_index(&self, provider: ModelProvider) -> usize {
+        let id = self.get(provider).map(|account| account.id.as_str());
+        self.accounts(provider).iter().position(|account| Some(account.id.as_str()) == id).unwrap_or(0)
+    }
+
+    pub fn balance(&self, provider: ModelProvider) -> Balance {
+        self.balance.get(&provider).copied().unwrap_or_default()
+    }
+
+    pub fn set_balance(&mut self, provider: ModelProvider, balance: Balance) {
+        match balance {
+            Balance::Off => self.balance.remove(&provider),
+            chosen => self.balance.insert(provider, chosen),
+        };
     }
 
     pub fn slot_for(&self, provider: ModelProvider, label: &str, fresh: impl FnOnce() -> String) -> String {
@@ -94,6 +113,7 @@ impl ProviderBook {
             book.active.remove(provider);
         }
         book.active.extend(self.active.clone());
+        book.balance.extend(self.balance.clone());
         book
     }
 
@@ -103,6 +123,7 @@ impl ProviderBook {
             .map(|info| ProviderSummary {
                 account: self.get(info.provider).cloned(),
                 accounts: self.accounts(info.provider).to_vec(),
+                balance: self.balance(info.provider),
                 provider: info.provider,
                 name: info.name,
                 access: info.access,

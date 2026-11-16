@@ -47,6 +47,14 @@ impl Sdk {
         self.client.call(ClientCommand::UseProviderAccount { provider, account: account.to_owned() }, listed)
     }
 
+    pub fn set_balance(
+        &self,
+        provider: ModelProvider,
+        balance: domain::account_pool::Balance,
+    ) -> Result<Vec<ProviderSummary>, Error> {
+        self.client.call(ClientCommand::SetProviderBalance { provider, balance }, listed)
+    }
+
     pub fn remove_account(&self, provider: ModelProvider, account: &str) -> Result<Vec<ProviderSummary>, Error> {
         self.client.call(ClientCommand::RemoveProviderAccount { provider, account: account.to_owned() }, listed)
     }

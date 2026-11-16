@@ -2,6 +2,7 @@ mod cancellable_http;
 pub mod client;
 pub(crate) mod conversation_key;
 pub mod http;
+pub mod pooled;
 pub(crate) mod retry;
 pub mod routed;
 #[cfg(any(test, feature = "test-support"))]

@@ -102,3 +102,44 @@ fn a_subscription_account_is_named_by_its_email() {
     let labels: Vec<String> = summary.accounts.into_iter().map(|a| a.label).collect();
     assert_eq!(labels, ["a@x.io", "b@x.io"]);
 }
+
+fn order(providers: &ModelProviders) -> Vec<String> {
+    let keys = providers.keys(&OWNER, KEYED).expect("keys");
+    keys.into_iter()
+        .map(|key| {
+            let config = Config::parse(agent_engine::providers::get(KEYED).expect("known"), key.secret());
+            config.expect("config").api_key
+        })
+        .collect()
+}
+
+#[test]
+fn without_a_balance_a_run_gets_only_the_account_in_use() {
+    let (providers, _) = rig();
+    providers.connect(&OWNER, KEYED, FIRST);
+    providers.connect(&OWNER, KEYED, SECOND);
+    assert_eq!(order(&providers), [SECOND]);
+}
+
+#[test]
+fn failover_offers_the_account_in_use_first_and_the_others_after() {
+    let (providers, _) = rig();
+    providers.connect(&OWNER, KEYED, FIRST);
+    providers.connect(&OWNER, KEYED, SECOND);
+    providers.set_balance(&OWNER, KEYED, domain::account_pool::Balance::Failover);
+    assert_eq!(order(&providers), [SECOND, FIRST]);
+    assert_eq!(order(&providers), [SECOND, FIRST]);
+}
+
+#[test]
+fn round_robin_starts_each_run_on_the_next_account() {
+    let (providers, _) = rig();
+    providers.connect(&OWNER, KEYED, FIRST);
+    providers.connect(&OWNER, KEYED, SECOND);
+    let event = providers.set_balance(&OWNER, KEYED, domain::account_pool::Balance::RoundRobin);
+    let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
+    assert!(listed.iter().any(|p| p.provider == KEYED && p.balance == domain::account_pool::Balance::RoundRobin));
+    assert_eq!(order(&providers), [FIRST, SECOND]);
+    assert_eq!(order(&providers), [SECOND, FIRST]);
+    assert_eq!(order(&providers), [FIRST, SECOND]);
+}

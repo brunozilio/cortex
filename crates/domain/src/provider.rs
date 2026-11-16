@@ -19,6 +19,8 @@ pub struct ProviderSummary {
     pub account: Option<ProviderAccount>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub accounts: Vec<ProviderAccount>,
+    #[serde(default)]
+    pub balance: crate::account_pool::Balance,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

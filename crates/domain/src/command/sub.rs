@@ -108,3 +108,16 @@ pub fn model_command(argument: Option<String>) -> super::Command {
     };
     super::Command::ModelRole(role, change)
 }
+
+pub fn accounts_command(argument: Option<&str>) -> Option<super::Command> {
+    use crate::account_pool::Balance;
+    let Some(argument) = argument else { return Some(super::Command::Accounts { removing: false }) };
+    let (first, rest) = argument.split_once(char::is_whitespace).unwrap_or((argument, ""));
+    let rest = rest.trim();
+    match first.to_ascii_lowercase().as_str() {
+        "remove" if rest.is_empty() => Some(super::Command::Accounts { removing: true }),
+        "balance" if rest.is_empty() => Some(super::Command::AccountsBalance(None)),
+        "balance" => Balance::parse(rest).map(|balance| super::Command::AccountsBalance(Some(balance))),
+        _ => None,
+    }
+}

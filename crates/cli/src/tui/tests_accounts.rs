@@ -24,7 +24,7 @@ fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
 }
 
 fn two_accounts(data: &std::path::Path) -> App {
-    let engine = FakeEngine::new(vec![Model::new("keyed:main", "Main")], Vec::new());
+    let engine = FakeEngine::new(vec![Model::new("keyed:main", "Main").served_by(KEYED)], Vec::new());
     let sdk = sdk(&engine, data);
     sdk.connect_provider(KEYED, "sk-proj-0123456789aaaa").expect("first");
     sdk.connect_provider(KEYED, "sk-proj-0123456789bbbb").expect("second");
@@ -75,4 +75,19 @@ fn accounts_remove_forgets_the_picked_account() {
     until(&mut app, |app| in_use(app).as_deref() == Some("…aaaa"));
     let left = app.sdk.providers().expect("providers").into_iter().find(|p| p.provider == KEYED).expect("keyed");
     assert_eq!(left.accounts.len(), 1);
+}
+
+#[test]
+fn accounts_balance_sets_how_the_session_provider_s_accounts_share_the_work() {
+    use domain::account_pool::Balance;
+    let data = tempfile::tempdir().expect("data");
+    let mut app = two_accounts(data.path());
+    type_text(&mut app, "/accounts balance round-robin");
+    press(&mut app, KeyCode::Enter);
+    let balance = |app: &App| {
+        let providers = app.sdk.providers().expect("providers");
+        providers.into_iter().find(|p| p.provider == KEYED).map(|p| p.balance)
+    };
+    until(&mut app, |app| balance(app) == Some(Balance::RoundRobin));
+    until(&mut app, |app| screen(app).contains("round-robin"));
 }

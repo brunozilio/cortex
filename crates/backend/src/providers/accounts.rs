@@ -1,5 +1,6 @@
 use domain::Principal;
-use domain::provider::{ModelProvider, ProviderBook};
+use domain::account_pool::{self, Balance};
+use domain::provider::{ModelProvider, ProviderBook, ProviderKey};
 use llm_providers::Config;
 use platform::sync::Locked;
 use protocol::ServerEvent;
@@ -24,6 +25,33 @@ impl ModelProviders {
             Ok(())
         });
         self.answer(owner, provider, result)
+    }
+
+    pub fn set_balance(&self, owner: &Principal, provider: ModelProvider, balance: Balance) -> ServerEvent {
+        let result = self.change(owner, &mut |book| {
+            book.set_balance(provider, balance);
+            Ok(())
+        });
+        self.answer(owner, provider, result)
+    }
+
+    pub fn keys(&self, owner: &Principal, provider: ModelProvider) -> Result<Vec<ProviderKey>, String> {
+        let first = self.key(owner, provider)?;
+        let Some(holder) = self.holder(owner, provider) else { return Ok(vec![first]) };
+        let book = self.store.load(&holder);
+        let accounts = book.accounts(provider);
+        let run = {
+            let mut runs = self.runs.locked();
+            let counter = runs.entry(format!("{}/{provider}", crate::dirs::owner_key(&holder))).or_default();
+            *counter += 1;
+            *counter - 1
+        };
+        let order = account_pool::order(book.balance(provider), accounts.len(), book.active_index(provider), run);
+        let keys: Vec<ProviderKey> = order
+            .into_iter()
+            .filter_map(|at| self.account_key(holder.clone(), provider, &accounts[at].id).ok())
+            .collect();
+        Ok(if keys.is_empty() { vec![first] } else { keys })
     }
 
     pub fn disconnect(&self, owner: &Principal, provider: ModelProvider) -> ServerEvent {

@@ -1,3 +1,4 @@
+use domain::account_pool::Balance;
 use domain::provider::{ModelProvider, ProviderSummary};
 
 use super::app::{App, Msg};
@@ -37,6 +38,23 @@ impl App {
         self.catalog.accounts = listed;
         self.overlays.picker =
             Some(Picker { kind: PickerKind::Account { removing }, title: title.into(), items, cursor });
+    }
+
+    pub(super) fn balance(&mut self, chosen: Option<Balance>) {
+        let Some(provider) = self.model().map(|model| model.provider) else {
+            return self.transcript.notice("No model yet: /login connects a provider.");
+        };
+        let Some(balance) = chosen else {
+            let ways: Vec<String> = Balance::ALL.iter().map(|b| format!("{}: {}", b.name(), b.about())).collect();
+            return self.transcript.notice(format!(
+                "/accounts balance <way> sets how this provider's accounts share the work:\n{}",
+                ways.join("\n")
+            ));
+        };
+        self.spawn(move |sdk| match sdk.set_balance(provider, balance) {
+            Ok(_) => Msg::Notice(format!("Accounts balance: {} ({}).", balance.name(), balance.about())),
+            Err(error) => Msg::Error(error.to_string()),
+        });
     }
 
     pub(super) fn account_picked(&mut self, cursor: usize, removing: bool) {
