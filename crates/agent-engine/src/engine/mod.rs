@@ -6,6 +6,7 @@ mod moved;
 mod record;
 mod report;
 mod rewind;
+pub(crate) mod roles;
 mod sent;
 mod small_model;
 mod snapshot;

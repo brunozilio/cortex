@@ -76,6 +76,11 @@ impl Saver {
         let _ = self.0.send(Box::new(change));
     }
 
+    pub fn remember_value(&self, key: &str, value: serde_json::Value) {
+        let key = key.to_owned();
+        self.change(move |settings| settings[key] = value);
+    }
+
     pub fn remember(&self, key: &str, value: &str) {
         let (key, value) = (key.to_owned(), value.to_owned());
         self.change(move |settings| settings[key] = serde_json::Value::String(value));

@@ -141,8 +141,9 @@ impl Job {
         if self.request.safety_check {
             workspace.policy.safety = Some(Arc::new(crate::guard::Safety::default()));
         }
-        if let Some(name) = &settings.advisor {
-            let config = tools::subagent_config::AgentConfig { model: Some(name.clone()), ..Default::default() };
+        let roles = super::roles::merged(&self.request.roles, &settings);
+        if let Some(name) = roles.get(domain::model_roles::ModelRole::Advisor) {
+            let config = tools::subagent_config::AgentConfig { model: Some(name.to_owned()), ..Default::default() };
             match config.model(&self.request.model.id, self.request.model.provider) {
                 Ok(model) => workspace.models.advisor = Some(model),
                 Err(error) => return self.fail(&format!("advisorModel: {error}"), FailureKind::Other),
@@ -161,7 +162,10 @@ impl Job {
             .or(project_criteria)
             .filter(|_| self.request.permission != domain::PermissionMode::Plan)
         {
-            let config = tools::subagent_config::AgentConfig { model: settings.judge.clone(), ..Default::default() };
+            let config = tools::subagent_config::AgentConfig {
+                model: roles.get(domain::model_roles::ModelRole::Review).map(str::to_owned),
+                ..Default::default()
+            };
             match config.model(&self.request.model.id, self.request.model.provider) {
                 Ok(model) => {
                     let allow = criteria.judge_allow(&settings.judge_allow);
@@ -201,13 +205,14 @@ impl Job {
         let small = super::small_model::pick(
             self.request.model.provider,
             &self.request.model.id,
-            settings.small_model.as_deref(),
+            roles.get(domain::model_roles::ModelRole::Small),
             &self.source.catalog(&self.request),
         );
         if let Some(why) = &small.ignored {
             tracing::warn!("{why}");
         }
         workspace.models.small_model = small.model;
+        workspace.models.roles = roles;
         workspace.services.network = Some(tools::Network(Arc::clone(&self.mcp)));
         workspace.added_dirs = crate::brief::added_dirs(&self.request, &settings.added_dirs, workspace.home.as_deref());
         workspace.hooks.extend(&agent_config.hooks);
@@ -252,7 +257,11 @@ impl Job {
             runtime_guard.retain();
         }
         self.request.effort = agent_config.effort.unwrap_or(self.request.effort);
-        match agent_config.model(&self.request.model.id, self.request.model.provider) {
+        let chosen = match &agent_config.model {
+            Some(_) => agent_config.model(&self.request.model.id, self.request.model.provider),
+            None => Ok(workspace.models.roles.for_turn(&self.request.model.id, self.request.permission).to_owned()),
+        };
+        match chosen {
             Ok(model) if model != self.request.model.id => {
                 self.request.model.id = model.clone();
                 workspace.models.model.id = model;

@@ -6,6 +6,9 @@ fn bare(model: &str) -> &str {
 }
 
 pub fn pick(provider: ModelProvider, session: &str, configured: Option<&str>, catalog: &[ModelOption]) -> SmallChoice {
+    if let Some(elsewhere) = configured.filter(|name| super::roles::elsewhere(name, provider)) {
+        return SmallChoice { model: Some(elsewhere.to_owned()), ..SmallChoice::default() };
+    }
     let found = crate::providers::find(provider);
     let vendor = found.and_then(|provider| llm_providers::vendor(provider.vendor()));
     let configured = configured.map(|name| vendor.and_then(|vendor| vendor.alias(name)).unwrap_or(name));
@@ -52,6 +55,15 @@ mod tests {
         let chatgpt = ModelProvider::new("openai-subscription");
         let catalog = [offered(chatgpt, "gpt-6.1-sol"), offered(chatgpt, "gpt-6.1-terra")];
         assert_eq!(pick(chatgpt, "gpt-6.1-sol", None, &catalog).model.as_deref(), Some("gpt-6.1-terra"));
+    }
+
+    #[test]
+    fn a_small_model_on_another_connected_provider_is_kept_as_named() {
+        let chatgpt = ModelProvider::new("openai-subscription");
+        let catalog = [offered(chatgpt, "gpt-6.1-sol"), offered(chatgpt, "gpt-6.1-terra")];
+        let grok = "grok-subscription:grok-4.6-fast";
+        let choice = pick(chatgpt, "gpt-6.1-sol", Some(grok), &catalog);
+        assert_eq!((choice.model.as_deref(), choice.ignored), (Some(grok), None));
     }
 
     #[test]

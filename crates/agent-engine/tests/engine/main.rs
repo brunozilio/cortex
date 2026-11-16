@@ -9,6 +9,7 @@ mod headless;
 mod inbox;
 mod lsp;
 mod mcp;
+mod model_roles;
 mod plugins;
 mod runs;
 mod scripts;

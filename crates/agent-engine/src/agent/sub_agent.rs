@@ -50,26 +50,10 @@ impl Agent<'_> {
         if !workspace.auto_memory {
             config.memory = None;
         }
-        let mut unserved = None;
-        if let Some(model) = input.get("model").and_then(serde_json::Value::as_str).filter(|m| !m.is_empty()) {
-            let asked =
-                crate::tools::subagent_config::AgentConfig { model: Some(model.to_owned()), ..Default::default() };
-            if asked.model(&self.request.model, self.workspace.models.model.provider).is_ok() {
-                config.model = asked.model;
-            } else {
-                unserved = Some(model.to_owned());
-            }
-        }
-        let explores = chosen.as_ref().is_some_and(|agent| agent.name == "Explore");
-        if config.model.is_none() && explores {
-            let small = crate::tools::subagent_config::AgentConfig {
-                model: workspace.models.small_model.clone(),
-                ..Default::default()
-            };
-            if small.model.is_some() && small.model(&self.request.model, self.workspace.models.model.provider).is_ok() {
-                config.model = small.model;
-            }
-        }
+        let kind = chosen.as_ref().map_or("", |agent| agent.name.as_str());
+        let picked = super::sub_agent_model::choose(kind, config.model.take(), input, &self.request.model, workspace);
+        config.model = picked.model;
+        let unserved = picked.unserved;
         if input.get("isolation").and_then(serde_json::Value::as_str) == Some("worktree") {
             config.worktree = true;
         }

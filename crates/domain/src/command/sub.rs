@@ -84,3 +84,27 @@ impl McpCommand {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoleChange {
+    Pick,
+    Set(String),
+    Clear,
+}
+
+pub fn model_command(argument: Option<String>) -> super::Command {
+    use crate::model_roles::ModelRole;
+    let Some(argument) = argument else { return super::Command::Model(None) };
+    let (first, rest) = argument.split_once(char::is_whitespace).unwrap_or((argument.as_str(), ""));
+    let rest = rest.trim();
+    if first.eq_ignore_ascii_case("roles") && rest.is_empty() {
+        return super::Command::ModelRoles;
+    }
+    let Some(role) = ModelRole::parse(first) else { return super::Command::Model(Some(argument)) };
+    let change = match rest {
+        "" => RoleChange::Pick,
+        clear if ["default", "none", "off"].iter().any(|word| clear.eq_ignore_ascii_case(word)) => RoleChange::Clear,
+        model => RoleChange::Set(model.to_owned()),
+    };
+    super::Command::ModelRole(role, change)
+}

@@ -13,6 +13,8 @@ pub fn run(app: &mut App, command: Command) {
         Command::New => app.new_session(),
         Command::Model(None) => app.model_picker(),
         Command::Model(Some(wanted)) => app.set_model_named(&wanted),
+        Command::ModelRoles => app.list_roles(),
+        Command::ModelRole(role, change) => app.change_role(role, change),
         Command::Mode(None) => app.mode_picker(),
         Command::Mode(Some(mode)) => app.switch_mode(mode),
         Command::Effort(None) => app.effort_picker(),
@@ -57,12 +59,18 @@ pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, Str
     let builtin = Command::HELP
         .into_iter()
         .flat_map(|(name, about)| {
-            let named = name.starts_with(typed);
-            let aliases = Command::ALIASES.into_iter().filter(move |(_, of)| *of == name && !named);
+            let aliases =
+                Command::ALIASES.into_iter().filter(move |(_, of)| of.split_whitespace().next() == Some(name));
             std::iter::once((name.to_owned(), about.to_owned()))
-                .chain(aliases.map(move |(alias, _)| (alias.to_owned(), format!("Same as /{name}: {about}"))))
+                .chain(aliases.map(move |(alias, of)| (alias.to_owned(), format!("Same as /{of}: {about}"))))
         })
-        .chain(super::features::help().into_iter().map(|(name, about)| (name.to_owned(), about.to_owned())));
+        .chain(super::features::commands().into_iter().flat_map(|(names, about)| {
+            let name = names.first().copied().unwrap_or_default();
+            names.iter().map(move |alias| match *alias == name {
+                true => (name.to_owned(), about.to_owned()),
+                false => (alias.to_string(), format!("Same as /{name}: {about}")),
+            })
+        }));
     let skills = skills.iter().map(|(name, about)| (name.clone(), about.clone()));
     builtin.chain(skills).filter(|(name, _)| name.starts_with(typed)).collect()
 }
@@ -93,17 +101,30 @@ mod tests {
         assert_eq!(names, ["memory", "memo"]);
         let aliases_of_clear =
             |typed: &str| suggestions(typed, &[]).into_iter().filter(|(_, about)| about.starts_with("Same as /clear"));
-        assert_eq!(aliases_of_clear("").count(), 0, "an alias hides while its command is offered");
+        assert_eq!(
+            aliases_of_clear("").map(|(name, _)| name).collect::<Vec<_>>(),
+            ["new", "reset"],
+            "an alias shows beside its command"
+        );
         assert_eq!(aliases_of_clear("ne").map(|(name, _)| name).collect::<Vec<_>>(), ["new"]);
         assert_eq!(
             suggestions("res", &[]).iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(),
             ["reset", "resume"]
         );
+        let feature_names: usize = super::super::features::commands().iter().map(|(names, _)| names.len()).sum();
         assert_eq!(
             suggestions("", &skills).len(),
-            Command::HELP.len() + super::super::features::help().len() + 2,
+            Command::HELP.len() + Command::ALIASES.len() + feature_names + 2,
             "every match, not just a screenful"
         );
+    }
+
+    #[test]
+    fn the_other_names_of_a_command_are_offered_too() {
+        let about = |typed: &str| suggestions(typed, &[]).into_iter().find(|(name, _)| name == typed).map(|(_, a)| a);
+        assert!(about("plan").is_some_and(|about| about.starts_with("Same as /mode plan")));
+        assert!(about("console").is_some_and(|about| about.starts_with("Same as /trace")));
+        assert!(about("factory-reset").is_some());
     }
 
     #[test]

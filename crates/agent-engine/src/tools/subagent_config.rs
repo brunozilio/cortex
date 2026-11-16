@@ -137,6 +137,7 @@ impl AgentConfig {
         let Some(model) = &self.model else {
             return Ok(parent.into());
         };
+        let routed_elsewhere = crate::engine::roles::elsewhere(model, provider);
         let provider = crate::providers::find(provider);
         let vendor = provider.and_then(|provider| llm_providers::vendor(provider.vendor()));
         if let Some(full) = vendor.and_then(|vendor| vendor.alias(model)) {
@@ -144,11 +145,12 @@ impl AgentConfig {
         }
         match provider {
             _ if model == parent => Ok(model.clone()),
+            _ if routed_elsewhere => Ok(model.clone()),
             Some(provider) if provider.serves(model) => Ok(model.clone()),
-            _ => Err(
-                "the custom agent model must use the current provider; cross-provider credentials are not inherited"
-                    .into(),
-            ),
+            _ => {
+                Err("the agent model must be served by the current provider or name a connected one as provider:model"
+                    .into())
+            }
         }
     }
 }

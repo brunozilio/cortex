@@ -5,11 +5,19 @@ pub struct Models {
     pub small_model: Option<String>,
     pub advisor: Option<String>,
     pub escalation: Option<String>,
+    pub roles: domain::model_roles::ModelRoles,
 }
 
 impl Models {
     pub fn new(model: domain::ModelOption) -> Self {
-        Self { model, fallbacks: Vec::new(), small_model: None, advisor: None, escalation: None }
+        Self {
+            model,
+            fallbacks: Vec::new(),
+            small_model: None,
+            advisor: None,
+            escalation: None,
+            roles: Default::default(),
+        }
     }
 }
 

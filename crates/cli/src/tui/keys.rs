@@ -133,6 +133,7 @@ fn pick(app: &mut App, event: KeyEvent) {
                         app.set_model(model);
                     }
                 }
+                PickerKind::Role(role) => app.role_picked(role, cursor),
                 PickerKind::Effort => app.set_effort_from(Effort::ALL.get(cursor).copied()),
                 PickerKind::Mode => {
                     if let Some(mode) = PermissionMode::ALL.get(cursor) {

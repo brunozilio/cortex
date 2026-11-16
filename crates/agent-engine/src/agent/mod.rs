@@ -15,6 +15,7 @@ mod reminders;
 mod script_call;
 mod stuck;
 mod sub_agent;
+mod sub_agent_model;
 mod sub_agent_report;
 mod tasks;
 mod template;

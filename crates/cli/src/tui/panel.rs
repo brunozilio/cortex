@@ -74,7 +74,7 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
 
 const START: [(&str, &str); 4] = [
     ("/resume", "pick up an earlier conversation"),
-    ("/model", "switch the model"),
+    ("/model", "switch the model; /model <plan|explore|small|review|advisor> sets one per role"),
     ("@file", "point the agent at a file"),
     ("!cmd", "run a shell command yourself"),
 ];

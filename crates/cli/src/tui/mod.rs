@@ -59,6 +59,7 @@ mod vim;
 mod watchdog;
 mod wrap;
 
+mod model_roles;
 #[cfg(test)]
 mod shots;
 #[cfg(test)]
@@ -71,6 +72,8 @@ mod tests_auto_retry;
 mod tests_dirs;
 #[cfg(test)]
 mod tests_going_on;
+#[cfg(test)]
+mod tests_model_roles;
 #[cfg(test)]
 mod tests_notices;
 #[cfg(test)]
@@ -268,6 +271,11 @@ pub fn run(
     let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange);
     capture_mouse(false);
     ratatui::restore();
+    if let Some(chore) = app.exit_chore.take() {
+        drop(app);
+        println!("{}", chore());
+        return result;
+    }
     if app.session.as_ref().and_then(sdk::Session::id).is_some() {
         println!("Continue this conversation with: {brand_command} -c", brand_command = brand::COMMAND);
     }

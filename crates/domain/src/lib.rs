@@ -38,6 +38,7 @@ pub mod mcp_config;
 pub mod mcp_oauth;
 pub mod memory;
 pub mod model;
+pub mod model_roles;
 pub mod output;
 pub mod permission_rules;
 pub mod principal;

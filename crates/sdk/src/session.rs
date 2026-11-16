@@ -26,6 +26,7 @@ pub struct Session {
     verifications: Arc<Mutex<Verifications>>,
     added_dirs: Vec<PathBuf>,
     output_style: Option<String>,
+    roles: domain::model_roles::ModelRoles,
     headless: Headless,
     fork: std::sync::atomic::AtomicBool,
     spending: Arc<Mutex<Spending>>,
@@ -61,6 +62,7 @@ impl Session {
             verifications: Arc::default(),
             added_dirs: Vec::new(),
             output_style: None,
+            roles: Default::default(),
             headless: Headless::default(),
             fork: std::sync::atomic::AtomicBool::new(false),
             spending: Arc::default(),
@@ -137,6 +139,10 @@ impl Session {
 
     pub fn set_model(&mut self, model: ModelOption) {
         self.model = model;
+    }
+
+    pub fn set_roles(&mut self, roles: domain::model_roles::ModelRoles) {
+        self.roles = roles;
     }
 
     pub fn set_permission(&mut self, mode: PermissionMode) {
@@ -248,6 +254,7 @@ impl Session {
         request.disallowed_tools.clone_from(&self.headless.disallowed_tools);
         request.append_system.clone_from(&self.headless.append_system);
         request.fallback_model.clone_from(&self.headless.fallback_model);
+        request.roles.clone_from(&self.roles);
         if request.output_style.is_none() {
             request.output_style.clone_from(&self.output_style);
         }

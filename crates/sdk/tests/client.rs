@@ -283,3 +283,17 @@ fn side_calls_name_suggest_recap_and_warn_about_a_conversation() {
     );
     assert_eq!(requests[0].prompt, "fix the login page");
 }
+
+#[test]
+fn a_session_s_model_roles_reach_every_run() {
+    use domain::model_roles::{ModelRole, ModelRoles};
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![model()], script(vec![EngineEvent::TextDelta("ok".into())]));
+    let sdk = build(&engine, data.path());
+    let mut session = sdk.session(data.path(), model()).memory(false);
+    let mut roles = ModelRoles::default();
+    roles.set(ModelRole::Explore, Some("grok-subscription:grok-4.6-fast".into()));
+    session.set_roles(roles.clone());
+    let _: Vec<EngineEvent> = session.send("look around").expect("run").collect();
+    assert_eq!(engine.requests().remove(0).roles, roles);
+}

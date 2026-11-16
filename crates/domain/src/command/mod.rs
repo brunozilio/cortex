@@ -3,13 +3,15 @@ use crate::{Effort, PermissionMode};
 mod slash;
 mod sub;
 pub use slash::{closest, slash_name};
-pub use sub::{McpCommand, MemoryCommand, VerificationCommand};
+pub use sub::{McpCommand, MemoryCommand, RoleChange, VerificationCommand};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     Help(Option<String>),
     New,
     Model(Option<String>),
+    ModelRoles,
+    ModelRole(crate::model_roles::ModelRole, RoleChange),
     Mode(Option<PermissionMode>),
     Effort(Option<Effort>),
     EffortAuto,
@@ -53,7 +55,7 @@ impl Command {
         ("clear", "Clear the conversation and start fresh (also /new, /reset)"),
         ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
         ("fork", "Go on in a copy of this conversation, leaving it as it is"),
-        ("model", "Pick the model, or /model <id>"),
+        ("model", "Pick the model, or /model <id>; /model <role> [model] per role, /model roles lists them"),
         ("mode", "Pick ask, edits, plan or bypass"),
         ("effort", "Set low, medium, high, xhigh or max, or auto to pick the model and effort per request"),
         ("output-style", "How the agent talks: default, concise, proactive, explanatory, learning"),
@@ -86,7 +88,8 @@ impl Command {
         ("exit", "Quit (also /quit)"),
     ];
 
-    pub const ALIASES: [(&'static str, &'static str); 12] = [
+    pub const ALIASES: [(&'static str, &'static str); 13] = [
+        ("plan", "mode plan"),
         ("new", "clear"),
         ("reset", "clear"),
         ("continue", "resume"),
@@ -147,7 +150,8 @@ impl Command {
         match name.to_ascii_lowercase().as_str() {
             "help" | "?" => Some(Self::Help(argument.map(|name| name.trim_start_matches('/').to_owned()))),
             "clear" | "new" | "reset" => bare(Self::New),
-            "model" => Some(Self::Model(argument)),
+            "model" => Some(sub::model_command(argument)),
+            "plan" => bare(Self::Mode(Some(PermissionMode::Plan))),
             "mode" => match &argument {
                 None => Some(Self::Mode(None)),
                 Some(mode) => mode_named(mode).map(|mode| Self::Mode(Some(mode))),

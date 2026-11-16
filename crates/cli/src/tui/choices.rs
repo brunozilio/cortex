@@ -17,6 +17,7 @@ pub enum PickerKind {
     OutputStyle,
     Config,
     Effort,
+    Role(domain::model_roles::ModelRole),
 }
 
 const MODES: [(PermissionMode, &str); 4] = [
@@ -43,6 +44,7 @@ impl App {
                 self.vim = Some(super::vim::Vim::default());
             }
             self.output_style = saved["outputStyle"].as_str().map(str::to_owned);
+            self.roles = super::model_roles::saved(saved);
             self.status.command = saved["statusLine"].as_str().filter(|c| !c.is_empty()).map(str::to_owned);
             if let Some(id) = &self.resume {
                 self.title = settings::title(saved, &self.cwd, id);
@@ -93,6 +95,7 @@ impl App {
             session.add_dir(dir.clone());
         }
         session.set_output_style(self.output_style.clone());
+        session.set_roles(self.roles.clone());
         session.set_headless(self.headless.clone());
         self.session = Some(session);
         if resumed.is_some() {

@@ -130,7 +130,21 @@ fn memory_commands_parse_from_their_argument() {
 #[test]
 fn every_alias_runs_the_command_it_names() {
     for (alias, name) in Command::ALIASES {
-        assert!(Command::HELP.iter().any(|(listed, _)| *listed == name), "/{name}");
+        let command = name.split_whitespace().next().unwrap_or(name);
+        assert!(Command::HELP.iter().any(|(listed, _)| *listed == command), "/{name}");
         assert_eq!(Command::parse(&format!("/{alias}")), Command::parse(&format!("/{name}")), "/{alias}");
     }
+}
+
+#[test]
+fn model_takes_a_role_before_the_model_name() {
+    use crate::model_roles::ModelRole;
+    assert_eq!(Command::parse("/model roles"), Some(Command::ModelRoles));
+    assert_eq!(Command::parse("/model plan"), Some(Command::ModelRole(ModelRole::Plan, RoleChange::Pick)));
+    assert_eq!(
+        Command::parse("/model Explore grok-subscription:grok-4.6-fast"),
+        Some(Command::ModelRole(ModelRole::Explore, RoleChange::Set("grok-subscription:grok-4.6-fast".into())))
+    );
+    assert_eq!(Command::parse("/model review default"), Some(Command::ModelRole(ModelRole::Review, RoleChange::Clear)));
+    assert_eq!(Command::parse("/model gpt-6.1-sol"), Some(Command::Model(Some("gpt-6.1-sol".into()))));
 }
