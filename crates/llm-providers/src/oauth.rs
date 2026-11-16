@@ -21,6 +21,8 @@ pub struct Tokens {
     pub client: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
 }
 
 impl std::fmt::Debug for Tokens {
@@ -103,6 +105,7 @@ pub fn standard(
         expires_at: Some(now + Duration::seconds(value["expires_in"].as_i64().unwrap_or(0))),
         client: None,
         email: account_label(body).or_else(|| previous.and_then(|p| p.email.clone())),
+        subject: account_subject(body).or_else(|| previous.and_then(|p| p.subject.clone())),
     })
 }
 
@@ -145,11 +148,24 @@ pub fn browser(provider: &dyn Provider, host: &dyn Host, flow: &Browser<'_>) -> 
 
 pub fn account_label(body: &str) -> Option<String> {
     let value: Value = serde_json::from_str(body).ok()?;
-    let claims = value["id_token"].as_str().and_then(jwt_claims).unwrap_or(Value::Null);
-    [&value["account"]["email_address"], &value["account"]["email"], &value["email"], &claims["email"]]
+    let [id, access] = token_claims(&value);
+    [&value["account"]["email_address"], &value["account"]["email"], &value["email"], &id["email"], &access["email"]]
         .into_iter()
         .find_map(|found| found.as_str().map(str::trim).filter(|text| text.contains('@') && text.len() <= 254))
         .map(str::to_owned)
+}
+
+pub fn account_subject(body: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(body).ok()?;
+    let [id, access] = token_claims(&value);
+    [&id["sub"], &access["sub"]]
+        .into_iter()
+        .find_map(|found| found.as_str().map(str::trim).filter(|text| !text.is_empty() && text.len() <= 256))
+        .map(str::to_owned)
+}
+
+fn token_claims(value: &Value) -> [Value; 2] {
+    ["id_token", "access_token"].map(|key| value[key].as_str().and_then(jwt_claims).unwrap_or(Value::Null))
 }
 
 fn jwt_claims(jwt: &str) -> Option<Value> {
@@ -192,6 +208,22 @@ mod tests {
         assert_eq!((fresh.refresh_token.as_str(), fresh.account_id.as_str()), ("r0", "a"));
         assert_eq!(fresh.expires_at, Some(now + Duration::seconds(60)));
         assert!(matches!(standard(400, "{}", None, now, |_| Ok(String::new())), Err(ProviderError::Unauthorized(_))));
+    }
+
+    #[test]
+    fn without_an_email_the_token_s_subject_still_tells_accounts_apart() {
+        let jwt = |claims: &str| format!("h.{}.s", URL_SAFE_NO_PAD.encode(claims));
+        let from_id = format!(r#"{{"access_token":"a","id_token":"{}"}}"#, jwt(r#"{"sub":"user-1"}"#));
+        assert_eq!(account_subject(&from_id).as_deref(), Some("user-1"));
+        let from_access = format!(r#"{{"access_token":"{}"}}"#, jwt(r#"{"sub":"user-2","email":"two@x.ai"}"#));
+        assert_eq!(account_subject(&from_access).as_deref(), Some("user-2"));
+        assert_eq!(account_label(&from_access).as_deref(), Some("two@x.ai"));
+        assert_eq!(account_subject(r#"{"access_token":"opaque"}"#), None);
+        let now = Utc::now();
+        let first = standard(200, &from_id, None, now, |_| Ok(String::new())).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(first.subject.as_deref(), Some("user-1"));
+        let again = standard(200, r#"{"access_token":"b"}"#, Some(&first), now, |_| Ok(String::new()));
+        assert_eq!(again.unwrap_or_else(|e| panic!("{e}")).subject.as_deref(), Some("user-1"));
     }
 
     #[test]

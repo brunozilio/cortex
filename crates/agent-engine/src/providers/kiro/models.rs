@@ -68,6 +68,7 @@ mod tests {
             expires_at: None,
             client: None,
             email: None,
+            subject: None,
         };
         let config = llm_providers::Config { auth: Some(tokens), ..llm_providers::Config::default() };
         let call = call(&config, "");

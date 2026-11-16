@@ -143,3 +143,36 @@ fn round_robin_starts_each_run_on_the_next_account() {
     assert_eq!(order(&providers), [SECOND, FIRST]);
     assert_eq!(order(&providers), [FIRST, SECOND]);
 }
+
+#[test]
+fn without_an_email_the_token_s_subject_keeps_two_accounts_apart() {
+    let (providers, _) = rig();
+    let raw = |subject: &str| {
+        format!(
+            r#"{{"access_token":"a","refresh_token":"r","expires_at":"2099-01-01T00:00:00Z","subject":"{subject}"}}"#
+        )
+    };
+    let provider = ModelProvider::new("device-sub");
+    providers.connect(&OWNER, provider, &raw("0f3a9c1e-user-one"));
+    providers.connect(&OWNER, provider, &raw("7b22d410-user-two"));
+    let event = providers.connect(&OWNER, provider, &raw("0f3a9c1e-user-one"));
+    let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
+    let summary = listed.into_iter().find(|p| p.provider == provider).expect("device-sub");
+    let labels: Vec<String> = summary.accounts.into_iter().map(|a| a.label).collect();
+    assert_eq!(labels.len(), 2, "{labels:?}");
+    assert!(labels[0].ends_with("0f3a9c1e") && labels[1].ends_with("7b22d410"), "{labels:?}");
+}
+
+#[test]
+fn a_sign_in_that_names_no_one_is_added_as_a_numbered_account_and_never_replaces_one() {
+    let (providers, _) = rig();
+    let raw = r#"{"access_token":"a","refresh_token":"r","expires_at":"2099-01-01T00:00:00Z"}"#;
+    let provider = ModelProvider::new("device-sub");
+    providers.connect(&OWNER, provider, raw);
+    let event = providers.connect(&OWNER, provider, raw);
+    let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
+    let summary = listed.into_iter().find(|p| p.provider == provider).expect("device-sub");
+    let labels: Vec<String> = summary.accounts.into_iter().map(|a| a.label).collect();
+    assert_eq!(labels.len(), 2, "{labels:?}");
+    assert!(labels[1].ends_with("#2"), "{labels:?}");
+}

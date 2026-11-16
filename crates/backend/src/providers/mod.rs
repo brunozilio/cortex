@@ -200,7 +200,8 @@ impl ModelProviders {
 
     fn keep(&self, owner: &Principal, provider: ModelProvider, label: String, config: &Config) -> Result<(), String> {
         let _guard = self.lock.locked();
-        let label = accounts::identity(config).unwrap_or(label);
+        let label = accounts::identity(config, &agent_engine::providers::name(provider))
+            .unwrap_or_else(|| accounts::unnamed(config, label, self.store.load(owner).accounts(provider).len()));
         let id = self.store.load(owner).slot_for(provider, &label, || uuid::Uuid::new_v4().to_string());
         self.secrets.set(owner, slot(provider, &id), &account::secrets(config)?)?;
         let account = ProviderAccount { label, since_unix: self.now(), id };

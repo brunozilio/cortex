@@ -70,6 +70,7 @@ pub fn tokens(status: u16, body: &str, previous: Option<&Tokens>, now: DateTime<
         expires_at: Some(now + Duration::seconds(lifetime)),
         client: None,
         email: None,
+        subject: None,
     })
 }
 
@@ -130,6 +131,7 @@ mod tests {
             expires_at: None,
             client: None,
             email: None,
+            subject: None,
         };
         assert_eq!(serde_json::from_str::<Value>(&refresh(&previous).body).ok(), Some(json!({"refreshToken": "r0"})));
         let fresh = tokens(200, r#"{"accessToken":"new"}"#, Some(&previous), Utc::now());

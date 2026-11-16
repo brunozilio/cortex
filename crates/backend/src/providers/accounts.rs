@@ -7,9 +7,22 @@ use protocol::ServerEvent;
 
 use super::{ModelProviders, slot};
 
-pub(super) fn identity(config: &Config) -> Option<String> {
+const SUBJECT_SHOWN: usize = 8;
+
+pub(super) fn identity(config: &Config, name: &str) -> Option<String> {
     let tokens = config.auth.as_ref()?;
-    tokens.email.clone().or_else(|| (!tokens.account_id.is_empty()).then(|| tokens.account_id.clone()))
+    let subject = || {
+        let subject = tokens.subject.as_deref()?;
+        Some(format!("{name} · {}", subject.chars().take(SUBJECT_SHOWN).collect::<String>()))
+    };
+    tokens.email.clone().or_else(|| (!tokens.account_id.is_empty()).then(|| tokens.account_id.clone())).or_else(subject)
+}
+
+pub(super) fn unnamed(config: &Config, label: String, kept: usize) -> String {
+    match (&config.auth, kept) {
+        (Some(_), 1..) => format!("{label} #{}", kept + 1),
+        _ => label,
+    }
 }
 
 impl ModelProviders {

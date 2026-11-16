@@ -181,6 +181,7 @@ pub fn tokens(
         expires_at: Some(now + Duration::seconds(lifetime)),
         client: serde_json::to_value(client).ok(),
         email: None,
+        subject: None,
     })
 }
 
