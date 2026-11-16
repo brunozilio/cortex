@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-const DOCS: [&str; 2] = ["docs/architecture.md", "README.md"];
+const DOCS: [&str; 1] = ["README.md"];
 
 pub fn findings(root: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut crates = BTreeSet::new();

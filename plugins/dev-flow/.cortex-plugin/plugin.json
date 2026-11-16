@@ -1,6 +1,0 @@
-{
-  "name": "dev-flow",
-  "version": "0.1.0",
-  "description": "The team's development flow, from a Jira story to a tested, merged and closed change, with an approval gate at every stage.",
-  "license": "MIT"
-}

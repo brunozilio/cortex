@@ -45,7 +45,9 @@ use true colour where `COLORTERM` says so.
 
 Project settings, skills, agents and rules live in `.cortex/`, project
 instructions in `CORTEX.md` or `.cortex/CORTEX.md`, and your own in
-`~/.cortex/`. Plugins and MCP servers: [docs/plugins.md](docs/plugins.md).
+`~/.cortex/`. Plugins live in `~/.cortex/plugins/` (`cortex plugin
+install <git-url>`, `list`, `update`, `remove`); `/reload` in the chat
+lists what was found.
 
 ## Where data lives
 
@@ -74,8 +76,8 @@ you).
 
 ## Developing
 
-Read [CLAUDE.md](CLAUDE.md) (working rules, including how to run Cargo)
-and [docs/architecture.md](docs/architecture.md).
+Read [CLAUDE.md](CLAUDE.md): working rules, how the crates depend on each
+other, and how to run Cargo.
 
 ```sh
 export CARGO_TARGET_DIR="$PWD/target/agents/<task>"

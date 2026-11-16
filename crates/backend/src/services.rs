@@ -106,14 +106,15 @@ mod tests {
         let home = tempfile::tempdir().expect("home");
         let repo = tempfile::tempdir().expect("repo");
         std::fs::create_dir_all(home.path().join(brand::DIR)).expect("dir");
-        let settings = serde_json::json!({ "features": { "trace": false, "memory": true, "suggested-rules": false } });
+        let settings =
+            serde_json::json!({ "features": { "workspace": false, "memory": true, "suggested-rules": false } });
         std::fs::write(home.path().join(brand::DIR).join("settings.json"), settings.to_string()).expect("write");
         let mut services = LocalServices::with_engine(Arc::new(FakeEngine::new(Vec::new(), Vec::new())));
         services.homes = Arc::new(crate::OwnerHome::at(home.path()));
 
         let services = services.turned_off_in(repo.path());
 
-        assert!(services.off.contains("trace"));
+        assert!(services.off.contains("workspace"));
         assert!(!services.off.contains("memory"));
         assert!(services.off.contains("suggested_rules"), "a flag names its feature folder with hyphens");
     }

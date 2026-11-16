@@ -91,7 +91,6 @@ use ratatui::crossterm::terminal::{SetTitle, supports_keyboard_enhancement};
 use sdk::{PermissionMode, Sdk};
 
 pub use app::App;
-pub use features::cli as feature_command;
 pub use settings::last_session;
 
 fn capture_mouse(on: bool) {

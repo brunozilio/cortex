@@ -1,11 +1,29 @@
 # Working agreement
 
 Rust workspace: a coding agent driven from a terminal chat (CLI/TUI). The
-product's name lives in `brand.toml` (see docs/architecture.md). No GUI.
+product's name lives in `brand.toml` (read through the `brand` crate:
+`brand::NAME`, `brand::COMMAND`; `cargo run -p xtask -- brand` writes the
+files that must spell it out). No GUI.
+
+## Crates
+Dependencies are one-way; `domain` is the only crate every layer shares.
+
+```
+cli ──► sdk ──► backend ──► agent-engine ──► llm-providers ──► domain
+         │        │              │
+         └────────┴──► protocol ─┴─────────────────────────────► domain
+
+leaf crates: brand (everyone), code-map (backend), content (cli, agent-engine),
+             language-servers (agent-engine), platform (cli, backend, agent-engine),
+             script (agent-engine)
+```
+
+Nothing below `sdk` knows the CLI; `cli` reaches `backend` and
+`agent-engine` only in tests. The README's crate table says what each one
+is (`xtask lint` checks it lists every crate).
 
 ## Before changing code
 - Follow the Cargo isolation rules below before running any Cargo command.
-- Read @docs/architecture.md.
 - Run `cargo nextest run --workspace` (or `cargo test --workspace`) and `cargo clippy --workspace --all-targets -- -D warnings`.
 - `/verify` runs tests, clippy and `cargo run -p xtask -- lint`; run it before committing. The `arch-guard` agent reviews a diff against these rules.
 
@@ -35,8 +53,8 @@ product's name lives in `brand.toml` (see docs/architecture.md). No GUI.
   comments in shell, Python or TOML (a script's `#!` line is fine). The
   one exception: JSDoc type annotations (`@type`, `@param`) in `content/`
   JavaScript, pointing at `content/types.d.ts`. Say it
-  with names, types and tests instead; context belongs in docs/ or the
-  commit message. `.claude/hooks/no-comments.sh` rejects an edit that adds
+  with names, types and tests instead; context belongs in the commit
+  message. `.claude/hooks/no-comments.sh` rejects an edit that adds
   one and `xtask lint` fails on any.
 - Files over ~200–300 lines or functions mixing concerns get split.
 - Every new behaviour gets a test; IO sits behind traits so logic is testable.

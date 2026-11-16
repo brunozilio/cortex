@@ -192,7 +192,6 @@ fn allowed(path: &str, brand: &Brand) -> bool {
         || ["README.md", "CLAUDE.md", "AGENTS.md"].contains(&path)
         || path.starts_with(&own)
         || path.starts_with(".claude/")
-        || path.starts_with("plugins/")
 }
 
 fn names(text: &str, word: &str) -> bool {
@@ -226,10 +225,10 @@ mod name_tests {
     use super::{Brand, allowed, names};
 
     #[test]
-    fn a_plugin_kept_in_the_repository_may_spell_the_name_out() {
+    fn the_repository_s_own_folder_may_spell_the_name_out() {
         let brand = Brand { name: "Nova".into(), command: "nova".into(), company: "Acme".into(), author: "Ana".into() };
-        assert!(allowed("plugins/dev-flow/hooks/hooks.json", &brand));
         assert!(allowed(".nova/settings.json", &brand));
+        assert!(!allowed("plugins/dev-flow/hooks/hooks.json", &brand));
         assert!(!allowed("content/skills/run/SKILL.md", &brand));
         assert!(!allowed("crates/plugins/src/lib.rs", &brand));
     }
