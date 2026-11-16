@@ -18,6 +18,8 @@ pub struct PromptRequest {
     pub images: Vec<Image>,
     pub model: ModelOption,
     pub effort: Effort,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub auto_pick: bool,
     pub resume: Option<SessionId>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub fork: bool,
@@ -78,6 +80,7 @@ impl PromptRequest {
             images: Vec::new(),
             model,
             effort: Effort::Medium,
+            auto_pick: false,
             resume: None,
             fork: false,
             command: None,

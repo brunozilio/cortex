@@ -8,8 +8,11 @@ pub struct Saved {
     pub model: Option<String>,
     pub mode: Option<PermissionMode>,
     pub effort: Option<Effort>,
+    pub auto: bool,
     pub problems: Vec<String>,
 }
+
+pub const AUTO_EFFORT: &str = "auto";
 
 pub fn read(settings: &serde_json::Value) -> Saved {
     let mut problems = Vec::new();
@@ -20,9 +23,10 @@ pub fn read(settings: &serde_json::Value) -> Saved {
     };
     let mode = settings["mode"].as_str().and_then(mode_named);
     let effort = settings["effort"].as_str().and_then(level_named);
+    let auto = settings["effort"].as_str() == Some(AUTO_EFFORT);
     named("mode", "ask, edits, plan or bypass", mode.is_some());
-    named("effort", "low, medium, high, xhigh or max", effort.is_some());
-    Saved { model: settings["model"].as_str().map(str::to_owned), mode, effort, problems }
+    named("effort", "low, medium, high, xhigh, max or auto", effort.is_some() || auto);
+    Saved { model: settings["model"].as_str().map(str::to_owned), mode, effort, auto, problems }
 }
 
 pub fn last_session(settings: &serde_json::Value, cwd: &Path) -> Option<SessionId> {
@@ -134,10 +138,17 @@ mod tests {
                 model: Some("keyed:x".into()),
                 mode: Some(PermissionMode::Plan),
                 effort: Some(Effort::Max),
+                auto: false,
                 problems: Vec::new()
             }
         );
         assert_eq!(read(&json!(null)), Saved::default());
+    }
+
+    #[test]
+    fn a_saved_auto_effort_reads_back_as_auto_without_a_level() {
+        let saved = read(&json!({"effort": "auto"}));
+        assert_eq!((saved.effort, saved.auto, saved.problems.len()), (None, true, 0));
     }
 
     #[test]
@@ -148,7 +159,7 @@ mod tests {
             saved.problems,
             [
                 "The saved mode \"sideways\" is not ask, edits, plan or bypass; using the default.",
-                "The saved effort \"ultra\" is not low, medium, high, xhigh or max; using the default.",
+                "The saved effort \"ultra\" is not low, medium, high, xhigh, max or auto; using the default.",
             ]
         );
     }

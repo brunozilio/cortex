@@ -92,6 +92,9 @@ impl Transcript {
             EngineEvent::Tasks(tasks) => self.tasks.clone_from(tasks),
             EngineEvent::ToolLog { text, .. } => self.notice(format!("  › {text}")),
             EngineEvent::FellBack(model) => self.notice(format!("The model call failed; going on with {model}.")),
+            EngineEvent::Picked { model, effort } => {
+                self.notice(format!("Auto: {model}, {} effort", effort.cli_value()))
+            }
             EngineEvent::Moved(path) => {
                 self.moved = Some(path.clone());
                 self.notice(format!("Now working in {}", path.display()));

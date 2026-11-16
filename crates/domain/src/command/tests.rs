@@ -12,6 +12,7 @@ fn commands_parse_with_their_arguments() {
     assert_eq!(Command::parse("/model claude-opus-5-5"), Some(Command::Model(Some("claude-opus-5-5".into()))));
     assert_eq!(Command::parse("/mode plan"), Some(Command::Mode(Some(PermissionMode::Plan))));
     assert_eq!(Command::parse("/effort max"), Some(Command::Effort(Some(Effort::Max))));
+    assert_eq!(Command::parse("/effort auto"), Some(Command::EffortAuto));
     assert_eq!(Command::parse("/mcp"), Some(Command::Mcp(McpCommand::List)));
     assert_eq!(Command::parse("/reload"), Some(Command::Reload));
     assert_eq!(Command::parse("/rewind"), Some(Command::Rewind));

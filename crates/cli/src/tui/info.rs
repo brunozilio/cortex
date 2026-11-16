@@ -114,7 +114,7 @@ fn status(app: &App) -> String {
         "{brand_name} {}\n  Model    {model}\n  Mode     {}\n  Effort   {}\n  Folder   {}\n  Session  {session}",
         env!("CARGO_PKG_VERSION"),
         mode_label(app.mode()),
-        app.effort().cli_value(),
+        app.effort_label(),
         app.cwd.display(),
         brand_name = brand::NAME
     );

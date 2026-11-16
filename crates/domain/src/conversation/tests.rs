@@ -143,6 +143,13 @@ fn a_model_switch_names_the_new_model_without_guessing_why() {
 }
 
 #[test]
+fn an_automatic_pick_names_the_model_and_effort_it_chose() {
+    let mut transcript = Transcript::default();
+    transcript.apply(&EngineEvent::Picked { model: "claude-haiku-5-5".into(), effort: crate::Effort::Low });
+    assert_eq!(transcript.entries, [Entry::Notice("Auto: claude-haiku-5-5, low effort".into())]);
+}
+
+#[test]
 fn a_running_tool_shows_its_latest_line_until_its_result_comes() {
     let mut transcript = Transcript::default();
     transcript.apply(&EngineEvent::ToolStarted(ToolCall::new("t", "Bash", "cargo build")));

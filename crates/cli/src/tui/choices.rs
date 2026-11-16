@@ -57,6 +57,7 @@ impl App {
             self.mode = saved.mode.unwrap_or(self.mode);
         }
         self.effort = saved.effort.unwrap_or(self.effort);
+        self.auto_effort = saved.auto;
         match models {
             Ok(models) => self.catalog.models = models,
             Err(error) => return self.transcript.error(format!("Could not list the models: {error}")),
@@ -85,6 +86,9 @@ impl App {
         }
         session.set_permission(self.mode);
         session.set_effort(self.effort);
+        if self.auto_effort {
+            session.set_auto_pick();
+        }
         for dir in &self.added_dirs {
             session.add_dir(dir.clone());
         }
@@ -157,14 +161,26 @@ impl App {
 
     pub(super) fn set_effort_from(&mut self, effort: Option<Effort>) {
         let Some(effort) = effort else {
-            return self.transcript.notice(format!("Effort: {}", self.effort.cli_value()));
+            return self.transcript.notice(format!("Effort: {}", self.effort_label()));
         };
         self.effort = effort;
+        self.auto_effort = false;
         if let Some(session) = &mut self.session {
             session.set_effort(effort);
         }
         self.saver.remember("effort", effort.cli_value());
         self.transcript.notice(format!("Effort: {}", effort.cli_value()));
+    }
+
+    pub(super) fn set_auto_effort(&mut self) {
+        self.auto_effort = true;
+        if let Some(session) = &mut self.session {
+            session.set_auto_pick();
+        }
+        self.saver.remember("effort", super::settings::AUTO_EFFORT);
+        self.transcript.notice(
+            "Effort: auto. Each request picks the model and effort it needs; /effort <level> goes back to one level.",
+        );
     }
 
     pub(super) fn new_session(&mut self) {

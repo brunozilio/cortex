@@ -88,6 +88,10 @@ pub enum EngineEvent {
     AskWithdrawn(AskId),
     Steered(String),
     FellBack(String),
+    Picked {
+        model: String,
+        effort: crate::Effort,
+    },
     Notified(Vec<crate::inbox::Notice>),
     Moved(std::path::PathBuf),
     Tasks(Vec<TaskItem>),

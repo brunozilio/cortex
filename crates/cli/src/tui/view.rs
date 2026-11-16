@@ -233,7 +233,7 @@ fn status(app: &App) -> Line<'static> {
         " · ".dim(),
         Span::styled(mode_label(app.mode()), Style::new().fg(mode_color).add_modifier(Modifier::BOLD)),
         " · ".dim(),
-        format!("{} effort", app.effort().cli_value()).dim(),
+        format!("{} effort", app.effort_label()).dim(),
     ]);
     if !app.busy() && failed_last(app) {
         spans.extend([" · ".dim(), "✗ last run failed".fg(Color::Red)]);

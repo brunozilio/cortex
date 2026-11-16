@@ -63,6 +63,7 @@ pub struct App {
     pub(super) mode_given: bool,
     pub(super) mode: PermissionMode,
     pub(super) effort: Effort,
+    pub(super) auto_effort: bool,
     pub(super) tx: Sender<Msg>,
     pub(super) saver: super::settings::Saver,
     pub rx: Receiver<Msg>,
@@ -119,6 +120,7 @@ impl App {
             mode_given: mode.is_some(),
             mode: mode.unwrap_or_default(),
             effort: Effort::Medium,
+            auto_effort: false,
             saver,
             tx,
             rx,
@@ -165,8 +167,8 @@ impl App {
         self.mode
     }
 
-    pub fn effort(&self) -> Effort {
-        self.effort
+    pub fn effort_label(&self) -> &'static str {
+        if self.auto_effort { super::settings::AUTO_EFFORT } else { self.effort.cli_value() }
     }
 
     pub fn model(&self) -> Option<&Model> {

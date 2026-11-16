@@ -2,6 +2,7 @@
 
 mod agents;
 mod anchors;
+mod auto_pick;
 mod brand_only;
 mod checkpoints;
 mod headless;

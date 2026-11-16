@@ -19,6 +19,7 @@ pub struct Session {
     cwd: PathBuf,
     model: ModelOption,
     effort: Effort,
+    auto_pick: bool,
     permission: Arc<Mutex<PermissionMode>>,
     memory: bool,
     resume: Arc<Mutex<Option<SessionId>>>,
@@ -53,6 +54,7 @@ impl Session {
             cwd,
             model,
             effort: Effort::Medium,
+            auto_pick: false,
             permission: Arc::default(),
             memory: true,
             resume: Arc::default(),
@@ -143,6 +145,11 @@ impl Session {
 
     pub fn set_effort(&mut self, effort: Effort) {
         self.effort = effort;
+        self.auto_pick = false;
+    }
+
+    pub fn set_auto_pick(&mut self) {
+        self.auto_pick = true;
     }
 
     pub fn effort_level(&self) -> Effort {
@@ -187,6 +194,7 @@ impl Session {
         request.images = images;
         request.shown = shown;
         request.effort = self.effort;
+        request.auto_pick = self.auto_pick;
         let mode = self.permission_mode();
         request.permission = mode;
         request.resume = self.id();

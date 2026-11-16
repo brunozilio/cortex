@@ -27,6 +27,27 @@ fn submit(app: &mut App, text: &str) -> String {
 }
 
 #[test]
+fn effort_auto_lets_each_request_pick_its_model_and_effort_until_a_level_is_set() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = engine();
+    let mut app = ready(data.path(), &engine);
+    let notice = submit(&mut app, "/effort auto");
+    assert!(notice.contains("auto"), "{notice}");
+    for text in ["fix it", "/effort high", "and again"] {
+        type_text(&mut app, text);
+        press(&mut app, KeyCode::Enter);
+        until(&mut app, |app| !app.busy());
+    }
+    let picks: Vec<bool> = engine
+        .requests()
+        .into_iter()
+        .filter(|request| request.command.is_none())
+        .map(|request| request.auto_pick)
+        .collect();
+    assert_eq!(picks, [true, false]);
+}
+
+#[test]
 fn a_mistyped_command_is_not_sent_and_the_nearest_is_offered() {
     let data = tempfile::tempdir().expect("data");
     let engine = engine();

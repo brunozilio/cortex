@@ -96,12 +96,12 @@ fn effort_without_a_level_opens_a_picker_at_the_current_one() {
     type_text(&mut app, "/effort");
     press(&mut app, KeyCode::Enter);
     let picker = app.overlays.picker.as_ref().expect("a picker");
-    assert_eq!(picker.items[picker.cursor].0, app.effort().cli_value());
+    assert_eq!(picker.items[picker.cursor].0, app.effort.cli_value());
     assert!(screen(&app).contains("xhigh"), "{}", screen(&app));
     press(&mut app, KeyCode::Down);
     press(&mut app, KeyCode::Enter);
     assert!(app.overlays.picker.is_none());
-    assert_eq!(app.effort(), sdk::Effort::High, "the level after medium");
+    assert_eq!(app.effort, sdk::Effort::High, "the level after medium");
 }
 
 fn asking_script(then: EngineEvent) -> Vec<EngineEvent> {

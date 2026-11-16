@@ -8,7 +8,7 @@ fn entries(app: &App) -> Vec<(String, String, Command)> {
     vec![
         ("Model".into(), app.model().map(|m| m.label.clone()).unwrap_or_default(), Command::Model(None)),
         ("Permission mode".into(), domain::command::mode_label(app.mode()).into(), Command::Mode(None)),
-        ("Effort".into(), app.effort().cli_value().into(), Command::Effort(None)),
+        ("Effort".into(), app.effort_label().into(), Command::Effort(None)),
         (
             "Output style".into(),
             app.output_style.clone().unwrap_or_else(|| "default".into()),

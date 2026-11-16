@@ -17,6 +17,7 @@ pub fn run(app: &mut App, command: Command) {
         Command::Mode(Some(mode)) => app.switch_mode(mode),
         Command::Effort(None) => app.effort_picker(),
         Command::Effort(effort) => app.set_effort_from(effort),
+        Command::EffortAuto => app.set_auto_effort(),
         Command::Compact(focus) => app.compact(focus.as_deref().unwrap_or_default()),
         Command::Rewind => app.open_rewind(),
         Command::Retry => app.retry(),

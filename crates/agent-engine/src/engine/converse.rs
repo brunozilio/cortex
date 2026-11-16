@@ -137,6 +137,10 @@ impl Job {
             Err(error) => return self.model_failed(error),
         };
         let ledger = Arc::new(crate::meter::Ledger::default());
+        let mut template = template;
+        if self.request.auto_pick && self.request.command.is_none() {
+            self.auto_pick(&api, &ledger, &mut template);
+        }
         let api = crate::meter::Metered {
             api,
             ledger: ledger.clone(),
@@ -169,7 +173,6 @@ impl Job {
             .map(|turns| turns as usize)
             .or(agent_config.max_turns)
             .unwrap_or(crate::agent::MAX_TURNS);
-        let mut template = template;
         let initial = if history.is_empty() { agent_config.initial_prompt.as_deref().unwrap_or_default() } else { "" };
         let scripts = self.workspace.policy.scripts;
         let initial = match tools::skill::expand_initial(initial, &skills, &self.request.cwd, scripts) {

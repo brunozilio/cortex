@@ -1,3 +1,4 @@
+mod auto_pick;
 mod converse;
 pub(crate) mod date;
 mod job;

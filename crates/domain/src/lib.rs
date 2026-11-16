@@ -2,6 +2,7 @@ pub mod affected;
 pub mod agents;
 pub mod approval;
 pub mod attachment;
+pub mod auto_pick;
 pub mod billing;
 pub mod budget;
 pub mod cache_window;
