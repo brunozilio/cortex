@@ -15,7 +15,7 @@ fn app(assets: Option<&std::path::Path>) -> axum::Router {
 }
 
 fn with(assets: Assets) -> axum::Router {
-    console::router(Settings { token: TOKEN.into(), assets })
+    console::router(Settings { token: TOKEN.into(), assets }, console::Live::default())
 }
 
 async fn send(app: axum::Router, request: Request<Body>) -> (StatusCode, axum::http::HeaderMap, String) {

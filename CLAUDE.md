@@ -18,8 +18,10 @@ leaf crates: brand (everyone), code-map (backend), console (cli), content (cli, 
              script (agent-engine)
 ```
 
-`web/` is the browser app `/console` opens (Bun + Vite + React); `console`
-builds it into the binary when Bun is present, else serves `web/dist`.
+`web/` is the live trace page `/trace` and `/console` open (Bun + Vite +
+React + Tailwind); `console` builds it into the binary when Bun is present,
+else serves `web/dist`. The CLI's trace feature pushes the report, the
+session list and each session's runs into the console's `Live` hub.
 
 Nothing below `sdk` knows the CLI; `cli` reaches `backend` and
 `agent-engine` only in tests. The README's crate table says what each one

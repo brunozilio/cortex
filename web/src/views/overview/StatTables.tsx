@@ -1,0 +1,121 @@
+import { AlertCircle } from 'lucide-react'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Callout } from '@/components/Callout'
+import { modelsByCost } from '@/lib/days'
+import { ms, percent, usd } from '@/lib/format'
+import { MODEL_COLORS } from '@/lib/kinds'
+import { cn } from '@/lib/utils'
+import type { Insights, ToolStat } from '@/types'
+
+function Meter({ ratio, fill, className, color }: { ratio: number; fill?: number; className?: string; color?: string }) {
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+        <div className={cn('h-full', className)} style={{ width: `${Math.min(100, (fill ?? ratio) * 100)}%`, background: color }} />
+      </div>
+      <span className="num w-9 text-right">{percent(ratio)}</span>
+    </div>
+  )
+}
+
+export function ModelTable({ insights }: { insights: Insights }) {
+  const order = modelsByCost(insights.days)
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Models</CardTitle>
+        <CardDescription>Latency and cost per model</CardDescription>
+      </CardHeader>
+      <Table>
+        <TableHeader>
+          <TableRow className="border-t">
+            <TableHead>Model</TableHead>
+            <TableHead className="text-right">Calls</TableHead>
+            <TableHead className="text-right">p50</TableHead>
+            <TableHead className="text-right">p95</TableHead>
+            <TableHead className="text-right">Cache</TableHead>
+            <TableHead className="text-right">Cost</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {insights.models.map((model) => {
+            const i = order.indexOf(model.model)
+            const color = MODEL_COLORS[(i < 0 ? order.length : i) % MODEL_COLORS.length]
+            return (
+              <TableRow key={model.model}>
+                <TableCell>
+                  <span className="inline-flex items-center gap-2 font-mono text-[13px]">
+                    <span className="size-2 rounded-full" style={{ background: color }} />
+                    {model.model}
+                  </span>
+                </TableCell>
+                <TableCell className="num text-right">{model.calls}</TableCell>
+                <TableCell className="num text-right">{ms(model.p50_ms)}</TableCell>
+                <TableCell className="num text-right">{ms(model.p95_ms)}</TableCell>
+                <TableCell>
+                  <Meter ratio={model.cache_ratio} color={color} />
+                </TableCell>
+                <TableCell className="num text-right font-medium">{usd(model.cost_usd)}</TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </Card>
+  )
+}
+
+function errorRate(tool: ToolStat): number {
+  return tool.calls ? tool.failed / tool.calls : 0
+}
+
+function rateColor(rate: number): string {
+  if (rate > 0.1) return 'bg-danger'
+  if (rate > 0.05) return 'bg-warning'
+  return 'bg-success'
+}
+
+export function ToolTable({ insights }: { insights: Insights }) {
+  const worst = insights.tools.filter((tool) => tool.calls >= 5).sort((a, b) => errorRate(b) - errorRate(a))[0]
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Tools</CardTitle>
+        <CardDescription>Calls, failures and how often they asked you</CardDescription>
+      </CardHeader>
+      <Table>
+        <TableHeader>
+          <TableRow className="border-t">
+            <TableHead>Tool</TableHead>
+            <TableHead className="text-right">Calls</TableHead>
+            <TableHead className="text-right">Error rate</TableHead>
+            <TableHead className="text-right">p95</TableHead>
+            <TableHead className="text-right">Asked you</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {insights.tools.map((tool) => {
+            const rate = errorRate(tool)
+            return (
+              <TableRow key={tool.name}>
+                <TableCell className="font-mono text-[13px]">{tool.name}</TableCell>
+                <TableCell className="num text-right">{tool.calls}</TableCell>
+                <TableCell>
+                  <Meter ratio={rate} fill={Math.max(rate * 4, rate ? 0.03 : 0)} className={rateColor(rate)} />
+                </TableCell>
+                <TableCell className="num text-right">{ms(tool.p95_ms)}</TableCell>
+                <TableCell className="num text-right">{tool.asked}</TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+      {worst && errorRate(worst) > 0.1 ? (
+        <Callout tone="warning" icon={AlertCircle} title={`${worst.name} failed ${worst.failed} of ${worst.calls} calls`} className="m-4 mt-3">
+          That is {percent(errorRate(worst))} of its calls. Open the failed runs in Traces to see the commands.
+        </Callout>
+      ) : null}
+    </Card>
+  )
+}

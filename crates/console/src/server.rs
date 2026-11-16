@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use tokio::sync::oneshot;
 
-use crate::{Assets, Settings};
+use crate::{Assets, Live, Settings};
 
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(1);
 
@@ -28,6 +28,7 @@ pub enum StartError {
 pub struct Running {
     address: SocketAddr,
     token: String,
+    live: Live,
     stop: Option<oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
 }
@@ -39,6 +40,10 @@ impl Running {
 
     pub fn token(&self) -> &str {
         &self.token
+    }
+
+    pub fn live(&self) -> Live {
+        self.live.clone()
     }
 
     pub fn url(&self) -> String {
@@ -62,13 +67,14 @@ pub fn start(options: Options) -> Result<Running, StartError> {
     listener.set_nonblocking(true).map_err(StartError::Listen)?;
     let address = listener.local_addr().map_err(StartError::Listen)?;
     let token = secret()?;
-    let app = crate::router(Settings { token: token.clone(), assets: options.assets });
+    let live = Live::default();
+    let app = crate::router(Settings { token: token.clone(), assets: options.assets }, live.clone());
     let (stop, stopped) = oneshot::channel::<()>();
     let thread = std::thread::Builder::new()
         .name("console".into())
         .spawn(move || serve(listener, app, stopped))
         .map_err(StartError::Thread)?;
-    Ok(Running { address, token, stop: Some(stop), thread: Some(thread) })
+    Ok(Running { address, token, live, stop: Some(stop), thread: Some(thread) })
 }
 
 fn serve(listener: TcpListener, app: axum::Router, stopped: oneshot::Receiver<()>) {

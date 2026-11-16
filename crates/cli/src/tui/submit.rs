@@ -40,6 +40,16 @@ impl App {
         }
         self.send(text);
     }
+
+    pub fn take_prompt(&mut self, text: String) {
+        if let Some(run) = &self.turn.run {
+            let text = super::mentions::with_files(&self.sdk, &self.cwd, &text);
+            let _ = run.steer(&text);
+            self.turn.queued.push(text);
+            return;
+        }
+        self.send(text);
+    }
 }
 
 #[cfg(test)]

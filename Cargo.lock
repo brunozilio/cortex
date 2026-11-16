@@ -661,6 +661,7 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "brand",
+ "futures-util",
  "getrandom 0.3.4",
  "http-body-util",
  "mime_guess",
