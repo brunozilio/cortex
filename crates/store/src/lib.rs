@@ -1,8 +1,12 @@
+mod memory;
 mod migrations;
 mod postgres_database;
 
 use std::sync::Arc;
 
+use serde_json::Value;
+
+pub use memory::Memory;
 pub use migrations::MIGRATIONS;
 pub use postgres_database::PostgresDatabase;
 
@@ -25,7 +29,11 @@ impl Health {
 
 pub trait Database: Send + Sync {
     fn health(&self) -> Health;
+    fn preference(&self, key: &str) -> Result<Option<Value>, String>;
+    fn keep_preference(&self, key: &str, value: &Value) -> Result<(), String>;
 }
+
+const NO_DATABASE: &str = "the console has no database: run `docker compose up -d` and set DATABASE_URL";
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Unconfigured;
@@ -33,6 +41,14 @@ pub struct Unconfigured;
 impl Database for Unconfigured {
     fn health(&self) -> Health {
         Health::Missing
+    }
+
+    fn preference(&self, _key: &str) -> Result<Option<Value>, String> {
+        Err(NO_DATABASE.into())
+    }
+
+    fn keep_preference(&self, _key: &str, _value: &Value) -> Result<(), String> {
+        Err(NO_DATABASE.into())
     }
 }
 

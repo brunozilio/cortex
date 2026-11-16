@@ -700,6 +700,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "http-body-util",
+ "mime_guess",
  "platform",
  "sdk",
  "serde_json",
@@ -2510,6 +2511,8 @@ dependencies = [
  "bytes",
  "fallible-iterator",
  "postgres-protocol",
+ "serde_core",
+ "serde_json",
 ]
 
 [[package]]
@@ -3415,6 +3418,7 @@ name = "store"
 version = "0.0.0"
 dependencies = [
  "postgres",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 

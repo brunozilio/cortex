@@ -1,18 +1,17 @@
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use tokio::sync::oneshot;
 
-use crate::{Backend, Settings};
+use crate::{Assets, Backend, Settings};
 
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(1);
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Options {
-    pub assets: Option<PathBuf>,
+    pub assets: Assets,
     pub port: u16,
 }
 

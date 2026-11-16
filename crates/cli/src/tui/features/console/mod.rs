@@ -22,7 +22,7 @@ fn run(app: &mut App, _argument: Option<String>) {
     let Some(served) = app.features.get::<Served>(NAME) else { return };
     if served.0.is_none() {
         let started = sdk.sibling().map_err(|error| error.to_string()).and_then(|sibling| {
-            let options = console::Options { assets: console::locate(console::places()), port: 0 };
+            let options = console::Options { assets: console::discover(), port: 0 };
             console::start(Arc::new(sibling), options).map_err(|error| error.to_string())
         });
         match started {

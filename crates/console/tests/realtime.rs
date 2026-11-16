@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use console::{Backend, Options};
+use console::{Assets, Backend, Options};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -18,7 +18,7 @@ impl Backend for Fake {
 }
 
 fn started() -> console::Running {
-    console::start(Arc::new(Fake), Options { assets: None, port: 0 }).expect("server")
+    console::start(Arc::new(Fake), Options { assets: Assets::Missing, port: 0 }).expect("server")
 }
 
 fn socket_request(
@@ -84,7 +84,7 @@ impl Backend for Stuck {
 
 #[test]
 fn stopping_the_console_does_not_wait_for_a_backend_that_hangs() {
-    let running = console::start(Arc::new(Stuck), Options { assets: None, port: 0 }).expect("server");
+    let running = console::start(Arc::new(Stuck), Options { assets: Assets::Missing, port: 0 }).expect("server");
     let (address, cookie) = (running.address(), format!("console_token={}", running.token()));
     std::thread::spawn(move || {
         use std::io::Write;

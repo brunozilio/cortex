@@ -1,20 +1,20 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::http::Uri;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{any, get};
 use serde_json::{Value, json};
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::Backend;
+use crate::{Assets, Backend};
 
 #[derive(Debug, Clone)]
 pub struct Settings {
     pub token: String,
-    pub assets: Option<PathBuf>,
+    pub assets: Assets,
 }
 
 #[derive(Clone)]
@@ -29,10 +29,14 @@ pub fn router(backend: Arc<dyn Backend>, settings: Settings) -> Router {
         .route("/api/health", get(|| async { axum::Json(json!({ "status": "ok" })) }))
         .route("/api/instance", get(instance))
         .route("/api/ws", get(crate::realtime::socket))
+        .merge(crate::organization::routes())
         .route("/api/{*rest}", any(|| async { failure(StatusCode::NOT_FOUND, "not_found", "No such endpoint.") }));
     let app = match settings.assets {
-        Some(dist) => api.fallback_service(ServeDir::new(&dist).fallback(ServeFile::new(dist.join("index.html")))),
-        None => api.fallback(|| async { (StatusCode::SERVICE_UNAVAILABLE, Html(crate::assets::MISSING)) }),
+        Assets::Folder(dist) => {
+            api.fallback_service(ServeDir::new(&dist).fallback(ServeFile::new(dist.join("index.html"))))
+        }
+        Assets::Bundle(bundle) => api.fallback(move |uri: Uri| async move { crate::assets::serve(bundle, &uri) }),
+        Assets::Missing => api.fallback(|| async { (StatusCode::SERVICE_UNAVAILABLE, Html(crate::assets::MISSING)) }),
     };
     app.layer(axum::middleware::from_fn_with_state(shared.clone(), crate::access::guard)).with_state(shared)
 }

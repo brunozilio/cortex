@@ -29,6 +29,14 @@ mod tests {
         fn health(&self) -> Health {
             self.0.clone()
         }
+
+        fn preference(&self, _key: &str) -> Result<Option<Value>, String> {
+            Err("unused".into())
+        }
+
+        fn keep_preference(&self, _key: &str, _value: &Value) -> Result<(), String> {
+            Err("unused".into())
+        }
     }
 
     fn instance(health: Health) -> Value {

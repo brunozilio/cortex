@@ -1,6 +1,9 @@
 use postgres::Client;
 
-pub const MIGRATIONS: &[(&str, &str)] = &[("0001_instance", include_str!("../migrations/0001_instance.sql"))];
+pub const MIGRATIONS: &[(&str, &str)] = &[
+    ("0001_instance", include_str!("../migrations/0001_instance.sql")),
+    ("0002_preferences", include_str!("../migrations/0002_preferences.sql")),
+];
 
 pub fn apply(client: &mut Client) -> Result<(), postgres::Error> {
     client.batch_execute(

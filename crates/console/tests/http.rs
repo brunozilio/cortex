@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
-use console::{Backend, Settings};
+use console::{Asset, Assets, Backend, Settings};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -24,7 +24,11 @@ impl Backend for Fake {
 }
 
 fn app(assets: Option<&std::path::Path>) -> axum::Router {
-    console::router(Arc::new(Fake), Settings { token: TOKEN.into(), assets: assets.map(std::path::Path::to_path_buf) })
+    with(assets.map_or(Assets::Missing, |folder| Assets::Folder(folder.to_path_buf())))
+}
+
+fn with(assets: Assets) -> axum::Router {
+    console::router(Arc::new(Fake), Settings { token: TOKEN.into(), assets })
 }
 
 async fn send(app: axum::Router, request: Request<Body>) -> (StatusCode, axum::http::HeaderMap, String) {
@@ -126,4 +130,19 @@ async fn without_a_built_app_the_page_says_how_to_build_it() {
     let (status, _, body) = send(app(None), get("/")).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert!(body.contains("bun run build"), "{body}");
+}
+
+static BUNDLE: &[Asset] = &[
+    Asset { path: "assets/app.js", bytes: b"console.log(2)" },
+    Asset { path: "index.html", bytes: b"<html>bundled</html>" },
+];
+
+#[tokio::test]
+async fn the_app_built_into_the_binary_is_served_with_its_type_and_pages_fall_back_to_its_index() {
+    let (status, headers, body) = send(with(Assets::Bundle(BUNDLE)), get("/assets/app.js")).await;
+    assert_eq!((status, body.as_str()), (StatusCode::OK, "console.log(2)"));
+    assert_eq!(headers[header::CONTENT_TYPE], "text/javascript");
+    let (status, headers, body) = send(with(Assets::Bundle(BUNDLE)), get("/org/local/c/general")).await;
+    assert_eq!((status, body.as_str()), (StatusCode::OK, "<html>bundled</html>"));
+    assert_eq!(headers[header::CONTENT_TYPE], "text/html");
 }
