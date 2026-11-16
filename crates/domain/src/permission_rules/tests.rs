@@ -186,10 +186,33 @@ fn always_suggests_the_command_s_program_and_subcommand() {
     assert_eq!(suggest("Bash", "cargo test --workspace", false).as_deref(), Some("Bash(cargo test:*)"));
     assert_eq!(suggest("Bash", "ls -la src", false).as_deref(), Some("Bash(ls:*)"));
     assert_eq!(suggest("Bash", "make", false).as_deref(), Some("Bash(make)"));
-    assert_eq!(suggest("Bash", "git status && rm -rf x", false), None, "two commands: only this one");
+    assert_eq!(suggest("Bash", "cargo build && rm -rf x", false), None, "two commands: only this one");
     assert_eq!(suggest("Bash", "echo $(id)", false), None);
     assert_eq!(suggest("Bash", "./run.sh --fast", false), None, "a script by path");
     assert_eq!(suggest("Bash", "FOO=1 make", false), None);
+}
+
+#[test]
+fn always_names_the_kind_of_command_not_its_arguments() {
+    let kind = |command: &str| suggest("Bash", command, false);
+    assert_eq!(kind("gh issue create --title x").as_deref(), Some("Bash(gh issue create:*)"));
+    assert_eq!(kind("npm run build -- --watch").as_deref(), Some("Bash(npm run build:*)"));
+    assert_eq!(kind("docker compose up -d").as_deref(), Some("Bash(docker compose up:*)"));
+    assert_eq!(kind("python3 scripts/gen.py --all").as_deref(), Some("Bash(python3 scripts/gen.py:*)"));
+    assert_eq!(kind("python3 -c 'import os'"), None, "inline code has no kind");
+    assert_eq!(kind("node"), None, "a bare interpreter runs anything");
+}
+
+#[test]
+fn always_skips_the_moves_and_reads_around_the_command() {
+    let kind = |command: &str| suggest("Bash", command, false);
+    assert_eq!(kind("cd crates/cli && cargo test -p cli").as_deref(), Some("Bash(cargo test:*)"));
+    assert_eq!(kind("cargo build 2>&1 | tail -20").as_deref(), Some("Bash(cargo build:*)"));
+    let rules = rules(&["Bash(cargo test:*)"], &[], &[]);
+    let line = Target::Command("cd crates/cli && cargo test -p cli | head -5");
+    assert_eq!(rules.decide("Bash", &line, CWD, HOME), Some(RuleKind::Allow));
+    let escaping = Target::Command("cd /tmp && cargo test");
+    assert_eq!(rules.decide("Bash", &escaping, CWD, HOME), None, "a move out of the project is not skipped");
 }
 
 #[test]

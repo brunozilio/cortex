@@ -8,6 +8,7 @@ pub fn split_command(line: &str) -> (Vec<&str>, bool) {
             b'\\' if !single => i += 1,
             b'\'' if !double => single = !single,
             b'"' if !single => double = !double,
+            b'&' if !single && !double && i > 0 && bytes[i - 1] == b'>' => {}
             b'&' | b'|' | b';' | b'\n' if !single && !double => {
                 parts.push(&line[start..i]);
                 let doubled = matches!(byte, b'&' | b'|') && bytes.get(i + 1) == Some(&byte);
@@ -23,11 +24,18 @@ pub fn split_command(line: &str) -> (Vec<&str>, bool) {
     (parts, !single && !double)
 }
 
+const HARMLESS_REDIRECTS: [&str; 5] = ["2>&1", "1>&2", ">&2", "2>/dev/null", ">/dev/null"];
+
 pub fn hides_more(part: &str) -> bool {
     const MARKS: [&str; 7] = ["$(", "`", "<(", ">(", ">", "$'", "$\""];
     const RUNNERS: [&str; 11] = ["bash", "sh", "zsh", "dash", "ksh", "fish", "eval", "xargs", "source", ".", "exec"];
+    let part = without_harmless_redirects(part);
     MARKS.iter().any(|mark| part.contains(mark))
-        || normalized(part).split(' ').next().is_some_and(|first| RUNNERS.contains(&first))
+        || normalized(&part).split(' ').next().is_some_and(|first| RUNNERS.contains(&first))
+}
+
+pub fn without_harmless_redirects(part: &str) -> String {
+    part.split_whitespace().filter(|word| !HARMLESS_REDIRECTS.contains(word)).collect::<Vec<_>>().join(" ")
 }
 
 pub fn collapsed(part: &str) -> String {

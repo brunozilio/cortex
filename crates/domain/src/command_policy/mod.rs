@@ -37,12 +37,13 @@ pub fn classify(command: &str, git: &GitFacts<'_>) -> CommandClass {
     if !balanced || parts.is_empty() {
         return CommandClass::Unknown;
     }
-    let read_only = parts.iter().all(|part| {
-        let words = words(&normalized(part));
-        let words: Vec<&str> = words.iter().map(String::as_str).collect();
-        !hides_more(part) && reading::only_reads(&words)
-    });
-    if read_only { CommandClass::ReadOnly } else { CommandClass::Unknown }
+    if parts.iter().all(|part| only_reads(part)) { CommandClass::ReadOnly } else { CommandClass::Unknown }
+}
+
+pub fn only_reads(part: &str) -> bool {
+    let words = words(&normalized(part));
+    let words: Vec<&str> = words.iter().map(String::as_str).collect();
+    !hides_more(part) && reading::only_reads(&words)
 }
 
 #[cfg(test)]

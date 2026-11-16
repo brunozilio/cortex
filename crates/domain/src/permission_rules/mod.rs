@@ -1,3 +1,4 @@
+mod kind;
 mod pattern;
 mod site;
 
@@ -85,20 +86,7 @@ pub fn suggest(tool: &str, subject: &str, outside: bool) -> Option<String> {
         return site(subject).map(|host| format!("WebFetch(domain:{host})"));
     }
     if tool == "Bash" {
-        let (parts, balanced) = pattern::split_command(subject);
-        let [command] = parts.as_slice() else { return None };
-        if !balanced || pattern::hides_more(command) {
-            return None;
-        }
-        let collapsed = pattern::collapsed(command);
-        let mut words = collapsed.split(' ');
-        let program = words.next().filter(|w| w.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)))?;
-        if program.starts_with('.') {
-            return None;
-        }
-        let Some(next) = words.next() else { return Some(format!("Bash({program})")) };
-        let subcommand = next.chars().all(|c| c.is_ascii_alphanumeric() || "-_".contains(c)) && !next.starts_with('-');
-        return Some(if subcommand { format!("Bash({program} {next}:*)") } else { format!("Bash({program}:*)") });
+        return kind::command_kind(subject);
     }
     if outside && matches!(tool, "Read" | "Glob" | "Grep" | "LSP") {
         let path = subject.trim_end_matches('/');
@@ -191,7 +179,9 @@ impl PermissionRules {
             }
         }
         let allowed = |part: &Part<'_>| named(RuleKind::Allow).any(|rule| allows(rule, part, cwd, home));
-        (!parts.is_empty() && parts.iter().all(allowed)).then(|| (RuleKind::Allow, String::new()))
+        let along = |part: &Part<'_>| matches!(part.target, Target::Command(command) if kind::goes_along(command));
+        let covered = parts.iter().all(|part| allowed(part) || along(part)) && parts.iter().any(allowed);
+        covered.then(|| (RuleKind::Allow, String::new()))
     }
 }
 
