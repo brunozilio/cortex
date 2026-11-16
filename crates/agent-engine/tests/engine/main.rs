@@ -1,5 +1,6 @@
 #![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
 
+mod accounts;
 mod agents;
 mod anchors;
 mod auto_pick;

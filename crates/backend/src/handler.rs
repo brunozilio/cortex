@@ -194,12 +194,14 @@ impl CommandHandler {
     fn start(&self, owner: &Principal, run: RunId, request: &PromptRequest) -> Result<(), String> {
         agent_engine::tools::peers::register(self.client, Some(owner), &request.cwd);
         let outbox = self.outbox.clone();
-        let mut keys = crate::native::keys_for(&self.services.providers, owner, &request.model);
+        let (model_accounts, mut keys): (Vec<String>, Vec<_>) =
+            crate::native::keys_for(&self.services.providers, owner, &request.model).into_iter().unzip();
         let model = (!keys.is_empty()).then(|| keys.remove(0));
         let request = PromptRequest {
             credentials: domain::credentials::RunCredentials {
                 model,
                 model_pool: keys,
+                model_accounts,
                 other_models: crate::native::other_keys(&self.services.providers, owner, &request.model),
                 owner: Some(owner.clone()),
                 mcp: Vec::new(),

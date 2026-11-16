@@ -151,6 +151,7 @@ impl Agent<'_> {
                     (self.emit)(EngineEvent::ToolResult { id: id.clone(), output: found, failed: false });
                     (self.emit)(EngineEvent::ToolFinished { id });
                 }
+                Delta::HandedOver { from, to } => (self.emit)(EngineEvent::AccountSwitched { from, to }),
             };
             let reply = match self.api.turn(&request, &mut on, self.control.stop_flag()) {
                 Ok(reply) => {

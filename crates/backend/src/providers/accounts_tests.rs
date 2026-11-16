@@ -106,7 +106,7 @@ fn a_subscription_account_is_named_by_its_email() {
 fn order(providers: &ModelProviders) -> Vec<String> {
     let keys = providers.keys(&OWNER, KEYED).expect("keys");
     keys.into_iter()
-        .map(|key| {
+        .map(|(_, key)| {
             let config = Config::parse(agent_engine::providers::get(KEYED).expect("known"), key.secret());
             config.expect("config").api_key
         })

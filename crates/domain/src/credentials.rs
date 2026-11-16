@@ -3,6 +3,7 @@ pub struct RunCredentials {
     pub owner: Option<crate::Principal>,
     pub model: Option<crate::provider::ProviderKey>,
     pub model_pool: Vec<crate::provider::ProviderKey>,
+    pub model_accounts: Vec<String>,
     pub other_models: Vec<(crate::ModelProvider, crate::provider::ProviderKey)>,
     pub mcp: Vec<crate::mcp::LocalMcp>,
     pub client: u64,

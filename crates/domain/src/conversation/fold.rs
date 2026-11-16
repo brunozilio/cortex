@@ -92,6 +92,9 @@ impl Transcript {
             EngineEvent::Tasks(tasks) => self.tasks.clone_from(tasks),
             EngineEvent::ToolLog { text, .. } => self.notice(format!("  › {text}")),
             EngineEvent::FellBack(model) => self.notice(format!("The model call failed; going on with {model}.")),
+            EngineEvent::AccountSwitched { from, to } => {
+                self.notice(format!("Account {from} is busy or signed out; going on with {to}."))
+            }
             EngineEvent::Picked { model, effort } => {
                 self.notice(format!("Auto: {model}, {} effort", effort.cli_value()))
             }

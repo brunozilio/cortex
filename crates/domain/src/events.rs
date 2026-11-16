@@ -88,6 +88,10 @@ pub enum EngineEvent {
     AskWithdrawn(AskId),
     Steered(String),
     FellBack(String),
+    AccountSwitched {
+        from: String,
+        to: String,
+    },
     Picked {
         model: String,
         effort: crate::Effort,

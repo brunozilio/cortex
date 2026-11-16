@@ -46,6 +46,7 @@ pub enum Delta {
     ToolInput { name: String, piece: String },
     Searching { id: String, query: String },
     Searched { id: String, found: String },
+    HandedOver { from: String, to: String },
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

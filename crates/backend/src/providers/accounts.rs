@@ -48,8 +48,8 @@ impl ModelProviders {
         self.answer(owner, provider, result)
     }
 
-    pub fn keys(&self, owner: &Principal, provider: ModelProvider) -> Result<Vec<ProviderKey>, String> {
-        let first = self.key(owner, provider)?;
+    pub fn keys(&self, owner: &Principal, provider: ModelProvider) -> Result<Vec<(String, ProviderKey)>, String> {
+        let first = (agent_engine::providers::name(provider), self.key(owner, provider)?);
         let Some(holder) = self.holder(owner, provider) else { return Ok(vec![first]) };
         let book = self.store.load(&holder);
         let accounts = book.accounts(provider);
@@ -60,9 +60,12 @@ impl ModelProviders {
             *counter - 1
         };
         let order = account_pool::order(book.balance(provider), accounts.len(), book.active_index(provider), run);
-        let keys: Vec<ProviderKey> = order
+        let keys: Vec<(String, ProviderKey)> = order
             .into_iter()
-            .filter_map(|at| self.account_key(holder.clone(), provider, &accounts[at].id).ok())
+            .filter_map(|at| {
+                let key = self.account_key(holder.clone(), provider, &accounts[at].id).ok()?;
+                Some((accounts[at].label.clone(), key))
+            })
             .collect();
         Ok(if keys.is_empty() { vec![first] } else { keys })
     }

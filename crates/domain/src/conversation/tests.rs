@@ -143,6 +143,16 @@ fn a_model_switch_names_the_new_model_without_guessing_why() {
 }
 
 #[test]
+fn an_account_switch_names_both_accounts() {
+    let mut transcript = Transcript::default();
+    transcript.apply(&EngineEvent::AccountSwitched { from: "a@x.io".into(), to: "b@x.io".into() });
+    assert_eq!(
+        transcript.entries,
+        [Entry::Notice("Account a@x.io is busy or signed out; going on with b@x.io.".into())]
+    );
+}
+
+#[test]
 fn an_automatic_pick_names_the_model_and_effort_it_chose() {
     let mut transcript = Transcript::default();
     transcript.apply(&EngineEvent::Picked { model: "claude-haiku-5-5".into(), effort: crate::Effort::Low });

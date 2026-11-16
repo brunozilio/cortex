@@ -43,7 +43,12 @@ impl ApiSource for NativeApis {
         let main = if pool.is_empty() {
             client(key)
         } else {
-            let accounts = std::iter::once(key).chain(pool.iter().cloned()).map(client).collect();
+            let named = &request.credentials.model_accounts;
+            let accounts = std::iter::once(key)
+                .chain(pool.iter().cloned())
+                .enumerate()
+                .map(|(at, key)| (named.get(at).cloned().unwrap_or_else(|| format!("account {}", at + 1)), client(key)))
+                .collect();
             Arc::new(agent_engine::model::pooled::Pooled::new(accounts))
         };
         Ok(Arc::new(agent_engine::model::routed::Routed::new(
@@ -71,7 +76,7 @@ impl ApiSource for NativeApis {
     }
 }
 
-pub fn keys_for(providers: &ModelProviders, owner: &Principal, model: &ModelOption) -> Vec<ProviderKey> {
+pub fn keys_for(providers: &ModelProviders, owner: &Principal, model: &ModelOption) -> Vec<(String, ProviderKey)> {
     providers.keys(owner, model.provider).unwrap_or_default()
 }
 
@@ -183,7 +188,8 @@ mod tests {
         llm_providers::testing::install();
         providers.connect(&owner, KEYED, "sk-key-0123456789abcd");
         let native = |provider| ModelOption::new("m", "M").served_by(provider);
-        let key = keys_for(&providers, &owner, &native(KEYED)).remove(0);
+        let (label, key) = keys_for(&providers, &owner, &native(KEYED)).remove(0);
+        assert_eq!(label, "…abcd");
         assert!(key.secret().contains("sk-key-0123456789abcd"), "the provider's credential config");
         assert!(keys_for(&providers, &owner, &native(KEYED_TOO)).is_empty(), "not connected");
     }
