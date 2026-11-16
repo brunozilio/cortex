@@ -85,7 +85,58 @@ interface ModelCall {
   messages: number;
 }
 
+export interface BriefSkill {
+  name: string;
+  description: string;
+  path: string;
+  body: string | null;
+  disableModelInvocation: boolean;
+}
+
+export interface EditedSkill {
+  name: string;
+  description?: string;
+  body?: string;
+  disableModelInvocation?: boolean;
+}
+
+export interface BriefAgent {
+  name: string;
+  description: string;
+  instructions: string;
+  config?: Record<string, Json>;
+}
+
+export interface BriefRule {
+  path: string;
+  base?: string | null;
+  text: string;
+  patterns: string[];
+  error?: string | null;
+}
+
+export interface BriefInstructions {
+  path: string;
+  scope: "User" | "Project" | "Local";
+  text: string;
+}
+
+export interface Brief {
+  skills: BriefSkill[];
+  agents: BriefAgent[];
+  rules: BriefRule[];
+  instructions: BriefInstructions[];
+}
+
+export type TranscriptBlock = { Text: string } | Record<string, Json>;
+
+export interface TranscriptMessage {
+  role: "User" | "Assistant";
+  blocks: TranscriptBlock[];
+}
+
 export interface HookInputs {
+  Brief: Brief;
   PreToolUse: ToolCall;
   PostToolUse: ToolCall & { tool_response: string };
   PostToolUseFailure: ToolCall & { tool_response: string };
@@ -99,7 +150,13 @@ export interface HookInputs {
   SessionStart: { source: "startup" | "resume"; model: string };
   SessionEnd: Record<string, never>;
   Notification: { message: string; notification_type: string };
-  ModelRequest: ModelCall & { effort: string; maxTokens: number; tools: string[] };
+  ModelRequest: ModelCall & {
+    effort: string;
+    maxTokens: number;
+    tools: string[];
+    system: string;
+    history: TranscriptMessage[];
+  };
   ModelResponse: ModelCall & {
     text: string;
     toolCalls: { name: string; input: Json }[];
@@ -130,6 +187,9 @@ export interface HookSpecificOutput {
   model?: string;
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
   text?: string;
+  system?: string;
+  history?: TranscriptMessage[];
+  updatedPrompt?: string;
 }
 
 export interface HookResult {
@@ -139,6 +199,10 @@ export interface HookResult {
   stopReason?: string;
   systemMessage?: string;
   hookSpecificOutput?: HookSpecificOutput;
+  skills?: EditedSkill[];
+  agents?: BriefAgent[];
+  rules?: BriefRule[];
+  instructions?: BriefInstructions[];
 }
 
 type Returned<T> = T | void | Promise<T | void>;

@@ -40,6 +40,7 @@ mod tests {
             file: Default::default(),
             model_invocation: true,
             trusted: true,
+            body: None,
         }
     }
 

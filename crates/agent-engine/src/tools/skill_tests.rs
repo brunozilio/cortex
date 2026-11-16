@@ -43,3 +43,34 @@ fn finds_the_project_s_the_user_s_and_the_host_s_skills() {
     assert!(!loaded.content.contains("description:"), "the frontmatter stays behind");
     assert!(tool.run(&json!({ "skill": "missing" }), &Workspace::new("/")).is_error);
 }
+
+#[test]
+fn a_skill_a_hook_wrote_loads_its_own_body_even_over_a_file() {
+    let script = FoundSkill {
+        name: "review".into(),
+        description: "Review".into(),
+        file: "/nowhere/review/SKILL.js".into(),
+        model_invocation: true,
+        trusted: true,
+        body: Some("Use the ACME checklist.".into()),
+    };
+    let inline = FoundSkill {
+        name: "deploy".into(),
+        description: "Ship it".into(),
+        file: PathBuf::new(),
+        model_invocation: true,
+        trusted: false,
+        body: Some("Run make deploy for $ARGUMENTS.".into()),
+    };
+    let tool = SkillTool { skills: vec![script, inline] };
+
+    let deploy = tool.run(&json!({ "skill": "deploy", "args": "staging" }), &Workspace::new("/"));
+    assert!(!deploy.is_error, "{}", deploy.content);
+    assert_eq!(deploy.content, "Skill deploy\n\nRun make deploy for staging.\n\nArguments: staging");
+
+    let review = tool.run(&json!({ "skill": "review" }), &Workspace::new("/"));
+    assert_eq!(
+        (review.is_error, review.content.as_str()),
+        (false, "Skill review (base directory for its files: /nowhere/review)\n\nUse the ACME checklist.")
+    );
+}

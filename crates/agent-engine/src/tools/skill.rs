@@ -18,6 +18,8 @@ pub struct FoundSkill {
     pub model_invocation: bool,
     #[serde(default = "invocation_enabled")]
     pub trusted: bool,
+    #[serde(default)]
+    pub body: Option<String>,
 }
 
 impl FoundSkill {
@@ -90,6 +92,7 @@ fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
                     file,
                     model_invocation: described.model_invocation,
                     trusted: true,
+                    body: None,
                 });
             }
             let text = std::fs::read_to_string(&file).ok()?;
@@ -103,7 +106,14 @@ fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
                 None => bare,
             };
             let model_invocation = front.get("disable-model-invocation").is_none_or(|v| v != "true");
-            Some(FoundSkill { name, description: description.trim().to_owned(), file, model_invocation, trusted: true })
+            Some(FoundSkill {
+                name,
+                description: description.trim().to_owned(),
+                file,
+                model_invocation,
+                trusted: true,
+                body: None,
+            })
         })
         .collect();
     skills.sort_by(|a, b| a.name.cmp(&b.name));
@@ -151,6 +161,9 @@ impl Tool for SkillTool {
 
 fn load(skill: &FoundSkill, args: &str, cwd: &Path, access: ScriptAccess) -> Outcome {
     let name = &skill.name;
+    if let Some(body) = &skill.body {
+        return Outcome::ok(loaded(skill, body, args));
+    }
     if super::skill_script::is_script(&skill.file) {
         return match super::skill_script::render(&skill.file, args, cwd, access) {
             Ok(text) => Outcome::ok(text),
@@ -161,13 +174,19 @@ fn load(skill: &FoundSkill, args: &str, cwd: &Path, access: ScriptAccess) -> Out
         return Outcome::error(format!("The skill {name} could not be read."));
     };
     let (_, body) = parse_frontmatter(&text);
-    let base = skill.file.parent().map(|dir| dir.display().to_string()).unwrap_or_default();
-    let mut out =
-        format!("Skill {name} (base directory for its files: {base})\n\n{}", body.trim().replace("$ARGUMENTS", args));
+    Outcome::ok(loaded(skill, body, args))
+}
+
+fn loaded(skill: &FoundSkill, body: &str, args: &str) -> String {
+    let heading = match skill.file.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        Some(base) => format!("Skill {} (base directory for its files: {})", skill.name, base.display()),
+        None => format!("Skill {}", skill.name),
+    };
+    let mut out = format!("{heading}\n\n{}", body.trim().replace("$ARGUMENTS", args));
     if !args.trim().is_empty() {
         out.push_str(&format!("\n\nArguments: {args}"));
     }
-    Outcome::ok(out)
+    out
 }
 use super::script_tool::ScriptAccess;
 
@@ -244,6 +263,7 @@ fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
             file: entry.path().into(),
             model_invocation: front.get("disable-model-invocation").is_none_or(|value| value != "true"),
             trusted: true,
+            body: None,
         });
     }
     found.sort_by(|a, b| a.name.cmp(&b.name));

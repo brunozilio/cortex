@@ -107,3 +107,100 @@ fn a_model_hook_cannot_ask_a_model() {
     let prompt = json!({"ModelRequest": [{"hooks": [{"type": "prompt", "prompt": "pick one"}]}]});
     assert!(Hooks::parse(&prompt).is_err());
 }
+
+#[test]
+fn a_model_request_hook_rewrites_the_system_prompt_and_the_history_the_model_sees() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    let folder = rig.dir.path().join("hooks");
+    std::fs::create_dir_all(&folder).expect("hooks");
+    std::fs::write(
+        folder.join("rewrite.js"),
+        r#"export const event = "ModelRequest";
+export default (input) => ({
+  hookSpecificOutput: {
+    system: `ACME agent. Was ${input.system.length > 0 ? "set" : "empty"}.`,
+    history: [
+      { role: "User", blocks: [{ Text: "Answer in Portuguese." }] },
+      ...input.history.map((message) => ({ ...message, blocks: [{ Text: "redacted" }] })),
+    ],
+  },
+});"#,
+    )
+    .expect("hook");
+    rig.workspace.hooks = Hooks::from_scripts(&folder);
+    let model = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Pronto.".into())])]);
+    let mut history = vec![Message::user("my secret is 42")];
+
+    rig.run(&model, &mut history).expect("run");
+
+    let asked = &model.asked()[0];
+    assert_eq!(asked.system, "ACME agent. Was set.");
+    let texts: Vec<String> = asked.messages.iter().map(Message::text).collect();
+    assert_eq!(texts, ["Answer in Portuguese.", "redacted"]);
+    assert_eq!(history[0].text(), "my secret is 42", "the session keeps its own history");
+}
+
+#[test]
+fn a_model_request_hook_that_returns_a_broken_history_leaves_the_request_as_it_was() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    let folder = rig.dir.path().join("hooks");
+    std::fs::create_dir_all(&folder).expect("hooks");
+    std::fs::write(
+        folder.join("broken.js"),
+        r#"export const event = "ModelRequest";
+export default () => ({ hookSpecificOutput: { history: [{ role: "Robot" }] } });"#,
+    )
+    .expect("hook");
+    std::fs::write(
+        folder.join("empty.js"),
+        r#"export const event = "ModelRequest";
+export default () => ({ hookSpecificOutput: { history: [] } });"#,
+    )
+    .expect("hook");
+    rig.workspace.hooks = Hooks::from_scripts(&folder);
+    let model = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done.".into())])]);
+    rig.run(&model, &mut vec![Message::user("hi")]).expect("run");
+    let texts: Vec<String> = model.asked()[0].messages.iter().map(Message::text).collect();
+    assert_eq!(texts, ["hi"]);
+}
+
+#[test]
+fn model_request_hooks_run_in_turn_on_the_system_prompt() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    let folder = rig.dir.path().join("hooks");
+    std::fs::create_dir_all(&folder).expect("hooks");
+    std::fs::write(
+        folder.join("a.js"),
+        r#"export const event = "ModelRequest";
+export default () => ({ hookSpecificOutput: { system: "ACME agent." } });"#,
+    )
+    .expect("hook");
+    std::fs::write(
+        folder.join("b.js"),
+        r#"export const event = "ModelRequest";
+export default (input) => ({ hookSpecificOutput: { system: `${input.system} Be brief.` } });"#,
+    )
+    .expect("hook");
+    rig.workspace.hooks = Hooks::from_scripts(&folder);
+    let model = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done.".into())])]);
+    rig.run(&model, &mut vec![Message::user("hi")]).expect("run");
+    assert_eq!(model.asked()[0].system, "ACME agent. Be brief.");
+}
+
+#[test]
+fn a_model_request_hook_that_throws_never_reaches_the_system_prompt() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    let folder = rig.dir.path().join("hooks");
+    std::fs::create_dir_all(&folder).expect("hooks");
+    std::fs::write(
+        folder.join("throws.js"),
+        r#"export const event = "ModelRequest";
+export default () => { throw new Error("secret token abc"); };"#,
+    )
+    .expect("hook");
+    rig.workspace.hooks = Hooks::from_scripts(&folder);
+    let model = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done.".into())])]);
+    rig.run(&model, &mut vec![Message::user("hi")]).expect("run");
+    let system = &model.asked()[0].system;
+    assert!(!system.contains("Hook failed") && !system.contains("secret token abc"), "{system}");
+}

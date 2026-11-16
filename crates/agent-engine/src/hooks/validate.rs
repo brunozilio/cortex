@@ -1,6 +1,7 @@
 use super::Handler;
 
-const EVENTS: [&str; 16] = [
+const EVENTS: [&str; 17] = [
+    "Brief",
     "ModelRequest",
     "ModelResponse",
     "ModelError",
@@ -18,7 +19,8 @@ const EVENTS: [&str; 16] = [
     "PermissionRequest",
     "Notification",
 ];
-const NO_MODEL_HOOKS: [&str; 8] = [
+const NO_MODEL_HOOKS: [&str; 9] = [
+    "Brief",
     "SessionStart",
     "SessionEnd",
     "SubagentStart",

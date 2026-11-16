@@ -198,6 +198,11 @@ impl Job {
             match self.workspace.hooks.run_with_model(event, subject, payload, &self.workspace, Some((&api, &template)))
             {
                 Ok(hook) if hook.blocked.is_none() => {
+                    if let Some(prompt) = hook.prompt
+                        && let Some(typed) = user.blocks.get_mut(self.request.images.len())
+                    {
+                        *typed = crate::transcript::Block::Text(prompt);
+                    }
                     if !hook.context.is_empty() {
                         user.blocks.push(crate::transcript::Block::Text(hook.context));
                     }

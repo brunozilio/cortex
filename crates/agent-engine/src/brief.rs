@@ -24,13 +24,20 @@ impl Brief {
         let settings = prompt::settings::load(&request.cwd, home, &plugins)?;
         let mut skills = tools::skill::discover(request, home);
         skills.retain(|skill| domain::features::skill_flag(&skill.name).is_none_or(|flag| settings.features.on(flag)));
-        Ok(Self {
+        let found = crate::hooks::Briefed {
             skills,
             agents: tools::subagent::discover(request, home),
-            settings,
             rules: prompt::rules::discover(&request.cwd, home),
-            git: prompt::snapshot(&request.cwd),
             instructions: prompt::instructions(&request.cwd, home),
+        };
+        let edited = settings.hooks.edit_brief(found, &hook_workspace(request, home, &settings))?;
+        Ok(Self {
+            skills: edited.skills,
+            agents: edited.agents,
+            settings,
+            rules: edited.rules,
+            git: prompt::snapshot(&request.cwd),
+            instructions: edited.instructions,
             plugins,
             home: home.map(PathBuf::from),
         })
@@ -44,6 +51,17 @@ impl Brief {
             scripts: self.settings.scripts,
         }
     }
+}
+
+fn hook_workspace(
+    request: &PromptRequest,
+    home: Option<&std::path::Path>,
+    settings: &prompt::settings::Settings,
+) -> tools::Workspace {
+    let mut workspace = tools::Workspace::new(&request.cwd);
+    workspace.home = home.map(PathBuf::from);
+    workspace.policy.scripts = settings.scripts;
+    workspace
 }
 
 pub fn mcp_sources(request: &PromptRequest) -> Result<crate::mcp::McpSources, String> {
@@ -140,5 +158,109 @@ mod tests {
         let off = serde_json::json!({ "features": { domain::features::PR_FOLLOW: false } });
         std::fs::write(home.path().join(brand::DIR).join("settings.json"), off.to_string()).expect("settings");
         assert!(!offered(&request));
+    }
+
+    #[test]
+    fn a_brief_hook_adds_changes_and_removes_the_session_s_skills() {
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        let hooks = home.path().join(brand::DIR).join("hooks");
+        std::fs::create_dir_all(&hooks).expect("hooks");
+        std::fs::write(
+            hooks.join("skills.js"),
+            r#"export const event = "Brief";
+export default (input) => {
+  const review = input.skills.find((skill) => skill.name === "review");
+  return {
+    skills: [
+      ...input.skills
+        .filter((skill) => skill.name !== "follow-pr" && skill.name !== "review")
+        .map((skill) => ({ name: skill.name })),
+      { name: "review", description: `ACME: ${review.description}`, body: review.path.length > 0 ? "Use the ACME checklist." : "" },
+      { name: "deploy", description: "Ship it", body: "Run make deploy." },
+    ],
+  };
+};"#,
+        )
+        .expect("hook");
+        let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
+        request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+
+        let skills = super::Brief::load(&request).expect("brief").skills;
+
+        let named = |name: &str| skills.iter().find(|skill| skill.name == name);
+        assert!(named("follow-pr").is_none(), "removed");
+        assert!(named("verify").is_some(), "kept");
+        let review = named("review").expect("review");
+        assert!(review.description.starts_with("ACME: "), "{}", review.description);
+        assert_eq!(review.body.as_deref(), Some("Use the ACME checklist."));
+        let deploy = named("deploy").expect("deploy");
+        assert_eq!((deploy.description.as_str(), deploy.body.as_deref()), ("Ship it", Some("Run make deploy.")));
+    }
+
+    #[test]
+    fn a_brief_hook_replaces_the_agents_rules_and_instructions_and_hooks_run_in_turn() {
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        std::fs::write(repo.path().join(brand::INSTRUCTIONS), "Use tabs.").expect("instructions");
+        let hooks = home.path().join(brand::DIR).join("hooks");
+        std::fs::create_dir_all(&hooks).expect("hooks");
+        std::fs::write(
+            hooks.join("a-team.js"),
+            r#"export const event = "Brief";
+export default (input) => ({
+  agents: [
+    ...input.agents.filter((agent) => agent.name !== "explore"),
+    { name: "reviewer", description: "Reviews diffs", instructions: "Be strict." },
+  ],
+  rules: [...input.rules, { path: "/team/rust.md", text: "No unwrap.", patterns: ["**/*.rs"] }],
+  instructions: input.instructions.map((found) => ({ ...found, text: `${found.text} Team ACME.` })),
+});"#,
+        )
+        .expect("hook");
+        std::fs::write(
+            hooks.join("b-after.js"),
+            r#"export const event = "Brief";
+export default (input) => ({
+  agents: input.agents.map((agent) => agent.name === "reviewer" ? { ...agent, description: "Seen by the next hook" } : agent),
+});"#,
+        )
+        .expect("hook");
+        let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
+        request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+
+        let brief = super::Brief::load(&request).expect("brief");
+
+        let agents: Vec<(&str, &str)> =
+            brief.agents.iter().map(|agent| (agent.name.as_str(), agent.description.as_str())).collect();
+        assert!(!agents.iter().any(|(name, _)| *name == "explore"), "{agents:?}");
+        assert!(agents.contains(&("reviewer", "Seen by the next hook")), "{agents:?}");
+        let rule = brief.rules.last().expect("rule");
+        assert_eq!((rule.text.as_str(), rule.patterns.as_slice()), ("No unwrap.", ["**/*.rs".to_owned()].as_slice()));
+        let texts: Vec<&str> = brief.instructions.iter().map(|found| found.text.as_str()).collect();
+        assert!(texts.contains(&"Use tabs. Team ACME."), "{texts:?}");
+    }
+
+    #[test]
+    fn a_brief_hook_that_names_an_agent_twice_stops_the_session() {
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        let hooks = home.path().join(brand::DIR).join("hooks");
+        std::fs::create_dir_all(&hooks).expect("hooks");
+        std::fs::write(
+            hooks.join("twice.js"),
+            r#"export const event = "Brief";
+export default () => ({ agents: [
+  { name: "a", description: "x", instructions: "y" },
+  { name: "a", description: "x", instructions: "y" },
+] });"#,
+        )
+        .expect("hook");
+        let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
+        request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+
+        let error = super::Brief::load(&request).map(|_| ()).expect_err("twice");
+
+        assert_eq!(error, "a Brief hook: the hook listed the agent \"a\" twice");
     }
 }

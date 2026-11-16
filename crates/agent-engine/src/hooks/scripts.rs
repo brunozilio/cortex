@@ -147,7 +147,7 @@ export default () => ({ decision: "block", reason: "built in" });"#;
             .filter_map(|(path, source)| script::exported(path, &String::from_utf8_lossy(source), "event").ok())
             .filter_map(|event| event.as_str().map(str::to_owned))
             .collect();
-        assert_eq!(events.len(), 16, "one file per event: {events:?}");
+        assert_eq!(events.len(), 17, "one file per event: {events:?}");
         for event in &events {
             assert!(super::super::validate::event(event).is_ok(), "{event}");
         }

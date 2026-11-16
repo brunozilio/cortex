@@ -5,6 +5,7 @@ pub mod approval;
 pub mod attachment;
 pub mod auto_pick;
 pub mod billing;
+pub mod brief_edits;
 pub mod budget;
 pub mod cache_window;
 pub mod catalog;

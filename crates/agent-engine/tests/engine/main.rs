@@ -12,6 +12,7 @@ mod lsp;
 mod mcp;
 mod model_roles;
 mod plugins;
+mod prompt_hooks;
 mod runs;
 mod scripts;
 mod sessions;

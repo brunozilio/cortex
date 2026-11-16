@@ -1,9 +1,12 @@
+mod brief;
 mod handlers;
 mod model;
+mod rewrites;
 mod script_hook;
 mod scripts;
 mod validate;
 
+pub use self::brief::Briefed;
 pub use self::handlers::{command, http};
 pub use self::script_hook::script;
 use crate::tools::Workspace;
@@ -56,6 +59,14 @@ pub struct Decision {
     pub effort: Option<domain::Effort>,
     #[serde(default)]
     pub text: Option<String>,
+    #[serde(default)]
+    pub brief: Option<Value>,
+    #[serde(default)]
+    pub system: Option<String>,
+    #[serde(default)]
+    pub history: Option<Value>,
+    #[serde(default)]
+    pub prompt: Option<String>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommandOutput {
@@ -155,7 +166,7 @@ impl Hooks {
                     return Ok(decision);
                 }
                 if result.code != Some(0) {
-                    decision.context.push_str(&format!("Hook failed: {}\n", result.stderr));
+                    rewrites::failed(event, &result.stderr, &mut decision);
                     continue;
                 }
                 if let Ok(value) = serde_json::from_str::<Value>(&result.stdout) {
@@ -201,6 +212,7 @@ impl Hooks {
                     if decision.effort.is_none() && event == "ModelRequest" {
                         decision.effort = specific["effort"].as_str().and_then(domain::interception::effort);
                     }
+                    rewrites::absorb(event, &value, &mut decision, &mut input);
                     if decision.text.is_none() && event == "ModelResponse" {
                         decision.text = specific["text"].as_str().map(Into::into);
                     }

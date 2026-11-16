@@ -24,7 +24,13 @@ impl Agent<'_> {
             request.system = format!("{}\n\n{note}", request.system);
         }
         let tools: Vec<&str> = request.tools.iter().map(|tool| tool.name.as_str()).collect();
-        let extra = json!({"effort": request.effort.cli_value(), "maxTokens": request.max_tokens, "tools": tools});
+        let extra = json!({
+            "effort": request.effort.cli_value(),
+            "maxTokens": request.max_tokens,
+            "tools": tools,
+            "system": request.system,
+            "history": request.messages,
+        });
         let Some(decision) = self.model_hook(REQUEST, request, extra) else { return Ok(()) };
         if let Some(reason) = decision.blocked {
             return Err(Ending::Failed(ModelError::Provider(format!(
@@ -36,6 +42,15 @@ impl Agent<'_> {
         }
         if let Some(effort) = decision.effort {
             request.effort = effort;
+        }
+        if let Some(system) = decision.system {
+            request.system = system;
+        }
+        if let Some(history) = decision.history {
+            match rewritten_history(history) {
+                Ok(messages) => request.messages = messages,
+                Err(error) => tracing::warn!(%error, "a ModelRequest hook returned a history that was left out"),
+            }
         }
         let context = decision.context.trim();
         if !context.is_empty() {
@@ -80,6 +95,14 @@ impl Agent<'_> {
         }
         Ok(Intercepted::Accepted(reply))
     }
+}
+
+fn rewritten_history(history: Value) -> Result<Vec<crate::transcript::Message>, String> {
+    let messages: Vec<crate::transcript::Message> = serde_json::from_value(history).map_err(|e| e.to_string())?;
+    if messages.is_empty() {
+        return Err("the history is empty".into());
+    }
+    Ok(messages)
 }
 
 fn replace_text(blocks: &mut Vec<Block>, text: String) {
