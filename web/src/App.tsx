@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Header } from '@/shell/Header'
 import { Sidebar, type View } from '@/shell/Sidebar'
+import { sessionChoices } from '@/shell/SessionSelect'
 import { OverviewView } from '@/views/overview/OverviewView'
 import { TracesView } from '@/views/traces/TracesView'
 import { EvaluationsView } from '@/views/evals/EvaluationsView'
@@ -44,7 +45,7 @@ export function App({ initial }: { initial: Report }) {
   const latest = useRef({ report, selection: { run: selected, spanId } })
   latest.current = { report, selection: { run: selected, spanId } }
 
-  const liveStatus = useLiveFeed((update: SessionRuns) => {
+  useLiveFeed((update: SessionRuns) => {
     const before = latest.current.report
     const after = mergeSession(before, update)
     const next = followSelection(before, after, update, latest.current.selection)
@@ -55,8 +56,6 @@ export function App({ initial }: { initial: Report }) {
   })
   const [tab, setTab] = useState<InspectorTab>('io')
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
-  const [query, setQuery] = useState('')
-  const searchRef = useRef<HTMLInputElement>(null)
   const run = selected ? findRun(report, selected) : undefined
 
   const setView = (next: View) => {
@@ -95,39 +94,24 @@ export function App({ initial }: { initial: Report }) {
   const activeSession = filters.session.length === 1 ? filters.session[0] : null
   const writingTo = config ? (activeSession ?? run?.session ?? null) : null
 
-  const search = (value: string) => {
-    setQuery(value)
-    if (view !== 'traces') setView('traces')
-  }
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement
-      if (event.key !== '/' || target.closest('input, textarea')) return
-      event.preventDefault()
-      const header = searchRef.current
-      if (header && header.offsetParent) return header.focus()
-      setView('traces')
-      window.setTimeout(() => document.getElementById('run-search')?.focus(), 0)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  const choices = useMemo(() => sessionChoices(report, cards), [report, cards])
+  const allSessions = () => setFilters({ ...filters, session: [] })
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex min-h-screen">
-        <Sidebar
-          report={report}
-          view={view}
-          runCount={runs.length}
-          live={config !== null}
-          activeSession={activeSession}
-          onView={setView}
-          onSession={openSession}
-        />
+        <Sidebar report={report} view={view} runCount={runs.length} live={config !== null} onView={setView} />
         <main className="min-w-0 flex-1">
-          <Header ref={searchRef} project={report.project} current={report.current} live={liveStatus} view={view} query={query} onView={setView} onQuery={search} />
+          <Header
+            live={config !== null}
+            view={view}
+            sessions={choices}
+            activeSession={activeSession}
+            nowMs={report.generated_at_ms}
+            onView={setView}
+            onSession={openSession}
+            onAllSessions={allSessions}
+          />
           <div className="px-4 py-6 md:px-6">
             {view === 'overview' ? <OverviewView report={report} metric={metric} onMetric={setMetric} /> : null}
             {view === 'sessions' ? <SessionsView report={report} cards={cards} active={activeSession} onOpen={openSession} /> : null}
@@ -139,9 +123,7 @@ export function App({ initial }: { initial: Report }) {
                 spanId={spanId}
                 tab={tab}
                 filters={filters}
-                query={query}
                 onFilters={setFilters}
-                onQuery={setQuery}
                 onRun={(target) => openRun(target, 1, tab)}
                 onSpan={setSpanId}
                 onTab={setTab}

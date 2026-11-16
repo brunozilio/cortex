@@ -9,6 +9,7 @@ export interface SessionCard {
   status: Status
   updated: number
   current: boolean
+  cwd?: string
 }
 
 export type Column = 'need' | 'run' | 'done' | 'failed'

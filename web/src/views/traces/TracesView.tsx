@@ -16,9 +16,7 @@ interface TracesViewProps {
   spanId: number
   tab: InspectorTab
   filters: Filters
-  query: string
   onFilters: (filters: Filters) => void
-  onQuery: (query: string) => void
   onRun: (run: Run) => void
   onSpan: (id: number) => void
   onTab: (tab: InspectorTab) => void
@@ -37,9 +35,7 @@ export function TracesView(props: TracesViewProps) {
         nowMs={report.generated_at_ms}
         selected={selected}
         filters={props.filters}
-        query={props.query}
         onFilters={props.onFilters}
-        onQuery={props.onQuery}
         onSelect={props.onRun}
       />
       {run && span ? (

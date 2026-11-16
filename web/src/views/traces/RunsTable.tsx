@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { SignalBadges, StatusIcon } from '@/components/RunBadges'
 import { FacetFilter } from './FacetFilter'
-import { applyFilters, EMPTY_FILTERS, facetsFor, hasFilters, type Filters } from '@/lib/filters'
+import { applyFilters, EMPTY_FILTERS, facetsFor, type Filters } from '@/lib/filters'
 import { ms, percent, shortId, tokens, usd, when } from '@/lib/format'
 import { runKey, type RunRef } from '@/lib/report'
 import { cn } from '@/lib/utils'
@@ -21,32 +20,24 @@ interface RunsTableProps {
   nowMs: number
   selected: RunRef | null
   filters: Filters
-  query: string
   onFilters: (filters: Filters) => void
-  onQuery: (query: string) => void
   onSelect: (run: Run) => void
 }
 
-export function RunsTable({ runs, current, nowMs, selected, filters, query, onFilters, onQuery, onSelect }: RunsTableProps) {
-  const facets = useMemo(() => facetsFor(runs, current), [runs, current])
-  const visible = useMemo(() => applyFilters(runs, filters, query), [runs, filters, query])
+export function RunsTable({ runs, current, nowMs, selected, filters, onFilters, onSelect }: RunsTableProps) {
+  const facets = useMemo(() => facetsFor(runs, current).filter((facet) => facet.key !== 'session'), [runs, current])
+  const visible = useMemo(() => applyFilters(runs, filters, ''), [runs, filters])
   const [page, setPage] = useState(0)
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
-  useEffect(() => setPage(0), [filters, query])
+  useEffect(() => setPage(0), [filters])
   const shown = visible.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
   const maxCost = Math.max(...runs.map((run) => run.cost_usd), 0.0001)
   const selectedKey = selected ? runKey(selected) : ''
-  const reset = () => {
-    onFilters(EMPTY_FILTERS)
-    onQuery('')
-  }
+  const reset = () => onFilters({ ...EMPTY_FILTERS, session: filters.session })
+  const filtered = Object.entries(filters).some(([key, values]) => key !== 'session' && values.length > 0)
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2 p-4">
-        <label className="relative">
-          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input id="run-search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Filter prompts…" className="w-60 max-w-full pl-8" />
-        </label>
         {facets.map((facet) => (
           <FacetFilter
             key={facet.key}
@@ -56,7 +47,7 @@ export function RunsTable({ runs, current, nowMs, selected, filters, query, onFi
             onChange={(values) => onFilters({ ...filters, [facet.key]: values })}
           />
         ))}
-        {hasFilters(filters, query) ? (
+        {filtered ? (
           <Button variant="ghost" onClick={reset}>
             Reset
             <X />
