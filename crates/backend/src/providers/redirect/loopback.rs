@@ -29,7 +29,8 @@ impl Loopback {
         if !path.starts_with('/') || path.contains('?') {
             return Err("invalid callback path".into());
         }
-        let server = tiny_http::Server::http(format!("127.0.0.1:{port}")).map_err(|error| error.to_string())?;
+        let server =
+            tiny_http::Server::http(format!("127.0.0.1:{port}")).map_err(|error| bind_failed(port, &*error))?;
         let port = server.server_addr().to_ip().map(|addr| addr.port()).ok_or("no loopback port")?;
         Ok(Self { server, port, path: path.to_owned(), localhost })
     }
@@ -184,6 +185,16 @@ fn status(url: String) -> Result<u16, String> {
     client.get(url).send().map(|r| r.status().as_u16()).map_err(|e| e.to_string())
 }
 
+fn bind_failed(port: u16, error: &(dyn std::error::Error + 'static)) -> String {
+    match error.downcast_ref::<std::io::Error>() {
+        Some(io) if io.kind() == std::io::ErrorKind::AddrInUse => format!(
+            "the sign-in callback port {port} is already in use by another app; \
+             find it with `lsof -nP -iTCP:{port} -sTCP:LISTEN`, close it, and try again"
+        ),
+        _ => error.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,54 +245,5 @@ mod tests {
 }
 
 #[cfg(test)]
-mod provider_tests {
-    use super::*;
-
-    #[test]
-    fn provider_callback_uses_an_exact_path() {
-        let listener = Loopback::bind_on(0, "/auth/callback", false).expect("bind");
-        let redirect = listener.redirect_uri();
-        let sender = std::thread::spawn(move || {
-            let wrong = status(format!("{redirect}extra?code=bad&state=s"));
-            assert_eq!(wrong, Ok(404), "a prefix match must not accept another path");
-            assert_eq!(status(format!("{redirect}?code=good&state=s")), Ok(200), "callback");
-        });
-        assert_eq!(listener.wait("s"), Ok("good".into()));
-        sender.join().expect("sender");
-    }
-
-    #[test]
-    fn a_callback_for_another_state_is_refused_and_the_sign_in_keeps_waiting() {
-        let listener = Loopback::bind().expect("bind");
-        let redirect = listener.redirect_uri();
-        let sender = std::thread::spawn(move || {
-            assert_eq!(status(format!("{redirect}?code=evil&state=wrong")), Ok(400));
-            assert_eq!(status(format!("{redirect}?error=access_denied")), Ok(400), "no state: not ours either");
-            assert_eq!(status(format!("{redirect}?code=good&state=expected")), Ok(200), "callback");
-        });
-        assert_eq!(listener.wait("expected"), Ok("good".into()));
-        sender.join().expect("sender");
-    }
-
-    #[test]
-    fn an_error_for_this_sign_in_ends_it() {
-        let listener = Loopback::bind().expect("bind");
-        let redirect = listener.redirect_uri();
-        let sender = std::thread::spawn(move || status(format!("{redirect}?error=access_denied&state=expected")));
-        assert_eq!(listener.wait("expected"), Err("access_denied".into()));
-        assert_eq!(sender.join().expect("sender"), Ok(200), "HTTP reply");
-    }
-
-    #[test]
-    fn the_wait_ends_when_its_time_is_up() {
-        let listener = Loopback::bind().expect("bind");
-        assert!(listener.wait_for("s", Duration::from_millis(50)).is_err());
-    }
-
-    #[test]
-    fn only_a_provider_that_registered_localhost_is_sent_there() {
-        assert!(Loopback::bind().expect("bind").redirect_uri().starts_with("http://127.0.0.1:"));
-        let subscription = Loopback::bind_on(0, "/callback", true).expect("bind");
-        assert!(subscription.redirect_uri().starts_with("http://localhost:"));
-    }
-}
+#[path = "loopback_provider_tests.rs"]
+mod provider_tests;
