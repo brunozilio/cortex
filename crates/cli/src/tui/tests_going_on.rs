@@ -151,3 +151,35 @@ fn a_waiting_question_shows_the_keys_that_answer_it() {
     let app = asked_app(asking_script(EngineEvent::TextDelta("thanks".into())), data.path());
     assert!(screen(&app).contains("space toggles a multiple choice · esc skips"), "{}", screen(&app));
 }
+
+#[test]
+fn a_taken_sign_in_port_asks_to_close_the_app_holding_it() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    let holder = sdk::PortHolder { pid: 998, app: "Visual Studio Code".into() };
+    app.port_busy(sdk::ModelProvider::new("browser-sub"), "Kiro".into(), 49153, Some(holder));
+    let picker = app.overlays.picker.as_ref().expect("a picker");
+    assert_eq!(picker.title, "Port 49153 is in use by Visual Studio Code (PID 998)");
+    let choices: Vec<_> = picker.items.iter().map(|(label, _)| label.as_str()).collect();
+    assert_eq!(choices, ["Close Visual Studio Code and try again", "Try again", "Cancel"]);
+    assert!(screen(&app).contains("Kiro did not connect"), "{}", screen(&app));
+
+    press(&mut app, KeyCode::Up);
+    press(&mut app, KeyCode::Enter);
+    assert!(app.overlays.picker.is_none() && app.overlays.port_busy.is_none(), "cancel just closes it");
+}
+
+#[test]
+fn a_taken_sign_in_port_with_no_known_holder_offers_to_try_again() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    app.port_busy(sdk::ModelProvider::new("browser-sub"), "Kiro".into(), 49153, None);
+    let picker = app.overlays.picker.as_ref().expect("a picker");
+    assert_eq!(picker.title, "Port 49153 is in use by another app");
+    let choices: Vec<_> = picker.items.iter().map(|(label, _)| label.as_str()).collect();
+    assert_eq!(choices, ["Try again", "Cancel"]);
+}

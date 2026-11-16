@@ -12,6 +12,19 @@ pub struct ProviderAccount {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PortHolder {
+    pub pid: u32,
+    pub app: String,
+}
+
+pub fn app_name(executable: &str) -> String {
+    let mut parts = executable.split('/');
+    let mut outermost_app = parts.clone().filter_map(|part| part.strip_suffix(".app"));
+    let file = parts.rfind(|part| !part.is_empty()).unwrap_or(executable);
+    outermost_app.next().unwrap_or(file).to_owned()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderSummary {
     pub provider: ModelProvider,
     pub name: String,
@@ -115,6 +128,15 @@ impl std::fmt::Debug for ProviderKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_port_holder_is_named_by_the_app_that_contains_its_executable() {
+        let helper =
+            "/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/Contents/MacOS/Code Helper";
+        assert_eq!(app_name(helper), "Visual Studio Code");
+        assert_eq!(app_name("/usr/local/bin/node"), "node");
+        assert_eq!(app_name("node"), "node");
+    }
 
     #[test]
     fn keys_are_trimmed_and_blank_or_broken_ones_refused() {

@@ -16,7 +16,7 @@ use backend::{Extensions, LocalBackend, LocalServices};
 use domain::ModelOption;
 use protocol::{Backend, BackendError, Wake};
 
-pub use self::account::ProjectMemory;
+pub use self::account::{ProjectMemory, SignedIn};
 pub use self::extensions::{Agent, Command, Skill};
 pub use self::mcp::{McpConnection, McpServer};
 pub use self::run::{Run, RunControl};
@@ -25,7 +25,7 @@ use client::Client;
 pub use domain::mcp_config::{McpOrigin, McpServerInfo, McpState};
 pub use domain::memory::seed::Candidate as SeedCandidate;
 pub use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind, Revision};
-pub use domain::provider::{ModelProvider, ProviderSummary};
+pub use domain::provider::{ModelProvider, PortHolder, ProviderSummary};
 pub use domain::schedule::{Scheduled, When};
 pub use domain::{
     AgentAsk, AskId, AskKind, Choice, ChoreAnswer, Criteria, CriteriaSource, CustomAgent, Decision, Effort,

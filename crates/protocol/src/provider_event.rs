@@ -1,4 +1,4 @@
-use domain::provider::{ModelProvider, ProviderSummary};
+use domain::provider::{ModelProvider, PortHolder, ProviderSummary};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -16,5 +16,10 @@ pub enum ProviderEvent {
     Failed {
         provider: ModelProvider,
         message: String,
+    },
+    PortBusy {
+        provider: ModelProvider,
+        port: u16,
+        holder: Option<PortHolder>,
     },
 }

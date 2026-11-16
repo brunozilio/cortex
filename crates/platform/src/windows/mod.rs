@@ -17,6 +17,14 @@ pub fn release_target() -> Option<&'static str> {
     None
 }
 
+pub fn port_holder(_port: u16) -> Option<(u32, String)> {
+    None
+}
+
+pub fn terminate(_pid: u32) -> std::io::Result<()> {
+    Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+}
+
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     use std::os::windows::process::CommandExt;
     let mut command = Command::new(program);

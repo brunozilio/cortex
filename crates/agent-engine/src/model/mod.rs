@@ -78,6 +78,7 @@ impl From<llm_providers::ProviderError> for ModelError {
         match error {
             ProviderError::Unauthorized(why) => Self::Unauthorized(why),
             ProviderError::Invalid(why) => Self::Provider(why),
+            taken @ ProviderError::PortInUse(_) => Self::Provider(taken.to_string()),
         }
     }
 }

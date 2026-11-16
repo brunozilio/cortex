@@ -1,6 +1,6 @@
 use super::choices::Picker;
 use super::diff_view::DiffView;
-use super::login::SecretPrompt;
+use super::login::{PortBusy, SecretPrompt};
 use super::search::Search;
 use super::side::Side;
 
@@ -11,4 +11,5 @@ pub struct Overlays {
     pub side: Option<Side>,
     pub diffs: Option<DiffView>,
     pub secret: Option<SecretPrompt>,
+    pub port_busy: Option<PortBusy>,
 }

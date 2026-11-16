@@ -14,16 +14,24 @@ pub(crate) const CONFIG: &str = "config";
 const ANSWER_LIMIT: u64 = 1 << 20;
 
 pub trait SignIn: Send + Sync {
-    fn sign_in(&self, provider: ModelProvider, open: &mut dyn FnMut(String, Option<String>)) -> Result<Config, String>;
+    fn sign_in(
+        &self,
+        provider: ModelProvider,
+        open: &mut dyn FnMut(String, Option<String>),
+    ) -> Result<Config, ProviderError>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BrowserSignIn;
 
 impl SignIn for BrowserSignIn {
-    fn sign_in(&self, provider: ModelProvider, open: &mut dyn FnMut(String, Option<String>)) -> Result<Config, String> {
-        let provider = agent_engine::providers::get(provider).map_err(|e| e.to_string())?;
-        provider.sign_in(&NetHost { open: Mutex::new(open) }).map_err(|e| e.to_string())
+    fn sign_in(
+        &self,
+        provider: ModelProvider,
+        open: &mut dyn FnMut(String, Option<String>),
+    ) -> Result<Config, ProviderError> {
+        let provider = agent_engine::providers::get(provider).map_err(|e| ProviderError::Invalid(e.to_string()))?;
+        provider.sign_in(&NetHost { open: Mutex::new(open) })
     }
 }
 
@@ -57,7 +65,7 @@ impl Host for NetHost<'_> {
         open(url, code);
     }
     fn listen(&self, port: u16, path: &str) -> Result<Box<dyn Listener>, ProviderError> {
-        Ok(Box::new(Loopback::bind_on(port, path, true).map_err(ProviderError::Invalid)?))
+        Ok(Box::new(Loopback::bind_on(port, path, true)?))
     }
     fn random(&self, length: usize) -> Result<String, ProviderError> {
         let mut bytes = vec![0; length];

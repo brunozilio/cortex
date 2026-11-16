@@ -19,6 +19,7 @@ pub enum PickerKind {
     Effort,
     Role(domain::model_roles::ModelRole),
     Account { removing: bool },
+    PortBusy,
 }
 
 const MODES: [(PermissionMode, &str); 4] = [

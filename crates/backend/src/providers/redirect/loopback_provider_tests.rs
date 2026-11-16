@@ -49,10 +49,9 @@ fn only_a_provider_that_registered_localhost_is_sent_there() {
 }
 
 #[test]
-fn a_taken_callback_port_is_named_with_how_to_free_it() {
+fn a_taken_callback_port_is_reported_as_taken() {
     let taken = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
     let port = taken.local_addr().expect("addr").port();
     let error = Loopback::bind_on(port, "/oauth/callback", true).expect_err("port is taken");
-    assert!(error.contains(&format!("port {port} is already in use")), "{error}");
-    assert!(error.contains(&format!("lsof -nP -iTCP:{port} -sTCP:LISTEN")), "{error}");
+    assert_eq!(error, llm_providers::ProviderError::PortInUse(port));
 }

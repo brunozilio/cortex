@@ -1,3 +1,4 @@
+mod ports;
 mod private;
 mod tree;
 
@@ -5,6 +6,7 @@ use std::fs::OpenOptions;
 use std::path::Path;
 use std::process::Command;
 
+pub use ports::{port_holder, terminate};
 pub use private::{keep_owner, restrict, restrict_open};
 pub use tree::{Tree, alive};
 

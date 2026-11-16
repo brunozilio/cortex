@@ -25,17 +25,30 @@ impl Sdk {
         self.client.call(ClientCommand::ConnectProvider { provider, key: key.to_owned() }, listed)
     }
 
-    pub fn sign_in(
+    pub fn sign_in(&self, provider: ModelProvider, open: impl FnMut(&str, Option<&str>)) -> Result<SignedIn, Error> {
+        self.signing_in(ClientCommand::SignInProvider { provider }, open)
+    }
+
+    pub fn close_and_sign_in(
         &self,
         provider: ModelProvider,
-        mut open: impl FnMut(&str, Option<&str>),
-    ) -> Result<Vec<ProviderSummary>, Error> {
-        self.client.call(ClientCommand::SignInProvider { provider }, |event| {
-            if let ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, code, .. }) = &event {
-                open(url, code.as_deref());
-                return None;
+        port: u16,
+        pid: u32,
+        open: impl FnMut(&str, Option<&str>),
+    ) -> Result<SignedIn, Error> {
+        self.signing_in(ClientCommand::CloseAndSignIn { provider, port, pid }, open)
+    }
+
+    fn signing_in(&self, command: ClientCommand, mut open: impl FnMut(&str, Option<&str>)) -> Result<SignedIn, Error> {
+        self.client.call(command, |event| match event {
+            ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, code, .. }) => {
+                open(&url, code.as_deref());
+                None
             }
-            listed(event)
+            ServerEvent::Providers(ProviderEvent::PortBusy { port, holder, .. }) => {
+                Some(Ok(SignedIn::PortBusy { port, holder }))
+            }
+            other => listed(other).map(|answer| answer.map(SignedIn::Connected)),
         })
     }
 
@@ -87,6 +100,12 @@ impl Sdk {
     pub fn memory(&self, cwd: impl Into<PathBuf>) -> ProjectMemory<'_> {
         ProjectMemory { sdk: self, path: cwd.into() }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SignedIn {
+    Connected(Vec<ProviderSummary>),
+    PortBusy { port: u16, holder: Option<domain::provider::PortHolder> },
 }
 
 fn listed(event: ServerEvent) -> Option<Result<Vec<ProviderSummary>, String>> {

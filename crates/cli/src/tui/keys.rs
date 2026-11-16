@@ -142,6 +142,7 @@ fn pick(app: &mut App, event: KeyEvent) {
                     }
                 }
                 PickerKind::Login => app.login_picked(cursor),
+                PickerKind::PortBusy => app.port_busy_picked(cursor),
                 PickerKind::Rewind => app.rewind_picked(cursor),
                 PickerKind::Resume => app.resume_picked(cursor),
                 PickerKind::Logout => app.logout_picked(cursor),

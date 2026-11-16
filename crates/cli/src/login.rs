@@ -2,7 +2,7 @@ use std::io::{BufRead, Write};
 
 use domain::Access;
 use domain::provider::ProviderSummary;
-use sdk::Sdk;
+use sdk::{Sdk, SignedIn};
 
 pub fn how(access: Access) -> &'static str {
     match access {
@@ -32,11 +32,7 @@ pub fn login(sdk: &Sdk) -> Result<(), String> {
     let choice = picked(&ask(&format!("Choose 1-{}: ", menu.len()))?, menu.len()).ok_or("not one of the choices")?;
     let ProviderSummary { provider, name, access, .. } = menu[choice].clone();
     let listed = if access.subscription() {
-        sdk.sign_in(provider, |url, code| {
-            eprintln!("{}", visit(url, code));
-            open(url);
-        })
-        .map_err(|e| e.to_string())?
+        signed_in(sdk, provider)?
     } else {
         let key = secret(&format!("{name} API key (hidden): "))?;
         sdk.connect_provider(provider, &key).map_err(|e| e.to_string())?
@@ -47,6 +43,29 @@ pub fn login(sdk: &Sdk) -> Result<(), String> {
         None => return Err(format!("{name} did not connect")),
     }
     Ok(())
+}
+
+fn signed_in(sdk: &Sdk, provider: sdk::ModelProvider) -> Result<Vec<ProviderSummary>, String> {
+    let shown = |url: &str, code: Option<&str>| {
+        eprintln!("{}", visit(url, code));
+        open(url);
+    };
+    let mut answer = sdk.sign_in(provider, shown).map_err(|e| e.to_string())?;
+    loop {
+        let (port, holder) = match answer {
+            SignedIn::Connected(listed) => return Ok(listed),
+            SignedIn::PortBusy { port, holder } => (port, holder),
+        };
+        let Some(holder) = holder else {
+            return Err(format!("the sign-in needs port {port}, which another app is using; close it and try again"));
+        };
+        let question =
+            format!("Port {port} is in use by {} (PID {}). Close it and try again? [y/N] ", holder.app, holder.pid);
+        if !ask(&question)?.trim().eq_ignore_ascii_case("y") {
+            return Err(format!("the sign-in needs port {port}, which {} is using", holder.app));
+        }
+        answer = sdk.close_and_sign_in(provider, port, holder.pid, shown).map_err(|e| e.to_string())?;
+    }
 }
 
 pub fn logout(sdk: &Sdk) -> Result<(), String> {

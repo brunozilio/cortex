@@ -110,6 +110,9 @@ impl CommandHandler {
                 outbox.send(self.services.providers.connect(&principal, provider, &key))
             }
             ClientCommand::SignInProvider { provider } => self.services.providers.sign_in(&principal, provider, outbox),
+            ClientCommand::CloseAndSignIn { provider, port, pid } => {
+                self.services.providers.close_and_sign_in(&principal, provider, port, pid, outbox)
+            }
             ClientCommand::DisconnectProvider { provider } => {
                 outbox.send(self.services.providers.disconnect(&principal, provider))
             }

@@ -55,7 +55,7 @@ impl McpAuth {
 
     pub fn sign_in(&self, owner: &Principal, server: &str, open: &mut dyn FnMut(&str)) -> Result<(), String> {
         let auth = self.auth_server(server)?;
-        let loopback = Loopback::bind_on(0, "/callback", false)?;
+        let loopback = Loopback::bind_on(0, "/callback", false).map_err(|e| e.to_string())?;
         let redirect = loopback.redirect_uri();
         let (client_id, client_secret) = self.register(&auth, &redirect)?;
         let verifier = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());

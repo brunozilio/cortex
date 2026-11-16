@@ -1,6 +1,7 @@
 mod account;
 mod accounts;
 mod catalog;
+mod port;
 pub(crate) mod redirect;
 mod shared;
 mod store;
@@ -17,6 +18,7 @@ use protocol::{ProviderEvent, ServerEvent};
 
 pub use self::account::{BrowserSignIn, SignIn};
 pub use self::catalog::{ModelCatalog, ProviderCatalog};
+pub use self::port::{Ports, SystemPorts};
 pub use self::shared::{NothingShared, SharedCredentials};
 pub use self::store::{FileProviderStore, InMemoryProviderStore, ProviderStore};
 use crate::outbox::Outbox;
@@ -44,6 +46,7 @@ pub struct ModelProviders {
     secrets: Arc<dyn SecretStore>,
     shared: Arc<dyn SharedCredentials>,
     sign_in: Arc<dyn SignIn>,
+    ports: Arc<dyn Ports>,
     catalog: Arc<dyn ModelCatalog>,
     generations: Arc<Mutex<HashMap<String, u64>>>,
     runs: Arc<Mutex<HashMap<String, u64>>>,
@@ -68,6 +71,7 @@ impl ModelProviders {
             secrets,
             shared: Arc::new(NothingShared),
             sign_in: Arc::new(BrowserSignIn),
+            ports: Arc::new(SystemPorts),
             catalog: Arc::new(ProviderCatalog),
             generations: Arc::default(),
             runs: Arc::default(),
@@ -97,6 +101,11 @@ impl ModelProviders {
 
     pub fn with_sign_in(mut self, sign_in: Arc<dyn SignIn>) -> Self {
         self.sign_in = sign_in;
+        self
+    }
+
+    pub fn with_ports(mut self, ports: Arc<dyn Ports>) -> Self {
+        self.ports = ports;
         self
     }
 
@@ -144,16 +153,35 @@ impl ModelProviders {
             return outbox.send(ServerEvent::Providers(ProviderEvent::Failed { provider, message }));
         }
         let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
+        platform::named::spawn("provider-sign-in", move || this.signing_in(&owner, provider, &outbox));
+    }
+
+    pub fn close_and_sign_in(&self, owner: &Principal, provider: ModelProvider, port: u16, pid: u32, outbox: &Outbox) {
+        let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
         platform::named::spawn("provider-sign-in", move || {
-            let mut open = |url: String, code: Option<String>| {
-                outbox.send(ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code }));
-            };
-            let result = this
-                .sign_in
-                .sign_in(provider, &mut open)
-                .and_then(|config| this.keep(&owner, provider, agent_engine::providers::name(provider), &config));
-            outbox.send(this.answer(&owner, provider, result));
+            if this.ports.holder(port).is_some_and(|holder| holder.pid == pid)
+                && let Err(message) = this.ports.close(port, pid)
+            {
+                return outbox.send(ServerEvent::Providers(ProviderEvent::Failed { provider, message }));
+            }
+            this.signing_in(&owner, provider, &outbox);
         });
+    }
+
+    fn signing_in(&self, owner: &Principal, provider: ModelProvider, outbox: &Outbox) {
+        let mut open = |url: String, code: Option<String>| {
+            outbox.send(ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code }));
+        };
+        let config = match self.sign_in.sign_in(provider, &mut open) {
+            Err(llm_providers::ProviderError::PortInUse(port)) => {
+                let holder = self.ports.holder(port);
+                return outbox.send(ServerEvent::Providers(ProviderEvent::PortBusy { provider, port, holder }));
+            }
+            other => other.map_err(|error| error.to_string()),
+        };
+        let result =
+            config.and_then(|config| self.keep(owner, provider, agent_engine::providers::name(provider), &config));
+        outbox.send(self.answer(owner, provider, result));
     }
 
     pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {

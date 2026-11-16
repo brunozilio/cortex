@@ -29,6 +29,8 @@ pub enum ProviderError {
     Unauthorized(String),
     #[error("{0}")]
     Invalid(String),
+    #[error("the sign-in callback port {0} is already in use by another app")]
+    PortInUse(u16),
 }
 
 pub trait Provider: Sync {

@@ -111,15 +111,19 @@ fn subscriptions_accept_upstream_token_json_and_never_list_tokens() {
     }
 }
 
-struct FakeSignIn(Result<(), String>);
+struct FakeSignIn(Result<(), llm_providers::ProviderError>);
 
 impl SignIn for FakeSignIn {
-    fn sign_in(&self, provider: ModelProvider, open: &mut dyn FnMut(String, Option<String>)) -> Result<Config, String> {
+    fn sign_in(
+        &self,
+        provider: ModelProvider,
+        open: &mut dyn FnMut(String, Option<String>),
+    ) -> Result<Config, llm_providers::ProviderError> {
         let code = (provider == ModelProvider::new("device-sub")).then(|| "AB12-CD34".to_owned());
         open(format!("https://auth.test/{}", provider.id()), code);
         self.0.clone()?;
         let raw = r#"{"access_token":"access-secret","refresh_token":"refresh-secret","account_id":"acct","expires_at":"2099-01-01T00:00:00Z"}"#;
-        Config::parse(agent_engine::providers::get(provider).expect("known"), raw).map_err(|e| e.to_string())
+        Config::parse(agent_engine::providers::get(provider).expect("known"), raw)
     }
 }
 
@@ -169,7 +173,10 @@ fn a_code_sign_in_shows_the_code_to_type_and_keeps_its_own_account() {
 #[test]
 fn a_failed_sign_in_or_an_api_provider_keeps_nothing() {
     let rig = rig();
-    let providers = rig.providers.clone().with_sign_in(Arc::new(FakeSignIn(Err("closed the tab".into()))));
+    let providers = rig
+        .providers
+        .clone()
+        .with_sign_in(Arc::new(FakeSignIn(Err(llm_providers::ProviderError::Invalid("closed the tab".into())))));
     let (outbox, rx) = outbox();
     providers.sign_in(&OWNER, ModelProvider::new("browser-sub"), &outbox);
     next(&rx);
@@ -248,3 +255,6 @@ fn a_member_uses_the_organization_s_key_until_they_connect_their_own() {
     assert!(own.current().expect("load").secret().contains("sk-proj-own0123456789cd"));
     assert!(rig.providers.key(&OWNER, keyed).is_err(), "the local owner shares nothing");
 }
+
+#[path = "port_tests.rs"]
+mod port;

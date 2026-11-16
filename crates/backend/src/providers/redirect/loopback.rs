@@ -1,5 +1,7 @@
 use std::time::{Duration, Instant};
 
+use llm_providers::ProviderError;
+
 use super::callback;
 
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(300);
@@ -21,17 +23,21 @@ impl std::fmt::Debug for Loopback {
 
 impl Loopback {
     #[cfg(test)]
-    fn bind() -> Result<Self, String> {
+    fn bind() -> Result<Self, ProviderError> {
         Self::bind_on(0, "/callback", false)
     }
 
-    pub fn bind_on(port: u16, path: &str, localhost: bool) -> Result<Self, String> {
+    pub fn bind_on(port: u16, path: &str, localhost: bool) -> Result<Self, ProviderError> {
         if !path.starts_with('/') || path.contains('?') {
-            return Err("invalid callback path".into());
+            return Err(ProviderError::Invalid("invalid callback path".into()));
         }
         let server =
             tiny_http::Server::http(format!("127.0.0.1:{port}")).map_err(|error| bind_failed(port, &*error))?;
-        let port = server.server_addr().to_ip().map(|addr| addr.port()).ok_or("no loopback port")?;
+        let port = server
+            .server_addr()
+            .to_ip()
+            .map(|addr| addr.port())
+            .ok_or_else(|| ProviderError::Invalid("no loopback port".into()))?;
         Ok(Self { server, port, path: path.to_owned(), localhost })
     }
 
@@ -185,13 +191,10 @@ fn status(url: String) -> Result<u16, String> {
     client.get(url).send().map(|r| r.status().as_u16()).map_err(|e| e.to_string())
 }
 
-fn bind_failed(port: u16, error: &(dyn std::error::Error + 'static)) -> String {
+fn bind_failed(port: u16, error: &(dyn std::error::Error + 'static)) -> ProviderError {
     match error.downcast_ref::<std::io::Error>() {
-        Some(io) if io.kind() == std::io::ErrorKind::AddrInUse => format!(
-            "the sign-in callback port {port} is already in use by another app; \
-             find it with `lsof -nP -iTCP:{port} -sTCP:LISTEN`, close it, and try again"
-        ),
-        _ => error.to_string(),
+        Some(io) if io.kind() == std::io::ErrorKind::AddrInUse => ProviderError::PortInUse(port),
+        _ => ProviderError::Invalid(error.to_string()),
     }
 }
 
