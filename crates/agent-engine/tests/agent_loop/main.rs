@@ -2,6 +2,7 @@
 
 mod background_reports;
 mod code_review;
+mod command_policy;
 mod compaction;
 mod custom_agents;
 mod dependency_guard;

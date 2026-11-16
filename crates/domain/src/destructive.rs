@@ -43,7 +43,7 @@ pub fn destroys(command: &str) -> Destroys {
     found
 }
 
-fn words(text: &str) -> Vec<String> {
+pub(crate) fn words(text: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut word = String::new();
     let mut quote: Option<char> = None;

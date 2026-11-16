@@ -1,3 +1,4 @@
+use domain::command_policy::CommandClass;
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
 use serde_json::{Value, json};
 
@@ -63,8 +64,13 @@ impl Agent<'_> {
             .then(|| tool.reaches_outside(input, self.workspace))
             .flatten()
             .map(|path| path.display().to_string());
+        let class = self.command_class(&name, input);
+        if let CommandClass::Forbidden(reason) = class {
+            return self.refused(&name, reason);
+        }
         let (access, subject) = match &outside {
             Some(path) => (Access::ReadsOutside, path.as_str()),
+            None if class == CommandClass::ReadOnly => (Access::Reads, subject),
             None => (tool.access(), subject),
         };
         let mode = self.control.mode();
@@ -72,6 +78,15 @@ impl Agent<'_> {
         let rule = self.workspace.ruling(&name, subject, input).or_else(|| self.remembered_rule(&name, subject, input));
         let rule_asks = matches!(rule, Some((domain::permission_rules::RuleKind::Ask, _)));
         let original = ruled(mode, access, rule, by_mode);
+        if !matches!(original, Verdict::Deny(_))
+            && let CommandClass::Risky(why) = &class
+        {
+            if self.control.no_prompts() {
+                return self.refused(&name, format!("Not run: {why} The user cannot be asked here."));
+            }
+            let shown = format!("{why}\n{}", shown.unwrap_or(subject));
+            return self.ask_permission(id, tool, access, subject, &shown, input);
+        }
         if !matches!(original, Verdict::Deny(_)) && name == "Bash" && self.leaves_the_sandbox(input) {
             if self.control.no_prompts() {
                 return self.refused(&name, "Not run: leaving the sandbox needs the user, who cannot be asked here.");

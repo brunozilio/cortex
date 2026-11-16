@@ -1,4 +1,5 @@
 mod call;
+mod command_class;
 mod conversations;
 pub mod current;
 mod cutoffs;

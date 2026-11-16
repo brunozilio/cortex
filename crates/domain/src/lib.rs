@@ -9,6 +9,7 @@ pub mod catalog;
 pub mod changes;
 pub mod claims;
 pub mod command;
+pub mod command_policy;
 pub mod conversation;
 pub mod credentials;
 pub mod dependencies;
