@@ -87,6 +87,8 @@ fn a_server_that_does_not_let_brand_register_says_so() {
     let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
     let error = auth.sign_in(&Principal::LocalOwner, SERVER, &mut |_| {}).expect_err("no registration");
     assert!(error.contains("register"), "{error}");
+    let with_a_token = format!("{} mcp add -H 'Authorization: Bearer ${{TOKEN}}' <name> {SERVER}", brand::COMMAND);
+    assert!(error.contains(&with_a_token), "says how to use a token instead: {error}");
 }
 
 #[test]
@@ -103,4 +105,29 @@ fn an_unsafe_sign_in_address_is_refused_before_the_browser_opens() {
     assert!(error.contains("file:///Applications/Calculator.app") && !opened, "{error}");
     let plain = McpAuth::new(Arc::new(InMemorySecretStore::default()), Arc::new(ScriptedHttp::new([])));
     assert!(plain.sign_in(&Principal::LocalOwner, "http://mcp.test/mcp", &mut |_| {}).is_err(), "http elsewhere");
+}
+
+struct ReadOnlySecrets;
+
+impl SecretStore for ReadOnlySecrets {
+    fn get(&self, _: &Principal, _: domain::SecretId) -> Option<crate::secrets::Secrets> {
+        None
+    }
+
+    fn set(&self, _: &Principal, _: domain::SecretId, _: &crate::secrets::Secrets) -> Result<(), String> {
+        Err("Operation not permitted (os error 1)".into())
+    }
+
+    fn delete(&self, _: &Principal, _: domain::SecretId) {}
+}
+
+#[test]
+fn a_sign_in_that_could_not_be_kept_stops_before_the_browser_opens() {
+    let http = Arc::new(ScriptedHttp::new([]));
+    let auth = McpAuth::new(Arc::new(ReadOnlySecrets), http.clone());
+    let mut opened = false;
+    let error = auth.sign_in(&Principal::LocalOwner, SERVER, &mut |_| opened = true).expect_err("cannot keep it");
+    assert!(!opened, "the user is not sent to approve a sign-in that would be lost");
+    assert!(error.contains("Operation not permitted") && error.contains("saved"), "{error}");
+    assert!(http.sent().is_empty(), "nothing is asked of the server either");
 }

@@ -114,3 +114,21 @@ fn publishing_and_merging_are_asked_about() {
     }
     assert!(!risky("gh pr view 12", &GitFacts::default()));
 }
+
+#[test]
+fn signing_in_to_an_mcp_server_is_left_to_the_user() {
+    let cmd = brand::COMMAND;
+    for command in [
+        format!("{cmd} mcp login jira"),
+        format!("{cmd} mcp login jira; {cmd} mcp login github"),
+        format!("/Users/me/.cargo/bin/{cmd} mcp login cloudflare"),
+    ] {
+        let CommandClass::Forbidden(why) = plain(&command) else { panic!("{command}: {:?}", plain(&command)) };
+        assert!(why.contains("/mcp login") && why.contains(&format!("! {cmd} mcp login")), "{why}");
+    }
+    let CommandClass::Forbidden(why) = plain(&format!("{cmd} mcp login jira")) else { panic!("refused") };
+    assert!(why.contains("/mcp login jira"), "names the server: {why}");
+    for command in [format!("{cmd} mcp list"), format!("{cmd} mcp add jira https://mcp.test/mcp"), "login".into()] {
+        assert!(!matches!(plain(&command), CommandClass::Forbidden(_)), "{command}");
+    }
+}

@@ -136,7 +136,7 @@ Prefer the command; it validates and writes the user's file:
 
 ```bash
 {{COMMAND}} mcp add tracker https://mcp.example.com/mcp
-{{COMMAND}} mcp add -H "Authorization: Bearer ${API_TOKEN}" docs https://docs.example.com/mcp
+{{COMMAND}} mcp add -H 'Authorization: Bearer ${API_TOKEN}' docs https://docs.example.com/mcp
 {{COMMAND}} mcp add -e GITHUB_TOKEN='${GITHUB_TOKEN}' github npx -y @modelcontextprotocol/server-github
 {{COMMAND}} mcp list
 ```
@@ -161,7 +161,11 @@ with a `command` is a local process:
 `${VAR}` is read from the environment when the server starts: never
 write a secret into the file. A remote server that uses OAuth signs in
 with `{{COMMAND}} mcp login <name>` (or `/mcp login <name>` in the chat);
-the user does that, in their browser. Names starting with `{{COMMAND}}_`
+the user does that, in their browser, and you cannot run it for them. A
+server that does not let applications register themselves cannot sign in
+that way: it takes a token the service issues, passed as a header read
+from the environment (`-H 'Authorization: Bearer ${TOKEN}'`, single
+quotes so the shell keeps `${TOKEN}` for the file). Names starting with `{{COMMAND}}_`
 are reserved. New servers are picked up on the next prompt.
 
 Find the server's URL or package in the vendor's own documentation, and

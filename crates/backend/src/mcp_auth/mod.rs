@@ -54,10 +54,11 @@ impl McpAuth {
     }
 
     pub fn sign_in(&self, owner: &Principal, server: &str, open: &mut dyn FnMut(&str)) -> Result<(), String> {
+        self.can_keep(owner, server)?;
         let auth = self.auth_server(server)?;
         let loopback = Loopback::bind_on(0, "/callback", false).map_err(|e| e.to_string())?;
         let redirect = loopback.redirect_uri();
-        let (client_id, client_secret) = self.register(&auth, &redirect)?;
+        let (client_id, client_secret) = self.register(&auth, server, &redirect)?;
         let verifier = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
         let state = uuid::Uuid::new_v4().simple().to_string();
         let challenge = challenge(&verifier);
@@ -142,6 +143,13 @@ impl McpAuth {
         }
     }
 
+    fn can_keep(&self, owner: &Principal, server: &str) -> Result<(), String> {
+        let _guard = self.lock.locked();
+        let kept = self.load(owner, server);
+        self.save(owner, server, kept.as_ref())
+            .map_err(|error| format!("a sign-in could not be saved here ({error}), so the browser was not opened"))
+    }
+
     fn auth_server(&self, server: &str) -> Result<AuthServer, String> {
         let refuse =
             |url: &str| format!("{url} is not a safe address to sign in with (https, or http to this computer)");
@@ -172,12 +180,16 @@ impl McpAuth {
         Ok(auth)
     }
 
-    fn register(&self, auth: &AuthServer, redirect: &str) -> Result<(String, Option<String>), String> {
-        let endpoint = auth.registration_endpoint.as_deref().ok_or(concat!(
-            "this server does not let applications register themselves, so ",
-            brand::name!(),
-            " cannot sign in"
-        ))?;
+    fn register(&self, auth: &AuthServer, server: &str, redirect: &str) -> Result<(String, Option<String>), String> {
+        let endpoint = auth.registration_endpoint.as_deref().ok_or_else(|| {
+            format!(
+                "this server does not let applications register themselves, so {name} cannot sign in. \
+                 Use a token the service issues instead, kept in the environment: \
+                 `{cmd} mcp add -H 'Authorization: Bearer ${{TOKEN}}' <name> {server}`",
+                name = brand::NAME,
+                cmd = brand::COMMAND,
+            )
+        })?;
         let body = json!({
             "client_name": brand::NAME,
             "redirect_uris": [redirect],

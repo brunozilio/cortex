@@ -36,6 +36,7 @@ pub enum McpAction {
 }
 
 pub fn run(sdk: &Sdk, cwd: &std::path::Path, action: McpAction) -> Result<(), String> {
+    let mut added_name = None;
     let servers = match action {
         McpAction::List => sdk.mcp_servers(cwd),
         McpAction::Add { name, target, args, env, headers, transport } => {
@@ -43,7 +44,9 @@ pub fn run(sdk: &Sdk, cwd: &std::path::Path, action: McpAction) -> Result<(), St
             if transport == "sse" && server.get("url").is_some() {
                 server["type"] = "sse".into();
             }
-            sdk.add_mcp_server(cwd, &name, server)
+            let result = sdk.add_mcp_server(cwd, &name, server);
+            added_name = Some(name);
+            result
         }
         McpAction::Remove { name } => sdk.remove_mcp_server(cwd, &name),
         McpAction::Approve { name } => sdk.approve_mcp_server(cwd, &name, true),
@@ -55,8 +58,37 @@ pub fn run(sdk: &Sdk, cwd: &std::path::Path, action: McpAction) -> Result<(), St
         McpAction::Logout { name } => sdk.sign_out_mcp_server(cwd, &name),
     }
     .map_err(|error| error.to_string())?;
-    print!("{}", render(&servers));
+    match added_name {
+        Some(name) => print!("{}", added(&name, &servers)),
+        None => print!("{}", render(&servers)),
+    }
     Ok(())
+}
+
+fn added(name: &str, servers: &[McpServerInfo]) -> String {
+    match servers.iter().find(|server| server.name == name) {
+        Some(server) => {
+            format!("Added {name} ({}, {}): {}\n", origin(&server.origin), state(server.state), server.target)
+        }
+        None => render(servers),
+    }
+}
+
+fn origin(origin: &McpOrigin) -> String {
+    match origin {
+        McpOrigin::Host => "host".to_owned(),
+        McpOrigin::Project => "project".to_owned(),
+        McpOrigin::User => "user".to_owned(),
+        McpOrigin::Plugin(plugin) => format!("plugin {plugin}"),
+    }
+}
+
+fn state(state: McpState) -> &'static str {
+    match state {
+        McpState::Ready => "ready",
+        McpState::Pending => "waiting for approval",
+        McpState::Off => "off",
+    }
 }
 
 pub fn render(servers: &[McpServerInfo]) -> String {
@@ -71,17 +103,7 @@ pub fn render(servers: &[McpServerInfo]) -> String {
     let width = servers.iter().map(|server| server.name.len()).max().unwrap_or(0);
     let mut out = String::new();
     for server in servers {
-        let origin = match &server.origin {
-            McpOrigin::Host => "host".to_owned(),
-            McpOrigin::Project => "project".to_owned(),
-            McpOrigin::User => "user".to_owned(),
-            McpOrigin::Plugin(plugin) => format!("plugin {plugin}"),
-        };
-        let state = match server.state {
-            McpState::Ready => "ready",
-            McpState::Pending => "waiting for approval",
-            McpState::Off => "off",
-        };
+        let (origin, state) = (origin(&server.origin), state(server.state));
         out.push_str(&format!("{:<width$}  {origin:<14} {state:<21} {}\n", server.name, server.target));
     }
     let waiting: Vec<&str> =
@@ -128,6 +150,16 @@ mod tests {
             )
         );
         assert!(render(&[]).starts_with("No MCP servers."));
+    }
+
+    #[test]
+    fn adding_a_server_confirms_that_one_server_only() {
+        let servers = [
+            server("cloudflare", McpOrigin::User, "https://mcp.cloudflare.com/mcp", McpState::Ready),
+            server("jira", McpOrigin::User, "https://mcp.atlassian.com/v2/mcp", McpState::Ready),
+        ];
+        assert_eq!(added("jira", &servers), "Added jira (user, ready): https://mcp.atlassian.com/v2/mcp\n");
+        assert_eq!(added("gone", &servers), render(&servers), "an unexpected list is shown whole");
     }
 
     #[test]

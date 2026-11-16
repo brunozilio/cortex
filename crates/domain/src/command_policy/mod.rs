@@ -1,6 +1,7 @@
 mod reading;
 mod secrets;
 mod sharing;
+mod sign_in;
 
 use crate::destructive::words;
 use crate::permission_rules::{hides_more, normalized, split_command};
@@ -25,6 +26,9 @@ pub fn classify(command: &str, git: &GitFacts<'_>) -> CommandClass {
         return CommandClass::Forbidden(format!(
             "Refused: {why}. Never print secrets into the conversation; if the user needs it, they can run it themselves with `! <command>`."
         ));
+    }
+    if let Some(why) = parts.iter().find_map(|part| sign_in::left_to_the_user(part)) {
+        return CommandClass::Forbidden(format!("Refused: {why}."));
     }
     let risk = parts.iter().find_map(|part| {
         let words = words(&normalized(part));

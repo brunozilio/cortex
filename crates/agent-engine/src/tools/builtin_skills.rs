@@ -25,6 +25,8 @@ fn the_agent_may_load_the_configure_skill_to_set_up_model_fallback() {
         "\"type\": \"http\"",
         "enabledMcpServers",
         "{{COMMAND}} mcp login",
+        "-H 'Authorization: Bearer ${",
+        "register themselves",
     ] {
         assert!(text.contains(key), "configure explains {key}");
     }
