@@ -1,0 +1,5 @@
+[test]
+preload = ["./test/routes-preload.ts", "./test/brand-preload.ts", "./packages/ui/testing/preload.ts", "./packages/ui/testing/preload-done.ts"]
+
+[install]
+linker = "isolated"

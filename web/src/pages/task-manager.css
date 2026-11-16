@@ -1,0 +1,515 @@
+/* The task manager (ADR 0128): the agents' cards, the tasks now and what ended today, on one page. */
+.tm {
+  /* "Tempo" warms as a task goes on (full at 40 min), like an operating system's task manager. */
+  --tm-heat: color-mix(in srgb, var(--warn) 22%, var(--warn-soft));
+}
+/* A width of its own: in the page head's actions, which size to what they hold, a flex basis counted for nothing and
+   the field fell to its 220px minimum, cutting its placeholder mid-word. */
+.tm-search {
+  flex: 0 1 auto;
+  width: 360px;
+  min-width: 220px;
+  max-width: 100%;
+}
+.tm-search > .ac-searchfield {
+  width: 100%;
+}
+.tm-sum {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.tm-sum__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+/* The mark centres on its words, so the row's baseline is the words' and the count sits on the title's. */
+.tm-sum__item > :first-child {
+  align-self: center;
+}
+.tm-sum__item--wait {
+  color: var(--warn);
+}
+
+/* The agents' cards: a row that slides, a card at a time, its line edge to edge under its head. */
+.tm-cards .ac-carousel__track {
+  gap: 12px;
+  padding: 4px 2px 8px;
+}
+.tm-card.ac-card {
+  --card-pad: 0;
+  position: relative;
+  gap: 8px;
+  width: 184px;
+  overflow: hidden;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+}
+.tm-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-3) 0;
+}
+/* The card's press: it covers the card, so the face (`OpensAgent`) alone sits above it. */
+.tm-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.tm-card__text::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.tm-card__text b {
+  font-size: 14px;
+  font-weight: 650;
+}
+.tm-card__text small {
+  font-size: 12px;
+  color: var(--faint);
+}
+.tm-card__n {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-agent);
+  background: var(--plate);
+  font-size: 15px;
+  font-weight: 650;
+}
+.tm-card__wait.ac-chip {
+  flex: none;
+}
+/* No room around the line: it runs to the card's sides and bottom, and the card's own corners clip it. */
+.tm-card > .chart-spark {
+  margin-top: auto;
+}
+.tm-card[data-pressed],
+.tm-card[data-pressed]:hover {
+  background: var(--chosen-bg);
+  box-shadow: var(--chosen-shadow);
+  transform: var(--chosen-lift);
+}
+html:not([data-pointer]) .tm-card__text:focus-visible {
+  outline: none;
+}
+html:not([data-pointer]) .tm-card:has(.tm-card__text:focus-visible) {
+  box-shadow: var(--card-shadow), var(--focus-ring);
+}
+
+/* The tasks now: its toolbar ("Ver passos", "Parar tarefa"), then the table. */
+.tm-now,
+.tm-ended {
+  container: tm / inline-size;
+}
+.tm-now {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tm-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h-sm);
+}
+.tm-tools h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+/* Its tools are one group: after the heading while they fit, else together on the line under it. */
+.tm-tools__acts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tm-tool-stop.ac-btn:not(:disabled) {
+  color: var(--danger);
+}
+
+.tm-table.ac-card,
+.tm-list--ended.ac-card {
+  --card-pad: 0;
+  gap: 0;
+  overflow: hidden;
+  /* The card's own face, resolved here: inside it `--surface-raised` is a step up, which painted the buttons' ground
+     and the rings of the apps' logos lighter than the rows in dark. */
+  --tm-ground: var(--surface-raised);
+}
+.tm-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tm-row {
+  /* Where the name starts: a task under its agent starts its mark under the agent's face. */
+  --tm-indent: var(--space-3);
+  position: relative;
+  display: grid;
+  /* Every row is one line. Estado gets the room its words need first (whole from 950px), then Tarefa and Usando agora
+     share what's left; short of that each ends in "…" (the row's tip has them whole), and under the sum of the
+     minimums the row keeps its words, its time and its buttons (below). The buttons have a column of their own (two
+     32px squares, 8 apart and 8 from the edge), so they never cover the time. */
+  grid-template-columns: minmax(200px, 3fr) minmax(136px, 256px) minmax(120px, 2fr) 84px 80px;
+  align-items: stretch;
+  /* A 32px button, the kit's row air (`--row-py`) above and below it, and the hairline over it. */
+  min-height: calc(var(--control-h-sm) + 2 * var(--row-py) + 1px);
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+  color: var(--ink2);
+}
+.tm-row[data-look="grouped"] {
+  /* The agent's row: 12 + its chevron (16) + 8 to its face (18), whose middle the mark's (14) sits under. */
+  --tm-indent: 38px;
+}
+.tm-row--head {
+  min-height: 0;
+  border-top: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+}
+.tm-row--head > span {
+  padding: var(--space-3) var(--space-3) var(--space-2);
+}
+.tm-row--head > .tm-cell--time {
+  text-align: right;
+}
+.tm-list > .tm-row:hover {
+  background: var(--plate-soft);
+}
+.tm-list > .tm-row[data-selected] {
+  --tm-ground: var(--chosen-bg);
+  background: var(--chosen-bg);
+  box-shadow: var(--chosen-shadow);
+}
+html:not([data-pointer]) .tm-row:has(.tm-hit:focus-visible) {
+  box-shadow: var(--focus-ring-inset);
+}
+.tm-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: var(--row-py) var(--space-3);
+}
+.tm-cell--name {
+  gap: var(--space-2);
+  padding-left: var(--tm-indent);
+}
+/* The mark, the face, the chevron and the count keep their size: the words give way. */
+.tm-cell--name > :not(.tm-hit) {
+  flex: none;
+}
+.tm-cell--time {
+  justify-content: flex-end;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--tm-heat) calc(var(--h, 0) * 100%), transparent);
+}
+/* A wait's words and a program's name end in "…" too: the row's tip has them whole. */
+.tm-cell--state .tm-state__text b,
+.tm-cell--use .tm-use__text b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The program's one line on the row's middle with the other cells' words: its logo, taller than the line, centres on
+   it, rather than the line rising to the logo's top. */
+.tm-cell--use .tm-use {
+  align-items: center;
+}
+.tm-cell--use .tm-use > :first-child {
+  translate: none;
+}
+/* How an agent stands, how a task ended or how one its face leads stands, as a mark alone: only with no room for the
+   columns (below). */
+.tm-cell--state > .tm-mark {
+  display: none;
+}
+/* Ver passos and Parar, as squares (their words on hover and for screen readers), a button's clear from the edge. */
+.tm-cell--act {
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-inline: 0 var(--action-clear);
+}
+
+.tm-row--agent .tm-hit {
+  font-weight: 650;
+}
+.tm-cell--act > * {
+  position: relative;
+  z-index: 1;
+}
+/* An agent row's chevron: it says the row opens; the row's own press opens it. */
+.tm-twist {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  color: var(--muted);
+}
+.tm-row--agent:hover .tm-twist {
+  color: var(--ink);
+}
+.tm-twist > .ac-icon {
+  transition: transform 0.15s var(--out);
+}
+.tm-row--agent:not([data-open]) .tm-twist > .ac-icon {
+  transform: rotate(-90deg);
+}
+/* With a pointer, a task's buttons show on its row's hover, choice or focus (an agent's Parar always; a Parar already
+   stopping stays). */
+.tm-cell--act {
+  transition: opacity 0.12s;
+}
+@media (hover: hover) {
+  .tm-row:not(.tm-row--agent, :hover, [data-selected], :focus-within) .tm-cell--act:not(:has(> :disabled)) {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+/* "Pedidas por pessoas 6": a section's line inside the table. */
+.tm-sec {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--faint);
+}
+.tm-sec__count {
+  font-weight: 500;
+}
+.tm-sec + .tm-list > .tm-row:first-child {
+  border-top: 0;
+}
+.tm-none {
+  margin: 0;
+  padding: var(--space-3);
+  font-size: 13px;
+  color: var(--faint);
+}
+
+/* "Terminadas hoje": folded until opened, at the end. */
+.tm-ended {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tm-more {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 8px;
+  height: var(--control-h-sm);
+  margin-left: -6px;
+  padding: 0 10px 0 6px;
+  border: 0;
+  border-radius: var(--control-r-sm);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tm-more:hover {
+  background: var(--plate);
+  color: var(--ink);
+}
+html:not([data-pointer]) .tm-more:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.tm-more__chevron {
+  transition: transform 0.15s var(--out);
+}
+.tm-more[aria-expanded="true"] .tm-more__chevron {
+  transform: rotate(90deg);
+}
+.tm-row--ended {
+  grid-template-columns: minmax(0, 1fr) 190px 96px;
+}
+.tm-row--ended:first-child {
+  border-top: 0;
+}
+.tm-row--ended .tm-hit {
+  color: var(--ink2);
+}
+
+@media (max-width: 760px) {
+  .tm-search {
+    flex-basis: 100%;
+    width: 100%;
+  }
+  /* No arrows: a strip a finger swipes, out over the page's side room so the cards slide under the screen's edges,
+     each settling on the page's line. */
+  .tm-cards .ac-carousel__arrow {
+    display: none;
+  }
+  .tm-cards .ac-carousel__track {
+    margin-inline: calc(-1 * var(--page-x));
+    padding-inline: var(--page-x);
+    scroll-padding-inline: var(--page-x);
+  }
+}
+
+/* No room for the columns (a phone, a small window beside the sidebar): no column names, and each row is still one
+   line: its words, its time and its stop. A task's mark says how it stands; an agent's row, one that ended and one its
+   agent's face leads (`flat`) show theirs as a mark after the words. Estado and Usando agora are in the row's tip, and
+   Ver passos in the toolbar, for the row chosen: the words keep the room. */
+@container tm (max-width: 760px) {
+  .tm-row--head {
+    display: none;
+  }
+  .tm-row {
+    grid-template-columns: minmax(0, 1fr) auto 40px;
+  }
+  .tm-row--agent,
+  .tm-row[data-look="flat"] {
+    grid-template-columns: minmax(0, 1fr) auto auto 40px;
+  }
+  .tm-cell--act > .tm-steps {
+    display: none;
+  }
+  .tm-row--ended {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .tm-row[data-look="grouped"] {
+    --tm-indent: 26px;
+  }
+  .tm-row:not(.tm-row--agent, .tm-row--ended, [data-look="flat"]) > .tm-cell--state,
+  .tm-cell--use,
+  .tm-cell--state > :not(.tm-mark) {
+    display: none;
+  }
+  .tm-cell--state > .tm-mark {
+    display: inline-grid;
+  }
+  .tm-row--agent > .tm-cell--state,
+  .tm-row--ended > .tm-cell--state,
+  .tm-row[data-look="flat"] > .tm-cell--state {
+    padding-inline: var(--space-1) 0;
+  }
+}
+
+/* "Computadores" (ADR 0128): the computers with work, whether each has room, and "Ver fila". No memory figure. */
+.tm-computers {
+  display: flex;
+  flex-direction: column;
+}
+.tm-computers__list.ac-card {
+  --card-pad: 0;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+.tm-computer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-height: calc(var(--control-h-sm) + 2 * var(--row-py));
+  padding: var(--row-py) var(--space-3);
+}
+.tm-computer + .tm-computer {
+  border-top: 1px solid var(--line);
+}
+.tm-computer__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-item) var(--radius-item) var(--radius-item) 4px;
+  background: var(--card-well);
+  box-shadow: var(--card-well-shadow);
+  color: var(--muted);
+}
+/* Its name, then whether it has room in quiet type, on one line that ends in "…" (its tip has them whole), "Ver fila"
+   at the row's end. */
+.tm-computer__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tm-computer__text b {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tm-computer__text small {
+  margin-left: var(--space-2);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.tm-computer > .ac-btn {
+  flex: none;
+}
+
+/* Over the cards while work waits: today's line, then what holds the work in the Computadores rows' look. */
+.tm-causes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tm-causes__today {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+/* Narrow, a cause's row and a computer's alike: the tile and the name on one line, the facts whole and the way out
+   under them, full width. Its words' tip still opens from the way out. */
+@media (max-width: 760px) {
+  .tm-computer {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: var(--space-1) var(--space-3);
+  }
+  .tm-computer > .tm-computer__text {
+    display: contents;
+  }
+  .tm-computer__text b {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .tm-computer__text small {
+    grid-column: 1 / -1;
+    margin-left: 0;
+    white-space: normal;
+  }
+  .tm-computer > .ac-link {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}

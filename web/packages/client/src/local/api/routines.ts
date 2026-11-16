@@ -1,0 +1,38 @@
+import type { HttpApi } from "../../api/client";
+import { notAvailable, notFound } from "../unavailable";
+
+export const routinesGroup: NonNullable<HttpApi["routines"]> = {
+  list: async () => [],
+  parseSchedule: notAvailable,
+  create: notAvailable,
+  setActive: notAvailable,
+  runNow: notAvailable,
+  stop: notAvailable,
+  takeOver: notAvailable,
+  continueUsage: notAvailable,
+  runs: async () => [],
+  parseRule: notAvailable,
+  describeRule: notAvailable,
+  update: notAvailable,
+  remove: notAvailable,
+  duplicate: notAvailable,
+  hook: notFound,
+  newHookAddress: notAvailable,
+  newHookSecret: notAvailable,
+  removeHookSecret: notAvailable,
+  testHook: notAvailable,
+  webhookSetup: async () => ({
+    provider: "github",
+    id: null,
+    url: null,
+    secret: null,
+    receivedAt: null,
+    refusedAt: null,
+    secretSet: false,
+    canManage: false,
+    oneClick: false,
+  }),
+  ensureWebhook: notAvailable,
+  setWebhookSecret: notAvailable,
+  addWebhookToRepo: notAvailable,
+};

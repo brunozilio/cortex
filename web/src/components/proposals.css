@@ -1,0 +1,64 @@
+/* A card of proposals for several agents: each change once, then its rows (face, name, what changes, switch). */
+.proposal-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+/* Its rows' buttons (a member change's Aplicar) go under their words by the list's width: a thread is narrow too. */
+.proposal-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  container-type: inline-size;
+}
+/* A MediaRow: the face, the name and its switch on one line, what changes under them. */
+.proposal-row {
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.proposal-row > .ac-mediarow__face > .ac-icon {
+  color: var(--ink-muted);
+}
+.proposal-row__status {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.proposal-change {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.proposal-change--apps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* In a request card: light rows under the well, a hairline between them. */
+.rq .proposal-rows {
+  gap: 0;
+  margin-top: 8px;
+}
+.rq .proposal-row {
+  padding: 8px 0;
+}
+.rq .proposal-row + .proposal-row {
+  border-top: 1px solid var(--line);
+}
+
+/* The right hand's approvals card: its line, then each approval as the conversation draws it. */
+.rh-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.rh-cards > p {
+  margin: 0;
+}
+/* The stack's gap alone parts its cards: a request card's own room (request-card.css) would add to it. */
+.rh-cards > .rq {
+  margin: 0;
+}
