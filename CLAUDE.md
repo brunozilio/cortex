@@ -9,17 +9,17 @@ files that must spell it out). No GUI.
 Dependencies are one-way; `domain` is the only crate every layer shares.
 
 ```
-cli ──► console ──► sdk ──► backend ──► agent-engine ──► llm-providers ──► domain
- │                   │        │              │
- └───────────────────┴────────┴──► protocol ─┴─────────────────────────────► domain
+cli ──► sdk ──► backend ──► agent-engine ──► llm-providers ──► domain
+         │        │              │
+         └────────┴──► protocol ─┴─────────────────────────────► domain
 
-leaf crates: brand (everyone), code-map (backend), content (cli, agent-engine),
+leaf crates: brand (everyone), code-map (backend), console (cli), content (cli, agent-engine),
              language-servers (agent-engine), platform (cli, console, backend, agent-engine),
-             script (agent-engine), store (backend)
+             script (agent-engine)
 ```
 
 `web/` is the browser app `/console` opens (Bun + Vite + React); `console`
-serves its `web/dist` from disk. `web/PORTING.md` tracks its endpoints.
+builds it into the binary when Bun is present, else serves `web/dist`.
 
 Nothing below `sdk` knows the CLI; `cli` reaches `backend` and
 `agent-engine` only in tests. The README's crate table says what each one

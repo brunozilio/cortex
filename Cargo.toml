@@ -22,7 +22,6 @@ language-servers = { path = "crates/language-servers" }
 llm-providers = { path = "crates/llm-providers" }
 sdk = { path = "crates/sdk" }
 code-map = { path = "crates/code-map" }
-store = { path = "crates/store" }
 console = { path = "crates/console" }
 
 serde = { version = "1", features = ["derive"] }

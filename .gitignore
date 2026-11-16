@@ -9,6 +9,4 @@
 .claude/worktrees/
 
 web/node_modules
-web/packages/*/node_modules
 web/dist
-web/src/routeTree.gen.ts

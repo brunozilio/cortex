@@ -1,45 +1,25 @@
 {
-  "name": "@agenteschat/web",
-  "version": "0.0.0",
+  "name": "web",
   "private": true,
+  "version": "0.0.0",
   "type": "module",
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
-    "routes": "bun scripts/routes.ts",
     "dev": "vite",
-    "build": "bun run routes && vite build",
-    "preview": "vite preview",
-    "typecheck": "bun run routes && tsc -p tsconfig.json && tsc -p tsconfig.node.json && bun run --filter './packages/*' typecheck",
-    "test": "bun run routes && bun test",
-    "lint": "biome check .",
-    "format": "biome check --write ."
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
-    "@happy-dom/global-registrator": "^20.0.0",
-    "@tanstack/router-generator": "1.167.44",
-    "@tanstack/router-plugin": "^1.168.42",
-    "@testing-library/react": "^16.3.3",
-    "@types/bun": "^1.4.2",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
-    "typescript": "^7.0.2",
-    "vite": "^8.3.0"
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@agenteschat/client": "workspace:*",
-    "@agenteschat/i18n": "workspace:*",
-    "@agenteschat/providers": "workspace:*",
-    "@agenteschat/tokens": "workspace:*",
-    "@agenteschat/ui": "workspace:*",
-    "@tanstack/react-query": "^5.104.1",
-    "@tanstack/react-router": "^1.170.41",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
-  "packageManager": "bun@1.4.4"
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.90.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6"
+  }
 }

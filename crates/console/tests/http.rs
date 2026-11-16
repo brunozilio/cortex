@@ -1,34 +1,21 @@
 #![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
 
-use std::sync::Arc;
-
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
-use console::{Asset, Assets, Backend, Settings};
+use console::{Asset, Assets, Settings};
 use http_body_util::BodyExt;
-use serde_json::{Value, json};
+use serde_json::Value;
 use tower::ServiceExt;
 
 const TOKEN: &str = "secret-token";
 const COOKIE: &str = "console_token=secret-token";
-
-struct Fake;
-
-impl Backend for Fake {
-    fn feature(&self, name: &str, _input: Value) -> Result<Value, String> {
-        match name {
-            "instance" => Ok(json!({ "name": "Product", "version": "1.2.3", "database": { "status": "ready" } })),
-            other => Err(format!("no feature {other}")),
-        }
-    }
-}
 
 fn app(assets: Option<&std::path::Path>) -> axum::Router {
     with(assets.map_or(Assets::Missing, |folder| Assets::Folder(folder.to_path_buf())))
 }
 
 fn with(assets: Assets) -> axum::Router {
-    console::router(Arc::new(Fake), Settings { token: TOKEN.into(), assets })
+    console::router(Settings { token: TOKEN.into(), assets })
 }
 
 async fn send(app: axum::Router, request: Request<Body>) -> (StatusCode, axum::http::HeaderMap, String) {
@@ -51,15 +38,6 @@ fn built() -> tempfile::TempDir {
 }
 
 #[tokio::test]
-async fn the_instance_comes_from_the_backend() {
-    let (status, _, body) = send(app(None), get("/api/instance")).await;
-    assert_eq!(status, StatusCode::OK);
-    let instance: Value = serde_json::from_str(&body).expect("json");
-    assert_eq!(instance["name"], "Product");
-    assert_eq!(instance["version"], "1.2.3");
-}
-
-#[tokio::test]
 async fn health_answers_ok() {
     let (status, _, body) = send(app(None), get("/api/health")).await;
     assert_eq!(status, StatusCode::OK);
@@ -68,12 +46,12 @@ async fn health_answers_ok() {
 
 #[tokio::test]
 async fn the_api_refuses_a_request_without_the_token_cookie() {
-    let request = Request::get("/api/instance").body(Body::empty()).expect("request");
+    let request = Request::get("/api/health").body(Body::empty()).expect("request");
     let (status, _, body) = send(app(None), request).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(serde_json::from_str::<Value>(&body).expect("json")["error"]["code"], "unauthorized");
 
-    let wrong = Request::get("/api/instance").header(header::COOKIE, "console_token=nope").body(Body::empty());
+    let wrong = Request::get("/api/health").header(header::COOKIE, "console_token=nope").body(Body::empty());
     let (status, _, _) = send(app(None), wrong.expect("request")).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
@@ -99,7 +77,7 @@ async fn a_wrong_token_in_the_link_sets_no_cookie() {
 
 #[tokio::test]
 async fn a_write_from_another_site_is_refused() {
-    let request = Request::post("/api/instance")
+    let request = Request::post("/api/health")
         .header(header::COOKIE, COOKIE)
         .header(header::HOST, "127.0.0.1:4000")
         .header(header::ORIGIN, "https://evil.example")

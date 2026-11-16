@@ -1,11 +1,10 @@
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
-use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use tokio::sync::oneshot;
 
-use crate::{Assets, Backend, Settings};
+use crate::{Assets, Settings};
 
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(1);
 
@@ -58,12 +57,12 @@ impl Drop for Running {
     }
 }
 
-pub fn start(backend: Arc<dyn Backend>, options: Options) -> Result<Running, StartError> {
+pub fn start(options: Options) -> Result<Running, StartError> {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, options.port)).map_err(StartError::Listen)?;
     listener.set_nonblocking(true).map_err(StartError::Listen)?;
     let address = listener.local_addr().map_err(StartError::Listen)?;
     let token = secret()?;
-    let app = crate::router(backend, Settings { token: token.clone(), assets: options.assets });
+    let app = crate::router(Settings { token: token.clone(), assets: options.assets });
     let (stop, stopped) = oneshot::channel::<()>();
     let thread = std::thread::Builder::new()
         .name("console".into())
