@@ -1,13 +1,14 @@
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
 pub use crate::model::{Access, ModelProvider};
+pub use crate::provider_book::ProviderBook;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderAccount {
     pub label: String,
     pub since_unix: i64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,6 +17,8 @@ pub struct ProviderSummary {
     pub name: String,
     pub access: Access,
     pub account: Option<ProviderAccount>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accounts: Vec<ProviderAccount>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,44 +26,6 @@ pub struct ProviderInfo {
     pub provider: ModelProvider,
     pub name: String,
     pub access: Access,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProviderBook {
-    #[serde(default)]
-    accounts: BTreeMap<ModelProvider, ProviderAccount>,
-}
-
-impl ProviderBook {
-    pub fn get(&self, provider: ModelProvider) -> Option<&ProviderAccount> {
-        self.accounts.get(&provider)
-    }
-
-    pub fn connect(&mut self, provider: ModelProvider, account: ProviderAccount) -> Option<ProviderAccount> {
-        self.accounts.insert(provider, account)
-    }
-
-    pub fn disconnect(&mut self, provider: ModelProvider) -> Option<ProviderAccount> {
-        self.accounts.remove(&provider)
-    }
-
-    pub fn over(&self, shared: &ProviderBook) -> ProviderBook {
-        let mut accounts = shared.accounts.clone();
-        accounts.extend(self.accounts.clone());
-        ProviderBook { accounts }
-    }
-
-    pub fn summaries(&self, known: impl IntoIterator<Item = ProviderInfo>) -> Vec<ProviderSummary> {
-        known
-            .into_iter()
-            .map(|info| ProviderSummary {
-                account: self.get(info.provider).cloned(),
-                provider: info.provider,
-                name: info.name,
-                access: info.access,
-            })
-            .collect()
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,57 +113,6 @@ impl std::fmt::Debug for ProviderKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn account(label: &str) -> ProviderAccount {
-        ProviderAccount { label: label.into(), since_unix: 10 }
-    }
-
-    #[test]
-    fn an_owner_s_own_account_wins_over_the_shared_one_which_fills_the_rest() {
-        let (mine, theirs) = (ModelProvider::new("mine"), ModelProvider::new("theirs"));
-        let mut own = ProviderBook::default();
-        own.connect(mine, account("own"));
-        let mut shared = ProviderBook::default();
-        shared.connect(mine, account("org"));
-        shared.connect(theirs, account("org"));
-        let seen = own.over(&shared);
-        assert_eq!(seen.get(mine).map(|a| a.label.as_str()), Some("own"));
-        assert_eq!(seen.get(theirs).map(|a| a.label.as_str()), Some("org"));
-    }
-
-    #[test]
-    fn one_account_per_provider_and_the_new_one_replaces_the_old() {
-        let mut book = ProviderBook::default();
-        assert_eq!(book.connect(ModelProvider::new("acme"), account("…ab12")), None);
-        let old = book.connect(ModelProvider::new("acme"), account("…cd34"));
-        assert_eq!(old.map(|a| a.label), Some("…ab12".into()));
-        assert_eq!(book.get(ModelProvider::new("acme")).map(|a| a.label.as_str()), Some("…cd34"));
-        assert_eq!(book.disconnect(ModelProvider::new("acme")).map(|a| a.label), Some("…cd34".into()));
-        assert_eq!(book.get(ModelProvider::new("acme")), None);
-    }
-
-    #[test]
-    fn summaries_list_every_provider_with_an_account_in_order() {
-        let mut book = ProviderBook::default();
-        let (one, two) = (ModelProvider::new("one"), ModelProvider::new("two"));
-        book.connect(two, account("…ff00"));
-        let info = |provider, name: &str| ProviderInfo { provider, name: name.into(), access: Access::Key };
-        let summaries = book.summaries([info(one, "One"), info(two, "Two")]);
-        assert_eq!(summaries.iter().map(|s| s.provider).collect::<Vec<_>>(), [one, two]);
-        assert_eq!(summaries[0].account, None);
-        assert_eq!(
-            (summaries[1].name.as_str(), summaries[1].account.as_ref().map(|a| a.label.as_str())),
-            ("Two", Some("…ff00"))
-        );
-    }
-
-    #[test]
-    fn a_book_round_trips() {
-        let mut book = ProviderBook::default();
-        book.connect(ModelProvider::new("zenith"), account("x"));
-        let back: ProviderBook = serde_json::from_str(&serde_json::to_string(&book).expect("json")).expect("parse");
-        assert_eq!(back, book);
-    }
 
     #[test]
     fn keys_are_trimmed_and_blank_or_broken_ones_refused() {

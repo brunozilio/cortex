@@ -67,6 +67,7 @@ mod tests {
             account_id: "arn:aws:codewhisperer:us-east-1:1:profile/P".into(),
             expires_at: None,
             client: None,
+            email: None,
         };
         let config = llm_providers::Config { auth: Some(tokens), ..llm_providers::Config::default() };
         let call = call(&config, "");

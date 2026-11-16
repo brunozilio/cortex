@@ -134,6 +134,7 @@ fn pick(app: &mut App, event: KeyEvent) {
                     }
                 }
                 PickerKind::Role(role) => app.role_picked(role, cursor),
+                PickerKind::Account { removing } => app.account_picked(cursor, removing),
                 PickerKind::Effort => app.set_effort_from(Effort::ALL.get(cursor).copied()),
                 PickerKind::Mode => {
                     if let Some(mode) = PermissionMode::ALL.get(cursor) {

@@ -19,6 +19,8 @@ pub struct Tokens {
     pub expires_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
 }
 
 impl std::fmt::Debug for Tokens {
@@ -100,6 +102,7 @@ pub fn standard(
         account_id: account(&value)?,
         expires_at: Some(now + Duration::seconds(value["expires_in"].as_i64().unwrap_or(0))),
         client: None,
+        email: account_label(body).or_else(|| previous.and_then(|p| p.email.clone())),
     })
 }
 
@@ -189,5 +192,16 @@ mod tests {
         assert_eq!((fresh.refresh_token.as_str(), fresh.account_id.as_str()), ("r0", "a"));
         assert_eq!(fresh.expires_at, Some(now + Duration::seconds(60)));
         assert!(matches!(standard(400, "{}", None, now, |_| Ok(String::new())), Err(ProviderError::Unauthorized(_))));
+    }
+
+    #[test]
+    fn the_account_s_email_is_kept_and_survives_a_refresh_that_omits_it() {
+        let claims = URL_SAFE_NO_PAD.encode(r#"{"email":"dev@example.com"}"#);
+        let answer = format!(r#"{{"access_token":"a","refresh_token":"r","id_token":"h.{claims}.s"}}"#);
+        let now = Utc::now();
+        let first = standard(200, &answer, None, now, |_| Ok(String::new())).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(first.email.as_deref(), Some("dev@example.com"));
+        let again = standard(200, r#"{"access_token":"b"}"#, Some(&first), now, |_| Ok(String::new()));
+        assert_eq!(again.unwrap_or_else(|e| panic!("{e}")).email.as_deref(), Some("dev@example.com"));
     }
 }

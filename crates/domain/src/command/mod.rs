@@ -32,6 +32,7 @@ pub enum Command {
     Copy,
     Status,
     Logout,
+    Accounts { removing: bool },
     TerminalSetup,
     OutputStyle(Option<String>),
     Hooks,
@@ -50,7 +51,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const HELP: [(&'static str, &'static str); 35] = [
+    pub const HELP: [(&'static str, &'static str); 36] = [
         ("help", "Show the commands and keys"),
         ("clear", "Clear the conversation and start fresh (also /new, /reset)"),
         ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
@@ -82,6 +83,7 @@ impl Command {
         ("export", "Write the conversation as Markdown, /export <path>"),
         ("copy", "Copy the agent's last answer"),
         ("logout", "Forget a provider's credentials"),
+        ("accounts", "Switch which account of a provider is used; /accounts remove forgets one"),
         ("doctor", "Check that this installation can work here"),
         ("terminal-setup", "How to make Shift+Enter add a line in this terminal"),
         ("login", "Connect a provider (API key or subscription)"),
@@ -133,6 +135,7 @@ impl Command {
                 "vim",
                 "login",
                 "logout",
+                "accounts",
                 "doctor",
                 "terminal-setup",
                 "help",
@@ -192,6 +195,11 @@ impl Command {
             "export" => Some(Self::Export(argument)),
             "copy" => bare(Self::Copy),
             "logout" => bare(Self::Logout),
+            "accounts" => match argument.as_deref() {
+                None => Some(Self::Accounts { removing: false }),
+                Some(word) if word.eq_ignore_ascii_case("remove") => Some(Self::Accounts { removing: true }),
+                Some(_) => None,
+            },
             "terminal-setup" => bare(Self::TerminalSetup),
             "output-style" => Some(Self::OutputStyle(argument)),
             "hooks" => bare(Self::Hooks),

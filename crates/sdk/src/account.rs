@@ -43,6 +43,14 @@ impl Sdk {
         self.client.call(ClientCommand::DisconnectProvider { provider }, listed)
     }
 
+    pub fn use_account(&self, provider: ModelProvider, account: &str) -> Result<Vec<ProviderSummary>, Error> {
+        self.client.call(ClientCommand::UseProviderAccount { provider, account: account.to_owned() }, listed)
+    }
+
+    pub fn remove_account(&self, provider: ModelProvider, account: &str) -> Result<Vec<ProviderSummary>, Error> {
+        self.client.call(ClientCommand::RemoveProviderAccount { provider, account: account.to_owned() }, listed)
+    }
+
     pub fn skills(&self, cwd: &Path) -> Result<Vec<Skill>, Error> {
         self.client.call(ClientCommand::ListSkills { path: cwd.to_path_buf() }, |event| match event {
             ServerEvent::Skills(skills) => Some(Ok(skills)),

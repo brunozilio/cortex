@@ -95,7 +95,7 @@ mod tests {
         let owner = Principal::LocalOwner;
         assert_eq!(store.load(&owner), ProviderBook::default());
         let mut book = ProviderBook::default();
-        let account = ProviderAccount { label: "…ab12".into(), since_unix: 5 };
+        let account = ProviderAccount { label: "…ab12".into(), since_unix: 5, id: String::new() };
         book.connect(ModelProvider::new("keyed"), account);
         store.save(&owner, &book).expect("save");
         assert_eq!(store.load(&owner), book);

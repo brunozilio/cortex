@@ -148,3 +148,11 @@ fn model_takes_a_role_before_the_model_name() {
     assert_eq!(Command::parse("/model review default"), Some(Command::ModelRole(ModelRole::Review, RoleChange::Clear)));
     assert_eq!(Command::parse("/model gpt-6.1-sol"), Some(Command::Model(Some("gpt-6.1-sol".into()))));
 }
+
+#[test]
+fn accounts_switches_or_removes_one_of_a_provider_s_accounts() {
+    assert_eq!(Command::parse("/accounts"), Some(Command::Accounts { removing: false }));
+    assert_eq!(Command::parse("/accounts remove"), Some(Command::Accounts { removing: true }));
+    assert_eq!(Command::parse("/accounts other"), None);
+    assert!(Command::HELP.iter().any(|(name, _)| *name == "accounts"));
+}

@@ -1,4 +1,5 @@
 mod account;
+mod accounts;
 mod catalog;
 pub(crate) mod redirect;
 mod shared;
@@ -26,6 +27,13 @@ const UNKNOWN_SLOT: u128 = 0x7072_6f76_6964_6572_ffff_ffff_ffff_ffff;
 pub(crate) fn secret_id(provider: ModelProvider) -> SecretId {
     let slot = agent_engine::providers::find(provider).map_or(UNKNOWN_SLOT, |known| known.slot());
     SecretId::from_uuid(uuid::Uuid::from_u128(slot))
+}
+
+pub(crate) fn slot(provider: ModelProvider, account: &str) -> SecretId {
+    match uuid::Uuid::parse_str(account) {
+        Ok(id) if !account.is_empty() => SecretId::from_uuid(id),
+        _ => secret_id(provider),
+    }
 }
 
 type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
@@ -146,28 +154,16 @@ impl ModelProviders {
         });
     }
 
-    pub fn disconnect(&self, owner: &Principal, provider: ModelProvider) -> ServerEvent {
-        let result = {
-            let _guard = self.lock.locked();
-            self.secrets.delete(owner, secret_id(provider));
-            self.store
-                .update(owner, &mut |book| {
-                    book.disconnect(provider);
-                })
-                .map_err(|error| error.to_string())
-        };
-        self.answer(owner, provider, result)
-    }
-
     pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {
         use domain::provider::ProviderKeyStore;
         let Some(holder) = self.holder(owner, provider) else {
             return Err(format!("{} is not connected", agent_engine::providers::name(provider)));
         };
+        let id = self.store.load(&holder).get(provider).map(|account| account.id.clone()).unwrap_or_default();
         let source = Arc::new(account::AccountStore {
             secrets: self.secrets.clone(),
             owner: holder,
-            slot: secret_id(provider),
+            slot: slot(provider, &id),
             provider,
         });
         Ok(ProviderKey::new(source.load()?).with_store(source))
@@ -198,8 +194,10 @@ impl ModelProviders {
 
     fn keep(&self, owner: &Principal, provider: ModelProvider, label: String, config: &Config) -> Result<(), String> {
         let _guard = self.lock.locked();
-        self.secrets.set(owner, secret_id(provider), &account::secrets(config)?)?;
-        let account = ProviderAccount { label, since_unix: self.now() };
+        let label = accounts::identity(config).unwrap_or(label);
+        let id = self.store.load(owner).slot_for(provider, &label, || uuid::Uuid::new_v4().to_string());
+        self.secrets.set(owner, slot(provider, &id), &account::secrets(config)?)?;
+        let account = ProviderAccount { label, since_unix: self.now(), id };
         self.store
             .update(owner, &mut |book| {
                 book.connect(provider, account.clone());

@@ -24,6 +24,10 @@ pub enum Msg {
     StatusLine(String),
     Providers(Vec<domain::provider::ProviderSummary>),
     Menu(Vec<domain::provider::ProviderSummary>),
+    Accounts {
+        providers: Vec<domain::provider::ProviderSummary>,
+        removing: bool,
+    },
     Conversations(Vec<super::conversations::Conversation>),
     Context(domain::usage::ContextUsage),
     Shell {
@@ -66,6 +70,7 @@ impl super::app::App {
             Msg::Conversations(found) => super::resume::listed(self, found),
             Msg::Providers(providers) => super::info::connected(self, providers),
             Msg::Menu(providers) => self.menu(providers),
+            Msg::Accounts { providers, removing } => self.accounts_listed(providers, removing),
             Msg::StatusLine(line) => self.status.text = self.status.command.is_some().then_some(line),
             Msg::Context(usage) => {
                 self.window = Some(usage.window);

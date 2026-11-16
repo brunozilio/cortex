@@ -43,6 +43,7 @@ pub mod output;
 pub mod permission_rules;
 pub mod principal;
 pub mod provider;
+pub mod provider_book;
 pub mod redact;
 pub mod repeats;
 pub mod request;

@@ -1,3 +1,4 @@
+mod accounts;
 mod app;
 mod ask;
 mod attach;
@@ -66,6 +67,8 @@ mod shots;
 mod shots_html;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_accounts;
 #[cfg(test)]
 mod tests_auto_retry;
 #[cfg(test)]

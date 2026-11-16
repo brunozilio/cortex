@@ -18,6 +18,7 @@ pub enum PickerKind {
     Config,
     Effort,
     Role(domain::model_roles::ModelRole),
+    Account { removing: bool },
 }
 
 const MODES: [(PermissionMode, &str); 4] = [

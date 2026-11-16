@@ -180,6 +180,7 @@ pub fn tokens(
         account_id: previous.map(|p| p.account_id.clone()).unwrap_or_default(),
         expires_at: Some(now + Duration::seconds(lifetime)),
         client: serde_json::to_value(client).ok(),
+        email: None,
     })
 }
 

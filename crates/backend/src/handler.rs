@@ -113,6 +113,12 @@ impl CommandHandler {
             ClientCommand::DisconnectProvider { provider } => {
                 outbox.send(self.services.providers.disconnect(&principal, provider))
             }
+            ClientCommand::UseProviderAccount { provider, account } => {
+                outbox.send(self.services.providers.use_account(&principal, provider, &account))
+            }
+            ClientCommand::RemoveProviderAccount { provider, account } => {
+                outbox.send(self.services.providers.remove_account(&principal, provider, &account))
+            }
             ClientCommand::ListMcpServers { path } => self.mcp_servers(&principal, &path, Ok(())),
             ClientCommand::TakeNotices => {
                 outbox.send(ServerEvent::Notices(agent_engine::tools::inbox::take(self.client)));
