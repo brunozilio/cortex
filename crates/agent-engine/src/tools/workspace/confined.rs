@@ -7,10 +7,7 @@ use super::Workspace;
 
 impl Workspace {
     pub fn confined(&self, command: Command) -> Command {
-        match self.confinement() {
-            Some(confinement) => platform::sandbox::confined(command, &confinement),
-            None => command,
-        }
+        self.services.launch.0.launch(command, self.confinement().as_ref())
     }
 
     pub fn sandboxed(&self) -> bool {

@@ -1,10 +1,10 @@
 use std::path::Path;
 use std::time::Duration;
 
+use domain::lsp::Query;
 use domain::lsp::answer::{describe, explain};
 use domain::lsp::uri::uri_of;
-use domain::lsp::{Operation, Query};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::{Access, Outcome, Tool, Workspace, clip, field, shown};
 use crate::model::ToolSpec;
@@ -14,27 +14,11 @@ pub struct Lsp;
 
 impl Tool for Lsp {
     fn spec(&self) -> ToolSpec {
-        let operations: Vec<&str> = Operation::NAMES.iter().map(|(name, _)| *name).collect();
-        ToolSpec {
-            name: "LSP".into(),
-            description: crate::tools::describe("LSP", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "operation": { "type": "string", "enum": operations },
-                    "file_path": { "type": "string", "description": "The file the question is about." },
-                    "line": { "type": "integer", "description": "Line of the symbol, from 1." },
-                    "character": { "type": "integer", "description": "Column of the symbol, from 1." },
-                    "query": { "type": "string", "description": "The name to find (workspaceSymbol)." }
-                },
-                "required": ["operation", "file_path"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("LSP", &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("LSP")
     }
 
     fn reaches_outside(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {

@@ -20,28 +20,11 @@ pub struct Watch;
 
 impl Tool for Watch {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: WATCH_TOOL.into(),
-            description: super::describe(WATCH_TOOL, &Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "tool": { "type": "string", "description": "The read-only tool to call on each check, e.g. an MCP tool such as mcp__server__get_issue." },
-                    "input": { "type": "object", "description": "The arguments for that tool, as you would call it." },
-                    "path": { "type": "string", "description": "Dot path into the JSON the tool returns, e.g. data.fields.status.name; without it the whole result is compared." },
-                    "equals": { "description": "End when the value equals this (case ignored); a list ends on any of them.", "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
-                    "contains": { "type": "string", "description": "End when the value contains this text (case ignored)." },
-                    "every_seconds": { "type": "integer", "minimum": domain::watch::LEAST_EVERY, "maximum": domain::watch::MOST_EVERY, "description": "Seconds between checks (default 300)." },
-                    "description": { "type": "string", "description": "What it waits for, in a few words." }
-                },
-                "required": ["tool"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared(WATCH_TOOL, &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(WATCH_TOOL)
     }
 
     fn summary(&self, input: &Value) -> String {

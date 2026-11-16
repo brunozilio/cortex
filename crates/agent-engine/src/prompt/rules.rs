@@ -50,7 +50,7 @@ pub fn discover(cwd: &Path, home: Option<&Path>) -> Vec<Rule> {
             rules.push(Rule { path, base: base.clone(), text: body.trim().into(), patterns, error });
         }
     }
-    rules.extend(super::instruction_files::nested(cwd));
+    rules.extend(super::instruction_files::nested(cwd, home));
     rules
 }
 impl Rule {

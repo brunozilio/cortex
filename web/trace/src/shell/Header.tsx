@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { shortId } from '@/lib/format'
 import type { LiveStatus } from '@/lib/live'
-import { NAV, type View } from './Sidebar'
+import { NAV, shownViews, type View } from './Sidebar'
 
 interface HeaderProps {
   project: string
@@ -74,7 +74,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(({ project, curr
     <div className="px-4 pb-2 md:hidden">
       <Tabs value={view} onValueChange={(value) => onView(value as View)}>
         <TabsList className="w-full">
-          {NAV.map(({ key, label }) => (
+          {shownViews(live !== 'static').map(({ key, label }) => (
             <TabsTrigger key={key} value={key} className="flex-1">
               {label}
             </TabsTrigger>

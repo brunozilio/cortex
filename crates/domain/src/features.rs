@@ -20,7 +20,11 @@ pub const AUTO_REVIEW: &str = "auto-review";
 pub const AFFECTED_TESTS: &str = "experimental-affected-tests";
 pub const PR_FOLLOW: &str = "experimental-pr-follow";
 pub const SESSION_CLAIMS: &str = "experimental-session-claims";
+pub const OUTPUT_CLEANUP: &str = "experimental-output-cleanup";
+pub const OUTPUT_FILTERS: &str = "experimental-output-filters";
+pub const OUTPUT_SAVINGS: &str = "experimental-output-savings";
 pub const BRANCHES: &str = "branches";
+pub const GIT_OFFER: &str = "git-offer";
 pub const TEAM_MEMORY: &str = "team-memory";
 pub const LEARNING: &str = "experimental-learning";
 pub const WEB_MAIN_CONTENT: &str = "experimental-web-main-content";
@@ -44,6 +48,15 @@ pub struct Flag {
 
 pub const KNOWN: &[Flag] = &[
     Flag { name: SANDBOX, about: "Confine Bash and Monitor commands to the project's folders (macOS)" },
+    Flag {
+        name: OUTPUT_CLEANUP,
+        about: "Bash runs commands without colours and drops escape codes, redrawn progress and repeated lines",
+    },
+    Flag {
+        name: OUTPUT_FILTERS,
+        about: "Bash hides passing tests, build steps and progress from cargo, git, npm, pytest and go test, keeping the whole output in a file",
+    },
+    Flag { name: OUTPUT_SAVINGS, about: "/gain shows how much shorter command output reached the model this session" },
     Flag {
         name: REDACT_SECRETS,
         about: "Hide tokens, keys and the project's .env values in tool output before the model and the log see them",
@@ -79,6 +92,10 @@ pub const KNOWN: &[Flag] = &[
         ),
     },
     Flag { name: BRANCHES, about: "/branch starts a new conversation from before an earlier prompt, keeping this one" },
+    Flag {
+        name: GIT_OFFER,
+        about: "Offer to initialize git on the first message in a folder that is not a repository",
+    },
     Flag {
         name: SESSION_CLAIMS,
         about: "Warn the agent when another session in the same folder edited the file it is changing",

@@ -40,6 +40,9 @@ impl App {
             _ => {}
         }
         self.transcript.apply(&event);
+        if let EngineEvent::Usage(usage) = &event {
+            self.transcript.last_call = Some(domain::cache_window::LastCall::of(usage, super::conversations::now()));
+        }
         if !self.focused && (matches!(event, EngineEvent::Asked(_)) || event.is_terminal()) {
             self.bell = true;
         }
@@ -141,6 +144,9 @@ impl App {
     }
 
     pub fn answer(&mut self, decision: sdk::Decision) {
+        if super::git_offer::answered(self, &decision) {
+            return;
+        }
         let pending = self.ask.take();
         self.ask_closed();
         if let (Some(pending), Some(run)) = (pending, &self.turn.run)

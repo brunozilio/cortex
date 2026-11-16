@@ -54,10 +54,12 @@ fn a_model_the_provider_does_not_serve_falls_back_to_the_run_s_model() {
 }
 
 #[test]
-fn a_worktree_outside_a_repository_with_a_commit_says_to_call_again_without_isolation() {
+fn a_worktree_outside_a_repository_with_a_commit_runs_the_agent_without_isolation() {
     let rig = Rig::new(PermissionMode::AcceptEdits);
     let input = json!({"description": "Look", "prompt": "Say hi", "isolation": "worktree"});
-    let (_, history) = delegate(&rig, input, 1);
+    let (model, history) = delegate(&rig, input, 2);
+    assert_eq!(model.asked().len(), 3, "the sub-agent ran");
     let (failed, content) = agent_result(&history);
-    assert!(failed && content.contains("without isolation"), "{content}");
+    assert!(!failed && content.starts_with("ok"), "{content}");
+    assert!(content.contains("Ran without isolation"), "{content}");
 }

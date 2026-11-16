@@ -109,6 +109,57 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
 }
 
 #[test]
+fn resume_offers_a_session_another_client_ran_in_the_folder_but_not_an_archived_one() {
+    let data = tempfile::tempdir().expect("data");
+    let project = tempfile::tempdir().expect("project");
+    let script = vec![
+        EngineEvent::SessionStarted(SessionId("web-1".into())),
+        EngineEvent::Completed { duration_ms: 1, cost_usd: None },
+    ];
+    let model = Model::new("keyed:scripted", "Scripted");
+    let engine = FakeEngine::new(vec![model.clone()], script);
+    let sdk = sdk(&engine, data.path());
+    let elsewhere = sdk.sibling().expect("sibling");
+    let id = SessionId("web-1".into());
+    elsewhere.session(project.path(), model).send("hi").expect("run").text().expect("ended");
+    elsewhere.rename_session(&id, "From the browser").expect("renamed");
+
+    let mut app = App::new(sdk, project.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    type_text(&mut app, "/resume");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.overlays.picker.is_some());
+    assert!(screen(&app).contains("From the browser"), "{}", screen(&app));
+    press(&mut app, KeyCode::Esc);
+
+    elsewhere.archive_session(&id, true).expect("archived");
+    type_text(&mut app, "/resume");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| screen(app).contains("No earlier conversation"));
+    assert!(app.overlays.picker.is_none());
+}
+
+#[test]
+fn the_name_a_conversation_gets_is_kept_where_every_client_lists_it() {
+    let data = tempfile::tempdir().expect("data");
+    let script = vec![
+        EngineEvent::SessionStarted(SessionId("s".into())),
+        EngineEvent::Chore(domain::ChoreAnswer::Title("Greeting".into())),
+        EngineEvent::Completed { duration_ms: 1, cost_usd: None },
+    ];
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
+    let sdk = sdk(&engine, data.path());
+    let mut app = App::new(sdk.clone(), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+
+    type_text(&mut app, "say hi");
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.title.as_deref() == Some("Greeting"));
+
+    until(&mut app, |_| sdk.sessions().expect("listed").iter().any(|row| row.title.as_deref() == Some("Greeting")));
+}
+
+#[test]
 fn the_output_style_picked_goes_with_the_next_prompt() {
     let data = tempfile::tempdir().expect("data");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];

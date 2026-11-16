@@ -12,7 +12,7 @@ mod tree;
 
 use std::io::Read as _;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::model::ToolSpec;
 use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
@@ -33,23 +33,11 @@ pub struct WebFetch;
 
 impl Tool for WebFetch {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "WebFetch".into(),
-            description: crate::tools::describe("WebFetch", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "url": { "type": "string", "description": "The page's full URL." },
-                    "prompt": { "type": "string", "description": "What to find on it." }
-                },
-                "required": ["url", "prompt"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("WebFetch", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access("WebFetch")
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -99,16 +87,7 @@ pub struct WebSearch;
 
 impl Tool for WebSearch {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: crate::tools::WEB_SEARCH.into(),
-            description: crate::tools::describe(crate::tools::WEB_SEARCH, &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": { "query": { "type": "string", "description": "What to search for." } },
-                "required": ["query"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared(crate::tools::WEB_SEARCH, &serde_json::Value::Null)
     }
 
     fn offered(&self, workspace: &Workspace) -> bool {
@@ -117,7 +96,7 @@ impl Tool for WebSearch {
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access(crate::tools::WEB_SEARCH)
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -131,6 +110,8 @@ impl Tool for WebSearch {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
     use crate::model::http::ScriptedHttp;
     use crate::tools::Network;
@@ -194,6 +175,8 @@ mod tests {
 
 #[cfg(test)]
 mod offered_tests {
+    use serde_json::json;
+
     use super::*;
 
     fn on(provider: &'static str, model: &str) -> Workspace {

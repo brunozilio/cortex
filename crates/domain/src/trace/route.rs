@@ -116,7 +116,7 @@ pub fn build(records: Vec<Record>) -> Trace {
             Record::Opened { at_ms, run } => routed.push(None, at(at_ms, &mut last), Item::Opened(run)),
             Record::Truncated { keep } => routed.push(None, last.unwrap_or_default(), Item::Truncated(keep)),
             Record::Partial => routed.push(None, last.unwrap_or_default(), Item::Partial),
-            Record::Restarted => {}
+            Record::Restarted | Record::Shown { .. } => {}
         }
         if routed.totals.started_ms == 0 {
             routed.totals.started_ms = last.unwrap_or_default();

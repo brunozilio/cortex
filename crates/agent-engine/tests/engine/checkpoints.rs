@@ -119,7 +119,11 @@ fn a_branch_starts_a_new_conversation_before_a_prompt_and_keeps_the_original_and
 
     let Some(EngineEvent::SessionStarted(branched)) = events.first().cloned() else { panic!("{events:?}") };
     assert_ne!(branched, session);
-    assert!(events.iter().any(|event| matches!(event, EngineEvent::Branched { checkpoint: 1, prompt, .. } if prompt == "add more")));
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, EngineEvent::Branched { checkpoint: 1, prompt, .. } if prompt == "add more"))
+    );
     let kept = sessions.load_for(&request, &branched).map(|history| history.len());
     assert!(kept.is_some_and(|kept| original.is_some_and(|original| kept < original)), "{kept:?} {original:?}");
     assert_eq!(sessions.load_for(&request, &session).map(|history| history.len()), original, "the original is kept");

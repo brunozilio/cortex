@@ -4,6 +4,7 @@ pub mod named;
 pub mod private_file;
 pub mod sandbox;
 pub mod sync;
+pub mod typed;
 
 #[cfg(unix)]
 mod unix;

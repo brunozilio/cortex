@@ -1,4 +1,4 @@
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::shells::Watch;
 use crate::model::ToolSpec;
@@ -9,23 +9,11 @@ pub struct Monitor;
 
 impl Tool for Monitor {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "Monitor".into(),
-            description: crate::tools::describe("Monitor", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "command": { "type": "string", "description": "The command; each line it prints is an event." },
-                    "description": { "type": "string", "description": "What it watches, in a few words." }
-                },
-                "required": ["command"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("Monitor", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access("Monitor")
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -56,6 +44,8 @@ impl Tool for Monitor {
 mod tests {
     use std::time::{Duration, Instant};
 
+    use serde_json::json;
+
     use super::*;
     use crate::tools::inbox;
 
@@ -83,6 +73,8 @@ mod tests {
 #[cfg(all(test, unix))]
 mod read_tests {
     use std::time::{Duration, Instant};
+
+    use serde_json::json;
 
     use super::*;
     use crate::tools::inbox;

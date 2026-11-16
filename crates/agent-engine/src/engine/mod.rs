@@ -35,6 +35,7 @@ pub struct NativeEngine {
     sessions: Arc<dyn Sessions>,
     mcp: Arc<dyn Http>,
     lsp: Arc<dyn LanguageServers>,
+    launch: crate::tools::Launch,
 }
 
 impl std::fmt::Debug for NativeEngine {
@@ -45,11 +46,22 @@ impl std::fmt::Debug for NativeEngine {
 
 impl NativeEngine {
     pub fn new(source: Arc<dyn ApiSource>, sessions: Arc<dyn Sessions>) -> Self {
-        Self { source, sessions, mcp: Arc::new(NetHttp), lsp: Arc::new(LspPool::default()) }
+        Self {
+            source,
+            sessions,
+            mcp: Arc::new(NetHttp),
+            lsp: Arc::new(LspPool::default()),
+            launch: crate::tools::Launch::default(),
+        }
     }
 
     pub fn with_language_servers(mut self, lsp: Arc<dyn LanguageServers>) -> Self {
         self.lsp = lsp;
+        self
+    }
+
+    pub fn with_launcher(mut self, launcher: Arc<dyn crate::tools::Launcher>) -> Self {
+        self.launch = crate::tools::Launch(launcher);
         self
     }
 }
@@ -65,7 +77,9 @@ impl AgentEngine for NativeEngine {
         request: &PromptRequest,
         sink: Arc<dyn EventSink>,
     ) -> Result<Box<dyn RunHandle>, EngineError> {
-        let workspace = Arc::new(Workspace::for_request(request));
+        let mut workspace = Workspace::for_request(request);
+        workspace.services.launch = self.launch.clone();
+        let workspace = Arc::new(workspace);
         let control = Arc::new(Control::new(request.permission, workspace.stop.clone()));
         let detach = Arc::clone(&workspace.detach);
         let gate = RunGate::new(run, sink);

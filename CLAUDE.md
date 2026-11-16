@@ -32,7 +32,9 @@ product's name lives in `brand.toml` (see docs/architecture.md). No GUI.
 - Domain rules live in `domain` (pure, no IO), never in the CLI's
   rendering or the `sdk` glue (the CLI's internal client).
 - No comments in code: no `//`, `///`, `//!` or `/* */` in Rust, no `#`
-  comments in shell, Python or TOML (a script's `#!` line is fine). Say it
+  comments in shell, Python or TOML (a script's `#!` line is fine). The
+  one exception: JSDoc type annotations (`@type`, `@param`) in `content/`
+  JavaScript, pointing at `content/types.d.ts`. Say it
   with names, types and tests instead; context belongs in docs/ or the
   commit message. `.claude/hooks/no-comments.sh` rejects an edit that adds
   one and `xtask lint` fails on any.

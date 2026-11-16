@@ -76,9 +76,9 @@ fn ask(question: &str) -> Result<String, String> {
 fn secret(question: &str) -> Result<String, String> {
     use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, read};
     use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+    enable_raw_mode().map_err(|e| e.to_string())?;
     eprint!("{question}");
     let _ = std::io::stderr().flush();
-    enable_raw_mode().map_err(|e| e.to_string())?;
     let mut text = String::new();
     let result = loop {
         match read() {

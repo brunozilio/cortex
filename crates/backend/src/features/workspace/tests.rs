@@ -70,3 +70,35 @@ fn mentioned_files_go_with_the_prompt() {
     let expected = "why is @a.rs empty? and @missing.rs\n\n<file path=\"a.rs\">\nfn a() {}\n</file>";
     assert_eq!(sent.expect("sent"), json!(expected));
 }
+
+#[test]
+fn git_is_offered_outside_a_repository_until_one_is_initialized_or_the_feature_is_off() {
+    let dir = tempfile::tempdir().expect("dir");
+    let cwd = dir.path();
+    assert_eq!(ask(cwd, json!({"op": "git-offer"})), Ok(json!({"offer": true})));
+
+    let mut services = crate::feature::testing::services(None);
+    services.off.insert(domain::features::GIT_OFFER.into());
+    let off = json!({"op": "git-offer", "path": cwd});
+    let answered = crate::feature::testing::with(1, &services, |context| handle(context, off));
+    assert_eq!(answered, Ok(json!({"offer": false})));
+
+    ask(cwd, json!({"op": "git-init"})).expect("initialized");
+    assert!(cwd.join(".git").is_dir());
+    assert_eq!(ask(cwd, json!({"op": "git-offer"})), Ok(json!({"offer": false})));
+    let nested = cwd.join("nested");
+    std::fs::create_dir(&nested).expect("nested");
+    assert_eq!(ask(&nested, json!({"op": "git-offer"})), Ok(json!({"offer": false})), "inside the repository");
+}
+
+#[test]
+fn initializing_git_makes_an_empty_first_commit_when_git_knows_who_commits() {
+    let dir = tempfile::tempdir().expect("dir");
+    let cwd = dir.path();
+    run(cwd, &["init", "-q"]);
+    run(cwd, &["config", "user.name", "t"]);
+    run(cwd, &["config", "user.email", "t@t"]);
+    assert_eq!(ask(cwd, json!({"op": "git-init"})), Ok(json!({"committed": true})));
+    run(cwd, &["rev-parse", "--verify", "HEAD"]);
+    assert_eq!(ask(cwd, json!({"op": "git-init"})), Ok(json!({"committed": false})), "a commit is already there");
+}

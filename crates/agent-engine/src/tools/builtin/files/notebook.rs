@@ -46,26 +46,11 @@ pub struct NotebookEdit;
 
 impl Tool for NotebookEdit {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "NotebookEdit".into(),
-            description: crate::tools::describe("NotebookEdit", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "notebook_path": { "type": "string" },
-                    "cell_number": { "type": "integer", "description": "The cell, from 0." },
-                    "new_source": { "type": "string" },
-                    "cell_type": { "enum": ["code", "markdown"] },
-                    "edit_mode": { "enum": ["replace", "insert", "delete"] }
-                },
-                "required": ["notebook_path"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("NotebookEdit", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Edits
+        crate::tools::declared_access("NotebookEdit")
     }
 
     fn summary(&self, input: &Value) -> String {

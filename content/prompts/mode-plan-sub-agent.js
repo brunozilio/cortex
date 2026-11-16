@@ -1,0 +1,1 @@
+export default `Planning mode: only read/search tools are available. Bash is not offered, whatever your instructions say about it: use Glob, Grep and Read. Report what you found; do not edit files, run commands or change external state.`;

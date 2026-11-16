@@ -99,7 +99,9 @@ fn evaluate<'js>(
         let object = value.as_object().ok_or_else(|| rquickjs::Error::new_from_js("value", "object"))?.clone();
         value = object.get(key)?;
     }
-    let function: Function = value.into_function().ok_or_else(|| rquickjs::Error::new_from_js("value", "function"))?;
+    let Some(function) = value.as_function().cloned() else {
+        return js_to_json(ctx, value);
+    };
     let make: Function = ctx.globals().get("__ctx")?;
     let context: JsValue = make.call((json_to_js(ctx, data)?,))?;
     let mut list = rquickjs::function::Args::new(ctx.clone(), arguments.len() + 1);
@@ -127,6 +129,42 @@ pub fn exported(name: &str, source: &str, export: &str) -> Result<Value, String>
             js_to_json(&ctx, value)
         })();
         evaluated.map_err(|error| describe(&ctx, error))
+    })
+}
+
+const EMPTY_FUNCTION: &str = r"(value) => typeof value === 'function'
+  && /^(async\s*)?(function\s*[\w$]*\s*)?\([^)]*\)\s*(=>\s*)?\{\s*\}$/.test(value.toString().trim())";
+
+pub fn empty_function(name: &str, source: &str, export: &str) -> bool {
+    let Ok(runtime) = Runtime::new() else { return false };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
+    let Ok(context) = Context::full(&runtime) else { return false };
+    context.with(|ctx| {
+        let found = (|| {
+            let (module, done) = Module::declare(ctx.clone(), name, source)?.eval()?;
+            done.finish::<()>()?;
+            let value: JsValue = module.get(export)?;
+            let check: Function = ctx.eval(EMPTY_FUNCTION)?;
+            check.call::<_, bool>((value,))
+        })();
+        found.unwrap_or(false)
+    })
+}
+
+pub fn exports(name: &str, source: &str, export: &str) -> bool {
+    let Ok(runtime) = Runtime::new() else { return false };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
+    let Ok(context) = Context::full(&runtime) else { return false };
+    context.with(|ctx| {
+        let found = (|| {
+            let (module, done) = Module::declare(ctx.clone(), name, source)?.eval()?;
+            done.finish::<()>()?;
+            let value: JsValue = module.get(export)?;
+            Ok::<bool, rquickjs::Error>(!value.is_undefined())
+        })();
+        found.unwrap_or(false)
     })
 }
 

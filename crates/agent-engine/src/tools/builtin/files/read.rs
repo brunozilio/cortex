@@ -12,28 +12,14 @@ pub struct Read;
 
 impl Tool for Read {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "Read".into(),
-            description: crate::tools::describe(
-                "Read",
-                &serde_json::json!({ "DEFAULT_LINES": DEFAULT_LINES, "LINE_CHARS": LINE_CHARS, "MAX_CHARS": MAX_CHARS }),
-            ),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "file_path": { "type": "string", "description": "The file to read." },
-                    "offset": { "type": "integer", "description": "First line to read, from 1." },
-                    "limit": { "type": "integer", "description": "How many lines to read." },
-                    "pages": { "type": "string", "description": "A PDF's pages, like \"3\" or \"1-5\"." }
-                },
-                "required": ["file_path"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared(
+            "Read",
+            &json!({ "DEFAULT_LINES": DEFAULT_LINES, "LINE_CHARS": LINE_CHARS, "MAX_CHARS": MAX_CHARS }),
+        )
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("Read")
     }
 
     fn reaches_outside(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
@@ -98,18 +84,18 @@ fn read(file: &std::path::Path, input: &Value, workspace: &Workspace) -> Outcome
     if text.is_empty() {
         return Outcome::ok("(the file is empty)");
     }
-    if workspace.tracking.seen_files.seen_again(&path, offset, limit) {
-        return Outcome::ok(format!(
-            "{} is unchanged since you last read these lines in this conversation; that text is still current.",
-            shown(&path, workspace)
-        ));
-    }
     let total = text.lines().count();
     if offset > total {
         return Outcome::error(format!("The file has {total} lines; offset {offset} is past its end."));
     }
     let mut out = String::new();
-    let mut last = (offset - 1 + limit).min(total);
+    let mut last = (offset - 1).saturating_add(limit).min(total);
+    if workspace.tracking.seen_files.covers(&path, offset, last) {
+        return Outcome::ok(format!(
+            "{} is unchanged since you last read these lines in this conversation; that text is still current.",
+            shown(&path, workspace)
+        ));
+    }
     for (number, line) in text.lines().enumerate().skip(offset - 1).take(limit) {
         let line = match line.char_indices().nth(LINE_CHARS) {
             Some((at, _)) => format!("{}… [line cut]", &line[..at]),
@@ -122,6 +108,7 @@ fn read(file: &std::path::Path, input: &Value, workspace: &Workspace) -> Outcome
         }
         out.push_str(&numbered);
     }
+    workspace.tracking.seen_files.saw(&path, offset, last);
     if last < total {
         out.push_str(&format!("… [{} more lines; read on from offset {}]\n", total - last, last + 1));
     }
@@ -170,12 +157,12 @@ mod tests {
         std::fs::write(dir.path().join("a.txt"), "one\ntwo\nthree\n").expect("write");
         let workspace = Workspace::new(dir.path());
 
+        let part = Read.run(&json!({"file_path": "a.txt", "offset": 2, "limit": 1}), &workspace);
+        assert_eq!(part.content, "     2\ttwo\n… [1 more lines; read on from offset 3]\n");
+
         let whole = Read.run(&json!({"file_path": "a.txt"}), &workspace);
         assert_eq!(whole, Outcome::ok("     1\tone\n     2\ttwo\n     3\tthree\n"));
         assert!(workspace.has_read(&dir.path().join("a.txt")));
-
-        let part = Read.run(&json!({"file_path": "a.txt", "offset": 2, "limit": 1}), &workspace);
-        assert_eq!(part.content, "     2\ttwo\n… [1 more lines; read on from offset 3]\n");
     }
 
     #[test]

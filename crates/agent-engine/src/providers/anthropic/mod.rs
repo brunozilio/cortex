@@ -57,13 +57,7 @@ impl Shape for Provider {
         let caps = model.and_then(|model| model.capabilities.as_ref());
         let max_tokens = caps.and_then(|c| c.max_output_tokens).unwrap_or(8192).min(8192);
         body["max_tokens"] = json!(max_tokens);
-        body["system"] = json!(
-            body["system"]
-                .as_array()
-                .map(|blocks| blocks.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n\n"))
-                .unwrap_or_default()
-        );
-        remove(body, &["thinking", "output_config", "cache_control"]);
+        remove(body, &["thinking", "output_config"]);
         if let Some(caps) = caps.filter(|c| c.reasoning && (c.adaptive_thinking || max_tokens > 1)) {
             body["thinking"] = if caps.adaptive_thinking {
                 json!({"type":"adaptive"})
@@ -114,14 +108,14 @@ mod tests {
     }
 
     #[test]
-    fn the_system_is_flattened_and_thinking_follows_the_capabilities() {
+    fn the_system_keeps_its_blocks_and_thinking_follows_the_capabilities() {
         let mut model = ModelOption::new("anthropic:claude-opus-4-1", "Opus");
         model.capabilities =
             Some(ModelCapabilities { reasoning: true, max_output_tokens: Some(32000), ..ModelCapabilities::default() });
         let mut body = json!({"model": "anthropic:claude-opus-4-1", "system": [{"text": "a"}, {"text": "b"}],
             "output_config": {"effort": "high"}});
         llm_providers::request::shape(&Provider, Some(&model), &mut body).unwrap_or_else(|e| panic!("{e}"));
-        assert_eq!(body["system"], "a\n\nb");
+        assert_eq!(body["system"], json!([{"text": "a"}, {"text": "b"}]));
         assert_eq!(body["thinking"], json!({"type": "enabled", "budget_tokens": 4096}));
     }
 

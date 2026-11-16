@@ -214,7 +214,7 @@ fn a_program_manages_the_owner_s_mcp_servers() {
     .expect("config");
     let engine = FakeEngine::new(vec![model()], Vec::new());
     let mut services = services(&engine);
-    services.home = Some(home.path().to_path_buf());
+    services.homes = std::sync::Arc::new(backend::OwnerHome::at(home.path()));
     let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
     let states = |servers: Vec<sdk::McpServerInfo>| -> Vec<(String, McpOrigin, McpState)> {
         servers.into_iter().map(|s| (s.name, s.origin, s.state)).collect()

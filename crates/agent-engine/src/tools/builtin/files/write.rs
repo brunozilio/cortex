@@ -1,4 +1,4 @@
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::model::ToolSpec;
 use crate::tools::read_files::Freshness;
@@ -9,23 +9,11 @@ pub struct Write;
 
 impl Tool for Write {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "Write".into(),
-            description: crate::tools::describe("Write", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "file_path": { "type": "string", "description": "The file to write." },
-                    "content": { "type": "string", "description": "The file's whole new content." }
-                },
-                "required": ["file_path", "content"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("Write", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Edits
+        crate::tools::declared_access("Write")
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -86,6 +74,8 @@ impl Tool for Write {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]

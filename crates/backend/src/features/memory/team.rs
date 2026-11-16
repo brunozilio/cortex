@@ -7,14 +7,12 @@ pub fn folder(project: &Path) -> PathBuf {
     project.join(brand::DIR).join("memory")
 }
 
-pub fn features(project: &Path) -> Features {
-    agent_engine::prompt::settings::load(project, std::env::home_dir().as_deref(), &[])
-        .map(|settings| settings.features)
-        .unwrap_or_default()
+pub fn features(project: &Path, home: Option<&Path>) -> Features {
+    agent_engine::prompt::settings::load(project, home, &[]).map(|settings| settings.features).unwrap_or_default()
 }
 
-pub fn load(project: &Path) -> Vec<Memory> {
-    load_if(project, &features(project))
+pub fn load(project: &Path, home: Option<&Path>) -> Vec<Memory> {
+    load_if(project, &features(project, home))
 }
 
 pub fn load_if(project: &Path, features: &Features) -> Vec<Memory> {
@@ -40,8 +38,8 @@ pub fn load_if(project: &Path, features: &Features) -> Vec<Memory> {
         .collect()
 }
 
-pub fn share(project: &Path, memory: &Memory) -> Result<PathBuf, String> {
-    let structured = features(project).on(domain::features::STRUCTURED_LEARNINGS);
+pub fn share(project: &Path, home: Option<&Path>, memory: &Memory) -> Result<PathBuf, String> {
+    let structured = features(project, home).on(domain::features::STRUCTURED_LEARNINGS);
     let by = if structured {
         team::Sharer { author: git_user(project), date: Some(agent_engine::today()), structured }
     } else {
@@ -89,8 +87,8 @@ mod tests {
             credit: None,
         };
 
-        let path = share(project.path(), &mine).expect("shared");
-        let loaded = load(project.path());
+        let path = share(project.path(), None, &mine).expect("shared");
+        let loaded = load(project.path(), None);
 
         assert!(path.starts_with(folder(project.path())));
         assert_eq!(loaded.len(), 1);

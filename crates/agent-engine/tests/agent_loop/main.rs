@@ -1,5 +1,6 @@
 #![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
 
+mod background_reports;
 mod code_review;
 mod compaction;
 mod custom_agents;
@@ -18,6 +19,8 @@ mod script_skills;
 mod scripts;
 mod send_message;
 mod steering;
+mod sub_agent_asks;
+mod sub_agent_endings;
 mod sub_agent_fallbacks;
 mod sub_agents;
 mod turns;

@@ -38,6 +38,30 @@ fn the_run_s_own_rules_turn_limit_and_appended_prompt_apply() {
 }
 
 #[test]
+fn the_run_s_ask_rule_asks_even_for_a_call_its_allow_rule_covers() {
+    let dir = tempfile::tempdir().expect("dir");
+    let scripted = Arc::new(ScriptedModel::new([
+        ScriptedModel::reply(vec![Block::ToolUse {
+            id: "b".into(),
+            name: "Bash".into(),
+            input: json!({"command": "touch made.txt"}),
+        }]),
+        ScriptedModel::reply(vec![Block::Text("done".into())]),
+    ]));
+    let mut request = PromptRequest::plain(dir.path().into(), "make it", model());
+    request.allowed_tools = vec!["Bash(touch:*)".into()];
+    request.ask_tools = vec!["Bash(touch:*)".into()];
+    let (events, mut handle) = crate::start_with_handle(&engine(&scripted), &request);
+
+    let asked = std::iter::from_fn(|| events.recv_timeout(std::time::Duration::from_secs(10)).ok())
+        .any(|event| matches!(event, EngineEvent::Asked(_)));
+
+    assert!(asked, "the ask rule wins over the allow rule");
+    assert!(!dir.path().join("made.txt").exists());
+    handle.cancel();
+}
+
+#[test]
 fn a_malformed_rule_from_the_command_line_fails_the_run() {
     let dir = tempfile::tempdir().expect("dir");
     let scripted = Arc::new(ScriptedModel::new([]));

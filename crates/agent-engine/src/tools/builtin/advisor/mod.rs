@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::model::{ModelApi, ToolSpec, TurnRequest};
 use crate::tools::{Access, Consult, Outcome, Tool, Workspace};
@@ -15,15 +15,11 @@ pub struct Advisor;
 
 impl Tool for Advisor {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: ADVISOR_TOOL.into(),
-            description: crate::tools::describe("Advisor", &serde_json::Value::Null),
-            schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
-        }
+        crate::tools::declared(ADVISOR_TOOL, &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(ADVISOR_TOOL)
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -106,6 +102,8 @@ mod tests {
     use std::sync::atomic::AtomicBool;
 
     use domain::Effort;
+
+    use serde_json::json;
 
     use super::*;
     use crate::model::scripted::ScriptedModel;

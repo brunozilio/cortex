@@ -13,6 +13,7 @@ mod reminders;
 mod script_call;
 mod stuck;
 mod sub_agent;
+mod sub_agent_report;
 mod tasks;
 mod template;
 mod watch;
@@ -209,11 +210,15 @@ impl Agent<'_> {
                         history.push(Message { role: Role::User, blocks: steered });
                         continue;
                     }
-                    let pending: Vec<_> = tasks.background.locked().values().cloned().collect();
+                    let pending: Vec<_> =
+                        tasks.background.locked().iter().map(|(id, task)| (id.clone(), task.clone())).collect();
                     let mut reports = Vec::new();
-                    for task in pending {
+                    let saved = crate::tools::persisted::results_dir(&self.workspace.session_id);
+                    for (id, task) in pending {
                         if !task.collected.load(Ordering::Relaxed) {
-                            reports.push(task.output(true).content);
+                            let report = task.output(true).content;
+                            let short = crate::tools::persisted::persist(&report, &saved, &format!("report-{id}"));
+                            reports.push(short.unwrap_or(report));
                         }
                     }
                     if !reports.is_empty() && !self.control.is_stopped() {

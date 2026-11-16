@@ -36,7 +36,6 @@ pub fn run(app: &mut App, command: Command) {
         | Command::Logout
         | Command::TerminalSetup
         | Command::OutputStyle(_)) => super::info::run(app, other),
-        Command::Mouse => super::toggles::mouse(app),
         Command::Vim => super::toggles::vim(app),
         Command::Todos => super::listings::todos(app),
         Command::Permissions => super::dirs::show_rules(app, false),

@@ -7,7 +7,7 @@ use platform::sync::Locked;
 use std::time::Instant;
 
 use platform::Tree;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::model::ToolSpec;
 use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
@@ -129,6 +129,14 @@ pub fn list(client: u64) -> Vec<(String, String, bool)> {
     listed
 }
 
+pub fn tail(client: u64, id: &str, most: usize) -> Option<String> {
+    let shells = lock();
+    let shell = shells.get(id).filter(|shell| shell.client == client)?;
+    let kept = shell.output.locked();
+    let from = kept.len().saturating_sub(most);
+    Some(String::from_utf8_lossy(&kept[from..]).trim().to_owned())
+}
+
 fn refresh(shell: &mut Shell) -> Option<String> {
     if shell.exit.is_none()
         && let Ok(Some(status)) = shell.tree.child().try_wait()
@@ -143,23 +151,11 @@ pub struct BashOutput;
 
 impl Tool for BashOutput {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "BashOutput".into(),
-            description: crate::tools::describe("BashOutput", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "bash_id": { "type": "string", "description": "The id Bash returned." },
-                    "filter": { "type": "string", "description": "Keep only lines containing this." }
-                },
-                "required": ["bash_id"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("BashOutput", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("BashOutput")
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -206,20 +202,11 @@ pub struct KillShell;
 
 impl Tool for KillShell {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "KillShell".into(),
-            description: crate::tools::describe("KillShell", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": { "shell_id": { "type": "string", "description": "The id Bash, Monitor or Watch returned." } },
-                "required": ["shell_id"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("KillShell", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("KillShell")
     }
 
     fn summary(&self, input: &Value) -> String {

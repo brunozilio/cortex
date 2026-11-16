@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use domain::lsp::answer::RequestError;
 use domain::lsp::ServerSpec;
+use domain::lsp::answer::RequestError;
 use serde_json::Value;
 
 use super::{LanguageServer, LanguageServers, Lsp, Opened, Wait};

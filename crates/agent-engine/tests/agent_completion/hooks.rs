@@ -178,7 +178,7 @@ fn hook_allow_respects_parent_plan_mode() {
         PermissionMode::Plan,
     );
     assert!(!dir.path().join("forbidden").exists());
-    assert!(format!("{:?}", model.asked()[2].messages).contains("only read and search"));
+    assert!(format!("{:?}", model.asked()[2].messages).contains("Tool Bash is not available to this agent"));
 }
 #[test]
 fn pre_hook_replaces_the_actual_tool_arguments() {

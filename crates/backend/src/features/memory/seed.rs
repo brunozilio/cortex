@@ -37,7 +37,7 @@ impl Memories {
     }
 
     fn offered(&self, context: &Context<'_>, project: &Path) -> Result<Vec<Candidate>, String> {
-        if !team::features(project).on(domain::features::MEMORY_SEED) {
+        if !team::features(project, self.home(context.principal).as_deref()).on(domain::features::MEMORY_SEED) {
             return Err(format!("/memory seed is turned off ({}).", domain::features::MEMORY_SEED));
         }
         let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);

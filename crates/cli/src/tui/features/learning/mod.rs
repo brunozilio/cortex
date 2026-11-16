@@ -1,4 +1,4 @@
-use domain::learning::{Lesson, Proposal, WAITING};
+use domain::learning::{Keeping, Proposal, WAITING, keeping};
 use domain::memory::MemoryKind;
 use serde_json::json;
 
@@ -40,24 +40,20 @@ fn run(app: &mut App, argument: Option<String>) {
 
 fn keep(app: &mut App, proposal: Proposal) {
     let cwd = app.cwd.clone();
-    match proposal.kind {
-        Lesson::Memory => {
-            app.spawn(move |sdk| match sdk.memory(cwd).remember(MemoryKind::Procedural, &proposal.text, &[]) {
-                Ok(_) => Msg::Notice(format!("Remembered: {}", proposal.text)),
+    match keeping(&proposal) {
+        Keeping::Remember(text) => {
+            app.spawn(move |sdk| match sdk.memory(cwd).remember(MemoryKind::Procedural, &text, &[]) {
+                Ok(_) => Msg::Notice(format!("Remembered: {text}")),
                 Err(error) => Msg::Error(error.to_string()),
             })
         }
-        Lesson::Rule => {
-            let kind = if proposal.name == "deny" { "deny" } else { "allow" };
-            let keep = json!({ "cwd": cwd, "keep": { "rule": proposal.text, "kind": kind } });
+        Keeping::Rule { kind, rule } => {
+            let keep = json!({ "cwd": cwd, "keep": { "rule": rule, "kind": kind } });
             app.spawn(move |sdk| match sdk.feature("suggested_rules", keep) {
-                Ok(_) => Msg::Notice(format!("Kept the {kind} rule {} for this project.", proposal.text)),
+                Ok(_) => Msg::Notice(format!("Kept the {kind} rule {rule} for this project.")),
                 Err(error) => Msg::Error(error.to_string()),
             });
         }
-        Lesson::Skill => app.send(format!(
-            "Create or update the skill `{}` for this: {}\n\nLoad the skill-creator skill and follow it.",
-            proposal.name, proposal.text
-        )),
+        Keeping::Ask(prompt) => app.send(prompt),
     }
 }

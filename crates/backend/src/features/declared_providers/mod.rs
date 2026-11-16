@@ -4,9 +4,9 @@ use serde_json::{Value, json};
 
 use crate::feature::Context;
 
-pub fn handle(_context: &Context<'_>, input: Value) -> Result<Value, String> {
+pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let cwd: PathBuf = input["path"].as_str().map(PathBuf::from).ok_or("declared providers need a path")?;
-    Ok(json!(crate::native::declare_providers(std::env::home_dir().as_deref(), &cwd)))
+    Ok(json!(crate::native::declare_providers(context.services.home(context.principal).as_deref(), &cwd)))
 }
 
 pub fn forget(_client: u64) {}

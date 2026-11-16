@@ -3,6 +3,9 @@ use std::path::Path;
 const OFFERED: usize = 8;
 
 pub(super) fn offered(app: &super::app::App) -> Vec<String> {
+    if app.input.browsing_history() {
+        return Vec::new();
+    }
     let Some((_, query)) = typing(app.input.text(), app.input.cursor()) else { return Vec::new() };
     app.catalog
         .files

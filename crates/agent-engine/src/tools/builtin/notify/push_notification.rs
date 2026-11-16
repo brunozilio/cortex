@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use platform::bounded::{Bounds, Ended};
-use serde_json::{Value, json};
+use serde_json::Value;
 
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
+use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 
 #[derive(Debug)]
 pub struct PushNotification;
@@ -15,23 +15,11 @@ pub(crate) fn command(title: &str, message: &str) -> (String, Vec<String>, Vec<(
 
 impl Tool for PushNotification {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "PushNotification".into(),
-            description: crate::tools::describe("PushNotification", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "message": { "type": "string" },
-                    "title": { "type": "string", "description": concat!(brand::name!(), " by default.") }
-                },
-                "required": ["message"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("PushNotification", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("PushNotification")
     }
 
     fn summary(&self, input: &Value) -> String {

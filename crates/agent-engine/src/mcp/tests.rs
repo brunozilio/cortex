@@ -153,6 +153,12 @@ fn embedded_resource_links_and_structured_results_survive_tool_output() {
     assert!(outcome(&json!({"content":[{"type":"audio","data":"not-supported"}]})).is_error);
 }
 
+#[test]
+fn a_structured_result_reaches_the_model_on_one_line() {
+    let result = outcome(&json!({"structuredContent":{"items":[{"id":1,"name":"a"},{"id":2,"name":"b"}]}}));
+    assert_eq!(result.content, "Structured result:\n{\"items\":[{\"id\":1,\"name\":\"a\"},{\"id\":2,\"name\":\"b\"}]}");
+}
+
 struct Echo;
 
 impl domain::mcp::McpEndpoint for Echo {

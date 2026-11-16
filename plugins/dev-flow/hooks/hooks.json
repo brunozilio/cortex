@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Write|Edit|Bash|mcp__.*)$",
+        "hooks": [{ "type": "script", "command": "${CORTEX_PLUGIN_ROOT}/hooks/gate.js", "timeout": 30 }]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [{ "type": "script", "command": "${CORTEX_PLUGIN_ROOT}/hooks/resume.js", "timeout": 15 }]
+      }
+    ]
+  }
+}

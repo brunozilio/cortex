@@ -72,6 +72,13 @@ pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace
     Ok(setup)
 }
 
+pub const RAN_WITHOUT_ISOLATION: &str =
+    "Ran without isolation: this folder is not a git repository with a commit, so no worktree was made.";
+
+pub fn can_isolate(workspace: &Workspace) -> Result<bool, String> {
+    git::has_commit(workspace)
+}
+
 pub fn prepare(config: &AgentConfig, name: &str, workspace: &Workspace) -> Result<Setup, String> {
     if config.memory.is_none() && !config.worktree {
         return Ok(Setup { cwd: workspace.cwd.clone(), ..Default::default() });
@@ -93,7 +100,7 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
     if let Some(scope) = &config.memory {
         let base = match scope.as_str() {
             "user" => {
-                std::env::home_dir().ok_or("user home unavailable")?.join(concat!(brand::dir!(), "/agent-memory"))
+                workspace.home.as_deref().ok_or("user home unavailable")?.join(concat!(brand::dir!(), "/agent-memory"))
             }
             "project" => project.join(concat!(brand::dir!(), "/agent-memory")),
             "local" => project.join(concat!(brand::dir!(), "/agent-memory-local")),
@@ -121,14 +128,7 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
         setup.memory = String::from_utf8_lossy(&bytes).lines().take(200).collect::<Vec<_>>().join("\n");
         setup.memory_dir = Some(dir.canonicalize().map_err(|e| e.to_string())?);
     }
-    if config.worktree {
-        git_stopped(workspace, &workspace.cwd, &["rev-parse".as_ref(), "--verify".as_ref(), "HEAD".as_ref()]).map_err(
-            |_| {
-                "isolation: worktree needs a git repository with at least one commit, and this folder has none; \
-                 call again without isolation"
-                    .to_owned()
-            },
-        )?;
+    if config.worktree && git::has_commit(workspace)? {
         let root =
             PathBuf::from(git_stopped(workspace, &workspace.cwd, &["rev-parse".as_ref(), "--show-toplevel".as_ref()])?);
         let base = git_stopped(workspace, &root, &["symbolic-ref".as_ref(), "refs/remotes/origin/HEAD".as_ref()])

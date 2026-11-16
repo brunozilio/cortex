@@ -1,64 +1,10 @@
 use domain::command::mode_label;
+use domain::conversation::Outcome;
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
-use sdk::{AskKind, EngineEvent, PermissionMode};
 use unicode_width::UnicodeWidthStr;
 
 use super::markdown;
-use super::transcript::{Entry, Transcript};
-
-const EXIT_PLAN: &str = "ExitPlanMode";
-const ENTER_PLAN: &str = "EnterPlanMode";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Outcome {
-    Waiting,
-    Approved(PermissionMode),
-    KeptPlanning,
-}
-
-impl Transcript {
-    pub(super) fn planned(&mut self, event: &EngineEvent) -> bool {
-        match event {
-            EngineEvent::ToolStarted(call) if call.name == EXIT_PLAN => {
-                self.plan_call = Some(call.id.clone());
-                self.activity = Some("Waiting for the plan's approval".into());
-            }
-            EngineEvent::ToolStarted(call) if call.name == ENTER_PLAN => {}
-            EngineEvent::Asked(ask) => match &ask.kind {
-                AskKind::Plan { plan } => {
-                    self.push(Entry::Plan { plan: plan.clone(), outcome: Outcome::Waiting });
-                }
-                _ => return false,
-            },
-            EngineEvent::ModeChanged(PermissionMode::Plan) => self.notice("Entered plan mode"),
-            EngineEvent::ModeChanged(mode) => self.settle_plan(Outcome::Approved(*mode)),
-            EngineEvent::ToolResult { id, failed, .. } if self.plan_call.as_ref() == Some(id) => {
-                if *failed {
-                    self.settle_plan(Outcome::KeptPlanning);
-                }
-                self.plan_call = None;
-            }
-            EngineEvent::Completed { .. } | EngineEvent::Failed(_) | EngineEvent::Cancelled => {
-                self.settle_plan(Outcome::KeptPlanning);
-                self.plan_call = None;
-                return false;
-            }
-            _ => return false,
-        }
-        true
-    }
-
-    fn settle_plan(&mut self, settled: Outcome) {
-        let waiting = self.entries.iter_mut().rev().find_map(|entry| match entry {
-            Entry::Plan { outcome, .. } if *outcome == Outcome::Waiting => Some(outcome),
-            _ => None,
-        });
-        if let Some(outcome) = waiting {
-            *outcome = settled;
-        }
-    }
-}
 
 pub fn lines(plan: &str, outcome: Outcome, width: usize, out: &mut Vec<Line<'static>>) {
     let (mark, header) = match outcome {

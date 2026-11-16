@@ -8,6 +8,11 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     if let Some(id) = input["delete"].as_str() {
         schedules::remove(client, id);
     }
+    if let Some(wanted) = input.get("create") {
+        let when = serde_json::from_value(wanted["when"].clone()).map_err(|error| error.to_string())?;
+        let prompt = wanted["prompt"].as_str().map(str::trim).filter(|prompt| !prompt.is_empty());
+        schedules::add(client, prompt.ok_or("a scheduled prompt needs its text")?, when, schedules::now())?;
+    }
     let due = if input["take_due"] == true { schedules::take_due(client, schedules::now()) } else { Vec::new() };
     Ok(json!({ "due": due, "scheduled": schedules::list(client) }))
 }
@@ -42,6 +47,20 @@ mod tests {
         assert!(listed(&ask(other, json!({})).expect("other"), "scheduled").is_empty());
         let deleted = ask(client, json!({ "delete": later.id })).expect("deleted");
         assert!(listed(&deleted, "scheduled").is_empty());
+        forget(client);
+    }
+
+    #[test]
+    fn a_client_schedules_a_prompt_of_its_own() {
+        let client = 77_003;
+        let ask = |input: Value| crate::feature::testing::local(client, |context| handle(context, input));
+        let at = schedules::now() + 600;
+        let made = ask(json!({ "create": { "prompt": "check the deploy", "when": { "at": at } } })).expect("made");
+        let kept = listed(&made, "scheduled");
+        assert_eq!(kept.len(), 1);
+        assert_eq!((kept[0].prompt.as_str(), &kept[0].when), ("check the deploy", &When::At(at)));
+        assert!(ask(json!({ "create": { "prompt": "  ", "when": { "at": at } } })).is_err(), "a prompt is needed");
+        assert!(ask(json!({ "create": { "prompt": "x", "when": "soon" } })).is_err());
         forget(client);
     }
 }

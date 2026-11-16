@@ -10,7 +10,6 @@ use crate::model::http::{ScriptedHttp, Sent};
 use crate::model::{ModelApi, TurnRequest};
 use crate::transcript::Message;
 
-
 pub fn request(model: &str) -> TurnRequest {
     TurnRequest {
         model: model.into(),

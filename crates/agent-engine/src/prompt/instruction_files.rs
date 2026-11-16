@@ -15,11 +15,12 @@ fn network(path: &Path) -> bool {
 fn trust_root(cwd: &Path) -> PathBuf {
     cwd.ancestors().find(|p| p.join(".git").exists()).unwrap_or(cwd).canonicalize().unwrap_or_else(|_| cwd.into())
 }
-struct Loader {
+struct Loader<'a> {
     seen: HashSet<PathBuf>,
     bytes: usize,
+    home: Option<&'a Path>,
 }
-impl Loader {
+impl Loader<'_> {
     fn read(&mut self, path: &Path, allowed: &Path, depth: usize) -> Result<String, String> {
         if depth > 5 {
             return Err("instruction import exceeds five levels".into());
@@ -79,7 +80,7 @@ impl Loader {
                 for capture in import.captures_iter(&importable) {
                     let name = capture[1].trim_matches('"').trim_end_matches([',', ';', ')']);
                     let target = if let Some(home) = name.strip_prefix("~/") {
-                        std::env::home_dir().unwrap_or_default().join(home)
+                        self.home.unwrap_or(Path::new("")).join(home)
                     } else {
                         path.parent().unwrap_or(allowed).join(name)
                     };
@@ -99,7 +100,7 @@ impl Loader {
     }
 }
 pub fn load(cwd: &Path, home: Option<&Path>) -> Vec<Instructions> {
-    let mut loader = Loader { seen: HashSet::new(), bytes: 0 };
+    let mut loader = Loader { seen: HashSet::new(), bytes: 0, home };
     let mut result = Vec::new();
     if let Some(root) = home.map(|home| home.join(brand::DIR))
         && let Ok(allowed) = root.canonicalize()
@@ -135,7 +136,7 @@ pub fn load(cwd: &Path, home: Option<&Path>) -> Vec<Instructions> {
     }
     result
 }
-pub fn nested(cwd: &Path) -> Vec<super::rules::Rule> {
+pub fn nested(cwd: &Path, home: Option<&Path>) -> Vec<super::rules::Rule> {
     let trusted = trust_root(cwd);
     let mut paths: Vec<_> = ignore::WalkBuilder::new(cwd)
         .hidden(false)
@@ -167,7 +168,7 @@ pub fn nested(cwd: &Path) -> Vec<super::rules::Rule> {
         let Ok(relative) = base.strip_prefix(cwd) else {
             continue;
         };
-        let mut loader = Loader { seen: HashSet::new(), bytes: 0 };
+        let mut loader = Loader { seen: HashSet::new(), bytes: 0, home };
         let (text, error) = match loader.read(&path, &trusted, 0) {
             Ok(text) => (text, None),
             Err(error) => (String::new(), Some(error)),

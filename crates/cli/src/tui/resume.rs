@@ -7,11 +7,14 @@ pub fn open(app: &mut App, query: Option<String>) {
         return app.transcript.notice("Wait for the agent to finish, or press Esc, before resuming another.");
     }
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.settings() {
-        Ok(settings) => {
-            let found = conversations::list(&settings, &cwd);
+    app.spawn(move |sdk| match sdk.sessions() {
+        Ok(listed) => {
             let query = query.unwrap_or_default();
-            Msg::Conversations(found.into_iter().filter(|c| titled(c, &query)).collect())
+            let real = |path: &std::path::Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+            let folder = real(&cwd);
+            let here = listed.into_iter().filter(|row| !row.archived && real(&row.cwd) == folder);
+            let found = here.map(|row| Conversation { session: row.session, title: row.title, at: row.updated });
+            Msg::Conversations(found.filter(|c| titled(c, &query)).collect())
         }
         Err(error) => Msg::Error(error.to_string()),
     });

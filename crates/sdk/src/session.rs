@@ -174,8 +174,18 @@ impl Session {
     }
 
     pub fn send_with_images(&self, prompt: &str, images: Vec<crate::Image>) -> Result<Run, Error> {
+        self.send_shown(prompt, images, None)
+    }
+
+    pub fn send_shown(
+        &self,
+        prompt: &str,
+        images: Vec<crate::Image>,
+        shown: Option<domain::request::Shown>,
+    ) -> Result<Run, Error> {
         let mut request = PromptRequest::plain(self.cwd.clone(), prompt, self.model.clone());
         request.images = images;
+        request.shown = shown;
         request.effort = self.effort;
         let mode = self.permission_mode();
         request.permission = mode;

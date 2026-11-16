@@ -1,4 +1,5 @@
 mod check;
+mod command;
 pub mod mcp;
 mod optimize;
 pub mod run;
@@ -13,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::memory::{MemorySearches, SearchAnswer, recall, search};
 use domain::{
-    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, ModelOption, Principal, PromptRequest, Provenance,
+    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, Principal, PromptRequest, Provenance,
     RecallBudget, RunId,
 };
 use platform::sync::Locked;
@@ -22,8 +23,9 @@ use serde_json::{Value, json};
 use store::{FileMemoryStore, InMemoryStore};
 use store::{MemoryStore, memory_store_in};
 
-use crate::feature::Context;
 use crate::services::LocalServices;
+
+pub use command::handle;
 
 pub const NAME: &str = "memory";
 
@@ -34,6 +36,7 @@ pub struct Memories {
     store: Arc<dyn MemoryStore>,
     books: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
     before_optimizing: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
+    homes: Arc<dyn crate::Homes>,
 }
 
 impl std::fmt::Debug for Memories {
@@ -42,50 +45,35 @@ impl std::fmt::Debug for Memories {
     }
 }
 
-pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
-    let memories = of(context.services);
-    let owner = context.principal;
-    let path: PathBuf = input["path"].as_str().map(PathBuf::from).ok_or("the memory feature needs a path")?;
-    match input["op"].as_str().unwrap_or("list") {
-        "list" => Ok(memories.load(owner, &path)),
-        "search" => Ok(memories.search_listing(owner, &path, input["query"].as_str().unwrap_or_default())),
-        "edit" => {
-            let edits: Vec<MemoryEdit> = serde_json::from_value(input["edits"].clone()).map_err(|e| e.to_string())?;
-            memories.edit(owner, &path, &edits, Provenance { author: Author::User, now: now(), origin: None })
-        }
-        "undo" => memories.undo(owner, &path),
-        "share" => {
-            let id = MemoryId(input["id"].as_u64().and_then(|id| u32::try_from(id).ok()).ok_or("say which memory")?);
-            let shared = memories.shared(owner, &path, id)?;
-            Ok(json!({ "path": path, "file": shared }))
-        }
-        "check" => memories.check(owner, &path),
-        "seed" => memories.seed(context, &path),
-        "seed_keep" => {
-            let picked: Vec<usize> = serde_json::from_value(input["picked"].clone()).map_err(|e| e.to_string())?;
-            memories.keep_seeds(context, &path, &picked)
-        }
-        "optimize" => {
-            let run: RunId = serde_json::from_value(input["run"].clone()).map_err(|e| e.to_string())?;
-            let model: ModelOption = serde_json::from_value(input["model"].clone()).map_err(|e| e.to_string())?;
-            (context.submit)(run, memories.optimization(owner, &path, model))?;
-            Ok(json!({ "run": run }))
-        }
-        other => Err(format!("the memory feature has no {other:?}")),
-    }
-}
-
 pub fn forget(_client: u64) {}
 
 pub fn of(services: &LocalServices) -> Memories {
     static ALL: LazyLock<Mutex<HashMap<Option<PathBuf>, Memories>>> = LazyLock::new(Mutex::default);
     let mut all = ALL.locked();
-    all.entry(services.data.clone()).or_insert_with(|| Memories::new(memory_store_in(services.data.clone()))).clone()
+    all.entry(services.data.clone())
+        .or_insert_with(|| {
+            Memories::new(memory_store_in(services.data.clone())).with_homes(Arc::clone(&services.homes))
+        })
+        .clone()
 }
 
 impl Memories {
     pub fn new(store: Arc<dyn MemoryStore>) -> Self {
-        Self { store, books: Arc::default(), before_optimizing: Arc::default() }
+        Self {
+            store,
+            books: Arc::default(),
+            before_optimizing: Arc::default(),
+            homes: Arc::new(crate::OwnerHome::none()),
+        }
+    }
+
+    pub fn with_homes(mut self, homes: Arc<dyn crate::Homes>) -> Self {
+        self.homes = homes;
+        self
+    }
+
+    fn home(&self, owner: &Principal) -> Option<PathBuf> {
+        self.homes.home(owner)
     }
 
     fn book<'a>(
@@ -159,7 +147,7 @@ impl Memories {
         limit: usize,
         searches: &mut MemorySearches,
     ) -> SearchAnswer {
-        let shared = team::load(project);
+        let shared = team::load(project, self.home(owner).as_deref());
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
         let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
@@ -182,7 +170,7 @@ impl Memories {
             let book = self.book(&mut books, owner, project);
             book.memories.iter().find(|memory| memory.id == id).cloned()
         };
-        team::share(project, &memory.ok_or("there is no such memory")?)
+        team::share(project, self.home(owner).as_deref(), &memory.ok_or("there is no such memory")?)
     }
 
     fn mark_used(&self, owner: &Principal, project: &Path, book: &mut MemoryBook, given: &[Memory]) {
@@ -206,7 +194,7 @@ impl Memories {
             return self.brief_optimization(owner, run, request);
         }
         let budget = if tool { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
-        let features = team::features(&request.cwd);
+        let features = team::features(&request.cwd, self.home(owner).as_deref());
         let anchors = features.on(domain::features::MEMORY_ANCHORS);
         let shared = team::load_if(&request.cwd, &features);
         let (recalled, tool, anchored) = {

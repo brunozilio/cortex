@@ -1,5 +1,5 @@
 use domain::{Choice, Question};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
@@ -14,43 +14,11 @@ pub struct AskUserQuestion;
 
 impl Tool for AskUserQuestion {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: ASK_TOOL.to_owned(),
-            description: crate::tools::describe("AskUserQuestion", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "questions": {
-                        "type": "array", "minItems": 1, "maxItems": MAX_QUESTIONS,
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "question": { "type": "string", "description": "The whole question, ending with a question mark." },
-                                "header": { "type": "string", "description": "A tag of at most 12 characters." },
-                                "multiSelect": { "type": "boolean", "default": false },
-                                "options": {
-                                    "type": "array", "minItems": 2, "maxItems": MAX_OPTIONS,
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "label": { "type": "string" },
-                                            "description": { "type": "string" },
-                                        },
-                                        "required": ["label", "description"],
-                                    },
-                                },
-                            },
-                            "required": ["question", "header", "options", "multiSelect"],
-                        },
-                    },
-                },
-                "required": ["questions"],
-            }),
-        }
+        crate::tools::declared(ASK_TOOL, &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(ASK_TOOL)
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -115,6 +83,7 @@ pub fn answers(questions: &[Question], picks: &[Vec<usize>]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn input() -> Value {
         json!({ "questions": [{

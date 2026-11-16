@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -15,6 +15,12 @@ use crate::tools::{Access, Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message};
 
 const DEEPEST: usize = 8;
+
+struct Script<'a> {
+    name: &'a str,
+    path: &'a str,
+    source: &'a str,
+}
 
 thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
@@ -115,20 +121,61 @@ impl Agent<'_> {
     }
 
     fn run_script(&self, id: &str, tool: &ScriptTool, input: &Value, parent: &[Message]) -> Outcome {
+        let path = tool.path.display().to_string();
+        let script = Script { name: &tool.spec.name, path: &path, source: &tool.source };
+        self.run_js(id, &script, input, parent, None)
+    }
+
+    pub(super) fn execute_declared(
+        &self,
+        id: &str,
+        name: &str,
+        input: &Value,
+        parent: &[Message],
+        builtin: &dyn Fn(&Value) -> Outcome,
+    ) -> Outcome {
+        let path = crate::tools::declared_path(name);
+        let Some(source) = content::source(&path) else { return builtin(input) };
+        let script = Script { name, path: &path, source: &source };
+        self.run_js(id, &script, input, parent, Some(builtin))
+    }
+
+    fn run_js(
+        &self,
+        id: &str,
+        script: &Script<'_>,
+        input: &Value,
+        parent: &[Message],
+        builtin: Option<&dyn Fn(&Value) -> Outcome>,
+    ) -> Outcome {
         let depth = DEPTH.with(Cell::get);
         if depth >= DEEPEST {
-            return Outcome::error(format!("{} called tools {DEEPEST} levels deep; stopped", tool.spec.name));
+            return Outcome::error(format!("{} called tools {DEEPEST} levels deep; stopped", script.name));
         }
         let (send, requests) = mpsc::channel::<Request>();
         let host: Arc<dyn script::Host> = Arc::new(Bridge(Mutex::new(send)));
         let data = self.script_context();
         let stop = Arc::clone(&self.workspace.stop);
-        let (path, source, input) = (tool.path.display().to_string(), tool.source.clone(), input.clone());
+        let export = if script::exports(script.path, script.source, "execute") { "execute" } else { "run" };
+        let (path, source, input) = (script.path.to_owned(), script.source.to_owned(), input.clone());
+        let last: RefCell<Option<Outcome>> = RefCell::new(None);
         DEPTH.with(|cell| cell.set(depth + 1));
         let result = std::thread::scope(|scope| {
-            let running = scope.spawn(move || script::run(&path, &source, "run", &[input], &data, host, stop));
+            let running = scope.spawn(move || script::run(&path, &source, export, &[input], &data, host, stop));
             loop {
                 match requests.recv_timeout(Duration::from_millis(25)) {
+                    Ok(request) if request.function == "builtin" => {
+                        let answer = match builtin {
+                            Some(builtin) => {
+                                let outcome = builtin(&request.arguments);
+                                let content = Value::String(outcome.content.clone());
+                                last.replace(Some(outcome));
+                                Ok(content)
+                            }
+                            None => Err(format!("{} has no built-in to call", script.name)),
+                        };
+                        let _ = request.reply.send(answer);
+                    }
                     Ok(request) => {
                         let answer = self.serve(id, &request.function, request.arguments, parent);
                         let _ = request.reply.send(answer);
@@ -140,11 +187,14 @@ impl Agent<'_> {
             running.join().unwrap_or_else(|_| Err("the script crashed".into()))
         });
         DEPTH.with(|cell| cell.set(depth));
-        match result {
-            Ok(Value::String(text)) => Outcome::ok(text),
-            Ok(Value::Null) => Outcome::ok(""),
-            Ok(value) => Outcome::ok(value.to_string()),
-            Err(error) => Outcome::error(format!("{} failed: {error}", tool.spec.name)),
+        let last = last.into_inner();
+        match (result, last) {
+            (Ok(Value::String(text)), Some(outcome)) if text == outcome.content => outcome,
+            (Err(_), Some(outcome)) if self.workspace.stop.load(std::sync::atomic::Ordering::Relaxed) => outcome,
+            (Ok(Value::String(text)), _) => Outcome::ok(text),
+            (Ok(Value::Null), _) => Outcome::ok(""),
+            (Ok(value), _) => Outcome::ok(value.to_string()),
+            (Err(error), _) => Outcome::error(format!("{} failed: {error}", script.name)),
         }
     }
 

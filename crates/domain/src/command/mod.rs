@@ -23,7 +23,6 @@ pub enum Command {
     Todos,
     Context,
     Vim,
-    Mouse,
     Resume(Option<String>),
     Fork,
     Export(Option<String>),
@@ -48,7 +47,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const HELP: [(&'static str, &'static str); 36] = [
+    pub const HELP: [(&'static str, &'static str); 35] = [
         ("help", "Show the commands and keys"),
         ("clear", "Clear the conversation and start fresh (also /new, /reset)"),
         ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
@@ -70,7 +69,6 @@ impl Command {
         ("todos", "Show the agent's task list (Ctrl+T shows or hides it)"),
         ("context", "Show what fills the context window and what is left"),
         ("vim", "Turn vim keys in the prompt on or off"),
-        ("mouse", "Let the mouse wheel scroll (select text with Shift/Option)"),
         ("skills", "List skills and commands, /skills new <what it does> writes one"),
         ("agents", "List agents, /agents new <what it does> writes one"),
         ("config", "Change the chat's settings"),
@@ -129,7 +127,6 @@ impl Command {
                 "config",
                 "statusline",
                 "vim",
-                "mouse",
                 "login",
                 "logout",
                 "doctor",
@@ -169,7 +166,6 @@ impl Command {
             "todos" | "tasks" => bare(Self::Todos),
             "context" => bare(Self::Context),
             "vim" => bare(Self::Vim),
-            "mouse" => bare(Self::Mouse),
             "resume" | "continue" => Some(Self::Resume(argument)),
             "fork" | "branch" => bare(Self::Fork),
             "skills" | "commands" | "agents" => match argument.as_deref().map(|a| a.split_once(' ').unwrap_or((a, "")))

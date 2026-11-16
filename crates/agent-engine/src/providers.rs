@@ -20,10 +20,7 @@ pub fn all() -> Vec<&'static dyn Provider> {
 }
 
 pub fn find(provider: ModelProvider) -> Option<&'static dyn Provider> {
-    ALL.iter()
-        .copied()
-        .find(|known| known.id() == provider.id())
-        .or_else(|| declared::find(provider))
+    ALL.iter().copied().find(|known| known.id() == provider.id()).or_else(|| declared::find(provider))
 }
 
 pub fn get(provider: ModelProvider) -> Result<&'static dyn Provider, ProviderError> {

@@ -27,7 +27,7 @@ the CLI, and `cli` reaches `backend` and `agent-engine` only in tests.
 | `llm-providers` | Model providers, one folder each under `src/providers/<name>/`, found by `build.rs` into a registry. Shared pieces: `Config`, OAuth (`oauth::browser`), request effort, catalog paging, the sign-in `Host`. No network of its own. |
 | `language-servers` | Language servers: `LspClient` (one process), `LspPool` (kept per name and root), first-use installs; downloads through a `Fetch` the engine gives it (`agent_engine::NetFetch`). Re-exported as `agent_engine::lsp`. |
 | `platform` | What differs per operating system: child processes started the same everywhere (`command`), `Tree` ending a process with its children, `bounded` waits, `private_file` (files only the current user can read), the data folders. |
-| `content` | Prompts, built-in skills, agents, styles and tool texts from `content/`, embedded at build time; a user's `~/.{command}/` copy overrides one. |
+| `content` | Prompts, agents, styles, tools and hooks as JavaScript modules, plus built-in skills, from `content/`, embedded at build time; a user's `~/.{command}/` copy overrides one. `text`/`render` run a module's `default` export (a string or a function of `ctx`), `value` reads a static export such as `spec`; a run that called nothing back is cached by source and data. A run's start copies the whole folder into `~/.{command}/` once per process (`install_once`), with `types.d.ts` for editors; `.content.json` keeps each copy's fingerprint, so an untouched copy follows the built-in when it changes or goes, and an edited one is the user's and is kept. A copy of a built-in tool in `~/.{command}/tools/` is that tool's override, never a script tool. |
 | `script` | The QuickJS runtime that runs JavaScript tools, skills and declared providers against a `Host`. |
 | `brand` | The product's name and command, from `brand.toml` (below). |
 | `code-map` | Experimental tree-sitter index of a repository (Rust, TypeScript/TSX, JavaScript, Python, Go): its functions and types and who calls whom (`extract`), ranked against a prompt into a short `<code-map>` block of pointers (`map`, pure), refreshed incrementally from a JSON cache keyed by path, size and mtime (`scan`, IO behind `Source`). |
@@ -44,12 +44,19 @@ filled with `brand::text`. Files that must spell it out (the binary's name
 in `crates/cli/Cargo.toml`, the workspace's authors, the repository's own `.{command}/`) are
 written by `cargo run -p xtask -- brand`; `xtask lint` fails when one is
 stale or another file names the product. README.md names the product too
-but is written by hand.
+but is written by hand, and so do the plugins kept in `plugins/`
+(`docs/plugins.md`): a plugin's manifest folder and
+`${{COMMAND}_PLUGIN_ROOT}` are spelled out, as in any installed plugin, so
+a renamed product renames them by hand.
 
 ## No comments in code
 
 Code carries no comments (a CLAUDE.md rule): no `//`, `///`, `//!` or
-`/* */` in Rust, no `#` comments in shell, Python or TOML. Names, types
+`/* */` in Rust, no `#` comments in shell, Python or TOML. JavaScript in
+`content/` carries only JSDoc type annotations pointing at
+`content/types.d.ts` (each hook's input and result per event, the hook's
+and the tool's `ctx`, `ToolSpec`), so an editor completes `input` and
+`ctx`; `tsc --checkJs --strict` passes on them. Names, types
 and tests say it; context belongs in docs/ or the commit message. `xtask
 lint` fails on a comment, and the
 `.claude/hooks/no-comments.sh` hook checks each edited file with `cargo
@@ -59,12 +66,40 @@ run -p xtask -- comments <file>`.
 
 A client sends `Envelope<ClientCommand>` to a `Backend` and polls
 `ServerEvent`s, woken by a `Wake` callback. `LocalBackend` runs everything
-in process on three worker threads (run control, skill and agent
-queries, memory), so a slow scan never delays a cancel. Every command carries a
+in process on two worker threads (run control; skill, agent and feature
+queries), so a slow scan never delays a cancel. Every command carries a
 `Principal` and passes an `Authorizer` (`LocalAuthorizer` accepts only the
 local owner); this is the seam for a future remote server. An
 `Envelope` also names its `protocol::VERSION`; the handler refuses another
 (or none) with `ServerEvent::Error` before authorizing it.
+
+### Seams for a multi-user server
+
+Everything runs where the backend runs: the engine, its tools, hooks, MCP
+and model calls. A server hosts the backend and swaps these, leaving the
+engine and the CLI as they are:
+
+- **Each person's folder** (`backend::Homes`): skills, agents, commands,
+  hooks, settings, instructions, plugins, MCP config, agent memory and
+  declared providers are read from `Homes::home(principal)`, which the
+  handler puts in the run's `Extensions::home`. The engine never reads the
+  machine's home (`brief::home`). `OwnerHome::system()` gives the local
+  owner `~` and a member nothing.
+- **Built-in content** (prompts, styles, tool texts, built-in skills) is the
+  installation's, not a person's: `content::use_folder` points it at the
+  organization's copy once per process, `~/.{command}` otherwise.
+- **Declared providers** register in one process-wide table, so on a server
+  they belong to the installation, not to each person.
+- **Model credentials** (`backend::SharedCredentials`): a person's own
+  account wins, else the holder the trait names (an organization's service
+  account) lends its key; tokens never leave the backend. `NothingShared`
+  locally.
+- **Where commands run** (`agent_engine::tools::Launcher`, set with
+  `NativeEngine::with_launcher`): Bash, background shells, hooks and test
+  runs start through it; `OnThisMachine` applies the local sandbox, a
+  server can wrap each command into a person's container. File tools read
+  and write the workspace folder directly, so a container mounts it.
+  MCP stdio servers and language servers do not go through it yet.
 
 ## Engines
 
@@ -115,6 +150,19 @@ a `PermissionMode`), Enter/ExitWorktree (session relocation),
 ListSessions (peers, tied to SendMessage routing) and Watch (calls another
 of the run's tools).
 
+Every built-in tool is declared in `content/tools/<Name>.js`, in the same
+shape as a script tool: `spec` (`name`, `access`: read, edit or execute,
+`input` schema, `description`; `input` and `description` may be functions
+of the data the Rust tool passes) and `execute(input, ctx)`. The Rust
+tool's `spec()` and `access()` read it (`tools::declared`,
+`declared_access`); the Rust side keeps only the behaviour. Each call runs
+`execute` (`Agent::execute_declared`), and `ctx.builtin(input)` enters the
+native path, with its permission check, so a user's copy in
+`~/.{command}/tools/` can change the input, the result or call other tools
+around it. When `execute` returns the built-in's text unchanged, the
+built-in's whole outcome (images, shown diff, error flag) is kept. A script
+tool exports `execute` too (`run` is still read).
+
 A feature that spans layers is one folder per layer, with the same name:
 `crates/agent-engine/src/tools/builtin/<name>/` (its tools),
 `crates/backend/src/features/<name>/` (`handle(&Context, input)` and
@@ -134,6 +182,13 @@ Inbox notices are core (`TakeNotices`).
 
 - **Built-in agents**: `Explore`, `Plan`, `general-purpose`, `fork`.
   Project or user agents of the same name replace them.
+- **How a sub-agent starts and ends** (`agent/sub_agent.rs`,
+  `agent/sub_agent_report.rs`): one started while planning is offered only
+  the tools planning allows (`permission::refused_while_planning`), so Bash,
+  the web tools and the editing tools are left out instead of refused call
+  by call. A model the provider does not serve is ignored and the report
+  says which model ran. A cancelled one ends as `AgentStatus::Cancelled`,
+  not `Failed`, and its result carries the answer it was still writing.
 - **SendMessage** (`agent/conversations.rs`): a finished sub-agent's
   report ends with its `agent_id`; `SendMessage` continues it with its
   conversation intact, on its original card. Agents last for the run (one
@@ -218,13 +273,36 @@ Inbox notices are core (`TakeNotices`).
   never waits on the user's own build; Go tests its package; Python and
   JavaScript run the test file beside the source (`test_<name>.py`,
   `<name>.test.ts`), JavaScript only with a `package.json`.
+- **Shorter command output** (rules in `domain::output`, applied by
+  `shell/shaped.rs` to a foreground `Bash` command that exited; each step
+  has its own flag, read into `Policy::output` as a `Shaping`):
+  `experimental-output-cleanup` runs the command with `PLAIN_ENV`
+  (`NO_COLOR`, `CARGO_TERM_COLOR=never`…) and `clean`s what it printed:
+  escape codes go, a line redrawn with `\r` keeps its last state, three or
+  more equal lines become one with `(×N)`, blank runs one blank line.
+  `experimental-output-filters` hides noise lines (passing tests, build
+  steps, progress) of cargo, git, npm/pnpm/yarn/bun/jest/vitest,
+  pytest/pip and go test, chosen by each part of the command
+  (`filter`); a piped command is left alone, a filter only drops lines
+  it knows, and one that saves under 400 characters gives way. Under
+  cargo, a warning that comes three times or more (same heading, whatever
+  it names in backticks) is shown once, followed by the places of the
+  others (`filters/warnings.rs`); errors always stay whole. The
+  whole (cleaned, redacted) output is kept in the session's
+  `persisted::results_dir` and the footer names the file, so the agent
+  can Read what was hidden; exit codes are untouched.
+  `experimental-output-savings` records each command's characters before
+  and after (`shell::savings`, per client, in memory) and the chat's
+  `/gain` (`output_savings` folders in the backend and CLI) shows them per
+  program (`report`). Output over 30,000 characters is still saved whole
+  and previewed by `agent/dispatch.rs`, with or without these flags.
 - **Automatic review** (`auto-review`; folder
   `tools/builtin/code_review/`, rules in `domain::review`): a reviewer
   next to the judge. When a top-level run changed files inside its
   folder (`Edit`, `Write`, `NotebookEdit`; a memory file in the
   temporary folder does not count) and is about to finish, a read-only child
   agent (`Read`, `Glob`, `Grep`, the run's system prompt with its
-  instructions, plus `content/prompts/reviewer.md`) reviews the changed
+  instructions, plus `content/prompts/reviewer.js`) reviews the changed
   files for defects and for docs or instructions the change made untrue,
   and answers JSON findings. `EngineEvent::Reviewed` carries them to the
   chat; a `high` finding sends the agent back once with a message that
@@ -316,12 +394,18 @@ Inbox notices are core (`TakeNotices`).
   `Usage::searches` and priced by `Vendor::search_price` into the run's cost), `Read` of PDFs
   (`pdftotext`) and notebooks, `NotebookEdit`, `Monitor` (waits for a
   check command), and `ToolSearch`: past 20 MCP tools their schemas wait
-  until loaded (`tools::tool_search`). A free query ignores words under
+  until loaded (`tools::tool_search`); loaded ones join the end of the
+  tool list in the order they were loaded, so the tools already sent stay
+  a cached prefix. A free query ignores words under
   three letters and ranks a word in a tool's name above one in its
   description; every answer names the tools still waiting, to load by
   `select:`. `Agent` takes `model` and `isolation: worktree` per call; a
   model the run's provider does not serve is ignored (the agent's own or
-  the run's is used), and a worktree needs a repository with a commit.
+  the run's is used), and outside a repository with a commit the agent
+  runs without the worktree and its result says so. The same holds for a
+  main agent whose definition asks for a worktree: `agent_runtime::prepare`
+  makes one only when the folder has a commit, and otherwise the agent
+  works in the folder.
 - **Repeated calls** (`domain::repeats`): a third call with the same tool
   and input in one run is not run, unless another tool that may change
   something ran in between; the agent is told its earlier result holds and
@@ -408,6 +492,15 @@ Inbox notices are core (`TakeNotices`).
   at start (`LocalServices::turned_off_in`), so a backend feature folder
   turned off in the settings joins `off` and its `handle` and `run.rs`
   are skipped.
+- **Git offer** (`domain::git_offer`, pure; flag `git-offer`): the chat
+  holds a new conversation's first prompt when the folder is not in a git
+  repository and asks, with the questions panel, whether to initialize
+  one (`tui/git_offer.rs`). The backend's `workspace` feature says whether
+  to offer (`git-offer`) and runs `git init` with an empty first commit,
+  so worktrees work at once (`git-init`; without a git identity the
+  commit is skipped and the chat says so). Any answer
+  sends the held prompt; "don't offer again" turns the flag off. It is
+  offered once per chat, never on a resumed conversation or in print mode.
 - **Sandbox** (`experimental-sandbox`, macOS only): `Bash` and `Monitor`
   commands run confined by the operating system. The rule is pure in
   `domain::sandbox`: a command reads anything but writes only inside the
@@ -457,9 +550,18 @@ Inbox notices are core (`TakeNotices`).
   `Block::Reminder` (sent as `<system-reminder>` text, left out of
   `Message::text`) on the latest user message whenever they change
   (`agent/reminders.rs`). Providers keep one cache key per
-  conversation (`model/conversation_key.rs`). Read sends a note for an
-  unchanged range already read (`tools/seen_files.rs`) and stops before
-  100k characters; long Bash output keeps its start and end. At the
+  conversation (`model/conversation_key.rs`); on the `messages` wire the
+  system prompt and the last tool each end a cached prefix and the
+  request's own `cache_control` caches the conversation up to its last
+  block, which the Anthropic and Claude providers send as they are. Read
+  sends a note for lines of an unchanged file that lie inside a range it
+  already showed (`tools/seen_files.rs`) and stops before 100k
+  characters; long Bash output keeps its start and end. A background
+  agent's report handed over when the run was about to finish is saved
+  and previewed like any long tool result (`agent/mod.rs`). Grep groups matching lines under their
+  file's path and shows 25 matches a file, 300 characters a line and 200
+  results (`head_limit` changes the last), saying how much each left out.
+  An MCP tool's structured result is sent as one line of JSON. At the
   compaction threshold, judged by the provider's token count
   (`upkeep::Counted`), old tool results are cleared first
   (`upkeep::clear_old_results`) and only then is the conversation
@@ -508,7 +610,7 @@ Inbox notices are core (`TakeNotices`).
   runs, what the user corrected (a denial with a note, a steer, repeats
   held back, a failed verification). After a run with two or more,
   `Session::learn` sends them as the `Learn` side call
-  (`chores::lesson`, `content/prompts/chore-learn.md`), which proposes at
+  (`chores::lesson`, `content/prompts/chore-learn.js`), which proposes at
   most one lasting lesson as JSON: a memory, a skill or a permission
   rule, with why. The chat shows it; `/learn keep` saves it (the memory
   through project memory, the rule through `suggested_rules`, the skill
@@ -616,26 +718,6 @@ Memory is reversible and kept without an LLM:
   overwritten. Saves `fsync` before the rename. Without an app data folder
   memory lives only in the process.
 
-## Language servers
-
-The agent navigates code through language servers. What they
-mean is pure in `domain::lsp`: the built-in servers and the
-`lspServers` layers (user, project, plugins' `.lsp.json`), the server and
-project root for a file, the `LSP` tool's questions and how answers and
-diagnostics read. The `language-servers` crate (`agent_engine::lsp`) runs them: `LspClient` (one
-process, `Content-Length` framing, a reader thread routing answers and
-published diagnostics) and `LspPool` (one server per name and root, kept
-by the `NativeEngine` across runs, ended after 10 idle minutes), behind
-`LanguageServers` so tests script them (`lsp::fake`).
-
-A built-in server missing from PATH is installed on first use:
-`domain::lsp::install` says how for each platform, every server at a
-pinned version (rust-analyzer's and clangd's GitHub releases, each with
-the SHA-256 its download must have, or nothing is installed; `npm
-install` for typescript, on TypeScript 6 because 7 has no `tsserver`,
-and pyright; `go install` for gopls) and `lsp::Downloads` does it into
-`<local data>/lsp/<server>/`,
-staging in a sibling folder and renaming it into place; an install
 Context features (each `experimental-`, flags in `domain::features::learnings`;
 on until turned off, like every flag):
 - **Memories about files** (`experimental-memory-anchors`; rules in
@@ -679,6 +761,26 @@ on until turned off, like every flag):
   `<code-map>` block. Calls are matched by name, so common names gather
   callers from unrelated types.
 
+## Language servers
+
+The agent navigates code through language servers. What they
+mean is pure in `domain::lsp`: the built-in servers and the
+`lspServers` layers (user, project, plugins' `.lsp.json`), the server and
+project root for a file, the `LSP` tool's questions and how answers and
+diagnostics read. The `language-servers` crate (`agent_engine::lsp`) runs them: `LspClient` (one
+process, `Content-Length` framing, a reader thread routing answers and
+published diagnostics) and `LspPool` (one server per name and root, kept
+by the `NativeEngine` across runs, ended after 10 idle minutes), behind
+`LanguageServers` so tests script them (`lsp::fake`).
+
+A built-in server missing from PATH is installed on first use:
+`domain::lsp::install` says how for each platform, every server at a
+pinned version (rust-analyzer's and clangd's GitHub releases, each with
+the SHA-256 its download must have, or nothing is installed; `npm
+install` for typescript, on TypeScript 6 because 7 has no `tsserver`,
+and pyright; `go install` for gopls) and `lsp::Downloads` does it into
+`<local data>/lsp/<server>/`,
+staging in a sibling folder and renaming it into place; an install
 another process finished meanwhile is kept as it is. The backend's
 engine turns it on (`LspPool::installing`); without it only PATH
 counts. Only the `LSP` tool starts an install and waits for it
@@ -698,6 +800,15 @@ what is not installed; `Edit` and `Write` append the
 file's errors and warnings as `<diagnostics>`. `tests/real_lsp.rs`
 (ignored) runs against clangd and installs rust-analyzer, typescript and
 clangd from the network.
+
+With `experimental-blast-radius` (`Workspace::blast_radius`; rules in
+`domain::lsp::blast`), `Edit` and `Write` also tell the agent who uses
+what it changed: the lines between the unchanged head and tail of the
+file, the innermost functions, methods, types and constants around them
+(`textDocument/documentSymbol`, at most three) and their references
+outside the file (`textDocument/references`, two seconds each), grouped
+by file in `<callers>`. Like diagnostics it never starts or waits for an
+install (`Lsp::callers`).
 
 ## Skills, agents and MCP
 
@@ -719,15 +830,6 @@ whole (`agent_engine::plugins`): skills, commands and agents as
 `~/.{command}/plugins/`; a plugin whose
 hooks or servers do not parse is left out, the run goes on. Every run
 rereads them; `/reload` refreshes what the chat keeps and lists them.
-With `experimental-blast-radius` (`Workspace::blast_radius`; rules in
-`domain::lsp::blast`), `Edit` and `Write` also tell the agent who uses
-what it changed: the lines between the unchanged head and tail of the
-file, the innermost functions, methods, types and constants around them
-(`textDocument/documentSymbol`, at most three) and their references
-outside the file (`textDocument/references`, two seconds each), grouped
-by file in `<callers>`. Like diagnostics it never starts or waits for an
-install (`Lsp::callers`).
-
 
 ## The SDK and the CLI
 
@@ -784,6 +886,35 @@ book change the same way (`ProviderStore::update`, `MemoryStore::update`), and
 every store writes through a unique temporary file and a rename. The system keychain is not used: macOS would ask to
 allow each new unsigned build of the binary.
 
+## Conversations and the catalog
+
+- **The conversation is folded in `domain`** (`domain::conversation`): a
+  `Transcript` takes `EngineEvent`s and keeps the entries shown, the
+  session's `SessionStatus`, the ask that waits (and which sub-agent asks:
+  a sub-agent's `Asked` is first emitted as its own `AgentEvent`), each
+  sub-agent's own conversation and the folder a session moved to. The
+  terminal draws from this fold. A `Transcript::recording()` also tells what
+  each event changed (`Change`); `replay` rebuilds a conversation from a
+  session's log.
+- **The catalog of sessions is the backend's** (`SessionCatalog`, one
+  `sessions.json` per owner; rules in `domain::catalog`). Every run that is
+  not a side chore lists its session when it starts and updates its status
+  when it asks, is answered and ends (`catalog::Listing`, from the run
+  sink). The `sessions` feature lists, renames, archives, deletes and marks
+  them seen, and reads one's history back (`Prompted` and `Event` records).
+  The conversations the terminal kept in the settings are brought in once.
+  The terminal's `/resume` lists the folder's sessions from this catalog,
+  and the name the terminal gives a conversation is written to it.
+- **One SDK client per session.** Queries carry no correlation id and
+  notices, schedules and background commands are kept per client, so
+  `Sdk::sibling()` opens another client over the same `LocalServices`.
+- **A line typed with `!`** runs through the backend's `shell` feature
+  (`run`, with `platform::typed`) and is told to the agent with the next
+  prompt (`conversation::with_shell`). It runs on this machine as the user,
+  not through the engine's `Launcher`, so a multi-user server must refuse or
+  wrap it. The feature's `output` shows a background command's last output
+  without moving what the agent has read.
+
 ## Sessions
 
 The engine keeps each session's transcript (`FileSessions`, one JSONL file
@@ -835,6 +966,18 @@ the followed session's runs alone (`"only": "current"`) and sends them
 when they changed; the page injects a `#live` block naming the stream,
 swaps that session in place and follows its newest run. The server lives
 as long as the chat; when it cannot start, `/trace` opens the file.
+
+The live page also shows the folder's sessions as a board (needs you,
+running, done, failed) from the catalog (`trace::board`, read at `GET
+/sessions` and refreshed by the tick), and writes to the session it shows:
+`POST /prompt` (the token, and the page's own origin when a browser sends
+one) leaves the text for the tick, which hands it to the chat as if typed
+when it is the chat's own session, steers a run the page started, or
+otherwise resumes that session on a sibling SDK client with the chat's
+model, mode and effort (`trace::outside`). Such a run answers no asks: they
+are denied, as in `Run::text`. `POST /watch` names the session the page
+opened, so its runs are sent once and again while the catalog says it is
+active.
 
 `trace.html` is built, not written by hand: its source is the React,
 Tailwind and shadcn/ui app in `web/trace` (types in `src/types.ts` mirror

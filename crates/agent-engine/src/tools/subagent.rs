@@ -113,28 +113,11 @@ impl Tool for AgentTool {
     fn spec(&self) -> ToolSpec {
         let agents: Vec<Value> =
             self.agents.iter().map(|agent| json!({ "name": agent.name, "description": agent.description })).collect();
-        let description = crate::tools::describe("Agent", &json!({ "agents": agents }));
-        ToolSpec {
-            name: AGENT_TOOL.to_owned(),
-            description,
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "description": { "type": "string", "description": "A short description of the task, 3 to 5 words." },
-                    "prompt": { "type": "string", "description": "The task for the agent to carry out." },
-                    "max_turns":{"type":"integer","minimum":1,"maximum":200},
-                    "run_in_background": { "type": "boolean", "description": "Run concurrently and return a task_id. Collect its report with TaskOutput." },
-                    "subagent_type": { "type": "string", "description": "The kind of agent; general-purpose when left out." },
-                    "model": { "type": "string", "description": "A model for this agent: an id or short name your own provider serves. One it does not serve is ignored and the agent's own or yours is used, as when left out." },
-                    "isolation": { "enum": ["worktree"], "description": "worktree: work in a git worktree of its own, kept when it changed something." },
-                },
-                "required": ["description", "prompt"],
-            }),
-        }
+        crate::tools::declared(AGENT_TOOL, &json!({ "agents": agents }))
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(AGENT_TOOL)
     }
 
     fn summary(&self, input: &Value) -> String {

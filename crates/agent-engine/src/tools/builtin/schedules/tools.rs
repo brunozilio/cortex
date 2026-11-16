@@ -5,24 +5,11 @@ pub struct CronCreate;
 
 impl Tool for CronCreate {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "CronCreate".into(),
-            description: crate::tools::describe("CronCreate", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "cron": { "type": "string" },
-                    "prompt": { "type": "string", "description": "What to send when it fires." },
-                    "recurring": { "type": "boolean", "description": "Every match (default) or only the next." }
-                },
-                "required": ["cron", "prompt"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("CronCreate", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access("CronCreate")
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -50,24 +37,11 @@ const WAKE: (i64, i64) = (60, 3600);
 
 impl Tool for ScheduleWakeup {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "ScheduleWakeup".into(),
-            description: crate::tools::describe("ScheduleWakeup", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "delaySeconds": { "type": "number" },
-                    "prompt": { "type": "string" },
-                    "reason": { "type": "string", "description": "Why this delay, in one sentence." }
-                },
-                "required": ["delaySeconds", "prompt"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("ScheduleWakeup", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access("ScheduleWakeup")
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -95,15 +69,11 @@ pub struct CronList;
 
 impl Tool for CronList {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "CronList".into(),
-            description: crate::tools::describe("CronList", &serde_json::Value::Null),
-            schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
-        }
+        crate::tools::declared("CronList", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("CronList")
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -121,20 +91,11 @@ pub struct CronDelete;
 
 impl Tool for CronDelete {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "CronDelete".into(),
-            description: crate::tools::describe("CronDelete", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": { "id": { "type": "string" } },
-                "required": ["id"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("CronDelete", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("CronDelete")
     }
 
     fn summary(&self, input: &Value) -> String {

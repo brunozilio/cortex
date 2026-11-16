@@ -14,12 +14,12 @@ mod diff_model;
 mod diff_view;
 mod diffs;
 pub(crate) mod dirs;
-mod drafted;
 mod editor;
 mod entries;
 mod export;
 mod features;
 mod git;
+mod git_offer;
 mod highlight;
 mod info;
 mod inline;
@@ -42,6 +42,7 @@ mod resume;
 mod rewind;
 mod runs;
 mod search;
+mod selection;
 mod settings;
 mod shell;
 mod side;
@@ -93,6 +94,14 @@ pub use app::App;
 pub use features::cli as feature_command;
 pub use settings::last_session;
 
+fn capture_mouse(on: bool) {
+    let _ = if on {
+        execute!(std::io::stdout(), event::EnableMouseCapture)
+    } else {
+        execute!(std::io::stdout(), event::DisableMouseCapture)
+    };
+}
+
 const FRAME: Duration = Duration::from_millis(80);
 const ANIMATING: Duration = Duration::from_millis(33);
 
@@ -142,6 +151,7 @@ pub fn run(
         inline::print(&mut terminal, view::welcome(&app, width))?;
     }
     let _ = execute!(std::io::stdout(), EnableBracketedPaste, event::EnableFocusChange);
+    capture_mouse(!start.inline);
     let enhanced = supports_keyboard_enhancement().unwrap_or(false)
         && execute!(
             std::io::stdout(),
@@ -151,7 +161,6 @@ pub fn run(
     let result = (|| -> std::io::Result<()> {
         let mut first = prompt;
         let mut named: Option<String> = None;
-        let mut mouse_on = false;
         let mut pick = start.pick;
         while !app.quit {
             while let Ok(msg) = app.rx.try_recv() {
@@ -180,17 +189,21 @@ pub fn run(
             auto_retry::tick(&mut app);
             statusline::refresh(&mut app);
             inline::flush(&mut terminal, &mut app)?;
-            terminal.draw(|frame| view::draw(frame, &app))?;
+            let mut selected = None;
+            terminal.draw(|frame| {
+                view::draw(frame, &app);
+                selected = selection::show(frame.buffer_mut(), &app.selection);
+            })?;
+            selection::copied(&mut app, selected);
             let wait = if app.motion.borrow().animating() { ANIMATING } else { FRAME };
             if event::poll(wait)? {
                 match event::read()? {
-                    Event::Key(key) => keys::key(&mut app, key),
+                    Event::Key(key) => {
+                        app.selection.clear();
+                        keys::key(&mut app, key);
+                    }
                     Event::Paste(text) => keys::paste(&mut app, &text),
-                    Event::Mouse(mouse) => match mouse.kind {
-                        event::MouseEventKind::ScrollUp => app.scroll = app.scroll.saturating_add(3),
-                        event::MouseEventKind::ScrollDown => app.scroll = app.scroll.saturating_sub(3),
-                        _ => {}
-                    },
+                    Event::Mouse(mouse) => selection::mouse(&mut app, mouse),
                     Event::FocusGained => app.focused = true,
                     Event::FocusLost => app.focused = false,
                     _ => {}
@@ -199,20 +212,14 @@ pub fn run(
             if std::mem::take(&mut app.redraw) {
                 terminal.clear()?;
             }
-            if app.mouse != mouse_on {
-                mouse_on = app.mouse;
-                let _ = if mouse_on {
-                    execute!(std::io::stdout(), event::EnableMouseCapture)
-                } else {
-                    execute!(std::io::stdout(), event::DisableMouseCapture)
-                };
-            }
             if std::mem::take(&mut app.external_edit) {
                 let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange);
+                capture_mouse(false);
                 ratatui::restore();
                 let edited = editor::edit(&editor::named(), app.input.text());
                 terminal = inline::terminal(app.inline.is_some());
                 let _ = execute!(std::io::stdout(), EnableBracketedPaste, event::EnableFocusChange);
+                capture_mouse(app.inline.is_none());
                 match edited {
                     Ok(text) => app.input.set(&text),
                     Err(error) => app.transcript.error(error),
@@ -220,10 +227,12 @@ pub fn run(
             }
             if let Some(path) = app.edit_file.take() {
                 let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange);
+                capture_mouse(false);
                 ratatui::restore();
                 let opened = editor::open(&editor::named(), &path);
                 terminal = inline::terminal(app.inline.is_some());
                 let _ = execute!(std::io::stdout(), EnableBracketedPaste, event::EnableFocusChange);
+                capture_mouse(app.inline.is_none());
                 match opened {
                     Ok(()) => app
                         .transcript
@@ -243,7 +252,8 @@ pub fn run(
     if enhanced {
         let _ = execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
     }
-    let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange, event::DisableMouseCapture);
+    let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange);
+    capture_mouse(false);
     ratatui::restore();
     if app.session.as_ref().and_then(sdk::Session::id).is_some() {
         println!("Continue this conversation with: {brand_command} -c", brand_command = brand::COMMAND);

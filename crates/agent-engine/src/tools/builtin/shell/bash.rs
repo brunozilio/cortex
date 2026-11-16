@@ -2,6 +2,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use super::clip_middle;
+use super::shaped::shaped;
 use super::shells::Waited;
 use crate::model::ToolSpec;
 use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
@@ -17,29 +18,14 @@ pub struct Bash;
 impl Tool for Bash {
     fn spec(&self) -> ToolSpec {
         let shell = platform::shell_name();
-        ToolSpec {
-            name: "Bash".into(),
-            description: crate::tools::describe(
-                "Bash",
-                &serde_json::json!({ "default_timeout": DEFAULT_TIMEOUT.as_millis(), "max_timeout": MAX_TIMEOUT.as_millis(), "OUTPUT": OUTPUT, "shell": shell }),
-            ),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "command": { "type": "string", "description": "The command to run." },
-                    "timeout": { "type": "integer", "description": "Milliseconds before it is stopped." },
-                    "run_in_background": { "type": "boolean", "description": "Leave it running and return its id at once." },
-                    "unsandboxed": { "type": "boolean", "description": "Run outside the sandbox. Only after the sandbox refused a command the task truly needs; the user is always asked." },
-                    "description": { "type": "string", "description": "What the command does, in plain active words the user reads, often without seeing the command: do not echo its text, flags or paths. Five to ten words for simple commands (`git status` → \"Show working tree status\"); more context for pipes or obscure flags (`git reset --hard origin/main` → \"Discard all local changes and match remote main\"). Never call a command \"complex\" or \"risky\": say what it does." }
-                },
-                "required": ["command"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared(
+            "Bash",
+            &json!({ "default_timeout": DEFAULT_TIMEOUT.as_millis(), "max_timeout": MAX_TIMEOUT.as_millis(), "OUTPUT": OUTPUT, "shell": shell }),
+        )
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access("Bash")
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -63,6 +49,7 @@ impl Tool for Bash {
             shell(command, workspace)
         };
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        super::shaped::plain(&mut shell, workspace);
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
             return match super::shells::start(workspace, command, &mut shell) {
                 Ok(id) => {
@@ -86,7 +73,7 @@ impl Tool for Bash {
         }
         let mut outcome = match waited {
             Waited::Exited { output, success: true, .. } => {
-                let text = clip_middle(&output, OUTPUT);
+                let text = clip_middle(&shaped(command, &output, workspace), OUTPUT);
                 Outcome::ok(if text.is_empty() { "(no output)".to_owned() } else { text })
             }
             Waited::Exited { output, code, .. } => {
@@ -94,7 +81,9 @@ impl Tool for Bash {
                 let refused = workspace.sandboxed() && domain::sandbox::blocked(&output);
                 let hint = if refused { format!("\n{}", domain::sandbox::hint(brand::DIR)) } else { String::new() };
                 Outcome::error(
-                    format!("{}\n(exit code {code}){hint}", clip_middle(&output, OUTPUT)).trim_start().to_owned(),
+                    format!("{}\n(exit code {code}){hint}", clip_middle(&shaped(command, &output, workspace), OUTPUT))
+                        .trim_start()
+                        .to_owned(),
                 )
             }
             Waited::Detached => {
@@ -162,6 +151,16 @@ mod tests {
 
         let failed = Bash.run(&json!({"command": "exit 3"}), &workspace);
         assert_eq!(failed, Outcome::error("(exit code 3)"));
+    }
+
+    #[test]
+    fn with_output_cleanup_a_command_runs_without_colours_and_its_escape_codes_are_dropped() {
+        let mut workspace = Workspace::new(std::env::temp_dir());
+        let command = json!({"command": "printf '\\033[31m%s\\033[0m' \"$NO_COLOR\""});
+        assert!(Bash.run(&command, &workspace).content.starts_with("\u{1b}[31m"));
+
+        workspace.policy.output.cleanup = true;
+        assert_eq!(Bash.run(&command, &workspace), Outcome::ok("1"));
     }
 
     #[test]

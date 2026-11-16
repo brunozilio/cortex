@@ -1,6 +1,8 @@
 use crate::frontmatter::parse as parse_frontmatter;
 use serde_json::Value;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+pub const MANAGED: &str = "managed-settings.json";
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Style {
     pub name: String,
@@ -125,84 +127,85 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     }
     let mut seen = std::collections::HashSet::new();
     roots.retain(|root| seen.insert(root.canonicalize().unwrap_or_else(|_| root.clone())));
-    for root in &roots {
-        hooks.extend(&crate::hooks::Hooks::from_scripts(&root.join("hooks")));
-    }
+    hooks.extend(&crate::hooks::Hooks::gathered(home, &roots));
     let project_criteria = super::criteria_file::nearest(roots.iter().filter(|root| !is_user_root(root)));
-    for root in &roots {
-        for name in ["settings.json", "settings.local.json"] {
-            let path = root.join(name);
-            let text = match std::fs::read_to_string(&path) {
-                Ok(text) => text,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(format!("{}: {e}", path.display())),
-            };
-            let settings: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-            let owners = is_user_root(root) || name == "settings.local.json";
-            if owners {
-                mcp_approval.read(&settings);
-                let named = settings["enabledProviders"].as_array().into_iter().flatten();
-                enabled_providers.extend(named.filter_map(|id| id.as_str().map(str::to_owned)));
-            }
-            super::permissions::read(&settings, owners, &mut permissions, &mut added_dirs)
+    let mut files: Vec<(PathBuf, bool)> = roots
+        .iter()
+        .flat_map(|root| {
+            ["settings.json", "settings.local.json"]
+                .map(|name| (root.join(name), is_user_root(root) || name == "settings.local.json"))
+        })
+        .collect();
+    files.extend(home.map(|home| (home.join(brand::DIR).join(MANAGED), true)));
+    for (path, owners) in files {
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        };
+        let settings: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+        if owners {
+            mcp_approval.read(&settings);
+            let named = settings["enabledProviders"].as_array().into_iter().flatten();
+            enabled_providers.extend(named.filter_map(|id| id.as_str().map(str::to_owned)));
+        }
+        super::permissions::read(&settings, owners, &mut permissions, &mut added_dirs)
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        if owners {
+            super::permissions::read_judge(&settings, &mut judge_allow)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
-            if owners {
-                super::permissions::read_judge(&settings, &mut judge_allow)
-                    .map_err(|e| format!("{}: {e}", path.display()))?;
-            }
-            if let Some(value) = settings.get("scripts") {
-                scripts = scripts.layered(value, owners)?;
-            }
-            if let Some(value) = settings.get("features") {
-                features = features.layered(value, owners).map_err(|e| format!("{}: {e}", path.display()))?;
-            }
-            if let Some(value) = settings.get("sandbox") {
-                sandbox = sandbox.layered(value, owners).map_err(|e| format!("{}: {e}", path.display()))?;
-            }
-            if let Some(value) = settings.get("autoMemoryEnabled") {
-                auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;
-            }
-            if let Some(value) = settings.get("agent") {
-                agent = if value.is_null() {
-                    None
-                } else {
-                    Some(value.as_str().ok_or("agent setting must be a name")?.to_owned())
-                };
-            }
-            if let Some(value) = settings.get("advisorModel") {
-                advisor = model_name(value, "advisorModel")?;
-            }
-            if let Some(value) = settings.get("judgeModel") {
-                judge = model_name(value, "judgeModel")?;
-            }
-            if owners && let Some(value) = settings.get("escalationModel") {
-                escalation = model_name(value, "escalationModel")?;
-            }
-            if let Some(value) = settings.get("fallbackModel") {
-                fallbacks = model_names(value, "fallbackModel")?;
-            }
-            if let Some(value) = settings.get("smallModel") {
-                small_model = model_name(value, "smallModel")?;
-            }
-            if let Some(value) = settings.get("hooks") {
-                hooks
-                    .extend(&crate::hooks::Hooks::parse(value).map_err(|e| format!("{}: hooks: {e}", path.display()))?);
-            }
-            if let Some(value) = settings.get("lspServers") {
-                let layer: LspLayer = serde_json::from_value(value.clone())
-                    .map_err(|e| format!("{}: lspServers: {e}", path.display()))?;
-                lsp_servers.push(if owners {
-                    layer
-                } else {
-                    layer.into_iter().map(|(server, config)| (server, config.without_commands())).collect()
-                });
-            }
-            if let Some(style) = settings["outputStyle"].as_str() {
-                selected = style.to_owned();
-            }
-            if let Some(value) = settings.get("jsonSchema") {
-                schema = (!value.is_null()).then(|| value.clone());
-            }
+        }
+        if let Some(value) = settings.get("scripts") {
+            scripts = scripts.layered(value, owners)?;
+        }
+        if let Some(value) = settings.get("features") {
+            features = features.layered(value, owners).map_err(|e| format!("{}: {e}", path.display()))?;
+        }
+        if let Some(value) = settings.get("sandbox") {
+            sandbox = sandbox.layered(value, owners).map_err(|e| format!("{}: {e}", path.display()))?;
+        }
+        if let Some(value) = settings.get("autoMemoryEnabled") {
+            auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;
+        }
+        if let Some(value) = settings.get("agent") {
+            agent = if value.is_null() {
+                None
+            } else {
+                Some(value.as_str().ok_or("agent setting must be a name")?.to_owned())
+            };
+        }
+        if let Some(value) = settings.get("advisorModel") {
+            advisor = model_name(value, "advisorModel")?;
+        }
+        if let Some(value) = settings.get("judgeModel") {
+            judge = model_name(value, "judgeModel")?;
+        }
+        if owners && let Some(value) = settings.get("escalationModel") {
+            escalation = model_name(value, "escalationModel")?;
+        }
+        if let Some(value) = settings.get("fallbackModel") {
+            fallbacks = model_names(value, "fallbackModel")?;
+        }
+        if let Some(value) = settings.get("smallModel") {
+            small_model = model_name(value, "smallModel")?;
+        }
+        if let Some(value) = settings.get("hooks") {
+            hooks.extend(&crate::hooks::Hooks::parse(value).map_err(|e| format!("{}: hooks: {e}", path.display()))?);
+        }
+        if let Some(value) = settings.get("lspServers") {
+            let layer: LspLayer =
+                serde_json::from_value(value.clone()).map_err(|e| format!("{}: lspServers: {e}", path.display()))?;
+            lsp_servers.push(if owners {
+                layer
+            } else {
+                layer.into_iter().map(|(server, config)| (server, config.without_commands())).collect()
+            });
+        }
+        if let Some(style) = settings["outputStyle"].as_str() {
+            selected = style.to_owned();
+        }
+        if let Some(value) = settings.get("jsonSchema") {
+            schema = (!value.is_null()).then(|| value.clone());
         }
     }
     for plugin in plugins {

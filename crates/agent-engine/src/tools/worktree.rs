@@ -1,4 +1,4 @@
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::{Access, Outcome, Tool, Workspace, field};
 use crate::model::ToolSpec;
@@ -11,15 +11,11 @@ pub struct EnterWorktree;
 
 impl Tool for EnterWorktree {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: ENTER_WORKTREE.into(),
-            description: crate::tools::describe("EnterWorktree", &serde_json::Value::Null),
-            schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
-        }
+        crate::tools::declared(ENTER_WORKTREE, &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access(ENTER_WORKTREE)
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -36,23 +32,11 @@ pub struct ExitWorktree;
 
 impl Tool for ExitWorktree {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: EXIT_WORKTREE.into(),
-            description: crate::tools::describe("ExitWorktree", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "action": { "type": "string", "enum": ["keep", "remove"] },
-                    "discard_changes": { "type": "boolean" }
-                },
-                "required": ["action"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared(EXIT_WORKTREE, &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access(EXIT_WORKTREE)
     }
 
     fn summary(&self, input: &Value) -> String {

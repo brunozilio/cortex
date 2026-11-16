@@ -44,6 +44,12 @@ impl ProviderBook {
         self.accounts.remove(&provider)
     }
 
+    pub fn over(&self, shared: &ProviderBook) -> ProviderBook {
+        let mut accounts = shared.accounts.clone();
+        accounts.extend(self.accounts.clone());
+        ProviderBook { accounts }
+    }
+
     pub fn summaries(&self, known: impl IntoIterator<Item = ProviderInfo>) -> Vec<ProviderSummary> {
         known
             .into_iter()
@@ -145,6 +151,19 @@ mod tests {
 
     fn account(label: &str) -> ProviderAccount {
         ProviderAccount { label: label.into(), since_unix: 10 }
+    }
+
+    #[test]
+    fn an_owner_s_own_account_wins_over_the_shared_one_which_fills_the_rest() {
+        let (mine, theirs) = (ModelProvider::new("mine"), ModelProvider::new("theirs"));
+        let mut own = ProviderBook::default();
+        own.connect(mine, account("own"));
+        let mut shared = ProviderBook::default();
+        shared.connect(mine, account("org"));
+        shared.connect(theirs, account("org"));
+        let seen = own.over(&shared);
+        assert_eq!(seen.get(mine).map(|a| a.label.as_str()), Some("own"));
+        assert_eq!(seen.get(theirs).map(|a| a.label.as_str()), Some("org"));
     }
 
     #[test]

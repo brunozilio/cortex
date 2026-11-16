@@ -58,6 +58,56 @@ impl Agent<'_> {
         let shown_summary = self.workspace.policy.redacted(&summary);
         let shown_input = redacted_value(input, &|text| self.workspace.policy.redacted(text));
         (self.emit)(EngineEvent::ToolStarted(ToolCall::new(id, name, shown_summary).with_input(shown_input)));
+        let native = |input: &Value| -> Outcome {
+            let summary = tool.map(|tool| tool.summary(input)).unwrap_or_default();
+            if name == "TaskOutput" {
+                tasks.output(input)
+            } else if name == "TaskStop" {
+                tasks.stop(input)
+            } else if name == "TaskList" {
+                tasks.list(|| {
+                    tool.map(|tool| tool.run(input, self.workspace))
+                        .and_then(|out| serde_json::from_str::<Value>(&out.content).ok())
+                        .unwrap_or_else(|| json!([]))
+                })
+            } else if let Some(outcome) = tool.and_then(|tool| {
+                let agent = crate::tools::Consult {
+                    api: self.api,
+                    request: &self.request,
+                    conversation: parent,
+                    stop: self.control.stop_flag(),
+                };
+                tool.consult(input, self.workspace, &agent)
+            }) {
+                outcome
+            } else {
+                let permission = pre.permission.as_deref();
+                match tool {
+                    None => Outcome::error(format!("There is no tool named {name}.")),
+                    Some(_) if name == ASK_TOOL => self.ask_user(id, input),
+                    Some(_) if name == EXIT_PLAN_TOOL => self.exit_plan_mode(id, input),
+                    Some(_) if name == ENTER_PLAN_TOOL => self.enter_plan_mode(),
+                    Some(_) if name == ENTER_WORKTREE => self.enter_worktree(tasks),
+                    Some(_) if name == EXIT_WORKTREE => self.exit_worktree(input, tasks),
+                    Some(_) if name == AGENT_TOOL && (AgentTool { agents: self.agents.to_vec() }).background(input) => {
+                        self.start_background(input, tasks, parent, spawn)
+                    }
+                    Some(_) if name == AGENT_TOOL => {
+                        self.sub_agent_with(input, self.control, self.workspace, parent, &tasks.conversations, None)
+                    }
+                    Some(_) if name == SEND_MESSAGE_TOOL && self.to_session(input, &tasks.conversations) => {
+                        self.permitted(id, &crate::tools::peers::SessionMessage, &summary, input, permission)
+                    }
+                    Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
+                    Some(_) if name == crate::tools::watch::WATCH_TOOL => self.watch(id, input, tasks),
+                    Some(tool) => match (self.project_skill(tool.as_ref(), input), tool.script()) {
+                        (Some(skill), _) => self.skill_call(id, tool.as_ref(), skill, &summary, input, permission),
+                        (None, Some(script)) => self.script_call(id, script, &summary, input, parent, permission),
+                        (None, None) => self.permitted(id, tool.as_ref(), &summary, input, permission),
+                    },
+                }
+            }
+        };
         let mut outcome = if let Some(reason) = &pre.blocked {
             Outcome::error(format!("Hook blocked {name}: {reason}"))
         } else if !rule_context.is_empty() {
@@ -83,60 +133,10 @@ impl Agent<'_> {
             domain::watch::while_watching(name, &tasks.still_watching(self.workspace.credentials.client))
         {
             Outcome::error(refusal)
-        } else if name == "TaskOutput" {
-            tasks.output(input)
-        } else if name == "TaskStop" {
-            tasks.stop(input)
-        } else if name == "TaskList" {
-            tasks.list(|| {
-                tool.map(|tool| tool.run(input, self.workspace))
-                    .and_then(|out| serde_json::from_str::<Value>(&out.content).ok())
-                    .unwrap_or_else(|| json!([]))
-            })
-        } else if let Some(outcome) = tool.and_then(|tool| {
-            let agent = crate::tools::Consult {
-                api: self.api,
-                request: &self.request,
-                conversation: parent,
-                stop: self.control.stop_flag(),
-            };
-            tool.consult(input, self.workspace, &agent)
-        }) {
-            outcome
+        } else if tool.is_some_and(|tool| tool.script().is_none()) && crate::tools::declares_execute(name) {
+            self.execute_declared(id, name, input, parent, &native)
         } else {
-            match tool {
-                None => Outcome::error(format!("There is no tool named {name}.")),
-                Some(_) if name == ASK_TOOL => self.ask_user(id, input),
-                Some(_) if name == EXIT_PLAN_TOOL => self.exit_plan_mode(id, input),
-                Some(_) if name == ENTER_PLAN_TOOL => self.enter_plan_mode(),
-                Some(_) if name == ENTER_WORKTREE => self.enter_worktree(tasks),
-                Some(_) if name == EXIT_WORKTREE => self.exit_worktree(input, tasks),
-                Some(_) if name == AGENT_TOOL && (AgentTool { agents: self.agents.to_vec() }).background(input) => {
-                    self.start_background(input, tasks, parent, spawn)
-                }
-                Some(_) if name == AGENT_TOOL => {
-                    self.sub_agent_with(input, self.control, self.workspace, parent, &tasks.conversations, None)
-                }
-                Some(_) if name == SEND_MESSAGE_TOOL && self.to_session(input, &tasks.conversations) => {
-                    let message = crate::tools::peers::SessionMessage;
-                    self.permitted(id, &message, &summary, input, pre.permission.as_deref())
-                }
-                Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
-                Some(_) if name == crate::tools::watch::WATCH_TOOL => self.watch(id, input, tasks),
-                Some(tool) if self.project_skill(tool.as_ref(), input).is_some() => {
-                    match self.project_skill(tool.as_ref(), input) {
-                        Some(skill) => {
-                            self.skill_call(id, tool.as_ref(), skill, &summary, input, pre.permission.as_deref())
-                        }
-                        None => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),
-                    }
-                }
-                Some(tool) if tool.script().is_some() => match tool.script() {
-                    Some(script) => self.script_call(id, script, &summary, input, parent, pre.permission.as_deref()),
-                    None => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),
-                },
-                Some(tool) => self.permitted(id, tool.as_ref(), &summary, input, pre.permission.as_deref()),
-            }
+            native(input)
         };
         if !pre.context.is_empty() {
             outcome.content.push_str(&format!("\nHook context: {}", pre.context));

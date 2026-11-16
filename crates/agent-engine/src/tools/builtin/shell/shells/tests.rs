@@ -1,6 +1,8 @@
 use std::process::Stdio;
 use std::time::Duration;
 
+use serde_json::json;
+
 use super::*;
 
 pub(super) fn of_client(client: u64) -> Workspace {
@@ -49,6 +51,20 @@ fn a_background_command_is_read_incrementally_and_stopped() {
     let stopped = KillShell.run(&json!({ "shell_id": id }), &workspace(901));
     assert!(stopped.content.starts_with("Stopped"), "{stopped:?}");
     assert!(list(901).is_empty());
+}
+
+#[test]
+fn a_person_looks_at_the_last_output_without_taking_it_from_the_agent() {
+    let id = start(&of_client(907), "server", &mut sh("echo one; echo two; sleep 30")).expect("start");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !tail(907, &id, 100).is_some_and(|seen| seen.contains("two")) {
+        assert!(Instant::now() < deadline, "the output never came");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(tail(907, &id, 4).as_deref(), Some("two"), "only the last bytes, trimmed");
+    assert_eq!(tail(908, &id, 100), None, "another client cannot see it");
+    assert!(read(&id, 907).contains("one\ntwo"), "the agent still reads it all");
+    assert!(kill(907, &id));
 }
 
 #[test]

@@ -1,0 +1,159 @@
+export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+
+export interface ExecOptions {
+  timeout?: number;
+  input?: string;
+}
+
+export interface ExecResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+export interface FetchOptions {
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+export interface FetchResult {
+  status: number;
+  body: string;
+}
+
+export interface LlmRequest {
+  prompt: string;
+  system?: string;
+  model?: string;
+}
+
+export interface Brand {
+  NAME: string;
+  COMMAND: string;
+  DIR: string;
+  INSTRUCTIONS: string;
+  ENV: string;
+}
+
+export interface ScriptContext {
+  text(path: string): string;
+  include(path: string, extra?: Record<string, Json>): string;
+  log(text: unknown): void;
+  readFile(path: string): string;
+  writeFile(path: string, text: string): void;
+  exec(command: string, options?: ExecOptions): ExecResult;
+  fetch(url: string, options?: FetchOptions): FetchResult;
+  llm(request: string | LlmRequest): string;
+  tool(name: string, input?: Record<string, Json>): string;
+  call(name: string, value?: Json): Json;
+}
+
+export interface HookContext extends ScriptContext {
+  cwd: string;
+  session: string;
+  agent: string | null;
+}
+
+export interface ToolContext extends ScriptContext {
+  cwd: string;
+  model: string;
+  mode: "plan" | "ask" | "acceptedits" | "bypass";
+  session: string;
+  tools: string[];
+  skills: { name: string; description: string; path: string }[];
+  agents: { name: string; description: string }[];
+  builtin(input: Record<string, Json>): string;
+}
+
+interface HookBase {
+  hook_event_name: HookEvent;
+  session_id: string;
+  agent_type: string | null;
+  cwd: string;
+}
+
+interface ToolCall {
+  tool_name: string;
+  tool_use_id: string;
+  tool_input: Record<string, Json>;
+}
+
+interface ModelCall {
+  model: string;
+  kind: "main" | "sub-agent";
+  mode: "ask" | "edits" | "plan" | "bypass";
+  messages: number;
+}
+
+export interface HookInputs {
+  PreToolUse: ToolCall;
+  PostToolUse: ToolCall & { tool_response: string };
+  PostToolUseFailure: ToolCall & { tool_response: string };
+  PermissionRequest: ToolCall;
+  Stop: { last_assistant_message: string | null; stop_hook_active: boolean };
+  SubagentStart: { agent_type: string; prompt: string };
+  SubagentStop: { last_assistant_message: string | null; stop_hook_active: boolean };
+  PreCompact: { trigger: "manual" | "auto"; custom_instructions: string; context_tokens: number };
+  PostCompact: { trigger: "manual" | "auto"; custom_instructions: string; context_tokens: number };
+  UserPromptSubmit: { prompt: string };
+  SessionStart: { source: "startup" | "resume"; model: string };
+  SessionEnd: Record<string, never>;
+  Notification: { message: string; notification_type: string };
+  ModelRequest: ModelCall & { effort: string; maxTokens: number; tools: string[] };
+  ModelResponse: ModelCall & {
+    text: string;
+    toolCalls: { name: string; input: Json }[];
+    stopReason: "end_turn" | "tool_use" | "max_tokens" | "refusal" | "pause_turn";
+    usage: { input: number; output: number };
+    rejections: number;
+  };
+  ModelError: ModelCall & {
+    error: string;
+    errorKind: "overloaded" | "unauthorized" | "network" | "provider" | "too_long";
+    attempt: number;
+    tried: string[];
+    fallbacks: string[];
+  };
+}
+
+export type HookEvent = keyof HookInputs;
+
+export type HookInput<E extends HookEvent> = HookBase & HookInputs[E];
+
+export interface HookSpecificOutput {
+  additionalContext?: string;
+  permissionDecision?: "allow" | "deny" | "ask";
+  permissionDecisionReason?: string;
+  updatedInput?: Record<string, Json>;
+  updatedToolOutput?: Json;
+  decision?: { behavior: "allow" | "deny" | "ask"; updatedInput?: Record<string, Json> };
+  model?: string;
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  text?: string;
+}
+
+export interface HookResult {
+  decision?: "block";
+  reason?: string;
+  continue?: boolean;
+  stopReason?: string;
+  systemMessage?: string;
+  hookSpecificOutput?: HookSpecificOutput;
+}
+
+type Returned<T> = T | void | Promise<T | void>;
+
+export type Hook<E extends HookEvent> = (input: HookInput<E>, ctx: HookContext) => Returned<HookResult | string>;
+
+export type Access = "read" | "edit" | "execute";
+
+export interface ToolSpec<Data = Record<string, Json>> {
+  name: string;
+  access: Access;
+  input: Json | ((ctx: Data & { brand: Brand }) => Json);
+  description: string | ((ctx: Data & { brand: Brand }) => string);
+}
+
+export type ToolInput = Record<string, Json>;
+
+export type Execute<Input = ToolInput> = (input: Input, ctx: ToolContext) => Returned<string | Json>;

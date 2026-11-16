@@ -6,7 +6,7 @@ use platform::sync::Locked;
 
 use domain::Principal;
 use domain::inbox::Notice;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
@@ -98,15 +98,11 @@ pub struct ListSessions;
 
 impl Tool for ListSessions {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "ListSessions".into(),
-            description: crate::tools::describe("ListSessions", &serde_json::Value::Null),
-            schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
-        }
+        crate::tools::declared("ListSessions", &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("ListSessions")
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -132,6 +128,7 @@ impl Tool for ListSessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn sessions_message_each_other_within_one_owner() {

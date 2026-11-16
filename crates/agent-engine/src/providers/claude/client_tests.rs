@@ -19,6 +19,13 @@ fn a_turn_goes_to_the_messages_api_signed_in() {
 }
 
 #[test]
+fn the_system_prompt_and_the_conversation_are_cached() {
+    let (_, body) = sent_turn(CLAUDE, MESSAGES);
+    assert_eq!(body["cache_control"], serde_json::json!({"type": "ephemeral"}));
+    assert_eq!(body["system"][1]["cache_control"], serde_json::json!({"type": "ephemeral"}));
+}
+
+#[test]
 fn the_chosen_effort_reaches_an_adaptive_model() {
     let body = effort_body(CLAUDE, "claude-opus-5-5", MESSAGES);
     assert_eq!(body["output_config"]["effort"], "high");

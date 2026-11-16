@@ -7,7 +7,6 @@ mod plugin;
 mod print;
 mod print_output;
 mod tui;
-mod verdict;
 
 use std::path::PathBuf;
 use std::process::ExitCode;

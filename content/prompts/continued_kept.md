@@ -1,1 +1,0 @@
-The messages after this summary are the most recent ones from before compaction, kept word for word. The summary was written without seeing them, so where the two differ, trust these messages.

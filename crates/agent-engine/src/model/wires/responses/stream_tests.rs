@@ -39,7 +39,10 @@ fn a_recorded_answer_folds_into_reasoning_text_and_a_call() {
 #[test]
 fn cached_input_counts_as_cache_reads_not_input() {
     let (reply, _) = fold(&recorded());
-    assert_eq!(reply.expect("reply").usage, Usage { input: 12, output: 87, cache_read: 4000, cache_write: 0, searches: 0 });
+    assert_eq!(
+        reply.expect("reply").usage,
+        Usage { input: 12, output: 87, cache_read: 4000, cache_write: 0, searches: 0 }
+    );
 }
 
 #[test]
@@ -129,4 +132,22 @@ fn a_web_search_call_is_kept_whole_and_shown_as_a_search() {
             Delta::Searched { id: "ws_1".into(), found: "completed".into() },
         ]
     );
+}
+
+#[test]
+fn reasoning_summaries_stream_apart_as_they_are_kept() {
+    let (_, seen) = fold(&[
+        r#"{"type":"response.reasoning_summary_part.added","summary_index":0}"#,
+        r#"{"type":"response.reasoning_summary_text.delta","summary_index":0,"delta":"**Plan**"}"#,
+        r#"{"type":"response.reasoning_summary_part.added","summary_index":1}"#,
+        r#"{"type":"response.reasoning_summary_text.delta","summary_index":1,"delta":"**Design**"}"#,
+    ]);
+    let thought: String = seen
+        .iter()
+        .filter_map(|delta| match delta {
+            Delta::Thinking(text) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(thought, "**Plan**\n\n**Design**");
 }

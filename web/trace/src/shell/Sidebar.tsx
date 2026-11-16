@@ -1,4 +1,4 @@
-import { Activity, LayoutDashboard, List, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { Activity, LayoutDashboard, List, ShieldCheck, SquareKanban, type LucideIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { shortId, usdShort, when } from '@/lib/format'
@@ -6,18 +6,24 @@ import { sessionCost } from '@/lib/report'
 import { cn } from '@/lib/utils'
 import type { Report } from '@/types'
 
-export type View = 'overview' | 'traces' | 'evals'
+export type View = 'overview' | 'sessions' | 'traces' | 'evals'
 
 export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { key: 'sessions', label: 'Sessions', icon: SquareKanban },
   { key: 'traces', label: 'Traces', icon: List },
   { key: 'evals', label: 'Evaluations', icon: ShieldCheck },
 ]
+
+export function shownViews(live: boolean) {
+  return NAV.filter((entry) => live || entry.key !== 'sessions')
+}
 
 interface SidebarProps {
   report: Report
   view: View
   runCount: number
+  live: boolean
   activeSession: string | null
   onView: (view: View) => void
   onSession: (session: string) => void
@@ -27,7 +33,7 @@ function lastActivity(report: Report, session: string): number {
   return Math.max(0, ...(report.sessions.find((entry) => entry.id === session)?.runs.map((run) => run.started_at_ms + run.duration_ms) ?? []))
 }
 
-export function Sidebar({ report, view, runCount, activeSession, onView, onSession }: SidebarProps) {
+export function Sidebar({ report, view, runCount, live, activeSession, onView, onSession }: SidebarProps) {
   const severe = report.insights.findings.filter((finding) => finding.severe).length
   const sessions = [...report.sessions].sort((a, b) => (a.id === report.current ? -1 : b.id === report.current ? 1 : lastActivity(report, b.id) - lastActivity(report, a.id)))
   return (
@@ -43,7 +49,7 @@ export function Sidebar({ report, view, runCount, activeSession, onView, onSessi
       </div>
       <nav className="grid gap-0.5">
         <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">Observe</div>
-        {NAV.map(({ key, label, icon: Icon }) => (
+        {shownViews(live).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             type="button"

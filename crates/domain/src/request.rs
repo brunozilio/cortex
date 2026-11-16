@@ -41,6 +41,8 @@ pub struct PromptRequest {
     pub allowed_tools: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disallowed_tools: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ask_tools: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback_model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -51,8 +53,17 @@ pub struct PromptRequest {
     pub budget: Option<crate::budget::Budget>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code_map: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shown: Option<Shown>,
     #[serde(skip)]
     pub credentials: crate::credentials::RunCredentials,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Shown {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attached: Vec<String>,
 }
 
 fn checked() -> bool {
@@ -79,11 +90,13 @@ impl PromptRequest {
             max_turns: None,
             allowed_tools: Vec::new(),
             disallowed_tools: Vec::new(),
+            ask_tools: Vec::new(),
             fallback_model: None,
             append_system: None,
             verification: None,
             budget: None,
             code_map: None,
+            shown: None,
             credentials: Default::default(),
         }
     }

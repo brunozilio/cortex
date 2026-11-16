@@ -58,7 +58,7 @@ fn shows_the_top_level_of_the_working_directory_when_known() {
     let mut empty = environment();
     empty.top_level = Some(Vec::new());
     assert!(system(&empty).contains(
-        "- Today: 2026-11-07\n- The working directory was empty when the conversation started (no files or folders except hidden ones starting with `.`); this is not updated as you work.\n"
+        "- Today: 2026-11-07\n- The working directory was empty when the conversation started (no files or folders except hidden ones starting with `.`), so there is nothing in it to list, search or read: do not call Glob, Grep or Read on it, nor start an agent to explore it, before you have created files. This is not updated as you work.\n"
     ));
     let mut listed = environment();
     listed.top_level = Some(vec!["README.md".into(), "src/".into()]);
@@ -211,6 +211,8 @@ fn the_turn_reminder_guides_planning_and_repeats_the_style() {
     let planning = reminder(PermissionMode::Plan, 0, Some("Be concise."));
     assert!(planning.contains("Planning mode is on.") && planning.contains("**Verification**"));
     assert!(planning.ends_with("\nBe concise."), "the style's reminder comes last");
+    assert!(planning.contains("started empty") && planning.contains("write the plan yourself"), "{planning}");
+    assert!(reminder(PermissionMode::Plan, 1, None).contains("Bash is not offered"));
     let sub_agent = reminder(PermissionMode::Plan, 1, Some("Be concise."));
     assert!(!sub_agent.contains("Planning mode is on.") && !sub_agent.contains("Be concise."));
     assert!(!reminder(PermissionMode::Ask, 0, None).contains("Planning"));
@@ -225,6 +227,6 @@ fn names_the_language_servers_so_the_agent_reaches_for_the_lsp_tool() {
         LanguageServer { name: "typescript".into(), extensions: vec![".js".into(), ".ts".into()] },
     ];
     assert!(system(&served).contains(
-        "- Model: Qwen3.8 27B 8-bit\n- Language servers (the LSP tool; prefer it to Grep for definitions, references, callers and symbols): rust-analyzer (.rs), typescript (.js, .ts)\n"
+        "- Model: Qwen3.8 27B 8-bit\n- Language servers (the LSP tool; prefer it to Grep for definitions, references, callers and symbols, and its documentSymbol outline to reading a long file whole): rust-analyzer (.rs), typescript (.js, .ts)\n"
     ));
 }

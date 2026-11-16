@@ -69,6 +69,15 @@ reason. Exit code 2 or a JSON decision blocks; PreToolUse may rewrite
 arguments (checked again); Stop may demand more work. Hooks run with the
 user's environment and limits on time, output and turns.
 
+Built-in hooks are script hooks in `content/hooks/`, one file per event
+(`PreToolUse.js`…), each naming its `event` with an empty
+`export default (input, ctx) => {}`. A hook script whose `default` is
+missing or has an empty body (`script::empty_function`) is not
+registered, so an empty one costs nothing and keeps streaming (a
+ModelResponse hook holds the reply until it answers). They load before the user's and the project's (`Hooks::from_builtin`, their
+`command` is `builtin:hooks/<file>`); a file of the same name in
+`~/.{command}/hooks/` replaces one.
+
 A `script` hook (a `.js` file) gets the same `ctx` as a script tool. On
 events that run with a model at hand (the tool, permission, stop, session
 and compaction ones), `ctx.llm` asks the run's model and `ctx.tool` runs a

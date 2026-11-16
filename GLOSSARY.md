@@ -17,6 +17,25 @@ _Avoid_: Chat, thread
 One execution of an engine for a prompt or a session command, ending in
 exactly one terminal event.
 
+**Ask**:
+What a run waits on the user for: a permission, questions, or a plan to
+approve.
+
+**Catalog**:
+The list of an owner's sessions with their folder, title and status.
+
+**Place**:
+A prompt of the conversation the user can go back to: rewinding drops what
+came after it and restores the files, branching starts a new session there.
+_Avoid_: Snapshot
+
+**Queue**:
+What the user said while the agent worked, waiting for the agent to take it.
+
+**Quick question**:
+A question answered beside the conversation, which stays as it was.
+_Avoid_: Side chat
+
 **Memory**:
 What an agent keeps about a project between sessions: episodic, semantic or
 procedural.

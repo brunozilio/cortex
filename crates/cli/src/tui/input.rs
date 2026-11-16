@@ -181,7 +181,14 @@ impl Input {
         &self.history
     }
 
+    pub fn browsing_history(&self) -> bool {
+        self.recalled.and_then(|at| self.history.get(at)).is_some_and(|recalled| *recalled == self.text)
+    }
+
     pub fn slash_word(&self) -> Option<&str> {
+        if self.browsing_history() {
+            return None;
+        }
         let word = self.text.strip_prefix('/')?;
         (!word.contains(char::is_whitespace)).then_some(word)
     }

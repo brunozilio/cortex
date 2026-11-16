@@ -29,6 +29,9 @@ impl Recorder {
             seen: Mutex::default(),
         };
         if request.command.is_none() {
+            if let Some(shown) = &request.shown {
+                recorder.write(Entry::Shown(shown.clone()));
+            }
             recorder.write(Entry::Prompted { at_ms: now(), prompt: request.prompt.clone() });
         }
         Arc::new(recorder)

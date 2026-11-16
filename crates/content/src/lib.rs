@@ -4,6 +4,31 @@ mod embedded {
     include!(concat!(env!("OUT_DIR"), "/content.rs"));
 }
 
+mod install;
+mod render;
+
+pub use install::{Installed, MANIFEST, install_files, install_once};
+
+pub use render::{LIMIT, call, call_in, exports, render, render_export, render_export_in, render_in, value, value_in};
+
+pub fn brand() -> serde_json::Value {
+    serde_json::json!({
+        "NAME": brand::NAME, "COMMAND": brand::COMMAND, "DIR": brand::DIR,
+        "INSTRUCTIONS": brand::INSTRUCTIONS, "ENV": brand::ENV,
+    })
+}
+
+pub fn with_brand(data: &serde_json::Value) -> serde_json::Value {
+    let mut data = match data {
+        serde_json::Value::Object(fields) => serde_json::Value::Object(fields.clone()),
+        _ => serde_json::json!({}),
+    };
+    if data.get("brand").is_none() {
+        data["brand"] = brand();
+    }
+    data
+}
+
 pub fn hash() -> u64 {
     embedded::HASH
 }
@@ -16,8 +41,17 @@ pub fn builtin_files(prefix: &str) -> Vec<(&'static str, &'static [u8])> {
     embedded::FILES.iter().filter(|(file, _)| file.starts_with(prefix)).copied().collect()
 }
 
-pub fn user_folder() -> Option<PathBuf> {
-    std::env::home_dir().map(|home| home.join(brand::DIR))
+static FOLDER: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+pub fn use_folder(folder: PathBuf) -> Result<(), PathBuf> {
+    FOLDER.set(folder)
+}
+
+pub fn folder() -> Option<PathBuf> {
+    match FOLDER.get() {
+        Some(folder) => Some(folder.clone()),
+        None => std::env::home_dir().map(|home| home.join(brand::DIR)),
+    }
 }
 
 pub fn override_path(folder: &Path, path: &str) -> Option<PathBuf> {
@@ -29,6 +63,10 @@ pub fn override_path(folder: &Path, path: &str) -> Option<PathBuf> {
 pub fn user_text(folder: Option<&Path>, path: &str) -> Option<String> {
     let file = folder.and_then(|folder| override_path(folder, path))?;
     std::fs::read_to_string(file).ok().map(|text| brand::text(text.trim_end_matches('\n')))
+}
+
+pub fn source(path: &str) -> Option<String> {
+    user_text(folder().as_deref(), path).or_else(|| builtin_text(path))
 }
 
 pub fn builtin_text(path: &str) -> Option<String> {
@@ -44,7 +82,10 @@ pub fn text_in(folder: Option<&Path>, path: &str) -> String {
 }
 
 pub fn text(path: &str) -> String {
-    text_in(user_folder().as_deref(), path)
+    if path.ends_with(".js") {
+        return render(path, &with_brand(&serde_json::Value::Null));
+    }
+    text_in(folder().as_deref(), path)
 }
 
 pub fn paths() -> Vec<&'static str> {
@@ -54,6 +95,14 @@ pub fn paths() -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_host_s_folder_replaces_the_home_one_and_is_set_once() {
+        let chosen = tempfile::tempdir().expect("folder");
+        assert_eq!(use_folder(chosen.path().to_path_buf()), Ok(()));
+        assert_eq!(folder().as_deref(), Some(chosen.path()));
+        assert!(use_folder("/elsewhere".into()).is_err());
+    }
 
     #[test]
     fn a_user_file_wins_over_the_built_in_one_and_is_read_each_time() {

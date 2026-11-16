@@ -68,13 +68,14 @@ impl Shape for Provider {
         "/messages"
     }
     fn shape(&self, model: Option<&ModelOption>, body: &mut Value, effort: &str) -> Result<(), ProviderError> {
-        let mut blocks = vec![json!({"type":"text", "text":"You are Claude Code, Anthropic's official CLI for Claude."})];
+        let mut blocks =
+            vec![json!({"type":"text", "text":"You are Claude Code, Anthropic's official CLI for Claude."})];
         if let Some(existing) = body["system"].as_array() {
             blocks.extend(existing.iter().cloned());
         }
         body["system"] = json!(blocks);
         body["max_tokens"] = json!(8192);
-        remove(body, &["thinking", "output_config", "cache_control"]);
+        remove(body, &["thinking", "output_config"]);
         llm_providers::effort(self.vendor(), body, model, effort, false)
     }
     fn catalog(&self, config: &Config, _after: &str) -> Call {
@@ -165,7 +166,8 @@ mod tests {
 
     #[test]
     fn it_speaks_as_claude_code() {
-        let mut body = json!({"model": "claude-subscription:claude-sonnet-4-5", "system": [{"type": "text", "text": "x"}]});
+        let mut body =
+            json!({"model": "claude-subscription:claude-sonnet-4-5", "system": [{"type": "text", "text": "x"}]});
         llm_providers::request::shape(&Provider, None, &mut body).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(body["system"][0]["text"], "You are Claude Code, Anthropic's official CLI for Claude.");
         assert_eq!(body["max_tokens"], 8192);

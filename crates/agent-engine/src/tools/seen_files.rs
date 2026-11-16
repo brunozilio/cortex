@@ -3,23 +3,38 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+type Stamp = (u64, Option<SystemTime>);
+
+#[derive(Debug)]
 struct Seen {
-    len: u64,
-    modified: Option<SystemTime>,
-    offset: usize,
-    limit: usize,
+    stamp: Stamp,
+    ranges: Vec<(usize, usize)>,
 }
 
 #[derive(Debug, Default)]
 pub struct SeenFiles(Mutex<HashMap<PathBuf, Seen>>);
 
+fn stamp(path: &Path) -> Option<Stamp> {
+    let metadata = std::fs::metadata(path).ok()?;
+    Some((metadata.len(), metadata.modified().ok()))
+}
+
 impl SeenFiles {
-    pub fn seen_again(&self, path: &Path, offset: usize, limit: usize) -> bool {
-        let Ok(metadata) = std::fs::metadata(path) else { return false };
-        let now = Seen { len: metadata.len(), modified: metadata.modified().ok(), offset, limit };
-        let Ok(mut seen) = self.0.lock() else { return false };
-        seen.insert(path.to_path_buf(), now) == Some(now)
+    pub fn covers(&self, path: &Path, first: usize, last: usize) -> bool {
+        let (Some(now), Ok(seen)) = (stamp(path), self.0.lock()) else { return false };
+        first <= last
+            && seen.get(path).is_some_and(|seen| {
+                seen.stamp == now && seen.ranges.iter().any(|(from, to)| *from <= first && last <= *to)
+            })
+    }
+
+    pub fn saw(&self, path: &Path, first: usize, last: usize) {
+        let (Some(now), Ok(mut seen)) = (stamp(path), self.0.lock()) else { return };
+        let entry = seen.entry(path.to_path_buf()).or_insert_with(|| Seen { stamp: now, ranges: Vec::new() });
+        if entry.stamp != now {
+            *entry = Seen { stamp: now, ranges: Vec::new() };
+        }
+        entry.ranges.push((first, last));
     }
 
     pub fn forget(&self) {

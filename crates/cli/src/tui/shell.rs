@@ -1,14 +1,7 @@
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
-use std::time::Duration;
-
-use platform::{Bounds, Ended};
 
 use super::app::{App, Msg};
 use super::transcript::{Entry, ToolState};
-
-const LIMIT: Duration = Duration::from_secs(120);
-const KEPT: usize = 30_000;
 
 pub fn start(app: &mut App, command: String) {
     let id = format!("shell-{}", app.transcript.entries.len());
@@ -20,7 +13,7 @@ pub fn start(app: &mut App, command: String) {
         output: None,
     });
     let cwd = app.cwd.clone();
-    app.spawn(move |_| Msg::Shell { id, result: run(&cwd, &command), command });
+    app.spawn(move |sdk| Msg::Shell { id, result: run(sdk, &cwd, &command), command });
 }
 
 pub fn finished(app: &mut App, id: &str, command: String, result: Result<(String, bool), String>) {
@@ -33,33 +26,14 @@ pub fn finished(app: &mut App, id: &str, command: String, result: Result<(String
             *out = Some(output.clone());
         }
     }
-    let kept: String = output.chars().take(KEPT).collect();
-    app.shell_context.push(format!("$ {command}\n{kept}"));
+    app.shell_context.push(domain::conversation::shell_note(&command, &output));
 }
 
-pub fn with_context(context: &mut Vec<String>, prompt: &str) -> String {
-    if context.is_empty() {
-        return prompt.to_owned();
-    }
-    let ran = std::mem::take(context).join("\n\n");
-    format!("I ran this in the shell myself:\n<shell>\n{ran}\n</shell>\n\n{prompt}")
-}
+pub use domain::conversation::with_shell as with_context;
 
-fn run(cwd: &Path, command: &str) -> Result<(String, bool), String> {
-    let mut shell = platform::command("sh");
-    shell.arg("-c").arg(format!("exec 2>&1\n{command}")).current_dir(cwd);
-    let never = AtomicBool::new(false);
-    let bounds = Bounds { timeout: LIMIT, max_output: usize::MAX, stop: &never, input: None };
-    let finished =
-        platform::bounded::run(&mut shell, bounds).map_err(|error| format!("could not start the shell: {error}"))?;
-    let mut out = finished.stdout;
-    match finished.ended {
-        Ended::Exited(status) => Ok((out.trim_end().to_owned(), !status.success())),
-        Ended::TimedOut | Ended::Stopped => {
-            out.push_str(&format!("\n[stopped after {} seconds]", LIMIT.as_secs()));
-            Ok((out, true))
-        }
-    }
+fn run(sdk: &sdk::Sdk, cwd: &Path, command: &str) -> Result<(String, bool), String> {
+    let ran = sdk.feature("shell", serde_json::json!({ "run": command, "path": cwd })).map_err(|e| e.to_string())?;
+    Ok((ran["output"].as_str().unwrap_or_default().to_owned(), ran["failed"] == true))
 }
 
 #[cfg(all(test, unix))]
@@ -70,8 +44,10 @@ mod tests {
     fn runs_in_the_project_and_says_whether_it_failed() {
         let dir = tempfile::tempdir().expect("dir");
         std::fs::write(dir.path().join("a.txt"), "x").expect("write");
-        assert_eq!(run(dir.path(), "ls"), Ok(("a.txt".to_owned(), false)));
-        assert_eq!(run(dir.path(), "echo oops >&2; exit 3"), Ok(("oops".to_owned(), true)));
+        let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
+        let sdk = super::super::tests::sdk(&engine, dir.path());
+        assert_eq!(run(&sdk, dir.path(), "ls"), Ok(("a.txt".to_owned(), false)));
+        assert_eq!(run(&sdk, dir.path(), "echo oops >&2; exit 3"), Ok(("oops".to_owned(), true)));
     }
 
     #[test]

@@ -1,7 +1,8 @@
-use domain::{Forgotten, MemoryKind};
+use domain::{Forgotten, MemoryKind, ModelOption};
 
 use super::*;
 use crate::dirs::project_key;
+use crate::feature::Context;
 
 fn plain() -> Memories {
     Memories::new(Arc::new(InMemoryStore::default()))

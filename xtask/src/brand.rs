@@ -192,6 +192,7 @@ fn allowed(path: &str, brand: &Brand) -> bool {
         || ["README.md", "CLAUDE.md", "AGENTS.md"].contains(&path)
         || path.starts_with(&own)
         || path.starts_with(".claude/")
+        || path.starts_with("plugins/")
 }
 
 fn names(text: &str, word: &str) -> bool {
@@ -222,7 +223,16 @@ pub fn findings(root: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> 
 
 #[cfg(test)]
 mod name_tests {
-    use super::names;
+    use super::{Brand, allowed, names};
+
+    #[test]
+    fn a_plugin_kept_in_the_repository_may_spell_the_name_out() {
+        let brand = Brand { name: "Nova".into(), command: "nova".into(), company: "Acme".into(), author: "Ana".into() };
+        assert!(allowed("plugins/dev-flow/hooks/hooks.json", &brand));
+        assert!(allowed(".nova/settings.json", &brand));
+        assert!(!allowed("content/skills/run/SKILL.md", &brand));
+        assert!(!allowed("crates/plugins/src/lib.rs", &brand));
+    }
 
     #[test]
     fn a_name_counts_on_its_own_only() {

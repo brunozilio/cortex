@@ -1,11 +1,14 @@
 use std::path::Path;
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::model::ToolSpec;
 use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required, shown};
 
 const OUTPUT: usize = 2_000_000;
+const RESULTS: usize = 200;
+const PER_FILE: usize = 25;
+const LINE: usize = 300;
 
 #[derive(Debug)]
 pub struct Grep;
@@ -19,32 +22,11 @@ enum Mode {
 
 impl Tool for Grep {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "Grep".into(),
-            description: crate::tools::describe("Grep", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "pattern": { "type": "string", "description": "The regular expression." },
-                    "path": { "type": "string", "description": "File or directory to search; the working directory if omitted." },
-                    "glob": { "type": "string", "description": "Only files whose name matches this glob." },
-                    "output_mode": { "type": "string", "enum": ["content", "files_with_matches", "count"] },
-                    "-i": { "type": "boolean", "description": "Ignore case." },
-                    "-n": { "type": "boolean", "description": "Number lines (content mode)." },
-                    "-A": { "type": "integer", "description": "Lines after each match (content mode)." },
-                    "-B": { "type": "integer", "description": "Lines before each match (content mode)." },
-                    "-C": { "type": "integer", "description": "Lines around each match (content mode)." },
-                    "multiline": { "type": "boolean", "description": "Let matches span lines." },
-                    "head_limit": { "type": "integer", "description": "Keep only the first N results." }
-                },
-                "required": ["pattern"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("Grep", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("Grep")
     }
 
     fn reaches_outside(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
@@ -86,7 +68,8 @@ impl Tool for Grep {
         let (before, after) = (number("-B").unwrap_or(context), number("-A").unwrap_or(context));
         let root = field(input, "path").map_or_else(|| workspace.cwd.clone(), |path| workspace.resolve(path));
 
-        let mut results: Vec<String> = Vec::new();
+        let limit = number("head_limit").filter(|limit| *limit > 0).unwrap_or(RESULTS);
+        let mut results = Results::default();
         let walk =
             ignore::WalkBuilder::new(&root).hidden(false).filter_entry(|entry| entry.file_name() != ".git").build();
         for entry in walk.filter_map(Result::ok) {
@@ -101,24 +84,74 @@ impl Tool for Grep {
             let Ok(text) = String::from_utf8(bytes) else { continue };
             let name = shown(path, workspace);
             match mode {
-                Mode::Files if regex.is_match(&text) => results.push(name),
+                Mode::Files if regex.is_match(&text) => results.entry(name, limit),
                 Mode::Count => {
                     let count = regex.find_iter(&text).count();
                     if count > 0 {
-                        results.push(format!("{name}:{count}"));
+                        results.entry(format!("{name}:{count}"), limit);
                     }
                 }
-                Mode::Content => lines(&regex, &text, &name, flag("-n"), (before, after), &mut results),
+                Mode::Content => results.file(&name, lines(&regex, &text, flag("-n"), (before, after)), limit),
                 Mode::Files => {}
             }
         }
-        if results.is_empty() {
+        if results.shown.is_empty() {
             return Outcome::ok("No matches found.");
         }
-        if let Some(limit) = number("head_limit") {
-            results.truncate(limit);
+        let between = if mode == Mode::Content { "\n\n" } else { "\n" };
+        Outcome::ok(clip(&results.text(between), OUTPUT))
+    }
+}
+
+#[derive(Default)]
+struct Results {
+    shown: Vec<String>,
+    kept: usize,
+    hidden: usize,
+}
+
+struct Matches {
+    lines: Vec<String>,
+    more: usize,
+}
+
+impl Results {
+    fn entry(&mut self, entry: String, limit: usize) {
+        if self.kept < limit {
+            self.shown.push(entry);
+            self.kept += 1;
+        } else {
+            self.hidden += 1;
         }
-        Outcome::ok(clip(&results.join("\n"), OUTPUT))
+    }
+
+    fn file(&mut self, name: &str, matches: Matches, limit: usize) {
+        let room = limit.saturating_sub(self.kept).min(matches.lines.len());
+        self.hidden += matches.lines.len() - room;
+        if room == 0 {
+            return;
+        }
+        self.kept += room;
+        let mut group = format!("{name}\n{}", matches.lines[..room].join("\n"));
+        if matches.more > 0 && room == matches.lines.len() {
+            group.push_str(&format!("\n… [{} more matches in this file]", matches.more));
+        }
+        self.shown.push(group);
+    }
+
+    fn text(&self, between: &str) -> String {
+        let mut text = self.shown.join(between);
+        if self.hidden > 0 {
+            text.push_str(&format!("\n… [{} more results; narrow the search or raise head_limit]", self.hidden));
+        }
+        text
+    }
+}
+
+fn cut(line: &str) -> String {
+    match line.char_indices().nth(LINE) {
+        None => line.to_owned(),
+        Some((at, _)) => format!("{}… [+{} characters]", &line[..at], line[at..].chars().count()),
     }
 }
 
@@ -126,18 +159,13 @@ fn matches_glob(filter: Option<&globset::GlobMatcher>, path: &Path) -> bool {
     filter.is_none_or(|glob| path.file_name().is_some_and(|name| glob.is_match(name)) || glob.is_match(path))
 }
 
-fn lines(
-    regex: &regex::Regex,
-    text: &str,
-    name: &str,
-    numbered: bool,
-    (before, after): (usize, usize),
-    out: &mut Vec<String>,
-) {
+fn lines(regex: &regex::Regex, text: &str, numbered: bool, (before, after): (usize, usize)) -> Matches {
     let all: Vec<&str> = text.lines().collect();
     let hits: Vec<usize> = all.iter().enumerate().filter(|(_, line)| regex.is_match(line)).map(|(at, _)| at).collect();
+    let more = hits.len().saturating_sub(PER_FILE);
+    let mut out = Vec::new();
     let mut shown_until = 0;
-    for hit in hits {
+    for hit in hits.into_iter().take(PER_FILE) {
         let start = hit.saturating_sub(before).max(shown_until);
         let end = (hit + after + 1).min(all.len());
         if start > shown_until && shown_until > 0 && (before > 0 || after > 0) {
@@ -145,18 +173,17 @@ fn lines(
         }
         for (at, line) in all.iter().enumerate().take(end).skip(start) {
             let mark = if at == hit { ':' } else { '-' };
-            out.push(if numbered {
-                format!("{name}{mark}{}{mark}{line}", at + 1)
-            } else {
-                format!("{name}{mark}{line}")
-            });
+            out.push(if numbered { format!("{}{mark}{}", at + 1, cut(line)) } else { cut(line) });
         }
         shown_until = end;
     }
+    Matches { lines: out, more }
 }
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     fn workspace() -> (tempfile::TempDir, Workspace) {
@@ -186,7 +213,52 @@ mod tests {
 
         let content =
             Grep.run(&json!({"pattern": "run\\(", "output_mode": "content", "-n": true, "-B": 1}), &workspace);
-        assert_eq!(content.content.replace('\\', "/"), "src/a.rs-1-fn main() {\nsrc/a.rs:2:    run();");
+        assert_eq!(content.content.replace('\\', "/"), "src/a.rs\n1-fn main() {\n2:    run();");
+    }
+
+    fn content_of(dir: &tempfile::TempDir, input: &Value) -> String {
+        Grep.run(input, &Workspace::new(dir.path())).content
+    }
+
+    #[test]
+    fn matching_lines_are_grouped_under_their_file() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join("a.txt"), "hit one\nmiss\nhit two\n").expect("write");
+        std::fs::write(dir.path().join("b.txt"), "hit three\n").expect("write");
+        let found = content_of(&dir, &json!({"pattern": "hit", "output_mode": "content", "-n": true}));
+        let mut groups: Vec<&str> = found.split("\n\n").collect();
+        groups.sort_unstable();
+        assert_eq!(groups, vec!["a.txt\n1:hit one\n3:hit two", "b.txt\n1:hit three"]);
+    }
+
+    #[test]
+    fn a_long_line_is_cut_and_says_how_much_was_left_out() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join("min.js"), format!("hit{}\n", "x".repeat(1_000))).expect("write");
+        let found = content_of(&dir, &json!({"pattern": "hit", "output_mode": "content"}));
+        assert_eq!(found, format!("min.js\nhit{}… [+703 characters]", "x".repeat(297)));
+    }
+
+    #[test]
+    fn one_file_shows_its_first_matches_and_counts_the_rest() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join("log.txt"), "hit\n".repeat(30)).expect("write");
+        let found = content_of(&dir, &json!({"pattern": "hit", "output_mode": "content"}));
+        assert_eq!(found, format!("log.txt\n{}… [5 more matches in this file]", "hit\n".repeat(25)));
+    }
+
+    #[test]
+    fn results_stop_at_a_default_limit_that_head_limit_replaces() {
+        let dir = tempfile::tempdir().expect("dir");
+        for at in 0..205 {
+            std::fs::write(dir.path().join(format!("f{at}.txt")), "hit\n").expect("write");
+        }
+        let listed = content_of(&dir, &json!({"pattern": "hit"}));
+        assert_eq!(listed.lines().count(), 201);
+        assert!(listed.ends_with("\n… [5 more results; narrow the search or raise head_limit]"), "{listed}");
+        assert_eq!(content_of(&dir, &json!({"pattern": "hit", "head_limit": 300})).lines().count(), 205);
+        let two = content_of(&dir, &json!({"pattern": "hit", "head_limit": 2}));
+        assert!(two.ends_with("\n… [203 more results; narrow the search or raise head_limit]"), "{two}");
     }
 
     #[test]

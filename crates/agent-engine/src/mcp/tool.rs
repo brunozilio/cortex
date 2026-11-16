@@ -68,11 +68,10 @@ pub(super) fn outcome(result: &Value) -> Outcome {
             None => problems.push("MCP content part has no type".into()),
         }
     }
-    if let Some(structured) = result.get("structuredContent") {
-        let formatted = serde_json::to_string_pretty(structured).unwrap_or_else(|_| structured.to_string());
-        if !text.iter().any(|part| serde_json::from_str::<Value>(part).is_ok_and(|value| value == *structured)) {
-            text.push(format!("Structured result:\n{formatted}"));
-        }
+    if let Some(structured) = result.get("structuredContent")
+        && !text.iter().any(|part| serde_json::from_str::<Value>(part).is_ok_and(|value| value == *structured))
+    {
+        text.push(format!("Structured result:\n{structured}"));
     }
     let failed = result["isError"].as_bool().unwrap_or(false) || !problems.is_empty();
     text.extend(problems);

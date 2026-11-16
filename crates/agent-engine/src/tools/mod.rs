@@ -3,7 +3,8 @@ pub mod builtin {
     include!(concat!(env!("OUT_DIR"), "/builtin_tools.rs"));
 }
 pub mod builtin_agents;
-pub mod builtin_skills;
+#[cfg(test)]
+mod builtin_skills;
 pub mod inbox;
 mod lsp;
 mod outside;
@@ -37,7 +38,7 @@ use serde_json::Value;
 
 pub use llm_providers::web_search::WEB_SEARCH;
 pub use lsp::Lsp;
-pub use workspace::{Network, Verification, Workspace, env_secrets};
+pub use workspace::{Launch, Launcher, Network, OnThisMachine, Verification, Workspace, env_secrets};
 
 use crate::model::ToolSpec;
 
@@ -157,12 +158,36 @@ pub fn named(name: &str) -> Option<Box<dyn Tool>> {
     standard().into_iter().find(|tool| tool.spec().name == name)
 }
 
-pub fn describe(name: &str, data: &Value) -> String {
-    let script = format!("tools/{name}.js");
-    if content::builtin(&script).is_some() || content::user_text(content::user_folder().as_deref(), &script).is_some() {
-        return crate::prompt::render(&script, data);
+pub fn declared_path(name: &str) -> String {
+    format!("tools/{name}.js")
+}
+
+pub fn declared(name: &str, data: &Value) -> crate::model::ToolSpec {
+    let path = declared_path(name);
+    let data = content::with_brand(data);
+    let spec = content::value(&path, "spec").unwrap_or_default();
+    let schema = match spec.get("input") {
+        Some(input) => input.clone(),
+        None => content::call(&path, "spec.input", &data).unwrap_or_else(|| serde_json::json!({ "type": "object" })),
+    };
+    crate::model::ToolSpec {
+        name: name.to_owned(),
+        description: content::render_export(&path, "spec.description", &data).unwrap_or_default(),
+        schema,
     }
-    content::text(&format!("tools/{name}.md"))
+}
+
+pub fn declared_access(name: &str) -> Access {
+    let spec = content::value(&declared_path(name), "spec").unwrap_or_default();
+    match spec["access"].as_str() {
+        Some("read") => Access::Reads,
+        Some("edit") => Access::Edits,
+        _ => Access::Executes,
+    }
+}
+
+pub fn declares_execute(name: &str) -> bool {
+    content::exports(&declared_path(name), "execute")
 }
 
 pub(crate) fn field<'a>(input: &'a Value, name: &str) -> Option<&'a str> {
@@ -212,5 +237,34 @@ mod tests {
         for tool in tools {
             assert_eq!(tool.spec().schema["type"], "object", "{}", tool.spec().name);
         }
+    }
+}
+
+#[cfg(test)]
+mod declared_tests {
+    use super::Tool;
+
+    #[test]
+    fn every_built_in_tool_is_declared_in_content_with_an_execute() {
+        let mut tools: Vec<Box<dyn Tool>> = super::standard();
+        tools.push(Box::new(super::Lsp));
+        tools.push(Box::new(super::skill::SkillTool { skills: Vec::new() }));
+        tools.push(Box::new(super::subagent::AgentTool { agents: Vec::new() }));
+        tools.push(Box::new(super::send_message::SendMessageTool));
+        tools.extend(super::task::tools());
+        tools.push(Box::new(super::tool_search::ToolSearch));
+        let schema = serde_json::json!({ "type": "string" });
+        tools.push(Box::new(super::structured::Structured::new(schema.clone()).expect("structured")));
+        for tool in &tools {
+            let spec = tool.spec();
+            let name = spec.name.as_str();
+            assert!(content::builtin(&super::declared_path(name)).is_some(), "{name} has no content/tools file");
+            assert!(!spec.description.trim().is_empty(), "{name} has no description");
+            assert_eq!(spec.schema["type"], "object", "{name}");
+            assert!(super::declares_execute(name), "{name} has no execute");
+            assert!(!spec.description.contains("{{"), "{name} keeps a placeholder");
+        }
+        let structured = tools.iter().find(|tool| tool.spec().name == "StructuredOutput").expect("structured");
+        assert_eq!(structured.spec().schema["properties"]["result"], schema, "input is a function of the data");
     }
 }

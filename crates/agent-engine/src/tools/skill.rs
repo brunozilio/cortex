@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::frontmatter::parse as parse_frontmatter;
 use domain::PromptRequest;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::{Access, Outcome, Tool, Workspace, required};
 use crate::model::ToolSpec;
@@ -45,8 +45,11 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
     for dir in request.extensions.iter().flat_map(|extensions| &extensions.dirs) {
         sources.push((dir.join("skills"), None, true));
     }
-    if let Some(builtin) = home.and_then(super::builtin_skills::dir) {
-        sources.push((builtin, None, true));
+    content::install_once();
+    if let Some(installed) = content::folder().map(|folder| folder.join("skills"))
+        && !sources.iter().any(|(dir, _, _)| *dir == installed)
+    {
+        sources.push((installed, None, true));
     }
     let mut found: Vec<FoundSkill> = Vec::new();
     for (dir, namespace, trusted) in sources {
@@ -120,22 +123,11 @@ impl Tool for SkillTool {
     }
 
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: SKILL_TOOL.to_owned(),
-            description: crate::tools::describe("Skill", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "skill": { "type": "string", "description": "The skill's name, without a leading slash." },
-                    "args": { "type": "string", "description": "Optional arguments for the skill." },
-                },
-                "required": ["skill"],
-            }),
-        }
+        crate::tools::declared(SKILL_TOOL, &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(SKILL_TOOL)
     }
 
     fn summary(&self, input: &Value) -> String {

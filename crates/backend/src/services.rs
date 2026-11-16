@@ -14,10 +14,11 @@ pub struct LocalServices {
     pub data: Option<PathBuf>,
     pub off: std::collections::BTreeSet<String>,
     pub settings: Arc<dyn SettingsStore>,
+    pub catalog: Arc<dyn crate::SessionCatalog>,
     pub extensions: Extensions,
     pub providers: ModelProviders,
     pub authorizer: Arc<dyn Authorizer>,
-    pub home: Option<PathBuf>,
+    pub homes: Arc<dyn crate::Homes>,
     pub mcp_auth: crate::McpAuth,
 }
 
@@ -30,10 +31,12 @@ impl std::fmt::Debug for LocalServices {
 impl LocalServices {
     pub fn detect() -> Self {
         let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
-        let services = Self::with_engine(Arc::new(crate::native::engine(&data)));
+        let mut services = Self::with_engine(Arc::new(crate::native::engine(&data)));
+        services.catalog = Arc::new(crate::catalog::FileSessionCatalog::system());
         match std::env::current_dir() {
             Ok(cwd) => {
-                let _ = crate::native::declare_providers(std::env::home_dir().as_deref(), &cwd);
+                let _ =
+                    crate::native::declare_providers(services.home(&domain::Principal::LocalOwner).as_deref(), &cwd);
                 services.turned_off_in(&cwd)
             }
             Err(_) => services,
@@ -41,7 +44,9 @@ impl LocalServices {
     }
 
     pub fn turned_off_in(mut self, cwd: &Path) -> Self {
-        if let Ok(settings) = agent_engine::prompt::settings::load(cwd, self.home.as_deref(), &[]) {
+        if let Ok(settings) =
+            agent_engine::prompt::settings::load(cwd, self.home(&domain::Principal::LocalOwner).as_deref(), &[])
+        {
             self.off.extend(settings.features.off().flat_map(|name| [name.to_owned(), name.replace('-', "_")]));
         }
         self
@@ -53,12 +58,17 @@ impl LocalServices {
             data: crate::dirs::app_data_dir(),
             off: std::collections::BTreeSet::new(),
             settings: Arc::new(FileSettingsStore::system()),
+            catalog: Arc::new(crate::catalog::InMemorySessionCatalog::default()),
             extensions: Extensions::default(),
             providers: ModelProviders::system(),
             authorizer: Arc::new(LocalAuthorizer),
-            home: std::env::home_dir(),
+            homes: Arc::new(crate::OwnerHome::system()),
             mcp_auth: crate::McpAuth::system(),
         }
+    }
+
+    pub fn home(&self, owner: &domain::Principal) -> Option<PathBuf> {
+        self.homes.home(owner)
     }
 
     pub fn without(mut self, feature: &str) -> Self {
@@ -69,6 +79,7 @@ impl LocalServices {
     pub fn kept_in(mut self, data: &Path) -> Self {
         self.data = Some(data.to_path_buf());
         self.settings = Arc::new(FileSettingsStore::new(data.join("users")));
+        self.catalog = Arc::new(crate::catalog::FileSessionCatalog::new(data.join("users")));
         self.providers = self.providers.with_store(Arc::new(FileProviderStore::new(data.join("providers"))));
         self
     }
@@ -98,7 +109,7 @@ mod tests {
         let settings = serde_json::json!({ "features": { "trace": false, "memory": true, "suggested-rules": false } });
         std::fs::write(home.path().join(brand::DIR).join("settings.json"), settings.to_string()).expect("write");
         let mut services = LocalServices::with_engine(Arc::new(FakeEngine::new(Vec::new(), Vec::new())));
-        services.home = Some(home.path().to_path_buf());
+        services.homes = Arc::new(crate::OwnerHome::at(home.path()));
 
         let services = services.turned_off_in(repo.path());
 

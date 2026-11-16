@@ -2,14 +2,12 @@ mod criteria_file;
 mod git;
 mod instruction_files;
 pub(crate) mod markdown;
-pub mod permissions;
-mod render;
-mod top_level;
-pub use render::render;
 pub mod owner_settings;
+pub mod permissions;
 pub mod rules;
 pub mod settings;
 pub mod styles;
+mod top_level;
 pub const CONTRACT_VERSION: &str = "agent-engine/1";
 
 use std::path::{Path, PathBuf};
@@ -95,24 +93,21 @@ impl Environment {
                 "name": style.name, "instructions": style.instructions, "keep_coding": style.keep_coding,
             })),
             "contract": CONTRACT_VERSION,
-            "brand": brand_data(),
+            "brand": content::brand(),
         })
     }
 }
 
-fn brand_data() -> serde_json::Value {
-    serde_json::json!({
-        "NAME": brand::NAME, "COMMAND": brand::COMMAND, "DIR": brand::DIR,
-        "INSTRUCTIONS": brand::INSTRUCTIONS, "ENV": brand::ENV,
-    })
+pub fn render(path: &str, data: &serde_json::Value) -> String {
+    content::render(path, &content::with_brand(data))
 }
 
 pub fn text(name: &str) -> String {
-    content::text(&format!("prompts/{name}.md"))
+    content::text(&format!("prompts/{name}.js"))
 }
 
 pub fn system(environment: &Environment) -> String {
-    render::render("prompts/system.js", &environment.data())
+    render("prompts/system.js", &environment.data())
 }
 
 pub fn user_message(request: &PromptRequest) -> String {
@@ -137,6 +132,6 @@ pub fn reminder(mode: domain::PermissionMode, depth: usize, style: Option<&str>)
         domain::PermissionMode::AcceptEdits => "edits",
         domain::PermissionMode::Bypass => "bypass",
     };
-    let data = serde_json::json!({ "mode": mode, "depth": depth, "style": style, "brand": brand_data() });
-    render::render("prompts/reminder.js", &data)
+    let data = serde_json::json!({ "mode": mode, "depth": depth, "style": style });
+    render("prompts/reminder.js", &data)
 }

@@ -7,8 +7,8 @@ use std::time::Duration;
 use domain::lsp::install::{Install, Recipe};
 use platform::{Bounds, Ended};
 
-use super::Starter;
 use super::Fetch;
+use super::Starter;
 use super::download::Download;
 use super::installs::Installer;
 

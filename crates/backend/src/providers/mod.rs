@@ -1,6 +1,7 @@
 mod account;
 mod catalog;
 pub(crate) mod redirect;
+mod shared;
 mod store;
 
 use std::collections::HashMap;
@@ -8,13 +9,14 @@ use std::sync::{Arc, Mutex};
 
 use platform::sync::Locked;
 
-use domain::provider::{ModelProvider, ProviderAccount, ProviderKey, clean_key, key_hint};
+use domain::provider::{ModelProvider, ProviderAccount, ProviderBook, ProviderKey, clean_key, key_hint};
 use domain::{Principal, SecretId};
 use llm_providers::Config;
 use protocol::{ProviderEvent, ServerEvent};
 
 pub use self::account::{BrowserSignIn, SignIn};
 pub use self::catalog::{ModelCatalog, ProviderCatalog};
+pub use self::shared::{NothingShared, SharedCredentials};
 pub use self::store::{FileProviderStore, InMemoryProviderStore, ProviderStore};
 use crate::outbox::Outbox;
 use crate::secrets::SecretStore;
@@ -32,6 +34,7 @@ type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 pub struct ModelProviders {
     store: Arc<dyn ProviderStore>,
     secrets: Arc<dyn SecretStore>,
+    shared: Arc<dyn SharedCredentials>,
     sign_in: Arc<dyn SignIn>,
     catalog: Arc<dyn ModelCatalog>,
     generations: Arc<Mutex<HashMap<String, u64>>>,
@@ -54,6 +57,7 @@ impl ModelProviders {
         Self {
             store,
             secrets,
+            shared: Arc::new(NothingShared),
             sign_in: Arc::new(BrowserSignIn),
             catalog: Arc::new(ProviderCatalog),
             generations: Arc::default(),
@@ -68,6 +72,11 @@ impl ModelProviders {
 
     pub fn with_secrets(mut self, secrets: Arc<dyn SecretStore>) -> Self {
         self.secrets = secrets;
+        self
+    }
+
+    pub fn with_shared(mut self, shared: Arc<dyn SharedCredentials>) -> Self {
+        self.shared = shared;
         self
     }
 
@@ -98,7 +107,7 @@ impl ModelProviders {
 
     pub fn list(&self, owner: &Principal) -> ServerEvent {
         ServerEvent::Providers(ProviderEvent::Listed {
-            providers: self.store.load(owner).summaries(agent_engine::providers::infos()),
+            providers: self.book(owner).summaries(agent_engine::providers::infos()),
         })
     }
 
@@ -152,16 +161,35 @@ impl ModelProviders {
 
     pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {
         use domain::provider::ProviderKeyStore;
-        if self.store.load(owner).get(provider).is_none() {
+        let Some(holder) = self.holder(owner, provider) else {
             return Err(format!("{} is not connected", agent_engine::providers::name(provider)));
-        }
+        };
         let source = Arc::new(account::AccountStore {
             secrets: self.secrets.clone(),
-            owner: owner.clone(),
+            owner: holder,
             slot: secret_id(provider),
             provider,
         });
         Ok(ProviderKey::new(source.load()?).with_store(source))
+    }
+
+    fn shared_holder(&self, owner: &Principal) -> Option<Principal> {
+        self.shared.holder(owner).filter(|holder| holder != owner)
+    }
+
+    fn book(&self, owner: &Principal) -> ProviderBook {
+        let own = self.store.load(owner);
+        match self.shared_holder(owner) {
+            Some(holder) => own.over(&self.store.load(&holder)),
+            None => own,
+        }
+    }
+
+    fn holder(&self, owner: &Principal, provider: ModelProvider) -> Option<Principal> {
+        if self.store.load(owner).get(provider).is_some() {
+            return Some(owner.clone());
+        }
+        self.shared_holder(owner).filter(|holder| self.store.load(holder).get(provider).is_some())
     }
 
     fn now(&self) -> i64 {

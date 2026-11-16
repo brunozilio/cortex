@@ -14,6 +14,7 @@ pub struct Folder {
     streamed: String,
     final_text: Vec<String>,
     calling: Option<String>,
+    thought: bool,
 }
 
 impl Folder {
@@ -35,7 +36,11 @@ impl Folder {
                 let part = &event["part"];
                 self.final_text(text(if part["type"] == "refusal" { &part["refusal"] } else { &part["text"] }));
             }
-            "response.reasoning_summary_text.delta" => on(Delta::Thinking(text(&event["delta"]))),
+            "response.reasoning_summary_part.added" if self.thought => on(Delta::Thinking("\n\n".into())),
+            "response.reasoning_summary_text.delta" => {
+                self.thought = true;
+                on(Delta::Thinking(text(&event["delta"])));
+            }
             "response.output_item.added" if event["item"]["type"] == "function_call" => {
                 self.calling = Some(text(&event["item"]["name"]));
             }

@@ -7,7 +7,8 @@ use crate::feature::Context;
 
 pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let cwd = input["cwd"].as_str().ok_or("the flags feature needs the project's folder")?;
-    let home = context.services.home.as_deref().ok_or("no home folder to keep your settings in")?;
+    let home = context.services.home(context.principal).ok_or("no home folder to keep your settings in")?;
+    let home = home.as_path();
     if let Some(name) = input["name"].as_str() {
         let on = input["on"].as_bool().ok_or("say whether the feature is on or off")?;
         owner_settings::keep_feature(home, name, on)?;
@@ -41,7 +42,7 @@ mod tests {
         let home = tempfile::tempdir().expect("home");
         let repo = tempfile::tempdir().expect("repo");
         let mut services = testing::services(None);
-        services.home = Some(home.path().to_path_buf());
+        services.homes = std::sync::Arc::new(crate::OwnerHome::at(home.path()));
         let cwd = repo.path().display().to_string();
 
         let listed = testing::with(1, &services, |context| handle(context, json!({ "cwd": cwd }))).expect("listed");

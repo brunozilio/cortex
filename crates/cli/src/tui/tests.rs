@@ -13,9 +13,14 @@ use super::app::App;
 use super::{keys, view};
 
 pub(super) fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
+    sdk_without(engine, data, &["memory_search", domain::features::GIT_OFFER])
+}
+
+pub(super) fn sdk_without(engine: &FakeEngine, data: &std::path::Path, off: &[&str]) -> Sdk {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.data = None;
-    services.off.insert("memory_search".into());
+    services.homes = Arc::new(backend::OwnerHome::at(data));
+    services.off.extend(off.iter().map(|flag| (*flag).to_owned()));
     let secrets = Arc::new(InMemorySecretStore::default());
     services.providers = services.providers.with_secrets(secrets);
     Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)

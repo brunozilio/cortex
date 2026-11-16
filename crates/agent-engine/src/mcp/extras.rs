@@ -35,24 +35,11 @@ impl std::fmt::Debug for ListResources {
 impl Tool for ListResources {
     fn spec(&self) -> ToolSpec {
         let names: Vec<&str> = self.0.iter().map(|server| server.name()).collect();
-        ToolSpec {
-            name: "ListMcpResources".into(),
-            description: format!(
-                "List the resources (files, records, documents) MCP servers offer: {}. Read one with \
-                 ReadMcpResource.",
-                names.join(", ")
-            ),
-            schema: json!({
-                "type": "object",
-                "properties": { "server": { "type": "string", "description": "The server whose resources to list." } },
-                "required": ["server"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("ListMcpResources", &json!({ "servers": names }))
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access("ListMcpResources")
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -95,20 +82,11 @@ impl std::fmt::Debug for ReadResource {
 
 impl Tool for ReadResource {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "ReadMcpResource".into(),
-            description: "Read a resource of an MCP server by its URI (ListMcpResources lists them).".into(),
-            schema: json!({
-                "type": "object",
-                "properties": { "server": { "type": "string" }, "uri": { "type": "string" } },
-                "required": ["server", "uri"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("ReadMcpResource", &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Executes
+        crate::tools::declared_access("ReadMcpResource")
     }
 
     fn summary(&self, input: &Value) -> String {

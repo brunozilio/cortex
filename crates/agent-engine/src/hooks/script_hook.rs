@@ -16,10 +16,9 @@ pub fn script(
     workspace: &Workspace,
     model: Option<(&dyn ModelApi, &TurnRequest)>,
 ) -> Result<CommandOutput, String> {
-    let path = std::path::PathBuf::from(&handler.command);
-    let source = std::fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let source = super::scripts::source(&handler.command)?;
     let hook = Hook {
-        shown: path.display().to_string(),
+        shown: handler.command.clone(),
         source,
         input: input.clone(),
         data: serde_json::json!({ "cwd": workspace.cwd, "session": workspace.session_id, "agent": workspace.agent_name }),

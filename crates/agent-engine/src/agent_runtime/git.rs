@@ -18,6 +18,16 @@ pub(crate) fn git_stopped(workspace: &Workspace, cwd: &Path, args: &[&OsStr]) ->
     output(cwd, args, &workspace.stop).map(|out| out.trim().to_owned())
 }
 
+pub(crate) fn has_commit(workspace: &Workspace) -> Result<bool, String> {
+    let mut command = platform::command("git");
+    command.arg("-C").arg(&workspace.cwd).args(["rev-parse", "--verify", "HEAD"]);
+    let bounds = Bounds { timeout: TIMEOUT, max_output: MAX_OUTPUT, stop: &workspace.stop, input: None };
+    match platform::bounded::run(&mut command, bounds).map_err(|e| e.to_string())?.ended {
+        Ended::Exited(status) => Ok(status.success()),
+        Ended::Stopped | Ended::TimedOut => Err("git operation cancelled or timed out".into()),
+    }
+}
+
 pub(crate) fn output(cwd: &Path, args: &[&OsStr], stop: &AtomicBool) -> Result<String, String> {
     let mut command = platform::command("git");
     command.arg("-C").arg(cwd).args(args);

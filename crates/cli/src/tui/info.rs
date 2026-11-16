@@ -54,10 +54,9 @@ pub fn doctor(app: &App) {
 pub fn styles() -> Vec<(String, String)> {
     let mut styles = vec![("default".to_owned(), format!("{}'s usual way: works, then reports", brand::NAME))];
     for (path, _) in content::builtin_files("styles/") {
-        let Some(id) = path.strip_prefix("styles/").and_then(|name| name.strip_suffix(".md")) else { continue };
-        let text = content::text(path);
-        let about =
-            text.lines().find_map(|line| line.strip_prefix("description:")).unwrap_or_default().trim().to_owned();
+        let Some(id) = path.strip_prefix("styles/").and_then(|name| name.strip_suffix(".js")) else { continue };
+        let spec = content::value(path, "spec").unwrap_or_default();
+        let about = spec["description"].as_str().unwrap_or_default().trim().to_owned();
         styles.push((id.to_owned(), about));
     }
     styles

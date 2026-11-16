@@ -102,8 +102,11 @@ pub fn load(home: Option<&Path>, cwd: &Path) -> Vec<ScriptTool> {
         home.map(|home| (home.join(brand::DIR).join("tools"), true)).into_iter().collect();
     folders.push((cwd.join(brand::DIR).join("tools"), false));
     let mut tools: Vec<ScriptTool> = Vec::new();
+    let built_in = |file: &Path| {
+        file.file_name().is_some_and(|name| content::builtin(&format!("tools/{}", name.to_string_lossy())).is_some())
+    };
     for (folder, trusted) in folders {
-        for file in files(&folder) {
+        for file in files(&folder).into_iter().filter(|file| !built_in(file)) {
             match parse(&file, trusted) {
                 Ok(tool) if !trusted && tools.iter().any(|known| known.spec.name == tool.spec.name) => {
                     tracing::warn!(name = %tool.spec.name, "a project script tool with the owner's tool's name is left out")
@@ -225,5 +228,24 @@ mod join_tests {
         assert_eq!(described("Echo"), [("The owner's.".to_owned(), true)]);
         assert_eq!(described("Grep"), [("The owner's.".to_owned(), true)], "the owner may replace a built-in");
         assert_eq!(described("Deploy"), [("The project's.".to_owned(), true)]);
+    }
+}
+
+#[cfg(test)]
+mod copied_content_tests {
+    use super::*;
+
+    #[test]
+    fn a_copy_of_a_built_in_tool_in_the_user_s_folder_is_not_a_script_tool() {
+        let home = tempfile::tempdir().expect("home");
+        let project = tempfile::tempdir().expect("project");
+        let user_tools = home.path().join(brand::DIR).join("tools");
+        std::fs::create_dir_all(&user_tools).expect("dir");
+        let bash = content::builtin("tools/Bash.js").expect("Bash ships");
+        std::fs::write(user_tools.join("Bash.js"), bash).expect("copy");
+        std::fs::write(user_tools.join("echo.js"), r#"export const spec = { name: "Echo" };"#).expect("write");
+        let names: Vec<String> =
+            load(Some(home.path()), project.path()).into_iter().map(|tool| tool.spec.name).collect();
+        assert_eq!(names, ["Echo"]);
     }
 }

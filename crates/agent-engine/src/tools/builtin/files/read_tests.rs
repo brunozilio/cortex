@@ -25,9 +25,23 @@ fn reading_an_unchanged_file_again_sends_a_note_not_its_text() {
 }
 
 #[test]
-fn a_changed_file_or_another_range_is_read_in_full() {
+fn lines_inside_what_was_already_read_send_a_note_not_their_text() {
     let (dir, workspace) = project();
     read(&workspace, json!({"file_path": "a.rs"}));
+    let inside = read(&workspace, json!({"file_path": "a.rs", "offset": 2, "limit": 1}));
+    assert!(!inside.contains("two") && inside.contains("unchanged"), "{inside}");
+
+    let line = "x".repeat(1_000);
+    std::fs::write(dir.path().join("big.txt"), format!("{line}\n").repeat(500)).expect("write");
+    read(&workspace, json!({"file_path": "big.txt"}));
+    let past_the_cut = read(&workspace, json!({"file_path": "big.txt", "offset": 400, "limit": 2}));
+    assert!(past_the_cut.contains("   400\tx"), "only the lines shown count as read");
+}
+
+#[test]
+fn a_changed_file_or_lines_not_read_yet_are_read_in_full() {
+    let (dir, workspace) = project();
+    read(&workspace, json!({"file_path": "a.rs", "limit": 1}));
     assert!(read(&workspace, json!({"file_path": "a.rs", "offset": 2})).contains("two"));
     std::fs::write(dir.path().join("a.rs"), "one\ntwo\nthree\nfour\n").expect("write");
     assert!(read(&workspace, json!({"file_path": "a.rs", "offset": 2})).contains("four"));

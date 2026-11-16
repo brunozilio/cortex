@@ -24,6 +24,16 @@ pub fn files(cwd: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
+pub fn inside(cwd: &Path) -> bool {
+    git(cwd, &["rev-parse", "--git-dir"]).is_ok()
+}
+
+pub fn init(cwd: &Path) -> Result<bool, String> {
+    git(cwd, &["init", "--quiet"])?;
+    let has_commit = git(cwd, &["rev-parse", "--verify", "HEAD"]).is_ok();
+    Ok(!has_commit && git(cwd, &["commit", "--quiet", "--allow-empty", "-m", "Initial commit"]).is_ok())
+}
+
 fn staged(cwd: &Path) -> Result<String, String> {
     git(cwd, &["diff", "--cached", "--no-color", "--no-ext-diff"])
 }

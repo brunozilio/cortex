@@ -1,4 +1,5 @@
 mod account;
+mod catalog;
 mod chores;
 mod client;
 mod extensions;
@@ -57,11 +58,29 @@ pub enum Error {
 #[derive(Debug, Clone)]
 pub struct Sdk {
     client: Arc<Client>,
+    services: Option<LocalServices>,
 }
 
 impl Sdk {
     pub fn builder() -> Builder {
         Builder::default()
+    }
+
+    pub fn sibling(&self) -> Result<Self, Error> {
+        let services = self
+            .services
+            .clone()
+            .ok_or_else(|| Error::Backend("only a client of the local backend can open another beside it".into()))?;
+        Self::local(services)
+    }
+
+    fn local(services: LocalServices) -> Result<Self, Error> {
+        let (wake_tx, woken) = crossbeam_channel::bounded(1);
+        let wake: Wake = Arc::new(move || {
+            let _ = wake_tx.try_send(());
+        });
+        let backend = LocalBackend::new(services.clone(), wake).map_err(|error| Error::Backend(error.to_string()))?;
+        Ok(Self { client: Arc::new(Client::new(Box::new(backend), woken)), services: Some(services) })
     }
 
     pub fn session(&self, cwd: impl Into<PathBuf>, model: ModelOption) -> Session {
@@ -139,18 +158,18 @@ impl Builder {
     }
 
     pub fn build(self) -> Result<Sdk, Error> {
-        let (wake_tx, woken) = crossbeam_channel::bounded(1);
-        let wake: Wake = Arc::new(move || {
-            let _ = wake_tx.try_send(());
-        });
         if let Some(connect) = self.connect {
+            let (wake_tx, woken) = crossbeam_channel::bounded(1);
+            let wake: Wake = Arc::new(move || {
+                let _ = wake_tx.try_send(());
+            });
             if !self.definitions.is_empty() || !self.connections.is_empty() || !self.servers.is_empty() {
                 return Err(Error::Backend(
                     "agents, skills, commands and MCP servers given to the builder reach only the local backend".into(),
                 ));
             }
             let backend = connect(wake).map_err(|error| Error::Backend(error.to_string()))?;
-            return Ok(Sdk { client: Arc::new(Client::new(backend, woken)) });
+            return Ok(Sdk { client: Arc::new(Client::new(backend, woken)), services: None });
         }
         let mut services = self.services.unwrap_or_else(LocalServices::detect);
         if let Some(data) = &self.data {
@@ -170,7 +189,6 @@ impl Builder {
             .map(|server| domain::mcp::LocalMcp::new(server.name().to_owned(), Arc::new(server)))
             .collect();
         services.extensions = extensions;
-        let backend = LocalBackend::new(services, wake).map_err(|error| Error::Backend(error.to_string()))?;
-        Ok(Sdk { client: Arc::new(Client::new(Box::new(backend), woken)) })
+        Sdk::local(services)
     }
 }

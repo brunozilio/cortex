@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::sync::Mutex;
 
 use serde_json::{Value, json};
@@ -15,13 +14,13 @@ const NAME_WEIGHT: usize = 3;
 #[derive(Debug, Default)]
 pub struct Deferred {
     specs: Vec<ToolSpec>,
-    loaded: Mutex<BTreeSet<String>>,
+    loaded: Mutex<Vec<String>>,
 }
 
 impl Deferred {
     pub fn loaded(&self) -> Vec<ToolSpec> {
         let loaded = self.loaded.lock().map(|loaded| loaded.clone()).unwrap_or_default();
-        self.specs.iter().filter(|spec| loaded.contains(&spec.name)).cloned().collect()
+        loaded.iter().filter_map(|name| self.specs.iter().find(|spec| spec.name == *name)).cloned().collect()
     }
 
     pub fn only(&self, allowed: impl Fn(&str) -> bool) -> Self {
@@ -39,11 +38,15 @@ impl Deferred {
 
     pub fn waiting(&self) -> Vec<&str> {
         let loaded = self.loaded.lock().map(|loaded| loaded.clone()).unwrap_or_default();
-        self.specs.iter().map(|spec| spec.name.as_str()).filter(|name| !loaded.contains(*name)).collect()
+        self.specs
+            .iter()
+            .map(|spec| spec.name.as_str())
+            .filter(|name| !loaded.iter().any(|loaded| loaded == name))
+            .collect()
     }
 
     pub fn is_loaded(&self, name: &str) -> bool {
-        self.loaded.lock().is_ok_and(|loaded| loaded.contains(name))
+        self.loaded.lock().is_ok_and(|loaded| loaded.iter().any(|loaded| loaded == name))
     }
 
     pub fn search(&self, query: &str) -> Vec<ToolSpec> {
@@ -83,7 +86,11 @@ impl Deferred {
             }
         };
         if let Ok(mut loaded) = self.loaded.lock() {
-            loaded.extend(found.iter().map(|spec| spec.name.clone()));
+            for spec in &found {
+                if !loaded.contains(&spec.name) {
+                    loaded.push(spec.name.clone());
+                }
+            }
         }
         found.into_iter().cloned().collect()
     }
@@ -104,28 +111,13 @@ pub fn defer(specs: Vec<ToolSpec>) -> (Vec<ToolSpec>, Option<Deferred>) {
 #[derive(Debug)]
 pub struct ToolSearch;
 
-impl ToolSearch {
-    fn spec_for() -> ToolSpec {
-        ToolSpec {
-            name: TOOL_SEARCH.into(),
-            description: crate::tools::describe("ToolSearch", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": { "query": { "type": "string" } },
-                "required": ["query"],
-                "additionalProperties": false
-            }),
-        }
-    }
-}
-
 impl Tool for ToolSearch {
     fn spec(&self) -> ToolSpec {
-        Self::spec_for()
+        crate::tools::declared(TOOL_SEARCH, &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(TOOL_SEARCH)
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -171,6 +163,17 @@ mod tests {
 
     fn spec(name: &str, description: &str) -> ToolSpec {
         ToolSpec { name: name.into(), description: description.into(), schema: json!({"type": "object"}) }
+    }
+
+    #[test]
+    fn loaded_tools_keep_the_order_they_were_loaded_in() {
+        let specs = (0..25).map(|n| spec(&format!("mcp__jira__tool{n}"), "a Jira thing")).collect();
+        let deferred = defer(specs).1.expect("deferred");
+        for name in ["mcp__jira__tool9", "mcp__jira__tool3", "mcp__jira__tool9"] {
+            deferred.search(&format!("select:{name}"));
+        }
+        let loaded: Vec<String> = deferred.loaded().into_iter().map(|spec| spec.name).collect();
+        assert_eq!(loaded, ["mcp__jira__tool9", "mcp__jira__tool3"]);
     }
 
     #[test]

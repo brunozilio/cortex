@@ -62,6 +62,7 @@ impl Job {
         self.gate.observe(recorder.observer());
         self.recorder = Some(recorder);
         self.gate.emit(EngineEvent::SessionStarted(session.clone()));
+        content::install_once();
         let brief = match crate::brief::Brief::load(&self.request) {
             Ok(brief) => brief,
             Err(error) => return self.fail(&error, FailureKind::Other),
@@ -130,6 +131,7 @@ impl Job {
         workspace.policy.affected_tests = settings.features.on(domain::features::AFFECTED_TESTS);
         workspace.policy.session_claims = settings.features.on(domain::features::SESSION_CLAIMS);
         workspace.policy.web = domain::web_reading::WebReading::from(&settings.features);
+        workspace.policy.output = domain::output::Shaping::from(&settings.features);
         workspace.models.escalation.clone_from(&settings.escalation);
         if !settings.features.on(domain::features::BUDGET) {
             self.request.budget = None;
@@ -169,7 +171,6 @@ impl Job {
         }
         workspace.agent_name = selected.as_ref().map_or("main", |a| a.name.as_str()).into();
         workspace.session_id = session.0.clone();
-        workspace.hooks = settings.hooks.clone();
         workspace.anchored_memories = self
             .request
             .memory
@@ -178,9 +179,11 @@ impl Job {
             .map(|brief| brief.anchored.clone())
             .unwrap_or_default();
         workspace.blast_radius = settings.features.on(domain::features::BLAST_RADIUS);
+        workspace.hooks = settings.hooks.clone();
         workspace.policy.permissions = settings.permissions.clone();
         for (kind, rules) in [
             (domain::permission_rules::RuleKind::Allow, &self.request.allowed_tools),
+            (domain::permission_rules::RuleKind::Ask, &self.request.ask_tools),
             (domain::permission_rules::RuleKind::Deny, &self.request.disallowed_tools),
         ] {
             for rule in rules {

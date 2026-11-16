@@ -6,6 +6,7 @@ pub struct Services {
     pub lsp: Option<crate::lsp::Lsp>,
     pub files: Option<Arc<crate::checkpoints::FileHistory>>,
     pub deferred: Option<Arc<crate::tools::tool_search::Deferred>>,
+    pub launch: super::Launch,
 }
 
 #[derive(Clone)]

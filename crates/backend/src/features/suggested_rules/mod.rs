@@ -21,7 +21,7 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let store = FileSessions::new(data.join(crate::native::SESSIONS));
     let owner_settings = context.services.settings.load(context.principal).unwrap_or_default();
     let sessions = crate::settings::recent_sessions(&owner_settings, cwd);
-    let kept = settings::load(cwd, context.services.home.as_deref(), &[])?.permissions.listed();
+    let kept = settings::load(cwd, context.services.home(context.principal).as_deref(), &[])?.permissions.listed();
     serde_json::to_value(suggested(&store, context.principal, cwd, &sessions, &kept)).map_err(|e| e.to_string())
 }
 

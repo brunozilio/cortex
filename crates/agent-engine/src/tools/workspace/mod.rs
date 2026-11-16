@@ -2,6 +2,7 @@ mod anchors;
 mod blast;
 mod claims;
 mod confined;
+mod launcher;
 mod models;
 mod policy;
 mod services;
@@ -13,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+pub use launcher::{Launch, Launcher, OnThisMachine};
 pub use models::Models;
 pub use policy::{Policy, env_secrets};
 pub use services::{Network, Services};

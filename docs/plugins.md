@@ -30,6 +30,23 @@ names the backend's wins over `~/.{command}/plugins/`.
 {command} plugin install git@github.com:you/my-config.git
 ```
 
+## Plugins kept in this repository
+
+`plugins/` holds plugins versioned with the app but never compiled into
+it; each is installed like any other, by linking or copying its folder
+into `~/.{command}/plugins/`.
+
+- `plugins/dev-flow`: a team's development flow for one Jira story
+  (refine, spec, plan, implement, pull request, review, merge, QA, done)
+  over Jira and Confluence (the Atlassian MCP server), GitHub (`gh`) and
+  Zephyr Scale (REST). A story's state is `.flow/<ISSUE>.json` in the
+  project; `hooks/gate.js`, a PreToolUse script hook, answers `ask` when
+  that file moves to another stage and refuses the outside actions of a
+  stage not yet approved, with the stages, gates and guards as plain
+  JavaScript at the top of the file. Its tests run on Node
+  (`npm test` in the folder), outside Cargo. Its engineering skills are
+  adapted from addyosmani/agent-skills (MIT); `NOTICE.md` lists them.
+
 ## MCP servers a person or a project configures
 
 | Where | File | Starts |

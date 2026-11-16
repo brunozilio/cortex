@@ -5,8 +5,8 @@ use serde_json::{Value, json};
 
 use crate::feature::Context;
 
-pub fn handle(_context: &Context<'_>, input: Value) -> Result<Value, String> {
-    let home = std::env::home_dir().ok_or("no home folder to keep plugins in")?;
+pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
+    let home = context.services.home(context.principal).ok_or("no home folder to keep plugins in")?;
     let folder = home.join(brand::DIR).join("plugins");
     let text = |key: &str| input[key].as_str().map(str::trim).filter(|value| !value.is_empty());
     match input["op"].as_str().unwrap_or("list") {

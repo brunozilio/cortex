@@ -21,6 +21,7 @@ pub fn records(entries: Vec<Entry>) -> Vec<Record> {
             Entry::Restarted => records.push(Record::Restarted),
             Entry::Event { at_ms, event } => records.push(Record::Event { at_ms, event }),
             Entry::Prompted { at_ms, prompt } => records.push(Record::Prompted { at_ms, prompt }),
+            Entry::Shown(shown) => records.push(Record::Shown { text: shown.text, attached: shown.attached }),
             Entry::Called { at_ms, agent, call } => records.push(Record::Called { at_ms, agent, call }),
             Entry::Opened { at_ms, run } => records.push(Record::Opened { at_ms, run }),
         }

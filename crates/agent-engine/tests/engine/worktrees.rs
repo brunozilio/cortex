@@ -161,3 +161,26 @@ fn a_worktree_entered_in_a_run_that_then_fails_is_still_the_session_s() {
     assert!(matches!(events.last(), Some(EngineEvent::Failed(_))), "{events:?}");
     assert!(worktree.exists(), "kept for the session, not leaked or lost");
 }
+
+#[test]
+fn a_main_agent_asking_for_a_worktree_outside_a_repository_works_in_the_folder() {
+    let dir = tempfile::tempdir().expect("dir");
+    let root = dir.path().join(brand::DIR);
+    std::fs::create_dir_all(root.join("agents")).expect("agents");
+    std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer"}"#).expect("settings");
+    std::fs::write(root.join("agents/reviewer.md"), "---\nname: reviewer\nisolation: worktree\n---\nReview.")
+        .expect("agent");
+    let run = script(vec![("write", "Write", json!({"file_path": "work.txt", "content": "In the folder"}))], "Done.");
+    let store = tempfile::tempdir().expect("store");
+    let engine = NativeEngine::new(
+        Arc::new(Source(Mutex::new(vec![run]))),
+        Arc::new(agent_engine::sessions::FileSessions::new(store.path())),
+    );
+    let mut request = PromptRequest::plain(dir.path().into(), "Create work", model());
+    request.permission = PermissionMode::Bypass;
+    request.safety_check = false;
+    let events = finish(&start(&engine, &request));
+    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+    assert_eq!(std::fs::read_to_string(dir.path().join("work.txt")).expect("work"), "In the folder");
+    assert!(!root.join("worktrees").exists());
+}

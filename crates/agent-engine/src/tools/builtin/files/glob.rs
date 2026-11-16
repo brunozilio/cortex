@@ -13,23 +13,11 @@ pub struct Glob;
 
 impl Tool for Glob {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "Glob".into(),
-            description: crate::tools::describe("Glob", &serde_json::json!({ "LIMIT": LIMIT })),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "pattern": { "type": "string", "description": "The glob to match paths against." },
-                    "path": { "type": "string", "description": "The directory to search; the working directory if omitted." }
-                },
-                "required": ["pattern"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("Glob", &json!({ "LIMIT": LIMIT }))
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access("Glob")
     }
 
     fn reaches_outside(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {

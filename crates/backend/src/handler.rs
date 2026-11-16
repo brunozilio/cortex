@@ -83,10 +83,18 @@ impl CommandHandler {
             }
             ClientCommand::ListSkills { path } => {
                 agent_engine::tools::peers::register(self.client, Some(&principal), &path);
-                outbox.send(ServerEvent::Skills(crate::extensions::skills(&path, &self.services.extensions)));
+                outbox.send(ServerEvent::Skills(crate::extensions::skills(
+                    &path,
+                    &self.services.extensions,
+                    self.services.home(&principal).as_deref(),
+                )));
             }
             ClientCommand::ListAgents { path } => {
-                outbox.send(ServerEvent::Agents(crate::extensions::agents(&path, &self.services.extensions)));
+                outbox.send(ServerEvent::Agents(crate::extensions::agents(
+                    &path,
+                    &self.services.extensions,
+                    self.services.home(&principal).as_deref(),
+                )));
             }
             ClientCommand::LoadSettings => {
                 outbox.send(ServerEvent::Settings { settings: self.services.settings.load(&principal) });
@@ -105,7 +113,7 @@ impl CommandHandler {
             ClientCommand::DisconnectProvider { provider } => {
                 outbox.send(self.services.providers.disconnect(&principal, provider))
             }
-            ClientCommand::ListMcpServers { path } => self.mcp_servers(&path, Ok(())),
+            ClientCommand::ListMcpServers { path } => self.mcp_servers(&principal, &path, Ok(())),
             ClientCommand::TakeNotices => {
                 outbox.send(ServerEvent::Notices(agent_engine::tools::inbox::take(self.client)));
             }
@@ -118,17 +126,23 @@ impl CommandHandler {
             ClientCommand::ListPermissions { path } => self.outbox.send(crate::permissions::list(
                 &path,
                 &self.services.extensions,
-                self.services.home.as_deref(),
+                self.services.home(&principal).as_deref(),
             )),
-            ClientCommand::ApproveMcpServer { path, name, approve } => {
-                self.mcp_servers(&path, crate::mcp_admin::approve(&path, self.services.home.as_deref(), &name, approve))
-            }
-            ClientCommand::AddMcpServer { path, name, server } => {
-                self.mcp_servers(&path, crate::mcp_admin::add(self.services.home.as_deref(), &name, server))
-            }
-            ClientCommand::RemoveMcpServer { path, name } => {
-                self.mcp_servers(&path, crate::mcp_admin::remove(self.services.home.as_deref(), &name))
-            }
+            ClientCommand::ApproveMcpServer { path, name, approve } => self.mcp_servers(
+                &principal,
+                &path,
+                crate::mcp_admin::approve(&path, self.services.home(&principal).as_deref(), &name, approve),
+            ),
+            ClientCommand::AddMcpServer { path, name, server } => self.mcp_servers(
+                &principal,
+                &path,
+                crate::mcp_admin::add(self.services.home(&principal).as_deref(), &name, server),
+            ),
+            ClientCommand::RemoveMcpServer { path, name } => self.mcp_servers(
+                &principal,
+                &path,
+                crate::mcp_admin::remove(self.services.home(&principal).as_deref(), &name),
+            ),
             ClientCommand::SignInMcpServer { path, name } => {
                 crate::mcp_auth::command::sign_in(&self.services, &principal, path, name, &self.outbox);
             }
@@ -138,9 +152,9 @@ impl CommandHandler {
         }
     }
 
-    fn mcp_servers(&self, path: &std::path::Path, changed: Result<(), String>) {
+    fn mcp_servers(&self, principal: &Principal, path: &std::path::Path, changed: Result<(), String>) {
         let event = match changed {
-            Ok(()) => crate::mcp_admin::list(path, &self.services.extensions, self.services.home.as_deref()),
+            Ok(()) => crate::mcp_admin::list(path, &self.services.extensions, self.services.home(principal).as_deref()),
             Err(error) => ServerEvent::error(error),
         };
         self.outbox.send(event);
@@ -183,10 +197,11 @@ impl CommandHandler {
             },
             ..request.clone()
         };
-        let request = self.services.extensions.brief(run, request)?;
+        let request = self.services.extensions.brief(run, request, self.services.home(owner))?;
         let (request, finishes) = self.with_context(owner, |context| crate::features::prepare(context, run, request));
         let sink = Arc::new(RunSink {
             runs: Arc::clone(&self.runs),
+            listing: crate::catalog::Listing::of(&self.services, owner, &request),
             outbox,
             finishes: std::sync::Mutex::new(finishes),
             extensions: request.extensions.clone(),
@@ -222,6 +237,7 @@ impl CommandHandler {
 
 struct RunSink {
     runs: Arc<RunTable>,
+    listing: Option<crate::catalog::Listing>,
     outbox: Outbox,
     finishes: std::sync::Mutex<Vec<Finish>>,
     extensions: Option<domain::Extensions>,
@@ -229,6 +245,9 @@ struct RunSink {
 
 impl EventSink for RunSink {
     fn emit(&self, run: RunId, event: EngineEvent) {
+        if let Some(listing) = &self.listing {
+            listing.observe(&event);
+        }
         if event.is_terminal() {
             self.runs.finish(run);
             crate::extensions::discard(self.extensions.as_ref());

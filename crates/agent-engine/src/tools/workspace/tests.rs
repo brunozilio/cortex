@@ -30,11 +30,13 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         affected_tests: true,
         session_claims: true,
         web: domain::web_reading::WebReading::none(),
+        output: domain::output::Shaping { cleanup: true, filters: false, savings: true },
     };
 
     let fork = policy.fork();
 
     assert_eq!(fork.web, policy.web, "a sub-agent reads the web as its parent does");
+    assert_eq!(fork.output, policy.output, "a sub-agent's command output is shaped as its parent's");
     assert_eq!(fork.sandbox, policy.sandbox, "a sub-agent's commands stay as confined as its parent's");
     assert!(fork.redact.is_some(), "a sub-agent's output is redacted like its parent's");
     assert!(fork.snapshots && fork.dependency_guard);

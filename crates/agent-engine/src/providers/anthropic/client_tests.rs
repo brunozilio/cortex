@@ -22,8 +22,15 @@ fn a_turn_goes_to_the_messages_api_with_the_key() {
     assert_eq!(header(&sent, "x-api-key").as_deref(), Some("sk-test-key"));
     assert!(header(&sent, "authorization").is_none());
     assert_eq!(body["max_tokens"], 8192);
-    assert_eq!(body["system"], "Help the user.");
+    assert_eq!(body["system"][0]["text"], "Help the user.");
     assert!(body.get("thinking").is_none());
+}
+
+#[test]
+fn the_system_prompt_and_the_conversation_are_cached() {
+    let (_, body) = sent_turn(ANTHROPIC, MESSAGES);
+    assert_eq!(body["cache_control"], json!({"type": "ephemeral"}));
+    assert_eq!(body["system"][0]["cache_control"], json!({"type": "ephemeral"}));
 }
 
 #[test]

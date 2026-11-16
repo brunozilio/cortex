@@ -1,15 +1,18 @@
+use std::sync::Mutex;
+
 use domain::{AgentStatus, EngineEvent};
+use platform::sync::Locked;
 use serde_json::{Value, json};
 
 use super::conversations::{Conversations, Kept, Resume};
-use super::{Agent, Ending, MAX_TURNS};
+use super::{Agent, Ending, MAX_TURNS, sub_agent_report};
 use crate::control::Control;
 use crate::model::{ModelError, TurnRequest};
 use crate::tools::builtin_agents;
 use crate::tools::send_message::SEND_MESSAGE_TOOL;
 use crate::tools::subagent::{self, AGENT_TOOL, AgentTool};
 use crate::tools::{Outcome, Workspace};
-use crate::transcript::{Message, Role};
+use crate::transcript::Message;
 
 const TOP_LEVEL_ONLY: [&str; 6] = [
     AGENT_TOOL,
@@ -47,11 +50,14 @@ impl Agent<'_> {
         if !workspace.auto_memory {
             config.memory = None;
         }
+        let mut unserved = None;
         if let Some(model) = input.get("model").and_then(serde_json::Value::as_str).filter(|m| !m.is_empty()) {
             let asked =
                 crate::tools::subagent_config::AgentConfig { model: Some(model.to_owned()), ..Default::default() };
             if asked.model(&self.request.model, self.workspace.models.model.provider).is_ok() {
                 config.model = asked.model;
+            } else {
+                unserved = Some(model.to_owned());
             }
         }
         let explores = chosen.as_ref().is_some_and(|agent| agent.name == "Explore");
@@ -66,6 +72,14 @@ impl Agent<'_> {
         }
         if input.get("isolation").and_then(serde_json::Value::as_str) == Some("worktree") {
             config.worktree = true;
+        }
+        let unisolated = match config.worktree.then(|| crate::agent_runtime::can_isolate(workspace)) {
+            Some(Ok(false)) => true,
+            Some(Err(error)) => return Outcome::error(format!("Agent setup failed: {error}")),
+            Some(Ok(true)) | None => false,
+        };
+        if unisolated {
+            config.worktree = false;
         }
         let model = match config.model(&self.request.model, self.workspace.models.model.provider) {
             Ok(model) => model,
@@ -171,18 +185,27 @@ impl Agent<'_> {
             }
         };
         (self.emit)(EngineEvent::AgentUpdate { index, status: AgentStatus::Running { progress: 0.0 }, summary: None });
+        let saying = Mutex::new(String::new());
         let relay = |event: EngineEvent| match event {
             EngineEvent::TextDelta(_)
             | EngineEvent::ThinkingDelta(_)
             | EngineEvent::ToolStarted(_)
             | EngineEvent::ToolFinished { .. }
-            | EngineEvent::ToolResult { .. } => {
+            | EngineEvent::ToolResult { .. }
+            | EngineEvent::Asked(_) => {
+                match &event {
+                    EngineEvent::TextDelta(text) => saying.locked().push_str(text),
+                    EngineEvent::ToolResult { .. } => saying.locked().clear(),
+                    _ => {}
+                }
+                let asked = matches!(event, EngineEvent::Asked(_)).then(|| event.clone());
                 (self.emit)(EngineEvent::AgentEvent { index, event: Box::new(event) });
+                asked.into_iter().for_each(self.emit);
             }
-            EngineEvent::Asked(_) => (self.emit)(event),
             _ => {}
         };
         let started = std::time::Instant::now();
+        let planning = child_control.mode() == domain::PermissionMode::Plan;
         let child = Agent {
             api: self.api,
             tools: self.tools,
@@ -197,6 +220,7 @@ impl Agent<'_> {
                     .tools
                     .iter()
                     .filter(|spec| !TOP_LEVEL_ONLY.contains(&spec.name.as_str()) && config.allows(&spec.name))
+                    .filter(|spec| !planning || !self.refused_while_planning(&spec.name))
                     .cloned()
                     .collect(),
                 effort: config.effort.unwrap_or(self.request.effort),
@@ -238,19 +262,7 @@ impl Agent<'_> {
             Err(error) => Err(Ending::Failed(ModelError::Provider(error))),
         };
         let cleanup = runtime_guard.finish();
-        let report = history
-            .get(if history.len() >= own { own } else { 0 }..)
-            .unwrap_or_default()
-            .iter()
-            .rev()
-            .find(|m| m.role == Role::Assistant)
-            .map(Message::text)
-            .unwrap_or_default();
-        let read_outside = history.get(own.min(history.len())..).unwrap_or_default().iter().flat_map(|m| &m.blocks).any(
-            |b| matches!(b, crate::transcript::Block::ToolUse { name, .. } if domain::untrusted::reads_outside(name)),
-        );
-        let report =
-            if read_outside && !report.trim().is_empty() { domain::untrusted::relayed(&report) } else { report };
+        let report = sub_agent_report::last_said(&history, own);
         let report = match cleanup {
             Ok(Some(path)) => format!("{report}\n\nChanges retained in worktree: {}", path.display()),
             Ok(None) => report,
@@ -263,6 +275,7 @@ impl Agent<'_> {
                 (self.emit)(EngineEvent::AgentUpdate { index, status, summary: Some(summary) });
                 let mut report =
                     if report.trim().is_empty() { "The sub-agent finished without a report.".into() } else { report };
+                report.push_str(&sub_agent_report::how_it_ran(unisolated, unserved.as_deref(), &child.request.model));
                 if !config.worktree {
                     let id = conversations.keep(Kept { input: input.clone(), index, history });
                     report.push_str(&format!("\n\nagent_id: {id} (SendMessage continues it)"));
@@ -270,9 +283,18 @@ impl Agent<'_> {
                 Outcome::ok(report)
             }
             Err(ending) => {
-                (self.emit)(EngineEvent::AgentUpdate { index, status: AgentStatus::Failed, summary: None });
-                Outcome::error(format!("The sub-agent stopped: {ending:?}. What it said last: {report}"))
+                let unfinished = std::mem::take(&mut *saying.locked());
+                let (status, outcome) = sub_agent_report::stopped(&ending, unfinished, report);
+                (self.emit)(EngineEvent::AgentUpdate { index, status, summary: None });
+                outcome
             }
         }
+    }
+
+    fn refused_while_planning(&self, name: &str) -> bool {
+        self.tools
+            .iter()
+            .find(|tool| tool.spec().name == name)
+            .is_some_and(|tool| crate::permission::refused_while_planning(tool.access()))
     }
 }

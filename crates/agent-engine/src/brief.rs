@@ -65,7 +65,7 @@ pub fn permissions(request: &PromptRequest) -> Result<domain::permission_rules::
 }
 
 pub fn home(request: &PromptRequest) -> Option<PathBuf> {
-    request.extensions.as_ref().and_then(|extensions| extensions.home.clone()).or_else(std::env::home_dir)
+    request.extensions.as_ref().and_then(|extensions| extensions.home.clone())
 }
 
 pub fn added_dirs(request: &PromptRequest, settings: &[String], home: Option<&std::path::Path>) -> Vec<PathBuf> {
@@ -91,6 +91,14 @@ mod tests {
         let expected: Vec<PathBuf> =
             ["/shared", "/home/ana/notes", "/work/rocket/../lib", "/opt/x"].iter().map(PathBuf::from).collect();
         assert_eq!(dirs, expected);
+    }
+
+    #[test]
+    fn a_run_reads_only_the_home_its_backend_gave_it() {
+        let mut request = PromptRequest::plain("/work/rocket".into(), "hi", ModelOption::new("m", "M"));
+        assert_eq!(super::home(&request), None, "never the machine's own home");
+        request.extensions = Some(domain::Extensions { home: Some("/users/ana".into()), ..Default::default() });
+        assert_eq!(super::home(&request), Some(PathBuf::from("/users/ana")));
     }
 
     #[test]

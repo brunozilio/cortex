@@ -1,4 +1,4 @@
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
@@ -11,22 +11,11 @@ pub struct ExitPlanMode;
 
 impl Tool for ExitPlanMode {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: EXIT_PLAN_TOOL.to_owned(),
-            description: crate::tools::describe("ExitPlanMode", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "plan": { "type": "string", "description": "The plan, in markdown." },
-                },
-                "required": ["plan"],
-                "additionalProperties": false,
-            }),
-        }
+        crate::tools::declared(EXIT_PLAN_TOOL, &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(EXIT_PLAN_TOOL)
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -43,15 +32,11 @@ pub struct EnterPlanMode;
 
 impl Tool for EnterPlanMode {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: ENTER_PLAN_TOOL.to_owned(),
-            description: crate::tools::describe("EnterPlanMode", &serde_json::Value::Null),
-            schema: json!({ "type": "object", "properties": {}, "additionalProperties": false }),
-        }
+        crate::tools::declared(ENTER_PLAN_TOOL, &Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(ENTER_PLAN_TOOL)
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -70,6 +55,7 @@ pub fn plan(input: &Value) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn a_plan_must_have_text() {

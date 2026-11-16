@@ -221,3 +221,30 @@ fn each_connected_provider_lists_its_models_and_the_engine_s_come_last() {
         ServerEvent::Providers(ProviderEvent::Failed { provider, .. }) if *provider == ModelProvider::new("keyed")
     )));
 }
+
+struct OrgAccount(Principal);
+
+impl SharedCredentials for OrgAccount {
+    fn holder(&self, owner: &Principal) -> Option<Principal> {
+        (!owner.is_local()).then(|| self.0.clone())
+    }
+}
+
+#[test]
+fn a_member_uses_the_organization_s_key_until_they_connect_their_own() {
+    let org = Principal::member(domain::UserId::new(), domain::OrgId::new());
+    let member = Principal::member(domain::UserId::new(), org.org());
+    let mut rig = rig();
+    rig.providers = rig.providers.with_shared(Arc::new(OrgAccount(org.clone())));
+    let keyed = ModelProvider::new("keyed");
+    rig.providers.connect(&org, keyed, "sk-proj-org0123456789ab");
+
+    let shared = rig.providers.key(&member, keyed).expect("the organization's key");
+    assert!(shared.current().expect("load").secret().contains("sk-proj-org0123456789ab"));
+    assert_eq!(account(&rig.providers.list(&member), "keyed").map(|a| a.label), Some("…89ab".to_owned()));
+
+    rig.providers.connect(&member, keyed, "sk-proj-own0123456789cd");
+    let own = rig.providers.key(&member, keyed).expect("their own key");
+    assert!(own.current().expect("load").secret().contains("sk-proj-own0123456789cd"));
+    assert!(rig.providers.key(&OWNER, keyed).is_err(), "the local owner shares nothing");
+}

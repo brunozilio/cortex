@@ -18,9 +18,10 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
 pub fn forget(_client: u64) {}
 
 pub fn pointers(context: &Context<'_>, project: &Path, prompt: &str) -> Option<String> {
-    let on = agent_engine::prompt::settings::load(project, context.services.home.as_deref(), &[])
+    let home = context.services.home(context.principal);
+    let on = agent_engine::prompt::settings::load(project, home.as_deref(), &[])
         .is_ok_and(|settings| settings.features.on(domain::features::CODE_MAP));
-    if !on || !mapped(project) {
+    if !on || !mapped(project, home.as_deref()) {
         return None;
     }
     let map = code_map::refresh(project, &cache(context, project));
@@ -29,9 +30,8 @@ pub fn pointers(context: &Context<'_>, project: &Path, prompt: &str) -> Option<S
     (!shown.trim().is_empty()).then_some(shown)
 }
 
-fn mapped(project: &Path) -> bool {
-    let home = std::env::home_dir();
-    home.as_deref() != Some(project) && project.ancestors().any(|folder| folder.join(".git").exists())
+fn mapped(project: &Path, home: Option<&Path>) -> bool {
+    home != Some(project) && project.ancestors().any(|folder| folder.join(".git").exists())
 }
 
 fn cache(context: &Context<'_>, project: &Path) -> PathBuf {

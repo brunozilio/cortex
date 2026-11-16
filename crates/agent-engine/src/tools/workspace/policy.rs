@@ -24,6 +24,7 @@ pub struct Policy {
     pub affected_tests: bool,
     pub session_claims: bool,
     pub web: WebReading,
+    pub output: domain::output::Shaping,
 }
 
 impl Policy {
@@ -42,6 +43,7 @@ impl Policy {
             affected_tests: self.affected_tests,
             session_claims: self.session_claims,
             web: self.web,
+            output: self.output,
         }
     }
 

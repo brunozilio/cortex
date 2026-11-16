@@ -7,21 +7,10 @@ use serde_json::{Value, json};
 struct TaskTool(&'static str);
 impl Tool for TaskTool {
     fn spec(&self) -> ToolSpec {
-        let (description, schema) = match self.0 {
-            "TaskOutput" => (
-                "TaskOutput",
-                json!({"type":"object","properties":{"task_id":{"type":"string"},"block":{"type":"boolean"}},"required":["task_id"],"additionalProperties":false}),
-            ),
-            "TaskStop" => (
-                "TaskStop",
-                json!({"type":"object","properties":{"task_id":{"type":"string"}},"required":["task_id"],"additionalProperties":false}),
-            ),
-            _ => ("TaskList", json!({"type":"object","properties":{},"additionalProperties":false})),
-        };
-        ToolSpec { name: self.0.into(), description: crate::tools::describe(description, &Value::Null), schema }
+        crate::tools::declared(self.0, &Value::Null)
     }
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(self.0)
     }
     fn summary(&self, input: &Value) -> String {
         input["task_id"].as_str().unwrap_or_default().into()
@@ -51,26 +40,10 @@ struct PlanTool {
 }
 impl Tool for PlanTool {
     fn spec(&self) -> ToolSpec {
-        let (description, properties, required) = match self.name {
-            "TaskCreate" => {
-                ("TaskCreate", json!({"subject":{"type":"string"},"description":{"type":"string"}}), json!(["subject"]))
-            }
-            "TaskUpdate" => (
-                "TaskUpdate",
-                json!({"task_id":{"type":"string"},"status":{"enum":["pending","in_progress","completed"]},"description":{"type":"string"},"blocked_by":{"type":"array","items":{"type":"string"}}}),
-                json!(["task_id"]),
-            ),
-            "TaskGet" => ("TaskGet", json!({"task_id":{"type":"string"}}), json!(["task_id"])),
-            _ => ("TaskList", json!({}), json!([])),
-        };
-        ToolSpec {
-            name: self.name.into(),
-            description: crate::tools::describe(description, &Value::Null),
-            schema: json!({"type":"object","properties":properties,"required":required,"additionalProperties":false}),
-        }
+        crate::tools::declared(self.name, &Value::Null)
     }
     fn access(&self) -> Access {
-        Access::Reads
+        crate::tools::declared_access(self.name)
     }
     fn summary(&self, input: &Value) -> String {
         input["subject"].as_str().or_else(|| input["task_id"].as_str()).unwrap_or_default().into()

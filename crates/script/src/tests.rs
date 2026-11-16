@@ -88,3 +88,28 @@ fn an_exported_value_is_read_without_running_anything_else() {
     assert_eq!(exported("echo.js", source, "spec"), Ok(json!({ "name": "Echo", "input": { "type": "object" } })));
     assert!(exported("bad.js", "export const spec = ", "spec").is_err());
 }
+
+#[test]
+fn an_export_that_is_not_a_function_is_its_own_value() {
+    let source = r#"export const spec = { name: "Echo", description: "Says it back." };"#;
+    assert_eq!(go(source, "spec.description", &[], json!({})).0, Ok(json!("Says it back.")));
+}
+
+#[test]
+fn whether_a_module_exports_a_name_is_known_without_running_it() {
+    let source = r#"export const spec = {}; export function execute(input) { return input }"#;
+    assert!(exports("echo.js", source, "execute"));
+    assert!(!exports("echo.js", source, "run"));
+    assert!(!exports("bad.js", "export const spec = ", "spec"));
+}
+
+#[test]
+fn a_function_with_an_empty_body_is_known_as_empty() {
+    let empty = |source: &str| empty_function("hook.js", source, "default");
+    assert!(empty("export default (input, ctx) => {};"));
+    assert!(empty("export default function (input) {}"));
+    assert!(empty("export default async function named(input, ctx) {\n}"));
+    assert!(!empty("export default (input) => ({ decision: 'block' });"));
+    assert!(!empty("export default (input) => { return input };"));
+    assert!(!empty("export const event = 'Stop';"));
+}

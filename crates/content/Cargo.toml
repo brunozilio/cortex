@@ -8,6 +8,9 @@ build = "build.rs"
 
 [dependencies]
 brand.workspace = true
+script.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

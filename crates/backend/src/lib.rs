@@ -1,4 +1,5 @@
 mod authorizer;
+mod catalog;
 mod dirs;
 mod extensions;
 pub mod feature;
@@ -6,6 +7,7 @@ mod features {
     include!(concat!(env!("OUT_DIR"), "/features.rs"));
 }
 mod handler;
+mod homes;
 mod local;
 mod mcp_admin;
 mod mcp_auth;
@@ -20,14 +22,16 @@ mod services;
 mod settings;
 
 pub use authorizer::{AuthError, Authorizer, LocalAuthorizer, forbidden};
+pub use catalog::{FileSessionCatalog, InMemorySessionCatalog, SessionCatalog};
 pub use dirs::{local_data_dir, project_key};
 pub use extensions::{Extensions, McpServerSpec};
 pub use handler::CommandHandler;
+pub use homes::{Homes, OwnerHome};
 pub use local::LocalBackend;
 pub use mcp_auth::McpAuth;
 pub use outbox::Outbox;
 pub use protocol::{Backend, BackendError, Wake};
-pub use providers::{InMemoryProviderStore, ModelProviders, ProviderStore};
+pub use providers::{InMemoryProviderStore, ModelProviders, NothingShared, ProviderStore, SharedCredentials};
 pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
 pub use settings::SettingsStore;

@@ -2,6 +2,8 @@ pub mod affected;
 mod bash;
 mod changes;
 mod monitor;
+pub mod savings;
+mod shaped;
 pub mod shells;
 mod snapshot;
 

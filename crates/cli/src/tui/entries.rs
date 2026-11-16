@@ -100,10 +100,22 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
             }
         }
         Entry::Plan { plan, outcome } => super::plan::lines(plan, *outcome, width, out),
-        Entry::Notice(text) | Entry::Passing(text) => {
-            out.push(Line::from(""));
-            out.extend(wrap(text, width).into_iter().map(|line| notice(line, dim)));
+        Entry::Refused { .. }
+        | Entry::Repeated { .. }
+        | Entry::Attached { .. }
+        | Entry::Scheduled { .. }
+        | Entry::Rewound { .. }
+        | Entry::Branched
+        | Entry::HeadsUp { .. }
+        | Entry::Recap(_)
+        | Entry::Lesson { .. }
+        | Entry::Held { .. } => {}
+        Entry::Notice(text) | Entry::Passing(text) => said(text, width, dim, out),
+        Entry::Finished { duration_ms, cost_usd } => {
+            said(&domain::conversation::done(*duration_ms, *cost_usd), width, dim, out);
         }
+        Entry::Interrupted => said(domain::conversation::INTERRUPTED, width, dim, out),
+        Entry::Compacted { freed } => said(&domain::conversation::compacted(*freed), width, dim, out),
         Entry::Error(text) => {
             out.push(Line::from(""));
             for (i, line) in wrap(text, width.saturating_sub(2)).into_iter().enumerate() {
@@ -118,6 +130,11 @@ pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'st
             }
         }
     }
+}
+
+fn said(text: &str, width: usize, dim: Style, out: &mut Vec<Line<'static>>) {
+    out.push(Line::from(""));
+    out.extend(wrap(text, width).into_iter().map(|line| notice(line, dim)));
 }
 
 fn notice(line: String, dim: Style) -> Line<'static> {

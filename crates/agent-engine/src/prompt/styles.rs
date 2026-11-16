@@ -21,21 +21,22 @@ impl Builtin {
 }
 
 fn read(id: &str) -> Option<Builtin> {
-    let text = content::text(&format!("styles/{id}.md"));
-    let (front, body) = crate::frontmatter::parse(&text);
+    let path = format!("styles/{id}.js");
+    let spec = content::value(&path, "spec")?;
+    let field = |key: &str| spec[key].as_str().filter(|text| !text.is_empty()).map(str::to_owned);
     Some(Builtin {
         id: id.to_owned(),
-        name: front.get("name")?.to_owned(),
-        description: front.get("description").unwrap_or_default().to_owned(),
-        instructions: body.trim().to_owned(),
-        reminder: front.get("turn-reminder").map(str::to_owned),
+        name: field("name")?,
+        description: field("description").unwrap_or_default(),
+        instructions: content::text(&path).trim().to_owned(),
+        reminder: field("turnReminder"),
     })
 }
 
 pub fn all() -> Vec<Builtin> {
     content::builtin_files("styles/")
         .into_iter()
-        .filter_map(|(path, _)| path.strip_prefix("styles/")?.strip_suffix(".md").and_then(read))
+        .filter_map(|(path, _)| path.strip_prefix("styles/")?.strip_suffix(".js").and_then(read))
         .collect()
 }
 

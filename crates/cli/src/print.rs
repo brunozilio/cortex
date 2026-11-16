@@ -66,7 +66,7 @@ pub fn print_all(sdk: &Sdk, cwd: PathBuf, wanted: Wanted<'_>, prompts: &[String]
                     run.answer(ask.id, Decision::Deny).map_err(|e| e.to_string())?;
                 }
                 EngineEvent::Verified(verdict) => {
-                    output.note(&crate::verdict::line(&verdict));
+                    output.note(&domain::conversation::verdict::line(&verdict));
                     failed_verification |= !verdict.passed;
                 }
                 _ => {}

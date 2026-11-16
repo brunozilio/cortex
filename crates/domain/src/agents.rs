@@ -5,6 +5,7 @@ pub enum AgentStatus {
     Running { progress: f32 },
     Done { seconds: u32 },
     Failed,
+    Cancelled,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

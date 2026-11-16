@@ -15,7 +15,6 @@ fn entries(app: &App) -> Vec<(String, String, Command)> {
             Command::OutputStyle(None),
         ),
         ("Vim keys".into(), on(app.vim.is_some()), Command::Vim),
-        ("Mouse wheel scrolls".into(), on(app.mouse), Command::Mouse),
         ("Status line".into(), app.status.command.clone().unwrap_or_else(|| "usual".into()), Command::StatusLine(None)),
     ]
 }

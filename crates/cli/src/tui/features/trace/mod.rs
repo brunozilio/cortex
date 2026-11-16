@@ -1,6 +1,9 @@
 pub(super) mod cli;
+mod board;
 mod follow;
+mod http;
 mod live;
+mod outside;
 mod page;
 
 use std::path::{Path, PathBuf};

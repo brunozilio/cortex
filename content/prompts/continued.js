@@ -1,0 +1,1 @@
+export default `This session continues an earlier conversation, compacted into this summary:`;

@@ -149,3 +149,30 @@ fn a_message_the_engine_never_took_is_sent_as_the_next_prompt() {
     until(&mut app, |_| prompts(&engine).len() == 2);
     assert_eq!(prompts(&engine), ["read the code", "also check the docs"]);
 }
+
+#[test]
+fn the_arrows_walk_past_a_recalled_command_until_it_is_edited() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    app.input.set_history(vec!["first".into(), "/help".into(), "last".into()]);
+
+    press(&mut app, KeyCode::Up);
+    press(&mut app, KeyCode::Up);
+    assert_eq!(app.input.text(), "/help");
+    assert!(!screen(&app).contains("Show the commands and keys"), "{}", screen(&app));
+    press(&mut app, KeyCode::Up);
+    assert_eq!(app.input.text(), "first");
+    press(&mut app, KeyCode::Down);
+    assert_eq!(app.input.text(), "/help");
+    press(&mut app, KeyCode::Down);
+    assert_eq!(app.input.text(), "last");
+
+    press(&mut app, KeyCode::Up);
+    press(&mut app, KeyCode::Backspace);
+    assert_eq!(app.input.text(), "/hel");
+    assert!(screen(&app).contains("Show the commands and keys"), "{}", screen(&app));
+    press(&mut app, KeyCode::Up);
+    assert_eq!(app.input.text(), "/hel", "an edited command is completed again");
+}

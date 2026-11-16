@@ -82,3 +82,26 @@ fn the_user_s_own_tool_runs_without_asking_and_its_log_reaches_the_screen() {
     assert!(!events.iter().any(|event| matches!(event, EngineEvent::Asked(_))));
     assert!(events.contains(&EngineEvent::ToolLog { id: "m".into(), text: "marking".into() }), "{events:?}");
 }
+
+#[test]
+fn a_tool_that_exports_execute_runs_it_and_has_no_built_in_to_call() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    let home = tempfile::tempdir().expect("home");
+    let folder = home.path().join(brand::DIR).join("tools");
+    std::fs::create_dir_all(&folder).expect("tools");
+    let tool = r#"
+export const spec = { name: "Mark", description: "Writes a mark.", access: "read" };
+export function execute(input, ctx) {
+  ctx.writeFile("mark.txt", "executed");
+  try { ctx.builtin(input) } catch (error) { return error.message }
+}
+"#;
+    std::fs::write(folder.join("mark.js"), tool).expect("tool");
+    let mut history = vec![Message::user("mark")];
+    rig.run_with(&model(), &mut history, script_tools(home.path(), rig.dir.path())).expect("run");
+    assert_eq!(std::fs::read_to_string(rig.dir.path().join("mark.txt")).expect("mark"), "executed");
+    let answered = history.iter().flat_map(|message| message.blocks.iter()).any(
+        |block| matches!(block, Block::ToolResult { content, .. } if content.contains("Mark has no built-in to call")),
+    );
+    assert!(answered, "{history:?}");
+}

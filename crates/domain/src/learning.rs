@@ -66,6 +66,26 @@ pub struct Proposal {
     pub why: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Keeping {
+    Remember(String),
+    Rule { kind: &'static str, rule: String },
+    Ask(String),
+}
+
+pub fn keeping(proposal: &Proposal) -> Keeping {
+    match proposal.kind {
+        Lesson::Memory => Keeping::Remember(proposal.text.clone()),
+        Lesson::Rule => {
+            Keeping::Rule { kind: if proposal.name == "deny" { "deny" } else { "allow" }, rule: proposal.text.clone() }
+        }
+        Lesson::Skill => Keeping::Ask(format!(
+            "Create or update the skill `{}` for this: {}\n\nLoad the skill-creator skill and follow it.",
+            proposal.name, proposal.text
+        )),
+    }
+}
+
 pub fn parse(reply: &str) -> Option<Proposal> {
     let start = reply.find('{')?;
     let end = reply.rfind('}')?;
@@ -106,6 +126,25 @@ mod tests {
         assert_eq!(proposal.text, "This project uses pnpm, never npm.");
         assert_eq!(parse(r#"{"kind": "rule", "name": "", "text": " ", "why": ""}"#), None);
         assert_eq!(parse("none"), None);
+    }
+
+    #[test]
+    fn keeping_a_lesson_remembers_it_keeps_a_rule_or_asks_for_the_skill() {
+        let lesson =
+            |kind, name: &str, text: &str| Proposal { kind, name: name.into(), text: text.into(), why: String::new() };
+        assert_eq!(keeping(&lesson(Lesson::Memory, "pm", "Use pnpm.")), Keeping::Remember("Use pnpm.".into()));
+        assert_eq!(
+            keeping(&lesson(Lesson::Rule, "deny", "Bash(git push:*)")),
+            Keeping::Rule { kind: "deny", rule: "Bash(git push:*)".into() }
+        );
+        assert_eq!(
+            keeping(&lesson(Lesson::Rule, "whatever", "Bash(ls)")),
+            Keeping::Rule { kind: "allow", rule: "Bash(ls)".into() }
+        );
+        let Keeping::Ask(prompt) = keeping(&lesson(Lesson::Skill, "release", "Tag then publish.")) else {
+            panic!("a skill is asked for")
+        };
+        assert!(prompt.starts_with("Create or update the skill `release` for this: Tag then publish."));
     }
 
     #[test]

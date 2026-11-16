@@ -1,4 +1,4 @@
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::model::ToolSpec;
 use crate::tools::read_files::Freshness;
@@ -9,25 +9,11 @@ pub struct Edit;
 
 impl Tool for Edit {
     fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "Edit".into(),
-            description: crate::tools::describe("Edit", &serde_json::Value::Null),
-            schema: json!({
-                "type": "object",
-                "properties": {
-                    "file_path": { "type": "string", "description": "The file to change." },
-                    "old_string": { "type": "string", "description": "The exact text to replace." },
-                    "new_string": { "type": "string", "description": "The text to put in its place." },
-                    "replace_all": { "type": "boolean", "description": "Replace every occurrence.", "default": false }
-                },
-                "required": ["file_path", "old_string", "new_string"],
-                "additionalProperties": false
-            }),
-        }
+        crate::tools::declared("Edit", &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        Access::Edits
+        crate::tools::declared_access("Edit")
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -96,6 +82,8 @@ impl Tool for Edit {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     fn setup(text: &str) -> (tempfile::TempDir, Workspace) {

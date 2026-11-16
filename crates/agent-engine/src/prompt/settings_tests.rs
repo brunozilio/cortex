@@ -18,6 +18,19 @@ fn project_overrides_user_and_claude_settings_are_not_read() {
 }
 
 #[test]
+fn managed_settings_in_the_home_have_the_last_word_over_the_project() {
+    let home = tempfile::tempdir().expect("home");
+    let repo = tempfile::tempdir().expect("repo");
+    let (user, project) = (home.path().join(brand::DIR), repo.path().join(brand::DIR));
+    std::fs::create_dir_all(&user).expect("user");
+    std::fs::create_dir_all(&project).expect("project");
+    std::fs::write(project.join("settings.local.json"), r#"{"features":{"insights":true}}"#).expect("project");
+    std::fs::write(user.join(MANAGED), r#"{"features":{"insights":false}}"#).expect("managed");
+    let settings = load(repo.path(), Some(home.path()), &[]).expect("settings");
+    assert!(!settings.features.on("insights"));
+}
+
+#[test]
 fn custom_style_controls_coding_instructions_and_rejects_paths() {
     let repo = tempfile::tempdir().expect("valid test fixture");
     let root = repo.path().join(brand::DIR);

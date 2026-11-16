@@ -5,11 +5,14 @@ import { Sidebar, type View } from '@/shell/Sidebar'
 import { OverviewView } from '@/views/overview/OverviewView'
 import { TracesView } from '@/views/traces/TracesView'
 import { EvaluationsView } from '@/views/evals/EvaluationsView'
+import { SessionsView } from '@/views/sessions/SessionsView'
+import { Composer } from '@/components/Composer'
 import type { InspectorTab } from '@/views/traces/inspector/Inspector'
 import type { Metric } from '@/lib/days'
 import { EMPTY_FILTERS, type Filters } from '@/lib/filters'
 import { allRuns, defaultRun, findRun, latestRun, type RunRef } from '@/lib/report'
-import { followSelection, mergeSession } from '@/lib/live'
+import { followSelection, mergeSession, readLiveConfig } from '@/lib/live'
+import { sendPrompt, useSessions, watchSession } from '@/lib/sessions'
 import { useLiveFeed } from '@/lib/useLiveFeed'
 import type { Finding, Report, Run, SessionRuns } from '@/types'
 
@@ -18,7 +21,7 @@ const VIEW_KEY = 'trace-view'
 function storedView(): View {
   try {
     const value = localStorage.getItem(VIEW_KEY)
-    if (value === 'overview' || value === 'traces' || value === 'evals') return value
+    if (value === 'overview' || value === 'sessions' || value === 'traces' || value === 'evals') return value
   } catch {
     return 'overview'
   }
@@ -31,6 +34,8 @@ function refOf(run: Run | undefined): RunRef | null {
 
 export function App({ initial }: { initial: Report }) {
   const [report, setReport] = useState(initial)
+  const [config] = useState(readLiveConfig)
+  const cards = useSessions(config)
   const runs = useMemo(() => allRuns(report), [report])
   const [view, setViewState] = useState<View>(storedView)
   const [metric, setMetric] = useState<Metric>('cost')
@@ -78,11 +83,16 @@ export function App({ initial }: { initial: Report }) {
   }
 
   const openSession = (session: string) => {
+    if (config) void watchSession(config, session).catch(() => undefined)
     setFilters({ ...EMPTY_FILTERS, session: [session] })
     const latest = latestRun(report, session)
     if (latest) openRun(latest)
+    else setSelected(null)
     setView('traces')
   }
+
+  const activeSession = filters.session.length === 1 ? filters.session[0] : null
+  const writingTo = config ? (activeSession ?? run?.session ?? null) : null
 
   const search = (value: string) => {
     setQuery(value)
@@ -110,7 +120,8 @@ export function App({ initial }: { initial: Report }) {
           report={report}
           view={view}
           runCount={runs.length}
-          activeSession={filters.session.length === 1 ? filters.session[0] : null}
+          live={config !== null}
+          activeSession={activeSession}
           onView={setView}
           onSession={openSession}
         />
@@ -118,6 +129,7 @@ export function App({ initial }: { initial: Report }) {
           <Header ref={searchRef} project={report.project} current={report.current} live={liveStatus} view={view} query={query} onView={setView} onQuery={search} />
           <div className="px-4 py-6 md:px-6">
             {view === 'overview' ? <OverviewView report={report} metric={metric} onMetric={setMetric} /> : null}
+            {view === 'sessions' ? <SessionsView report={report} cards={cards} active={activeSession} onOpen={openSession} /> : null}
             {view === 'traces' ? (
               <TracesView
                 report={report}
@@ -135,6 +147,14 @@ export function App({ initial }: { initial: Report }) {
               />
             ) : null}
             {view === 'evals' ? <EvaluationsView report={report} onFinding={openFinding} /> : null}
+            {view === 'traces' && config && writingTo ? (
+              <Composer
+                key={writingTo}
+                session={writingTo}
+                title={cards.find((card) => card.session === writingTo)?.title ?? null}
+                onSend={(text) => sendPrompt(config, writingTo, text)}
+              />
+            ) : null}
           </div>
         </main>
       </div>

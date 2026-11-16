@@ -1,7 +1,7 @@
 mod cancellable_http;
+pub mod client;
 pub(crate) mod conversation_key;
 pub mod http;
-pub mod client;
 pub(crate) mod retry;
 pub mod routed;
 #[cfg(any(test, feature = "test-support"))]
@@ -21,14 +21,14 @@ use serde_json::Value;
 
 use crate::transcript::{Message, StopReason, Usage};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ToolSpec {
     pub name: String,
     pub description: String,
     pub schema: Value,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TurnRequest {
     pub model: String,
     pub system: String,
@@ -38,7 +38,7 @@ pub struct TurnRequest {
     pub max_tokens: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Delta {
     Text(String),
     Thinking(String),
@@ -47,14 +47,14 @@ pub enum Delta {
     Searched { id: String, found: String },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Reply {
     pub message: Message,
     pub stop: StopReason,
     pub usage: Usage,
 }
 
-#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ModelError {
     #[error("not signed in: {0}")]
     Unauthorized(String),

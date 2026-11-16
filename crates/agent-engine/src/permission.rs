@@ -57,8 +57,12 @@ pub fn verdict(mode: PermissionMode, access: Access, tool: &str, subject: &str, 
     }
 }
 
+pub fn refused_while_planning(access: Access) -> bool {
+    matches!(access, Access::Edits | Access::Executes)
+}
+
 pub fn ruled(mode: PermissionMode, access: Access, rule: Option<(RuleKind, String)>, by_mode: Verdict) -> Verdict {
-    let planning = mode == PermissionMode::Plan && matches!(access, Access::Edits | Access::Executes);
+    let planning = mode == PermissionMode::Plan && refused_while_planning(access);
     match rule {
         Some((RuleKind::Deny, rule)) => Verdict::Deny(format!(
             "The permission rule {rule} in settings refuses this. Do not retry it; take another approach or ask the user."

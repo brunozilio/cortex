@@ -10,7 +10,7 @@ use crate::feature::Context;
 const MENTIONED: usize = 5;
 const KEPT: usize = 50_000;
 
-pub fn handle(_context: &Context<'_>, input: Value) -> Result<Value, String> {
+pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let path: PathBuf = input["path"].as_str().map(PathBuf::from).ok_or("the workspace feature needs a path")?;
     match input["op"].as_str().unwrap_or_default() {
         "changes" => {
@@ -18,6 +18,11 @@ pub fn handle(_context: &Context<'_>, input: Value) -> Result<Value, String> {
             serde_json::to_value(git::changes_in(&path, scope)?).map_err(|e| e.to_string())
         }
         "files" => Ok(json!(git::files(&path))),
+        "git-offer" => {
+            let turned_off = !context.on(domain::features::GIT_OFFER);
+            Ok(json!({ "offer": domain::git_offer::due(true, git::inside(&path), turned_off) }))
+        }
+        "git-init" => git::init(&path).map(|committed| json!({ "committed": committed })),
         "mentions" => Ok(json!(with_files(&path, input["prompt"].as_str().unwrap_or_default()))),
         other => Err(format!("the workspace feature has no {other:?}")),
     }

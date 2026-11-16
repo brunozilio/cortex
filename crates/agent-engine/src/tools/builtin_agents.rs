@@ -7,11 +7,11 @@ pub const FORK: &str = "fork";
 const WRITERS: [&str; 4] = ["Agent", "Edit", "Write", "StructuredOutput"];
 
 pub fn fork_preamble() -> String {
-    content::text("agents/fork.md").split_once("\n---\n").map(|(_, body)| body.trim().to_owned()).unwrap_or_default()
+    content::text("agents/fork.js").trim().to_owned()
 }
 
 pub fn general() -> String {
-    content::text("prompts/agent-general.md")
+    content::text("prompts/agent-general.js")
 }
 
 pub fn is_fork(input: &serde_json::Value) -> bool {
@@ -46,14 +46,14 @@ fn read_only() -> AgentConfig {
 pub fn all() -> Vec<FoundAgent> {
     content::builtin_files("agents/")
         .into_iter()
+        .filter(|(path, _)| path.ends_with(".js"))
         .filter_map(|(path, _)| {
-            let text = content::text(path);
-            let (front, body) = crate::frontmatter::parse(&text);
-            let read_only = front.get("read-only") == Some("true");
+            let spec = content::value(path, "spec")?;
+            let read_only = spec["readOnly"].as_bool() == Some(true);
             Some(FoundAgent {
-                name: front.get("name")?.to_owned(),
-                description: front.get("description").unwrap_or_default().to_owned(),
-                instructions: body.trim().to_owned(),
+                name: spec["name"].as_str().filter(|name| !name.is_empty())?.to_owned(),
+                description: spec["description"].as_str().unwrap_or_default().to_owned(),
+                instructions: content::text(path).trim().to_owned(),
                 config: if read_only { self::read_only() } else { AgentConfig::default() },
             })
         })

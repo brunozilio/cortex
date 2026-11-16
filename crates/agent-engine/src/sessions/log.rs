@@ -20,6 +20,7 @@ pub enum Entry {
         at_ms: u64,
         prompt: String,
     },
+    Shown(domain::request::Shown),
     Called {
         at_ms: u64,
         #[serde(default)]
@@ -56,7 +57,11 @@ pub(super) fn conversation(entries: impl IntoIterator<Item = Entry>) -> Vec<Mess
             Entry::Message(message) => history.push(message),
             Entry::Truncated { keep } => history.truncate(keep),
             Entry::Restarted => history.clear(),
-            Entry::Event { .. } | Entry::Prompted { .. } | Entry::Called { .. } | Entry::Opened { .. } => {}
+            Entry::Event { .. }
+            | Entry::Prompted { .. }
+            | Entry::Shown(_)
+            | Entry::Called { .. }
+            | Entry::Opened { .. } => {}
         }
     }
     history
