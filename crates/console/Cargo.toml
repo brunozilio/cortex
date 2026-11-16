@@ -1,0 +1,27 @@
+[package]
+name = "console"
+description = "The web console: serves the browser app and its API on localhost, over the SDK."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+sdk.workspace = true
+brand.workspace = true
+platform.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros", "time"] }
+tower-http = { version = "0.6", features = ["fs"] }
+getrandom = "0.3"
+
+[dev-dependencies]
+tempfile.workspace = true
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+tokio-tungstenite = "0.28"
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
+
+[lints]
+workspace = true

@@ -73,6 +73,8 @@ you).
 | `platform` | Per-OS IO: child processes and their trees, private files, data folders. |
 | `content` | Prompts, built-in skills and agents, embedded at build time. |
 | `script` | The QuickJS runtime for JavaScript tools, skills and providers. |
+| `console` | The web console behind `/console`: serves `web/dist` and its API on localhost, over the SDK. |
+| `store` | The shared Postgres database (`docker compose up -d`, `DATABASE_URL`): connection, migrations, health. |
 
 ## Developing
 

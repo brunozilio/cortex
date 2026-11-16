@@ -1,0 +1,13 @@
+[package]
+name = "store"
+description = "The shared database: Postgres connection, migrations and health."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+postgres = "0.19"
+thiserror.workspace = true
+
+[lints]
+workspace = true

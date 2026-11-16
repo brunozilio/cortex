@@ -20,6 +20,7 @@ pub struct LocalServices {
     pub authorizer: Arc<dyn Authorizer>,
     pub homes: Arc<dyn crate::Homes>,
     pub mcp_auth: crate::McpAuth,
+    pub database: Arc<dyn store::Database>,
 }
 
 impl std::fmt::Debug for LocalServices {
@@ -33,6 +34,7 @@ impl LocalServices {
         let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
         let mut services = Self::with_engine(Arc::new(crate::native::engine(&data)));
         services.catalog = Arc::new(crate::catalog::FileSessionCatalog::system());
+        services.database = store::from_env();
         match std::env::current_dir() {
             Ok(cwd) => {
                 let _ =
@@ -64,6 +66,7 @@ impl LocalServices {
             authorizer: Arc::new(LocalAuthorizer),
             homes: Arc::new(crate::OwnerHome::system()),
             mcp_auth: crate::McpAuth::system(),
+            database: Arc::new(store::Unconfigured),
         }
     }
 
