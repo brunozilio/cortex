@@ -17,6 +17,7 @@ sdk.workspace = true
 console.workspace = true
 domain.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 crossbeam-channel.workspace = true
 ratatui = "0.30.2"
 unicode-width = "0.2.3"
@@ -28,7 +29,6 @@ tracing.workspace = true
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "std"] }
 
 [dev-dependencies]
-tempfile.workspace = true
 backend.workspace = true
 agent-engine = { workspace = true, features = ["test-support"] }
 

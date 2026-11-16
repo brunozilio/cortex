@@ -17,6 +17,7 @@ pub mod dependencies;
 pub mod destructive;
 pub mod egress;
 pub mod engines;
+pub mod evals;
 pub mod events;
 pub mod executable;
 pub mod extensions;

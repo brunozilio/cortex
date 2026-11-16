@@ -1,5 +1,6 @@
 mod config;
 mod doctor;
+mod eval;
 mod logging;
 mod login;
 mod mcp;
@@ -103,6 +104,15 @@ enum Action {
     },
     #[command(about = "Check that this installation can work in the folder")]
     Doctor,
+    #[command(
+        about = "Run the evals in .{command}/evals (each <name>/case.json, with an optional fixture/) and score them"
+    )]
+    Eval {
+        #[arg(help = "Only these cases (all by default)")]
+        names: Vec<String>,
+        #[arg(long, help = "Print the scores as JSON")]
+        json: bool,
+    },
     #[command(about = "Read or change the settings: the user's, or this project's with --project")]
     Config {
         #[command(subcommand)]
@@ -160,6 +170,23 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
             let checks = doctor::checks(&sdk, &cwd);
             println!("{}", doctor::render(&checks));
             Ok(if checks.iter().all(|c| c.ok) { ExitCode::SUCCESS } else { ExitCode::FAILURE })
+        }
+        Some(Action::Eval { names, json }) => {
+            let program = std::env::current_exe().map_err(|e| e.to_string())?;
+            let asker = eval::Process { program, model: cli.model.clone() };
+            let outcomes: Vec<_> = eval::cases(&cwd, &names)?
+                .iter()
+                .map(|(name, dir)| {
+                    eprintln!("Running {name}…");
+                    eval::run_case(&asker, name, dir)
+                })
+                .collect();
+            if json {
+                println!("{}", serde_json::to_string_pretty(&outcomes).map_err(|e| e.to_string())?);
+            } else {
+                println!("{}", domain::evals::table(&outcomes));
+            }
+            Ok(if outcomes.iter().all(domain::evals::Outcome::ok) { ExitCode::SUCCESS } else { ExitCode::FAILURE })
         }
         Some(Action::Models) => {
             for model in sdk.models().map_err(|e| e.to_string())? {

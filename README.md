@@ -30,6 +30,7 @@ cortex models                            # what the connected providers offer
 cortex mcp                               # MCP servers: list, add, remove, approve
 cortex config                            # read or change the settings
 cortex doctor                            # check this installation in this folder
+cortex eval                              # run .cortex/evals/<name>/case.json and score them
 ```
 
 In the chat: Enter sends, Alt+Enter (or Ctrl+J) adds a line, Esc
