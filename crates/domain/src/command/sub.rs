@@ -21,6 +21,7 @@ pub enum MemoryCommand {
     Edit,
     Seed,
     SeedKeep(Vec<usize>),
+    Score,
 }
 
 impl MemoryCommand {
@@ -33,6 +34,7 @@ impl MemoryCommand {
             ("optimize" | "optimise", []) => Some(Self::Optimize),
             ("undo", []) => Some(Self::Undo),
             ("forgotten", []) => Some(Self::Forgotten),
+            ("score", []) => Some(Self::Score),
             ("edit", []) => Some(Self::Edit),
             ("restore", [id]) => id.parse().ok().map(|id| Self::Restore(MemoryId(id))),
             ("share", [id]) => id.parse().ok().map(|id| Self::Share(MemoryId(id))),

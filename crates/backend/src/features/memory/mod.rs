@@ -3,6 +3,7 @@ mod command;
 pub mod mcp;
 mod optimize;
 pub mod run;
+mod score;
 mod seed;
 mod store;
 mod team;
@@ -12,10 +13,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use domain::memory::scorecard::RunOutcome;
 use domain::memory::{MemorySearches, SearchAnswer, recall, search};
 use domain::{
-    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, Principal, PromptRequest, Provenance,
-    RecallBudget, RunId,
+    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, Principal, PromptRequest, Provenance, RecallBudget,
+    RunId,
 };
 use platform::sync::Locked;
 use serde_json::{Value, json};
@@ -197,6 +199,18 @@ impl Memories {
         let features = team::features(&request.cwd, self.home(owner).as_deref());
         let anchors = features.on(domain::features::MEMORY_ANCHORS);
         let shared = team::load_if(&request.cwd, &features);
+        let structured = features.on(domain::features::STRUCTURED_LEARNINGS);
+        if features.on(domain::features::MEMORY_SCORECARD) && self.holds_out(owner, &request.cwd) {
+            let brief = MemoryBrief {
+                output: edits_file(run),
+                origin: brief.origin.clone(),
+                anchors,
+                structured,
+                held_out: true,
+                ..MemoryBrief::default()
+            };
+            return PromptRequest { memory: Some(brief), ..request.clone() };
+        }
         let (recalled, tool, anchored) = {
             let mut books = self.lock();
             let book = self.book(&mut books, owner, &request.cwd);
@@ -223,13 +237,23 @@ impl Memories {
             optimizing: false,
             anchored,
             anchors,
-            structured: features.on(domain::features::STRUCTURED_LEARNINGS),
+            structured,
+            held_out: false,
         };
         PromptRequest { memory: Some(brief), ..request.clone() }
     }
 
-    pub fn finish(&self, owner: &Principal, request: &PromptRequest, completed: bool) -> Option<Result<Value, String>> {
+    pub fn finish(
+        &self,
+        owner: &Principal,
+        request: &PromptRequest,
+        outcome: &RunOutcome,
+    ) -> Option<Result<Value, String>> {
         let brief = request.memory.as_ref()?;
+        if !brief.optimizing {
+            self.keep_score(owner, request, brief.held_out, outcome);
+        }
+        let completed = outcome.completed;
         let json = completed.then(|| std::fs::read_to_string(&brief.output).ok()).flatten();
         let _ = std::fs::remove_file(&brief.output);
         let edits = json.and_then(|json| domain::memory::parse_memory_edits(&json)).unwrap_or_default();

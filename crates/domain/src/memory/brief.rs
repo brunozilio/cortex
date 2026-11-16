@@ -26,6 +26,8 @@ pub struct MemoryBrief {
     pub anchors: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub structured: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub held_out: bool,
 }
 
 impl MemoryBrief {

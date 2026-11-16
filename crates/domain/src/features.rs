@@ -4,7 +4,9 @@ use serde_json::Value;
 
 mod learnings;
 
-pub use learnings::{BLAST_RADIUS, CODE_MAP, LEARNING_CHECK, MEMORY_ANCHORS, MEMORY_SEED, STRUCTURED_LEARNINGS};
+pub use learnings::{
+    BLAST_RADIUS, CODE_MAP, LEARNING_CHECK, MEMORY_ANCHORS, MEMORY_SCORECARD, MEMORY_SEED, STRUCTURED_LEARNINGS,
+};
 
 pub const SANDBOX: &str = "experimental-sandbox";
 

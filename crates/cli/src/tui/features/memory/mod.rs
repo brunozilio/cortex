@@ -62,6 +62,7 @@ fn run(app: &mut App, command: MemoryCommand) {
                 .map(|file| format!("Shared [{}] as {file}: commit it and the team's agents recall it too.", id.0)),
             MemoryCommand::Seed => memory.seed().map(|offered| seed_listing(&offered)),
             MemoryCommand::SeedKeep(picked) => memory.keep_seeds(&picked).map(|all| listing("Kept. Memory", &all)),
+            MemoryCommand::Score => memory.score(),
         };
         match answer {
             Ok(text) => Msg::Notice(text),

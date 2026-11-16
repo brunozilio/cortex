@@ -109,6 +109,7 @@ fn memory_commands_parse_from_their_argument() {
     assert_eq!(MemoryCommand::parse(None), Some(MemoryCommand::List));
     assert_eq!(MemoryCommand::parse(Some("the renderer".into())), Some(MemoryCommand::Search("the renderer".into())));
     assert_eq!(MemoryCommand::parse(Some("Optimize".into())), Some(MemoryCommand::Optimize));
+    assert_eq!(MemoryCommand::parse(Some("score".into())), Some(MemoryCommand::Score));
     assert_eq!(MemoryCommand::parse(Some("undo".into())), Some(MemoryCommand::Undo));
     assert_eq!(MemoryCommand::parse(Some("forgotten".into())), Some(MemoryCommand::Forgotten));
     assert_eq!(MemoryCommand::parse(Some("edit".into())), Some(MemoryCommand::Edit));

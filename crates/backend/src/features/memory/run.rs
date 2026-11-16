@@ -25,8 +25,8 @@ pub fn prepare(context: &Context<'_>, run: RunId, request: PromptRequest) -> (Pr
         ));
     }
     let kept = request.clone();
-    let finish: Finish = Box::new(move |completed| {
-        let output = memories.finish(&owner, &kept, completed)?;
+    let finish: Finish = Box::new(move |outcome| {
+        let output = memories.finish(&owner, &kept, outcome)?;
         Some(ServerEvent::Feature { feature: NAME.into(), output })
     });
     (request, Some(finish))

@@ -24,6 +24,7 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
             Ok(json!({ "path": path, "file": shared }))
         }
         "check" => memories.check(owner, &path),
+        "score" => Ok(json!({ "path": path, "report": memories.score(owner, &path) })),
         "seed" => memories.seed(context, &path),
         "seed_keep" => {
             let picked: Vec<usize> = serde_json::from_value(input["picked"].clone()).map_err(|e| e.to_string())?;

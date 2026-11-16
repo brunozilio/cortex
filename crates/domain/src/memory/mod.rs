@@ -126,6 +126,8 @@ pub struct MemoryBook {
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub forgotten: Vec<Forgotten>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub scorecard: scorecard::Scorecard,
 }
 
 impl MemoryBook {
@@ -264,6 +266,7 @@ mod dedup;
 mod optimize;
 mod recall;
 mod sanitize;
+pub mod scorecard;
 pub mod search;
 mod searches;
 pub mod seed;

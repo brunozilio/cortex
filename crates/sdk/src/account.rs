@@ -112,6 +112,11 @@ impl ProjectMemory<'_> {
         Ok(answer["prompt"].as_str().map(str::to_owned))
     }
 
+    pub fn score(&self) -> Result<String, Error> {
+        let answer = self.ask(json!({ "op": "score" }), "report")?;
+        Ok(answer["report"].as_str().unwrap_or_default().to_owned())
+    }
+
     pub fn seed(&self) -> Result<Vec<Candidate>, Error> {
         let answer = self.ask(json!({ "op": "seed" }), "candidates")?;
         parse(&answer["candidates"])

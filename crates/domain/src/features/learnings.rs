@@ -6,6 +6,7 @@ pub const LEARNING_CHECK: &str = "experimental-learning-check";
 pub const BLAST_RADIUS: &str = "experimental-blast-radius";
 pub const CODE_MAP: &str = "experimental-code-map";
 pub const MEMORY_SEED: &str = "experimental-memory-seed";
+pub const MEMORY_SCORECARD: &str = "experimental-memory-scorecard";
 
 pub const KNOWN: &[Flag] = &[
     Flag {
@@ -31,6 +32,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: MEMORY_SEED,
         about: "/memory seed offers what you asked for in two or more past sessions as memories to keep",
+    },
+    Flag {
+        name: MEMORY_SCORECARD,
+        about: "One request in 20 runs without recalled memory, so /memory score can show whether memory saves corrections and cost",
     },
 ];
 

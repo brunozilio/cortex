@@ -31,6 +31,36 @@ fn by_user() -> Provenance {
     Provenance { author: Author::User, now: 5, origin: None }
 }
 
+fn ended(completed: bool) -> domain::memory::scorecard::RunOutcome {
+    domain::memory::scorecard::RunOutcome { completed, ..Default::default() }
+}
+
+#[test]
+fn every_twentieth_request_goes_without_memory_and_the_score_compares_both() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let memories = plain();
+    let owner = Principal::LocalOwner;
+    memories.edit(&owner, dir.path(), &[remember("The renderer uses wgpu")], by_user()).expect("edit");
+    let mut held = Vec::new();
+    for n in 1..=20 {
+        let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), false);
+        let brief = briefed.memory.clone().expect("brief");
+        if brief.held_out {
+            held.push(n);
+            assert!(brief.recalled.is_empty(), "nothing recalled when held out");
+        } else {
+            assert!(!brief.recalled.is_empty());
+        }
+        let corrections = u32::from(brief.held_out);
+        let outcome = domain::memory::scorecard::RunOutcome { corrections, ..ended(true) };
+        memories.finish(&owner, &briefed, &outcome);
+    }
+    assert_eq!(held, [20]);
+    let report = memories.score(&owner, dir.path());
+    assert!(report.contains("With memory: 19 runs, 0.0 corrections"), "{report}");
+    assert!(report.contains("Without memory: 1 runs, 100.0 corrections"), "{report}");
+}
+
 #[test]
 fn project_keys_are_flat_file_names() {
     assert_eq!(project_key(Path::new("/Users/me/sky.app")), "-Users-me-sky-app");
@@ -122,7 +152,7 @@ fn a_run_is_briefed_and_its_edits_applied_on_completion() {
 
     std::fs::write(&brief.output, r#"{"remember":[{"kind":"episodic","text":"Tuned the renderer"}],"forget":[0]}"#)
         .expect("write");
-    let learned = listed(&memories.finish(&owner, &briefed, true).expect("changed").expect("saved"));
+    let learned = listed(&memories.finish(&owner, &briefed, &ended(true)).expect("changed").expect("saved"));
     assert_eq!(learned.len(), 1);
     assert_eq!((learned[0].kind, learned[0].author), (MemoryKind::Episodic, Author::Agent));
     assert_eq!(learned[0].origin.as_deref(), Some("Night sky"));
@@ -159,7 +189,7 @@ fn a_failed_run_changes_nothing() {
     let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), false);
     let output = briefed.memory.clone().expect("brief").output;
     std::fs::write(&output, r#"{"remember":[{"kind":"semantic","text":"Half done"}]}"#).expect("write");
-    assert_eq!(memories.finish(&owner, &briefed, false), None);
+    assert_eq!(memories.finish(&owner, &briefed, &ended(false)), None);
     assert!(!output.exists());
     let mut no_memory = request(dir.path());
     no_memory.memory = None;
@@ -180,7 +210,7 @@ fn an_optimisation_can_be_undone_until_the_next_edit() {
     assert!(brief.optimizing && brief.recalled.is_empty() && !brief.tool);
 
     std::fs::write(&brief.output, r#"{"forget":[0]}"#).expect("write");
-    let optimized = memories.finish(&owner, &briefed, true).expect("changed").expect("saved");
+    let optimized = memories.finish(&owner, &briefed, &ended(true)).expect("changed").expect("saved");
     assert_eq!(listed(&optimized).len(), 1);
     assert_eq!(forgotten(&optimized).iter().map(|f| f.memory.id).collect::<Vec<_>>(), vec![MemoryId(0)]);
     let undone = memories.undo(&owner, dir.path()).expect("undone");
@@ -190,7 +220,7 @@ fn an_optimisation_can_be_undone_until_the_next_edit() {
 
     let briefed = memories.brief(&owner, RunId::new(), &request, false);
     std::fs::write(&briefed.memory.clone().expect("brief").output, r#"{"forget":[1]}"#).expect("write");
-    let _ = memories.finish(&owner, &briefed, true);
+    let _ = memories.finish(&owner, &briefed, &ended(true));
     memories.edit(&owner, dir.path(), &[remember("Inter is the font")], by_user()).expect("edit");
     assert!(memories.undo(&owner, dir.path()).is_err(), "an edit ends the undo");
 }

@@ -205,6 +205,7 @@ impl CommandHandler {
             outbox,
             finishes: std::sync::Mutex::new(finishes),
             extensions: request.extensions.clone(),
+            outcome: std::sync::Mutex::default(),
         });
         match self.services.engine.start(run, &request, sink) {
             Ok(handle) => {
@@ -241,6 +242,7 @@ struct RunSink {
     outbox: Outbox,
     finishes: std::sync::Mutex<Vec<Finish>>,
     extensions: Option<domain::Extensions>,
+    outcome: std::sync::Mutex<domain::memory::scorecard::RunOutcome>,
 }
 
 impl EventSink for RunSink {
@@ -248,12 +250,13 @@ impl EventSink for RunSink {
         if let Some(listing) = &self.listing {
             listing.observe(&event);
         }
+        self.outcome.locked().observe(&event);
         if event.is_terminal() {
             self.runs.finish(run);
             crate::extensions::discard(self.extensions.as_ref());
-            let completed = matches!(event, EngineEvent::Completed { .. });
+            let outcome = *self.outcome.locked();
             let finishes = std::mem::take(&mut *self.finishes.locked());
-            for finished in finishes.into_iter().filter_map(|finish| finish(completed)) {
+            for finished in finishes.into_iter().filter_map(|finish| finish(&outcome)) {
                 self.outbox.send(finished);
             }
         }
