@@ -136,25 +136,35 @@ impl Tool for ToolSearch {
         if found.is_empty() {
             return Outcome::error(format!("No tool matches \"{query}\"."));
         }
-        let shown: Vec<Value> = found
-            .iter()
-            .map(|spec| json!({ "name": spec.name, "description": spec.description, "parameters": spec.schema }))
-            .collect();
-        let waiting = deferred.waiting();
-        let rest = if waiting.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "\n\nNot loaded yet: {}. If none above is the tool you need, load it by exact name with the query \
-                 \"select:<name>[,<name>]\" instead of calling a loaded tool that does something else.",
-                waiting.join(", ")
-            )
-        };
-        Outcome::ok(format!(
-            "Loaded; call them from now on:\n{}{rest}",
-            serde_json::to_string_pretty(&shown).unwrap_or_default()
-        ))
+        Outcome::ok(report(&found, &deferred.waiting()))
     }
+}
+
+const LOADED: &str = "Loaded; call them from now on:\n";
+const WAITING: &str = "\n\nNot loaded yet: ";
+
+fn report(found: &[ToolSpec], waiting: &[&str]) -> String {
+    let shown: Vec<Value> = found
+        .iter()
+        .map(|spec| json!({ "name": spec.name, "description": spec.description, "parameters": spec.schema }))
+        .collect();
+    let rest = if waiting.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "{WAITING}{}. If none above is the tool you need, load it by exact name with the query \
+             \"select:<name>[,<name>]\" instead of calling a loaded tool that does something else.",
+            waiting.join(", ")
+        )
+    };
+    format!("{LOADED}{}{rest}", serde_json::to_string_pretty(&shown).unwrap_or_default())
+}
+
+pub fn loaded_names(result: &str) -> Vec<String> {
+    let Some(shown) = result.strip_prefix(LOADED) else { return Vec::new() };
+    let shown = shown.split_once(WAITING).map_or(shown, |(shown, _)| shown);
+    let shown: Vec<Value> = serde_json::from_str(shown).unwrap_or_default();
+    shown.iter().filter_map(|tool| tool["name"].as_str().map(str::to_owned)).collect()
 }
 
 #[cfg(test)]
@@ -207,6 +217,16 @@ mod tests {
         assert!(!child.is_loaded("mcp__github__delete_repo"), "the parent's loads stay the parent's");
         assert!(child.search("select:mcp__github__delete_repo").is_empty(), "not a tool it may use");
         assert_eq!(child.search("select:mcp__jira__tool1").len(), 1);
+    }
+
+    #[test]
+    fn a_search_s_result_says_which_tools_it_loaded() {
+        let found = [spec("mcp__jira__getJiraIssue", "Get an issue"), spec("mcp__jira__tool1", "")];
+        let names = ["mcp__jira__getJiraIssue", "mcp__jira__tool1"];
+        assert_eq!(loaded_names(&report(&found, &["mcp__jira__tool2"])), names);
+        assert_eq!(loaded_names(&report(&found, &[])), names);
+        assert!(loaded_names("No tool matches \"x\".").is_empty());
+        assert!(loaded_names("Every tool is already loaded.").is_empty());
     }
 
     fn jira() -> Deferred {

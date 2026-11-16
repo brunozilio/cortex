@@ -89,3 +89,20 @@ fn the_id_token_names_the_account_when_the_access_token_does_not() {
     assert_eq!(account(response(json!({"organizations": [{"id": "org-1"}]}))), Ok("org-1".into()));
     assert!(account(response(json!({}))).is_err(), "no account anywhere");
 }
+
+#[test]
+fn openai_s_own_providers_keep_tools_a_search_loaded_in_the_conversation() {
+    let mut body = serde_json::json!({
+        "model": "gpt-5.6-sol",
+        "tools": [],
+        "input": [{"type": "additional_tools", "role": "developer", "tools": [{"name": "a"}]}],
+    });
+    for provider in [&Provider as &dyn Shape, &crate::providers::openai::Provider] {
+        let mut shaped = body.clone();
+        llm_providers::request::shape(provider, None, &mut shaped).expect("shaped");
+        assert_eq!(shaped["input"][0]["type"], "additional_tools", "{}", provider.id());
+    }
+    body["model"] = "gpt-5".into();
+    llm_providers::request::shape(&Provider, None, &mut body).expect("shaped");
+    assert_eq!(body["tools"], serde_json::json!([{"name": "a"}]), "older models get them in the list");
+}

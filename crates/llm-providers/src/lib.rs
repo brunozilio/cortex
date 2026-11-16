@@ -1,3 +1,4 @@
+pub mod added_tools;
 pub mod catalog;
 mod config;
 pub mod declared;
@@ -70,6 +71,10 @@ pub trait Provider: Sync {
 
     fn web_search(&self, _model: &str) -> Option<Value> {
         None
+    }
+
+    fn tools_in_conversation(&self, _model: &str) -> bool {
+        false
     }
 
     fn turn_headers(&self, _model: Option<&ModelOption>, _body: &Value) -> Vec<(String, String)> {

@@ -1,14 +1,16 @@
 use domain::Effort;
 use serde_json::{Value, json};
 
+use super::loaded::{Loaded, tool};
 use crate::model::TurnRequest;
 use crate::transcript::{Block, Message, Role};
 
 pub fn body(request: &TurnRequest) -> Value {
+    let loaded = Loaded::of(request);
     let mut body = json!({
         "model": request.model,
         "instructions": request.system,
-        "input": request.messages.iter().flat_map(items).collect::<Vec<_>>(),
+        "input": request.messages.iter().flat_map(|message| items(message, &loaded)).collect::<Vec<_>>(),
         "reasoning": { "effort": effort(request.effort), "summary": "auto" },
         "store": false,
         "stream": true,
@@ -16,19 +18,7 @@ pub fn body(request: &TurnRequest) -> Value {
         "include": ["reasoning.encrypted_content"],
     });
     if !request.tools.is_empty() {
-        body["tools"] = request
-            .tools
-            .iter()
-            .map(|tool| {
-                json!({
-                    "type": "function",
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.schema,
-                    "strict": false,
-                })
-            })
-            .collect();
+        body["tools"] = request.tools.iter().filter(|spec| loaded.declared(spec)).map(tool).collect();
         body["tool_choice"] = json!("auto");
         body["parallel_tool_calls"] = json!(true);
     }
@@ -43,7 +33,7 @@ pub const fn effort(effort: Effort) -> &'static str {
     }
 }
 
-fn items(message: &Message) -> Vec<Value> {
+fn items(message: &Message, loaded: &Loaded) -> Vec<Value> {
     let mut items = Vec::new();
     let mut text = String::new();
     let flush = |text: &mut String, items: &mut Vec<Value>| {
@@ -101,6 +91,7 @@ fn items(message: &Message) -> Vec<Value> {
                 flush(&mut text, &mut items);
                 let output = if *is_error { format!("Error: {content}") } else { content.clone() };
                 items.push(json!({ "type": "function_call_output", "call_id": id, "output": output }));
+                items.extend(loaded.after(id));
             }
         }
     }
@@ -121,7 +112,7 @@ mod tests {
             Block::Native { origin: crate::transcript::ReasoningOrigin::of("messages"), item: json!({"type": "x"}) },
             Block::Text("Found it.".into()),
         ]);
-        let sent = items(&message);
+        let sent = items(&message, &Loaded::default());
         assert_eq!(sent.len(), 2);
         assert_eq!(sent[0], call);
         assert_eq!(sent[1]["role"], "assistant");
@@ -135,7 +126,11 @@ mod tests {
             messages: vec![
                 Message::user("Read a"),
                 Message::assistant(vec![
-                    Block::Thinking { text: "plan".into(), signature: Some("enc".into()), origin: Some(super::super::ORIGIN) },
+                    Block::Thinking {
+                        text: "plan".into(),
+                        signature: Some("enc".into()),
+                        origin: Some(super::super::ORIGIN),
+                    },
                     Block::Text("Reading.".into()),
                     Block::ToolUse { id: "c1".into(), name: "Read".into(), input: json!({"file_path": "a"}) },
                 ]),

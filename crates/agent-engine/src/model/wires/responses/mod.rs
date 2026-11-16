@@ -1,4 +1,5 @@
 mod body;
+mod loaded;
 mod stream;
 
 use std::sync::Arc;
@@ -18,7 +19,6 @@ pub const ORIGIN: crate::transcript::ReasoningOrigin = crate::transcript::Reason
 pub fn open(http: Arc<dyn Http>, _model: Option<&domain::ModelOption>) -> Arc<dyn ModelApi> {
     Arc::new(Responses::new(http, Arc::new(domain::provider::ProviderKey::new("transport-owned"))))
 }
-
 
 pub const API: &str = "https://api.openai.com/v1";
 

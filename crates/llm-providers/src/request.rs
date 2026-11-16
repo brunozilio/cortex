@@ -17,6 +17,9 @@ pub fn shape(provider: &dyn Provider, model: Option<&ModelOption>, body: &mut Va
         .to_owned();
     let named = body["model"].as_str().unwrap_or_default().to_owned();
     crate::web_search::put(provider.web_search(&named), body);
+    if !provider.tools_in_conversation(&named) {
+        crate::added_tools::into_tools(body);
+    }
     provider.shape(model, body, &effort)
 }
 
@@ -49,5 +52,17 @@ mod tests {
         let mut body = json!({"model": "keyed:some-model"});
         shape(&crate::testing::KEYED, None, &mut body).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(body["model"], "some-model");
+    }
+
+    #[test]
+    fn a_provider_that_does_not_take_tools_in_the_conversation_gets_them_in_the_list() {
+        let mut body = json!({
+            "model": "keyed:gpt-6-astra",
+            "tools": [],
+            "input": [{"type": "additional_tools", "role": "developer", "tools": [{"name": "a"}]}],
+        });
+        shape(&crate::testing::KEYED, None, &mut body).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(body["tools"], json!([{"name": "a"}]));
+        assert_eq!(body["input"], json!([]));
     }
 }

@@ -37,6 +37,9 @@ impl Shape for Provider {
     fn web_search(&self, _model: &str) -> Option<serde_json::Value> {
         Some(llm_providers::web_search::responses())
     }
+    fn tools_in_conversation(&self, model: &str) -> bool {
+        llm_providers::added_tools::openai(model)
+    }
     fn base(&self, _config: &Config) -> String {
         "https://api.openai.com/v1".to_owned()
     }

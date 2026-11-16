@@ -46,6 +46,9 @@ impl Shape for Provider {
     fn web_search(&self, _model: &str) -> Option<serde_json::Value> {
         Some(llm_providers::web_search::responses())
     }
+    fn tools_in_conversation(&self, model: &str) -> bool {
+        llm_providers::added_tools::openai(model)
+    }
     fn check(&self, config: &Config) -> Result<(), ProviderError> {
         if config.refreshable()?.account_id.is_empty() {
             return Err(ProviderError::Unauthorized("ChatGPT account_id is missing".into()));
