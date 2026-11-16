@@ -20,6 +20,10 @@ fn span(id: u32, parent: u32, kind: SpanKind, name: &str, start_ms: u64, end_ms:
         stop: None,
         attrs: Vec::new(),
         flags: Vec::new(),
+        request: None,
+        reply: None,
+        system_id: None,
+        tools_id: None,
     }
 }
 
@@ -51,6 +55,9 @@ fn run(day: u64, index: usize, spans: Vec<Span>) -> Run {
         waste: 0.0,
         signals: Vec::new(),
         spans: [vec![span(1, 0, SpanKind::Run, "run", 0, 0)], spans].concat(),
+        messages: Vec::new(),
+        systems: std::collections::BTreeMap::new(),
+        tools: std::collections::BTreeMap::new(),
     }
 }
 

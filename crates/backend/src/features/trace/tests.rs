@@ -94,3 +94,32 @@ fn with_no_session_at_all_the_report_is_empty() {
     assert!(report.sessions.is_empty());
     assert_eq!(report.current, "");
 }
+
+#[test]
+fn a_followed_session_keeps_every_text_whole_while_the_report_stays_light() {
+    let root = tempfile::tempdir().expect("dir");
+    let store = FileSessions::new(root.path().join("sessions"));
+    let owner = Principal::LocalOwner;
+    let id = SessionId("long".into());
+    let mut request = PromptRequest::plain(root.path().into(), "", ModelOption::new("", ""));
+    request.credentials.owner = Some(owner.clone());
+    let long = "x".repeat(30_000);
+    for entry in [
+        Entry::Prompted { at_ms: NOW, prompt: long.clone() },
+        Entry::Event { at_ms: NOW + 1, event: EngineEvent::ToolStarted(ToolCall::new("r", "Read", "a.txt")) },
+        Entry::Event {
+            at_ms: NOW + 2,
+            event: EngineEvent::ToolResult { id: "r".into(), output: long.clone(), failed: false },
+        },
+    ] {
+        store.record(&request, &id, &entry).expect("record");
+    }
+
+    let followed = traced(&store, &owner, root.path(), &id).expect("runs");
+    let tool = followed[0].spans.iter().find(|span| span.kind == SpanKind::Tool).expect("tool");
+    assert_eq!(tool.output.len(), 30_000);
+
+    let report = everything(&store, &owner, &[(id, root.path().to_path_buf())], NOW);
+    let tool = report.sessions[0].runs[0].spans.iter().find(|span| span.kind == SpanKind::Tool).expect("tool");
+    assert!(tool.output.len() < 30_000);
+}

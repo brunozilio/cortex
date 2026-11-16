@@ -30,7 +30,7 @@ export function IoTab({ span }: { span: Span }) {
   if (span.kind === 'llm') {
     return (
       <>
-        <Bubble who="Prompt" text={span.input} tone="user" />
+        <Bubble who="Prompt" text={span.request ? `${span.input} · open Messages to read them` : span.input} tone="user" />
         {span.thinking ? <Bubble who="Thinking" text={span.thinking} tone="thinking" /> : null}
         <Bubble who="Response" text={span.output} tone="model" />
       </>

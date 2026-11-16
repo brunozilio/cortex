@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use agent_engine::sessions::{FileSessions, records};
 use domain::trace::insights::{Report, SessionRuns, insights, recent};
-use domain::trace::runs::{Run, runs, trim};
+use domain::trace::runs::{Run, runs, trim, without_messages};
 use domain::{ModelOption, Principal, PromptRequest, SessionId};
 use serde_json::Value;
 
@@ -32,8 +32,7 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let store = FileSessions::new(data.join(crate::native::SESSIONS));
     if input["only"] == "current" {
         let current = SessionId(session.into());
-        let mut runs = traced(&store, context.principal, Path::new(cwd), &current)?;
-        trim(&mut runs, CURRENT_TEXT);
+        let runs = traced(&store, context.principal, Path::new(cwd), &current)?;
         return serde_json::to_value(SessionRuns { id: current.0, runs }).map_err(|e| e.to_string());
     }
     let owner_settings = context.services.settings.load(context.principal).unwrap_or_default();
@@ -55,6 +54,7 @@ fn everything(store: &FileSessions, owner: &Principal, listed: &[(SessionId, Pat
             let mut runs = traced(store, owner, cwd, id).ok()?;
             runs.retain(|run| recent(run, now_ms));
             trim(&mut runs, OTHER_TEXT);
+            without_messages(&mut runs);
             (!runs.is_empty()).then(|| SessionRuns { id: id.0.clone(), runs })
         })
         .collect();
@@ -91,6 +91,7 @@ fn reported(
         let Ok(mut runs) = traced(store, owner, cwd, id) else { continue };
         runs.retain(|run| recent(run, now_ms));
         trim(&mut runs, OTHER_TEXT);
+        without_messages(&mut runs);
         if !runs.is_empty() {
             sessions.push(SessionRuns { id: id.0.clone(), runs });
         }

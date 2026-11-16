@@ -1,6 +1,10 @@
+mod messages;
 mod spans;
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
+use serde_json::Value;
 
 use self::spans::Spans;
 pub use self::spans::{JUDGE, REVIEW};
@@ -61,6 +65,14 @@ pub struct Span {
     pub stop: Option<String>,
     pub attrs: Vec<(String, String)>,
     pub flags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<Vec<u32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools_id: Option<String>,
 }
 
 impl Span {
@@ -113,6 +125,12 @@ pub struct Run {
     pub waste: f64,
     pub signals: Vec<Signal>,
     pub spans: Vec<Span>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<Value>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub systems: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub tools: BTreeMap<String, Value>,
 }
 
 impl Run {
@@ -162,8 +180,10 @@ fn run(session: &str, index: usize, nodes: &[&Node], spans: &mut Spans) -> Run {
     } else {
         Status::Running
     };
-    let spans = spans.finish(completed.map(|(duration, _)| duration));
-    summarize(session, index, prompt, started, info, status, completed.and_then(|(_, cost)| cost), spans)
+    let (spans, kept) = spans.finish(completed.map(|(duration, _)| duration));
+    let mut run = summarize(session, index, prompt, started, info, status, completed.and_then(|(_, cost)| cost), spans);
+    (run.messages, run.systems, run.tools) = (kept.messages, kept.systems, kept.tools);
+    run
 }
 
 #[allow(clippy::too_many_arguments, reason = "every field of a run is computed here once")]
@@ -193,6 +213,9 @@ fn summarize(
         waste: 0.0,
         signals: Vec::new(),
         spans,
+        messages: Vec::new(),
+        systems: BTreeMap::new(),
+        tools: BTreeMap::new(),
     };
     let calls: Vec<Usage> = run.calls().map(|(_, usage)| usage.clone()).collect();
     run.cost_usd = cost.unwrap_or_else(|| dollars(calls.iter().map(|usage| usage.cost_usd))) + 0.0;
@@ -240,6 +263,15 @@ pub fn trim(runs: &mut [Run], limit: usize) {
         cut(&mut span.input);
         cut(&mut span.output);
         cut(&mut span.thinking);
+    }
+}
+
+pub fn without_messages(runs: &mut [Run]) {
+    for run in runs.iter_mut() {
+        (run.messages, run.systems, run.tools) = (Vec::new(), BTreeMap::new(), BTreeMap::new());
+        for span in &mut run.spans {
+            (span.request, span.reply) = (None, None);
+        }
     }
 }
 

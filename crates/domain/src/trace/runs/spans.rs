@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use super::messages::{Kept, Messages};
 use super::{ContextSplit, Span, SpanKind, Usage};
 use crate::billing::ModelUsage;
 use crate::trace::{Agent, Kind, Lane, ModelCall, Node, RunInfo, Wait};
@@ -15,6 +16,7 @@ pub(super) struct Spans {
     list: Vec<Span>,
     systems: HashMap<String, u64>,
     tools: HashMap<String, u64>,
+    messages: Messages,
 }
 
 fn usage(usage: &ModelUsage) -> Usage {
@@ -40,6 +42,7 @@ impl Spans {
     pub(super) fn begin(&mut self, start: u64, prompt: &str, info: Option<&RunInfo>) {
         self.start = start;
         self.list.clear();
+        self.messages.begin();
         let id = self.add(0, SpanKind::Run, "run".into(), start, start);
         let root = &mut self.list[id as usize - 1];
         root.input = prompt.into();
@@ -60,7 +63,7 @@ impl Spans {
         }
     }
 
-    pub(super) fn finish(&mut self, duration: Option<u64>) -> Vec<Span> {
+    pub(super) fn finish(&mut self, duration: Option<u64>) -> (Vec<Span>, Kept) {
         let latest = self.list.iter().map(|span| span.end_ms).max().unwrap_or_default();
         let answer = self.list.iter().rev().find(|span| span.kind == SpanKind::Llm && !span.output.is_empty());
         let answer = answer.map(|span| span.output.clone()).unwrap_or_default();
@@ -68,7 +71,7 @@ impl Spans {
             root.end_ms = duration.unwrap_or_default().max(latest);
             root.output = answer;
         }
-        std::mem::take(&mut self.list)
+        (std::mem::take(&mut self.list), self.messages.finish())
     }
 
     fn add(&mut self, parent: u32, kind: SpanKind, name: String, from: u64, until: u64) -> u32 {
@@ -90,6 +93,10 @@ impl Spans {
             stop: None,
             attrs: Vec::new(),
             flags: Vec::new(),
+            request: None,
+            reply: None,
+            system_id: None,
+            tools_id: None,
         });
         id
     }
@@ -179,7 +186,9 @@ impl Spans {
         let name = call.as_ref().map(|c| c.model.clone()).or_else(|| spent.as_ref().map(|u| u.model.clone()));
         let id = self.add(parent, SpanKind::Llm, name.unwrap_or_else(|| "model".into()), at, until);
         let context = call.as_ref().zip(spent.as_ref()).map(|(call, spent)| self.context(call, spent));
+        let sent = call.as_ref().map(|call| self.messages.sent(parent, call)).unwrap_or_default();
         let span = self.span(id);
+        (span.request, span.reply, span.system_id, span.tools_id) = (sent.request, sent.reply, sent.system, sent.tools);
         (span.output, span.thinking) = (text.into(), thinking.into());
         span.usage = spent.as_ref().map(usage);
         span.context = context;

@@ -17,6 +17,7 @@ pub(super) struct Recorder {
     session: SessionId,
     held: Mutex<Option<(u64, EngineEvent)>>,
     seen: Mutex<HashSet<String>>,
+    conversations: Mutex<super::sent::Conversations>,
 }
 
 impl Recorder {
@@ -27,6 +28,7 @@ impl Recorder {
             session: session.clone(),
             held: Mutex::new(None),
             seen: Mutex::default(),
+            conversations: Mutex::default(),
         };
         if request.command.is_none() {
             if let Some(shown) = &request.shown {
@@ -64,6 +66,9 @@ impl Recorder {
             ),
             Err(_) => (Some(request.system.clone()), Some(tools)),
         };
+        let agent = crate::agent::current::agent();
+        let delta =
+            self.conversations.lock().ok().map(|mut conversations| conversations.delta(agent, &request.messages));
         let call = ModelCall {
             model: request.model.clone(),
             stop: format!("{:?}", reply.stop),
@@ -74,12 +79,15 @@ impl Recorder {
             system,
             tools_id,
             tools,
+            keep: delta.as_ref().map_or(0, |delta| delta.keep),
+            added: delta.map(|delta| delta.added),
+            reply: serde_json::to_value(&reply.message).ok(),
         };
         let Ok(mut held) = self.held.lock() else { return };
         if let Some((at_ms, event)) = held.take() {
             self.write(Entry::Event { at_ms, event });
         }
-        self.write(Entry::Called { at_ms: now(), agent: crate::agent::current::agent(), call });
+        self.write(Entry::Called { at_ms: now(), agent, call });
     }
 
     pub(super) fn opened(&self, run: RunInfo) {

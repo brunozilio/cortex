@@ -7,12 +7,18 @@ import { IoTab } from './IoTab'
 import { MetricsTab } from './MetricsTab'
 import { MetadataTab } from './MetadataTab'
 import { EvalsTab } from './EvalsTab'
+import { MessagesTab, SystemTab, ToolsTab } from './MessagesTab'
 import type { Finding, Run, Span } from '@/types'
 
-export type InspectorTab = 'io' | 'metrics' | 'meta' | 'evals'
+export type InspectorTab = 'io' | 'messages' | 'system' | 'tools' | 'metrics' | 'meta' | 'evals'
+
+const LLM_TABS: InspectorTab[] = ['messages', 'system', 'tools']
 
 const TABS: { key: InspectorTab; label: string }[] = [
   { key: 'io', label: 'Input / Output' },
+  { key: 'messages', label: 'Messages' },
+  { key: 'system', label: 'System' },
+  { key: 'tools', label: 'Tools' },
   { key: 'metrics', label: 'Metrics' },
   { key: 'meta', label: 'Metadata' },
   { key: 'evals', label: 'Evaluations' },
@@ -27,6 +33,9 @@ interface InspectorProps {
 }
 
 export function Inspector({ run, span, tab, findings, onTab }: InspectorProps) {
+  const llm = span.kind === 'llm'
+  const tabs = TABS.filter(({ key }) => llm || !LLM_TABS.includes(key))
+  const shown = tabs.some(({ key }) => key === tab) ? tab : 'io'
   return (
     <Card>
       <div className="flex items-center gap-3 p-5 pb-4">
@@ -45,10 +54,10 @@ export function Inspector({ run, span, tab, findings, onTab }: InspectorProps) {
           ) : null}
         </span>
       </div>
-      <Tabs value={tab} onValueChange={(value) => onTab(value as InspectorTab)}>
+      <Tabs value={shown} onValueChange={(value) => onTab(value as InspectorTab)}>
         <div className="px-5">
           <TabsList className="w-full">
-            {TABS.map(({ key, label }) => (
+            {tabs.map(({ key, label }) => (
               <TabsTrigger key={key} value={key} className="flex-1 text-xs sm:text-sm">
                 {label}
               </TabsTrigger>
@@ -58,6 +67,19 @@ export function Inspector({ run, span, tab, findings, onTab }: InspectorProps) {
         <TabsContent value="io" className="grid min-w-0 gap-4 p-5">
           <IoTab span={span} />
         </TabsContent>
+        {llm ? (
+          <>
+            <TabsContent value="messages" className="grid min-w-0 gap-4 p-5">
+              <MessagesTab run={run} span={span} />
+            </TabsContent>
+            <TabsContent value="system" className="grid min-w-0 gap-4 p-5">
+              <SystemTab run={run} span={span} />
+            </TabsContent>
+            <TabsContent value="tools" className="grid min-w-0 gap-4 p-5">
+              <ToolsTab run={run} span={span} />
+            </TabsContent>
+          </>
+        ) : null}
         <TabsContent value="metrics" className="grid min-w-0 gap-4 p-5">
           <MetricsTab run={run} span={span} />
         </TabsContent>

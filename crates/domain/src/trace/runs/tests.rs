@@ -122,3 +122,52 @@ fn long_texts_are_cut_to_the_limit() {
     trim(&mut runs, 3);
     assert_eq!(runs[0].spans[0].input, "fix …");
 }
+
+#[test]
+fn a_model_call_shows_the_messages_it_was_sent_its_system_prompt_its_tools_and_its_reply() {
+    let first = ModelCall {
+        model: "sonnet".into(),
+        system_id: "s".into(),
+        system: Some("You are careful.".into()),
+        tools_id: "t".into(),
+        tools: Some(json!([{ "name": "Read" }])),
+        added: Some(vec![json!({ "role": "User", "blocks": [{ "Text": "fix it" }] })]),
+        reply: Some(json!({ "role": "Assistant", "blocks": [{ "Text": "looking" }] })),
+        ..ModelCall::default()
+    };
+    let second = ModelCall {
+        model: "sonnet".into(),
+        system_id: "s".into(),
+        tools_id: "t".into(),
+        keep: 1,
+        added: Some(vec![json!({ "role": "Assistant", "blocks": [{ "Text": "looking" }] })]),
+        ..ModelCall::default()
+    };
+    let records = vec![
+        Record::Prompted { at_ms: 1_000, prompt: "fix it".into() },
+        Record::Called { at_ms: 1_100, agent: None, call: first },
+        at(1_200, EngineEvent::TextDelta("looking".into())),
+        at(1_250, spent(10, 0, 5, 0.01)),
+        Record::Called { at_ms: 1_300, agent: None, call: second },
+        at(1_400, EngineEvent::TextDelta("done".into())),
+        at(1_450, spent(20, 10, 5, 0.01)),
+        at(1_500, EngineEvent::Completed { duration_ms: 500, cost_usd: None }),
+    ];
+
+    let run = &runs("s1", &build(records))[0];
+
+    let calls: Vec<&Span> = run.spans.iter().filter(|span| span.kind == SpanKind::Llm).collect();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0].request, Some(vec![0]));
+    assert_eq!(calls[1].request, Some(vec![0, 1]));
+    assert_eq!(calls[0].reply.as_ref().map(|reply| reply["blocks"][0]["Text"].clone()), Some(json!("looking")));
+    assert_eq!(calls[1].system_id.as_deref(), Some("s"));
+    assert_eq!(run.systems.get("s").map(String::as_str), Some("You are careful."));
+    assert_eq!(run.tools.get("t"), Some(&json!([{ "name": "Read" }])));
+    assert_eq!(run.messages[0]["blocks"][0]["Text"], "fix it");
+
+    let mut light = vec![run.clone()];
+    without_messages(&mut light);
+    assert!(light[0].messages.is_empty() && light[0].systems.is_empty());
+    assert!(light[0].spans.iter().all(|span| span.request.is_none() && span.reply.is_none()));
+}

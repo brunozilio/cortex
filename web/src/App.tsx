@@ -69,6 +69,7 @@ export function App({ initial }: { initial: Report }) {
   }
 
   const openRun = (target: Run, span = 1, nextTab: InspectorTab = 'io') => {
+    if (config) void watchSession(config, target.session).catch(() => undefined)
     setSelected(refOf(target))
     setSpanId(span)
     setTab(nextTab)
