@@ -30,6 +30,33 @@ fn answering(rig: &Rig, decision: Decision) -> std::thread::JoinHandle<()> {
 }
 
 #[test]
+fn an_mcp_sign_in_is_refused_in_the_sandbox_and_asked_about_outside_it() {
+    let login = format!("{} mcp login jira", brand::COMMAND);
+    let mut rig = Rig::new(PermissionMode::AcceptEdits);
+    rig.workspace.policy.sandbox = Some(domain::sandbox::Sandbox::default());
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("in", "Bash", json!({ "command": login }))]),
+        ScriptedModel::reply(vec![tool_use("out", "Bash", json!({ "command": login, "unsandboxed": true }))]),
+        ScriptedModel::reply(vec![Block::Text("Done".into())]),
+    ]);
+    let answerer = answering(&rig, Decision::Deny);
+    rig.run(&model, &mut vec![Message::user("sign in")]).expect("run");
+    answerer.join().expect("answerer");
+
+    let events = rig.events();
+    let refused_inside = events
+        .iter()
+        .any(|event| matches!(event, EngineEvent::Refused { reason, .. } if reason.contains("/mcp login jira")));
+    let asked = events.iter().filter(|event| matches!(event, EngineEvent::Asked(_))).count();
+    if platform::sandbox::SUPPORTED {
+        assert!(refused_inside, "the sandboxed run cannot keep the sign-in, so it never starts");
+        assert_eq!(asked, 1, "only the run outside the sandbox is asked about");
+    } else {
+        assert!(!refused_inside, "without a sandbox nothing is confined");
+    }
+}
+
+#[test]
 fn leaving_the_sandbox_is_always_asked_even_in_bypass() {
     let mut rig = Rig::new(PermissionMode::Bypass);
     rig.workspace.policy.sandbox = Some(domain::sandbox::Sandbox::default());

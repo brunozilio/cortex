@@ -161,11 +161,17 @@ with a `command` is a local process:
 `${VAR}` is read from the environment when the server starts: never
 write a secret into the file. A remote server that uses OAuth signs in
 with `{{COMMAND}} mcp login <name>` (or `/mcp login <name>` in the chat);
-the user does that, in their browser, and you cannot run it for them. A
+the user signs in, in their browser. It saves the sign-in outside the
+project, so run it with `unsandboxed` set and a timeout of 300000, one
+server per call, or ask the user to run `/mcp login <name>`. A
 server that does not let applications register themselves cannot sign in
 that way: it takes a token the service issues, passed as a header read
 from the environment (`-H 'Authorization: Bearer ${TOKEN}'`, single
-quotes so the shell keeps `${TOKEN}` for the file). Names starting with `{{COMMAND}}_`
+quotes so the shell keeps `${TOKEN}` for the file). `{{COMMAND}} mcp add`
+refuses a secret written out. The variable must be set where
+{{NAME}} starts: for GitHub, the user can `export GITHUB_TOKEN="$(gh auth
+token)"` in their shell profile. Never read a token yourself to put it
+anywhere. Names starting with `{{COMMAND}}_`
 are reserved. New servers are picked up on the next prompt.
 
 Find the server's URL or package in the vendor's own documentation, and

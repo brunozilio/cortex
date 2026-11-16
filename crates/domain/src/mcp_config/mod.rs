@@ -1,4 +1,5 @@
 mod edit;
+mod secrets;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -125,6 +126,28 @@ mod tests {
         assert!(removed);
         assert_eq!(left, json!({"mcpServers": {}}));
         assert!(!remove_server(left, "atlassian").1);
+    }
+
+    #[test]
+    fn a_secret_written_out_is_refused_and_one_read_from_the_environment_is_kept() {
+        let url = "https://api.githubcopilot.com/mcp/";
+        let token = format!("gho_{}", "a1B2c3D4e5F6g7H8i9J0k1L2");
+        for server in [
+            json!({"type": "http", "url": url, "headers": {"Authorization": format!("Bearer {token}")}}),
+            json!({"type": "http", "url": url, "headers": {"X-Api-Key": "plain-value-1234"}}),
+            json!({"command": "github-mcp-server", "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": token}}),
+            json!({"command": "npx", "args": ["-y", "server", "--token", token]}),
+        ] {
+            let error = add_server(json!(null), "github", server.clone()).expect_err("refused");
+            assert!(error.contains("${") && !error.contains(&token), "{error}");
+        }
+        for server in [
+            json!({"type": "http", "url": url, "headers": {"Authorization": "Bearer ${GITHUB_TOKEN}"}}),
+            json!({"type": "http", "url": url, "headers": {"X-Toolsets": "repos,issues"}}),
+            json!({"command": "npx", "args": ["-y", "server"], "env": {"LOG_LEVEL": "debug", "API_KEY": "${API_KEY}"}}),
+        ] {
+            assert!(add_server(json!(null), "github", server.clone()).is_ok(), "{server}");
+        }
     }
 
     #[test]

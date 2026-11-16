@@ -102,6 +102,12 @@ pub fn add_server(config: Value, name: &str, server: Value) -> Result<Value, Str
     if !valid {
         return Err("a server needs a `command` (stdio) or `type: http` (or `sse`) with a `url`".into());
     }
+    if let Some(place) = super::secrets::written_out(&server) {
+        return Err(format!(
+            "`{place}` writes a secret into the file. Keep it in the environment and write `${{VAR}}` in its \
+             place, such as -H 'Authorization: Bearer ${{TOKEN}}' (single quotes, so the shell leaves it alone)"
+        ));
+    }
     let mut config = into_object(config);
     let servers = config.entry("mcpServers").or_insert_with(|| json!({}));
     if !servers.is_object() {

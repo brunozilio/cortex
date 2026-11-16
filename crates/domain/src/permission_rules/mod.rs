@@ -2,7 +2,7 @@ mod kind;
 mod pattern;
 mod site;
 
-pub use pattern::{hides_more, normalized, split_command};
+pub use pattern::{hides_more, normalized, split_command, without_harmless_redirects};
 pub use site::{is_private, site};
 
 #[cfg(test)]

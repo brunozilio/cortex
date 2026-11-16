@@ -116,19 +116,49 @@ fn publishing_and_merging_are_asked_about() {
 }
 
 #[test]
-fn signing_in_to_an_mcp_server_is_left_to_the_user() {
+fn signing_in_to_an_mcp_server_is_refused_inside_the_sandbox_only() {
     let cmd = brand::COMMAND;
     for command in [
         format!("{cmd} mcp login jira"),
         format!("{cmd} mcp login jira; {cmd} mcp login github"),
         format!("/Users/me/.cargo/bin/{cmd} mcp login cloudflare"),
     ] {
-        let CommandClass::Forbidden(why) = plain(&command) else { panic!("{command}: {:?}", plain(&command)) };
-        assert!(why.contains("/mcp login") && why.contains(&format!("! {cmd} mcp login")), "{why}");
+        let why = sign_in_refused(&command, true).unwrap_or_else(|| panic!("{command}"));
+        assert!(why.contains("unsandboxed") && why.contains("/mcp login"), "{why}");
+        assert_eq!(sign_in_refused(&command, false), None, "outside the sandbox it is asked about as usual");
+        assert!(!matches!(plain(&command), CommandClass::Forbidden(_)), "{command}");
     }
-    let CommandClass::Forbidden(why) = plain(&format!("{cmd} mcp login jira")) else { panic!("refused") };
+    let why = sign_in_refused(&format!("{cmd} mcp login jira"), true).unwrap_or_default();
     assert!(why.contains("/mcp login jira"), "names the server: {why}");
     for command in [format!("{cmd} mcp list"), format!("{cmd} mcp add jira https://mcp.test/mcp"), "login".into()] {
-        assert!(!matches!(plain(&command), CommandClass::Forbidden(_)), "{command}");
+        assert_eq!(sign_in_refused(&command, true), None, "{command}");
+    }
+}
+
+#[test]
+fn asking_what_a_program_is_or_how_to_use_it_only_reads() {
+    let cmd = brand::COMMAND;
+    for command in [
+        "command -v github-mcp-server".to_owned(),
+        "command -v github-mcp-server || true".to_owned(),
+        "command -v gh docker".to_owned(),
+        "docker --version".to_owned(),
+        "cargo --help".to_owned(),
+        format!("{cmd} mcp list"),
+        format!("{cmd} mcp add --help && {cmd} mcp remove --help"),
+    ] {
+        assert_eq!(plain(&command), CommandClass::ReadOnly, "{command}");
+    }
+    for command in [
+        "./deploy.sh --help".to_owned(),
+        "/tmp/tool --version".to_owned(),
+        "npx create-thing --version".to_owned(),
+        "docker run --help".to_owned(),
+        "command -v $(rm -rf x)".to_owned(),
+        "command rm -rf build".to_owned(),
+        format!("{cmd} mcp add jira https://mcp.test/mcp"),
+        format!("{cmd} mcp list > out.txt"),
+    ] {
+        assert_ne!(plain(&command), CommandClass::ReadOnly, "{command}");
     }
 }
