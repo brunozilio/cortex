@@ -79,7 +79,7 @@ impl Agent<'_> {
         let rule_asks = matches!(rule, Some((domain::permission_rules::RuleKind::Ask, _)));
         let original = ruled(mode, access, rule, by_mode);
         if !matches!(original, Verdict::Deny(_))
-            && let CommandClass::Risky(why) = &class
+            && let Some(why) = self.always_asks(&name, input)
         {
             if self.control.no_prompts() {
                 return self.refused(&name, format!("Not run: {why} The user cannot be asked here."));

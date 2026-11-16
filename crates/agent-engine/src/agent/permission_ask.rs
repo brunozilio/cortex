@@ -26,7 +26,7 @@ impl Agent<'_> {
         let kind = AskKind::Permission {
             tool: name.clone(),
             subject: shown.to_owned(),
-            rememberable: !matches!(self.command_class(&name, input), domain::command_policy::CommandClass::Risky(_)),
+            rememberable: self.always_asks(&name, input).is_none(),
             rule: rule.clone(),
         };
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask.clone(), kind }));

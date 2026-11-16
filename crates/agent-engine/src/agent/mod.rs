@@ -4,6 +4,7 @@ mod conversations;
 pub mod current;
 mod cutoffs;
 mod dispatch;
+mod egress;
 mod incoming;
 mod interception;
 mod model_hooks;
@@ -192,6 +193,7 @@ impl Agent<'_> {
             if let Some(safety) = &self.workspace.policy.safety {
                 safety.observe(history);
             }
+            self.workspace.tracking.hear(egress::heard(history));
             history.push(reply.message);
             counted.observe(reply.usage, history.len());
             if reply.stop != StopReason::MaxTokens {

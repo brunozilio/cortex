@@ -16,6 +16,7 @@ pub(crate) struct Tracking {
     pub(crate) seen_rules: Arc<Mutex<HashSet<PathBuf>>>,
     pub(crate) seen_memories: Arc<Mutex<HashSet<domain::MemoryId>>>,
     pub(crate) shells: Mutex<Vec<String>>,
+    heard: Mutex<domain::egress::Heard>,
 }
 
 impl Tracking {
@@ -50,6 +51,14 @@ impl Tracking {
 
     pub(crate) fn refusals_stop(&self) -> Option<String> {
         self.refusals.locked().stop()
+    }
+
+    pub(crate) fn hear(&self, heard: domain::egress::Heard) {
+        *self.heard.locked() = heard;
+    }
+
+    pub(crate) fn heard(&self) -> domain::egress::Heard {
+        self.heard.locked().clone()
     }
 
     pub(crate) fn started_shell(&self, id: &str) {
