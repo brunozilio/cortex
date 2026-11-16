@@ -1,5 +1,5 @@
 use super::search::cosine;
-use super::{MemoryBook, MemoryId, REVISIONS_KEPT, Revision};
+use super::{Author, MemoryBook, MemoryId, REVISIONS_KEPT, Revision};
 
 pub const NEAR_DUPLICATE: f32 = 0.92;
 
@@ -17,16 +17,20 @@ impl MemoryBook {
             let newer = self.memories.remove(at);
             let vector = self.vectors.remove(&id);
             let Some(older) = self.memories.iter_mut().find(|m| m.id == into) else { continue };
-            let old = std::mem::replace(&mut older.text, newer.text);
-            older.history.push(Revision { text: old, until: now });
-            let extra = older.history.len().saturating_sub(REVISIONS_KEPT);
-            older.history.drain(..extra);
+            let agent_over_user = older.author == Author::User && newer.author == Author::Agent;
+            if !agent_over_user {
+                let old = std::mem::replace(&mut older.text, newer.text);
+                older.author = newer.author;
+                older.history.push(Revision { text: old, until: now });
+                let extra = older.history.len().saturating_sub(REVISIONS_KEPT);
+                older.history.drain(..extra);
+            }
             for tag in newer.tags {
                 if !older.tags.contains(&tag) {
                     older.tags.push(tag);
                 }
             }
-            if let Some(vector) = vector {
+            if let Some(vector) = vector.filter(|_| !agent_over_user) {
                 self.vectors.insert(into, vector);
             }
             merged.push((id, into));

@@ -91,6 +91,39 @@ fn a_new_memory_that_says_the_same_revises_the_old_one() {
     assert!(!book.vectors.contains_key(&MemoryId(4)) && book.vectors[&MemoryId(0)] == vec![0.99, 0.05, 0.0]);
 }
 
+fn by_user(now: i64) -> Provenance {
+    Provenance { author: Author::User, now, origin: None }
+}
+
+fn near_pair(older: &Provenance, newer: &Provenance) -> (MemoryBook, Vec<(MemoryId, MemoryId)>) {
+    let mut book = MemoryBook::default();
+    book.apply(&[remember(MemoryKind::Semantic, "Indent with tabs", &["style"])], older);
+    let since = book.next_id();
+    book.apply(&[remember(MemoryKind::Semantic, "Indent with tabs, width 4", &["format"])], newer);
+    book.vectors.insert(MemoryId(0), vec![1.0, 0.0]);
+    book.vectors.insert(MemoryId(1), vec![0.99, 0.05]);
+    let merged = book.merge_near_duplicates(since, newer.now);
+    (book, merged)
+}
+
+#[test]
+fn the_agent_never_rewrites_what_the_user_said() {
+    let (book, merged) = near_pair(&by_user(100), &by_agent(200));
+    assert_eq!(merged, vec![(MemoryId(1), MemoryId(0))]);
+    let kept = &book.memories[0];
+    assert_eq!((kept.text.as_str(), kept.author), ("Indent with tabs", Author::User), "the user's wording stays");
+    assert!(kept.history.is_empty());
+    assert_eq!(kept.tags, ["style", "format"], "tags still join");
+}
+
+#[test]
+fn what_the_user_says_takes_over_an_agent_s_memory() {
+    let (book, _) = near_pair(&by_agent(100), &by_user(200));
+    let kept = &book.memories[0];
+    assert_eq!((kept.text.as_str(), kept.author), ("Indent with tabs, width 4", Author::User));
+    assert_eq!(kept.history.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["Indent with tabs"]);
+}
+
 #[test]
 fn old_episodes_fade_unless_they_keep_being_used() {
     let day = 24 * 60 * 60;

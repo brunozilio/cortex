@@ -151,7 +151,7 @@ fn memory_is_optimized_by_a_run() {
     let mut run = memory.optimize(model()).expect("optimize");
     while run.next_event().is_some() {}
     let request = engine.requests().pop().expect("a run");
-    assert!(request.prompt.contains("[0] semantic: The renderer uses wgpu."));
+    assert!(request.prompt.contains("[0] semantic, from the user: The renderer uses wgpu."));
     assert!(matches!(memory.undo(), Err(Error::Backend(message)) if message.contains("nothing to undo")));
 }
 

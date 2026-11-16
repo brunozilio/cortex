@@ -172,7 +172,7 @@ mod tests {
         command(&mut app, "/memory forgotten", "[0] Uses wgpu");
         command(&mut app, "/memory restore 0", "Restored [0] Uses wgpu");
         command(&mut app, "/memory optimize", "Memory optimized: 2 → 2 memories");
-        assert!(engine.requests().iter().any(|r| r.prompt.contains("[1] semantic: Inter is the font")));
+        assert!(engine.requests().iter().any(|r| r.prompt.contains("[1] semantic, from the user: Inter is the font")));
     }
 
     #[test]

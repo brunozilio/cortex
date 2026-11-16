@@ -10,13 +10,17 @@ pub fn optimize_prompt(memories: &[Memory]) -> String {
          fact about the project or the user, procedural is how to do something here.\n\
          - Fold many small episodic memories about one topic into a single semantic or episodic summary.\n\
          - Make wordy memories short and precise; keep names, paths, commands and numbers exact.\n\
+         - Memories marked \"from the user\" are what the user said. When one conflicts with an agent's memory, \
+         the user's own words win: forget or revise the agent's, never the user's, and keep the user's wording \
+         when merging.\n\
          Never invent facts, and do not look at or change the project's files. If the memory is already \
          tidy, change nothing. Write every change to the memory file described at the end; do not add a \
          memory about this tidying itself.\n\nMemory:",
     );
     for m in memories {
         let tags = if m.tags.is_empty() { String::new() } else { format!(" ({})", m.tags.join(", ")) };
-        out.push_str(&format!("\n[{}] {}{tags}: {}", m.id.0, m.kind.key(), m.text));
+        let said = if m.author == crate::Author::User { ", from the user" } else { "" };
+        out.push_str(&format!("\n[{}] {}{tags}{said}: {}", m.id.0, m.kind.key(), m.text));
     }
     out
 }
@@ -46,5 +50,9 @@ mod tests {
             optimize_prompt(&[memory(3, MemoryKind::Semantic, &["ci", "lint"]), memory(7, MemoryKind::Episodic, &[])]);
         assert!(prompt.contains("\n[3] semantic (ci, lint): m3\n[7] episodic: m7"));
         assert!(prompt.contains("Merge memories"));
+        let said = Memory { author: Author::User, ..memory(9, MemoryKind::Semantic, &[]) };
+        let prompt = optimize_prompt(&[said]);
+        assert!(prompt.contains("\n[9] semantic, from the user: m9"), "{prompt}");
+        assert!(prompt.contains("the user's own words win"), "{prompt}");
     }
 }

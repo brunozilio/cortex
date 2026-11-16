@@ -174,7 +174,7 @@ fn an_optimisation_can_be_undone_until_the_next_edit() {
     let both = [remember("Uses wgpu"), remember("The renderer uses wgpu")];
     memories.edit(&owner, dir.path(), &both, by_user()).expect("edit");
     let request = memories.optimization(&owner, dir.path(), ModelOption::new("opus", "Opus"));
-    assert!(request.prompt.contains("[0] semantic (render): Uses wgpu"));
+    assert!(request.prompt.contains("[0] semantic (render), from the user: Uses wgpu"));
     let briefed = memories.brief(&owner, RunId::new(), &request, false);
     let brief = briefed.memory.clone().expect("brief");
     assert!(brief.optimizing && brief.recalled.is_empty() && !brief.tool);

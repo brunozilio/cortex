@@ -167,7 +167,10 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
     collect(&backend, &woke, run_ended);
 
     let [optimizing, plain] = &engine.requests()[..] else { panic!("two runs: {:?}", engine.requests()) };
-    assert!(optimizing.prompt.contains("long-term memory") && optimizing.prompt.contains("[0] semantic: Uses wgpu"));
+    assert!(
+        optimizing.prompt.contains("long-term memory")
+            && optimizing.prompt.contains("[0] semantic, from the user: Uses wgpu")
+    );
     assert!(optimizing.memory.as_ref().is_some_and(|brief| brief.optimizing && brief.recalled.is_empty()));
     assert!(optimizing.credentials.mcp.is_empty(), "no memory_search while tidying");
     assert!(!plain.memory.as_ref().is_some_and(|brief| brief.optimizing), "a client cannot ask for it");
