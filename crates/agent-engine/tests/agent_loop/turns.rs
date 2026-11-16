@@ -125,12 +125,26 @@ fn an_overloaded_model_goes_down_the_fallback_chain() {
 }
 
 #[test]
-fn other_failures_end_the_run_without_a_hook() {
+fn the_model_s_own_failures_end_the_run_without_a_hook() {
     let mut rig = Rig::new(PermissionMode::Bypass);
     rig.workspace.models.fallbacks = vec!["backup".into()];
-    let model = ScriptedModel::new([Err(ModelError::Network("down".into()))]);
+    let model = ScriptedModel::new([Err(ModelError::Provider("bad request".into()))]);
     let ending = rig.run(&model, &mut vec![Message::user("go")]);
-    assert_eq!(ending, Err(Ending::Failed(ModelError::Network("down".into()))));
+    assert_eq!(ending, Err(Ending::Failed(ModelError::Provider("bad request".into()))));
+}
+
+#[test]
+fn an_unreachable_or_signed_out_model_falls_back_down_the_chain() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    rig.workspace.models.fallbacks = vec!["backup".into(), "last".into()];
+    let model = ScriptedModel::new([
+        Err(ModelError::Network("down".into())),
+        Err(ModelError::Unauthorized("expired".into())),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    rig.run(&model, &mut vec![Message::user("go")]).expect("run");
+    let models: Vec<String> = model.asked().into_iter().map(|asked| asked.model).collect();
+    assert_eq!(models, ["m", "backup", "last"]);
 }
 
 #[test]

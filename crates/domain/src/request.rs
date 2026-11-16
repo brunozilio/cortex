@@ -47,6 +47,8 @@ pub struct PromptRequest {
     pub ask_tools: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fallbacks: Vec<String>,
     #[serde(default, skip_serializing_if = "crate::model_roles::ModelRoles::is_empty")]
     pub roles: crate::model_roles::ModelRoles,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -97,6 +99,7 @@ impl PromptRequest {
             disallowed_tools: Vec::new(),
             ask_tools: Vec::new(),
             fallback_model: None,
+            fallbacks: Vec::new(),
             roles: Default::default(),
             append_system: None,
             verification: None,

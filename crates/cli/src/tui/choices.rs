@@ -46,6 +46,7 @@ impl App {
             }
             self.output_style = saved["outputStyle"].as_str().map(str::to_owned);
             self.roles = super::model_roles::saved(saved);
+            self.fallbacks = super::fallbacks::saved(saved);
             self.status.command = saved["statusLine"].as_str().filter(|c| !c.is_empty()).map(str::to_owned);
             if let Some(id) = &self.resume {
                 self.title = settings::title(saved, &self.cwd, id);
@@ -97,6 +98,7 @@ impl App {
         }
         session.set_output_style(self.output_style.clone());
         session.set_roles(self.roles.clone());
+        session.set_fallbacks(self.fallbacks.clone());
         session.set_headless(self.headless.clone());
         self.session = Some(session);
         if resumed.is_some() {

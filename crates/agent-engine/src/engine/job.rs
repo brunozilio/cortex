@@ -198,10 +198,7 @@ impl Job {
             }
         }
         workspace.home = crate::brief::home(&self.request);
-        workspace.models.fallbacks = match &self.request.fallback_model {
-            Some(model) => vec![model.clone()],
-            None => settings.fallbacks.clone(),
-        };
+        workspace.models.fallbacks = super::roles::fallbacks(&self.request, &settings.fallbacks);
         let small = super::small_model::pick(
             self.request.model.provider,
             &self.request.model.id,

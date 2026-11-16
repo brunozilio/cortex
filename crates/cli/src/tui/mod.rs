@@ -18,6 +18,7 @@ pub(crate) mod dirs;
 mod editor;
 mod entries;
 mod export;
+mod fallbacks;
 mod features;
 mod git;
 mod git_offer;

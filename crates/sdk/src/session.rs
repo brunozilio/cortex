@@ -27,6 +27,7 @@ pub struct Session {
     added_dirs: Vec<PathBuf>,
     output_style: Option<String>,
     roles: domain::model_roles::ModelRoles,
+    fallbacks: Vec<String>,
     headless: Headless,
     fork: std::sync::atomic::AtomicBool,
     spending: Arc<Mutex<Spending>>,
@@ -63,6 +64,7 @@ impl Session {
             added_dirs: Vec::new(),
             output_style: None,
             roles: Default::default(),
+            fallbacks: Vec::new(),
             headless: Headless::default(),
             fork: std::sync::atomic::AtomicBool::new(false),
             spending: Arc::default(),
@@ -143,6 +145,10 @@ impl Session {
 
     pub fn set_roles(&mut self, roles: domain::model_roles::ModelRoles) {
         self.roles = roles;
+    }
+
+    pub fn set_fallbacks(&mut self, fallbacks: Vec<String>) {
+        self.fallbacks = fallbacks;
     }
 
     pub fn set_permission(&mut self, mode: PermissionMode) {
@@ -255,6 +261,7 @@ impl Session {
         request.append_system.clone_from(&self.headless.append_system);
         request.fallback_model.clone_from(&self.headless.fallback_model);
         request.roles.clone_from(&self.roles);
+        request.fallbacks.clone_from(&self.fallbacks);
         if request.output_style.is_none() {
             request.output_style.clone_from(&self.output_style);
         }

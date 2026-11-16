@@ -13,6 +13,14 @@ pub fn merged(asked: &ModelRoles, settings: &Settings) -> ModelRoles {
     roles
 }
 
+pub fn fallbacks(request: &domain::PromptRequest, settings: &[String]) -> Vec<String> {
+    match (&request.fallback_model, request.fallbacks.is_empty()) {
+        (Some(model), _) => vec![model.clone()],
+        (None, false) => request.fallbacks.clone(),
+        (None, true) => settings.to_vec(),
+    }
+}
+
 pub fn elsewhere(model: &str, current: domain::ModelProvider) -> bool {
     let known: Vec<&str> = crate::providers::all().iter().map(|provider| provider.id()).collect();
     domain::routing::route(model, &known).provider.is_some_and(|provider| provider != current.id())

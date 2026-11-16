@@ -100,13 +100,18 @@ pub fn model_command(argument: Option<String>) -> super::Command {
     if first.eq_ignore_ascii_case("roles") && rest.is_empty() {
         return super::Command::ModelRoles;
     }
-    let Some(role) = ModelRole::parse(first) else { return super::Command::Model(Some(argument)) };
     let change = match rest {
         "" => RoleChange::Pick,
         clear if ["default", "none", "off"].iter().any(|word| clear.eq_ignore_ascii_case(word)) => RoleChange::Clear,
         model => RoleChange::Set(model.to_owned()),
     };
-    super::Command::ModelRole(role, change)
+    if first.eq_ignore_ascii_case("fallbacks") {
+        return super::Command::ModelFallbacks(change);
+    }
+    match ModelRole::parse(first) {
+        Some(role) => super::Command::ModelRole(role, change),
+        None => super::Command::Model(Some(argument)),
+    }
 }
 
 pub fn accounts_command(argument: Option<&str>) -> Option<super::Command> {

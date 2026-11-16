@@ -10,6 +10,10 @@ pub enum Failure {
 }
 
 impl Failure {
+    pub fn moves_down_the_chain(self) -> bool {
+        matches!(self, Self::Overloaded | Self::Unauthorized | Self::Network)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Overloaded => "overloaded",
@@ -62,7 +66,7 @@ impl Fallback {
         match verdict {
             Verdict::Stop => None,
             Verdict::Forward(model) => untried(&model).then_some(model),
-            Verdict::Pass if failure == Failure::Overloaded => self.chain.iter().find(|model| untried(model)).cloned(),
+            Verdict::Pass if failure.moves_down_the_chain() => self.chain.iter().find(|model| untried(model)).cloned(),
             Verdict::Pass => None,
         }
     }

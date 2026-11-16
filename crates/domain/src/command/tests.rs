@@ -167,3 +167,13 @@ fn accounts_balance_names_how_the_session_provider_s_accounts_share_the_work() {
     );
     assert_eq!(Command::parse("/accounts balance sometimes"), None);
 }
+
+#[test]
+fn model_fallbacks_shows_sets_or_clears_the_chain() {
+    assert_eq!(Command::parse("/model fallbacks"), Some(Command::ModelFallbacks(RoleChange::Pick)));
+    assert_eq!(
+        Command::parse("/model fallbacks grok-4.6  sonnet"),
+        Some(Command::ModelFallbacks(RoleChange::Set("grok-4.6  sonnet".into())))
+    );
+    assert_eq!(Command::parse("/model fallbacks off"), Some(Command::ModelFallbacks(RoleChange::Clear)));
+}

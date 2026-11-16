@@ -91,3 +91,20 @@ fn the_small_role_wins_over_the_small_model_setting() {
     finish(&start(&engine(&scripted), &request));
     assert_eq!(scripted.asked()[1].model, GROK);
 }
+
+#[test]
+fn the_session_s_fallbacks_take_over_when_the_model_is_busy() {
+    let dir = tempfile::tempdir().expect("dir");
+    let root = dir.path().join(brand::DIR);
+    std::fs::create_dir_all(&root).expect("settings dir");
+    std::fs::write(root.join("settings.json"), r#"{"fallbackModel":"from-settings"}"#).expect("settings");
+    let scripted = Arc::new(ScriptedModel::new([
+        Err(agent_engine::model::ModelError::Overloaded("429".into())),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]));
+    let mut request = PromptRequest::plain(dir.path().into(), "go", model());
+    request.permission = PermissionMode::Bypass;
+    request.fallbacks = vec![GROK.into()];
+    finish(&start(&engine(&scripted), &request));
+    assert_eq!(scripted.asked()[1].model, GROK, "the session's chain wins over the settings file");
+}

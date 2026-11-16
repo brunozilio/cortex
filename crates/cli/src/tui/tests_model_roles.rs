@@ -86,3 +86,20 @@ fn an_unknown_model_for_a_role_is_refused() {
     assert!(screen(&app).contains("No model named nope"), "{}", screen(&app));
     assert_eq!(app.roles.get(ModelRole::Small), None);
 }
+
+#[test]
+fn fallbacks_set_by_name_reach_the_next_run_and_are_remembered() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = engine();
+    let mut app = started(&engine, data.path());
+    send(&mut app, "/model fallbacks fast main");
+    assert!(screen(&app).contains("Fallbacks: Fast → Main"), "{}", screen(&app));
+    send(&mut app, "go");
+    assert_eq!(engine.requests().last().expect("run").fallbacks, [FAST, MAIN]);
+    until(&mut app, |app| app.sdk.settings().is_ok_and(|saved| saved["fallbacks"][0] == FAST));
+    send(&mut app, "/model fallbacks off");
+    send(&mut app, "again");
+    assert!(engine.requests().last().expect("run").fallbacks.is_empty());
+    send(&mut app, "/model fallbacks nope");
+    assert!(screen(&app).contains("No model named nope"), "{}", screen(&app));
+}

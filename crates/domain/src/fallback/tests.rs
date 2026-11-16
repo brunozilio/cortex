@@ -14,10 +14,16 @@ fn an_overloaded_model_goes_down_the_chain_in_order() {
 }
 
 #[test]
-fn the_chain_alone_answers_only_overload() {
-    let mut fallback = chain(&["orbit:a"]);
-    for failure in [Failure::Unauthorized, Failure::Network, Failure::Provider, Failure::TooLong] {
-        assert_eq!(fallback.next("nova:x", failure, Verdict::Pass), None, "{failure:?}");
+fn the_chain_answers_a_busy_signed_out_or_unreachable_model() {
+    for failure in [Failure::Overloaded, Failure::Unauthorized, Failure::Network] {
+        assert_eq!(chain(&["orbit:a"]).next("nova:x", failure, Verdict::Pass), Some("orbit:a".into()), "{failure:?}");
+    }
+}
+
+#[test]
+fn the_chain_leaves_the_model_s_own_failures_alone() {
+    for failure in [Failure::Provider, Failure::TooLong] {
+        assert_eq!(chain(&["orbit:a"]).next("nova:x", failure, Verdict::Pass), None, "{failure:?}");
     }
 }
 
