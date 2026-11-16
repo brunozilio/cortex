@@ -3,14 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
-    "./catalog": "./src/catalog.ts",
-    "./plans": "./src/plans.ts",
-    "./context-limits": "./src/context-limits.ts",
-    "./types": "./src/types.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
-  },
-  "license": "AGPL-3.0-only"
+  }
 }
