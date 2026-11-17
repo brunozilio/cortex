@@ -157,6 +157,52 @@ pub fn shown(logs: &[String], outcome: &Result<String, String>, limit: usize) ->
     parts.join("\n")
 }
 
+pub const FRESH: &str = "<note>\nThis script ran in a new JavaScript context: what earlier REPL calls in this conversation \
+                         declared is gone (the app restarted, the session was resumed, or the context was let go). \
+                         Declare again what you need.\n</note>";
+
+const REFUSED_ROWS: usize = 10;
+const REFUSED_CHARS: usize = 500;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refused {
+    pub tool: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Report {
+    pub logs: Vec<String>,
+    pub outcome: Result<String, String>,
+    pub refused: Vec<Refused>,
+    pub fresh: bool,
+}
+
+pub fn reported(report: &Report, limit: usize) -> String {
+    let mut parts = Vec::new();
+    if report.fresh {
+        parts.push(FRESH.to_owned());
+    }
+    parts.push(shown(&report.logs, &report.outcome, limit));
+    if !report.refused.is_empty() {
+        let mut rows: Vec<String> = report
+            .refused
+            .iter()
+            .take(REFUSED_ROWS)
+            .map(|refused| format!("- {}: {}", refused.tool, cut_middle(refused.reason.trim(), REFUSED_CHARS)))
+            .collect();
+        if report.refused.len() > REFUSED_ROWS {
+            rows.push(format!("- and {} more", report.refused.len() - REFUSED_ROWS));
+        }
+        parts.push(format!("<refused>\nTool calls refused while the script ran:\n{}\n</refused>", rows.join("\n")));
+    }
+    parts.join("\n")
+}
+
+pub fn fresh_context(started_now: bool, earlier_scripts: usize) -> bool {
+    started_now && earlier_scripts > 0
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -186,6 +232,42 @@ mod tests {
 
         assert!(text.contains("01\n[... 6 characters cut from the middle ...]\n89"));
         assert!(text.contains("ab\n[... 6 characters cut from the middle ...]\nij"));
+    }
+
+    #[test]
+    fn the_report_notes_a_new_context_first_and_lists_refused_calls_last() {
+        let report = Report {
+            logs: Vec::new(),
+            outcome: Ok("done".into()),
+            refused: vec![Refused { tool: "Write".into(), reason: " The user said no. ".into() }],
+            fresh: true,
+        };
+
+        let text = reported(&report, PART);
+
+        assert_eq!(
+            text,
+            format!(
+                "{FRESH}\n<result>\ndone\n</result>\n<refused>\nTool calls refused while the script ran:\n- Write: The user said no.\n</refused>"
+            )
+        );
+    }
+
+    #[test]
+    fn many_refusals_are_counted_past_the_first_ten() {
+        let refused = (0..13).map(|n| Refused { tool: format!("T{n}"), reason: "no".into() }).collect();
+        let report = Report { logs: Vec::new(), outcome: Err("x".into()), refused, fresh: false };
+
+        let text = reported(&report, PART);
+
+        assert!(text.contains("- T9: no\n- and 3 more\n</refused>") && !text.contains("T10"), "{text}");
+        assert!(!text.contains("<note>"));
+    }
+
+    #[test]
+    fn a_new_context_is_worth_a_note_only_after_earlier_scripts() {
+        assert!(fresh_context(true, 1));
+        assert!(!fresh_context(true, 0) && !fresh_context(false, 3));
     }
 
     #[test]

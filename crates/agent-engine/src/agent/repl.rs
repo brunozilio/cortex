@@ -1,6 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, mpsc};
 
-use domain::code_mode::Declared;
+use domain::EngineEvent;
+use domain::code_mode::{Declared, Refused, Report};
+use platform::sync::Locked;
 use script::session::{Evaluate, Evaluation, HostCall, Limits, Message as Sent};
 use serde_json::{Value, json};
 
@@ -11,7 +13,7 @@ use crate::tools::repl::{REPL_TOOL, SEARCH_TOOLS, reachable, session};
 use crate::transcript::{Block, Message};
 
 impl Agent<'_> {
-    pub(super) fn repl(&self, input: &Value, tasks: &Tasks, parent: &[Message]) -> Outcome {
+    pub(super) fn repl(&self, id: &str, input: &Value, tasks: &Tasks, parent: &[Message]) -> Outcome {
         let Some(code) = input["code"].as_str().filter(|code| !code.trim().is_empty()) else {
             return Outcome::error("Missing required parameter `code`.");
         };
@@ -20,8 +22,34 @@ impl Agent<'_> {
         let limits = Limits { total: domain::code_mode::total_limit(input["timeout"].as_u64()), ..Limits::default() };
         let request = Evaluate { code: code.to_owned(), functions, limits, stop: Arc::clone(&self.workspace.stop) };
         let owner = format!("{}/{}", self.workspace.session_id, self.workspace.agent_name);
-        let messages = session(&owner).evaluate(request);
-        let evaluation = std::thread::scope(|scope| {
+        let context = session(&owner);
+        let refused: Mutex<Vec<Refused>> = Mutex::default();
+        let watch = |event: EngineEvent| {
+            if let EngineEvent::Refused { tool, reason } = &event {
+                refused.locked().push(Refused { tool: tool.clone(), reason: reason.clone() });
+            }
+            (self.emit)(event);
+        };
+        let watching = Agent { emit: &watch, request: self.request.clone(), ..*self };
+        let evaluation = {
+            let _unwatched = self.workspace.tracking.seen_files.unwatched();
+            let model_s_own = std::mem::take(&mut *tasks.repeats.locked());
+            let evaluation = watching.serve_script(context.session.evaluate(request), tasks, parent);
+            *tasks.repeats.locked() = model_s_own;
+            evaluation
+        };
+        let report = Report {
+            fresh: domain::code_mode::fresh_context(context.started_now, earlier_scripts(parent, id)),
+            logs: evaluation.logs,
+            refused: refused.into_inner().unwrap_or_default(),
+            outcome: evaluation.outcome,
+        };
+        let text = domain::code_mode::reported(&report, domain::code_mode::PART);
+        if report.outcome.is_ok() { Outcome::ok(text) } else { Outcome::error(text) }
+    }
+
+    fn serve_script(&self, messages: mpsc::Receiver<Sent>, tasks: &Tasks, parent: &[Message]) -> Evaluation {
+        std::thread::scope(|scope| {
             for message in messages.iter() {
                 match message {
                     Sent::Done(evaluation) => return evaluation,
@@ -32,9 +60,7 @@ impl Agent<'_> {
                 }
             }
             Evaluation { logs: Vec::new(), outcome: Err("the script's context stopped answering".into()), calls: 0 }
-        });
-        let shown = domain::code_mode::shown(&evaluation.logs, &evaluation.outcome, domain::code_mode::PART);
-        if evaluation.outcome.is_ok() { Outcome::ok(shown) } else { Outcome::error(shown) }
+        })
     }
 
     fn answer(&self, call: HostCall, tasks: &Tasks, parent: &[Message]) {
@@ -68,6 +94,14 @@ impl Agent<'_> {
             .collect();
         Ok(Value::Array(found))
     }
+}
+
+fn earlier_scripts(history: &[Message], current: &str) -> usize {
+    history
+        .iter()
+        .flat_map(|message| message.blocks.iter())
+        .filter(|block| matches!(block, Block::ToolUse { id, name, .. } if name == REPL_TOOL && id != current))
+        .count()
 }
 
 fn answered(block: Block) -> Result<Value, String> {

@@ -123,6 +123,57 @@ fn search_tools_finds_deferred_tools_and_returns_their_declarations() {
 }
 
 #[test]
+fn reads_in_a_script_do_not_count_as_reads_the_model_has_seen() {
+    let rig = code_mode(PermissionMode::AcceptEdits);
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use(
+            "r0",
+            "REPL",
+            json!({ "code": "const a = await Read({ file_path: 'notes.txt' }); \
+                             const b = await Read({ file_path: 'notes.txt' }); a === b && a.includes('alpha')" }),
+        )]),
+        ScriptedModel::reply(vec![tool_use("d0", "Read", json!({ "file_path": "notes.txt" }))]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    let mut history = vec![Message::user("go")];
+
+    rig.run_with(&model, &mut history, vec![Box::new(agent_engine::tools::repl::Repl)]).expect("run");
+
+    let results = results(&history);
+    assert_eq!(results[0], ("<result>\ntrue\n</result>".to_owned(), false), "a script gets the text every time");
+    assert!(results[1].0.contains("alpha"), "the model's own read shows the text: {:?}", results[1]);
+}
+
+#[test]
+fn a_script_after_earlier_ones_in_a_new_context_is_told_their_values_are_gone() {
+    let rig = code_mode(PermissionMode::AcceptEdits);
+    let mut history = vec![
+        Message::user("go"),
+        Message::assistant(vec![tool_use("before", "REPL", json!({ "code": "const kept = 1" }))]),
+        Message {
+            role: agent_engine::transcript::Role::User,
+            blocks: vec![Block::ToolResult {
+                id: "before".into(),
+                content: "<result>\nundefined\n</result>".into(),
+                is_error: false,
+            }],
+        },
+    ];
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("r0", "REPL", json!({ "code": "typeof kept" }))]),
+        ScriptedModel::reply(vec![tool_use("r1", "REPL", json!({ "code": "'again'" }))]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+
+    rig.run_with(&model, &mut history, vec![Box::new(agent_engine::tools::repl::Repl)]).expect("run");
+
+    let results = results(&history);
+    assert!(results[1].0.starts_with("<note>\nThis script ran in a new JavaScript context"), "{:?}", results[1]);
+    assert!(results[1].0.contains("<result>\nundefined\n</result>"));
+    assert_eq!(results[2], ("<result>\nagain\n</result>".to_owned(), false), "the note comes once");
+}
+
+#[test]
 fn what_one_script_keeps_the_next_one_reads() {
     let rig = code_mode(PermissionMode::AcceptEdits);
 
@@ -154,7 +205,9 @@ fn a_call_the_user_refuses_throws_in_the_script_and_nothing_is_written() {
     let history = scripts(&rig, &[code]);
     denier.join().expect("denier");
 
-    assert_eq!(results(&history)[0], ("<result>\nrefused: ToolError Write\n</result>".to_owned(), false));
+    let (content, failed) = &results(&history)[0];
+    assert!(!failed && content.starts_with("<result>\nrefused: ToolError Write\n</result>\n<refused>\n"), "{content}");
+    assert!(content.contains("- Write: "), "the refused call is listed: {content}");
     assert!(!rig.dir.path().join("made.txt").exists());
 }
 

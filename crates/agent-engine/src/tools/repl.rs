@@ -50,14 +50,20 @@ impl Tool for Repl {
 
 type Contexts = Mutex<Vec<(String, Arc<script::session::Session>)>>;
 
-pub fn session(id: &str) -> Arc<script::session::Session> {
+#[derive(Debug)]
+pub struct Context {
+    pub session: Arc<script::session::Session>,
+    pub started_now: bool,
+}
+
+pub fn session(id: &str) -> Context {
     static ALL: OnceLock<Contexts> = OnceLock::new();
     let mut all = ALL.get_or_init(Mutex::default).locked();
     if let Some(at) = all.iter().position(|(owner, _)| owner == id) {
         let found = all.remove(at);
         let session = Arc::clone(&found.1);
         all.push(found);
-        return session;
+        return Context { session, started_now: false };
     }
     let helpers = content::source(HELPERS).unwrap_or_default();
     let session = Arc::new(script::session::Session::with_helpers(helpers));
@@ -65,7 +71,7 @@ pub fn session(id: &str) -> Arc<script::session::Session> {
     if all.len() > KEPT {
         all.remove(0);
     }
-    session
+    Context { session, started_now: true }
 }
 
 pub fn reachable(name: &str) -> bool {
@@ -116,11 +122,15 @@ mod tests {
     #[test]
     fn one_session_keeps_one_context_and_the_oldest_ones_are_let_go() {
         let first = session("repl-test-a");
-        assert!(Arc::ptr_eq(&first, &session("repl-test-a")));
+        assert!(first.started_now);
+        let again = session("repl-test-a");
+        assert!(Arc::ptr_eq(&first.session, &again.session) && !again.started_now);
         for n in 0..KEPT {
             session(&format!("repl-test-other-{n}"));
         }
-        assert!(!Arc::ptr_eq(&first, &session("repl-test-a")), "a context unused for longest is let go");
+        let renewed = session("repl-test-a");
+        assert!(!Arc::ptr_eq(&first.session, &renewed.session), "a context unused for longest is let go");
+        assert!(renewed.started_now);
     }
 
     #[test]
