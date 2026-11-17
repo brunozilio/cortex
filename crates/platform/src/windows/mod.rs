@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub use shell::WindowsShell;
-pub use tree::{Tree, alive};
+pub use tree::alive;
+pub(crate) use tree::{Tree, lost};
 
 pub const NAME: &str = "Windows";
 pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;

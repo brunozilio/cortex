@@ -42,6 +42,7 @@ impl LanguageServer for Fake {
 struct Starts {
     installed: Vec<&'static str>,
     broken: Vec<&'static str>,
+    mended: Arc<AtomicBool>,
     started: Arc<Mutex<Vec<(String, PathBuf)>>>,
     programs: Arc<Mutex<Vec<PathBuf>>>,
     servers: Arc<Mutex<Vec<Arc<Fake>>>>,
@@ -67,7 +68,7 @@ impl Starter for Starts {
         assert!(program.is_absolute() && program.to_string_lossy().contains(&spec.command), "{program:?}");
         self.started.lock().expect("starts").push((spec.name.clone(), root.to_path_buf()));
         self.programs.lock().expect("programs").push(program.to_path_buf());
-        if self.broken.contains(&spec.command.as_str()) {
+        if self.broken.contains(&spec.command.as_str()) && !self.mended.load(Ordering::Relaxed) {
             return Err(format!("{} crashed", spec.name));
         }
         let server = Arc::new(Fake { root: root.to_path_buf(), alive: AtomicBool::new(true) });
@@ -115,7 +116,7 @@ impl Installs {
 }
 
 impl Installer for Installs {
-    fn install(&self, install: &Install, dir: &Path) -> Result<(), String> {
+    fn install(&self, install: &Install, dir: &Path, _: &AtomicBool) -> Result<(), String> {
         self.asked.lock().expect("asked").push((install.recipe.clone(), dir.to_path_buf()));
         let mut open = self.gate.0.lock().expect("gate");
         while !*open {
@@ -212,6 +213,31 @@ fn a_missing_or_failed_server_says_why_and_is_not_retried_in_a_loop() {
     assert!(open(&pool, "/no-such-w/main.go").expect_err("crashed").contains("crashed"));
     assert!(open(&pool, "/no-such-w/main.go").expect_err("still").contains("crashed"));
     assert_eq!(starts.count(), 1);
+}
+
+#[test]
+fn a_server_that_failed_to_start_is_tried_again_after_a_short_while_not_at_the_idle_sweep() {
+    let starts = Starts { installed: vec!["gopls"], broken: vec!["gopls"], ..Default::default() };
+    let retry = Duration::from_millis(300);
+    let pool = LspPool::new(starts.clone(), IDLE).retrying_after(retry);
+    assert!(open(&pool, "/no-such-w/main.go").expect_err("crashed").contains("crashed"));
+    starts.mended.store(true, Ordering::Relaxed);
+    assert!(open(&pool, "/no-such-w/main.go").expect_err("too soon").contains("crashed"));
+    assert_eq!(starts.count(), 1, "it is not started again at once");
+    std::thread::sleep(retry + Duration::from_millis(50));
+    open(&pool, "/no-such-w/main.go").expect("the environment was fixed");
+    assert_eq!(starts.count(), 2);
+}
+
+#[test]
+fn a_start_that_its_caller_stopped_is_not_remembered_as_a_failure() {
+    let starts = Starts { installed: vec!["gopls"], broken: vec!["gopls"], ..Default::default() };
+    let pool = pool(&starts);
+    let stopped = AtomicBool::new(true);
+    let file = Path::new("/no-such-w/main.go");
+    pool.open(file, &defaults(), Path::new("/no-such-w"), &stopped, Wait::ForInstall).expect_err("stopped");
+    starts.mended.store(true, Ordering::Relaxed);
+    open(&pool, "/no-such-w/main.go").expect("started on the next request");
 }
 
 #[test]

@@ -8,8 +8,8 @@ use super::http::Shared;
 use crate::model::http::{Response, read_line_stopped};
 use crate::model::sse::SseDecoder;
 
-const FIRST_WAIT: Duration = if cfg!(test) { Duration::from_millis(50) } else { Duration::from_secs(1) };
-const MOST_WAIT: Duration = Duration::from_secs(60);
+pub(super) const FIRST_WAIT: Duration = if cfg!(test) { Duration::from_millis(50) } else { Duration::from_secs(1) };
+pub(super) const MOST_WAIT: Duration = Duration::from_secs(60);
 
 pub(super) fn run(shared: &Shared, listener: &Listener, closed: &AtomicBool) {
     let mut wait = FIRST_WAIT;
@@ -50,7 +50,7 @@ fn read(shared: &Shared, mut stream: Response, listener: &Listener, closed: &Ato
     }
 }
 
-fn pause(wait: Duration, closed: &AtomicBool) {
+pub(super) fn pause(wait: Duration, closed: &AtomicBool) {
     let until = std::time::Instant::now() + wait;
     while !closed.load(Ordering::Relaxed) && std::time::Instant::now() < until {
         std::thread::sleep(Duration::from_millis(25));

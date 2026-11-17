@@ -15,9 +15,73 @@ fn with_npm() -> Starts {
 struct Crashing;
 
 impl Installer for Crashing {
-    fn install(&self, _: &Install, _: &Path) -> Result<(), String> {
+    fn install(&self, _: &Install, _: &Path, _: &AtomicBool) -> Result<(), String> {
         panic!("the unpacker crashed");
     }
+}
+
+#[derive(Clone, Default)]
+struct Slow {
+    started: Arc<Mutex<usize>>,
+    stopped: Arc<AtomicBool>,
+}
+
+impl Installer for Slow {
+    fn install(&self, install: &Install, dir: &Path, stop: &AtomicBool) -> Result<(), String> {
+        let attempt = {
+            let mut started = self.started.lock().expect("started");
+            *started += 1;
+            *started
+        };
+        if attempt == 1 {
+            while !stop.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            self.stopped.store(true, Ordering::Relaxed);
+            return Err("it was stopped".into());
+        }
+        let program = dir.join(&install.program);
+        std::fs::create_dir_all(program.parent().expect("folder")).map_err(|e| e.to_string())?;
+        std::fs::write(&program, "").map_err(|e| e.to_string())
+    }
+}
+
+#[test]
+fn an_install_ends_when_the_only_caller_waiting_for_it_stops_and_the_next_request_starts_it_again() {
+    let data = tempfile::tempdir().expect("data");
+    let installs = Slow::default();
+    let pool = Arc::new(LspPool::installing(with_npm(), IDLE, data.path().into(), installs.clone()));
+    let stop = Arc::new(AtomicBool::new(false));
+    let waiting = {
+        let (pool, stop) = (Arc::clone(&pool), Arc::clone(&stop));
+        std::thread::spawn(move || {
+            pool.open(Path::new("/no-such-w/app.ts"), &defaults(), Path::new("/no-such-w"), &stop, Wait::ForInstall)
+                .map(|_| ())
+        })
+    };
+    until("the install started", || *installs.started.lock().expect("started") == 1);
+    stop.store(true, Ordering::Relaxed);
+    let stopped = waiting.join().expect("joined").expect_err("stopped");
+    assert!(stopped.contains("Stopped while typescript was installing"), "{stopped}");
+    until("the installer was told to stop", || installs.stopped.load(Ordering::Relaxed));
+    until("the stopped install is forgotten", || names(&pool.available(&defaults())).contains(&"typescript"));
+    open(&pool, "/no-such-w/app.ts").expect("installed by the next request");
+    assert_eq!(*installs.started.lock().expect("started"), 2);
+}
+
+#[test]
+fn a_failed_install_is_tried_again_after_a_short_while() {
+    let data = tempfile::tempdir().expect("data");
+    let installs = Installs::failing("the registry is unreachable");
+    let retry = Duration::from_millis(300);
+    let pool = LspPool::installing(with_npm(), IDLE, data.path().into(), installs.clone()).retrying_after(retry);
+    assert!(open(&pool, "/no-such-w/app.ts").expect_err("failed").contains("unreachable"));
+    assert!(open(&pool, "/no-such-w/app.ts").expect_err("too soon").contains("unreachable"));
+    assert_eq!(installs.count(), 1);
+    std::thread::sleep(retry + Duration::from_millis(50));
+    assert!(names(&pool.available(&defaults())).contains(&"typescript"), "it is offered again");
+    assert!(open(&pool, "/no-such-w/app.ts").is_err());
+    assert_eq!(installs.count(), 2, "the install ran again");
 }
 
 #[test]

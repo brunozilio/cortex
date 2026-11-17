@@ -1,26 +1,35 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{ChildStdin, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, Weak};
+use std::time::{Duration, Instant};
 
-use platform::Tree;
+use platform::Child;
+use platform::child::{GRACE, Spawn, Stderr, last_lines};
+use platform::sync::Locked;
 use serde_json::{Value, json};
 
-use super::{Listener, Transport};
+use super::{ANSWER_WAIT, Listener, MESSAGE_AT_MOST, Transport};
 
-const ANSWER_WAIT: Duration = Duration::from_secs(600);
+const SILENT_AFTER_CANCEL: Duration = if cfg!(test) { Duration::from_secs(1) } else { Duration::from_secs(3) };
+const STDERR_LINES: usize = 5;
 
 type Waiting = Arc<Mutex<HashMap<String, Sender<Value>>>>;
 
+struct Heard {
+    waiting: Waiting,
+    ended: AtomicBool,
+    messages: AtomicU64,
+    problem: Mutex<Option<String>>,
+}
+
 pub struct StdioTransport {
     name: String,
-    tree: Mutex<Tree>,
+    child: Arc<Child>,
     input: Arc<Mutex<ChildStdin>>,
-    waiting: Waiting,
-    ended: Arc<AtomicBool>,
+    heard: Arc<Heard>,
     shared: bool,
 }
 
@@ -33,6 +42,16 @@ impl std::fmt::Debug for StdioTransport {
 fn write(input: &Mutex<ChildStdin>, name: &str, message: &Value) -> Result<(), String> {
     let mut input = input.lock().map_err(|_| "the server's input is unavailable")?;
     writeln!(input, "{message}").and_then(|()| input.flush()).map_err(|error| format!("{name}: {error}"))
+}
+
+fn line(output: &mut impl BufRead, into: &mut Vec<u8>) -> Result<bool, String> {
+    into.clear();
+    let most = u64::try_from(MESSAGE_AT_MOST).unwrap_or(u64::MAX).saturating_add(1);
+    let read = output.by_ref().take(most).read_until(b'\n', into).map_err(|error| error.to_string())?;
+    if into.len() > MESSAGE_AT_MOST && !into.ends_with(b"\n") {
+        return Err(format!("sent a line longer than {} MiB", MESSAGE_AT_MOST / (1024 * 1024)));
+    }
+    Ok(read > 0)
 }
 
 impl StdioTransport {
@@ -49,51 +68,116 @@ impl StdioTransport {
     ) -> Result<Self, String> {
         let mut process = platform::command(command);
         process.args(args).envs(env.iter().cloned());
-        process.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
-        let mut tree = Tree::spawn(&mut process).map_err(|error| format!("{name} could not start: {error}"))?;
-        let input = tree.child().stdin.take().ok_or_else(|| format!("{name} has no input"))?;
-        let output = tree.child().stdout.take().ok_or_else(|| format!("{name} has no output"))?;
+        process.stdin(Stdio::piped()).stdout(Stdio::piped());
+        let child = Child::spawn_with(&mut process, Spawn { stderr: Stderr::Tail, ..Spawn::default() })
+            .map_err(|error| format!("{name} could not start: {error}"))?;
+        let input = child.take_stdin().ok_or_else(|| format!("{name} has no input"))?;
+        let output = child.take_stdout().ok_or_else(|| format!("{name} has no output"))?;
+        let heard = Arc::new(Heard {
+            waiting: Arc::default(),
+            ended: AtomicBool::new(false),
+            messages: AtomicU64::new(0),
+            problem: Mutex::new(None),
+        });
         let transport = Self {
             name: name.to_owned(),
-            tree: Mutex::new(tree),
+            child: Arc::new(child),
             input: Arc::new(Mutex::new(input)),
-            waiting: Arc::default(),
-            ended: Arc::default(),
+            heard,
             shared: listener.is_some(),
         };
-        let (waiting, ended, input) =
-            (Arc::clone(&transport.waiting), Arc::clone(&transport.ended), Arc::clone(&transport.input));
-        let server = name.to_owned();
+        let reading = Reading {
+            server: name.to_owned(),
+            input: Arc::clone(&transport.input),
+            heard: Arc::clone(&transport.heard),
+            child: Arc::downgrade(&transport.child),
+            listener,
+        };
         std::thread::Builder::new()
             .name(format!("{brand_command}-mcp-{name}", brand_command = brand::COMMAND))
-            .spawn(move || {
-                for line in BufReader::new(output).lines().map_while(Result::ok) {
-                    let Ok(message) = serde_json::from_str::<Value>(&line) else { continue };
-                    match (message.get("id"), message.get("method").and_then(Value::as_str)) {
-                        (Some(id), None) => {
-                            let sender = waiting.lock().ok().and_then(|mut waiting| waiting.remove(&id.to_string()));
-                            if let Some(sender) = sender {
-                                let _ = sender.send(message);
-                            }
-                        }
-                        (Some(id), Some(method)) => {
-                            let _ = write(&input, &server, &super::sse::client_answer(id, method));
-                        }
-                        (None, Some(method)) => {
-                            if let Some(listener) = &listener {
-                                listener(method, &message["params"]);
-                            }
-                        }
-                        (None, None) => {}
-                    }
-                }
-                ended.store(true, Ordering::Relaxed);
-                if let Ok(mut waiting) = waiting.lock() {
-                    waiting.clear();
-                }
-            })
+            .spawn(move || reading.all(BufReader::new(output)))
             .map_err(|error| error.to_string())?;
         Ok(transport)
+    }
+
+    fn stopped(&self) -> String {
+        if let Some(problem) = self.heard.problem.locked().clone() {
+            return problem;
+        }
+        let said = last_lines(&self.child.stderr_tail(), STDERR_LINES);
+        if said.is_empty() { format!("{} stopped", self.name) } else { format!("{} stopped: {said}", self.name) }
+    }
+
+    fn cancel(&self, message: &Value, reason: &str) {
+        let params = json!({ "requestId": message.get("id"), "reason": reason });
+        let cancelled = json!({ "jsonrpc": "2.0", "method": "notifications/cancelled", "params": params });
+        let _ = write(&self.input, &self.name, &cancelled);
+        if self.shared {
+            return;
+        }
+        let heard_so_far = self.heard.messages.load(Ordering::Relaxed);
+        let (heard, child) = (Arc::clone(&self.heard), Arc::downgrade(&self.child));
+        let watching = std::thread::Builder::new().name(format!("{}-mcp-cancelled", brand::COMMAND)).spawn(move || {
+            std::thread::sleep(SILENT_AFTER_CANCEL);
+            let silent = heard.messages.load(Ordering::Relaxed) == heard_so_far;
+            if let Some(child) = child.upgrade().filter(|_| silent) {
+                child.terminate(GRACE);
+            }
+        });
+        if watching.is_err() {
+            self.child.terminate(GRACE);
+        }
+    }
+}
+
+struct Reading {
+    server: String,
+    input: Arc<Mutex<ChildStdin>>,
+    heard: Arc<Heard>,
+    child: Weak<Child>,
+    listener: Option<Listener>,
+}
+
+impl Reading {
+    fn all(self, mut output: impl BufRead) {
+        let mut bytes = Vec::new();
+        loop {
+            match line(&mut output, &mut bytes) {
+                Ok(true) => self.route(&bytes),
+                Ok(false) => break,
+                Err(problem) => {
+                    *self.heard.problem.locked() = Some(format!("{} {problem}", self.server));
+                    if let Some(child) = self.child.upgrade() {
+                        child.terminate(GRACE);
+                    }
+                    break;
+                }
+            }
+        }
+        self.heard.ended.store(true, Ordering::Relaxed);
+        self.heard.waiting.locked().clear();
+    }
+
+    fn route(&self, line: &[u8]) {
+        let Ok(message) = serde_json::from_slice::<Value>(line) else { return };
+        self.heard.messages.fetch_add(1, Ordering::Relaxed);
+        match (message.get("id"), message.get("method").and_then(Value::as_str)) {
+            (Some(id), None) => {
+                let sender = self.heard.waiting.locked().remove(&id.to_string());
+                if let Some(sender) = sender {
+                    let _ = sender.send(message);
+                }
+            }
+            (Some(id), Some(method)) => {
+                let _ = write(&self.input, &self.server, &super::sse::client_answer(id, method));
+            }
+            (None, Some(method)) => {
+                if let Some(listener) = &self.listener {
+                    listener(method, &message["params"]);
+                }
+            }
+            (None, None) => {}
+        }
     }
 }
 
@@ -105,38 +189,29 @@ impl Transport for StdioTransport {
     fn request_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<Value, String> {
         let id = message.get("id").map(Value::to_string).unwrap_or_default();
         let (send, receive) = channel();
-        self.waiting.lock().map_err(|_| "MCP request queue unavailable")?.insert(id.clone(), send);
+        self.heard.waiting.locked().insert(id.clone(), send);
         let forget = || {
-            let _ = self.waiting.lock().map(|mut waiting| waiting.remove(&id));
+            self.heard.waiting.locked().remove(&id);
         };
         if let Err(error) = write(&self.input, &self.name, message) {
             forget();
-            return Err(error);
+            return Err(if self.child.is_alive() { error } else { self.stopped() });
         }
-        let deadline = std::time::Instant::now() + ANSWER_WAIT;
+        let deadline = Instant::now() + ANSWER_WAIT;
         loop {
             match receive.recv_timeout(Duration::from_millis(25)) {
                 Ok(reply) => return Ok(reply),
-                Err(RecvTimeoutError::Disconnected) => return Err(format!("{} stopped", self.name)),
+                Err(RecvTimeoutError::Disconnected) => return Err(self.stopped()),
                 Err(RecvTimeoutError::Timeout) => {}
             }
-            if self.ended.load(Ordering::Relaxed) {
+            if self.heard.ended.load(Ordering::Relaxed) {
                 forget();
-                return Err(format!("{} stopped", self.name));
+                return Err(self.stopped());
             }
-            if stop.load(Ordering::Relaxed) || std::time::Instant::now() > deadline {
+            let cancelled = stop.load(Ordering::Relaxed);
+            if cancelled || Instant::now() > deadline {
                 forget();
-                if self.shared {
-                    let reason = if stop.load(Ordering::Relaxed) { "cancelled" } else { "timed out" };
-                    let params = json!({ "requestId": message.get("id"), "reason": reason });
-                    let _ = write(
-                        &self.input,
-                        &self.name,
-                        &json!({ "jsonrpc": "2.0", "method": "notifications/cancelled", "params": params }),
-                    );
-                } else {
-                    self.tree.lock().map_err(|_| "MCP process unavailable")?.kill();
-                }
+                self.cancel(message, if cancelled { "cancelled" } else { "timed out" });
                 return Err("MCP call cancelled or timed out".into());
             }
         }
@@ -147,10 +222,7 @@ impl Transport for StdioTransport {
     }
 }
 
-impl Drop for StdioTransport {
-    fn drop(&mut self) {
-        if let Ok(tree) = self.tree.get_mut() {
-            tree.kill();
-        }
-    }
-}
+#[cfg(test)]
+#[cfg(unix)]
+#[path = "stdio_tests.rs"]
+mod tests;

@@ -6,10 +6,11 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::Tree;
+use crate::child::Child;
 use crate::sync::Locked;
 
 const POLL: Duration = Duration::from_millis(20);
+const FIRST_POLL: Duration = Duration::from_millis(1);
 const READ_GRACE: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
@@ -43,6 +44,22 @@ impl Finished {
     }
 }
 
+#[derive(Debug)]
+pub struct Captured {
+    pub ended: Ended,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+
+impl Captured {
+    pub fn status(&self) -> Option<ExitStatus> {
+        match self.ended {
+            Ended::Exited(status) => Some(status),
+            Ended::Stopped | Ended::TimedOut => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keep {
     Start,
@@ -54,32 +71,45 @@ pub fn run(command: &mut Command, bounds: Bounds<'_>) -> io::Result<Finished> {
 }
 
 pub fn run_keeping(command: &mut Command, bounds: Bounds<'_>, keep: Keep) -> io::Result<Finished> {
+    let Captured { ended, stdout, stderr } = capture(command, bounds, keep)?;
+    let text = |bytes: Vec<u8>| String::from_utf8_lossy(&bytes).into_owned();
+    Ok(Finished { ended, stdout: text(stdout), stderr: text(stderr) })
+}
+
+pub fn run_raw(command: &mut Command, bounds: Bounds<'_>) -> io::Result<Captured> {
+    capture(command, bounds, Keep::Start)
+}
+
+fn capture(command: &mut Command, bounds: Bounds<'_>, keep: Keep) -> io::Result<Captured> {
     let Bounds { timeout, max_output, stop, input } = bounds;
     let stdin = if input.is_some() { Stdio::piped() } else { Stdio::null() };
     command.stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut tree = Tree::spawn(command)?;
-    if let (Some(input), Some(mut stdin)) = (input, tree.child().stdin.take()) {
+    let child = Child::spawn(command)?;
+    if let (Some(input), Some(mut stdin)) = (input, child.take_stdin()) {
         drop(crate::named::spawn("process-input", move || {
             let _ = stdin.write_all(&input);
         }));
     }
-    let stdout = Reader::of(tree.child().stdout.take(), max_output, keep);
-    let stderr = Reader::of(tree.child().stderr.take(), max_output, keep);
-    let ended = wait(&mut tree, timeout, stop);
-    tree.kill();
-    let ended = ended?;
+    let stdout = Reader::of(child.take_stdout(), max_output, keep);
+    let stderr = Reader::of(child.take_stderr(), max_output, keep);
+    let ended = wait(&child, timeout, stop);
+    child.kill();
     let until = Instant::now() + READ_GRACE;
-    Ok(Finished { ended, stdout: stdout.read_until(until), stderr: stderr.read_until(until) })
+    Ok(Captured { ended, stdout: stdout.read_until(until), stderr: stderr.read_until(until) })
 }
 
-fn wait(tree: &mut Tree, timeout: Duration, stop: &AtomicBool) -> io::Result<Ended> {
+fn wait(child: &Child, timeout: Duration, stop: &AtomicBool) -> Ended {
     let started = Instant::now();
+    let mut pause = FIRST_POLL;
     loop {
-        match tree.child().try_wait()? {
-            Some(status) => return Ok(Ended::Exited(status)),
-            None if stop.load(Ordering::Relaxed) => return Ok(Ended::Stopped),
-            None if started.elapsed() > timeout => return Ok(Ended::TimedOut),
-            None => std::thread::sleep(POLL),
+        match child.try_wait() {
+            Some(status) => return Ended::Exited(status),
+            None if stop.load(Ordering::Relaxed) => return Ended::Stopped,
+            None if started.elapsed() > timeout => return Ended::TimedOut,
+            None => {
+                std::thread::sleep(pause);
+                pause = (pause * 2).min(POLL);
+            }
         }
     }
 }
@@ -103,10 +133,9 @@ impl Reader {
         Self { kept, ended }
     }
 
-    fn read_until(self, until: Instant) -> String {
+    fn read_until(self, until: Instant) -> Vec<u8> {
         let _ = self.ended.recv_timeout(until.saturating_duration_since(Instant::now()));
-        let bytes: Vec<u8> = self.kept.locked().iter().copied().collect();
-        String::from_utf8_lossy(&bytes).into_owned()
+        self.kept.locked().iter().copied().collect()
     }
 }
 
@@ -174,6 +203,28 @@ mod tests {
         let mut with = bounds(&stop, Duration::from_secs(5));
         with.input = Some(b"hello".to_vec());
         assert_eq!(run(&mut sh("cat"), with).expect("run").stdout, "hello");
+    }
+
+    #[test]
+    fn a_command_ended_at_its_timeout_leaves_no_zombie() {
+        let dir = tempfile::tempdir().expect("dir");
+        let pid_file = dir.path().join("pid");
+        let free = AtomicBool::new(false);
+        let script = format!("echo $$ > '{}'; exec sleep 30", pid_file.display());
+        let slow = run(&mut sh(&script), bounds(&free, Duration::from_secs(1))).expect("run");
+        assert_eq!(slow.ended, Ended::TimedOut);
+        let pid: u32 = std::fs::read_to_string(&pid_file).expect("pid").trim().parse().expect("a pid");
+        assert!(!crate::alive(pid), "pid {pid} was killed and never waited for");
+    }
+
+    #[test]
+    fn output_that_is_not_text_is_kept_byte_for_byte() {
+        let stop = AtomicBool::new(false);
+        let mut with = bounds(&stop, Duration::from_secs(5));
+        with.max_output = 64;
+        let done = run_raw(&mut sh("printf '\\377\\000\\376'"), with).expect("run");
+        assert_eq!(done.stdout, [0xff, 0x00, 0xfe]);
+        assert!(done.status().is_some_and(|status| status.success()));
     }
 
     #[test]

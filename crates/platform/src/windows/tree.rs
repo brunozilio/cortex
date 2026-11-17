@@ -4,7 +4,7 @@ use std::io;
 use std::process::{Child, Command};
 
 #[derive(Debug)]
-pub struct Tree {
+pub(crate) struct Tree {
     child: Child,
     job: job::Job,
 }
@@ -26,10 +26,26 @@ impl Tree {
         &mut self.child
     }
 
+    pub fn id(&self) -> u32 {
+        self.child.id()
+    }
+
+    pub fn has_exited(&mut self) -> bool {
+        !matches!(self.child.try_wait(), Ok(None))
+    }
+
+    pub fn ask_to_stop(&mut self) -> bool {
+        false
+    }
+
     pub fn kill(&mut self) {
         self.job.terminate();
         let _ = self.child.kill();
     }
+}
+
+pub fn lost() -> std::process::ExitStatus {
+    std::os::windows::process::ExitStatusExt::from_raw(1)
 }
 
 pub fn alive(pid: u32) -> bool {

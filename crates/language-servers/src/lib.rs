@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod callers_tests;
 mod client;
+mod documents;
 mod download;
 #[cfg(any(test, feature = "test-support"))]
 pub mod fake;
@@ -21,7 +22,7 @@ use serde_json::Value;
 pub use client::LspClient;
 pub use installer::Downloads;
 pub use installs::Installer;
-pub use pool::{IDLE, LspPool, Processes, Starter};
+pub use pool::{IDLE, LspPool, Processes, RETRY, Starter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Wait {

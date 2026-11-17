@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use domain::destructive::Destroys;
 
+use super::git::Git;
 use crate::tools::Workspace;
 
 const MOST_FILES: usize = 5_000;
@@ -37,7 +37,7 @@ pub fn keep(workspace: &Workspace, command: &str) -> Kept {
     for path in &destroys.paths {
         walk(&workspace.resolve(path), &mut found);
     }
-    found.extend(outside_the_index(&workspace.cwd, &destroys));
+    found.extend(outside_the_index(&Git::stopped_by(&workspace.stop), &workspace.cwd, &destroys));
     let mut kept = Kept::default();
     let mut bytes = 0;
     for path in found {
@@ -64,17 +64,14 @@ fn walk(path: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
-fn outside_the_index(cwd: &Path, destroys: &Destroys) -> Vec<PathBuf> {
+fn outside_the_index(git: &Git<'_>, cwd: &Path, destroys: &Destroys) -> Vec<PathBuf> {
     if !destroys.untracked {
         return Vec::new();
     }
-    let Some(root) = git(cwd, &["rev-parse", "--show-toplevel"]) else { return Vec::new() };
-    let root = PathBuf::from(String::from_utf8_lossy(&root).trim());
-    let mut args = vec!["status", "--porcelain=v1", "-z", "--untracked-files=all"];
-    if destroys.ignored {
-        args.push("--ignored=matching");
-    }
-    let Some(listed) = git(&root, &args) else { return Vec::new() };
+    let Some(root) = git.text(cwd, &["rev-parse", "--show-toplevel"]) else { return Vec::new() };
+    let root = PathBuf::from(root.trim());
+    let ignored: &[&str] = if destroys.ignored { &["--ignored=matching"] } else { &[] };
+    let Some(listed) = git.status(&root, ignored) else { return Vec::new() };
     let entries = listed.split(|byte| *byte == 0).filter(|entry| entry.len() > 3);
     let outside = entries.filter(|entry| entry.starts_with(b"?? ") || entry.starts_with(b"!! "));
     let mut found = Vec::new();
@@ -82,11 +79,6 @@ fn outside_the_index(cwd: &Path, destroys: &Destroys) -> Vec<PathBuf> {
         walk(&root.join(String::from_utf8_lossy(&entry[3..]).as_ref()), &mut found);
     }
     found
-}
-
-fn git(cwd: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let output = Command::new("git").args(["-c", "core.quotepath=off"]).args(args).current_dir(cwd).output().ok()?;
-    output.status.success().then_some(output.stdout)
 }
 
 #[cfg(test)]
@@ -129,7 +121,8 @@ mod tests {
     #[test]
     fn git_clean_keeps_untracked_files_and_ignored_ones_only_when_asked() {
         let dir = tempfile::tempdir().expect("dir");
-        let run = |args: &[&str]| assert!(git(dir.path(), args).is_some(), "git {args:?}");
+        let never = std::sync::atomic::AtomicBool::new(false);
+        let run = |args: &[&str]| assert!(Git::stopped_by(&never).bytes(dir.path(), args, 4096).is_some(), "{args:?}");
         run(&["init", "-q"]);
         std::fs::write(dir.path().join(".gitignore"), "cache/\n").expect("ignore");
         std::fs::create_dir(dir.path().join("cache")).expect("cache");

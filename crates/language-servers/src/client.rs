@@ -9,26 +9,27 @@ use std::time::{Duration, Instant};
 
 use domain::lsp::answer::RequestError;
 use domain::lsp::{ServerSpec, uri::uri_of};
-use platform::Tree;
+use platform::Child;
+use platform::child::{Spawn, Stderr, last_lines};
 use serde_json::{Value, json};
 
+use super::documents::{Documents, Published};
 use super::framing::{read_message, write_message};
 
 const STARTUP: Duration = Duration::from_secs(60);
 const TICK: Duration = Duration::from_millis(25);
+const SHUTDOWN_WAIT: Duration = Duration::from_secs(2);
+const EXIT_WAIT: Duration = Duration::from_secs(1);
+const STDERR_LINES: usize = 5;
 
 type Answer = Result<Value, RequestError>;
-
-struct Published {
-    version: Option<i64>,
-    items: Vec<Value>,
-}
 
 struct Shared {
     name: String,
     writer: Mutex<Box<dyn Write + Send>>,
     pending: Mutex<HashMap<u64, Sender<Answer>>>,
-    published: Mutex<HashMap<String, Published>>,
+    documents: Mutex<Documents>,
+    published: Mutex<Published>,
     arrived: Condvar,
     alive: AtomicBool,
 }
@@ -36,8 +37,7 @@ struct Shared {
 pub struct LspClient {
     shared: Arc<Shared>,
     next: AtomicU64,
-    documents: Mutex<HashMap<String, i64>>,
-    tree: Option<Mutex<Tree>>,
+    child: Option<Child>,
 }
 
 impl std::fmt::Debug for LspClient {
@@ -50,11 +50,12 @@ impl LspClient {
     pub fn spawn(spec: &ServerSpec, program: &Path, root: &Path, stop: &AtomicBool) -> Result<Self, String> {
         let mut command = platform::command(program);
         command.args(&spec.args).envs(&spec.env).current_dir(root);
-        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
-        let mut tree = Tree::spawn(&mut command).map_err(|error| format!("{} could not start: {error}", spec.name))?;
-        let input = tree.child().stdin.take().ok_or_else(|| format!("{} has no input", spec.name))?;
-        let output = tree.child().stdout.take().ok_or_else(|| format!("{} has no output", spec.name))?;
-        Self::connect(&spec.name, output, input, root, Some(tree), stop)
+        command.stdin(Stdio::piped()).stdout(Stdio::piped());
+        let child = Child::spawn_with(&mut command, Spawn { stderr: Stderr::Tail, ..Spawn::default() })
+            .map_err(|error| format!("{} could not start: {error}", spec.name))?;
+        let input = child.take_stdin().ok_or_else(|| format!("{} has no input", spec.name))?;
+        let output = child.take_stdout().ok_or_else(|| format!("{} has no output", spec.name))?;
+        Self::connect(&spec.name, output, input, root, Some(child), stop)
     }
 
     pub fn connect(
@@ -62,13 +63,14 @@ impl LspClient {
         reader: impl Read + Send + 'static,
         writer: impl Write + Send + 'static,
         root: &Path,
-        tree: Option<Tree>,
+        child: Option<Child>,
         stop: &AtomicBool,
     ) -> Result<Self, String> {
         let shared = Arc::new(Shared {
             name: name.to_owned(),
             writer: Mutex::new(Box::new(writer)),
             pending: Mutex::default(),
+            documents: Mutex::default(),
             published: Mutex::default(),
             arrived: Condvar::new(),
             alive: AtomicBool::new(true),
@@ -78,7 +80,7 @@ impl LspClient {
             .name(format!("{brand_command}-lsp-{name}", brand_command = brand::COMMAND))
             .spawn(move || reading.read_all(BufReader::new(reader)))
             .map_err(|error| error.to_string())?;
-        let client = Self { shared, next: AtomicU64::new(1), documents: Mutex::default(), tree: tree.map(Mutex::new) };
+        let client = Self { shared, next: AtomicU64::new(1), child };
         let root_uri = uri_of(root);
         let folder = root.file_name().and_then(|name| name.to_str()).unwrap_or("root");
         let params = json!({
@@ -114,7 +116,7 @@ impl LspClient {
     ) -> Result<Value, RequestError> {
         let shared = &self.shared;
         if !self.is_alive() {
-            return Err(RequestError::Failed(format!("{} stopped", shared.name)));
+            return Err(RequestError::Failed(self.stopped()));
         }
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let (send, answer) = channel();
@@ -123,7 +125,11 @@ impl LspClient {
             .lock()
             .map_err(|_| RequestError::Failed("the server's requests are unavailable".into()))?
             .insert(id, send);
-        let sent = shared.send(&json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
+        let mut message = json!({"jsonrpc": "2.0", "id": id, "method": method});
+        if !params.is_null() {
+            message["params"] = params;
+        }
+        let sent = shared.send(&message).map_err(|_| self.stopped());
         let answered = sent.map_err(RequestError::Failed).and_then(|()| self.wait(&answer, stop, wait));
         if let Ok(mut pending) = shared.pending.lock() {
             pending.remove(&id);
@@ -137,9 +143,9 @@ impl LspClient {
         loop {
             match answer.recv_timeout(TICK) {
                 Ok(answer) => return answer,
-                Err(RecvTimeoutError::Disconnected) => return Err(RequestError::Failed(format!("{name} stopped"))),
+                Err(RecvTimeoutError::Disconnected) => return Err(RequestError::Failed(self.stopped())),
                 Err(RecvTimeoutError::Timeout) if !self.is_alive() => {
-                    return Err(RequestError::Failed(format!("{name} stopped")));
+                    return Err(RequestError::Failed(self.stopped()));
                 }
                 Err(RecvTimeoutError::Timeout) if stop.load(Ordering::Relaxed) => {
                     return Err(RequestError::Failed("cancelled".into()));
@@ -152,17 +158,27 @@ impl LspClient {
         }
     }
 
+    fn stopped(&self) -> String {
+        let name = &self.shared.name;
+        let said = self.child.as_ref().map(|child| last_lines(&child.stderr_tail(), STDERR_LINES)).unwrap_or_default();
+        if said.is_empty() { format!("{name} stopped") } else { format!("{name} stopped: {said}") }
+    }
+
     fn notify(&self, method: &str, params: Value) -> Result<(), String> {
-        self.shared.send(&json!({"jsonrpc": "2.0", "method": method, "params": params}))
+        let mut message = json!({"jsonrpc": "2.0", "method": method});
+        if !params.is_null() {
+            message["params"] = params;
+        }
+        self.shared.send(&message)
     }
 
     pub fn sync(&self, file: &Path, language: &str, text: &str) -> Result<i64, String> {
         let uri = uri_of(file);
-        let mut documents = self.documents.lock().map_err(|_| "the open files are unavailable")?;
+        let mut documents = self.shared.documents.lock().map_err(|_| "the open files are unavailable")?;
         if let Ok(mut published) = self.shared.published.lock() {
-            published.remove(&uri);
+            published.forget(&uri);
         }
-        let version = match documents.get(&uri) {
+        let version = match documents.version(&uri) {
             Some(version) => {
                 let version = version + 1;
                 let document = json!({"uri": uri, "version": version});
@@ -173,13 +189,23 @@ impl LspClient {
                 version
             }
             None => {
+                while let Some(stalest) = documents.make_room() {
+                    self.close(&stalest)?;
+                }
                 let document = json!({"uri": uri, "languageId": language, "version": 1, "text": text});
                 self.notify("textDocument/didOpen", json!({"textDocument": document}))?;
                 1
             }
         };
-        documents.insert(uri, version);
+        documents.keep(uri, version);
         Ok(version)
+    }
+
+    fn close(&self, uri: &str) -> Result<(), String> {
+        if let Ok(mut published) = self.shared.published.lock() {
+            published.forget(uri);
+        }
+        self.notify("textDocument/didClose", json!({"textDocument": {"uri": uri}}))
     }
 
     pub fn diagnostics(&self, file: &Path, version: i64, wait: Duration) -> Option<Vec<Value>> {
@@ -260,8 +286,15 @@ impl Shared {
     fn publish(&self, params: &Value) {
         let Some(uri) = params["uri"].as_str() else { return };
         let items = params["diagnostics"].as_array().cloned().unwrap_or_default();
-        if let Ok(mut published) = self.published.lock() {
-            published.insert(uri.to_owned(), Published { version: params["version"].as_i64(), items });
+        let over = self.published.lock().is_ok_and(|mut published| {
+            published.keep(uri.to_owned(), params["version"].as_i64(), items);
+            published.is_over()
+        });
+        if over {
+            let open = self.documents.lock().map(|documents| documents.uris()).unwrap_or_default();
+            if let Ok(mut published) = self.published.lock() {
+                published.trim(&open);
+            }
         }
         self.arrived.notify_all();
     }
@@ -269,10 +302,13 @@ impl Shared {
 
 impl Drop for LspClient {
     fn drop(&mut self) {
-        if let Some(tree) = &mut self.tree
-            && let Ok(tree) = tree.get_mut()
-        {
-            tree.kill();
+        if !self.is_alive() {
+            return;
+        }
+        let _ = self.request("shutdown", Value::Null, &AtomicBool::new(false), SHUTDOWN_WAIT);
+        let _ = self.notify("exit", Value::Null);
+        if let Some(child) = &self.child {
+            child.wait_until(Instant::now() + EXIT_WAIT);
         }
     }
 }

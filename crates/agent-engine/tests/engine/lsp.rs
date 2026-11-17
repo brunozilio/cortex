@@ -101,7 +101,7 @@ fn without_an_installed_server_the_tool_is_not_offered() {
 struct Offline;
 
 impl Installer for Offline {
-    fn install(&self, _: &Install, _: &Path) -> Result<(), String> {
+    fn install(&self, _: &Install, _: &Path, _: &AtomicBool) -> Result<(), String> {
         Err("offline".into())
     }
 }

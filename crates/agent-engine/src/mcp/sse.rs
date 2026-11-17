@@ -1,29 +1,28 @@
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use platform::sync::Locked;
 use serde_json::{Value, json};
 
-use super::Transport;
-use crate::model::http::{Http, Response, read_line_stopped};
-use crate::model::sse::SseDecoder;
-
-type Waiting = Arc<Mutex<HashMap<String, Sender<Value>>>>;
+use super::sse_listen::{Link, Listening, Waiting, open};
+use super::{ANSWER_WAIT, Transport};
+use crate::model::http::Http;
 
 pub struct SseTransport {
-    name: String,
-    endpoint: String,
-    headers: Vec<(String, String)>,
-    http: Arc<dyn Http>,
+    link: Arc<Link>,
     waiting: Waiting,
     closed: Arc<AtomicBool>,
+    down: Arc<AtomicBool>,
+    greeting: Arc<Mutex<Option<Value>>>,
+    answer_wait: Duration,
 }
 
 impl std::fmt::Debug for SseTransport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SseTransport").field("name", &self.name).field("endpoint", &self.endpoint).finish()
+        let endpoint = self.link.endpoint.locked().clone();
+        f.debug_struct("SseTransport").field("name", &self.link.name).field("endpoint", &endpoint).finish()
     }
 }
 
@@ -42,103 +41,40 @@ impl SseTransport {
         stop: &AtomicBool,
         listener: Option<super::Listener>,
     ) -> Result<Self, String> {
-        let mut asked = headers.to_vec();
-        asked.push(("accept".into(), "text/event-stream".into()));
-        let mut stream = http.get_stream(url, &asked, stop).map_err(|e| format!("{name}: {e}"))?;
-        if !(200..300).contains(&stream.status) {
-            return Err(format!("{name} answered HTTP {}", stream.status));
-        }
-        let mut decoder = SseDecoder::new();
-        let given_up = AtomicBool::new(false);
-        let (found, waiting) = std::sync::mpsc::channel::<()>();
-        let endpoint = std::thread::scope(|scope| {
-            let given_up = &given_up;
-            scope.spawn(move || {
-                let deadline = std::time::Instant::now() + ENDPOINT_WAIT;
-                loop {
-                    let left = deadline.saturating_duration_since(std::time::Instant::now());
-                    match waiting.recv_timeout(left.min(STOP_CHECK)) {
-                        Err(std::sync::mpsc::RecvTimeoutError::Timeout)
-                            if !stop.load(Ordering::Relaxed) && !left.is_zero() => {}
-                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                            given_up.store(true, Ordering::Relaxed);
-                            return;
-                        }
-                        _ => return,
-                    }
-                }
-            });
-            let endpoint = endpoint_of(name, url, &mut stream, &mut decoder, given_up);
-            drop(found);
-            endpoint
-        })?;
-        let transport = Self {
+        let opened = open(name, url, headers, &http, stop)?;
+        let link = Link {
             name: name.to_owned(),
-            endpoint,
+            url: url.to_owned(),
+            endpoint: Mutex::new(opened.endpoint),
             headers: headers.to_vec(),
             http,
+        };
+        let transport = Self {
+            link: Arc::new(link),
             waiting: Arc::default(),
             closed: Arc::default(),
+            down: Arc::default(),
+            greeting: Arc::default(),
+            answer_wait: ANSWER_WAIT,
         };
-        transport.listen(stream, decoder, listener);
+        let listening = Listening {
+            link: Arc::clone(&transport.link),
+            waiting: Arc::clone(&transport.waiting),
+            closed: Arc::clone(&transport.closed),
+            down: Arc::clone(&transport.down),
+            greeting: Arc::clone(&transport.greeting),
+            listener,
+        };
+        platform::named::spawn("mcp-sse", move || listening.run(opened.stream, opened.decoder));
         Ok(transport)
     }
 
-    fn listen(&self, mut stream: Response, mut decoder: SseDecoder, listener: Option<super::Listener>) {
-        let (waiting, closed) = (Arc::clone(&self.waiting), Arc::clone(&self.closed));
-        let poster = self.poster();
-        platform::named::spawn("mcp-sse", move || {
-            loop {
-                let mut line = String::new();
-                match read_line_stopped(stream.body.as_mut(), &mut line, &closed) {
-                    Ok(0) | Err(_) => break,
-                    Ok(_) => {}
-                }
-                let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n'])) else { continue };
-                let Ok(message) = serde_json::from_str::<Value>(&event.data) else { continue };
-                match (message.get("id"), message.get("method").and_then(Value::as_str)) {
-                    (Some(id), None) => {
-                        let sender = waiting.lock().ok().and_then(|mut waiting| waiting.remove(&id.to_string()));
-                        if let Some(sender) = sender {
-                            let _ = sender.send(message);
-                        }
-                    }
-                    (Some(id), Some(method)) => {
-                        let _ = poster.post(&client_answer(id, method), &closed);
-                    }
-                    (None, Some(method)) => {
-                        if let Some(listener) = &listener {
-                            listener(method, &message["params"]);
-                        }
-                    }
-                    (None, None) => {}
-                }
-            }
-            closed.store(true, Ordering::Relaxed);
-            if let Ok(mut waiting) = waiting.lock() {
-                waiting.clear();
-            }
-        });
+    fn forget(&self, id: &str) {
+        self.waiting.locked().remove(id);
     }
 
-    fn poster(&self) -> Poster {
-        Poster { endpoint: self.endpoint.clone(), headers: self.headers.clone(), http: Arc::clone(&self.http) }
-    }
-}
-
-struct Poster {
-    endpoint: String,
-    headers: Vec<(String, String)>,
-    http: Arc<dyn Http>,
-}
-
-impl Poster {
-    fn post(&self, message: &Value, stop: &AtomicBool) -> Result<(), String> {
-        let response = self
-            .http
-            .post_stopped(&self.endpoint, &self.headers, &message.to_string(), stop)
-            .map_err(|e| e.to_string())?;
-        if (200..300).contains(&response.status) { Ok(()) } else { Err(format!("HTTP {}", response.status)) }
+    fn closed_its_stream(&self) -> String {
+        format!("{} closed its stream", self.link.name)
     }
 }
 
@@ -148,29 +84,37 @@ impl Transport for SseTransport {
     }
 
     fn request_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<Value, String> {
+        if message["method"] == "initialize" {
+            *self.greeting.locked() = Some(message.clone());
+        }
+        if self.down.load(Ordering::Relaxed) {
+            return Err(self.closed_its_stream());
+        }
         let id = message.get("id").map(Value::to_string).unwrap_or_default();
         let (send, receive): (Sender<Value>, Receiver<Value>) = channel();
-        self.waiting.lock().map_err(|_| "MCP waiters unavailable")?.insert(id.clone(), send);
-        if let Err(error) = self.poster().post(message, stop) {
-            let _ = self.waiting.lock().map(|mut waiting| waiting.remove(&id));
-            return Err(format!("{}: {error}", self.name));
+        self.waiting.locked().insert(id.clone(), send);
+        if let Err(error) = self.link.post(message, stop) {
+            self.forget(&id);
+            return Err(format!("{}: {error}", self.link.name));
         }
+        let deadline = Instant::now() + self.answer_wait;
         loop {
-            if stop.load(Ordering::Relaxed) || self.closed.load(Ordering::Relaxed) {
+            let stopped = stop.load(Ordering::Relaxed);
+            if stopped || self.down.load(Ordering::Relaxed) {
                 if let Ok(reply) = receive.try_recv() {
                     return Ok(reply);
                 }
-                let _ = self.waiting.lock().map(|mut waiting| waiting.remove(&id));
-                return Err(if stop.load(Ordering::Relaxed) {
-                    "cancelled".into()
-                } else {
-                    format!("{} closed its stream", self.name)
-                });
+                self.forget(&id);
+                return Err(if stopped { "cancelled".into() } else { self.closed_its_stream() });
+            }
+            if Instant::now() > deadline {
+                self.forget(&id);
+                return Err(format!("{} did not answer in {}s", self.link.name, self.answer_wait.as_secs()));
             }
             match receive.recv_timeout(Duration::from_millis(25)) {
                 Ok(reply) => return Ok(reply),
                 Err(RecvTimeoutError::Timeout) => {}
-                Err(RecvTimeoutError::Disconnected) => return Err(format!("{} closed its stream", self.name)),
+                Err(RecvTimeoutError::Disconnected) => return Err(self.closed_its_stream()),
             }
         }
     }
@@ -180,43 +124,8 @@ impl Transport for SseTransport {
     }
 
     fn notify_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<(), String> {
-        self.poster().post(message, stop).map_err(|error| format!("{}: {error}", self.name))
+        self.link.post(message, stop).map_err(|error| format!("{}: {error}", self.link.name))
     }
-}
-
-const ENDPOINT_WAIT: Duration = Duration::from_secs(30);
-const STOP_CHECK: Duration = Duration::from_millis(25);
-
-fn endpoint_of(
-    name: &str,
-    url: &str,
-    stream: &mut Response,
-    decoder: &mut SseDecoder,
-    given_up: &AtomicBool,
-) -> Result<String, String> {
-    loop {
-        let mut line = String::new();
-        match read_line_stopped(stream.body.as_mut(), &mut line, given_up) {
-            Err(crate::model::ModelError::Cancelled) => {
-                return Err(format!("{name} did not name its endpoint in time"));
-            }
-            Err(error) => return Err(error.to_string()),
-            Ok(0) => return Err(format!("{name} closed its stream before naming its endpoint")),
-            Ok(_) => {}
-        }
-        if let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n']))
-            && event.event == "endpoint"
-        {
-            return same_site(url, event.data.trim())
-                .ok_or_else(|| format!("{name} named an endpoint on another site ({}); refused", event.data.trim()));
-        }
-    }
-}
-
-fn same_site(url: &str, endpoint: &str) -> Option<String> {
-    let base = url::Url::parse(url).ok()?;
-    let joined = base.join(endpoint).ok()?;
-    (joined.origin() == base.origin()).then(|| joined.to_string())
 }
 
 pub(super) fn client_answer(id: &Value, method: &str) -> Value {

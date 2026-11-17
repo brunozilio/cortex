@@ -1,10 +1,10 @@
 #![allow(unsafe_code)]
 
 use std::io;
-use std::process::{Child, Command};
+use std::process::{Child, Command, ExitStatus};
 
 #[derive(Debug)]
-pub struct Tree {
+pub(crate) struct Tree {
     child: Child,
 }
 
@@ -18,12 +18,39 @@ impl Tree {
         &mut self.child
     }
 
+    pub fn id(&self) -> u32 {
+        self.child.id()
+    }
+
+    pub fn has_exited(&mut self) -> bool {
+        let pid = libc::id_t::from(self.child.id());
+        let mut seen: libc::siginfo_t = unsafe { std::mem::zeroed() };
+        let unreaped = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
+        let asked = unsafe { libc::waitid(libc::P_PID, pid, &raw mut seen, unreaped) };
+        asked != 0 || seen.si_signo == libc::SIGCHLD
+    }
+
+    pub fn ask_to_stop(&mut self) -> bool {
+        self.signal(libc::SIGTERM);
+        true
+    }
+
     pub fn kill(&mut self) {
-        if let Ok(group) = i32::try_from(self.child.id()) {
-            unsafe { libc::kill(-group, libc::SIGKILL) };
-        }
+        self.signal(libc::SIGKILL);
         let _ = self.child.kill();
     }
+
+    fn signal(&self, signal: libc::c_int) {
+        if let Ok(group) = i32::try_from(self.child.id())
+            && group > 0
+        {
+            unsafe { libc::kill(-group, signal) };
+        }
+    }
+}
+
+pub fn lost() -> ExitStatus {
+    std::os::unix::process::ExitStatusExt::from_raw(libc::SIGKILL)
 }
 
 pub fn alive(pid: u32) -> bool {
@@ -33,37 +60,4 @@ pub fn alive(pid: u32) -> bool {
     }
     let answered = unsafe { libc::kill(pid, 0) };
     answered == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::BufRead;
-    use std::process::Stdio;
-    use std::time::{Duration, Instant};
-
-    fn alive(pid: i32) -> bool {
-        unsafe { libc::kill(pid, 0) == 0 }
-    }
-
-    #[test]
-    fn killing_the_tree_ends_what_the_root_started() -> io::Result<()> {
-        let mut command = Command::new("/bin/sh");
-        command.args(["-c", "sleep 30 & echo $!; wait"]).stdout(Stdio::piped());
-        let mut tree = Tree::spawn(&mut command)?;
-        let stdout = tree.child().stdout.take().ok_or_else(|| io::Error::other("no stdout"))?;
-        let mut line = String::new();
-        io::BufReader::new(stdout).read_line(&mut line)?;
-        let grandchild: i32 = line.trim().parse().map_err(io::Error::other)?;
-        assert!(alive(grandchild));
-
-        tree.kill();
-        tree.child().wait()?;
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while alive(grandchild) && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        assert!(!alive(grandchild), "the grandchild outlived the tree");
-        Ok(())
-    }
 }

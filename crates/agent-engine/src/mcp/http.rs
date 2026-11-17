@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 
-use super::{Listener, PROTOCOL_VERSION, Transport};
+use super::{Listener, MESSAGE_AT_MOST, PROTOCOL_VERSION, Transport};
 use crate::model::http::{Http, Response};
 
 pub struct HttpTransport {
@@ -128,15 +128,16 @@ impl Transport for HttpTransport {
                     _ => {}
                 }
             }
-            if text.len() > 16 * 1024 * 1024 {
+            if text.len() > MESSAGE_AT_MOST {
                 return Err("MCP response exceeds size limit".into());
             }
-            if let Some(reply) = parse(&text).filter(|r| r.get("id") == message.get("id") && r.get("method").is_none())
-            {
+            let answers = |reply: &Value| reply.get("id") == message.get("id") && reply.get("method").is_none();
+            if let Some(reply) = on_one_line(&line).filter(answers) {
                 return Ok(reply);
             }
             if read == 0 {
-                return Err(format!("{} sent an unreadable answer", self.shared.name));
+                let unreadable = || format!("{} sent an unreadable answer", self.shared.name);
+                return parse(&text).filter(answers).ok_or_else(unreadable);
             }
         }
     }
@@ -164,6 +165,12 @@ impl Transport for HttpTransport {
     }
 }
 
+fn on_one_line(line: &str) -> Option<Value> {
+    let line = line.trim();
+    let message = line.strip_prefix("data:").unwrap_or(line).trim_start();
+    message.starts_with('{').then(|| serde_json::from_str(message).ok()).flatten()
+}
+
 pub fn parse(text: &str) -> Option<Value> {
     serde_json::from_str(text.trim()).ok().or_else(|| {
         text.lines()
@@ -171,3 +178,7 @@ pub fn parse(text: &str) -> Option<Value> {
             .find_map(|data| serde_json::from_str::<Value>(data.trim()).ok().filter(|v| v.get("id").is_some()))
     })
 }
+
+#[cfg(test)]
+#[path = "http_tests.rs"]
+mod tests;

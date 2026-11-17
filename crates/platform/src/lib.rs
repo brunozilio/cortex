@@ -1,4 +1,5 @@
 pub mod bounded;
+pub mod child;
 pub mod file_lock;
 pub mod named;
 pub mod private_file;
@@ -22,7 +23,8 @@ mod system;
 #[path = "windows/mod.rs"]
 mod system;
 
-pub use bounded::{Bounds, Ended, Finished};
+pub use bounded::{Bounds, Captured, Ended, Finished};
+pub use child::Child;
 pub use system::*;
 
 pub fn data_dir(name: &str, command: &str) -> Option<std::path::PathBuf> {

@@ -8,7 +8,8 @@ use std::process::Command;
 
 pub use ports::{port_holder, terminate};
 pub use private::{LOCK_FILES_CAN_BE_REMOVED, is_file_at, keep_owner, open_with_mode_of, restrict, restrict_open};
-pub use tree::{Tree, alive};
+pub use tree::alive;
+pub(crate) use tree::{Tree, lost};
 
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     Command::new(program)

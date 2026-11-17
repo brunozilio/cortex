@@ -4,6 +4,7 @@ use std::time::Duration;
 use serde_json::json;
 
 use super::*;
+use crate::tools::Tool;
 
 pub(super) fn of_client(client: u64) -> Workspace {
     let mut workspace = Workspace::new(std::env::temp_dir());
@@ -91,13 +92,5 @@ fn stdout_and_stderr_keep_the_order_they_were_printed_in() {
     assert_eq!(output, "one\ntwo\nthree");
 }
 
-#[test]
-fn unread_output_keeps_only_its_newest_part() {
-    let mut kept = vec![b'a'; 2 * KEPT];
-    capped(&mut kept);
-    assert_eq!(kept.len(), 2 * KEPT, "at the limit nothing goes");
-    kept.extend_from_slice(b"newest");
-    capped(&mut kept);
-    assert_eq!(kept.len(), KEPT);
-    assert!(kept.ends_with(b"newest"));
-}
+#[path = "lifecycle_tests.rs"]
+mod lifecycle;

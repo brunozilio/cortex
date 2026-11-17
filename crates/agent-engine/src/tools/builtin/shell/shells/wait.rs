@@ -1,3 +1,4 @@
+use platform::child::GRACE;
 use platform::sync::Locked;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -28,7 +29,7 @@ pub(crate) fn wait(id: &str, timeout: Duration, stop: &AtomicBool, detach: &Atom
             }
             drop(output);
             if refresh(shell).is_some() {
-                let status = shell.tree.child().try_wait().ok().flatten();
+                let status = shell.child.try_wait();
                 Some((status, shells.remove(id)))
             } else {
                 None
@@ -36,7 +37,7 @@ pub(crate) fn wait(id: &str, timeout: Duration, stop: &AtomicBool, detach: &Atom
         };
         if let Some((status, shell)) = exited {
             return Waited::Exited {
-                output: taken(shell),
+                output: taken(shell.as_ref()),
                 success: status.is_some_and(|status| status.success()),
                 code: status.and_then(|status| status.code()),
             };
@@ -46,26 +47,24 @@ pub(crate) fn wait(id: &str, timeout: Duration, stop: &AtomicBool, detach: &Atom
         }
         let stopped = stop.load(Ordering::Relaxed);
         if stopped || started.elapsed() > timeout {
-            let mut shell = lock().remove(id);
-            if let Some(shell) = &mut shell {
-                shell.tree.kill();
-                let _ = shell.tree.child().wait();
+            let shell = lock().remove(id);
+            if let Some(shell) = &shell {
+                shell.child.terminate(GRACE);
             }
-            let output = taken(shell);
+            let output = taken(shell.as_ref());
             return if stopped { Waited::Stopped(output) } else { Waited::TimedOut(output) };
         }
         std::thread::sleep(Duration::from_millis(15));
     }
 }
 
-fn taken(shell: Option<Shell>) -> String {
+fn taken(shell: Option<&Shell>) -> String {
     let Some(shell) = shell else { return String::new() };
     let deadline = Instant::now() + Duration::from_millis(500);
     while !shell.readers.iter().all(std::thread::JoinHandle::is_finished) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
     }
-    let kept = shell.output.locked();
-    String::from_utf8_lossy(&kept).trim_end().to_owned()
+    shell.unread().whole()
 }
 
 #[cfg(test)]

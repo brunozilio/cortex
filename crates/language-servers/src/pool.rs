@@ -46,6 +46,7 @@ impl Starter for Processes {
 }
 
 pub const IDLE: Duration = Duration::from_secs(10 * 60);
+pub const RETRY: Duration = Duration::from_secs(30);
 
 enum Slot {
     Empty,
@@ -59,6 +60,7 @@ struct Inner {
     starter: Box<dyn Starter>,
     installs: Option<Installs>,
     idle: Duration,
+    retry: Duration,
     slots: Mutex<HashMap<Key, Arc<Mutex<Slot>>>>,
 }
 
@@ -94,8 +96,19 @@ impl LspPool {
     }
 
     fn with(starter: Box<dyn Starter>, idle: Duration, installs: Option<Installs>) -> Self {
-        let inner = Inner { starter, installs, idle, slots: Mutex::default() };
+        let inner = Inner { starter, installs, idle, retry: RETRY, slots: Mutex::default() };
         Self { inner: Arc::new(inner), sweeping: AtomicBool::new(false) }
+    }
+
+    #[must_use]
+    pub fn retrying_after(mut self, retry: Duration) -> Self {
+        if let Some(inner) = Arc::get_mut(&mut self.inner) {
+            inner.retry = retry;
+            if let Some(installs) = &mut inner.installs {
+                installs.retry = retry;
+            }
+        }
+        self
     }
 
     pub fn sweep(&self, now: Instant) {
@@ -162,7 +175,7 @@ impl LanguageServers for LspPool {
             Arc::clone(slots.entry(key).or_insert_with(|| Arc::new(Mutex::new(Slot::Empty))))
         };
         let opened = |server| Opened { server, language: language.to_owned(), root: root.clone() };
-        if let Some(server) = Self::ready(&slot)? {
+        if let Some(server) = self.ready(&slot)? {
             return Ok(opened(server));
         }
         self.keep_sweeping();
@@ -170,17 +183,23 @@ impl LanguageServers for LspPool {
         let mut slot = slot.lock().map_err(|_| "the language server is unavailable")?;
         let server = match &*slot {
             Slot::Running { server, .. } if server.is_alive() => Arc::clone(server),
-            Slot::Failed { reason, .. } => return Err(reason.clone()),
-            Slot::Empty | Slot::Running { .. } => match self.inner.starter.start(spec, &program, &root, stop) {
-                Ok(server) => {
-                    self.keep_sweeping();
-                    server
+            Slot::Failed { reason, at } if at.elapsed() < self.inner.retry => return Err(reason.clone()),
+            Slot::Empty | Slot::Running { .. } | Slot::Failed { .. } => {
+                match self.inner.starter.start(spec, &program, &root, stop) {
+                    Ok(server) => {
+                        self.keep_sweeping();
+                        server
+                    }
+                    Err(reason) if stop.load(Ordering::Relaxed) => {
+                        *slot = Slot::Empty;
+                        return Err(reason);
+                    }
+                    Err(reason) => {
+                        *slot = Slot::Failed { reason: reason.clone(), at: Instant::now() };
+                        return Err(reason);
+                    }
                 }
-                Err(reason) => {
-                    *slot = Slot::Failed { reason: reason.clone(), at: Instant::now() };
-                    return Err(reason);
-                }
-            },
+            }
         };
         *slot = Slot::Running { server: Arc::clone(&server), used: Instant::now() };
         Ok(opened(server))
@@ -202,7 +221,7 @@ impl LanguageServers for LspPool {
 }
 
 impl LspPool {
-    fn ready(slot: &Mutex<Slot>) -> Result<Option<Arc<dyn LanguageServer>>, String> {
+    fn ready(&self, slot: &Mutex<Slot>) -> Result<Option<Arc<dyn LanguageServer>>, String> {
         let mut slot = slot.lock().map_err(|_| "the language server is unavailable")?;
         match &*slot {
             Slot::Running { server, .. } if server.is_alive() => {
@@ -210,8 +229,8 @@ impl LspPool {
                 *slot = Slot::Running { server: Arc::clone(&server), used: Instant::now() };
                 Ok(Some(server))
             }
-            Slot::Failed { reason, .. } => Err(reason.clone()),
-            Slot::Empty | Slot::Running { .. } => Ok(None),
+            Slot::Failed { reason, at } if at.elapsed() < self.inner.retry => Err(reason.clone()),
+            Slot::Empty | Slot::Running { .. } | Slot::Failed { .. } => Ok(None),
         }
     }
 

@@ -19,6 +19,9 @@ pub(crate) fn ended_source(id: &str) -> String {
 }
 
 pub(crate) fn watch(id: String, client: u64, what: Watch) {
+    if let Some(shell) = lock().get_mut(&id) {
+        shell.watched = true;
+    }
     platform::named::spawn("shell-watch", move || {
         let mut seen: usize = 0;
         let mut partial = String::new();
@@ -54,8 +57,21 @@ pub(crate) fn watch(id: String, client: u64, what: Watch) {
             }
             if let Some(exit) = exit {
                 inbox::push(client, Notice::new(source, format!("`{command}` finished ({exit}).")));
+                told(&id, what, seen);
                 return;
             }
         }
     });
+}
+
+fn told(id: &str, what: Watch, seen: usize) {
+    let mut shells = lock();
+    let Some(shell) = shells.get_mut(id) else { return };
+    shell.told = true;
+    if what == Watch::Lines && seen >= shell.written() {
+        shell.mark_read();
+    }
+    if shell.collected() {
+        shells.remove(id);
+    }
 }

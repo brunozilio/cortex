@@ -1,6 +1,7 @@
 pub mod affected;
 mod bash;
 mod changes;
+mod git;
 mod monitor;
 pub mod savings;
 mod shaped;

@@ -19,9 +19,9 @@ const OUTPUT: usize = 64 * 1024;
 pub struct Downloads<F>(pub F);
 
 impl<F: Fetch> Installer for Downloads<F> {
-    fn install(&self, install: &Install, home: &Path) -> Result<(), String> {
+    fn install(&self, install: &Install, home: &Path, stop: &AtomicBool) -> Result<(), String> {
         settle(home, &install.program, |staging| {
-            fill(&self.0, install, staging).and_then(|()| executable(&staging.join(&install.program)))
+            fill(&self.0, install, staging, stop).and_then(|()| executable(&staging.join(&install.program)))
         })
     }
 }
@@ -53,20 +53,19 @@ fn place(staging: &Path, home: &Path, program: &Path, replaced: &Path) -> Result
     }
 }
 
-fn fill(fetch: &dyn Fetch, install: &Install, staging: &Path) -> Result<(), String> {
+fn fill(fetch: &dyn Fetch, install: &Install, staging: &Path, stop: &AtomicBool) -> Result<(), String> {
     match &install.recipe {
         Recipe::Npm { packages } => {
             let mut command = platform::command(tool(&install.recipe)?);
             command.arg("install").arg("--prefix").arg(staging).args(["--no-audit", "--no-fund", "--loglevel=error"]);
-            run(command.args(packages))
+            run(command.args(packages), stop)
         }
         Recipe::Go { module } => {
             let mut command = platform::command(tool(&install.recipe)?);
-            run(command.arg("install").arg(module).env("GOBIN", staging.join("bin")))
+            run(command.arg("install").arg(module).env("GOBIN", staging.join("bin")), stop)
         }
-        Recipe::Download { url, archive, sha256 } => {
-            Download { fetch, url, archive: *archive, sha256 }.unpack_into(staging, &staging.join(&install.program))
-        }
+        Recipe::Download { url, archive, sha256 } => Download { fetch, url, archive: *archive, sha256, stop }
+            .unpack_into(staging, &staging.join(&install.program)),
     }
 }
 
@@ -75,11 +74,9 @@ fn tool(recipe: &Recipe) -> Result<PathBuf, String> {
     super::Processes.find(name).ok_or_else(|| format!("it needs `{name}` on PATH; install {runtime} first."))
 }
 
-fn run(command: &mut Command) -> Result<(), String> {
-    let never = AtomicBool::new(false);
-    let finished =
-        platform::bounded::run(command, Bounds { timeout: TIMEOUT, max_output: OUTPUT, stop: &never, input: None })
-            .map_err(|error| error.to_string())?;
+fn run(command: &mut Command, stop: &AtomicBool) -> Result<(), String> {
+    let finished = platform::bounded::run(command, Bounds { timeout: TIMEOUT, max_output: OUTPUT, stop, input: None })
+        .map_err(|error| error.to_string())?;
     match finished.ended {
         Ended::Exited(status) if status.success() => Ok(()),
         Ended::Exited(status) => Err(format!("{status}: {}", last_lines(&finished.stderr))),
@@ -144,6 +141,21 @@ mod tests {
         .expect("already installed");
         assert_eq!(std::fs::read_to_string(home.join("bin/server")).expect("program"), "theirs");
         assert_eq!(std::fs::read_dir(data.path()).expect("list").count(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_install_command_ends_when_its_caller_stops() {
+        let stop = std::sync::Arc::new(AtomicBool::new(false));
+        let stopping = std::sync::Arc::clone(&stop);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            stopping.store(true, std::sync::atomic::Ordering::Relaxed);
+        });
+        let started = std::time::Instant::now();
+        let mut slow = platform::command("/bin/sh");
+        assert_eq!(run(slow.args(["-c", "sleep 60"]), &stop), Err("it was stopped".into()));
+        assert!(started.elapsed() < Duration::from_secs(30), "it ran on for {:?}", started.elapsed());
     }
 
     #[test]

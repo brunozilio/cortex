@@ -107,3 +107,6 @@ fn an_error_answer_and_a_server_that_ends_are_reported() {
     assert!(gone.to_string().contains("fake stopped"), "{gone}");
     assert!(!client.is_alive());
 }
+
+#[path = "client_lifecycle_tests.rs"]
+mod lifecycle;

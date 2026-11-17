@@ -1,6 +1,6 @@
 #[test]
 #[cfg(unix)]
-fn cancelling_stdio_mcp_stops_its_process_tree_before_it_can_write() {
+fn a_stdio_mcp_server_that_stays_silent_after_a_cancelled_call_is_stopped_before_it_can_write() {
     use agent_engine::{
         mcp::{McpServer, ServerSpec},
         model::http::{Http, NetHttp},
@@ -16,7 +16,7 @@ fn cancelling_stdio_mcp_stops_its_process_tree_before_it_can_write() {
 case "$line" in
 *'"method":"initialize"'*) printf '%s\n' '{{"id":1,"result":{{}}}}';;
 *'"method":"tools/list"'*) printf '%s\n' '{{"id":2,"result":{{"tools":[{{"name":"slow","inputSchema":{{"type":"object"}}}}]}}}}';;
-*'"method":"tools/call"'*) touch '{}'; sleep 1; touch '{}'; printf '%s\n' '{{"id":3,"result":{{"content":[{{"type":"text","text":"done"}}]}}}}';;
+*'"method":"tools/call"'*) touch '{}'; sleep 6; touch '{}'; printf '%s\n' '{{"id":3,"result":{{"content":[{{"type":"text","text":"done"}}]}}}}';;
 esac
 done"#,
         started.display(),
@@ -40,8 +40,10 @@ done"#,
     }
     assert!(started.exists());
     workspace.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let cancelled = std::time::Instant::now();
     assert!(call.join().expect("valid test fixture").is_error);
-    std::thread::sleep(Duration::from_millis(1100));
+    assert!(cancelled.elapsed() < Duration::from_secs(2), "the cancelled call waited for the server");
+    std::thread::sleep(Duration::from_millis(6500));
     assert!(!leaked.exists(), "MCP side effect occurred after cancellation");
 }
 #[test]

@@ -7,6 +7,7 @@ mod local;
 mod script_server;
 mod servers;
 mod sse;
+mod sse_listen;
 mod stdio;
 mod tool;
 
@@ -28,6 +29,8 @@ use crate::model::http::Http;
 use crate::tools::{Outcome, Tool};
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
+pub const ANSWER_WAIT: std::time::Duration = std::time::Duration::from_secs(600);
+pub(crate) const MESSAGE_AT_MOST: usize = 16 * 1024 * 1024;
 
 pub type Listener = Arc<dyn Fn(&str, &Value) + Send + Sync>;
 

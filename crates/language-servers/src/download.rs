@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use domain::lsp::install::Archive;
@@ -15,6 +16,7 @@ pub(super) struct Download<'a> {
     pub url: &'a str,
     pub archive: Archive,
     pub sha256: &'a str,
+    pub stop: &'a AtomicBool,
 }
 
 impl Download<'_> {
@@ -23,8 +25,22 @@ impl Download<'_> {
         if status != 200 {
             return Err(format!("{} answered {status}", self.url));
         }
-        unpack(Patient::new(body, QUIET), self.archive, self.sha256, staging, program)
-            .map_err(|error| format!("{}: {error}", self.url))
+        let body = Stoppable { inner: Patient::new(body, QUIET), stop: self.stop };
+        unpack(body, self.archive, self.sha256, staging, program).map_err(|error| format!("{}: {error}", self.url))
+    }
+}
+
+struct Stoppable<'a, R> {
+    inner: R,
+    stop: &'a AtomicBool,
+}
+
+impl<R: io::Read> io::Read for Stoppable<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.stop.load(Ordering::Relaxed) {
+            return Err(io::Error::other("it was stopped"));
+        }
+        self.inner.read(buf)
     }
 }
 
@@ -181,6 +197,17 @@ mod tests {
 
     fn pause() -> io::Result<Vec<u8>> {
         Err(io::Error::new(io::ErrorKind::TimedOut, "waiting for stream"))
+    }
+
+    #[test]
+    fn a_download_that_is_stopped_reads_no_further() {
+        let stop = AtomicBool::new(false);
+        let mut body = Stoppable { inner: &b"abcdef"[..], stop: &stop };
+        let mut some = [0_u8; 3];
+        body.read_exact(&mut some).expect("the start");
+        stop.store(true, Ordering::Relaxed);
+        let error = body.read_to_end(&mut Vec::new()).expect_err("stopped");
+        assert_eq!(error.to_string(), "it was stopped");
     }
 
     #[test]

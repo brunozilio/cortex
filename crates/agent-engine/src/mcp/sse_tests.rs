@@ -1,4 +1,5 @@
 use std::io::{BufReader, Read};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
@@ -12,9 +13,12 @@ use crate::tools::{Outcome, Tool, Workspace};
 type Posted = (String, Vec<(String, String)>);
 
 struct Legacy {
-    endpoint: String,
+    endpoint: Mutex<String>,
     stream: Mutex<Option<Sender<Vec<u8>>>>,
     posted: Mutex<Vec<Posted>>,
+    methods: Mutex<Vec<String>>,
+    down: AtomicBool,
+    silent: AtomicBool,
 }
 
 struct Pipe(Receiver<Vec<u8>>, Vec<u8>);
@@ -39,7 +43,23 @@ impl Read for Pipe {
 
 impl Legacy {
     fn new(endpoint: &str) -> Arc<Self> {
-        Arc::new(Self { endpoint: endpoint.into(), stream: Mutex::default(), posted: Mutex::default() })
+        Arc::new(Self {
+            endpoint: Mutex::new(endpoint.into()),
+            stream: Mutex::default(),
+            posted: Mutex::default(),
+            methods: Mutex::default(),
+            down: AtomicBool::new(false),
+            silent: AtomicBool::new(false),
+        })
+    }
+
+    fn drop_the_stream(&self) {
+        self.down.store(true, Ordering::Relaxed);
+        self.stream.lock().expect("stream").take();
+    }
+
+    fn methods(&self) -> Vec<String> {
+        self.methods.lock().expect("methods").clone()
     }
 
     fn send(&self, event: &str, data: &str) {
@@ -56,9 +76,13 @@ impl Http for Legacy {
         _headers: &[(String, String)],
         _stop: &std::sync::atomic::AtomicBool,
     ) -> Result<Response, ModelError> {
+        if self.down.load(Ordering::Relaxed) {
+            return Err(ModelError::Network("the server is down".into()));
+        }
         let (send, receive) = channel();
         *self.stream.lock().expect("stream") = Some(send);
-        self.send("endpoint", &self.endpoint);
+        let endpoint = self.endpoint.lock().expect("endpoint").clone();
+        self.send("endpoint", &endpoint);
         let body = Box::new(BufReader::new(Pipe(receive, Vec::new())));
         Ok(Response { status: 200, headers: vec![("content-type".into(), "text/event-stream".into())], body })
     }
@@ -66,7 +90,10 @@ impl Http for Legacy {
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {
         self.posted.lock().expect("posted").push((url.into(), headers.to_vec()));
         let message: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
-        if let Some(id) = message.get("id") {
+        if let Some(method) = message["method"].as_str() {
+            self.methods.lock().expect("methods").push(method.to_owned());
+        }
+        if let Some(id) = message.get("id").filter(|_| !self.silent.load(Ordering::Relaxed)) {
             let result = match message["method"].as_str() {
                 Some("tools/list") => json!({ "tools": [{ "name": "echo", "inputSchema": { "type": "object" } }] }),
                 Some("tools/call") => {
@@ -116,11 +143,75 @@ fn a_request_after_the_stream_ended_fails_instead_of_waiting() {
     let legacy = Legacy::new("/messages");
     let http: Arc<dyn Http> = legacy.clone();
     let server = McpServer::open(&spec(), &http).expect("connected");
-    legacy.stream.lock().expect("stream").take();
+    legacy.drop_the_stream();
     let started = std::time::Instant::now();
     let error = server.initialize_stopped(&std::sync::atomic::AtomicBool::new(false)).expect_err("closed");
     assert!(error.contains("closed its stream"), "{error}");
     assert!(started.elapsed() < std::time::Duration::from_secs(60), "{:?}", started.elapsed());
+}
+
+fn until(what: &str, met: impl Fn() -> bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !met() {
+        assert!(std::time::Instant::now() < deadline, "never happened: {what}");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn a_stream_that_dropped_is_opened_again_and_the_server_greeted_anew() {
+    let legacy = Legacy::new("/messages?session=1");
+    let http: Arc<dyn Http> = legacy.clone();
+    let server = Arc::new(McpServer::open(&spec(), &http).expect("connected"));
+    let tools = server.tools().expect("tools");
+    let say = |text: &str| tools[0].run(&json!({ "say": text }), &Workspace::new("/"));
+    assert_eq!(say("hello"), Outcome::ok("hello"));
+
+    legacy.drop_the_stream();
+    until("a call fails while the stream is down", || say("lost").content.contains("closed its stream"));
+    let before = legacy.methods().len();
+    *legacy.endpoint.lock().expect("endpoint") = "/messages?session=2".into();
+    legacy.down.store(false, Ordering::Relaxed);
+    until("the stream is back", || say("again") == Outcome::ok("again"));
+
+    let after = legacy.methods().split_off(before);
+    let greeted: Vec<&str> = after.iter().map(String::as_str).filter(|method| *method != "tools/call").collect();
+    assert_eq!(greeted[..2], ["initialize", "notifications/initialized"], "{after:?}");
+    let posted = legacy.posted.lock().expect("posted").clone();
+    assert_eq!(posted.last().map(|(url, _)| url.as_str()), Some("https://mcp.test/messages?session=2"));
+}
+
+#[test]
+fn a_request_in_flight_fails_when_the_stream_drops() {
+    let legacy = Legacy::new("/messages");
+    let http: Arc<dyn Http> = legacy.clone();
+    let server = Arc::new(McpServer::open(&spec(), &http).expect("connected"));
+    let tools = server.tools().expect("tools");
+    legacy.silent.store(true, Ordering::Relaxed);
+    let asking = std::thread::spawn(move || tools[0].run(&json!({ "say": "hello" }), &Workspace::new("/")));
+    until("the call was posted", || legacy.methods().iter().any(|method| method == "tools/call"));
+    legacy.drop_the_stream();
+    let failed = asking.join().expect("joined");
+    assert!(failed.is_error && failed.content.contains("closed its stream"), "{failed:?}");
+}
+
+#[test]
+fn a_request_nobody_answers_gives_up_at_its_deadline() {
+    use crate::mcp::Transport;
+    let legacy = Legacy::new("/messages");
+    let http: Arc<dyn Http> = legacy.clone();
+    let never = AtomicBool::new(false);
+    let mut transport =
+        super::SseTransport::connect("legacy", "https://mcp.test/sse", &[], http, &never, None).expect("connected");
+    assert_eq!(transport.answer_wait, crate::mcp::ANSWER_WAIT, "the same wait as every other transport");
+    transport.answer_wait = std::time::Duration::from_millis(100);
+    legacy.silent.store(true, Ordering::Relaxed);
+    let started = std::time::Instant::now();
+    let error = transport
+        .request_stopped(&json!({ "jsonrpc": "2.0", "id": 9, "method": "tools/list" }), &never)
+        .expect_err("nobody answered");
+    assert!(error.contains("legacy did not answer in"), "{error}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(30), "{:?}", started.elapsed());
 }
 
 #[test]

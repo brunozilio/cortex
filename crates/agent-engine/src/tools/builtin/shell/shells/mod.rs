@@ -1,35 +1,77 @@
 use std::collections::HashMap;
 use std::io::Read as _;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
+use platform::Child;
+use platform::child::{GRACE, Leftovers, Spawn};
 use platform::sync::Locked;
-use std::time::Instant;
 
-use platform::Tree;
-use serde_json::Value;
+use crate::tools::Workspace;
 
-use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
-
+mod output;
+mod tools;
 mod wait;
 mod watch;
+use output::{KEPT, Unread, capped};
+pub use tools::{BashOutput, KillShell};
 pub(crate) use wait::{Waited, wait};
 pub(crate) use watch::{Watch, ended_source, watch};
 
-const KEPT: usize = 1 << 20;
-const SHOWN: usize = 30_000;
+const FORGOTTEN_AFTER: Duration = Duration::from_secs(60 * 60);
 
 struct Shell {
     client: u64,
     command: String,
-    tree: Tree,
+    child: Child,
     output: Arc<Mutex<Vec<u8>>>,
-    dropped: Arc<std::sync::atomic::AtomicUsize>,
+    dropped: Arc<AtomicUsize>,
     read: usize,
     started: Instant,
     exit: Option<String>,
+    ended: Option<Instant>,
+    watched: bool,
+    told: bool,
     readers: Vec<std::thread::JoinHandle<()>>,
+}
+
+impl Shell {
+    fn unread(&self) -> Unread {
+        Unread::of(&self.output.locked(), self.dropped.load(Ordering::Relaxed), self.read)
+    }
+
+    fn take_unread(&mut self) -> Unread {
+        let mut kept = self.output.locked();
+        let dropped = self.dropped.load(Ordering::Relaxed);
+        let unread = Unread::of(&kept, dropped, self.read);
+        self.read = dropped + kept.len();
+        if kept.len() > KEPT {
+            let read = kept.len() - KEPT;
+            kept.drain(..read);
+            self.dropped.fetch_add(read, Ordering::Relaxed);
+        }
+        unread
+    }
+
+    fn mark_read(&mut self) {
+        self.read = self.written();
+    }
+
+    fn written(&self) -> usize {
+        self.dropped.load(Ordering::Relaxed) + self.output.locked().len()
+    }
+
+    fn collected(&self) -> bool {
+        self.exit.is_some()
+            && self.readers.iter().all(std::thread::JoinHandle::is_finished)
+            && self.read >= self.written()
+            && (self.told || !self.watched)
+    }
+
+    fn stop(self) {
+        self.child.terminate(GRACE);
+    }
 }
 
 fn shells() -> &'static Mutex<HashMap<String, Shell>> {
@@ -48,22 +90,34 @@ pub(crate) fn start(
 ) -> std::io::Result<String> {
     let client = workspace.credentials.client;
     static NEXT: AtomicU64 = AtomicU64::new(1);
+    forget_finished(Instant::now());
     let (reader, writer) = std::io::pipe()?;
     command.stdout(writer.try_clone()?).stderr(writer);
-    let spawned = Tree::spawn(command);
+    let spawned = Child::spawn_with(command, Spawn { leftovers: Leftovers::Kept, ..Spawn::default() });
     command.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-    let tree = spawned?;
+    let child = spawned?;
     let output = Arc::new(Mutex::new(Vec::new()));
     let pipe = boxed(reader);
-    let dropped = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicUsize::new(0));
     let readers = vec![{
         let (output, dropped) = (Arc::clone(&output), Arc::clone(&dropped));
         platform::named::spawn("shell-output", move || collect(pipe, &output, &dropped))
     }];
     let id = format!("bash_{}", NEXT.fetch_add(1, Ordering::Relaxed));
-    let started = Instant::now();
-    let shell =
-        Shell { client, command: summary.to_owned(), tree, output, dropped, read: 0, started, exit: None, readers };
+    let shell = Shell {
+        client,
+        command: summary.to_owned(),
+        child,
+        output,
+        dropped,
+        read: 0,
+        started: Instant::now(),
+        exit: None,
+        ended: None,
+        watched: false,
+        told: false,
+        readers,
+    };
     lock().insert(id.clone(), shell);
     workspace.tracking.started_shell(&id);
     Ok(id)
@@ -73,7 +127,7 @@ fn boxed(pipe: impl std::io::Read + Send + 'static) -> Box<dyn std::io::Read + S
     Box::new(pipe)
 }
 
-fn collect(mut pipe: Box<dyn std::io::Read + Send>, output: &Mutex<Vec<u8>>, dropped: &std::sync::atomic::AtomicUsize) {
+fn collect(mut pipe: Box<dyn std::io::Read + Send>, output: &Mutex<Vec<u8>>, dropped: &AtomicUsize) {
     let mut chunk = [0_u8; 8192];
     while let Ok(read) = pipe.read(&mut chunk) {
         if read == 0 {
@@ -85,40 +139,37 @@ fn collect(mut pipe: Box<dyn std::io::Read + Send>, output: &Mutex<Vec<u8>>, dro
     }
 }
 
-fn capped(kept: &mut Vec<u8>) -> usize {
-    if kept.len() <= 2 * KEPT {
-        return 0;
+fn taken(client: u64, id: &str) -> Option<Shell> {
+    let mut shells = lock();
+    if !shells.get(id).is_some_and(|shell| shell.client == client) {
+        return None;
     }
-    let drop = kept.len() - KEPT;
-    kept.drain(..drop);
-    drop
+    shells.remove(id)
 }
 
 pub fn kill_client(client: u64) {
-    let mut shells = lock();
-    let ids: Vec<String> =
-        shells.iter().filter(|(_, shell)| shell.client == client).map(|(id, _)| id.clone()).collect();
-    for id in ids {
-        if let Some(mut shell) = shells.remove(&id) {
-            shell.tree.kill();
-            let _ = shell.tree.child().wait();
-        }
-    }
+    let leaving: Vec<Shell> = {
+        let mut shells = lock();
+        let ids: Vec<String> =
+            shells.iter().filter(|(_, shell)| shell.client == client).map(|(id, _)| id.clone()).collect();
+        ids.iter().filter_map(|id| shells.remove(id)).collect()
+    };
+    leaving.into_iter().for_each(Shell::stop);
 }
 
 pub fn kill(client: u64, id: &str) -> bool {
-    let mut shells = lock();
-    if !shells.get(id).is_some_and(|shell| shell.client == client) {
-        return false;
-    }
-    if let Some(mut shell) = shells.remove(id) {
-        shell.tree.kill();
-        let _ = shell.tree.child().wait();
-    }
-    true
+    stopped(client, id).is_some()
+}
+
+fn stopped(client: u64, id: &str) -> Option<String> {
+    let shell = taken(client, id)?;
+    let command = shell.command.clone();
+    shell.stop();
+    Some(command)
 }
 
 pub fn list(client: u64) -> Vec<(String, String, bool)> {
+    forget_finished(Instant::now());
     let mut shells = lock();
     let mut listed: Vec<_> = shells
         .iter_mut()
@@ -139,99 +190,27 @@ pub fn tail(client: u64, id: &str, most: usize) -> Option<String> {
 
 fn refresh(shell: &mut Shell) -> Option<String> {
     if shell.exit.is_none()
-        && let Ok(Some(status)) = shell.tree.child().try_wait()
+        && let Some(status) = shell.child.try_wait()
     {
         shell.exit = Some(status.code().map_or_else(|| "killed by a signal".to_owned(), |c| format!("exit code {c}")));
+        shell.ended = Some(Instant::now());
     }
     shell.exit.clone()
 }
 
-#[derive(Debug)]
-pub struct BashOutput;
-
-impl Tool for BashOutput {
-    fn spec(&self) -> ToolSpec {
-        crate::tools::declared("BashOutput", &serde_json::Value::Null)
-    }
-
-    fn access(&self) -> Access {
-        crate::tools::declared_access("BashOutput")
-    }
-
-    fn summary(&self, input: &Value) -> String {
-        field(input, "bash_id").unwrap_or_default().to_owned()
-    }
-
-    fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
-        let id = match required(input, "bash_id") {
-            Ok(id) => id,
-            Err(error) => return error,
-        };
-        let mut shells = lock();
-        let Some(shell) = shells.get_mut(id).filter(|shell| shell.client == workspace.credentials.client) else {
-            return Outcome::error(format!("No background command `{id}`."));
-        };
-        let exit = refresh(shell);
-        let text = {
-            let mut kept = shell.output.locked();
-            let from = if shell.read > kept.len() { 0 } else { shell.read };
-            let new = String::from_utf8_lossy(&kept[from..]).into_owned();
-            if kept.len() > KEPT {
-                let drop = kept.len() - KEPT;
-                kept.drain(..drop);
-                shell.dropped.fetch_add(drop, Ordering::Relaxed);
-            }
-            shell.read = kept.len();
-            new
-        };
-        let text = match field(input, "filter") {
-            Some(filter) => text.lines().filter(|line| line.contains(filter)).collect::<Vec<_>>().join("\n"),
-            None => text,
-        };
-        let state = match exit {
-            Some(exit) => format!("finished ({exit})"),
-            None => format!("running for {}s", shell.started.elapsed().as_secs()),
-        };
-        let text = if text.trim().is_empty() { "(no new output)".to_owned() } else { clip(text.trim_end(), SHOWN) };
-        Outcome::ok(format!("[{id}: {state}]\n{text}"))
-    }
+fn forget_finished(now: Instant) {
+    forget_finished_of(now, None);
 }
 
-#[derive(Debug)]
-pub struct KillShell;
-
-impl Tool for KillShell {
-    fn spec(&self) -> ToolSpec {
-        crate::tools::declared("KillShell", &serde_json::Value::Null)
+fn forget_finished_of(now: Instant, client: Option<u64>) {
+    let mut shells = lock();
+    for shell in shells.values_mut() {
+        refresh(shell);
     }
-
-    fn access(&self) -> Access {
-        crate::tools::declared_access("KillShell")
-    }
-
-    fn summary(&self, input: &Value) -> String {
-        field(input, "shell_id").unwrap_or_default().to_owned()
-    }
-
-    fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
-        let id = match required(input, "shell_id") {
-            Ok(id) => id,
-            Err(error) => return error,
-        };
-        if let Some(explained) = crate::tools::watch::stop(workspace.credentials.client, id) {
-            return Outcome::ok(format!("Stopped {id} ({explained})."));
-        }
-        let mut shells = lock();
-        if !shells.get(id).is_some_and(|shell| shell.client == workspace.credentials.client) {
-            return Outcome::error(format!("No background command `{id}`."));
-        }
-        let Some(mut shell) = shells.remove(id) else {
-            return Outcome::error(format!("No background command `{id}`."));
-        };
-        shell.tree.kill();
-        let _ = shell.tree.child().wait();
-        Outcome::ok(format!("Stopped {id} ({}).", shell.command))
-    }
+    shells.retain(|_, shell| {
+        let theirs = client.is_none_or(|client| shell.client == client);
+        !(theirs && shell.ended.is_some_and(|at| now.saturating_duration_since(at) >= FORGOTTEN_AFTER))
+    });
 }
 
 #[cfg(all(test, unix))]
