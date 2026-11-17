@@ -155,11 +155,16 @@ impl Tool for SkillTool {
         if !skill.model_invocation {
             return Outcome::error(format!("Skill {name} requires explicit user invocation."));
         }
-        load(skill, input["args"].as_str().unwrap_or_default(), &workspace.cwd, workspace.policy.scripts)
+        load(skill, input["args"].as_str().unwrap_or_default(), &workspace.cwd, &granted(skill, workspace))
     }
 }
 
-fn load(skill: &FoundSkill, args: &str, cwd: &Path, access: ScriptAccess) -> Outcome {
+fn granted(skill: &FoundSkill, workspace: &Workspace) -> Granted {
+    let origin = Origin::trusted(skill.trusted);
+    Granted { access: workspace.policy.scripts.of(origin), origin, confine: workspace.confiner() }
+}
+
+fn load(skill: &FoundSkill, args: &str, cwd: &Path, access: &Granted) -> Outcome {
     let name = &skill.name;
     if let Some(body) = &skill.body {
         return Outcome::ok(loaded(skill, body, args));
@@ -188,17 +193,21 @@ fn loaded(skill: &FoundSkill, body: &str, args: &str) -> String {
     }
     out
 }
-use super::script_tool::ScriptAccess;
+use super::script_tool::{Origin, ScriptAccess};
+use super::skill_script::Granted;
 
 pub fn expand_initial(
     initial: &str,
     skills: &[FoundSkill],
     cwd: &Path,
-    access: ScriptAccess,
+    workspace: &Workspace,
 ) -> Result<String, String> {
     let initial = initial.trim();
     let Some(command) = initial.strip_prefix('/') else { return Ok(initial.into()) };
-    let unattended = |skill: &FoundSkill| if skill.project_script() { ScriptAccess::none() } else { access };
+    let unattended = |skill: &FoundSkill| {
+        let granted = granted(skill, workspace);
+        if skill.project_script() { Granted { access: ScriptAccess::none(), ..granted } } else { granted }
+    };
     expand(initial, skills, cwd, unattended).unwrap_or_else(|| {
         let name = command.split_whitespace().next().unwrap_or_default();
         Err(format!("Initial command /{name} is not an available skill or custom command"))
@@ -209,21 +218,21 @@ pub fn expand_command(
     prompt: &str,
     skills: &[FoundSkill],
     cwd: &Path,
-    access: ScriptAccess,
+    workspace: &Workspace,
 ) -> Option<Result<String, String>> {
-    expand(prompt, skills, cwd, |_| access)
+    expand(prompt, skills, cwd, |skill| granted(skill, workspace))
 }
 
 fn expand(
     prompt: &str,
     skills: &[FoundSkill],
     cwd: &Path,
-    access: impl Fn(&FoundSkill) -> ScriptAccess,
+    access: impl Fn(&FoundSkill) -> Granted,
 ) -> Option<Result<String, String>> {
     let command = prompt.trim().strip_prefix('/')?;
     let (name, args) = command.split_once(char::is_whitespace).unwrap_or((command, ""));
     let skill = skills.iter().find(|skill| skill.name == name)?;
-    let loaded = load(skill, args.trim(), cwd, access(skill));
+    let loaded = load(skill, args.trim(), cwd, &access(skill));
     Some(if loaded.is_error { Err(loaded.content) } else { Ok(loaded.content) })
 }
 fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {

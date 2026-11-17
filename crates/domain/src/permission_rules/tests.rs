@@ -94,6 +94,73 @@ fn a_denied_command_is_found_behind_wrappers_and_spellings() {
 }
 
 #[test]
+fn a_denied_command_is_found_after_shell_keywords_wrapper_values_and_quotes() {
+    let rules = rules(&["Bash"], &[], &["Bash(rm:*)", "Bash(git push:*)"]);
+    let missed = [
+        "if true; then rm -rf x; fi",
+        "for f in *; do rm $f; done",
+        "while true; do rm x; done",
+        "if rm x; then ls; fi",
+        "if false; then ls; elif rm x; then ls; else rm y; fi",
+        "until rm x; do ls; done",
+        "if (rm x); then ls; fi",
+        "sudo -u root rm x",
+        "sudo -E -u root rm x",
+        "sudo --user root rm x",
+        "nice -n 10 rm x",
+        "env -u HOME rm x",
+        "env -i PATH=/bin rm x",
+        "timeout 5 rm x",
+        "timeout -s KILL 5 rm x",
+        "stdbuf -oL rm x",
+        "stdbuf -o L rm x",
+        "ionice -c 3 rm x",
+        "chrt 10 rm x",
+        "time -p rm x",
+        "sudo nice -n 5 timeout 5 rm x",
+        "git \"push\"",
+        "git 'push' origin main",
+        "git pu\\sh",
+        "r\"m\" x",
+    ]
+    .into_iter()
+    .filter(|line| command(&rules, line) != Some(RuleKind::Deny))
+    .collect::<Vec<_>>();
+    assert!(missed.is_empty(), "not denied: {missed:?}");
+    assert_eq!(command(&rules, "git status"), Some(RuleKind::Allow));
+    assert_eq!(command(&rules, "timeout 5 ls"), Some(RuleKind::Allow));
+}
+
+#[test]
+fn a_deny_rule_written_with_quotes_still_matches_the_quoted_command() {
+    let rules = rules(&["Bash"], &[], &["Bash(git commit -m \"wip\":*)"]);
+    assert_eq!(command(&rules, "git commit -m \"wip\""), Some(RuleKind::Deny));
+    assert_eq!(command(&rules, "git commit -m wip"), Some(RuleKind::Deny));
+    assert_eq!(command(&rules, "git commit -m done"), Some(RuleKind::Allow));
+}
+
+#[test]
+fn a_program_named_by_a_variable_or_run_inside_a_construct_is_asked_about_when_rules_restrict() {
+    let rules = rules(&["Bash"], &[], &["Bash(rm:*)"]);
+    for line in [
+        "X=rm; $X -rf x",
+        "X=rm; \"$X\" -rf x",
+        "${X} -rf x",
+        "case a in a) rm x ;; esac",
+        "f() { rm x; }; f",
+        "function f { rm x; }; f",
+    ] {
+        assert!(
+            matches!(command(&rules, line), Some(RuleKind::Ask | RuleKind::Deny)),
+            "{line}: {:?}",
+            command(&rules, line)
+        );
+    }
+    let open = super::PermissionRules::default().with(RuleKind::Allow, "Bash");
+    assert_eq!(command(&open, "$X -rf x"), Some(RuleKind::Allow), "nothing restricts");
+}
+
+#[test]
 fn a_command_hidden_inside_another_is_asked_about_when_rules_restrict() {
     let rules = rules(&["Bash"], &[], &["Bash(rm:*)"]);
     for line in ["echo $(rm -rf x)", "echo `rm x`", "bash -c 'rm x'", "eval 'rm x'", "ls | xargs rm"] {

@@ -2,9 +2,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use agent_engine::model::scripted::ScriptedModel;
-use agent_engine::tools::Tool;
 use agent_engine::tools::script_tool::ScriptAccess;
 use agent_engine::tools::skill::{FoundSkill, SkillTool, discover, expand_command, expand_initial};
+use agent_engine::tools::{Tool, Workspace};
 use agent_engine::transcript::{Block, Message};
 use domain::{AskKind, Decision, EngineEvent, ModelOption, PermissionMode, PromptRequest};
 use serde_json::json;
@@ -114,14 +114,56 @@ fn only_a_command_the_user_typed_gives_a_project_s_script_its_access() {
     let found = found(project.path(), home.path());
     let mark = project.path().join("mark.txt");
 
-    let initial = expand_initial("/mark", &found, project.path(), ScriptAccess::default());
+    let mut workspace = Workspace::new(project.path());
+    let everything = ScriptAccess { files: true, processes: true, network: true };
+    workspace.policy.scripts.project = everything;
+    let initial = expand_initial("/mark", &found, project.path(), &workspace);
     assert!(initial.is_err() && !mark.exists(), "an agent's initial prompt is not the user typing: {initial:?}");
 
-    let off = ScriptAccess { files: false, ..ScriptAccess::default() };
-    let typed = expand_command("/mark", &found, project.path(), off).expect("a skill");
+    workspace.policy.scripts.project = ScriptAccess { files: false, ..everything };
+    let typed = expand_command("/mark", &found, project.path(), &workspace).expect("a skill");
     assert!(typed.is_err() && !mark.exists(), "the settings' scripts.files holds for a typed command: {typed:?}");
 
-    let typed = expand_command("/mark", &found, project.path(), ScriptAccess::default()).expect("a skill");
+    workspace.policy.scripts.project = everything;
+    let typed = expand_command("/mark", &found, project.path(), &workspace).expect("a skill");
     assert_eq!(typed.as_deref(), Ok("MARKED"));
     assert!(mark.exists());
+}
+
+#[test]
+fn a_project_s_script_skill_gets_no_files_until_the_owner_s_settings_grant_them() {
+    let project = tempfile::tempdir().expect("project");
+    let home = tempfile::tempdir().expect("home");
+    skill(project.path(), SKILL);
+    let found = found(project.path(), home.path());
+    let workspace = Workspace::new(project.path());
+    let typed = expand_command("/mark", &found, project.path(), &workspace).expect("a skill");
+    assert!(typed.as_ref().is_err_and(|why| why.contains("scripts.files")), "{typed:?}");
+    assert!(!project.path().join("mark.txt").exists());
+}
+
+#[test]
+fn a_project_s_script_skill_the_user_allowed_still_gets_no_files_by_default() {
+    let rig = Rig::new(PermissionMode::Ask);
+    let home = tempfile::tempdir().expect("home");
+    skill(rig.dir.path(), SKILL);
+    let control = Arc::clone(&rig.control);
+    let events = Arc::clone(&rig.events);
+    let allower = std::thread::spawn(move || {
+        for _ in 0..400 {
+            let ask = events.lock().expect("events").iter().find_map(|event| match event {
+                EngineEvent::Asked(ask) => Some(ask.id.clone()),
+                _ => None,
+            });
+            if let Some(id) = ask {
+                control.answer(&id, Decision::Allow);
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    });
+    load_mark(&rig, found(rig.dir.path(), home.path()));
+    allower.join().expect("allower");
+    assert_eq!(asks(&rig).len(), 1);
+    assert!(!rig.dir.path().join("mark.txt").exists(), "allowed to run, not to write");
 }

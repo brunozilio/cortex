@@ -59,6 +59,8 @@ fn shaper(shown: String, source: String, path: &Path) -> Shaper {
         let host = std::sync::Arc::new(crate::tools::script_io::StandaloneHost {
             cwd: cwd.clone(),
             access: none,
+            origin: crate::tools::script_tool::Origin::Project,
+            confine: crate::tools::Confiner::default(),
             stop: std::sync::Arc::clone(&stop),
         });
         let limit = Some(std::time::Duration::from_secs(2));

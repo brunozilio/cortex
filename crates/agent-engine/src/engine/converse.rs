@@ -178,7 +178,7 @@ impl Job {
             .or(agent_config.max_turns)
             .unwrap_or(crate::agent::MAX_TURNS);
         let initial = if history.is_empty() { agent_config.initial_prompt.as_deref().unwrap_or_default() } else { "" };
-        let scripts = self.workspace.policy.scripts;
+        let scripts = &self.workspace;
         let initial = match tools::skill::expand_initial(initial, &skills, &self.request.cwd, scripts) {
             Ok(initial) => initial,
             Err(error) => return self.fail(&error, FailureKind::Other),

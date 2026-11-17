@@ -24,9 +24,12 @@ pub fn script(
         data: serde_json::json!({ "cwd": workspace.cwd, "session": workspace.session_id, "agent": workspace.agent_name }),
         limit: Duration::from_secs(handler.timeout),
     };
+    let origin = crate::tools::script_tool::Origin::of_script(&handler.command, workspace.home.as_deref());
     let standalone = StandaloneHost {
         cwd: workspace.cwd.clone(),
-        access: workspace.policy.scripts,
+        access: workspace.policy.scripts.of(origin),
+        origin,
+        confine: workspace.confiner(),
         stop: Arc::clone(&workspace.stop),
     };
     let result = match model {
@@ -180,3 +183,7 @@ export default function (input, ctx) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "script_access_tests.rs"]
+mod access_tests;

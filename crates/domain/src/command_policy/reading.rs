@@ -1,42 +1,60 @@
-const READERS: [&str; 30] = [
-    "ls", "pwd", "cat", "head", "tail", "wc", "grep", "egrep", "fgrep", "rg", "tree", "file", "stat", "which", "du",
-    "df", "diff", "uniq", "cut", "basename", "dirname", "realpath", "nl", "tac", "jq", "type", "true", "false", "date",
-    "whoami",
-];
+use super::readers::{READERS, Reader};
 
-const GIT_READERS: [&str; 10] =
-    ["status", "log", "diff", "show", "rev-parse", "ls-files", "blame", "grep", "describe", "shortlog"];
+const EXPANDED_BY_THE_SHELL: [char; 9] = ['$', '\\', '*', '?', '[', '{', '~', '<', '`'];
 
-pub fn only_reads(words: &[&str]) -> bool {
-    match words {
-        [] => false,
-        ["git", "branch", rest @ ..] => rest.iter().all(|word| word.starts_with('-') && !branch_writes(word)),
-        ["git", "remote"] | ["git", "remote", "-v"] => true,
-        ["git", "tag"] | ["git", "tag", "-l" | "--list", ..] => true,
-        ["git", sub, rest @ ..] => {
-            GIT_READERS.contains(sub) && inside(rest) && !rest.iter().any(|word| word.starts_with("--output"))
-        }
-        ["find", rest @ ..] => inside(rest) && !rest.iter().any(|word| finds_and_acts(word)),
-        ["sort", rest @ ..] => inside(rest) && !rest.iter().any(|word| word.starts_with("-o") || *word == "--output"),
-        [program, rest @ ..] => READERS.contains(program) && inside(rest),
+pub fn only_reads(part: &str, words: &[&str]) -> bool {
+    if part.contains(EXPANDED_BY_THE_SHELL) || !words.iter().all(|word| stays_inside(word)) {
+        return false;
     }
+    let Some(reader) = reader_of(words) else { return false };
+    arguments_allowed(reader, &words[reader.program.len()..])
 }
 
-fn branch_writes(flag: &str) -> bool {
-    matches!(
-        flag,
-        "-d" | "-D" | "-m" | "-M" | "-c" | "-C" | "--delete" | "--move" | "--copy" | "-u" | "--set-upstream-to"
-    ) || flag.starts_with("--set-upstream")
-        || flag.starts_with("--edit-description")
+pub fn is_reader(program: &str) -> bool {
+    READERS.iter().any(|reader| reader.program.first() == Some(&program))
 }
 
-fn finds_and_acts(word: &str) -> bool {
-    matches!(word, "-exec" | "-execdir" | "-ok" | "-okdir" | "-delete" | "-fprint" | "-fprint0" | "-fprintf" | "-fls")
+fn reader_of<'a>(words: &[&str]) -> Option<&'a Reader> {
+    READERS.iter().filter(|reader| words.starts_with(reader.program)).max_by_key(|reader| reader.program.len())
 }
 
-fn inside(words: &[&str]) -> bool {
-    words.iter().all(|word| {
-        let path = word.split_once('=').map_or(*word, |(_, value)| value);
-        !path.starts_with('/') && !path.starts_with('~') && !path.split('/').any(|segment| segment == "..")
+fn stays_inside(word: &str) -> bool {
+    let value = word.split_once('=').map_or(word, |(_, value)| value);
+    [word, value].iter().all(|path| !path.starts_with('/') && !path.split('/').any(|segment| segment == ".."))
+}
+
+fn arguments_allowed(reader: &Reader, arguments: &[&str]) -> bool {
+    let mut options_ended = false;
+    arguments.iter().all(|word| {
+        if options_ended || !word.starts_with('-') || *word == "-" {
+            return reader.operands;
+        }
+        if *word == "--" {
+            options_ended = true;
+            return true;
+        }
+        flag_allowed(reader, word)
     })
+}
+
+fn flag_allowed(reader: &Reader, word: &str) -> bool {
+    let listed = |flag: &str| reader.flags.contains(&flag);
+    if word.starts_with("--") {
+        return listed(word.split_once('=').map_or(word, |(name, _)| name));
+    }
+    if !reader.clustered {
+        return listed(word);
+    }
+    for (at, letter) in word.char_indices().skip(1) {
+        if letter.is_ascii_digit() {
+            continue;
+        }
+        if listed(&format!("-{letter}=")) {
+            return !word[at + letter.len_utf8()..].starts_with('/');
+        }
+        if !listed(&format!("-{letter}")) {
+            return false;
+        }
+    }
+    true
 }

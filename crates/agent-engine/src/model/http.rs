@@ -43,6 +43,21 @@ pub trait Http: Send + Sync {
         Err(super::ModelError::Network("streaming GET is not supported by this HTTP transport".into()))
     }
 
+    fn one_hop(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
+        self.streamed(url, headers, body)
+    }
+
+    fn streamed(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
+        match body {
+            Some(body) => self.post(url, headers, body),
+            None => self.get(url, headers),
+        }
+    }
+
+    fn addresses(&self, host: &str) -> Result<Vec<std::net::IpAddr>, String> {
+        super::web_client::system_addresses(host)
+    }
+
     fn post_model(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, super::ModelError> {
         self.post(url, headers, body).map_err(super::ModelError::Network)
     }
@@ -55,14 +70,17 @@ pub struct NetHttp;
 
 pub const SHORT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
+fn reason(error: super::ModelError) -> String {
+    match error {
+        super::ModelError::Network(reason) => reason,
+        error => error.to_string(),
+    }
+}
+
 impl NetHttp {
     fn short(url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
         let never = std::sync::atomic::AtomicBool::new(false);
-        let response =
-            super::cancellable_http::send(url, headers, body, &never, SHORT_TIMEOUT).map_err(|error| match error {
-                super::ModelError::Network(reason) => reason,
-                error => error.to_string(),
-            })?;
+        let response = super::cancellable_http::send(url, headers, body, &never, SHORT_TIMEOUT).map_err(reason)?;
         let (status, headers) = (response.status, response.headers.clone());
         let text = response.text_stopped(&never).map_err(|error| error.to_string())?;
         Ok(Response { status, headers, body: Box::new(Cursor::new(text.into_bytes())) })
@@ -82,6 +100,15 @@ impl Http for NetHttp {
 
     fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Response, String> {
         Self::short(url, headers, None)
+    }
+
+    fn one_hop(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
+        super::cancellable_http::one_hop(url, headers, body, SHORT_TIMEOUT).map_err(reason)
+    }
+
+    fn streamed(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
+        let never = std::sync::atomic::AtomicBool::new(false);
+        super::cancellable_http::send(url, headers, body, &never, SHORT_TIMEOUT).map_err(reason)
     }
 
     fn get_stream(
@@ -131,50 +158,7 @@ impl Response {
 }
 
 #[cfg(any(test, feature = "test-support"))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Sent {
-    pub url: String,
-    pub headers: Vec<(String, String)>,
-    pub body: String,
-}
-
-#[cfg(any(test, feature = "test-support"))]
-#[derive(Debug, Default)]
-pub struct ScriptedHttp {
-    answers: std::sync::Mutex<std::collections::VecDeque<(u16, String)>>,
-    sent: std::sync::Mutex<Vec<Sent>>,
-}
-
-#[cfg(any(test, feature = "test-support"))]
-impl ScriptedHttp {
-    pub fn new(answers: impl IntoIterator<Item = (u16, String)>) -> Self {
-        Self { answers: std::sync::Mutex::new(answers.into_iter().collect()), sent: std::sync::Mutex::default() }
-    }
-
-    pub fn sent(&self) -> Vec<Sent> {
-        self.sent.lock().map(|sent| sent.clone()).unwrap_or_default()
-    }
-}
-
-#[cfg(any(test, feature = "test-support"))]
-impl Http for ScriptedHttp {
-    fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Response, String> {
-        self.post(url, headers, "")
-    }
-
-    fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {
-        if let Ok(mut sent) = self.sent.lock() {
-            sent.push(Sent { url: url.to_owned(), headers: headers.to_vec(), body: body.to_owned() });
-        }
-        let (status, text) = self
-            .answers
-            .lock()
-            .ok()
-            .and_then(|mut answers| answers.pop_front())
-            .ok_or_else(|| "no scripted answer left".to_owned())?;
-        Ok(Response { status, headers: Vec::new(), body: Box::new(Cursor::new(text.into_bytes())) })
-    }
-}
+pub use super::scripted_http::{ScriptedHttp, Sent};
 
 pub struct Stopped<'a> {
     pub http: &'a dyn Http,

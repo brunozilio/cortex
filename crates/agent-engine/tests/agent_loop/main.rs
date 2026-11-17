@@ -30,6 +30,7 @@ mod turns;
 mod unsandboxed;
 mod watch;
 mod watch_hooks;
+mod write_boundary;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};

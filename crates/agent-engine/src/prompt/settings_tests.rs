@@ -155,13 +155,38 @@ fn a_checked_in_file_can_only_take_script_access_away() {
     };
     write(home.path().join(brand::DIR), "settings.json", serde_json::json!({ "processes": false }));
     write(repo.path().join(brand::DIR), "settings.json", serde_json::json!({ "processes": true, "network": false }));
-    let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts;
+    let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts.owner;
     assert!(!scripts.processes, "the repository cannot turn back on what the owner turned off");
     assert!(!scripts.network && scripts.files);
 
     write(repo.path().join(brand::DIR), "settings.local.json", serde_json::json!({ "processes": true }));
-    let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts;
+    let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts.owner;
     assert!(scripts.processes, "the owner's local file may");
+}
+
+#[test]
+fn a_project_s_scripts_get_nothing_until_the_owner_s_settings_turn_it_on() {
+    use crate::tools::script_tool::ScriptAccess;
+    let home = tempfile::tempdir().expect("home");
+    let repo = tempfile::tempdir().expect("repo");
+    let write = |root: std::path::PathBuf, scripts: serde_json::Value| {
+        std::fs::create_dir_all(&root).expect("dir");
+        std::fs::write(root.join("settings.json"), serde_json::json!({ "scripts": scripts }).to_string())
+            .expect("write");
+    };
+    let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts;
+    assert_eq!(scripts.project, ScriptAccess::none());
+    assert_eq!(scripts.owner, ScriptAccess::default(), "the user's own scripts keep everything");
+
+    let all = serde_json::json!({ "files": true, "processes": true, "network": true });
+    write(repo.path().join(brand::DIR), all);
+    let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts;
+    assert_eq!(scripts.project, ScriptAccess::none(), "the repository cannot grant itself access");
+
+    std::fs::remove_file(repo.path().join(brand::DIR).join("settings.json")).expect("remove");
+    write(home.path().join(brand::DIR), serde_json::json!({ "files": true }));
+    let scripts = load(repo.path(), Some(home.path()), &[]).expect("load").scripts;
+    assert_eq!(scripts.project, ScriptAccess { files: true, processes: false, network: false });
 }
 
 #[test]

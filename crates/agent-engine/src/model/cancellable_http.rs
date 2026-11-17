@@ -19,6 +19,7 @@ pub const STREAM_TIMEOUT: Duration = Duration::from_secs(900);
 struct Shared {
     runtime: Runtime,
     client: reqwest::Client,
+    web: reqwest::Client,
 }
 
 static SHARED: OnceLock<Result<Shared, String>> = OnceLock::new();
@@ -32,11 +33,12 @@ fn shared() -> Result<&'static Shared, ModelError> {
                 .enable_all()
                 .build()
                 .map_err(|error| error.to_string())?;
-            let client = {
+            let (client, web) = {
                 let _entered = runtime.enter();
-                reqwest::Client::builder().build().map_err(|error| described(&error))?
+                let client = reqwest::Client::builder().build().map_err(|error| described(&error))?;
+                (client, super::web_client::client().map_err(|error| described(&error))?)
             };
-            Ok(Shared { runtime, client })
+            Ok(Shared { runtime, client, web })
         })
         .as_ref()
         .map_err(|error| ModelError::Network(error.clone()))
@@ -68,20 +70,42 @@ pub fn send(
     stop: &AtomicBool,
     timeout: Duration,
 ) -> Result<Response, ModelError> {
+    let shared = shared()?;
+    dispatch(shared, &shared.client, url, headers, body, stop, timeout)
+}
+
+pub fn one_hop(
+    url: &str,
+    headers: &[(String, String)],
+    body: Option<&str>,
+    timeout: Duration,
+) -> Result<Response, ModelError> {
+    let shared = shared()?;
+    dispatch(shared, &shared.web, url, headers, body, &AtomicBool::new(false), timeout)
+}
+
+fn dispatch(
+    shared: &'static Shared,
+    client: &reqwest::Client,
+    url: &str,
+    headers: &[(String, String)],
+    body: Option<&str>,
+    stop: &AtomicBool,
+    timeout: Duration,
+) -> Result<Response, ModelError> {
     if stop.load(Ordering::Relaxed) {
         return Err(ModelError::Cancelled);
     }
-    let shared = shared()?;
     let mut request = match body {
         Some(body) => {
-            let request = shared.client.post(url).body(body.to_owned());
+            let request = client.post(url).body(body.to_owned());
             if headers.iter().any(|(key, _)| key.eq_ignore_ascii_case("content-type")) {
                 request
             } else {
                 request.header("content-type", "application/json")
             }
         }
-        None => shared.client.get(url),
+        None => client.get(url),
     };
     for (key, value) in headers {
         request = request.header(key, value);

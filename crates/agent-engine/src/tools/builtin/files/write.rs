@@ -16,6 +16,10 @@ impl Tool for Write {
         crate::tools::declared_access("Write")
     }
 
+    fn writes_to(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
+        field(input, "file_path").map(|path| workspace.resolve(path))
+    }
+
     fn summary(&self, input: &Value) -> String {
         field(input, "file_path").unwrap_or_default().to_owned()
     }

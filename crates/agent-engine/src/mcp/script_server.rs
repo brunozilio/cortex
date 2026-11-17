@@ -7,9 +7,9 @@ use serde_json::{Value, json};
 
 use super::ServerSpec;
 use crate::tools::script_io::StandaloneHost;
-pub use crate::tools::script_tool::ScriptAccess;
+pub use crate::tools::script_tool::{Origin, ScriptAccess};
 
-pub fn found(folder: &Path, cwd: &Path, access: ScriptAccess) -> Vec<ServerSpec> {
+pub fn found(folder: &Path, cwd: &Path, access: ScriptAccess, origin: Origin) -> Vec<ServerSpec> {
     let Ok(entries) = std::fs::read_dir(folder) else { return Vec::new() };
     let mut servers: Vec<ServerSpec> = entries
         .flatten()
@@ -17,7 +17,7 @@ pub fn found(folder: &Path, cwd: &Path, access: ScriptAccess) -> Vec<ServerSpec>
         .filter(|path| path.extension().is_some_and(|ext| ext == "js"))
         .filter_map(|path| {
             let name = path.file_stem()?.to_string_lossy().into_owned();
-            Some(ServerSpec::Script { name, path, cwd: cwd.to_path_buf(), access })
+            Some(ServerSpec::Script { name, path, cwd: cwd.to_path_buf(), access, origin })
         })
         .collect();
     servers.sort_by(|a, b| a.name().cmp(b.name()));
@@ -30,6 +30,7 @@ pub struct ScriptServer {
     source: String,
     cwd: PathBuf,
     access: ScriptAccess,
+    origin: Origin,
     tools: Vec<Value>,
 }
 
@@ -56,7 +57,14 @@ impl ScriptServer {
                 })
             })
             .collect();
-        Ok(Self { name: name.to_owned(), path: path.to_path_buf(), source, cwd: cwd.to_path_buf(), access, tools })
+        let (name, path, cwd) = (name.to_owned(), path.to_path_buf(), cwd.to_path_buf());
+        Ok(Self { name, path, source, cwd, access, origin: Origin::Project, tools })
+    }
+
+    #[must_use]
+    pub fn coming_from(mut self, origin: Origin) -> Self {
+        self.origin = origin;
+        self
     }
 
     fn call(&self, tool: &str, arguments: &Value) -> Value {
@@ -64,8 +72,13 @@ impl ScriptServer {
             return text_result(format!("{} has no tool {tool}", self.name), true);
         }
         let stop = Arc::new(AtomicBool::new(false));
-        let host: Arc<dyn script::Host> =
-            Arc::new(StandaloneHost { cwd: self.cwd.clone(), access: self.access, stop: Arc::clone(&stop) });
+        let host: Arc<dyn script::Host> = Arc::new(StandaloneHost {
+            cwd: self.cwd.clone(),
+            access: self.access,
+            origin: self.origin,
+            confine: crate::tools::Confiner::default(),
+            stop: Arc::clone(&stop),
+        });
         let data = json!({ "cwd": self.cwd.display().to_string(), "server": self.name });
         let export = format!("default.tools.{tool}.run");
         let shown = self.path.display().to_string();
@@ -108,7 +121,7 @@ mod tests {
         assert_eq!(added["result"]["content"][0]["text"], "5");
         let failed = server.handle(&call("fail")).expect("answer");
         assert_eq!(failed["result"]["isError"], true);
-        assert_eq!(found(dir.path(), dir.path(), ScriptAccess::default()).len(), 1);
+        assert_eq!(found(dir.path(), dir.path(), ScriptAccess::default(), Origin::Owner).len(), 1);
     }
 
     #[test]

@@ -7,10 +7,9 @@ mod json;
 mod links;
 mod main_content;
 mod page;
+pub mod reach;
 mod runs;
 mod tree;
-
-use std::io::Read as _;
 
 use serde_json::Value;
 
@@ -20,9 +19,6 @@ use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
 const SHOWN: usize = 60_000;
 const READ: u64 = 5 << 20;
 const ACCEPT: &str = "text/markdown, text/plain;q=0.9, text/html;q=0.8, application/json;q=0.8, */*;q=0.5";
-
-use domain::permission_rules::is_private;
-use domain::permission_rules::site as host;
 
 pub fn tools() -> Vec<Box<dyn Tool>> {
     vec![Box::new(WebFetch), Box::new(WebSearch)]
@@ -46,35 +42,32 @@ impl Tool for WebFetch {
 
     fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
         let url = match required(input, "url") {
-            Ok(url) => url.replacen("http://", "https://", 1),
+            Ok(url) => reach::secure(url),
             Err(error) => return error,
         };
-        let Some(site) = host(&url).filter(|_| url.starts_with("https://")) else {
-            return Outcome::error(format!("Not a web address: {url}"));
-        };
-        if is_private(&site) {
-            return Outcome::error(format!("{site} is this computer or its private network; WebFetch reads the web."));
-        }
         let Some(web) = &workspace.services.network else {
-            return Outcome::error("The web is not available to this run.");
+            return match reach::refusal_by_name(&url) {
+                Some(why) => Outcome::error(why),
+                None => Outcome::error("The web is not available to this run."),
+            };
         };
         let reading = workspace.policy.web;
         let mut headers = vec![("User-Agent".into(), brand::NAME.into())];
         if reading.formats {
             headers.push(("Accept".into(), ACCEPT.into()));
         }
-        let response = match web.0.get(&url, &headers) {
-            Ok(response) => response,
-            Err(error) => return Outcome::error(format!("Could not fetch {url}: {error}")),
+        let reach::Reached { url, mut response } = match reach::fetch(&*web.0, &url, &headers) {
+            Ok(reached) => reached,
+            Err(why) => return Outcome::error(why),
         };
         if !(200..300).contains(&response.status) {
             return Outcome::error(format!("{url} answered {}", response.status));
         }
         let content_type = response.header("content-type");
-        let mut bytes = Vec::new();
-        if let Err(error) = response.body.take(READ).read_to_end(&mut bytes) {
-            return Outcome::error(format!("Could not read {url}: {error}"));
-        }
+        let bytes = match crate::model::web_client::read_capped(response.body.as_mut(), READ) {
+            Ok(bytes) => bytes,
+            Err(error) => return Outcome::error(format!("Could not read {url}: {error}")),
+        };
         match page::read(&String::from_utf8_lossy(&bytes), content_type.as_deref(), &url, reading) {
             Ok(text) => Outcome::ok(page::clipped(&text, SHOWN)),
             Err(page::Unreadable(why)) => Outcome::error(why),

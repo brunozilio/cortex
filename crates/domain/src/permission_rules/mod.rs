@@ -1,9 +1,10 @@
 mod kind;
 mod pattern;
 mod site;
+mod unwrapped;
 
 pub use pattern::{hides_more, normalized, split_command, without_harmless_redirects};
-pub use site::{is_private, site};
+pub use site::{is_private, is_private_address, site};
 
 #[cfg(test)]
 mod tests;
@@ -22,6 +23,8 @@ pub struct PermissionsInfo {
     pub added_dirs: Vec<String>,
     #[serde(default)]
     pub hooks: Vec<HookInfo>,
+    #[serde(default)]
+    pub notices: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -143,6 +146,11 @@ impl PermissionRules {
         self
     }
 
+    pub fn naming_their_target(&self) -> Self {
+        let named = |(kind, rule): &&(RuleKind, Rule)| *kind != RuleKind::Allow || rule.specifier.is_some();
+        Self { rules: self.rules.iter().filter(named).cloned().collect() }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.rules.is_empty()
     }
@@ -204,7 +212,10 @@ fn parts<'a>(target: &Target<'a>) -> Vec<Part<'a>> {
 fn restricts(rule: &Rule, part: &Part<'_>, cwd: &str, home: Option<&str>) -> bool {
     let Some(specifier) = &rule.specifier else { return true };
     match part.target {
-        Target::Command(_) => pattern::command_matches(specifier, &part.run),
+        Target::Command(_) => {
+            pattern::command_matches(specifier, &part.run)
+                || pattern::command_matches(&unwrapped::unquoted(specifier), &unwrapped::unquoted(&part.run))
+        }
         Target::Path(path) => pattern::path_matches(specifier, path, cwd, home, true),
         Target::Tree(tree) => pattern::tree_meets(specifier, tree, cwd, home),
         Target::Other(subject) => specifier == subject,

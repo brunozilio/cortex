@@ -7,13 +7,13 @@ use domain::sandbox::Sandbox;
 use domain::web_reading::WebReading;
 
 use crate::guard::Safety;
-use crate::tools::script_tool::ScriptAccess;
+use crate::tools::script_tool::ScriptGrants;
 
 #[derive(Debug, Default)]
 pub struct Policy {
     pub permissions: PermissionRules,
     pub pre_approved: PermissionRules,
-    pub scripts: ScriptAccess,
+    pub scripts: ScriptGrants,
     pub safety: Option<Arc<Safety>>,
     pub sandbox: Option<Sandbox>,
     pub redact: Option<Arc<Known>>,

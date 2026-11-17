@@ -45,11 +45,13 @@ pub struct Settings {
     pub judge_allow: domain::permission_rules::PermissionRules,
     #[serde(default)]
     pub added_dirs: Vec<String>,
-    pub scripts: crate::tools::script_tool::ScriptAccess,
+    pub scripts: crate::tools::script_tool::ScriptGrants,
     #[serde(default)]
     pub features: domain::features::Features,
     #[serde(default)]
     pub sandbox: domain::sandbox::Sandbox,
+    #[serde(default)]
+    pub notices: Vec<String>,
 }
 
 pub type LspLayer = std::collections::BTreeMap<String, domain::lsp::ServerConfig>;
@@ -76,6 +78,7 @@ impl Default for Settings {
             scripts: Default::default(),
             features: Default::default(),
             sandbox: Default::default(),
+            notices: Vec::new(),
         }
     }
 }
@@ -117,7 +120,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     let mut permissions = domain::permission_rules::PermissionRules::default();
     let mut judge_allow = domain::permission_rules::PermissionRules::default();
     let mut added_dirs = Vec::new();
-    let mut scripts = crate::tools::script_tool::ScriptAccess::default();
+    let mut scripts = crate::tools::script_tool::ScriptGrants::default();
     let mut features = domain::features::Features::default();
     let mut sandbox = domain::sandbox::Sandbox::default();
     let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(brand::DIR));
@@ -132,7 +135,8 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     }
     let mut seen = std::collections::HashSet::new();
     roots.retain(|root| seen.insert(root.canonicalize().unwrap_or_else(|_| root.clone())));
-    hooks.extend(&crate::hooks::Hooks::gathered(home, &roots));
+    let trust = super::project_trust::ProjectTrust::of(home);
+    hooks.extend(&crate::hooks::Hooks::gathered(home, &roots, &|file| trust.runs_hooks_of(file)));
     let project_criteria = super::criteria_file::nearest(roots.iter().filter(|root| !is_user_root(root)));
     let mut files: Vec<(PathBuf, bool)> = roots
         .iter()
@@ -149,6 +153,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
             Err(e) => return Err(format!("{}: {e}", path.display())),
         };
         let settings: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+        let owners = owners && trust.local_is_the_owner_s(&path);
         if owners {
             mcp_approval.read(&settings);
             let named = settings["enabledProviders"].as_array().into_iter().flatten();
@@ -194,7 +199,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         if let Some(value) = settings.get("smallModel") {
             small_model = model_name(value, "smallModel")?;
         }
-        if let Some(value) = settings.get("hooks") {
+        if let Some(value) = settings.get("hooks").filter(|_| trust.runs_hooks_of(&path)) {
             hooks.extend(&crate::hooks::Hooks::parse(value).map_err(|e| format!("{}: hooks: {e}", path.display()))?);
         }
         if let Some(value) = settings.get("lspServers") {
@@ -221,6 +226,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         }
     }
     lsp_servers.extend(crate::plugins::lsp_layers(plugins));
+    let notices = trust.notices();
     if ["CLAUDE_CODE_DISABLE_AUTO_MEMORY", concat!(brand::env_prefix!(), "_DISABLE_AUTO_MEMORY")]
         .iter()
         .any(|key| std::env::var(key).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes")))
@@ -268,6 +274,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
                 scripts,
                 features,
                 sandbox,
+                notices,
             });
         }
     };
@@ -292,6 +299,7 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         scripts,
         features,
         sandbox,
+        notices,
     })
 }
 #[cfg(test)]

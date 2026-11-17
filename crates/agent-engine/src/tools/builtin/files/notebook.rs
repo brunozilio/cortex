@@ -53,6 +53,10 @@ impl Tool for NotebookEdit {
         crate::tools::declared_access("NotebookEdit")
     }
 
+    fn writes_to(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
+        field(input, "notebook_path").map(|path| workspace.resolve(path))
+    }
+
     fn summary(&self, input: &Value) -> String {
         field(input, "notebook_path").unwrap_or_default().to_owned()
     }

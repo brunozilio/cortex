@@ -28,10 +28,16 @@ const HARMLESS_REDIRECTS: [&str; 5] = ["2>&1", "1>&2", ">&2", "2>/dev/null", ">/
 
 pub fn hides_more(part: &str) -> bool {
     const MARKS: [&str; 7] = ["$(", "`", "<(", ">(", ">", "$'", "$\""];
-    const RUNNERS: [&str; 11] = ["bash", "sh", "zsh", "dash", "ksh", "fish", "eval", "xargs", "source", ".", "exec"];
+    const RUNNERS: [&str; 15] = [
+        "bash", "sh", "zsh", "dash", "ksh", "fish", "eval", "xargs", "source", ".", "exec", "case", "function",
+        "select", "coproc",
+    ];
     let part = without_harmless_redirects(part);
-    MARKS.iter().any(|mark| part.contains(mark))
-        || normalized(&part).split(' ').next().is_some_and(|first| RUNNERS.contains(&first))
+    let run = normalized(&part);
+    let mut words = run.split(' ');
+    let program = words.next().unwrap_or_default();
+    let defines = program.contains('(') || words.next().is_some_and(|second| second.starts_with("()"));
+    MARKS.iter().any(|mark| part.contains(mark)) || RUNNERS.contains(&program) || program.starts_with('$') || defines
 }
 
 pub fn without_harmless_redirects(part: &str) -> String {
@@ -43,25 +49,9 @@ pub fn collapsed(part: &str) -> String {
 }
 
 pub fn normalized(part: &str) -> String {
-    const WRAPPERS: [&str; 8] = ["env", "command", "builtin", "nohup", "time", "sudo", "nice", "doas"];
     let collapsed = collapsed(part);
-    let mut words = collapsed.trim_start_matches(['(', '{', '!', ' ']).split(' ').peekable();
-    let mut wrapped = false;
-    while let Some(word) = words.peek() {
-        let assignment = word
-            .split_once('=')
-            .is_some_and(|(name, _)| !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
-        if assignment || WRAPPERS.contains(word) || (wrapped && word.starts_with('-')) {
-            wrapped |= WRAPPERS.contains(word);
-            words.next();
-        } else {
-            break;
-        }
-    }
-    let Some(program) = words.next() else { return String::new() };
-    let program: String = program.chars().filter(|c| !matches!(c, '"' | '\'' | '\\')).collect();
-    let program = program.rsplit('/').next().unwrap_or_default().to_owned();
-    std::iter::once(program).chain(words.map(str::to_owned)).collect::<Vec<_>>().join(" ")
+    let words: Vec<&str> = collapsed.split(' ').collect();
+    super::unwrapped::run(&words)
 }
 
 pub fn command_matches(specifier: &str, command: &str) -> bool {

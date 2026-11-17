@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+pub use confined::Confiner;
 pub use launcher::{Launch, Launcher, OnThisMachine};
 pub use models::Models;
 pub use policy::{Policy, env_secrets};

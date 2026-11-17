@@ -69,6 +69,34 @@ fn a_project_s_tool_asks_the_first_time_even_when_bypassing_and_a_refusal_stops_
     assert!(!rig.dir.path().join("mark.txt").exists(), "a refused tool never runs");
 }
 
+fn project_tool_run(rig: &Rig) -> String {
+    let home = tempfile::tempdir().expect("home");
+    let folder = rig.dir.path().join(brand::DIR).join("tools");
+    std::fs::create_dir_all(&folder).expect("tools");
+    std::fs::write(folder.join("mark.js"), TOOL).expect("tool");
+    let answerer = answer_every_ask(rig, Decision::Allow);
+    let mut history = vec![Message::user("mark")];
+    rig.run_with(&model(), &mut history, script_tools(home.path(), rig.dir.path())).expect("run");
+    assert_eq!(answerer.join().expect("answerer"), 1, "asked once");
+    format!("{:?}", history.iter().flat_map(|message| &message.blocks).collect::<Vec<_>>())
+}
+
+#[test]
+fn a_project_s_tool_the_user_allowed_still_gets_no_files_by_default() {
+    let rig = Rig::new(PermissionMode::Ask);
+    let said = project_tool_run(&rig);
+    assert!(!rig.dir.path().join("mark.txt").exists(), "allowed to run, not to write");
+    assert!(said.contains("scripts.files"), "the script is told which setting grants it: {said}");
+}
+
+#[test]
+fn a_project_s_tool_writes_once_the_owner_s_settings_grant_files() {
+    let mut rig = Rig::new(PermissionMode::Ask);
+    rig.workspace.policy.scripts.project.files = true;
+    project_tool_run(&rig);
+    assert_eq!(std::fs::read_to_string(rig.dir.path().join("mark.txt")).expect("mark"), "marked");
+}
+
 #[test]
 fn the_user_s_own_tool_runs_without_asking_and_its_log_reaches_the_screen() {
     let rig = Rig::new(PermissionMode::Bypass);

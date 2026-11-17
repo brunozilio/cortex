@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use super::script_tool::ScriptAccess;
+use super::Confiner;
+use super::script_tool::{Origin, ScriptAccess};
 
 pub struct Described {
     pub name: Option<String>,
@@ -29,11 +30,23 @@ pub fn describe(path: &Path) -> Option<Described> {
     })
 }
 
-pub fn render(path: &Path, args: &str, cwd: &Path, access: ScriptAccess) -> Result<String, String> {
+#[derive(Debug, Clone)]
+pub struct Granted {
+    pub access: ScriptAccess,
+    pub origin: Origin,
+    pub confine: Confiner,
+}
+
+pub fn render(path: &Path, args: &str, cwd: &Path, granted: &Granted) -> Result<String, String> {
     let source = std::fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let stop = Arc::new(AtomicBool::new(false));
-    let host: Arc<dyn script::Host> =
-        Arc::new(super::script_io::StandaloneHost { cwd: cwd.to_path_buf(), access, stop: Arc::clone(&stop) });
+    let host: Arc<dyn script::Host> = Arc::new(super::script_io::StandaloneHost {
+        cwd: cwd.to_path_buf(),
+        access: granted.access,
+        origin: granted.origin,
+        confine: granted.confine.clone(),
+        stop: Arc::clone(&stop),
+    });
     let data = json!({ "cwd": cwd.display().to_string(), "args": args, "base": path.parent().map(|dir| dir.display().to_string()) });
     let shown = path.display().to_string();
     let value = script::run_within(

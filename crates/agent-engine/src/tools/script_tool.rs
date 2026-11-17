@@ -41,6 +41,57 @@ impl ScriptAccess {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Origin {
+    Owner,
+    Project,
+}
+
+impl Origin {
+    pub fn trusted(trusted: bool) -> Self {
+        if trusted { Self::Owner } else { Self::Project }
+    }
+
+    pub fn of_script(shown: &str, home: Option<&Path>) -> Self {
+        let owned = |home: &Path| {
+            let folder = home.join(brand::DIR);
+            let real = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+            real(Path::new(shown)).starts_with(real(&folder))
+        };
+        Self::trusted(shown.starts_with(crate::hooks::BUILTIN_SCRIPT) || home.is_some_and(owned))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ScriptGrants {
+    pub owner: ScriptAccess,
+    #[serde(default = "ScriptAccess::none")]
+    pub project: ScriptAccess,
+}
+
+impl Default for ScriptGrants {
+    fn default() -> Self {
+        Self { owner: ScriptAccess::default(), project: ScriptAccess::none() }
+    }
+}
+
+impl ScriptGrants {
+    pub fn none() -> Self {
+        Self { owner: ScriptAccess::none(), project: ScriptAccess::none() }
+    }
+
+    pub fn of(&self, origin: Origin) -> ScriptAccess {
+        match origin {
+            Origin::Owner => self.owner,
+            Origin::Project => self.project,
+        }
+    }
+
+    pub fn layered(self, value: &Value, owners: bool) -> Result<Self, String> {
+        Ok(Self { owner: self.owner.layered(value, owners)?, project: self.project.layered(value, owners)? })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ScriptTool {
     pub spec: ToolSpec,

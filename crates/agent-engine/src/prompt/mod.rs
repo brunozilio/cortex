@@ -4,6 +4,7 @@ mod instruction_files;
 pub(crate) mod markdown;
 pub mod owner_settings;
 pub mod permissions;
+mod project_trust;
 pub mod rules;
 pub mod settings;
 pub mod styles;

@@ -43,6 +43,13 @@ pub struct AuthServer {
     pub registration_endpoint: Option<String>,
     #[serde(default)]
     pub scopes_supported: Vec<String>,
+    #[serde(skip)]
+    pub resource_scopes: Vec<String>,
+}
+
+pub fn resource_scopes(resource_metadata: &Value) -> Vec<String> {
+    let listed = resource_metadata["scopes_supported"].as_array().into_iter().flatten();
+    listed.filter_map(Value::as_str).filter(|scope| !scope.is_empty()).map(str::to_owned).collect()
 }
 
 #[derive(Debug)]
@@ -66,8 +73,8 @@ impl Authorize<'_> {
             ("state", self.state.to_owned()),
             ("resource", self.resource.to_owned()),
         ];
-        if !self.server.scopes_supported.is_empty() {
-            pairs.push(("scope", self.server.scopes_supported.join(" ")));
+        if !self.server.resource_scopes.is_empty() {
+            pairs.push(("scope", self.server.resource_scopes.join(" ")));
         }
         let joiner = if self.server.authorization_endpoint.contains('?') { '&' } else { '?' };
         format!("{}{joiner}{}", self.server.authorization_endpoint, form(&pairs))
@@ -89,7 +96,7 @@ fn encode(text: &str) -> String {
 
 pub fn endpoint_ok(url: &str) -> bool {
     let Some(host) = crate::permission_rules::site(url) else { return false };
-    let loopback = host == "localhost" || host == "::1" || host.starts_with("127.");
+    let loopback = host == "localhost" || host.parse::<std::net::IpAddr>().is_ok_and(|address| address.is_loopback());
     match url.split_once("://").map(|(scheme, _)| scheme.to_ascii_lowercase()).as_deref() {
         Some("https") => loopback || !crate::permission_rules::is_private(&host),
         Some("http") => loopback,
@@ -168,7 +175,8 @@ mod tests {
             authorization_endpoint: "https://auth.test/authorize".into(),
             token_endpoint: "https://auth.test/token".into(),
             registration_endpoint: None,
-            scopes_supported: vec!["read".into(), "write".into()],
+            scopes_supported: vec!["read".into(), "write".into(), "admin".into()],
+            resource_scopes: vec!["read".into(), "write".into()],
         };
         let url = Authorize {
             server: &server,
@@ -184,6 +192,26 @@ mod tests {
             "https://auth.test/authorize?response_type=code&client_id=c1&redirect_uri=http%3A%2F%2F127.0.0.1%3A5555%2Fcallback\
              &code_challenge=abc&code_challenge_method=S256&state=s&resource=https%3A%2F%2Fmcp.test%2Fmcp&scope=read%20write"
         );
+    }
+
+    #[test]
+    fn only_the_scopes_the_resource_asks_for_are_requested_never_all_the_server_supports() {
+        let advertised = json!({
+            "authorization_endpoint": "https://auth.test/authorize",
+            "token_endpoint": "https://auth.test/token",
+            "scopes_supported": ["read", "write", "admin"],
+            "resource_scopes": ["admin"],
+        });
+        let mut server: AuthServer = serde_json::from_value(advertised).expect("metadata");
+        let url = |server: &AuthServer| {
+            Authorize { server, client_id: "c1", redirect_uri: "r", challenge: "abc", state: "s", resource: "x" }.url()
+        };
+        assert!(!url(&server).contains("scope="), "nothing asked for, nothing requested: {}", url(&server));
+
+        let resource = json!({ "authorization_servers": ["https://auth.test"], "scopes_supported": ["read", 7, ""] });
+        server.resource_scopes = resource_scopes(&resource);
+        assert!(url(&server).ends_with("&scope=read"), "{}", url(&server));
+        assert!(resource_scopes(&json!({ "authorization_servers": [] })).is_empty());
     }
 
     #[test]
@@ -225,6 +253,17 @@ mod safety_tests {
         ] {
             assert!(!endpoint_ok(refused), "{refused}");
         }
+    }
+
+    #[test]
+    fn a_name_that_only_starts_like_a_loopback_address_is_not_this_computer() {
+        for refused in ["http://127.example.com/token", "http://127.0.0.1.evil.test/token", "http://127.1/token"] {
+            assert!(!endpoint_ok(refused), "{refused}");
+        }
+        for allowed in ["http://127.0.0.1/token", "http://127.8.9.10:99/token", "http://[::1]:8080/token"] {
+            assert!(endpoint_ok(allowed), "{allowed}");
+        }
+        assert!(endpoint_ok("https://127.example.com/token"), "a public name over https is as good as any other");
     }
 
     #[test]

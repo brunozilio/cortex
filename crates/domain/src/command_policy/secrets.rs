@@ -1,9 +1,10 @@
+use super::wildcards;
 use crate::permission_rules::normalized;
 
-const CONTENT_READERS: [&str; 30] = [
+const CONTENT_READERS: [&str; 32] = [
     "cat", "head", "tail", "less", "more", "bat", "grep", "egrep", "fgrep", "rg", "base64", "xxd", "od", "hexdump",
     "strings", "sed", "awk", "cut", "sort", "nl", "tac", "cp", "scp", "curl", "wget", "nc", "jq", "diff", "uniq",
-    "openssl",
+    "openssl", "source", ".",
 ];
 
 const KEY_FILES: [&str; 10] = [
@@ -33,8 +34,21 @@ pub fn exposes(part: &str) -> Option<String> {
     if !CONTENT_READERS.contains(&program.as_str()) {
         return None;
     }
-    let file = rest.iter().map(|word| word.trim_start_matches('@')).find(|word| secret_file(word))?;
-    Some(format!("it reads {file}, which holds secrets"))
+    let file = rest.iter().map(|word| word.trim_start_matches('@')).find(|word| names_a_secret(word))?;
+    Some(format!("it reads {file}, which holds secrets or could match a file that does"))
+}
+
+fn names_a_secret(word: &str) -> bool {
+    let unescaped: String = word.chars().filter(|c| *c != '\\').collect();
+    wildcards::alternatives(&unescaped).iter().any(|word| {
+        let name = word.rsplit('/').next().unwrap_or(word);
+        if wildcards::has_wildcards(name) { could_be_secret(name) } else { secret_file(name) }
+    })
+}
+
+fn could_be_secret(name: &str) -> bool {
+    let fixed = KEY_FILES.iter().chain([".env", ".env.*"].iter()).any(|secret| wildcards::could_match(name, secret));
+    fixed || KEY_ENDINGS.iter().any(|ending| wildcards::could_match(name, &format!("*{ending}")))
 }
 
 fn first(part: &str) -> String {

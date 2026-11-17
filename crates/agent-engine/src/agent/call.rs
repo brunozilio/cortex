@@ -121,7 +121,7 @@ impl Agent<'_> {
         (self.emit)(EngineEvent::Tasks(tasks));
     }
 
-    fn concurrent(&self, name: &str, input: &Value) -> bool {
+    pub(super) fn concurrent(&self, name: &str, input: &Value) -> bool {
         const SERIAL: [&str; 8] = [
             ASK_TOOL,
             EXIT_PLAN_TOOL,

@@ -1,13 +1,15 @@
 mod describing;
+mod readers;
 mod reading;
 mod secrets;
 mod sharing;
 mod sign_in;
+mod wildcards;
 
 pub use sign_in::sign_in_refused;
 
 use crate::destructive::words;
-use crate::permission_rules::{hides_more, normalized, split_command};
+use crate::permission_rules::{hides_more, normalized, split_command, without_harmless_redirects};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandClass {
@@ -45,9 +47,11 @@ pub fn classify(command: &str, git: &GitFacts<'_>) -> CommandClass {
 }
 
 pub fn only_reads(part: &str) -> bool {
-    let words = words(&normalized(part));
+    let written = without_harmless_redirects(part);
+    let (_, balanced) = split_command(&written);
+    let words = words(&written);
     let words: Vec<&str> = words.iter().map(String::as_str).collect();
-    !hides_more(part) && (reading::only_reads(&words) || describing::only_describes(part))
+    balanced && !hides_more(part) && (reading::only_reads(&written, &words) || describing::only_describes(part))
 }
 
 #[cfg(test)]

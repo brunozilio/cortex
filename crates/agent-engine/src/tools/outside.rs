@@ -28,17 +28,60 @@ fn settled(path: &Path) -> PathBuf {
     out
 }
 
+const OUTSIDE_THE_PROJECT: &str = "This writes outside the project and the folders you added:";
+const GIT_FOLDER: &str =
+    "This writes inside the repository's .git folder, where hooks and configuration can run commands:";
+const OWN_CONFIGURATION: &str =
+    concat!("This changes ", brand::name!(), "'s own configuration, which can grant permissions and run code:");
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuardedWrite {
+    pub path: PathBuf,
+    pub why: &'static str,
+}
+
+fn protected(inside: &Path) -> Option<&'static str> {
+    inside.components().find_map(|part| {
+        let name = part.as_os_str().to_string_lossy();
+        if name.eq_ignore_ascii_case(".git") {
+            Some(GIT_FOLDER)
+        } else if name.eq_ignore_ascii_case(brand::DIR) {
+            Some(OWN_CONFIGURATION)
+        } else {
+            None
+        }
+    })
+}
+
 impl Workspace {
     fn project_root(&self) -> PathBuf {
         let cwd = settled(&self.cwd);
         cwd.ancestors().find(|dir| dir.join(".git").exists()).map_or_else(|| cwd.clone(), Path::to_path_buf)
     }
 
+    fn settled_here(&self, path: &Path) -> PathBuf {
+        settled(&if path.is_absolute() { path.to_path_buf() } else { self.cwd.join(path) })
+    }
+
+    fn root_holding(&self, settled_path: &Path) -> Option<PathBuf> {
+        std::iter::once(self.project_root())
+            .chain(self.added_dirs.iter().map(|dir| settled(dir)))
+            .find(|root| settled_path.starts_with(root))
+    }
+
     pub fn may_read(&self, path: &Path) -> bool {
-        let path = settled(&if path.is_absolute() { path.to_path_buf() } else { self.cwd.join(path) });
-        path.starts_with(self.project_root())
-            || self.added_dirs.iter().any(|dir| path.starts_with(settled(dir)))
+        let path = self.settled_here(path);
+        self.root_holding(&path).is_some()
             || path.starts_with(settled(&super::persisted::results_dir(&self.session_id)))
+    }
+
+    pub fn guarded_write(&self, path: &Path) -> Option<GuardedWrite> {
+        let path = self.settled_here(path);
+        let why = match self.root_holding(&path) {
+            None => OUTSIDE_THE_PROJECT,
+            Some(root) => path.strip_prefix(&root).ok().and_then(protected)?,
+        };
+        Some(GuardedWrite { path, why })
     }
 
     pub fn outside<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Option<PathBuf> {

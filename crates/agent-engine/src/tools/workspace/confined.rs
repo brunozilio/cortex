@@ -5,7 +5,23 @@ use domain::sandbox::Places;
 
 use super::Workspace;
 
+#[derive(Debug, Clone, Default)]
+pub struct Confiner {
+    launch: super::Launch,
+    confinement: Option<platform::sandbox::Confinement>,
+}
+
+impl Confiner {
+    pub fn confined(&self, command: Command) -> Command {
+        self.launch.0.launch(command, self.confinement.as_ref())
+    }
+}
+
 impl Workspace {
+    pub fn confiner(&self) -> Confiner {
+        Confiner { launch: self.services.launch.clone(), confinement: self.confinement() }
+    }
+
     pub fn confined(&self, command: Command) -> Command {
         self.services.launch.0.launch(command, self.confinement().as_ref())
     }

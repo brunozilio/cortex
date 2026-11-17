@@ -6,6 +6,7 @@ use serde_json::Value;
 
 use super::{ServerSpec, parse_config};
 use crate::plugins::Plugin;
+use crate::tools::script_tool::Origin;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct McpSources {
@@ -13,7 +14,7 @@ pub struct McpSources {
     pub plugins: Vec<Plugin>,
     pub approval: McpApproval,
     #[serde(default)]
-    pub scripts: crate::tools::script_tool::ScriptAccess,
+    pub scripts: crate::tools::script_tool::ScriptGrants,
 }
 
 pub fn configured(cwd: &Path, sources: &McpSources) -> Vec<ServerSpec> {
@@ -57,12 +58,11 @@ fn origins(cwd: &Path, sources: &McpSources) -> Vec<(McpOrigin, ServerSpec)> {
         .map(|home| read(&home.join(concat!(brand::dir!(), "/mcp.json")), "the user's"))
         .unwrap_or_default();
     let mut found: Vec<(McpOrigin, ServerSpec)> = Vec::new();
-    let project_scripts = super::script_server::found(&cwd.join(brand::DIR).join("mcp"), cwd, sources.scripts);
-    let user_scripts = sources
-        .home
-        .as_ref()
-        .map(|home| super::script_server::found(&home.join(brand::DIR).join("mcp"), cwd, sources.scripts))
-        .unwrap_or_default();
+    let scripts_in = |root: &Path, origin: Origin| {
+        super::script_server::found(&root.join(brand::DIR).join("mcp"), cwd, sources.scripts.of(origin), origin)
+    };
+    let project_scripts = scripts_in(cwd, Origin::Project);
+    let user_scripts = sources.home.as_ref().map(|home| scripts_in(home, Origin::Owner)).unwrap_or_default();
     let project = project.into_iter().chain(project_scripts);
     let user = user.into_iter().chain(user_scripts);
     let own = project.map(|s| (McpOrigin::Project, s)).chain(user.map(|s| (McpOrigin::User, s)));
@@ -230,6 +230,31 @@ mod tests {
             servers(&request, &sources),
             [stdio("jira", "jira-mcp", &[]), stdio("notes", "notes-mcp", &[("KEY", "dflt")])],
             "the approved project server wins its name; reserved names never start"
+        );
+    }
+
+    #[test]
+    fn a_project_s_script_server_gets_the_project_s_script_access_and_the_user_s_gets_the_owner_s() {
+        use crate::tools::script_tool::{Origin, ScriptAccess};
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        let server = "export default { tools: {} };";
+        write(repo.path().join(concat!(brand::dir!(), "/mcp/theirs.js")), server);
+        write(home.path().join(concat!(brand::dir!(), "/mcp/mine.js")), server);
+        let sources = McpSources { home: Some(home.path().to_path_buf()), ..McpSources::default() };
+        let granted: Vec<(String, ScriptAccess, Origin)> = origins(repo.path(), &sources)
+            .into_iter()
+            .filter_map(|(_, server)| match server {
+                ServerSpec::Script { name, access, origin, .. } => Some((name, access, origin)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            granted,
+            [
+                ("theirs".to_owned(), ScriptAccess::none(), Origin::Project),
+                ("mine".to_owned(), ScriptAccess::default(), Origin::Owner),
+            ]
         );
     }
 }

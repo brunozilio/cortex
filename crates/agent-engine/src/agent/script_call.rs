@@ -9,7 +9,7 @@ use super::Agent;
 use super::tasks::Tasks;
 use crate::model::ToolSpec;
 use crate::tools::script_bridge::{Bridge, Request};
-use crate::tools::script_tool::ScriptTool;
+use crate::tools::script_tool::{Origin, ScriptTool};
 use crate::tools::skill::FoundSkill;
 use crate::tools::{Access, Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message};
@@ -20,6 +20,7 @@ struct Script<'a> {
     name: &'a str,
     path: &'a str,
     source: &'a str,
+    origin: Origin,
 }
 
 thread_local! {
@@ -77,10 +78,7 @@ impl Agent<'_> {
     }
 
     fn approved(&self, name: &str, summary: &str, input: &Value) -> bool {
-        matches!(
-            self.workspace.ruling(name, summary, input).or_else(|| self.remembered_rule(name, summary, input)),
-            Some((domain::permission_rules::RuleKind::Allow, _))
-        )
+        matches!(self.rule_for(name, summary, input, false), Some((domain::permission_rules::RuleKind::Allow, _)))
     }
 
     pub(super) fn project_skill<'t>(&self, tool: &'t dyn Tool, input: &Value) -> Option<&'t FoundSkill> {
@@ -122,7 +120,8 @@ impl Agent<'_> {
 
     fn run_script(&self, id: &str, tool: &ScriptTool, input: &Value, parent: &[Message]) -> Outcome {
         let path = tool.path.display().to_string();
-        let script = Script { name: &tool.spec.name, path: &path, source: &tool.source };
+        let origin = Origin::trusted(tool.trusted);
+        let script = Script { name: &tool.spec.name, path: &path, source: &tool.source, origin };
         self.run_js(id, &script, input, parent, None)
     }
 
@@ -136,7 +135,7 @@ impl Agent<'_> {
     ) -> Outcome {
         let path = crate::tools::declared_path(name);
         let Some(source) = content::source(&path) else { return builtin(input) };
-        let script = Script { name, path: &path, source: &source };
+        let script = Script { name, path: &path, source: &source, origin: Origin::Owner };
         self.run_js(id, &script, input, parent, Some(builtin))
     }
 
@@ -177,7 +176,7 @@ impl Agent<'_> {
                         let _ = request.reply.send(answer);
                     }
                     Ok(request) => {
-                        let answer = self.serve(id, &request.function, request.arguments, parent);
+                        let answer = self.serve(id, script.origin, &request.function, request.arguments, parent);
                         let _ = request.reply.send(answer);
                     }
                     Err(RecvTimeoutError::Timeout) if !running.is_finished() => {}
@@ -198,8 +197,15 @@ impl Agent<'_> {
         }
     }
 
-    fn serve(&self, id: &str, function: &str, arguments: Value, parent: &[Message]) -> Result<Value, String> {
-        let access = self.workspace.policy.scripts;
+    fn serve(
+        &self,
+        id: &str,
+        origin: Origin,
+        function: &str,
+        arguments: Value,
+        parent: &[Message],
+    ) -> Result<Value, String> {
+        let access = self.workspace.policy.scripts.of(origin);
         let text = |key: &str| arguments.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
         match function {
             "tool" => {
@@ -229,9 +235,10 @@ impl Agent<'_> {
                     .map_err(|error| format!("{}: {error}", path.display()))
             }
             "exec" if access.processes => {
-                crate::tools::script_io::exec(&self.workspace.cwd, &arguments, &self.workspace.stop)
+                let confine = self.workspace.confiner();
+                crate::tools::script_io::exec(&self.workspace.cwd, &arguments, &self.workspace.stop, &confine)
             }
-            "fetch" if access.network => crate::tools::script_io::fetch(&arguments),
+            "fetch" if access.network => crate::tools::script_io::fetch(&arguments, origin),
             "readFile" | "writeFile" => Err("scripts may not touch files here (settings: scripts.files)".into()),
             "exec" => Err("scripts may not start processes here (settings: scripts.processes)".into()),
             "fetch" => Err("scripts may not reach the network here (settings: scripts.network)".into()),

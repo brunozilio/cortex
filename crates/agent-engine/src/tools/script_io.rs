@@ -5,15 +5,19 @@ use std::time::Duration;
 use platform::bounded::{Bounds, Ended};
 use serde_json::{Value, json};
 
-use crate::model::http::{Http, NetHttp};
+use super::Confiner;
+use super::script_tool::{Origin, ScriptAccess};
+use crate::model::http::{Http, NetHttp, Response};
+use crate::tools::builtin::web::reach;
 
 const OUTPUT: usize = 1 << 20;
+pub const FETCHED: u64 = 5 << 20;
 
-pub fn exec(cwd: &Path, arguments: &Value, stop: &AtomicBool) -> Result<Value, String> {
+pub fn exec(cwd: &Path, arguments: &Value, stop: &AtomicBool, confine: &Confiner) -> Result<Value, String> {
     let command =
         arguments["command"].as_str().filter(|command| !command.trim().is_empty()).ok_or("ctx.exec needs a command")?;
     let seconds = arguments["timeout"].as_u64().unwrap_or(120);
-    let mut process = platform::script_shell(command);
+    let mut process = confine.confined(platform::script_shell(command));
     process.current_dir(cwd);
     let input = arguments["input"].as_str().map(|text| text.as_bytes().to_vec());
     let bounds = Bounds { timeout: Duration::from_secs(seconds), max_output: OUTPUT, stop, input };
@@ -26,7 +30,11 @@ pub fn exec(cwd: &Path, arguments: &Value, stop: &AtomicBool) -> Result<Value, S
     Ok(json!({ "code": code, "stdout": done.stdout, "stderr": done.stderr }))
 }
 
-pub fn fetch(arguments: &Value) -> Result<Value, String> {
+pub fn fetch(arguments: &Value, origin: Origin) -> Result<Value, String> {
+    fetch_over(&NetHttp, arguments, origin)
+}
+
+pub fn fetch_over(web: &dyn Http, arguments: &Value, origin: Origin) -> Result<Value, String> {
     let url = arguments["url"].as_str().ok_or("ctx.fetch needs a url")?;
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err(format!("{url} is not an http(s) address"));
@@ -37,18 +45,31 @@ pub fn fetch(arguments: &Value) -> Result<Value, String> {
             headers.iter().map(|(key, value)| (key.clone(), value.as_str().unwrap_or_default().to_owned())).collect()
         })
         .unwrap_or_default();
-    let response = match arguments["body"].as_str() {
-        Some(body) => NetHttp.post(url, &headers, body),
-        None => NetHttp.get(url, &headers),
-    }?;
+    let body = arguments["body"].as_str();
+    let mut response = match origin {
+        Origin::Owner => web.streamed(url, &headers, body)?,
+        Origin::Project => public(web, url, &headers, body)?,
+    };
     let status = response.status;
-    let body = response.text_stopped(&AtomicBool::new(false)).map_err(|error| error.to_string())?;
-    Ok(json!({ "status": status, "body": body }))
+    let bytes = crate::model::web_client::read_capped(response.body.as_mut(), FETCHED)
+        .map_err(|error| format!("Could not read {url}: {error}"))?;
+    Ok(json!({ "status": status, "body": String::from_utf8_lossy(&bytes) }))
+}
+
+fn public(web: &dyn Http, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
+    let Some(body) = body else { return reach::fetch(web, url, headers).map(|reached| reached.response) };
+    let url = reach::secure(url);
+    match reach::refusal(&url, web) {
+        Some(why) => Err(why),
+        None => web.one_hop(&url, headers, Some(body)),
+    }
 }
 
 pub struct StandaloneHost {
     pub cwd: std::path::PathBuf,
-    pub access: super::script_tool::ScriptAccess,
+    pub access: ScriptAccess,
+    pub origin: Origin,
+    pub confine: Confiner,
     pub stop: std::sync::Arc<AtomicBool>,
 }
 
@@ -77,8 +98,8 @@ impl script::Host for StandaloneHost {
                     .map(|()| Value::Null)
                     .map_err(|error| format!("{}: {error}", path.display()))
             }
-            "exec" if self.access.processes => exec(&self.cwd, &arguments, &self.stop),
-            "fetch" if self.access.network => fetch(&arguments),
+            "exec" if self.access.processes => exec(&self.cwd, &arguments, &self.stop, &self.confine),
+            "fetch" if self.access.network => fetch(&arguments, self.origin),
             "readFile" | "writeFile" => Err("scripts may not touch files here (settings: scripts.files)".into()),
             "exec" => Err("scripts may not start processes here (settings: scripts.processes)".into()),
             "fetch" => Err("scripts may not reach the network here (settings: scripts.network)".into()),
@@ -86,3 +107,7 @@ impl script::Host for StandaloneHost {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "script_io_tests.rs"]
+mod tests;

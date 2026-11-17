@@ -79,6 +79,7 @@ pub fn permissions(request: &PromptRequest) -> Result<domain::permission_rules::
         rules: settings.permissions.listed(),
         added_dirs: settings.added_dirs,
         hooks: settings.hooks.listed(),
+        notices: settings.notices,
     })
 }
 

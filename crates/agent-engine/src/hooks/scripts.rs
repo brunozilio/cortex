@@ -26,17 +26,21 @@ pub fn source(command: &str) -> Result<String, String> {
 }
 
 impl Hooks {
-    pub fn gathered(home: Option<&Path>, roots: &[PathBuf]) -> Self {
+    pub fn gathered(home: Option<&Path>, roots: &[PathBuf], runs: &dyn Fn(&Path) -> bool) -> Self {
         let user_hooks = home.map(|home| home.join(brand::DIR).join("hooks"));
         let mut hooks = Self::from_builtin(&content::builtin_files("hooks/"), user_hooks.as_deref());
         for root in roots {
-            hooks.extend(&Self::from_scripts(&root.join("hooks")));
+            hooks.extend(&Self::from_scripts_that(&root.join("hooks"), runs));
         }
         hooks
     }
 
     pub fn from_scripts(folder: &Path) -> Self {
-        let files = scripts_in(folder).into_iter().filter_map(|file| {
+        Self::from_scripts_that(folder, &|_| true)
+    }
+
+    fn from_scripts_that(folder: &Path, runs: &dyn Fn(&Path) -> bool) -> Self {
+        let files = scripts_in(folder).into_iter().filter(|file| runs(file)).filter_map(|file| {
             let source = std::fs::read_to_string(&file).ok()?;
             Some((file.display().to_string(), source))
         });

@@ -10,10 +10,10 @@ fn commands_that_only_look_inside_the_project_are_read_only() {
         "ls -la",
         "git status",
         "git log --oneline -5",
-        "git diff HEAD~1 -- src/lib.rs",
+        "git diff HEAD -- src/lib.rs",
         "cat src/main.rs | grep fn | wc -l",
         "rg -n 'todo' crates && git branch -a",
-        "find . -name '*.rs'",
+        "find . -name main.rs",
         "pwd; which cargo",
     ] {
         assert_eq!(plain(command), CommandClass::ReadOnly, "{command}");
@@ -43,6 +43,136 @@ fn writing_reaching_outside_or_hiding_a_command_is_left_to_the_usual_checks() {
     }
 }
 
+fn read_only(commands: &[&str]) -> Vec<String> {
+    commands.iter().filter(|command| plain(command) == CommandClass::ReadOnly).map(|c| (*c).to_owned()).collect()
+}
+
+#[test]
+fn a_changed_environment_or_a_wrapper_is_never_read_only() {
+    let slipped = read_only(&[
+        "LD_PRELOAD=./x.so ls",
+        "PATH=./bin ls",
+        "GIT_EXTERNAL_DIFF=./x git diff",
+        "sudo cat notes.txt",
+        "env ls",
+        "nice ls",
+        "doas ls",
+        "command ls",
+        "builtin pwd",
+        "nohup ls",
+        "time ls",
+        "./ls",
+        "bin/ls -la",
+        "( ls )",
+        "! ls",
+    ]);
+    assert!(slipped.is_empty(), "read-only by mistake: {slipped:?}");
+}
+
+#[test]
+fn a_flag_that_writes_or_runs_a_program_is_never_read_only() {
+    let slipped = read_only(&[
+        "rg --pre ./script pattern",
+        "sort --output=out.txt x",
+        "sort -o out.txt x",
+        "sort --compress-program=./x a",
+        "rg -z todo",
+        "rg --hostname-bin=./x todo",
+        "uniq in out",
+        "tree -o out",
+        "git grep --open-files-in-pager=cmd x",
+        "git grep -Ocmd x",
+        "git diff --ext-diff",
+        "git log --output=log.txt",
+        "git branch new-branch",
+        "git tag -l -d v1",
+        "git tag v2",
+        "file -C -m magic",
+        "tail -f notes.txt",
+        "ls --unknown-flag",
+        "jq env",
+        "find . -fprint out",
+        "find . -newerXY",
+    ]);
+    assert!(slipped.is_empty(), "read-only by mistake: {slipped:?}");
+}
+
+#[test]
+fn a_word_the_shell_would_expand_or_that_leaves_the_project_is_never_read_only() {
+    let slipped = read_only(&[
+        "cat $HOME/.aws/config",
+        "cat \\/etc/hosts",
+        "cat .en?",
+        "cat *.txt",
+        "cat [a-z]otes.txt",
+        "cat {a,b}.txt",
+        "cat ~/notes.md",
+        "cat x~",
+        "cat \"/etc/hosts\"",
+        "cat '/etc'/hosts",
+        "cat </etc/hosts",
+        "cat src/../../x",
+        "grep -r key --include=/etc/x",
+        "head -n5 \"../x\"",
+        "git diff HEAD~1",
+        "find . -name '*.rs'",
+        "ls 'unclosed",
+    ]);
+    assert!(slipped.is_empty(), "read-only by mistake: {slipped:?}");
+}
+
+#[test]
+fn only_a_listed_reader_may_describe_itself_without_asking() {
+    let slipped = read_only(&["docker --version", "cargo --help", "deploy --help", "X=1 ls --help", "./ls --version"]);
+    assert!(slipped.is_empty(), "read-only by mistake: {slipped:?}");
+    let cmd = brand::COMMAND;
+    for command in ["ls --help".to_owned(), "git --version".to_owned(), format!("{cmd} --version")] {
+        assert_eq!(plain(&command), CommandClass::ReadOnly, "{command}");
+    }
+}
+
+#[test]
+fn a_listed_reader_with_listed_flags_and_plain_words_is_read_only() {
+    for command in [
+        "ls",
+        "ls -la src",
+        "ls -1 --color=never",
+        "cat -n notes.txt",
+        "head -5 notes.txt",
+        "head -n 5 notes.txt",
+        "tail -n20 notes.txt 2>/dev/null",
+        "wc -l src/main.rs",
+        "grep -rn --include=lib.rs \"fn main\" src",
+        "grep -A3 -B 2 -e todo notes.txt",
+        "cut -d: -f1 notes.txt",
+        "diff -u a.txt b.txt",
+        "du -sh src",
+        "stat notes.txt",
+        "find . -name main.rs -type f",
+        "find src -maxdepth 2 -iname readme.md",
+        "git status --short",
+        "git log --oneline -5",
+        "git log -n 3 --stat",
+        "git diff --cached -- src/lib.rs",
+        "git show HEAD --stat",
+        "git blame -L 1,5 src/lib.rs",
+        "git grep -n todo",
+        "git ls-files -o --exclude-standard",
+        "git rev-parse --abbrev-ref HEAD",
+        "git branch -a",
+        "git branch --show-current",
+        "git tag --list",
+        "git remote -v",
+        "pwd; which cargo",
+        "date -u +%Y-%m-%d",
+        "sort -rn notes.txt",
+        "rg -n 'todo' crates",
+        "rg --files -g Cargo.toml",
+    ] {
+        assert_eq!(plain(command), CommandClass::ReadOnly, "{command}");
+    }
+}
+
 #[test]
 fn printing_secrets_is_refused_whatever_else_the_command_does() {
     for command in [
@@ -59,6 +189,37 @@ fn printing_secrets_is_refused_whatever_else_the_command_does() {
         assert!(matches!(plain(command), CommandClass::Forbidden(_)), "{command}: {:?}", plain(command));
     }
     for command in ["ls .env", "ls -a", "env CARGO_TERM_COLOR=always cargo test", "cat .env.example", "git status"] {
+        assert!(!matches!(plain(command), CommandClass::Forbidden(_)), "{command}");
+    }
+}
+
+#[test]
+fn a_wildcard_that_could_name_a_secret_file_is_refused_like_the_file_itself() {
+    for command in [
+        "cat .env*",
+        "cat .en?",
+        "cat ~/.ssh/id_*",
+        "cat .e[n]v",
+        "head -3 config/*.pem",
+        "grep KEY .env.*",
+        "cat .{env,envrc}",
+        "cat .en\\v",
+        "cat secrets.j*",
+        "cat *",
+    ] {
+        assert!(matches!(plain(command), CommandClass::Forbidden(_)), "{command}: {:?}", plain(command));
+    }
+    for command in ["cat *.txt", "cat src/*.rs", "grep -r key docs/*.md", "cat notes.{md,txt}", "ls .env*"] {
+        assert!(!matches!(plain(command), CommandClass::Forbidden(_)), "{command}");
+    }
+}
+
+#[test]
+fn loading_a_secret_file_into_the_shell_is_refused_like_printing_it() {
+    for command in ["source .env", ". .env", ". ./config/.env.production && cargo run", "source ~/.ssh/id_rsa"] {
+        assert!(matches!(plain(command), CommandClass::Forbidden(_)), "{command}: {:?}", plain(command));
+    }
+    for command in ["source venv/bin/activate", ". ./setup.sh", "source .env.example"] {
         assert!(!matches!(plain(command), CommandClass::Forbidden(_)), "{command}");
     }
 }
@@ -142,8 +303,8 @@ fn asking_what_a_program_is_or_how_to_use_it_only_reads() {
         "command -v github-mcp-server".to_owned(),
         "command -v github-mcp-server || true".to_owned(),
         "command -v gh docker".to_owned(),
-        "docker --version".to_owned(),
-        "cargo --help".to_owned(),
+        "grep --version".to_owned(),
+        "ls --help".to_owned(),
         format!("{cmd} mcp list"),
         format!("{cmd} mcp add --help && {cmd} mcp remove --help"),
     ] {
@@ -151,6 +312,8 @@ fn asking_what_a_program_is_or_how_to_use_it_only_reads() {
     }
     for command in [
         "./deploy.sh --help".to_owned(),
+        "docker --version".to_owned(),
+        "cargo --help".to_owned(),
         "/tmp/tool --version".to_owned(),
         "npx create-thing --version".to_owned(),
         "docker run --help".to_owned(),

@@ -27,6 +27,7 @@ pub enum ServerSpec {
         path: std::path::PathBuf,
         cwd: std::path::PathBuf,
         access: crate::tools::script_tool::ScriptAccess,
+        origin: crate::tools::script_tool::Origin,
     },
 }
 

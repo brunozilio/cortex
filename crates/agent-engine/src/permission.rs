@@ -30,7 +30,9 @@ impl Remembered {
     fn rule(tool: &str, access: Access, subject: &str) -> String {
         match access {
             Access::Edits => tool.to_owned(),
-            Access::Reads | Access::Executes | Access::ReadsOutside => format!("{tool}({subject})"),
+            Access::Reads | Access::Executes | Access::ReadsOutside | Access::EditsGuarded => {
+                format!("{tool}({subject})")
+            }
         }
     }
 
@@ -58,7 +60,7 @@ pub fn verdict(mode: PermissionMode, access: Access, tool: &str, subject: &str, 
 }
 
 pub fn refused_while_planning(access: Access) -> bool {
-    matches!(access, Access::Edits | Access::Executes)
+    matches!(access, Access::Edits | Access::Executes | Access::EditsGuarded)
 }
 
 pub fn ruled(mode: PermissionMode, access: Access, rule: Option<(RuleKind, String)>, by_mode: Verdict) -> Verdict {
@@ -127,6 +129,28 @@ mod tests {
         remembered.remember("Read", outside, "/etc/hosts");
         assert_eq!(verdict(PermissionMode::Plan, outside, "Read", "/etc/hosts", &remembered), Verdict::Allow);
         assert_eq!(verdict(PermissionMode::Ask, outside, "Read", "/etc/passwd", &remembered), Verdict::Ask, "by path");
+    }
+
+    #[test]
+    fn a_guarded_edit_is_asked_for_by_path_unless_bypassing_and_refused_while_planning() {
+        let guarded = Access::EditsGuarded;
+        let mut remembered = Remembered::default();
+        remembered.remember("Edit", Access::Edits, "a.rs");
+        for mode in [PermissionMode::Ask, PermissionMode::AcceptEdits] {
+            assert_eq!(verdict(mode, guarded, "Edit", "/p/.git/config", &remembered), Verdict::Ask, "{mode:?}");
+        }
+        assert_eq!(verdict(PermissionMode::Bypass, guarded, "Edit", "/p/.git/config", &remembered), Verdict::Allow);
+        assert!(matches!(
+            verdict(PermissionMode::Plan, guarded, "Edit", "/p/.git/config", &remembered),
+            Verdict::Deny(_)
+        ));
+        remembered.remember("Edit", guarded, "/p/.git/config");
+        let accept = PermissionMode::AcceptEdits;
+        assert_eq!(verdict(accept, guarded, "Edit", "/p/.git/config", &remembered), Verdict::Allow);
+        assert_eq!(verdict(accept, guarded, "Edit", "/p/.git/hooks/x", &remembered), Verdict::Ask, "by path");
+        let allow = Some((RuleKind::Allow, String::new()));
+        let planning = Verdict::Deny("planning".into());
+        assert_eq!(ruled(PermissionMode::Plan, guarded, allow, planning.clone()), planning);
     }
 
     #[test]

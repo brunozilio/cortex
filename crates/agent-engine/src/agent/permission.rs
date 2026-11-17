@@ -69,14 +69,17 @@ impl Agent<'_> {
         if let CommandClass::Forbidden(reason) = class {
             return self.refused(&name, reason);
         }
-        let (access, subject) = match &outside {
-            Some(path) => (Access::ReadsOutside, path.as_str()),
-            None if class == CommandClass::ReadOnly => (Access::Reads, subject),
-            None => (tool.access(), subject),
+        let guarded = self.guarded_write(tool, input);
+        let (access, subject) = match (&outside, &guarded) {
+            (Some(path), _) => (Access::ReadsOutside, path.as_str()),
+            (None, Some((path, _))) => (Access::EditsGuarded, path.as_str()),
+            (None, None) if class == CommandClass::ReadOnly => (Access::Reads, subject),
+            (None, None) => (tool.access(), subject),
         };
+        let shown = guarded.as_ref().map(|(_, shown)| shown.as_str()).or(shown);
         let mode = self.control.mode();
         let by_mode = verdict(mode, access, &name, subject, &self.control.remembered());
-        let rule = self.workspace.ruling(&name, subject, input).or_else(|| self.remembered_rule(&name, subject, input));
+        let rule = self.rule_for(&name, subject, input, guarded.is_some());
         let rule_asks = matches!(rule, Some((domain::permission_rules::RuleKind::Ask, _)));
         let original = ruled(mode, access, rule, by_mode);
         if !matches!(original, Verdict::Deny(_))
@@ -113,10 +116,7 @@ impl Agent<'_> {
             (_, Some("allow")) => Verdict::Allow,
             (verdict, _) => verdict,
         };
-        let pre_approved = matches!(
-            self.workspace.ruling_with(&self.workspace.policy.pre_approved, &name, subject, input),
-            Some((domain::permission_rules::RuleKind::Allow, _))
-        );
+        let pre_approved = self.pre_approved(&name, subject, input, guarded.is_some());
         if pre_approved && !rule_asks && !matches!(verdict, Verdict::Deny(_)) && hook_permission != Some("ask") {
             return self.went_ahead(id, tool, input);
         }

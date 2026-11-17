@@ -8,7 +8,7 @@ use platform::sync::Locked;
 use super::{Models, Policy, Tracking, Workspace};
 use crate::guard::Safety;
 use crate::tools::read_files::Freshness;
-use crate::tools::script_tool::ScriptAccess;
+use crate::tools::script_tool::ScriptGrants;
 
 fn rules(text: &str) -> PermissionRules {
     PermissionRules::default().with(RuleKind::Allow, text)
@@ -19,7 +19,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
     let policy = Policy {
         permissions: rules("Bash(git status)"),
         pre_approved: rules("Bash(cargo test)"),
-        scripts: ScriptAccess::none(),
+        scripts: ScriptGrants::none(),
         safety: None,
         sandbox: Some(domain::sandbox::Sandbox { network: false, ..Default::default() }),
         redact: Some(Arc::new(domain::redact::Known::default())),
@@ -42,7 +42,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
     assert!(fork.redact.is_some(), "a sub-agent's output is redacted like its parent's");
     assert!(fork.snapshots && fork.dependency_guard);
     assert_eq!(fork.permissions, policy.permissions);
-    assert_eq!(fork.scripts, ScriptAccess::none());
+    assert_eq!(fork.scripts, ScriptGrants::none());
     assert!(fork.pre_approved.is_empty());
     assert!(fork.safety.is_none());
 }

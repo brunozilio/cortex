@@ -9,6 +9,7 @@ mod validate;
 pub use self::brief::Briefed;
 pub use self::handlers::{command, http};
 pub use self::script_hook::script;
+pub use self::scripts::BUILTIN as BUILTIN_SCRIPT;
 use crate::tools::Workspace;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

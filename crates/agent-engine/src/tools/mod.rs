@@ -38,7 +38,7 @@ use serde_json::Value;
 
 pub use llm_providers::web_search::WEB_SEARCH;
 pub use lsp::Lsp;
-pub use workspace::{Launch, Launcher, Network, OnThisMachine, Verification, Workspace, env_secrets};
+pub use workspace::{Confiner, Launch, Launcher, Network, OnThisMachine, Verification, Workspace, env_secrets};
 
 use crate::model::ToolSpec;
 
@@ -48,6 +48,7 @@ pub enum Access {
     Edits,
     Executes,
     ReadsOutside,
+    EditsGuarded,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -105,6 +106,10 @@ pub trait Tool: Send + Sync {
     fn access(&self) -> Access;
 
     fn reaches_outside(&self, _input: &Value, _workspace: &Workspace) -> Option<PathBuf> {
+        None
+    }
+
+    fn writes_to(&self, _input: &Value, _workspace: &Workspace) -> Option<PathBuf> {
         None
     }
 
