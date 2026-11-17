@@ -1,6 +1,57 @@
-use super::Ending;
+use super::interception::Intercepted;
+use super::{Call, Exchange, Next, TurnState};
+use crate::agent::permission::egress;
+use crate::agent::{Agent, Ending};
 use crate::model::{ModelError, Reply};
-use crate::transcript::{Block, Message, StopReason};
+use crate::transcript::{Block, Message, StopReason, replied, told};
+
+impl Agent<'_> {
+    pub(super) fn take_reply(&self, turn: &mut TurnState<'_>, exchange: Exchange) -> Result<Next, Ending> {
+        let Exchange { request, reply } = exchange;
+        let reply = match self.intercept_reply(reply, &request, &mut turn.rejections)? {
+            Intercepted::Accepted(reply) => reply,
+            Intercepted::Rejected => return Ok(Next::AskModel),
+        };
+        let calls: Vec<Call> = reply
+            .message
+            .tool_uses()
+            .map(|(id, name, input)| (id.to_owned(), name.to_owned(), input.clone()))
+            .collect();
+        if turn.cutoffs.ask_again_for_empty(&reply, !calls.is_empty()) {
+            return Ok(Next::AskModel);
+        }
+        turn.reminders.observe(&calls);
+        if let Some(safety) = &self.workspace.policy.safety {
+            safety.observe(turn.history);
+        }
+        self.workspace.tracking.hear(egress::heard(turn.history));
+        let said = replied(turn.history, reply.message);
+        turn.counted.observe(reply.usage, turn.history.len());
+        if reply.stop != StopReason::MaxTokens {
+            turn.cutoffs.answered();
+        }
+        after_the_reply(turn, reply.stop, calls, said)
+    }
+}
+
+pub(super) fn after_the_reply(
+    turn: &mut TurnState<'_>,
+    stop: StopReason,
+    calls: Vec<Call>,
+    said: bool,
+) -> Result<Next, Ending> {
+    match stop {
+        StopReason::MaxTokens if calls.is_empty() => {
+            let continuation = turn.cutoffs.continuation(turn.history.last().filter(|_| said))?;
+            told(turn.history, continuation);
+            Ok(Next::AskModel)
+        }
+        StopReason::Refusal => Err(Ending::Refused),
+        StopReason::PauseTurn if calls.is_empty() => Ok(Next::AskModel),
+        _ if calls.is_empty() => Ok(Next::Finishing { said }),
+        _ => Ok(Next::RunTools(calls)),
+    }
+}
 
 const MAX_CONTINUATIONS: usize = 3;
 const MAX_STRUCTURED_NUDGES: usize = 3;

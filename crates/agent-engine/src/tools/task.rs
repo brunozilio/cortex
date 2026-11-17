@@ -1,6 +1,6 @@
 use platform::sync::Locked;
 
-use super::{Access, Outcome, Tool, Workspace};
+use super::{Access, Outcome, Tool, Workspace, names};
 use crate::model::ToolSpec;
 use serde_json::{Value, json};
 #[derive(Debug)]
@@ -21,8 +21,9 @@ impl Tool for TaskTool {
 }
 pub fn tools() -> Vec<Box<dyn Tool>> {
     let board = std::sync::Arc::new(std::sync::Mutex::new(Board::default()));
-    let mut tools: Vec<Box<dyn Tool>> = vec![Box::new(TaskTool("TaskOutput")), Box::new(TaskTool("TaskStop"))];
-    for name in ["TaskCreate", "TaskUpdate", "TaskGet", "TaskList"] {
+    let mut tools: Vec<Box<dyn Tool>> =
+        vec![Box::new(TaskTool(names::TASK_OUTPUT)), Box::new(TaskTool(names::TASK_STOP))];
+    for name in [names::TASK_CREATE, names::TASK_UPDATE, "TaskGet", names::TASK_LIST] {
         tools.push(Box::new(PlanTool { name, board: board.clone() }));
     }
     tools
@@ -50,10 +51,10 @@ impl Tool for PlanTool {
     }
     fn run(&self, input: &Value, _: &Workspace) -> Outcome {
         let mut board = self.board.locked();
-        if self.name == "TaskList" {
+        if self.name == names::TASK_LIST {
             return Outcome::ok(json!(board.tasks.values().collect::<Vec<_>>()).to_string());
         }
-        if self.name == "TaskCreate" {
+        if self.name == names::TASK_CREATE {
             let Some(subject) = input["subject"].as_str().filter(|s| !s.trim().is_empty()) else {
                 return Outcome::error("subject is required");
             };

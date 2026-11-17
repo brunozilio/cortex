@@ -19,13 +19,13 @@ impl Tool for Bash {
     fn spec(&self) -> ToolSpec {
         let shell = platform::shell_name();
         crate::tools::declared(
-            "Bash",
+            crate::tools::names::BASH,
             &json!({ "default_timeout": DEFAULT_TIMEOUT.as_millis(), "max_timeout": MAX_TIMEOUT.as_millis(), "OUTPUT": OUTPUT, "shell": shell }),
         )
     }
 
     fn access(&self) -> Access {
-        crate::tools::declared_access("Bash")
+        crate::tools::declared_access(crate::tools::names::BASH)
     }
 
     fn summary(&self, input: &Value) -> String {

@@ -13,13 +13,13 @@ pub struct Read;
 impl Tool for Read {
     fn spec(&self) -> ToolSpec {
         crate::tools::declared(
-            "Read",
+            crate::tools::names::READ,
             &json!({ "DEFAULT_LINES": DEFAULT_LINES, "LINE_CHARS": LINE_CHARS, "MAX_CHARS": MAX_CHARS }),
         )
     }
 
     fn access(&self) -> Access {
-        crate::tools::declared_access("Read")
+        crate::tools::declared_access(crate::tools::names::READ)
     }
 
     fn reaches_outside(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {

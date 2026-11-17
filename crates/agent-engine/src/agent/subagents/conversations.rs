@@ -4,37 +4,37 @@ use std::sync::{Arc, Mutex};
 
 use platform::sync::Locked;
 
-use super::Agent;
+use crate::agent::Agent;
 use crate::tools::Outcome;
 use crate::transcript::Message;
 
-pub(super) struct Kept {
-    pub(super) input: Value,
-    pub(super) index: usize,
-    pub(super) history: Vec<Message>,
+pub(in crate::agent) struct Kept {
+    pub(in crate::agent) input: Value,
+    pub(in crate::agent) index: usize,
+    pub(in crate::agent) history: Vec<Message>,
 }
 
-pub(super) struct Resume {
-    pub(super) index: usize,
-    pub(super) history: Vec<Message>,
-    pub(super) message: String,
+pub(in crate::agent) struct Resume {
+    pub(in crate::agent) index: usize,
+    pub(in crate::agent) history: Vec<Message>,
+    pub(in crate::agent) message: String,
 }
 
 #[derive(Default, Clone)]
-pub(super) struct Conversations(Arc<Mutex<BTreeMap<String, Kept>>>);
+pub(in crate::agent) struct Conversations(Arc<Mutex<BTreeMap<String, Kept>>>);
 
 impl Conversations {
-    pub(super) fn id(index: usize) -> String {
+    pub(in crate::agent) fn id(index: usize) -> String {
         format!("agent-{}", index + 1)
     }
 
-    pub(super) fn keep(&self, kept: Kept) -> String {
+    pub(in crate::agent) fn keep(&self, kept: Kept) -> String {
         let id = Self::id(kept.index);
         self.0.locked().insert(id.clone(), kept);
         id
     }
 
-    pub(super) fn has(&self, to: &str) -> bool {
+    pub(in crate::agent) fn has(&self, to: &str) -> bool {
         self.0.locked().contains_key(to)
     }
 
@@ -44,7 +44,7 @@ impl Conversations {
 }
 
 impl Agent<'_> {
-    pub(super) fn send_message(&self, input: &Value, conversations: &Conversations) -> Outcome {
+    pub(in crate::agent) fn send_message(&self, input: &Value, conversations: &Conversations) -> Outcome {
         if self.depth > 0 {
             return Outcome::error("A sub-agent cannot message other agents; do the work yourself.");
         }
@@ -70,7 +70,7 @@ impl Agent<'_> {
 }
 
 impl Agent<'_> {
-    pub(super) fn to_session(&self, input: &Value, conversations: &Conversations) -> bool {
+    pub(in crate::agent) fn to_session(&self, input: &Value, conversations: &Conversations) -> bool {
         let to = input["to"].as_str().map(str::trim).unwrap_or_default();
         self.depth == 0 && !conversations.has(to) && crate::tools::peers::open().iter().any(|peer| peer.name == to)
     }

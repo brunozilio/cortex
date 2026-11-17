@@ -9,7 +9,7 @@ use script::session::{Evaluate, Evaluation, HostCall, Limits, Message as Sent};
 use serde_json::{Value, json};
 
 use super::Agent;
-use super::tasks::Tasks;
+use super::run::ThisRun as Tasks;
 use crate::control::Control;
 use crate::tools::repl::{READ_TEXT, REPL_TOOL, Repl, SEARCH_TOOLS, reachable, session};
 use crate::tools::{Outcome, Tool, Workspace, raw_text};
@@ -195,7 +195,7 @@ impl ScriptRun {
                 };
                 match self.messages.recv_timeout(wait) {
                     Ok(Sent::Done(evaluation)) => return Some(evaluation),
-                    Ok(Sent::Call(call)) if watching.concurrent(&call.function, &call.input) => {
+                    Ok(Sent::Call(call)) if watching.concurrent(tasks, &call.function, &call.input) => {
                         scope.spawn(move || watching.answer(call, tasks, &[]));
                     }
                     Ok(Sent::Call(call)) => watching.answer(call, tasks, parent),

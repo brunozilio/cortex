@@ -1,13 +1,13 @@
 use serde_json::Value;
 
-use super::Agent;
-use super::tasks::Tasks;
+use crate::agent::Agent;
+use crate::agent::run::ThisRun;
 use crate::agent_runtime::{self, Relocation, Setup};
 use crate::tools::Outcome;
 
 impl Agent<'_> {
-    pub(super) fn enter_worktree(&self, tasks: &Tasks) -> Outcome {
-        if let Some(refused) = self.unmovable(tasks) {
+    pub(super) fn enter_worktree(&self, run: &ThisRun) -> Outcome {
+        if let Some(refused) = self.unmovable(run) {
             return refused;
         }
         if let Some(state) = &self.workspace.worktree {
@@ -30,8 +30,8 @@ impl Agent<'_> {
         }
     }
 
-    pub(super) fn exit_worktree(&self, input: &Value, tasks: &Tasks) -> Outcome {
-        if let Some(refused) = self.unmovable(tasks) {
+    pub(super) fn exit_worktree(&self, input: &Value, run: &ThisRun) -> Outcome {
+        if let Some(refused) = self.unmovable(run) {
             return refused;
         }
         let Some(state) = &self.workspace.worktree else {
@@ -52,14 +52,14 @@ impl Agent<'_> {
         Outcome::ok(format!("{said}. From your next step on, the session works in {}.", state.root.display()))
     }
 
-    fn unmovable(&self, tasks: &Tasks) -> Option<Outcome> {
+    fn unmovable(&self, run: &ThisRun) -> Option<Outcome> {
         if self.depth > 0 {
             return Some(Outcome::error("Only the main agent moves the session between worktrees."));
         }
         if self.control.is_moving() {
             return Some(Outcome::error("The session is already moving this turn."));
         }
-        if tasks.busy() {
+        if run.background.busy() {
             return Some(Outcome::error(
                 "Background agents are still working here; collect or stop them (TaskOutput, TaskStop) first.",
             ));

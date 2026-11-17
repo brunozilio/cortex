@@ -85,6 +85,46 @@ pub struct CommandOutput {
     pub stdout: String,
     pub stderr: String,
 }
+type Model<'a> = Option<(&'a dyn crate::model::ModelApi, &'a crate::model::TurnRequest)>;
+
+#[derive(Debug, PartialEq, Eq)]
+enum Handled {
+    GoOn,
+    Blocked,
+}
+
+impl Group {
+    fn applies_to(&self, subject: &str) -> Result<bool, String> {
+        if self.matcher.is_empty() || self.matcher == "*" {
+            return Ok(true);
+        }
+        Ok(regex::Regex::new(&self.matcher).map_err(|e| e.to_string())?.is_match(subject))
+    }
+}
+
+impl Handler {
+    fn runs(&self, input: &Value, workspace: &Workspace, model: Model<'_>) -> Result<CommandOutput, String> {
+        match self.kind.as_str() {
+            "http" => http(self, input, workspace),
+            "script" => script(self, input, workspace, model),
+            "command" => command(self, input, workspace),
+            _ => self.judged(input, workspace, model),
+        }
+    }
+
+    fn judged(&self, input: &Value, workspace: &Workspace, model: Model<'_>) -> Result<CommandOutput, String> {
+        let (api, template) = model.ok_or("model hook requires an active model context")?;
+        let verdict = model::evaluate(self, input, workspace, api, template)?;
+        let stdout = if verdict["ok"] == true {
+            "{}".into()
+        } else {
+            let reason = verdict["reason"].as_str().unwrap_or("Model hook rejected the action");
+            json!({"decision":"block","reason":reason}).to_string()
+        };
+        Ok(CommandOutput { code: Some(0), stdout, stderr: String::new() })
+    }
+}
+
 impl Hooks {
     pub fn listed(&self) -> Vec<domain::permission_rules::HookInfo> {
         let mut listed = Vec::new();
@@ -142,17 +182,13 @@ impl Hooks {
     ) -> Result<Decision, String> {
         self.decided(event, subject, input, workspace, model).map(Decision::without_trailing_whitespace)
     }
-    #[allow(
-        clippy::too_many_lines,
-        reason = "split planned: hook matching and hook execution separate in a later phase"
-    )]
     fn decided(
         &self,
         event: &str,
         subject: &str,
         mut input: Value,
         workspace: &Workspace,
-        model: Option<(&dyn crate::model::ModelApi, &crate::model::TurnRequest)>,
+        model: Model<'_>,
     ) -> Result<Decision, String> {
         let mut decision = Decision::default();
         input["hook_event_name"] = json!(event);
@@ -160,110 +196,12 @@ impl Hooks {
         input["agent_type"] = json!(workspace.agent_name);
         input["cwd"] = json!(workspace.cwd);
         for group in self.0.get(event).into_iter().flatten() {
-            if !group.matcher.is_empty()
-                && group.matcher != "*"
-                && !regex::Regex::new(&group.matcher).map_err(|e| e.to_string())?.is_match(subject)
-            {
+            if !group.applies_to(subject)? {
                 continue;
             }
             for handler in &group.hooks {
-                let result: CommandOutput = if matches!(handler.kind.as_str(), "command" | "http" | "script") {
-                    match handler.kind.as_str() {
-                        "http" => http(handler, &input, workspace)?,
-                        "script" => script(handler, &input, workspace, model)?,
-                        _ => command(handler, &input, workspace)?,
-                    }
-                } else {
-                    let (api, template) = model.ok_or("model hook requires an active model context")?;
-                    let verdict = model::evaluate(handler, &input, workspace, api, template)?;
-                    CommandOutput {
-                        code: Some(0),
-                        stdout: if verdict["ok"] == true {
-                            "{}".into()
-                        } else {
-                            json!({"decision":"block","reason":verdict["reason"].as_str().unwrap_or("Model hook rejected the action")}).to_string()
-                        },
-                        stderr: String::new(),
-                    }
-                };
-                if result.code == Some(2) {
-                    decision.blocked = Some(result.stderr);
-                    return Ok(decision);
-                }
-                if result.code != Some(0) {
-                    rewrites::failed(event, &result.stderr, &mut decision);
-                    continue;
-                }
-                if let Ok(value) = serde_json::from_str::<Value>(&result.stdout) {
-                    let specific = &value["hookSpecificOutput"];
-                    if value["continue"] == false
-                        || value["decision"] == "block"
-                        || specific["permissionDecision"] == "deny"
-                    {
-                        decision.blocked = Some(
-                            value["reason"]
-                                .as_str()
-                                .or_else(|| value["stopReason"].as_str())
-                                .or_else(|| specific["permissionDecisionReason"].as_str())
-                                .unwrap_or("Blocked by configured hook")
-                                .into(),
-                        );
-                    }
-                    let permission = if event == "PermissionRequest" {
-                        specific["decision"]["behavior"].as_str()
-                    } else {
-                        specific["permissionDecision"].as_str()
-                    };
-                    if let Some(permission) = permission {
-                        if !matches!(permission, "allow" | "deny" | "ask") {
-                            return Err("invalid permission decision from hook".into());
-                        }
-                        decision.permission = Some(permission.into());
-                        if permission == "deny" {
-                            decision.blocked = Some(
-                                specific["permissionDecisionReason"]
-                                    .as_str()
-                                    .unwrap_or("Permission hook denied the action")
-                                    .into(),
-                            );
-                        }
-                    }
-                    if event == "PostToolUse" {
-                        decision.updated_output = specific.get("updatedToolOutput").cloned();
-                    }
-                    if decision.model.is_none() && matches!(event, "ModelRequest" | "ModelError") {
-                        decision.model = specific["model"].as_str().filter(|m| !m.trim().is_empty()).map(Into::into);
-                    }
-                    if decision.effort.is_none() && event == "ModelRequest" {
-                        decision.effort = specific["effort"].as_str().and_then(domain::interception::effort);
-                    }
-                    rewrites::absorb(event, &value, &mut decision, &mut input);
-                    if decision.text.is_none() && event == "ModelResponse" {
-                        decision.text = specific["text"].as_str().map(Into::into);
-                    }
-                    for text in
-                        [value["systemMessage"].as_str(), specific["additionalContext"].as_str()].into_iter().flatten()
-                    {
-                        decision.context.push_str(text);
-                        decision.context.push('\n');
-                    }
-                    if matches!(event, "PreToolUse" | "PermissionRequest")
-                        && let Some(updated) = if event == "PermissionRequest" {
-                            specific["decision"].get("updatedInput")
-                        } else {
-                            specific.get("updatedInput")
-                        }
-                    {
-                        if !updated.is_object() {
-                            return Err("hook updatedInput must be an object".into());
-                        }
-                        decision.updated_input = Some(updated.clone());
-                        input["tool_input"] = updated.clone();
-                    }
-                } else if matches!(event, "SessionStart" | "UserPromptSubmit") {
-                    decision.context.push_str(&result.stdout);
-                }
-                if decision.blocked.is_some() {
+                let result = handler.runs(&input, workspace, model)?;
+                if absorbed(event, result, &mut decision, &mut input)? == Handled::Blocked {
                     return Ok(decision);
                 }
             }
@@ -271,3 +209,95 @@ impl Hooks {
         Ok(decision)
     }
 }
+
+fn absorbed(event: &str, result: CommandOutput, decision: &mut Decision, input: &mut Value) -> Result<Handled, String> {
+    if result.code == Some(2) {
+        decision.blocked = Some(result.stderr);
+        return Ok(Handled::Blocked);
+    }
+    if result.code != Some(0) {
+        rewrites::failed(event, &result.stderr, decision);
+        return Ok(Handled::GoOn);
+    }
+    match serde_json::from_str::<Value>(&result.stdout) {
+        Ok(value) => answered(event, &value, decision, input)?,
+        Err(_) if matches!(event, "SessionStart" | "UserPromptSubmit") => decision.context.push_str(&result.stdout),
+        Err(_) => {}
+    }
+    Ok(if decision.blocked.is_some() { Handled::Blocked } else { Handled::GoOn })
+}
+
+fn answered(event: &str, value: &Value, decision: &mut Decision, input: &mut Value) -> Result<(), String> {
+    let specific = &value["hookSpecificOutput"];
+    if let Some(reason) = blocking(value) {
+        decision.blocked = Some(reason);
+    }
+    permission_answered(event, specific, decision)?;
+    if event == "PostToolUse" {
+        decision.updated_output = specific.get("updatedToolOutput").cloned();
+    }
+    if decision.model.is_none() && matches!(event, "ModelRequest" | "ModelError") {
+        decision.model = specific["model"].as_str().filter(|m| !m.trim().is_empty()).map(Into::into);
+    }
+    if decision.effort.is_none() && event == "ModelRequest" {
+        decision.effort = specific["effort"].as_str().and_then(domain::interception::effort);
+    }
+    rewrites::absorb(event, value, decision, input);
+    if decision.text.is_none() && event == "ModelResponse" {
+        decision.text = specific["text"].as_str().map(Into::into);
+    }
+    for text in [value["systemMessage"].as_str(), specific["additionalContext"].as_str()].into_iter().flatten() {
+        decision.context.push_str(text);
+        decision.context.push('\n');
+    }
+    input_updated(event, specific, decision, input)
+}
+
+fn blocking(value: &Value) -> Option<String> {
+    let specific = &value["hookSpecificOutput"];
+    let blocks = value["continue"] == false || value["decision"] == "block" || specific["permissionDecision"] == "deny";
+    blocks.then(|| {
+        value["reason"]
+            .as_str()
+            .or_else(|| value["stopReason"].as_str())
+            .or_else(|| specific["permissionDecisionReason"].as_str())
+            .unwrap_or("Blocked by configured hook")
+            .into()
+    })
+}
+
+fn permission_answered(event: &str, specific: &Value, decision: &mut Decision) -> Result<(), String> {
+    let permission = if event == "PermissionRequest" {
+        specific["decision"]["behavior"].as_str()
+    } else {
+        specific["permissionDecision"].as_str()
+    };
+    let Some(permission) = permission else { return Ok(()) };
+    if !matches!(permission, "allow" | "deny" | "ask") {
+        return Err("invalid permission decision from hook".into());
+    }
+    decision.permission = Some(permission.into());
+    if permission == "deny" {
+        let reason = specific["permissionDecisionReason"].as_str().unwrap_or("Permission hook denied the action");
+        decision.blocked = Some(reason.into());
+    }
+    Ok(())
+}
+
+fn input_updated(event: &str, specific: &Value, decision: &mut Decision, input: &mut Value) -> Result<(), String> {
+    let updated = match event {
+        "PermissionRequest" => specific["decision"].get("updatedInput"),
+        "PreToolUse" => specific.get("updatedInput"),
+        _ => None,
+    };
+    let Some(updated) = updated else { return Ok(()) };
+    if !updated.is_object() {
+        return Err("hook updatedInput must be an object".into());
+    }
+    decision.updated_input = Some(updated.clone());
+    input["tool_input"] = updated.clone();
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;

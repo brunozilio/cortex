@@ -14,10 +14,10 @@ impl Structured {
 }
 impl Tool for Structured {
     fn spec(&self) -> ToolSpec {
-        crate::tools::declared("StructuredOutput", &json!({ "schema": self.schema }))
+        crate::tools::declared(super::names::STRUCTURED_OUTPUT, &json!({ "schema": self.schema }))
     }
     fn access(&self) -> Access {
-        crate::tools::declared_access("StructuredOutput")
+        crate::tools::declared_access(super::names::STRUCTURED_OUTPUT)
     }
     fn summary(&self, _: &Value) -> String {
         "Structured result".into()

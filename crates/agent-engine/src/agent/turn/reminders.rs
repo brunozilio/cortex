@@ -1,3 +1,5 @@
+use super::upkeep::Budget;
+use crate::agent::run::ThisRun;
 use crate::transcript::{Block, Message, Role};
 
 #[derive(Debug, Default)]
@@ -8,7 +10,7 @@ pub struct Reminders {
 
 impl Reminders {
     pub fn observe(&mut self, calls: &[(String, String, serde_json::Value)]) {
-        if calls.iter().any(|(_, name, _)| name.starts_with("Task") && name != "TaskOutput" && name != "TaskStop") {
+        if calls.iter().any(|(_, name, _)| crate::tools::names::plans_tasks(name)) {
             self.quiet_tasks = 0;
         } else if !calls.is_empty() {
             self.quiet_tasks += 1;
@@ -36,8 +38,8 @@ impl Reminders {
     }
 }
 
-impl super::Agent<'_> {
-    pub(super) fn runtime_reminder(&self, used: u64, threshold: u64, quiet_tasks: usize) -> String {
+impl crate::agent::Agent<'_> {
+    pub(super) fn runtime_reminder(&self, budget: &Budget, quiet_tasks: usize, run: &ThisRun) -> String {
         let context = self.workspace.prompt_context.as_ref();
         let style = context.and_then(|context| context.output_style.as_ref());
         let reminder =
@@ -46,11 +48,11 @@ impl super::Agent<'_> {
         let offers_search = self.request.tools.iter().any(|spec| spec.name == crate::tools::tool_search::TOOL_SEARCH);
         let deferred =
             self.workspace.services.deferred.as_ref().filter(|_| offers_search).map(|deferred| deferred.announcement());
-        let tasks = if quiet_tasks >= QUIET_TURNS { self.open_tasks() } else { Vec::new() };
+        let tasks = if quiet_tasks >= QUIET_TURNS { self.open_tasks(run) } else { Vec::new() };
         let notes: String = [
             deferred,
             context.and_then(|context| date_changed(&context.date, &today)),
-            context_left(used, threshold),
+            context_left(budget.used, budget.threshold),
             tasks_left_alone(quiet_tasks, &tasks),
         ]
         .into_iter()

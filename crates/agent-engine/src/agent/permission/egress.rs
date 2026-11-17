@@ -3,12 +3,11 @@ use std::collections::HashMap;
 use domain::egress::{Heard, Said};
 use serde_json::Value;
 
-use super::Agent;
+use crate::agent::Agent;
+use crate::tools::names::WEB_FETCH;
 use crate::transcript::{Block, Message, Role};
 
-const FETCHING_TOOL: &str = "WebFetch";
-
-pub(super) fn heard(history: &[Message]) -> Heard {
+pub(in crate::agent) fn heard(history: &[Message]) -> Heard {
     let tools: HashMap<&str, &str> = history
         .iter()
         .flat_map(|message| &message.blocks)
@@ -37,7 +36,7 @@ impl Agent<'_> {
         if let domain::command_policy::CommandClass::Risky(why) = self.command_class(tool, input) {
             return Some(why);
         }
-        let url = input["url"].as_str().filter(|_| tool == FETCHING_TOOL)?;
+        let url = input["url"].as_str().filter(|_| tool == WEB_FETCH)?;
         self.workspace.tracking.heard().concern(url).map(|why| format!("Check this address first: {why}."))
     }
 }

@@ -1,3 +1,4 @@
+pub mod after;
 pub mod ask;
 pub mod builtin;
 pub mod builtin_agents;
@@ -5,6 +6,7 @@ pub mod builtin_agents;
 mod builtin_skills;
 pub mod inbox;
 mod lsp;
+pub mod names;
 mod outside;
 pub mod peers;
 pub mod persisted;

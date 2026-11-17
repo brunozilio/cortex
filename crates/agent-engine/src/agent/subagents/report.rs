@@ -1,6 +1,6 @@
 use domain::AgentStatus;
 
-use super::Ending;
+use crate::agent::Ending;
 use crate::tools::Outcome;
 use crate::transcript::{Block, Message, Role};
 

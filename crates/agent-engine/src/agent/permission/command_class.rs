@@ -5,11 +5,12 @@ use std::sync::atomic::AtomicBool;
 use domain::command_policy::{CommandClass, GitFacts, classify, sign_in_refused};
 use serde_json::Value;
 
-use super::Agent;
+use crate::agent::Agent;
+use crate::tools::names::BASH;
 
 impl Agent<'_> {
     pub(super) fn command_class(&self, tool: &str, input: &Value) -> CommandClass {
-        let Some(command) = input["command"].as_str().filter(|_| tool == "Bash") else {
+        let Some(command) = input["command"].as_str().filter(|_| tool == BASH) else {
             return CommandClass::Unknown;
         };
         let confined = self.workspace.sandboxed() && input["unsandboxed"].as_bool() != Some(true);

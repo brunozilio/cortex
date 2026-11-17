@@ -2,7 +2,7 @@ use domain::EngineEvent;
 use domain::interception::Rejections;
 use serde_json::{Value, json};
 
-use super::{Agent, Ending};
+use crate::agent::{Agent, Ending};
 use crate::model::{ModelError, Reply, TurnRequest};
 use crate::transcript::{Block, StopReason};
 

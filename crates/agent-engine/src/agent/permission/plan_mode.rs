@@ -1,12 +1,12 @@
 use domain::{AskKind, Decision, EngineEvent, PermissionMode};
 use serde_json::Value;
 
-use super::Agent;
+use crate::agent::Agent;
 use crate::tools::Outcome;
 use crate::tools::plan_mode::plan;
 
 impl Agent<'_> {
-    pub(super) fn exit_plan_mode(&self, id: &str, input: &Value) -> Outcome {
+    pub(in crate::agent) fn exit_plan_mode(&self, id: &str, input: &Value) -> Outcome {
         if self.depth > 0 {
             return Outcome::error("Only the main agent leaves plan mode.");
         }
@@ -49,7 +49,7 @@ impl Agent<'_> {
         }
     }
 
-    pub(super) fn enter_plan_mode(&self) -> Outcome {
+    pub(in crate::agent) fn enter_plan_mode(&self) -> Outcome {
         if self.depth > 0 {
             return Outcome::error("Only the main agent enters plan mode.");
         }

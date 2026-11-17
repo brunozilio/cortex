@@ -133,3 +133,73 @@ export function execute(input, ctx) {
     );
     assert!(answered, "{history:?}");
 }
+
+fn own_tool(home: &std::path::Path, file: &str, source: &str) {
+    let folder = home.join(brand::DIR).join("tools");
+    std::fs::create_dir_all(&folder).expect("tools");
+    std::fs::write(folder.join(file), source).expect("tool");
+}
+
+fn results(history: &[Message]) -> Vec<&str> {
+    history
+        .iter()
+        .flat_map(|message| message.blocks.iter())
+        .filter_map(|block| match block {
+            Block::ToolResult { content, .. } => Some(content.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_tool_a_script_calls_again_and_again_is_held_back_like_the_model_s_own_calls() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    let home = tempfile::tempdir().expect("home");
+    let tool = r#"
+export const spec = { name: "Thrice", description: "Reads one file three times.", access: "read" };
+export function run(input, ctx) {
+  const read = () => ctx.tool("Read", { file_path: "notes.txt" });
+  read();
+  read();
+  try { read() } catch (error) { return "held back: " + error.message }
+  return "read three times";
+}
+"#;
+    own_tool(home.path(), "thrice.js", tool);
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("t", "Thrice", json!({}))]),
+        ScriptedModel::reply(vec![Block::Text("Ok.".into())]),
+    ]);
+    let mut history = vec![Message::user("read")];
+    rig.run_with(&model, &mut history, script_tools(home.path(), rig.dir.path())).expect("run");
+    let said = results(&history);
+    assert!(said[0].starts_with("held back: ") && said[0].contains("you already called Read"), "{said:?}");
+    assert!(rig.events().contains(&EngineEvent::Repeated { tool: "Read".into() }));
+}
+
+#[test]
+fn a_background_agent_a_script_starts_is_one_the_run_can_collect() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    let home = tempfile::tempdir().expect("home");
+    let tool = r#"
+export const spec = { name: "Delegate", description: "Starts a reviewer in the background.", access: "read" };
+export function run(input, ctx) {
+  return ctx.tool("Agent", { description: "Review", prompt: "review", run_in_background: true });
+}
+"#;
+    own_tool(home.path(), "delegate.js", tool);
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("d", "Delegate", json!({}))]),
+        ScriptedModel::reply(vec![Block::Text("REVIEWED".into())]),
+        ScriptedModel::reply(vec![tool_use("o", "TaskOutput", json!({"task_id": "task-1"}))]),
+        ScriptedModel::reply(vec![Block::Text("Ok.".into())]),
+    ]);
+    let mut extra: Vec<Box<dyn Tool>> = vec![Box::new(agent_engine::tools::subagent::AgentTool::default())];
+    extra.extend(agent_engine::tools::task::tools());
+    extra.extend(script_tools(home.path(), rig.dir.path()));
+    let mut history = vec![Message::user("review")];
+    rig.run_with(&model, &mut history, extra).expect("run");
+    let said = results(&history);
+    assert!(said[0].contains(r#""task_id":"task-1""#), "the script hands back the task it started: {said:?}");
+    assert!(said[1].starts_with("REVIEWED"), "the run knows that task and collects its report: {said:?}");
+}

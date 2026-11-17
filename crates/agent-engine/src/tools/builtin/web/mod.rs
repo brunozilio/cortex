@@ -24,16 +24,32 @@ pub fn tools() -> Vec<Box<dyn Tool>> {
     vec![Box::new(WebFetch), Box::new(WebSearch)]
 }
 
+pub fn read_by_a_reader(ran: &crate::tools::after::Ran<'_>, page: &str) -> String {
+    let (url, looking_for) = (field(ran.input, "url"), field(ran.input, "prompt"));
+    let (models, agent) = (&ran.workspace.models, ran.agent);
+    let reader = guarded::reader(models.small_model.as_deref(), agent.request, models.model.provider);
+    let read = if ran.workspace.policy.web.small_pages_direct { guarded::digest } else { guarded::read_apart };
+    read(
+        agent.api,
+        &reader,
+        &agent.request.model,
+        url.unwrap_or_default(),
+        looking_for.unwrap_or_default(),
+        page,
+        agent.stop,
+    )
+}
+
 #[derive(Debug)]
 pub struct WebFetch;
 
 impl Tool for WebFetch {
     fn spec(&self) -> ToolSpec {
-        crate::tools::declared("WebFetch", &serde_json::Value::Null)
+        crate::tools::declared(crate::tools::names::WEB_FETCH, &serde_json::Value::Null)
     }
 
     fn access(&self) -> Access {
-        crate::tools::declared_access("WebFetch")
+        crate::tools::declared_access(crate::tools::names::WEB_FETCH)
     }
 
     fn summary(&self, input: &Value) -> String {

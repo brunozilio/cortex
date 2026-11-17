@@ -6,7 +6,8 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use super::Agent;
-use super::tasks::Tasks;
+use super::dispatch::Calling;
+use super::run::ThisRun;
 use crate::model::ToolSpec;
 use crate::tools::script_bridge::{Bridge, Request};
 use crate::tools::script_tool::{Origin, ScriptTool};
@@ -23,6 +24,19 @@ struct Script<'a> {
     origin: Origin,
 }
 
+#[derive(Clone, Copy)]
+struct Within<'a> {
+    id: &'a str,
+    parent: &'a [Message],
+    run: &'a ThisRun,
+}
+
+impl<'a> Within<'a> {
+    fn the_call(calling: &Calling<'a, '_>) -> Self {
+        Self { id: calling.id, parent: calling.parent, run: calling.run }
+    }
+}
+
 thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
 }
@@ -30,8 +44,7 @@ thread_local! {
 struct ScriptCall<'a, 'b> {
     agent: &'a Agent<'b>,
     tool: &'a ScriptTool,
-    parent: &'a [Message],
-    id: &'a str,
+    within: Within<'a>,
 }
 
 impl Tool for ScriptCall<'_, '_> {
@@ -48,7 +61,7 @@ impl Tool for ScriptCall<'_, '_> {
     }
 
     fn run(&self, input: &Value, _workspace: &Workspace) -> Outcome {
-        self.agent.run_script(self.id, self.tool, input, self.parent)
+        self.agent.run_script(self.within, self.tool, input)
     }
 }
 
@@ -62,42 +75,52 @@ fn answered(block: Block) -> Result<Value, String> {
     }
 }
 
+fn reported(result: Result<Value, String>, last: Option<Outcome>, stopped: bool, name: &str) -> Outcome {
+    match (result, last) {
+        (Ok(Value::String(text)), Some(outcome)) if text == outcome.content => outcome,
+        (Err(_), Some(outcome)) if stopped => outcome,
+        (Ok(Value::String(text)), _) => Outcome::ok(text),
+        (Ok(Value::Null), _) => Outcome::ok(""),
+        (Ok(value), _) => Outcome::ok(value.to_string()),
+        (Err(error), _) => Outcome::error(format!("{name} failed: {error}")),
+    }
+}
+
 impl Agent<'_> {
-    pub(super) fn script_call(
+    pub(in crate::agent) fn script_call(
         &self,
-        id: &str,
+        calling: &Calling<'_, '_>,
         tool: &ScriptTool,
         summary: &str,
         input: &Value,
-        parent: &[Message],
-        permission: Option<&str>,
     ) -> Outcome {
-        let call = ScriptCall { agent: self, tool, parent, id };
+        let call = ScriptCall { agent: self, tool, within: Within::the_call(calling) };
         let approved = tool.trusted || self.approved(&tool.spec.name, summary, input);
-        self.permitted(id, &call, summary, input, if approved { permission } else { Some("ask") })
+        let permission = if approved { calling.permission } else { Some("ask") };
+        self.permitted(calling.id, &call, summary, input, permission)
     }
 
     fn approved(&self, name: &str, summary: &str, input: &Value) -> bool {
         matches!(self.rule_for(name, summary, input, false), Some((domain::permission_rules::RuleKind::Allow, _)))
     }
 
-    pub(super) fn project_skill<'t>(&self, tool: &'t dyn Tool, input: &Value) -> Option<&'t FoundSkill> {
+    pub(in crate::agent) fn project_skill<'t>(&self, tool: &'t dyn Tool, input: &Value) -> Option<&'t FoundSkill> {
         let name = input["skill"].as_str()?.trim_start_matches('/');
         tool.skills().iter().find(|skill| skill.name == name && skill.project_script())
     }
 
-    pub(super) fn skill_call(
+    pub(in crate::agent) fn skill_call(
         &self,
-        id: &str,
+        calling: &Calling<'_, '_>,
         tool: &dyn Tool,
         skill: &FoundSkill,
         summary: &str,
         input: &Value,
-        permission: Option<&str>,
     ) -> Outcome {
         let approved = self.approved(&tool.spec().name, summary, input);
         let shown = format!("{summary}, the project's script {}", skill.file.display());
-        self.permitted_as(id, tool, summary, Some(&shown), input, if approved { permission } else { Some("ask") })
+        let permission = if approved { calling.permission } else { Some("ask") };
+        self.permitted_as(calling.id, tool, summary, Some(&shown), input, permission)
     }
 
     fn script_context(&self) -> Value {
@@ -118,33 +141,31 @@ impl Agent<'_> {
         })
     }
 
-    fn run_script(&self, id: &str, tool: &ScriptTool, input: &Value, parent: &[Message]) -> Outcome {
+    fn run_script(&self, within: Within<'_>, tool: &ScriptTool, input: &Value) -> Outcome {
         let path = tool.path.display().to_string();
         let origin = Origin::trusted(tool.trusted);
         let script = Script { name: &tool.spec.name, path: &path, source: &tool.source, origin };
-        self.run_js(id, &script, input, parent, None)
+        self.run_js(within, &script, input, None)
     }
 
-    pub(super) fn execute_declared(
+    pub(in crate::agent) fn execute_declared(
         &self,
-        id: &str,
-        name: &str,
+        calling: &Calling<'_, '_>,
         input: &Value,
-        parent: &[Message],
         builtin: &dyn Fn(&Value) -> Outcome,
     ) -> Outcome {
+        let name = calling.name;
         let path = crate::tools::declared_path(name);
         let Some(source) = content::source(&path) else { return builtin(input) };
         let script = Script { name, path: &path, source: &source, origin: Origin::Owner };
-        self.run_js(id, &script, input, parent, Some(builtin))
+        self.run_js(Within::the_call(calling), &script, input, Some(builtin))
     }
 
     fn run_js(
         &self,
-        id: &str,
+        within: Within<'_>,
         script: &Script<'_>,
         input: &Value,
-        parent: &[Message],
         builtin: Option<&dyn Fn(&Value) -> Outcome>,
     ) -> Outcome {
         let depth = DEPTH.with(Cell::get);
@@ -164,19 +185,11 @@ impl Agent<'_> {
             loop {
                 match requests.recv_timeout(Duration::from_millis(25)) {
                     Ok(request) if request.function == "builtin" => {
-                        let answer = match builtin {
-                            Some(builtin) => {
-                                let outcome = builtin(&request.arguments);
-                                let content = Value::String(outcome.content.clone());
-                                last.replace(Some(outcome));
-                                Ok(content)
-                            }
-                            None => Err(format!("{} has no built-in to call", script.name)),
-                        };
+                        let answer = built_in(builtin, &request.arguments, &last, script.name);
                         let _ = request.reply.send(answer);
                     }
                     Ok(request) => {
-                        let answer = self.serve(id, script.origin, &request.function, request.arguments, parent);
+                        let answer = self.serve(within, script.origin, &request.function, request.arguments);
                         let _ = request.reply.send(answer);
                     }
                     Err(RecvTimeoutError::Timeout) if !running.is_finished() => {}
@@ -186,25 +199,11 @@ impl Agent<'_> {
             running.join().unwrap_or_else(|_| Err("the script crashed".into()))
         });
         DEPTH.with(|cell| cell.set(depth));
-        let last = last.into_inner();
-        match (result, last) {
-            (Ok(Value::String(text)), Some(outcome)) if text == outcome.content => outcome,
-            (Err(_), Some(outcome)) if self.workspace.stop.load(std::sync::atomic::Ordering::Relaxed) => outcome,
-            (Ok(Value::String(text)), _) => Outcome::ok(text),
-            (Ok(Value::Null), _) => Outcome::ok(""),
-            (Ok(value), _) => Outcome::ok(value.to_string()),
-            (Err(error), _) => Outcome::error(format!("{} failed: {error}", script.name)),
-        }
+        let stopped = self.workspace.stop.load(std::sync::atomic::Ordering::Relaxed);
+        reported(result, last.into_inner(), stopped, script.name)
     }
 
-    fn serve(
-        &self,
-        id: &str,
-        origin: Origin,
-        function: &str,
-        arguments: Value,
-        parent: &[Message],
-    ) -> Result<Value, String> {
+    fn serve(&self, within: Within<'_>, origin: Origin, function: &str, arguments: Value) -> Result<Value, String> {
         let access = self.workspace.policy.scripts.of(origin);
         let text = |key: &str| arguments.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
         match function {
@@ -212,13 +211,13 @@ impl Agent<'_> {
                 let name = text("name");
                 let id = format!("script-{}", self.control.next_agent());
                 let spawn = |job: Box<dyn FnOnce() + Send + '_>| job();
-                answered(self.call(&id, &name, &arguments["input"], &Tasks::default(), parent, &spawn))
+                answered(self.call(&id, &name, &arguments["input"], within.run, within.parent, &spawn))
             }
             "llm" => self.script_llm(&arguments),
             "text" => Ok(Value::String(content::text(arguments.as_str().unwrap_or_default()))),
             "log" => {
                 let text = arguments.as_str().map_or_else(|| arguments.to_string(), str::to_owned);
-                (self.emit)(domain::EngineEvent::ToolLog { id: id.to_owned(), text });
+                (self.emit)(domain::EngineEvent::ToolLog { id: within.id.to_owned(), text });
                 Ok(Value::Null)
             }
             "readFile" if access.files => {
@@ -248,5 +247,36 @@ impl Agent<'_> {
 
     fn script_llm(&self, arguments: &Value) -> Result<Value, String> {
         crate::tools::script_bridge::ask_model(self.api, &self.request, arguments, self.control.stop_flag())
+    }
+}
+
+fn built_in(
+    builtin: Option<&dyn Fn(&Value) -> Outcome>,
+    arguments: &Value,
+    last: &RefCell<Option<Outcome>>,
+    name: &str,
+) -> Result<Value, String> {
+    let builtin = builtin.ok_or_else(|| format!("{name} has no built-in to call"))?;
+    let outcome = builtin(arguments);
+    let content = Value::String(outcome.content.clone());
+    last.replace(Some(outcome));
+    Ok(content)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_script_s_answer_keeps_the_built_in_s_outcome_when_it_passed_it_through() {
+        let built = Outcome::ok("listing").showing("3 files");
+        let same = reported(Ok(json!("listing")), Some(built.clone()), false, "Glob");
+        assert_eq!(same, built, "what the built-in showed survives the script");
+        let rewritten = reported(Ok(json!("2 files")), Some(built.clone()), false, "Glob");
+        assert_eq!(rewritten, Outcome::ok("2 files"));
+        assert_eq!(reported(Ok(Value::Null), None, false, "Glob"), Outcome::ok(""));
+        assert_eq!(reported(Ok(json!({"n": 1})), None, false, "Glob"), Outcome::ok(r#"{"n":1}"#));
+        assert_eq!(reported(Err("boom".into()), Some(built.clone()), true, "Glob"), built, "stopped mid-way");
+        assert_eq!(reported(Err("boom".into()), Some(built), false, "Glob"), Outcome::error("Glob failed: boom"));
     }
 }
