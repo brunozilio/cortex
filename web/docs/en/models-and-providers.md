@@ -62,6 +62,7 @@ The providers are listed in this order in `{{COMMAND}} login` and `/login`:
 | GitHub Copilot Subscription | `copilot-subscription` | Device code | 131,072 tokens |
 | Kiro Subscription | `kiro-subscription` | Browser sign-in | 200,000 tokens |
 | Grok Subscription | `grok-subscription` | Device code | 500,000 tokens |
+| Antigravity Subscription | `antigravity-subscription` | Browser sign-in | 200,000 tokens |
 | Declared providers | your choice | API key | 128,000 tokens unless declared |
 
 When a provider's catalog says how large a model's window is, that number is used; otherwise the default in this table applies.
@@ -95,6 +96,12 @@ Signs in through the browser via `app.kiro.dev/signin`, with the callback `http:
 Uses a SuperGrok or X Premium subscription. Signs in with xAI's device flow: a code and a link to approve it are shown, and {{NAME}} waits until you approve. Turns go to xAI's Responses API at `api.x.ai/v1`. Tokens last about six hours and are renewed before they expire and once after a 401. Only Grok chat models are listed (no image, video, speech or embedding models).
 
 Only some Grok models accept an effort level (`grok-3-mini`, `grok-4.20-multi-agent`, `grok-4.3`, `grok-4.5`, `grok-4.6`, or what the catalog says); `grok-4.6` accepts `xhigh`, the others stop at `high`. Other Grok models reason on their own.
+
+### Antigravity Subscription
+
+Uses the Google account you use in Antigravity. Signs in through Google in the browser with the callback `http://localhost:51121/oauth-callback`, so port 51121 must be free while you sign in. After the sign-in your Cloud Code project is looked up (an account without one is set up for the free tier). Turns go to Google's Cloud Code backend (`daily-cloudcode-pa.googleapis.com`), which serves the Gemini, Claude and GPT-OSS models the picker lists; the thinking level is part of the model's name (`-low`, `-medium`, `-high`). Tokens refresh on their own, also after a 401.
+
+This is not an official client: Google may restrict accounts that use Antigravity's sign-in outside Antigravity.
 
 ### Declared providers
 

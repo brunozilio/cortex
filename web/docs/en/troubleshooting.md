@@ -115,7 +115,7 @@ A model can be named by its full id (`anthropic:claude-sonnet-5-5`), the part af
 ### A browser sign-in does not finish
 
 - If the browser does not open, copy the URL {{NAME}} prints.
-- ChatGPT Subscription waits on port 1455 and Kiro Subscription on port 49153. Close whatever else uses that port and try again.
+- ChatGPT Subscription waits on port 1455, Kiro Subscription on port 49153 and Antigravity Subscription on port 51121. Close whatever else uses that port and try again.
 - Kiro accepts Google, GitHub, Builder ID and organization (IAM Identity Center) sign-ins. An organization sign-in fails when Kiro's portal does not say the organization's start URL (it must be `https`) or its AWS region; check the start URL and try again.
 - GitHub Copilot refuses classic `ghp_` tokens.
 

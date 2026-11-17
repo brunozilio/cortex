@@ -115,7 +115,7 @@ Um modelo pode ser indicado pelo id completo (`anthropic:claude-sonnet-5-5`), pe
 ### O login no navegador não termina
 
 - Se o navegador não abrir, copie a URL que o {{NAME}} imprime.
-- O ChatGPT Subscription espera na porta 1455 e o Kiro Subscription na porta 49153. Feche o que mais estiver usando essa porta e tente de novo.
+- O ChatGPT Subscription espera na porta 1455, o Kiro Subscription na porta 49153 e o Antigravity Subscription na porta 51121. Feche o que mais estiver usando essa porta e tente de novo.
 - O Kiro aceita logins com Google, GitHub, Builder ID e de organização (IAM Identity Center). Um login de organização falha quando o portal do Kiro não informa a URL inicial da organização (que precisa ser `https`) ou a sua região AWS; confira a URL inicial e tente de novo.
 - O GitHub Copilot recusa tokens clássicos `ghp_`.
 

@@ -62,6 +62,7 @@ Os provedores aparecem nesta ordem em `{{COMMAND}} login` e `/login`:
 | GitHub Copilot Subscription | `copilot-subscription` | Código de dispositivo | 131.072 tokens |
 | Kiro Subscription | `kiro-subscription` | Login no navegador | 200.000 tokens |
 | Grok Subscription | `grok-subscription` | Código de dispositivo | 500.000 tokens |
+| Antigravity Subscription | `antigravity-subscription` | Login no navegador | 200.000 tokens |
 | Provedores declarados | você escolhe | Chave de API | 128.000 tokens, salvo se declarado |
 
 Quando o catálogo do provedor informa o tamanho da janela de um modelo, esse número é usado; senão vale o padrão desta tabela.
@@ -95,6 +96,12 @@ Faz login pelo navegador via `app.kiro.dev/signin`, com o callback `http://local
 Usa uma assinatura SuperGrok ou X Premium. Faz login com o fluxo de dispositivo da xAI: aparecem um código e um link para aprová-lo, e o {{NAME}} espera até você aprovar. Os turnos vão para a Responses API da xAI em `api.x.ai/v1`. Os tokens duram cerca de seis horas e são renovados antes de expirar e uma vez depois de um 401. Só os modelos de chat do Grok aparecem (nada de modelos de imagem, vídeo, fala ou embeddings).
 
 Só alguns modelos Grok aceitam um nível de esforço (`grok-3-mini`, `grok-4.20-multi-agent`, `grok-4.3`, `grok-4.5`, `grok-4.6`, ou o que o catálogo disser); o `grok-4.6` aceita `xhigh`, os outros param em `high`. Os demais modelos Grok raciocinam por conta própria.
+
+### Antigravity Subscription
+
+Usa a conta Google que você usa no Antigravity. Faz login pelo Google no navegador com o callback `http://localhost:51121/oauth-callback`, então a porta 51121 precisa estar livre durante o login. Depois do login o seu projeto do Cloud Code é procurado (uma conta sem projeto é configurada no plano gratuito). Os turnos vão para o backend Cloud Code do Google (`daily-cloudcode-pa.googleapis.com`), que serve os modelos Gemini, Claude e GPT-OSS que o seletor lista; o nível de raciocínio faz parte do nome do modelo (`-low`, `-medium`, `-high`). Os tokens são renovados sozinhos, também depois de um 401.
+
+Este não é um cliente oficial: o Google pode restringir contas que usam o login do Antigravity fora do Antigravity.
 
 ### Provedores declarados
 

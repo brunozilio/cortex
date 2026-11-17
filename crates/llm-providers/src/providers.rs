@@ -4,6 +4,8 @@ use domain::provider::ProviderInfo;
 
 pub mod anthropic;
 #[cfg(feature = "subscription-providers")]
+pub mod antigravity;
+#[cfg(feature = "subscription-providers")]
 pub mod chatgpt;
 #[cfg(feature = "subscription-providers")]
 pub mod claude;
@@ -17,6 +19,8 @@ pub mod openai;
 
 pub static ALL: &[&dyn Provider] = &[
     &anthropic::Provider,
+    #[cfg(feature = "subscription-providers")]
+    &antigravity::Provider,
     #[cfg(feature = "subscription-providers")]
     &chatgpt::Provider,
     #[cfg(feature = "subscription-providers")]
@@ -95,6 +99,7 @@ mod tests {
             ids,
             [
                 "anthropic",
+                "antigravity-subscription",
                 "openai-subscription",
                 "claude-subscription",
                 "copilot-subscription",
