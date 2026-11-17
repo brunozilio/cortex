@@ -33,7 +33,7 @@ pub use data_root::DataRoot;
 pub use db::Db;
 pub use degraded::Degraded;
 pub use dirs::project_key;
-pub use domain::mcp_config::{McpOrigin, McpServerInfo, McpState};
+pub use domain::mcp_config::{McpEntry, McpListing, McpOrigin, McpServerInfo, McpState, McpUnreadable};
 pub use domain::memory::seed::Candidate as SeedCandidate;
 pub use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind, Revision};
 pub use domain::provider::{ModelProvider, PortHolder, ProviderSummary};

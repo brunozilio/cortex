@@ -202,7 +202,12 @@ fn a_program_manages_the_owner_s_mcp_servers() {
         servers.into_iter().map(|s| (s.name, s.origin, s.state)).collect()
     };
 
-    assert!(sdk.mcp_servers(repo.path()).expect("list").is_empty(), "not offered until the folder is trusted");
+    assert_eq!(
+        states(sdk.mcp_servers(repo.path()).expect("list")),
+        [("jira".into(), McpOrigin::Project, McpState::Untrusted)],
+        "shown as skipped until the folder is trusted"
+    );
+    assert!(sdk.approve_mcp_server(repo.path(), "ghost", true).is_err(), "only a server that is there");
     assert_eq!(sdk.set_trust(repo.path(), true).expect("trust").trust, app::Trust::Trusted);
     assert_eq!(
         states(sdk.mcp_servers(repo.path()).expect("list")),
@@ -211,11 +216,18 @@ fn a_program_manages_the_owner_s_mcp_servers() {
     let approved = sdk.approve_mcp_server(repo.path(), "jira", true).expect("approve");
     assert_eq!(states(approved)[0].2, McpState::Ready);
     let added = sdk
-        .add_mcp_server(repo.path(), "atlassian", json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"}))
+        .add_mcp_server(
+            repo.path(),
+            "atlassian",
+            json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"}),
+            false,
+        )
         .expect("add");
+    assert_eq!(sdk.mcp_server(repo.path(), "atlassian").expect("get").info.origin, McpOrigin::User);
+    assert!(sdk.mcp_listing(repo.path()).expect("listing").unreadable.is_empty());
     assert_eq!(states(added)[1], ("atlassian".into(), McpOrigin::User, McpState::Ready));
     assert!(home.path().join(concat!(brand::dir!(), "/mcp.json")).is_file());
-    assert!(sdk.add_mcp_server(repo.path(), "plugin_x", json!({"command": "x"})).is_err());
+    assert!(sdk.add_mcp_server(repo.path(), "plugin_x", json!({"command": "x"}), false).is_err());
     assert_eq!(sdk.remove_mcp_server(repo.path(), "atlassian").expect("remove").len(), 1);
 }
 

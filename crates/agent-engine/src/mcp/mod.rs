@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use domain::PromptRequest;
 use serde_json::{Value, json};
 
-pub use self::configured::{McpSources, list, project_config, sources};
+pub use self::configured::{McpSources, list, listing, project_config, sources};
 pub use self::http::{HttpTransport, parse};
 pub use self::local::LocalTransport;
 pub use self::servers::{ServerSpec, StdioSandbox, parse_config, servers};

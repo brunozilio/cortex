@@ -147,10 +147,16 @@ impl CommandHandler {
             }
             ClientCommand::ListPermissions { path } => crate::permissions::list(&path, &self.services.extensions, home),
             ClientCommand::ApproveMcpServer { path, name, approve } => {
-                self.mcp_servers(&path, crate::mcp_admin::approve(&path, home, &name, approve))
+                let extensions = &self.services.extensions;
+                let approved = crate::mcp_admin::known(&path, extensions, home, &name)
+                    .and_then(|()| crate::mcp_admin::approve(&path, home, &name, approve));
+                self.mcp_servers(&path, approved)
             }
-            ClientCommand::AddMcpServer { path, name, server } => {
-                self.mcp_servers(&path, crate::mcp_admin::add(home, &name, server))
+            ClientCommand::AddMcpServer { path, name, server, replace } => {
+                self.mcp_servers(&path, crate::mcp_admin::add(home, &name, server, replace))
+            }
+            ClientCommand::GetMcpServer { path, name } => {
+                crate::mcp_admin::get(&path, &self.services.extensions, home, &name)
             }
             ClientCommand::RemoveMcpServer { path, name } => {
                 self.mcp_servers(&path, crate::mcp_admin::remove(home, &name))

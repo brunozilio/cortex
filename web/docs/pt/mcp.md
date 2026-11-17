@@ -23,7 +23,7 @@ Adicione um servidor remoto:
 Adicione um servidor local iniciado com `npx`, passando um token do seu ambiente:
 
 ```bash
-{{COMMAND}} mcp add -e GITHUB_TOKEN='${GITHUB_TOKEN}' github npx -y @modelcontextprotocol/server-github
+{{COMMAND}} mcp add -e GITHUB_TOKEN='${GITHUB_TOKEN}' github -- npx -y @modelcontextprotocol/server-github
 ```
 
 Veja o que uma sessão nesta pasta vai usar:
@@ -119,30 +119,33 @@ Quando o seu arquivo e o do projeto declaram o mesmo nome, um servidor do projet
 | Comando | O que faz |
 |---|---|
 | `{{COMMAND}} mcp` ou `{{COMMAND}} mcp list` | Lista os servidores, de onde vem cada um e se ele inicia |
-| `{{COMMAND}} mcp add <nome> <url-ou-comando> [args…]` | Acrescenta um servidor seu em `~/{{DIR}}/mcp.json` |
+| `{{COMMAND}} mcp get <nome>` | Mostra um servidor: origem, estado, alvo, arquivo e a entrada guardada, com os segredos ocultos |
+| `{{COMMAND}} mcp add <nome> <url-ou-comando> [-- args…]` | Acrescenta um servidor seu em `~/{{DIR}}/mcp.json` |
 | `{{COMMAND}} mcp remove <nome>` | Remove um servidor seu |
 | `{{COMMAND}} mcp approve <nome>` | Deixa um servidor do projeto iniciar |
 | `{{COMMAND}} mcp deny <nome>` | Desliga um servidor do projeto |
 | `{{COMMAND}} mcp login <nome>` | Faz login num servidor remoto pelo navegador (OAuth) |
 | `{{COMMAND}} mcp logout <nome>` | Esquece o login num servidor remoto |
 
-`add` aceita estas opções, escritas antes do nome:
+`add` aceita estas opções, em qualquer lugar antes de `--`:
 
 | Opção | Significado |
 |---|---|
 | `-e`, `--env CHAVE=VALOR` | Uma variável de ambiente para um servidor local (pode repetir). Use aspas simples em `'${VAR}'` para o shell deixá-la para o {{NAME}} ler ao iniciar. |
 | `-H`, `--header "Nome: valor"` | Um cabeçalho para um servidor remoto (pode repetir) |
 | `--transport sse` | Usa o transporte mais antigo HTTP + SSE para uma URL (`http` por padrão) |
+| `--force` | Substitui um servidor seu que já tem esse nome |
 
-Um alvo que começa com `https://` ou `http://` cria um servidor remoto; qualquer outra coisa é o comando de um servidor local, e o que vem depois são os argumentos dele.
+Um alvo que começa com `https://` ou `http://` cria um servidor remoto; qualquer outra coisa é o comando de um servidor local, e o que vem depois são os argumentos dele. Escreva `--` antes dos argumentos do servidor quando algum deles começa com `-`: tudo depois de `--` é do servidor. Um argumento que começa com `-` sem `--` antes é recusado, com a dica de acrescentar um.
 
 ```bash
 {{COMMAND}} mcp add -H "Authorization: Bearer ${API_TOKEN}" docs https://docs.example.com/mcp
 {{COMMAND}} mcp add --transport sse legacy https://old.example.com/sse
-{{COMMAND}} mcp add jira jira-mcp --stdio
+{{COMMAND}} mcp add jira jira-mcp -- --stdio
+{{COMMAND}} mcp add github -- npx -y @modelcontextprotocol/server-github
 ```
 
-`add` recusa um nome com outros caracteres, um nome reservado ou um servidor sem comando nem URL. `remove` só remove servidores do seu próprio `~/{{DIR}}/mcp.json`.
+`add` recusa um nome com outros caracteres, um nome reservado, um servidor sem comando nem URL, ou um nome que você já usa (a não ser com `--force`; o erro mostra a entrada que existe). `remove` só remove servidores do seu próprio `~/{{DIR}}/mcp.json`. `approve`, `deny` e `get` recusam um nome que não está na lista e dizem quais estão.
 
 ### A lista
 
@@ -160,6 +163,9 @@ Cada linha mostra o nome, a origem, o estado e o alvo (URL ou linha de comando).
 | `ready` | Inicia no próximo prompt |
 | `waiting for approval` | Um servidor do projeto que você ainda não aprovou |
 | `off` | Um servidor do projeto que você desligou |
+| `skipped: folder not trusted` | Um servidor de um projeto cuja pasta você não marcou como confiável: aparece na lista, mas nada do projeto inicia |
+
+Um arquivo de configuração que não é JSON válido aparece com o erro dele. Quando é o seu `~/{{DIR}}/mcp.json`, `{{COMMAND}} mcp list` falha (código de saída 1); um `{{DIR}}/mcp.json` quebrado do projeto vira uma linha `warning:` e a lista segue.
 
 ## No chat: `/mcp`
 
@@ -177,7 +183,7 @@ A mudança vale a partir da próxima mensagem. `/reload` relê `~/{{DIR}}` e o p
 
 Um servidor no `{{DIR}}/mcp.json` versionado de um projeto roda um programa ou chama uma URL em seu nome, então duas coisas precisam valer antes de ele iniciar:
 
-1. Você confia na pasta do projeto. Até lá os servidores dele não são iniciados nem aparecem para aprovação. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
+1. Você confia na pasta do projeto. Até lá os servidores dele não são iniciados; `{{COMMAND}} mcp list` os mostra como `skipped: folder not trusted`, e `{{COMMAND}} doctor` os conta na linha de confiança. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
 2. Você aprova aquele servidor. Confiar na pasta não aprova os servidores dela.
 
 As aprovações ficam nas suas próprias configurações, nunca no arquivo compartilhado do projeto:

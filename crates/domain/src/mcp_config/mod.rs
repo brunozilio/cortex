@@ -1,10 +1,15 @@
 mod edit;
+mod listing;
 mod secrets;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use self::edit::{McpOrigin, McpServerInfo, McpState, add_server, remove_server, server_from, set_approval};
+pub use self::edit::{
+    McpOrigin, McpServerInfo, McpState, add_server, entry_target, remove_server, server_from, set_approval,
+};
+pub use self::listing::{McpEntry, McpListing, McpUnreadable, unknown};
+pub use self::secrets::redacted;
 
 pub const RESERVED_PREFIXES: [&str; 2] = [concat!(brand::command!(), "_"), "plugin_"];
 
@@ -117,11 +122,17 @@ mod tests {
     #[test]
     fn a_person_adds_and_removes_their_own_servers() {
         let server = json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"});
-        let config = add_server(json!(null), "atlassian", server.clone()).expect("added");
+        let config = add_server(json!(null), "atlassian", server.clone(), false).expect("added");
         assert_eq!(config, json!({"mcpServers": {"atlassian": server}}));
-        assert!(add_server(config.clone(), "plugin_x", json!({"command": "x"})).is_err(), "reserved");
-        assert!(add_server(config.clone(), "bad name", json!({"command": "x"})).is_err(), "not a tool-safe name");
-        assert!(add_server(config.clone(), "x", json!({"type": "websocket"})).is_err(), "neither stdio nor http");
+        assert!(add_server(config.clone(), "plugin_x", json!({"command": "x"}), false).is_err(), "reserved");
+        assert!(
+            add_server(config.clone(), "bad name", json!({"command": "x"}), false).is_err(),
+            "not a tool-safe name"
+        );
+        assert!(
+            add_server(config.clone(), "x", json!({"type": "websocket"}), false).is_err(),
+            "neither stdio nor http"
+        );
         let (left, removed) = remove_server(config, "atlassian");
         assert!(removed);
         assert_eq!(left, json!({"mcpServers": {}}));
@@ -138,7 +149,7 @@ mod tests {
             json!({"command": "github-mcp-server", "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": token}}),
             json!({"command": "npx", "args": ["-y", "server", "--token", token]}),
         ] {
-            let error = add_server(json!(null), "github", server.clone()).expect_err("refused");
+            let error = add_server(json!(null), "github", server.clone(), false).expect_err("refused");
             assert!(error.contains("${") && !error.contains(&token), "{error}");
         }
         for server in [
@@ -146,8 +157,33 @@ mod tests {
             json!({"type": "http", "url": url, "headers": {"X-Toolsets": "repos,issues"}}),
             json!({"command": "npx", "args": ["-y", "server"], "env": {"LOG_LEVEL": "debug", "API_KEY": "${API_KEY}"}}),
         ] {
-            assert!(add_server(json!(null), "github", server.clone()).is_ok(), "{server}");
+            assert!(add_server(json!(null), "github", server.clone(), false).is_ok(), "{server}");
         }
+    }
+
+    #[test]
+    fn a_name_already_taken_is_replaced_only_when_asked() {
+        let config =
+            add_server(json!(null), "echo", json!({"command": "node", "args": ["s.js"]}), false).expect("added");
+        let refused = add_server(config.clone(), "echo", json!({"command": "deno"}), false).expect_err("taken");
+        assert!(refused.contains("`echo` is already one of your MCP servers (node s.js)"), "{refused}");
+        let replaced = add_server(config, "echo", json!({"command": "deno"}), true).expect("replaced");
+        assert_eq!(replaced["mcpServers"]["echo"], json!({"command": "deno"}));
+    }
+
+    #[test]
+    fn a_shown_entry_hides_its_secrets_and_keeps_the_rest() {
+        let token = format!("gho_{}", "a1B2c3D4e5F6g7H8i9J0k1L2");
+        let server = json!({"type": "http", "url": "https://e.test/mcp",
+            "headers": {"Authorization": format!("Bearer {token}"), "X-Toolsets": "repos", "X-Key": "${KEY}"},
+            "args": ["--token", token.clone()]});
+        let shown = redacted(&server);
+        assert_eq!(
+            shown,
+            json!({"type": "http", "url": "https://e.test/mcp",
+                "headers": {"Authorization": "<hidden>", "X-Toolsets": "repos", "X-Key": "${KEY}"},
+                "args": ["--token", "<hidden>"]})
+        );
     }
 
     #[test]

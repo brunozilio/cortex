@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::api::features::channels::ChannelsRequest;
 use crate::api::{ClientCommand, Reply};
-use domain::mcp_config::McpServerInfo;
+use domain::mcp_config::{McpEntry, McpListing, McpServerInfo};
 
 use crate::{Error, Sdk};
 
@@ -16,13 +16,29 @@ impl Sdk {
         self.client.call(command, listed)
     }
 
+    pub fn mcp_listing(&self, cwd: &Path) -> Result<McpListing, Error> {
+        self.client.call(ClientCommand::ListMcpServers { path: cwd.to_path_buf() }, |reply| match reply {
+            Reply::McpServers { servers, unreadable, .. } => Some(Ok(McpListing { servers, unreadable })),
+            _ => None,
+        })
+    }
+
+    pub fn mcp_server(&self, cwd: &Path, name: &str) -> Result<McpEntry, Error> {
+        let command = ClientCommand::GetMcpServer { path: cwd.to_path_buf(), name: name.to_owned() };
+        self.client.call(command, |reply| match reply {
+            Reply::McpServer(entry) => Some(Ok(entry)),
+            _ => None,
+        })
+    }
+
     pub fn add_mcp_server(
         &self,
         cwd: &Path,
         name: &str,
         server: serde_json::Value,
+        replace: bool,
     ) -> Result<Vec<McpServerInfo>, Error> {
-        let command = ClientCommand::AddMcpServer { path: cwd.to_path_buf(), name: name.to_owned(), server };
+        let command = ClientCommand::AddMcpServer { path: cwd.to_path_buf(), name: name.to_owned(), server, replace };
         self.client.call(command, listed)
     }
 

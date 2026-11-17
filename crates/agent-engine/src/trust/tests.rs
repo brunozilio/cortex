@@ -146,7 +146,11 @@ fn an_untrusted_folder_s_scripts_agents_and_servers_are_left_out_and_its_text_is
     assert_eq!(reviewer.instructions, "Review.");
     assert!(brief.instructions.iter().any(|file| file.text.contains("Use tabs.")), "the instruction file is read");
     assert!(brief.rules.iter().any(|rule| rule.text.contains("Use tabs.")), "and so are its rules");
-    assert!(crate::mcp::list(&untrusted).expect("list").is_empty(), "its servers are not even offered");
+    let skipped = crate::mcp::list(&untrusted).expect("list");
+    assert!(
+        skipped.iter().all(|server| server.state == domain::mcp_config::McpState::Untrusted),
+        "its servers are only shown as skipped: {skipped:?}"
+    );
     assert!(crate::mcp::servers(&untrusted, &brief.mcp()).is_empty(), "nor started");
     assert!(crate::tools::script_tool::load(&brief.gate(&repo)).is_empty());
 

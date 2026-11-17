@@ -20,18 +20,34 @@ pub enum ServerEvent {
 pub enum Reply {
     Done,
     Models(Vec<ModelOption>),
-    Settings { settings: Option<serde_json::Value> },
+    Settings {
+        settings: Option<serde_json::Value>,
+    },
     Skills(Vec<Skill>),
     Agents(Vec<CustomAgent>),
-    McpServers { path: PathBuf, servers: Vec<domain::mcp_config::McpServerInfo> },
-    McpAuthorizeAt { name: String, url: String },
+    McpServers {
+        path: PathBuf,
+        servers: Vec<domain::mcp_config::McpServerInfo>,
+        #[serde(default)]
+        unreadable: Vec<domain::mcp_config::McpUnreadable>,
+    },
+    McpServer(domain::mcp_config::McpEntry),
+    McpAuthorizeAt {
+        name: String,
+        url: String,
+    },
     Notices(Notices),
     Feature(FeatureReply),
     FeatureFailed(FeatureError),
-    Permissions { path: PathBuf, permissions: domain::permission_rules::PermissionsInfo },
+    Permissions {
+        path: PathBuf,
+        permissions: domain::permission_rules::PermissionsInfo,
+    },
     Trust(domain::trust::TrustReport),
     Providers(ProviderEvent),
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,7 +119,26 @@ mod tests {
             Reply::Settings { settings: Some(serde_json::json!({ "model": "m" })) },
             Reply::Skills(Vec::new()),
             Reply::Agents(Vec::new()),
-            Reply::McpServers { path: "/repo".into(), servers: Vec::new() },
+            Reply::McpServers { path: "/repo".into(), servers: Vec::new(), unreadable: Vec::new() },
+            Reply::McpServers {
+                path: "/repo".into(),
+                servers: Vec::new(),
+                unreadable: vec![domain::mcp_config::McpUnreadable {
+                    path: "/home/mcp.json".into(),
+                    origin: domain::mcp_config::McpOrigin::User,
+                    error: "EOF".into(),
+                }],
+            },
+            Reply::McpServer(domain::mcp_config::McpEntry {
+                info: domain::mcp_config::McpServerInfo {
+                    name: "jira".into(),
+                    origin: domain::mcp_config::McpOrigin::Project,
+                    target: "jira-mcp".into(),
+                    state: domain::mcp_config::McpState::Untrusted,
+                },
+                file: Some("/repo/mcp.json".into()),
+                entry: Some(serde_json::json!({"command": "jira-mcp"})),
+            }),
             Reply::McpAuthorizeAt { name: "linear".into(), url: "https://auth.test".into() },
             Reply::Notices(Notices {
                 for_user: vec!["keys cannot be kept".into()],

@@ -12,7 +12,10 @@ fn url_of(services: &LocalServices, path: &Path, name: &str) -> Result<String, S
         return Err("Could not read the MCP servers".into());
     };
     let server =
-        servers.iter().find(|server| server.name == name).ok_or_else(|| format!("No MCP server `{name}` here"))?;
+        servers.iter().find(|server| server.name == name).ok_or_else(|| domain::mcp_config::unknown(name, &servers))?;
+    if server.state == domain::mcp_config::McpState::Untrusted {
+        return Err(format!("`{name}` is skipped: {}", domain::trust::NOT_TRUSTED));
+    }
     if server.target.starts_with("https://") || server.target.starts_with("http://") {
         Ok(server.target.clone())
     } else {

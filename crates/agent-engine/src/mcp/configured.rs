@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use domain::PromptRequest;
-use domain::mcp_config::{McpApproval, McpOrigin, McpServerInfo, McpState, expand, is_free_name};
+use domain::mcp_config::{
+    McpApproval, McpListing, McpOrigin, McpServerInfo, McpState, McpUnreadable, expand, is_free_name,
+};
 use serde_json::Value;
 
 use super::{ServerSpec, parse_config};
@@ -73,16 +75,43 @@ pub fn sources(request: &PromptRequest) -> Result<McpSources, String> {
 }
 
 pub fn list(request: &PromptRequest) -> Result<Vec<McpServerInfo>, String> {
+    listing(request).map(|listing| listing.servers)
+}
+
+pub fn listing(request: &PromptRequest) -> Result<McpListing, String> {
     let sources = crate::brief::mcp_sources(request)?;
-    Ok(origins(&request.cwd, &sources)
-        .into_iter()
-        .map(|(origin, server)| McpServerInfo {
-            name: server.name().to_owned(),
-            state: McpState::of(&origin, server.name(), &sources.approval),
-            target: server.target(),
-            origin,
-        })
-        .collect())
+    let cwd = &request.cwd;
+    let home = sources.home.as_deref();
+    let mut listing = McpListing::default();
+    if let Some(path) = project_config(cwd, home) {
+        match parsed(&path) {
+            Err(error) => listing.unreadable.push(McpUnreadable { path, origin: McpOrigin::Project, error }),
+            Ok(found) if !crate::trust::Gate::at(cwd, home, sources.trust).honours(&path) => {
+                listing.servers.extend(found.into_iter().filter(|server| is_free_name(server.name())).map(|server| {
+                    McpServerInfo {
+                        name: server.name().to_owned(),
+                        origin: McpOrigin::Project,
+                        target: server.target(),
+                        state: McpState::Untrusted,
+                    }
+                }));
+            }
+            Ok(_) => {}
+        }
+    }
+    let user = home.map(|home| home.join(brand::DIR).join("mcp.json")).filter(|path| path.is_file());
+    if let Some(path) = user
+        && let Err(error) = parsed(&path)
+    {
+        listing.unreadable.push(McpUnreadable { path, origin: McpOrigin::User, error });
+    }
+    listing.servers.extend(origins(cwd, &sources).into_iter().map(|(origin, server)| McpServerInfo {
+        name: server.name().to_owned(),
+        state: McpState::of(&origin, server.name(), &sources.approval),
+        target: server.target(),
+        origin,
+    }));
+    Ok(listing)
 }
 
 pub fn project_config(cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
@@ -150,13 +179,16 @@ fn plugin_servers(plugin: &Plugin) -> Vec<ServerSpec> {
     }
 }
 
-fn read(path: &Path, whose: &str) -> Vec<ServerSpec> {
-    let parsed = std::fs::read_to_string(path)
+fn parsed(path: &Path) -> Result<Vec<ServerSpec>, String> {
+    std::fs::read_to_string(path)
         .map_err(|error| error.to_string())
         .and_then(|text| serde_json::from_str::<Value>(&text).map_err(|error| error.to_string()))
         .map(|config| expand(config, &|name| std::env::var(name).ok()))
-        .and_then(|config| parse_config(&config.to_string()));
-    parsed.unwrap_or_else(|error| {
+        .and_then(|config| parse_config(&config.to_string()))
+}
+
+fn read(path: &Path, whose: &str) -> Vec<ServerSpec> {
+    parsed(path).unwrap_or_else(|error| {
         tracing::warn!(%error, path = %path.display(), "{whose} MCP servers are not available");
         Vec::new()
     })
@@ -240,6 +272,35 @@ mod tests {
             ]
         );
         assert!(!format!("{listed:?}").contains("secret"), "headers stay out");
+    }
+
+    #[test]
+    fn the_listing_names_each_unreadable_file_and_an_untrusted_project_s_servers_as_skipped() {
+        use domain::Extensions;
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        let user = home.path().join(concat!(brand::dir!(), "/mcp.json"));
+        write(user.clone(), "{broken");
+        write(repo.path().join(concat!(brand::dir!(), "/mcp.json")), r#"{"mcpServers": {"jira": {"command": "j"}}}"#);
+        let mut request = PromptRequest::plain(repo.path().to_path_buf(), "", ModelOption::new("", ""));
+        request.extensions = Some(Extensions {
+            home: Some(home.path().to_path_buf()),
+            trust: domain::trust::Trust::Untrusted,
+            ..Extensions::default()
+        });
+        let listing = crate::mcp::listing(&request).expect("listed");
+        assert_eq!(
+            listing.servers,
+            [McpServerInfo {
+                name: "jira".into(),
+                origin: McpOrigin::Project,
+                target: "j".into(),
+                state: McpState::Untrusted
+            }]
+        );
+        assert_eq!(listing.unreadable.len(), 1);
+        assert_eq!((&listing.unreadable[0].path, &listing.unreadable[0].origin), (&user, &McpOrigin::User));
+        assert!(listing.unreadable[0].error.contains("key must be a string"), "{listing:?}");
     }
 
     #[test]

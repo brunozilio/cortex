@@ -16,7 +16,7 @@ fn with_no_servers_the_list_says_how_to_add_one() {
 #[test]
 fn a_command_server_is_added_listed_and_removed() {
     let sandbox = Sandbox::fresh();
-    let added = sandbox.run(&["mcp", "add", "-e", "TOKEN=${TOKEN}", "echo", "node", "server.js", "--flag"]);
+    let added = sandbox.run(&["mcp", "add", "-e", "TOKEN=${TOKEN}", "echo", "node", "--", "server.js", "--flag"]);
     added.succeeded().quiet_on_stderr();
     assert_eq!(added.stdout, "Added echo (user, ready): node server.js --flag\n");
     assert_eq!(
@@ -106,4 +106,97 @@ fn a_project_settings_file_that_is_not_json_fails_the_list_naming_it() {
         .quiet_on_stdout()
         .complained("Could not read the MCP servers")
         .complained(&file.display().to_string());
+}
+
+fn project_servers(sandbox: &Sandbox, servers: &str) {
+    sandbox.write(&sandbox.project_dir().join("mcp.json"), &format!(r#"{{"mcpServers": {servers}}}"#));
+}
+
+#[test]
+fn a_user_config_that_is_not_json_fails_the_list_naming_it_and_its_error() {
+    let sandbox = Sandbox::fresh();
+    let file = sandbox.user_dir().join("mcp.json");
+    sandbox.write(&file, "{broken");
+    let ran = sandbox.run(&["mcp", "list"]);
+    ran.failed_with(1).complained(&file.display().to_string()).complained("key must be a string");
+    assert!(!ran.stdout.contains("No MCP servers"), "{ran:?}");
+}
+
+#[test]
+fn a_project_config_that_is_not_json_is_a_warning_on_the_list() {
+    let sandbox = Sandbox::fresh();
+    let file = sandbox.project_dir().join("mcp.json");
+    sandbox.write(&file, "{broken");
+    let ran = sandbox.run(&["mcp", "list"]);
+    ran.succeeded().complained(&format!("warning: {}: key must be a string", file.display()));
+}
+
+#[test]
+fn approving_or_denying_a_server_that_is_not_there_fails_naming_it_and_the_known_ones() {
+    let sandbox = Sandbox::fresh();
+    project_servers(&sandbox, r#"{"jira": {"command": "jira-mcp"}}"#);
+    for verb in ["approve", "deny"] {
+        let ran = sandbox.run(&["mcp", verb, "ghost"]);
+        ran.failed_with(1).quiet_on_stdout().complained("No MCP server `ghost` here; known: jira");
+    }
+    assert!(!sandbox.project_dir().join("settings.local.json").exists(), "no approval was written");
+    sandbox.run(&["mcp", "approve", "jira"]).succeeded();
+}
+
+#[test]
+fn adding_a_name_that_is_taken_is_refused_unless_forced() {
+    let sandbox = Sandbox::fresh();
+    sandbox.run(&["mcp", "add", "echo", "node"]).succeeded();
+    let ran = sandbox.run(&["mcp", "add", "echo", "deno"]);
+    ran.failed_with(1).quiet_on_stdout().complained("`echo` is already one of your MCP servers (node)");
+    ran.complained("--force");
+    assert_eq!(kept(&sandbox)["mcpServers"]["echo"]["command"], "node", "the first one is kept");
+    sandbox.run(&["mcp", "add", "--force", "echo", "deno"]).succeeded().said("Added echo (user, ready): deno");
+    assert_eq!(kept(&sandbox)["mcpServers"]["echo"]["command"], "deno");
+}
+
+#[test]
+fn an_untrusted_project_s_servers_are_listed_as_skipped_and_counted_by_doctor() {
+    let sandbox = Sandbox::fresh();
+    project_servers(&sandbox, r#"{"jira": {"command": "jira-mcp"}}"#);
+    let ran = sandbox.run(&["mcp", "list"]);
+    ran.succeeded();
+    let jira = ran.stdout.lines().find(|line| line.starts_with("jira")).unwrap_or_else(|| panic!("{ran:?}"));
+    assert!(jira.contains("project") && jira.contains("skipped: folder not trusted"), "{ran:?}");
+    let doctor = sandbox.run(&["doctor"]);
+    let trust = doctor.stdout.lines().find(|line| line.contains("trust")).unwrap_or_default();
+    assert!(trust.contains("MCP servers (1)"), "{doctor:?}");
+}
+
+#[test]
+fn options_after_the_command_are_ours_and_the_server_s_own_follow_a_double_dash() {
+    let sandbox = Sandbox::fresh();
+    sandbox.run(&["mcp", "add", "echo", "node", "-e", "K=V"]).succeeded();
+    assert_eq!(kept(&sandbox)["mcpServers"]["echo"], serde_json::json!({"command": "node", "env": {"K": "V"}}));
+
+    let ran = sandbox.run(&["mcp", "add", "other", "node", "server.js", "--flag"]);
+    ran.failed_with(2).quiet_on_stdout().complained("'-- --flag'");
+
+    sandbox.run(&["mcp", "add", "npx", "--", "npx", "-y", "pkg"]).succeeded();
+    assert_eq!(kept(&sandbox)["mcpServers"]["npx"], serde_json::json!({"command": "npx", "args": ["-y", "pkg"]}));
+
+    let help = sandbox.run(&["mcp", "add", "--help"]);
+    help.succeeded().said(" -- ");
+}
+
+#[test]
+fn get_prints_one_server_s_entry_with_its_secrets_hidden() {
+    let sandbox = Sandbox::fresh();
+    sandbox.write(
+        &sandbox.user_dir().join("mcp.json"),
+        r#"{"mcpServers": {"docs": {"type": "http", "url": "https://e.invalid/mcp",
+            "headers": {"Authorization": "Bearer sk-live-abcdef0123456789", "X-Toolsets": "repos"}}}}"#,
+    );
+    let ran = sandbox.run(&["mcp", "get", "docs"]);
+    ran.succeeded().quiet_on_stderr().said("docs").said("user").said("https://e.invalid/mcp").said("repos");
+    assert!(!ran.stdout.contains("sk-live"), "{ran:?}");
+    ran.said(&sandbox.user_dir().join("mcp.json").display().to_string());
+
+    let ghost = sandbox.run(&["mcp", "get", "ghost"]);
+    ghost.failed_with(1).quiet_on_stdout().complained("No MCP server `ghost` here; known: docs");
 }

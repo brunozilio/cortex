@@ -106,6 +106,7 @@ fn is_query(command: &ClientCommand) -> bool {
             | ClientCommand::Feature(_)
             | ClientCommand::ApproveMcpServer { .. }
             | ClientCommand::AddMcpServer { .. }
+            | ClientCommand::GetMcpServer { .. }
             | ClientCommand::RemoveMcpServer { .. }
             | ClientCommand::SignInMcpServer { .. }
             | ClientCommand::SignOutMcpServer { .. }

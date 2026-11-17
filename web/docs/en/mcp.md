@@ -23,7 +23,7 @@ Add a remote server:
 Add a local server started with `npx`, passing a token from your environment:
 
 ```bash
-{{COMMAND}} mcp add -e GITHUB_TOKEN='${GITHUB_TOKEN}' github npx -y @modelcontextprotocol/server-github
+{{COMMAND}} mcp add -e GITHUB_TOKEN='${GITHUB_TOKEN}' github -- npx -y @modelcontextprotocol/server-github
 ```
 
 Check what a session in this folder will use:
@@ -119,30 +119,33 @@ When the user's and the project's files declare the same name, an approved proje
 | Command | What it does |
 |---|---|
 | `{{COMMAND}} mcp` or `{{COMMAND}} mcp list` | Lists the servers, where each comes from and whether it starts |
-| `{{COMMAND}} mcp add <name> <url-or-command> [args…]` | Adds one of your servers to `~/{{DIR}}/mcp.json` |
+| `{{COMMAND}} mcp get <name>` | Shows one server: its origin, state, target, file and stored entry, with secrets hidden |
+| `{{COMMAND}} mcp add <name> <url-or-command> [-- args…]` | Adds one of your servers to `~/{{DIR}}/mcp.json` |
 | `{{COMMAND}} mcp remove <name>` | Removes one of your servers |
 | `{{COMMAND}} mcp approve <name>` | Lets a project server start |
 | `{{COMMAND}} mcp deny <name>` | Turns a project server off |
 | `{{COMMAND}} mcp login <name>` | Signs in to a remote server in the browser (OAuth) |
 | `{{COMMAND}} mcp logout <name>` | Forgets the sign-in to a remote server |
 
-`add` takes these options, written before the name:
+`add` takes these options, anywhere before `--`:
 
 | Option | Meaning |
 |---|---|
 | `-e`, `--env KEY=VALUE` | An environment variable for a local server (repeatable). Quote `'${VAR}'` so the shell leaves it for {{NAME}} to read at start. |
 | `-H`, `--header "Name: value"` | A header for a remote server (repeatable) |
 | `--transport sse` | Use the older HTTP + SSE transport for a URL (`http` by default) |
+| `--force` | Replace a server of yours that already has this name |
 
-A target starting with `https://` or `http://` makes a remote server; anything else is the command of a local server, and what follows it are its arguments.
+A target starting with `https://` or `http://` makes a remote server; anything else is the command of a local server, and what follows it are its arguments. Write `--` before the server's own arguments when any of them starts with `-`: everything after `--` belongs to the server. An argument starting with `-` without a `--` before it is refused with a hint to add one.
 
 ```bash
 {{COMMAND}} mcp add -H "Authorization: Bearer ${API_TOKEN}" docs https://docs.example.com/mcp
 {{COMMAND}} mcp add --transport sse legacy https://old.example.com/sse
-{{COMMAND}} mcp add jira jira-mcp --stdio
+{{COMMAND}} mcp add jira jira-mcp -- --stdio
+{{COMMAND}} mcp add github -- npx -y @modelcontextprotocol/server-github
 ```
 
-`add` refuses a name with other characters, a reserved name, or a server that has neither a command nor a URL. `remove` only removes servers from your own `~/{{DIR}}/mcp.json`.
+`add` refuses a name with other characters, a reserved name, a server that has neither a command nor a URL, or a name you already use (unless `--force` is given; the error names the existing entry). `remove` only removes servers from your own `~/{{DIR}}/mcp.json`. `approve`, `deny` and `get` refuse a name that is not listed, and say which names are.
 
 ### The list
 
@@ -160,6 +163,9 @@ Each line shows the name, the origin, the state and the target (URL or command l
 | `ready` | Starts with the next prompt |
 | `waiting for approval` | A project server you have not approved |
 | `off` | A project server you turned off |
+| `skipped: folder not trusted` | A project server in a folder you have not trusted: it is listed, but nothing of the project starts |
+
+A configuration file that is not valid JSON is named with its error. When it is your own `~/{{DIR}}/mcp.json`, `{{COMMAND}} mcp list` fails (exit code 1); a project's broken `{{DIR}}/mcp.json` is a `warning:` line and the list goes on.
 
 ## In the chat: `/mcp`
 
@@ -177,7 +183,7 @@ A change applies from the next message. `/reload` re-reads `~/{{DIR}}` and the p
 
 A server in a project's checked-in `{{DIR}}/mcp.json` runs a program or calls a URL on your behalf, so two things must be true before it starts:
 
-1. You trust the project's folder. Until then its servers are not started and are not even listed for approval. See [Workspace trust](./sandbox-and-safety#workspace-trust).
+1. You trust the project's folder. Until then its servers are not started; `{{COMMAND}} mcp list` shows them as `skipped: folder not trusted`, and `{{COMMAND}} doctor` counts them on its trust line. See [Workspace trust](./sandbox-and-safety#workspace-trust).
 2. You approve that server. Trusting the folder does not approve its servers.
 
 Approvals live in your own settings, never in the project's shared file:

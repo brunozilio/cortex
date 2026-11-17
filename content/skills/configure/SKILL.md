@@ -137,7 +137,7 @@ Prefer the command; it validates and writes the user's file:
 ```bash
 {{COMMAND}} mcp add tracker https://mcp.example.com/mcp
 {{COMMAND}} mcp add -H 'Authorization: Bearer ${API_TOKEN}' docs https://docs.example.com/mcp
-{{COMMAND}} mcp add -e GITHUB_TOKEN='${GITHUB_TOKEN}' github npx -y @modelcontextprotocol/server-github
+{{COMMAND}} mcp add -e GITHUB_TOKEN='${GITHUB_TOKEN}' github -- npx -y @modelcontextprotocol/server-github
 {{COMMAND}} mcp list
 ```
 

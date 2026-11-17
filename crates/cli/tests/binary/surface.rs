@@ -52,6 +52,15 @@ fn an_unknown_subcommand_of_a_group_is_a_usage_error() {
 }
 
 #[test]
+fn a_prompt_without_a_terminal_or_print_mode_fails_early_without_drawing() {
+    let sandbox = Sandbox::fresh();
+    for args in [vec!["bogus-sub"], vec![], vec!["--inline", "hello there"]] {
+        let ran = sandbox.run(&args);
+        ran.failed_with(2).quiet_on_stdout().complained("no terminal: use -p for print mode");
+    }
+}
+
+#[test]
 fn a_project_folder_that_does_not_exist_fails_naming_it() {
     let sandbox = Sandbox::fresh();
     let missing = sandbox.path("missing");

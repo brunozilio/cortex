@@ -12,41 +12,128 @@ pub const SIGN_IN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 #[allow(clippy::large_enum_variant, reason = "commands are short-lived messages, never stored in bulk")]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum ClientCommand {
-    SubmitPrompt { run: RunId, request: PromptRequest },
-    CancelRun { run: RunId },
-    AnswerAsk { run: RunId, ask: AskId, decision: Decision },
-    SetPermissionMode { run: RunId, mode: PermissionMode },
-    SteerRun { run: RunId, text: String },
-    UnsteerRun { run: RunId },
-    BackgroundRun { run: RunId },
+    SubmitPrompt {
+        run: RunId,
+        request: PromptRequest,
+    },
+    CancelRun {
+        run: RunId,
+    },
+    AnswerAsk {
+        run: RunId,
+        ask: AskId,
+        decision: Decision,
+    },
+    SetPermissionMode {
+        run: RunId,
+        mode: PermissionMode,
+    },
+    SteerRun {
+        run: RunId,
+        text: String,
+    },
+    UnsteerRun {
+        run: RunId,
+    },
+    BackgroundRun {
+        run: RunId,
+    },
     ListModels,
-    RegisterPeer { path: PathBuf },
-    ListSkills { path: PathBuf },
-    ListAgents { path: PathBuf },
+    RegisterPeer {
+        path: PathBuf,
+    },
+    ListSkills {
+        path: PathBuf,
+    },
+    ListAgents {
+        path: PathBuf,
+    },
     LoadSettings,
-    SaveSettings { settings: serde_json::Value },
-    ChangeSettings { changes: Vec<crate::settings::SettingsChange> },
+    SaveSettings {
+        settings: serde_json::Value,
+    },
+    ChangeSettings {
+        changes: Vec<crate::settings::SettingsChange>,
+    },
     ListProviders,
-    ConnectProvider { provider: ModelProvider, key: String },
-    SignInProvider { provider: ModelProvider },
-    CloseAndSignIn { provider: ModelProvider, port: u16, pid: u32 },
-    DisconnectProvider { provider: ModelProvider },
-    UseProviderAccount { provider: ModelProvider, account: String },
-    RemoveProviderAccount { provider: ModelProvider, account: String },
-    SetProviderBalance { provider: ModelProvider, balance: domain::account_pool::Balance },
-    ListMcpServers { path: PathBuf },
-    TakeNotices { for_agent: bool },
+    ConnectProvider {
+        provider: ModelProvider,
+        key: String,
+    },
+    SignInProvider {
+        provider: ModelProvider,
+    },
+    CloseAndSignIn {
+        provider: ModelProvider,
+        port: u16,
+        pid: u32,
+    },
+    DisconnectProvider {
+        provider: ModelProvider,
+    },
+    UseProviderAccount {
+        provider: ModelProvider,
+        account: String,
+    },
+    RemoveProviderAccount {
+        provider: ModelProvider,
+        account: String,
+    },
+    SetProviderBalance {
+        provider: ModelProvider,
+        balance: domain::account_pool::Balance,
+    },
+    ListMcpServers {
+        path: PathBuf,
+    },
+    TakeNotices {
+        for_agent: bool,
+    },
     Feature(FeatureRequest),
-    ListPermissions { path: PathBuf },
-    ApproveMcpServer { path: PathBuf, name: String, approve: bool },
-    AddMcpServer { path: PathBuf, name: String, server: serde_json::Value },
-    RemoveMcpServer { path: PathBuf, name: String },
-    SignInMcpServer { path: PathBuf, name: String },
-    SignOutMcpServer { path: PathBuf, name: String },
-    Trust { path: PathBuf, trusted: bool },
-    TrustForThisProcess { path: PathBuf },
-    TrustState { path: PathBuf },
-    CancelRequest { request: RequestId },
+    ListPermissions {
+        path: PathBuf,
+    },
+    ApproveMcpServer {
+        path: PathBuf,
+        name: String,
+        approve: bool,
+    },
+    AddMcpServer {
+        path: PathBuf,
+        name: String,
+        server: serde_json::Value,
+        #[serde(default)]
+        replace: bool,
+    },
+    GetMcpServer {
+        path: PathBuf,
+        name: String,
+    },
+    RemoveMcpServer {
+        path: PathBuf,
+        name: String,
+    },
+    SignInMcpServer {
+        path: PathBuf,
+        name: String,
+    },
+    SignOutMcpServer {
+        path: PathBuf,
+        name: String,
+    },
+    Trust {
+        path: PathBuf,
+        trusted: bool,
+    },
+    TrustForThisProcess {
+        path: PathBuf,
+    },
+    TrustState {
+        path: PathBuf,
+    },
+    CancelRequest {
+        request: RequestId,
+    },
 }
 
 impl ClientCommand {
@@ -80,6 +167,7 @@ impl ClientCommand {
             Self::Feature(_) => "feature",
             Self::ApproveMcpServer { .. } => "approve_mcp_server",
             Self::AddMcpServer { .. } => "add_mcp_server",
+            Self::GetMcpServer { .. } => "get_mcp_server",
             Self::RemoveMcpServer { .. } => "remove_mcp_server",
             Self::SignInMcpServer { .. } => "sign_in_mcp_server",
             Self::SignOutMcpServer { .. } => "sign_out_mcp_server",
@@ -142,7 +230,9 @@ mod tests {
                 path: "/repo".into(),
                 name: "atlassian".into(),
                 server: serde_json::json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"}),
+                replace: true,
             },
+            ClientCommand::GetMcpServer { path: "/repo".into(), name: "atlassian".into() },
             ClientCommand::RemoveMcpServer { path: "/repo".into(), name: "atlassian".into() },
             ClientCommand::SignInMcpServer { path: "/repo".into(), name: "linear".into() },
             ClientCommand::SignOutMcpServer { path: "/repo".into(), name: "linear".into() },

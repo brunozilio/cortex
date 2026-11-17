@@ -71,11 +71,12 @@ Prints one line per model: its id, padded to 40 characters, then its label.
 {{COMMAND}} mcp [COMMAND]
 ```
 
-Without a command, it lists the servers. Every command prints the server list afterwards: the name, where it comes from (`host`, `project`, `user` or `plugin <name>`), its state (`ready`, `waiting for approval` or `off`), and its URL or command. See [MCP](./mcp).
+Without a command, it lists the servers. Every command prints the server list afterwards: the name, where it comes from (`host`, `project`, `user` or `plugin <name>`), its state (`ready`, `waiting for approval`, `off` or `skipped: folder not trusted`), and its URL or command. See [MCP](./mcp).
 
 | Command | Arguments | What it does |
 |---|---|---|
 | `mcp list` | | List the servers, where they come from and whether they start |
+| `mcp get` | `<NAME>` | Show one server's entry, with its secrets hidden |
 | `mcp add` | `<NAME> <TARGET> [ARGS]...` | Add one of your own servers: a URL (HTTP) or a command and its arguments |
 | `mcp remove` | `<NAME>` | Remove one of your own servers |
 | `mcp approve` | `<NAME>` | Let a server of this project's `.mcp.json` start |
@@ -89,17 +90,19 @@ Without a command, it lists the servers. Every command prints the server list af
 |---|---|---|---|
 | `<NAME>` | text | | The server's name: letters, digits, `-` and `_` |
 | `<TARGET>` | text | | A URL starting with `https://` or `http://` for an HTTP server; anything else is the command to start |
-| `[ARGS]...` | text | | The command's arguments. Everything after the target is taken as is, even values starting with `-`. |
+| `[ARGS]...` | text | | The command's arguments; write `--` before them when one starts with `-` |
+| `--force` | | | Replace a server of yours that has this name |
 | `-e`, `--env` | `KEY=VALUE` | | An environment variable for a command server (repeatable). `${VAR}` is read when the server starts. |
 | `-H`, `--header` | `"Name: value"` | | A header for an HTTP server (repeatable) |
 | `--transport` | `http` or `sse` | `http` | `sse` for a server on the older HTTP+SSE transport |
 
-Because the arguments take everything after the target, put the options before the name:
+The options may come anywhere before `--`; everything after `--` is the server's own:
 
 ```bash
 {{COMMAND}} mcp add -H "Authorization: Bearer $TOKEN" docs https://mcp.example.com/mcp
 {{COMMAND}} mcp add --transport sse legacy https://old.example.com/sse
-{{COMMAND}} mcp add -e API_KEY='${API_KEY}' files npx -y @example/files-mcp --root .
+{{COMMAND}} mcp add -e API_KEY='${API_KEY}' files -- npx -y @example/files-mcp --root .
+{{COMMAND}} mcp get files
 {{COMMAND}} mcp approve jira
 ```
 

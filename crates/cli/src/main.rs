@@ -174,8 +174,17 @@ fn run(mut cli: Cli) -> Result<ExitCode, String> {
     match cli.command.take() {
         Some(action) => subcommand(action, &launch.sdk, &launch.cwd, cli.model),
         None if cli.print => print_the_answers(cli, launch),
+        None if !on_a_terminal() => {
+            eprintln!("{brand_command}: no terminal: use -p for print mode", brand_command = brand::COMMAND);
+            Ok(ExitCode::from(2))
+        }
         None => chat(cli, launch),
     }
+}
+
+fn on_a_terminal() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
 }
 
 fn launch(cli: &Cli, sdk: Sdk, cwd: PathBuf) -> Result<Launch, String> {

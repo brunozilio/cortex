@@ -71,11 +71,12 @@ Imprime uma linha por modelo: o id, completado até 40 caracteres, e depois o r�
 {{COMMAND}} mcp [COMMAND]
 ```
 
-Sem comando, lista os servidores. Todo comando imprime a lista de servidores no fim: o nome, de onde vem (`host`, `project`, `user` ou `plugin <nome>`), o estado (`ready`, `waiting for approval` ou `off`) e a URL ou o comando. Veja [MCP](./mcp).
+Sem comando, lista os servidores. Todo comando imprime a lista de servidores no fim: o nome, de onde vem (`host`, `project`, `user` ou `plugin <nome>`), o estado (`ready`, `waiting for approval`, `off` ou `skipped: folder not trusted`) e a URL ou o comando. Veja [MCP](./mcp).
 
 | Comando | Argumentos | O que faz |
 |---|---|---|
 | `mcp list` | | Lista os servidores, de onde vêm e se iniciam |
+| `mcp get` | `<NAME>` | Mostra a entrada de um servidor, com os segredos ocultos |
 | `mcp add` | `<NAME> <TARGET> [ARGS]...` | Adiciona um servidor seu: uma URL (HTTP) ou um comando e seus argumentos |
 | `mcp remove` | `<NAME>` | Remove um servidor seu |
 | `mcp approve` | `<NAME>` | Deixa um servidor do `.mcp.json` deste projeto iniciar |
@@ -89,17 +90,19 @@ Argumentos e opções de `mcp add`:
 |---|---|---|---|
 | `<NAME>` | texto | | O nome do servidor: letras, dígitos, `-` e `_` |
 | `<TARGET>` | texto | | Uma URL começando com `https://` ou `http://` para um servidor HTTP; qualquer outra coisa é o comando a iniciar |
-| `[ARGS]...` | texto | | Os argumentos do comando. Tudo depois do target é pego como está, mesmo valores que começam com `-`. |
+| `[ARGS]...` | texto | | Os argumentos do comando; escreva `--` antes deles quando algum começa com `-` |
+| `--force` | | | Substitui um servidor seu que tem esse nome |
 | `-e`, `--env` | `KEY=VALUE` | | Uma variável de ambiente para um servidor de comando (pode repetir). `${VAR}` é lido quando o servidor inicia. |
 | `-H`, `--header` | `"Name: value"` | | Um cabeçalho para um servidor HTTP (pode repetir) |
 | `--transport` | `http` ou `sse` | `http` | `sse` para um servidor no transporte antigo HTTP+SSE |
 
-Como os argumentos pegam tudo depois do target, coloque as opções antes do nome:
+As opções podem vir em qualquer lugar antes de `--`; tudo depois de `--` é do servidor:
 
 ```bash
 {{COMMAND}} mcp add -H "Authorization: Bearer $TOKEN" docs https://mcp.example.com/mcp
 {{COMMAND}} mcp add --transport sse legacy https://old.example.com/sse
-{{COMMAND}} mcp add -e API_KEY='${API_KEY}' files npx -y @example/files-mcp --root .
+{{COMMAND}} mcp add -e API_KEY='${API_KEY}' files -- npx -y @example/files-mcp --root .
+{{COMMAND}} mcp get files
 {{COMMAND}} mcp approve jira
 ```
 

@@ -21,6 +21,7 @@ pub enum McpState {
     Ready,
     Pending,
     Off,
+    Untrusted,
 }
 
 impl McpState {
@@ -87,7 +88,21 @@ pub fn server_from(target: &str, args: &[String], env: &[(String, String)], head
     Value::Object(server)
 }
 
-pub fn add_server(config: Value, name: &str, server: Value) -> Result<Value, String> {
+pub fn entry_target(server: &Value) -> String {
+    if let Some(url) = server["url"].as_str() {
+        return url.to_owned();
+    }
+    let args = server["args"].as_array().into_iter().flatten().filter_map(Value::as_str);
+    server["command"].as_str().into_iter().chain(args).collect::<Vec<_>>().join(" ")
+}
+
+pub fn add_server(config: Value, name: &str, server: Value, replace: bool) -> Result<Value, String> {
+    if !replace && let Some(existing) = config["mcpServers"].get(name) {
+        return Err(format!(
+            "`{name}` is already one of your MCP servers ({}); add it with --force to replace it",
+            entry_target(existing)
+        ));
+    }
     if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || "-_".contains(c)) {
         return Err(format!("`{name}` is not a server name: use letters, digits, - and _"));
     }
