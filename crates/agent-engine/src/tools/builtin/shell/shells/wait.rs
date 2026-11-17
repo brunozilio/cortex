@@ -85,7 +85,7 @@ mod tests {
     fn a_command_is_waited_for_and_its_output_kept() {
         let (stop, detach) = (AtomicBool::new(false), AtomicBool::new(false));
         let id = started("echo out; echo err >&2; exit 3", 911);
-        let waited = wait(&id, Duration::from_secs(5), &stop, &detach);
+        let waited = wait(&id, Duration::from_secs(120), &stop, &detach);
         let Waited::Exited { output, success, code } = waited else { panic!("{waited:?}") };
         assert!(output.contains("out") && output.contains("err"), "{output}");
         assert_eq!((success, code), (false, Some(3)));
@@ -99,10 +99,12 @@ mod tests {
         let id = started("sleep 30", 912);
         let pressed = std::sync::Arc::clone(&detach);
         let ctrl_b = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(100));
+            while pressed.load(Ordering::SeqCst) {
+                std::thread::yield_now();
+            }
             pressed.store(true, Ordering::SeqCst);
         });
-        assert_eq!(wait(&id, Duration::from_secs(5), &stop, &detach), Waited::Detached, "the stale press is ignored");
+        assert_eq!(wait(&id, Duration::from_secs(120), &stop, &detach), Waited::Detached, "the stale press is ignored");
         ctrl_b.join().expect("ctrl+b");
         assert_eq!(super::super::list(912), [(id.clone(), "sleep 30".to_owned(), true)]);
         assert!(!super::super::kill(999, &id), "another client cannot stop it");
@@ -110,6 +112,11 @@ mod tests {
         assert!(super::super::list(912).is_empty());
 
         let id = started("echo started; sleep 30", 913);
+        let deadline = Instant::now() + Duration::from_secs(120);
+        while !super::super::tail(913, &id, 100).is_some_and(|seen| seen.contains("started")) {
+            assert!(Instant::now() < deadline, "the command never printed");
+            std::thread::sleep(Duration::from_millis(5));
+        }
         let waited = wait(&id, Duration::from_millis(300), &stop, &AtomicBool::new(false));
         assert!(matches!(&waited, Waited::TimedOut(output) if output.contains("started")), "{waited:?}");
     }

@@ -88,32 +88,43 @@ fn a_retry_replaces_the_sign_in_this_process_still_had_waiting_on_the_port() {
     let ports = Arc::new(FakePorts::default());
     let waits = WaitsOnThePortFirst { ports: ports.clone(), earlier: std::sync::atomic::AtomicUsize::new(0) };
     let providers = rig().providers.with_sign_in(Arc::new(waits)).with_ports(ports.clone());
-    let (outbox, rx) = outbox();
+    let (tx, rx) = crossbeam_channel::unbounded();
+    let outbox = Outbox::new(tx, Arc::new(|| {}));
     let browser = ModelProvider::new("browser-sub");
-    providers.sign_in(browser, &outbox);
+    providers.sign_in(browser, &outbox.answering(RequestId(1)));
     assert!(matches!(
         next(&rx),
-        ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, .. }) if url.ends_with("never-answered")
+        Reply::Providers(ProviderEvent::AuthorizeAt { url, .. }) if url.ends_with("never-answered")
     ));
 
-    providers.sign_in(browser, &outbox);
+    providers.sign_in(browser, &outbox.answering(RequestId(2)));
 
+    let mut replaced = Vec::new();
+    let mut retried = Vec::new();
+    for _ in 0..3 {
+        match sent(&rx) {
+            protocol::ServerEvent::Reply { id: RequestId(1), reply } => replaced.push(reply),
+            protocol::ServerEvent::Reply { id: RequestId(2), reply } => retried.push(reply),
+            other => panic!("expected an answer to one of the two sign-ins, got {other:?}"),
+        }
+    }
+    assert!(failure(&replaced[0]).contains("replaced"), "the replaced sign-in ends for the request that began it");
     assert!(matches!(
-        next(&rx),
-        ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, .. }) if url.ends_with("browser-sub")
+        &retried[0],
+        Reply::Providers(ProviderEvent::AuthorizeAt { url, .. }) if url.ends_with("browser-sub")
     ));
-    assert!(listed(&next(&rx)).iter().any(|p| p.provider == browser && p.account.is_some()));
+    assert!(listed(&retried[1]).iter().any(|p| p.provider == browser && p.account.is_some()));
     assert!(ports.closed().is_empty(), "no process was closed to get the port back");
     let more = rx.recv_timeout(std::time::Duration::from_millis(200));
-    assert!(more.is_err(), "the replaced sign-in says nothing more: {more:?}");
+    assert!(more.is_err(), "each sign-in ends once: {more:?}");
 }
 
 fn signing_in(ports: &Arc<FakePorts>) -> ModelProviders {
     rig().providers.with_sign_in(Arc::new(NeedsPort(ports.clone()))).with_ports(ports.clone())
 }
 
-fn busy(holder: Option<PortHolder>) -> ServerEvent {
-    ServerEvent::Providers(ProviderEvent::PortBusy { provider: ModelProvider::new("browser-sub"), port: PORT, holder })
+fn busy(holder: Option<PortHolder>) -> Reply {
+    Reply::Providers(ProviderEvent::PortBusy { provider: ModelProvider::new("browser-sub"), port: PORT, holder })
 }
 
 #[test]
@@ -131,7 +142,7 @@ fn closing_the_holder_frees_the_port_and_the_sign_in_goes_on() {
     let providers = signing_in(&ports);
     let (outbox, rx) = outbox();
     providers.close_and_sign_in(ModelProvider::new("browser-sub"), PORT, 998, &outbox);
-    assert!(matches!(next(&rx), ServerEvent::Providers(ProviderEvent::AuthorizeAt { .. })));
+    assert!(matches!(next(&rx), Reply::Providers(ProviderEvent::AuthorizeAt { .. })));
     assert!(listed(&next(&rx)).iter().any(|p| p.provider == ModelProvider::new("browser-sub") && p.account.is_some()));
     assert_eq!(ports.closed(), [998]);
 }

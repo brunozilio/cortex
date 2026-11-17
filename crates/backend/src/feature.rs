@@ -1,11 +1,11 @@
 use domain::{PromptRequest, RunId};
-use protocol::ServerEvent;
+use protocol::Unsolicited;
 
 use crate::services::LocalServices;
 
 pub type Submit<'a> = &'a dyn Fn(RunId, PromptRequest) -> Result<(), String>;
 
-pub type Finish = Box<dyn FnOnce(&domain::memory::scorecard::RunOutcome) -> Option<ServerEvent> + Send + Sync>;
+pub type Finish = Box<dyn FnOnce(&domain::memory::scorecard::RunOutcome) -> Option<Unsolicited> + Send + Sync>;
 
 pub struct Context<'a> {
     pub client: u64,

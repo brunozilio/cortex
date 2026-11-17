@@ -72,11 +72,18 @@ mod tests {
     #[test]
     fn lines_reported_while_watched_reach_the_viewer_and_nothing_leaks_after() {
         let shown = Mutex::new(Vec::new());
+        let viewer_has = |lines: usize| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(120);
+            while shown.locked().len() < lines {
+                assert!(std::time::Instant::now() < deadline, "the viewer never got line {lines}");
+                std::thread::sleep(EVERY / 10);
+            }
+        };
         let answer = watched(&|line| shown.locked().push(line), || {
             report("step 1\n");
-            std::thread::sleep(EVERY * 2);
+            viewer_has(1);
             report("step 1\nstep 2\n");
-            std::thread::sleep(EVERY * 2);
+            viewer_has(2);
             42
         });
         assert_eq!(answer, 42);

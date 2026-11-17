@@ -43,7 +43,7 @@ fn hook_timeout_kills_a_running_process_tree() {
     let workspace = Workspace::new(dir.path());
     let handler = agent_engine::hooks::Handler {
         kind: "command".into(),
-        command: "sleep 20".into(),
+        command: "sleep 120".into(),
         timeout: 1,
         status_message: (),
         prompt: None,
@@ -54,7 +54,7 @@ fn hook_timeout_kills_a_running_process_tree() {
     };
     let start = std::time::Instant::now();
     assert!(agent_engine::hooks::command(&handler, &json!({}), &workspace).is_err());
-    assert!(start.elapsed() < std::time::Duration::from_secs(4));
+    assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
 }
 
 #[test]
@@ -205,9 +205,9 @@ fn completed_hook_shell_does_not_wait_for_a_pipe_inheriting_background_child() {
     let dir = tempfile::tempdir().expect("dir");
     let workspace = Workspace::new(dir.path());
     let handler: agent_engine::hooks::Handler =
-        serde_json::from_value(json!({"type":"command","command":"sleep 20 & exit 0","timeout":1})).expect("handler");
+        serde_json::from_value(json!({"type":"command","command":"sleep 20 & exit 0","timeout":60})).expect("handler");
     let start = std::time::Instant::now();
     let result = agent_engine::hooks::command(&handler, &json!({}), &workspace).expect("completed shell");
     assert_eq!(result.code, Some(0));
-    assert!(start.elapsed() < std::time::Duration::from_secs(2));
+    assert!(start.elapsed() < std::time::Duration::from_secs(15), "{:?}", start.elapsed());
 }

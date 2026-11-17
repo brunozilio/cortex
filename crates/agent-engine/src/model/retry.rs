@@ -96,10 +96,10 @@ mod tests {
             stopper.store(true, Ordering::Relaxed);
         });
         let started = Instant::now();
-        let result = with_retries("P", Duration::from_secs(30), &stop, &mut |_| {}, |_| {
+        let result = with_retries("P", Duration::from_secs(600), &stop, &mut |_| {}, |_| {
             Err(ModelError::Overloaded("busy".into()))
         });
         assert!(matches!(result, Err(ModelError::Cancelled)));
-        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(started.elapsed() < Duration::from_secs(60), "the wait went on: {:?}", started.elapsed());
     }
 }

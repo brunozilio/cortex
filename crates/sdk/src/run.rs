@@ -4,16 +4,20 @@ use platform::sync::Locked;
 
 use crossbeam_channel::Receiver;
 use domain::{AskId, Decision, EngineEvent, PermissionMode, RunId, SessionId};
-use protocol::ClientCommand;
+use protocol::{ClientCommand, Reply};
 
 use crate::Error;
-use crate::client::Client;
+use crate::client::{Client, Pending};
 use crate::plan_watch::PlanWatch;
+
+const BACKEND_GONE: &str = "the backend went away before the run ended";
 
 #[derive(Debug)]
 pub struct Run {
     id: RunId,
     events: Receiver<EngineEvent>,
+    accepted: Option<Pending>,
+    left_running: bool,
     client: Arc<Client>,
     pub(crate) resume: Arc<Mutex<Option<SessionId>>>,
     pub(crate) mode: Arc<Mutex<PermissionMode>>,
@@ -27,13 +31,18 @@ impl Run {
     pub(crate) fn start(client: &Arc<Client>, command: impl FnOnce(RunId) -> ClientCommand) -> Result<Self, Error> {
         let run = RunId::new();
         let events = client.follow(run);
-        if let Err(error) = client.send(command(run)) {
-            client.forget(run);
-            return Err(error);
-        }
+        let accepted = match client.ask(command(run)) {
+            Ok(accepted) => accepted,
+            Err(error) => {
+                client.forget(run);
+                return Err(error);
+            }
+        };
         Ok(Run {
             id: run,
             events,
+            accepted: Some(accepted),
+            left_running: false,
             client: Arc::clone(client),
             resume: Arc::default(),
             mode: Arc::default(),
@@ -52,7 +61,7 @@ impl Run {
         if self.done {
             return None;
         }
-        let event = self.events.recv().ok()?;
+        let event = self.awaited();
         self.observe(&event);
         Some(event)
     }
@@ -61,9 +70,47 @@ impl Run {
         if self.done {
             return None;
         }
-        let event = self.events.try_recv().ok()?;
+        let event = match self.refused_already() {
+            Some(refused) => refused,
+            None => match self.events.try_recv() {
+                Ok(event) => event,
+                Err(crossbeam_channel::TryRecvError::Empty) => return None,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => gone(),
+            },
+        };
         self.observe(&event);
         Some(event)
+    }
+
+    pub fn leave_running(mut self) {
+        self.left_running = true;
+    }
+
+    fn awaited(&mut self) -> EngineEvent {
+        loop {
+            let Some(accepted) = self.accepted.as_ref().map(|pending| pending.replies().clone()) else {
+                return self.events.recv().unwrap_or_else(|_| gone());
+            };
+            crossbeam_channel::select! {
+                recv(self.events) -> event => return event.unwrap_or_else(|_| gone()),
+                recv(accepted) -> reply => {
+                    self.accepted = None;
+                    if let Some(message) = reply.ok().and_then(refusal) {
+                        return EngineEvent::Failed(message);
+                    }
+                }
+            }
+        }
+    }
+
+    fn refused_already(&mut self) -> Option<EngineEvent> {
+        let reply = match self.accepted.as_ref()?.replies().try_recv() {
+            Ok(reply) => Some(reply),
+            Err(crossbeam_channel::TryRecvError::Empty) => return None,
+            Err(crossbeam_channel::TryRecvError::Disconnected) => None,
+        };
+        self.accepted = None;
+        reply.and_then(refusal).map(EngineEvent::Failed)
     }
 
     fn observe(&mut self, event: &EngineEvent) {
@@ -172,8 +219,27 @@ impl Iterator for Run {
 
 impl Drop for Run {
     fn drop(&mut self) {
-        if !self.done {
-            self.client.forget(self.id);
+        if self.done {
+            return;
+        }
+        self.client.forget(self.id);
+        if !self.left_running {
+            let _ = self.client.send(ClientCommand::CancelRun { run: self.id });
         }
     }
 }
+
+fn gone() -> EngineEvent {
+    EngineEvent::Failed(BACKEND_GONE.into())
+}
+
+fn refusal(reply: Reply) -> Option<String> {
+    match reply {
+        Reply::Error { message } | Reply::Feature { output: Err(message), .. } => Some(message),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+#[path = "run_tests.rs"]
+mod tests;

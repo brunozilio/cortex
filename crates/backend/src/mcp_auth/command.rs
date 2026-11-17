@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
-use protocol::ServerEvent;
+use protocol::Reply;
 
-use crate::outbox::Outbox;
+use crate::outbox::Replies;
 use crate::services::LocalServices;
 
 fn url_of(services: &LocalServices, path: &Path, name: &str) -> Result<String, String> {
-    let ServerEvent::McpServers { servers, .. } =
+    let Reply::McpServers { servers, .. } =
         crate::mcp_admin::list(path, &services.extensions, services.home().as_deref())
     else {
         return Err("Could not read the MCP servers".into());
@@ -20,27 +20,27 @@ fn url_of(services: &LocalServices, path: &Path, name: &str) -> Result<String, S
     }
 }
 
-pub(crate) fn sign_in(services: &LocalServices, path: PathBuf, name: String, outbox: &Outbox) {
+pub(crate) fn sign_in(services: &LocalServices, path: PathBuf, name: String, replies: &Replies) {
     let url = match url_of(services, &path, &name) {
         Ok(url) => url,
-        Err(error) => return outbox.send(ServerEvent::error(error)),
+        Err(error) => return replies.send(Reply::error(error)),
     };
-    let (auth, outbox) = (services.mcp_auth.clone(), outbox.clone());
+    let (auth, replies) = (services.mcp_auth.clone(), replies.clone());
     let (extensions, home) = (services.extensions.clone(), services.home());
     platform::named::spawn("mcp-sign-in", move || {
-        let mut open = |at: &str| outbox.send(ServerEvent::McpAuthorizeAt { name: name.clone(), url: at.to_owned() });
-        match auth.sign_in(&url, &mut open) {
-            Ok(()) => outbox.send(crate::mcp_admin::list(&path, &extensions, home.as_deref())),
-            Err(error) => outbox.send(ServerEvent::error(format!("Could not sign in to {name}: {error}"))),
-        }
+        let mut open = |at: &str| replies.send(Reply::McpAuthorizeAt { name: name.clone(), url: at.to_owned() });
+        replies.send(match auth.sign_in(&url, replies.stop(), &mut open) {
+            Ok(()) => crate::mcp_admin::list(&path, &extensions, home.as_deref()),
+            Err(error) => Reply::error(format!("Could not sign in to {name}: {error}")),
+        });
     });
 }
 
-pub(crate) fn sign_out(services: &LocalServices, path: &Path, name: &str, outbox: &Outbox) {
+pub(crate) fn sign_out(services: &LocalServices, path: &Path, name: &str) -> Reply {
     let result = url_of(services, path, name).and_then(|url| services.mcp_auth.sign_out(&url));
-    outbox.send(match result {
+    match result {
         Ok(true) => crate::mcp_admin::list(path, &services.extensions, services.home().as_deref()),
-        Ok(false) => ServerEvent::error(format!("You were not signed in to {name}")),
-        Err(error) => ServerEvent::error(error),
-    });
+        Ok(false) => Reply::error(format!("You were not signed in to {name}")),
+        Err(error) => Reply::error(error),
+    }
 }

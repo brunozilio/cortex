@@ -25,10 +25,12 @@ pub(super) fn sdk_without(engine: &FakeEngine, data: &std::path::Path, off: &[&s
     Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
 }
 
+pub(super) const SETTLES_WITHIN: Duration = Duration::from_secs(120);
+
 pub(super) fn until(app: &mut App, done: impl Fn(&App) -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + SETTLES_WITHIN;
     while !done(app) {
-        assert!(Instant::now() < deadline, "timed out");
+        assert!(Instant::now() < deadline, "the app never got there in {SETTLES_WITHIN:?}");
         if let Ok(msg) = app.rx.recv_timeout(Duration::from_millis(50)) {
             app.message(msg);
         }

@@ -2,7 +2,7 @@ use domain::account_pool::{self, Balance};
 use domain::provider::{ModelProvider, ProviderBook, ProviderKey};
 use llm_providers::Config;
 use platform::sync::Locked;
-use protocol::ServerEvent;
+use protocol::Reply;
 
 use super::{ModelProviders, slot};
 
@@ -25,12 +25,12 @@ pub(super) fn unnamed(config: &Config, label: String, kept: usize) -> String {
 }
 
 impl ModelProviders {
-    pub fn use_account(&self, provider: ModelProvider, wanted: &str) -> ServerEvent {
+    pub fn use_account(&self, provider: ModelProvider, wanted: &str) -> Reply {
         let result = self.change(&mut |book| book.use_account(provider, wanted).map(|_| ()));
         self.answer(provider, result)
     }
 
-    pub fn remove_account(&self, provider: ModelProvider, wanted: &str) -> ServerEvent {
+    pub fn remove_account(&self, provider: ModelProvider, wanted: &str) -> Reply {
         let result = self.change(&mut |book| {
             let removed = book.remove(provider, wanted)?;
             self.secrets.delete(slot(provider, &removed.id));
@@ -39,7 +39,7 @@ impl ModelProviders {
         self.answer(provider, result)
     }
 
-    pub fn set_balance(&self, provider: ModelProvider, balance: Balance) -> ServerEvent {
+    pub fn set_balance(&self, provider: ModelProvider, balance: Balance) -> Reply {
         let result = self.change(&mut |book| {
             book.set_balance(provider, balance);
             Ok(())
@@ -68,7 +68,7 @@ impl ModelProviders {
         Ok(if keys.is_empty() { vec![first] } else { keys })
     }
 
-    pub fn disconnect(&self, provider: ModelProvider) -> ServerEvent {
+    pub fn disconnect(&self, provider: ModelProvider) -> Reply {
         let result = self.change(&mut |book| {
             for account in book.disconnect(provider) {
                 self.secrets.delete(slot(provider, &account.id));

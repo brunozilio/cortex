@@ -4,17 +4,25 @@ use domain::memory::seed::Candidate;
 use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind};
 use domain::provider::{ModelProvider, ProviderSummary};
 use domain::{CustomAgent, ModelOption, Skill};
-use protocol::{ClientCommand, ProviderEvent, ServerEvent};
+use protocol::{ClientCommand, ProviderEvent, Reply};
 use serde_json::{Value, json};
 
 use crate::{Error, Run, Sdk};
 
 impl Sdk {
     pub fn models(&self) -> Result<Vec<ModelOption>, Error> {
-        self.client.call(ClientCommand::ListModels, |event| match event {
-            ServerEvent::Models(models) => Some(Ok(models)),
+        self.client.call(ClientCommand::ListModels, |reply| match reply {
+            Reply::Models(models) => Some(Ok(models)),
             _ => None,
         })
+    }
+
+    pub fn unsolicited(&self) -> Vec<protocol::Unsolicited> {
+        self.client.unsolicited()
+    }
+
+    pub fn cancel_sign_ins(&self) {
+        self.client.cancel_flows();
     }
 
     pub fn providers(&self) -> Result<Vec<ProviderSummary>, Error> {
@@ -40,12 +48,12 @@ impl Sdk {
     }
 
     fn signing_in(&self, command: ClientCommand, mut open: impl FnMut(&str, Option<&str>)) -> Result<SignedIn, Error> {
-        self.client.call(command, |event| match event {
-            ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, code, .. }) => {
+        self.client.flow(command, crate::client::sign_in_patience(), |reply| match reply {
+            Reply::Providers(ProviderEvent::AuthorizeAt { url, code, .. }) => {
                 open(&url, code.as_deref());
                 None
             }
-            ServerEvent::Providers(ProviderEvent::PortBusy { port, holder, .. }) => {
+            Reply::Providers(ProviderEvent::PortBusy { port, holder, .. }) => {
                 Some(Ok(SignedIn::PortBusy { port, holder }))
             }
             other => listed(other).map(|answer| answer.map(SignedIn::Connected)),
@@ -73,28 +81,31 @@ impl Sdk {
     }
 
     pub fn skills(&self, cwd: &Path) -> Result<Vec<Skill>, Error> {
-        self.client.call(ClientCommand::ListSkills { path: cwd.to_path_buf() }, |event| match event {
-            ServerEvent::Skills(skills) => Some(Ok(skills)),
+        self.client.call(ClientCommand::ListSkills { path: cwd.to_path_buf() }, |reply| match reply {
+            Reply::Skills(skills) => Some(Ok(skills)),
             _ => None,
         })
     }
 
     pub fn agents(&self, cwd: &Path) -> Result<Vec<CustomAgent>, Error> {
-        self.client.call(ClientCommand::ListAgents { path: cwd.to_path_buf() }, |event| match event {
-            ServerEvent::Agents(agents) => Some(Ok(agents)),
+        self.client.call(ClientCommand::ListAgents { path: cwd.to_path_buf() }, |reply| match reply {
+            Reply::Agents(agents) => Some(Ok(agents)),
             _ => None,
         })
     }
 
     pub fn settings(&self) -> Result<serde_json::Value, Error> {
-        self.client.call(ClientCommand::LoadSettings, |event| match event {
-            ServerEvent::Settings { settings } => Some(Ok(settings.unwrap_or_else(|| serde_json::json!({})))),
+        self.client.call(ClientCommand::LoadSettings, |reply| match reply {
+            Reply::Settings { settings } => Some(Ok(settings.unwrap_or_else(|| serde_json::json!({})))),
             _ => None,
         })
     }
 
     pub fn save_settings(&self, settings: serde_json::Value) -> Result<(), Error> {
-        self.client.send(ClientCommand::SaveSettings { settings })
+        self.client.call(ClientCommand::SaveSettings { settings }, |reply| match reply {
+            Reply::Done => Some(Ok(())),
+            _ => None,
+        })
     }
 
     pub fn memory(&self, cwd: impl Into<PathBuf>) -> ProjectMemory<'_> {
@@ -108,10 +119,10 @@ pub enum SignedIn {
     PortBusy { port: u16, holder: Option<domain::provider::PortHolder> },
 }
 
-fn listed(event: ServerEvent) -> Option<Result<Vec<ProviderSummary>, String>> {
-    match event {
-        ServerEvent::Providers(ProviderEvent::Listed { providers }) => Some(Ok(providers)),
-        ServerEvent::Providers(ProviderEvent::Failed { message, .. }) => Some(Err(message)),
+fn listed(reply: Reply) -> Option<Result<Vec<ProviderSummary>, String>> {
+    match reply {
+        Reply::Providers(ProviderEvent::Listed { providers }) => Some(Ok(providers)),
+        Reply::Providers(ProviderEvent::Failed { message, .. }) => Some(Err(message)),
         _ => None,
     }
 }
@@ -128,7 +139,7 @@ impl ProjectMemory<'_> {
     }
 
     pub fn search(&self, query: &str) -> Result<Vec<(Memory, f32)>, Error> {
-        let found = self.ask(json!({ "op": "search", "query": query }), "scores")?;
+        let found = self.ask(json!({ "op": "search", "query": query }))?;
         let scores: Vec<(MemoryId, f32)> = parse(&found["scores"])?;
         let memories = self.list()?;
         Ok(scores
@@ -143,17 +154,17 @@ impl ProjectMemory<'_> {
     }
 
     pub fn check(&self) -> Result<Option<String>, Error> {
-        let answer = self.ask(json!({ "op": "check" }), "prompt")?;
+        let answer = self.ask(json!({ "op": "check" }))?;
         Ok(answer["prompt"].as_str().map(str::to_owned))
     }
 
     pub fn score(&self) -> Result<String, Error> {
-        let answer = self.ask(json!({ "op": "score" }), "report")?;
+        let answer = self.ask(json!({ "op": "score" }))?;
         Ok(answer["report"].as_str().unwrap_or_default().to_owned())
     }
 
     pub fn seed(&self) -> Result<Vec<Candidate>, Error> {
-        let answer = self.ask(json!({ "op": "seed" }), "candidates")?;
+        let answer = self.ask(json!({ "op": "seed" }))?;
         parse(&answer["candidates"])
     }
 
@@ -178,7 +189,7 @@ impl ProjectMemory<'_> {
     }
 
     pub fn share(&self, id: MemoryId) -> Result<String, Error> {
-        let answer = self.ask(json!({ "op": "share", "id": id.0 }), "file")?;
+        let answer = self.ask(json!({ "op": "share", "id": id.0 }))?;
         Ok(answer["file"].as_str().unwrap_or_default().to_owned())
     }
 
@@ -199,22 +210,13 @@ impl ProjectMemory<'_> {
     }
 
     fn answer(&self, input: Value) -> Result<(Vec<Memory>, Vec<Forgotten>), Error> {
-        let answer = self.ask(input, "memories")?;
+        let answer = self.ask(input)?;
         Ok((parse(&answer["memories"])?, parse(&answer["forgotten"])?))
     }
 
-    fn ask(&self, mut input: Value, holding: &'static str) -> Result<Value, Error> {
+    fn ask(&self, mut input: Value) -> Result<Value, Error> {
         input["path"] = json!(self.path);
-        let path = json!(self.path);
-        let command = ClientCommand::Feature { feature: MEMORY.into(), input };
-        self.sdk.client.call(command, |event| match event {
-            ServerEvent::Feature { feature, output } if feature == MEMORY => match output {
-                Ok(answer) if answer["path"] == path && answer.get(holding).is_some() => Some(Ok(answer)),
-                Ok(_) => None,
-                Err(error) => Some(Err(error)),
-            },
-            _ => None,
-        })
+        self.sdk.feature(MEMORY, input)
     }
 }
 

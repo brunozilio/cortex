@@ -6,6 +6,8 @@ mod mcp_servers;
 mod plan_watch;
 mod run;
 mod session;
+#[cfg(test)]
+mod testing;
 
 use std::path::PathBuf;
 use std::sync::Arc;

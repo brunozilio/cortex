@@ -140,12 +140,28 @@ fn settings_are_kept_between_builds() {
     let sdk = build(&engine, data.path());
     assert_eq!(sdk.settings().expect("settings"), json!({}));
     sdk.save_settings(json!({"model": "scripted"})).expect("save");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while sdk.settings().expect("settings") != json!({"model": "scripted"}) {
-        assert!(std::time::Instant::now() < deadline, "the settings were not saved");
-    }
+    assert_eq!(sdk.settings().expect("settings"), json!({"model": "scripted"}), "kept by the time the save returns");
     let again = build(&engine, data.path());
     assert_eq!(again.settings().expect("settings"), json!({"model": "scripted"}));
+}
+
+#[test]
+fn a_failed_settings_save_is_reported_to_the_caller_that_saved() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![model()], Vec::new());
+    let sdk = build(&engine, data.path());
+    sdk.save_settings(json!({"model": "scripted"})).expect("save");
+
+    let reader = sdk.clone();
+    let reading = std::thread::spawn(move || (0..20).map(|_| reader.settings()).collect::<Vec<_>>());
+    let refused = sdk.save_settings(json!({ "notes": "x".repeat(300 * 1024) }));
+    let read = reading.join().expect("join");
+
+    assert!(
+        matches!(&refused, Err(Error::Backend(message)) if message.contains("Could not save the settings")),
+        "{refused:?}"
+    );
+    assert!(read.iter().all(|settings| matches!(settings, Ok(kept) if *kept == json!({"model": "scripted"}))));
 }
 
 #[test]

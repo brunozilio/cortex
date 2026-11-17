@@ -4,6 +4,10 @@ use domain::provider::ModelProvider;
 use domain::{AskId, Decision, PermissionMode, PromptRequest, RunId};
 use serde::{Deserialize, Serialize};
 
+use crate::RequestId;
+
+pub const SIGN_IN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant, reason = "commands are short-lived messages, never stored in bulk")]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
@@ -37,6 +41,7 @@ pub enum ClientCommand {
     RemoveMcpServer { path: PathBuf, name: String },
     SignInMcpServer { path: PathBuf, name: String },
     SignOutMcpServer { path: PathBuf, name: String },
+    CancelRequest { request: RequestId },
 }
 
 impl ClientCommand {
@@ -71,6 +76,7 @@ impl ClientCommand {
             Self::RemoveMcpServer { .. } => "remove_mcp_server",
             Self::SignInMcpServer { .. } => "sign_in_mcp_server",
             Self::SignOutMcpServer { .. } => "sign_out_mcp_server",
+            Self::CancelRequest { .. } => "cancel_request",
         }
     }
 }
@@ -121,6 +127,7 @@ mod tests {
             ClientCommand::RemoveMcpServer { path: "/repo".into(), name: "atlassian".into() },
             ClientCommand::SignInMcpServer { path: "/repo".into(), name: "linear".into() },
             ClientCommand::SignOutMcpServer { path: "/repo".into(), name: "linear".into() },
+            ClientCommand::CancelRequest { request: RequestId(7) },
         ];
         for command in commands {
             let json = serde_json::to_string(&command).expect("serialize");

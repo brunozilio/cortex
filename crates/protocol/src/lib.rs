@@ -5,7 +5,7 @@ mod event;
 mod provider_event;
 
 pub use backend::{Backend, BackendError, Wake};
-pub use command::ClientCommand;
-pub use envelope::{Envelope, VERSION};
-pub use event::ServerEvent;
+pub use command::{ClientCommand, SIGN_IN_TIMEOUT};
+pub use envelope::{Envelope, RequestId, VERSION};
+pub use event::{Reply, ServerEvent, Unsolicited};
 pub use provider_event::ProviderEvent;

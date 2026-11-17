@@ -6,7 +6,7 @@ use ratatui::crossterm::event::KeyCode;
 use sdk::{Decision, EngineEvent, Model};
 
 use super::app::App;
-use super::tests::{press, screen, sdk, type_text, until};
+use super::tests::{SETTLES_WITHIN, press, screen, sdk, type_text, until};
 use super::transcript::Entry;
 
 #[test]
@@ -29,7 +29,7 @@ fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
     assert_eq!(app.input.text(), "run the tests");
     assert!(app.ghost.is_none());
 
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + SETTLES_WITHIN;
     let asked = || engine.requests().iter().filter_map(|r| r.command).collect::<Vec<_>>();
     while asked().len() < 3 {
         assert!(Instant::now() < deadline, "{:?}", asked());

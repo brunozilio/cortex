@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use domain::mcp_config::McpServerInfo;
-use protocol::{ClientCommand, ServerEvent};
+use protocol::{ClientCommand, Reply};
 
 use crate::{Error, Sdk};
 
@@ -36,12 +36,12 @@ impl Sdk {
         mut open: impl FnMut(&str),
     ) -> Result<Vec<McpServerInfo>, Error> {
         let command = ClientCommand::SignInMcpServer { path: cwd.to_path_buf(), name: name.to_owned() };
-        self.client.call(command, |event| {
-            if let ServerEvent::McpAuthorizeAt { url, .. } = &event {
+        self.client.flow(command, crate::client::sign_in_patience(), |reply| {
+            if let Reply::McpAuthorizeAt { url, .. } = &reply {
                 open(url);
                 return None;
             }
-            listed(event)
+            listed(reply)
         })
     }
 
@@ -58,32 +58,31 @@ impl Sdk {
 
 impl Sdk {
     pub fn notices(&self) -> Result<Vec<domain::inbox::Notice>, Error> {
-        self.client.call(ClientCommand::TakeNotices, |event| match event {
-            ServerEvent::Notices(notices) => Some(Ok(notices)),
+        self.client.call(ClientCommand::TakeNotices, |reply| match reply {
+            Reply::Notices(notices) => Some(Ok(notices)),
             _ => None,
         })
     }
 
     pub fn feature(&self, feature: &str, input: serde_json::Value) -> Result<serde_json::Value, Error> {
         let command = ClientCommand::Feature { feature: feature.to_owned(), input };
-        let asked = feature.to_owned();
-        self.client.call(command, move |event| match event {
-            ServerEvent::Feature { feature, output } if feature == asked => Some(output),
+        self.client.call(command, |reply| match reply {
+            Reply::Feature { output, .. } => Some(output),
             _ => None,
         })
     }
 
     pub fn permissions(&self, cwd: &Path) -> Result<domain::permission_rules::PermissionsInfo, Error> {
-        self.client.call(ClientCommand::ListPermissions { path: cwd.to_path_buf() }, |event| match event {
-            ServerEvent::Permissions { permissions, .. } => Some(Ok(permissions)),
+        self.client.call(ClientCommand::ListPermissions { path: cwd.to_path_buf() }, |reply| match reply {
+            Reply::Permissions { permissions, .. } => Some(Ok(permissions)),
             _ => None,
         })
     }
 }
 
-fn listed(event: ServerEvent) -> Option<Result<Vec<McpServerInfo>, String>> {
-    match event {
-        ServerEvent::McpServers { servers, .. } => Some(Ok(servers)),
+fn listed(reply: Reply) -> Option<Result<Vec<McpServerInfo>, String>> {
+    match reply {
+        Reply::McpServers { servers, .. } => Some(Ok(servers)),
         _ => None,
     }
 }

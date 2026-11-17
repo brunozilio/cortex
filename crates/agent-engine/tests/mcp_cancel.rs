@@ -34,10 +34,8 @@ done"#,
     let workspace = Arc::new(Workspace::new(dir.path()));
     let worker = workspace.clone();
     let call = std::thread::spawn(move || tool.run(&json!({}), &worker));
-    for _ in 0..200 {
-        if started.exists() {
-            break;
-        }
+    let deadline = std::time::Instant::now() + Duration::from_secs(120);
+    while !started.exists() && std::time::Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
     }
     assert!(started.exists());

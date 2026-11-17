@@ -56,7 +56,7 @@ mod tests {
         workspace.credentials.client = 8901;
         let started = Monitor.run(&json!({"command": "echo ready; sleep 0.7; echo ERROR boom"}), &workspace);
         assert!(!started.is_error && started.content.contains("Monitoring as bash_"), "{started:?}");
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + Duration::from_secs(120);
         let mut seen = Vec::new();
         while !seen.iter().any(|n: &domain::inbox::Notice| n.text.contains("finished")) {
             assert!(Instant::now() < deadline, "{seen:?}");
@@ -86,7 +86,7 @@ mod read_tests {
         workspace.credentials.client = 8902;
         let started = Monitor.run(&json!({"command": "echo one; sleep 1; echo two; sleep 1; echo three"}), &workspace);
         let id = started.content.split_whitespace().nth(2).expect("id").trim_end_matches(':').to_owned();
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + Duration::from_secs(120);
         let mut lines = Vec::new();
         let mut read = false;
         while !lines.iter().any(|text: &String| text.contains("finished")) {

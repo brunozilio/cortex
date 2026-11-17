@@ -41,7 +41,7 @@ fn signing_in_discovers_registers_and_keeps_tokens_that_are_refreshed_when_stale
     ]));
     let auth = McpAuth::new(Arc::clone(&secrets), http.clone()).at(1_000);
     let mut opened = String::new();
-    auth.sign_in(SERVER, &mut |url| {
+    auth.sign_in(SERVER, &Arc::default(), &mut |url| {
         opened = url.to_owned();
         approve(url);
     })
@@ -83,7 +83,7 @@ fn a_server_that_does_not_let_brand_register_says_so() {
         ),
     ]));
     let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
-    let error = auth.sign_in(SERVER, &mut |_| {}).expect_err("no registration");
+    let error = auth.sign_in(SERVER, &Arc::default(), &mut |_| {}).expect_err("no registration");
     assert!(error.contains("register"), "{error}");
     let with_a_token = format!("{} mcp add -H 'Authorization: Bearer ${{TOKEN}}' <name> {SERVER}", brand::COMMAND);
     assert!(error.contains(&with_a_token), "says how to use a token instead: {error}");
@@ -99,10 +99,10 @@ fn an_unsafe_sign_in_address_is_refused_before_the_browser_opens() {
     let http = Arc::new(ScriptedHttp::new([(404, String::new()), (404, String::new()), (200, metadata.to_string())]));
     let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
     let mut opened = false;
-    let error = auth.sign_in(SERVER, &mut |_| opened = true).expect_err("refused");
+    let error = auth.sign_in(SERVER, &Arc::default(), &mut |_| opened = true).expect_err("refused");
     assert!(error.contains("file:///Applications/Calculator.app") && !opened, "{error}");
     let plain = McpAuth::new(Arc::new(InMemorySecretStore::default()), Arc::new(ScriptedHttp::new([])));
-    assert!(plain.sign_in("http://mcp.test/mcp", &mut |_| {}).is_err(), "http elsewhere");
+    assert!(plain.sign_in("http://mcp.test/mcp", &Arc::default(), &mut |_| {}).is_err(), "http elsewhere");
 }
 
 struct ReadOnlySecrets;
@@ -124,7 +124,7 @@ fn a_sign_in_that_could_not_be_kept_stops_before_the_browser_opens() {
     let http = Arc::new(ScriptedHttp::new([]));
     let auth = McpAuth::new(Arc::new(ReadOnlySecrets), http.clone());
     let mut opened = false;
-    let error = auth.sign_in(SERVER, &mut |_| opened = true).expect_err("cannot keep it");
+    let error = auth.sign_in(SERVER, &Arc::default(), &mut |_| opened = true).expect_err("cannot keep it");
     assert!(!opened, "the user is not sent to approve a sign-in that would be lost");
     assert!(error.contains("Operation not permitted") && error.contains("saved"), "{error}");
     assert!(http.sent().is_empty(), "nothing is asked of the server either");
@@ -188,11 +188,46 @@ fn the_scopes_the_resource_asks_for_reach_the_authorization_url() {
     ]));
     let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
     let mut opened = String::new();
-    auth.sign_in(SERVER, &mut |url| {
+    auth.sign_in(SERVER, &Arc::default(), &mut |url| {
         opened = url.to_owned();
         approve(url);
     })
     .expect("signed in");
     assert!(opened.contains("&scope=mcp%3Aread%20mcp%3Awrite"), "{opened}");
     assert!(!opened.contains("admin"), "only what the resource asks for: {opened}");
+}
+
+#[test]
+fn a_cancelled_sign_in_stops_waiting_for_the_browser_and_frees_its_port() {
+    let http = Arc::new(ScriptedHttp::new([
+        (200, json!({ "authorization_servers": ["https://auth.test"] }).to_string()),
+        (
+            200,
+            json!({
+                "authorization_endpoint": "https://auth.test/authorize",
+                "token_endpoint": "https://auth.test/token",
+                "registration_endpoint": "https://auth.test/register"
+            })
+            .to_string(),
+        ),
+        (201, json!({ "client_id": "c-1" }).to_string()),
+    ]));
+    let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut redirect = String::new();
+    let asked = std::time::Instant::now();
+    let error = auth
+        .sign_in(SERVER, &stop, &mut |url| {
+            redirect = query_value(url, "redirect_uri");
+            stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        })
+        .expect_err("cancelled");
+    assert!(error.contains("cancelled"), "{error}");
+    assert!(asked.elapsed() < std::time::Duration::from_secs(5), "it did not wait for the browser");
+    let port: u16 = redirect.rsplit(':').next().and_then(|rest| rest.split('/').next()?.parse().ok()).expect("port");
+    let freed = std::time::Instant::now();
+    while let Err(error) = Loopback::bind_on(port, "/callback", false) {
+        assert!(freed.elapsed() < std::time::Duration::from_secs(5), "the port is still held: {error:?}");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 }

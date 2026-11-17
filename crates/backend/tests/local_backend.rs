@@ -8,7 +8,7 @@ use agent_engine::fake::FakeEngine;
 use backend::{Backend, LocalBackend, LocalServices, Wake};
 use crossbeam_channel::Receiver;
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, PromptRequest, RunId};
-use protocol::{ClientCommand, Envelope, ServerEvent};
+use protocol::{ClientCommand, Envelope, Reply, RequestId, ServerEvent};
 use serde_json::json;
 
 fn project_with_a_skill_and_an_agent() -> tempfile::TempDir {
@@ -75,23 +75,69 @@ fn run_ended(event: &ServerEvent) -> bool {
     matches!(event, ServerEvent::Run { event, .. } if event.is_terminal())
 }
 
-fn send(backend: &LocalBackend, command: ClientCommand) {
-    backend.send(Envelope::local(command)).expect("send");
+fn send(backend: &LocalBackend, command: ClientCommand) -> RequestId {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let id = RequestId(NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+    backend.send(Envelope::local(id, command)).expect("send");
+    id
+}
+
+fn answer(backend: &LocalBackend, woke: &Receiver<()>, command: ClientCommand) -> Reply {
+    let asked = send(backend, command);
+    let events = collect(backend, woke, |event| matches!(event, ServerEvent::Reply { id, .. } if *id == asked));
+    match events.into_iter().last() {
+        Some(ServerEvent::Reply { reply, .. }) => reply,
+        other => panic!("expected an answer, got {other:?}"),
+    }
 }
 
 #[test]
 fn submit_streams_run_events_and_wakes() {
     let (backend, woke) = backend(scripted());
     let run = RunId::new();
-    send(&backend, ClientCommand::SubmitPrompt { run, request: request() });
+    let submitted = send(&backend, ClientCommand::SubmitPrompt { run, request: request() });
     let events = collect(&backend, &woke, run_ended);
+    let accepted = ServerEvent::Reply { id: submitted, reply: Reply::Done };
+    let of_the_run: Vec<_> = events.iter().filter(|event| **event != accepted).cloned().collect();
     assert_eq!(
-        events,
+        of_the_run,
         vec![
             ServerEvent::Run { run, event: EngineEvent::TextDelta("Hello".into()) },
             ServerEvent::Run { run, event: EngineEvent::Completed { duration_ms: 10, cost_usd: None } },
         ]
     );
+}
+
+#[test]
+fn a_prompt_for_a_run_already_in_progress_is_refused_to_the_request_that_sent_it() {
+    let (backend, woke) = backend(FakeEngine::demo().with_delay(Duration::from_millis(200)));
+    let run = RunId::new();
+    let first = send(&backend, ClientCommand::SubmitPrompt { run, request: request() });
+    let second = send(&backend, ClientCommand::SubmitPrompt { run, request: request() });
+    let events = collect(&backend, &woke, |event| matches!(event, ServerEvent::Reply { id, .. } if *id == second));
+    assert!(events.contains(&ServerEvent::Reply { id: first, reply: Reply::Done }), "{events:?}");
+    assert!(
+        matches!(events.last(), Some(ServerEvent::Reply { reply: Reply::Error { message }, .. }) if message.contains("already in progress")),
+        "{events:?}"
+    );
+    send(&backend, ClientCommand::CancelRun { run });
+}
+
+#[test]
+fn every_command_that_says_nothing_else_is_acknowledged() {
+    let (backend, woke) = backend(scripted());
+    let unknown = RunId::new();
+    for command in [
+        ClientCommand::SaveSettings { settings: json!({ "model": "m" }) },
+        ClientCommand::CancelRun { run: unknown },
+        ClientCommand::SteerRun { run: unknown, text: "use tabs".into() },
+        ClientCommand::UnsteerRun { run: unknown },
+        ClientCommand::BackgroundRun { run: unknown },
+        ClientCommand::CancelRequest { request: RequestId(u64::MAX) },
+    ] {
+        let name = command.name();
+        assert_eq!(answer(&backend, &woke, command), Reply::Done, "{name}");
+    }
 }
 
 #[test]
@@ -128,18 +174,14 @@ fn answers_reach_the_run_that_asked() {
 #[test]
 fn queries_answer_models_skills_and_agents() {
     let (backend, woke) = backend(scripted());
-    send(&backend, ClientCommand::ListModels);
-    let models = collect(&backend, &woke, |event| matches!(event, ServerEvent::Models(_)));
-    assert_eq!(models, vec![ServerEvent::Models(vec![model()])]);
+    assert_eq!(answer(&backend, &woke, ClientCommand::ListModels), Reply::Models(vec![model()]));
 
     let dir = project_with_a_skill_and_an_agent();
-    send(&backend, ClientCommand::ListSkills { path: dir.path().to_path_buf() });
-    let skills = collect(&backend, &woke, |event| matches!(event, ServerEvent::Skills(_)));
-    assert!(matches!(&skills[..], [ServerEvent::Skills(list)] if list.iter().any(|s| s.name == "motion")));
+    let skills = answer(&backend, &woke, ClientCommand::ListSkills { path: dir.path().to_path_buf() });
+    assert!(matches!(&skills, Reply::Skills(list) if list.iter().any(|s| s.name == "motion")));
 
-    send(&backend, ClientCommand::ListAgents { path: dir.path().to_path_buf() });
-    let agents = collect(&backend, &woke, |event| matches!(event, ServerEvent::Agents(_)));
-    assert!(matches!(&agents[..], [ServerEvent::Agents(list)] if list.iter().any(|a| a.name == "reviewer")));
+    let agents = answer(&backend, &woke, ClientCommand::ListAgents { path: dir.path().to_path_buf() });
+    assert!(matches!(&agents, Reply::Agents(list) if list.iter().any(|a| a.name == "reviewer")));
 }
 
 #[test]
@@ -154,8 +196,7 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
         tags: vec![],
         touches: vec![],
     };
-    send(&backend, memory(json!({ "op": "edit", "path": path, "edits": [fact] })));
-    collect(&backend, &woke, answered);
+    answer(&backend, &woke, memory(json!({ "op": "edit", "path": path, "edits": [fact] })));
 
     let run = RunId::new();
     send(&backend, memory(json!({ "op": "optimize", "path": path, "run": run, "model": model() })));
@@ -175,20 +216,15 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
     assert!(!plain.memory.as_ref().is_some_and(|brief| brief.optimizing), "a client cannot ask for it");
     assert!(plain.credentials.mcp.is_empty(), "memory that fits in the prompt is not searched");
 
-    send(&backend, memory(json!({ "op": "undo", "path": path })));
-    let undo = collect(&backend, &woke, answered);
+    let undo = answer(&backend, &woke, memory(json!({ "op": "undo", "path": path })));
     assert!(
-        matches!(undo.last(), Some(ServerEvent::Feature { output: Err(message), .. }) if message.contains("nothing to undo")),
+        matches!(&undo, Reply::Feature { output: Err(message), .. } if message.contains("nothing to undo")),
         "an optimization that changed nothing leaves nothing to undo: {undo:?}"
     );
 }
 
 fn memory(input: serde_json::Value) -> ClientCommand {
     ClientCommand::Feature { feature: "memory".into(), input }
-}
-
-fn answered(event: &ServerEvent) -> bool {
-    matches!(event, ServerEvent::Feature { feature, .. } if feature == "memory")
 }
 
 #[test]
@@ -203,11 +239,16 @@ fn dropping_the_backend_cancels_runs() {
 #[test]
 fn a_command_in_another_protocol_version_is_refused() {
     let (backend, woke) = backend(scripted());
-    let newer = Envelope { version: protocol::VERSION + 1, ..Envelope::local(ClientCommand::LoadSettings) };
+    let newer =
+        Envelope { version: protocol::VERSION + 1, ..Envelope::local(RequestId(77), ClientCommand::LoadSettings) };
     backend.send(newer).expect("send");
-    let events = collect(&backend, &woke, |event| matches!(event, ServerEvent::Error { .. }));
+    let events = collect(&backend, &woke, |event| matches!(event, ServerEvent::Reply { .. }));
     assert!(
-        matches!(events.as_slice(), [ServerEvent::Error { message }] if message.contains("protocol version")),
+        matches!(
+            events.as_slice(),
+            [ServerEvent::Reply { id: RequestId(77), reply: Reply::Error { message } }]
+                if message.contains("protocol version")
+        ),
         "{events:?}"
     );
 }

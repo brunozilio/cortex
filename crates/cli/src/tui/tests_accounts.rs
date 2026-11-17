@@ -11,6 +11,19 @@ use super::tests::{press, screen, type_text, until};
 
 const KEYED: ModelProvider = ModelProvider::new("keyed");
 
+#[derive(Debug)]
+struct NothingListed;
+
+impl backend::ModelCatalog for NothingListed {
+    fn models(
+        &self,
+        _provider: ModelProvider,
+        _key: domain::provider::ProviderKey,
+    ) -> Result<Vec<domain::ModelOption>, String> {
+        Ok(Vec::new())
+    }
+}
+
 fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
     agent_engine::providers::install_testing();
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
@@ -18,7 +31,8 @@ fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
     services.providers = services
         .providers
         .with_secrets(Arc::new(InMemorySecretStore::default()))
-        .with_store(Arc::new(InMemoryProviderStore::default()));
+        .with_store(Arc::new(InMemoryProviderStore::default()))
+        .with_catalog(Arc::new(NothingListed));
     Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
 }
 

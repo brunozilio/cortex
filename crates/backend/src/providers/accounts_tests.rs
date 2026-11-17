@@ -26,9 +26,9 @@ fn in_use(providers: &ModelProviders) -> String {
         .api_key
 }
 
-fn accounts(event: &ServerEvent) -> Vec<ProviderAccount> {
+fn accounts(event: &Reply) -> Vec<ProviderAccount> {
     match event {
-        ServerEvent::Providers(ProviderEvent::Listed { providers }) => {
+        Reply::Providers(ProviderEvent::Listed { providers }) => {
             providers.iter().find(|p| p.provider == KEYED).map(|p| p.accounts.clone()).unwrap_or_default()
         }
         other => panic!("expected the list, got {other:?}"),
@@ -54,7 +54,7 @@ fn switching_accounts_changes_the_key_the_next_run_gets() {
     assert_eq!(in_use(&providers), FIRST);
     providers.use_account(KEYED, "…bbbb");
     assert_eq!(in_use(&providers), SECOND);
-    assert!(matches!(providers.use_account(KEYED, "9"), ServerEvent::Providers(ProviderEvent::Failed { .. })));
+    assert!(matches!(providers.use_account(KEYED, "9"), Reply::Providers(ProviderEvent::Failed { .. })));
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn a_subscription_account_is_named_by_its_email() {
     let provider = ModelProvider::new("device-sub");
     providers.connect(provider, &raw("a@x.io"));
     let event = providers.connect(provider, &raw("b@x.io"));
-    let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
+    let Reply::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
     let summary = listed.into_iter().find(|p| p.provider == provider).expect("device-sub");
     let labels: Vec<String> = summary.accounts.into_iter().map(|a| a.label).collect();
     assert_eq!(labels, ["a@x.io", "b@x.io"]);
@@ -136,7 +136,7 @@ fn round_robin_starts_each_run_on_the_next_account() {
     providers.connect(KEYED, FIRST);
     providers.connect(KEYED, SECOND);
     let event = providers.set_balance(KEYED, domain::account_pool::Balance::RoundRobin);
-    let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
+    let Reply::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
     assert!(listed.iter().any(|p| p.provider == KEYED && p.balance == domain::account_pool::Balance::RoundRobin));
     assert_eq!(order(&providers), [FIRST, SECOND]);
     assert_eq!(order(&providers), [SECOND, FIRST]);
@@ -155,7 +155,7 @@ fn without_an_email_the_token_s_subject_keeps_two_accounts_apart() {
     providers.connect(provider, &raw("0f3a9c1e-user-one"));
     providers.connect(provider, &raw("7b22d410-user-two"));
     let event = providers.connect(provider, &raw("0f3a9c1e-user-one"));
-    let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
+    let Reply::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
     let summary = listed.into_iter().find(|p| p.provider == provider).expect("device-sub");
     let labels: Vec<String> = summary.accounts.into_iter().map(|a| a.label).collect();
     assert_eq!(labels.len(), 2, "{labels:?}");
@@ -169,7 +169,7 @@ fn a_sign_in_that_names_no_one_is_added_as_a_numbered_account_and_never_replaces
     let provider = ModelProvider::new("device-sub");
     providers.connect(provider, raw);
     let event = providers.connect(provider, raw);
-    let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
+    let Reply::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
     let summary = listed.into_iter().find(|p| p.provider == provider).expect("device-sub");
     let labels: Vec<String> = summary.accounts.into_iter().map(|a| a.label).collect();
     assert_eq!(labels.len(), 2, "{labels:?}");

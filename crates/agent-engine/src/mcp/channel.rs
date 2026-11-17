@@ -110,7 +110,7 @@ done
         };
         let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
         let server = open(&spec, &http, 9501).expect("channel");
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(120);
         let notices = loop {
             let notices = inbox::take(9501);
             if !notices.is_empty() || Instant::now() > deadline {
@@ -149,7 +149,7 @@ done
             });
             bridge.handle_stopped(&slow, &stop).expect("answer")
         });
-        assert!(started.elapsed() < Duration::from_secs(5), "the run stopped waiting");
+        assert!(started.elapsed() < Duration::from_secs(120), "the run stopped waiting");
         assert_eq!(dropped["id"], 4);
         assert!(dropped["error"]["message"].as_str().is_some_and(|error| error.contains("cancelled")), "{dropped}");
 

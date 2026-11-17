@@ -243,7 +243,7 @@ fn independent_reads_overlap_and_results_keep_the_model_call_order() {
         }
         fn run(&self, input: &serde_json::Value, _: &Workspace) -> Outcome {
             self.0.fetch_add(1, Ordering::SeqCst);
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
             while self.0.load(Ordering::SeqCst) < 2 && std::time::Instant::now() < deadline {
                 std::thread::yield_now();
             }

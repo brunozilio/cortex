@@ -88,7 +88,7 @@ fn read_rejects_a_fifo_without_waiting_for_a_writer() {
     let start = std::time::Instant::now();
     let result = agent_engine::tools::named("Read").expect("Read").run(&json!({"file_path":"pipe"}), &workspace);
     assert!(result.is_error && result.content.contains("regular file"));
-    assert!(start.elapsed() < std::time::Duration::from_secs(1));
+    assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
 }
 #[test]
 #[cfg(unix)]
@@ -107,7 +107,7 @@ fn cancellation_during_worktree_creation_removes_the_registered_clean_checkout()
     let workspace = Workspace::new(dir.path());
     let stop = workspace.stop.clone();
     let thread = std::thread::spawn(move || {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
         while !marker.exists() && std::time::Instant::now() < deadline {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }

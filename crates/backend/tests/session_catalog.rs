@@ -8,7 +8,7 @@ use agent_engine::fake::FakeEngine;
 use backend::{Backend, LocalBackend, LocalServices, Wake};
 use crossbeam_channel::Receiver;
 use domain::{AgentAsk, AskId, AskKind, EngineEvent, ModelOption, PromptRequest, RunId, SessionCommand, SessionId};
-use protocol::{ClientCommand, Envelope, ServerEvent};
+use protocol::{ClientCommand, Envelope, Reply, RequestId, ServerEvent};
 use serde_json::{Value, json};
 
 fn model() -> ModelOption {
@@ -47,14 +47,17 @@ fn until(backend: &LocalBackend, woke: &Receiver<()>, done: impl Fn(&ServerEvent
 
 fn run(backend: &LocalBackend, woke: &Receiver<()>, request: PromptRequest, stop: impl Fn(&EngineEvent) -> bool) {
     let run = RunId::new();
-    backend.send(Envelope::local(ClientCommand::SubmitPrompt { run, request })).expect("send");
+    backend.send(Envelope::local(RequestId(1), ClientCommand::SubmitPrompt { run, request })).expect("send");
     until(backend, woke, |event| matches!(event, ServerEvent::Run { event, .. } if stop(event)));
 }
 
 fn sessions(backend: &LocalBackend, woke: &Receiver<()>, input: Value) -> Value {
-    backend.send(Envelope::local(ClientCommand::Feature { feature: "sessions".into(), input })).expect("send");
-    match until(backend, woke, |event| matches!(event, ServerEvent::Feature { feature, .. } if feature == "sessions")) {
-        ServerEvent::Feature { output, .. } => output.expect("the sessions feature answers"),
+    let asked = RequestId(2);
+    backend.send(Envelope::local(asked, ClientCommand::Feature { feature: "sessions".into(), input })).expect("send");
+    match until(backend, woke, |event| matches!(event, ServerEvent::Reply { id, .. } if *id == asked)) {
+        ServerEvent::Reply { reply: Reply::Feature { output, .. }, .. } => {
+            output.expect("the sessions feature answers")
+        }
         other => panic!("{other:?}"),
     }
 }

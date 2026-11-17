@@ -1,6 +1,6 @@
 use domain::memory::MemorySearches;
 use domain::{PromptRequest, RunId};
-use protocol::ServerEvent;
+use protocol::Unsolicited;
 
 use super::NAME;
 use super::mcp::MemoryEndpoint;
@@ -21,7 +21,7 @@ pub fn prepare(context: &Context<'_>, run: RunId, request: PromptRequest) -> (Pr
     let kept = request.clone();
     let finish: Finish = Box::new(move |outcome| {
         let output = memories.finish(&kept, outcome)?;
-        Some(ServerEvent::Feature { feature: NAME.into(), output })
+        Some(Unsolicited::Feature { feature: NAME.into(), output })
     });
     (request, Some(finish))
 }

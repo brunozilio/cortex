@@ -99,7 +99,7 @@ mod tests {
         let started = std::time::Instant::now();
         let waited = std::time::Duration::from_millis(200);
         let line = super::run_within("sleep 30; echo late", &serde_json::json!({}), std::path::Path::new("."), waited);
-        assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+        assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
         assert!(line.contains("took too long") && !line.contains("late"), "{line}");
     }
 

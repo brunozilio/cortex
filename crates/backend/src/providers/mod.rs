@@ -15,7 +15,7 @@ use platform::sync::Locked;
 use domain::SecretId;
 use domain::provider::{ModelProvider, ProviderAccount, ProviderKey, clean_key, key_hint};
 use llm_providers::Config;
-use protocol::{ProviderEvent, ServerEvent};
+use protocol::{ProviderEvent, Reply};
 
 pub use self::account::{BrowserSignIn, SignIn};
 pub use self::catalog::{ModelCatalog, ProviderCatalog};
@@ -46,7 +46,6 @@ pub struct ModelProviders {
     sign_in: Arc<dyn SignIn>,
     ports: Arc<dyn Ports>,
     catalog: Arc<dyn ModelCatalog>,
-    generation: Arc<Mutex<u64>>,
     runs: Arc<Mutex<HashMap<ModelProvider, u64>>>,
     lock: Arc<Mutex<()>>,
     in_flight: Arc<Mutex<HashMap<ModelProvider, Arc<signing::InFlight>>>>,
@@ -72,7 +71,6 @@ impl ModelProviders {
             sign_in: Arc::new(BrowserSignIn),
             ports: Arc::new(SystemPorts),
             catalog: Arc::new(ProviderCatalog),
-            generation: Arc::default(),
             runs: Arc::default(),
             lock: Arc::default(),
             in_flight: Arc::default(),
@@ -116,18 +114,13 @@ impl ModelProviders {
         self
     }
 
-    pub(crate) fn for_client(mut self) -> Self {
-        self.generation = Arc::default();
-        self
-    }
-
-    pub fn list(&self) -> ServerEvent {
-        ServerEvent::Providers(ProviderEvent::Listed {
+    pub fn list(&self) -> Reply {
+        Reply::Providers(ProviderEvent::Listed {
             providers: self.store.load().summaries(agent_engine::providers::infos()),
         })
     }
 
-    pub fn connect(&self, provider: ModelProvider, raw: &str) -> ServerEvent {
+    pub fn connect(&self, provider: ModelProvider, raw: &str) -> Reply {
         let kept = self.secrets.unkept().map_or(Ok(()), |reason| Err(crate::secrets::refusal(&reason)));
         let result = kept
             .and_then(|()| self.parse(provider, raw))
@@ -191,12 +184,12 @@ impl ModelProviders {
             .map_err(|error| error.to_string())
     }
 
-    fn answer(&self, provider: ModelProvider, result: Result<(), String>) -> ServerEvent {
+    fn answer(&self, provider: ModelProvider, result: Result<(), String>) -> Reply {
         match result {
             Ok(()) => self.list(),
             Err(message) => {
                 tracing::warn!(%message, ?provider, "model provider command failed");
-                ServerEvent::Providers(ProviderEvent::Failed { provider, message })
+                Reply::Providers(ProviderEvent::Failed { provider, message })
             }
         }
     }

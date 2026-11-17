@@ -4,8 +4,9 @@ use std::sync::atomic::AtomicBool;
 use domain::provider::{ModelProvider, ProviderSummary};
 
 use super::*;
-use crate::outbox::Outbox;
+use crate::outbox::{Outbox, Replies};
 use crate::secrets::InMemorySecretStore;
+use protocol::{RequestId, Unsolicited};
 
 struct Rig {
     providers: ModelProviders,
@@ -27,20 +28,20 @@ fn api_key(rig: &Rig, provider: ModelProvider) -> String {
         .api_key
 }
 
-fn listed(event: &ServerEvent) -> Vec<ProviderSummary> {
+fn listed(event: &Reply) -> Vec<ProviderSummary> {
     match event {
-        ServerEvent::Providers(ProviderEvent::Listed { providers }) => providers.clone(),
+        Reply::Providers(ProviderEvent::Listed { providers }) => providers.clone(),
         other => panic!("expected the list, got {other:?}"),
     }
 }
 
-fn account(event: &ServerEvent, provider: &str) -> Option<domain::provider::ProviderAccount> {
+fn account(event: &Reply, provider: &str) -> Option<domain::provider::ProviderAccount> {
     listed(event).into_iter().find(|s| s.provider.id() == provider).and_then(|s| s.account)
 }
 
-fn failure(event: &ServerEvent) -> String {
+fn failure(event: &Reply) -> String {
     match event {
-        ServerEvent::Providers(ProviderEvent::Failed { message, .. }) => message.clone(),
+        Reply::Providers(ProviderEvent::Failed { message, .. }) => message.clone(),
         other => panic!("expected a failure, got {other:?}"),
     }
 }
@@ -97,7 +98,7 @@ fn subscriptions_accept_upstream_token_json_and_never_list_tokens() {
         assert!(rig.providers.key(provider).expect("key").current().is_ok());
         assert!(matches!(
             rig.providers.connect(provider, "sk-api-key"),
-            ServerEvent::Providers(ProviderEvent::Failed { .. })
+            Reply::Providers(ProviderEvent::Failed { .. })
         ));
     }
 }
@@ -119,13 +120,22 @@ impl SignIn for FakeSignIn {
     }
 }
 
-fn outbox() -> (Outbox, crossbeam_channel::Receiver<ServerEvent>) {
+type Sent = crossbeam_channel::Receiver<protocol::ServerEvent>;
+
+fn outbox() -> (Replies, Sent) {
     let (tx, rx) = crossbeam_channel::unbounded();
-    (Outbox::new(tx, Arc::new(|| {})), rx)
+    (Outbox::new(tx, Arc::new(|| {})).answering(RequestId(1)), rx)
 }
 
-fn next(rx: &crossbeam_channel::Receiver<ServerEvent>) -> ServerEvent {
+fn sent(rx: &Sent) -> protocol::ServerEvent {
     rx.recv_timeout(std::time::Duration::from_secs(5)).expect("event")
+}
+
+fn next(rx: &Sent) -> Reply {
+    match sent(rx) {
+        protocol::ServerEvent::Reply { id: RequestId(1), reply } => reply,
+        other => panic!("expected an answer to the request, got {other:?}"),
+    }
 }
 
 #[test]
@@ -136,7 +146,7 @@ fn signing_in_to_a_subscription_opens_the_browser_then_keeps_the_tokens() {
     providers.sign_in(ModelProvider::new("browser-sub"), &outbox);
     assert!(matches!(
         next(&rx),
-        ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code: None })
+        Reply::Providers(ProviderEvent::AuthorizeAt { provider, url, code: None })
             if provider == ModelProvider::new("browser-sub") && url.ends_with("browser-sub")
     ));
     let listed = listed(&next(&rx));
@@ -153,7 +163,7 @@ fn a_code_sign_in_shows_the_code_to_type_and_keeps_its_own_account() {
     providers.sign_in(ModelProvider::new("device-sub"), &outbox);
     assert!(matches!(
         next(&rx),
-        ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, code: Some(code), .. })
+        Reply::Providers(ProviderEvent::AuthorizeAt { provider, code: Some(code), .. })
             if provider == ModelProvider::new("device-sub") && code == "AB12-CD34"
     ));
     let listed = listed(&next(&rx));
@@ -198,7 +208,7 @@ fn connecting_fails_clearly_when_keys_cannot_be_kept() {
 #[test]
 fn the_client_is_told_once_that_keys_cannot_be_kept() {
     let providers = unkept();
-    let notice = providers.clone().for_client().unkept_notice().expect("told");
+    let notice = providers.clone().unkept_notice().expect("told");
     assert_eq!(notice.source, "secrets");
     assert!(notice.text.starts_with("keys cannot be kept on this machine: the disk is read-only"), "{}", notice.text);
     assert_eq!(providers.unkept_notice(), None, "once for the whole process");
@@ -221,16 +231,36 @@ impl ModelCatalog for ByKey {
     }
 }
 
-fn discovered(providers: &ModelProviders, local: Vec<domain::ModelOption>) -> (Vec<String>, Vec<ServerEvent>) {
+fn discovered(providers: &ModelProviders, local: Vec<domain::ModelOption>) -> (Vec<String>, Vec<Unsolicited>) {
     let (outbox, rx) = outbox();
     providers.discover_models(local, &outbox);
-    let mut others = Vec::new();
+    let mut told = Vec::new();
     loop {
-        match next(&rx) {
-            ServerEvent::Models(models) => return (models.into_iter().map(|m| m.id).collect(), others),
-            other => others.push(other),
+        match sent(&rx) {
+            protocol::ServerEvent::Reply { id: RequestId(1), reply: Reply::Models(models) } => {
+                return (models.into_iter().map(|m| m.id).collect(), told);
+            }
+            protocol::ServerEvent::Unsolicited(unsolicited) => told.push(unsolicited),
+            other => panic!("expected the models, got {other:?}"),
         }
     }
+}
+
+#[test]
+fn every_listing_asked_for_is_answered_even_when_a_newer_one_was_asked_meanwhile() {
+    let providers = rig().providers.with_catalog(Arc::new(ByKey));
+    let (tx, rx) = crossbeam_channel::unbounded();
+    let outbox = Outbox::new(tx, Arc::new(|| {}));
+    providers.discover_models(Vec::new(), &outbox.answering(RequestId(1)));
+    providers.discover_models(Vec::new(), &outbox.answering(RequestId(2)));
+    let mut answered: Vec<_> = (0..2)
+        .map(|_| match sent(&rx) {
+            protocol::ServerEvent::Reply { id, reply: Reply::Models(_) } => id,
+            other => panic!("expected the models, got {other:?}"),
+        })
+        .collect();
+    answered.sort();
+    assert_eq!(answered, [RequestId(1), RequestId(2)]);
 }
 
 #[test]
@@ -244,7 +274,7 @@ fn each_connected_provider_lists_its_models_and_the_engine_s_come_last() {
     assert_eq!(models, ["keyed-too:sk-ant", "fixture"]);
     assert!(events.iter().any(|e| matches!(
         e,
-        ServerEvent::Providers(ProviderEvent::Failed { provider, .. }) if *provider == ModelProvider::new("keyed")
+        Unsolicited::CatalogFailed { provider, .. } if *provider == ModelProvider::new("keyed")
     )));
 }
 

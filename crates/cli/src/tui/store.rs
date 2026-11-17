@@ -83,7 +83,7 @@ mod tests {
         let store = FailsOnce::holding(kept.clone());
         let saver = Saver::over(store.clone());
         saver.remember("model", "keyed:x");
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(120);
         while store.failures_left.load(Ordering::SeqCst) > 0 {
             assert!(Instant::now() < deadline, "the read was never tried");
             std::thread::yield_now();

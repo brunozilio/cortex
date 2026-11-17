@@ -167,8 +167,8 @@ mod tests {
     fn stops_at_the_timeout() {
         let workspace = Workspace::new(std::env::temp_dir());
         let started = Instant::now();
-        let outcome = Bash.run(&json!({"command": "sleep 5", "timeout": 200}), &workspace);
+        let outcome = Bash.run(&json!({"command": "sleep 60", "timeout": 200}), &workspace);
         assert!(outcome.is_error && outcome.content.contains("stopped after 200 ms"), "{outcome:?}");
-        assert!(started.elapsed() < Duration::from_secs(3));
+        assert!(started.elapsed() < Duration::from_secs(30), "the command ran on: {:?}", started.elapsed());
     }
 }

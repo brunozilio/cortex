@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use domain::mcp_config;
 use domain::{ModelOption, PromptRequest};
-use protocol::ServerEvent;
+use protocol::Reply;
 use serde_json::Value;
 
 use crate::extensions::Extensions;
@@ -17,11 +17,11 @@ pub(crate) fn request_in(path: &Path, extensions: &Extensions, home: Option<&Pat
     request
 }
 
-pub(crate) fn list(path: &Path, extensions: &Extensions, home: Option<&Path>) -> ServerEvent {
+pub(crate) fn list(path: &Path, extensions: &Extensions, home: Option<&Path>) -> Reply {
     let request = request_in(path, extensions, home);
     match agent_engine::mcp::list(&request) {
-        Ok(servers) => ServerEvent::McpServers { path: path.to_path_buf(), servers },
-        Err(error) => ServerEvent::error(format!("Could not read the MCP servers: {error}")),
+        Ok(servers) => Reply::McpServers { path: path.to_path_buf(), servers },
+        Err(error) => Reply::error(format!("Could not read the MCP servers: {error}")),
     }
 }
 
@@ -72,8 +72,8 @@ mod tests {
 
     use super::*;
 
-    fn states(event: ServerEvent) -> Vec<(String, McpOrigin, McpState)> {
-        let ServerEvent::McpServers { servers, .. } = event else { panic!("not a listing: {event:?}") };
+    fn states(event: Reply) -> Vec<(String, McpOrigin, McpState)> {
+        let Reply::McpServers { servers, .. } = event else { panic!("not a listing: {event:?}") };
         servers.into_iter().map(|s| (s.name, s.origin, s.state)).collect()
     }
 

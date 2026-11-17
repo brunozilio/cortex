@@ -106,13 +106,17 @@ fn background_agent_runs_concurrently_and_output_is_collected() {
     struct Concurrent {
         parent: AtomicUsize,
         started: AtomicBool,
+        advanced: AtomicBool,
         done: AtomicBool,
     }
     impl ModelApi for Concurrent {
         fn turn(&self, request: &TurnRequest, _: &mut dyn FnMut(Delta), _: &AtomicBool) -> Result<Reply, ModelError> {
             if request.system.contains("# You are a sub-agent") {
                 self.started.store(true, Ordering::SeqCst);
-                std::thread::sleep(std::time::Duration::from_millis(150));
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+                while !self.advanced.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
+                    std::thread::yield_now();
+                }
                 self.done.store(true, Ordering::SeqCst);
                 return ScriptedModel::reply(vec![Block::Text("independent report".into())]);
             }
@@ -123,12 +127,13 @@ fn background_agent_runs_concurrently_and_output_is_collected() {
                     json!({"description":"Review independently","prompt":"review","run_in_background":true}),
                 )]),
                 1 => {
-                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
                     while !self.started.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
                         std::thread::yield_now();
                     }
                     assert!(self.started.load(Ordering::SeqCst));
                     assert!(!self.done.load(Ordering::SeqCst), "parent must advance before child completion");
+                    self.advanced.store(true, Ordering::SeqCst);
                     ScriptedModel::reply(vec![tool_use("out", "TaskOutput", json!({"task_id":"task-1"}))])
                 }
                 _ => {
@@ -141,8 +146,12 @@ fn background_agent_runs_concurrently_and_output_is_collected() {
         }
     }
     let rig = Rig::new(PermissionMode::Bypass);
-    let model =
-        Concurrent { parent: AtomicUsize::new(0), started: AtomicBool::new(false), done: AtomicBool::new(false) };
+    let model = Concurrent {
+        parent: AtomicUsize::new(0),
+        started: AtomicBool::new(false),
+        advanced: AtomicBool::new(false),
+        done: AtomicBool::new(false),
+    };
     let mut tools = tools::standard();
     tools.push(Box::new(tools::subagent::AgentTool::default()));
     tools.extend(tools::task::tools());
@@ -191,10 +200,8 @@ fn stopping_background_task_joins_its_shell_without_stopping_parent() {
                     json!({"description":"Controlled cancellation","prompt":"execute fixture","run_in_background":true}),
                 )]),
                 1 => {
-                    for _ in 0..200 {
-                        if self.dir.join("ready").exists() {
-                            break;
-                        }
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+                    while !self.dir.join("ready").exists() && std::time::Instant::now() < deadline {
                         std::thread::sleep(std::time::Duration::from_millis(5));
                     }
                     assert!(self.dir.join("ready").exists());

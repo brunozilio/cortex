@@ -47,7 +47,7 @@ mod tests {
         let pkg = dir.path().join("pkg");
         std::fs::create_dir(&pkg).expect("pkg");
         let mut workspace = Workspace::new(dir.path());
-        workspace.credentials.client = 9_301;
+        workspace.credentials.client = 9_351;
         let file = pkg.join("store.go");
 
         assert_eq!(start(&workspace, &file), "", "nothing runs with the flag off");
@@ -56,7 +56,7 @@ mod tests {
         assert!(first.contains("Started go test . in pkg as bash_"), "{first}");
         assert_eq!(start(&workspace, &dir.path().join("README.md")), "");
         assert_eq!(start(&workspace, Path::new("/elsewhere/x.go")), "", "only files in the project");
-        shells::kill_client(9_301);
+        shells::kill_client(9_351);
     }
 
     fn running(client: u64) -> Vec<String> {
@@ -71,7 +71,7 @@ mod tests {
         }
         std::fs::write(dir.path().join("go.mod"), "module x\n").expect("go.mod");
         let mut workspace = Workspace::new(dir.path());
-        workspace.credentials.client = 9_302;
+        workspace.credentials.client = 9_352;
         workspace.policy.affected_tests = true;
         let store = dir.path().join("store/db.go");
 
@@ -83,12 +83,12 @@ mod tests {
         assert!(again.contains("Started go test . in store"), "{again}");
         assert_ne!(id(&first), id(&again), "the stale run gives way to a fresh one");
         assert!(api.contains("Started go test . in api"), "{api}");
-        let listed: Vec<String> = shells::list(9_302).into_iter().map(|(id, _, _)| id).collect();
+        let listed: Vec<String> = shells::list(9_352).into_iter().map(|(id, _, _)| id).collect();
         assert!(!listed.contains(&id(&first).unwrap_or_default()), "the replaced run is gone: {listed:?}");
-        let mut going = running(9_302);
+        let mut going = running(9_352);
         going.sort();
         assert!(going.len() <= 2, "{going:?}");
-        shells::kill_client(9_302);
+        shells::kill_client(9_352);
     }
 
     #[test]
@@ -96,7 +96,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("dir");
         std::fs::create_dir(dir.path().join("store")).expect("package");
         let mut workspace = Workspace::new(dir.path());
-        workspace.credentials.client = 9_303;
+        workspace.credentials.client = 9_353;
         workspace.policy.affected_tests = true;
         let store = dir.path().join("store/db.go");
 
@@ -104,16 +104,16 @@ mod tests {
         let first_id =
             first.split(" as ").nth(1).and_then(|rest| rest.split(' ').next()).unwrap_or_default().to_owned();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-        while !running(9_303).is_empty() && std::time::Instant::now() < deadline {
+        while !running(9_353).is_empty() && std::time::Instant::now() < deadline {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
         std::thread::sleep(std::time::Duration::from_millis(1_200));
         start(&workspace, &store);
 
-        let notices = crate::tools::inbox::take(9_303);
+        let notices = crate::tools::inbox::take(9_353);
         let stale = format!("background {first_id}");
         assert!(notices.iter().all(|notice| notice.source != stale), "{notices:?}");
-        shells::kill_client(9_303);
-        crate::tools::inbox::forget_client(9_303);
+        shells::kill_client(9_353);
+        crate::tools::inbox::forget_client(9_353);
     }
 }

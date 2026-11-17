@@ -3,10 +3,11 @@ use std::sync::Arc;
 use agent_engine::EventSink;
 use domain::{EngineEvent, PromptRequest, RunId};
 use platform::sync::Locked;
-use protocol::{ClientCommand, Envelope, ServerEvent};
+use protocol::{ClientCommand, Envelope, Reply, ServerEvent};
 
 use crate::feature::{Context, Finish};
-use crate::outbox::Outbox;
+use crate::flows::Flows;
+use crate::outbox::{Outbox, Replies};
 use crate::runs::{Reach, RunTable};
 use crate::services::LocalServices;
 
@@ -15,6 +16,7 @@ pub struct CommandHandler {
     services: LocalServices,
     runs: Arc<RunTable>,
     outbox: Outbox,
+    flows: Flows,
     client: u64,
 }
 
@@ -28,12 +30,25 @@ impl Drop for CommandHandler {
 }
 
 impl CommandHandler {
-    pub fn new(mut services: LocalServices, outbox: Outbox) -> Self {
-        services.providers = services.providers.for_client();
+    pub fn new(services: LocalServices, outbox: Outbox) -> Self {
         let runs = Arc::new(RunTable::default());
         static CLIENTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let client = CLIENTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        Self { services, runs, outbox, client }
+        Self { services, runs, outbox, flows: Flows::default(), client }
+    }
+
+    pub fn handle(&self, envelope: Envelope<ClientCommand>) {
+        let replies = self.outbox.answering(envelope.id);
+        if let Err(error) = envelope.spoken() {
+            tracing::warn!(%error, "command in another protocol version");
+            replies.send(Reply::error(error));
+            return;
+        }
+        let command = envelope.payload;
+        tracing::debug!(command = command.name(), request = %envelope.id, "handling command");
+        if let Some(answer) = self.answer(command, &replies) {
+            replies.send(answer);
+        }
     }
 
     #[allow(
@@ -41,128 +56,113 @@ impl CommandHandler {
         clippy::cognitive_complexity,
         reason = "split planned: one match over every client command, to become a handler per command"
     )]
-    pub fn handle(&self, envelope: Envelope<ClientCommand>) {
-        let outbox = &self.outbox;
-        if let Err(error) = envelope.spoken() {
-            tracing::warn!(%error, "command in another protocol version");
-            outbox.send(ServerEvent::error(error));
-            return;
-        }
-        let command = envelope.payload;
-        tracing::debug!(command = command.name(), "handling command");
-        match command {
+    fn answer(&self, command: ClientCommand, replies: &Replies) -> Option<Reply> {
+        let providers = &self.services.providers;
+        let home = self.services.home();
+        let home = home.as_deref();
+        Some(match command {
             ClientCommand::SubmitPrompt { run, request } => {
-                self.submit(run, &crate::sent::as_sent(&request));
+                Reply::done_or(self.submit(run, &crate::sent::as_sent(&request)))
             }
-            ClientCommand::CancelRun { run } => {
-                Self::reached("cancel_run", run, self.runs.cancel(run));
-            }
+            ClientCommand::CancelRun { run } => Self::reached("cancel_run", run, self.runs.cancel(run)),
             ClientCommand::AnswerAsk { run, ask, decision } => {
                 let reach = self.runs.control(run, |handle| handle.answer(&ask, &decision));
-                Self::reached("answer_ask", run, reach);
+                Self::reached("answer_ask", run, reach)
             }
             ClientCommand::SetPermissionMode { run, mode } => {
                 let reach = self.runs.control(run, |handle| handle.set_mode(mode));
-                Self::reached("set_permission_mode", run, reach);
+                Self::reached("set_permission_mode", run, reach)
             }
             ClientCommand::SteerRun { run, text } => {
                 let reach = self.runs.control(run, |handle| handle.steer(text));
-                Self::reached("steer_run", run, reach);
+                Self::reached("steer_run", run, reach)
             }
             ClientCommand::UnsteerRun { run } => {
                 let reach = self.runs.control(run, |handle| handle.unsteer());
-                Self::reached("unsteer_run", run, reach);
+                Self::reached("unsteer_run", run, reach)
             }
             ClientCommand::BackgroundRun { run } => {
                 let reach = self.runs.control(run, |handle| handle.background());
-                Self::reached("background_run", run, reach);
+                Self::reached("background_run", run, reach)
             }
             ClientCommand::ListModels => {
-                let models = self.services.engine.models();
-                self.services.providers.discover_models(models, outbox);
+                providers.discover_models(self.services.engine.models(), replies);
+                return None;
             }
             ClientCommand::ListSkills { path } => {
                 agent_engine::tools::peers::register(self.client, &path);
-                outbox.send(ServerEvent::Skills(crate::extensions::skills(
-                    &path,
-                    &self.services.extensions,
-                    self.services.home().as_deref(),
-                )));
+                Reply::Skills(crate::extensions::skills(&path, &self.services.extensions, home))
             }
             ClientCommand::ListAgents { path } => {
-                outbox.send(ServerEvent::Agents(crate::extensions::agents(
-                    &path,
-                    &self.services.extensions,
-                    self.services.home().as_deref(),
-                )));
+                Reply::Agents(crate::extensions::agents(&path, &self.services.extensions, home))
             }
-            ClientCommand::LoadSettings => {
-                outbox.send(ServerEvent::Settings { settings: self.services.settings.load() });
-            }
+            ClientCommand::LoadSettings => Reply::Settings { settings: self.services.settings.load() },
             ClientCommand::SaveSettings { settings } => {
-                if let Err(error) = self.services.settings.save(&settings) {
+                Reply::done_or(self.services.settings.save(&settings).map_err(|error| {
                     tracing::warn!(%error, "could not keep settings");
-                    outbox.send(ServerEvent::error(format!("Could not save the settings: {error}")));
-                }
+                    format!("Could not save the settings: {error}")
+                }))
             }
-            ClientCommand::ListProviders => outbox.send(self.services.providers.list()),
-            ClientCommand::ConnectProvider { provider, key } => {
-                outbox.send(self.services.providers.connect(provider, &key))
+            ClientCommand::ListProviders => providers.list(),
+            ClientCommand::ConnectProvider { provider, key } => providers.connect(provider, &key),
+            ClientCommand::SignInProvider { provider } => {
+                self.flows.began(replies);
+                providers.sign_in(provider, replies);
+                return None;
             }
-            ClientCommand::SignInProvider { provider } => self.services.providers.sign_in(provider, outbox),
             ClientCommand::CloseAndSignIn { provider, port, pid } => {
-                self.services.providers.close_and_sign_in(provider, port, pid, outbox)
+                self.flows.began(replies);
+                providers.close_and_sign_in(provider, port, pid, replies);
+                return None;
             }
-            ClientCommand::DisconnectProvider { provider } => outbox.send(self.services.providers.disconnect(provider)),
-            ClientCommand::UseProviderAccount { provider, account } => {
-                outbox.send(self.services.providers.use_account(provider, &account))
-            }
-            ClientCommand::RemoveProviderAccount { provider, account } => {
-                outbox.send(self.services.providers.remove_account(provider, &account))
-            }
-            ClientCommand::SetProviderBalance { provider, balance } => {
-                outbox.send(self.services.providers.set_balance(provider, balance))
-            }
+            ClientCommand::DisconnectProvider { provider } => providers.disconnect(provider),
+            ClientCommand::UseProviderAccount { provider, account } => providers.use_account(provider, &account),
+            ClientCommand::RemoveProviderAccount { provider, account } => providers.remove_account(provider, &account),
+            ClientCommand::SetProviderBalance { provider, balance } => providers.set_balance(provider, balance),
             ClientCommand::ListMcpServers { path } => self.mcp_servers(&path, Ok(())),
             ClientCommand::TakeNotices => {
-                let unkept = self.services.providers.unkept_notice();
+                let unkept = providers.unkept_notice();
                 let arrived = agent_engine::tools::inbox::take(self.client);
-                outbox.send(ServerEvent::Notices(unkept.into_iter().chain(arrived).collect()));
+                Reply::Notices(unkept.into_iter().chain(arrived).collect())
             }
             ClientCommand::Feature { feature, input } => {
                 let output = self
                     .with_context(|context| crate::features::handle(&feature, context, input))
                     .unwrap_or_else(|| Err(format!("there is no {feature} here")));
-                outbox.send(ServerEvent::Feature { feature, output });
+                Reply::Feature { feature, output }
             }
-            ClientCommand::ListPermissions { path } => self.outbox.send(crate::permissions::list(
-                &path,
-                &self.services.extensions,
-                self.services.home().as_deref(),
-            )),
-            ClientCommand::ApproveMcpServer { path, name, approve } => self
-                .mcp_servers(&path, crate::mcp_admin::approve(&path, self.services.home().as_deref(), &name, approve)),
+            ClientCommand::ListPermissions { path } => crate::permissions::list(&path, &self.services.extensions, home),
+            ClientCommand::ApproveMcpServer { path, name, approve } => {
+                self.mcp_servers(&path, crate::mcp_admin::approve(&path, home, &name, approve))
+            }
             ClientCommand::AddMcpServer { path, name, server } => {
-                self.mcp_servers(&path, crate::mcp_admin::add(self.services.home().as_deref(), &name, server))
+                self.mcp_servers(&path, crate::mcp_admin::add(home, &name, server))
             }
             ClientCommand::RemoveMcpServer { path, name } => {
-                self.mcp_servers(&path, crate::mcp_admin::remove(self.services.home().as_deref(), &name))
+                self.mcp_servers(&path, crate::mcp_admin::remove(home, &name))
             }
             ClientCommand::SignInMcpServer { path, name } => {
-                crate::mcp_auth::command::sign_in(&self.services, path, name, &self.outbox);
+                self.flows.began(replies);
+                crate::mcp_auth::command::sign_in(&self.services, path, name, replies);
+                return None;
             }
             ClientCommand::SignOutMcpServer { path, name } => {
-                crate::mcp_auth::command::sign_out(&self.services, &path, &name, &self.outbox);
+                crate::mcp_auth::command::sign_out(&self.services, &path, &name)
             }
-        }
+            ClientCommand::CancelRequest { request } => {
+                if !self.flows.cancel(request) {
+                    tracing::debug!(%request, "nothing left to cancel for this request");
+                }
+                Reply::Done
+            }
+        })
     }
 
-    fn mcp_servers(&self, path: &std::path::Path, changed: Result<(), String>) {
-        let event = match changed {
+    fn mcp_servers(&self, path: &std::path::Path, changed: Result<(), String>) -> Reply {
+        match changed {
             Ok(()) => crate::mcp_admin::list(path, &self.services.extensions, self.services.home().as_deref()),
-            Err(error) => ServerEvent::error(error),
-        };
-        self.outbox.send(event);
+            Err(error) => Reply::error(error),
+        }
     }
 
     pub fn cancel_all(&self) {
@@ -170,21 +170,18 @@ impl CommandHandler {
     }
 
     fn with_context<T>(&self, body: impl FnOnce(&Context<'_>) -> T) -> T {
-        let submit = |run: RunId, request: PromptRequest| {
-            self.submit(run, &request);
-            Ok(())
-        };
+        let submit = |run: RunId, request: PromptRequest| self.submit(run, &request);
         body(&Context { client: self.client, services: &self.services, submit: &submit })
     }
 
-    fn submit(&self, run: RunId, request: &PromptRequest) {
+    fn submit(&self, run: RunId, request: &PromptRequest) -> Result<(), String> {
         if self.runs.is_active(run) {
-            self.outbox.send(ServerEvent::error(format!("run {run} is already in progress")));
-            return;
+            return Err(format!("run {run} is already in progress"));
         }
         if let Err(message) = self.start(run, request) {
             self.fail(run, message);
         }
+        Ok(())
     }
 
     fn start(&self, run: RunId, request: &PromptRequest) -> Result<(), String> {
@@ -223,10 +220,11 @@ impl CommandHandler {
         }
     }
 
-    fn reached(command: &'static str, run: RunId, reach: Reach) {
+    fn reached(command: &'static str, run: RunId, reach: Reach) -> Reply {
         if reach == Reach::Inactive {
             tracing::debug!(%run, command, "for a run that is not active");
         }
+        Reply::Done
     }
 
     fn fail(&self, run: RunId, message: String) {
@@ -257,7 +255,7 @@ impl EventSink for RunSink {
             let outcome = *self.outcome.locked();
             let finishes = std::mem::take(&mut *self.finishes.locked());
             for finished in finishes.into_iter().filter_map(|finish| finish(&outcome)) {
-                self.outbox.send(finished);
+                self.outbox.send(ServerEvent::Unsolicited(finished));
             }
         }
         self.outbox.send(ServerEvent::Run { run, event });

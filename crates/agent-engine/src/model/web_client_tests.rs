@@ -3,6 +3,8 @@ use std::net::{TcpListener, TcpStream};
 
 use crate::model::http::{Http, NetHttp};
 
+const STILL_SENDING: std::time::Duration = std::time::Duration::from_secs(120);
+
 fn serve(answer: impl Fn(&mut TcpStream) + Send + 'static) -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let port = listener.local_addr().expect("address").port();
@@ -48,19 +50,18 @@ fn a_name_that_resolves_to_this_computer_is_not_connected_to() {
 
 #[test]
 fn a_body_without_end_is_read_only_up_to_the_cap() {
-    let port = serve(|stream| {
+    let (hung_up, hangs_up) = std::sync::mpsc::channel();
+    let port = serve(move |stream| {
         let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n");
         let chunk = [b'a'; 16 * 1024];
-        while stream.write_all(&chunk).is_ok() {
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
+        while stream.write_all(&chunk).is_ok() {}
+        let _ = hung_up.send(());
     });
-    let started = std::time::Instant::now();
     let mut response = NetHttp.one_hop(&format!("http://127.0.0.1:{port}/"), &[], None).expect("answer");
     let read = super::read_capped(response.body.as_mut(), 64 * 1024).expect("read");
     drop(response);
     assert_eq!(read.len(), 64 * 1024);
-    assert!(started.elapsed() < std::time::Duration::from_secs(5), "the whole body was waited for");
+    hangs_up.recv_timeout(STILL_SENDING).expect("the endless body was let go of once the cap was read");
 }
 
 #[test]

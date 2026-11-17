@@ -8,7 +8,7 @@ use backend::{Backend, LocalBackend, LocalServices, Wake};
 use domain::{Effort, EngineEvent, Memory, MemoryBrief, MemoryEdit, MemoryKind, PromptRequest, RunId};
 #[path = "support/native_live.rs"]
 mod native_live;
-use protocol::{ClientCommand, Envelope, ServerEvent};
+use protocol::{ClientCommand, Envelope, RequestId, ServerEvent, Unsolicited};
 
 fn seed(backend: &LocalBackend, project: &Path) {
     let mut edits = vec![MemoryEdit::Remember {
@@ -24,7 +24,9 @@ fn seed(backend: &LocalBackend, project: &Path) {
         touches: vec![],
     }));
     let input = serde_json::json!({ "op": "edit", "path": project, "edits": edits });
-    backend.send(Envelope::local(ClientCommand::Feature { feature: "memory".into(), input })).expect("seed");
+    backend
+        .send(Envelope::local(RequestId(1), ClientCommand::Feature { feature: "memory".into(), input }))
+        .expect("seed");
 }
 
 #[test]
@@ -46,7 +48,7 @@ fn an_agent_searches_and_writes_project_memory() {
         )
     };
     let run = RunId::new();
-    backend.send(Envelope::local(ClientCommand::SubmitPrompt { run, request })).expect("send");
+    backend.send(Envelope::local(RequestId(2), ClientCommand::SubmitPrompt { run, request })).expect("send");
 
     let deadline = Instant::now() + Duration::from_secs(240);
     let (mut reply, mut searched, mut learned) = (String::new(), false, Vec::new());
@@ -57,7 +59,9 @@ fn an_agent_searches_and_writes_project_memory() {
                 println!("tool {} {}", call.name, call.summary);
                 searched |= call.name.contains("memory_search");
             }
-            Some(ServerEvent::Feature { feature, output: Ok(answer) }) if feature == "memory" => {
+            Some(ServerEvent::Unsolicited(Unsolicited::Feature { feature, output: Ok(answer) }))
+                if feature == "memory" =>
+            {
                 learned = serde_json::from_value::<Vec<Memory>>(answer["memories"].clone()).unwrap_or_default();
             }
             Some(ServerEvent::Run { event: EngineEvent::Asked(ask), .. }) => panic!("the run asked: {ask:?}"),

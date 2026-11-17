@@ -54,10 +54,16 @@ impl McpAuth {
         McpSignIns(Arc::new(RunTokens { auth: self.clone() }))
     }
 
-    pub fn sign_in(&self, server: &str, open: &mut dyn FnMut(&str)) -> Result<(), String> {
+    pub fn sign_in(
+        &self,
+        server: &str,
+        stop: &Arc<std::sync::atomic::AtomicBool>,
+        open: &mut dyn FnMut(&str),
+    ) -> Result<(), String> {
         self.can_keep()?;
         let auth = self.auth_server(server)?;
-        let loopback = Loopback::bind_on(0, "/callback", false).map_err(|e| e.to_string())?;
+        let loopback =
+            Loopback::bind_on(0, "/callback", false).map_err(|e| e.to_string())?.stopped_by(Arc::clone(stop));
         let redirect = loopback.redirect_uri();
         let (client_id, client_secret) = self.register(&auth, server, &redirect)?;
         let verifier = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());

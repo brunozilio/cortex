@@ -5,46 +5,47 @@ use std::time::{Duration, Instant};
 use domain::provider::ModelProvider;
 use llm_providers::ProviderError;
 use platform::sync::Locked;
-use protocol::{ProviderEvent, ServerEvent};
+use protocol::{ProviderEvent, Reply};
 
 use super::ModelProviders;
-use crate::outbox::Outbox;
+use crate::outbox::Replies;
 
 const RELEASE_WAIT: Duration = Duration::from_secs(5);
 const RELEASE_POLL: Duration = Duration::from_millis(10);
+const STOPPED: &str = "this sign-in was cancelled or replaced by a newer one";
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct InFlight {
     stop: Arc<AtomicBool>,
     ended: AtomicBool,
 }
 
-fn failed(provider: ModelProvider, message: String) -> ServerEvent {
-    ServerEvent::Providers(ProviderEvent::Failed { provider, message })
+fn failed(provider: ModelProvider, message: String) -> Reply {
+    Reply::Providers(ProviderEvent::Failed { provider, message })
 }
 
 impl ModelProviders {
-    pub fn sign_in(&self, provider: ModelProvider, outbox: &Outbox) {
+    pub fn sign_in(&self, provider: ModelProvider, replies: &Replies) {
         if let Some(message) = self.cannot_sign_in(provider) {
-            return outbox.send(failed(provider, message));
+            return replies.send(failed(provider, message));
         }
-        let (this, outbox) = (self.clone(), outbox.clone());
-        platform::named::spawn("provider-sign-in", move || this.signing_in(provider, &outbox));
+        let (this, replies) = (self.clone(), replies.clone());
+        platform::named::spawn("provider-sign-in", move || this.signing_in(provider, &replies));
     }
 
-    pub fn close_and_sign_in(&self, provider: ModelProvider, port: u16, pid: u32, outbox: &Outbox) {
+    pub fn close_and_sign_in(&self, provider: ModelProvider, port: u16, pid: u32, replies: &Replies) {
         if let Some(message) = self.secrets.unkept().map(|reason| crate::secrets::refusal(&reason)) {
-            return outbox.send(failed(provider, message));
+            return replies.send(failed(provider, message));
         }
-        let (this, outbox) = (self.clone(), outbox.clone());
+        let (this, replies) = (self.clone(), replies.clone());
         platform::named::spawn("provider-sign-in", move || {
             if pid != std::process::id()
                 && this.ports.holder(port).is_some_and(|holder| holder.pid == pid)
                 && let Err(message) = this.ports.close(port, pid)
             {
-                return outbox.send(failed(provider, message));
+                return replies.send(failed(provider, message));
             }
-            this.signing_in(provider, &outbox);
+            this.signing_in(provider, &replies);
         });
     }
 
@@ -55,25 +56,25 @@ impl ModelProviders {
         self.secrets.unkept().map(|reason| crate::secrets::refusal(&reason))
     }
 
-    fn signing_in(&self, provider: ModelProvider, outbox: &Outbox) {
-        let mine = self.replacing_the_one_in_flight(provider);
+    fn signing_in(&self, provider: ModelProvider, replies: &Replies) {
+        let mine = self.replacing_the_one_in_flight(provider, replies.stop());
         let mut open = |url: String, code: Option<String>| {
-            outbox.send(ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code }));
+            replies.send(Reply::Providers(ProviderEvent::AuthorizeAt { provider, url, code }));
         };
         let signed = self.sign_in.sign_in(provider, &mine.stop, &mut open);
         self.ended(provider, &mine);
         if mine.stop.load(Ordering::SeqCst) {
-            return;
+            return replies.send(failed(provider, STOPPED.to_owned()));
         }
         let config = match signed {
-            Err(ProviderError::PortInUse(port)) => return outbox.send(self.port_busy(provider, port)),
+            Err(ProviderError::PortInUse(port)) => return replies.send(self.port_busy(provider, port)),
             other => other.map_err(|error| error.to_string()),
         };
         let result = config.and_then(|config| self.keep(provider, agent_engine::providers::name(provider), &config));
-        outbox.send(self.answer(provider, result));
+        replies.send(self.answer(provider, result));
     }
 
-    fn port_busy(&self, provider: ModelProvider, port: u16) -> ServerEvent {
+    fn port_busy(&self, provider: ModelProvider, port: u16) -> Reply {
         let holder = self.ports.holder(port);
         if holder.as_ref().is_some_and(|holder| holder.pid == std::process::id()) {
             let message = format!(
@@ -82,11 +83,11 @@ impl ModelProviders {
             );
             return failed(provider, message);
         }
-        ServerEvent::Providers(ProviderEvent::PortBusy { provider, port, holder })
+        Reply::Providers(ProviderEvent::PortBusy { provider, port, holder })
     }
 
-    fn replacing_the_one_in_flight(&self, provider: ModelProvider) -> Arc<InFlight> {
-        let mine = Arc::new(InFlight::default());
+    fn replacing_the_one_in_flight(&self, provider: ModelProvider, stop: &Arc<AtomicBool>) -> Arc<InFlight> {
+        let mine = Arc::new(InFlight { stop: Arc::clone(stop), ended: AtomicBool::new(false) });
         let earlier = self.in_flight.locked().insert(provider, Arc::clone(&mine));
         if let Some(earlier) = earlier {
             earlier.stop.store(true, Ordering::SeqCst);

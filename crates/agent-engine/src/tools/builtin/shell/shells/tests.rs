@@ -37,7 +37,7 @@ fn read(id: &str, client: u64) -> String {
 #[test]
 fn a_background_command_is_read_incrementally_and_stopped() {
     let id = start(&of_client(901), "server", &mut sh("echo ready; sleep 30")).expect("start");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(120);
     let mut first = read(&id, 901);
     while !first.contains("ready") {
         assert!(Instant::now() < deadline, "{first}");
@@ -56,7 +56,7 @@ fn a_background_command_is_read_incrementally_and_stopped() {
 #[test]
 fn a_person_looks_at_the_last_output_without_taking_it_from_the_agent() {
     let id = start(&of_client(907), "server", &mut sh("echo one; echo two; sleep 30")).expect("start");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(120);
     while !tail(907, &id, 100).is_some_and(|seen| seen.contains("two")) {
         assert!(Instant::now() < deadline, "the output never came");
         std::thread::sleep(Duration::from_millis(20));
@@ -70,7 +70,7 @@ fn a_person_looks_at_the_last_output_without_taking_it_from_the_agent() {
 #[test]
 fn a_finished_command_says_how_and_a_leaving_client_stops_its_own() {
     let done = start(&of_client(903), "build", &mut sh("echo built; exit 2")).expect("start");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(120);
     let mut text = read(&done, 903);
     while !text.contains("finished") {
         assert!(Instant::now() < deadline, "{text}");
@@ -87,7 +87,7 @@ fn a_finished_command_says_how_and_a_leaving_client_stops_its_own() {
 fn stdout_and_stderr_keep_the_order_they_were_printed_in() {
     let (stop, detach) = (std::sync::atomic::AtomicBool::new(false), std::sync::atomic::AtomicBool::new(false));
     let id = start(&of_client(905), "both", &mut sh("echo one; echo two >&2; echo three")).expect("start");
-    let Waited::Exited { output, .. } = wait(&id, Duration::from_secs(5), &stop, &detach) else { panic!("ended") };
+    let Waited::Exited { output, .. } = wait(&id, Duration::from_secs(120), &stop, &detach) else { panic!("ended") };
     assert_eq!(output, "one\ntwo\nthree");
 }
 

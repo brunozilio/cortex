@@ -3,10 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use llm_providers::ProviderError;
+use protocol::SIGN_IN_TIMEOUT;
 
 use super::callback;
 
-const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(300);
 const STOP_POLL: Duration = Duration::from_millis(100);
 
 const TEMPLATE: &str = include_str!("done.html");
@@ -96,7 +96,7 @@ impl Loopback {
                 return Err("the sign-in timed out".to_owned());
             }
             if self.stopped() {
-                return Err("this sign-in was replaced by a newer one".to_owned());
+                return Err("this sign-in was cancelled or replaced by a newer one".to_owned());
             }
             let waited = self.server.recv_timeout(left.min(STOP_POLL)).map_err(|error| error.to_string())?;
             let Some(request) = waited else { continue };
@@ -237,7 +237,7 @@ mod tests {
             let client = reqwest::blocking::Client::builder().no_proxy().build().expect("client");
             client.get(uri).send().and_then(reqwest::blocking::Response::text).expect("page")
         });
-        let pending = loopback.next_within("s", &[], Duration::from_secs(5)).expect("callback");
+        let pending = loopback.next_within("s", &[], SIGN_IN_TIMEOUT).expect("callback");
         pending.signed_in(Some("dev@example.com"));
         let page = hit.join().expect("join");
         assert!(page.contains("As dev@example.com. Return to"), "{page}");

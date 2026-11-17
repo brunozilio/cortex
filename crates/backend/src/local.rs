@@ -97,6 +97,7 @@ fn is_query(command: &ClientCommand) -> bool {
             | ClientCommand::RemoveMcpServer { .. }
             | ClientCommand::SignInMcpServer { .. }
             | ClientCommand::SignOutMcpServer { .. }
+            | ClientCommand::CancelRequest { .. }
     )
 }
 
