@@ -4,7 +4,9 @@ pub mod file_lock;
 pub mod keychain;
 pub mod named;
 pub mod private_file;
+pub mod runtime;
 pub mod sandbox;
+pub mod stop;
 pub mod store;
 pub mod sync;
 pub mod typed;
@@ -26,7 +28,9 @@ mod system;
 
 pub use bounded::{Bounds, Captured, Ended, Finished};
 pub use child::Child;
+pub use stop::Stop;
 pub use system::*;
+pub use tokio_util::sync::CancellationToken;
 
 pub fn data_dir(name: &str, command: &str) -> Option<std::path::PathBuf> {
     system::data_dir_in(|key| std::env::var_os(key), std::env::home_dir(), name, command)

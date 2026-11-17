@@ -1,3 +1,4 @@
+mod body;
 mod cancellable_http;
 pub mod client;
 pub(crate) mod conversation_key;
@@ -14,13 +15,17 @@ pub(crate) mod sse_read;
 pub mod web_client;
 pub mod wires;
 
-use std::sync::atomic::AtomicBool;
-
 use domain::Effort;
 use domain::provider::ProviderKey;
 use serde_json::Value;
 
 use crate::transcript::{Message, StopReason, Usage};
+
+pub use tokio_util::sync::CancellationToken;
+
+pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+
+pub type OnDelta<'a> = &'a mut (dyn FnMut(Delta) + Send);
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ToolSpec {
@@ -70,6 +75,8 @@ pub enum ModelError {
     Provider(String),
     #[error("could not reach the provider: {0}")]
     Network(String),
+    #[error("the provider sent nothing for {0} seconds")]
+    Stalled(u64),
     #[error("cancelled")]
     Cancelled,
 }
@@ -87,7 +94,7 @@ impl From<llm_providers::ProviderError> for ModelError {
 
 impl ModelError {
     pub const fn is_transient(&self) -> bool {
-        matches!(self, Self::Overloaded(_) | Self::Network(_))
+        matches!(self, Self::Overloaded(_) | Self::Network(_) | Self::Stalled(_))
     }
 
     pub const fn failure(&self) -> Option<domain::fallback::Failure> {
@@ -97,7 +104,7 @@ impl ModelError {
             Self::Overloaded(_) => Some(Failure::Overloaded),
             Self::TooLong(_) => Some(Failure::TooLong),
             Self::Provider(_) => Some(Failure::Provider),
-            Self::Network(_) => Some(Failure::Network),
+            Self::Network(_) | Self::Stalled(_) => Some(Failure::Network),
             Self::Cancelled => None,
         }
     }
@@ -120,5 +127,31 @@ impl KeySource for ProviderKey {
 }
 
 pub trait ModelApi: Send + Sync {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError>;
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>>;
+}
+
+pub trait BlockingTurn {
+    fn turn_blocking(
+        &self,
+        request: &TurnRequest,
+        on: &mut (dyn FnMut(Delta) + Send),
+        cancel: &CancellationToken,
+    ) -> Result<Reply, ModelError>;
+}
+
+impl<T: ModelApi + ?Sized> BlockingTurn for T {
+    fn turn_blocking(
+        &self,
+        request: &TurnRequest,
+        on: &mut (dyn FnMut(Delta) + Send),
+        cancel: &CancellationToken,
+    ) -> Result<Reply, ModelError> {
+        platform::runtime::block_on(self.turn(request, on, cancel))
+            .unwrap_or_else(|error| Err(ModelError::Network(error.to_string())))
+    }
 }

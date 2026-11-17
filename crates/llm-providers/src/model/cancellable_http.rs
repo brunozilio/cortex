@@ -1,23 +1,17 @@
+use super::body::{Body, LEGACY_POLL};
 use super::{ModelError, http::Response};
 use std::{
-    io::{self, BufRead, Read},
     sync::{
         OnceLock,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
-use tokio::{
-    runtime::{Handle, Runtime},
-    sync::{mpsc, oneshot},
-    task::AbortHandle,
-};
-const POLL: Duration = Duration::from_millis(25);
-const CHUNKS_IN_FLIGHT: usize = 8;
+use tokio_util::sync::CancellationToken;
+
 pub const STREAM_TIMEOUT: Duration = Duration::from_secs(900);
 
 struct Shared {
-    runtime: Runtime,
     client: reqwest::Client,
     web: reqwest::Client,
 }
@@ -27,21 +21,25 @@ static SHARED: OnceLock<Result<Shared, String>> = OnceLock::new();
 fn shared() -> Result<&'static Shared, ModelError> {
     SHARED
         .get_or_init(|| {
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
-                .thread_name("http")
-                .enable_all()
-                .build()
-                .map_err(|error| error.to_string())?;
-            let (client, web) = {
-                let _entered = runtime.enter();
-                let client = reqwest::Client::builder().build().map_err(|error| described(&error))?;
-                (client, super::web_client::client().map_err(|error| described(&error))?)
-            };
-            Ok(Shared { runtime, client, web })
+            let runtime = platform::runtime::shared().map_err(|error| error.to_string())?;
+            let _entered = runtime.enter();
+            let client = reqwest::Client::builder().build().map_err(|error| described(&error))?;
+            let web = super::web_client::client().map_err(|error| described(&error))?;
+            Ok(Shared { client, web })
         })
         .as_ref()
         .map_err(|error| ModelError::Network(error.clone()))
+}
+
+async fn ready(cancel: &CancellationToken) -> Result<&'static Shared, ModelError> {
+    if SHARED.get().is_none() {
+        let built = tokio::task::spawn_blocking(|| shared().map(|_| ()));
+        tokio::select! {
+            () = cancel.cancelled() => return Err(ModelError::Cancelled),
+            done = built => done.map_err(|error| ModelError::Network(error.to_string()))??,
+        }
+    }
+    shared()
 }
 
 pub(crate) fn described(error: &(dyn std::error::Error + 'static)) -> String {
@@ -57,11 +55,98 @@ pub(crate) fn described(error: &(dyn std::error::Error + 'static)) -> String {
     text
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Ask<'a> {
+    pub url: &'a str,
+    pub headers: &'a [(String, String)],
+    pub body: Option<&'a str>,
+    pub total: Option<Duration>,
+    pub idle: Option<Duration>,
+    pub one_hop: bool,
+}
+
+impl<'a> Ask<'a> {
+    pub(crate) fn new(url: &'a str, headers: &'a [(String, String)], body: Option<&'a str>) -> Self {
+        Self { url, headers, body, total: None, idle: None, one_hop: false }
+    }
+}
+
+pub(crate) async fn fetch(ask: Ask<'_>, cancel: &CancellationToken) -> Result<Response, ModelError> {
+    if cancel.is_cancelled() {
+        return Err(ModelError::Cancelled);
+    }
+    let shared = ready(cancel).await?;
+    let client = if ask.one_hop { &shared.web } else { &shared.client };
+    let mut request = match ask.body {
+        Some(body) => {
+            let request = client.post(ask.url).body(body.to_owned());
+            if ask.headers.iter().any(|(key, _)| key.eq_ignore_ascii_case("content-type")) {
+                request
+            } else {
+                request.header("content-type", "application/json")
+            }
+        }
+        None => client.get(ask.url),
+    };
+    for (key, value) in ask.headers {
+        request = request.header(key, value);
+    }
+    if let Some(total) = ask.total {
+        request = request.timeout(total);
+    }
+    let sent = async {
+        match ask.idle {
+            Some(idle) => {
+                tokio::time::timeout(idle, request.send()).await.map_err(|_| ModelError::Stalled(idle.as_secs()))
+            }
+            None => Ok(request.send().await),
+        }
+    };
+    let response = tokio::select! {
+        biased;
+        () = cancel.cancelled() => return Err(ModelError::Cancelled),
+        sent = sent => sent?.map_err(|error| ModelError::Network(described(&error)))?,
+    };
+    let status = response.status().as_u16();
+    let headers = response
+        .headers()
+        .iter()
+        .filter_map(|(key, value)| Some((key.as_str().to_owned(), value.to_str().ok()?.to_owned())))
+        .collect();
+    let body = match ask.idle {
+        Some(idle) => Body::remote(response).idle(idle),
+        None => Body::remote(response),
+    };
+    Ok(Response { status, headers, body })
+}
+
+async fn raised(stop: &AtomicBool) {
+    while !stop.load(Ordering::Relaxed) {
+        tokio::time::sleep(LEGACY_POLL).await;
+    }
+}
+
+fn blocking(ask: Ask<'_>, stop: Option<&AtomicBool>) -> Result<Response, ModelError> {
+    if stop.is_some_and(|stop| stop.load(Ordering::Relaxed)) {
+        return Err(ModelError::Cancelled);
+    }
+    let never = CancellationToken::new();
+    platform::runtime::block_on(async {
+        match stop {
+            Some(stop) => tokio::select! {
+                biased;
+                () = raised(stop) => Err(ModelError::Cancelled),
+                fetched = fetch(ask, &never) => fetched,
+            },
+            None => fetch(ask, &never).await,
+        }
+    })
+    .map_err(|error| ModelError::Network(error.to_string()))?
+}
+
 pub fn post(url: &str, headers: &[(String, String)], body: &str, stop: &AtomicBool) -> Result<Response, ModelError> {
     send(url, headers, Some(body), stop, STREAM_TIMEOUT)
 }
-
-type Head = Result<(u16, Vec<(String, String)>), String>;
 
 pub fn send(
     url: &str,
@@ -70,8 +155,16 @@ pub fn send(
     stop: &AtomicBool,
     timeout: Duration,
 ) -> Result<Response, ModelError> {
-    let shared = shared()?;
-    dispatch(shared, &shared.client, url, headers, body, stop, timeout)
+    blocking(Ask { total: Some(timeout), ..Ask::new(url, headers, body) }, Some(stop))
+}
+
+pub fn unstoppable(
+    url: &str,
+    headers: &[(String, String)],
+    body: Option<&str>,
+    timeout: Duration,
+) -> Result<Response, ModelError> {
+    blocking(Ask { total: Some(timeout), ..Ask::new(url, headers, body) }, None)
 }
 
 pub fn one_hop(
@@ -80,144 +173,7 @@ pub fn one_hop(
     body: Option<&str>,
     timeout: Duration,
 ) -> Result<Response, ModelError> {
-    let shared = shared()?;
-    dispatch(shared, &shared.web, url, headers, body, &AtomicBool::new(false), timeout)
-}
-
-fn dispatch(
-    shared: &'static Shared,
-    client: &reqwest::Client,
-    url: &str,
-    headers: &[(String, String)],
-    body: Option<&str>,
-    stop: &AtomicBool,
-    timeout: Duration,
-) -> Result<Response, ModelError> {
-    if stop.load(Ordering::Relaxed) {
-        return Err(ModelError::Cancelled);
-    }
-    let mut request = match body {
-        Some(body) => {
-            let request = client.post(url).body(body.to_owned());
-            if headers.iter().any(|(key, _)| key.eq_ignore_ascii_case("content-type")) {
-                request
-            } else {
-                request.header("content-type", "application/json")
-            }
-        }
-        None => client.get(url),
-    };
-    for (key, value) in headers {
-        request = request.header(key, value);
-    }
-    let request = request.timeout(timeout);
-    let (head_tx, mut head_rx) = oneshot::channel::<Head>();
-    let (data_tx, data_rx) = mpsc::channel::<Result<Vec<u8>, String>>(CHUNKS_IN_FLIGHT);
-    let task = shared.runtime.spawn(async move {
-        let mut response = match request.send().await {
-            Ok(response) => response,
-            Err(error) => {
-                let _ = head_tx.send(Err(described(&error)));
-                return;
-            }
-        };
-        let status = response.status().as_u16();
-        let headers = response
-            .headers()
-            .iter()
-            .filter_map(|(k, v)| Some((k.as_str().to_owned(), v.to_str().ok()?.to_owned())))
-            .collect();
-        if head_tx.send(Ok((status, headers))).is_err() {
-            return;
-        }
-        loop {
-            let chunk = match response.chunk().await {
-                Ok(Some(chunk)) => Ok(chunk.to_vec()),
-                Ok(None) => return,
-                Err(error) => Err(described(&error)),
-            };
-            let failed = chunk.is_err();
-            if data_tx.send(chunk).await.is_err() || failed {
-                return;
-            }
-        }
-    });
-    let task = Task(task.abort_handle());
-    let handle = shared.runtime.handle();
-    loop {
-        if stop.load(Ordering::Relaxed) {
-            return Err(ModelError::Cancelled);
-        }
-        match handle.block_on(async { tokio::time::timeout(POLL, &mut head_rx).await }) {
-            Ok(Ok(Ok((status, headers)))) => {
-                return Ok(Response {
-                    status,
-                    headers,
-                    body: Box::new(Body {
-                        data: data_rx,
-                        handle: handle.clone(),
-                        buffer: Vec::new(),
-                        at: 0,
-                        _running: task,
-                    }),
-                });
-            }
-            Ok(Ok(Err(error))) => return Err(ModelError::Network(error)),
-            Ok(Err(_)) => return Err(ModelError::Network("request ended before response headers".into())),
-            Err(_) => {}
-        }
-    }
-}
-
-struct Task(AbortHandle);
-
-impl Drop for Task {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
-}
-
-struct Body {
-    data: mpsc::Receiver<Result<Vec<u8>, String>>,
-    handle: Handle,
-    buffer: Vec<u8>,
-    at: usize,
-    _running: Task,
-}
-impl Read for Body {
-    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
-        let data = self.fill_buf()?;
-        let count = data.len().min(out.len());
-        out[..count].copy_from_slice(&data[..count]);
-        self.consume(count);
-        Ok(count)
-    }
-}
-impl BufRead for Body {
-    fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        if self.at == self.buffer.len() {
-            let data = &mut self.data;
-            let next = self.handle.block_on(async { tokio::time::timeout(POLL, data.recv()).await });
-            match next {
-                Ok(Some(Ok(bytes))) => {
-                    self.buffer = bytes;
-                    self.at = 0;
-                }
-                Ok(Some(Err(error))) => return Err(io::Error::other(error)),
-                Err(_) => {
-                    return Err(io::Error::new(io::ErrorKind::TimedOut, "waiting for stream"));
-                }
-                Ok(None) => {
-                    self.buffer.clear();
-                    self.at = 0;
-                }
-            }
-        }
-        Ok(&self.buffer[self.at..])
-    }
-    fn consume(&mut self, count: usize) {
-        self.at = (self.at + count).min(self.buffer.len());
-    }
+    blocking(Ask { total: Some(timeout), one_hop: true, ..Ask::new(url, headers, body) }, None)
 }
 
 #[cfg(test)]

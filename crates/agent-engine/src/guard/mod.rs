@@ -1,11 +1,11 @@
 use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
 
+use platform::Stop;
 use platform::sync::Locked;
 
 use serde_json::{Value, json};
 
-use crate::model::{ModelApi, TurnRequest};
+use crate::model::{BlockingTurn, ModelApi, TurnRequest};
 use crate::transcript::{Block, Message, Role};
 
 const BOUNDARY: u8 = 50;
@@ -31,7 +31,7 @@ impl Safety {
         instructions: &str,
         tool: &str,
         input: &Value,
-        stop: &AtomicBool,
+        stop: &Stop,
     ) -> Result<(), String> {
         let transcript = self.transcript.locked().clone();
         let action = json!({ tool: input }).to_string();
@@ -55,7 +55,7 @@ impl Safety {
             ..template.clone()
         };
         let answer = api
-            .turn(&request, &mut |_| {}, stop)
+            .turn_blocking(&request, &mut |_| {}, stop.token())
             .map_err(|error| format!("{brand_name}'s safety check could not run ({error}), so the action was held back. Retry it, or ask the user.", brand_name = brand::NAME))?
             .message
             .text();

@@ -2,21 +2,26 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{ChildStdin, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use platform::Child;
 use platform::child::{GRACE, Spawn, Stderr, last_lines};
 use platform::sync::Locked;
+use platform::{Child, Stop};
 use serde_json::{Value, json};
+use tokio::sync::oneshot;
 
 use super::{ANSWER_WAIT, Listener, MESSAGE_AT_MOST, Transport};
 
 const SILENT_AFTER_CANCEL: Duration = if cfg!(test) { Duration::from_secs(1) } else { Duration::from_secs(3) };
 const STDERR_LINES: usize = 5;
 
-type Waiting = Arc<Mutex<HashMap<String, Sender<Value>>>>;
+type Waiting = Arc<Mutex<HashMap<String, oneshot::Sender<Value>>>>;
+
+enum Answer {
+    Replied(Option<Value>),
+    Ended(&'static str),
+}
 
 struct Heard {
     waiting: Waiting,
@@ -195,36 +200,40 @@ impl Reading {
 
 impl Transport for StdioTransport {
     fn request(&self, message: &Value) -> Result<Value, String> {
-        self.request_stopped(message, &AtomicBool::new(false))
+        self.request_stopped(message, &Stop::new())
     }
 
-    fn request_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<Value, String> {
+    fn request_stopped(&self, message: &Value, stop: &Stop) -> Result<Value, String> {
         let id = message.get("id").map(Value::to_string).unwrap_or_default();
-        let (send, receive) = channel();
+        let (send, receive) = oneshot::channel();
         self.heard.waiting.locked().insert(id.clone(), send);
         let forget = || {
             self.heard.waiting.locked().remove(&id);
         };
+        if self.heard.ended.load(Ordering::Relaxed) {
+            forget();
+            return Err(self.stopped());
+        }
         if let Err(error) = write(&self.input, &self.name, message) {
             forget();
             return Err(if self.child.is_alive() { error } else { self.stopped() });
         }
-        let deadline = Instant::now() + ANSWER_WAIT;
-        loop {
-            match receive.recv_timeout(Duration::from_millis(25)) {
-                Ok(reply) => return Ok(reply),
-                Err(RecvTimeoutError::Disconnected) => return Err(self.stopped()),
-                Err(RecvTimeoutError::Timeout) => {}
+        let waited = platform::runtime::block_on(async {
+            tokio::select! {
+                biased;
+                reply = receive => Answer::Replied(reply.ok()),
+                () = stop.wait() => Answer::Ended("cancelled"),
+                () = tokio::time::sleep(ANSWER_WAIT) => Answer::Ended("timed out"),
             }
-            if self.heard.ended.load(Ordering::Relaxed) {
+        })
+        .map_err(|error| error.to_string())?;
+        match waited {
+            Answer::Replied(Some(reply)) => Ok(reply),
+            Answer::Replied(None) => Err(self.stopped()),
+            Answer::Ended(reason) => {
                 forget();
-                return Err(self.stopped());
-            }
-            let cancelled = stop.load(Ordering::Relaxed);
-            if cancelled || Instant::now() > deadline {
-                forget();
-                self.cancel(message, if cancelled { "cancelled" } else { "timed out" });
-                return Err("MCP call cancelled or timed out".into());
+                self.cancel(message, reason);
+                Err("MCP call cancelled or timed out".into())
             }
         }
     }

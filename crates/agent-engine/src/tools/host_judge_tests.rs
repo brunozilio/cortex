@@ -1,5 +1,3 @@
-use std::sync::atomic::AtomicBool;
-
 use domain::permission_rules::RuleKind;
 use serde_json::json;
 
@@ -45,7 +43,7 @@ fn rules_decide_a_script_s_calls_like_the_tool_that_does_the_same() {
 }
 
 fn attended(mode: PermissionMode, no_prompts: bool) -> (HostJudge, Arc<Control>, Arc<Mutex<Vec<EngineEvent>>>) {
-    let root = Arc::new(Control::new(mode, Arc::new(AtomicBool::new(false))));
+    let root = Arc::new(Control::new(mode, Arc::default()));
     let control = root.child_configured(None, no_prompts);
     let events: Arc<Mutex<Vec<EngineEvent>>> = Arc::default();
     let seen = Arc::clone(&events);

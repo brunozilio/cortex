@@ -185,7 +185,7 @@ mod tests {
     use super::*;
 
     fn control() -> Arc<Control> {
-        Arc::new(Control::new(domain::PermissionMode::Ask, Arc::new(AtomicBool::new(false))))
+        Arc::new(Control::new(domain::PermissionMode::Ask, Arc::default()))
     }
 
     #[test]

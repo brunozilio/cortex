@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use serde_json::json;
 
@@ -62,7 +61,7 @@ fn a_huge_read_stops_at_a_whole_line_and_says_where_to_go_on() {
 fn a_sub_agent_or_a_compacted_conversation_gets_the_text_again() {
     let (_dir, workspace) = project();
     read(&workspace, json!({"file_path": "a.rs"}));
-    let child = workspace.fork(Arc::new(AtomicBool::new(false)));
+    let child = workspace.fork(Arc::default());
     assert!(read(&child, json!({"file_path": "a.rs"})).contains("two"), "the child never saw it");
     workspace.forget_seen_files();
     assert!(read(&workspace, json!({"file_path": "a.rs"})).contains("two"), "the summary dropped it");

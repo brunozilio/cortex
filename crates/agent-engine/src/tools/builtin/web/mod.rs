@@ -81,7 +81,7 @@ impl Tool for WebFetch {
             return Outcome::error(format!("{url} answered {}", response.status));
         }
         let content_type = response.header("content-type");
-        let bytes = match crate::model::web_client::read_capped(response.body.as_mut(), READ) {
+        let bytes = match crate::model::web_client::read_capped(&mut response.body, READ) {
             Ok(bytes) => bytes,
             Err(error) => return Outcome::error(format!("Could not read {url}: {error}")),
         };

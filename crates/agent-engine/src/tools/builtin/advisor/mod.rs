@@ -1,8 +1,7 @@
-use std::sync::atomic::AtomicBool;
-
+use platform::Stop;
 use serde_json::Value;
 
-use crate::model::{ModelApi, ToolSpec, TurnRequest};
+use crate::model::{BlockingTurn, ModelApi, ToolSpec, TurnRequest};
 use crate::tools::{Consult, Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message, Role};
 
@@ -73,13 +72,7 @@ pub fn transcript(history: &[Message]) -> String {
     text
 }
 
-pub fn consult(
-    api: &dyn ModelApi,
-    template: &TurnRequest,
-    model: &str,
-    history: &[Message],
-    stop: &AtomicBool,
-) -> Outcome {
+pub fn consult(api: &dyn ModelApi, template: &TurnRequest, model: &str, history: &[Message], stop: &Stop) -> Outcome {
     let request = TurnRequest {
         model: model.into(),
         system: crate::prompt::text("advisor-system"),
@@ -88,7 +81,7 @@ pub fn consult(
         effort: domain::Effort::Max,
         ..template.clone()
     };
-    match api.turn(&request, &mut |_| {}, stop) {
+    match api.turn_blocking(&request, &mut |_| {}, stop.token()) {
         Ok(reply) if !reply.message.text().trim().is_empty() => Outcome::ok(reply.message.text().trim().to_owned()),
         Ok(_) => Outcome::error("The advisor gave no advice; go on with your best judgement."),
         Err(error) => {
@@ -99,7 +92,6 @@ pub fn consult(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
 
     use domain::Effort;
 
@@ -130,7 +122,7 @@ mod tests {
             effort: Effort::Low,
             max_tokens: 1000,
         };
-        let outcome = consult(&model, &template, "strong", &history, &AtomicBool::new(false));
+        let outcome = consult(&model, &template, "strong", &history, &Stop::new());
         assert_eq!(outcome.content, "Check the lexer first.");
         let asked = &model.asked()[0];
         assert_eq!((asked.model.as_str(), asked.effort), ("strong", Effort::Max));
@@ -157,7 +149,7 @@ mod tests {
             ScriptedModel::reply(vec![Block::Text("Done.".into())]),
         ]);
         let tools = tools();
-        let control = Control::new(domain::PermissionMode::Bypass, Arc::new(AtomicBool::new(false)));
+        let control = Control::new(domain::PermissionMode::Bypass, Arc::default());
         let request = TurnRequest {
             model: "m".into(),
             system: "s".into(),

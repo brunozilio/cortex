@@ -1,70 +1,44 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
-
-use platform::sync::Locked;
-use std::time::Duration;
-
-const STOP_CHECK: Duration = Duration::from_millis(25);
+use tokio::sync::{Mutex, MutexGuard};
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Default)]
 pub(super) struct Turns {
-    busy: Mutex<bool>,
-    freed: Condvar,
+    busy: Mutex<()>,
 }
 
 #[derive(Debug)]
-pub(super) struct Turn<'a>(&'a Turns);
-
-impl Turns {
-    fn busy(&self) -> MutexGuard<'_, bool> {
-        self.busy.locked()
-    }
-
-    pub(super) fn take(&self) -> Turn<'_> {
-        let mut busy = self.busy();
-        while *busy {
-            busy = platform::sync::wait(&self.freed, busy);
-        }
-        *busy = true;
-        Turn(self)
-    }
-
-    pub(super) fn take_unless(&self, stop: &AtomicBool) -> Option<Turn<'_>> {
-        let mut busy = self.busy();
-        loop {
-            if stop.load(Ordering::Relaxed) {
-                return None;
-            }
-            if !*busy {
-                *busy = true;
-                return Some(Turn(self));
-            }
-            busy = self.freed.wait_timeout(busy, STOP_CHECK).unwrap_or_else(PoisonError::into_inner).0;
-        }
-    }
+pub(super) struct Turn<'a> {
+    _held: MutexGuard<'a, ()>,
 }
 
-impl Drop for Turn<'_> {
-    fn drop(&mut self) {
-        *self.0.busy() = false;
-        self.0.freed.notify_one();
+impl Turns {
+    pub(super) fn take(&self) -> Turn<'_> {
+        Turn { _held: self.busy.blocking_lock() }
+    }
+
+    pub(super) async fn take_unless(&self, cancel: &CancellationToken) -> Option<Turn<'_>> {
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => None,
+            held = self.busy.lock() => Some(Turn { _held: held }),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
 
     use super::*;
 
     #[test]
     fn a_waiting_turn_starts_as_soon_as_the_last_one_ends() {
         let turns = Turns::default();
-        let never = AtomicBool::new(false);
+        let never = CancellationToken::new();
         let first = turns.take();
         std::thread::scope(|scope| {
             let waiter = scope.spawn(|| {
-                let _second = turns.take_unless(&never).expect("second");
+                let _second = platform::runtime::block_on(turns.take_unless(&never)).expect("runtime").expect("second");
                 Instant::now()
             });
             std::thread::sleep(Duration::from_millis(50));
@@ -77,10 +51,17 @@ mod tests {
     }
 
     #[test]
-    fn a_stopped_wait_gives_up_its_turn() {
+    fn a_cancelled_wait_gives_up_its_turn_at_once() {
         let turns = Turns::default();
         let _held = turns.take();
-        let stop = AtomicBool::new(true);
-        assert!(turns.take_unless(&stop).is_none());
+        let cancel = CancellationToken::new();
+        let canceller = cancel.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(20));
+            canceller.cancel();
+        });
+        let started = Instant::now();
+        assert!(platform::runtime::block_on(turns.take_unless(&cancel)).expect("runtime").is_none());
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 }

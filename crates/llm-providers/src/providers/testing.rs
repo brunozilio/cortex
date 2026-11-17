@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use domain::provider::ProviderKey;
 use domain::{Effort, ModelOption, ModelProvider};
@@ -7,7 +6,7 @@ use serde_json::{Value, json};
 
 use crate::model::client::ProviderClient;
 use crate::model::http::{ScriptedHttp, Sent};
-use crate::model::{ModelApi, TurnRequest};
+use crate::model::{BlockingTurn, CancellationToken, TurnRequest};
 use crate::transcript::Message;
 
 pub fn request(model: &str) -> TurnRequest {
@@ -44,7 +43,9 @@ pub fn client(
 
 pub fn sent_turn(provider: ModelProvider, fixture: &str) -> (Sent, Value) {
     let (client, http) = client(provider, [(200, fixture.to_owned())]);
-    client.turn(&request(&format!("{}:model-1", provider.id())), &mut |_| {}, &AtomicBool::new(false)).expect("stream");
+    client
+        .turn_blocking(&request(&format!("{}:model-1", provider.id())), &mut |_| {}, &CancellationToken::new())
+        .expect("stream");
     let sent = http.sent().remove(0);
     let body = serde_json::from_str(&sent.body).expect("body");
     (sent, body)
@@ -55,7 +56,7 @@ pub fn effort_body(provider: ModelProvider, model: &str, fixture: &str) -> Value
     let option = ModelOption::new(format!("{}:{model}", provider.id()), model).served_by(provider);
     let key = Arc::new(ProviderKey::new(credentials(provider)));
     ProviderClient::for_model(option, http.clone(), key)
-        .turn(&request(model), &mut |_| {}, &AtomicBool::new(false))
+        .turn_blocking(&request(model), &mut |_| {}, &CancellationToken::new())
         .expect("turn");
     serde_json::from_str(&http.sent()[0].body).expect("body")
 }

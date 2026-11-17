@@ -3,9 +3,8 @@ mod transport;
 mod turns;
 
 use super::http::Http;
-use super::{Delta, KeySource, ModelApi, ModelError, Reply, TurnRequest};
+use super::{BoxFuture, CancellationToken, KeySource, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use domain::{ModelOption, ModelProvider};
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 pub use llm_providers::Config;
@@ -63,15 +62,24 @@ impl ProviderClient {
 }
 
 impl ModelApi for ProviderClient {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        if stop.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(ModelError::Cancelled);
-        }
-        let ready = self.ready()?;
-        {
-            let _turn = ready.transport.turns.take();
-            ready.transport.config(false)?;
-        }
-        ready.api.turn(request, on, stop)
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(async move {
+            if cancel.is_cancelled() {
+                return Err(ModelError::Cancelled);
+            }
+            let ready = self.ready()?;
+            {
+                let Some(_turn) = ready.transport.turns.take_unless(cancel).await else {
+                    return Err(ModelError::Cancelled);
+                };
+                ready.transport.config(false)?;
+            }
+            ready.api.turn(request, on, cancel).await
+        })
     }
 }

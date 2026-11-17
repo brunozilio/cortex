@@ -1,7 +1,4 @@
 use std::cell::{Cell, RefCell};
-use std::sync::mpsc::{self, RecvTimeoutError};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use serde_json::{Value, json};
 
@@ -9,7 +6,7 @@ use super::Agent;
 use super::dispatch::Calling;
 use super::run::ThisRun;
 use crate::model::ToolSpec;
-use crate::tools::script_bridge::{Bridge, Request};
+use crate::tools::script_bridge::hosted;
 use crate::tools::script_tool::{Capabilities, Capability, Origin, ScriptTool};
 use crate::tools::skill::FoundSkill;
 use crate::tools::{Outcome, Tool, Workspace};
@@ -182,32 +179,20 @@ impl Agent<'_> {
         if depth >= DEEPEST {
             return Outcome::error(format!("{} called tools {DEEPEST} levels deep; stopped", script.name));
         }
-        let (send, requests) = mpsc::channel::<Request>();
-        let host: Arc<dyn script::Host> = Arc::new(Bridge(Mutex::new(send)));
         let data = self.script_context();
-        let stop = Arc::clone(&self.workspace.stop);
+        let stop = self.workspace.stop.flag();
         let export = if script::exports(script.path, script.source, "execute") { "execute" } else { "run" };
         let (path, source, input) = (script.path.to_owned(), script.source.to_owned(), input.clone());
         let last: RefCell<Option<Outcome>> = RefCell::new(None);
         DEPTH.with(|cell| cell.set(depth + 1));
-        let result = std::thread::scope(|scope| {
-            let running = scope.spawn(move || script::run(&path, &source, export, &[input], &data, host, stop));
-            loop {
-                match requests.recv_timeout(Duration::from_millis(25)) {
-                    Ok(request) if request.function == "builtin" => {
-                        let answer = built_in(builtin, &request.arguments, &last, script.name);
-                        let _ = request.reply.send(answer);
-                    }
-                    Ok(request) => {
-                        let answer = self.serve(within, script, &request.function, request.arguments);
-                        let _ = request.reply.send(answer);
-                    }
-                    Err(RecvTimeoutError::Timeout) if !running.is_finished() => {}
-                    Err(_) => break,
-                }
-            }
-            running.join().unwrap_or_else(|_| Err("the script crashed".into()))
-        });
+        let result = hosted(
+            "the script crashed",
+            move |host| script::run(&path, &source, export, &[input], &data, host, stop),
+            |function, arguments| match function {
+                "builtin" => built_in(builtin, &arguments, &last, script.name),
+                function => self.serve(within, script, function, arguments),
+            },
+        );
         DEPTH.with(|cell| cell.set(depth));
         let stopped = self.workspace.stop.load(std::sync::atomic::Ordering::Relaxed);
         reported(result, last.into_inner(), stopped, script.name)

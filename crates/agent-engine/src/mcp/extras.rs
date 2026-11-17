@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use serde_json::{Value, json};
 
@@ -129,7 +128,7 @@ impl Tool for ReadResource {
     }
 }
 
-pub fn expand_prompt(servers: &[Arc<McpServer>], typed: &str, stop: &AtomicBool) -> Option<Result<String, String>> {
+pub fn expand_prompt(servers: &[Arc<McpServer>], typed: &str, stop: &platform::Stop) -> Option<Result<String, String>> {
     let rest = typed.trim().strip_prefix("/mcp__")?;
     let (name, args) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
     let (server_name, prompt) = name.split_once("__")?;
@@ -137,7 +136,7 @@ pub fn expand_prompt(servers: &[Arc<McpServer>], typed: &str, stop: &AtomicBool)
     Some(prompt_text(server, prompt, args.trim(), stop))
 }
 
-fn prompt_text(server: &McpServer, prompt: &str, args: &str, stop: &AtomicBool) -> Result<String, String> {
+fn prompt_text(server: &McpServer, prompt: &str, args: &str, stop: &platform::Stop) -> Result<String, String> {
     let listed = server.ask("prompts/list", json!({}), stop)?;
     let declared = listed["prompts"]
         .as_array()

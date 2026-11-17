@@ -1,9 +1,8 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use crate::model::http::ScriptedHttp;
 use crate::model::wires::chat::{Chat, Endpoint, Endpoints};
-use crate::model::{Delta, ModelApi, ModelError, ToolSpec, TurnRequest};
+use crate::model::{BlockingTurn, CancellationToken, Delta, ModelError, ToolSpec, TurnRequest};
 use crate::transcript::{Block, Message, StopReason};
 use domain::Effort;
 use serde_json::{Value, json};
@@ -41,7 +40,7 @@ fn folds_thinking_text_and_a_call_from_a_streamed_answer() {
         Arc::new(ScriptedHttp::new([(200, include_str!("../../../../tests/fixtures/chat_tool_use.sse").to_owned())]));
     let mut deltas = Vec::new();
     let reply = Chat::new(http.clone(), served())
-        .turn(&request(), &mut |delta| deltas.push(delta), &AtomicBool::new(false))
+        .turn_blocking(&request(), &mut |delta| deltas.push(delta), &CancellationToken::new())
         .expect("reply");
     assert_eq!(reply.stop, StopReason::ToolUse);
     assert_eq!(
@@ -68,7 +67,8 @@ fn folds_thinking_text_and_a_call_from_a_streamed_answer() {
 fn folds_a_recorded_chat_answer_with_reasoning_and_a_tool_call() {
     let stream = include_str!("../../../../tests/fixtures/chat_reasoning_tool_call.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
-    let reply = Chat::new(http, served()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("reply");
+    let reply =
+        Chat::new(http, served()).turn_blocking(&request(), &mut |_| {}, &CancellationToken::new()).expect("reply");
     assert_eq!(reply.stop, StopReason::ToolUse);
     assert_eq!(
         reply.message.blocks,
@@ -103,7 +103,7 @@ fn asks_the_served_model_with_the_whole_conversation_and_the_tools() {
         role: crate::transcript::Role::User,
         blocks: vec![Block::ToolResult { id: "call_0".into(), content: "no such file".into(), is_error: true }],
     });
-    Chat::new(http.clone(), served()).turn(&request, &mut |_| {}, &AtomicBool::new(false)).expect("reply");
+    Chat::new(http.clone(), served()).turn_blocking(&request, &mut |_| {}, &CancellationToken::new()).expect("reply");
     let sent = http.sent();
     assert_eq!(sent[0].url, "http://127.0.0.1:8080/v1/chat/completions");
     assert!(sent[0].headers.iter().all(|(name, _)| name != "authorization"), "a local server takes no key");
@@ -132,14 +132,16 @@ fn a_model_still_loading_is_busy_and_a_refused_request_says_why() {
     let http = Arc::new(ScriptedHttp::new([]));
     let error = Chat::new(http.clone(), loading)
         .without_backoff()
-        .turn(&request(), &mut |_| {}, &AtomicBool::new(false))
+        .turn_blocking(&request(), &mut |_| {}, &CancellationToken::new())
         .expect_err("loading");
     assert_eq!(error, ModelError::Overloaded("qwen is still starting".into()));
     assert!(http.sent().is_empty());
 
     let refused = r#"{"error":{"message":"context length exceeded"}}"#;
     let http = Arc::new(ScriptedHttp::new([(400, refused.to_owned())]));
-    let error = Chat::new(http, served()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect_err("refused");
+    let error = Chat::new(http, served())
+        .turn_blocking(&request(), &mut |_| {}, &CancellationToken::new())
+        .expect_err("refused");
     assert_eq!(error, ModelError::TooLong("context length exceeded".into()), "so the run compacts and goes on");
 }
 
@@ -151,7 +153,8 @@ fn an_answer_cut_off_by_its_length_says_so() {
         "data: [DONE]\n\n",
     );
     let http = Arc::new(ScriptedHttp::new([(200, stream.to_owned())]));
-    let reply = Chat::new(http, served()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("reply");
+    let reply =
+        Chat::new(http, served()).turn_blocking(&request(), &mut |_| {}, &CancellationToken::new()).expect("reply");
     assert_eq!((reply.stop, reply.message.text()), (StopReason::MaxTokens, "Half".to_owned()));
 }
 

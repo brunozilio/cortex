@@ -91,7 +91,7 @@ pub struct Consult<'a> {
     pub api: &'a dyn crate::model::ModelApi,
     pub request: &'a crate::model::TurnRequest,
     pub conversation: &'a [crate::transcript::Message],
-    pub stop: &'a std::sync::atomic::AtomicBool,
+    pub stop: &'a platform::Stop,
 }
 
 impl std::fmt::Debug for Consult<'_> {

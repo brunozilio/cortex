@@ -38,7 +38,7 @@ impl Tool for Watch {
 
 struct Entry {
     client: u64,
-    stop: Arc<AtomicBool>,
+    stop: Arc<platform::Stop>,
     explained: String,
     tool: String,
     input: Value,
@@ -53,7 +53,7 @@ pub fn start(watching: Watching, tool: Arc<dyn Tool>, workspace: &Workspace) -> 
     static NEXT: AtomicU64 = AtomicU64::new(1);
     let id = format!("watch_{}", NEXT.fetch_add(1, Ordering::Relaxed));
     let client = workspace.credentials.client;
-    let stop = Arc::new(AtomicBool::new(false));
+    let stop = Arc::new(platform::Stop::new());
     let workspace = workspace.fork(Arc::clone(&stop));
     let explained = watching.plan.explained();
     let (tool_name, input) = (watching.plan.tool.clone(), watching.plan.input.clone());

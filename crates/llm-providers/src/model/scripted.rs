@@ -1,8 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
 
-use super::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use super::{BoxFuture, CancellationToken, Delta, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use crate::transcript::{Block, Message, StopReason, Usage};
 
 #[derive(Debug, Default)]
@@ -28,7 +27,18 @@ impl ScriptedModel {
 }
 
 impl ModelApi for ScriptedModel {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), _stop: &AtomicBool) -> Result<Reply, ModelError> {
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        _cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(async move { self.answer(request, on) })
+    }
+}
+
+impl ScriptedModel {
+    pub fn answer(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta)) -> Result<Reply, ModelError> {
         if let Ok(mut asked) = self.asked.lock() {
             asked.push(request.clone());
         }

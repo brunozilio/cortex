@@ -29,7 +29,6 @@ pub fn kept_whole(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
 
     use serde_json::json;
 
@@ -63,7 +62,7 @@ mod tests {
         let model = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Port 8080.".into())])]);
         let mut workspace = Workspace::new("/repo");
         workspace.policy.web.small_pages_direct = false;
-        let (request, stop) = (request(), AtomicBool::new(false));
+        let (request, stop) = (request(), platform::Stop::new());
         let agent = Consult { api: &model, request: &request, conversation: &[], stop: &stop };
         let input = json!({"url": "https://x.dev", "prompt": "the port"});
         let ran = Ran { input: &input, workspace: &workspace, agent: &agent };
@@ -80,7 +79,7 @@ mod tests {
         let model = ScriptedModel::new([]);
         let mut workspace = Workspace::new("/repo");
         workspace.policy.web.small_pages_direct = true;
-        let (request, stop) = (request(), AtomicBool::new(false));
+        let (request, stop) = (request(), platform::Stop::new());
         let agent = Consult { api: &model, request: &request, conversation: &[], stop: &stop };
         let input = json!({"url": "https://x.dev"});
         let ran = Ran { input: &input, workspace: &workspace, agent: &agent };

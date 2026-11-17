@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use super::{BoxFuture, CancellationToken, Delta, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 
 pub struct Pooled {
     accounts: Vec<(String, Arc<dyn ModelApi>)>,
@@ -21,18 +21,36 @@ impl Pooled {
 }
 
 impl ModelApi for Pooled {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(self.handed_round(request, on, cancel))
+    }
+}
+
+impl Pooled {
+    async fn handed_round(
+        &self,
+        request: &TurnRequest,
+        on: OnDelta<'_>,
+        cancel: &CancellationToken,
+    ) -> Result<Reply, ModelError> {
         let count = self.accounts.len();
         let start = self.current.load(Ordering::Relaxed);
         let mut last = Err(ModelError::Unauthorized("no account is connected".into()));
         for offset in 0..count {
             let at = (start + offset) % count;
             let mut wrote = false;
-            let mut seen = |delta: Delta| {
-                wrote = true;
-                on(delta);
+            last = {
+                let mut seen = |delta: Delta| {
+                    wrote = true;
+                    on(delta);
+                };
+                self.accounts[at].1.turn(request, &mut seen, cancel).await
             };
-            last = self.accounts[at].1.turn(request, &mut seen, stop);
             let hands_over =
                 last.as_ref().err().and_then(ModelError::failure).is_some_and(domain::account_pool::hands_over);
             if !hands_over || wrote {

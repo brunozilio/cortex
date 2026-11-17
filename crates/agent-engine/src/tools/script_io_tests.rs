@@ -68,7 +68,11 @@ struct Endless;
 
 impl Http for Endless {
     fn get(&self, _url: &str, _headers: &[(String, String)]) -> Result<Response, String> {
-        Ok(Response { status: 200, headers: Vec::new(), body: Box::new(BufReader::new(std::io::repeat(b'a'))) })
+        Ok(Response {
+            status: 200,
+            headers: Vec::new(),
+            body: crate::model::http::Body::reader(BufReader::new(std::io::repeat(b'a'))),
+        })
     }
 
     fn addresses(&self, _host: &str) -> Result<Vec<std::net::IpAddr>, String> {

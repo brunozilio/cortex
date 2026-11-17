@@ -1,5 +1,4 @@
 use std::collections::{HashMap, VecDeque};
-use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Mutex;
 
@@ -73,6 +72,6 @@ impl Http for ScriptedHttp {
             .ok()
             .and_then(|mut answers| answers.pop_front())
             .ok_or_else(|| "no scripted answer left".to_owned())?;
-        Ok(Response { status, headers, body: Box::new(Cursor::new(text.into_bytes())) })
+        Ok(Response { status, headers, body: text.into() })
     }
 }

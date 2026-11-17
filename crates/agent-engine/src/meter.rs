@@ -1,9 +1,8 @@
 use crate::RunGate;
-use crate::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use crate::model::{BoxFuture, CancellationToken, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use domain::billing::{ModelUsage, PRICE_DATE};
 use domain::{EngineEvent, ModelProvider};
 use llm_providers::rates;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
@@ -31,16 +30,30 @@ pub struct Metered {
     pub budget: Option<domain::budget::Budget>,
 }
 impl ModelApi for Metered {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        if let Some(budget) = &self.budget {
-            let run_cost = self.ledger.known_cost();
-            if !budget.allows(run_cost) {
-                return Err(ModelError::Provider(budget.refusal(run_cost)));
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(async move {
+            if let Some(budget) = &self.budget {
+                let run_cost = self.ledger.known_cost();
+                if !budget.allows(run_cost) {
+                    return Err(ModelError::Provider(budget.refusal(run_cost)));
+                }
             }
-        }
-        let reply = self.api.turn(request, on, stop)?;
+            let reply = self.api.turn(request, on, cancel).await?;
+            self.record(request, &reply)?;
+            Ok(reply)
+        })
+    }
+}
+
+impl Metered {
+    fn record(&self, request: &TurnRequest, reply: &Reply) -> Result<(), ModelError> {
         if let Some(calls) = &self.calls {
-            calls(request, &reply);
+            calls(request, reply);
         }
         let u = reply.usage;
         let provider = crate::providers::find(self.provider);
@@ -69,7 +82,7 @@ impl ModelApi for Metered {
                 price_date: PRICE_DATE.into(),
             },
         ));
-        Ok(reply)
+        Ok(())
     }
 }
 fn spent_by(agent: Option<usize>, usage: ModelUsage) -> EngineEvent {
@@ -92,6 +105,7 @@ mod tests {
 
     use super::*;
     use crate::boundary::EventSink;
+    use crate::model::BlockingTurn;
     use crate::model::scripted::ScriptedModel;
     use crate::transcript::Block;
 
@@ -132,14 +146,14 @@ mod tests {
             effort: domain::Effort::Medium,
             max_tokens: 100,
         };
-        let stop = AtomicBool::new(false);
+        let stop = CancellationToken::new();
 
         let spent = metered(Some(Budget { limit_usd: 1.0, spent_usd: 1.0 }));
-        let refused = spent.turn(&request, &mut |_| {}, &stop).expect_err("refused");
+        let refused = spent.turn_blocking(&request, &mut |_| {}, &stop).expect_err("refused");
         assert!(refused.to_string().contains("budget"), "{refused}");
 
         let within = metered(Some(Budget { limit_usd: 1.0, spent_usd: 0.5 }));
-        assert!(within.turn(&request, &mut |_| {}, &stop).is_ok());
-        assert!(metered(None).turn(&request, &mut |_| {}, &stop).is_ok());
+        assert!(within.turn_blocking(&request, &mut |_| {}, &stop).is_ok());
+        assert!(metered(None).turn_blocking(&request, &mut |_| {}, &stop).is_ok());
     }
 }

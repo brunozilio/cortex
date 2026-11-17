@@ -89,7 +89,7 @@ fn endpoint_of(
 ) -> Result<String, String> {
     loop {
         let mut line = String::new();
-        match read_line_stopped(stream.body.as_mut(), &mut line, given_up) {
+        match read_line_stopped(&mut stream.body, &mut line, given_up) {
             Err(crate::model::ModelError::Cancelled) => {
                 return Err(format!("{name} did not name its endpoint in time"));
             }
@@ -165,7 +165,7 @@ impl Listening {
         let mut heard = false;
         loop {
             let mut line = String::new();
-            match read_line_stopped(stream.body.as_mut(), &mut line, &self.closed) {
+            match read_line_stopped(&mut stream.body, &mut line, &self.closed) {
                 Ok(0) | Err(_) => return heard,
                 Ok(_) => {}
             }

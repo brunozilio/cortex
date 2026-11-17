@@ -31,7 +31,7 @@ pub struct Verification {
 #[derive(Debug)]
 pub struct Workspace {
     pub cwd: PathBuf,
-    pub stop: Arc<AtomicBool>,
+    pub stop: Arc<platform::Stop>,
     pub detach: Arc<AtomicBool>,
     pub credentials: domain::credentials::RunCredentials,
     pub prompt_context: Option<crate::prompt::Environment>,
@@ -56,7 +56,7 @@ impl Workspace {
     pub fn new(cwd: impl Into<PathBuf>) -> Self {
         Self {
             cwd: cwd.into(),
-            stop: Arc::new(AtomicBool::new(false)),
+            stop: Arc::default(),
             detach: Arc::default(),
             credentials: Default::default(),
             prompt_context: None,
@@ -95,7 +95,7 @@ impl Workspace {
         }
     }
 
-    pub fn fork(&self, stop: Arc<AtomicBool>) -> Self {
+    pub fn fork(&self, stop: Arc<platform::Stop>) -> Self {
         Self {
             cwd: self.cwd.clone(),
             stop,

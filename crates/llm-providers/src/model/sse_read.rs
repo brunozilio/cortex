@@ -1,6 +1,6 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use tokio_util::sync::CancellationToken;
 
-use super::http::{Response, read_line_stopped};
+use super::http::Response;
 use super::sse::SseDecoder;
 use super::{Delta, ModelError, Reply};
 
@@ -9,21 +9,21 @@ pub trait SseFold {
     fn finish(self, on: &mut dyn FnMut(Delta)) -> Result<Reply, ModelError>;
 }
 
-pub fn read_sse(
+pub async fn read_sse(
     response: Response,
     mut folder: impl SseFold,
-    on: &mut dyn FnMut(Delta),
-    stop: &AtomicBool,
+    on: &mut (dyn FnMut(Delta) + Send),
+    cancel: &CancellationToken,
 ) -> Result<Reply, ModelError> {
     let mut decoder = SseDecoder::new();
     let mut body = response.body;
     let mut line = String::new();
     loop {
-        if stop.load(Ordering::Relaxed) {
+        if cancel.is_cancelled() {
             return Err(ModelError::Cancelled);
         }
         line.clear();
-        let read = read_line_stopped(body.as_mut(), &mut line, stop)?;
+        let read = body.read_line(&mut line, cancel).await?;
         let event = if read == 0 { decoder.finish() } else { decoder.line(line.trim_end_matches('\n')) };
         if let Some(event) = event {
             folder.event(&event.data, on)?;
@@ -37,6 +37,7 @@ pub fn read_sse(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::http::Body;
     use crate::transcript::{Block, Message, StopReason, Usage};
 
     #[derive(Default)]
@@ -55,25 +56,25 @@ mod tests {
     }
 
     fn response(text: &str) -> Response {
-        Response { status: 200, headers: Vec::new(), body: Box::new(std::io::Cursor::new(text.as_bytes().to_vec())) }
+        Response { status: 200, headers: Vec::new(), body: Body::from(text) }
+    }
+
+    fn read(text: &str, on: &mut (dyn FnMut(Delta) + Send), cancel: &CancellationToken) -> Result<Reply, ModelError> {
+        platform::runtime::block_on(read_sse(response(text), Collect::default(), on, cancel)).expect("runtime")
     }
 
     #[test]
     fn every_event_is_folded_until_the_stream_ends() {
         let mut seen = Vec::new();
-        let reply = read_sse(
-            response("data: a\n\ndata: b\n\ndata: c"),
-            Collect::default(),
-            &mut |d| seen.push(d),
-            &AtomicBool::new(false),
-        );
+        let reply = read("data: a\n\ndata: b\n\ndata: c", &mut |d| seen.push(d), &CancellationToken::new());
         assert_eq!(reply.expect("reply").message.text(), "a,b,c", "the last event needs no blank line");
         assert_eq!(seen.len(), 3);
     }
 
     #[test]
     fn a_stopped_run_reads_no_further() {
-        let stopped = read_sse(response("data: a\n\n"), Collect::default(), &mut |_| {}, &AtomicBool::new(true));
-        assert!(matches!(stopped, Err(ModelError::Cancelled)));
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        assert!(matches!(read("data: a\n\n", &mut |_| {}, &cancel), Err(ModelError::Cancelled)));
     }
 }

@@ -96,7 +96,7 @@ struct Endless;
 
 impl Http for Endless {
     fn get(&self, _url: &str, _headers: &[(String, String)]) -> Result<Response, String> {
-        let body = Box::new(BufReader::new(std::io::repeat(b'a')));
+        let body = crate::model::http::Body::reader(BufReader::new(std::io::repeat(b'a')));
         Ok(Response { status: 200, headers: vec![("content-type".into(), "text/plain".into())], body })
     }
 

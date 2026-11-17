@@ -129,12 +129,11 @@ pub fn engine(sessions: Arc<FileSessions>, language_servers: PathBuf) -> NativeE
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
 
     use domain::ModelProvider;
 
-    use agent_engine::model::TurnRequest;
     use agent_engine::model::http::ScriptedHttp;
+    use agent_engine::model::{BlockingTurn, CancellationToken, TurnRequest};
 
     use super::*;
 
@@ -159,7 +158,7 @@ mod tests {
             effort: domain::Effort::Low,
             max_tokens: 1,
         };
-        let _ = api.turn(&turn, &mut |_| {}, &AtomicBool::new(false));
+        let _ = api.turn_blocking(&turn, &mut |_| {}, &CancellationToken::new());
         http.sent().last().map(|sent| sent.url.clone()).unwrap_or_default()
     }
 
@@ -204,7 +203,7 @@ mod tests {
                 effort: domain::Effort::Low,
                 max_tokens: 1,
             };
-            api.turn(&turn, &mut |_| {}, &AtomicBool::new(false))
+            api.turn_blocking(&turn, &mut |_| {}, &CancellationToken::new())
         };
         let _ = ask("keyed-too:model-b");
         let sent = http.sent();
@@ -243,7 +242,7 @@ mod tests {
             effort: domain::Effort::Low,
             max_tokens: 1,
         };
-        let _ = api.turn(&turn, &mut |_| {}, &AtomicBool::new(false));
+        let _ = api.turn_blocking(&turn, &mut |_| {}, &CancellationToken::new());
         let keys: Vec<bool> =
             http.sent().iter().map(|sent| sent.headers.iter().any(|(_, value)| value.contains("sk-two"))).collect();
         assert_eq!(keys, [false, true], "the second account answered the same turn");

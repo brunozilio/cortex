@@ -1,9 +1,10 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use super::*;
 use crate::model::scripted::ScriptedModel;
-use crate::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use crate::model::{
+    BlockingTurn, BoxFuture, CancellationToken, Delta, ModelApi, ModelError, OnDelta, Reply, TurnRequest,
+};
 use crate::transcript::Block;
 
 fn request() -> TurnRequest {
@@ -23,7 +24,7 @@ fn pool(apis: Vec<Arc<dyn ModelApi>>) -> Pooled {
 }
 
 fn ask(api: &dyn ModelApi) -> Result<Reply, ModelError> {
-    api.turn(&request(), &mut |_| {}, &AtomicBool::new(false))
+    api.turn_blocking(&request(), &mut |_| {}, &CancellationToken::new())
 }
 
 fn answer(text: &str) -> Result<Reply, ModelError> {
@@ -50,7 +51,7 @@ fn the_hand_over_is_told_with_both_accounts_names() {
     let second = Arc::new(ScriptedModel::new([answer("ok")]));
     let pooled = pool(vec![first as Arc<dyn ModelApi>, second]);
     let mut seen = Vec::new();
-    pooled.turn(&request(), &mut |delta| seen.push(delta), &AtomicBool::new(false)).expect("ok");
+    pooled.turn_blocking(&request(), &mut |delta| seen.push(delta), &CancellationToken::new()).expect("ok");
     seen.retain(|delta| matches!(delta, Delta::HandedOver { .. }));
     assert_eq!(seen, [Delta::HandedOver { from: "a@x.io".into(), to: "b@x.io".into() }]);
 }
@@ -77,7 +78,7 @@ fn when_every_account_is_busy_the_last_failure_is_told() {
     let busy = |why: &str| Arc::new(ScriptedModel::new([Err(ModelError::Overloaded(why.into()))]));
     let pooled = pool(vec![busy("a") as Arc<dyn ModelApi>, busy("b")]);
     let mut seen = Vec::new();
-    let failed = pooled.turn(&request(), &mut |delta| seen.push(delta), &AtomicBool::new(false));
+    let failed = pooled.turn_blocking(&request(), &mut |delta| seen.push(delta), &CancellationToken::new());
     assert_eq!(failed.map(|_| ()), Err(ModelError::Overloaded("b".into())));
     assert_eq!(seen.len(), 1, "only a real hand-over is told: {seen:?}");
 }
@@ -85,9 +86,16 @@ fn when_every_account_is_busy_the_last_failure_is_told() {
 struct HalfAnswer;
 
 impl ModelApi for HalfAnswer {
-    fn turn(&self, _: &TurnRequest, on: &mut dyn FnMut(Delta), _: &AtomicBool) -> Result<Reply, ModelError> {
-        on(Delta::Text("partial".into()));
-        Err(ModelError::Overloaded("cut".into()))
+    fn turn<'a>(
+        &'a self,
+        _: &'a TurnRequest,
+        on: OnDelta<'a>,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(async move {
+            on(Delta::Text("partial".into()));
+            Err(ModelError::Overloaded("cut".into()))
+        })
     }
 }
 

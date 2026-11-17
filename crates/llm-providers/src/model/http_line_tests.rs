@@ -81,3 +81,14 @@ fn bytes_that_are_not_text_fail_the_read_and_a_stop_cancels_it() {
     let stopped = read_line_stopped(&mut waiting, &mut String::new(), &AtomicBool::new(true));
     assert_eq!(stopped, Err(ModelError::Cancelled));
 }
+
+#[test]
+fn the_stream_idle_deadline_is_configurable_and_falls_back_to_its_default() {
+    use super::{STREAM_IDLE, idle_from};
+    use std::time::Duration;
+    assert_eq!(idle_from(Some("45")), Duration::from_secs(45));
+    assert_eq!(idle_from(Some(" 7 ")), Duration::from_secs(7));
+    for unusable in [None, Some(""), Some("0"), Some("soon"), Some("-3")] {
+        assert_eq!(idle_from(unusable), STREAM_IDLE, "{unusable:?}");
+    }
+}

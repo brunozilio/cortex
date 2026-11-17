@@ -1,11 +1,9 @@
-use platform::{Bounds, Ended};
+use platform::{Bounds, Ended, Stop};
 use serde_json::Value;
-use std::{
-    sync::atomic::Ordering,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
 use super::{CommandOutput, Handler};
+use crate::model::ModelError;
 use crate::tools::Workspace;
 
 pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, String> {
@@ -22,33 +20,44 @@ pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Resul
     }
 }
 
+const ENDED_EARLY: &str = "hook cancelled or timed out";
+
+async fn within<T>(timeout: u64, run: &Stop, work: impl Future<Output = Result<T, String>>) -> Result<T, String> {
+    tokio::select! {
+        biased;
+        () = run.wait() => Err(ENDED_EARLY.into()),
+        () = tokio::time::sleep(Duration::from_secs(timeout)) => Err(ENDED_EARLY.into()),
+        done = work => done,
+    }
+}
+
+fn waited<T: Send>(
+    timeout: u64,
+    run: &Stop,
+    work: impl Future<Output = Result<T, String>> + Send,
+) -> Result<T, String> {
+    platform::runtime::block_on(within(timeout, run, work)).unwrap_or_else(|error| Err(error.to_string()))
+}
+
 pub(super) fn bounded<T: Send>(
     timeout: u64,
     workspace: &Workspace,
-    work: impl FnOnce(std::sync::Arc<std::sync::atomic::AtomicBool>) -> Result<T, String> + Send,
+    work: impl FnOnce(Arc<Stop>) -> Result<T, String> + Send,
 ) -> Result<T, String> {
-    {
-        let signal = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (send, receive) = std::sync::mpsc::channel();
-        let signal_ref = signal.clone();
-        std::thread::scope(|scope| {
-            scope.spawn(move || {
-                let _ = send.send(work(signal_ref));
-            });
-            let start = Instant::now();
-            loop {
-                match receive.recv_timeout(Duration::from_millis(25)) {
-                    Ok(result) => return result,
-                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err("hook worker stopped".into()),
-                    Err(_) => {}
-                }
-                if workspace.stop.load(Ordering::Relaxed) || start.elapsed() > Duration::from_secs(timeout) {
-                    signal.store(true, Ordering::Relaxed);
-                    return Err("hook cancelled or timed out".into());
-                }
-            }
-        })
-    }
+    let own = Arc::new(Stop::new());
+    let (send, receive) = tokio::sync::oneshot::channel();
+    let handed = Arc::clone(&own);
+    std::thread::scope(|scope| {
+        scope.spawn(move || {
+            let _ = send.send(work(handed));
+        });
+        let done = async { receive.await.unwrap_or_else(|_| Err("hook worker stopped".into())) };
+        let outcome = waited(timeout, &workspace.stop, done);
+        if outcome.is_err() {
+            own.cancel();
+        }
+        outcome
+    })
 }
 
 pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, String> {
@@ -70,38 +79,29 @@ pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<C
             .into_owned();
         headers.push((name.clone(), value));
     }
-    bounded(handler.timeout, workspace, |stop| {
-        let mut response = NetHttp.post_stopped(url, &headers, &input.to_string(), &stop).map_err(|e| e.to_string())?;
-        let mut bytes = Vec::new();
-        let mut buffer = [0; 4096];
-        loop {
-            if stop.load(Ordering::Relaxed) {
-                return Err("HTTP hook cancelled".into());
-            }
-            match response.body.read(&mut buffer) {
-                Ok(0) => break,
-                Ok(count) => {
-                    bytes.extend_from_slice(&buffer[..count]);
-                    if bytes.len() > 64 * 1024 {
-                        return Err("HTTP hook output exceeds 64 KiB".into());
-                    }
-                }
-                Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => continue,
-                Err(e) => return Err(e.to_string()),
-            }
-        }
-        let ok = (200..300).contains(&response.status);
+    let body = input.to_string();
+    let hook = workspace.stop.token().child_token();
+    let asked = async {
+        let response = NetHttp.post_streaming(url, &headers, &body, &hook).await.map_err(|e| e.to_string())?;
+        let status = response.status;
+        let text = response.body.text(&hook, HTTP_OUTPUT_AT_MOST).await.map_err(|error| match error {
+            ModelError::Provider(_) => "HTTP hook output exceeds 64 KiB".to_owned(),
+            ModelError::Network(why) if why.contains("UTF-8") => "HTTP hook returned non UTF-8 output".to_owned(),
+            error => error.to_string(),
+        })?;
+        let ok = (200..300).contains(&status);
         Ok(CommandOutput {
             code: Some(if ok { 0 } else { 1 }),
-            stdout: if ok {
-                String::from_utf8(bytes).map_err(|_| "HTTP hook returned non UTF-8 output")?
-            } else {
-                String::new()
-            },
-            stderr: if ok { String::new() } else { format!("HTTP hook status {}", response.status) },
+            stdout: if ok { text } else { String::new() },
+            stderr: if ok { String::new() } else { format!("HTTP hook status {status}") },
         })
-    })
+    };
+    let outcome = waited(handler.timeout, &workspace.stop, asked);
+    hook.cancel();
+    outcome
 }
+
+const HTTP_OUTPUT_AT_MOST: usize = 64 * 1024;
 
 #[cfg(test)]
 #[cfg(target_os = "macos")]
@@ -145,5 +145,59 @@ mod tests {
         let adding = hooks("UserPromptSubmit", "printf 'Team convention:\\n  tabs.\\n'");
         let added = adding.run("UserPromptSubmit", "", serde_json::json!({}), &workspace).expect("ran");
         assert_eq!(added.context, "Team convention:\n  tabs.");
+    }
+}
+
+#[cfg(test)]
+mod scoped {
+    use std::time::Instant;
+
+    use super::*;
+
+    fn silent_hook(timeout: u64) -> (Handler, std::net::TcpListener) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener");
+        let url = format!("http://{}/hook", listener.local_addr().expect("address"));
+        let handler = serde_json::from_value(serde_json::json!({ "type": "http", "url": url, "timeout": timeout }))
+            .expect("handler");
+        (handler, listener)
+    }
+
+    #[test]
+    fn an_http_hook_that_runs_out_of_time_ends_alone_and_leaves_the_run_going() {
+        let (handler, _listener) = silent_hook(1);
+        let workspace = Workspace::new("/tmp");
+        let started = Instant::now();
+        assert_eq!(http(&handler, &serde_json::json!({}), &workspace).map(|_| ()), Err(ENDED_EARLY.into()));
+        assert!(started.elapsed() < Duration::from_secs(10), "{:?}", started.elapsed());
+        assert!(!workspace.stop.is_stopped(), "only the hook was ended");
+    }
+
+    #[test]
+    fn cancelling_the_run_ends_a_waiting_http_hook_at_once() {
+        let (handler, _listener) = silent_hook(600);
+        let workspace = Workspace::new("/tmp");
+        let stop = Arc::clone(&workspace.stop);
+        let cancelled_at = Arc::new(std::sync::Mutex::new(None));
+        let marked = Arc::clone(&cancelled_at);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            *marked.lock().expect("mark") = Some(Instant::now());
+            stop.cancel();
+        });
+        assert!(http(&handler, &serde_json::json!({}), &workspace).is_err());
+        let ended = Instant::now();
+        let cancelled = cancelled_at.lock().expect("mark").expect("cancelled");
+        assert!(ended.saturating_duration_since(cancelled) < Duration::from_secs(2), "{:?}", ended - cancelled);
+    }
+
+    #[test]
+    fn a_hook_worker_s_timeout_stops_its_own_work_only() {
+        let workspace = Workspace::new("/tmp");
+        let ended = bounded(1, &workspace, |own: Arc<Stop>| {
+            platform::runtime::block_on(async { own.wait().await }).map_err(|error| error.to_string())?;
+            Ok(own.is_stopped())
+        });
+        assert_eq!(ended, Err(ENDED_EARLY.into()));
+        assert!(!workspace.stop.is_stopped());
     }
 }

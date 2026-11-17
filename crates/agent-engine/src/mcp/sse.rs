@@ -80,10 +80,10 @@ impl SseTransport {
 
 impl Transport for SseTransport {
     fn request(&self, message: &Value) -> Result<Value, String> {
-        self.request_stopped(message, &AtomicBool::new(false))
+        self.request_stopped(message, &platform::Stop::new())
     }
 
-    fn request_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<Value, String> {
+    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, String> {
         if message["method"] == "initialize" {
             *self.greeting.locked() = Some(message.clone());
         }
@@ -120,10 +120,10 @@ impl Transport for SseTransport {
     }
 
     fn notify(&self, message: &Value) -> Result<(), String> {
-        self.notify_stopped(message, &AtomicBool::new(false))
+        self.notify_stopped(message, &platform::Stop::new())
     }
 
-    fn notify_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<(), String> {
+    fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), String> {
         self.link.post(message, stop).map_err(|error| format!("{}: {error}", self.link.name))
     }
 }

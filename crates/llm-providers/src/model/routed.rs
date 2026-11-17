@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use platform::sync::Locked;
@@ -9,7 +8,7 @@ use domain::{ModelOption, ModelProvider};
 
 use super::client::ProviderClient;
 use super::http::Http;
-use super::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use super::{BoxFuture, CancellationToken, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 
 pub struct Routed {
     main: Arc<dyn ModelApi>,
@@ -57,14 +56,21 @@ impl Routed {
 }
 
 impl ModelApi for Routed {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        let known: Vec<&str> = crate::providers::all().iter().map(|provider| provider.id()).collect();
-        let route = domain::routing::route(&request.model, &known);
-        match route.provider.map(ModelProvider::named) {
-            Some(provider) if provider != self.provider => {
-                self.other(provider, &request.model)?.turn(request, on, stop)
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(async move {
+            let known: Vec<&str> = crate::providers::all().iter().map(|provider| provider.id()).collect();
+            let route = domain::routing::route(&request.model, &known);
+            match route.provider.map(ModelProvider::named) {
+                Some(provider) if provider != self.provider => {
+                    self.other(provider, &request.model)?.turn(request, on, cancel).await
+                }
+                _ => self.main.turn(request, on, cancel).await,
             }
-            _ => self.main.turn(request, on, stop),
-        }
+        })
     }
 }

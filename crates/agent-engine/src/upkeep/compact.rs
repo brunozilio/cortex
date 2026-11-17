@@ -1,9 +1,8 @@
-use std::sync::atomic::AtomicBool;
-
 use domain::Compaction;
+use platform::Stop;
 
 use super::message_tokens;
-use crate::model::{ModelApi, ModelError, TurnRequest};
+use crate::model::{BlockingTurn, ModelApi, ModelError, TurnRequest};
 use crate::transcript::{Block, Message};
 
 const KEPT_SHARE: u64 = 5;
@@ -29,7 +28,7 @@ pub(super) fn compact(
     api: &dyn ModelApi,
     template: &TurnRequest,
     history: &mut Vec<Message>,
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<Compaction, ModelError> {
     compact_on(api, template, history, stop, None)
 }
@@ -38,7 +37,7 @@ pub fn compact_on(
     api: &dyn ModelApi,
     template: &TurnRequest,
     history: &mut Vec<Message>,
-    stop: &AtomicBool,
+    stop: &Stop,
     focus: Option<&str>,
 ) -> Result<Compaction, ModelError> {
     let before: u64 = history.iter().map(message_tokens).sum();
@@ -49,9 +48,9 @@ pub fn compact_on(
         None => crate::prompt::text("compact"),
     }));
     let request = TurnRequest { messages: asked, ..template.clone() };
-    let answered = match api.turn(&request, &mut |_| {}, stop) {
+    let answered = match api.turn_blocking(&request, &mut |_| {}, stop.token()) {
         Ok(reply) if summary_text(&reply.message.text()).is_empty() && !request.tools.is_empty() => {
-            api.turn(&TurnRequest { tools: Vec::new(), ..request }, &mut |_| {}, stop)
+            api.turn_blocking(&TurnRequest { tools: Vec::new(), ..request }, &mut |_| {}, stop.token())
         }
         other => other,
     };
@@ -97,7 +96,7 @@ fn bounded_summary(
     api: &dyn ModelApi,
     template: &TurnRequest,
     history: &[Message],
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<String, ModelError> {
     let mut text = super::retained::records(history);
     let mut calls = 0;
@@ -107,7 +106,7 @@ fn bounded_summary(
         let chars: Vec<char> = text.chars().collect();
         let mut retry = false;
         for part in chars.chunks(chunk_chars) {
-            if stop.load(std::sync::atomic::Ordering::Relaxed) {
+            if stop.is_stopped() {
                 return Err(ModelError::Cancelled);
             }
             calls += 1;
@@ -129,7 +128,7 @@ fn bounded_summary(
                 max_tokens: template.max_tokens.min(4096),
                 ..template.clone()
             };
-            match api.turn(&request, &mut |_| {}, stop) {
+            match api.turn_blocking(&request, &mut |_| {}, stop.token()) {
                 Ok(reply) if !summary_text(&reply.message.text()).is_empty() => {
                     summaries.push(summary_text(&reply.message.text()))
                 }

@@ -19,7 +19,7 @@ pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>, client: u64) -> Result<Arc<
             inbox::push(client, notice);
         }
     });
-    let given_up = AtomicBool::new(false);
+    let given_up = platform::Stop::new();
     let (opened, waiting) = std::sync::mpsc::channel::<()>();
     let server = std::thread::scope(|scope| {
         let given_up = &given_up;
@@ -61,13 +61,13 @@ impl McpEndpoint for Bridge {
         self.handle_stopped(message, &AtomicBool::new(false))
     }
 
-    fn handle_stopped(&self, message: &Value, stop: &AtomicBool) -> Option<Value> {
+    fn handle_stopped(&self, message: &Value, flag: &AtomicBool) -> Option<Value> {
         let id = message.get("id")?.clone();
         let method = message["method"].as_str().unwrap_or_default();
         let answer = if method == "initialize" {
             Ok(json!({ "protocolVersion": super::PROTOCOL_VERSION, "capabilities": self.0.capabilities() }))
         } else {
-            self.0.ask(method, message["params"].clone(), stop)
+            platform::stop::following(flag, |stop| self.0.ask(method, message["params"].clone(), stop))
         };
         Some(match answer {
             Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),

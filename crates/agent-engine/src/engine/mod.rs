@@ -12,6 +12,7 @@ mod session;
 mod small_model;
 mod snapshot;
 mod stop;
+mod task;
 #[cfg(test)]
 mod tests;
 
@@ -25,7 +26,7 @@ use crate::model::http::{Http, NetHttp};
 use crate::model::{ModelApi, ModelError};
 use crate::sessions::Sessions;
 use crate::tools::Workspace;
-use domain::{Decision, EngineEvent, FailureKind, ModelOption, PermissionMode, PromptRequest, RunId};
+use domain::{Decision, EngineEvent, ModelOption, PermissionMode, PromptRequest, RunId};
 
 const MAX_OUTPUT: u32 = 64_000;
 
@@ -44,6 +45,7 @@ pub struct NativeEngine {
     lsp: Arc<dyn LanguageServers>,
     launch: crate::tools::Launch,
     live: Arc<live::LiveSessions>,
+    runtime: Result<tokio::runtime::Handle, String>,
 }
 
 impl std::fmt::Debug for NativeEngine {
@@ -62,6 +64,7 @@ impl NativeEngine {
             lsp: Arc::new(LspPool::default()),
             launch: crate::tools::Launch::default(),
             live: Arc::default(),
+            runtime: task::runtime().map_err(|error| error.to_string()),
         }
     }
 
@@ -99,18 +102,11 @@ impl AgentEngine for NativeEngine {
             held: Arc::default(),
             live: live::Live::of(&self.live),
         };
-        let panic_gate = gate.clone();
-        let panic_control = control.clone();
-        std::thread::Builder::new()
-            .name("agent-engine-run".into())
-            .spawn(move || {
-                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job.run(workspace))).is_err() {
-                    panic_control.cancel();
-                    panic_gate.emit(EngineEvent::Failure(FailureKind::Other));
-                    panic_gate.emit(EngineEvent::Failed("The native engine stopped unexpectedly.".into()));
-                }
-            })
-            .map_err(|source| EngineError::Spawn { engine: "the native engine", source })?;
+        let runtime = self.runtime.as_ref().map_err(|why| EngineError::Spawn {
+            engine: "the native engine",
+            source: std::io::Error::other(why.clone()),
+        })?;
+        task::spawn(runtime, job, workspace, Arc::clone(&control), gate.clone());
         Ok(Box::new(Handle { control, gate, detach }))
     }
 }

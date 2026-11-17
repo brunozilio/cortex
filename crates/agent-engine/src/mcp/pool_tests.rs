@@ -2,7 +2,6 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use domain::{Extensions, ModelOption, PromptRequest};
@@ -54,7 +53,7 @@ impl Fixture {
 
     fn connect(&self, request: &PromptRequest) -> Vec<Arc<McpServer>> {
         let http: Arc<dyn Http> = Arc::new(NetHttp);
-        self.pool.connect(request, &McpSources::default(), &http, &AtomicBool::new(false), &Arc::default())
+        self.pool.connect(request, &McpSources::default(), &http, &platform::Stop::new(), &Arc::default())
     }
 
     fn started(&self) -> Vec<String> {

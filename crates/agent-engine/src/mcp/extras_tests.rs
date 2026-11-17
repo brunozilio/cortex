@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use domain::{ModelOption, PromptRequest};
 use serde_json::{Value, json};
@@ -41,7 +40,7 @@ fn servers() -> Vec<Arc<crate::mcp::McpServer>> {
     request.credentials.mcp = vec![domain::mcp::LocalMcp::new("docs", Arc::new(Docs))];
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
     let sources = crate::mcp::McpSources::default();
-    connect_stopped(&request, &sources, &http, &AtomicBool::new(false))
+    connect_stopped(&request, &sources, &http, &platform::Stop::new())
 }
 
 #[test]
@@ -74,8 +73,8 @@ fn a_server_s_rules_cover_its_resources() {
 #[test]
 fn a_typed_mcp_prompt_is_filled_with_the_words_after_it() {
     let servers = servers();
-    let expanded = expand_prompt(&servers, "/mcp__docs__review src/main.rs error handling", &AtomicBool::new(false));
+    let expanded = expand_prompt(&servers, "/mcp__docs__review src/main.rs error handling", &platform::Stop::new());
     assert_eq!(expanded, Some(Ok("Review src/main.rs for error handling.".into())));
-    assert_eq!(expand_prompt(&servers, "/review it", &AtomicBool::new(false)), None, "not an MCP prompt");
-    assert!(matches!(expand_prompt(&servers, "/mcp__docs__missing", &AtomicBool::new(false)), Some(Err(_))));
+    assert_eq!(expand_prompt(&servers, "/review it", &platform::Stop::new()), None, "not an MCP prompt");
+    assert!(matches!(expand_prompt(&servers, "/mcp__docs__missing", &platform::Stop::new()), Some(Err(_))));
 }

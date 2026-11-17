@@ -1,6 +1,5 @@
 #![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
 
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use agent_engine::agent::Agent;
@@ -28,7 +27,7 @@ export function execute(input, ctx) {
 
 fn run(dir: &std::path::Path, calls: Vec<Block>) -> (Vec<Message>, Vec<EngineEvent>) {
     let workspace = Workspace::new(dir);
-    let control = Control::new(PermissionMode::Bypass, Arc::new(AtomicBool::new(false)));
+    let control = Control::new(PermissionMode::Bypass, Arc::default());
     let tools = tools::standard();
     let events: Arc<Mutex<Vec<EngineEvent>>> = Arc::default();
     let seen = Arc::clone(&events);

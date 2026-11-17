@@ -159,7 +159,7 @@ impl Live {
         request: &PromptRequest,
         sources: &McpSources,
         http: &Arc<dyn Http>,
-        stop: &AtomicBool,
+        stop: &platform::Stop,
         judge: &Arc<HostJudge>,
     ) -> Vec<Arc<McpServer>> {
         match &self.entered {

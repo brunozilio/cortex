@@ -100,16 +100,16 @@ impl HttpTransport {
 
 impl Transport for HttpTransport {
     fn request(&self, message: &Value) -> Result<Value, String> {
-        self.request_stopped(message, &AtomicBool::new(false))
+        self.request_stopped(message, &platform::Stop::new())
     }
 
-    fn request_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<Value, String> {
+    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, String> {
         let mut response = self.shared.post(message, stop)?;
         let mut text = String::new();
         let mut decoder = crate::model::sse::SseDecoder::new();
         loop {
             let mut line = String::new();
-            let read = crate::model::http::read_line_stopped(response.body.as_mut(), &mut line, stop)
+            let read = crate::model::http::read_line_stopped(&mut response.body, &mut line, stop)
                 .map_err(|e| e.to_string())?;
             text.push_str(&line);
             if let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n']))
@@ -142,12 +142,12 @@ impl Transport for HttpTransport {
         }
     }
 
-    fn notify_stopped(&self, message: &Value, stop: &AtomicBool) -> Result<(), String> {
+    fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), String> {
         self.shared.post(message, stop).map(|_| ())
     }
 
     fn notify(&self, message: &Value) -> Result<(), String> {
-        self.notify_stopped(message, &AtomicBool::new(false))
+        self.notify_stopped(message, &platform::Stop::new())
     }
 
     fn listen(&self) {

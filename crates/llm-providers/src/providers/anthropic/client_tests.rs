@@ -1,13 +1,12 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use domain::provider::ProviderKey;
 use domain::{ModelOption, ModelProvider};
 use serde_json::{Value, json};
 
-use crate::model::ModelApi;
 use crate::model::client::ProviderClient;
 use crate::model::http::ScriptedHttp;
+use crate::model::{BlockingTurn, CancellationToken};
 use crate::providers::testing::{client, effort_body, header, request, sent_turn};
 
 const ANTHROPIC: ModelProvider = ModelProvider::new("anthropic");
@@ -51,7 +50,7 @@ fn a_request_uses_the_discovered_model_capabilities() {
     });
     let http = Arc::new(ScriptedHttp::new([(200, MESSAGES.to_owned())]));
     let client = ProviderClient::for_model(model, http.clone(), Arc::new(ProviderKey::new("sk-ant-key")));
-    client.turn(&request("anthropic:claude-test"), &mut |_| {}, &AtomicBool::new(false)).expect("stream");
+    client.turn_blocking(&request("anthropic:claude-test"), &mut |_| {}, &CancellationToken::new()).expect("stream");
     let body: Value = serde_json::from_str(&http.sent()[0].body).expect("json");
     assert_eq!(body["max_tokens"], 3000);
     assert_eq!(body["thinking"], json!({"type":"enabled","budget_tokens":1500}));

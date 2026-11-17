@@ -9,7 +9,7 @@ fn acts(tool: &dyn Tool) -> bool {
 }
 
 fn tools(request: &PromptRequest, http: &Arc<dyn Http>) -> Vec<Box<dyn Tool>> {
-    tools_stopped(request, &McpSources::default(), http, &std::sync::atomic::AtomicBool::new(false))
+    tools_stopped(request, &McpSources::default(), http, &platform::Stop::new())
 }
 
 fn listed(id: u64) -> String {
@@ -69,7 +69,7 @@ fn a_failed_call_and_an_unreachable_server_say_so() {
     let (_dir, request) = docs_request();
     let spec = servers(&request, &super::McpSources::default()).remove(0);
     let server = McpServer::open(&spec, &http).expect("open");
-    let stop = std::sync::atomic::AtomicBool::new(false);
+    let stop = platform::Stop::new();
     assert_eq!(server.call("search", &Value::Null, &stop), Outcome::error("no"));
     assert!(server.call("search", &Value::Null, &stop).content.contains("HTTP 401"));
     let none: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
@@ -298,7 +298,6 @@ fn a_server_the_owner_signed_in_to_gets_their_token_and_one_refusing_says_how_to
     request.credentials.mcp_tokens = None;
     let spec = super::servers(&request, &super::McpSources::default()).remove(0);
     let refusing: Arc<dyn Http> = Arc::new(ScriptedHttp::new([(401, String::new())]));
-    let error =
-        McpServer::open(&spec, &refusing).expect("open").initialize_stopped(&std::sync::atomic::AtomicBool::new(false));
+    let error = McpServer::open(&spec, &refusing).expect("open").initialize_stopped(&platform::Stop::new());
     assert!(error.expect_err("refused").contains("/mcp login linear"));
 }

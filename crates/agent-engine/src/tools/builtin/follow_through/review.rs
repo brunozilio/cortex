@@ -1,7 +1,7 @@
 use domain::follow_through::{Judgement, nudges, worth_judging};
 
 use crate::agent::{Agent, Ending, Review};
-use crate::model::TurnRequest;
+use crate::model::{BlockingTurn, TurnRequest};
 use crate::transcript::{Message, Role};
 
 const JUDGE_TOKENS: u32 = 300;
@@ -29,7 +29,7 @@ impl Review for FollowThrough {
         let request = users.first().map(String::as_str).unwrap_or_default();
         let judged = agent
             .api
-            .turn(&judge_request(agent, request, &answer), &mut |_| {}, agent.control.stop_flag())
+            .turn_blocking(&judge_request(agent, request, &answer), &mut |_| {}, agent.control.token())
             .map(|reply| Judgement::parse(&reply.message.text()));
         if agent.control.is_stopped() {
             return Err(Ending::Cancelled);

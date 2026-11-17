@@ -1,9 +1,8 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use agent_engine::agent::Agent;
 use agent_engine::model::scripted::ScriptedModel;
-use agent_engine::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use agent_engine::model::{BoxFuture, CancellationToken, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use agent_engine::tools;
 use agent_engine::transcript::{Block, Message};
 use domain::{AgentStatus, EngineEvent, PermissionMode};
@@ -105,9 +104,14 @@ struct Split {
 }
 
 impl ModelApi for Split {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
         let script = if request.system.contains("# You are a sub-agent") { &self.child } else { &self.parent };
-        script.turn(request, on, stop)
+        script.turn(request, on, cancel)
     }
 }
 

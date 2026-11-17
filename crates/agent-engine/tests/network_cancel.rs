@@ -58,7 +58,7 @@ fn cancellation_closes_stalled_connections_before_and_after_headers() {
         let signal = stop.clone();
         let client = std::thread::spawn(move || {
             let mut response = NetHttp.post_stopped(&format!("http://{address}"), &[], "{}", &signal)?;
-            read_line_stopped(response.body.as_mut(), &mut String::new(), &signal).map(|_| ())
+            read_line_stopped(&mut response.body, &mut String::new(), &signal).map(|_| ())
         });
         ready_rx.recv_timeout(NEVER_CLOSED).expect("the server took the request");
         stop.store(true, Ordering::Relaxed);

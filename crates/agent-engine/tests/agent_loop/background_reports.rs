@@ -1,8 +1,8 @@
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use agent_engine::agent::Agent;
 use agent_engine::model::scripted::ScriptedModel;
-use agent_engine::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use agent_engine::model::{BoxFuture, CancellationToken, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use agent_engine::tools;
 use agent_engine::transcript::{Block, Message};
 use domain::PermissionMode;
@@ -16,7 +16,18 @@ struct LongReport {
 }
 
 impl ModelApi for LongReport {
-    fn turn(&self, request: &TurnRequest, _: &mut dyn FnMut(Delta), _: &AtomicBool) -> Result<Reply, ModelError> {
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        _: OnDelta<'a>,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(std::future::ready(self.answer(request)))
+    }
+}
+
+impl LongReport {
+    fn answer(&self, request: &TurnRequest) -> Result<Reply, ModelError> {
         if request.system.contains("# You are a sub-agent") {
             return ScriptedModel::reply(vec![Block::Text(format!("REPORT-START {} REPORT-END", "x".repeat(60_000)))]);
         }

@@ -1,6 +1,5 @@
 #![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
 
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use agent_engine::agent::Agent;
@@ -24,7 +23,7 @@ fn calls(name: &str, input: serde_json::Value) -> Result<agent_engine::model::Re
 fn run(mode: PermissionMode, model: &ScriptedModel, dir: &std::path::Path) -> (String, Vec<TurnRequest>) {
     let mut workspace = Workspace::new(dir);
     workspace.policy.safety = Some(Arc::new(Safety::default()));
-    let control = Arc::new(Control::new(mode, Arc::new(AtomicBool::new(false))));
+    let control = Arc::new(Control::new(mode, Arc::default()));
     let events: Arc<Mutex<Vec<EngineEvent>>> = Arc::default();
     let sink = Arc::clone(&events);
     let emit = move |event: EngineEvent| sink.lock().expect("events").push(event);

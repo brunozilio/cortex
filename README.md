@@ -111,7 +111,7 @@ is only in `app.db`, which the older binary does not read.
 | `brand` | The product's name and command, from `brand.toml`. |
 | `language-servers` | Runs language servers for the `LSP` tool and edit diagnostics: client, pool, first-use installs. |
 | `code-map` | Experimental tree-sitter index of a repository's functions, types and callers, ranked against a prompt. |
-| `platform` | Per-OS IO: child processes and their trees, private files, stored documents (lock, atomic replace, corrupt set aside), data folders, the system keychain. |
+| `platform` | Per-OS IO: child processes and their trees, private files, stored documents (lock, atomic replace, corrupt set aside), data folders, the system keychain; the process's one async runtime and the run's `Stop` (cancellation token plus flag). |
 | `content` | Prompts, built-in skills and agents, embedded at build time. |
 | `script` | The QuickJS runtime for JavaScript tools, skills and providers. |
 | `console` | The live trace page behind `/trace` and `/console`: serves the browser app on localhost (whatever `cargo run -p xtask -- web` last built into `web/dist`, embedded in the binary at compile time) with the report, the sessions and their updates as server-sent events. |

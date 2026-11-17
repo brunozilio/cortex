@@ -1,9 +1,8 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use crate::model::http::ScriptedHttp;
 use crate::model::wires::responses::Responses;
-use crate::model::{Delta, ModelApi, ModelError, TurnRequest};
+use crate::model::{BlockingTurn, CancellationToken, Delta, ModelError, TurnRequest};
 use crate::transcript::{Block, Message, StopReason};
 use domain::Effort;
 use domain::provider::ProviderKey;
@@ -30,7 +29,7 @@ fn folds_reasoning_text_and_a_call() {
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
     let mut deltas = Vec::new();
     let reply = Responses::new(http.clone(), key())
-        .turn(&request(), &mut |delta| deltas.push(delta), &AtomicBool::new(false))
+        .turn_blocking(&request(), &mut |delta| deltas.push(delta), &CancellationToken::new())
         .expect("reply");
     assert_eq!(reply.stop, StopReason::ToolUse);
     assert_eq!(
@@ -61,7 +60,7 @@ fn folds_reasoning_text_and_a_call() {
 fn the_key_goes_to_the_api() {
     let stream = include_str!("../../../../tests/fixtures/responses_tool_use.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
-    Responses::new(http.clone(), key()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("key");
+    Responses::new(http.clone(), key()).turn_blocking(&request(), &mut |_| {}, &CancellationToken::new()).expect("key");
     let sent = http.sent();
     let header = |name: &str| sent[0].headers.iter().find(|(key, _)| key == name).map(|(_, v)| v.clone());
     assert_eq!(sent[0].url, "https://api.openai.com/v1/responses");
@@ -74,7 +73,7 @@ fn maps_errors() {
     let http = Arc::new(ScriptedHttp::new([(401, r#"{"detail":"Unauthorized"}"#.to_owned())]));
     let error = Responses::new(http, key())
         .without_backoff()
-        .turn(&request(), &mut |_| {}, &AtomicBool::new(false))
+        .turn_blocking(&request(), &mut |_| {}, &CancellationToken::new())
         .expect_err("refused");
     assert!(matches!(error, ModelError::Unauthorized(_)));
 
@@ -82,14 +81,16 @@ fn maps_errors() {
     let http = Arc::new(ScriptedHttp::new((0..4).map(|_| (429, limit.to_owned()))));
     let error = Responses::new(http.clone(), key())
         .without_backoff()
-        .turn(&request(), &mut |_| {}, &AtomicBool::new(false))
+        .turn_blocking(&request(), &mut |_| {}, &CancellationToken::new())
         .expect_err("limited");
     assert_eq!(error, ModelError::Overloaded("The usage limit has been reached".into()));
     assert_eq!(http.sent().len(), 4);
 
     let failed = "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"context_length_exceeded\",\"message\":\"too long\"}}}\n\n";
     let http = Arc::new(ScriptedHttp::new([(200, failed.to_owned())]));
-    let error = Responses::new(http, key()).turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect_err("failed");
+    let error = Responses::new(http, key())
+        .turn_blocking(&request(), &mut |_| {}, &CancellationToken::new())
+        .expect_err("failed");
     assert_eq!(error, ModelError::TooLong("too long".into()));
 }
 

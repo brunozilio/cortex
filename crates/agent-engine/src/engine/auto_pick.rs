@@ -53,7 +53,7 @@ impl Job {
             max_tokens: reader.max_tokens.min(PICK_TOKENS),
             ..reader
         };
-        match metered.turn(&request, &mut |_| {}, self.control.stop_flag()) {
+        match crate::model::BlockingTurn::turn_blocking(&metered, &request, &mut |_| {}, self.control.token()) {
             Ok(reply) => Pick::parse(&reply.message.text()),
             Err(error) => {
                 tracing::warn!(%error, "the automatic model pick could not run");

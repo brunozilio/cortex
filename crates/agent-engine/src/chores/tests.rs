@@ -20,8 +20,8 @@ fn says(text: &str) -> ScriptedModel {
     ScriptedModel::new([ScriptedModel::reply(vec![Block::Text(text.into())])])
 }
 
-fn no() -> AtomicBool {
-    AtomicBool::new(false)
+fn no() -> platform::Stop {
+    platform::Stop::new()
 }
 
 #[test]

@@ -1,13 +1,12 @@
 mod clean;
 mod heads_up;
 
-use std::sync::atomic::AtomicBool;
-
 use domain::{ChoreAnswer, SessionCommand};
+use platform::Stop;
 
 use self::clean::field;
 pub use self::clean::{clean_suggestion, clean_title, conversation_text, kebab, spoken};
-use crate::model::{ModelApi, ModelError, TurnRequest};
+use crate::model::{BlockingTurn, ModelApi, ModelError, TurnRequest};
 use crate::transcript::Message;
 
 pub fn answer(
@@ -16,7 +15,7 @@ pub fn answer(
     template: &TurnRequest,
     prompt: &str,
     history: &[Message],
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<Option<ChoreAnswer>, ModelError> {
     Ok(match command {
         SessionCommand::Title => title(api, template, prompt, stop)?.map(ChoreAnswer::Title),
@@ -44,7 +43,7 @@ fn ask(
     system: String,
     messages: Vec<Message>,
     max_tokens: u32,
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<String, ModelError> {
     let request = TurnRequest {
         system,
@@ -53,14 +52,14 @@ fn ask(
         max_tokens: template.max_tokens.min(max_tokens),
         ..template.clone()
     };
-    Ok(api.turn(&request, &mut |_| {}, stop)?.message.text())
+    Ok(api.turn_blocking(&request, &mut |_| {}, stop.token())?.message.text())
 }
 
 pub fn title(
     api: &dyn ModelApi,
     template: &TurnRequest,
     prompt: &str,
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<Option<String>, ModelError> {
     let message = Message::user(format!("<session>\n{}\n</session>", prompt.trim()));
     let answer = ask(api, template, crate::prompt::text("chore-title"), vec![message], 200, stop)?;
@@ -71,7 +70,7 @@ pub fn branch_name(
     api: &dyn ModelApi,
     template: &TurnRequest,
     history: &[Message],
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<Option<String>, ModelError> {
     let message =
         Message::user(format!("<conversation>\n{}\n</conversation>", conversation_text(history, BRANCH_TAIL)));
@@ -83,7 +82,7 @@ pub fn recap(
     api: &dyn ModelApi,
     template: &TurnRequest,
     history: &[Message],
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<Option<String>, ModelError> {
     let message = Message::user(format!("<conversation>\n{}\n</conversation>", conversation_text(history, RECAP_TAIL)));
     let answer = ask(api, template, crate::prompt::text("chore-recap"), vec![message], 300, stop)?;
@@ -95,7 +94,7 @@ pub fn suggestion(
     api: &dyn ModelApi,
     template: &TurnRequest,
     history: &[Message],
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<Option<String>, ModelError> {
     let mut messages = history.to_vec();
     messages.push(Message::user(crate::prompt::text("chore-suggest")));
@@ -108,7 +107,7 @@ pub fn lesson(
     template: &TurnRequest,
     history: &[Message],
     signals: &str,
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<Option<domain::learning::Proposal>, ModelError> {
     let mut messages = history.to_vec();
     while messages.last().is_some_and(|message| message.tool_uses().next().is_some()) {
@@ -124,7 +123,7 @@ pub fn side_answer(
     template: &TurnRequest,
     history: &[Message],
     question: &str,
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<String, ModelError> {
     let mut messages = history.to_vec();
     while messages.last().is_some_and(|message| message.tool_uses().next().is_some()) {

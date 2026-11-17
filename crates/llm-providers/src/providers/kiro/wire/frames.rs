@@ -1,7 +1,5 @@
-use std::io::{BufRead, ErrorKind};
-use std::sync::atomic::{AtomicBool, Ordering};
-
-use crate::model::ModelError;
+use crate::model::http::Body;
+use crate::model::{CancellationToken, ModelError};
 
 const MAX_MESSAGE: usize = 16 << 20;
 const PRELUDE: usize = 12;
@@ -19,9 +17,9 @@ impl Frame {
     }
 }
 
-pub fn next(reader: &mut dyn BufRead, stop: &AtomicBool) -> Result<Option<Frame>, ModelError> {
+pub async fn next(body: &mut Body, cancel: &CancellationToken) -> Result<Option<Frame>, ModelError> {
     let mut prelude = [0u8; PRELUDE];
-    if fill(reader, &mut prelude, stop)? == 0 {
+    if fill(body, &mut prelude, cancel).await? == 0 {
         return Ok(None);
     }
     let total = u32::from_be_bytes([prelude[0], prelude[1], prelude[2], prelude[3]]) as usize;
@@ -30,28 +28,18 @@ pub fn next(reader: &mut dyn BufRead, stop: &AtomicBool) -> Result<Option<Frame>
         return Err(ModelError::Network(format!("invalid event stream message length {total}")));
     }
     let mut rest = vec![0u8; total - PRELUDE];
-    fill(reader, &mut rest, stop)?;
+    fill(body, &mut rest, cancel).await?;
     let headers = headers(&rest[..header_len]).map_err(ModelError::Network)?;
     let payload = rest[header_len..rest.len() - TRAILER].to_vec();
     Ok(Some(Frame { headers, payload }))
 }
 
-fn fill(reader: &mut dyn BufRead, buffer: &mut [u8], stop: &AtomicBool) -> Result<usize, ModelError> {
-    let mut filled = 0;
-    while filled < buffer.len() {
-        if stop.load(Ordering::Relaxed) {
-            return Err(ModelError::Cancelled);
-        }
-        match reader.read(&mut buffer[filled..]) {
-            Ok(0) if filled == 0 => return Ok(0),
-            Ok(0) => return Err(ModelError::Network("the event stream was cut short".into())),
-            Ok(count) => filled += count,
-            Err(error)
-                if matches!(error.kind(), ErrorKind::Interrupted | ErrorKind::TimedOut | ErrorKind::WouldBlock) => {}
-            Err(error) => return Err(ModelError::Network(error.to_string())),
-        }
+async fn fill(body: &mut Body, buffer: &mut [u8], cancel: &CancellationToken) -> Result<usize, ModelError> {
+    match body.read_full(buffer, cancel).await? {
+        0 => Ok(0),
+        filled if filled < buffer.len() => Err(ModelError::Network("the event stream was cut short".into())),
+        filled => Ok(filled),
     }
-    Ok(filled)
 }
 
 fn headers(mut bytes: &[u8]) -> Result<Vec<(String, String)>, String> {
@@ -112,10 +100,19 @@ pub(crate) fn encode(headers: &[(&str, &str)], payload: &str) -> Vec<u8> {
 mod tests {
     use super::*;
 
+    fn frames(mut body: Body, cancel: &CancellationToken) -> Result<Vec<Frame>, ModelError> {
+        platform::runtime::block_on(async {
+            let mut frames = Vec::new();
+            while let Some(frame) = next(&mut body, cancel).await? {
+                frames.push(frame);
+            }
+            Ok(frames)
+        })
+        .expect("runtime")
+    }
+
     fn all(bytes: &[u8]) -> Result<Vec<Frame>, ModelError> {
-        let mut reader = std::io::BufReader::new(bytes);
-        let stop = AtomicBool::new(false);
-        std::iter::from_fn(|| next(&mut reader, &stop).transpose()).collect()
+        frames(Body::from(bytes.to_vec()), &CancellationToken::new())
     }
 
     struct Trickle(Vec<u8>, usize, bool);
@@ -124,7 +121,7 @@ mod tests {
         fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
             self.2 = !self.2;
             if self.2 {
-                return Err(std::io::Error::new(ErrorKind::TimedOut, "waiting for stream"));
+                return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "waiting for stream"));
             }
             let count = out.len().min(3).min(self.0.len() - self.1);
             out[..count].copy_from_slice(&self.0[self.1..self.1 + count]);
@@ -136,13 +133,13 @@ mod tests {
     #[test]
     fn a_body_that_waits_between_pieces_is_read_whole() {
         let bytes = include_bytes!("testdata/text.bin").to_vec();
-        let mut reader = std::io::BufReader::with_capacity(1, Trickle(bytes, 0, false));
-        let stop = AtomicBool::new(false);
-        let frames: Result<Vec<_>, _> = std::iter::from_fn(|| next(&mut reader, &stop).transpose()).collect();
-        assert_eq!(frames.map(|f| f.len()), Ok(9));
-        let stopped = AtomicBool::new(true);
-        let mut reader = std::io::BufReader::new(Trickle(encode(&[], "{}"), 0, false));
-        assert_eq!(next(&mut reader, &stopped), Err(ModelError::Cancelled));
+        let reader = std::io::BufReader::with_capacity(1, Trickle(bytes, 0, false));
+        let read = frames(Body::reader(reader), &CancellationToken::new());
+        assert_eq!(read.map(|f| f.len()), Ok(9));
+        let stopped = CancellationToken::new();
+        stopped.cancel();
+        let reader = std::io::BufReader::new(Trickle(encode(&[], "{}"), 0, false));
+        assert_eq!(frames(Body::reader(reader), &stopped), Err(ModelError::Cancelled));
     }
 
     #[test]

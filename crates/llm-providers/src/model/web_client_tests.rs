@@ -58,7 +58,7 @@ fn a_body_without_end_is_read_only_up_to_the_cap() {
         let _ = hung_up.send(());
     });
     let mut response = NetHttp.one_hop(&format!("http://127.0.0.1:{port}/"), &[], None).expect("answer");
-    let read = super::read_capped(response.body.as_mut(), 64 * 1024).expect("read");
+    let read = super::read_capped(&mut response.body, 64 * 1024).expect("read");
     drop(response);
     assert_eq!(read.len(), 64 * 1024);
     hangs_up.recv_timeout(STILL_SENDING).expect("the endless body was let go of once the cap was read");

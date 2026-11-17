@@ -1,34 +1,62 @@
-use std::sync::atomic::AtomicBool;
-use std::sync::{Mutex, mpsc};
+use std::sync::{Arc, Mutex, mpsc};
 
+use platform::Stop;
 use serde_json::Value;
 
-use crate::model::{ModelApi, TurnRequest};
+use crate::model::{BlockingTurn, ModelApi, TurnRequest};
 use crate::tools::{Effect, Workspace, changes_nothing};
 use crate::transcript::Message;
 
-pub(crate) struct Request {
-    pub function: String,
-    pub arguments: Value,
-    pub reply: mpsc::Sender<Result<Value, String>>,
+struct Request {
+    function: String,
+    arguments: Value,
+    reply: mpsc::Sender<Result<Value, String>>,
 }
 
-pub(crate) struct Bridge(pub Mutex<mpsc::Sender<Request>>);
+enum Hosted {
+    Call(Request),
+    Done,
+}
+
+struct Bridge(Mutex<mpsc::Sender<Hosted>>);
 
 impl script::Host for Bridge {
     fn call(&self, function: &str, arguments: Value) -> Result<Value, String> {
         let (reply, answer) = mpsc::channel();
-        let request = Request { function: function.to_owned(), arguments, reply };
+        let request = Hosted::Call(Request { function: function.to_owned(), arguments, reply });
         self.0.lock().map_err(|_| "the agent is unavailable")?.send(request).map_err(|_| "the agent is gone")?;
         answer.recv().map_err(|_| "the agent did not answer".to_owned())?
     }
+}
+
+pub(crate) fn hosted(
+    crashed: &str,
+    run: impl FnOnce(Arc<dyn script::Host>) -> Result<Value, String> + Send,
+    mut serve: impl FnMut(&str, Value) -> Result<Value, String>,
+) -> Result<Value, String> {
+    let (send, calls) = mpsc::channel::<Hosted>();
+    let finished = send.clone();
+    let host: Arc<dyn script::Host> = Arc::new(Bridge(Mutex::new(send)));
+    std::thread::scope(|scope| {
+        let running = scope.spawn(move || {
+            let ran = run(host);
+            let _ = finished.send(Hosted::Done);
+            ran
+        });
+        for hosted in calls.iter() {
+            let Hosted::Call(request) = hosted else { break };
+            let answer = serve(&request.function, request.arguments);
+            let _ = request.reply.send(answer);
+        }
+        running.join().unwrap_or_else(|_| Err(crashed.to_owned()))
+    })
 }
 
 pub(crate) fn ask_model(
     api: &dyn ModelApi,
     template: &TurnRequest,
     arguments: &Value,
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<Value, String> {
     let field = |key: &str| arguments.get(key).and_then(Value::as_str).map(str::to_owned);
     let prompt = field("prompt").ok_or("ctx.llm needs a prompt")?;
@@ -39,7 +67,7 @@ pub(crate) fn ask_model(
         tools: Vec::new(),
         ..template.clone()
     };
-    let reply = api.turn(&request, &mut |_| {}, stop).map_err(|error| error.to_string())?;
+    let reply = api.turn_blocking(&request, &mut |_| {}, stop.token()).map_err(|error| error.to_string())?;
     Ok(Value::String(reply.message.text()))
 }
 
@@ -66,3 +94,7 @@ pub(crate) fn read_only_tool(arguments: &Value, workspace: &Workspace) -> Result
     let outcome = tool.run(input, workspace);
     if outcome.is_error { Err(outcome.content) } else { Ok(Value::String(outcome.content)) }
 }
+
+#[cfg(test)]
+#[path = "script_bridge_tests.rs"]
+mod tests;

@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use domain::permission_rules::{PermissionRules, RuleKind};
 use platform::sync::Locked;
@@ -102,7 +101,7 @@ fn a_forked_workspace_keeps_models_and_drops_verification_and_worktree() {
         allow: PermissionRules::default(),
     });
 
-    let fork = workspace.fork(Arc::new(AtomicBool::new(false)));
+    let fork = workspace.fork(Arc::default());
 
     assert_eq!(fork.models.small_model.as_deref(), Some("small"));
     assert_eq!(fork.cwd, Path::new("/repo"));

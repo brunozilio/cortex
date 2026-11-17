@@ -6,7 +6,7 @@ use super::{Exchange, Next, TurnState, cutoffs};
 use crate::agent::run::ThisRun;
 use crate::agent::{Agent, Ending};
 use crate::hooks::Decision;
-use crate::model::{Delta, ModelError, Reply, ToolSpec, TurnRequest};
+use crate::model::{BlockingTurn, Delta, ModelError, Reply, ToolSpec, TurnRequest};
 
 const RECOVERIES_AT_MOST: u8 = 2;
 
@@ -48,7 +48,7 @@ impl Agent<'_> {
             }
             Delta::HandedOver { from, to } => (self.emit)(EngineEvent::AccountSwitched { from, to }),
         };
-        self.api.turn(request, &mut on, self.control.stop_flag())
+        self.api.turn_blocking(request, &mut on, self.control.token())
     }
 
     fn recovered(

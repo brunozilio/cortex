@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 
 use crate::mcp::{Listener, McpServer, ServerSpec};
 use crate::model::ModelError;
-use crate::model::http::{Http, Response};
+use crate::model::http::{Body, Http, Response};
 
 struct Streamable {
     get_status: u16,
@@ -72,12 +72,12 @@ impl Http for Streamable {
             return Ok(Response {
                 status: self.get_status,
                 headers: Vec::new(),
-                body: Box::new(Cursor::new(Vec::new())),
+                body: Body::reader(Cursor::new(Vec::new())),
             });
         }
         let (send, receive) = channel();
         self.streams.lock().expect("streams").push(send);
-        let body = Box::new(BufReader::new(Pipe(receive, Vec::new())));
+        let body = Body::reader(BufReader::new(Pipe(receive, Vec::new())));
         Ok(Response { status: 200, headers: Vec::new(), body })
     }
 
@@ -85,7 +85,7 @@ impl Http for Streamable {
         let message: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
         let session = vec![("mcp-session-id".to_owned(), "s-1".to_owned())];
         let Some(id) = message.get("id") else {
-            return Ok(Response { status: 202, headers: session, body: Box::new(Cursor::new(Vec::new())) });
+            return Ok(Response { status: 202, headers: session, body: Body::reader(Cursor::new(Vec::new())) });
         };
         let result = match message["method"].as_str() {
             Some("initialize") => json!({ "capabilities": { "experimental": { "claude/channel": {} } } }),
@@ -93,7 +93,7 @@ impl Http for Streamable {
         };
         let progress = json!({ "jsonrpc": "2.0", "method": "notifications/claude/channel", "params": { "content": "while answering" } });
         let text = event(&progress) + &event(&json!({ "jsonrpc": "2.0", "id": id, "result": result }));
-        Ok(Response { status: 200, headers: session, body: Box::new(Cursor::new(text.into_bytes())) })
+        Ok(Response { status: 200, headers: session, body: Body::reader(Cursor::new(text.into_bytes())) })
     }
 }
 
@@ -108,8 +108,8 @@ fn listened(server: &Arc<Streamable>) -> (McpServer, Arc<Mutex<Vec<String>>>) {
         kept.lock().expect("heard").push(params["content"].as_str().unwrap_or_default().to_owned());
     });
     let http: Arc<dyn Http> = Arc::clone(server) as Arc<dyn Http>;
-    let opened = McpServer::open_listening(&spec(), &http, &AtomicBool::new(false), Some(listener)).expect("open");
-    opened.initialize_stopped(&AtomicBool::new(false)).expect("initialize");
+    let opened = McpServer::open_listening(&spec(), &http, &platform::Stop::new(), Some(listener)).expect("open");
+    opened.initialize_stopped(&platform::Stop::new()).expect("initialize");
     (opened, heard)
 }
 
@@ -133,7 +133,7 @@ fn a_streamable_server_is_heard_on_its_answers_and_on_its_own_stream() {
 
     server.say("deploy please");
     assert!(until(|| heard.lock().expect("heard").contains(&"deploy please".to_owned())));
-    let answer = opened.ask("tools/call", json!({ "name": "reply" }), &AtomicBool::new(false)).expect("answer");
+    let answer = opened.ask("tools/call", json!({ "name": "reply" }), &platform::Stop::new()).expect("answer");
     assert_eq!(answer["content"][0]["text"], "sent");
     let heard = heard.lock().expect("heard").clone();
     assert_eq!(heard.iter().filter(|said| *said == "while answering").count(), 2, "initialize's and the call's");
@@ -169,7 +169,7 @@ fn an_unlistened_server_opens_no_stream() {
     let server = Streamable::new(200);
     let http: Arc<dyn Http> = Arc::clone(&server) as Arc<dyn Http>;
     let opened = McpServer::open(&spec(), &http).expect("open");
-    opened.initialize_stopped(&AtomicBool::new(false)).expect("initialize");
+    opened.initialize_stopped(&platform::Stop::new()).expect("initialize");
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(server.gets(), 0);
 }

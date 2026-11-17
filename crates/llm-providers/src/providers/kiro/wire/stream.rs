@@ -180,11 +180,12 @@ mod tests {
     use serde_json::json;
 
     fn fold(bytes: &[u8], window: Option<u64>) -> (Result<Reply, ModelError>, Vec<Delta>) {
-        let mut reader = std::io::BufReader::new(bytes);
+        let mut body = crate::model::http::Body::from(bytes.to_vec());
         let mut folder = Folder::new(window);
         let mut seen = Vec::new();
-        let stop = std::sync::atomic::AtomicBool::new(false);
-        while let Ok(Some(frame)) = frames::next(&mut reader, &stop) {
+        let never = crate::model::CancellationToken::new();
+        let mut next = || platform::runtime::block_on(frames::next(&mut body, &never)).expect("runtime");
+        while let Ok(Some(frame)) = next() {
             if let Err(error) = folder.frame(&frame, &mut |delta| seen.push(delta)) {
                 return (Err(error), seen);
             }

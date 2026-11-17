@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -31,12 +31,12 @@ pub fn last_line(output: &str) -> Option<String> {
 pub fn watched<T>(show: &(dyn Fn(String) + Sync), run: impl FnOnce() -> T) -> T {
     let slot: Slot = Arc::default();
     let previous = SLOT.with(|current| current.replace(Some(Arc::clone(&slot))));
-    let done = AtomicBool::new(false);
+    let (done, finished) = std::sync::mpsc::channel::<()>();
     let result = std::thread::scope(|scope| {
-        scope.spawn(|| {
+        scope.spawn(move || {
             let mut shown: Option<String> = None;
             loop {
-                let finished = done.load(Ordering::SeqCst);
+                let ended = !matches!(finished.recv_timeout(EVERY), Err(RecvTimeoutError::Timeout));
                 let latest = slot.locked().clone();
                 if latest.is_some() && latest != shown {
                     if let Some(line) = latest.clone() {
@@ -44,14 +44,13 @@ pub fn watched<T>(show: &(dyn Fn(String) + Sync), run: impl FnOnce() -> T) -> T 
                     }
                     shown = latest;
                 }
-                if finished {
+                if ended {
                     break;
                 }
-                std::thread::sleep(EVERY);
             }
         });
         let result = run();
-        done.store(true, Ordering::SeqCst);
+        drop(done);
         result
     });
     SLOT.with(|current| current.replace(previous));
@@ -90,5 +89,16 @@ mod tests {
         assert_eq!(*shown.locked(), ["step 1", "step 2"]);
         report("after the tool");
         assert_eq!(shown.locked().len(), 2, "outside a watched call a report goes nowhere");
+    }
+
+    #[test]
+    fn a_watched_call_returns_as_soon_as_it_finishes() {
+        let shown = Mutex::new(Vec::new());
+        let started = std::time::Instant::now();
+        for _ in 0..5 {
+            watched(&|line| shown.locked().push(line), || report("quick\n"));
+        }
+        assert!(started.elapsed() < EVERY, "{:?}", started.elapsed());
+        assert_eq!(shown.locked().len(), 5, "the last line is still shown");
     }
 }

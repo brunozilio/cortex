@@ -1,9 +1,9 @@
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use agent_engine::model::scripted::ScriptedModel;
-use agent_engine::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use agent_engine::model::{BoxFuture, CancellationToken, Delta, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use agent_engine::transcript::{Block, Message, StopReason, Usage};
 use serde_json::Value;
 
@@ -64,14 +64,21 @@ impl Gated {
 }
 
 impl ModelApi for Gated {
-    fn turn(&self, _request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        on(Delta::Text(self.partial.into()));
-        self.reached.lock().expect("reached").send(()).expect("the test waits at the gate");
-        self.release.lock().expect("release").recv_timeout(PATIENCE).expect("the test opens the gate");
-        if stop.load(Ordering::Relaxed) {
-            return Err(ModelError::Cancelled);
-        }
-        ScriptedModel::reply(vec![Block::Text(self.partial.into())])
+    fn turn<'a>(
+        &'a self,
+        _request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(async move {
+            on(Delta::Text(self.partial.into()));
+            self.reached.lock().expect("reached").send(()).expect("the test waits at the gate");
+            self.release.lock().expect("release").recv_timeout(PATIENCE).expect("the test opens the gate");
+            if cancel.is_cancelled() {
+                return Err(ModelError::Cancelled);
+            }
+            ScriptedModel::reply(vec![Block::Text(self.partial.into())])
+        })
     }
 }
 
@@ -99,12 +106,19 @@ impl Held {
 }
 
 impl ModelApi for Held {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        if self.asked.fetch_add(1, Ordering::SeqCst) == self.turn {
-            self.reached.lock().expect("reached").send(()).expect("the test waits at the gate");
-            self.release.lock().expect("release").recv_timeout(PATIENCE).expect("the test opens the gate");
-        }
-        self.script.turn(request, on, stop)
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        _cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(async move {
+            if self.asked.fetch_add(1, Ordering::SeqCst) == self.turn {
+                self.reached.lock().expect("reached").send(()).expect("the test waits at the gate");
+                self.release.lock().expect("release").recv_timeout(PATIENCE).expect("the test opens the gate");
+            }
+            self.script.answer(request, on)
+        })
     }
 }
 
@@ -125,9 +139,14 @@ impl ByTask {
 }
 
 impl ModelApi for ByTask {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        _cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
         let opening = request.messages.first().map(Message::text).unwrap_or_default();
         let lane = self.tasks.iter().find(|(task, _)| opening == *task).map_or(&self.main, |(_, lane)| lane);
-        lane.turn(request, on, stop)
+        Box::pin(async move { lane.answer(request, on) })
     }
 }

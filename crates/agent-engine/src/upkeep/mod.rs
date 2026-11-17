@@ -64,7 +64,6 @@ pub fn measure(model: &ModelOption, system: &str, tools: &[ToolSpec], history: &
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
 
     use domain::Effort;
     use serde_json::json;
@@ -117,7 +116,7 @@ mod tests {
             vec![Message::user("x".repeat(4000)), Message::assistant(vec![Block::Text("y".repeat(4000))])];
         let model =
             ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("They asked for x; y is done.".into())])]);
-        let compaction = compact(&model, &template(), &mut history, &AtomicBool::new(false)).expect("compact");
+        let compaction = compact(&model, &template(), &mut history, &platform::Stop::new()).expect("compact");
         assert_eq!(history.len(), 1);
         assert!(
             history[0].text().starts_with(&crate::prompt::text("continued"))
@@ -130,12 +129,12 @@ mod tests {
         let model = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text(
             "<analysis>They asked for x.</analysis>\n<summary>\n1. Primary request: x.\n</summary>".into(),
         )])]);
-        compact(&model, &template(), &mut tagged, &AtomicBool::new(false)).expect("compact");
+        compact(&model, &template(), &mut tagged, &platform::Stop::new()).expect("compact");
         let focused = crate::model::scripted::ScriptedModel::new([crate::model::scripted::ScriptedModel::reply(vec![
             crate::transcript::Block::Text("<summary>kept</summary>".into()),
         ])]);
         let mut history = vec![Message::user("one"), Message::user("two")];
-        compact_on(&focused, &template(), &mut history, &AtomicBool::new(false), Some("the API changes"))
+        compact_on(&focused, &template(), &mut history, &platform::Stop::new(), Some("the API changes"))
             .expect("focused");
         let asked = focused.asked()[0].messages.last().map(Message::text).unwrap_or_default();
         assert!(asked.ends_with("The user asks the summary to focus on: the API changes"), "{asked}");
@@ -147,7 +146,7 @@ mod tests {
 
         let mut kept = vec![Message::user("z")];
         let silent = ScriptedModel::new([ScriptedModel::reply(vec![])]);
-        assert!(compact(&silent, &template(), &mut kept, &AtomicBool::new(false)).is_err());
+        assert!(compact(&silent, &template(), &mut kept, &platform::Stop::new()).is_err());
         assert_eq!(kept, vec![Message::user("z")]);
     }
 }

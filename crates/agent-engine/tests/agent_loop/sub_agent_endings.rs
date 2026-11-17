@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use agent_engine::agent::Ending;
 use agent_engine::control::Control;
 use agent_engine::model::scripted::ScriptedModel;
-use agent_engine::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use agent_engine::model::{BoxFuture, CancellationToken, Delta, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use agent_engine::tools;
 use agent_engine::transcript::{Block, Message};
 use domain::{AgentStatus, EngineEvent, PermissionMode};
@@ -41,14 +41,21 @@ struct StoppedMidAnswer {
 }
 
 impl ModelApi for StoppedMidAnswer {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), _: &AtomicBool) -> Result<Reply, ModelError> {
-        if request.system.contains("# You are a sub-agent") {
-            on(Delta::Text("Half of the plan".into()));
-            self.control.cancel();
-            return Err(ModelError::Cancelled);
-        }
-        assert_eq!(self.parent.fetch_add(1, Ordering::Relaxed), 0, "a cancelled run asks nothing more");
-        ScriptedModel::reply(vec![tool_use("a1", "Agent", json!({"description": "Plan", "prompt": "Plan it"}))])
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(async move {
+            if request.system.contains("# You are a sub-agent") {
+                on(Delta::Text("Half of the plan".into()));
+                self.control.cancel();
+                return Err(ModelError::Cancelled);
+            }
+            assert_eq!(self.parent.fetch_add(1, Ordering::Relaxed), 0, "a cancelled run asks nothing more");
+            ScriptedModel::reply(vec![tool_use("a1", "Agent", json!({"description": "Plan", "prompt": "Plan it"}))])
+        })
     }
 }
 

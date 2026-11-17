@@ -39,15 +39,15 @@ pub type Listener = Arc<dyn Fn(&str, &Value) + Send + Sync>;
 
 pub trait Transport: Send + Sync {
     fn request(&self, message: &Value) -> Result<Value, String>;
-    fn request_stopped(&self, message: &Value, stop: &std::sync::atomic::AtomicBool) -> Result<Value, String> {
-        if stop.load(Ordering::Relaxed) {
+    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, String> {
+        if stop.is_stopped() {
             return Err("cancelled".into());
         }
         self.request(message)
     }
     fn notify(&self, message: &Value) -> Result<(), String>;
-    fn notify_stopped(&self, message: &Value, stop: &std::sync::atomic::AtomicBool) -> Result<(), String> {
-        if stop.load(Ordering::Relaxed) {
+    fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), String> {
+        if stop.is_stopped() {
             return Err("cancelled".into());
         }
         self.notify(message)
@@ -78,21 +78,17 @@ impl McpServer {
     }
 
     pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>) -> Result<Self, String> {
-        Self::open_stopped(spec, http, &std::sync::atomic::AtomicBool::new(false))
+        Self::open_stopped(spec, http, &platform::Stop::new())
     }
 
-    pub fn open_stopped(
-        spec: &ServerSpec,
-        http: &Arc<dyn Http>,
-        stop: &std::sync::atomic::AtomicBool,
-    ) -> Result<Self, String> {
+    pub fn open_stopped(spec: &ServerSpec, http: &Arc<dyn Http>, stop: &platform::Stop) -> Result<Self, String> {
         Self::open_listening(spec, http, stop, None)
     }
 
     pub fn open_listening(
         spec: &ServerSpec,
         http: &Arc<dyn Http>,
-        stop: &std::sync::atomic::AtomicBool,
+        stop: &platform::Stop,
         listener: Option<Listener>,
     ) -> Result<Self, String> {
         if stop.load(Ordering::Relaxed) {
@@ -119,7 +115,7 @@ impl McpServer {
         Ok(Self::new(spec.name(), transport))
     }
 
-    fn rpc_stopped(&self, method: &str, params: Value, stop: &std::sync::atomic::AtomicBool) -> Result<Value, String> {
+    fn rpc_stopped(&self, method: &str, params: Value, stop: &platform::Stop) -> Result<Value, String> {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let reply = self
             .transport
@@ -132,14 +128,14 @@ impl McpServer {
     }
 
     pub fn tools(self: &Arc<Self>) -> Result<Vec<McpTool>, String> {
-        self.tools_stopped(&std::sync::atomic::AtomicBool::new(false))
+        self.tools_stopped(&platform::Stop::new())
     }
-    pub fn tools_stopped(self: &Arc<Self>, stop: &std::sync::atomic::AtomicBool) -> Result<Vec<McpTool>, String> {
+    pub fn tools_stopped(self: &Arc<Self>, stop: &platform::Stop) -> Result<Vec<McpTool>, String> {
         self.initialize_stopped(stop)?;
         self.listed_tools_stopped(stop)
     }
 
-    pub fn initialize_stopped(&self, stop: &std::sync::atomic::AtomicBool) -> Result<(), String> {
+    pub fn initialize_stopped(&self, stop: &platform::Stop) -> Result<(), String> {
         let client = json!({ "name": brand::COMMAND, "version": env!("CARGO_PKG_VERSION") });
         let answer = self.rpc_stopped(
             "initialize",
@@ -174,14 +170,11 @@ impl McpServer {
         self.capabilities.lock().is_ok_and(|capabilities| capabilities.get(capability).is_some_and(Value::is_object))
     }
 
-    pub fn ask(&self, method: &str, params: Value, stop: &std::sync::atomic::AtomicBool) -> Result<Value, String> {
+    pub fn ask(&self, method: &str, params: Value, stop: &platform::Stop) -> Result<Value, String> {
         self.rpc_stopped(method, params, stop)
     }
 
-    pub fn listed_tools_stopped(
-        self: &Arc<Self>,
-        stop: &std::sync::atomic::AtomicBool,
-    ) -> Result<Vec<McpTool>, String> {
+    pub fn listed_tools_stopped(self: &Arc<Self>, stop: &platform::Stop) -> Result<Vec<McpTool>, String> {
         let mut tools = Vec::new();
         let mut params = json!({});
         let mut cursors = std::collections::HashSet::new();
@@ -219,7 +212,7 @@ impl McpServer {
         Err("MCP catalog exceeded the pagination limit".into())
     }
 
-    fn call(&self, name: &str, arguments: &Value, stop: &std::sync::atomic::AtomicBool) -> Outcome {
+    fn call(&self, name: &str, arguments: &Value, stop: &platform::Stop) -> Outcome {
         let arguments = if arguments.is_null() { json!({}) } else { arguments.clone() };
         match self.transport.request_stopped(&json!({"jsonrpc":"2.0","id":self.next.fetch_add(1,Ordering::Relaxed),"method":"tools/call","params":{"name":name,"arguments":arguments}}),stop).and_then(|reply| {
             if let Some(error)=reply.get("error") {Err(error["message"].as_str().unwrap_or("MCP call failed").to_owned())} else {Ok(reply["result"].clone())}
@@ -234,7 +227,7 @@ pub fn tools_stopped(
     request: &PromptRequest,
     sources: &McpSources,
     http: &Arc<dyn Http>,
-    stop: &std::sync::atomic::AtomicBool,
+    stop: &platform::Stop,
 ) -> Vec<Box<dyn Tool>> {
     tools_of(&connect_stopped(request, sources, http, stop), stop)
 }
@@ -243,7 +236,7 @@ pub fn connect_stopped(
     request: &PromptRequest,
     sources: &McpSources,
     http: &Arc<dyn Http>,
-    stop: &std::sync::atomic::AtomicBool,
+    stop: &platform::Stop,
 ) -> Vec<Arc<McpServer>> {
     connect_judged(request, sources, http, stop, &Arc::default())
 }
@@ -252,7 +245,7 @@ pub fn connect_judged(
     request: &PromptRequest,
     sources: &McpSources,
     http: &Arc<dyn Http>,
-    stop: &std::sync::atomic::AtomicBool,
+    stop: &platform::Stop,
     judge: &Arc<crate::tools::host_judge::HostJudge>,
 ) -> Vec<Arc<McpServer>> {
     let mut connected = in_process(request, stop);
@@ -264,18 +257,14 @@ pub fn connect_judged(
     connected
 }
 
-fn ready(
-    name: &str,
-    server: Result<McpServer, String>,
-    stop: &std::sync::atomic::AtomicBool,
-) -> Option<Arc<McpServer>> {
+fn ready(name: &str, server: Result<McpServer, String>, stop: &platform::Stop) -> Option<Arc<McpServer>> {
     server
         .and_then(|server| server.initialize_stopped(stop).map(|()| Arc::new(server)))
         .inspect_err(|error| tracing::warn!(%error, server = name, "an MCP server is not available to this run"))
         .ok()
 }
 
-fn in_process(request: &PromptRequest, stop: &std::sync::atomic::AtomicBool) -> Vec<Arc<McpServer>> {
+fn in_process(request: &PromptRequest, stop: &platform::Stop) -> Vec<Arc<McpServer>> {
     request
         .credentials
         .mcp
@@ -300,7 +289,7 @@ fn wanted(
         .collect()
 }
 
-pub fn tools_of(servers: &[Arc<McpServer>], stop: &std::sync::atomic::AtomicBool) -> Vec<Box<dyn Tool>> {
+pub fn tools_of(servers: &[Arc<McpServer>], stop: &platform::Stop) -> Vec<Box<dyn Tool>> {
     let mut tools: Vec<Box<dyn Tool>> = servers
         .iter()
         .flat_map(|server| {

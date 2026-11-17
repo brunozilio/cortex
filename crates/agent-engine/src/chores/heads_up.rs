@@ -1,15 +1,14 @@
-use std::sync::atomic::AtomicBool;
-
 use domain::HeadsUp;
+use platform::Stop;
 
-use crate::model::{ModelApi, ModelError, TurnRequest};
+use crate::model::{BlockingTurn, ModelApi, ModelError, TurnRequest};
 use crate::transcript::Message;
 
 pub(super) fn look(
     api: &dyn ModelApi,
     template: &TurnRequest,
     history: &[Message],
-    stop: &AtomicBool,
+    stop: &Stop,
 ) -> Result<Option<HeadsUp>, ModelError> {
     let mut messages = history.to_vec();
     while messages.last().is_some_and(|message| message.tool_uses().next().is_some()) {
@@ -18,7 +17,7 @@ pub(super) fn look(
     messages.push(Message::user(crate::prompt::text("heads-up")));
     let request =
         TurnRequest { messages, tools: Vec::new(), max_tokens: template.max_tokens.min(1500), ..template.clone() };
-    Ok(parse(&api.turn(&request, &mut |_| {}, stop)?.message.text()))
+    Ok(parse(&api.turn_blocking(&request, &mut |_| {}, stop.token())?.message.text()))
 }
 
 pub fn parse(answer: &str) -> Option<HeadsUp> {

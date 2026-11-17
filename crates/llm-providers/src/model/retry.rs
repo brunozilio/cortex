@@ -1,110 +1,124 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::hash::{BuildHasher, Hasher};
+use std::time::{Duration, SystemTime};
 
-use super::{Delta, ModelError, Reply};
+use tokio_util::sync::CancellationToken;
+
+use super::{BoxFuture, Delta, ModelError, OnDelta, Reply, TurnRequest};
 
 const ATTEMPTS: u32 = 4;
-const STEP: Duration = Duration::from_millis(25);
+pub const RETRY_AFTER_AT_MOST: Duration = Duration::from_secs(60);
 
-pub fn with_retries(
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Failed {
+    pub error: ModelError,
+    pub retry_after: Option<Duration>,
+}
+
+impl From<ModelError> for Failed {
+    fn from(error: ModelError) -> Self {
+        Self { error, retry_after: None }
+    }
+}
+
+pub(crate) trait Attempt: Sync {
+    fn once<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, Failed>>;
+}
+
+pub(crate) fn retry_after(headers: &[(String, String)], now: SystemTime) -> Option<Duration> {
+    let header = |name: &str| {
+        headers.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)).map(|(_, value)| value.trim().to_owned())
+    };
+    if let Some(millis) = header("retry-after-ms").and_then(|value| value.parse::<f64>().ok())
+        && millis.is_finite()
+        && millis >= 0.0
+    {
+        return Some(Duration::from_secs_f64(millis / 1000.0));
+    }
+    let value = header("retry-after")?;
+    if let Ok(seconds) = value.parse::<u64>() {
+        return Some(Duration::from_secs(seconds));
+    }
+    let at = jiff::fmt::rfc2822::parse(&value).ok()?.timestamp();
+    let now = jiff::Timestamp::try_from(now).ok()?;
+    Some(Duration::try_from(at.duration_since(now)).unwrap_or(Duration::ZERO))
+}
+
+pub(crate) async fn refusal(
+    response: super::http::Response,
+    cancel: &CancellationToken,
+    judge: fn(u16, &str) -> ModelError,
+) -> Failed {
+    let retry_after = retry_after(&response.headers, SystemTime::now());
+    let status = response.status;
+    match response.text(cancel).await {
+        Ok(text) => Failed { error: judge(status, &text), retry_after },
+        Err(error) => error.into(),
+    }
+}
+
+pub(crate) fn jittered(wait: Duration, random: u64) -> Duration {
+    let half = wait / 2;
+    let spread = u64::try_from(half.as_nanos()).unwrap_or(u64::MAX);
+    if spread == 0 {
+        return wait;
+    }
+    half + Duration::from_nanos(random % (spread + 1))
+}
+
+fn random() -> u64 {
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u128(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_nanos());
+    hasher.finish()
+}
+
+pub(crate) fn pause(wait: Duration, retry_after: Option<Duration>) -> Option<Duration> {
+    match retry_after {
+        Some(asked) if asked > RETRY_AFTER_AT_MOST => None,
+        Some(asked) => Some(asked),
+        None => Some(jittered(wait, random())),
+    }
+}
+
+pub(crate) async fn with_retries(
     provider: &str,
     backoff: Duration,
-    stop: &AtomicBool,
-    on: &mut dyn FnMut(Delta),
-    mut once: impl FnMut(&mut dyn FnMut(Delta)) -> Result<Reply, ModelError>,
+    attempt: &dyn Attempt,
+    request: &TurnRequest,
+    on: OnDelta<'_>,
+    cancel: &CancellationToken,
 ) -> Result<Reply, ModelError> {
     let mut wait = backoff;
-    let mut wrote = false;
-    for attempt in 1..=ATTEMPTS {
-        let mut seen = |delta: Delta| {
-            wrote = true;
-            on(delta);
+    for tried in 1..=ATTEMPTS {
+        let mut wrote = false;
+        let outcome = {
+            let mut seen = |delta: Delta| {
+                wrote = true;
+                on(delta);
+            };
+            attempt.once(request, &mut seen, cancel).await
         };
-        match once(&mut seen) {
-            Err(error) if error.is_transient() && !wrote && attempt < ATTEMPTS => {
-                tracing::warn!(%error, attempt, "{provider} is busy, retrying");
-                sleep_stopped(wait, stop)?;
-                wait *= 2;
-            }
-            other => return other,
+        let failed = match outcome {
+            Ok(reply) => return Ok(reply),
+            Err(failed) if failed.error.is_transient() && !wrote && tried < ATTEMPTS => failed,
+            Err(failed) => return Err(failed.error),
+        };
+        let Some(delay) = pause(wait, failed.retry_after) else { return Err(failed.error) };
+        tracing::warn!(error = %failed.error, attempt = tried, ?delay, "{provider} is busy, retrying");
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Err(ModelError::Cancelled),
+            () = tokio::time::sleep(delay) => {}
         }
+        wait *= 2;
     }
     Err(ModelError::Overloaded("no answer after retrying".into()))
 }
 
-fn sleep_stopped(wait: Duration, stop: &AtomicBool) -> Result<(), ModelError> {
-    let until = Instant::now() + wait;
-    loop {
-        if stop.load(Ordering::Relaxed) {
-            return Err(ModelError::Cancelled);
-        }
-        let left = until.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            return Ok(());
-        }
-        std::thread::sleep(left.min(STEP));
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::transcript::{Message, StopReason, Usage};
-    use std::sync::Arc;
-
-    fn reply() -> Reply {
-        Reply {
-            message: Message::assistant(Vec::new()),
-            stop: StopReason::EndTurn,
-            usage: Usage::default(),
-            served: None,
-        }
-    }
-
-    #[test]
-    fn a_busy_provider_is_asked_again_until_it_answers() {
-        let mut asked = 0;
-        let result = with_retries("P", Duration::ZERO, &AtomicBool::new(false), &mut |_| {}, |_| {
-            asked += 1;
-            if asked < 3 { Err(ModelError::Overloaded("busy".into())) } else { Ok(reply()) }
-        });
-        assert!(result.is_ok());
-        assert_eq!(asked, 3);
-    }
-
-    #[test]
-    fn an_answer_already_shown_is_never_asked_again() {
-        let mut asked = 0;
-        let result = with_retries("P", Duration::ZERO, &AtomicBool::new(false), &mut |_| {}, |on| {
-            asked += 1;
-            on(Delta::Text("half".into()));
-            Err(ModelError::Network("dropped".into()))
-        });
-        assert!(matches!(result, Err(ModelError::Network(_))));
-        assert_eq!(asked, 1);
-    }
-
-    #[test]
-    fn a_provider_busy_every_time_gives_up() {
-        let result = with_retries("P", Duration::ZERO, &AtomicBool::new(false), &mut |_| {}, |_| {
-            Err(ModelError::Overloaded("busy".into()))
-        });
-        assert!(matches!(result, Err(ModelError::Overloaded(_))));
-    }
-
-    #[test]
-    fn stopping_during_the_wait_ends_it_at_once() {
-        let stop = Arc::new(AtomicBool::new(false));
-        let stopper = Arc::clone(&stop);
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(50));
-            stopper.store(true, Ordering::Relaxed);
-        });
-        let started = Instant::now();
-        let result = with_retries("P", Duration::from_secs(600), &stop, &mut |_| {}, |_| {
-            Err(ModelError::Overloaded("busy".into()))
-        });
-        assert!(matches!(result, Err(ModelError::Cancelled)));
-        assert!(started.elapsed() < Duration::from_secs(60), "the wait went on: {:?}", started.elapsed());
-    }
-}
+#[path = "retry_tests.rs"]
+mod tests;

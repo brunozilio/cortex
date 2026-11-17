@@ -52,7 +52,7 @@ pub fn fetch_over(web: &dyn Http, arguments: &Value, origin: Origin) -> Result<V
         Origin::Project => public(web, url, &headers, body)?,
     };
     let status = response.status;
-    let bytes = crate::model::web_client::read_capped(response.body.as_mut(), FETCHED)
+    let bytes = crate::model::web_client::read_capped(&mut response.body, FETCHED)
         .map_err(|error| format!("Could not read {url}: {error}"))?;
     Ok(json!({ "status": status, "body": String::from_utf8_lossy(&bytes) }))
 }

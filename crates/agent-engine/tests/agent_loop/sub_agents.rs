@@ -101,7 +101,7 @@ fn a_call_can_pick_the_sub_agent_s_model() {
 
 #[test]
 fn background_agent_runs_concurrently_and_output_is_collected() {
-    use agent_engine::model::{Delta, ModelApi, Reply};
+    use agent_engine::model::{BoxFuture, CancellationToken, ModelApi, OnDelta, Reply};
     use std::sync::atomic::{AtomicUsize, Ordering};
     struct Concurrent {
         parent: AtomicUsize,
@@ -110,7 +110,17 @@ fn background_agent_runs_concurrently_and_output_is_collected() {
         done: AtomicBool,
     }
     impl ModelApi for Concurrent {
-        fn turn(&self, request: &TurnRequest, _: &mut dyn FnMut(Delta), _: &AtomicBool) -> Result<Reply, ModelError> {
+        fn turn<'a>(
+            &'a self,
+            request: &'a TurnRequest,
+            _: OnDelta<'a>,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+            Box::pin(std::future::ready(self.answer(request)))
+        }
+    }
+    impl Concurrent {
+        fn answer(&self, request: &TurnRequest) -> Result<Reply, ModelError> {
             if request.system.contains("# You are a sub-agent") {
                 self.started.store(true, Ordering::SeqCst);
                 let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
@@ -176,7 +186,7 @@ fn background_agent_runs_concurrently_and_output_is_collected() {
 #[test]
 #[cfg(unix)]
 fn stopping_background_task_joins_its_shell_without_stopping_parent() {
-    use agent_engine::model::{Delta, ModelApi, Reply};
+    use agent_engine::model::{BoxFuture, CancellationToken, ModelApi, OnDelta, Reply};
     use std::sync::atomic::{AtomicUsize, Ordering};
     struct StopModel {
         parent: AtomicUsize,
@@ -184,7 +194,17 @@ fn stopping_background_task_joins_its_shell_without_stopping_parent() {
         dir: std::path::PathBuf,
     }
     impl ModelApi for StopModel {
-        fn turn(&self, request: &TurnRequest, _: &mut dyn FnMut(Delta), _: &AtomicBool) -> Result<Reply, ModelError> {
+        fn turn<'a>(
+            &'a self,
+            request: &'a TurnRequest,
+            _: OnDelta<'a>,
+            _: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+            Box::pin(std::future::ready(self.answer(request)))
+        }
+    }
+    impl StopModel {
+        fn answer(&self, request: &TurnRequest) -> Result<Reply, ModelError> {
             if request.system.contains("# You are a sub-agent") {
                 assert_eq!(self.child.fetch_add(1, Ordering::Relaxed), 0, "cancelled child must not call model again");
                 return ScriptedModel::reply(vec![tool_use(

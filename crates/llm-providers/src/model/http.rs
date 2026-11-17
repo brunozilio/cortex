@@ -1,9 +1,17 @@
-use std::io::{BufRead, Cursor};
+use std::io::BufRead;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+
+use tokio_util::sync::CancellationToken;
+
+pub use super::body::Body;
+use super::cancellable_http::{self, Ask};
+use super::{BoxFuture, ModelError};
 
 pub struct Response {
     pub status: u16,
     pub headers: Vec<(String, String)>,
-    pub body: Box<dyn BufRead + Send>,
+    pub body: Body,
 }
 
 impl std::fmt::Debug for Response {
@@ -16,18 +24,50 @@ impl Response {
     pub fn header(&self, name: &str) -> Option<String> {
         self.headers.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)).map(|(_, value)| value.clone())
     }
+
+    pub async fn text(self, cancel: &CancellationToken) -> Result<String, ModelError> {
+        self.body.text(cancel, usize::MAX).await
+    }
+}
+
+pub const STREAM_IDLE: Duration = Duration::from_secs(300);
+
+pub fn idle_from(value: Option<&str>) -> Duration {
+    value
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .map_or(STREAM_IDLE, Duration::from_secs)
+}
+
+pub fn stream_idle() -> Duration {
+    idle_from(std::env::var(brand::env("STREAM_IDLE_SECONDS")).ok().as_deref())
 }
 
 pub trait Http: Send + Sync {
+    fn post_streaming<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(async move {
+            if cancel.is_cancelled() {
+                return Err(ModelError::Cancelled);
+            }
+            self.post_model(url, headers, body)
+        })
+    }
+
     fn post_stopped(
         &self,
         url: &str,
         headers: &[(String, String)],
         body: &str,
-        stop: &std::sync::atomic::AtomicBool,
-    ) -> Result<Response, super::ModelError> {
-        if stop.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(super::ModelError::Cancelled);
+        stop: &AtomicBool,
+    ) -> Result<Response, ModelError> {
+        if stop.load(Ordering::Relaxed) {
+            return Err(ModelError::Cancelled);
         }
         self.post_model(url, headers, body)
     }
@@ -38,9 +78,9 @@ pub trait Http: Send + Sync {
         &self,
         _url: &str,
         _headers: &[(String, String)],
-        _stop: &std::sync::atomic::AtomicBool,
-    ) -> Result<Response, super::ModelError> {
-        Err(super::ModelError::Network("streaming GET is not supported by this HTTP transport".into()))
+        _stop: &AtomicBool,
+    ) -> Result<Response, ModelError> {
+        Err(ModelError::Network("streaming GET is not supported by this HTTP transport".into()))
     }
 
     fn one_hop(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
@@ -58,8 +98,8 @@ pub trait Http: Send + Sync {
         super::web_client::system_addresses(host)
     }
 
-    fn post_model(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, super::ModelError> {
-        self.post(url, headers, body).map_err(super::ModelError::Network)
+    fn post_model(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, ModelError> {
+        self.post(url, headers, body).map_err(ModelError::Network)
     }
 
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String>;
@@ -68,34 +108,52 @@ pub trait Http: Send + Sync {
 #[derive(Debug, Default)]
 pub struct NetHttp;
 
-pub const SHORT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+pub const SHORT_TIMEOUT: Duration = Duration::from_secs(15);
 
-fn reason(error: super::ModelError) -> String {
+fn reason(error: ModelError) -> String {
     match error {
-        super::ModelError::Network(reason) => reason,
+        ModelError::Network(reason) => reason,
         error => error.to_string(),
     }
 }
 
 impl NetHttp {
     fn short(url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
-        let never = std::sync::atomic::AtomicBool::new(false);
-        let response = super::cancellable_http::send(url, headers, body, &never, SHORT_TIMEOUT).map_err(reason)?;
-        let (status, headers) = (response.status, response.headers.clone());
-        let text = response.text_stopped(&never).map_err(|error| error.to_string())?;
-        Ok(Response { status, headers, body: Box::new(Cursor::new(text.into_bytes())) })
+        let never = CancellationToken::new();
+        let ask = Ask { total: Some(SHORT_TIMEOUT), ..Ask::new(url, headers, body) };
+        platform::runtime::block_on(async {
+            let response = cancellable_http::fetch(ask, &never).await?;
+            let (status, headers) = (response.status, response.headers.clone());
+            let text = response.text(&never).await?;
+            Ok(Response { status, headers, body: Body::from(text) })
+        })
+        .map_err(|error| error.to_string())?
+        .map_err(reason)
     }
 }
 
 impl Http for NetHttp {
+    fn post_streaming<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(cancellable_http::fetch(
+            Ask { idle: Some(stream_idle()), ..Ask::new(url, headers, Some(body)) },
+            cancel,
+        ))
+    }
+
     fn post_stopped(
         &self,
         url: &str,
         headers: &[(String, String)],
         body: &str,
-        stop: &std::sync::atomic::AtomicBool,
-    ) -> Result<Response, super::ModelError> {
-        super::cancellable_http::post(url, headers, body, stop)
+        stop: &AtomicBool,
+    ) -> Result<Response, ModelError> {
+        cancellable_http::post(url, headers, body, stop)
     }
 
     fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Response, String> {
@@ -103,21 +161,15 @@ impl Http for NetHttp {
     }
 
     fn one_hop(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
-        super::cancellable_http::one_hop(url, headers, body, SHORT_TIMEOUT).map_err(reason)
+        cancellable_http::one_hop(url, headers, body, SHORT_TIMEOUT).map_err(reason)
     }
 
     fn streamed(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
-        let never = std::sync::atomic::AtomicBool::new(false);
-        super::cancellable_http::send(url, headers, body, &never, SHORT_TIMEOUT).map_err(reason)
+        cancellable_http::unstoppable(url, headers, body, SHORT_TIMEOUT).map_err(reason)
     }
 
-    fn get_stream(
-        &self,
-        url: &str,
-        headers: &[(String, String)],
-        stop: &std::sync::atomic::AtomicBool,
-    ) -> Result<Response, super::ModelError> {
-        super::cancellable_http::send(url, headers, None, stop, std::time::Duration::from_secs(12 * 3600))
+    fn get_stream(&self, url: &str, headers: &[(String, String)], stop: &AtomicBool) -> Result<Response, ModelError> {
+        cancellable_http::send(url, headers, None, stop, Duration::from_secs(12 * 3600))
     }
 
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {
@@ -125,34 +177,31 @@ impl Http for NetHttp {
     }
 }
 
-pub fn read_line_stopped(
-    body: &mut dyn BufRead,
-    line: &mut String,
-    stop: &std::sync::atomic::AtomicBool,
-) -> Result<usize, super::ModelError> {
+pub fn read_line_stopped(body: &mut dyn BufRead, line: &mut String, stop: &AtomicBool) -> Result<usize, ModelError> {
     let mut bytes = Vec::new();
     loop {
-        if stop.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(super::ModelError::Cancelled);
+        if stop.load(Ordering::Relaxed) {
+            return Err(ModelError::Cancelled);
         }
         match body.read_until(b'\n', &mut bytes) {
             Ok(_) => {
                 let text = std::str::from_utf8(&bytes)
-                    .map_err(|_| super::ModelError::Network("stream did not contain valid UTF-8".into()))?;
+                    .map_err(|_| ModelError::Network("stream did not contain valid UTF-8".into()))?;
                 line.push_str(text);
                 return Ok(bytes.len());
             }
             Err(error) if matches!(error.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => {
                 continue;
             }
-            Err(error) => return Err(super::ModelError::Network(error.to_string())),
+            Err(error) => return Err(ModelError::Network(error.to_string())),
         }
     }
 }
+
 impl Response {
-    pub fn text_stopped(mut self, stop: &std::sync::atomic::AtomicBool) -> Result<String, super::ModelError> {
+    pub fn text_stopped(mut self, stop: &AtomicBool) -> Result<String, ModelError> {
         let mut text = String::new();
-        while read_line_stopped(self.body.as_mut(), &mut text, stop)? > 0 {}
+        while read_line_stopped(&mut self.body, &mut text, stop)? > 0 {}
         Ok(text)
     }
 }
@@ -162,7 +211,7 @@ pub use super::scripted_http::{ScriptedHttp, Sent};
 
 pub struct Stopped<'a> {
     pub http: &'a dyn Http,
-    pub stop: &'a std::sync::atomic::AtomicBool,
+    pub stop: &'a AtomicBool,
 }
 impl Http for Stopped<'_> {
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {
@@ -173,7 +222,7 @@ impl Http for Stopped<'_> {
         if text.len() > 8 * 1024 * 1024 {
             return Err("authentication response exceeds size limit".into());
         }
-        Ok(Response { status, headers, body: Box::new(Cursor::new(text.into_bytes())) })
+        Ok(Response { status, headers, body: Body::from(text) })
     }
 }
 

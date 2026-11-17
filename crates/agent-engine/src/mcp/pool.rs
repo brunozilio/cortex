@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use domain::PromptRequest;
@@ -26,7 +26,7 @@ impl McpPool {
         request: &PromptRequest,
         sources: &McpSources,
         http: &Arc<dyn Http>,
-        stop: &AtomicBool,
+        stop: &platform::Stop,
         judge: &Arc<HostJudge>,
     ) -> Vec<Arc<McpServer>> {
         let mut connected = super::in_process(request, stop);

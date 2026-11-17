@@ -1,9 +1,8 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use crate::model::http::ScriptedHttp;
 use crate::model::wires::messages::Messages;
-use crate::model::{Delta, ModelApi, ModelError, TurnRequest};
+use crate::model::{BlockingTurn, CancellationToken, Delta, ModelError, TurnRequest};
 use crate::transcript::{Block, Message, StopReason};
 use domain::Effort;
 use domain::provider::ProviderKey;
@@ -30,7 +29,7 @@ fn folds_thinking_text_and_a_tool_call() {
     let http = Arc::new(ScriptedHttp::new([(200, stream.to_owned())]));
     let mut deltas = Vec::new();
     let reply = client(&http, "sk-test")
-        .turn(&request(), &mut |delta| deltas.push(delta), &AtomicBool::new(false))
+        .turn_blocking(&request(), &mut |delta| deltas.push(delta), &CancellationToken::new())
         .expect("reply");
 
     assert_eq!(reply.stop, StopReason::ToolUse);
@@ -63,7 +62,7 @@ fn folds_thinking_text_and_a_tool_call() {
 fn sends_the_key_and_names_itself() {
     let stream = include_str!("../../../../tests/fixtures/messages_tool_use.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
-    client(&http, "sk-test").turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect("key");
+    client(&http, "sk-test").turn_blocking(&request(), &mut |_| {}, &CancellationToken::new()).expect("key");
 
     let sent = http.sent();
     let header =
@@ -80,13 +79,14 @@ fn retries_when_busy_and_names_what_failed() {
     let stream = include_str!("../../../../tests/fixtures/messages_tool_use.sse").to_owned();
     let busy = r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#.to_owned();
     let http = Arc::new(ScriptedHttp::new([(529, busy), (200, stream)]));
-    let reply = client(&http, "k").turn(&request(), &mut |_| {}, &AtomicBool::new(false));
+    let reply = client(&http, "k").turn_blocking(&request(), &mut |_| {}, &CancellationToken::new());
     assert!(reply.is_ok(), "{reply:?}");
     assert_eq!(http.sent().len(), 2);
 
     let refused = r#"{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#;
     let http = Arc::new(ScriptedHttp::new([(401, refused.to_owned())]));
-    let error = client(&http, "bad").turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect_err("refused");
+    let error =
+        client(&http, "bad").turn_blocking(&request(), &mut |_| {}, &CancellationToken::new()).expect_err("refused");
     assert_eq!(error, ModelError::Unauthorized("invalid x-api-key".into()));
     assert_eq!(http.sent().len(), 1, "a refusal is not retried");
 }
@@ -96,13 +96,28 @@ fn a_cut_stream_is_an_error_and_cancelling_stops_reading() {
     let cut = include_str!("../../../../tests/fixtures/messages_tool_use.sse").replace("event: message_stop", "");
     let cut = cut.replace(r#"data: {"type":"message_stop"}"#, "");
     let http = Arc::new(ScriptedHttp::new([(200, cut.clone()), (200, cut.clone()), (200, cut.clone()), (200, cut)]));
-    let error = client(&http, "k").turn(&request(), &mut |_| {}, &AtomicBool::new(false)).expect_err("cut");
+    let error = client(&http, "k").turn_blocking(&request(), &mut |_| {}, &CancellationToken::new()).expect_err("cut");
     assert!(matches!(error, ModelError::Network(_)), "{error:?}");
 
     let stream = include_str!("../../../../tests/fixtures/messages_tool_use.sse").to_owned();
     let http = Arc::new(ScriptedHttp::new([(200, stream)]));
-    let error = client(&http, "k").turn(&request(), &mut |_| {}, &AtomicBool::new(true)).expect_err("cancelled");
+    let cancelled = CancellationToken::new();
+    cancelled.cancel();
+    let error = client(&http, "k").turn_blocking(&request(), &mut |_| {}, &cancelled).expect_err("cancelled");
     assert_eq!(error, ModelError::Cancelled);
+}
+
+#[test]
+fn a_throttled_turn_waits_as_long_as_the_server_asks_then_asks_again() {
+    let stream = include_str!("../../../../tests/fixtures/messages_tool_use.sse").to_owned();
+    let busy = r#"{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#.to_owned();
+    let asked_for = vec![("retry-after-ms".to_owned(), "150".to_owned())];
+    let http = Arc::new(ScriptedHttp::with_headers([(429, asked_for, busy), (200, Vec::new(), stream)]));
+    let started = std::time::Instant::now();
+    let reply = client(&http, "k").turn_blocking(&request(), &mut |_| {}, &CancellationToken::new());
+    assert!(reply.is_ok(), "{reply:?}");
+    assert_eq!(http.sent().len(), 2);
+    assert!(started.elapsed() >= std::time::Duration::from_millis(150), "{:?}", started.elapsed());
 }
 
 fn with_image(image: &domain::Image) -> TurnRequest {

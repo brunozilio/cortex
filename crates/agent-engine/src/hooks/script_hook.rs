@@ -1,5 +1,4 @@
-use std::sync::mpsc::{self, RecvTimeoutError};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -8,7 +7,7 @@ use super::{CommandOutput, Handler};
 use crate::model::{ModelApi, TurnRequest};
 use crate::tools::Workspace;
 use crate::tools::host_judge::Grounds;
-use crate::tools::script_bridge::{Bridge, Request, ask_model, read_only_tool};
+use crate::tools::script_bridge::{ask_model, hosted, read_only_tool};
 use crate::tools::script_io::StandaloneHost;
 use crate::tools::script_tool::{Capabilities, Declaration};
 
@@ -36,7 +35,7 @@ pub fn script(
         access: workspace.policy.scripts.of(origin),
         origin,
         confine: workspace.confiner(),
-        stop: Arc::clone(&workspace.stop),
+        stop: workspace.stop.flag(),
         script: format!("the hook {}", handler.command),
         capabilities,
         judge: workspace.host_judge(),
@@ -69,7 +68,7 @@ struct Hook {
 
 impl Hook {
     fn run(self, host: Arc<dyn script::Host>, workspace: &Workspace) -> Result<Value, String> {
-        let stop = Arc::clone(&workspace.stop);
+        let stop = workspace.stop.flag();
         script::run_within(
             &self.shown,
             &self.source,
@@ -90,37 +89,23 @@ fn bridged(
     api: &dyn ModelApi,
     template: &TurnRequest,
 ) -> Result<Value, String> {
-    let (send, requests) = mpsc::channel::<Request>();
-    let host: Arc<dyn script::Host> = Arc::new(Bridge(Mutex::new(send)));
-    let stop = Arc::clone(&workspace.stop);
-    std::thread::scope(|scope| {
-        let running = scope.spawn(move || {
-            script::run_within(
-                &hook.shown,
-                &hook.source,
-                "default",
-                &[hook.input],
-                &hook.data,
-                host,
-                stop,
-                Some(hook.limit),
-            )
-        });
-        loop {
-            match requests.recv_timeout(Duration::from_millis(25)) {
-                Ok(request) => {
-                    let answer = match request.function.as_str() {
-                        "llm" => ask_model(api, template, &request.arguments, &workspace.stop),
-                        "tool" => read_only_tool(&request.arguments, workspace),
-                        other => script::Host::call(standalone, other, request.arguments),
-                    };
-                    let _ = request.reply.send(answer);
-                }
-                Err(RecvTimeoutError::Timeout) => continue,
-                Err(RecvTimeoutError::Disconnected) => break,
-            }
-        }
-        running.join().unwrap_or_else(|_| Err("the hook script stopped unexpectedly".into()))
+    let stop = workspace.stop.flag();
+    let run = move |host| {
+        script::run_within(
+            &hook.shown,
+            &hook.source,
+            "default",
+            &[hook.input],
+            &hook.data,
+            host,
+            stop,
+            Some(hook.limit),
+        )
+    };
+    hosted("the hook script stopped unexpectedly", run, |function, arguments| match function {
+        "llm" => ask_model(api, template, &arguments, &workspace.stop),
+        "tool" => read_only_tool(&arguments, workspace),
+        other => script::Host::call(standalone, other, arguments),
     })
 }
 

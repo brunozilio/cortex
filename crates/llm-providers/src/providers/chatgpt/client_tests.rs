@@ -1,4 +1,3 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -8,7 +7,7 @@ use serde_json::{Value, json};
 
 use crate::model::client::{Config, ProviderClient};
 use crate::model::http::ScriptedHttp;
-use crate::model::{ModelApi, ModelError};
+use crate::model::{BlockingTurn, CancellationToken, ModelError};
 use crate::providers::testing::{effort_body, header, request};
 
 const CHATGPT: ModelProvider = ModelProvider::new("openai-subscription");
@@ -45,7 +44,9 @@ impl ProviderKeyStore for Saved {
 #[test]
 fn a_turn_goes_to_the_codex_backend_for_the_account() {
     let (client, http) = client([(200, RESPONSES.to_owned())]);
-    client.turn(&request("openai-subscription:model-1"), &mut |_| {}, &AtomicBool::new(false)).expect("stream");
+    client
+        .turn_blocking(&request("openai-subscription:model-1"), &mut |_| {}, &CancellationToken::new())
+        .expect("stream");
     let sent = http.sent().remove(0);
     let body: Value = serde_json::from_str(&sent.body).expect("body");
     assert_eq!(body["model"], "model-1");
@@ -73,7 +74,9 @@ fn an_effort_outside_the_catalog_fails_before_sending() {
         ..Default::default()
     });
     let client = ProviderClient::for_model(model, http.clone(), Arc::new(ProviderKey::new(credentials())));
-    let error = client.turn(&request("gpt-test"), &mut |_| {}, &AtomicBool::new(false)).expect_err("unsupported high");
+    let error = client
+        .turn_blocking(&request("gpt-test"), &mut |_| {}, &CancellationToken::new())
+        .expect_err("unsupported high");
     assert!(error.to_string().contains("does not support"));
     assert!(http.sent().is_empty());
 }
@@ -116,7 +119,9 @@ fn expired_tokens_rotate_once_and_are_kept_for_a_new_client() {
 fn a_401_forces_one_refresh_and_replays_the_same_request() {
     let refreshed = json!({"access_token":token("account-new"),"expires_in":3600}).to_string();
     let (client, http) = client([(401, "{}".into()), (200, refreshed), (200, RESPONSES.to_owned())]);
-    client.turn(&request("openai-subscription:gpt-test"), &mut |_| {}, &AtomicBool::new(false)).expect("replayed");
+    client
+        .turn_blocking(&request("openai-subscription:gpt-test"), &mut |_| {}, &CancellationToken::new())
+        .expect("replayed");
     let sent = http.sent();
     assert_eq!(sent.len(), 3);
     assert_eq!(sent[0].body, sent[2].body);
@@ -127,7 +132,7 @@ fn a_401_forces_one_refresh_and_replays_the_same_request() {
 fn a_refused_refresh_is_an_authentication_failure_and_not_retried() {
     let (client, http) = client([(401, "{}".into()), (401, "{}".into())]);
     let error = client
-        .turn(&request("openai-subscription:gpt-test"), &mut |_| {}, &AtomicBool::new(false))
+        .turn_blocking(&request("openai-subscription:gpt-test"), &mut |_| {}, &CancellationToken::new())
         .expect_err("refresh refused");
     assert!(matches!(error, ModelError::Unauthorized(_)));
     assert_eq!(http.sent().len(), 2, "do not replay after a refused refresh");

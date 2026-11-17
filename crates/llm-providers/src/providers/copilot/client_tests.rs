@@ -1,12 +1,11 @@
-use crate::model::ModelApi;
 use crate::model::client::ProviderClient;
 use crate::model::http::ScriptedHttp;
+use crate::model::{BlockingTurn, CancellationToken};
 use domain::ModelOption;
 use domain::model::ModelCapabilities;
 use domain::provider::ProviderKey;
 use serde_json::{Value, json};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use domain::ModelProvider;
 
@@ -41,7 +40,7 @@ fn claude_goes_to_messages_on_the_account_api() {
         Arc::new(ScriptedHttp::new([(200, include_str!("../../../tests/fixtures/messages_tool_use.sse").into())]));
     let client = ProviderClient::for_model(claude, http.clone(), key());
     client
-        .turn(&request("copilot-subscription:claude-sonnet-4.5"), &mut |_| {}, &AtomicBool::new(false))
+        .turn_blocking(&request("copilot-subscription:claude-sonnet-4.5"), &mut |_| {}, &CancellationToken::new())
         .expect("turn");
     let sent = &http.sent()[0];
     assert_eq!(sent.url, "https://api.business.githubcopilot.com/v1/messages");
@@ -63,7 +62,7 @@ fn gpt_goes_to_responses_with_an_offered_effort() {
     let http =
         Arc::new(ScriptedHttp::new([(200, include_str!("../../../tests/fixtures/responses_tool_use.sse").into())]));
     ProviderClient::for_model(gpt, http.clone(), key())
-        .turn(&request("copilot-subscription:gpt-5"), &mut |_| {}, &AtomicBool::new(false))
+        .turn_blocking(&request("copilot-subscription:gpt-5"), &mut |_| {}, &CancellationToken::new())
         .expect("turn");
     let sent = &http.sent()[0];
     assert_eq!(sent.url, "https://api.business.githubcopilot.com/responses");

@@ -3,14 +3,14 @@ mod frames;
 mod stream;
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 pub use body::body;
 pub use stream::Folder;
 
 use crate::model::http::Http;
-use crate::model::{Delta, ModelApi, ModelError, Reply, TurnRequest};
+use crate::model::retry::{Attempt, Failed, refusal, with_retries};
+use crate::model::{BoxFuture, CancellationToken, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 
 pub const NAME: &str = "event_stream";
 
@@ -39,24 +39,38 @@ impl Conversation {
         self.backoff = Duration::ZERO;
         self
     }
+}
 
-    fn once(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        let response = self.http.post_stopped("", &[], &body(request).to_string(), stop)?;
-        if response.status != 200 {
-            return Err(status_error(response.status, &response.text_stopped(stop)?));
-        }
-        let mut folder = Folder::new(self.window);
-        let mut body = response.body;
-        while let Some(frame) = frames::next(body.as_mut(), stop)? {
-            folder.frame(&frame, on)?;
-        }
-        folder.finish()
+impl Attempt for Conversation {
+    fn once<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, Failed>> {
+        Box::pin(async move {
+            let response = self.http.post_streaming("", &[], &body(request).to_string(), cancel).await?;
+            if response.status != 200 {
+                return Err(refusal(response, cancel, status_error).await);
+            }
+            let mut folder = Folder::new(self.window);
+            let mut body = response.body;
+            while let Some(frame) = frames::next(&mut body, cancel).await? {
+                folder.frame(&frame, on)?;
+            }
+            Ok(folder.finish()?)
+        })
     }
 }
 
 impl ModelApi for Conversation {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        crate::model::retry::with_retries("Kiro", self.backoff, stop, on, |on| self.once(request, on, stop))
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(with_retries("Kiro", self.backoff, self, request, on, cancel))
     }
 }
 
@@ -84,7 +98,7 @@ mod tests {
         fn post(&self, _url: &str, _headers: &[(String, String)], body: &str) -> Result<Response, String> {
             self.1.lock().map_err(|e| e.to_string())?.push(body.to_owned());
             let (status, bytes) = self.0.lock().map_err(|e| e.to_string())?.remove(0);
-            Ok(Response { status, headers: Vec::new(), body: Box::new(std::io::Cursor::new(bytes)) })
+            Ok(Response { status, headers: Vec::new(), body: bytes.into() })
         }
     }
 
@@ -102,7 +116,7 @@ mod tests {
     fn run(answers: Vec<(u16, Vec<u8>)>) -> (Result<Reply, ModelError>, usize) {
         let http = Arc::new(Recorded(Mutex::new(answers), Mutex::new(Vec::new())));
         let api = Conversation::new(http.clone(), None).without_backoff();
-        let reply = api.turn(&request(), &mut |_| {}, &AtomicBool::new(false));
+        let reply = crate::model::BlockingTurn::turn_blocking(&api, &request(), &mut |_| {}, &CancellationToken::new());
         let sent = http.1.lock().map(|sent| sent.len()).unwrap_or_default();
         (reply, sent)
     }

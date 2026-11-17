@@ -3,14 +3,14 @@ mod loaded;
 mod stream;
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 pub use body::{body, effort};
 pub use stream::Folder;
 
 use crate::model::http::Http;
-use crate::model::{Delta, KeySource, ModelApi, ModelError, Reply, TurnRequest};
+use crate::model::retry::{Attempt, Failed, refusal, with_retries};
+use crate::model::{BoxFuture, CancellationToken, Delta, KeySource, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 
 pub const NAME: &str = "responses";
 
@@ -55,14 +55,23 @@ impl Responses {
         ];
         Ok((format!("{API}/responses"), headers))
     }
+}
 
-    fn once(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        let (url, headers) = self.target()?;
-        let response = self.http.post_stopped(&url, &headers, &body(request).to_string(), stop)?;
-        if response.status != 200 {
-            return Err(status_error(response.status, &response.text_stopped(stop)?));
-        }
-        crate::model::sse_read::read_sse(response, Folder::new(), on, stop)
+impl Attempt for Responses {
+    fn once<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, Failed>> {
+        Box::pin(async move {
+            let (url, headers) = self.target()?;
+            let response = self.http.post_streaming(&url, &headers, &body(request).to_string(), cancel).await?;
+            if response.status != 200 {
+                return Err(refusal(response, cancel, status_error).await);
+            }
+            Ok(crate::model::sse_read::read_sse(response, Folder::new(), on, cancel).await?)
+        })
     }
 }
 
@@ -76,8 +85,13 @@ impl crate::model::sse_read::SseFold for Folder {
 }
 
 impl ModelApi for Responses {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), stop: &AtomicBool) -> Result<Reply, ModelError> {
-        crate::model::retry::with_retries("OpenAI", self.backoff, stop, on, |on| self.once(request, on, stop))
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(with_retries("OpenAI", self.backoff, self, request, on, cancel))
     }
 }
 

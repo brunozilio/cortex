@@ -1,12 +1,10 @@
 use crate::model::client::ProviderClient;
 use crate::model::http::{Http, Response, Sent};
-use crate::model::{ModelApi, ModelError};
+use crate::model::{BlockingTurn, CancellationToken, ModelError};
 use crate::transcript::Block;
 use domain::provider::{ProviderKey, ProviderKeyStore};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
-use std::io::Cursor;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use domain::ModelProvider;
@@ -40,7 +38,7 @@ impl Http for Wire {
         self.sent.lock().map_err(|e| e.to_string())?.push(sent);
         let (status, bytes) =
             self.answers.lock().map_err(|e| e.to_string())?.pop_front().ok_or("no scripted answer left")?;
-        Ok(Response { status, headers: Vec::new(), body: Box::new(Cursor::new(bytes)) })
+        Ok(Response { status, headers: Vec::new(), body: bytes.into() })
     }
 }
 
@@ -58,7 +56,7 @@ fn a_turn_goes_to_the_profiles_runtime_and_folds_the_tool_call() {
     let wire = Wire::new([(200, TOOL_USE.to_vec())]);
     let client = ProviderClient::new(KIRO, wire.clone(), key());
     let reply = client
-        .turn(&request("kiro-subscription:claude-haiku-4.5"), &mut |_| {}, &AtomicBool::new(false))
+        .turn_blocking(&request("kiro-subscription:claude-haiku-4.5"), &mut |_| {}, &CancellationToken::new())
         .expect("turn");
     assert!(matches!(&reply.message.blocks[..], [Block::ToolUse { name, .. }] if name == "Read"));
     let Sent { url, headers, body } = &wire.sent()[0];
@@ -81,7 +79,7 @@ fn a_rejected_token_is_refreshed_once_and_the_turn_replayed() {
     let store = Arc::new(Saved(Mutex::new(key().secret().to_owned())));
     let key = ProviderKey::new(key().secret()).with_store(store.clone());
     let client = ProviderClient::new(KIRO, wire.clone(), Arc::new(key));
-    client.turn(&request("kiro-subscription:auto"), &mut |_| {}, &AtomicBool::new(false)).expect("turn");
+    client.turn_blocking(&request("kiro-subscription:auto"), &mut |_| {}, &CancellationToken::new()).expect("turn");
     let sent = wire.sent();
     assert_eq!(sent[1].url, "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken");
     assert_eq!(serde_json::from_str::<Value>(&sent[1].body).ok(), Some(json!({"refreshToken": "ref-1"})));
@@ -107,7 +105,7 @@ fn a_refused_refresh_signs_out() {
     let denied = br#"{"__type":"com.amazon.aws.codewhisperer#AccessDeniedException","message":"invalid"}"#;
     let wire = Wire::new([(403, denied.to_vec()), (401, br#"{"message":"Bad credentials"}"#.to_vec())]);
     let client = ProviderClient::new(KIRO, wire, key());
-    let result = client.turn(&request("kiro-subscription:auto"), &mut |_| {}, &AtomicBool::new(false));
+    let result = client.turn_blocking(&request("kiro-subscription:auto"), &mut |_| {}, &CancellationToken::new());
     assert!(matches!(result, Err(ModelError::Unauthorized(_))), "{result:?}");
 }
 

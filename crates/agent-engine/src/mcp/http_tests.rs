@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
@@ -14,7 +13,7 @@ fn answering(body: String) -> HttpTransport {
 }
 
 fn asked(transport: &HttpTransport) -> Result<Value, String> {
-    transport.request_stopped(&json!({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}), &AtomicBool::new(false))
+    transport.request_stopped(&json!({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}), &platform::Stop::new())
 }
 
 #[test]

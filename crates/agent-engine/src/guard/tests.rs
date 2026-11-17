@@ -1,5 +1,3 @@
-use std::sync::atomic::AtomicBool;
-
 use domain::Effort;
 use serde_json::json;
 
@@ -62,7 +60,7 @@ fn the_transcript_keeps_words_and_calls_but_not_thinking() {
 
 #[test]
 fn a_routine_action_passes_and_a_harmful_one_is_held_back() {
-    let no = AtomicBool::new(false);
+    let no = platform::Stop::new();
     let input = json!({"command": "rm -rf target"});
     let calm = says("<severity>8</severity>");
     assert_eq!(safety().check(&calm, &template(), "", "Bash", &input, &no), Ok(()));
@@ -80,7 +78,7 @@ fn a_routine_action_passes_and_a_harmful_one_is_held_back() {
 
 #[test]
 fn a_check_that_cannot_answer_holds_the_action_back() {
-    let no = AtomicBool::new(false);
+    let no = platform::Stop::new();
     let input = json!({"command": "ls"});
     assert!(safety().check(&says("Looks fine to me."), &template(), "", "Bash", &input, &no).is_err());
     let broken = ScriptedModel::new([Err(crate::model::ModelError::Provider("overloaded".into()))]);

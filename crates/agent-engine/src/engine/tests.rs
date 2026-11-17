@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use domain::{EngineProblem, RunId, SessionCommand, SessionId};
+use domain::{EngineProblem, FailureKind, RunId, SessionCommand, SessionId};
 
 use super::stop::Stop;
 use super::*;

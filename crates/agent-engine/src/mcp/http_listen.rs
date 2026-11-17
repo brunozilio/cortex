@@ -33,7 +33,7 @@ fn read(shared: &Shared, mut stream: Response, listener: &Listener, closed: &Ato
     let mut heard = false;
     loop {
         let mut line = String::new();
-        match read_line_stopped(stream.body.as_mut(), &mut line, closed) {
+        match read_line_stopped(&mut stream.body, &mut line, closed) {
             Ok(0) | Err(_) => return heard,
             Ok(_) => {}
         }

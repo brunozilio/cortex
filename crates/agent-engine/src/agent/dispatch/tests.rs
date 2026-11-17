@@ -1,4 +1,3 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use domain::EngineEvent;
@@ -46,7 +45,7 @@ impl Bench {
     fn with(tools: Vec<Box<dyn Tool>>) -> Self {
         let dir = tempfile::tempdir().expect("dir");
         let workspace = Workspace::new(dir.path());
-        let control = Control::new(domain::PermissionMode::Bypass, Arc::new(AtomicBool::new(false)));
+        let control = Control::new(domain::PermissionMode::Bypass, Arc::default());
         Self { _dir: dir, workspace, control, tools, events: Mutex::default() }
     }
 

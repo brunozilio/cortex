@@ -95,7 +95,7 @@ impl Agent<'_> {
 
     pub(in crate::agent) fn asked(&self, call: &str, kind: AskKind) -> Result<Decision, RecvError> {
         let ask = AskId(format!("ask-{}-{call}", uuid::Uuid::new_v4()));
-        let answer = self.control.open(ask.clone());
+        let mut answer = self.control.open(ask.clone());
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask.clone(), kind }));
         let answer = answer.recv();
         if let Ok(decision) = &answer {

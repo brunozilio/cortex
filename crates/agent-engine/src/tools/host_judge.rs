@@ -170,7 +170,7 @@ impl Attendant {
         judgement: &Judgement,
     ) -> Result<(), String> {
         let ask = AskId(format!("ask-{}-script", uuid::Uuid::new_v4()));
-        let answer = self.control.open(ask.clone());
+        let mut answer = self.control.open(ask.clone());
         let kind =
             AskKind::Permission { tool: tool.to_owned(), subject: shown.to_owned(), rememberable, rule: rule.clone() };
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask.clone(), kind }));

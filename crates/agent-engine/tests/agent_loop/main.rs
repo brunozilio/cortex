@@ -36,7 +36,6 @@ mod watch;
 mod watch_hooks;
 mod write_boundary;
 
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use agent_engine::agent::{Agent, Ending};
@@ -74,7 +73,7 @@ impl Rig {
         let dir = tempfile::tempdir().expect("dir");
         std::fs::write(dir.path().join("notes.txt"), "alpha\nbeta\n").expect("write");
         let workspace = Workspace::new(dir.path());
-        let control = Arc::new(Control::new(mode, Arc::new(AtomicBool::new(false))));
+        let control = Arc::new(Control::new(mode, Arc::default()));
         Self { dir, workspace, control, events: Arc::default() }
     }
 

@@ -2,7 +2,9 @@
 
 use agent_engine::{
     ApiSource, NativeEngine,
-    model::{Delta, ModelApi, ModelError, Reply, TurnRequest, scripted::ScriptedModel},
+    model::{
+        BoxFuture, CancellationToken, Delta, ModelApi, ModelError, OnDelta, Reply, TurnRequest, scripted::ScriptedModel,
+    },
     sessions::InMemorySessions,
     transcript::Block,
 };
@@ -16,7 +18,7 @@ use serde_json::json;
 use std::{
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -34,7 +36,17 @@ struct Model {
     edits: std::path::PathBuf,
 }
 impl ModelApi for Model {
-    fn turn(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta), _: &AtomicBool) -> Result<Reply, ModelError> {
+    fn turn<'a>(
+        &'a self,
+        request: &'a TurnRequest,
+        on: OnDelta<'a>,
+        _: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Reply, ModelError>> {
+        Box::pin(std::future::ready(self.answer(request, on)))
+    }
+}
+impl Model {
+    fn answer(&self, request: &TurnRequest, on: &mut dyn FnMut(Delta)) -> Result<Reply, ModelError> {
         if request.system.starts_with("You are a security monitor") {
             return ScriptedModel::reply(vec![Block::Text("<severity>3</severity>".into())]);
         }

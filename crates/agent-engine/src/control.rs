@@ -1,21 +1,26 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::RecvError;
 use std::sync::{Arc, Mutex, Weak};
 
+use tokio::sync::oneshot;
+
 use domain::{AskId, Decision, PermissionMode};
+use platform::Stop;
 use platform::sync::Locked;
+
+use crate::model::CancellationToken;
 
 use domain::permission::Remembered;
 
 #[derive(Debug)]
 pub struct Control {
-    stop: Arc<AtomicBool>,
+    stop: Arc<Stop>,
     mode: Mutex<PermissionMode>,
     ceiling: Option<PermissionMode>,
     no_prompts: bool,
     remembered: Mutex<Remembered>,
-    asks: Mutex<HashMap<AskId, Sender<Decision>>>,
+    asks: Mutex<HashMap<AskId, oneshot::Sender<Decision>>>,
     steered: Arc<Mutex<Vec<String>>>,
     moving: Mutex<Option<crate::agent_runtime::Relocation>>,
     spawned: AtomicUsize,
@@ -23,7 +28,7 @@ pub struct Control {
 }
 
 impl Control {
-    pub fn new(mode: PermissionMode, stop: Arc<AtomicBool>) -> Self {
+    pub fn new(mode: PermissionMode, stop: Arc<Stop>) -> Self {
         Self {
             stop,
             mode: Mutex::new(mode),
@@ -78,7 +83,7 @@ impl Control {
         self.no_prompts
     }
 
-    pub fn shared_stop(&self) -> Arc<AtomicBool> {
+    pub fn shared_stop(&self) -> Arc<Stop> {
         self.stop.clone()
     }
 
@@ -86,16 +91,20 @@ impl Control {
         self.spawned.fetch_add(1, Ordering::Relaxed)
     }
 
-    pub fn stop_flag(&self) -> &AtomicBool {
+    pub fn stop_flag(&self) -> &Stop {
         &self.stop
     }
 
+    pub fn token(&self) -> &CancellationToken {
+        self.stop.token()
+    }
+
     pub fn is_stopped(&self) -> bool {
-        self.stop.load(Ordering::Relaxed)
+        self.stop.is_stopped()
     }
 
     pub fn cancel(&self) {
-        self.stop.store(true, Ordering::Relaxed);
+        self.stop.cancel();
         for child in self.children.locked().iter().filter_map(Weak::upgrade) {
             child.cancel();
         }
@@ -143,17 +152,18 @@ impl Control {
         std::mem::take(&mut *self.steered.locked())
     }
 
-    pub fn open(&self, id: AskId) -> Receiver<Decision> {
-        let (send, receive) = channel();
+    pub fn open(&self, id: AskId) -> Awaited {
+        let (send, receive) = oneshot::channel();
+        let awaited = Awaited { answer: Some(receive), cancel: self.token().clone() };
         if self.is_stopped() {
-            return receive;
+            return awaited;
         }
         let mut asks = self.asks.locked();
         if self.is_stopped() {
-            return receive;
+            return awaited;
         }
         asks.insert(id, send);
-        receive
+        awaited
     }
 
     pub fn answer(&self, id: &AskId, decision: Decision) {
@@ -167,6 +177,34 @@ impl Control {
     }
 }
 
+#[derive(Debug)]
+pub struct Awaited {
+    answer: Option<oneshot::Receiver<Decision>>,
+    cancel: CancellationToken,
+}
+
+impl Awaited {
+    pub fn recv(&mut self) -> Result<Decision, RecvError> {
+        let answer = self.answer.take().ok_or(RecvError)?;
+        let cancel = self.cancel.clone();
+        let waited = platform::runtime::block_on(async move {
+            tokio::select! {
+                biased;
+                () = cancel.cancelled() => Err(RecvError),
+                answered = answer => answered.map_err(|_| RecvError),
+            }
+        });
+        waited.unwrap_or(Err(RecvError))
+    }
+
+    pub fn try_recv(&mut self) -> Result<Decision, RecvError> {
+        let answer = self.answer.as_mut().ok_or(RecvError)?;
+        let answered = answer.try_recv().map_err(|_| RecvError)?;
+        self.answer = None;
+        Ok(answered)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,7 +213,7 @@ mod tests {
     fn answers_reach_the_open_ask_once() {
         let control = Control::new(PermissionMode::Ask, Arc::default());
         let id = AskId("a".into());
-        let waiting = control.open(id.clone());
+        let mut waiting = control.open(id.clone());
         control.answer(&id, Decision::Allow);
         control.answer(&id, Decision::Deny);
         assert_eq!(waiting.recv(), Ok(Decision::Allow));
@@ -208,7 +246,7 @@ mod tests {
         let control = Control::new(PermissionMode::Ask, Arc::default());
         let child = control.child();
         let id = AskId("a".into());
-        let waiting = control.open(id.clone());
+        let mut waiting = control.open(id.clone());
         poison(&control.children);
         poison(&control.asks);
         control.answer(&id, Decision::Allow);
@@ -220,10 +258,29 @@ mod tests {
     #[test]
     fn cancelling_releases_waiting_asks() {
         let control = Control::new(PermissionMode::Ask, Arc::default());
-        let waiting = control.open(AskId("a".into()));
+        let mut waiting = control.open(AskId("a".into()));
         control.cancel();
         assert!(control.is_stopped());
         assert!(waiting.recv().is_err());
+    }
+
+    #[test]
+    fn a_question_being_waited_on_ends_the_moment_its_run_is_cancelled() {
+        let control = Arc::new(Control::new(PermissionMode::Ask, Arc::default()));
+        let parent = Control::new(PermissionMode::Ask, Arc::default());
+        let child = parent.child();
+        let mut asked = control.open(AskId("a".into()));
+        let mut asked_of_child = child.open(AskId("b".into()));
+        let canceller = Arc::clone(&control);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            canceller.cancel();
+            parent.cancel();
+        });
+        let started = std::time::Instant::now();
+        assert!(asked.recv().is_err());
+        assert!(asked_of_child.recv().is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
     }
 }
 #[cfg(test)]
@@ -256,7 +313,7 @@ mod child_policy_tests {
         assert!(handle.take_steered().is_empty());
 
         let id = AskId("a".into());
-        let waiting = run.open(id.clone());
+        let mut waiting = run.open(id.clone());
         handle.answer(&id, Decision::Allow);
         assert_eq!(waiting.recv(), Ok(Decision::Allow));
 

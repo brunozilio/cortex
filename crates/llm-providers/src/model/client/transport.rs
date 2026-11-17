@@ -1,5 +1,5 @@
 use super::super::{
-    KeySource, ModelError,
+    BoxFuture, CancellationToken, KeySource, ModelError,
     http::{Http, Response},
 };
 use super::{Config, oauth};
@@ -62,30 +62,28 @@ impl Transport {
 }
 
 impl Http for Transport {
-    fn post_stopped(
-        &self,
-        _url: &str,
-        _headers: &[(String, String)],
-        body: &str,
-        stop: &AtomicBool,
-    ) -> Result<Response, ModelError> {
-        self.send_stopped(body, stop)
+    fn post_streaming<'a>(
+        &'a self,
+        _url: &'a str,
+        _headers: &'a [(String, String)],
+        body: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(self.send(body, cancel))
     }
-    fn post(&self, _url: &str, _headers: &[(String, String)], body: &str) -> Result<Response, String> {
-        self.send(body).map_err(|error| error.to_string())
+    fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {
+        self.post_model(url, headers, body).map_err(|error| error.to_string())
     }
     fn post_model(&self, _url: &str, _headers: &[(String, String)], body: &str) -> Result<Response, ModelError> {
-        self.send(body)
+        platform::runtime::block_on(self.send(body, &CancellationToken::new()))
+            .unwrap_or_else(|error| Err(ModelError::Network(error.to_string())))
     }
 }
 
 impl Transport {
-    fn send(&self, body: &str) -> Result<Response, ModelError> {
-        self.send_stopped(body, &AtomicBool::new(false))
-    }
-
-    fn send_stopped(&self, body: &str, stop: &AtomicBool) -> Result<Response, ModelError> {
-        let Some(_turn) = self.turns.take_unless(stop) else { return Err(ModelError::Cancelled) };
+    async fn send(&self, body: &str, cancel: &CancellationToken) -> Result<Response, ModelError> {
+        let Some(_turn) = self.turns.take_unless(cancel).await else { return Err(ModelError::Cancelled) };
+        let stop = &AtomicBool::new(false);
         let mut body: Value = serde_json::from_str(body).map_err(|e| ModelError::Provider(e.to_string()))?;
         request::shape(self.provider, self.model.as_ref(), &mut body)?;
         let turn_headers = self.provider.turn_headers(self.model.as_ref(), &body);
@@ -102,56 +100,17 @@ impl Transport {
             headers
         };
         let mut config = self.config_stopped(false, stop)?;
-        let mut response = self.http.post_stopped(
-            &format!("{}{path}", config.base(self.provider)),
-            &headers(&config),
-            &bound(&config),
-            stop,
-        )?;
+        let mut url = format!("{}{path}", config.base(self.provider));
+        let mut response = self.http.post_streaming(&url, &headers(&config), &bound(&config), cancel).await?;
         if self.provider.retries_after_refresh(response.status) {
             drop(response);
             config = self.config_stopped(true, stop)?;
-            response = self.http.post_stopped(
-                &format!("{}{path}", config.base(self.provider)),
-                &headers(&config),
-                &bound(&config),
-                stop,
-            )?;
+            url = format!("{}{path}", config.base(self.provider));
+            response = self.http.post_streaming(&url, &headers(&config), &bound(&config), cancel).await?;
         }
         let limit = if response.status < 300 { request::STREAM_LIMIT } else { request::ERROR_LIMIT };
-        response.body = Box::new(Bounded { inner: response.body, remaining: limit });
+        response.body = response.body.bounded(limit);
         Ok(response)
-    }
-}
-
-struct Bounded {
-    inner: Box<dyn std::io::BufRead + Send>,
-    remaining: usize,
-}
-impl std::io::Read for Bounded {
-    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
-        if output.is_empty() {
-            return Ok(0);
-        }
-        let buffer = std::io::BufRead::fill_buf(self)?;
-        let count = buffer.len().min(output.len());
-        output[..count].copy_from_slice(&buffer[..count]);
-        std::io::BufRead::consume(self, count);
-        Ok(count)
-    }
-}
-impl std::io::BufRead for Bounded {
-    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        let buffer = self.inner.fill_buf()?;
-        if self.remaining == 0 && !buffer.is_empty() {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "provider stream exceeds size limit"));
-        }
-        Ok(&buffer[..buffer.len().min(self.remaining)])
-    }
-    fn consume(&mut self, amount: usize) {
-        let count = amount.min(self.remaining);
-        self.inner.consume(count);
-        self.remaining -= count;
     }
 }
 

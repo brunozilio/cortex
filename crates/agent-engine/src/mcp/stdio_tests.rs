@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use serde_json::json;
@@ -81,7 +81,7 @@ fn gone(pid: u32) -> bool {
 #[test]
 fn a_server_let_go_at_the_end_of_a_run_leaves_no_zombie() {
     let fixture = Fixture::running(&SERVER.replace("SLOW", "sleep 0.1"));
-    fixture.server.initialize_stopped(&AtomicBool::new(false)).expect("initialize");
+    fixture.server.initialize_stopped(&platform::Stop::new()).expect("initialize");
     let pid = fixture.pid();
     assert!(platform::alive(pid));
     let Fixture { dir, server } = fixture;
@@ -93,7 +93,7 @@ fn a_server_let_go_at_the_end_of_a_run_leaves_no_zombie() {
 #[test]
 fn a_server_that_dies_as_it_starts_says_why_in_its_own_words() {
     let fixture = Fixture::running("echo 'fatal: MCP_API_KEY is not set' >&2; exit 1");
-    let error = fixture.server.initialize_stopped(&AtomicBool::new(false)).expect_err("it never answers");
+    let error = fixture.server.initialize_stopped(&platform::Stop::new()).expect_err("it never answers");
     assert!(error.contains("fixture stopped"), "{error}");
     assert!(error.contains("MCP_API_KEY is not set"), "{error}");
 }
@@ -125,7 +125,7 @@ fn a_line_longer_than_the_limit_is_an_error_and_is_not_read_whole() {
     let endless = "read -r line; head -c 17000000 /dev/zero | tr '\\0' 'a'; echo; sleep 60";
     let fixture = Fixture::running(endless);
     let started = Instant::now();
-    let error = fixture.server.initialize_stopped(&AtomicBool::new(false)).expect_err("too long");
+    let error = fixture.server.initialize_stopped(&platform::Stop::new()).expect_err("too long");
     assert!(error.contains("longer than 16 MiB"), "{error}");
     assert!(started.elapsed() < Duration::from_secs(60), "{:?}", started.elapsed());
 }
