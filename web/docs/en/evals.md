@@ -56,7 +56,7 @@ rename  pass    5/5  $0.14
 The scratch folder is deleted when the case is done.
 
 > [!IMPORTANT]
-> The agent runs in the scratch folder, not in your project, so your project's `{{DIR}}` settings and `{{INSTRUCTIONS}}` are not found there. Put whatever the case needs (instructions, `{{DIR}}/settings.json`, skills) inside `fixture/`. Your own settings in `~/{{DIR}}` still apply.
+> The agent runs in the scratch folder, not in your project, so your project's `{{DIR}}` settings and `{{INSTRUCTIONS}}` are not found there. Put whatever the case needs (instructions, `{{DIR}}/settings.json`, skills) inside `fixture/`. Your own settings in `~/{{DIR}}` still apply. The scratch folder is treated as trusted when your project's folder is trusted; otherwise the fixture's hooks, scripts, MCP servers and `settings.local.json` are skipped (see [Workspace trust](./sandbox-and-safety#workspace-trust)).
 
 > [!WARNING]
 > Print mode denies every permission request. Without a `mode`, the run uses `edits`: the agent can change files but any command that asks for permission is refused. Set `"mode": "bypass"` when the task needs to run commands, as the scratch folder is a throwaway copy.

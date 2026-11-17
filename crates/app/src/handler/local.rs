@@ -101,6 +101,7 @@ fn is_query(command: &ClientCommand) -> bool {
             | ClientCommand::ListAgents { .. }
             | ClientCommand::ListMcpServers { .. }
             | ClientCommand::ListPermissions { .. }
+            | ClientCommand::TrustState { .. }
             | ClientCommand::TakeNotices { .. }
             | ClientCommand::Feature(_)
             | ClientCommand::ApproveMcpServer { .. }

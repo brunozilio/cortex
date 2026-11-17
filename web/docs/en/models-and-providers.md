@@ -135,7 +135,7 @@ export function shape(body) {
 ```
 
 > [!IMPORTANT]
-> A project's declared providers do not load until you approve them: add their ids to `enabledProviders` in your own settings (`~/{{DIR}}/settings.json` or a `settings.local.json`). Until then `{{COMMAND}} doctor` reports that the provider waits.
+> A project's declared providers load only when you trust the project's folder (see [Workspace trust](./sandbox-and-safety#workspace-trust)) and have approved them: add their ids to `enabledProviders` in your own settings (`~/{{DIR}}/settings.json`, or the trusted project's `settings.local.json`). Until then `{{COMMAND}} doctor` reports that the provider is skipped or waits.
 
 ```json
 {

@@ -74,6 +74,10 @@ struct Cli {
     #[arg(help = "With --print: judge the work against these criteria before it ends (exits 1 when it fails them)")]
     #[arg(long, requires = "print")]
     verification: Option<String>,
+    #[arg(help = "With --print: trust the project folder for this run only, so its hooks, scripts, MCP servers and \
+                  local settings load; nothing is stored")]
+    #[arg(long, requires = "print")]
+    trust: bool,
     #[arg(help = "The project folder (the current one by default)")]
     #[arg(short = 'C', long)]
     cwd: Option<PathBuf>,
@@ -192,7 +196,15 @@ fn subcommand(action: Action, sdk: &Sdk, cwd: &std::path::Path, model: Option<St
             println!("{}", doctor::render(&checks));
             Ok(if checks.iter().all(|c| c.ok) { ExitCode::SUCCESS } else { ExitCode::FAILURE })
         }
-        Action::Eval { names, json } => evals(cwd, &names, json, model),
+        Action::Eval { names, json } => {
+            let trust = sdk.trust_state(cwd).is_ok_and(|report| report.trust.is_trusted());
+            evals(
+                cwd,
+                &names,
+                json,
+                eval::Process { program: std::env::current_exe().map_err(|e| e.to_string())?, model, trust },
+            )
+        }
         Action::Models => {
             for model in sdk.models().map_err(|e| e.to_string())? {
                 println!("{:<40} {}", model.id, model.label);
@@ -209,9 +221,7 @@ fn subcommand(action: Action, sdk: &Sdk, cwd: &std::path::Path, model: Option<St
     }
 }
 
-fn evals(cwd: &std::path::Path, names: &[String], json: bool, model: Option<String>) -> Result<ExitCode, String> {
-    let program = std::env::current_exe().map_err(|e| e.to_string())?;
-    let asker = eval::Process { program, model };
+fn evals(cwd: &std::path::Path, names: &[String], json: bool, asker: eval::Process) -> Result<ExitCode, String> {
     let outcomes: Vec<_> = eval::cases(cwd, names)?
         .iter()
         .map(|(name, dir)| {
@@ -246,6 +256,7 @@ fn print_the_answers(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
         format: cli.output_format,
         resume,
         fork: cli.fork_session,
+        trust: cli.trust,
     };
     print::print_all(&sdk, cwd, wanted, prompts)
 }

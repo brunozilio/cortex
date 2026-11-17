@@ -40,6 +40,7 @@ use serde_json::Value;
 
 pub use llm_providers::web_search::WEB_SEARCH;
 pub use lsp::Lsp;
+pub(crate) use outside::settled;
 pub use workspace::{
     Confiner, Launch, Launcher, Models, Network, OnThisMachine, Policy, Verification, Workspace, env_secrets,
 };

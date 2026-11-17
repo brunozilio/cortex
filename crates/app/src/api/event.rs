@@ -29,6 +29,7 @@ pub enum Reply {
     Feature(FeatureReply),
     FeatureFailed(FeatureError),
     Permissions { path: PathBuf, permissions: domain::permission_rules::PermissionsInfo },
+    Trust(domain::trust::TrustReport),
     Providers(ProviderEvent),
     Error { message: String },
 }
@@ -118,6 +119,16 @@ mod tests {
                 message: "nothing to undo".into(),
             }),
             Reply::Permissions { path: "/repo".into(), permissions: Default::default() },
+            Reply::Trust(domain::trust::TrustReport {
+                root: "/repo".into(),
+                trust: domain::trust::Trust::Untrusted,
+                refusal: Some(domain::trust::Refusal::Home),
+                brings: {
+                    let mut brings = domain::trust::Contributions::default();
+                    brings.add(domain::trust::ContributionKind::HookScript, "hooks/guard.js");
+                    brings
+                },
+            }),
             Reply::error("could not save the settings"),
         ];
         replies.extend(provider_events().into_iter().map(Reply::Providers));

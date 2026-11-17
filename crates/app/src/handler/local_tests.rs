@@ -45,6 +45,9 @@ fn queries_are_routed_apart_from_run_control() {
     assert!(is_query(&ClientCommand::ListSkills { path: "/".into() }));
     assert!(is_query(&ClientCommand::ListAgents { path: "/".into() }));
     assert!(!is_query(&ClientCommand::ListModels));
+    assert!(is_query(&ClientCommand::TrustState { path: "/".into() }), "reading the state waits behind no run");
+    assert!(!is_query(&ClientCommand::Trust { path: "/".into(), trusted: true }), "a change is ordered with the runs");
+    assert!(!is_query(&ClientCommand::TrustForThisProcess { path: "/".into() }));
 }
 
 #[test]

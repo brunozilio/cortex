@@ -60,6 +60,7 @@ pub mod small_model;
 pub mod stuck;
 pub mod suggested_rules;
 pub mod trace;
+pub mod trust;
 pub mod untrusted;
 pub mod usage;
 pub mod verification;

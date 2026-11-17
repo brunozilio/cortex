@@ -15,6 +15,7 @@ pub struct Wanted<'a> {
     pub format: Format,
     pub resume: Option<app::SessionId>,
     pub fork: bool,
+    pub trust: bool,
 }
 
 pub fn resumed(
@@ -36,7 +37,7 @@ pub fn print_all(
     wanted: Wanted<'_>,
     prompts: impl IntoIterator<Item = Result<String, String>>,
 ) -> Result<ExitCode, String> {
-    let Wanted { model: wanted, mode, verification, add_dirs, headless, format, resume, fork } = wanted;
+    let Wanted { model: wanted, mode, verification, add_dirs, headless, format, resume, fork, trust } = wanted;
     let models = sdk.models().map_err(|e| e.to_string())?;
     let remembered = sdk.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
     let model = domain::model::choose_model(&models, wanted.or(remembered.as_deref())).ok_or(concat!(
@@ -52,7 +53,7 @@ pub fn print_all(
             brand_command = brand::COMMAND
         ));
     }
-    warn_of_skipped_hooks(sdk, &cwd, &mut std::io::stderr().lock());
+    settle_trust(sdk, &cwd, trust, &mut std::io::stderr().lock())?;
     warn_of_what_is_not_kept(sdk, &mut std::io::stderr().lock());
     let mut session = sdk.session(cwd, model);
     if let Some(id) = resume {
@@ -97,11 +98,24 @@ pub fn print_all(
     Ok(if failed { ExitCode::FAILURE } else { ExitCode::SUCCESS })
 }
 
-fn warn_of_skipped_hooks(sdk: &Sdk, cwd: &std::path::Path, errors: &mut dyn std::io::Write) {
-    let notices = sdk.permissions(cwd).map(|info| info.notices).unwrap_or_default();
-    for notice in notices {
+fn settle_trust(sdk: &Sdk, cwd: &std::path::Path, trust: bool, errors: &mut dyn std::io::Write) -> Result<(), String> {
+    let trusted_once = trust.then(|| sdk.trust_for_this_process(cwd));
+    let report = match trusted_once {
+        Some(Ok(report)) => report,
+        Some(Err(refused)) => {
+            let _ = writeln!(errors, "{}: --trust ignored: {refused}", brand::COMMAND);
+            sdk.trust_state(cwd).map_err(|error| error.to_string())?
+        }
+        None => sdk.trust_state(cwd).map_err(|error| error.to_string())?,
+    };
+    if let Some(skipped) = report.skipped_line() {
+        let _ = writeln!(errors, "{}: {skipped}", brand::COMMAND);
+    }
+    let replaced = sdk.permissions(cwd).map(|info| info.notices).unwrap_or_default();
+    for notice in replaced.iter().filter(|notice| notice.contains(domain::trust::LEGACY_OPT_IN)) {
         let _ = writeln!(errors, "{}: {notice}", brand::COMMAND);
     }
+    Ok(())
 }
 
 fn warn_of_what_is_not_kept(sdk: &Sdk, errors: &mut dyn std::io::Write) {
@@ -110,6 +124,10 @@ fn warn_of_what_is_not_kept(sdk: &Sdk, errors: &mut dyn std::io::Write) {
         let _ = writeln!(errors, "{}: {notice}", brand::COMMAND);
     }
 }
+
+#[cfg(test)]
+#[path = "print_trust_tests.rs"]
+mod trust_tests;
 
 #[cfg(test)]
 mod tests {
@@ -142,41 +160,6 @@ mod tests {
         services.off.insert(domain::features::MEMORY_SEARCH.into());
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
         (Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND), engine)
-    }
-
-    fn git(repo: &std::path::Path, args: &[&str]) {
-        let done = std::process::Command::new("git").arg("-C").arg(repo).args(args).output().expect("git runs");
-        assert!(done.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&done.stderr));
-    }
-
-    #[test]
-    fn hooks_a_repository_versions_are_said_to_be_skipped_before_the_first_answer() {
-        let (data, home, repo) = (
-            tempfile::tempdir().expect("data"),
-            tempfile::tempdir().expect("home"),
-            tempfile::tempdir().expect("repo"),
-        );
-        let hooks = repo.path().join(brand::DIR).join("hooks");
-        std::fs::create_dir_all(&hooks).expect("hooks");
-        std::fs::write(hooks.join("guard.js"), "export const event = \"PreToolUse\";\nexport default () => ({});\n")
-            .expect("hook");
-        git(repo.path(), &["init", "-q"]);
-        git(repo.path(), &["add", "-A"]);
-        let engine = FakeEngine::new(vec![Model::new("scripted", "Scripted")], Vec::new());
-        let mut services = LocalServices::with_engine(Arc::new(engine));
-        services.homes = Arc::new(app::OwnerHome::at(home.path()));
-        let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
-
-        let mut errors = Vec::new();
-        warn_of_skipped_hooks(&sdk, repo.path(), &mut errors);
-        let said = String::from_utf8(errors).expect("text");
-
-        assert!(said.starts_with(brand::COMMAND), "{said}");
-        assert!(said.contains("guard.js") && said.contains("trustProjectHooks"), "{said}");
-        assert_eq!(said.lines().count(), 1, "said once: {said}");
-        let mut quiet = Vec::new();
-        warn_of_skipped_hooks(&sdk, data.path(), &mut quiet);
-        assert!(quiet.is_empty(), "nothing to say where no hook was skipped");
     }
 
     #[test]

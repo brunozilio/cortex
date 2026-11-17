@@ -18,6 +18,8 @@ Quando o agente precisa da sua aprovação, o painel mostra a ferramenta, o que 
 
 A opção "don't ask again" não aparece para ações que precisam ser aprovadas toda vez (veja Ações que sempre perguntam, abaixo).
 
+Em uma pasta em que você não confiou, uma regra salva no `{{DIR}}/settings.local.json` vale só naquela execução; ela passa a valer nas seguintes quando você confiar na pasta, e o chat avisa disso ao salvar a regra. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
+
 As regras sugeridas descrevem o tipo de ação, não os argumentos:
 
 | Pedido sobre | Regra sugerida |

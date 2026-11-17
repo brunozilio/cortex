@@ -63,47 +63,43 @@ All of these are combined; none replaces another.
 | Source | Applies to |
 |---|---|
 | `~/{{DIR}}/settings.json`, under `"hooks"` | You, every project |
-| `{{DIR}}/settings.json` and `{{DIR}}/settings.local.json`, under `"hooks"`, in the project and every folder above it | That project, unless git tracks the file (see [below](#hooks-a-repository-versions)) |
+| `{{DIR}}/settings.json` and `{{DIR}}/settings.local.json`, under `"hooks"`, in the current folder and each folder above it up to the project root | That project, once you trust its folder (see [below](#project-hooks-and-workspace-trust)) |
 | `~/{{DIR}}/managed-settings.json`, under `"hooks"` | You, every project |
 | `~/{{DIR}}/hooks/*.js` | You, every project |
-| `{{DIR}}/hooks/*.js` in the project and every folder above it | That project, unless git tracks the file (see [below](#hooks-a-repository-versions)) |
+| `{{DIR}}/hooks/*.js` in the current folder and each folder above it up to the project root | That project, once you trust its folder (see [below](#project-hooks-and-workspace-trust)) |
 | `hooks/hooks.json` in an installed plugin | Wherever the plugin is installed (see [Plugins](./plugins)) |
 | `hooks` in a custom agent's frontmatter | Only while that agent runs (see [Agents](./agents)) |
 
 Hooks are read again at the start of every prompt, so a change applies from your next message.
 
-### Hooks a repository versions
+### Project hooks and workspace trust
 
-A hook runs commands on your computer with your permissions, so {{NAME}} does not run hooks that arrive with a repository. A project file that git tracks (a checked-in `{{DIR}}/settings.json`, a committed `{{DIR}}/settings.local.json`, or a script in `{{DIR}}/hooks/`) has its hooks **skipped**. Everything else in that file still applies: its deny and ask rules, for example, hold as before.
+A hook runs commands on your computer with your permissions, so {{NAME}} runs a project's hooks only after you trust its folder. Until then the `hooks` key of the project's `{{DIR}}/settings.json` and `{{DIR}}/settings.local.json`, and the scripts in its `{{DIR}}/hooks/`, are **skipped**. Everything else in those files that only restricts still applies: deny and ask rules, for example.
 
-When hooks are skipped, {{NAME}} tells you which files they came from:
+When hooks are skipped, {{NAME}} tells you:
 
-- `/hooks` and `/permissions` end with a note naming the files;
-- with `-p`, the same note is printed once to stderr before the first answer.
+- the chat asks whether you trust the folder before your first prompt, listing the hooks it would enable;
+- `/hooks` and `/permissions` end with a note listing what was skipped, with the reason `folder not trusted (/trust)`;
+- with `-p`, one line on stderr says how many project items were skipped; pass `--trust` to run them for that invocation.
 
-These hooks still run:
+Trust the folder with the dialog or with `/trust yes`. See [Workspace trust](./sandbox-and-safety#workspace-trust) for what else it covers.
+
+These hooks always run:
 
 - your own, in `~/{{DIR}}/settings.json`, `~/{{DIR}}/managed-settings.json` and `~/{{DIR}}/hooks/`;
-- project hooks in files git does not track, such as a `{{DIR}}/settings.local.json` you keep out of version control or a script you have not added;
-- every project hook when the folder is not a git repository.
+- the hooks of installed plugins.
 
-To run a repository's versioned hooks as before, set `trustProjectHooks` in **your** settings file, `~/{{DIR}}/settings.json`:
-
-```json
-{ "trustProjectHooks": true }
-```
-
-The key is read only from your own files in `~/{{DIR}}/`. A project cannot turn it on for itself.
+Hooks in a `{{DIR}}/` folder above the project (above the folder that holds `.git`) are never run, whatever you trusted.
 
 > [!WARNING]
-> `trustProjectHooks` applies to every repository you open. With it on, a checked-in `{{DIR}}/settings.json` or `{{DIR}}/hooks/` runs commands on your computer with your permissions: read them before working in a repository you do not trust.
+> Once a folder is trusted, a checked-in `{{DIR}}/settings.json` or `{{DIR}}/hooks/` runs commands on your computer with your permissions. Read them before trusting a repository, and again after pulling changes to them.
 
 > [!NOTE]
 > Hooks in another tool's folders, such as `.claude/settings.json`, are not read.
 
 ### Reviewing hooks
 
-`/hooks` lists every hook a run here fires, with its event, matcher (`*` for all) and what it runs: the command, the URL, or `prompt:`/`agent:` followed by the start of the prompt. A run with no hooks shows *No hooks. Add them under "hooks" in {{DIR}}/settings.json.* When a repository's versioned hooks were skipped, the list ends with a note naming the files they came from (see [Hooks a repository versions](#hooks-a-repository-versions)).
+`/hooks` lists every hook a run here fires, with its event, matcher (`*` for all) and what it runs: the command, the URL, or `prompt:`/`agent:` followed by the start of the prompt. A run with no hooks shows *No hooks. Add them under "hooks" in {{DIR}}/settings.json.* When the folder is not trusted, the list ends with a note listing what was skipped, with the reason `folder not trusted (/trust)` (see [Project hooks and workspace trust](#project-hooks-and-workspace-trust)).
 
 ## Configuration format
 

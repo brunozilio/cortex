@@ -20,6 +20,21 @@ pub(super) struct Opening {
     pub pick: bool,
 }
 
+impl Opening {
+    pub(super) fn step(&mut self, app: &mut App) {
+        if app.session.is_none() || features::trust::pending(app) {
+            return;
+        }
+        if std::mem::take(&mut self.pick) {
+            resume::open(app, None);
+        }
+        if let Some(prompt) = self.prompt.take() {
+            app.prompt.input.set(&prompt);
+            app.submit();
+        }
+    }
+}
+
 pub(super) trait Events {
     fn waiting(&mut self, within: Duration) -> std::io::Result<bool>;
     fn next(&mut self) -> std::io::Result<Event>;
@@ -99,16 +114,7 @@ impl Seat<'_> {
     }
 
     fn open(&mut self, app: &mut App) {
-        if app.session.is_none() {
-            return;
-        }
-        if std::mem::take(&mut self.opening.pick) {
-            resume::open(app, None);
-        }
-        if let Some(prompt) = self.opening.prompt.take() {
-            app.prompt.input.set(&prompt);
-            app.submit();
-        }
+        self.opening.step(app);
     }
 
     fn draw(&mut self, app: &mut App) -> std::io::Result<()> {

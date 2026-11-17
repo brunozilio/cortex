@@ -36,11 +36,13 @@ As próximas execuções já usam a mudança; não é preciso reiniciar nada.
 | `~/{{DIR}}/settings.json` | Você, em todos os projetos | Sim | Suas preferências, modelos e permissões. `{{COMMAND}} config` e `/features` gravam aqui. |
 | `~/{{DIR}}/settings.local.json` | Você, em todos os projetos | Sim | O mesmo que o anterior, se preferir um segundo arquivo. |
 | `{{DIR}}/settings.json` no projeto (ou em qualquer pasta acima) | Todos que clonam o projeto | Não: vai para o repositório | Regras do time: regras de negação e de pergunta, hooks, estilo de resposta. |
-| `{{DIR}}/settings.local.json` no projeto (ou em qualquer pasta acima) | Você, neste projeto | Sim | Suas escolhas privadas no projeto. As respostas "não perguntar de novo", `/rules keep` e `{{COMMAND}} config --project` gravam aqui. |
+| `{{DIR}}/settings.local.json` no projeto | Você, neste projeto | Sim, depois que você confia na pasta | Suas escolhas privadas no projeto. As respostas "não perguntar de novo", `/rules keep` e `{{COMMAND}} config --project` gravam aqui. |
 | `~/{{DIR}}/managed-settings.json` | Você, em todos os projetos | Sim | Lido por último, depois de todos os outros. |
 
 > [!IMPORTANT]
-> Deixe `{{DIR}}/settings.local.json` fora do controle de versão. Ele é tratado como seu, então o que estiver nele pode conceder permissões.
+> O `{{DIR}}/settings.local.json` de um projeto só conta como seu em uma pasta em que você confia (veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta)). Até lá ele é lido como o `settings.json` versionado e só pode restringir; então uma regra salva com "não perguntar de novo" vale só naquela execução e passa a valer nas seguintes quando a pasta for confiável; o chat avisa disso ao salvar a regra. Deixe o arquivo fora do controle de versão: em uma pasta confiável, o que estiver nele pode conceder permissões.
+
+Uma pasta `{{DIR}}/` acima do projeto (acima da pasta que contém o `.git`, ou acima da pasta atual quando não há repositório) é lida como um arquivo versionado, seja qual for o nome do arquivo e não importa em que você confiou: pode restringir, nunca conceder.
 
 ### Quais pastas são lidas
 
@@ -71,8 +73,7 @@ O `{{DIR}}/settings.json` de um projeto vem de quem escreveu o repositório, ent
 | `escalationModel` | Ignorada. |
 | `enabledProviders` | Ignorada. |
 | `enableAllProjectMcpServers`, `enabledMcpServers`, `disabledMcpServers` | Ignoradas. |
-| `hooks` | Ignorados enquanto o git rastrear o arquivo, a não ser que você defina `trustProjectHooks` nas suas próprias configurações. Veja [Hooks](./hooks#hooks-versionados-pelo-git). |
-| `trustProjectHooks` | Ignorada. Só o `~/{{DIR}}/settings.json` a liga. |
+| `hooks` | Ignorados até você confiar na pasta. Veja [Hooks](./hooks#hooks-do-projeto-e-confianca-na-pasta). |
 | `scripts.*` | Só pode desligar acessos. Não consegue dar acesso aos scripts do próprio projeto. |
 | `features.*` | Pode desligar um recurso comum e ligar um recurso de segurança (`experimental-sandbox`, `redact-secrets`, `experimental-dependency-guard`), nunca o contrário. |
 | `sandbox.network` | Só pode desligar a rede. |
@@ -127,8 +128,7 @@ Sem opções, edita `~/{{DIR}}/settings.json`. Com `--project`, edita `{{DIR}}/s
 | `enableAllProjectMcpServers` | booleano | `false` | Inicia sem perguntar todos os servidores MCP declarados no `{{DIR}}/mcp.json` do projeto. Lido só dos seus próprios arquivos. |
 | `enabledMcpServers` | lista de textos | `[]` | Servidores MCP do projeto que você aprovou. `{{COMMAND}} mcp approve` e `/mcp approve` gravam aqui. Lido só dos seus próprios arquivos. |
 | `disabledMcpServers` | lista de textos | `[]` | Servidores MCP do projeto que você desligou; vence as duas chaves acima. Lido só dos seus próprios arquivos. |
-| `hooks` | objeto | `{}` | Comandos, prompts ou chamadas HTTP executados em eventos. Os hooks de todos os arquivos se somam, menos os de arquivos do projeto que o git rastreia, que são ignorados enquanto `trustProjectHooks` não estiver ligada. Veja [Hooks](./hooks). |
-| `trustProjectHooks` | booleano | `false` | `true` roda os hooks versionados de um repositório (o `{{DIR}}/settings.json` versionado e a pasta `{{DIR}}/hooks/`) como se fossem seus. Só vale no seu próprio arquivo de configuração, `~/{{DIR}}/settings.json`; um projeto não consegue defini-la. Veja [Hooks versionados pelo git](./hooks#hooks-versionados-pelo-git). |
+| `hooks` | objeto | `{}` | Comandos, prompts ou chamadas HTTP executados em eventos. Os hooks de todos os arquivos se somam; os hooks de um projeto são ignorados até você confiar na pasta dele. Veja [Hooks](./hooks#hooks-do-projeto-e-confianca-na-pasta). |
 | `lspServers` | objeto | `{}` | Adiciona, altera ou desativa servidores de linguagem. Veja [`lspServers`](#lspservers) e [Inteligência de código](./code-intelligence). |
 | `permissions` | objeto | `{}` | Regras de liberar, perguntar e negar, e pastas extras. Veja [`permissions`](#permissions). |
 | `verification` | objeto | `{}` | Regras para o juiz de verificação. Veja [`verification`](#verification). |

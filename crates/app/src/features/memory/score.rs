@@ -24,7 +24,7 @@ impl Memories {
     }
 
     pub(super) fn keep_score(&self, request: &PromptRequest, held: bool, outcome: &RunOutcome) {
-        let features = team::features(&request.cwd, self.home().as_deref());
+        let features = team::features(&self.gate(&request.cwd));
         if !features.on(domain::features::MEMORY_SCORECARD) {
             return;
         }

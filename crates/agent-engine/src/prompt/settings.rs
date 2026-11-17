@@ -1,8 +1,9 @@
-use super::project_trust::ProjectTrust;
 use crate::frontmatter::parse as parse_frontmatter;
+use crate::trust::Gate;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 pub const MANAGED: &str = "managed-settings.json";
+const LOCAL: &str = "settings.local.json";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Style {
@@ -100,22 +101,26 @@ fn model_names(value: &Value, key: &str) -> Result<Vec<String>, String> {
     }
 }
 
-pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin]) -> Result<Settings, String> {
-    let roots = roots(cwd, home);
-    let trust = ProjectTrust::of(home);
+pub fn load(gate: &Gate, plugins: &[crate::plugins::Plugin]) -> Result<Settings, String> {
+    let home = gate.home();
+    let roots = roots(gate.cwd(), home);
     let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(brand::DIR));
     let mut merged = Settings::default();
-    merged.hooks.extend(&crate::hooks::Hooks::gathered(home, &roots, &|file| trust.runs_hooks_of(file)));
+    merged.hooks.extend(&crate::hooks::Hooks::gathered(home, &roots, &|file| gate.honours(file)));
     merged.project_criteria = super::criteria_file::nearest(roots.iter().filter(|root| !is_user_root(root)));
     let mut style = String::from("Default");
-    for (path, owners) in files(&roots, home) {
+    let mut replaced_opt_in = false;
+    for (path, users) in files(&roots, home) {
         let Some(value) = read(&path)? else { continue };
-        let owners = owners && trust.local_is_the_owner_s(&path);
-        let layer = Layer { path: &path, value: &value, owners, trust: &trust };
+        let honoured = users || gate.honours(&path);
+        let owners = users || (honoured && path.file_name().is_some_and(|name| name == LOCAL));
+        replaced_opt_in |= users && value.get(domain::trust::LEGACY_OPT_IN).is_some();
+        let layer = Layer { path: &path, value: &value, owners, runs_hooks: honoured };
         layer.merge_into(&mut merged, &mut style)?;
     }
     add_plugins(&mut merged, plugins);
-    merged.notices = trust.notices();
+    merged.notices = gate.skipped_notice().into_iter().collect();
+    merged.notices.extend(replaced_opt_in.then(domain::trust::legacy_notice));
     if auto_memory_disabled_by_environment() {
         merged.auto_memory = false;
     }
@@ -142,10 +147,7 @@ fn files(roots: &[PathBuf], home: Option<&Path>) -> Vec<(PathBuf, bool)> {
     let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(brand::DIR));
     let mut files: Vec<(PathBuf, bool)> = roots
         .iter()
-        .flat_map(|root| {
-            ["settings.json", "settings.local.json"]
-                .map(|name| (root.join(name), is_user_root(root) || name == "settings.local.json"))
-        })
+        .flat_map(|root| ["settings.json", LOCAL].map(|name| (root.join(name), is_user_root(root))))
         .collect();
     files.extend(home.map(|home| (home.join(brand::DIR).join(MANAGED), true)));
     files
@@ -164,7 +166,7 @@ struct Layer<'a> {
     path: &'a Path,
     value: &'a Value,
     owners: bool,
-    trust: &'a ProjectTrust,
+    runs_hooks: bool,
 }
 
 impl Layer<'_> {
@@ -249,7 +251,7 @@ impl Layer<'_> {
     }
 
     fn merge_extensions(&self, merged: &mut Settings) -> Result<(), String> {
-        if let Some(value) = self.value.get("hooks").filter(|_| self.trust.runs_hooks_of(self.path)) {
+        if let Some(value) = self.value.get("hooks").filter(|_| self.runs_hooks) {
             let hooks = crate::hooks::Hooks::parse(value).map_err(|e| self.located(format!("hooks: {e}")))?;
             merged.hooks.extend(&hooks);
         }
@@ -310,8 +312,19 @@ fn style_named(selected: String, roots: &[PathBuf]) -> Result<Option<Style>, Str
     }))
 }
 #[cfg(test)]
+pub(crate) fn load_trusted(
+    cwd: &Path,
+    home: Option<&Path>,
+    plugins: &[crate::plugins::Plugin],
+) -> Result<Settings, String> {
+    load(&Gate::at(cwd, home, domain::trust::Trust::Trusted), plugins)
+}
+#[cfg(test)]
 #[path = "settings_lsp_tests.rs"]
 mod lsp_tests;
 #[cfg(test)]
 #[path = "settings_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "settings_trust_tests.rs"]
+mod trust_tests;

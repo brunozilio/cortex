@@ -76,6 +76,7 @@ O `/help` agrupa os comandos em **Conversation**, **Model and mode**, **Project*
 | `/gain` | | Quanto mais curta a saída de comandos chegou ao modelo |
 | `/features [nome on\|off]` | | Lista ou liga/desliga os recursos que podem ser desligados |
 | `/trace` | `/console` | Abre o trace ao vivo no navegador |
+| `/trust [yes\|no]` | | Mostra se esta pasta é confiável, ou muda isso |
 | `/docs` | | Abre os comandos, teclas e flags no navegador |
 | `/factory-reset` | | Apaga tudo o que o {{NAME}} guarda nesta máquina |
 | `/<skill> [argumentos]` | | Roda uma skill ou comando personalizado |
@@ -367,6 +368,10 @@ Mostra quanto mais curta a saída de comandos chegou ao modelo nesta sessão. Pr
 ### /trace
 
 Abre no navegador o trace ao vivo de todas as sessões: execuções, spans, custo, esperas e checagens. Apelido: `/console`. Veja [Console de trace](./trace-console).
+
+### /trust
+
+`/trust` mostra se a pasta do projeto é confiável e lista o que ela traz que depende de confiança: hooks, scripts, servidores MCP, provedores declarados, concessões no `settings.local.json`. `/trust yes` confia na pasta e `/trust no` deixa de confiar. A mudança vale a partir da próxima execução. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
 
 ### /docs
 

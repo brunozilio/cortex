@@ -18,6 +18,8 @@ When the agent needs your approval, the panel shows the tool, what it wants to d
 
 The "don't ask again" choice is not offered for actions that must be approved every time (see [Always asked](#actions-that-always-ask)).
 
+In a folder you have not trusted, a rule saved to `{{DIR}}/settings.local.json` holds for that run only; it applies to later runs once you trust the folder, and the chat says so when it saves the rule. See [Workspace trust](./sandbox-and-safety#workspace-trust).
+
 Suggested rules name the kind of action, not its arguments:
 
 | You were asked about | Suggested rule |

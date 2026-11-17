@@ -48,6 +48,17 @@ Give the run what it needs up front:
 
 Rules are separated by spaces or commas (not inside parentheses), and both options can be repeated. The rule syntax is described in [Permissions](./permissions).
 
+### Project hooks, scripts and servers need `--trust`
+
+Print mode never asks whether you trust the folder. Unless the folder is already trusted, the run loads nothing from the project that runs code or grants permissions (hooks, script tools, MCP servers, declared providers, `settings.local.json` grants), and one line on standard error says how many items were skipped. Pass `--trust` to load them for that invocation; nothing is stored:
+
+```bash
+{{COMMAND}} -p --trust "run the release checks"
+```
+
+> [!WARNING]
+> A script or CI job that relies on the project's hooks must pass `--trust`. Use it only where you control what the repository contains. See [Workspace trust](./sandbox-and-safety#workspace-trust).
+
 > [!WARNING]
 > `--mode bypass` lets the agent run any command without asking. Use it only in a disposable environment, such as a CI container or a scratch checkout. See [Sandbox and safety](./sandbox-and-safety).
 

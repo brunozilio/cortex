@@ -148,10 +148,13 @@ fn files(folder: &Path) -> Vec<PathBuf> {
     found
 }
 
-pub fn load(home: Option<&Path>, cwd: &Path) -> Vec<ScriptTool> {
+pub fn load(gate: &crate::trust::Gate) -> Vec<ScriptTool> {
     let mut folders: Vec<(PathBuf, bool)> =
-        home.map(|home| (home.join(brand::DIR).join("tools"), true)).into_iter().collect();
-    folders.push((cwd.join(brand::DIR).join("tools"), false));
+        gate.home().map(|home| (home.join(brand::DIR).join("tools"), true)).into_iter().collect();
+    let project = gate.cwd().join(brand::DIR).join("tools");
+    if gate.honours(&project) {
+        folders.push((project, false));
+    }
     let mut tools: Vec<ScriptTool> = Vec::new();
     let built_in = |file: &Path| {
         file.file_name().is_some_and(|name| content::builtin(&format!("tools/{}", name.to_string_lossy())).is_some())
@@ -227,10 +230,13 @@ mod tests {
         std::fs::write(project_tools.join("tool.js"), r#"export const spec = { name: "Deploy", access: "read" };"#)
             .expect("write");
         std::fs::write(user_tools.join("broken.js"), "export const spec = ").expect("write");
-        let tools = load(Some(home.path()), project.path());
+        let tools = load(&crate::trust::trusted(project.path(), home.path()));
         let named: Vec<(&str, Access)> = tools.iter().map(|tool| (tool.spec.name.as_str(), tool.access)).collect();
         assert_eq!(named, [("Echo", Access::Reads), ("Deploy", Access::Executes)]);
         assert_eq!(tools[0].spec.description, "Says it back.");
+        let untrusted = load(&crate::trust::untrusted(project.path(), home.path()));
+        let named: Vec<&str> = untrusted.iter().map(|tool| tool.spec.name.as_str()).collect();
+        assert_eq!(named, ["Echo"], "an untrusted folder's tools are not registered");
     }
 
     #[test]
@@ -264,7 +270,7 @@ mod join_tests {
         std::fs::write(project_tools.join("deploy.js"), spec("Deploy", "The project's.")).expect("write");
 
         let mut tools = crate::tools::standard();
-        join(&mut tools, load(Some(home.path()), project.path()));
+        join(&mut tools, load(&crate::trust::trusted(project.path(), home.path())));
 
         let described = |name: &str| -> Vec<(String, bool)> {
             tools
@@ -296,7 +302,7 @@ mod copied_content_tests {
         std::fs::write(user_tools.join("Bash.js"), bash).expect("copy");
         std::fs::write(user_tools.join("echo.js"), r#"export const spec = { name: "Echo" };"#).expect("write");
         let names: Vec<String> =
-            load(Some(home.path()), project.path()).into_iter().map(|tool| tool.spec.name).collect();
+            load(&crate::trust::trusted(project.path(), home.path())).into_iter().map(|tool| tool.spec.name).collect();
         assert_eq!(names, ["Echo"]);
     }
 }

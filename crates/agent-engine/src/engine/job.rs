@@ -33,7 +33,7 @@ impl Job {
         let session = self.load_session()?;
         let brief = self.brief()?;
         let equipped = self.equip(&brief, workspace)?;
-        let governed = self.apply_policy(equipped, &brief.settings, &session.id)?;
+        let governed = self.apply_policy(equipped, &brief, &session.id)?;
         let runtime = self.prepare_runtime(governed, &brief.settings, &session)?;
         let mut opened = self.open(runtime, &brief, session)?;
         let outcome = self.drive(&mut opened, &brief.agents);

@@ -20,6 +20,7 @@ mod providers;
 mod secrets;
 mod services;
 mod settings;
+mod trust;
 mod turned_off;
 
 pub use api::features::flags::ListedFlag;
@@ -37,6 +38,7 @@ pub use domain::memory::seed::Candidate as SeedCandidate;
 pub use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind, Revision};
 pub use domain::provider::{ModelProvider, PortHolder, ProviderSummary};
 pub use domain::schedule::{Scheduled, When};
+pub use domain::trust::{Contributions, Trust, TrustAnswer, TrustReport};
 pub use domain::{
     AgentAsk, AskId, AskKind, Choice, ChoreAnswer, Criteria, CriteriaSource, CustomAgent, Decision, Effort,
     EngineEvent, HeadsUp, Image, MAX_IMAGE_BYTES, ModelOption as Model, PermissionMode, Question, Rewound, SessionId,
@@ -52,4 +54,5 @@ pub use providers::{InMemoryProviderStore, ModelCatalog, ModelProviders, Provide
 pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
 pub use settings::{SettingsChange, SettingsStore};
+pub use trust::{InMemoryTrustStore, TrustStore, Trusts};
 pub use turned_off::TurnedOff;

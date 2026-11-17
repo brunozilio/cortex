@@ -68,21 +68,21 @@ fn hook_list(hooks: &[HookInfo]) -> String {
 mod tests {
     use super::*;
 
-    const SKIPPED: &str = "This project's hooks were skipped: /repo/hooks/guard.js is versioned in git.";
+    const SKIPPED: &str = "Skipped: folder not trusted (/trust).\n  Hook scripts:\n    hooks/guard.js";
 
     #[test]
-    fn the_permissions_listing_says_which_project_hooks_were_skipped() {
+    fn the_permissions_listing_says_what_was_skipped_because_the_folder_is_not_trusted() {
         let mut info = PermissionsInfo { notices: vec![SKIPPED.to_owned()], ..PermissionsInfo::default() };
         assert!(permissions(&info).ends_with(SKIPPED), "even with no rules: {}", permissions(&info));
         info.rules.push((RuleKind::Allow, "Bash(ls:*)".to_owned()));
         let listed = permissions(&info);
         assert!(listed.contains("allow  Bash(ls:*)") && listed.ends_with(SKIPPED), "{listed}");
         info.notices.clear();
-        assert!(!permissions(&info).contains("skipped"));
+        assert!(!permissions(&info).contains("not trusted"));
     }
 
     #[test]
-    fn the_hooks_listing_says_which_project_hooks_were_skipped() {
+    fn the_hooks_listing_says_what_was_skipped_because_the_folder_is_not_trusted() {
         let info = PermissionsInfo { notices: vec![SKIPPED.to_owned()], ..PermissionsInfo::default() };
         let listed = hooks(&info);
         assert!(listed.starts_with("No hooks.") && listed.ends_with(SKIPPED), "{listed}");

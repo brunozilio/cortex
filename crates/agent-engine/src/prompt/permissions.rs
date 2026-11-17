@@ -132,7 +132,7 @@ mod tests {
     fn a_kept_rule_starts_the_file_when_there_is_none() {
         let repo = tempfile::tempdir().expect("repo");
         super::keep_allow(repo.path(), "Read(//opt/lib/**)").expect("kept");
-        let rules = crate::prompt::settings::load(repo.path(), None, &[]).expect("settings").permissions;
+        let rules = crate::prompt::settings::load_trusted(repo.path(), None, &[]).expect("settings").permissions;
         let cwd = repo.path().to_string_lossy().into_owned();
         let target = domain::permission_rules::Target::Path("/opt/lib/a.h");
         assert!(rules.decide("Read", &target, &cwd, None).is_some(), "loaded back as an allow");
@@ -143,7 +143,7 @@ mod tests {
 mod loading {
     use domain::permission_rules::{RuleKind, Target};
 
-    use crate::prompt::settings::load;
+    use crate::prompt::settings::load_trusted as load;
 
     #[test]
     fn rules_come_from_every_file_but_only_the_owner_s_allow() {

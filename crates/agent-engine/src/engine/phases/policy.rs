@@ -7,6 +7,7 @@ use domain::permission_rules::{PermissionRules, RuleKind};
 use domain::{PromptRequest, SessionId};
 
 use super::equip::{Equipped, MainAgent, Toolbox};
+use crate::brief::Brief;
 use crate::engine::job::Job;
 use crate::engine::roles;
 use crate::engine::stop::Stop;
@@ -25,12 +26,14 @@ impl Job {
     pub(in crate::engine) fn apply_policy(
         &mut self,
         equipped: Equipped,
-        settings: &Settings,
+        brief: &Brief,
         session: &SessionId,
     ) -> Result<Governed, Stop> {
+        let settings = &brief.settings;
         let Equipped { mut workspace, mut toolbox, main } = equipped;
         workspace.auto_memory = settings.auto_memory;
         workspace.policy = flagged(settings, &workspace.cwd, self.request.safety_check);
+        workspace.policy.trust = brief.trust;
         workspace.models.escalation.clone_from(&settings.escalation);
         self.request.budget = budget(&self.request, &settings.features);
         workspace.services.files = Some(Arc::default());

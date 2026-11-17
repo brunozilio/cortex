@@ -13,6 +13,7 @@ mod schedules;
 mod shell;
 mod suggested_rules;
 mod trace;
+pub(in crate::tui) mod trust;
 mod verification;
 
 use std::any::Any;
@@ -98,6 +99,7 @@ fn registered() -> Vec<Feature> {
         shell::feature(),
         suggested_rules::feature(),
         trace::feature(),
+        trust::feature(),
         verification::feature(),
     ]
 }
@@ -193,6 +195,7 @@ mod tests {
                 "bashes",
                 "rules",
                 "trace|console",
+                "trust",
                 "verification",
             ],
             "one entry per feature folder, empty for cache_warning and elsewhere, which bring no command"

@@ -162,6 +162,7 @@ fn prepare(app: &mut App, notice: Option<String>, start: Start) {
         app.transcript.notice(notice);
     }
     app.ui.inline = start.inline.then_some(0);
+    features::trust::opening(app);
     if !start.channels.is_empty() {
         open_channels(app, start.channels);
     }

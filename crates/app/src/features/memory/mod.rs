@@ -34,6 +34,7 @@ pub struct Memories {
     store: Arc<dyn MemoryStore>,
     books: Arc<Mutex<Books>>,
     homes: Arc<dyn crate::Homes>,
+    trusts: crate::trust::Trusts,
 }
 
 impl std::fmt::Debug for Memories {
@@ -45,7 +46,7 @@ impl std::fmt::Debug for Memories {
 pub fn forget(_client: u64) {}
 
 pub fn of(services: &LocalServices) -> Memories {
-    services.memories.clone().with_homes(Arc::clone(&services.homes))
+    services.memories.clone().with_homes(Arc::clone(&services.homes)).with_trusts(services.extensions.trusts.clone())
 }
 
 fn keep<'a>(books: &'a mut MutexGuard<Books>, project: &Path, changed: Revised) -> &'a mut MemoryBook {
@@ -56,7 +57,21 @@ fn keep<'a>(books: &'a mut MutexGuard<Books>, project: &Path, changed: Revised) 
 
 impl Memories {
     pub fn new(store: Arc<dyn MemoryStore>) -> Self {
-        Self { store, books: Arc::default(), homes: Arc::new(crate::OwnerHome::none()) }
+        Self {
+            store,
+            books: Arc::default(),
+            homes: Arc::new(crate::OwnerHome::none()),
+            trusts: crate::trust::Trusts::default(),
+        }
+    }
+
+    pub fn with_trusts(mut self, trusts: crate::trust::Trusts) -> Self {
+        self.trusts = trusts;
+        self
+    }
+
+    fn gate(&self, project: &Path) -> agent_engine::trust::Gate {
+        self.trusts.gate(project, self.home().as_deref())
     }
 
     pub(crate) fn kept_in(db: crate::db::Db) -> Self {
@@ -129,7 +144,7 @@ impl Memories {
     }
 
     pub fn find(&self, project: &Path, query: &str, limit: usize, searches: &mut MemorySearches) -> SearchAnswer {
-        let shared = team::load(project, self.home().as_deref());
+        let shared = team::load(&self.gate(project));
         let mut books = self.lock();
         let kept = self.kept(&mut books, project);
         let known: Vec<Memory> = kept.book.memories.iter().cloned().chain(shared).collect();
@@ -152,7 +167,7 @@ impl Memories {
             let book = self.book(&mut books, project);
             book.memories.iter().find(|memory| memory.id == id).cloned()
         };
-        team::share(project, self.home().as_deref(), &memory.ok_or("there is no such memory")?)
+        team::share(&self.gate(project), &memory.ok_or("there is no such memory")?)
     }
 
     fn mark_used(&self, project: &Path, kept: &mut Revised, given: &[Memory]) {
@@ -176,7 +191,7 @@ impl Memories {
             return self.brief_optimization(run, request);
         }
         let budget = if tool { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
-        let features = team::features(&request.cwd, self.home().as_deref());
+        let features = team::features(&self.gate(&request.cwd));
         let anchors = features.on(domain::features::MEMORY_ANCHORS);
         let shared = team::load_if(&request.cwd, &features);
         let structured = features.on(domain::features::STRUCTURED_LEARNINGS);

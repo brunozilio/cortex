@@ -43,18 +43,32 @@ impl LocalServices {
 
     pub fn in_project(self, cwd: Option<&Path>) -> Self {
         let Some(cwd) = cwd.map(Path::to_path_buf).or_else(|| std::env::current_dir().ok()) else { return self };
-        let services = self.turned_off_in(&cwd);
-        if !services.off.contains(domain::features::DECLARED_PROVIDERS) {
-            let _ = crate::native::declare_providers(services.home().as_deref(), &cwd);
+        self.follow_project(&cwd);
+        self
+    }
+
+    pub fn follow_project(&self, cwd: &Path) {
+        if let Ok(settings) = self.project_settings(cwd) {
+            self.off.follow(&settings.features);
         }
-        services
+        if !self.off.contains(domain::features::DECLARED_PROVIDERS) {
+            let _ = crate::native::declare_providers(&self.gate(cwd));
+        }
     }
 
     pub fn turned_off_in(self, cwd: &Path) -> Self {
-        if let Ok(settings) = agent_engine::prompt::settings::load(cwd, self.home().as_deref(), &[]) {
+        if let Ok(settings) = self.project_settings(cwd) {
             self.off.follow(&settings.features);
         }
         self
+    }
+
+    pub fn gate(&self, cwd: &Path) -> agent_engine::trust::Gate {
+        self.extensions.trusts.gate(cwd, self.home().as_deref())
+    }
+
+    pub fn project_settings(&self, cwd: &Path) -> Result<agent_engine::prompt::settings::Settings, String> {
+        agent_engine::prompt::settings::load(&self.gate(cwd), &[])
     }
 
     pub fn with_engine(engine: Arc<dyn AgentEngine>) -> Self {
@@ -77,7 +91,7 @@ impl LocalServices {
             memories: stores.memories,
             database: stores.database,
             sessions: stores.sessions,
-            extensions: Extensions::default(),
+            extensions: Extensions { trusts: crate::trust::Trusts::kept(stores.trusts), ..Extensions::default() },
             providers: ModelProviders::new(stores.providers, Arc::clone(&stores.secrets)),
             homes: Arc::new(crate::OwnerHome::none()),
             mcp_auth: crate::McpAuth::new(stores.secrets, http),
@@ -103,6 +117,10 @@ impl LocalServices {
             memories: stores.memories,
             database: stores.database,
             sessions: stores.sessions,
+            extensions: Extensions {
+                plugins: self.extensions.plugins,
+                trusts: crate::trust::Trusts::kept(stores.trusts),
+            },
             providers: self.providers.with_store(stores.providers).with_secrets(Arc::clone(&stores.secrets)),
             mcp_auth: self.mcp_auth.with_secrets(stores.secrets),
             ..self
@@ -141,7 +159,13 @@ mod tests {
         let by = domain::Provenance { author: domain::Author::User, now: 5, origin: None };
         crate::features::memory::of(&services).edit(Path::new("/work"), &[remember], by).expect("memory");
 
-        for kept in ["users/local/settings.json", "app.db", "providers/local/providers.json"] {
+        services.extensions.trusts.set(Path::new("/work/rocket"), None, true).expect("trust");
+        for kept in [
+            "users/local/settings.json",
+            "users/local/trusted-folders.json",
+            "app.db",
+            "providers/local/providers.json",
+        ] {
             assert!(data.path().join(kept).is_file(), "{kept}");
         }
         assert!(!data.path().join("users/local/sessions.json").exists(), "the catalog is in the database");

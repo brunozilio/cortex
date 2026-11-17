@@ -16,7 +16,7 @@ pub struct Changes {
 
 impl Memories {
     pub fn check(&self, project: &Path) -> Result<MemoryCheck, String> {
-        let features = team::features(project, self.home().as_deref());
+        let features = team::features(&self.gate(project));
         if !features.on(domain::features::LEARNING_CHECK) {
             return Err(format!("/check is turned off ({}).", domain::features::LEARNING_CHECK));
         }

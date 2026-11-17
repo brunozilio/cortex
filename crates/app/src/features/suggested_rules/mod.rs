@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::api::features::suggested_rules::{SuggestedRulesReply, SuggestedRulesRequest};
-use agent_engine::prompt::{permissions, settings};
+use agent_engine::prompt::permissions;
 use agent_engine::sessions::{FileSessions, records};
 use domain::permission_rules::RuleKind;
 use domain::suggested_rules::{Suggestion, suggestions};
@@ -15,7 +15,7 @@ pub fn handle(context: &Context<'_>, request: SuggestedRulesRequest) -> Result<S
         SuggestedRulesRequest::List { cwd } => {
             let store = context.services.sessions.as_ref();
             let sessions = crate::features::sessions::recent(context, &cwd);
-            let kept = settings::load(&cwd, context.services.home().as_deref(), &[])?.permissions.listed();
+            let kept = context.services.project_settings(&cwd)?.permissions.listed();
             Ok(SuggestedRulesReply::Suggested(suggested(store, &cwd, &sessions, &kept)))
         }
         SuggestedRulesRequest::KeepRule { cwd, kind, rule } => {

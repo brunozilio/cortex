@@ -18,7 +18,9 @@ pub fn forget(_client: u64) {}
 
 pub fn pointers(context: &Context<'_>, project: &Path, prompt: &str) -> Option<String> {
     let home = context.services.home();
-    let on = agent_engine::prompt::settings::load(project, home.as_deref(), &[])
+    let on = context
+        .services
+        .project_settings(project)
         .is_ok_and(|settings| settings.features.on(domain::features::CODE_MAP));
     if !on || !mapped(project, home.as_deref()) {
         return None;

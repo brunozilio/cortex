@@ -164,6 +164,9 @@ export default function (args, ctx) {
 
 Um arquivo `.js` numa pasta `commands/` funciona do mesmo jeito, como comando. O que um script pode fazer com arquivos, processos e rede segue a configuração `scripts` (veja [Configurações](./settings)). Um `SKILL.js` do projeto é substituído por um seu ou de um plugin com o mesmo nome.
 
+> [!IMPORTANT]
+> O `SKILL.js` e os comandos `.js` de um projeto só são oferecidos depois que você confia na pasta do projeto; as skills e os comandos em Markdown carregam de qualquer forma. O mesmo vale para as ferramentas JavaScript do projeto em `{{DIR}}/tools/`. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
+
 ## Skills embutidas
 
 O {{NAME}} vem com estas skills, que você pode substituir por uma sua de mesmo nome:

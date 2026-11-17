@@ -76,6 +76,7 @@ Slash commands control the chat itself: the conversation, the model, the project
 | `/gain` | | How much shorter command output reached the model |
 | `/features [name on\|off]` | | List or switch the features you can turn off |
 | `/trace` | `/console` | Open the live trace in the browser |
+| `/trust [yes\|no]` | | Show whether this folder is trusted, or change it |
 | `/docs` | | Open the commands, keys and flags in the browser |
 | `/factory-reset` | | Erase everything {{NAME}} keeps on this machine |
 | `/<skill> [arguments]` | | Run a skill or custom command |
@@ -367,6 +368,10 @@ Shows how much shorter command output reached the model this session. Needs the 
 ### /trace
 
 Opens the live trace of every session in the browser: runs, spans, cost, waits and checks. Alias: `/console`. See [Trace console](./trace-console).
+
+### /trust
+
+`/trust` shows whether the project folder is trusted and lists what it brings that needs trust: hooks, scripts, MCP servers, declared providers, grants in `settings.local.json`. `/trust yes` trusts the folder and `/trust no` stops trusting it. A change takes effect on the next run. See [Workspace trust](./sandbox-and-safety#workspace-trust).
 
 ### /docs
 

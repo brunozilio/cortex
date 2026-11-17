@@ -10,10 +10,14 @@ use crate::plugins::SERVER;
 use crate::{Source, finish, model, start};
 
 fn offered(repo: &std::path::Path) -> Vec<String> {
+    offered_to(&crate::trusted(repo, "hi"))
+}
+
+fn offered_to(request: &PromptRequest) -> Vec<String> {
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));
     let engine =
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
-    let events = finish(&start(&engine, &PromptRequest::plain(repo.into(), "hi", model())));
+    let events = finish(&start(&engine, request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     model_api.asked()[0].tools.iter().map(|tool| tool.name.clone()).collect()
 }
@@ -37,4 +41,9 @@ fn a_project_server_reaches_a_run_once_approved() {
     )
     .expect("approve");
     assert!(offered(repo.path()).contains(&"mcp__jira__ping".to_owned()));
+    let untrusted = PromptRequest::plain(repo.path().into(), "hi", model());
+    assert!(
+        !offered_to(&untrusted).iter().any(|name| name.starts_with("mcp__jira__")),
+        "approved in a file of a folder nobody trusted: not started"
+    );
 }

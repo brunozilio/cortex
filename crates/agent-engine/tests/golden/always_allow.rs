@@ -114,7 +114,7 @@ fn a_command_always_allowed_runs_and_keeps_its_rule_in_the_project_s_local_setti
         call("b2", "Bash", json!({"command": "echo one"})),
         says("Done."),
     ]);
-    let mut request = stage.request("Echo twice");
+    let mut request = stage.trusted("Echo twice");
     request.permission = PermissionMode::Ask;
 
     let mut run = stage.start(&request);

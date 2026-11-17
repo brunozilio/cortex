@@ -73,7 +73,8 @@ pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace
 
 fn brief_in(cwd: &std::path::Path, workspace: &Workspace) -> Result<crate::brief::Brief, String> {
     let mut request = domain::PromptRequest::plain(cwd.to_path_buf(), "", workspace.models.model.clone());
-    request.extensions = Some(domain::Extensions { home: workspace.home.clone(), ..Default::default() });
+    request.extensions =
+        Some(domain::Extensions { home: workspace.home.clone(), trust: workspace.policy.trust, ..Default::default() });
     crate::brief::Brief::load(&request)
 }
 

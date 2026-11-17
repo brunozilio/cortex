@@ -9,6 +9,7 @@ description: The sandbox, secret redaction, snapshots before destructive command
 
 | Mechanism | On by default | Turned off with | Where |
 |---|---|---|---|
+| [Workspace trust](#workspace-trust) | Always | trust the folder | All systems |
 | [Sandbox](#sandbox) | Yes | `features.experimental-sandbox` | macOS only |
 | [Secret redaction](#secret-redaction) | Yes | `features.redact-secrets` | All systems |
 | [Snapshots before destructive commands](#snapshots-before-destructive-commands) | Yes | `features.destructive-snapshot` | All systems |
@@ -22,6 +23,60 @@ Features are switched with `/features <name> on|off` (saved to `~/{{DIR}}/settin
 
 > [!IMPORTANT]
 > The sandbox, secret redaction and the dependency guard are **security features**. A project's checked-in `{{DIR}}/settings.json` can turn them on but never off; only your own settings files can turn them off.
+
+## Workspace trust
+
+A project folder can bring files that run code on your computer or widen what the agent may do without asking. A repository you have just cloned may contain them. {{NAME}} loads none of them until you say you trust the folder.
+
+### What waits for trust
+
+| From the project | Until the folder is trusted |
+|---|---|
+| `hooks` in `{{DIR}}/settings.json` and `{{DIR}}/settings.local.json` | Not registered |
+| Hook scripts in `{{DIR}}/hooks/*.js` | Not registered |
+| `{{DIR}}/settings.local.json` | Read like the checked-in `settings.json`: it can only restrict (see [Settings](./settings#what-a-checked-in-file-cannot-do)). Its allow rules, additional directories, script access, MCP and provider approvals and language-server commands are ignored. |
+| MCP servers in `{{DIR}}/mcp.json` and `{{DIR}}/mcp/*.js` | Not started and not listed for approval |
+| Declared providers in `{{DIR}}/providers/*.js` | Not loaded |
+| Script tools in `{{DIR}}/tools/` | Not registered |
+| Skills and commands written as scripts (`skill.js`, `commands/*.js`) | Not offered. Skills and commands written in Markdown still load. |
+| `hooks`, `mcpServers`, `permissionMode` and `initialPrompt` in a project agent's frontmatter | Dropped. The agent and its instructions are still offered. |
+
+These still apply in a folder you have not trusted, because they only inform the agent or restrict it: instruction files, rules in `{{DIR}}/rules/`, `deny` and `ask` permission rules, output styles and `{{DIR}}/verification.md`.
+
+Your own folder, `~/{{DIR}}/`, is always trusted: your hooks, tools, servers and settings work in every folder.
+
+### Trusting a folder
+
+When you open the chat in a folder that is not trusted and brings something from the table, {{NAME}} asks before your first prompt is sent. The question names the folder and lists what trusting it would enable.
+
+| Choice | Result |
+|---|---|
+| Trust this folder | Stored for this folder. Everything listed loads from now on. |
+| Continue without trusting (the default) | Nothing listed is loaded. You are asked again the next time you start {{NAME}} here. |
+| Exit | Leaves without sending anything. |
+
+A folder that brings nothing from the table does not ask.
+
+`/trust` shows whether the folder is trusted and what it brings. `/trust yes` trusts it and `/trust no` stops trusting it; the change takes effect on the next run. `{{COMMAND}} doctor` reports the state too. `/hooks` and `/permissions` end with a note listing what was skipped, with the reason `folder not trusted (/trust)`.
+
+With `--print` nobody is asked: the run is untrusted, and one line on stderr says how many project items were skipped. Pass `--trust` to trust the folder for that one invocation; nothing is stored.
+
+```bash
+{{COMMAND}} -p --trust "run the release checks"
+```
+
+### What a trusted folder is
+
+- Trust is kept per project: the nearest parent folder that contains `.git`, or the folder itself when there is none. Trusting a repository covers its subfolders.
+- It does not cover a repository nested inside it that has its own `.git`, and it does not cover the folders above it. A `{{DIR}}/` folder above the project is never a source of hooks or owner settings, whatever you trusted.
+- Your home folder and the root of the file system cannot be trusted as a project.
+- The answer is stored in {{NAME}}'s data folder (`trusted-folders.json`), never inside the project, and is keyed by the folder's real path: a moved or re-cloned repository asks again.
+- Past sessions in a folder do not make it trusted.
+
+> [!WARNING]
+> Trust is all or nothing for a folder, and it does not expire when the folder's content changes. After pulling changes into a trusted repository, review what changed under `{{DIR}}/` as you would review code.
+
+Trust does not replace the other checks. A trusted project's MCP servers still wait for your approval, one by one (see [MCP](./mcp)), and its scripts still get no file, process or network access until your settings grant it (see [Settings](./settings#scripts)).
 
 ## Sandbox
 

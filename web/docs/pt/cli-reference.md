@@ -132,7 +132,7 @@ Depois de instalar, um chat novo ou `/reload` carrega o plugin.
 {{COMMAND}} doctor
 ```
 
-Roda as verificações da instalação para a pasta e sai com 0 quando todas passam, 1 caso contrário. Veja [Solução de problemas](./troubleshooting#rodar-o-doctor).
+Roda as verificações da instalação para a pasta e sai com 0 quando todas passam, 1 caso contrário. A linha `trust` diz se a pasta é confiável e quantos itens do projeto estão sendo ignorados enquanto ela não é; uma pasta não confiável não conta como verificação que falhou. Veja [Solução de problemas](./troubleshooting#rodar-o-doctor).
 
 ### eval
 
@@ -184,6 +184,7 @@ Lê ou muda o seu arquivo de configurações, `~/{{DIR}}/settings.json`. Com `--
 | `--input-format` | | `text` ou `stream-json` | `text` | `--print` | `text` pega o prompt da linha de comando; `stream-json` lê mensagens de usuário como linhas JSON na entrada padrão e responde uma de cada vez |
 | `--max-turns` | | número | 200 | `--print` | O máximo de turnos do modelo que uma execução pode usar |
 | `--verification` | | texto | | `--print` | Julga o trabalho por estes critérios antes de terminar; o comando sai com 1 quando eles não são atendidos |
+| `--trust` | | | desligado | `--print` | Confia na pasta do projeto só nesta chamada, para que os hooks, scripts, servidores MCP e configurações locais dela carreguem. Nada é guardado. Sem ela, uma execução com `--print` roda sem confiança e uma linha no stderr diz o que foi ignorado. Na sua pasta pessoal ela é ignorada, com uma linha no stderr avisando. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta). |
 
 ### Modelo e comportamento
 

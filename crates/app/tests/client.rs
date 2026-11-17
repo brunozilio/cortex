@@ -202,6 +202,8 @@ fn a_program_manages_the_owner_s_mcp_servers() {
         servers.into_iter().map(|s| (s.name, s.origin, s.state)).collect()
     };
 
+    assert!(sdk.mcp_servers(repo.path()).expect("list").is_empty(), "not offered until the folder is trusted");
+    assert_eq!(sdk.set_trust(repo.path(), true).expect("trust").trust, app::Trust::Trusted);
     assert_eq!(
         states(sdk.mcp_servers(repo.path()).expect("list")),
         [("jira".into(), McpOrigin::Project, McpState::Pending)]

@@ -56,7 +56,7 @@ rename  pass    5/5  $0.14
 A pasta de rascunho é apagada quando o caso termina.
 
 > [!IMPORTANT]
-> O agente roda na pasta de rascunho, não no seu projeto, então as configurações em `{{DIR}}` e o `{{INSTRUCTIONS}}` do projeto não são encontrados ali. Coloque o que o caso precisa (instruções, `{{DIR}}/settings.json`, skills) dentro de `fixture/`. As suas configurações em `~/{{DIR}}` continuam valendo.
+> O agente roda na pasta de rascunho, não no seu projeto, então as configurações em `{{DIR}}` e o `{{INSTRUCTIONS}}` do projeto não são encontrados ali. Coloque o que o caso precisa (instruções, `{{DIR}}/settings.json`, skills) dentro de `fixture/`. As suas configurações em `~/{{DIR}}` continuam valendo. A pasta de rascunho é tratada como confiável quando a pasta do seu projeto é confiável; caso contrário, hooks, scripts, servidores MCP e o `settings.local.json` da fixture são ignorados (veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta)).
 
 > [!WARNING]
 > O modo print nega todo pedido de permissão. Sem `mode`, a execução usa `edits`: o agente pode alterar arquivos, mas qualquer comando que peça permissão é recusado. Use `"mode": "bypass"` quando a tarefa precisar rodar comandos, já que a pasta de rascunho é uma cópia descartável.

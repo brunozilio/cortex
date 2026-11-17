@@ -32,7 +32,7 @@ impl Memories {
     }
 
     pub fn offered(&self, context: &Context<'_>, project: &Path) -> Result<Vec<Candidate>, String> {
-        if !team::features(project, self.home().as_deref()).on(domain::features::MEMORY_SEED) {
+        if !team::features(&self.gate(project)).on(domain::features::MEMORY_SEED) {
             return Err(format!("/memory seed is turned off ({}).", domain::features::MEMORY_SEED));
         }
         let store = context.services.sessions.as_ref();

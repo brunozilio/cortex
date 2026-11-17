@@ -174,7 +174,12 @@ A mudança vale a partir da próxima mensagem. `/reload` relê `~/{{DIR}}` e o p
 
 ## Aprovar servidores do projeto
 
-Um servidor no `{{DIR}}/mcp.json` versionado de um projeto roda um programa ou chama uma URL em seu nome, então ele só inicia depois que você o aprova. As aprovações ficam nas suas próprias configurações, nunca no arquivo compartilhado do projeto:
+Um servidor no `{{DIR}}/mcp.json` versionado de um projeto roda um programa ou chama uma URL em seu nome, então duas coisas precisam valer antes de ele iniciar:
+
+1. Você confia na pasta do projeto. Até lá os servidores dele não são iniciados nem aparecem para aprovação. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
+2. Você aprova aquele servidor. Confiar na pasta não aprova os servidores dela.
+
+As aprovações ficam nas suas próprias configurações, nunca no arquivo compartilhado do projeto:
 
 - `{{COMMAND}} mcp approve <nome>` (ou `/mcp approve <nome>`) acrescenta o nome a `enabledMcpServers` no `settings.local.json` ao lado do `mcp.json` do projeto, e o tira de `disabledMcpServers`.
 - `{{COMMAND}} mcp deny <nome>` faz o contrário.
@@ -195,7 +200,7 @@ Você também pode editar as chaves à mão:
 | `disabledMcpServers` | Servidores do projeto desligados; vence as outras duas |
 | `enableAllProjectMcpServers` | `true` aprova todos os servidores do projeto |
 
-Essas chaves só contam nos seus próprios arquivos: `~/{{DIR}}/settings.json`, qualquer `settings.local.json` e `~/{{DIR}}/managed-settings.json`. No `{{DIR}}/settings.json` versionado de um projeto elas são ignoradas.
+Essas chaves só contam nos seus próprios arquivos: `~/{{DIR}}/settings.json`, `~/{{DIR}}/managed-settings.json` e o `settings.local.json` de um projeto em cuja pasta você confia. No `{{DIR}}/settings.json` versionado de um projeto elas são ignoradas.
 
 ## Login com OAuth
 

@@ -135,7 +135,7 @@ export function shape(body) {
 ```
 
 > [!IMPORTANT]
-> Os provedores declarados de um projeto só carregam depois que você os aprova: adicione os ids deles em `enabledProviders` nas suas próprias configurações (`~/{{DIR}}/settings.json` ou um `settings.local.json`). Até lá, o `{{COMMAND}} doctor` avisa que o provedor está esperando.
+> Os provedores declarados de um projeto só carregam quando você confia na pasta do projeto (veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta)) e os aprovou: adicione os ids deles em `enabledProviders` nas suas próprias configurações (`~/{{DIR}}/settings.json` ou o `settings.local.json` do projeto confiável). Até lá, o `{{COMMAND}} doctor` avisa que o provedor foi ignorado ou está esperando.
 
 ```json
 {

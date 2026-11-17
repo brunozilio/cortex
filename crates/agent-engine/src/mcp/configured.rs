@@ -15,6 +15,8 @@ pub struct McpSources {
     pub approval: McpApproval,
     #[serde(default)]
     pub scripts: crate::tools::script_tool::ScriptGrants,
+    #[serde(default)]
+    pub trust: domain::trust::Trust,
 }
 
 pub fn configured(cwd: &Path, sources: &McpSources) -> Vec<ServerSpec> {
@@ -50,7 +52,8 @@ pub fn project_config(cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
 }
 
 fn origins(cwd: &Path, sources: &McpSources) -> Vec<(McpOrigin, ServerSpec)> {
-    let project = project_config(cwd, sources.home.as_deref());
+    let gate = crate::trust::Gate::at(cwd, sources.home.as_deref(), sources.trust);
+    let project = project_config(cwd, sources.home.as_deref()).filter(|path| gate.honours(path));
     let project = project.map(|path| read(&path, "the project's")).unwrap_or_default();
     let user = sources
         .home
@@ -59,7 +62,11 @@ fn origins(cwd: &Path, sources: &McpSources) -> Vec<(McpOrigin, ServerSpec)> {
         .unwrap_or_default();
     let mut found: Vec<(McpOrigin, ServerSpec)> = Vec::new();
     let scripts_in = |root: &Path, origin: Origin| {
-        super::script_server::found(&root.join(brand::DIR).join("mcp"), cwd, sources.scripts.of(origin), origin)
+        let folder = root.join(brand::DIR).join("mcp");
+        if !gate.honours(&folder) {
+            return Vec::new();
+        }
+        super::script_server::found(&folder, cwd, sources.scripts.of(origin), origin)
     };
     let project_scripts = scripts_in(cwd, Origin::Project);
     let user_scripts = sources.home.as_ref().map(|home| scripts_in(home, Origin::Owner)).unwrap_or_default();
@@ -166,6 +173,7 @@ mod tests {
         request.extensions = Some(Extensions {
             home: Some(home.path().to_path_buf()),
             plugins: vec![plugin.path().to_path_buf()],
+            trust: domain::trust::Trust::Trusted,
             ..Extensions::default()
         });
         let info = |name: &str, origin: McpOrigin, target: &str, state: McpState| McpServerInfo {
@@ -217,8 +225,13 @@ mod tests {
         );
         let cwd = repo.path().join("crates/app");
         std::fs::create_dir_all(&cwd).expect("cwd");
+        std::fs::create_dir_all(repo.path().join(".git")).expect("a repository");
         let request = PromptRequest::plain(cwd, "hi", ModelOption::new("m", "M"));
-        let mut sources = McpSources { home: Some(home.path().to_path_buf()), ..McpSources::default() };
+        let mut sources = McpSources {
+            home: Some(home.path().to_path_buf()),
+            trust: domain::trust::Trust::Trusted,
+            ..McpSources::default()
+        };
 
         assert_eq!(
             servers(&request, &sources),
@@ -231,6 +244,12 @@ mod tests {
             [stdio("jira", "jira-mcp", &[]), stdio("notes", "notes-mcp", &[("KEY", "dflt")])],
             "the approved project server wins its name; reserved names never start"
         );
+        sources.trust = domain::trust::Trust::Untrusted;
+        assert_eq!(
+            servers(&request, &sources),
+            [stdio("jira", "user-jira", &[]), stdio("notes", "notes-mcp", &[("KEY", "dflt")])],
+            "approval alone starts nothing from a folder that is not trusted"
+        );
     }
 
     #[test]
@@ -241,7 +260,11 @@ mod tests {
         let server = "export default { tools: {} };";
         write(repo.path().join(concat!(brand::dir!(), "/mcp/theirs.js")), server);
         write(home.path().join(concat!(brand::dir!(), "/mcp/mine.js")), server);
-        let sources = McpSources { home: Some(home.path().to_path_buf()), ..McpSources::default() };
+        let sources = McpSources {
+            home: Some(home.path().to_path_buf()),
+            trust: domain::trust::Trust::Trusted,
+            ..McpSources::default()
+        };
         let granted: Vec<(String, ScriptAccess, Origin)> = origins(repo.path(), &sources)
             .into_iter()
             .filter_map(|(_, server)| match server {

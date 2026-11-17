@@ -5,6 +5,7 @@ use super::{Answer, Asker};
 pub struct Process {
     pub program: PathBuf,
     pub model: Option<String>,
+    pub trust: bool,
 }
 
 impl Asker for Process {
@@ -16,6 +17,9 @@ impl Asker for Process {
         }
         if let Some(model) = &self.model {
             command.arg("--model").arg(model);
+        }
+        if self.trust {
+            command.arg("--trust");
         }
         let output =
             command.arg("--").arg(prompt).stdin(std::process::Stdio::null()).output().map_err(|e| e.to_string())?;

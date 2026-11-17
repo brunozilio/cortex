@@ -36,11 +36,13 @@ New runs pick up the change; there is nothing to restart.
 | `~/{{DIR}}/settings.json` | You, in every project | Yes | Your own preferences, models, permissions. `{{COMMAND}} config` and `/features` write here. |
 | `~/{{DIR}}/settings.local.json` | You, in every project | Yes | Same as above, if you prefer to keep a second file. |
 | `{{DIR}}/settings.json` in the project (or any parent folder) | Everyone who clones the project | No: checked in | Team rules: deny and ask rules, hooks, output style. |
-| `{{DIR}}/settings.local.json` in the project (or any parent folder) | You, in this project | Yes | Your private project choices. "Don't ask again" answers, `/rules keep` and `{{COMMAND}} config --project` write here. |
+| `{{DIR}}/settings.local.json` in the project | You, in this project | Yes, once you trust the folder | Your private project choices. "Don't ask again" answers, `/rules keep` and `{{COMMAND}} config --project` write here. |
 | `~/{{DIR}}/managed-settings.json` | You, in every project | Yes | Read last, after every other file. |
 
 > [!IMPORTANT]
-> Keep `{{DIR}}/settings.local.json` out of version control. It is trusted as yours, so anything in it can grant permissions.
+> A project's `{{DIR}}/settings.local.json` counts as yours only in a folder you trust (see [Workspace trust](./sandbox-and-safety#workspace-trust)). Until then it is read like the checked-in `settings.json` and can only restrict, so a rule you saved with "don't ask again" holds for that run only and applies to later ones once the folder is trusted; the chat says so when it saves the rule. Keep the file out of version control: in a trusted folder anything in it can grant permissions.
+
+A `{{DIR}}/` folder above the project (above the folder that holds `.git`, or above the current folder when there is no repository) is read like a checked-in file, whatever its name and whatever you trusted: it can restrict, never grant.
 
 ### Which folders are read
 
@@ -71,8 +73,7 @@ A project's `{{DIR}}/settings.json` comes from whoever wrote the repository, so 
 | `escalationModel` | Ignored. |
 | `enabledProviders` | Ignored. |
 | `enableAllProjectMcpServers`, `enabledMcpServers`, `disabledMcpServers` | Ignored. |
-| `hooks` | Skipped while git tracks the file, unless you set `trustProjectHooks` in your own settings. See [Hooks](./hooks#hooks-a-repository-versions). |
-| `trustProjectHooks` | Ignored. Only `~/{{DIR}}/settings.json` turns it on. |
+| `hooks` | Skipped until you trust the folder. See [Hooks](./hooks#project-hooks-and-workspace-trust). |
 | `scripts.*` | Can only turn access off. It cannot give the project's own scripts access. |
 | `features.*` | Can turn an ordinary feature off, and can turn a security feature (`experimental-sandbox`, `redact-secrets`, `experimental-dependency-guard`) on, never the other way round. |
 | `sandbox.network` | Can only turn the network off. |
@@ -127,8 +128,7 @@ Without options it edits `~/{{DIR}}/settings.json`. With `--project` it edits `{
 | `enableAllProjectMcpServers` | boolean | `false` | Starts every MCP server the project's `{{DIR}}/mcp.json` declares without asking. Read only from your own files. |
 | `enabledMcpServers` | list of strings | `[]` | Project MCP servers you approved. `{{COMMAND}} mcp approve` and `/mcp approve` write here. Read only from your own files. |
 | `disabledMcpServers` | list of strings | `[]` | Project MCP servers you turned off; wins over the two keys above. Read only from your own files. |
-| `hooks` | object | `{}` | Commands, prompts or HTTP calls that run on events. Hooks from every file are combined, except those in project files git tracks, which are skipped unless `trustProjectHooks` is on. See [Hooks](./hooks). |
-| `trustProjectHooks` | boolean | `false` | `true` runs the hooks a repository versions (its checked-in `{{DIR}}/settings.json` and `{{DIR}}/hooks/`) as if they were yours. Honoured only in your own settings file, `~/{{DIR}}/settings.json`; a project cannot set it. See [Hooks a repository versions](./hooks#hooks-a-repository-versions). |
+| `hooks` | object | `{}` | Commands, prompts or HTTP calls that run on events. Hooks from every file are combined; a project's hooks are skipped until you trust its folder. See [Hooks](./hooks#project-hooks-and-workspace-trust). |
 | `lspServers` | object | `{}` | Adds, changes or disables language servers. See [`lspServers`](#lspservers) and [Code intelligence](./code-intelligence). |
 | `permissions` | object | `{}` | Allow, ask and deny rules and extra folders. See [`permissions`](#permissions). |
 | `verification` | object | `{}` | Rules for the verification judge. See [`verification`](#verification). |

@@ -164,6 +164,9 @@ export default function (args, ctx) {
 
 A `.js` file in a `commands/` folder works the same way as a command. What a script may do with files, processes and the network follows the `scripts` setting (see [Settings](./settings)). A project's `SKILL.js` is replaced by one of yours or a plugin's with the same name.
 
+> [!IMPORTANT]
+> A project's `SKILL.js` and `.js` commands are offered only after you trust the project's folder; its Markdown skills and commands load either way. The same holds for a project's JavaScript tools in `{{DIR}}/tools/`. See [Workspace trust](./sandbox-and-safety#workspace-trust).
+
 ## Built-in skills
 
 {{NAME}} ships these skills, which you can replace with your own of the same name:

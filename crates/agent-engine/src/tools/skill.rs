@@ -33,6 +33,8 @@ fn invocation_enabled() -> bool {
 }
 pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill> {
     let cwd = &request.cwd;
+    let gate = crate::trust::Gate::within(request, home);
+    let project_folders = cwd.ancestors().count();
     let mut sources: Vec<(PathBuf, Option<String>, bool)> = Vec::new();
     for directory in cwd.ancestors() {
         let owners = home.is_some_and(|home| home == directory);
@@ -54,11 +56,13 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
         sources.push((installed, None, true));
     }
     let mut found: Vec<FoundSkill> = Vec::new();
-    for (dir, namespace, trusted) in sources {
-        for skill in scan(&dir, namespace.as_deref())
-            .into_iter()
-            .chain(scan_commands(&dir.with_file_name("commands"), namespace.as_deref()))
-        {
+    for (at, (dir, namespace, trusted)) in sources.into_iter().enumerate() {
+        let runs = |script: &Path| at >= project_folders || gate.honours(script);
+        for skill in scan(&dir, namespace.as_deref(), &runs).into_iter().chain(scan_commands(
+            &dir.with_file_name("commands"),
+            namespace.as_deref(),
+            &runs,
+        )) {
             let skill = FoundSkill { trusted, ..skill };
             match found.iter().position(|known| known.name == skill.name) {
                 None => found.push(skill),
@@ -69,7 +73,7 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
     }
     found
 }
-fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
+fn scan(dir: &Path, namespace: Option<&str>, runs: &dyn Fn(&Path) -> bool) -> Vec<FoundSkill> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     let mut skills: Vec<FoundSkill> = entries
         .flatten()
@@ -80,6 +84,7 @@ fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
                     && path.file_name().is_some_and(|name| {
                         name.eq_ignore_ascii_case("skill.md") || name.eq_ignore_ascii_case("skill.js")
                     })
+                    && (!super::skill_script::is_script(path) || runs(path))
             })?;
             let folder = entry.file_name().to_string_lossy().into_owned();
             if super::skill_script::is_script(&file) {
@@ -235,11 +240,14 @@ fn expand(
     let loaded = load(skill, args.trim(), cwd, &access(skill));
     Some(if loaded.is_error { Err(loaded.content) } else { Ok(loaded.content) })
 }
-fn scan_commands(dir: &Path, namespace: Option<&str>) -> Vec<FoundSkill> {
+fn scan_commands(dir: &Path, namespace: Option<&str>, runs: &dyn Fn(&Path) -> bool) -> Vec<FoundSkill> {
     let mut found = Vec::new();
     for entry in ignore::WalkBuilder::new(dir).hidden(false).max_depth(Some(8)).build().filter_map(Result::ok) {
         let ext = entry.path().extension().and_then(|ext| ext.to_str()).unwrap_or_default().to_owned();
         if !entry.file_type().is_some_and(|t| t.is_file()) || !matches!(ext.as_str(), "md" | "js") {
+            continue;
+        }
+        if ext == "js" && !runs(entry.path()) {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(entry.path()) else { continue };

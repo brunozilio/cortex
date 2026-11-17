@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use agent_engine::lsp::{Downloads, IDLE, LspPool, Processes};
@@ -89,15 +89,18 @@ pub fn other_keys(providers: &ModelProviders, model: &ModelOption) -> Vec<(Model
         .collect()
 }
 
-pub fn declare_providers(home: Option<&Path>, cwd: &Path) -> Vec<String> {
+pub fn declare_providers(gate: &agent_engine::trust::Gate) -> Vec<String> {
     use agent_engine::declared_providers::{Loaded, load};
-    let approved = agent_engine::prompt::settings::load(cwd, home, &[])
-        .map(|settings| settings.enabled_providers)
-        .unwrap_or_default();
-    let described: Vec<(bool, String)> = load(home, cwd, &approved)
+    let approved =
+        agent_engine::prompt::settings::load(gate, &[]).map(|settings| settings.enabled_providers).unwrap_or_default();
+    let described: Vec<(bool, String)> = load(gate, &approved)
         .into_iter()
         .map(|loaded| match loaded {
             Loaded::Ready(provider) => (true, format!("{provider} loaded")),
+            Loaded::Untrusted { path } => (
+                false,
+                format!("{}: the project's provider is skipped: {}", path.display(), domain::trust::NOT_TRUSTED),
+            ),
             Loaded::Unapproved { path, id } => (
                 false,
                 format!(

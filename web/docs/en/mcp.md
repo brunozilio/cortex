@@ -174,7 +174,12 @@ A change applies from the next message. `/reload` re-reads `~/{{DIR}}` and the p
 
 ## Approving project servers
 
-A server in a project's checked-in `{{DIR}}/mcp.json` runs a program or calls a URL on your behalf, so it does not start until you approve it. Approvals live in your own settings, never in the project's shared file:
+A server in a project's checked-in `{{DIR}}/mcp.json` runs a program or calls a URL on your behalf, so two things must be true before it starts:
+
+1. You trust the project's folder. Until then its servers are not started and are not even listed for approval. See [Workspace trust](./sandbox-and-safety#workspace-trust).
+2. You approve that server. Trusting the folder does not approve its servers.
+
+Approvals live in your own settings, never in the project's shared file:
 
 - `{{COMMAND}} mcp approve <name>` (or `/mcp approve <name>`) adds the name to `enabledMcpServers` in the `settings.local.json` next to the project's `mcp.json`, and removes it from `disabledMcpServers`.
 - `{{COMMAND}} mcp deny <name>` does the opposite.
@@ -195,7 +200,7 @@ You can also edit the keys yourself:
 | `disabledMcpServers` | Project servers turned off; wins over the other two |
 | `enableAllProjectMcpServers` | `true` approves every project server |
 
-These keys count only in your own files: `~/{{DIR}}/settings.json`, any `settings.local.json`, and `~/{{DIR}}/managed-settings.json`. In a project's checked-in `{{DIR}}/settings.json` they are ignored.
+These keys count only in your own files: `~/{{DIR}}/settings.json`, `~/{{DIR}}/managed-settings.json`, and the `settings.local.json` of a project whose folder you trust. In a project's checked-in `{{DIR}}/settings.json` they are ignored.
 
 ## Signing in with OAuth
 

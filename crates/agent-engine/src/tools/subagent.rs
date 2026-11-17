@@ -22,6 +22,8 @@ pub struct FoundAgent {
 
 pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent> {
     let cwd = &request.cwd;
+    let gate = crate::trust::Gate::within(request, home);
+    let project_folders = cwd.ancestors().count();
     let mut sources: Vec<(PathBuf, Option<String>)> = Vec::new();
     for directory in cwd.ancestors() {
         sources.push((directory.join(concat!(brand::dir!(), "/agents")), None));
@@ -36,7 +38,10 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent>
         sources.push((dir.join("agents"), None));
     }
     let mut found: Vec<FoundAgent> = Vec::new();
-    let scanned = sources.into_iter().flat_map(|(dir, namespace)| scan(&dir, namespace.as_deref()));
+    let scanned = sources.into_iter().enumerate().flat_map(|(at, (dir, namespace))| {
+        let privileged = |file: &Path| namespace.is_none() && (at >= project_folders || gate.honours(file));
+        scan(&dir, namespace.as_deref(), &privileged)
+    });
     for agent in scanned.chain(super::builtin_agents::all()) {
         if !found.iter().any(|known| known.name == agent.name) {
             found.push(agent);
@@ -45,7 +50,9 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent>
     found
 }
 
-fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundAgent> {
+pub const PRIVILEGES: [&str; 4] = ["hooks", "mcpServers", "permissionMode", "initialPrompt"];
+
+fn scan(dir: &Path, namespace: Option<&str>, privileged: &dyn Fn(&Path) -> bool) -> Vec<FoundAgent> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     let mut agents: Vec<FoundAgent> = entries
         .flatten()
@@ -55,10 +62,10 @@ fn scan(dir: &Path, namespace: Option<&str>) -> Vec<FoundAgent> {
             let text = std::fs::read_to_string(&path).ok()?;
             let (front, body, config) = match crate::prompt::markdown::frontmatter(&text) {
                 Ok((mut front, body)) => {
-                    if namespace.is_some()
+                    if !privileged(&path)
                         && let Some(map) = front.as_object_mut()
                     {
-                        for key in ["hooks", "mcpServers", "permissionMode", "initialPrompt"] {
+                        for key in PRIVILEGES {
                             map.remove(key);
                         }
                     }

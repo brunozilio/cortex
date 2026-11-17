@@ -2,37 +2,45 @@ use std::path::{Path, PathBuf};
 
 use domain::{CustomAgent, ModelOption, PromptRequest, Skill};
 
+use crate::trust::Trusts;
+
 #[derive(Debug, Clone, Default)]
 pub struct Extensions {
     pub plugins: Vec<PathBuf>,
+    pub trusts: Trusts,
 }
 
 impl Extensions {
-    fn for_run(&self) -> domain::Extensions {
-        domain::Extensions { plugins: self.plugins.clone(), ..Default::default() }
+    pub(crate) fn host(&self, cwd: &Path, home: Option<&Path>) -> domain::Extensions {
+        domain::Extensions {
+            plugins: self.plugins.clone(),
+            home: home.map(Path::to_path_buf),
+            trust: self.trusts.of(cwd, home),
+            ..Default::default()
+        }
     }
 
     pub(crate) fn brief(&self, request: PromptRequest, home: Option<PathBuf>) -> PromptRequest {
-        let extensions = domain::Extensions { home, ..self.for_run() };
+        let extensions = self.host(&request.cwd, home.as_deref());
         PromptRequest { extensions: (!extensions.is_empty()).then_some(extensions), ..request }
+    }
+
+    pub(crate) fn request_in(&self, cwd: &Path, home: Option<&Path>) -> PromptRequest {
+        let mut request = PromptRequest::plain(cwd.to_path_buf(), "", ModelOption::new("", ""));
+        request.extensions = Some(self.host(cwd, home));
+        request
     }
 }
 
-fn session(cwd: &Path, extensions: &Extensions) -> PromptRequest {
-    let mut request = PromptRequest::plain(cwd.to_path_buf(), "", ModelOption::new("", ""));
-    request.extensions = Some(extensions.for_run());
-    request
-}
-
 pub(crate) fn skills(cwd: &Path, extensions: &Extensions, home: Option<&Path>) -> Vec<Skill> {
-    agent_engine::tools::skill::discover(&session(cwd, extensions), home)
+    agent_engine::tools::skill::discover(&extensions.request_in(cwd, home), home)
         .into_iter()
         .map(|found| Skill { name: found.name, description: found.description })
         .collect()
 }
 
 pub(crate) fn agents(cwd: &Path, extensions: &Extensions, home: Option<&Path>) -> Vec<CustomAgent> {
-    agent_engine::tools::subagent::discover(&session(cwd, extensions), home)
+    agent_engine::tools::subagent::discover(&extensions.request_in(cwd, home), home)
         .into_iter()
         .map(|found| CustomAgent { name: found.name, description: found.description })
         .collect()
@@ -40,6 +48,8 @@ pub(crate) fn agents(cwd: &Path, extensions: &Extensions, home: Option<&Path>) -
 
 #[cfg(test)]
 mod tests {
+    use domain::trust::Trust;
+
     use super::*;
 
     #[test]
@@ -48,7 +58,7 @@ mod tests {
         let plugin = dir.path().join("acme");
         std::fs::create_dir_all(plugin.join("commands")).expect("commands");
         std::fs::write(plugin.join("commands/ship.md"), "---\ndescription: Ships\n---\nShip it.").expect("command");
-        let extensions = Extensions { plugins: vec![plugin] };
+        let extensions = Extensions { plugins: vec![plugin], ..Extensions::default() };
         let names: Vec<String> = skills(dir.path(), &extensions, None).into_iter().map(|s| s.name).collect();
         assert!(names.contains(&"acme:ship".into()), "{names:?}");
     }
@@ -57,7 +67,7 @@ mod tests {
     fn a_run_gets_the_host_s_plugins() {
         let request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
         assert_eq!(Extensions::default().brief(request.clone(), None), request, "nothing to add");
-        let extensions = Extensions { plugins: vec!["/plugins/acme".into()] };
+        let extensions = Extensions { plugins: vec!["/plugins/acme".into()], ..Extensions::default() };
         let added = extensions.brief(request, None).extensions.expect("extensions");
         assert_eq!(added.plugins, [PathBuf::from("/plugins/acme")]);
     }
@@ -67,6 +77,24 @@ mod tests {
         let request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
         let briefed = Extensions::default().brief(request, Some("/users/ana".into()));
         assert_eq!(briefed.extensions.and_then(|extensions| extensions.home), Some(PathBuf::from("/users/ana")));
+    }
+
+    #[test]
+    fn a_run_is_trusted_only_when_the_store_says_so_whatever_the_request_claims() {
+        let repo = tempfile::tempdir().expect("repo");
+        let mut request = PromptRequest::plain(repo.path().into(), "hi", ModelOption::new("m", "M"));
+        request.extensions = Some(domain::Extensions { trust: Trust::Trusted, ..Default::default() });
+        let extensions = Extensions::default();
+        let trust_of = |request: &PromptRequest| {
+            let briefed = extensions.brief(request.clone(), None);
+            briefed.extensions.map(|extensions| extensions.trust).unwrap_or_default()
+        };
+        assert_eq!(trust_of(&request), Trust::Untrusted, "what the request said is replaced");
+
+        extensions.trusts.set(repo.path(), None, true).expect("trusted");
+        assert_eq!(trust_of(&request), Trust::Trusted);
+        let elsewhere = PromptRequest { cwd: tempfile::tempdir().expect("other").path().into(), ..request };
+        assert_eq!(trust_of(&elsewhere), Trust::Untrusted, "another folder has its own answer");
     }
 
     #[test]

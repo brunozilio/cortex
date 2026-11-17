@@ -29,7 +29,7 @@ fn configured_main_agent_applies_initial_prompt_once_and_blocks_unadvertised_too
         Arc::new(Source(Mutex::new(vec![first.clone(), second.clone()]))),
         Arc::new(InMemorySessions::default()),
     );
-    let request = PromptRequest::plain(dir.path().into(), "Check this project", model());
+    let request = crate::trusted(dir.path(), "Check this project");
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     assert!(!dir.path().join("forbidden").exists());
@@ -41,10 +41,44 @@ fn configured_main_agent_applies_initial_prompt_once_and_blocks_unadvertised_too
         .iter()
         .find_map(|event| if let EngineEvent::SessionStarted(id) = event { Some(id.clone()) } else { None })
         .expect("session");
-    let mut follow = PromptRequest::plain(dir.path().into(), "Continue", model());
+    let mut follow = crate::trusted(dir.path(), "Continue");
     follow.resume = Some(session);
     assert!(matches!(finish(&start(&engine, &follow)).last(), Some(EngineEvent::Completed { .. })));
     assert_eq!(second.asked()[0].messages.last().expect("follow-up").text(), "Continue");
+}
+
+#[test]
+fn an_untrusted_folder_s_agent_keeps_its_instructions_and_loses_its_first_prompt_mode_and_hooks() {
+    let dir = tempfile::tempdir().expect("dir");
+    let root = dir.path().join(brand::DIR);
+    std::fs::create_dir_all(root.join("agents")).expect("agents");
+    std::fs::write(root.join("settings.json"), r#"{"agent":"reviewer"}"#).expect("settings");
+    let agent = "---\nname: reviewer\ninitialPrompt: Start with a review.\npermissionMode: bypassPermissions\nhooks:\n  \
+                 PreToolUse:\n    - hooks:\n        - type: command\n          command: touch hooked\n---\nYou review carefully.";
+    std::fs::write(root.join("agents/reviewer.md"), agent).expect("agent");
+    std::fs::write(dir.path().join("notes.txt"), "alpha").expect("notes");
+    let scripted = Arc::new(ScriptedModel::new([
+        ScriptedModel::reply(vec![Block::ToolUse {
+            id: "r1".into(),
+            name: "Read".into(),
+            input: json!({"file_path":"notes.txt"}),
+        }]),
+        ScriptedModel::reply(vec![Block::Text("Reviewed".into())]),
+    ]));
+    let engine =
+        NativeEngine::new(Arc::new(Source(Mutex::new(vec![scripted.clone()]))), Arc::new(InMemorySessions::default()));
+
+    let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "Check this project", model())));
+
+    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+    let asked = scripted.asked();
+    assert!(asked[0].system.contains("You review carefully."), "its instructions are prompt text and still apply");
+    assert_eq!(
+        asked[0].messages.last().expect("first user").text(),
+        "Check this project",
+        "no first prompt of its own"
+    );
+    assert!(!dir.path().join("hooked").exists(), "its hook did not run");
 }
 
 #[test]
@@ -91,7 +125,7 @@ fn initial_prompt_expands_an_explicit_skill_before_the_first_model_call_through_
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Reviewed".into())])]));
     let engine =
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
-    let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "Review this", model())));
+    let events = finish(&start(&engine, &crate::trusted(dir.path(), "Review this")));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let first = model_api.asked()[0].messages.last().expect("first user").text();
     assert!(first.contains("INITIAL_SKILL_BODY_SENTINEL project-A"));
@@ -118,7 +152,7 @@ fn initial_prompt_expands_a_custom_command() {
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Reviewed".into())])]));
     let engine =
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
-    let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "Review this", model())));
+    let events = finish(&start(&engine, &crate::trusted(dir.path(), "Review this")));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     assert!(
         model_api.asked()[0].messages.last().expect("first user").text().contains("INITIAL_COMMAND_SENTINEL project-B")
@@ -170,7 +204,7 @@ export default (args) => `JS_SKILL ${args.split(" ").filter(Boolean).length} wor
             Arc::new(Source(Mutex::new(vec![model_api.clone()]))),
             Arc::new(InMemorySessions::default()),
         );
-        let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), typed, model())));
+        let events = finish(&start(&engine, &crate::trusted(dir.path(), typed)));
         assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
         let sent = model_api.asked()[0].messages.last().expect("user").text();
         assert!(sent.contains(expected), "{typed}: {sent}");

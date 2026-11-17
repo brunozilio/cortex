@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::trust::Gate;
 use crate::{prompt, tools};
 use domain::PromptRequest;
 use serde::{Deserialize, Serialize};
@@ -15,13 +16,15 @@ pub struct Brief {
     pub plugins: Vec<crate::plugins::Plugin>,
     #[serde(default)]
     pub home: Option<PathBuf>,
+    #[serde(default)]
+    pub trust: domain::trust::Trust,
 }
 impl Brief {
     pub fn load(request: &PromptRequest) -> Result<Self, String> {
-        let home = home(request);
-        let home = home.as_deref();
+        let gate = Gate::of(request);
+        let home = gate.home();
         let plugins = crate::plugins::found(request, home);
-        let settings = prompt::settings::load(&request.cwd, home, &plugins)?;
+        let settings = prompt::settings::load(&gate, &plugins)?;
         let mut skills = tools::skill::discover(request, home);
         skills.retain(|skill| domain::features::skill_flag(&skill.name).is_none_or(|flag| settings.features.on(flag)));
         let found = crate::hooks::Briefed {
@@ -40,6 +43,7 @@ impl Brief {
             instructions: edited.instructions,
             plugins,
             home: home.map(PathBuf::from),
+            trust: gate.trust(),
         })
     }
 
@@ -49,7 +53,12 @@ impl Brief {
             plugins: self.plugins.clone(),
             approval: self.settings.mcp_approval.clone(),
             scripts: self.settings.scripts,
+            trust: self.trust,
         }
+    }
+
+    pub fn gate(&self, cwd: &std::path::Path) -> Gate {
+        Gate::at(cwd, self.home.as_deref(), self.trust)
     }
 }
 
@@ -65,16 +74,22 @@ fn hook_workspace(
 }
 
 pub fn mcp_sources(request: &PromptRequest) -> Result<crate::mcp::McpSources, String> {
-    let home = home(request);
-    let plugins = crate::plugins::found(request, home.as_deref());
-    let settings = prompt::settings::load(&request.cwd, home.as_deref(), &plugins)?;
-    Ok(crate::mcp::McpSources { home, plugins, approval: settings.mcp_approval, scripts: settings.scripts })
+    let gate = Gate::of(request);
+    let plugins = crate::plugins::found(request, gate.home());
+    let settings = prompt::settings::load(&gate, &plugins)?;
+    Ok(crate::mcp::McpSources {
+        home: gate.home().map(PathBuf::from),
+        plugins,
+        approval: settings.mcp_approval,
+        scripts: settings.scripts,
+        trust: gate.trust(),
+    })
 }
 
 pub fn permissions(request: &PromptRequest) -> Result<domain::permission_rules::PermissionsInfo, String> {
-    let home = home(request);
-    let plugins = crate::plugins::found(request, home.as_deref());
-    let settings = prompt::settings::load(&request.cwd, home.as_deref(), &plugins)?;
+    let gate = Gate::of(request);
+    let plugins = crate::plugins::found(request, gate.home());
+    let settings = prompt::settings::load(&gate, &plugins)?;
     Ok(domain::permission_rules::PermissionsInfo {
         rules: settings.permissions.listed(),
         added_dirs: settings.added_dirs,
@@ -132,7 +147,11 @@ mod tests {
         )
         .expect("write");
         let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
-        request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+        request.extensions = Some(domain::Extensions {
+            home: Some(home.path().into()),
+            trust: domain::trust::Trust::Trusted,
+            ..Default::default()
+        });
         let info = super::permissions(&request).expect("permissions");
         assert_eq!(info.rules, [(domain::permission_rules::RuleKind::Allow, "Bash(ls:*)".to_owned())]);
         assert_eq!(info.added_dirs, ["../lib"]);

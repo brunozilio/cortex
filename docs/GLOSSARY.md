@@ -52,6 +52,8 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 **Effect.** The planned replacement for access: what one call will do (read a path, write a path, execute a command, reach a host, spawn), declared by the tool in Rust and judged by one policy engine. It does not exist in the code yet; see `decisions/0003-effects-based-permission-policy.md`.
 
+**Trust (workspace trust).** The user's stored answer to "may this project folder run code and grant itself permissions?". It is `Trust::Trusted` or `Trust::Untrusted`, kept per trust root (the nearest ancestor containing `.git`, else the folder itself; never the home folder or a file-system root) in `users/local/trusted-folders.json`, and handed to the engine by the handler as `Extensions.trust`. In an untrusted folder the engine's `Gate` skips project hooks, scripts, MCP servers, declared providers, language-server commands and the owner reading of `settings.local.json`; instruction files and deny or ask rules still apply. It is not a per-item approval (a trusted project's MCP server still waits for its own), not the `trusted` field of a found skill or script tool (which says whether a script is the owner's or the project's, for script access), and not "untrusted content" (text the model read). A `Contributions` is the typed list of what a folder brings that trust would enable; a `TrustReport` is the state plus that list. See `decisions/0004-workspace-trust.md`. The rule is in `crates/domain/src/trust/`, the gate and the scan in `crates/agent-engine/src/trust/`, the store in `crates/app/src/trust.rs`.
+
 **Permission rule.** An allow, ask or deny line, written `Tool` or `Tool(specifier)`. Deny wins over ask, ask over allow; with no rule the mode decides. Lives in `crates/domain/src/permission_rules/mod.rs`.
 
 ## Models
@@ -66,7 +68,7 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 ## Configuration
 
-**Workspace vs project.** `Workspace` is an engine type: the per-run context handed to every tool (folders, policy, models, services). It is not a folder and not the Cargo workspace. The project is the folder the user works in, with the `.<command>/` folders of it and its ancestors. "Workspace trust" in `decisions/0004-workspace-trust.md` is about the project folder. `Workspace` lives in `crates/agent-engine/src/tools/workspace/mod.rs`.
+**Workspace vs project.** `Workspace` is an engine type: the per-run context handed to every tool (folders, policy, models, services). It is not a folder and not the Cargo workspace. The project is the folder the user works in, with the `.<command>/` folders of it and its ancestors. "Workspace trust" in `decisions/0004-workspace-trust.md` is about the project folder (see **Trust**). `Workspace` lives in `crates/agent-engine/src/tools/workspace/mod.rs`.
 
 **Settings vs UI state.** Settings are the configuration files a user or a project writes: `~/.<command>/settings.json`, `<project>/.<command>/settings.json` and `settings.local.json` (rules, hooks, flags, model roles). They are read by `crates/agent-engine/src/prompt/settings.rs`. UI state is what the TUI remembers for itself (model, mode, prompt history, last session per folder), stored in the data folder. The code calls both "settings"; the UI state is written by `crates/cli/src/tui/settings.rs` through `crates/app/src/settings.rs`, as a list of `SettingsChange` applied under the file's lock rather than as a whole document.
 
@@ -89,6 +91,8 @@ The product is written as "the app", its binary as `<command>`, its project fold
 **Plugin.** A git checkout under `~/.<command>/plugins/<name>/` that contributes hooks, MCP servers and language-server definitions. Lives in `crates/agent-engine/src/plugins.rs`.
 
 **Worktree.** A git worktree the engine creates under `<repository>/.<command>/worktrees/` so a sub-agent or a session can work in isolation. It is removed at the end if nothing changed and kept otherwise. Lives in `crates/agent-engine/src/agent_runtime/mod.rs`.
+
+**Child.** A process the application started and answers for, held as a `platform::child::Child`: a Bash shell, a monitor, an MCP stdio server, a language server, a hook command, a git helper. It runs in its own process group, is stopped politely before it is killed, is always waited for, and can keep the end of what it wrote to its error stream. It is not a sub-agent (a child run of the agent loop, which is a thread, not a process) and not the web terminal's pseudo-terminal process. "Grace" is how long a child is given between the polite stop and the kill; "reaped" means it has been waited for, after which nothing is signalled. See "Child processes" in `architecture.md`. Lives in `crates/platform/src/child.rs`.
 
 ## Memory and messages to the agent
 

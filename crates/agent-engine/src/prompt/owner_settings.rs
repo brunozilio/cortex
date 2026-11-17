@@ -38,11 +38,11 @@ mod tests {
 
         keep_feature(home.path(), SANDBOX, false).expect("kept");
 
-        let settings = super::super::settings::load(repo.path(), Some(home.path()), &[]).expect("load");
+        let settings = super::super::settings::load_trusted(repo.path(), Some(home.path()), &[]).expect("load");
         assert!(!settings.features.on(SANDBOX));
         assert_eq!(settings.style.map(|style| style.name), Some("Concise".into()));
         keep_feature(home.path(), SANDBOX, true).expect("kept");
-        let settings = super::super::settings::load(repo.path(), Some(home.path()), &[]).expect("load");
+        let settings = super::super::settings::load_trusted(repo.path(), Some(home.path()), &[]).expect("load");
         assert!(settings.features.on(SANDBOX));
     }
 

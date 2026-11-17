@@ -20,6 +20,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         permissions: rules("Bash(git status)"),
         pre_approved: rules("Bash(cargo test)"),
         scripts: ScriptGrants::none(),
+        trust: domain::trust::Trust::Trusted,
         safety: None,
         sandbox: Some(domain::sandbox::Sandbox { network: false, ..Default::default() }),
         redact: Some(Arc::new(domain::redact::Known::default())),
@@ -38,6 +39,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
 
     let fork = policy.fork();
 
+    assert_eq!(fork.trust, policy.trust, "a sub-agent works in a folder as trusted as its parent's");
     assert_eq!(fork.web, policy.web, "a sub-agent reads the web as its parent does");
     assert_eq!(fork.output, policy.output, "a sub-agent's command output is shaped as its parent's");
     assert_eq!(fork.sandbox, policy.sandbox, "a sub-agent's commands stay as confined as its parent's");

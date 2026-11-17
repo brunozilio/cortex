@@ -13,10 +13,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_client_cannot_hand_a_run_its_own_tools_or_files() {
+    fn a_client_cannot_hand_a_run_its_own_tools_files_or_trust() {
         let mut request = PromptRequest::plain("/srv/u/rocket".into(), "hi", ModelOption::new("m", "M"));
-        request.extensions =
-            Some(Extensions { dirs: vec!["/etc".into()], plugins: vec!["/tmp/evil".into()], ..Extensions::default() });
+        request.extensions = Some(Extensions {
+            dirs: vec!["/etc".into()],
+            plugins: vec!["/tmp/evil".into()],
+            trust: domain::trust::Trust::Trusted,
+            ..Extensions::default()
+        });
         request.memory =
             Some(MemoryBrief { output: "/etc/passwd".into(), origin: Some("Launch".into()), ..MemoryBrief::default() });
         let sent = as_sent(&request);

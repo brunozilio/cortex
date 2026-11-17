@@ -1,3 +1,4 @@
+use super::load_trusted as load;
 use super::*;
 
 #[test]

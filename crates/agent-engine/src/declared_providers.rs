@@ -7,15 +7,19 @@ use llm_providers::declared::{Declared, Shaper, register_shaped};
 pub enum Loaded {
     Ready(ModelProvider),
     Unapproved { path: PathBuf, id: String },
+    Untrusted { path: PathBuf },
     Broken { path: PathBuf, why: String },
 }
 
-pub fn load(home: Option<&Path>, cwd: &Path, approved: &[String]) -> Vec<Loaded> {
-    let user = home.map(|home| home.join(brand::DIR).join("providers"));
-    let project = cwd.join(brand::DIR).join("providers");
+pub fn load(gate: &crate::trust::Gate, approved: &[String]) -> Vec<Loaded> {
+    let user = gate.home().map(|home| home.join(brand::DIR).join("providers"));
+    let project = gate.cwd().join(brand::DIR).join("providers");
     let mut loaded: Vec<Loaded> = user.iter().flat_map(|dir| scripts(dir)).map(|path| one(&path, None)).collect();
     if user.as_ref().is_none_or(|user| !same(user, &project)) {
-        loaded.extend(scripts(&project).into_iter().map(|path| one(&path, Some(approved))));
+        loaded.extend(scripts(&project).into_iter().map(|path| match gate.honours(&path) {
+            true => one(&path, Some(approved)),
+            false => Loaded::Untrusted { path },
+        }));
     }
     loaded
 }
@@ -120,12 +124,17 @@ mod tests {
         let project = tempfile::tempdir().expect("project");
         write(home.path(), "mine.js", "loaded-mine");
         write(project.path(), "theirs.js", "loaded-theirs");
-        let loaded = load(Some(home.path()), project.path(), &[]);
+        let untrusted = load(&crate::trust::untrusted(project.path(), home.path()), &["loaded-theirs".to_owned()]);
+        assert_eq!(untrusted[0], Loaded::Ready(ModelProvider::named("loaded-mine")));
+        assert!(matches!(&untrusted[1], Loaded::Untrusted { path } if path.ends_with("theirs.js")), "{untrusted:?}");
+        assert!(crate::providers::find(ModelProvider::named("loaded-theirs")).is_none(), "not even when approved");
+
+        let loaded = load(&crate::trust::trusted(project.path(), home.path()), &[]);
         assert_eq!(loaded[0], Loaded::Ready(ModelProvider::named("loaded-mine")));
         assert!(matches!(&loaded[1], Loaded::Unapproved { id, .. } if id == "loaded-theirs"));
         assert!(crate::providers::find(ModelProvider::named("loaded-theirs")).is_none());
 
-        let approved = load(Some(home.path()), project.path(), &["loaded-theirs".to_owned()]);
+        let approved = load(&crate::trust::trusted(project.path(), home.path()), &["loaded-theirs".to_owned()]);
         assert_eq!(approved[1], Loaded::Ready(ModelProvider::named("loaded-theirs")));
     }
 
@@ -137,7 +146,7 @@ mod tests {
         let source = r#"export default { id: "loaded-shaped", name: "Shaped", wire: "chat", base: "https://s.example/v1" };
 export function shape(body) { return { ...body, temperature: 0.1, model: body.model.replace("fast", "fast-v2") }; }"#;
         std::fs::write(folder.join("shaped.js"), source).expect("write");
-        let loaded = load(Some(home.path()), &home.path().join("elsewhere"), &[]);
+        let loaded = load(&crate::trust::untrusted(&home.path().join("elsewhere"), home.path()), &[]);
         assert_eq!(loaded, [Loaded::Ready(ModelProvider::named("loaded-shaped"))]);
         let provider = crate::providers::get(ModelProvider::named("loaded-shaped")).expect("found");
         let mut body = serde_json::json!({"model": "fast", "messages": []});
@@ -152,7 +161,7 @@ export function shape(body) { return { ...body, temperature: 0.1, model: body.mo
         std::fs::create_dir_all(&folder).expect("folder");
         std::fs::write(folder.join("a.js"), "export default { id: 1 };").expect("write");
         write(home.path(), "b.js", "loaded-after-broken");
-        let loaded = load(Some(home.path()), &home.path().join("elsewhere"), &[]);
+        let loaded = load(&crate::trust::untrusted(&home.path().join("elsewhere"), home.path()), &[]);
         assert!(matches!(&loaded[0], Loaded::Broken { why, .. } if why.contains("not a provider")), "{loaded:?}");
         assert_eq!(loaded[1], Loaded::Ready(ModelProvider::named("loaded-after-broken")));
     }

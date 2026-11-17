@@ -65,12 +65,26 @@ impl Agent<'_> {
     fn remember_allowed(&self, asking: &Asking<'_>, rule: Option<String>) {
         match rule {
             Some(rule) => {
-                if let Err(error) = crate::prompt::permissions::keep_allow(&self.workspace.cwd, &rule) {
-                    tracing::warn!(%error, %rule, "the rule lasts this session only");
+                match crate::prompt::permissions::keep_allow(&self.workspace.cwd, &rule) {
+                    Ok(()) => self.say_when_the_rule_waits_for_trust(&rule),
+                    Err(error) => tracing::warn!(%error, %rule, "the rule lasts this session only"),
                 }
                 self.control.remember(|remembered| remembered.allow_rule(&rule));
             }
             None => self.control.remember(|remembered| remembered.remember(asking.name, asking.access, asking.subject)),
+        }
+    }
+
+    fn say_when_the_rule_waits_for_trust(&self, rule: &str) {
+        let workspace = self.workspace;
+        let kept = workspace.cwd.join(brand::DIR).join("settings.local.json");
+        let gate = crate::trust::Gate::at(&workspace.cwd, workspace.home.as_deref(), workspace.policy.trust);
+        if !gate.honours(&kept) {
+            (self.emit)(EngineEvent::Notice(format!(
+                "Kept {rule} in {}/settings.local.json. This folder is not trusted, so the rule holds for this run \
+                 only; it applies to later ones once you trust the folder (/trust).",
+                brand::DIR
+            )));
         }
     }
 

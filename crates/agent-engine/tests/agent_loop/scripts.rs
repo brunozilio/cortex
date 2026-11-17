@@ -19,7 +19,8 @@ export function run(input, ctx) {
 "#;
 
 fn script_tools(home: &std::path::Path, project: &std::path::Path) -> Vec<Box<dyn Tool>> {
-    load(Some(home), project).into_iter().map(|tool| Box::new(tool) as Box<dyn Tool>).collect()
+    let trusted = agent_engine::trust::Gate::at(project, Some(home), domain::trust::Trust::Trusted);
+    load(&trusted).into_iter().map(|tool| Box::new(tool) as Box<dyn Tool>).collect()
 }
 
 fn answer_every_ask(rig: &Rig, decision: Decision) -> std::thread::JoinHandle<usize> {

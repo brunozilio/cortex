@@ -49,6 +49,10 @@ pub fn skill_flag(skill: &str) -> Option<&'static str> {
 
 const SECURITY: &[&str] = &[SANDBOX, REDACT_SECRETS, DEPENDENCY_GUARD];
 
+pub fn only_restricts(feature: &str, flag: bool) -> bool {
+    flag == SECURITY.contains(&feature)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Flag {
     pub name: &'static str,
@@ -232,7 +236,7 @@ impl Features {
         let flags = value.as_object().ok_or("features must be an object of true or false")?;
         for (feature, flag) in flags {
             let flag = flag.as_bool().ok_or_else(|| format!("features.{feature} must be true or false"))?;
-            if owners || flag == SECURITY.contains(&feature.as_str()) {
+            if owners || only_restricts(feature, flag) {
                 self.set.insert(feature.clone(), flag);
             }
         }

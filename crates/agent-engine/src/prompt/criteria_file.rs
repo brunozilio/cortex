@@ -28,15 +28,15 @@ mod tests {
             std::fs::write(root.join("verification.md"), text).expect("write");
         }
 
-        let settings = super::super::settings::load(&nested, Some(home.path()), &[]).expect("load");
+        let settings = super::super::settings::load_trusted(&nested, Some(home.path()), &[]).expect("load");
         assert_eq!(settings.project_criteria.as_deref(), Some("the app's"));
 
         std::fs::remove_file(nested.join(brand::DIR).join("verification.md")).expect("remove");
-        let settings = super::super::settings::load(&nested, Some(home.path()), &[]).expect("load");
+        let settings = super::super::settings::load_trusted(&nested, Some(home.path()), &[]).expect("load");
         assert_eq!(settings.project_criteria.as_deref(), Some("the repository's"));
 
         let lone = tempfile::tempdir().expect("lone");
-        let settings = super::super::settings::load(lone.path(), Some(home.path()), &[]).expect("load");
+        let settings = super::super::settings::load_trusted(lone.path(), Some(home.path()), &[]).expect("load");
         assert_eq!(settings.project_criteria, None, "the owner's own file is not a project's criteria");
     }
 }

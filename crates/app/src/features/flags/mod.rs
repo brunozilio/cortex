@@ -20,7 +20,7 @@ pub fn handle(context: &Context<'_>, request: FlagsRequest) -> Result<FlagsReply
 pub fn forget(_client: u64) {}
 
 fn listed(context: &Context<'_>, cwd: &Path, home: &Path) -> Result<FlagsReply, String> {
-    let settings = settings::load(cwd, Some(home), &[])?;
+    let settings = settings::load(&context.services.extensions.trusts.gate(cwd, Some(home)), &[])?;
     context.services.off.follow(&settings.features);
     let flags = settings.features.listed().into_iter().map(|flag| {
         let available = !flag.name.eq(domain::features::SANDBOX) || platform::sandbox::SUPPORTED;

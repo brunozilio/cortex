@@ -63,47 +63,43 @@ Todas estas fontes se somam; nenhuma substitui a outra.
 | Fonte | Vale para |
 |---|---|
 | `~/{{DIR}}/settings.json`, em `"hooks"` | Você, em todos os projetos |
-| `{{DIR}}/settings.json` e `{{DIR}}/settings.local.json`, em `"hooks"`, no projeto e em cada pasta acima dele | Aquele projeto, a não ser que o git rastreie o arquivo (veja [abaixo](#hooks-versionados-pelo-git)) |
+| `{{DIR}}/settings.json` e `{{DIR}}/settings.local.json`, em `"hooks"`, na pasta atual e em cada pasta acima dela até a raiz do projeto | Aquele projeto, depois que você confia na pasta dele (veja [abaixo](#hooks-do-projeto-e-confianca-na-pasta)) |
 | `~/{{DIR}}/managed-settings.json`, em `"hooks"` | Você, em todos os projetos |
 | `~/{{DIR}}/hooks/*.js` | Você, em todos os projetos |
-| `{{DIR}}/hooks/*.js` no projeto e em cada pasta acima dele | Aquele projeto, a não ser que o git rastreie o arquivo (veja [abaixo](#hooks-versionados-pelo-git)) |
+| `{{DIR}}/hooks/*.js` na pasta atual e em cada pasta acima dela até a raiz do projeto | Aquele projeto, depois que você confia na pasta dele (veja [abaixo](#hooks-do-projeto-e-confianca-na-pasta)) |
 | `hooks/hooks.json` num plugin instalado | Onde o plugin estiver instalado (veja [Plugins](./plugins)) |
 | `hooks` no frontmatter de um agente próprio | Só enquanto aquele agente roda (veja [Agentes](./agents)) |
 
 Os hooks são lidos de novo no início de cada prompt, então uma mudança vale a partir da sua próxima mensagem.
 
-### Hooks versionados pelo git
+### Hooks do projeto e confiança na pasta
 
-Um hook roda comandos no seu computador com as suas permissões, por isso o {{NAME}} não roda hooks que chegam junto com um repositório. Quando o git rastreia um arquivo do projeto (um `{{DIR}}/settings.json` versionado, um `{{DIR}}/settings.local.json` que foi commitado ou um script em `{{DIR}}/hooks/`), os hooks desse arquivo são **ignorados**. O resto do arquivo continua valendo: as regras de negar e de perguntar, por exemplo, seguem como antes.
+Um hook roda comandos no seu computador com as suas permissões, por isso o {{NAME}} só roda os hooks de um projeto depois que você confia na pasta dele. Até lá, a chave `hooks` do `{{DIR}}/settings.json` e do `{{DIR}}/settings.local.json` do projeto e os scripts em `{{DIR}}/hooks/` são **ignorados**. O resto desses arquivos que só restringe continua valendo: as regras de negar e de perguntar, por exemplo.
 
-Quando algum hook é ignorado, o {{NAME}} avisa de quais arquivos ele veio:
+Quando hooks são ignorados, o {{NAME}} avisa:
 
-- `/hooks` e `/permissions` terminam com um aviso que cita os arquivos;
-- com `-p`, o mesmo aviso sai uma vez no stderr, antes da primeira resposta.
+- o chat pergunta se você confia na pasta antes do seu primeiro prompt e lista os hooks que seriam habilitados;
+- `/hooks` e `/permissions` terminam com uma nota listando o que foi ignorado, com o motivo `folder not trusted (/trust)`;
+- com `-p`, uma linha no stderr diz quantos itens do projeto foram ignorados; passe `--trust` para rodá-los naquela chamada.
 
-Estes hooks continuam rodando:
+Confie na pasta pela pergunta inicial ou com `/trust yes`. Veja em [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta) o que mais ela cobre.
+
+Estes hooks sempre rodam:
 
 - os seus, em `~/{{DIR}}/settings.json`, `~/{{DIR}}/managed-settings.json` e `~/{{DIR}}/hooks/`;
-- os hooks do projeto em arquivos que o git não rastreia, como um `{{DIR}}/settings.local.json` que você deixa fora do controle de versão ou um script que você ainda não adicionou;
-- todos os hooks do projeto quando a pasta não é um repositório git.
+- os hooks de plugins instalados.
 
-Para voltar a rodar os hooks versionados de um repositório, defina `trustProjectHooks` no **seu** arquivo de configuração, `~/{{DIR}}/settings.json`:
-
-```json
-{ "trustProjectHooks": true }
-```
-
-A chave só é lida dos seus próprios arquivos em `~/{{DIR}}/`. Um projeto não consegue ligá-la para si mesmo.
+Hooks em uma pasta `{{DIR}}/` acima do projeto (acima da pasta que contém o `.git`) nunca rodam, não importa em que você confiou.
 
 > [!WARNING]
-> `trustProjectHooks` vale para todo repositório que você abrir. Com ela ligada, um `{{DIR}}/settings.json` versionado ou a pasta `{{DIR}}/hooks/` rodam comandos no seu computador com as suas permissões: leia-os antes de trabalhar num repositório em que você não confia.
+> Depois que a pasta é confiável, um `{{DIR}}/settings.json` versionado ou a pasta `{{DIR}}/hooks/` rodam comandos no seu computador com as suas permissões. Leia esses arquivos antes de confiar em um repositório, e de novo depois de puxar alterações neles.
 
 > [!NOTE]
 > Hooks nas pastas de outra ferramenta, como `.claude/settings.json`, não são lidos.
 
 ### Conferir os hooks
 
-`/hooks` lista cada hook que uma execução aqui dispara, com o evento, o matcher (`*` para todos) e o que ele roda: o comando, a URL, ou `prompt:`/`agent:` seguido do começo do prompt. Sem hooks, aparece *No hooks. Add them under "hooks" in {{DIR}}/settings.json.* Quando os hooks versionados de um repositório foram ignorados, a lista termina com um aviso que cita os arquivos de onde eles vieram (veja [Hooks versionados pelo git](#hooks-versionados-pelo-git)).
+`/hooks` lista cada hook que uma execução aqui dispara, com o evento, o matcher (`*` para todos) e o que ele roda: o comando, a URL, ou `prompt:`/`agent:` seguido do começo do prompt. Sem hooks, aparece *No hooks. Add them under "hooks" in {{DIR}}/settings.json.* Quando a pasta não é confiável, a lista termina com uma nota listando o que foi ignorado, com o motivo `folder not trusted (/trust)` (veja [Hooks do projeto e confiança na pasta](#hooks-do-projeto-e-confianca-na-pasta)).
 
 ## Formato da configuração
 

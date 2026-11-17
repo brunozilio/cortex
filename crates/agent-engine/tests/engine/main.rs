@@ -83,3 +83,9 @@ fn finish(events: &Receiver<EngineEvent>) -> Vec<EngineEvent> {
 fn model() -> ModelOption {
     ModelOption::new("claude-opus-5-5", "Opus 5.5")
 }
+
+fn trusted(dir: &std::path::Path, prompt: &str) -> PromptRequest {
+    let mut request = PromptRequest::plain(dir.into(), prompt, model());
+    request.extensions = Some(domain::Extensions { trust: domain::trust::Trust::Trusted, ..Default::default() });
+    request
+}

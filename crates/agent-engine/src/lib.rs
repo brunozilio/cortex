@@ -22,6 +22,7 @@ pub mod plugins;
 pub mod prompt;
 pub mod sessions;
 pub mod tools;
+pub mod trust;
 pub mod upkeep;
 
 pub use llm_providers::{model, providers, transcript};

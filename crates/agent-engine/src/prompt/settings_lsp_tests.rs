@@ -1,4 +1,4 @@
-use super::*;
+use super::load_trusted as load;
 
 fn write(path: std::path::PathBuf, text: &str) {
     std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");

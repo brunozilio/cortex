@@ -43,6 +43,7 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
             .map(|info| format!("{} permission rules, {} hooks", info.rules.len(), info.hooks.len()))
             .map_err(|e| format!("{e} (fix the file it names)")),
     ));
+    found.push(check("trust", sdk.trust_state(cwd).map(|report| trust(&report)).map_err(|e| e.to_string())));
     found.push(check(
         "mcp servers",
         sdk.mcp_servers(cwd).map(|servers| format!("{} configured", servers.len())).map_err(|e| e.to_string()),
@@ -55,6 +56,17 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
         program("rg", &["--version"]).or_else(|_| Ok("not installed (Grep works without it)".into())),
     ));
     found
+}
+
+const UNTRUSTED: &str = domain::trust::NOT_TRUSTED;
+
+fn trust(report: &app::TrustReport) -> String {
+    match report.skipped() {
+        Some(skipped) => {
+            format!("{} ({}); /trust in the chat, --trust with --print", report.state(), skipped.counted())
+        }
+        None => report.state(),
+    }
 }
 
 fn declared(sdk: &Sdk, cwd: &Path) -> Result<String, String> {
@@ -73,11 +85,18 @@ fn sandbox(flags: Result<Vec<app::ListedFlag>, String>) -> Result<String, String
 }
 
 fn summarize(lines: &[String]) -> Result<String, String> {
+    let (untrusted, lines): (Vec<&String>, Vec<&String>) = lines.iter().partition(|line| line.contains(UNTRUSTED));
     let (loaded, problems): (Vec<&String>, Vec<&String>) = lines.iter().partition(|line| line.ends_with(" loaded"));
+    let skipped = match untrusted.len() {
+        0 => String::new(),
+        count => format!(", {count} skipped: {UNTRUSTED}"),
+    };
     match (loaded.len(), problems.is_empty()) {
         (_, false) => Err(problems.iter().map(|line| line.as_str()).collect::<Vec<_>>().join("; ")),
-        (0, true) => Ok(concat!("none (~/.", brand::command!(), "/providers/*.js adds one)").to_owned()),
-        (count, true) => Ok(format!("{count} loaded")),
+        (0, true) if untrusted.is_empty() => {
+            Ok(concat!("none (~/.", brand::command!(), "/providers/*.js adds one)").to_owned())
+        }
+        (count, true) => Ok(format!("{count} loaded{skipped}")),
     }
 }
 
@@ -130,6 +149,28 @@ mod tests {
         assert_eq!(summarize(&lines(&["groq loaded", "local loaded"])), Ok("2 loaded".into()));
         let mixed = lines(&["groq loaded", "/p/x.js: left out: bad wire"]);
         assert_eq!(summarize(&mixed), Err("/p/x.js: left out: bad wire".into()));
+        let untrusted =
+            lines(&["groq loaded", "/p/x.js: the project's provider is skipped: folder not trusted (/trust)"]);
+        assert_eq!(
+            summarize(&untrusted),
+            Ok("1 loaded, 1 skipped: folder not trusted (/trust)".into()),
+            "a folder nobody trusted yet is not a problem with the installation"
+        );
+    }
+
+    #[test]
+    fn the_trust_line_says_the_state_and_what_is_skipped() {
+        let mut brings = app::Contributions::default();
+        brings.add(domain::trust::ContributionKind::HookScript, "hooks/guard.js");
+        let untrusted =
+            app::TrustReport { root: "/work/rocket".into(), trust: app::Trust::Untrusted, refusal: None, brings };
+        assert_eq!(
+            trust(&untrusted),
+            "/work/rocket is not trusted: 1 project item skipped (Hook scripts (1)); \
+             /trust in the chat, --trust with --print"
+        );
+        let trusted = app::TrustReport { trust: app::Trust::Trusted, ..untrusted };
+        assert_eq!(trust(&trusted), "/work/rocket is trusted");
     }
 
     #[test]

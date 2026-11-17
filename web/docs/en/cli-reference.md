@@ -132,7 +132,7 @@ After an install, a new chat or `/reload` picks the plugin up.
 {{COMMAND}} doctor
 ```
 
-Runs the installation checks for the folder and exits with 0 when they all pass, 1 otherwise. See [Troubleshooting](./troubleshooting#run-the-doctor).
+Runs the installation checks for the folder and exits with 0 when they all pass, 1 otherwise. The `trust` line says whether the folder is trusted and how many project items are skipped while it is not; an untrusted folder is not a failed check. See [Troubleshooting](./troubleshooting#run-the-doctor).
 
 ### eval
 
@@ -184,6 +184,7 @@ Reads or changes your settings file, `~/{{DIR}}/settings.json`. With `--project`
 | `--input-format` | | `text` or `stream-json` | `text` | `--print` | `text` takes the prompt from the command line; `stream-json` reads user messages as JSON lines on standard input and answers them in turn |
 | `--max-turns` | | number | 200 | `--print` | The most model turns a run may take |
 | `--verification` | | text | | `--print` | Judge the work against these criteria before it ends; the command exits with 1 when it fails them |
+| `--trust` | | | off | `--print` | Trust the project folder for this invocation only, so its hooks, scripts, MCP servers and local settings load. Nothing is stored. Without it a `--print` run is untrusted and one line on stderr says what was skipped. In your home folder it is ignored, with a line on stderr saying so. See [Workspace trust](./sandbox-and-safety#workspace-trust). |
 
 ### Model and behaviour
 

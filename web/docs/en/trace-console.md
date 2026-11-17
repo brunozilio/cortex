@@ -107,13 +107,14 @@ The terminal is the only way to drive a session from the page: the page's server
 The page is a web app built with Bun. {{NAME}} serves it from, in order:
 
 1. the folder named in the `{{ENV}}_CONSOLE_DIR` environment variable, when it holds an `index.html`;
-2. the copy built into the binary, when Bun was present at build time;
-3. a `console` folder in {{NAME}}'s data folder, or the repository's `web/dist`.
+2. the copy built into the binary, when the page had been built before the binary was compiled;
+3. a `console` folder in {{NAME}}'s data folder.
 
-When none is found, the page says **The console app is not built yet**: install [Bun](https://bun.sh) and build again, or build the app once:
+When none is found, the page says **The console app is not built yet**: the binary was compiled without the page. From the repository, with [Bun](https://bun.sh) installed, build the page and then the binary again:
 
 ```bash
-cd web && bun install && bun run build
+cargo run -p xtask -- web
+cargo build --release
 ```
 
 If the server cannot start at all, the chat says `The {{NAME}} page could not start: …`.

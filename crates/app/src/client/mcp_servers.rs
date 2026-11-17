@@ -64,11 +64,30 @@ impl Sdk {
         })
     }
 
+    pub fn trust_state(&self, cwd: &Path) -> Result<domain::trust::TrustReport, Error> {
+        self.client.call(ClientCommand::TrustState { path: cwd.to_path_buf() }, trust_report)
+    }
+
+    pub fn set_trust(&self, cwd: &Path, trusted: bool) -> Result<domain::trust::TrustReport, Error> {
+        self.client.call(ClientCommand::Trust { path: cwd.to_path_buf(), trusted }, trust_report)
+    }
+
+    pub fn trust_for_this_process(&self, cwd: &Path) -> Result<domain::trust::TrustReport, Error> {
+        self.client.call(ClientCommand::TrustForThisProcess { path: cwd.to_path_buf() }, trust_report)
+    }
+
     pub fn permissions(&self, cwd: &Path) -> Result<domain::permission_rules::PermissionsInfo, Error> {
         self.client.call(ClientCommand::ListPermissions { path: cwd.to_path_buf() }, |reply| match reply {
             Reply::Permissions { permissions, .. } => Some(Ok(permissions)),
             _ => None,
         })
+    }
+}
+
+fn trust_report(reply: Reply) -> Option<Result<domain::trust::TrustReport, String>> {
+    match reply {
+        Reply::Trust(report) => Some(Ok(report)),
+        _ => None,
     }
 }
 

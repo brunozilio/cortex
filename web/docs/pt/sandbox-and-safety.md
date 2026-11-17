@@ -9,6 +9,7 @@ As [permissões](./permissions) decidem o que o agente pode fazer. Além delas, 
 
 | Mecanismo | Ligado por padrão | Desligado com | Onde |
 |---|---|---|---|
+| Confiança na pasta | Sempre | confie na pasta | Todos os sistemas |
 | Sandbox | Sim | `features.experimental-sandbox` | Só macOS |
 | Ocultação de segredos | Sim | `features.redact-secrets` | Todos os sistemas |
 | Snapshots antes de comandos destrutivos | Sim | `features.destructive-snapshot` | Todos os sistemas |
@@ -22,6 +23,60 @@ Os recursos são alternados com `/features <nome> on|off` (salvo em `~/{{DIR}}/s
 
 > [!IMPORTANT]
 > A sandbox, a ocultação de segredos e a proteção de dependências são **recursos de segurança**. O `{{DIR}}/settings.json` versionado de um projeto pode ligá-los, mas nunca desligá-los; só os seus próprios arquivos de configuração podem desligá-los.
+
+## Confiança na pasta
+
+A pasta de um projeto pode trazer arquivos que rodam código no seu computador ou ampliam o que o agente faz sem perguntar. Um repositório que você acabou de clonar pode ter esses arquivos. O {{NAME}} não carrega nenhum deles enquanto você não disser que confia na pasta.
+
+### O que espera pela confiança
+
+| Vindo do projeto | Enquanto a pasta não é confiável |
+|---|---|
+| `hooks` em `{{DIR}}/settings.json` e `{{DIR}}/settings.local.json` | Não são registrados |
+| Scripts de hook em `{{DIR}}/hooks/*.js` | Não são registrados |
+| `{{DIR}}/settings.local.json` | É lido como o `settings.json` versionado: só pode restringir (veja [Configurações](./settings#o-que-um-arquivo-do-repositorio-nao-pode-fazer)). As regras de permissão `allow`, as pastas adicionais, o acesso de scripts, as aprovações de MCP e de provedores e os comandos de servidores de linguagem são ignorados. |
+| Servidores MCP em `{{DIR}}/mcp.json` e `{{DIR}}/mcp/*.js` | Não são iniciados nem aparecem para aprovação |
+| Provedores declarados em `{{DIR}}/providers/*.js` | Não são carregados |
+| Ferramentas de script em `{{DIR}}/tools/` | Não são registradas |
+| Skills e comandos escritos como script (`skill.js`, `commands/*.js`) | Não são oferecidos. Skills e comandos em Markdown continuam carregando. |
+| `hooks`, `mcpServers`, `permissionMode` e `initialPrompt` no frontmatter de um agente do projeto | São descartados. O agente e as instruções dele continuam disponíveis. |
+
+Continuam valendo numa pasta em que você não confiou, porque só informam ou restringem o agente: arquivos de instruções, regras em `{{DIR}}/rules/`, regras de permissão `deny` e `ask`, estilos de saída e o `{{DIR}}/verification.md`.
+
+A sua própria pasta, `~/{{DIR}}/`, é sempre confiável: seus hooks, ferramentas, servidores e configurações funcionam em qualquer pasta.
+
+### Confiar em uma pasta
+
+Quando você abre o chat em uma pasta não confiável que traz algo da tabela, o {{NAME}} pergunta antes de enviar o seu primeiro prompt. A pergunta mostra a pasta e lista o que a confiança habilitaria.
+
+| Opção | Resultado |
+|---|---|
+| Trust this folder | Fica guardado para esta pasta. Tudo o que foi listado passa a carregar. |
+| Continue without trusting (o padrão) | Nada do que foi listado é carregado. A pergunta volta na próxima vez que você abrir o {{NAME}} aqui. |
+| Exit | Sai sem enviar nada. |
+
+Uma pasta que não traz nada da tabela não pergunta.
+
+`/trust` mostra se a pasta é confiável e o que ela traz. `/trust yes` confia nela e `/trust no` deixa de confiar; a mudança vale a partir da próxima execução. O `{{COMMAND}} doctor` também informa o estado. `/hooks` e `/permissions` terminam com uma nota listando o que foi ignorado, com o motivo `folder not trusted (/trust)`.
+
+Com `--print` ninguém é perguntado: a execução roda sem confiança, e uma linha no stderr diz quantos itens do projeto foram ignorados. Passe `--trust` para confiar na pasta só naquela chamada; nada é guardado.
+
+```bash
+{{COMMAND}} -p --trust "rode as verificações de release"
+```
+
+### O que é uma pasta confiável
+
+- A confiança é guardada por projeto: a pasta mais próxima, subindo, que contém `.git`, ou a própria pasta quando não há nenhuma. Confiar em um repositório vale para as subpastas dele.
+- Ela não vale para um repositório aninhado que tem o seu próprio `.git` nem para as pastas acima. Uma pasta `{{DIR}}/` acima do projeto nunca é fonte de hooks nem de configurações de dono, não importa em que você confiou.
+- A sua pasta pessoal e a raiz do sistema de arquivos não podem ser confiadas como projeto.
+- A resposta fica na pasta de dados do {{NAME}} (`trusted-folders.json`), nunca dentro do projeto, e é ligada ao caminho real da pasta: um repositório movido ou clonado de novo pergunta outra vez.
+- Sessões anteriores em uma pasta não a tornam confiável.
+
+> [!WARNING]
+> A confiança é tudo ou nada para a pasta e não expira quando o conteúdo dela muda. Depois de puxar alterações para um repositório confiável, revise o que mudou em `{{DIR}}/` como você revisaria código.
+
+A confiança não substitui as outras verificações. Os servidores MCP de um projeto confiável ainda esperam a sua aprovação, um a um (veja [MCP](./mcp)), e os scripts dele continuam sem acesso a arquivos, processos e rede até que as suas configurações liberem (veja [Configurações](./settings#scripts)).
 
 ## Sandbox
 

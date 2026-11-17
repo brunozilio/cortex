@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use agent_engine::trust::Gate;
 use domain::features::Features;
 use domain::memory::{Memory, team};
 
@@ -7,12 +8,12 @@ pub fn folder(project: &Path) -> PathBuf {
     project.join(brand::DIR).join("memory")
 }
 
-pub fn features(project: &Path, home: Option<&Path>) -> Features {
-    agent_engine::prompt::settings::load(project, home, &[]).map(|settings| settings.features).unwrap_or_default()
+pub fn features(gate: &Gate) -> Features {
+    agent_engine::prompt::settings::load(gate, &[]).map(|settings| settings.features).unwrap_or_default()
 }
 
-pub fn load(project: &Path, home: Option<&Path>) -> Vec<Memory> {
-    load_if(project, &features(project, home))
+pub fn load(gate: &Gate) -> Vec<Memory> {
+    load_if(gate.cwd(), &features(gate))
 }
 
 pub fn load_if(project: &Path, features: &Features) -> Vec<Memory> {
@@ -38,8 +39,9 @@ pub fn load_if(project: &Path, features: &Features) -> Vec<Memory> {
         .collect()
 }
 
-pub fn share(project: &Path, home: Option<&Path>, memory: &Memory) -> Result<PathBuf, String> {
-    let structured = features(project, home).on(domain::features::STRUCTURED_LEARNINGS);
+pub fn share(gate: &Gate, memory: &Memory) -> Result<PathBuf, String> {
+    let project = gate.cwd();
+    let structured = features(gate).on(domain::features::STRUCTURED_LEARNINGS);
     let by = if structured {
         team::Sharer { author: git_user(project), date: Some(agent_engine::today()), structured }
     } else {
@@ -80,8 +82,9 @@ mod tests {
             credit: None,
         };
 
-        let path = share(project.path(), None, &mine).expect("shared");
-        let loaded = load(project.path(), None);
+        let gate = Gate::at(project.path(), None, domain::trust::Trust::Untrusted);
+        let path = share(&gate, &mine).expect("shared");
+        let loaded = load(&gate);
 
         assert!(path.starts_with(folder(project.path())));
         assert_eq!(loaded.len(), 1);

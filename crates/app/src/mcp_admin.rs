@@ -1,21 +1,15 @@
 use std::path::Path;
 
 use crate::api::Reply;
+use domain::PromptRequest;
 use domain::mcp_config;
-use domain::{ModelOption, PromptRequest};
 use platform::store::Document;
 use serde_json::Value;
 
 use crate::extensions::Extensions;
 
 pub(crate) fn request_in(path: &Path, extensions: &Extensions, home: Option<&Path>) -> PromptRequest {
-    let mut request = PromptRequest::plain(path.to_path_buf(), "", ModelOption::new("", ""));
-    request.extensions = Some(domain::Extensions {
-        plugins: extensions.plugins.clone(),
-        home: home.map(Path::to_path_buf),
-        ..Default::default()
-    });
-    request
+    extensions.request_in(path, home)
 }
 
 pub(crate) fn list(path: &Path, extensions: &Extensions, home: Option<&Path>) -> Reply {
@@ -87,6 +81,9 @@ mod tests {
         std::fs::create_dir_all(&cwd).expect("cwd");
         let host = Extensions::default();
         let list = || states(list(&cwd, &host, Some(home.path())));
+        assert!(list().is_empty(), "an untrusted folder's servers are not offered for approval");
+        std::fs::create_dir_all(repo.path().join(".git")).expect("a repository, so src is inside the project");
+        host.trusts.set(&cwd, Some(home.path()), true).expect("trusted");
         assert_eq!(list(), [("jira".into(), McpOrigin::Project, McpState::Pending)]);
 
         approve(&cwd, Some(home.path()), "jira", true).expect("approve");

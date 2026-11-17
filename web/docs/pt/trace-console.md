@@ -107,13 +107,14 @@ O `/docs` abre esta documentação no mesmo servidor da página, com os nomes re
 A página é um app web construído com Bun. O {{NAME}} a serve a partir de, em ordem:
 
 1. a pasta indicada na variável de ambiente `{{ENV}}_CONSOLE_DIR`, quando ela tem um `index.html`;
-2. a cópia embutida no binário, quando o Bun estava presente na compilação;
-3. uma pasta `console` na pasta de dados do {{NAME}}, ou o `web/dist` do repositório.
+2. a cópia embutida no binário, quando a página já tinha sido construída antes de o binário ser compilado;
+3. uma pasta `console` na pasta de dados do {{NAME}}.
 
-Quando nenhuma é encontrada, a página diz **The console app is not built yet**: instale o [Bun](https://bun.sh) e compile de novo, ou construa o app uma vez:
+Quando nenhuma é encontrada, a página diz **The console app is not built yet**: o binário foi compilado sem a página. No repositório, com o [Bun](https://bun.sh) instalado, construa a página e depois o binário de novo:
 
 ```bash
-cd web && bun install && bun run build
+cargo run -p xtask -- web
+cargo build --release
 ```
 
 Se o servidor nem conseguir iniciar, o chat diz `The {{NAME}} page could not start: …`.

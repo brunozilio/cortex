@@ -48,6 +48,17 @@ Dê à execução o que ela precisa logo de início:
 
 As regras são separadas por espaços ou vírgulas (fora dos parênteses), e as duas opções podem ser repetidas. A sintaxe das regras está em [Permissões](./permissions).
 
+### Hooks, scripts e servidores do projeto precisam de `--trust`
+
+O modo de impressão nunca pergunta se você confia na pasta. Se a pasta ainda não é confiável, a execução não carrega nada do projeto que rode código ou conceda permissões (hooks, ferramentas de script, servidores MCP, provedores declarados, concessões do `settings.local.json`), e uma linha na saída de erro diz quantos itens foram ignorados. Passe `--trust` para carregá-los naquela chamada; nada é guardado:
+
+```bash
+{{COMMAND}} -p --trust "rode as verificações de release"
+```
+
+> [!WARNING]
+> Um script ou job de CI que depende dos hooks do projeto precisa passar `--trust`. Use a opção só onde você controla o conteúdo do repositório. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
+
 > [!WARNING]
 > `--mode bypass` deixa o agente rodar qualquer comando sem perguntar. Use só num ambiente descartável, como um container de CI ou um checkout de rascunho. Veja [Sandbox e segurança](./sandbox-and-safety).
 

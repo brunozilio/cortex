@@ -2,7 +2,7 @@ use std::path::{Component, Path, PathBuf};
 
 use super::Workspace;
 
-fn settled(path: &Path) -> PathBuf {
+pub(crate) fn settled(path: &Path) -> PathBuf {
     if let Ok(real) = path.canonicalize() {
         return real;
     }
@@ -55,8 +55,7 @@ fn protected(inside: &Path) -> Option<&'static str> {
 
 impl Workspace {
     fn project_root(&self) -> PathBuf {
-        let cwd = settled(&self.cwd);
-        cwd.ancestors().find(|dir| dir.join(".git").exists()).map_or_else(|| cwd.clone(), Path::to_path_buf)
+        domain::trust::project_root(&settled(&self.cwd), &|dir| dir.join(".git").exists())
     }
 
     fn settled_here(&self, path: &Path) -> PathBuf {
