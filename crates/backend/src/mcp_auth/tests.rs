@@ -131,3 +131,71 @@ fn a_sign_in_that_could_not_be_kept_stops_before_the_browser_opens() {
     assert!(error.contains("Operation not permitted") && error.contains("saved"), "{error}");
     assert!(http.sent().is_empty(), "nothing is asked of the server either");
 }
+
+fn tokens_for(server: &str) -> McpTokens {
+    McpTokens {
+        access_token: format!("a-{server}"),
+        refresh_token: None,
+        expires_at: None,
+        client_id: "c".into(),
+        client_secret: None,
+        token_endpoint: "https://auth.test/token".into(),
+        resource: server.to_owned(),
+    }
+}
+
+#[test]
+fn two_processes_signing_in_to_different_servers_keep_both_sign_ins() {
+    let dir = tempfile::tempdir().expect("dir");
+    let file = dir.path().join("secrets.json");
+    let owner = Principal::LocalOwner;
+    let servers: Vec<String> = (0..8).map(|n| format!("https://mcp{n}.test/mcp")).collect();
+    let start = std::sync::Barrier::new(servers.len());
+    std::thread::scope(|scope| {
+        for server in &servers {
+            let store = crate::secrets::SealedSecretStore::open(&file, [7; 32]).expect("store");
+            let auth = McpAuth::new(Arc::new(store), Arc::new(ScriptedHttp::new([])));
+            let (owner, start) = (owner.clone(), &start);
+            scope.spawn(move || {
+                start.wait();
+                auth.save(&owner, server, Some(&tokens_for(server))).expect("saved");
+            });
+        }
+    });
+    let store = crate::secrets::SealedSecretStore::open(&file, [7; 32]).expect("store");
+    let reader = McpAuth::new(Arc::new(store), Arc::new(ScriptedHttp::new([])));
+    let kept: Vec<&String> = servers.iter().filter(|server| reader.token(&owner, server).is_some()).collect();
+    assert_eq!(kept.len(), servers.len(), "kept only {kept:?}");
+}
+
+#[test]
+fn the_scopes_the_resource_asks_for_reach_the_authorization_url() {
+    let http = Arc::new(ScriptedHttp::new([
+        (
+            200,
+            json!({ "authorization_servers": ["https://auth.test"], "scopes_supported": ["mcp:read", "mcp:write"] })
+                .to_string(),
+        ),
+        (
+            200,
+            json!({
+                "authorization_endpoint": "https://auth.test/authorize",
+                "token_endpoint": "https://auth.test/token",
+                "registration_endpoint": "https://auth.test/register",
+                "scopes_supported": ["mcp:read", "mcp:write", "admin"]
+            })
+            .to_string(),
+        ),
+        (201, json!({ "client_id": "c-1" }).to_string()),
+        (200, json!({ "access_token": "a-1" }).to_string()),
+    ]));
+    let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
+    let mut opened = String::new();
+    auth.sign_in(&Principal::LocalOwner, SERVER, &mut |url| {
+        opened = url.to_owned();
+        approve(url);
+    })
+    .expect("signed in");
+    assert!(opened.contains("&scope=mcp%3Aread%20mcp%3Awrite"), "{opened}");
+    assert!(!opened.contains("admin"), "only what the resource asks for: {opened}");
+}

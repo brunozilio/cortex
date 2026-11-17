@@ -19,6 +19,9 @@ impl Ports for SystemPorts {
     }
 
     fn close(&self, port: u16, pid: u32) -> Result<(), String> {
+        if pid == std::process::id() {
+            return Err(format!("port {port} is held by this very session, which will not close itself"));
+        }
         platform::terminate(pid).map_err(|error| format!("could not close PID {pid}: {error}"))?;
         let started = Instant::now();
         while self.holder(port).is_some_and(|holder| holder.pid == pid) {

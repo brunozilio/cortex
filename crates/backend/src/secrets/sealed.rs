@@ -32,25 +32,44 @@ impl std::fmt::Debug for SealedSecretStore {
 
 impl SealedSecretStore {
     pub fn open(path: &Path, key: [u8; 32]) -> Result<Self, String> {
-        let entries = match std::fs::read_to_string(path) {
-            Ok(json) => serde_json::from_str(&json).map_err(|error| error.to_string())?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => BTreeMap::new(),
-            Err(error) => return Err(error.to_string()),
+        let entries = match read(path)? {
+            Some(Ok(entries)) => entries,
+            Some(Err(error)) => {
+                set_aside(path, &error)?;
+                BTreeMap::new()
+            }
+            None => BTreeMap::new(),
         };
         let cipher = XChaCha20Poly1305::new(&key.into());
         Ok(Self { path: path.to_path_buf(), cipher, entries: Mutex::new(entries) })
     }
 
+    fn sealed(&self, name: &str, secrets: &Secrets) -> Result<Sealed, String> {
+        let json = serde_json::to_vec(secrets).map_err(|error| error.to_string())?;
+        let mut nonce = [0u8; 24];
+        getrandom::fill(&mut nonce).map_err(|error| error.to_string())?;
+        let sealed = self
+            .cipher
+            .encrypt(XNonce::from_slice(&nonce), Payload { msg: &json, aad: name.as_bytes() })
+            .map_err(|_| "could not seal the secrets".to_owned())?;
+        Ok(Sealed { nonce: hex(&nonce), sealed: hex(&sealed) })
+    }
+
+    fn opened(&self, name: &str, entry: &Sealed) -> Option<Secrets> {
+        let nonce: [u8; 24] = unhex(&entry.nonce)?.try_into().ok()?;
+        let opened = self
+            .cipher
+            .decrypt(XNonce::from_slice(&nonce), Payload { msg: &unhex(&entry.sealed)?, aad: name.as_bytes() })
+            .ok()?;
+        serde_json::from_slice(&opened).ok()
+    }
+
+    fn held(&self) -> Result<platform::file_lock::Exclusive, String> {
+        platform::file_lock::Exclusive::on(&self.path).map_err(|error| error.to_string())
+    }
+
     pub fn key_at(path: &Path) -> Result<[u8; 32], String> {
-        if let Ok(text) = std::fs::read_to_string(path) {
-            return unhex(text.trim())
-                .and_then(|bytes| bytes.try_into().ok())
-                .ok_or("the secrets key is not 64 hex digits".into());
-        }
-        let mut key = [0u8; 32];
-        getrandom::fill(&mut key).map_err(|error| error.to_string())?;
-        write_private(path, &hex(&key)).map_err(|error| error.to_string())?;
-        Ok(key)
+        super::key::at(path)
     }
 
     fn entries(&self) -> MutexGuard<'_, BTreeMap<String, Sealed>> {
@@ -77,26 +96,30 @@ impl SecretStore for SealedSecretStore {
     fn get(&self, owner: &Principal, connection: SecretId) -> Option<Secrets> {
         let name = name(owner, connection);
         let entry = self.entries().get(&name)?.clone();
-        let nonce: [u8; 24] = unhex(&entry.nonce)?.try_into().ok()?;
-        let opened = self
-            .cipher
-            .decrypt(XNonce::from_slice(&nonce), Payload { msg: &unhex(&entry.sealed)?, aad: name.as_bytes() })
-            .ok()?;
-        serde_json::from_slice(&opened).ok()
+        self.opened(&name, &entry)
     }
 
     fn set(&self, owner: &Principal, connection: SecretId, secrets: &Secrets) -> Result<(), String> {
         let name = name(owner, connection);
-        let json = serde_json::to_vec(secrets).map_err(|error| error.to_string())?;
-        let mut nonce = [0u8; 24];
-        getrandom::fill(&mut nonce).map_err(|error| error.to_string())?;
-        let sealed = self
-            .cipher
-            .encrypt(XNonce::from_slice(&nonce), Payload { msg: &json, aad: name.as_bytes() })
-            .map_err(|_| "could not seal the secrets".to_owned())?;
-        let _held = platform::file_lock::Exclusive::on(&self.path).map_err(|error| error.to_string())?;
+        let sealed = self.sealed(&name, secrets)?;
+        let _held = self.held()?;
         let mut entries = self.entries();
-        entries.insert(name, Sealed { nonce: hex(&nonce), sealed: hex(&sealed) });
+        entries.insert(name, sealed);
+        self.save(&entries)
+    }
+
+    fn update(
+        &self,
+        owner: &Principal,
+        connection: SecretId,
+        change: &mut dyn FnMut(&mut Secrets),
+    ) -> Result<(), String> {
+        let name = name(owner, connection);
+        let _held = self.held()?;
+        let mut entries = self.entries();
+        let mut secrets = entries.get(&name).and_then(|entry| self.opened(&name, entry)).unwrap_or_default();
+        change(&mut secrets);
+        entries.insert(name.clone(), self.sealed(&name, &secrets)?);
         self.save(&entries)
     }
 
@@ -117,11 +140,35 @@ impl SecretStore for SealedSecretStore {
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
+type Entries = BTreeMap<String, Sealed>;
+
+fn read(path: &Path) -> Result<Option<Result<Entries, serde_json::Error>>, String> {
+    match std::fs::read(path) {
+        Ok(json) => Ok(Some(serde_json::from_slice(&json))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("the secrets file {} cannot be read: {error}", path.display())),
+    }
+}
+
+fn set_aside(path: &Path, error: &serde_json::Error) -> Result<(), String> {
+    let _held = platform::file_lock::Exclusive::on(path).map_err(|error| error.to_string())?;
+    if !matches!(read(path)?, Some(Err(_))) {
+        return Ok(());
+    }
+    let epoch = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |since| since.as_secs());
+    let aside = path.with_extension(format!("json.corrupt-{epoch}"));
+    std::fs::rename(path, &aside).map_err(|rename| {
+        format!("the secrets file {} does not parse and could not be kept aside: {rename}", path.display())
+    })?;
+    tracing::warn!(%error, aside = %aside.display(), "the secrets file did not parse; kept aside");
+    Ok(())
+}
+
+pub(super) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn unhex(text: &str) -> Option<Vec<u8>> {
+pub(super) fn unhex(text: &str) -> Option<Vec<u8>> {
     (0..text.len())
         .step_by(2)
         .map(|at| text.get(at..at + 2).and_then(|pair| u8::from_str_radix(pair, 16).ok()))
@@ -225,6 +272,27 @@ mod tests {
         let moved = store.entries().get(&name(&Principal::LocalOwner, a)).cloned().expect("sealed");
         store.entries().insert(name(&Principal::LocalOwner, b), moved);
         assert_eq!(store.get(&Principal::LocalOwner, b), None);
+    }
+
+    #[test]
+    fn a_secrets_file_that_does_not_parse_is_kept_aside_and_a_fresh_one_opens() {
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("secrets.json");
+        std::fs::write(&path, "{ not json").expect("write");
+
+        let store = SealedSecretStore::open(&path, [3; 32]).expect("a fresh store opens");
+
+        let connection = SecretId::new();
+        store.set(&Principal::LocalOwner, connection, &secrets()).expect("set");
+        assert_eq!(store.get(&Principal::LocalOwner, connection), Some(secrets()));
+        let aside: Vec<String> = std::fs::read_dir(dir.path())
+            .expect("list")
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("secrets.json.corrupt-"))
+            .collect();
+        assert_eq!(aside.len(), 1, "{aside:?}");
+        assert_eq!(std::fs::read_to_string(dir.path().join(&aside[0])).expect("aside"), "{ not json");
     }
 
     #[test]

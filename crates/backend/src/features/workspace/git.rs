@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::process::Command;
 
 use domain::changes::{Changes, DiffScope};
 
@@ -47,15 +46,5 @@ fn branch_base(cwd: &Path) -> Result<String, String> {
 }
 
 fn git(cwd: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(["-c", "core.quotepath=off"])
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .map_err(|error| format!("git: {error}"))?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).trim().to_owned())
-    }
+    crate::git::run(cwd, &[&["-c", "core.quotepath=off"], args].concat(), crate::git::LOCAL)
 }

@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::process::{Command, Stdio};
 
 use domain::Principal;
 use domain::memory::Memory;
@@ -77,20 +76,13 @@ fn git_empty_tree(project: &Path) -> String {
 }
 
 fn git(project: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(project)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| format!("git: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim_end().to_owned())
+    crate::git::run(project, args, crate::git::LOCAL).map(|output| output.trim_end().to_owned())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::process::Command;
+
     use super::*;
 
     fn run(dir: &Path, args: &[&str]) {

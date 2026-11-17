@@ -157,7 +157,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         println!("{}", config::run(&config::file(&cwd, *project)?, action.clone())?);
         return Ok(ExitCode::SUCCESS);
     }
-    let sdk = Sdk::builder().build().map_err(|e| e.to_string())?;
+    let sdk = Sdk::builder().cwd(&cwd).build().map_err(|e| e.to_string())?;
     let prompt = (!cli.prompt.is_empty()).then(|| cli.prompt.join(" "));
     let add_dirs = cli.add_dir.iter().map(|typed| tui::dirs::folder(&cwd, typed)).collect::<Result<Vec<_>, _>>()?;
     let headless = sdk::Headless {

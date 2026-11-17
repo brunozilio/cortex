@@ -53,14 +53,8 @@ pub fn share(project: &Path, home: Option<&Path>, memory: &Memory) -> Result<Pat
 }
 
 fn git_user(project: &Path) -> Option<String> {
-    let output = std::process::Command::new("git")
-        .args(["config", "user.name"])
-        .current_dir(project)
-        .stdin(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    let name = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-    (output.status.success() && !name.is_empty()).then_some(name)
+    let name = crate::git::run(project, &["config", "user.name"], crate::git::LOCAL).ok()?.trim().to_owned();
+    (!name.is_empty()).then_some(name)
 }
 
 #[cfg(test)]

@@ -8,6 +8,16 @@ pub trait Host: Send + Sync {
     fn call(&self, function: &str, arguments: Value) -> Result<Value, String>;
 }
 
+const MOST_MEMORY: usize = 64 << 20;
+const MOST_STACK: usize = 1 << 20;
+
+pub(crate) fn runtime() -> rquickjs::Result<Runtime> {
+    let runtime = Runtime::new()?;
+    runtime.set_memory_limit(MOST_MEMORY);
+    runtime.set_max_stack_size(MOST_STACK);
+    Ok(runtime)
+}
+
 const PRELUDE: &str = r#"
 const call = (name, value) => {
   const answer = JSON.parse(globalThis.__host(name, JSON.stringify(value === undefined ? null : value)));
@@ -52,7 +62,7 @@ pub fn run_within(
     stop: Arc<AtomicBool>,
     limit: Option<std::time::Duration>,
 ) -> Result<Value, String> {
-    let runtime = Runtime::new().map_err(|error| error.to_string())?;
+    let runtime = runtime().map_err(|error| error.to_string())?;
     let flag = Arc::clone(&stop);
     let timed_out = Arc::new(AtomicBool::new(false));
     let late = Arc::clone(&timed_out);
@@ -121,7 +131,7 @@ fn evaluate<'js>(
 }
 
 pub fn exported(name: &str, source: &str, export: &str) -> Result<Value, String> {
-    let runtime = Runtime::new().map_err(|error| error.to_string())?;
+    let runtime = runtime().map_err(|error| error.to_string())?;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
     let context = Context::full(&runtime).map_err(|error| error.to_string())?;
@@ -140,7 +150,7 @@ const EMPTY_FUNCTION: &str = r"(value) => typeof value === 'function'
   && /^(async\s*)?(function\s*[\w$]*\s*)?\([^)]*\)\s*(=>\s*)?\{\s*\}$/.test(value.toString().trim())";
 
 pub fn empty_function(name: &str, source: &str, export: &str) -> bool {
-    let Ok(runtime) = Runtime::new() else { return false };
+    let Ok(runtime) = runtime() else { return false };
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
     let Ok(context) = Context::full(&runtime) else { return false };
@@ -157,7 +167,7 @@ pub fn empty_function(name: &str, source: &str, export: &str) -> bool {
 }
 
 pub fn exports(name: &str, source: &str, export: &str) -> bool {
-    let Ok(runtime) = Runtime::new() else { return false };
+    let Ok(runtime) = runtime() else { return false };
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
     let Ok(context) = Context::full(&runtime) else { return false };

@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use super::*;
 
 fn repository(at: &Path) {
@@ -27,6 +29,27 @@ fn a_plugin_is_installed_listed_updated_and_removed() {
     assert!(update(&folder, "ship-it").is_ok());
     assert_eq!(remove(&folder, "ship-it").expect("removed")["removed"], "ship-it");
     assert!(list(&folder).is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn updating_a_plugin_never_lets_git_ask_at_the_terminal() {
+    let home = tempfile::tempdir().expect("home");
+    let folder = home.path().join("plugins");
+    let target = folder.join("asks");
+    std::fs::create_dir_all(&target).expect("target");
+    repository(&target);
+    let remote = home.path().join("remote.sh");
+    std::fs::write(&remote, "echo \"prompt=${GIT_TERMINAL_PROMPT:-unset}\" >&2\nexit 1\n").expect("remote");
+    let run = |args: &[&str]| {
+        assert!(Command::new("git").args(args).current_dir(&target).output().expect("git").status.success());
+    };
+    run(&["config", "protocol.ext.allow", "always"]);
+    run(&["remote", "add", "origin", &format!("ext::sh {}", remote.display())]);
+
+    let refused = update(&folder, "asks").expect_err("the remote fails");
+
+    assert!(refused.contains("prompt=0"), "{refused}");
 }
 
 #[test]

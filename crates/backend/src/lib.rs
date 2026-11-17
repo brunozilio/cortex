@@ -6,6 +6,7 @@ pub mod feature;
 mod features {
     include!(concat!(env!("OUT_DIR"), "/features.rs"));
 }
+mod git;
 mod handler;
 mod homes;
 mod local;

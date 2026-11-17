@@ -71,7 +71,9 @@ O `{{DIR}}/settings.json` de um projeto vem de quem escreveu o repositório, ent
 | `escalationModel` | Ignorada. |
 | `enabledProviders` | Ignorada. |
 | `enableAllProjectMcpServers`, `enabledMcpServers`, `disabledMcpServers` | Ignoradas. |
-| `scripts.*` | Só pode desligar acessos. |
+| `hooks` | Ignorados enquanto o git rastrear o arquivo, a não ser que você defina `trustProjectHooks` nas suas próprias configurações. Veja [Hooks](./hooks#hooks-versionados-pelo-git). |
+| `trustProjectHooks` | Ignorada. Só o `~/{{DIR}}/settings.json` a liga. |
+| `scripts.*` | Só pode desligar acessos. Não consegue dar acesso aos scripts do próprio projeto. |
 | `features.*` | Pode desligar um recurso comum e ligar um recurso de segurança (`experimental-sandbox`, `redact-secrets`, `experimental-dependency-guard`), nunca o contrário. |
 | `sandbox.network` | Só pode desligar a rede. |
 | `sandbox.allowWrite` | Ignorada. |
@@ -125,11 +127,12 @@ Sem opções, edita `~/{{DIR}}/settings.json`. Com `--project`, edita `{{DIR}}/s
 | `enableAllProjectMcpServers` | booleano | `false` | Inicia sem perguntar todos os servidores MCP declarados no `{{DIR}}/mcp.json` do projeto. Lido só dos seus próprios arquivos. |
 | `enabledMcpServers` | lista de textos | `[]` | Servidores MCP do projeto que você aprovou. `{{COMMAND}} mcp approve` e `/mcp approve` gravam aqui. Lido só dos seus próprios arquivos. |
 | `disabledMcpServers` | lista de textos | `[]` | Servidores MCP do projeto que você desligou; vence as duas chaves acima. Lido só dos seus próprios arquivos. |
-| `hooks` | objeto | `{}` | Comandos, prompts ou chamadas HTTP executados em eventos. Os hooks de todos os arquivos se somam. Veja [Hooks](./hooks). |
+| `hooks` | objeto | `{}` | Comandos, prompts ou chamadas HTTP executados em eventos. Os hooks de todos os arquivos se somam, menos os de arquivos do projeto que o git rastreia, que são ignorados enquanto `trustProjectHooks` não estiver ligada. Veja [Hooks](./hooks). |
+| `trustProjectHooks` | booleano | `false` | `true` roda os hooks versionados de um repositório (o `{{DIR}}/settings.json` versionado e a pasta `{{DIR}}/hooks/`) como se fossem seus. Só vale no seu próprio arquivo de configuração, `~/{{DIR}}/settings.json`; um projeto não consegue defini-la. Veja [Hooks versionados pelo git](./hooks#hooks-versionados-pelo-git). |
 | `lspServers` | objeto | `{}` | Adiciona, altera ou desativa servidores de linguagem. Veja [`lspServers`](#lspservers) e [Inteligência de código](./code-intelligence). |
 | `permissions` | objeto | `{}` | Regras de liberar, perguntar e negar, e pastas extras. Veja [`permissions`](#permissions). |
 | `verification` | objeto | `{}` | Regras para o juiz de verificação. Veja [`verification`](#verification). |
-| `scripts` | objeto | tudo `true` | O que ferramentas, skills, hooks e provedores em JavaScript podem fazer. Veja [`scripts`](#scripts). |
+| `scripts` | objeto | tudo `true` para os seus scripts, tudo `false` para os de um projeto | O que ferramentas, skills, hooks e provedores em JavaScript podem fazer. Veja [`scripts`](#scripts). |
 | `sandbox` | objeto | rede ligada | Onde comandos na sandbox podem gravar e se acessam a rede. Veja [`sandbox`](#sandbox). |
 | `features` | objeto | todos os recursos ligados | Liga ou desliga recursos pelo nome. Veja [`features`](#features). |
 
@@ -170,17 +173,35 @@ A sintaxe e a precedência das regras estão na página [Permissões](./permissi
 
 ### `scripts`
 
-| Chave | Tipo | Padrão | Descrição |
-|---|---|---|---|
-| `scripts.files` | booleano | `true` | Scripts podem ler e gravar arquivos (`readFile`, `writeFile`). |
-| `scripts.processes` | booleano | `true` | Scripts podem iniciar processos (`exec`). |
-| `scripts.network` | booleano | `true` | Scripts podem acessar a rede (`fetch`). |
+| Chave | Tipo | Seus scripts | Scripts de um projeto | Descrição |
+|---|---|---|---|---|
+| `scripts.files` | booleano | `true` | `false` | Scripts podem ler e gravar arquivos (`readFile`, `writeFile`). |
+| `scripts.processes` | booleano | `true` | `false` | Scripts podem iniciar processos (`exec`). |
+| `scripts.network` | booleano | `true` | `false` | Scripts podem acessar a rede (`fetch`). |
+
+O padrão depende de onde o script está:
+
+- **Os seus scripts** são os que ficam em `~/{{DIR}}/` e os que vêm com o {{NAME}}. Eles têm os três tipos de acesso, a não ser que um arquivo de configuração desligue algum.
+- **Os scripts de um projeto** são os que ficam na pasta `{{DIR}}/` do projeto: as ferramentas, skills, hooks, provedores e servidores MCP em script dele. Eles não têm **nenhum** dos três até que um dos seus próprios arquivos de configuração libere.
+
+Os seus próprios arquivos são `~/{{DIR}}/settings.json`, `~/{{DIR}}/settings.local.json`, `~/{{DIR}}/managed-settings.json` e o `{{DIR}}/settings.local.json` de um projeto, desde que o git não o rastreie. Um valor definido neles vale para os dois grupos: `true` libera o acesso também para os scripts do projeto, `false` tira o acesso também dos seus. Um `{{DIR}}/settings.json` versionado só pode desligar acessos.
 
 Um script barrado recebe um erro que cita a configuração, por exemplo `scripts may not touch files here (settings: scripts.files)`.
+
+Para deixar os scripts do projeto em que você está trabalhando lerem arquivos e rodarem comandos, mas sem acesso à rede, coloque isto no `{{DIR}}/settings.local.json` daquele projeto, para valer só ali:
+
+```json
+{ "scripts": { "files": true, "processes": true } }
+```
+
+Para desligar a rede de todos os scripts, inclusive os seus:
 
 ```json
 { "scripts": { "network": false } }
 ```
+
+> [!NOTE]
+> Versões anteriores davam aos scripts de um projeto os três tipos de acesso por padrão. Se uma ferramenta ou um hook do projeto passar a falhar com `settings: scripts.…`, libere o que ele precisa em um dos seus próprios arquivos, como mostrado acima.
 
 ### `sandbox`
 

@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -12,11 +13,14 @@ use crate::secrets::{SecretStore, Secrets};
 
 pub(crate) const CONFIG: &str = "config";
 const ANSWER_LIMIT: u64 = 1 << 20;
+const STOP_POLL: std::time::Duration = std::time::Duration::from_millis(100);
+const REPLACED: &str = "this sign-in was replaced by a newer one";
 
 pub trait SignIn: Send + Sync {
     fn sign_in(
         &self,
         provider: ModelProvider,
+        stop: &Arc<AtomicBool>,
         open: &mut dyn FnMut(String, Option<String>),
     ) -> Result<Config, ProviderError>;
 }
@@ -28,15 +32,26 @@ impl SignIn for BrowserSignIn {
     fn sign_in(
         &self,
         provider: ModelProvider,
+        stop: &Arc<AtomicBool>,
         open: &mut dyn FnMut(String, Option<String>),
     ) -> Result<Config, ProviderError> {
         let provider = agent_engine::providers::get(provider).map_err(|e| ProviderError::Invalid(e.to_string()))?;
-        provider.sign_in(&NetHost { open: Mutex::new(open) })
+        provider.sign_in(&NetHost { open: Mutex::new(open), stop: Arc::clone(stop) })
     }
 }
 
 struct NetHost<'a> {
     open: Mutex<&'a mut dyn FnMut(String, Option<String>)>,
+    stop: Arc<AtomicBool>,
+}
+
+impl NetHost<'_> {
+    fn going(&self) -> Result<(), ProviderError> {
+        if self.stop.load(Ordering::SeqCst) {
+            return Err(ProviderError::Invalid(REPLACED.to_owned()));
+        }
+        Ok(())
+    }
 }
 
 fn read(response: agent_engine::model::http::Response) -> Result<(u16, String), ProviderError> {
@@ -54,10 +69,12 @@ fn read(response: agent_engine::model::http::Response) -> Result<(u16, String), 
 impl Host for NetHost<'_> {
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<(u16, String), ProviderError> {
         use agent_engine::model::http::Http;
+        self.going()?;
         read(agent_engine::model::http::NetHttp.post(url, headers, body).map_err(ProviderError::Invalid)?)
     }
     fn get(&self, url: &str, headers: &[(String, String)]) -> Result<(u16, String), ProviderError> {
         use agent_engine::model::http::Http;
+        self.going()?;
         read(agent_engine::model::http::NetHttp.get(url, headers).map_err(ProviderError::Invalid)?)
     }
     fn open(&self, url: String, code: Option<String>) {
@@ -65,7 +82,7 @@ impl Host for NetHost<'_> {
         open(url, code);
     }
     fn listen(&self, port: u16, path: &str) -> Result<Box<dyn Listener>, ProviderError> {
-        Ok(Box::new(Loopback::bind_on(port, path, true)?))
+        Ok(Box::new(Loopback::bind_on(port, path, true)?.stopped_by(Arc::clone(&self.stop))))
     }
     fn random(&self, length: usize) -> Result<String, ProviderError> {
         let mut bytes = vec![0; length];
@@ -73,7 +90,14 @@ impl Host for NetHost<'_> {
         Ok(URL_SAFE_NO_PAD.encode(bytes))
     }
     fn sleep(&self, duration: std::time::Duration) {
-        std::thread::sleep(duration);
+        let until = std::time::Instant::now() + duration;
+        while !self.stop.load(Ordering::SeqCst) {
+            let left = until.saturating_duration_since(std::time::Instant::now());
+            if left.is_zero() {
+                return;
+            }
+            std::thread::sleep(left.min(STOP_POLL));
+        }
     }
     fn now(&self) -> chrono::DateTime<chrono::Utc> {
         chrono::Utc::now()

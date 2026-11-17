@@ -1,7 +1,10 @@
+mod key;
 mod sealed;
+mod unkept;
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Mutex;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use platform::sync::Locked;
 
@@ -10,6 +13,7 @@ use domain::{Principal, SecretId};
 use crate::dirs::owner_key;
 
 pub use self::sealed::SealedSecretStore;
+pub use self::unkept::{Unkept, refusal};
 
 pub type Secrets = BTreeMap<String, String>;
 
@@ -17,24 +21,43 @@ pub trait SecretStore: Send + Sync {
     fn get(&self, owner: &Principal, connection: SecretId) -> Option<Secrets>;
     fn set(&self, owner: &Principal, connection: SecretId, secrets: &Secrets) -> Result<(), String>;
     fn delete(&self, owner: &Principal, connection: SecretId);
+
+    fn update(
+        &self,
+        owner: &Principal,
+        connection: SecretId,
+        change: &mut dyn FnMut(&mut Secrets),
+    ) -> Result<(), String> {
+        let mut secrets = self.get(owner, connection).unwrap_or_default();
+        change(&mut secrets);
+        self.set(owner, connection, &secrets)
+    }
+
+    fn unkept(&self) -> Option<String> {
+        None
+    }
 }
 
-pub fn system_secrets() -> std::sync::Arc<dyn SecretStore> {
-    static STORE: std::sync::OnceLock<std::sync::Arc<dyn SecretStore>> = std::sync::OnceLock::new();
-    std::sync::Arc::clone(STORE.get_or_init(|| {
-        let dir = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
-        let sealed = std::fs::create_dir_all(&dir)
-            .map_err(|error| error.to_string())
-            .and_then(|()| SealedSecretStore::key_at(&dir.join("secrets.key")))
-            .and_then(|key| SealedSecretStore::open(&dir.join("secrets.json"), key));
-        match sealed {
-            Ok(store) => std::sync::Arc::new(store),
-            Err(error) => {
-                tracing::error!(%error, "the sealed secrets file is unusable; keys last only until restart");
-                std::sync::Arc::new(InMemorySecretStore::default())
-            }
+pub fn system_secrets() -> Arc<dyn SecretStore> {
+    static STORE: std::sync::OnceLock<Arc<dyn SecretStore>> = std::sync::OnceLock::new();
+    Arc::clone(STORE.get_or_init(|| secrets_in(crate::local_data_dir().as_deref())))
+}
+
+pub fn secrets_in(dir: Option<&Path>) -> Arc<dyn SecretStore> {
+    match sealed_in(dir) {
+        Ok(store) => Arc::new(store),
+        Err(reason) => {
+            tracing::error!(%reason, "the sealed secrets file is unusable; no key can be kept");
+            Arc::new(Unkept::because(reason))
         }
-    }))
+    }
+}
+
+fn sealed_in(dir: Option<&Path>) -> Result<SealedSecretStore, String> {
+    let dir = dir.ok_or("this user has no data folder")?;
+    std::fs::create_dir_all(dir).map_err(|error| format!("{} cannot be made: {error}", dir.display()))?;
+    let key = SealedSecretStore::key_at(&dir.join("secrets.key"))?;
+    SealedSecretStore::open(&dir.join("secrets.json"), key)
 }
 
 #[derive(Debug, Default)]
@@ -57,5 +80,52 @@ impl SecretStore for InMemorySecretStore {
     fn delete(&self, owner: &Principal, connection: SecretId) {
         let mut map = self.secrets.locked();
         map.remove(&(owner_key(owner), connection));
+    }
+
+    fn update(
+        &self,
+        owner: &Principal,
+        connection: SecretId,
+        change: &mut dyn FnMut(&mut Secrets),
+    ) -> Result<(), String> {
+        change(self.secrets.locked().entry((owner_key(owner), connection)).or_default());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stored(store: &dyn SecretStore) -> Result<(), String> {
+        store.set(&Principal::LocalOwner, SecretId::new(), &Secrets::from([("k".to_owned(), "v".to_owned())]))
+    }
+
+    #[test]
+    fn a_data_folder_gets_a_sealed_file_that_keeps_what_is_set() {
+        let dir = tempfile::tempdir().expect("dir");
+        let store = secrets_in(Some(&dir.path().join("data")));
+        assert_eq!(store.unkept(), None);
+        stored(&*store).expect("kept");
+        assert!(dir.path().join("data/secrets.json").is_file());
+    }
+
+    #[test]
+    fn without_a_data_folder_nothing_is_kept_and_no_temporary_folder_stands_in() {
+        let store = secrets_in(None);
+        let reason = store.unkept().expect("says why");
+        assert!(reason.contains("no data folder"), "{reason}");
+        let refused = stored(&*store).expect_err("nothing pretends to be saved");
+        assert_eq!(refused, format!("keys cannot be kept on this machine: {reason}"));
+    }
+
+    #[test]
+    fn a_vault_that_cannot_be_opened_says_why_instead_of_keeping_keys_in_memory() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::create_dir(dir.path().join("secrets.key")).expect("a folder where the key should be");
+        let store = secrets_in(Some(dir.path()));
+        let reason = store.unkept().expect("says why");
+        assert!(reason.contains("secrets.key"), "{reason}");
+        assert!(stored(&*store).is_err());
     }
 }

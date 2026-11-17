@@ -94,6 +94,7 @@ impl Sdk {
 pub struct Builder {
     name: Option<String>,
     data: Option<PathBuf>,
+    cwd: Option<PathBuf>,
     services: Option<LocalServices>,
     definitions: Definitions,
     connections: Vec<McpConnection>,
@@ -115,6 +116,11 @@ impl Builder {
 
     pub fn data_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.data = Some(dir.into());
+        self
+    }
+
+    pub fn cwd(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.cwd = Some(dir.into());
         self
     }
 
@@ -171,7 +177,7 @@ impl Builder {
             let backend = connect(wake).map_err(|error| Error::Backend(error.to_string()))?;
             return Ok(Sdk { client: Arc::new(Client::new(backend, woken)), services: None });
         }
-        let mut services = self.services.unwrap_or_else(LocalServices::detect);
+        let mut services = self.services.unwrap_or_else(|| LocalServices::detect_in(self.cwd.as_deref()));
         if let Some(data) = &self.data {
             services = services.kept_in(data);
         }

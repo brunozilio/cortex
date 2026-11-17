@@ -23,13 +23,29 @@ pub fn run(app: &mut App, typed: Option<String>) {
 pub fn show_rules(app: &App, hooks_only: bool) {
     let cwd = app.cwd.clone();
     app.spawn(move |sdk| match sdk.permissions(&cwd) {
-        Ok(info) if hooks_only => Msg::Notice(hooks(&info.hooks)),
+        Ok(info) if hooks_only => Msg::Notice(hooks(&info)),
         Ok(info) => Msg::Notice(permissions(&info)),
         Err(error) => Msg::Error(error.to_string()),
     });
 }
 
 pub fn permissions(info: &domain::permission_rules::PermissionsInfo) -> String {
+    noted(rules(info), &info.notices)
+}
+
+pub fn hooks(info: &domain::permission_rules::PermissionsInfo) -> String {
+    noted(hook_list(&info.hooks), &info.notices)
+}
+
+fn noted(mut text: String, notices: &[String]) -> String {
+    for notice in notices {
+        text.push_str("\n\n");
+        text.push_str(notice);
+    }
+    text
+}
+
+fn rules(info: &domain::permission_rules::PermissionsInfo) -> String {
     use domain::permission_rules::RuleKind;
     if info.rules.is_empty() && info.added_dirs.is_empty() {
         return concat!(
@@ -55,7 +71,7 @@ pub fn permissions(info: &domain::permission_rules::PermissionsInfo) -> String {
     text
 }
 
-pub fn hooks(hooks: &[domain::permission_rules::HookInfo]) -> String {
+fn hook_list(hooks: &[domain::permission_rules::HookInfo]) -> String {
     if hooks.is_empty() {
         return concat!("No hooks. Add them under \"hooks\" in ", brand::dir!(), "/settings.json.").to_owned();
     }
@@ -74,4 +90,32 @@ pub fn folder(cwd: &Path, typed: &str) -> Result<PathBuf, String> {
     };
     let real = path.canonicalize().map_err(|_| format!("No folder at {}.", path.display()))?;
     if real.is_dir() { Ok(real) } else { Err(format!("{} is a file, not a folder.", real.display())) }
+}
+
+#[cfg(test)]
+mod tests {
+    use domain::permission_rules::{PermissionsInfo, RuleKind};
+
+    use super::*;
+
+    const SKIPPED: &str = "This project's hooks were skipped: /repo/hooks/guard.js is versioned in git.";
+
+    #[test]
+    fn the_permissions_listing_says_which_project_hooks_were_skipped() {
+        let mut info = PermissionsInfo { notices: vec![SKIPPED.to_owned()], ..PermissionsInfo::default() };
+        assert!(permissions(&info).ends_with(SKIPPED), "even with no rules: {}", permissions(&info));
+        info.rules.push((RuleKind::Allow, "Bash(ls:*)".to_owned()));
+        let listed = permissions(&info);
+        assert!(listed.contains("allow  Bash(ls:*)") && listed.ends_with(SKIPPED), "{listed}");
+        info.notices.clear();
+        assert!(!permissions(&info).contains("skipped"));
+    }
+
+    #[test]
+    fn the_hooks_listing_says_which_project_hooks_were_skipped() {
+        let info = PermissionsInfo { notices: vec![SKIPPED.to_owned()], ..PermissionsInfo::default() };
+        let listed = hooks(&info);
+        assert!(listed.starts_with("No hooks.") && listed.ends_with(SKIPPED), "{listed}");
+        assert_eq!(hooks(&PermissionsInfo::default()), hook_list(&[]));
+    }
 }

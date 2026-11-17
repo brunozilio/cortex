@@ -4,9 +4,11 @@ mod catalog;
 mod port;
 pub(crate) mod redirect;
 mod shared;
+mod signing;
 mod store;
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use platform::sync::Locked;
@@ -21,7 +23,6 @@ pub use self::catalog::{ModelCatalog, ProviderCatalog};
 pub use self::port::{Ports, SystemPorts};
 pub use self::shared::{NothingShared, SharedCredentials};
 pub use self::store::{FileProviderStore, InMemoryProviderStore, ProviderStore};
-use crate::outbox::Outbox;
 use crate::secrets::SecretStore;
 
 const UNKNOWN_SLOT: u128 = 0x7072_6f76_6964_6572_ffff_ffff_ffff_ffff;
@@ -51,6 +52,8 @@ pub struct ModelProviders {
     generations: Arc<Mutex<HashMap<String, u64>>>,
     runs: Arc<Mutex<HashMap<String, u64>>>,
     lock: Arc<Mutex<()>>,
+    in_flight: Arc<Mutex<HashMap<ModelProvider, Arc<signing::InFlight>>>>,
+    told_unkept: Arc<AtomicBool>,
     clock: Clock,
 }
 
@@ -76,6 +79,8 @@ impl ModelProviders {
             generations: Arc::default(),
             runs: Arc::default(),
             lock: Arc::default(),
+            in_flight: Arc::default(),
+            told_unkept: Arc::default(),
             clock: Arc::new(system_clock),
         }
     }
@@ -131,8 +136,23 @@ impl ModelProviders {
     }
 
     pub fn connect(&self, owner: &Principal, provider: ModelProvider, raw: &str) -> ServerEvent {
-        let result = self.parse(provider, raw).and_then(|(config, label)| self.keep(owner, provider, label, &config));
+        let kept = self.secrets.unkept().map_or(Ok(()), |reason| Err(crate::secrets::refusal(&reason)));
+        let result = kept
+            .and_then(|()| self.parse(provider, raw))
+            .and_then(|(config, label)| self.keep(owner, provider, label, &config));
         self.answer(owner, provider, result)
+    }
+
+    pub fn unkept_notice(&self) -> Option<domain::inbox::Notice> {
+        let reason = self.secrets.unkept()?;
+        let told = self.told_unkept.swap(true, Ordering::SeqCst);
+        (!told).then(|| {
+            let text = format!(
+                "{}. Connecting a provider or signing in fails until this is fixed.",
+                crate::secrets::refusal(&reason)
+            );
+            domain::inbox::Notice::new("secrets", text)
+        })
     }
 
     fn parse(&self, provider: ModelProvider, raw: &str) -> Result<(Config, String), String> {
@@ -145,43 +165,6 @@ impl ModelProviders {
         let config = Config { api_key: key.clone(), ..Config::default() };
         config.validate(provider).map_err(|e| e.to_string())?;
         Ok((config, key_hint(&key)))
-    }
-
-    pub fn sign_in(&self, owner: &Principal, provider: ModelProvider, outbox: &Outbox) {
-        if !agent_engine::providers::find(provider).is_some_and(|known| known.access().subscription()) {
-            let message = format!("{} connects with an API key", agent_engine::providers::name(provider));
-            return outbox.send(ServerEvent::Providers(ProviderEvent::Failed { provider, message }));
-        }
-        let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
-        platform::named::spawn("provider-sign-in", move || this.signing_in(&owner, provider, &outbox));
-    }
-
-    pub fn close_and_sign_in(&self, owner: &Principal, provider: ModelProvider, port: u16, pid: u32, outbox: &Outbox) {
-        let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
-        platform::named::spawn("provider-sign-in", move || {
-            if this.ports.holder(port).is_some_and(|holder| holder.pid == pid)
-                && let Err(message) = this.ports.close(port, pid)
-            {
-                return outbox.send(ServerEvent::Providers(ProviderEvent::Failed { provider, message }));
-            }
-            this.signing_in(&owner, provider, &outbox);
-        });
-    }
-
-    fn signing_in(&self, owner: &Principal, provider: ModelProvider, outbox: &Outbox) {
-        let mut open = |url: String, code: Option<String>| {
-            outbox.send(ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code }));
-        };
-        let config = match self.sign_in.sign_in(provider, &mut open) {
-            Err(llm_providers::ProviderError::PortInUse(port)) => {
-                let holder = self.ports.holder(port);
-                return outbox.send(ServerEvent::Providers(ProviderEvent::PortBusy { provider, port, holder }));
-            }
-            other => other.map_err(|error| error.to_string()),
-        };
-        let result =
-            config.and_then(|config| self.keep(owner, provider, agent_engine::providers::name(provider), &config));
-        outbox.send(self.answer(owner, provider, result));
     }
 
     pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {

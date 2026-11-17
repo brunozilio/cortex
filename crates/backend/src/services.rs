@@ -30,17 +30,20 @@ impl std::fmt::Debug for LocalServices {
 
 impl LocalServices {
     pub fn detect() -> Self {
+        Self::detect_in(None)
+    }
+
+    pub fn detect_in(cwd: Option<&Path>) -> Self {
         let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
         let mut services = Self::with_engine(Arc::new(crate::native::engine(&data)));
         services.catalog = Arc::new(crate::catalog::FileSessionCatalog::system());
-        match std::env::current_dir() {
-            Ok(cwd) => {
-                let _ =
-                    crate::native::declare_providers(services.home(&domain::Principal::LocalOwner).as_deref(), &cwd);
-                services.turned_off_in(&cwd)
-            }
-            Err(_) => services,
-        }
+        services.in_project(cwd)
+    }
+
+    pub fn in_project(self, cwd: Option<&Path>) -> Self {
+        let Some(cwd) = cwd.map(Path::to_path_buf).or_else(|| std::env::current_dir().ok()) else { return self };
+        let _ = crate::native::declare_providers(self.home(&domain::Principal::LocalOwner).as_deref(), &cwd);
+        self.turned_off_in(&cwd)
     }
 
     pub fn turned_off_in(mut self, cwd: &Path) -> Self {
@@ -117,5 +120,23 @@ mod tests {
         assert!(services.off.contains("workspace"));
         assert!(!services.off.contains("memory"));
         assert!(services.off.contains("suggested_rules"), "a flag names its feature folder with hyphens");
+    }
+
+    #[test]
+    fn the_folder_asked_for_decides_what_is_off_not_the_one_the_process_started_in() {
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        std::fs::create_dir_all(repo.path().join(brand::DIR)).expect("dir");
+        let settings = serde_json::json!({ "features": { "workspace": false } });
+        std::fs::write(repo.path().join(brand::DIR).join("settings.local.json"), settings.to_string()).expect("write");
+        let mut services = LocalServices::with_engine(Arc::new(FakeEngine::new(Vec::new(), Vec::new())));
+        services.homes = Arc::new(crate::OwnerHome::at(home.path()));
+        assert_ne!(std::env::current_dir().ok().as_deref(), Some(repo.path()));
+
+        let elsewhere = services.clone().in_project(None);
+        let asked = services.in_project(Some(repo.path()));
+
+        assert!(!elsewhere.off.contains("workspace"), "the process's own folder says nothing about it");
+        assert!(asked.off.contains("workspace"));
     }
 }

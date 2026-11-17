@@ -54,7 +54,7 @@ impl McpAuth {
     }
 
     pub fn sign_in(&self, owner: &Principal, server: &str, open: &mut dyn FnMut(&str)) -> Result<(), String> {
-        self.can_keep(owner, server)?;
+        self.can_keep(owner)?;
         let auth = self.auth_server(server)?;
         let loopback = Loopback::bind_on(0, "/callback", false).map_err(|e| e.to_string())?;
         let redirect = loopback.redirect_uri();
@@ -143,10 +143,10 @@ impl McpAuth {
         }
     }
 
-    fn can_keep(&self, owner: &Principal, server: &str) -> Result<(), String> {
+    fn can_keep(&self, owner: &Principal) -> Result<(), String> {
         let _guard = self.lock.locked();
-        let kept = self.load(owner, server);
-        self.save(owner, server, kept.as_ref())
+        self.secrets
+            .update(owner, SLOT, &mut |_| {})
             .map_err(|error| format!("a sign-in could not be saved here ({error}), so the browser was not opened"))
     }
 
@@ -156,9 +156,13 @@ impl McpAuth {
         if !mcp_oauth::endpoint_ok(server) {
             return Err(refuse(server));
         }
-        let issuer = mcp_oauth::resource_metadata_urls(server)
-            .iter()
-            .find_map(|url| self.get_json(url)?["authorization_servers"][0].as_str().map(str::to_owned))
+        let resource = mcp_oauth::resource_metadata_urls(server).iter().find_map(|url| {
+            let metadata = self.get_json(url)?;
+            metadata["authorization_servers"][0].is_string().then_some(metadata)
+        });
+        let issuer = resource
+            .as_ref()
+            .and_then(|metadata| metadata["authorization_servers"][0].as_str().map(str::to_owned))
             .or_else(|| {
                 server.split_once("://").map(|(scheme, rest)| {
                     format!("{scheme}://{}", rest.split(['/', '?', '#']).next().unwrap_or_default())
@@ -168,10 +172,11 @@ impl McpAuth {
         if !mcp_oauth::endpoint_ok(&issuer) {
             return Err(refuse(&issuer));
         }
-        let auth: AuthServer = mcp_oauth::auth_server_metadata_urls(&issuer)
+        let mut auth: AuthServer = mcp_oauth::auth_server_metadata_urls(&issuer)
             .iter()
             .find_map(|url| serde_json::from_value(self.get_json(url)?).ok())
             .ok_or_else(|| format!("{issuer} does not describe how to sign in (no OAuth metadata)"))?;
+        auth.resource_scopes = resource.as_ref().map(mcp_oauth::resource_scopes).unwrap_or_default();
         let endpoints =
             [Some(&auth.authorization_endpoint), Some(&auth.token_endpoint), auth.registration_endpoint.as_ref()];
         if let Some(unsafe_url) = endpoints.into_iter().flatten().find(|url| !mcp_oauth::endpoint_ok(url)) {
@@ -233,16 +238,15 @@ impl McpAuth {
     }
 
     fn save(&self, owner: &Principal, server: &str, tokens: Option<&McpTokens>) -> Result<(), String> {
-        let mut kept = self.secrets.get(owner, SLOT).unwrap_or_default();
-        match tokens {
-            Some(tokens) => {
-                kept.insert(server.to_owned(), serde_json::to_string(tokens).map_err(|e| e.to_string())?);
+        let json = tokens.map(serde_json::to_string).transpose().map_err(|e| e.to_string())?;
+        self.secrets.update(owner, SLOT, &mut |kept| match &json {
+            Some(json) => {
+                kept.insert(server.to_owned(), json.clone());
             }
             None => {
                 kept.remove(server);
             }
-        }
-        self.secrets.set(owner, SLOT, &kept)
+        })
     }
 }
 

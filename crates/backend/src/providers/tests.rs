@@ -1,8 +1,10 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use domain::provider::{ModelProvider, ProviderSummary};
 
 use super::*;
+use crate::outbox::Outbox;
 use crate::secrets::InMemorySecretStore;
 
 struct Rig {
@@ -117,6 +119,7 @@ impl SignIn for FakeSignIn {
     fn sign_in(
         &self,
         provider: ModelProvider,
+        _stop: &Arc<AtomicBool>,
         open: &mut dyn FnMut(String, Option<String>),
     ) -> Result<Config, llm_providers::ProviderError> {
         let code = (provider == ModelProvider::new("device-sub")).then(|| "AB12-CD34".to_owned());
@@ -184,6 +187,33 @@ fn a_failed_sign_in_or_an_api_provider_keeps_nothing() {
     providers.sign_in(&OWNER, ModelProvider::new("keyed-too"), &outbox);
     assert!(failure(&next(&rx)).contains("API key"));
     assert!(listed(&providers.list(&OWNER)).iter().all(|p| p.account.is_none()));
+}
+
+fn unkept() -> ModelProviders {
+    llm_providers::testing::install();
+    let secrets = Arc::new(crate::secrets::Unkept::because("the disk is read-only"));
+    ModelProviders::new(Arc::new(InMemoryProviderStore::default()), secrets).with_sign_in(Arc::new(FakeSignIn(Ok(()))))
+}
+
+#[test]
+fn connecting_fails_clearly_when_keys_cannot_be_kept() {
+    let providers = unkept();
+    let refused = "keys cannot be kept on this machine: the disk is read-only";
+    assert_eq!(failure(&providers.connect(&OWNER, ModelProvider::new("keyed"), "sk-proj-0123456789abcd")), refused);
+    assert!(listed(&providers.list(&OWNER)).iter().all(|p| p.account.is_none()));
+    let (outbox, rx) = outbox();
+    providers.sign_in(&OWNER, ModelProvider::new("browser-sub"), &outbox);
+    assert_eq!(failure(&next(&rx)), refused, "the browser is not opened for a sign-in that would be lost");
+}
+
+#[test]
+fn the_client_is_told_once_that_keys_cannot_be_kept() {
+    let providers = unkept();
+    let notice = providers.clone().for_client().unkept_notice().expect("told");
+    assert_eq!(notice.source, "secrets");
+    assert!(notice.text.starts_with("keys cannot be kept on this machine: the disk is read-only"), "{}", notice.text);
+    assert_eq!(providers.unkept_notice(), None, "once for the whole process");
+    assert_eq!(rig().providers.unkept_notice(), None, "nothing to say when keys are kept");
 }
 
 struct ByKey;

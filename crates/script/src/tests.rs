@@ -26,6 +26,28 @@ fn go(source: &str, export: &str, arguments: &[Value], data: Value) -> (Result<V
 }
 
 #[test]
+fn a_script_that_keeps_allocating_fails_instead_of_taking_the_machine_s_memory() {
+    let hog = r#"
+      export default function () {
+        const kept = [];
+        for (let i = 0; i < 256; i++) kept.push("x".repeat(1 << 20) + i);
+        return kept.length;
+      }"#;
+    let (result, _) = go(hog, "default", &[], json!({}));
+    let refused = result.expect_err("256 MiB is past what a script may hold");
+    assert!(refused.to_lowercase().contains("memory"), "{refused}");
+    let (after, _) = go("export default () => 1 + 1;", "default", &[], json!({}));
+    assert_eq!(after, Ok(json!(2)), "the next script starts fresh");
+}
+
+#[test]
+fn a_script_that_recurses_without_end_fails_instead_of_overflowing_the_stack() {
+    let (result, _) =
+        go("const deeper = () => deeper() + 1;\nexport default () => deeper();", "default", &[], json!({}));
+    assert!(result.is_err(), "{result:?}");
+}
+
+#[test]
 fn a_prompt_is_a_function_of_its_context() {
     let source = r##"
       export default function (ctx) {

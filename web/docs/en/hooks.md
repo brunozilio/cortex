@@ -63,24 +63,47 @@ All of these are combined; none replaces another.
 | Source | Applies to |
 |---|---|
 | `~/{{DIR}}/settings.json`, under `"hooks"` | You, every project |
-| `{{DIR}}/settings.json` and `{{DIR}}/settings.local.json`, under `"hooks"`, in the project and every folder above it | That project |
+| `{{DIR}}/settings.json` and `{{DIR}}/settings.local.json`, under `"hooks"`, in the project and every folder above it | That project, unless git tracks the file (see [below](#hooks-a-repository-versions)) |
 | `~/{{DIR}}/managed-settings.json`, under `"hooks"` | You, every project |
 | `~/{{DIR}}/hooks/*.js` | You, every project |
-| `{{DIR}}/hooks/*.js` in the project and every folder above it | That project |
+| `{{DIR}}/hooks/*.js` in the project and every folder above it | That project, unless git tracks the file (see [below](#hooks-a-repository-versions)) |
 | `hooks/hooks.json` in an installed plugin | Wherever the plugin is installed (see [Plugins](./plugins)) |
 | `hooks` in a custom agent's frontmatter | Only while that agent runs (see [Agents](./agents)) |
 
 Hooks are read again at the start of every prompt, so a change applies from your next message.
 
+### Hooks a repository versions
+
+A hook runs commands on your computer with your permissions, so {{NAME}} does not run hooks that arrive with a repository. A project file that git tracks (a checked-in `{{DIR}}/settings.json`, a committed `{{DIR}}/settings.local.json`, or a script in `{{DIR}}/hooks/`) has its hooks **skipped**. Everything else in that file still applies: its deny and ask rules, for example, hold as before.
+
+When hooks are skipped, {{NAME}} tells you which files they came from:
+
+- `/hooks` and `/permissions` end with a note naming the files;
+- with `-p`, the same note is printed once to stderr before the first answer.
+
+These hooks still run:
+
+- your own, in `~/{{DIR}}/settings.json`, `~/{{DIR}}/managed-settings.json` and `~/{{DIR}}/hooks/`;
+- project hooks in files git does not track, such as a `{{DIR}}/settings.local.json` you keep out of version control or a script you have not added;
+- every project hook when the folder is not a git repository.
+
+To run a repository's versioned hooks as before, set `trustProjectHooks` in **your** settings file, `~/{{DIR}}/settings.json`:
+
+```json
+{ "trustProjectHooks": true }
+```
+
+The key is read only from your own files in `~/{{DIR}}/`. A project cannot turn it on for itself.
+
 > [!WARNING]
-> A project's checked-in `{{DIR}}/settings.json` and `{{DIR}}/hooks/` can add hooks, and those hooks run commands on your computer with your permissions. Read them before working in a repository you do not trust.
+> `trustProjectHooks` applies to every repository you open. With it on, a checked-in `{{DIR}}/settings.json` or `{{DIR}}/hooks/` runs commands on your computer with your permissions: read them before working in a repository you do not trust.
 
 > [!NOTE]
 > Hooks in another tool's folders, such as `.claude/settings.json`, are not read.
 
 ### Reviewing hooks
 
-`/hooks` lists every hook a run here fires, with its event, matcher (`*` for all) and what it runs: the command, the URL, or `prompt:`/`agent:` followed by the start of the prompt. A run with no hooks shows *No hooks. Add them under "hooks" in {{DIR}}/settings.json.*
+`/hooks` lists every hook a run here fires, with its event, matcher (`*` for all) and what it runs: the command, the URL, or `prompt:`/`agent:` followed by the start of the prompt. A run with no hooks shows *No hooks. Add them under "hooks" in {{DIR}}/settings.json.* When a repository's versioned hooks were skipped, the list ends with a note naming the files they came from (see [Hooks a repository versions](#hooks-a-repository-versions)).
 
 ## Configuration format
 
@@ -305,6 +328,9 @@ export default (input, ctx) => {
 | `default` | The hook function. A file whose default export is missing or an empty function is skipped. |
 
 {{NAME}} ships one empty template per event. A file in `~/{{DIR}}/hooks/` with the same name as a template (for example `PreToolUse.js`) takes its place.
+
+> [!NOTE]
+> A script in a project's `{{DIR}}/hooks/` cannot read or write files, start processes or reach the network (`ctx.readFile`, `ctx.exec`, `ctx.fetch`…) until one of your own settings files grants it. Scripts in `~/{{DIR}}/hooks/` can. See [`scripts`](./settings#scripts).
 
 ### `http`
 

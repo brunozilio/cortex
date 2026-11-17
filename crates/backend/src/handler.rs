@@ -132,7 +132,9 @@ impl CommandHandler {
             }
             ClientCommand::ListMcpServers { path } => self.mcp_servers(&principal, &path, Ok(())),
             ClientCommand::TakeNotices => {
-                outbox.send(ServerEvent::Notices(agent_engine::tools::inbox::take(self.client)));
+                let unkept = self.services.providers.unkept_notice();
+                let arrived = agent_engine::tools::inbox::take(self.client);
+                outbox.send(ServerEvent::Notices(unkept.into_iter().chain(arrived).collect()));
             }
             ClientCommand::Feature { feature, input } => {
                 let output = self
@@ -256,6 +258,10 @@ impl CommandHandler {
         self.outbox.send(ServerEvent::Run { run, event: EngineEvent::Failed(message) });
     }
 }
+
+#[cfg(test)]
+#[path = "handler_tests.rs"]
+mod tests;
 
 struct RunSink {
     runs: Arc<RunTable>,

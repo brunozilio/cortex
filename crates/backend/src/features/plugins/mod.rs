@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde_json::{Value, json};
 
@@ -87,12 +86,7 @@ fn named_after(source: &str) -> Option<String> {
 }
 
 fn git(cwd: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git").args(args).current_dir(cwd).output().map_err(|error| format!("git: {error}"))?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).trim().to_owned())
-    }
+    crate::git::run(cwd, args, crate::git::REMOTE)
 }
 
 #[cfg(test)]

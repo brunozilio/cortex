@@ -71,7 +71,9 @@ A project's `{{DIR}}/settings.json` comes from whoever wrote the repository, so 
 | `escalationModel` | Ignored. |
 | `enabledProviders` | Ignored. |
 | `enableAllProjectMcpServers`, `enabledMcpServers`, `disabledMcpServers` | Ignored. |
-| `scripts.*` | Can only turn access off. |
+| `hooks` | Skipped while git tracks the file, unless you set `trustProjectHooks` in your own settings. See [Hooks](./hooks#hooks-a-repository-versions). |
+| `trustProjectHooks` | Ignored. Only `~/{{DIR}}/settings.json` turns it on. |
+| `scripts.*` | Can only turn access off. It cannot give the project's own scripts access. |
 | `features.*` | Can turn an ordinary feature off, and can turn a security feature (`experimental-sandbox`, `redact-secrets`, `experimental-dependency-guard`) on, never the other way round. |
 | `sandbox.network` | Can only turn the network off. |
 | `sandbox.allowWrite` | Ignored. |
@@ -125,11 +127,12 @@ Without options it edits `~/{{DIR}}/settings.json`. With `--project` it edits `{
 | `enableAllProjectMcpServers` | boolean | `false` | Starts every MCP server the project's `{{DIR}}/mcp.json` declares without asking. Read only from your own files. |
 | `enabledMcpServers` | list of strings | `[]` | Project MCP servers you approved. `{{COMMAND}} mcp approve` and `/mcp approve` write here. Read only from your own files. |
 | `disabledMcpServers` | list of strings | `[]` | Project MCP servers you turned off; wins over the two keys above. Read only from your own files. |
-| `hooks` | object | `{}` | Commands, prompts or HTTP calls that run on events. Hooks from every file are combined. See [Hooks](./hooks). |
+| `hooks` | object | `{}` | Commands, prompts or HTTP calls that run on events. Hooks from every file are combined, except those in project files git tracks, which are skipped unless `trustProjectHooks` is on. See [Hooks](./hooks). |
+| `trustProjectHooks` | boolean | `false` | `true` runs the hooks a repository versions (its checked-in `{{DIR}}/settings.json` and `{{DIR}}/hooks/`) as if they were yours. Honoured only in your own settings file, `~/{{DIR}}/settings.json`; a project cannot set it. See [Hooks a repository versions](./hooks#hooks-a-repository-versions). |
 | `lspServers` | object | `{}` | Adds, changes or disables language servers. See [`lspServers`](#lspservers) and [Code intelligence](./code-intelligence). |
 | `permissions` | object | `{}` | Allow, ask and deny rules and extra folders. See [`permissions`](#permissions). |
 | `verification` | object | `{}` | Rules for the verification judge. See [`verification`](#verification). |
-| `scripts` | object | all `true` | What JavaScript tools, skills, hooks and providers may do. See [`scripts`](#scripts). |
+| `scripts` | object | all `true` for your scripts, all `false` for a project's | What JavaScript tools, skills, hooks and providers may do. See [`scripts`](#scripts). |
 | `sandbox` | object | network on | Where sandboxed commands may write and whether they reach the network. See [`sandbox`](#sandbox). |
 | `features` | object | every feature on | Turns features on or off by name. See [`features`](#features). |
 
@@ -170,17 +173,35 @@ Rule syntax and precedence are on the [Permissions](./permissions) page.
 
 ### `scripts`
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `scripts.files` | boolean | `true` | Scripts may read and write files (`readFile`, `writeFile`). |
-| `scripts.processes` | boolean | `true` | Scripts may start processes (`exec`). |
-| `scripts.network` | boolean | `true` | Scripts may reach the network (`fetch`). |
+| Key | Type | Your scripts | A project's scripts | Description |
+|---|---|---|---|---|
+| `scripts.files` | boolean | `true` | `false` | Scripts may read and write files (`readFile`, `writeFile`). |
+| `scripts.processes` | boolean | `true` | `false` | Scripts may start processes (`exec`). |
+| `scripts.network` | boolean | `true` | `false` | Scripts may reach the network (`fetch`). |
+
+The default depends on where the script lives:
+
+- **Your scripts** are the ones under `~/{{DIR}}/` and the ones {{NAME}} ships. They have all three kinds of access unless a settings file turns one off.
+- **A project's scripts** are the ones under the project's `{{DIR}}/`: its tools, skills, hooks, providers and script MCP servers. They have **none** of the three until one of your own settings files grants it.
+
+Your own files are `~/{{DIR}}/settings.json`, `~/{{DIR}}/settings.local.json`, `~/{{DIR}}/managed-settings.json` and a project's `{{DIR}}/settings.local.json` that git does not track. A value set there applies to both groups: `true` grants the access to project scripts as well, `false` takes it from your scripts too. A checked-in `{{DIR}}/settings.json` can only turn access off.
 
 A script that is refused gets an error naming the setting, for example `scripts may not touch files here (settings: scripts.files)`.
+
+Let the scripts of the project you are working in read files and run commands, but not reach the network. Put this in that project's `{{DIR}}/settings.local.json` so it applies only there:
+
+```json
+{ "scripts": { "files": true, "processes": true } }
+```
+
+Turn the network off for every script, yours included:
 
 ```json
 { "scripts": { "network": false } }
 ```
+
+> [!NOTE]
+> Earlier versions gave a project's scripts all three kinds of access by default. If a project tool or hook now fails with `settings: scripts.…`, grant what it needs in one of your own files as shown above.
 
 ### `sandbox`
 

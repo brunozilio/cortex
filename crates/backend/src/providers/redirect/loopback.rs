@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use llm_providers::ProviderError;
@@ -5,6 +7,7 @@ use llm_providers::ProviderError;
 use super::callback;
 
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(300);
+const STOP_POLL: Duration = Duration::from_millis(100);
 
 const TEMPLATE: &str = include_str!("done.html");
 
@@ -13,6 +16,7 @@ pub struct Loopback {
     port: u16,
     path: String,
     localhost: bool,
+    stop: Option<Arc<AtomicBool>>,
 }
 
 impl std::fmt::Debug for Loopback {
@@ -38,7 +42,16 @@ impl Loopback {
             .to_ip()
             .map(|addr| addr.port())
             .ok_or_else(|| ProviderError::Invalid("no loopback port".into()))?;
-        Ok(Self { server, port, path: path.to_owned(), localhost })
+        Ok(Self { server, port, path: path.to_owned(), localhost, stop: None })
+    }
+
+    pub fn stopped_by(mut self, stop: Arc<AtomicBool>) -> Self {
+        self.stop = Some(stop);
+        self
+    }
+
+    fn stopped(&self) -> bool {
+        self.stop.as_ref().is_some_and(|stop| stop.load(Ordering::SeqCst))
     }
 
     pub fn port(&self) -> u16 {
@@ -82,7 +95,11 @@ impl Loopback {
             if left.is_zero() {
                 return Err("the sign-in timed out".to_owned());
             }
-            let Some(request) = self.server.recv_timeout(left).map_err(|error| error.to_string())? else { continue };
+            if self.stopped() {
+                return Err("this sign-in was replaced by a newer one".to_owned());
+            }
+            let waited = self.server.recv_timeout(left.min(STOP_POLL)).map_err(|error| error.to_string())?;
+            let Some(request) = waited else { continue };
             let url = request.url().to_owned();
             let (path, query) = url.split_once('?').unwrap_or((&url, ""));
             if path != self.path && !others.contains(&path) {
@@ -225,6 +242,21 @@ mod tests {
         let page = hit.join().expect("join");
         assert!(page.contains("As dev@example.com. Return to"), "{page}");
         assert!(page.contains("class=\"ok\""));
+    }
+
+    #[test]
+    fn a_stopped_wait_lets_go_of_the_port_for_the_next_sign_in() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let loopback = Loopback::bind().expect("bind").stopped_by(Arc::clone(&stop));
+        let port = loopback.port();
+        let waiting = std::thread::spawn(move || loopback.next_within("s", &[], Duration::from_secs(30)).map(|_| ()));
+        std::thread::sleep(Duration::from_millis(50));
+        let asked = Instant::now();
+        stop.store(true, Ordering::SeqCst);
+        let ended = waiting.join().expect("join").expect_err("stopped");
+        assert!(ended.contains("replaced"), "{ended}");
+        assert!(asked.elapsed() < Duration::from_secs(5));
+        Loopback::bind_on(port, "/callback", false).expect("the port is free again");
     }
 
     #[test]

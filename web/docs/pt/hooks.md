@@ -63,24 +63,47 @@ Todas estas fontes se somam; nenhuma substitui a outra.
 | Fonte | Vale para |
 |---|---|
 | `~/{{DIR}}/settings.json`, em `"hooks"` | Você, em todos os projetos |
-| `{{DIR}}/settings.json` e `{{DIR}}/settings.local.json`, em `"hooks"`, no projeto e em cada pasta acima dele | Aquele projeto |
+| `{{DIR}}/settings.json` e `{{DIR}}/settings.local.json`, em `"hooks"`, no projeto e em cada pasta acima dele | Aquele projeto, a não ser que o git rastreie o arquivo (veja [abaixo](#hooks-versionados-pelo-git)) |
 | `~/{{DIR}}/managed-settings.json`, em `"hooks"` | Você, em todos os projetos |
 | `~/{{DIR}}/hooks/*.js` | Você, em todos os projetos |
-| `{{DIR}}/hooks/*.js` no projeto e em cada pasta acima dele | Aquele projeto |
+| `{{DIR}}/hooks/*.js` no projeto e em cada pasta acima dele | Aquele projeto, a não ser que o git rastreie o arquivo (veja [abaixo](#hooks-versionados-pelo-git)) |
 | `hooks/hooks.json` num plugin instalado | Onde o plugin estiver instalado (veja [Plugins](./plugins)) |
 | `hooks` no frontmatter de um agente próprio | Só enquanto aquele agente roda (veja [Agentes](./agents)) |
 
 Os hooks são lidos de novo no início de cada prompt, então uma mudança vale a partir da sua próxima mensagem.
 
+### Hooks versionados pelo git
+
+Um hook roda comandos no seu computador com as suas permissões, por isso o {{NAME}} não roda hooks que chegam junto com um repositório. Quando o git rastreia um arquivo do projeto (um `{{DIR}}/settings.json` versionado, um `{{DIR}}/settings.local.json` que foi commitado ou um script em `{{DIR}}/hooks/`), os hooks desse arquivo são **ignorados**. O resto do arquivo continua valendo: as regras de negar e de perguntar, por exemplo, seguem como antes.
+
+Quando algum hook é ignorado, o {{NAME}} avisa de quais arquivos ele veio:
+
+- `/hooks` e `/permissions` terminam com um aviso que cita os arquivos;
+- com `-p`, o mesmo aviso sai uma vez no stderr, antes da primeira resposta.
+
+Estes hooks continuam rodando:
+
+- os seus, em `~/{{DIR}}/settings.json`, `~/{{DIR}}/managed-settings.json` e `~/{{DIR}}/hooks/`;
+- os hooks do projeto em arquivos que o git não rastreia, como um `{{DIR}}/settings.local.json` que você deixa fora do controle de versão ou um script que você ainda não adicionou;
+- todos os hooks do projeto quando a pasta não é um repositório git.
+
+Para voltar a rodar os hooks versionados de um repositório, defina `trustProjectHooks` no **seu** arquivo de configuração, `~/{{DIR}}/settings.json`:
+
+```json
+{ "trustProjectHooks": true }
+```
+
+A chave só é lida dos seus próprios arquivos em `~/{{DIR}}/`. Um projeto não consegue ligá-la para si mesmo.
+
 > [!WARNING]
-> O `{{DIR}}/settings.json` versionado de um projeto e a pasta `{{DIR}}/hooks/` podem acrescentar hooks, e esses hooks rodam comandos no seu computador com as suas permissões. Leia-os antes de trabalhar num repositório em que você não confia.
+> `trustProjectHooks` vale para todo repositório que você abrir. Com ela ligada, um `{{DIR}}/settings.json` versionado ou a pasta `{{DIR}}/hooks/` rodam comandos no seu computador com as suas permissões: leia-os antes de trabalhar num repositório em que você não confia.
 
 > [!NOTE]
 > Hooks nas pastas de outra ferramenta, como `.claude/settings.json`, não são lidos.
 
 ### Conferir os hooks
 
-`/hooks` lista cada hook que uma execução aqui dispara, com o evento, o matcher (`*` para todos) e o que ele roda: o comando, a URL, ou `prompt:`/`agent:` seguido do começo do prompt. Sem hooks, aparece *No hooks. Add them under "hooks" in {{DIR}}/settings.json.*
+`/hooks` lista cada hook que uma execução aqui dispara, com o evento, o matcher (`*` para todos) e o que ele roda: o comando, a URL, ou `prompt:`/`agent:` seguido do começo do prompt. Sem hooks, aparece *No hooks. Add them under "hooks" in {{DIR}}/settings.json.* Quando os hooks versionados de um repositório foram ignorados, a lista termina com um aviso que cita os arquivos de onde eles vieram (veja [Hooks versionados pelo git](#hooks-versionados-pelo-git)).
 
 ## Formato da configuração
 
@@ -305,6 +328,9 @@ export default (input, ctx) => {
 | `default` | A função do hook. Um arquivo sem export padrão, ou com uma função vazia, é ignorado. |
 
 O {{NAME}} vem com um modelo vazio para cada evento. Um arquivo em `~/{{DIR}}/hooks/` com o mesmo nome de um modelo (por exemplo `PreToolUse.js`) toma o lugar dele.
+
+> [!NOTE]
+> Um script na pasta `{{DIR}}/hooks/` de um projeto não pode ler nem gravar arquivos, iniciar processos ou acessar a rede (`ctx.readFile`, `ctx.exec`, `ctx.fetch`…) enquanto um dos seus próprios arquivos de configuração não liberar. Os scripts em `~/{{DIR}}/hooks/` podem. Veja [`scripts`](./settings#scripts).
 
 ### `http`
 

@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use domain::provider::PortHolder;
@@ -44,13 +45,67 @@ impl SignIn for NeedsPort {
     fn sign_in(
         &self,
         provider: ModelProvider,
+        stop: &Arc<AtomicBool>,
         open: &mut dyn FnMut(String, Option<String>),
     ) -> Result<Config, ProviderError> {
         if self.0.holder(PORT).is_some() {
             return Err(ProviderError::PortInUse(PORT));
         }
-        FakeSignIn(Ok(())).sign_in(provider, open)
+        FakeSignIn(Ok(())).sign_in(provider, stop, open)
     }
+}
+
+struct WaitsOnThePortFirst {
+    ports: Arc<FakePorts>,
+    earlier: std::sync::atomic::AtomicUsize,
+}
+
+impl SignIn for WaitsOnThePortFirst {
+    fn sign_in(
+        &self,
+        provider: ModelProvider,
+        stop: &Arc<AtomicBool>,
+        open: &mut dyn FnMut(String, Option<String>),
+    ) -> Result<Config, ProviderError> {
+        if self.ports.holder(PORT).is_some() {
+            return Err(ProviderError::PortInUse(PORT));
+        }
+        if self.earlier.fetch_add(1, Ordering::SeqCst) > 0 {
+            return FakeSignIn(Ok(())).sign_in(provider, stop, open);
+        }
+        *self.ports.holder.lock().expect("holder") = Some(PortHolder { pid: std::process::id(), app: "this".into() });
+        open("https://auth.test/never-answered".into(), None);
+        while !stop.load(Ordering::SeqCst) {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        *self.ports.holder.lock().expect("holder") = None;
+        Err(ProviderError::Invalid("replaced".into()))
+    }
+}
+
+#[test]
+fn a_retry_replaces_the_sign_in_this_process_still_had_waiting_on_the_port() {
+    let ports = Arc::new(FakePorts::default());
+    let waits = WaitsOnThePortFirst { ports: ports.clone(), earlier: std::sync::atomic::AtomicUsize::new(0) };
+    let providers = rig().providers.with_sign_in(Arc::new(waits)).with_ports(ports.clone());
+    let (outbox, rx) = outbox();
+    let browser = ModelProvider::new("browser-sub");
+    providers.sign_in(&OWNER, browser, &outbox);
+    assert!(matches!(
+        next(&rx),
+        ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, .. }) if url.ends_with("never-answered")
+    ));
+
+    providers.sign_in(&OWNER, browser, &outbox);
+
+    assert!(matches!(
+        next(&rx),
+        ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, .. }) if url.ends_with("browser-sub")
+    ));
+    assert!(listed(&next(&rx)).iter().any(|p| p.provider == browser && p.account.is_some()));
+    assert!(ports.closed().is_empty(), "no process was closed to get the port back");
+    let more = rx.recv_timeout(std::time::Duration::from_millis(200));
+    assert!(more.is_err(), "the replaced sign-in says nothing more: {more:?}");
 }
 
 fn signing_in(ports: &Arc<FakePorts>) -> ModelProviders {
@@ -88,4 +143,14 @@ fn a_port_now_held_by_another_process_is_not_closed_and_is_asked_about_again() {
     signing_in(&ports).close_and_sign_in(&OWNER, ModelProvider::new("browser-sub"), PORT, 998, &outbox);
     assert_eq!(next(&rx), busy(Some(PortHolder { pid: 1234, app: "Other".into() })));
     assert!(ports.closed().is_empty());
+}
+
+#[test]
+fn this_very_process_is_never_closed_to_free_the_port() {
+    let ports = FakePorts::held_by(std::process::id(), "this app");
+    let (outbox, rx) = outbox();
+    signing_in(&ports).close_and_sign_in(&OWNER, ModelProvider::new("browser-sub"), PORT, std::process::id(), &outbox);
+    let message = failure(&next(&rx));
+    assert!(message.contains(&PORT.to_string()), "{message}");
+    assert!(ports.closed().is_empty(), "closing the holder would have ended this session");
 }

@@ -34,6 +34,23 @@ impl FileSessionCatalog {
     fn load(&self, owner: &Principal) -> Catalog {
         std::fs::read(self.path(owner)).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
     }
+
+    fn load_to_change(&self, owner: &Principal) -> Catalog {
+        let path = self.path(owner);
+        let Ok(bytes) = std::fs::read(&path) else { return Catalog::default() };
+        serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+            let aside = path.with_extension(format!("json.corrupt-{}", now()));
+            match std::fs::rename(&path, &aside) {
+                Ok(()) => {
+                    tracing::warn!(%error, aside = %aside.display(), "an unreadable session catalog was kept aside")
+                }
+                Err(rename) => {
+                    tracing::error!(%error, %rename, "an unreadable session catalog could not be kept aside")
+                }
+            }
+            Catalog::default()
+        })
+    }
 }
 
 impl SessionCatalog for FileSessionCatalog {
@@ -44,7 +61,14 @@ impl SessionCatalog for FileSessionCatalog {
 
     fn update(&self, owner: &Principal, change: &mut dyn FnMut(&mut Catalog)) {
         let _writing = self.writing.locked();
-        let before = self.load(owner);
+        let _held = match platform::file_lock::Exclusive::on(&self.path(owner)) {
+            Ok(held) => held,
+            Err(error) => {
+                tracing::warn!(%error, "could not lock the session catalog; it was left as it was");
+                return;
+            }
+        };
+        let before = self.load_to_change(owner);
         let mut catalog = before.clone();
         change(&mut catalog);
         if catalog == before {
@@ -142,5 +166,48 @@ mod tests {
         let reopened = FileSessionCatalog::new(root.path().to_path_buf());
         assert_eq!(reopened.read(&ana).listed().len(), 1);
         assert!(reopened.read(&rui).listed().is_empty());
+    }
+
+    #[test]
+    fn a_catalog_that_does_not_parse_is_kept_aside_instead_of_overwritten() {
+        let root = tempfile::tempdir().expect("root");
+        let owner = Principal::LocalOwner;
+        let store = FileSessionCatalog::new(root.path().to_path_buf());
+        let folder = root.path().join(owner_key(&owner));
+        std::fs::create_dir_all(&folder).expect("folder");
+        std::fs::write(folder.join("sessions.json"), "{ half written").expect("write");
+
+        store.update(&owner, &mut |catalog| catalog.started(&SessionId("a".into()), Path::new("/w"), 1));
+
+        assert_eq!(store.read(&owner).listed().len(), 1);
+        let aside: Vec<_> = std::fs::read_dir(&folder)
+            .expect("list")
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with("sessions.json.corrupt-"))
+            .collect();
+        assert_eq!(aside.len(), 1, "what could not be read is still there to recover");
+        assert_eq!(std::fs::read_to_string(aside[0].path()).expect("aside"), "{ half written");
+    }
+
+    #[test]
+    fn two_processes_on_one_catalog_keep_each_other_s_sessions() {
+        let root = tempfile::tempdir().expect("root");
+        let owner = Principal::LocalOwner;
+        let start = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            for writer in 0..8 {
+                let (root, owner, start) = (root.path().to_path_buf(), owner.clone(), &start);
+                scope.spawn(move || {
+                    let store = FileSessionCatalog::new(root);
+                    start.wait();
+                    for session in 0..5 {
+                        let id = SessionId(format!("{writer}-{session}"));
+                        store.update(&owner, &mut |catalog| catalog.started(&id, Path::new("/w"), 1));
+                    }
+                });
+            }
+        });
+        let kept = FileSessionCatalog::new(root.path().to_path_buf()).read(&owner).listed().len();
+        assert_eq!(kept, 40);
     }
 }

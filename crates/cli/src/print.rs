@@ -52,6 +52,7 @@ pub fn print_all(
             brand_command = brand::COMMAND
         ));
     }
+    warn_of_skipped_hooks(sdk, &cwd, &mut std::io::stderr().lock());
     let mut session = sdk.session(cwd, model);
     if let Some(id) = resume {
         session = session.resume(id);
@@ -95,6 +96,13 @@ pub fn print_all(
     Ok(if failed { ExitCode::FAILURE } else { ExitCode::SUCCESS })
 }
 
+fn warn_of_skipped_hooks(sdk: &Sdk, cwd: &std::path::Path, errors: &mut dyn std::io::Write) {
+    let notices = sdk.permissions(cwd).map(|info| info.notices).unwrap_or_default();
+    for notice in notices {
+        let _ = writeln!(errors, "{}: {notice}", brand::COMMAND);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -128,6 +136,41 @@ mod tests {
         services.off.insert("memory_search".into());
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
         (Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND), engine)
+    }
+
+    fn git(repo: &std::path::Path, args: &[&str]) {
+        let done = std::process::Command::new("git").arg("-C").arg(repo).args(args).output().expect("git runs");
+        assert!(done.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&done.stderr));
+    }
+
+    #[test]
+    fn hooks_a_repository_versions_are_said_to_be_skipped_before_the_first_answer() {
+        let (data, home, repo) = (
+            tempfile::tempdir().expect("data"),
+            tempfile::tempdir().expect("home"),
+            tempfile::tempdir().expect("repo"),
+        );
+        let hooks = repo.path().join(brand::DIR).join("hooks");
+        std::fs::create_dir_all(&hooks).expect("hooks");
+        std::fs::write(hooks.join("guard.js"), "export const event = \"PreToolUse\";\nexport default () => ({});\n")
+            .expect("hook");
+        git(repo.path(), &["init", "-q"]);
+        git(repo.path(), &["add", "-A"]);
+        let engine = FakeEngine::new(vec![Model::new("scripted", "Scripted")], Vec::new());
+        let mut services = LocalServices::with_engine(Arc::new(engine));
+        services.homes = Arc::new(backend::OwnerHome::at(home.path()));
+        let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
+
+        let mut errors = Vec::new();
+        warn_of_skipped_hooks(&sdk, repo.path(), &mut errors);
+        let said = String::from_utf8(errors).expect("text");
+
+        assert!(said.starts_with(brand::COMMAND), "{said}");
+        assert!(said.contains("guard.js") && said.contains("trustProjectHooks"), "{said}");
+        assert_eq!(said.lines().count(), 1, "said once: {said}");
+        let mut quiet = Vec::new();
+        warn_of_skipped_hooks(&sdk, data.path(), &mut quiet);
+        assert!(quiet.is_empty(), "nothing to say where no hook was skipped");
     }
 
     #[test]

@@ -1,12 +1,16 @@
+use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::JoinHandle;
+use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::Tree;
+use crate::sync::Locked;
 
 const POLL: Duration = Duration::from_millis(20);
+const READ_GRACE: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
 pub struct Bounds<'a> {
@@ -39,49 +43,95 @@ impl Finished {
     }
 }
 
-pub fn run(command: &mut Command, bounds: Bounds<'_>) -> io::Result<Finished> {
-    let stdin = if bounds.input.is_some() { Stdio::piped() } else { Stdio::null() };
-    command.stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut tree = Tree::spawn(command)?;
-    let writer = match (bounds.input, tree.child().stdin.take()) {
-        (Some(input), Some(mut stdin)) => Some(crate::named::spawn("process-input", move || {
-            let _ = stdin.write_all(&input);
-        })),
-        _ => None,
-    };
-    let stdout = reader(tree.child().stdout.take(), bounds.max_output);
-    let stderr = reader(tree.child().stderr.take(), bounds.max_output);
-    let started = Instant::now();
-    let ended = loop {
-        match tree.child().try_wait() {
-            Ok(Some(status)) => break Ended::Exited(status),
-            Ok(None) if bounds.stop.load(Ordering::Relaxed) => break Ended::Stopped,
-            Ok(None) if started.elapsed() > bounds.timeout => break Ended::TimedOut,
-            Ok(None) => std::thread::sleep(POLL),
-            Err(error) => {
-                tree.kill();
-                return Err(error);
-            }
-        }
-    };
-    tree.kill();
-    if let Some(writer) = writer {
-        let _ = writer.join();
-    }
-    let stdout = stdout.join().unwrap_or_default();
-    let stderr = stderr.join().unwrap_or_default();
-    Ok(Finished { ended, stdout, stderr })
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Keep {
+    Start,
+    End,
 }
 
-fn reader(pipe: Option<impl Read + Send + 'static>, cap: usize) -> JoinHandle<String> {
-    crate::named::spawn("process-output", move || {
-        let mut bytes = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = (&mut pipe).take(cap as u64).read_to_end(&mut bytes);
-            let _ = io::copy(&mut pipe, &mut io::sink());
+pub fn run(command: &mut Command, bounds: Bounds<'_>) -> io::Result<Finished> {
+    run_keeping(command, bounds, Keep::Start)
+}
+
+pub fn run_keeping(command: &mut Command, bounds: Bounds<'_>, keep: Keep) -> io::Result<Finished> {
+    let Bounds { timeout, max_output, stop, input } = bounds;
+    let stdin = if input.is_some() { Stdio::piped() } else { Stdio::null() };
+    command.stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut tree = Tree::spawn(command)?;
+    if let (Some(input), Some(mut stdin)) = (input, tree.child().stdin.take()) {
+        drop(crate::named::spawn("process-input", move || {
+            let _ = stdin.write_all(&input);
+        }));
+    }
+    let stdout = Reader::of(tree.child().stdout.take(), max_output, keep);
+    let stderr = Reader::of(tree.child().stderr.take(), max_output, keep);
+    let ended = wait(&mut tree, timeout, stop);
+    tree.kill();
+    let ended = ended?;
+    let until = Instant::now() + READ_GRACE;
+    Ok(Finished { ended, stdout: stdout.read_until(until), stderr: stderr.read_until(until) })
+}
+
+fn wait(tree: &mut Tree, timeout: Duration, stop: &AtomicBool) -> io::Result<Ended> {
+    let started = Instant::now();
+    loop {
+        match tree.child().try_wait()? {
+            Some(status) => return Ok(Ended::Exited(status)),
+            None if stop.load(Ordering::Relaxed) => return Ok(Ended::Stopped),
+            None if started.elapsed() > timeout => return Ok(Ended::TimedOut),
+            None => std::thread::sleep(POLL),
         }
+    }
+}
+
+struct Reader {
+    kept: Arc<Mutex<VecDeque<u8>>>,
+    ended: Receiver<()>,
+}
+
+impl Reader {
+    fn of(pipe: Option<impl Read + Send + 'static>, cap: usize, keep: Keep) -> Self {
+        let kept = Arc::new(Mutex::new(VecDeque::new()));
+        let (end, ended) = std::sync::mpsc::channel();
+        let into = Arc::clone(&kept);
+        drop(crate::named::spawn("process-output", move || {
+            if let Some(pipe) = pipe {
+                copy(pipe, &into, cap, keep);
+            }
+            let _ = end.send(());
+        }));
+        Self { kept, ended }
+    }
+
+    fn read_until(self, until: Instant) -> String {
+        let _ = self.ended.recv_timeout(until.saturating_duration_since(Instant::now()));
+        let bytes: Vec<u8> = self.kept.locked().iter().copied().collect();
         String::from_utf8_lossy(&bytes).into_owned()
-    })
+    }
+}
+
+fn copy(mut pipe: impl Read, into: &Mutex<VecDeque<u8>>, cap: usize, keep: Keep) {
+    let mut chunk = [0u8; 8192];
+    loop {
+        let read = match pipe.read(&mut chunk) {
+            Ok(0) => return,
+            Ok(read) => read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(_) => return,
+        };
+        let mut kept = into.locked();
+        match keep {
+            Keep::Start => {
+                let room = cap.saturating_sub(kept.len()).min(read);
+                kept.extend(&chunk[..room]);
+            }
+            Keep::End => {
+                kept.extend(&chunk[..read]);
+                let over = kept.len().saturating_sub(cap);
+                kept.drain(..over);
+            }
+        }
+    }
 }
 
 #[cfg(all(test, unix))]
@@ -106,6 +156,16 @@ mod tests {
         assert_eq!(done.stdout, "01234567");
         assert_eq!(done.stderr, "oops\n");
         assert_eq!(done.status().and_then(|s| s.code()), Some(3));
+    }
+
+    #[test]
+    fn a_grandchild_that_left_the_group_cannot_hold_the_run_open() {
+        let stop = AtomicBool::new(false);
+        let leaves = "if command -v setsid >/dev/null 2>&1; then setsid sleep 10 & else set -m; sleep 10 & fi; echo hi";
+        let started = Instant::now();
+        let done = run(&mut sh(leaves), bounds(&stop, Duration::from_secs(3))).expect("run");
+        assert!(started.elapsed() < Duration::from_secs(6), "held open for {:?}", started.elapsed());
+        assert_eq!(done.stdout, "hi\n");
     }
 
     #[test]
