@@ -44,7 +44,7 @@ is (`xtask lint` checks it lists every crate).
 - `docs/vision.md`: the problem, who it is for, scope, non-goals, open decisions.
 - `docs/GLOSSARY.md`: the project's vocabulary and where each term lives.
 - `docs/architecture.md`: crate map, request path, data on disk, threading.
-- `docs/decisions/`: one record per decision (`0001`…`0010`), with context and costs.
+- `docs/decisions/`: one record per decision (`0001`…`0011`), with context and costs.
 - `docs/threat-model.md`: assets, actors, trust boundaries, known gaps.
 
 Files under `docs/` must not spell the product's name, command or env

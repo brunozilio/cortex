@@ -127,6 +127,8 @@ A flag whose name starts with `experimental-` is experimental: its behaviour may
 | `experimental-follow-through` | Review | | Sends the agent back when it ends promising more work |
 | `experimental-affected-tests` | Review | | Runs the tests covering an edited file in the background |
 | `experimental-escalation` | Review | | Sends a stuck agent to the Advisor or to `escalationModel` |
+| `experimental-code-mode` | Tools | | The REPL tool: the agent scripts its tools in JavaScript and sees only what the script returns |
+| `experimental-code-mode-only` | Tools | | Off until you turn it on: REPL becomes the agent's only tool |
 | `experimental-learning` | Learning and memory | | Offers one lesson to keep after a run where you corrected the agent |
 | `team-memory` | Learning and memory | | Recalls memories checked into `{{DIR}}/memory` |
 | `experimental-memory-anchors` | Learning and memory | | Memories name their files and show up when those files are touched |
@@ -393,6 +395,24 @@ After the agent edits or writes a file, the tests that cover it start in the bac
 > Default: on.
 
 When the agent keeps failing the same call, it is told to ask the Advisor (when `advisorModel` is set) or the next turns run on `escalationModel`. See [Verification and review](./verification-and-review#escalation-when-the-agent-is-stuck).
+
+## Tools
+
+### `experimental-code-mode`
+
+> [!EXPERIMENTAL]
+> Default: on.
+
+Gives the agent the **REPL** tool. Instead of calling tools one turn at a time, the agent writes a JavaScript script in which every other tool is a function (`await Grep({ pattern: "TODO" })`), loops and filters in code, and reads only what the script returns. Searching many files or making the same edit in many places then takes one turn, and the files it only needed to filter never enter the conversation.
+
+Each call a script makes is an ordinary tool call: it follows your permission mode, rules and hooks, asks you exactly as the tool would, and shows up in the chat as its own tool row. A refused call fails inside the script. What a script declares stays for the next one in the same session until {{NAME}} exits. Turn the flag off to remove the tool.
+
+### `experimental-code-mode-only`
+
+> [!EXPERIMENTAL]
+> Default: off. Unlike the other flags, it stays off until you turn it on in your own settings (`/features experimental-code-mode-only on`); a project's settings cannot turn it on.
+
+With `experimental-code-mode` on, makes **REPL** the agent's only way to use tools. The model is offered REPL, AskUserQuestion and the plan-mode and worktree switches; every other tool is described inside REPL's description as a typed function and is called from scripts. Tools held back for search (with many MCP tools) are found from a script with `searchTools("words")`. Permissions, rules and hooks apply to each call exactly as before.
 
 ## Learning and memory
 

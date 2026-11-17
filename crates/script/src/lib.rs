@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+pub mod session;
+
 use rquickjs::{Context, Ctx, Function, Module, Runtime, Value as JsValue};
 use serde_json::Value;
 
@@ -194,7 +196,7 @@ fn js_to_json<'js>(ctx: &Ctx<'js>, value: JsValue<'js>) -> rquickjs::Result<Valu
     Ok(serde_json::from_str(&text).unwrap_or(Value::Null))
 }
 
-fn describe(ctx: &Ctx<'_>, error: rquickjs::Error) -> String {
+pub(crate) fn describe(ctx: &Ctx<'_>, error: rquickjs::Error) -> String {
     if matches!(error, rquickjs::Error::Exception) {
         let caught = ctx.catch();
         if let Some(exception) = caught.as_exception() {

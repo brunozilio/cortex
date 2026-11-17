@@ -12,6 +12,7 @@ mod permission;
 mod permission_ask;
 mod plan_mode;
 mod reminders;
+mod repl;
 mod script_call;
 mod stuck;
 mod sub_agent;

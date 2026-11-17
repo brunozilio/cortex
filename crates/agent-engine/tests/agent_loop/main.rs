@@ -17,6 +17,7 @@ mod permissions;
 mod plan_mode;
 mod redaction;
 mod repeats;
+mod repl;
 mod safeguards;
 mod script_skills;
 mod scripts;

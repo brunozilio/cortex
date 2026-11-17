@@ -13,6 +13,11 @@ impl Agent<'_> {
     }
 
     pub(super) fn offered(&self) -> Vec<ToolSpec> {
+        if self.workspace.policy.code_mode == domain::code_mode::Mode::Only {
+            let more_to_find =
+                self.workspace.services.deferred.as_ref().is_some_and(|deferred| !deferred.waiting().is_empty());
+            return crate::tools::repl::only(self.request.tools.clone(), more_to_find);
+        }
         let mut tools = self.request.tools.clone();
         if let Some(deferred) = &self.workspace.services.deferred {
             tools.extend(deferred.loaded());

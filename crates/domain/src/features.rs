@@ -36,6 +36,10 @@ pub const WEB_LINKS: &str = "experimental-web-links";
 pub const WEB_SMALL_PAGES_DIRECT: &str = "experimental-web-small-pages-direct";
 pub const WEB_FORMATS: &str = "experimental-web-formats";
 pub const WEB_EMPTY_PAGE_ERROR: &str = "experimental-web-empty-page-error";
+pub const CODE_MODE: &str = "experimental-code-mode";
+pub const CODE_MODE_ONLY: &str = "experimental-code-mode-only";
+
+const OPT_IN: &[&str] = &[CODE_MODE_ONLY];
 
 pub fn skill_flag(skill: &str) -> Option<&'static str> {
     (skill == "follow-pr").then_some(PR_FOLLOW)
@@ -136,6 +140,14 @@ pub const KNOWN: &[Flag] = &[
         about: "WebFetch reports a page with almost no text (built by JavaScript, a login, a bot check) as an error",
     },
     Flag {
+        name: CODE_MODE,
+        about: "The REPL tool: the agent writes JavaScript that calls its tools as functions, and only what the script returns reaches the model",
+    },
+    Flag {
+        name: CODE_MODE_ONLY,
+        about: "With experimental-code-mode, REPL is the agent's only tool and every other tool is called from scripts; off until you turn it on",
+    },
+    Flag {
         name: AUTO_REVIEW,
         about: "When a run changed files, a read-only reviewer checks the changes and the docs before it finishes",
     },
@@ -195,7 +207,7 @@ pub struct Features {
 
 impl Features {
     pub fn on(&self, feature: &str) -> bool {
-        self.set.get(feature).copied().unwrap_or(true)
+        self.set.get(feature).copied().unwrap_or(!OPT_IN.contains(&feature))
     }
 
     pub fn listed(&self) -> Vec<Listed> {
@@ -239,6 +251,16 @@ mod tests {
 
         let features = features.layered(&json!({ SANDBOX: false, "insights": false }), true).expect("flags");
         assert!(!features.on(SANDBOX) && !features.on("insights"));
+    }
+
+    #[test]
+    fn an_opt_in_flag_is_off_until_turned_on() {
+        let features = Features::default();
+        assert!(features.on(CODE_MODE) && !features.on(CODE_MODE_ONLY));
+
+        let features = features.layered(&json!({ CODE_MODE_ONLY: true }), true).expect("flags");
+        assert!(features.on(CODE_MODE_ONLY));
+        assert!(features.listed().iter().any(|flag| flag.name == CODE_MODE_ONLY && flag.on));
     }
 
     #[test]

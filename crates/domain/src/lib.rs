@@ -11,6 +11,7 @@ pub mod cache_window;
 pub mod catalog;
 pub mod changes;
 pub mod claims;
+pub mod code_mode;
 pub mod command;
 pub mod command_policy;
 pub mod conversation;

@@ -13,6 +13,7 @@ pub mod persisted;
 pub mod plan_mode;
 pub mod progress;
 pub mod read_files;
+pub mod repl;
 mod rule_target;
 pub(crate) mod script_bridge;
 pub(crate) mod script_io;

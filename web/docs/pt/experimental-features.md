@@ -127,6 +127,8 @@ Uma flag cujo nome começa com `experimental-` é experimental: o comportamento 
 | `experimental-follow-through` | Revisão | | Manda o agente de volta quando ele termina prometendo mais trabalho |
 | `experimental-affected-tests` | Revisão | | Roda em segundo plano os testes que cobrem um arquivo editado |
 | `experimental-escalation` | Revisão | | Manda um agente empacado para o Advisor ou para o `escalationModel` |
+| `experimental-code-mode` | Ferramentas | | A ferramenta REPL: o agente programa suas ferramentas em JavaScript e só vê o que o script devolve |
+| `experimental-code-mode-only` | Ferramentas | | Desligada até você ligar: a REPL vira a única ferramenta do agente |
 | `experimental-learning` | Aprendizado e memória | | Oferece uma lição para guardar depois de uma execução em que você corrigiu o agente |
 | `team-memory` | Aprendizado e memória | | Lembra as memórias versionadas em `{{DIR}}/memory` |
 | `experimental-memory-anchors` | Aprendizado e memória | | Memórias citam seus arquivos e aparecem quando esses arquivos são tocados |
@@ -393,6 +395,24 @@ Depois que o agente edita ou escreve um arquivo, os testes que o cobrem começam
 > Padrão: ligada.
 
 Quando o agente falha a mesma chamada repetidas vezes, ele é orientado a consultar o Advisor (quando o `advisorModel` está definido) ou os próximos turnos rodam no `escalationModel`. Veja [Verificação e revisão](./verification-and-review#escalonamento-quando-o-agente-empaca).
+
+## Ferramentas
+
+### `experimental-code-mode`
+
+> [!EXPERIMENTAL]
+> Padrão: ligada.
+
+Dá ao agente a ferramenta **REPL**. Em vez de chamar uma ferramenta por turno, o agente escreve um script em JavaScript em que cada uma das outras ferramentas é uma função (`await Grep({ pattern: "TODO" })`), faz laços e filtros no código e lê só o que o script devolve. Buscar em muitos arquivos ou fazer a mesma edição em muitos lugares passa a custar um turno, e os arquivos que ele só precisava filtrar nunca entram na conversa.
+
+Cada chamada de um script é uma chamada de ferramenta comum: segue o seu modo de permissão, as regras e os hooks, pergunta a você como a ferramenta perguntaria e aparece no chat como uma linha de ferramenta própria. Uma chamada recusada falha dentro do script. O que um script declara fica para o próximo na mesma sessão até o {{NAME}} fechar. Desligue a flag para tirar a ferramenta.
+
+### `experimental-code-mode-only`
+
+> [!EXPERIMENTAL]
+> Padrão: desligada. Ao contrário das outras flags, ela fica desligada até você ligar nas suas próprias configurações (`/features experimental-code-mode-only on`); as configurações de um projeto não podem ligá-la.
+
+Com a `experimental-code-mode` ligada, faz da **REPL** o único jeito de o agente usar ferramentas. O modelo recebe a REPL, a AskUserQuestion e as chaves de plan mode e de worktree; todas as outras ferramentas aparecem na descrição da REPL como funções tipadas e são chamadas de dentro dos scripts. As ferramentas guardadas para busca (quando há muitas ferramentas MCP) são encontradas num script com `searchTools("palavras")`. Permissões, regras e hooks valem para cada chamada exatamente como antes.
 
 ## Aprendizado e memória
 

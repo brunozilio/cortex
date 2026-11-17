@@ -1,0 +1,1 @@
+More tools exist than are declared below (MCP servers' tools, mostly). Find them with `await searchTools("words about the task")`: it returns the matching tools with their descriptions and input schemas, and from then on each is callable as `tools["exact_name"](input)`.

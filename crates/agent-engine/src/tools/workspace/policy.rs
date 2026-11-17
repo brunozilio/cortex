@@ -24,6 +24,7 @@ pub struct Policy {
     pub follow_through: bool,
     pub affected_tests: bool,
     pub session_claims: bool,
+    pub code_mode: domain::code_mode::Mode,
     pub web: WebReading,
     pub output: domain::output::Shaping,
 }
@@ -44,6 +45,7 @@ impl Policy {
             follow_through: self.follow_through,
             affected_tests: self.affected_tests,
             session_claims: self.session_claims,
+            code_mode: self.code_mode,
             web: self.web,
             output: self.output,
         }

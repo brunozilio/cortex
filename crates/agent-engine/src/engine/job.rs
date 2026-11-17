@@ -96,6 +96,7 @@ impl Job {
         let agents = brief.agents;
         tools.push(Box::new(tools::subagent::AgentTool { agents: agents.clone() }));
         tools.push(Box::new(tools::send_message::SendMessageTool));
+        tools.push(Box::new(tools::repl::Repl));
         tools.extend(tools::task::tools());
         let servers = crate::mcp::connect_stopped(&self.request, &mcp_sources, &self.mcp, self.control.stop_flag());
         tools.extend(crate::mcp::tools_of(&servers, self.control.stop_flag()));
@@ -141,6 +142,7 @@ impl Job {
         workspace.policy.follow_through = settings.features.on(domain::features::FOLLOW_THROUGH);
         workspace.policy.affected_tests = settings.features.on(domain::features::AFFECTED_TESTS);
         workspace.policy.session_claims = settings.features.on(domain::features::SESSION_CLAIMS);
+        workspace.policy.code_mode = domain::code_mode::Mode::of(&settings.features);
         workspace.policy.web = domain::web_reading::WebReading::from(&settings.features);
         workspace.policy.output = domain::output::Shaping::from(&settings.features);
         workspace.models.escalation.clone_from(&settings.escalation);
