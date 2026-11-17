@@ -43,6 +43,16 @@ mod tests {
 }
 
 #[cfg(test)]
+mod section_tests {
+    #[test]
+    fn a_section_of_brand_toml_becomes_a_module_of_constants() {
+        assert!(!super::cloudflare::CLIENT_ID.is_empty());
+        assert!(super::cloudflare::REDIRECT.starts_with("http://"));
+        assert!(!super::cloudflare::SCOPES.is_empty());
+    }
+}
+
+#[cfg(test)]
 mod literal_tests {
     #[test]
     fn each_name_is_also_a_literal() {

@@ -1,6 +1,6 @@
 [package]
 name = "brand"
-description = "The product's name, command, folders and owner, read from brand.toml when built."
+description = "The product's name, command, folders and owner, read from config.toml when built."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

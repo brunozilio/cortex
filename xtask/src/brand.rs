@@ -10,11 +10,12 @@ pub struct Brand {
 
 impl Brand {
     pub fn read(root: &Path) -> Result<Self, String> {
-        let file = root.join("brand.toml");
+        let file = root.join("config.toml");
         let text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
         let values: Vec<(String, String)> = text
             .lines()
             .map(|line| line.split_once('#').map_or(line, |(before, _)| before).trim())
+            .take_while(|line| !line.starts_with('['))
             .filter_map(|line| line.split_once('='))
             .map(|(key, value)| (key.trim().to_owned(), value.trim().trim_matches('"').to_owned()))
             .collect();
@@ -24,7 +25,7 @@ impl Brand {
                 .find(|(name, _)| name == key)
                 .map(|(_, value)| value.clone())
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| format!("brand.toml has no `{key}`"))
+                .ok_or_else(|| format!("config.toml has no `{key}`"))
         };
         Ok(Self { name: get("name")?, command: get("command")?, company: get("company")?, author: get("author")? })
     }
@@ -174,6 +175,16 @@ mod tests {
     }
 
     #[test]
+    fn the_product_s_names_are_read_before_the_first_section_only() {
+        let root = tempfile::tempdir().expect("root");
+        let text = "name = \"Nova\"\ncommand = \"nova\"\ncompany = \"Acme\"\nauthor = \"Ana\"\n\n[cloudflare]\nname = \"other\"\n";
+        std::fs::write(root.path().join("config.toml"), text).expect("config.toml");
+        assert_eq!(Brand::read(root.path()).expect("read").name, "Nova");
+        std::fs::write(root.path().join("config.toml"), "[cloudflare]\nname = \"Nova\"\n").expect("config.toml");
+        assert!(Brand::read(root.path()).is_err(), "a name inside a section is not the product's");
+    }
+
+    #[test]
     fn a_line_is_replaced_once() {
         assert_eq!(set_line("a\nNAME=\"x\"\nNAME=\"y\"\n", "NAME=", "NAME=\"z\""), "a\nNAME=\"z\"\nNAME=\"y\"\n");
     }
@@ -188,7 +199,7 @@ mod tests {
 
 fn allowed(path: &str, brand: &Brand) -> bool {
     let own = format!(".{}/", brand.command);
-    ["brand.toml", "Cargo.lock", "Cargo.toml", "crates/cli/Cargo.toml"].contains(&path)
+    ["config.toml", "Cargo.lock", "Cargo.toml", "crates/cli/Cargo.toml"].contains(&path)
         || ["README.md", "CLAUDE.md", "AGENTS.md", "LICENSE"].contains(&path)
         || path.starts_with(&own)
         || path.starts_with(".claude/")

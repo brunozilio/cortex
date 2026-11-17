@@ -2,7 +2,7 @@
 
 Status: DRAFT written from the 2026-11-16 audit, for the owner to review; nothing here is approved until the sign-off listed under "Open decisions".
 
-This document names the product as "the app" and its binary as `<command>`; the real name lives in `brand.toml`.
+This document names the product as "the app" and its binary as `<command>`; the real name lives in `config.toml`.
 
 ## The problem
 

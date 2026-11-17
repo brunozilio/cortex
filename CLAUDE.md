@@ -1,7 +1,7 @@
 # Working agreement
 
 Rust workspace: a coding agent driven from a terminal chat (CLI/TUI). The
-product's name lives in `brand.toml` (read through the `brand` crate:
+product's name lives in `config.toml` (read through the `brand` crate:
 `brand::NAME`, `brand::COMMAND`; `cargo run -p xtask -- brand` writes the
 files that must spell it out). It is a terminal product; it also serves a
 local web page on loopback for the trace, the console, the user docs and a

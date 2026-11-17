@@ -37,7 +37,7 @@ The main line is `cli -> app -> agent-engine -> llm-providers -> domain`.
 | `relay` | The self-hosted relay binary: serves the page as an installable web app and forwards encrypted frames between phones and their machine, and the same relay as a Cloudflare Worker (`worker/relay.js`), published by `<command> remote up` |
 | `code-map` | Tree-sitter index of a repository, ranked against a prompt |
 | `platform` | Per-OS IO: child processes, private files, file locks, data folders, sandbox, system keychain |
-| `brand` | The product's name and command, from `brand.toml` |
+| `brand` | The product's name and command from `config.toml`, and one module of constants per section of it (`[cloudflare]` becomes `brand::cloudflare`) |
 
 `web/` is the browser app the console serves (trace, console, documentation, terminal). `content/` is JavaScript and Markdown, not a crate. `xtask/` holds the repository lint, the web page's build (`xtask web`), the release check on it and the fixtures that tie the page's types to `domain`'s.
 

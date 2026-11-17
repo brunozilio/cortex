@@ -28,7 +28,7 @@ pub struct CloudflareClient {
 
 impl CloudflareClient {
     pub fn branded() -> Result<Self, String> {
-        Self::parse(brand::CLOUDFLARE_CLIENT_ID, brand::CLOUDFLARE_REDIRECT, brand::CLOUDFLARE_SCOPES)
+        Self::parse(brand::cloudflare::CLIENT_ID, brand::cloudflare::REDIRECT, brand::cloudflare::SCOPES)
     }
 
     pub fn parse(id: &str, redirect: &str, scopes: &str) -> Result<Self, String> {

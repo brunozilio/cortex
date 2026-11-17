@@ -118,7 +118,7 @@ is only in `app.db`, which the older binary does not read.
 | `app` | The application API, in process: the CLI's client (sessions, runs), `ClientCommand` / `ServerEvent`, and the command handler behind them: runs, memory, settings, providers, secrets. |
 | `llm-providers` | Talking to a model: the `Provider` trait, one folder per provider, the model client that sends requests over HTTP and reads the streams, the wires, the transcript types, credentials, OAuth, sign-in, catalogs, declared providers and model-family vendor folders. The subscription providers are a Cargo feature, `subscription-providers`, on by default. |
 | `cli` | The `cortex` binary: terminal chat (ratatui), `-p`, `login`, `logout`, `models`, `mcp`, `plugin`, `remote`, `config`, `doctor`, `eval`. |
-| `brand` | The product's name and command, from `brand.toml`. |
+| `brand` | The product's name and command, and one module of constants per section of `config.toml` (`brand::cloudflare`), from `config.toml`. |
 | `language-servers` | Runs language servers for the `LSP` tool and edit diagnostics: client, pool, first-use installs. |
 | `code-map` | Experimental tree-sitter index of a repository's functions, types and callers, ranked against a prompt. |
 | `platform` | Per-OS IO: child processes and their trees, private files, stored documents (lock, atomic replace, corrupt set aside), data folders, the system keychain; the process's one async runtime and the run's `Stop` (cancellation token plus flag). |

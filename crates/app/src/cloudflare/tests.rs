@@ -99,5 +99,5 @@ fn the_redirect_is_a_fixed_loopback_address() {
     {
         assert!(CloudflareClient::parse("id", bad, "s").is_err(), "{bad}");
     }
-    assert!(CloudflareClient::branded().is_ok(), "brand.toml names a usable client");
+    assert!(CloudflareClient::branded().is_ok(), "config.toml names a usable client");
 }
