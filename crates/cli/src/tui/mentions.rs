@@ -23,11 +23,15 @@ pub(super) fn load(app: &mut super::app::App) {
 }
 
 pub(super) fn complete(app: &mut super::app::App, file: &str) {
-    let (text, cursor) = (app.prompt.input.text().to_owned(), app.prompt.input.cursor());
-    let Some((start, _)) = typing(&text, cursor) else { return };
-    let rest = text[cursor..].trim_start();
-    let joined = if rest.is_empty() { String::new() } else { format!(" {rest}") };
-    app.prompt.input.set(&format!("{}@{file} {}", &text[..start], joined.trim_start()).replace("  ", " "));
+    complete_input(&mut app.prompt.input, file);
+}
+
+pub fn complete_input(input: &mut super::input::Input, file: &str) {
+    if input.browsing_history() {
+        return;
+    }
+    let Some((start, _)) = typing(input.text(), input.cursor()) else { return };
+    input.complete_word(start, &format!("@{file}"));
 }
 
 pub fn typing(text: &str, cursor: usize) -> Option<(usize, &str)> {
@@ -95,6 +99,19 @@ mod tests {
         assert_eq!(typing("olha\u{a0}@src", 10), Some((6, "src")));
         assert_eq!(typing("見て\u{3000}@src", 13), Some((9, "src")));
         assert_eq!(typing("olha\u{a0}src", 9), None);
+    }
+
+    #[test]
+    fn completing_a_mention_keeps_the_rest_of_the_prompt_as_typed() {
+        let rest = "  keep  two\n  indented";
+        let mut input = crate::tui::input::Input::default();
+        input.set(&format!("see @ma{rest}"));
+        for _ in rest.chars() {
+            input.left();
+        }
+        complete_input(&mut input, "src/main.rs");
+        assert_eq!(input.text(), "see @src/main.rs keep  two\n  indented");
+        assert_eq!(&input.text()[..input.cursor()], "see @src/main.rs ", "the cursor stays after the mention");
     }
 
     #[test]

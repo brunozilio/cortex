@@ -97,7 +97,7 @@ pub fn layout(text: &str, cursor: usize, width: usize) -> (Vec<String>, (usize, 
     let mut at = (0, 0);
     for (offset, c) in text.char_indices() {
         if offset == cursor {
-            at = (rows.len() - 1, used);
+            at = (rows.len() - 1, used.min(width - 1));
         }
         if c == '\n' {
             rows.push(String::new());
@@ -137,6 +137,12 @@ mod tests {
         assert_eq!(layout("abcde", 5, 5), (vec!["abcde".into(), String::new()], (1, 0)), "a full row moves on");
         assert_eq!(layout("ab\ncd", 1, 5), (vec!["ab".into(), "cd".into()], (0, 1)));
         assert_eq!(layout("abcdefg", 5, 5).1, (1, 0), "on the first character of a wrapped row");
+    }
+
+    #[test]
+    fn the_cursor_after_a_full_row_stays_inside_it() {
+        assert_eq!(layout("abcde\u{301}", 5, 5).1, (0, 4), "before a combining mark");
+        assert_eq!(layout("abcde\nf", 5, 5).1, (0, 4), "on the line break");
     }
 
     #[test]

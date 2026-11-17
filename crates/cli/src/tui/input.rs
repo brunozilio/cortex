@@ -4,6 +4,7 @@ pub struct Input {
     cursor: usize,
     history: Vec<String>,
     recalled: Option<usize>,
+    draft: (String, usize),
 }
 
 impl Input {
@@ -123,9 +124,19 @@ impl Input {
     }
 
     pub fn set_history(&mut self, history: Vec<String>) {
+        let earlier = history.len();
         let mut merged = history;
         merged.append(&mut self.history);
         self.history = merged;
+        self.recalled = self.recalled.map(|at| at + earlier);
+    }
+
+    pub fn complete_word(&mut self, start: usize, word: &str) {
+        let rest = self.text[self.cursor..].trim_start_matches(' ');
+        let end = self.text.len() - rest.len();
+        let completed = format!("{word} ");
+        self.text.replace_range(start..end, &completed);
+        self.cursor = start + completed.len();
     }
 
     pub fn delete_word(&mut self) {
@@ -158,6 +169,9 @@ impl Input {
             Some(at) => at.checked_sub(1).or(Some(at)),
         };
         if let Some(at) = next {
+            if self.recalled.is_none() {
+                self.draft = (self.text.clone(), self.cursor);
+            }
             self.recalled = Some(at);
             self.set(&self.history[at].clone());
         }
@@ -171,7 +185,7 @@ impl Input {
             }
             Some(_) => {
                 self.recalled = None;
-                self.set("");
+                (self.text, self.cursor) = std::mem::take(&mut self.draft);
             }
             None => {}
         }
@@ -197,6 +211,10 @@ impl Input {
 pub fn after_last_whitespace(text: &str) -> usize {
     text.char_indices().rev().find(|(_, c)| c.is_whitespace()).map_or(0, |(at, c)| at + c.len_utf8())
 }
+
+#[cfg(test)]
+#[path = "input_properties.rs"]
+mod properties;
 
 #[cfg(test)]
 mod tests {
@@ -288,6 +306,31 @@ mod tests {
         assert_eq!(input.text(), "second");
         input.newer();
         assert_eq!(input.text(), "");
+    }
+
+    #[test]
+    fn up_then_down_brings_back_the_half_typed_prompt() {
+        let mut input = Input::default();
+        input.set("sent");
+        input.take();
+        input.set("half typed");
+        input.left();
+        input.older();
+        assert_eq!(input.text(), "sent");
+        input.newer();
+        assert_eq!((input.text(), input.cursor()), ("half typed", "half type".len()));
+    }
+
+    #[test]
+    fn earlier_history_arriving_while_browsing_keeps_the_recalled_prompt() {
+        let mut input = Input::default();
+        input.set("now");
+        input.take();
+        input.older();
+        input.set_history(vec!["before".into()]);
+        assert!(input.browsing_history(), "still on the recalled prompt");
+        input.newer();
+        assert_eq!(input.text(), "", "down from the newest goes back to the draft");
     }
 
     #[test]
