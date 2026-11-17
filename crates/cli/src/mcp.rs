@@ -39,9 +39,9 @@ pub enum McpAction {
     },
     #[command(about = "Remove one of your own servers")]
     Remove { name: String },
-    #[command(about = "Let a server of this project's .mcp.json start")]
+    #[command(about = concat!("Let a server of this project's ", brand::dir!(), "/mcp.json start"))]
     Approve { name: String },
-    #[command(about = "Turn a server of this project's .mcp.json off")]
+    #[command(about = concat!("Turn a server of this project's ", brand::dir!(), "/mcp.json off"))]
     Deny { name: String },
     #[command(about = "Sign in to a remote server in the browser (OAuth)")]
     Login { name: String },
@@ -148,7 +148,9 @@ pub fn render(servers: &[McpServerInfo]) -> String {
         return concat!(
             "No MCP servers. Add one with `",
             brand::command!(),
-            " mcp add <name> <url|command>`, or a project's .mcp.json.\n"
+            " mcp add <name> <url|command>`, or a project's ",
+            brand::dir!(),
+            "/mcp.json.\n"
         )
         .into();
     }

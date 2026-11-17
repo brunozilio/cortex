@@ -11,7 +11,7 @@ exchanged at `prod.us-east-1.auth.desktop.kiro.dev/oauth/token` for the
 redirect including `?login_option=…`. The answer's `profileArn` names the
 account and its region; tokens refresh at `/refreshToken` (also on a 401 or
 403). Organization (IAM Identity Center) and Builder ID sign-ins are
-refused for now.
+accepted too; an organization account needs a Kiro profile.
 
 Turns are `GenerateAssistantResponse` on `runtime.<region>.kiro.dev` (AWS
 JSON 1.0, `x-amz-target`), answered as AWS event-stream frames; that wire
