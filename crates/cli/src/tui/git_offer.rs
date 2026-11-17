@@ -21,7 +21,7 @@ pub(super) fn hold(app: &mut App, text: &str) -> bool {
         return false;
     }
     let (ticket, cwd, text) = (app.turn.prepare(text), app.cwd.clone(), text.to_owned());
-    app.spawn(move |sdk| Msg::GitOffer { ticket, offered: sdk.git_offered(&cwd).unwrap_or(false), text });
+    app.spawn(move |client| Msg::GitOffer { ticket, offered: client.git_offered(&cwd).unwrap_or(false), text });
     true
 }
 
@@ -68,8 +68,8 @@ pub(super) fn answered(app: &mut App, decision: &app::Decision) -> bool {
 
 fn initialize(app: &mut App, text: String) {
     let (ticket, cwd) = (app.turn.prepare(&text), app.cwd.clone());
-    app.spawn(move |sdk| {
-        let committed = sdk.init_git(&cwd).map_err(|error| error.to_string());
+    app.spawn(move |client| {
+        let committed = client.init_git(&cwd).map_err(|error| error.to_string());
         Msg::GitInitialized { ticket, committed, text }
     });
 }
@@ -100,7 +100,7 @@ fn send(app: &mut App, text: String) {
 fn never_again(app: &mut App) {
     app.session.turned_off.insert(GIT_OFFER.to_owned());
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.set_flag(&cwd, GIT_OFFER, false) {
+    app.spawn(move |client| match client.set_flag(&cwd, GIT_OFFER, false) {
         Ok(_) => Msg::Nothing,
         Err(error) => Msg::Error(format!("Could not keep git-offer off: {error}")),
     });

@@ -8,7 +8,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::key;
 use crate::tui::app::App;
 use crate::tui::picker::PickerKind;
-use crate::tui::tests::{press, sdk, type_text, until};
+use crate::tui::tests::{client, press, type_text, until};
 use crate::tui::transcript::Entry;
 
 const NONE: KeyModifiers = KeyModifiers::NONE;
@@ -26,7 +26,7 @@ struct Desk {
 fn desk_with(script: Vec<EngineEvent>, delay: Duration) -> Desk {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script).with_delay(delay);
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
     until(&mut app, |app| app.session.is_some());
     Desk { app, engine, _data: data }
 }

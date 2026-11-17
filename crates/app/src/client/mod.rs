@@ -23,7 +23,7 @@ pub use self::account::SignedIn;
 pub use self::memory::ProjectMemory;
 pub use self::run::{Run, RunControl};
 pub use self::session::{Headless, Session};
-use dispatch::Client;
+use dispatch::Dispatcher;
 pub use domain::budget::Spending;
 
 #[derive(Debug, thiserror::Error)]
@@ -49,12 +49,12 @@ impl From<domain::failure::RunFailure> for Error {
 }
 
 #[derive(Debug, Clone)]
-pub struct Sdk {
-    client: Arc<Client>,
+pub struct Client {
+    dispatcher: Arc<Dispatcher>,
     services: LocalServices,
 }
 
-impl Sdk {
+impl Client {
     pub fn builder() -> Builder {
         Builder::default()
     }
@@ -69,13 +69,13 @@ impl Sdk {
             let _ = wake_tx.try_send(());
         });
         let backend = LocalBackend::new(services.clone(), wake).map_err(|error| Error::Backend(error.to_string()))?;
-        Ok(Self { client: Arc::new(Client::new(Box::new(backend), woken)), services })
+        Ok(Self { dispatcher: Arc::new(Dispatcher::new(Box::new(backend), woken)), services })
     }
 
     pub fn session(&self, cwd: impl Into<PathBuf>, model: ModelOption) -> Session {
         let cwd = cwd.into();
         let cwd = std::path::absolute(&cwd).unwrap_or(cwd);
-        Session::new(Arc::clone(&self.client), cwd, model)
+        Session::new(Arc::clone(&self.dispatcher), cwd, model)
     }
 }
 
@@ -109,11 +109,11 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> Result<Sdk, Error> {
+    pub fn build(self) -> Result<Client, Error> {
         let mut services = self.services.unwrap_or_else(|| LocalServices::detect_in(self.cwd.as_deref()));
         if let Some(data) = &self.data {
             services = services.kept_in(data);
         }
-        Sdk::local(services)
+        Client::local(services)
     }
 }

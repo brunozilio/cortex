@@ -3,12 +3,12 @@ use app::{EngineEvent, Model};
 use ratatui::crossterm::event::KeyCode;
 
 use super::app::App;
-use super::tests::{press, screen, sdk, type_text, until};
+use super::tests::{client, press, screen, type_text, until};
 
 fn app(data: &std::path::Path) -> (App, FakeEngine) {
     let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], done);
-    let mut app = App::new(sdk(&engine, data), data.into(), None, None);
+    let mut app = App::new(client(&engine, data), data.into(), None, None);
     until(&mut app, |app| app.session.is_some());
     (app, engine)
 }

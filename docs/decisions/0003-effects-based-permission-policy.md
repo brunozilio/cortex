@@ -25,7 +25,7 @@ One policy engine in `domain` decides, from what a call will do.
 - The `access` field is removed from the 39 `content/tools/*.js` files.
 - Rollout: the new engine first runs in shadow mode beside the current verdict and differences are logged; then it replaces it. The audit's bypasses become regression tests, and the parser gets property tests.
 
-Phase 1 ships a stopgap (no auto-approval of "read-only" Bash, an outside-project check for writing tools); this decision is phase 6.2.
+A stopgap shipped first, on 2026-11-16 (no auto-approval of "read-only" Bash, an outside-project check for writing tools); this decision replaced it on 2026-11-17.
 
 ## Consequences
 

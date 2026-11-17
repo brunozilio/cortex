@@ -54,7 +54,7 @@ fn a_backend_that_stopped_waking_is_not_polled_in_a_busy_loop() {
     let polled = Arc::new(AtomicUsize::new(0));
     let (wake, woken) = crossbeam_channel::bounded(1);
     drop(wake);
-    let client = Client::new(Box::new(Gone(Arc::clone(&polled))), woken);
+    let client = Dispatcher::new(Box::new(Gone(Arc::clone(&polled))), woken);
     std::thread::sleep(Duration::from_millis(600));
     drop(client);
     let polls = polled.load(Ordering::Relaxed);
@@ -223,7 +223,7 @@ fn a_pending_sign_in_is_cancelled_from_another_thread_without_waiting_for_it() {
 #[test]
 fn a_call_waiting_on_a_backend_that_went_away_fails_instead_of_waiting_out_its_time() {
     let (wake, woken) = crossbeam_channel::bounded::<()>(1);
-    let client = Arc::new(Client::new(Box::new(Quiet), woken));
+    let client = Arc::new(Dispatcher::new(Box::new(Quiet), woken));
     let asking = Arc::clone(&client);
     let waiting = std::thread::spawn(move || asking.call(ClientCommand::LoadSettings, settings));
     until(|| (!client.shared.waiters.locked().is_empty()).then_some(()));
@@ -256,7 +256,7 @@ impl Backend for Dies {
 fn a_backend_whose_worker_died_fails_every_waiting_call_and_run_though_its_wake_is_still_held() {
     let dead = Arc::new(AtomicBool::new(false));
     let (wake, woken) = crossbeam_channel::bounded::<()>(1);
-    let client = Arc::new(Client::new(Box::new(Dies(Arc::clone(&dead))), woken));
+    let client = Arc::new(Dispatcher::new(Box::new(Dies(Arc::clone(&dead))), woken));
     let asking = Arc::clone(&client);
     let waiting = std::thread::spawn(move || asking.call(ClientCommand::LoadSettings, settings));
     until(|| (!client.shared.waiters.locked().is_empty()).then_some(()));

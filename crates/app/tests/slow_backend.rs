@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use agent_engine::fake::FakeEngine;
-use app::{EngineEvent, LocalServices, Model, Sdk, SettingsStore};
+use app::{Client, EngineEvent, LocalServices, Model, SettingsStore};
 use crossbeam_channel::{Receiver, Sender};
 use domain::SessionId;
 
@@ -30,7 +30,7 @@ fn model() -> Model {
     Model::new("scripted", "Scripted")
 }
 
-fn with_a_stuck_backend() -> (Sdk, Arc<Stuck>, Sender<()>, FakeEngine) {
+fn with_a_stuck_backend() -> (Client, Arc<Stuck>, Sender<()>, FakeEngine) {
     let script = vec![
         EngineEvent::SessionStarted(SessionId("s".into())),
         EngineEvent::Completed { duration_ms: 1, cost_usd: None },
@@ -41,20 +41,20 @@ fn with_a_stuck_backend() -> (Sdk, Arc<Stuck>, Sender<()>, FakeEngine) {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.off.insert(domain::features::MEMORY_SEARCH.into());
     services.settings = Arc::clone(&stuck) as Arc<dyn SettingsStore>;
-    (Sdk::builder().services(services).build().expect(brand::COMMAND), stuck, release, engine)
+    (Client::builder().services(services).build().expect(brand::COMMAND), stuck, release, engine)
 }
 
 #[test]
 fn starting_a_run_a_side_question_or_a_context_measure_never_waits_for_the_backend() {
-    let (sdk, stuck, release, engine) = with_a_stuck_backend();
-    let asking = sdk.clone();
+    let (client, stuck, release, engine) = with_a_stuck_backend();
+    let asking = client.clone();
     let settings = std::thread::spawn(move || asking.settings());
     let deadline = Instant::now() + Duration::from_secs(5);
     while !stuck.entered.load(Ordering::SeqCst) {
         assert!(Instant::now() < deadline, "the backend never took the command it is stuck on");
         std::thread::sleep(Duration::from_millis(2));
     }
-    let session = sdk.session("/repo", model()).resume(SessionId("s".into()));
+    let session = client.session("/repo", model()).resume(SessionId("s".into()));
 
     let asked = Instant::now();
     let prompt = session.send_with_images("hi", Vec::new()).expect("enqueued");

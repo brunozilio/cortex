@@ -3,11 +3,11 @@ use app::{EngineEvent, Model, PermissionMode};
 use ratatui::crossterm::event::KeyCode;
 
 use super::super::app::App;
-use super::super::tests::{press, sdk, type_text, until};
+use super::super::tests::{client, press, type_text, until};
 use super::super::transcript::Entry;
 
 fn ready(data: &std::path::Path, engine: &FakeEngine) -> App {
-    let mut app = App::new(sdk(engine, data), data.into(), None, Some(PermissionMode::Ask));
+    let mut app = App::new(client(engine, data), data.into(), None, Some(PermissionMode::Ask));
     until(&mut app, |app| app.session.is_some() && !app.catalog.skills.is_empty());
     app
 }

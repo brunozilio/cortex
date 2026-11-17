@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
-use app::{Decision, EngineEvent, InMemorySecretStore, LocalServices, Sdk, Trust};
+use app::{Client, Decision, EngineEvent, InMemorySecretStore, LocalServices, Trust};
 use ratatui::crossterm::event::KeyCode;
 
 use super::*;
@@ -35,15 +35,15 @@ fn stage(hook: bool) -> Stage {
     services.homes = Arc::new(app::OwnerHome::at(&home));
     services.off.extend([domain::features::MEMORY_SEARCH, domain::features::GIT_OFFER].map(str::to_owned));
     services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
-    let sdk = Sdk::builder().data_dir(&data).services(services).build().expect(brand::COMMAND);
-    let mut app = App::new(sdk, repo.clone(), None, None);
+    let client = Client::builder().data_dir(&data).services(services).build().expect(brand::COMMAND);
+    let mut app = App::new(client, repo.clone(), None, None);
     opening(&mut app);
     until(&mut app, |app| app.session.is_some());
     Stage { app, engine, repo, _folders: folders }
 }
 
 fn trust_of(app: &App, folder: &Path) -> Trust {
-    app.sdk.trust_state(folder).expect("state").trust
+    app.client.trust_state(folder).expect("state").trust
 }
 
 fn last_notice(app: &App) -> String {
@@ -89,7 +89,7 @@ fn trusting_in_the_dialog_is_stored_and_the_first_prompt_runs_trusted() {
     let carried = engine.requests()[0].host.extensions.as_ref().map(|extensions| extensions.trust);
     assert_eq!(carried, Some(Trust::Trusted));
 
-    let mut again = App::new(app.sdk.clone(), repo, None, None);
+    let mut again = App::new(app.client.clone(), repo, None, None);
     super::opening(&mut again);
     assert!(!pending(&again), "a trusted folder does not ask again");
 }

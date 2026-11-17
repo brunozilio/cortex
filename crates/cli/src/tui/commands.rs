@@ -61,7 +61,7 @@ pub fn run(app: &mut App, command: Command) {
 
 fn doctor(app: &App) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| Msg::Notice(crate::doctor::render(&crate::doctor::checks(sdk, &cwd))));
+    app.spawn(move |client| Msg::Notice(crate::doctor::render(&crate::doctor::checks(client, &cwd))));
 }
 
 pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, String)> {

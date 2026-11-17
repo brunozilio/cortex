@@ -18,7 +18,7 @@ pub(super) fn load(app: &mut super::app::App) {
     if app.catalog.files.is_none() && typing(app.prompt.input.text(), app.prompt.input.cursor()).is_some() {
         app.catalog.files = Some(Vec::new());
         let cwd = app.cwd.clone();
-        app.spawn(move |sdk| super::app::Msg::Files(list(sdk, &cwd)));
+        app.spawn(move |client| super::app::Msg::Files(list(client, &cwd)));
     }
 }
 
@@ -67,19 +67,19 @@ fn score(query: &str, file: &str) -> Option<i64> {
     Some(100 - gaps.min(99))
 }
 
-pub fn list(sdk: &app::Sdk, cwd: &Path) -> Vec<String> {
-    sdk.project_files(cwd).unwrap_or_default()
+pub fn list(client: &app::Client, cwd: &Path) -> Vec<String> {
+    client.project_files(cwd).unwrap_or_default()
 }
 
 pub fn names_a_file(prompt: &str) -> bool {
     prompt.contains('@')
 }
 
-pub fn with_files(sdk: &app::Sdk, cwd: &Path, prompt: &str) -> String {
+pub fn with_files(client: &app::Client, cwd: &Path, prompt: &str) -> String {
     if !names_a_file(prompt) {
         return prompt.to_owned();
     }
-    sdk.with_mentioned_files(cwd, prompt).unwrap_or_else(|_| prompt.to_owned())
+    client.with_mentioned_files(cwd, prompt).unwrap_or_else(|_| prompt.to_owned())
 }
 
 #[cfg(test)]

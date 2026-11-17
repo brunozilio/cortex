@@ -128,26 +128,26 @@ impl Drop for Pending {
     }
 }
 
-pub(crate) struct Client {
+pub(crate) struct Dispatcher {
     backend: Arc<Mutex<Box<dyn Backend>>>,
     shared: Arc<Shared>,
     next: AtomicU64,
     stop: Arc<AtomicBool>,
 }
 
-impl std::fmt::Debug for Client {
+impl std::fmt::Debug for Dispatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Client").finish_non_exhaustive()
+        f.debug_struct("Dispatcher").finish_non_exhaustive()
     }
 }
 
-impl Client {
+impl Dispatcher {
     pub(crate) fn new(backend: Box<dyn Backend>, woken: Receiver<()>) -> Self {
         let backend = Arc::new(Mutex::new(backend));
         let shared = Arc::new(Shared::default());
         let stop = Arc::new(AtomicBool::new(false));
         let (b, s, halt) = (Arc::clone(&backend), Arc::clone(&shared), Arc::clone(&stop));
-        platform::named::spawn("sdk-dispatch", move || dispatch(&b, &s, &woken, &halt));
+        platform::named::spawn("client-dispatch", move || dispatch(&b, &s, &woken, &halt));
         Self { backend, shared, next: AtomicU64::new(1), stop }
     }
 
@@ -234,7 +234,7 @@ impl Client {
     }
 }
 
-impl Drop for Client {
+impl Drop for Dispatcher {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
     }

@@ -12,7 +12,7 @@ use ratatui::crossterm::event::KeyCode;
 use super::app::App;
 use super::motion::Motion;
 use super::shots_html::{DARK, LIGHT, Palette, page};
-use super::tests::{press, sdk, type_text, until};
+use super::tests::{client, press, type_text, until};
 use super::theme::{self, Background, Theme};
 use super::view;
 
@@ -139,7 +139,7 @@ fn scenes() -> Vec<Scene> {
 fn build(scene: &Scene, data: &Path) -> App {
     let model = Model::new("keyed:opus", "Opus 5.5");
     let engine = FakeEngine::new(vec![model], scene.events.clone()).with_delay(Duration::from_millis(2));
-    let mut app = App::new(sdk(&engine, data), data.into(), None, None);
+    let mut app = App::new(client(&engine, data), data.into(), None, None);
     app.ui.motion = std::cell::RefCell::new(Motion::new(false));
     until(&mut app, |app| app.session.is_some());
     app.cwd = PathBuf::from("~/code/shop-api");

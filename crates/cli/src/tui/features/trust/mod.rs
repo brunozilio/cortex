@@ -21,7 +21,7 @@ pub fn feature() -> Feature {
 }
 
 pub fn opening(app: &mut App) {
-    match app.sdk.trust_state(&app.cwd) {
+    match app.client.trust_state(&app.cwd) {
         Ok(report) => offer(app, &report),
         Err(error) => tracing::warn!(%error, "this folder's trust could not be read; it is treated as not trusted"),
     }
@@ -46,7 +46,7 @@ fn answered(app: &mut App, decision: &app::Decision) -> bool {
     }
     app.ask = None;
     match domain::trust::answer(decision) {
-        TrustAnswer::Trust => match app.sdk.set_trust(&app.cwd, true) {
+        TrustAnswer::Trust => match app.client.set_trust(&app.cwd, true) {
             Ok(report) => {
                 app.transcript.notice(changed(&report));
                 refresh_skills(app);
@@ -61,7 +61,7 @@ fn answered(app: &mut App, decision: &app::Decision) -> bool {
 
 fn refresh_skills(app: &App) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.skills(&cwd) {
+    app.spawn(move |client| match client.skills(&cwd) {
         Ok(found) => Msg::Skills(found.into_iter().map(|skill| (skill.name, skill.description)).collect()),
         Err(error) => Msg::Error(error.to_string()),
     });
@@ -70,7 +70,7 @@ fn refresh_skills(app: &App) {
 fn run(app: &mut App, argument: Option<String>) {
     let cwd = app.cwd.clone();
     match argument.as_deref().map(str::to_ascii_lowercase).as_deref() {
-        None => app.spawn(move |sdk| match sdk.trust_state(&cwd) {
+        None => app.spawn(move |client| match client.trust_state(&cwd) {
             Ok(report) => Msg::Notice(shown(&report)),
             Err(error) => Msg::Error(error.to_string()),
         }),
@@ -82,7 +82,7 @@ fn run(app: &mut App, argument: Option<String>) {
 
 fn set(app: &App, trusted: bool) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.set_trust(&cwd, trusted) {
+    app.spawn(move |client| match client.set_trust(&cwd, trusted) {
         Ok(report) => Msg::Notice(changed(&report)),
         Err(error) => Msg::Error(error.to_string()),
     });

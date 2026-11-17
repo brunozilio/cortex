@@ -27,7 +27,7 @@ pub(super) struct Framed {
 impl Job {
     pub(super) fn frame(&self, runtime: Runtime, brief: &Brief, session: &SessionId) -> Result<Framed, Stop> {
         let Runtime { mut workspace, mut toolbox, main, worktree } = runtime;
-        let setup = &worktree.guard.setup;
+        let setup = &worktree.lease.setup;
         let environment = self.environment(&workspace, &toolbox, setup, brief, session);
         let mut system = prompt::system(&environment);
         workspace.prompt_context = Some(environment);

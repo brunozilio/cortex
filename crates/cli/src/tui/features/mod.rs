@@ -2,13 +2,13 @@ mod branches;
 mod budget;
 mod cache_warning;
 mod docs;
-mod elsewhere;
 mod factory_reset;
 mod flags;
 mod learning;
 mod learning_check;
 mod memory;
 mod output_savings;
+mod outside_runs;
 mod remote;
 mod schedules;
 mod shell;
@@ -89,13 +89,13 @@ fn registered() -> Vec<Feature> {
         budget::feature(),
         cache_warning::feature(),
         docs::feature(),
-        elsewhere::feature(),
         factory_reset::feature(),
         flags::feature(),
         learning::feature(),
         learning_check::feature(),
         memory::feature(),
         output_savings::feature(),
+        outside_runs::feature(),
         remote::feature(),
         schedules::feature(),
         shell::feature(),
@@ -186,13 +186,13 @@ mod tests {
                 "budget",
                 "",
                 "docs",
-                "",
                 "factory-reset",
                 "features",
                 "learn",
                 "check",
                 "memory",
                 "gain",
+                "",
                 "remote",
                 "schedules loop",
                 "bashes",
@@ -201,7 +201,7 @@ mod tests {
                 "trust",
                 "verification",
             ],
-            "one entry per feature folder, empty for cache_warning and elsewhere, which bring no command"
+            "one entry per feature folder, empty for cache_warning and outside_runs, which bring no command"
         );
     }
 

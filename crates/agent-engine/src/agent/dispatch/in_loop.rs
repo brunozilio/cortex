@@ -59,7 +59,7 @@ pub(super) fn not_alongside(name: &str) -> Outcome {
 }
 
 impl Agent<'_> {
-    pub(super) fn native<'env>(&'env self, calling: &Calling<'_, 'env>, input: &Value) -> Outcome {
+    pub(super) fn in_loop<'env>(&'env self, calling: &Calling<'_, 'env>, input: &Value) -> Outcome {
         let Calling { id, name, tool, run, parent, .. } = *calling;
         let handler = Handler::of(name);
         match handler {

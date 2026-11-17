@@ -7,17 +7,17 @@ use domain::memory::seed::Candidate;
 use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind};
 
 use crate::client::features::unexpected;
-use crate::{Error, Run, Sdk};
+use crate::{Client, Error, Run};
 
-impl Sdk {
+impl Client {
     pub fn memory(&self, cwd: impl Into<PathBuf>) -> ProjectMemory<'_> {
-        ProjectMemory { sdk: self, path: cwd.into() }
+        ProjectMemory { client: self, path: cwd.into() }
     }
 }
 
 #[derive(Debug)]
 pub struct ProjectMemory<'a> {
-    sdk: &'a Sdk,
+    client: &'a Client,
     path: PathBuf,
 }
 
@@ -96,7 +96,7 @@ impl ProjectMemory<'_> {
 
     pub fn optimize(&self, model: ModelOption) -> Result<Run, Error> {
         let path = self.path.clone();
-        Run::start(&self.sdk.client, |run| {
+        Run::start(&self.client.dispatcher, |run| {
             let op = MemoryOp::Optimize { run, model };
             ClientCommand::Feature(FeatureRequest::Memory(MemoryRequest { path, op }))
         })
@@ -114,6 +114,6 @@ impl ProjectMemory<'_> {
     }
 
     fn ask(&self, op: MemoryOp) -> Result<MemoryReply, Error> {
-        self.sdk.ask_memory(MemoryRequest { path: self.path.clone(), op })
+        self.client.ask_memory(MemoryRequest { path: self.path.clone(), op })
     }
 }

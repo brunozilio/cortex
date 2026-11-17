@@ -1,4 +1,4 @@
-use app::{McpEntry, McpListing, McpOrigin, McpServerInfo, McpState, Sdk};
+use app::{Client, McpEntry, McpListing, McpOrigin, McpServerInfo, McpState};
 use clap::Subcommand;
 
 const ADD_EXAMPLES: &str = concat!(
@@ -49,12 +49,12 @@ pub enum McpAction {
     Logout { name: String },
 }
 
-pub fn run(sdk: &Sdk, cwd: &std::path::Path, action: McpAction) -> Result<(), String> {
+pub fn run(client: &Client, cwd: &std::path::Path, action: McpAction) -> Result<(), String> {
     let mut added_name = None;
     let servers = match action {
-        McpAction::List => return list(&sdk.mcp_listing(cwd).map_err(|error| error.to_string())?),
+        McpAction::List => return list(&client.mcp_listing(cwd).map_err(|error| error.to_string())?),
         McpAction::Get { name } => {
-            print!("{}", shown(&sdk.mcp_server(cwd, &name).map_err(|error| error.to_string())?));
+            print!("{}", shown(&client.mcp_server(cwd, &name).map_err(|error| error.to_string())?));
             return Ok(());
         }
         McpAction::Add { name, target, args, force, env, headers, transport } => {
@@ -62,18 +62,18 @@ pub fn run(sdk: &Sdk, cwd: &std::path::Path, action: McpAction) -> Result<(), St
             if transport == "sse" && server.get("url").is_some() {
                 server["type"] = "sse".into();
             }
-            let result = sdk.add_mcp_server(cwd, &name, server, force);
+            let result = client.add_mcp_server(cwd, &name, server, force);
             added_name = Some(name);
             result
         }
-        McpAction::Remove { name } => sdk.remove_mcp_server(cwd, &name),
-        McpAction::Approve { name } => sdk.approve_mcp_server(cwd, &name, true),
-        McpAction::Deny { name } => sdk.approve_mcp_server(cwd, &name, false),
-        McpAction::Login { name } => sdk.sign_in_mcp_server(cwd, &name, |url| {
+        McpAction::Remove { name } => client.remove_mcp_server(cwd, &name),
+        McpAction::Approve { name } => client.approve_mcp_server(cwd, &name, true),
+        McpAction::Deny { name } => client.approve_mcp_server(cwd, &name, false),
+        McpAction::Login { name } => client.sign_in_mcp_server(cwd, &name, |url| {
             eprintln!("Opening the sign-in page: {url}");
             crate::login::open(url);
         }),
-        McpAction::Logout { name } => sdk.sign_out_mcp_server(cwd, &name),
+        McpAction::Logout { name } => client.sign_out_mcp_server(cwd, &name),
     }
     .map_err(|error| error.to_string())?;
     match added_name {

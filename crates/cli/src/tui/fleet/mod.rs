@@ -24,7 +24,7 @@ pub fn open(app: &mut App) {
     app.fleet.open = true;
     app.fleet.cursor = 0;
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match super::resume::here(sdk, &cwd) {
+    app.spawn(move |client| match super::resume::here(client, &cwd) {
         Ok(found) => Msg::Earlier(found),
         Err(error) => Msg::Error(error.to_string()),
     });

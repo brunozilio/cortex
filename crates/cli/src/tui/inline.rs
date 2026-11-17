@@ -71,7 +71,7 @@ mod tests {
     use ratatui::backend::TestBackend;
 
     use super::*;
-    use crate::tui::tests::{sdk, type_text, until};
+    use crate::tui::tests::{client, type_text, until};
 
     fn text(buffer: &ratatui::buffer::Buffer) -> String {
         let area = buffer.area;
@@ -90,7 +90,7 @@ mod tests {
             EngineEvent::Completed { duration_ms: 1, cost_usd: None },
         ];
         let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
-        let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+        let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
         app.ui.inline = Some(0);
         until(&mut app, |app| app.session.is_some());
         let options = TerminalOptions { viewport: Viewport::Inline(8) };

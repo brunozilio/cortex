@@ -43,9 +43,9 @@ impl App {
             Ok(Some(ChoreAnswer::Title(title))) => {
                 if let Some(id) = self.session.id() {
                     self.saver.remember_title(&self.cwd, &id, &title);
-                    let (sdk, named) = (self.sdk.clone(), title.clone());
+                    let (client, named) = (self.client.clone(), title.clone());
                     std::thread::spawn(move || {
-                        if let Err(error) = sdk.rename_session(&id, &named) {
+                        if let Err(error) = client.rename_session(&id, &named) {
                             tracing::warn!(%error, "could not keep the conversation's name in the catalog");
                         }
                     });

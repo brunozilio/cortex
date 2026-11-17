@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use app::Sdk;
+use app::Client;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
@@ -16,11 +16,11 @@ fn check(name: &'static str, result: Result<String, String>) -> Check {
     }
 }
 
-pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
+pub fn checks(client: &Client, cwd: &Path) -> Vec<Check> {
     let mut found = vec![check("version", Ok(env!("CARGO_PKG_VERSION").to_owned()))];
     found.push(check(
         "providers",
-        sdk.providers().map_err(|e| e.to_string()).and_then(|providers| {
+        client.providers().map_err(|e| e.to_string()).and_then(|providers| {
             let connected: Vec<&str> =
                 providers.iter().filter(|p| p.account.is_some()).map(|p| p.name.as_str()).collect();
             if connected.is_empty() {
@@ -32,24 +32,25 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
     ));
     found.push(check(
         "models",
-        sdk.models().map_err(|e| e.to_string()).and_then(|models| match models.len() {
+        client.models().map_err(|e| e.to_string()).and_then(|models| match models.len() {
             0 => Err("none available: connect a provider".to_owned()),
             n => Ok(format!("{n} available")),
         }),
     ));
     found.push(check(
         "settings",
-        sdk.permissions(cwd)
+        client
+            .permissions(cwd)
             .map(|info| format!("{} permission rules, {} hooks", info.rules.len(), info.hooks.len()))
             .map_err(|e| format!("{e} (fix the file it names)")),
     ));
-    found.push(check("trust", sdk.trust_state(cwd).map(|report| trust(&report)).map_err(|e| e.to_string())));
+    found.push(check("trust", client.trust_state(cwd).map(|report| trust(&report)).map_err(|e| e.to_string())));
     found.push(check(
         "mcp servers",
-        sdk.mcp_servers(cwd).map(|servers| format!("{} configured", servers.len())).map_err(|e| e.to_string()),
+        client.mcp_servers(cwd).map(|servers| format!("{} configured", servers.len())).map_err(|e| e.to_string()),
     ));
-    found.push(check("declared providers", declared(sdk, cwd)));
-    found.push(check("sandbox", sandbox(sdk.flags(cwd).map_err(|e| e.to_string()))));
+    found.push(check("declared providers", declared(client, cwd)));
+    found.push(check("sandbox", sandbox(client.flags(cwd).map_err(|e| e.to_string()))));
     found.push(check("git", program("git", &["--version"])));
     found.push(check(
         "ripgrep",
@@ -71,8 +72,8 @@ fn trust(report: &app::TrustReport) -> String {
     }
 }
 
-fn declared(sdk: &Sdk, cwd: &Path) -> Result<String, String> {
-    summarize(&sdk.declare_providers(cwd).map_err(|e| e.to_string())?)
+fn declared(client: &Client, cwd: &Path) -> Result<String, String> {
+    summarize(&client.declare_providers(cwd).map_err(|e| e.to_string())?)
 }
 
 fn sandbox(flags: Result<Vec<app::ListedFlag>, String>) -> Result<String, String> {

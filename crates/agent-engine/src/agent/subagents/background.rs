@@ -20,7 +20,7 @@ pub(in crate::agent) type BackgroundJob<'env> =
     Box<dyn FnOnce(&Arc<Control>, &crate::tools::Workspace) -> Outcome + Send + 'env>;
 
 #[derive(Default)]
-pub(in crate::agent) struct Background(Mutex<BTreeMap<String, Arc<Task>>>);
+pub(in crate::agent) struct Background(Mutex<BTreeMap<String, Arc<BackgroundAgent>>>);
 
 pub(in crate::agent) struct CancelOnDrop<'a>(pub(in crate::agent) &'a Background);
 
@@ -30,14 +30,14 @@ impl Drop for CancelOnDrop<'_> {
     }
 }
 
-pub(in crate::agent) struct Task {
+pub(in crate::agent) struct BackgroundAgent {
     result: Mutex<Option<Outcome>>,
     ready: Condvar,
     collected: AtomicBool,
     control: Arc<Control>,
 }
 
-impl Task {
+impl BackgroundAgent {
     fn started(control: Arc<Control>) -> Self {
         Self { result: Mutex::new(None), ready: Condvar::new(), collected: AtomicBool::new(false), control }
     }
@@ -74,7 +74,7 @@ impl Background {
         self.0.locked().values().any(|task| !task.is_collected())
     }
 
-    pub(in crate::agent) fn started(&self) -> Vec<(String, Arc<Task>)> {
+    pub(in crate::agent) fn started(&self) -> Vec<(String, Arc<BackgroundAgent>)> {
         self.0.locked().iter().map(|(id, task)| (id.clone(), task.clone())).collect()
     }
 
@@ -82,18 +82,18 @@ impl Background {
         self.0.locked().len() < BACKGROUND_AT_MOST
     }
 
-    fn start(&self, control: Arc<Control>) -> Option<(String, Arc<Task>)> {
+    fn start(&self, control: Arc<Control>) -> Option<(String, Arc<BackgroundAgent>)> {
         let mut tasks = self.0.locked();
         if tasks.len() >= BACKGROUND_AT_MOST {
             return None;
         }
         let id = format!("task-{}", tasks.len() + 1);
-        let task = Arc::new(Task::started(control));
+        let task = Arc::new(BackgroundAgent::started(control));
         tasks.insert(id.clone(), task.clone());
         Some((id, task))
     }
 
-    fn find(&self, input: &Value) -> Option<Arc<Task>> {
+    fn find(&self, input: &Value) -> Option<Arc<BackgroundAgent>> {
         self.0.locked().get(input["task_id"].as_str().unwrap_or_default()).cloned()
     }
 

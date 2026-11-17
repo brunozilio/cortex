@@ -1,6 +1,6 @@
 # Glossary
 
-The project's own vocabulary. Code carries no comments (see `decisions/0010-comments-stay-out-of-code.md`), so a name is the only documentation next to the code and this file is where a name is explained. Paths are relative to the repository root and point at the main place a term lives today; the restructuring plan moves several of them.
+The project's own vocabulary. Code carries no comments (see `decisions/0010-comments-stay-out-of-code.md`), so a name is the only documentation next to the code and this file is where a name is explained. Paths are relative to the repository root and point at the main place a term lives as of 2026-11-17; a record in `decisions/` that moves one says so.
 
 The product is written as "the app", its binary as `<command>`, its project folder as `.<command>/` and its user folder as `~/.<command>/`.
 
@@ -34,7 +34,7 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 **Job.** The object that prepares and drives one run. It is not a queue entry and there is no scheduler; "job" and "run" have the same lifetime. Lives in `crates/agent-engine/src/engine/job.rs`.
 
-**Phase (engine).** One of the eight typed steps `Job::phases` runs in order for a run: `load_session`, `brief`, `equip`, `apply_policy`, `prepare_runtime`, `open`, `drive`, `close`. Each takes what the one before produced; a phase that ends the run early returns a `Stop`, which is turned into the run's last events in one place. A phase is not a turn (a step of the agent loop, inside `drive`) and not one of the plan's eleven phases in `architecture.md`. The list is in `crates/agent-engine/src/engine/job.rs`, each phase in `crates/agent-engine/src/engine/phases/`, `Stop` in `crates/agent-engine/src/engine/stop.rs`.
+**Phase (engine).** One of the eight typed steps `Job::phases` runs in order for a run: `load_session`, `brief`, `equip`, `apply_policy`, `prepare_runtime`, `open`, `drive`, `close`. Each takes what the one before produced; a phase that ends the run early returns a `Stop`, which is turned into the run's last events in one place. A phase is not a turn (a step of the agent loop, inside `drive`). The list is in `crates/agent-engine/src/engine/job.rs`, each phase in `crates/agent-engine/src/engine/phases/`, `Stop` in `crates/agent-engine/src/engine/stop.rs`.
 
 **Run gate.** The point every engine event passes through on its way out. It lets exactly one terminal event through and nothing after it, so a caller can rely on a run ending once. Lives in `crates/agent-engine/src/boundary/gate.rs`.
 
@@ -53,6 +53,8 @@ The product is written as "the app", its binary as `<command>`, its project fold
 **Fleet.** The sessions that are live in one terminal process, shown by `/fleet`. It is a list of sessions, not a group of agents or machines. Lives in `crates/cli/src/tui/fleet/mod.rs`.
 
 **Mirror.** The copy of the screen of the session a terminal process shows, sent to the console's terminal view while a page watches it. The page sees exactly what the terminal shows, at the terminal's size, and its keys go to that same session; it is not a second process resuming the session. Lives in `crates/console/src/mirror.rs`; the copying in `crates/cli/src/tui/mirror.rs`, the key decoding in `crates/cli/src/tui/mirror_keys.rs`.
+
+**Outside runs.** Runs of the session on screen that another process made: the console's page, a phone through remote control, or another terminal resuming the same session. While the terminal is idle, the `outside_runs` TUI feature checks the session's length once a second and, when it grew, reads its new records and adds them to the transcript, so the screen shows what was done elsewhere. It was the `elsewhere` folder until 2026-11-17. Lives in `crates/cli/src/tui/features/outside_runs/` (`watch.rs` decides when to look).
 
 **Parked session.** A live session in the fleet that is not the one on screen. Its state is held aside and swapped into the TUI's `App` when one of its events arrives. Lives in `crates/cli/src/tui/fleet/parked.rs`.
 
@@ -102,7 +104,7 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 **Document (persistence helper).** A JSON (or text) file that is read, changed and replaced whole under one policy: cross-process lock with a bounded wait, atomic replace, nothing written when nothing changed, and a file that does not parse set aside as `<name>.corrupt-<epoch seconds>` (program-owned) or reported and left alone (hand-edited). Every JSON store of the application goes through it (settings, UI state, provider accounts, the vault's entries, `mcp.json`); the session catalog and project memory are rows in the SQLite database `app.db` instead (`crates/app/src/db/`), and a session's log is append-only. See `decisions/0006-one-persistence-pattern.md`. It is not a file the agent edits for the user. Lives in `crates/platform/src/store/mod.rs`.
 
-**Data root.** Where one instance of the application keeps everything it owns: the folders for UI state, provider accounts, the code-map cache, session logs, language servers, the vault and `app.db`. `DataRoot::system()` is the user's real data folder, `DataRoot::under(folder)` puts all of it under one folder (`Sdk::builder().data_dir`, used by tests), and `DataRoot::in_memory()` keeps nothing on the machine. It also opens the stores; when `app.db` cannot be opened it falls back to stores that last as long as the process and records why, which reaches the user once as a harness notice. It is not the project folder and not `~/.<command>/`. Lives in `crates/app/src/data_root.rs`; the recorded reason is a `Degraded` (`crates/app/src/degraded.rs`).
+**Data root.** Where one instance of the application keeps everything it owns: the folders for UI state, provider accounts, the code-map cache, session logs, language servers, the vault and `app.db`. `DataRoot::system()` is the user's real data folder, `DataRoot::under(folder)` puts all of it under one folder (`Client::builder().data_dir`, used by tests), and `DataRoot::in_memory()` keeps nothing on the machine. It also opens the stores; when `app.db` cannot be opened it falls back to stores that last as long as the process and records why, which reaches the user once as a harness notice. It is not the project folder and not `~/.<command>/`. Lives in `crates/app/src/data_root.rs`; the recorded reason is a `Degraded` (`crates/app/src/degraded.rs`).
 
 **Feature vs feature flag.** A feature is a folder of code that plugs into a host: `crates/app/src/features/<name>/` on the backend and `crates/cli/src/tui/features/<name>/` in the TUI. A feature flag is a named on/off switch in the settings' `features` key, defined in `crates/domain/src/features.rs`; every flag is on unless turned off, except the opt-in ones (`experimental-code-mode-only`), which are off until the owner turns them on. A backend feature is turned off only through its switch, the flag `FeatureName::switch` names for it (`crates/app/src/api/features/mod.rs`; the flags that exist only for that are in `crates/domain/src/features/backend.rs`); `flags`, `sessions`, `shell` and `workspace` have none and are always on. A name that is not a known flag switches nothing. A Cargo feature is a third, unrelated thing.
 
@@ -156,6 +158,8 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 ## Client and handler
 
+**Client.** `app::Client`, what the terminal holds to talk to the in-process backend: sessions, runs, memory, settings, providers, MCP servers. It is internal to the app, not an SDK for other products (`decisions/0005-typed-application-api.md`); it was called `Sdk` until 2026-11-17. `Client::builder()` makes one (`data_dir` keeps everything under one folder, for tests); `sibling` makes a second one over the same services. Each has a `Dispatcher` and its `client-dispatch` thread, which sends commands, matches replies to requests and routes run events. Lives in `crates/app/src/client/mod.rs`, the dispatcher in `crates/app/src/client/dispatch.rs`.
+
 **Request id / reply / unsolicited event.** Every `ClientCommand` the client sends is wrapped in an `Envelope` with a `RequestId`, a number the client counts up. A `Reply` is a `ServerEvent::Reply` carrying the id of the request it answers; a request gets one terminal reply, after any number of non-terminal ones (a sign-in's "authorize at" step). A command whose handler panics is answered `internal error while handling <command>`. An unsolicited event (`ServerEvent::Unsolicited`) answers no request: the handler tells the client something that happened by itself, such as memory applied after a run or a model catalog that failed to load; the client keeps the latest 256 until they are read. Run events (`ServerEvent::Run`) are the third kind and are routed by `RunId`. The types are in `crates/app/src/api/` (`envelope.rs`, `command.rs`, `event.rs`), the waiting and routing in `crates/app/src/client/dispatch.rs`, the sending side in `crates/app/src/handler/outbox.rs`.
 
 ## Observability
@@ -182,14 +186,14 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 ## Names that collide
 
-The audit lists these; until they are renamed, check which one a file means.
+The audit listed these. Renamed on 2026-11-17: the background agent struct (`BackgroundAgent`, was `Task`), the worktree's cleanup (`WorktreeLease` in `agent_runtime/worktree_lease.rs`, was `Guard` in `guard.rs`), a hook's result (`HookOutcome`, was `hooks::Decision`), a memory's decided/ruled-out/watch-out note (`DecisionNote` in `knowledge/memory/decision_note.rs`, was `Decision`), what a hook says about the fallback chain (`FallbackChoice`, was `fallback::Verdict`), the router of the tools the loop handles itself (`agent/dispatch/in_loop.rs`, was `native.rs`), and the client (`app::Client`, was `Sdk`). What is left, and why it stays:
 
-- "Task": the agent's to-do items (`TaskCreate`, `TaskList`), background agents (`TaskOutput`, `TaskStop`), and a `Task` struct, one background agent of a run, in `crates/agent-engine/src/agent/subagents/background.rs`. What else a run holds (tool index, repeats, watches) is `ThisRun` in `crates/agent-engine/src/agent/run.rs`.
-- "guard": `crates/agent-engine/src/guard/` is the bypass safety classifier; `crates/agent-engine/src/agent_runtime/guard.rs` cleans up a worktree.
+- "Task": the agent's to-do items (`TaskCreate`, `TaskList`) and background agents (`TaskOutput`, `TaskStop`). These are tool names the model sees, so they keep the names models know. The struct for one background agent of a run is `BackgroundAgent` in `crates/agent-engine/src/agent/subagents/background.rs`; what else a run holds (tool index, repeats, watches) is `ThisRun` in `crates/agent-engine/src/agent/run.rs`.
+- "guard": `crates/agent-engine/src/guard/` is the bypass safety classifier, and `domain::permission::Guard` names what protects a path (outside the project, `.git/`, the app's own configuration). Both are the plain meaning of the word.
 - "permission": `crates/domain/src/safety/permission/` (the policy engine and its verdict), `crates/agent-engine/src/agent/permission/` (the flow around it: hooks, the question, the bypass check), `crates/agent-engine/src/prompt/permissions.rs` (reading and writing rules in settings).
 - "notice": an inbox notice (for the model), a harness notice (for the user) and a transcript notice entry; see "Notice (harness) vs inbox notice".
-- "phase": an engine phase of a run, and a phase of the restructuring plan.
+- "phase": only an engine phase of a run (see "Phase (engine)").
 - "Conversations": the message delta recorded for the trace, and the stored sub-agent conversations.
 - `crates/agent-engine/src/prompt/` in the engine holds project configuration (settings, rules, styles), not only prompts.
-- `Decision` and `Verdict` each name more than one type across `domain` and the engine.
-- "Native" in the `native-sessions` folder means only "the engine built into the app" (the folder keeps its name on disk); `Block::Native` is an item in a provider's own format, kept verbatim for that provider, and `agent/dispatch/native.rs` routes the tools the loop handles itself.
+- `Decision` is the user's answer to an ask (`domain::Decision`, `crates/domain/src/run/approval.rs`); `PermissionDecision` is what a rule or a hook says (allow, ask, deny). `Verdict` is two types: the permission policy's (`domain::permission::Verdict`) and the verification judge's (`domain::Verdict`, `crates/domain/src/run/verification/mod.rs`). Both are re-exported by `app` and used by the CLI and the engine's tests, so a rename touches every layer; left for its own change.
+- "Native" in the `native-sessions` folder means only "the engine built into the app" (the folder keeps its name on disk), and `Block::Native` is an item in a provider's own format, kept verbatim for that provider (its name is written into saved conversations).

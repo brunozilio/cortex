@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 
 use domain::{PromptRequest, SessionId};
 
-use crate::agent_runtime::{Guard, Relocation, Setup};
+use crate::agent_runtime::{Relocation, Setup, WorktreeLease};
 use crate::sessions::Sessions;
 use crate::tools::Workspace;
 
@@ -19,11 +19,11 @@ impl Move<'_> {
         &self,
         relocation: Relocation,
         workspace: &mut Workspace,
-        guard: &mut Guard,
+        lease: &mut WorktreeLease,
     ) -> Result<Moved, String> {
         let Relocation { setup, remove } = relocation;
         let entered = setup.worktree_root.is_some().then(|| setup.clone());
-        let moved = self.switch(setup, workspace, guard);
+        let moved = self.switch(setup, workspace, lease);
         if moved.is_err()
             && let Some(entered) = entered
         {
@@ -38,7 +38,12 @@ impl Move<'_> {
         Ok(Moved { system, cwd, kept })
     }
 
-    fn switch(&self, setup: Setup, workspace: &mut Workspace, guard: &mut Guard) -> Result<(String, PathBuf), String> {
+    fn switch(
+        &self,
+        setup: Setup,
+        workspace: &mut Workspace,
+        lease: &mut WorktreeLease,
+    ) -> Result<(String, PathBuf), String> {
         let folder = domain::Folder { cwd: &setup.cwd, extensions: self.request.host.extensions.as_ref() };
         let brief = crate::brief::Brief::load(folder)?;
         let Some(mut context) = workspace.prompt_context.clone() else {
@@ -58,7 +63,7 @@ impl Move<'_> {
         workspace.worktree = state;
         workspace.rules = brief.rules;
         workspace.prompt_context = Some(context);
-        guard.moved(setup);
+        lease.moved(setup);
         Ok((system, cwd))
     }
 }

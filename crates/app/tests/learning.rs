@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
-use app::{EngineEvent, Model, Sdk};
+use app::{Client, EngineEvent, Model};
 use app::{InMemorySecretStore, LocalServices};
 use domain::{SessionCommand, SessionId};
 
@@ -26,8 +26,8 @@ fn a_lesson_is_asked_for_only_after_the_user_corrected_the_agent_enough() {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.off.insert(domain::features::MEMORY_SEARCH.into());
     services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
-    let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
-    let session = sdk.session(data.path(), model());
+    let client = Client::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
+    let session = client.session(data.path(), model());
     assert!(session.learn().is_none(), "nothing happened yet");
 
     session.send("install it").expect("run").text().expect("text");

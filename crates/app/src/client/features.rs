@@ -13,15 +13,15 @@ use crate::api::features::trace::{TraceReply, TraceRequest};
 use crate::api::features::workspace::{WorkspaceReply, WorkspaceRequest};
 use crate::api::{ClientCommand, FeatureReply, FeatureRequest, Reply};
 
-use crate::{Error, Sdk};
+use crate::{Client, Error};
 
 pub(crate) fn unexpected() -> Error {
     Error::Backend("the backend answered something else".into())
 }
 
-impl Sdk {
+impl Client {
     fn feature_reply(&self, request: FeatureRequest) -> Result<FeatureReply, Error> {
-        let answered = self.client.call(ClientCommand::Feature(request), |reply| match reply {
+        let answered = self.dispatcher.call(ClientCommand::Feature(request), |reply| match reply {
             Reply::Feature(reply) => Some(Ok(Ok(reply))),
             Reply::FeatureFailed(error) => Some(Ok(Err(error))),
             _ => None,
@@ -39,7 +39,7 @@ impl Sdk {
 
 macro_rules! asks {
     ($($method:ident: $feature:ident($request:ty) -> $reply:ty;)*) => {
-        impl Sdk {
+        impl Client {
             $(pub(crate) fn $method(&self, request: $request) -> Result<$reply, Error> {
                 match self.feature_reply(FeatureRequest::$feature(request))? {
                     FeatureReply::$feature(reply) => Ok(reply),

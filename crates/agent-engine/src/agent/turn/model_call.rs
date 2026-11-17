@@ -1,11 +1,11 @@
 use domain::EngineEvent;
-use domain::fallback::{Fallback, Verdict};
+use domain::fallback::{Fallback, FallbackChoice};
 use serde_json::{Value, json};
 
 use super::{Exchange, Next, TurnState, cutoffs};
 use crate::agent::run::ThisRun;
 use crate::agent::{Agent, Ending};
-use crate::hooks::Decision;
+use crate::hooks::HookOutcome;
 use crate::model::{BlockingTurn, Delta, ModelError, Reply, ToolSpec, TurnRequest};
 
 const RECOVERIES_AT_MOST: u8 = 2;
@@ -87,9 +87,9 @@ impl Agent<'_> {
             "fallbacks": fallback.chain(),
         });
         let verdict = match self.model_hook(crate::hooks::HookEvent::ModelError, request, extra) {
-            Some(Decision { blocked: Some(_), .. }) => Verdict::Stop,
-            Some(Decision { model: Some(model), .. }) => Verdict::Forward(model),
-            _ => Verdict::Pass,
+            Some(HookOutcome { blocked: Some(_), .. }) => FallbackChoice::Stop,
+            Some(HookOutcome { model: Some(model), .. }) => FallbackChoice::Forward(model),
+            _ => FallbackChoice::Pass,
         };
         fallback.next(&request.model, failure, verdict)
     }
@@ -99,7 +99,7 @@ impl Agent<'_> {
         event: crate::hooks::HookEvent,
         request: &TurnRequest,
         extra: Value,
-    ) -> Option<Decision> {
+    ) -> Option<HookOutcome> {
         if !self.workspace.hooks.listens_to(event) {
             return None;
         }

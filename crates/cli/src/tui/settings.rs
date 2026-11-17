@@ -1,7 +1,7 @@
 use domain::command::{level_named, mode_named};
 use std::path::Path;
 
-use app::{Effort, PermissionMode, Sdk, SessionId, SettingsChange};
+use app::{Client, Effort, PermissionMode, SessionId, SettingsChange};
 
 use super::store::{Store, apply};
 
@@ -74,8 +74,8 @@ const FLUSH_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
 pub struct Saver(crossbeam_channel::Sender<Job>);
 
 impl Saver {
-    pub fn start(sdk: &Sdk) -> Self {
-        Self::over(sdk.clone())
+    pub fn start(client: &Client) -> Self {
+        Self::over(client.clone())
     }
 
     pub fn over(store: impl Store) -> Self {
@@ -144,13 +144,13 @@ mod tests {
     fn a_flush_returns_once_every_queued_change_is_saved() {
         let data = tempfile::tempdir().expect("data");
         let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
-        let sdk = super::super::tests::sdk(&engine, data.path());
-        let saver = Saver::start(&sdk);
+        let client = super::super::tests::client(&engine, data.path());
+        let saver = Saver::start(&client);
         for at in 0..50 {
             saver.remember("last", &at.to_string());
         }
         saver.flush();
-        assert_eq!(sdk.settings().expect("settings")["last"], json!("49"));
+        assert_eq!(client.settings().expect("settings")["last"], json!("49"));
     }
 
     #[test]
@@ -200,15 +200,15 @@ mod tests {
     fn prompts_are_kept_per_folder_newest_last_without_repeats() {
         let data = tempfile::tempdir().expect("data");
         let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
-        let sdk = super::super::tests::sdk(&engine, data.path());
-        sdk.save_settings(json!({"history": {"/a": ["one", "two"]}})).expect("saved");
-        let saver = Saver::start(&sdk);
+        let client = super::super::tests::client(&engine, data.path());
+        client.save_settings(json!({"history": {"/a": ["one", "two"]}})).expect("saved");
+        let saver = Saver::start(&client);
         saver.remember_prompt(Path::new("/a"), "one");
         saver.flush();
-        assert_eq!(history(&sdk.settings().expect("settings"), Path::new("/a")), ["two", "one"]);
+        assert_eq!(history(&client.settings().expect("settings"), Path::new("/a")), ["two", "one"]);
         saver.remember_prompt(Path::new("/a"), "two");
         saver.flush();
-        let settings = sdk.settings().expect("settings");
+        let settings = client.settings().expect("settings");
         assert_eq!(history(&settings, Path::new("/a")), ["one", "two"]);
         assert!(history(&settings, Path::new("/b")).is_empty());
     }
@@ -217,7 +217,8 @@ mod tests {
     fn two_chats_open_at_once_keep_what_each_other_remembers() {
         let data = tempfile::tempdir().expect("data");
         let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
-        let chats = [super::super::tests::sdk(&engine, data.path()), super::super::tests::sdk(&engine, data.path())];
+        let chats =
+            [super::super::tests::client(&engine, data.path()), super::super::tests::client(&engine, data.path())];
         let savers = [Saver::start(&chats[0]), Saver::start(&chats[1])];
         let (one, two) = (SessionId("s-1".into()), SessionId("s-2".into()));
         for at in 0..20 {

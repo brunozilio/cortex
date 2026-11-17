@@ -13,7 +13,7 @@ mod tui;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use app::{PermissionMode, Sdk};
+use app::{Client, PermissionMode};
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
@@ -158,7 +158,7 @@ fn main() -> ExitCode {
 }
 
 struct Launch {
-    sdk: Sdk,
+    client: Client,
     cwd: PathBuf,
     prompt: Option<String>,
     add_dirs: Vec<PathBuf>,
@@ -175,10 +175,10 @@ fn run(mut cli: Cli) -> Result<ExitCode, String> {
         println!("{}", config::run(&config::file(&cwd, *project)?, action.clone())?);
         return Ok(ExitCode::SUCCESS);
     }
-    let sdk = Sdk::builder().cwd(&cwd).build().map_err(|e| e.to_string())?;
-    let launch = launch(&cli, sdk, cwd)?;
+    let client = Client::builder().cwd(&cwd).build().map_err(|e| e.to_string())?;
+    let launch = launch(&cli, client, cwd)?;
     match cli.command.take() {
-        Some(action) => subcommand(action, &launch.sdk, &launch.cwd, cli.model),
+        Some(action) => subcommand(action, &launch.client, &launch.cwd, cli.model),
         None if cli.print => print_the_answers(cli, launch),
         None if !on_a_terminal() => {
             eprintln!("{brand_command}: no terminal: use -p for print mode", brand_command = brand::COMMAND);
@@ -193,7 +193,7 @@ fn on_a_terminal() -> bool {
     std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
 }
 
-fn launch(cli: &Cli, sdk: Sdk, cwd: PathBuf) -> Result<Launch, String> {
+fn launch(cli: &Cli, client: Client, cwd: PathBuf) -> Result<Launch, String> {
     let prompt = (!cli.prompt.is_empty()).then(|| cli.prompt.join(" "));
     let add_dirs = cli.add_dir.iter().map(|typed| tui::add_dir::folder(&cwd, typed)).collect::<Result<Vec<_>, _>>()?;
     let headless = app::Headless {
@@ -203,20 +203,25 @@ fn launch(cli: &Cli, sdk: Sdk, cwd: PathBuf) -> Result<Launch, String> {
         append_system: cli.append_system_prompt.clone(),
         fallback_model: cli.fallback_model.clone(),
     };
-    Ok(Launch { sdk, cwd, prompt, add_dirs, headless })
+    Ok(Launch { client, cwd, prompt, add_dirs, headless })
 }
 
-fn subcommand(action: Action, sdk: &Sdk, cwd: &std::path::Path, model: Option<String>) -> Result<ExitCode, String> {
+fn subcommand(
+    action: Action,
+    client: &Client,
+    cwd: &std::path::Path,
+    model: Option<String>,
+) -> Result<ExitCode, String> {
     match action {
-        Action::Login => login::login(sdk).map(|()| ExitCode::SUCCESS),
-        Action::Logout => login::logout(sdk).map(|()| ExitCode::SUCCESS),
+        Action::Login => login::login(client).map(|()| ExitCode::SUCCESS),
+        Action::Logout => login::logout(client).map(|()| ExitCode::SUCCESS),
         Action::Doctor => {
-            let checks = doctor::checks(sdk, cwd);
+            let checks = doctor::checks(client, cwd);
             println!("{}", doctor::render(&checks));
             Ok(if checks.iter().all(|c| c.ok) { ExitCode::SUCCESS } else { ExitCode::FAILURE })
         }
         Action::Eval { names, json } => {
-            let trust = sdk.trust_state(cwd).is_ok_and(|report| report.trust.is_trusted());
+            let trust = client.trust_state(cwd).is_ok_and(|report| report.trust.is_trusted());
             evals(
                 cwd,
                 &names,
@@ -225,16 +230,16 @@ fn subcommand(action: Action, sdk: &Sdk, cwd: &std::path::Path, model: Option<St
             )
         }
         Action::Models => {
-            for model in sdk.models().map_err(|e| e.to_string())? {
+            for model in client.models().map_err(|e| e.to_string())? {
                 println!("{:<40} {}", model.id, model.label);
             }
             Ok(ExitCode::SUCCESS)
         }
         Action::Mcp { action } => {
-            mcp::run(sdk, cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
+            mcp::run(client, cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
         }
         Action::Plugin { action } => {
-            plugin::run(sdk, action.unwrap_or(plugin::PluginAction::List)).map(|()| ExitCode::SUCCESS)
+            plugin::run(client, action.unwrap_or(plugin::PluginAction::List)).map(|()| ExitCode::SUCCESS)
         }
         Action::Remote { action } => {
             remote::run(action.unwrap_or(remote::RemoteAction::Status)).map(|()| ExitCode::SUCCESS)
@@ -260,14 +265,14 @@ fn evals(cwd: &std::path::Path, names: &[String], json: bool, asker: eval::Proce
 }
 
 fn print_the_answers(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
-    let Launch { sdk, cwd, prompt, add_dirs, headless } = launch;
+    let Launch { client, cwd, prompt, add_dirs, headless } = launch;
     let prompts: Box<dyn Iterator<Item = Result<String, String>>> = match cli.input_format.as_str() {
         "stream-json" => Box::new(print_output::prompts(std::io::stdin().lines())),
         "text" => Box::new(std::iter::once(Ok(prompt.ok_or("--print needs a prompt")?))),
         other => return Err(format!("unknown input format {other}: text or stream-json")),
     };
     let resume = print::resumed(cli.pick.as_deref(), cli.resume, || {
-        Ok(tui::last_session(&sdk.settings().map_err(|e| e.to_string())?, &cwd))
+        Ok(tui::last_session(&client.settings().map_err(|e| e.to_string())?, &cwd))
     })?;
     let wanted = print::Wanted {
         model: cli.model.as_deref(),
@@ -280,12 +285,12 @@ fn print_the_answers(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
         fork: cli.fork_session,
         trust: cli.trust,
     };
-    print::print_all(&sdk, cwd, wanted, prompts)
+    print::print_all(&client, cwd, wanted, prompts)
 }
 
 fn chat(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
-    let Launch { sdk, cwd, prompt, add_dirs, headless } = launch;
-    let last = if cli.resume { last_conversation(&sdk, &cwd)? } else { None };
+    let Launch { client, cwd, prompt, add_dirs, headless } = launch;
+    let last = if cli.resume { last_conversation(&client, &cwd)? } else { None };
     let (resume, pick) = match cli.pick {
         Some(id) if !id.is_empty() => (Some(app::SessionId(id)), false),
         Some(_) => (last, true),
@@ -300,12 +305,12 @@ fn chat(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
         inline: cli.inline,
         channels: cli.channels,
     };
-    tui::run(sdk, cwd, cli.model, cli.mode, prompt, None, start).map_err(|e| e.to_string())?;
+    tui::run(client, cwd, cli.model, cli.mode, prompt, None, start).map_err(|e| e.to_string())?;
     Ok(ExitCode::SUCCESS)
 }
 
-fn last_conversation(sdk: &Sdk, cwd: &std::path::Path) -> Result<Option<app::SessionId>, String> {
-    let settings = sdk.settings().map_err(|e| e.to_string())?;
+fn last_conversation(client: &Client, cwd: &std::path::Path) -> Result<Option<app::SessionId>, String> {
+    let settings = client.settings().map_err(|e| e.to_string())?;
     let last = tui::last_session(&settings, cwd);
     if last.is_none() {
         eprintln!(

@@ -5,7 +5,7 @@ use domain::model_roles::ModelRole;
 use ratatui::crossterm::event::KeyCode;
 
 use super::app::App;
-use super::tests::{press, screen, sdk, type_text, until};
+use super::tests::{client, press, screen, type_text, until};
 
 const MAIN: &str = "keyed:main";
 const FAST: &str = "keyed:fast";
@@ -22,7 +22,7 @@ fn engine() -> FakeEngine {
 }
 
 fn started(engine: &FakeEngine, data: &std::path::Path) -> App {
-    let mut app = App::new(sdk(engine, data), data.into(), None, None);
+    let mut app = App::new(client(engine, data), data.into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app
 }
@@ -42,7 +42,7 @@ fn a_role_set_by_name_reaches_the_next_run_and_is_remembered() {
     assert!(screen(&app).contains("explore: Fast"), "{}", screen(&app));
     send(&mut app, "look around");
     assert_eq!(engine.requests().last().expect("run").session.roles.get(ModelRole::Explore), Some(FAST));
-    until(&mut app, |app| app.sdk.settings().is_ok_and(|saved| saved["roles"]["explore"] == FAST));
+    until(&mut app, |app| app.client.settings().is_ok_and(|saved| saved["roles"]["explore"] == FAST));
     let mut again = started(&engine, data.path());
     send(&mut again, "again");
     assert_eq!(engine.requests().last().expect("run").session.roles.get(ModelRole::Explore), Some(FAST));
@@ -96,7 +96,7 @@ fn fallbacks_set_by_name_reach_the_next_run_and_are_remembered() {
     assert!(screen(&app).contains("Fallbacks: Fast → Main"), "{}", screen(&app));
     send(&mut app, "go");
     assert_eq!(engine.requests().last().expect("run").session.fallbacks, [FAST, MAIN]);
-    until(&mut app, |app| app.sdk.settings().is_ok_and(|saved| saved["fallbacks"][0] == FAST));
+    until(&mut app, |app| app.client.settings().is_ok_and(|saved| saved["fallbacks"][0] == FAST));
     send(&mut app, "/model fallbacks off");
     send(&mut app, "again");
     assert!(engine.requests().last().expect("run").session.fallbacks.is_empty());

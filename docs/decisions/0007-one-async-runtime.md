@@ -1,6 +1,6 @@
 # 0007 One async runtime in the engine with structured cancellation
 
-Status: Accepted, 2026-11-16; stages 8.1 and 8.2 done, 8.3 done except background sub-agents and the parallel reading batch, 2026-11-17 (see the end)
+Status: Accepted, 2026-11-16; stages 1 and 2 done, stage 3 done except background sub-agents and the parallel reading batch, 2026-11-17 (see the end)
 
 ## Context
 
@@ -27,7 +27,7 @@ Out of scope, kept synchronous and run on blocking threads: file tools, grep, th
 
 The engine's start call stays synchronous so the TUI, which is a synchronous loop reading a channel, does not change.
 
-This is phase 8 of the plan, after the loop is a state machine.
+It comes after the loop is a state machine (`0002-agent-loop-state-machine.md`).
 
 ## Consequences
 
@@ -41,26 +41,26 @@ What gets worse:
 - `async` spreads through traits (`ModelApi`, `Http`, MCP `Transport`) and all their test doubles; every scripted-model test changes.
 - Stack traces and panics inside tasks are harder to read than a thread's, and a panic no longer maps to "one run, one thread".
 - The synchronous start call hides a runtime behind it, so callers can still block on the engine from a place where blocking is wrong.
-- The console keeps its own runtime until the server stacks are unified in phase 9.4.
+- The console keeps its own runtime; unifying the server stacks is not scheduled as of 2026-11-17.
 
 ## Status by stage
 
 Updated 2026-11-17.
 
-### 8.1 Model HTTP async: done
+### Stage 1, model HTTP async: done
 
 - `ModelApi::turn` returns a boxed `Send` future and takes a `CancellationToken`; `Http` gained `post_streaming`, async with the token. Synchronous callers go through `BlockingTurn::turn_blocking`, which waits on the engine runtime. Test doubles that only implement `Http::post` still work, since `post_streaming` falls back to it.
 - The stream body (`model/body.rs`) is read with async IO; every wait races the token and the idle deadline. The 25 ms polling loops of the model path are gone: in the stream reader, in the request's wait for headers, in the retry sleep and in the per-account turn lock (now an async mutex). An idle deadline (300 s, `<PREFIX>_STREAM_IDLE_SECONDS`) replaces the 900 s total deadline and fails as the typed `ModelError::Stalled`. A line split across chunks is decoded only once whole.
 - Retries keep their policy (four attempts, only when nothing was shown, doubling from the wire's backoff) and add jitter (half to all of the wait) and `Retry-After` (`retry-after-ms`, seconds or a date; more than 60 s is not waited for).
 - The run's cancellation is `platform::Stop`: a token plus the flag the code not yet moved reads, set together. It dereferences to the flag, so the many functions that still take `&AtomicBool` accept it unchanged; they are moved one by one.
 
-### 8.2 One runtime, a run is a task: done
+### Stage 2, one runtime, a run is a task: done
 
 - One multi-threaded runtime per process (`platform::runtime`), built on first use with two to four named workers and at most 256 named blocking threads; `Engine` (then `NativeEngine`) takes its handle when built, and model HTTP uses the same one. Building it per engine would have split the HTTP connection pool across runtimes.
 - `AgentEngine::start` stays synchronous and spawns the run as a task; the agent loop is still synchronous code and runs on a blocking thread of the runtime, so a panic is the task's error and becomes the run's failure. Live sessions and their MCP pools are untouched.
 - A permission question or an `AskUserQuestion` waits on a oneshot answer selected against the run's token (`control::Awaited`), so cancelling ends the wait at once.
 
-### 8.3 The rest of the edges async: done but for two
+### Stage 3, the rest of the edges async: done but for two
 
 Done:
 
@@ -89,8 +89,8 @@ What still polls, and why:
 
 Measured with `crates/agent-engine/tests/cancel_latency.rs` on an 18-core Mac (debug build, so four runtime workers), cancel to the run's terminal event: a stalled MCP stdio call 45 ms before, under 1 ms after; a run waiting for an answer under 1 ms before and after (dropping the sender already woke it); a stalled model stream under 2 ms before and after. Threads in a run with three MCP servers and a background sub-agent: 10 before, 14 after; the four runtime workers now exist from the first run instead of from the first model request.
 
-The second part of 8.3, measured the same way, three runs each: a stalled MCP call over HTTP 3 to 6 ms before, under 1 ms after; a command hook still running 12 to 18 ms before, under 1 ms after, its process gone; a run whose background sub-agent waits on its model under 2 ms (unchanged). In the unit tests, measured from the cancel: an SSE request waiting for its answer and an SSE server naming its endpoint end in under 1 ms (they polled every 25 ms before); closing a listened HTTP or SSE server lets its stream go at once (before, closing an HTTP server did not end its listener until the last handle on it was dropped). Threads in a run with three MCP stdio servers and a background sub-agent: 14, as before.
+The second part of stage 3, measured the same way, three runs each: a stalled MCP call over HTTP 3 to 6 ms before, under 1 ms after; a command hook still running 12 to 18 ms before, under 1 ms after, its process gone; a run whose background sub-agent waits on its model under 2 ms (unchanged). In the unit tests, measured from the cancel: an SSE request waiting for its answer and an SSE server naming its endpoint end in under 1 ms (they polled every 25 ms before); closing a listened HTTP or SSE server lets its stream go at once (before, closing an HTTP server did not end its listener until the last handle on it was dropped). Threads in a run with three MCP stdio servers and a background sub-agent: 14, as before.
 
-The last part of 8.3, measured from the cancel in the unit tests, three runs each: an OAuth refresh of a model call against a server that never answers, 0.1 to 0.2 ms (before, it ran into the request's 15 s timeout and ended as a network error, not a cancel); a web fetch stalled before its headers or in its body, a web search stalled in the account's search and a script's `ctx.fetch` stalled, owner's or project's, all under 0.4 ms (before, the fetch and the script's request were not cancellable at all and the body read woke every 25 ms); `one_hop` and `request_cancellable` against a silent server, 0.1 to 12 ms.
+The last part of stage 3, measured from the cancel in the unit tests, three runs each: an OAuth refresh of a model call against a server that never answers, 0.1 to 0.2 ms (before, it ran into the request's 15 s timeout and ended as a network error, not a cancel); a web fetch stalled before its headers or in its body, a web search stalled in the account's search and a script's `ctx.fetch` stalled, owner's or project's, all under 0.4 ms (before, the fetch and the script's request were not cancellable at all and the body read woke every 25 ms); `one_hop` and `request_cancellable` against a silent server, 0.1 to 12 ms.
 
-What it cost, beyond the above: every `ModelApi` implementation and test double changed shape; the flag view of `Stop` keeps a second way to read cancellation alive until the last `&AtomicBool` is gone; a synchronous wait inside an async one is served on a fresh thread, which is correct but costs a thread for that wait. The second part of 8.3 changed `Http::get_stream` to an async call and every MCP test double to a body of chunks instead of a reader that blocked a worker for 25 ms at a time; `McpEndpoint` requiring `Any` means an endpoint must own its data. The last part made `Searcher::search` and `Http::one_hop` async, so their test doubles changed shape; a synchronous tool waiting on the network goes through `block_on` once per call; `StandaloneHost` carries a token next to its flag.
+What it cost, beyond the above: every `ModelApi` implementation and test double changed shape; the flag view of `Stop` keeps a second way to read cancellation alive until the last `&AtomicBool` is gone; a synchronous wait inside an async one is served on a fresh thread, which is correct but costs a thread for that wait. The second part of stage 3 changed `Http::get_stream` to an async call and every MCP test double to a body of chunks instead of a reader that blocked a worker for 25 ms at a time; `McpEndpoint` requiring `Any` means an endpoint must own its data. The last part made `Searcher::search` and `Http::one_hop` async, so their test doubles changed shape; a synchronous tool waiting on the network goes through `block_on` once per call; `StandaloneHost` carries a token next to its flag.

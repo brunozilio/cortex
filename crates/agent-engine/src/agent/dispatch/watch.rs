@@ -3,7 +3,7 @@ use std::sync::Arc;
 use domain::watch::{Plan, Step, Watching};
 use serde_json::Value;
 
-use super::native::Handler;
+use super::in_loop::Handler;
 use crate::agent::Agent;
 use crate::agent::run::ThisRun;
 use crate::tools::{Outcome, Tool};

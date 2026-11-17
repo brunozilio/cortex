@@ -74,8 +74,8 @@ pub(super) fn open(app: &mut App) {
 }
 
 fn report_all(app: &mut App, live: Live) {
-    app.spawn(move |sdk| {
-        if let Ok(report) = sdk.trace_of_every_session() {
+    app.spawn(move |client| {
+        if let Ok(report) = client.trace_of_every_session() {
             live.show(report.to_string());
         }
         reply(|app: &mut App| {
@@ -113,14 +113,14 @@ pub(super) fn tick(app: &mut App) {
     let watched = live.watched().filter(|id| !follow.sent.contains_key(id));
     follow.busy_before = busy;
     let wanted = Wanted { cwd, current, sessions, watched };
-    app.spawn(move |sdk| {
-        let traces = gathered(sdk, &live, wanted);
+    app.spawn(move |client| {
+        let traces = gathered(client, &live, wanted);
         reply(move |app: &mut App| arrived(app, traces))
     });
 }
 
-fn gathered(sdk: &app::Sdk, live: &Live, mut wanted: Wanted) -> Vec<(String, String)> {
-    let listed = sdk.sessions().unwrap_or_default();
+fn gathered(client: &app::Client, live: &Live, mut wanted: Wanted) -> Vec<(String, String)> {
+    let listed = client.sessions().unwrap_or_default();
     live.list(board::shown(&listed, wanted.current.as_ref()).to_string());
     wanted.sessions.extend(board::active(&listed).map(|entry| entry.session.0.clone()));
     wanted.sessions.extend(wanted.watched);
@@ -128,7 +128,7 @@ fn gathered(sdk: &app::Sdk, live: &Live, mut wanted: Wanted) -> Vec<(String, Str
     wanted.sessions.dedup();
     let folder = |id: &str| folder_of(&listed, id).unwrap_or_else(|| wanted.cwd.clone());
     let traces = wanted.sessions.iter().filter_map(|id| {
-        let runs = sdk.followed_trace(&SessionId(id.clone()), &folder(id)).ok()?;
+        let runs = client.followed_trace(&SessionId(id.clone()), &folder(id)).ok()?;
         Some((id.clone(), runs.to_string()))
     });
     traces.collect()

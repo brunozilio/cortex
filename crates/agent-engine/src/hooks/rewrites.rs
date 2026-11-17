@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
-use super::{Decision, HookEvent};
+use super::{HookEvent, HookOutcome};
 
-pub fn failed(event: HookEvent, error: &str, decision: &mut Decision) {
+pub fn failed(event: HookEvent, error: &str, decision: &mut HookOutcome) {
     if event.fails_quietly() {
         tracing::warn!(event = event.as_str(), error, "a hook failed and was skipped");
         return;
@@ -10,7 +10,7 @@ pub fn failed(event: HookEvent, error: &str, decision: &mut Decision) {
     decision.context.push_str(&format!("Hook failed: {error}\n"));
 }
 
-pub fn absorb(event: HookEvent, value: &Value, decision: &mut Decision, input: &mut Value) {
+pub fn absorb(event: HookEvent, value: &Value, decision: &mut HookOutcome, input: &mut Value) {
     let specific = &value["hookSpecificOutput"];
     match event {
         HookEvent::Brief => decision.brief = Some(value.clone()),

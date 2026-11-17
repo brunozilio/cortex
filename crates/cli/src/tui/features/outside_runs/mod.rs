@@ -8,7 +8,7 @@ use super::Feature;
 use crate::tui::app::{App, Msg};
 use watch::{Look, Watch};
 
-const NAME: &str = "elsewhere";
+const NAME: &str = "outside_runs";
 
 pub fn feature() -> Feature {
     Feature { tick: Some(tick), ..Feature::default() }
@@ -21,17 +21,17 @@ fn tick(app: &mut App) {
     let Some(watch) = app.features.get::<Watch>(NAME) else { return };
     match watch.look(session.as_ref(), busy, Instant::now()) {
         Look::Nothing => {}
-        Look::Settle(session) => app.spawn(move |sdk| {
-            let length = sdk.session_length(&session, &cwd).unwrap_or_default();
-            let records = sdk.history(&session, &cwd).map(|records| records.len()).unwrap_or_default();
+        Look::Settle(session) => app.spawn(move |client| {
+            let length = client.session_length(&session, &cwd).unwrap_or_default();
+            let records = client.history(&session, &cwd).map(|records| records.len()).unwrap_or_default();
             done(move |watch, _| watch.settled(&session, length, records))
         }),
-        Look::Check(session, known) => app.spawn(move |sdk| {
-            let length = sdk.session_length(&session, &cwd).unwrap_or(known);
+        Look::Check(session, known) => app.spawn(move |client| {
+            let length = client.session_length(&session, &cwd).unwrap_or(known);
             if length == known {
                 return done(|watch, _| watch.unchanged());
             }
-            let records: Vec<Record> = sdk.history(&session, &cwd).unwrap_or_default();
+            let records: Vec<Record> = client.history(&session, &cwd).unwrap_or_default();
             done(move |watch, app| {
                 let busy = app.busy();
                 watch.arrived(&mut app.transcript, &session, length, &records, busy);

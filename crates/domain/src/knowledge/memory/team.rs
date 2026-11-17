@@ -1,4 +1,4 @@
-use super::decision::Decision;
+use super::decision_note::DecisionNote;
 use super::{Author, Memory, MemoryId, MemoryKind, anchors, sanitize};
 
 pub const FIRST_ID: u32 = 1_000_000;
@@ -34,7 +34,7 @@ pub fn parse(at: usize, name: &str, text: &str) -> Option<Memory> {
             })
             .unwrap_or_default()
     };
-    let body = Decision::from_markdown(body).map_or_else(|| body.trim().to_owned(), |decision| decision.text());
+    let body = DecisionNote::from_markdown(body).map_or_else(|| body.trim().to_owned(), |decision| decision.text());
     let text: String = sanitize(&body).into_inner().chars().take(MOST_CHARS).collect();
     let id = MemoryId(FIRST_ID + u32::try_from(at).ok()?);
     let said = |key: &str| field(key).map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
@@ -90,7 +90,7 @@ pub fn file(memory: &Memory, by: &Sharer) -> (String, String) {
             front.push_str(&format!("{key}: {value}\n"));
         }
     }
-    let body = match Decision::parse(&memory.text).filter(|_| by.structured) {
+    let body = match DecisionNote::parse(&memory.text).filter(|_| by.structured) {
         Some(decision) => decision.markdown(),
         None => format!("{}\n", memory.text),
     };

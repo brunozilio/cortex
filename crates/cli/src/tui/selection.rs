@@ -114,7 +114,7 @@ mod tests {
     use ratatui::layout::Rect;
 
     use super::*;
-    use crate::tui::tests::{sdk, type_text, until};
+    use crate::tui::tests::{client, type_text, until};
 
     fn at(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
         MouseEvent { kind, column, row, modifiers: KeyModifiers::NONE }
@@ -122,7 +122,7 @@ mod tests {
 
     fn app(data: &std::path::Path) -> App {
         let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
-        let mut app = App::new(sdk(&engine, data), data.into(), None, None);
+        let mut app = App::new(client(&engine, data), data.into(), None, None);
         until(&mut app, |app| app.session.is_some());
         app
     }

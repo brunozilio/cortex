@@ -4,30 +4,30 @@ use crate::api::{ClientCommand, ProviderEvent, Reply};
 use domain::provider::{ModelProvider, ProviderSummary};
 use domain::{CustomAgent, ModelOption, Skill};
 
-use crate::{Error, Sdk};
+use crate::{Client, Error};
 
-impl Sdk {
+impl Client {
     pub fn models(&self) -> Result<Vec<ModelOption>, Error> {
-        self.client.call(ClientCommand::ListModels, |reply| match reply {
+        self.dispatcher.call(ClientCommand::ListModels, |reply| match reply {
             Reply::Models(models) => Some(Ok(models)),
             _ => None,
         })
     }
 
     pub fn unsolicited(&self) -> Vec<crate::api::Unsolicited> {
-        self.client.unsolicited()
+        self.dispatcher.unsolicited()
     }
 
     pub fn cancel_sign_ins(&self) {
-        self.client.cancel_flows();
+        self.dispatcher.cancel_flows();
     }
 
     pub fn providers(&self) -> Result<Vec<ProviderSummary>, Error> {
-        self.client.call(ClientCommand::ListProviders, listed)
+        self.dispatcher.call(ClientCommand::ListProviders, listed)
     }
 
     pub fn connect_provider(&self, provider: ModelProvider, key: &str) -> Result<Vec<ProviderSummary>, Error> {
-        self.client.call(ClientCommand::ConnectProvider { provider, key: key.to_owned() }, listed)
+        self.dispatcher.call(ClientCommand::ConnectProvider { provider, key: key.to_owned() }, listed)
     }
 
     pub fn sign_in(&self, provider: ModelProvider, open: impl FnMut(&str, Option<&str>)) -> Result<SignedIn, Error> {
@@ -45,7 +45,7 @@ impl Sdk {
     }
 
     fn signing_in(&self, command: ClientCommand, mut open: impl FnMut(&str, Option<&str>)) -> Result<SignedIn, Error> {
-        self.client.flow(command, crate::client::dispatch::sign_in_patience(), |reply| match reply {
+        self.dispatcher.flow(command, crate::client::dispatch::sign_in_patience(), |reply| match reply {
             Reply::Providers(ProviderEvent::AuthorizeAt { url, code, .. }) => {
                 open(&url, code.as_deref());
                 None
@@ -58,11 +58,11 @@ impl Sdk {
     }
 
     pub fn disconnect_provider(&self, provider: ModelProvider) -> Result<Vec<ProviderSummary>, Error> {
-        self.client.call(ClientCommand::DisconnectProvider { provider }, listed)
+        self.dispatcher.call(ClientCommand::DisconnectProvider { provider }, listed)
     }
 
     pub fn use_account(&self, provider: ModelProvider, account: &str) -> Result<Vec<ProviderSummary>, Error> {
-        self.client.call(ClientCommand::UseProviderAccount { provider, account: account.to_owned() }, listed)
+        self.dispatcher.call(ClientCommand::UseProviderAccount { provider, account: account.to_owned() }, listed)
     }
 
     pub fn set_balance(
@@ -70,50 +70,50 @@ impl Sdk {
         provider: ModelProvider,
         balance: domain::account_pool::Balance,
     ) -> Result<Vec<ProviderSummary>, Error> {
-        self.client.call(ClientCommand::SetProviderBalance { provider, balance }, listed)
+        self.dispatcher.call(ClientCommand::SetProviderBalance { provider, balance }, listed)
     }
 
     pub fn remove_account(&self, provider: ModelProvider, account: &str) -> Result<Vec<ProviderSummary>, Error> {
-        self.client.call(ClientCommand::RemoveProviderAccount { provider, account: account.to_owned() }, listed)
+        self.dispatcher.call(ClientCommand::RemoveProviderAccount { provider, account: account.to_owned() }, listed)
     }
 
     pub fn register_peer(&self, cwd: &Path) -> Result<(), Error> {
-        self.client.call(ClientCommand::RegisterPeer { path: cwd.to_path_buf() }, |reply| match reply {
+        self.dispatcher.call(ClientCommand::RegisterPeer { path: cwd.to_path_buf() }, |reply| match reply {
             Reply::Done => Some(Ok(())),
             _ => None,
         })
     }
 
     pub fn skills(&self, cwd: &Path) -> Result<Vec<Skill>, Error> {
-        self.client.call(ClientCommand::ListSkills { path: cwd.to_path_buf() }, |reply| match reply {
+        self.dispatcher.call(ClientCommand::ListSkills { path: cwd.to_path_buf() }, |reply| match reply {
             Reply::Skills(skills) => Some(Ok(skills)),
             _ => None,
         })
     }
 
     pub fn agents(&self, cwd: &Path) -> Result<Vec<CustomAgent>, Error> {
-        self.client.call(ClientCommand::ListAgents { path: cwd.to_path_buf() }, |reply| match reply {
+        self.dispatcher.call(ClientCommand::ListAgents { path: cwd.to_path_buf() }, |reply| match reply {
             Reply::Agents(agents) => Some(Ok(agents)),
             _ => None,
         })
     }
 
     pub fn settings(&self) -> Result<serde_json::Value, Error> {
-        self.client.call(ClientCommand::LoadSettings, |reply| match reply {
+        self.dispatcher.call(ClientCommand::LoadSettings, |reply| match reply {
             Reply::Settings { settings } => Some(Ok(settings.unwrap_or_else(|| serde_json::json!({})))),
             _ => None,
         })
     }
 
     pub fn change_settings(&self, changes: Vec<crate::settings::SettingsChange>) -> Result<(), Error> {
-        self.client.call(ClientCommand::ChangeSettings { changes }, |reply| match reply {
+        self.dispatcher.call(ClientCommand::ChangeSettings { changes }, |reply| match reply {
             Reply::Done => Some(Ok(())),
             _ => None,
         })
     }
 
     pub fn save_settings(&self, settings: serde_json::Value) -> Result<(), Error> {
-        self.client.call(ClientCommand::SaveSettings { settings }, |reply| match reply {
+        self.dispatcher.call(ClientCommand::SaveSettings { settings }, |reply| match reply {
             Reply::Done => Some(Ok(())),
             _ => None,
         })

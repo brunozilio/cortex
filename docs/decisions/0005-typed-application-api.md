@@ -20,8 +20,8 @@ One crate, `app`, is the application API. It is in-process only.
 - Every request, reply and error carries a correlation id. Success is an explicit reply. Unsolicited events travel on a separate channel from replies.
 - Each of the thirteen features gets typed request and reply types, converted one at a time, each with a test that pins today's silent defaults before the change.
 - Long flows (sign-in, a run) are cancellable streams, with one timeout owned by one side.
-- The order is: fix correlation and typing in place first (phases 3.1 to 3.3), then merge `protocol`, `backend` and `sdk` into `crates/app` as a pure move (phase 3.4). Session rules that sit in the client today (budget, plan, learning) move to `domain`.
-- The embedding API is removed (phase 2.2); the in-process memory MCP path it shares is kept.
+- The order is: fix correlation and typing in place first, then merge `protocol`, `backend` and `sdk` into `crates/app` as a pure move. The client the terminal holds is `app::Client` (it was `Sdk` until 2026-11-17). Session rules that sit in the client today (budget, plan, learning) move to `domain`.
+- The embedding API is removed, before the merge; the in-process memory MCP path it shares is kept.
 
 If a remote server becomes a real requirement, a transport is fitted to this API then.
 
@@ -38,4 +38,4 @@ What gets worse:
 - Typing thirteen features is thirteen behaviour-sensitive changes; any default that was accidental becomes explicit and may differ.
 - The crate table, the dependency rules and every import path change in one move commit, which conflicts with any work in flight on those crates.
 
-Follow-up (phase 4): the request a run is started with is typed in four parts by who sets them (`Prompt`, `SessionConfig`, `Policy`, `HostContext`), flattened so its JSON is unchanged, and calls that needed only a folder take a `Folder` or a path instead of a request filled with dummy values. A run's failure crosses each boundary through an explicit conversion (`ModelError` → `RunFailure` → the engine's `Stop` → the run's events → the client's `Error`); see "Failure taxonomy" in `GLOSSARY.md`.
+Follow-up, after the merge: the request a run is started with is typed in four parts by who sets them (`Prompt`, `SessionConfig`, `Policy`, `HostContext`), flattened so its JSON is unchanged, and calls that needed only a folder take a `Folder` or a path instead of a request filled with dummy values. A run's failure crosses each boundary through an explicit conversion (`ModelError` → `RunFailure` → the engine's `Stop` → the run's events → the client's `Error`); see "Failure taxonomy" in `GLOSSARY.md`.

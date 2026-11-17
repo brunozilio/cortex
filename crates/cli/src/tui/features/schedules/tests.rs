@@ -8,7 +8,7 @@ use ratatui::crossterm::event::KeyCode;
 
 use super::arrived;
 use crate::tui::app::App;
-use crate::tui::tests::{press, screen, sdk, type_text, until};
+use crate::tui::tests::{client, press, screen, type_text, until};
 
 fn script() -> Vec<EngineEvent> {
     vec![
@@ -32,7 +32,7 @@ fn due(id: &str, prompt: &str) -> Scheduled {
 }
 
 fn app(engine: &FakeEngine, data: &std::path::Path) -> App {
-    let mut app = App::new(sdk(engine, data), data.into(), None, None);
+    let mut app = App::new(client(engine, data), data.into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app
 }

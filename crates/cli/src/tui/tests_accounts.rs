@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
+use app::{Client, Model};
 use app::{InMemoryProviderStore, InMemorySecretStore, LocalServices};
-use app::{Model, Sdk};
 use domain::provider::ModelProvider;
 use ratatui::crossterm::event::KeyCode;
 
@@ -24,7 +24,7 @@ impl app::ModelCatalog for NothingListed {
     }
 }
 
-fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
+fn client(engine: &FakeEngine, data: &std::path::Path) -> Client {
     agent_engine::providers::install_testing();
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.homes = Arc::new(app::OwnerHome::at(data));
@@ -33,21 +33,21 @@ fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
         .with_secrets(Arc::new(InMemorySecretStore::default()))
         .with_store(Arc::new(InMemoryProviderStore::default()))
         .with_catalog(Arc::new(NothingListed));
-    Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
+    Client::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
 }
 
 fn two_accounts(data: &std::path::Path) -> App {
     let engine = FakeEngine::new(vec![Model::new("keyed:main", "Main").served_by(KEYED)], Vec::new());
-    let sdk = sdk(&engine, data);
-    sdk.connect_provider(KEYED, "sk-proj-0123456789aaaa").expect("first");
-    sdk.connect_provider(KEYED, "sk-proj-0123456789bbbb").expect("second");
-    let mut app = App::new(sdk, data.into(), None, None);
+    let client = client(&engine, data);
+    client.connect_provider(KEYED, "sk-proj-0123456789aaaa").expect("first");
+    client.connect_provider(KEYED, "sk-proj-0123456789bbbb").expect("second");
+    let mut app = App::new(client, data.into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app
 }
 
 fn in_use(app: &App) -> Option<String> {
-    let providers = app.sdk.providers().expect("providers");
+    let providers = app.client.providers().expect("providers");
     providers.into_iter().find(|p| p.provider == KEYED).and_then(|p| p.account).map(|a| a.label)
 }
 
@@ -86,7 +86,7 @@ fn accounts_remove_forgets_the_picked_account() {
     press(&mut app, KeyCode::Down);
     press(&mut app, KeyCode::Enter);
     until(&mut app, |app| in_use(app).as_deref() == Some("…aaaa"));
-    let left = app.sdk.providers().expect("providers").into_iter().find(|p| p.provider == KEYED).expect("keyed");
+    let left = app.client.providers().expect("providers").into_iter().find(|p| p.provider == KEYED).expect("keyed");
     assert_eq!(left.accounts.len(), 1);
 }
 
@@ -98,7 +98,7 @@ fn accounts_balance_sets_how_the_session_provider_s_accounts_share_the_work() {
     type_text(&mut app, "/accounts balance round-robin");
     press(&mut app, KeyCode::Enter);
     let balance = |app: &App| {
-        let providers = app.sdk.providers().expect("providers");
+        let providers = app.client.providers().expect("providers");
         providers.into_iter().find(|p| p.provider == KEYED).map(|p| p.balance)
     };
     until(&mut app, |app| balance(app) == Some(Balance::RoundRobin));

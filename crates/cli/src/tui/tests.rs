@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_engine::fake::FakeEngine;
-use app::{Decision, EngineEvent, Model, PermissionMode, Sdk};
+use app::{Client, Decision, EngineEvent, Model, PermissionMode};
 use app::{InMemorySecretStore, LocalServices};
 use domain::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId, ToolCall};
 use ratatui::Terminal;
@@ -12,17 +12,17 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::app::App;
 use super::{keys, view};
 
-pub(super) fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
-    sdk_without(engine, data, &[domain::features::MEMORY_SEARCH, domain::features::GIT_OFFER])
+pub(super) fn client(engine: &FakeEngine, data: &std::path::Path) -> Client {
+    client_without(engine, data, &[domain::features::MEMORY_SEARCH, domain::features::GIT_OFFER])
 }
 
-pub(super) fn sdk_without(engine: &FakeEngine, data: &std::path::Path, off: &[&str]) -> Sdk {
+pub(super) fn client_without(engine: &FakeEngine, data: &std::path::Path, off: &[&str]) -> Client {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.homes = Arc::new(app::OwnerHome::at(data));
     services.off.extend(off.iter().map(|flag| (*flag).to_owned()));
     let secrets = Arc::new(InMemorySecretStore::default());
     services.providers = services.providers.with_secrets(secrets);
-    Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
+    Client::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
 }
 
 pub(super) const SETTLES_WITHIN: Duration = Duration::from_secs(120);
@@ -75,7 +75,7 @@ fn a_prompt_streams_its_reply_tools_and_an_answered_question() {
     ];
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(60));
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     assert!(screen(&app).contains("Scripted · edits"), "{}", screen(&app));
 
@@ -100,7 +100,7 @@ fn shift_tab_and_commands_change_the_chat_without_the_agent() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, Some(PermissionMode::Ask));
     until(&mut app, |app| app.session.is_some());
     press(&mut app, KeyCode::BackTab);
     assert_eq!(app.mode(), PermissionMode::AcceptEdits);
@@ -153,7 +153,7 @@ fn preview() {
     ];
     let model = Model::new("keyed:model-opus", "Opus 5.5");
     let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(5));
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "make the port configurable");
     press(&mut app, KeyCode::Enter);
@@ -175,7 +175,7 @@ fn a_dropped_image_is_attached_to_the_prompt_that_names_it() {
     let model = Model::new("keyed:scripted", "Scripted");
     let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![model], done);
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "what is");
     keys::paste(&mut app, "'shot one.png'");
@@ -200,7 +200,7 @@ fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() 
     script.push(EngineEvent::Completed { duration_ms: 1, cost_usd: None });
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script).with_delay(Duration::from_millis(40));
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
     type_text(&mut app, "/btw too early?");
@@ -243,7 +243,7 @@ fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
     std::fs::write(repo.path().join("new.txt"), "new\n").expect("new");
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
-    let mut app = App::new(sdk(&engine, data.path()), repo.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), repo.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let loaded = |app: &App| app.overlays.diffs.as_ref().is_some_and(|view| !view.loading());
 
@@ -271,7 +271,7 @@ fn a_cut_command_output_shows_its_whole_note_above_the_folded_lines() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let text = (1..=3000).map(|n| n.to_string()).collect::<Vec<_>>().join("\n");
     let cut = domain::output::OutputLimit::of(1_000).cut(&text, Some("/tmp/results/bash-9-1.txt"));
@@ -288,7 +288,7 @@ fn ctrl_o_unfolds_a_long_output() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], Vec::new());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let long = (1..=8).map(|n| format!("line {n}")).collect::<Vec<_>>().join("\n");
     app.transcript.apply(&EngineEvent::ToolStarted(ToolCall::new("t", "Bash", "seq 8")));

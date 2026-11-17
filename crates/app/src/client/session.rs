@@ -10,12 +10,12 @@ use domain::session_run::{Carried, RunWatch};
 use domain::{Criteria, Effort, ModelOption, PermissionMode, PromptRequest, SessionId};
 
 use crate::Error;
-use crate::client::dispatch::Client;
+use crate::client::dispatch::Dispatcher;
 use crate::client::run::Run;
 
 #[derive(Debug)]
 pub struct Session {
-    client: Arc<Client>,
+    dispatcher: Arc<Dispatcher>,
     cwd: PathBuf,
     model: ModelOption,
     effort: Effort,
@@ -39,9 +39,9 @@ pub struct Headless {
 }
 
 impl Session {
-    pub(crate) fn new(client: Arc<Client>, cwd: PathBuf, model: ModelOption) -> Self {
+    pub(crate) fn new(dispatcher: Arc<Dispatcher>, cwd: PathBuf, model: ModelOption) -> Self {
         Self {
-            client,
+            dispatcher,
             cwd,
             model,
             effort: Effort::Medium,
@@ -247,7 +247,7 @@ impl Session {
         }
         request.policy.budget = self.spending().budget();
         let watch = RunWatch::of(request.session.command, request.policy.permission);
-        let run = Run::start(&self.client, |run| ClientCommand::SubmitPrompt { run, request })?;
+        let run = Run::start(&self.dispatcher, |run| ClientCommand::SubmitPrompt { run, request })?;
         Ok(run.of_session(Arc::clone(&self.carried), watch))
     }
 }

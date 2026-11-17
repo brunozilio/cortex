@@ -12,7 +12,7 @@ pub struct Listed {
 }
 
 pub(super) fn open(app: &mut App, removing: bool) {
-    app.spawn(move |sdk| match sdk.providers() {
+    app.spawn(move |client| match client.providers() {
         Ok(providers) => Msg::Accounts { providers, removing },
         Err(error) => Msg::Error(error.to_string()),
     });
@@ -49,7 +49,7 @@ pub(super) fn balance(app: &mut App, chosen: Option<Balance>) {
             ways.join("\n")
         ));
     };
-    app.spawn(move |sdk| match sdk.set_balance(provider, balance) {
+    app.spawn(move |client| match client.set_balance(provider, balance) {
         Ok(_) => Msg::Notice(format!("Accounts balance: {} ({}).", balance.name(), balance.about())),
         Err(error) => Msg::Error(error.to_string()),
     });
@@ -57,18 +57,18 @@ pub(super) fn balance(app: &mut App, chosen: Option<Balance>) {
 
 pub(super) fn picked(app: &mut App, cursor: usize, removing: bool) {
     let Some(Listed { provider, number, label }) = app.catalog.accounts.get(cursor).cloned() else { return };
-    app.spawn(move |sdk| {
+    app.spawn(move |client| {
         let done = if removing {
-            sdk.remove_account(provider, &number.to_string()).map(|_| format!("Forgot {label}."))
+            client.remove_account(provider, &number.to_string()).map(|_| format!("Forgot {label}."))
         } else {
-            sdk.use_account(provider, &number.to_string()).map(|_| format!("Using {label} from the next message."))
+            client.use_account(provider, &number.to_string()).map(|_| format!("Using {label} from the next message."))
         };
         done.map_or_else(|error| Msg::Error(error.to_string()), Msg::Notice)
     });
 }
 
 pub(super) fn logout(app: &mut App) {
-    app.spawn(|sdk| match sdk.providers() {
+    app.spawn(|client| match client.providers() {
         Ok(providers) => Msg::Providers(providers.into_iter().filter(|p| p.account.is_some()).collect()),
         Err(error) => Msg::Error(error.to_string()),
     });
@@ -86,7 +86,7 @@ pub(super) fn connected(app: &mut App, providers: Vec<ProviderSummary>) {
 
 pub(super) fn logout_picked(app: &mut App, cursor: usize) {
     let Some(summary) = app.catalog.connected.get(cursor).cloned() else { return };
-    app.spawn(move |sdk| match sdk.disconnect_provider(summary.provider) {
+    app.spawn(move |client| match client.disconnect_provider(summary.provider) {
         Ok(_) => Msg::Notice(format!("Forgot {}.", summary.name)),
         Err(error) => Msg::Error(error.to_string()),
     });

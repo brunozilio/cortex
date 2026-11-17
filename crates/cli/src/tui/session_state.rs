@@ -189,7 +189,7 @@ mod tests {
     fn session(data: &std::path::Path) -> Session {
         let model = Model::new("keyed:scripted", "Scripted");
         let engine = FakeEngine::new(vec![model.clone()], Vec::new());
-        crate::tui::tests::sdk(&engine, data).session(data.to_owned(), model)
+        crate::tui::tests::client(&engine, data).session(data.to_owned(), model)
     }
 
     #[test]

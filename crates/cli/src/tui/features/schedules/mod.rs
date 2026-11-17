@@ -40,8 +40,8 @@ fn poll(app: &mut App) {
     if !idle || !poll.0.due(Instant::now()) {
         return;
     }
-    app.spawn(|sdk| {
-        let due = sdk.take_due_schedules().unwrap_or_default();
+    app.spawn(|client| {
+        let due = client.take_due_schedules().unwrap_or_default();
         super::reply(move |app: &mut App| arrived(app, due))
     });
 }
@@ -66,10 +66,10 @@ fn schedules(app: &mut App, argument: Option<String>) {
         Some(("delete", id)) if !id.trim().is_empty() => Some(id.trim().to_owned()),
         Some(_) => return app.transcript.notice("/schedules lists them; /schedules delete <id> removes one."),
     };
-    app.spawn(move |sdk| {
+    app.spawn(move |client| {
         let kept = match &delete {
-            Some(id) => sdk.delete_schedule(id),
-            None => sdk.scheduled(),
+            Some(id) => client.delete_schedule(id),
+            None => client.scheduled(),
         };
         match kept {
             Ok(scheduled) if scheduled.is_empty() => Msg::Notice("Nothing is scheduled.".into()),

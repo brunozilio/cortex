@@ -3,7 +3,7 @@ use app::{EngineEvent, Model, PermissionMode};
 use ratatui::crossterm::event::KeyCode;
 
 use super::super::app::App;
-use super::super::tests::{press, screen, sdk_without, type_text, until};
+use super::super::tests::{client_without, press, screen, type_text, until};
 
 fn engine() -> FakeEngine {
     let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
@@ -11,8 +11,8 @@ fn engine() -> FakeEngine {
 }
 
 fn outside_a_repository(folder: &std::path::Path, engine: &FakeEngine) -> App {
-    let sdk = sdk_without(engine, folder, &[domain::features::MEMORY_SEARCH]);
-    let mut app = App::new(sdk, folder.into(), None, Some(PermissionMode::Ask));
+    let client = client_without(engine, folder, &[domain::features::MEMORY_SEARCH]);
+    let mut app = App::new(client, folder.into(), None, Some(PermissionMode::Ask));
     until(&mut app, |app| app.session.is_some());
     app
 }

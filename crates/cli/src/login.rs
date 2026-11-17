@@ -1,6 +1,6 @@
 use std::io::{BufRead, Write};
 
-use app::{Sdk, SignedIn};
+use app::{Client, SignedIn};
 use domain::Access;
 use domain::provider::ProviderSummary;
 
@@ -23,8 +23,8 @@ pub fn picked(answer: &str, count: usize) -> Option<usize> {
     answer.trim().parse::<usize>().ok().filter(|n| (1..=count).contains(n)).map(|n| n - 1)
 }
 
-pub fn login(sdk: &Sdk) -> Result<(), String> {
-    let menu = sdk.providers().map_err(|e| e.to_string())?;
+pub fn login(client: &Client) -> Result<(), String> {
+    let menu = client.providers().map_err(|e| e.to_string())?;
     eprintln!("Connect a provider:");
     for (i, summary) in menu.iter().enumerate() {
         eprintln!("  {}. {} ({})", i + 1, summary.name, how(summary.access));
@@ -32,10 +32,10 @@ pub fn login(sdk: &Sdk) -> Result<(), String> {
     let choice = picked(&ask(&format!("Choose 1-{}: ", menu.len()))?, menu.len()).ok_or("not one of the choices")?;
     let ProviderSummary { provider, name, access, .. } = menu[choice].clone();
     let listed = if access.subscription() {
-        signed_in(sdk, provider)?
+        signed_in(client, provider)?
     } else {
         let key = secret(&format!("{name} API key (hidden): "))?;
-        sdk.connect_provider(provider, &key).map_err(|e| e.to_string())?
+        client.connect_provider(provider, &key).map_err(|e| e.to_string())?
     };
     let account = listed.iter().find(|p| p.provider == provider).and_then(|p| p.account.as_ref());
     match account {
@@ -45,12 +45,12 @@ pub fn login(sdk: &Sdk) -> Result<(), String> {
     Ok(())
 }
 
-fn signed_in(sdk: &Sdk, provider: app::ModelProvider) -> Result<Vec<ProviderSummary>, String> {
+fn signed_in(client: &Client, provider: app::ModelProvider) -> Result<Vec<ProviderSummary>, String> {
     let shown = |url: &str, code: Option<&str>| {
         eprintln!("{}", visit(url, code));
         open(url);
     };
-    let mut answer = sdk.sign_in(provider, shown).map_err(|e| e.to_string())?;
+    let mut answer = client.sign_in(provider, shown).map_err(|e| e.to_string())?;
     loop {
         let (port, holder) = match answer {
             SignedIn::Connected(listed) => return Ok(listed),
@@ -64,13 +64,13 @@ fn signed_in(sdk: &Sdk, provider: app::ModelProvider) -> Result<Vec<ProviderSumm
         if !ask(&question)?.trim().eq_ignore_ascii_case("y") {
             return Err(format!("the sign-in needs port {port}, which {} is using", holder.app));
         }
-        answer = sdk.close_and_sign_in(provider, port, holder.pid, shown).map_err(|e| e.to_string())?;
+        answer = client.close_and_sign_in(provider, port, holder.pid, shown).map_err(|e| e.to_string())?;
     }
 }
 
-pub fn logout(sdk: &Sdk) -> Result<(), String> {
+pub fn logout(client: &Client) -> Result<(), String> {
     let connected: Vec<ProviderSummary> =
-        sdk.providers().map_err(|e| e.to_string())?.into_iter().filter(|p| p.account.is_some()).collect();
+        client.providers().map_err(|e| e.to_string())?.into_iter().filter(|p| p.account.is_some()).collect();
     if connected.is_empty() {
         eprintln!("No provider is connected.");
         return Ok(());
@@ -79,7 +79,7 @@ pub fn logout(sdk: &Sdk) -> Result<(), String> {
         eprintln!("  {}. {}", i + 1, summary.name);
     }
     let index = picked(&ask("Forget which? ")?, connected.len()).ok_or("not one of the choices")?;
-    sdk.disconnect_provider(connected[index].provider).map_err(|e| e.to_string())?;
+    client.disconnect_provider(connected[index].provider).map_err(|e| e.to_string())?;
     eprintln!("Forgot {}.", connected[index].name);
     Ok(())
 }

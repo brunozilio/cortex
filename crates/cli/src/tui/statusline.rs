@@ -105,10 +105,10 @@ mod tests {
 
     #[test]
     fn a_refresh_waits_for_the_one_still_running() {
-        use crate::tui::tests::{sdk, until};
+        use crate::tui::tests::{client, until};
         let data = tempfile::tempdir().expect("data");
         let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
-        let mut app = crate::tui::app::App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+        let mut app = crate::tui::app::App::new(client(&engine, data.path()), data.path().into(), None, None);
         until(&mut app, |app| !app.catalog.loading);
         let runs = data.path().join("runs");
         app.ui.status.command = Some(format!("echo ran >> '{}'; sleep 0.4; echo shown", runs.display()));

@@ -4,7 +4,7 @@ use domain::SessionId;
 use ratatui::crossterm::event::KeyCode;
 
 use super::app::App;
-use super::tests::{press, screen, sdk, type_text, until};
+use super::tests::{client, press, screen, type_text, until};
 
 #[test]
 fn an_added_folder_goes_with_every_prompt_even_after_new() {
@@ -15,7 +15,7 @@ fn an_added_folder_goes_with_every_prompt_even_after_new() {
         EngineEvent::Completed { duration_ms: 1, cost_usd: None },
     ];
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let real = shared.path().canonicalize().expect("real");
 
@@ -42,7 +42,7 @@ fn permissions_lists_the_project_s_rules() {
     )
     .expect("write");
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
-    let mut app = App::new(sdk(&engine, data.path()), project.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/permissions");
     press(&mut app, KeyCode::Enter);
@@ -61,7 +61,7 @@ fn an_at_mention_completes_a_project_file_and_sends_its_text() {
     assert!(init.is_ok_and(|status| status.success()), "git is needed for this test");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
-    let mut app = App::new(sdk(&engine, data.path()), project.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
     type_text(&mut app, "explain @mai");
@@ -81,13 +81,13 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
     let project = tempfile::tempdir().expect("project");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
-    let sdk = sdk(&engine, data.path());
+    let client = client(&engine, data.path());
     let earlier = serde_json::json!({
         "session": "old", "title": "Login page", "at": super::conversations::now() - 7_200,
     });
     let settings = serde_json::json!({"conversations": { project.path().to_string_lossy(): [earlier] }});
-    sdk.save_settings(settings).expect("saved");
-    let mut app = App::new(sdk, project.path().into(), None, None);
+    client.save_settings(settings).expect("saved");
+    let mut app = App::new(client, project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
     type_text(&mut app, "/resume");
@@ -113,13 +113,13 @@ fn resume_offers_a_session_another_client_ran_in_the_folder_but_not_an_archived_
     ];
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model.clone()], script);
-    let sdk = sdk(&engine, data.path());
-    let elsewhere = sdk.sibling().expect("sibling");
+    let client = client(&engine, data.path());
+    let elsewhere = client.sibling().expect("sibling");
     let id = SessionId("web-1".into());
     elsewhere.session(project.path(), model).send("hi").expect("run").text().expect("ended");
     elsewhere.rename_session(&id, "From the browser").expect("renamed");
 
-    let mut app = App::new(sdk, project.path().into(), None, None);
+    let mut app = App::new(client, project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/resume");
     press(&mut app, KeyCode::Enter);
@@ -143,15 +143,15 @@ fn the_name_a_conversation_gets_is_kept_where_every_client_lists_it() {
         EngineEvent::Completed { duration_ms: 1, cost_usd: None },
     ];
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
-    let sdk = sdk(&engine, data.path());
-    let mut app = App::new(sdk.clone(), data.path().into(), None, None);
+    let client = client(&engine, data.path());
+    let mut app = App::new(client.clone(), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
 
     type_text(&mut app, "say hi");
     press(&mut app, KeyCode::Enter);
     until(&mut app, |app| app.session.title.as_deref() == Some("Greeting"));
 
-    until(&mut app, |_| sdk.sessions().expect("listed").iter().any(|row| row.title.as_deref() == Some("Greeting")));
+    until(&mut app, |_| client.sessions().expect("listed").iter().any(|row| row.title.as_deref() == Some("Greeting")));
 }
 
 #[test]
@@ -159,7 +159,7 @@ fn the_output_style_picked_goes_with_the_next_prompt() {
     let data = tempfile::tempdir().expect("data");
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/output-style");
     press(&mut app, KeyCode::Enter);
@@ -177,7 +177,7 @@ fn the_output_style_picked_goes_with_the_next_prompt() {
 fn a_missing_folder_is_refused() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "/add-dir nowhere/at/all");
     press(&mut app, KeyCode::Enter);

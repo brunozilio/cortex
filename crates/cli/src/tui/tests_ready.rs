@@ -4,7 +4,7 @@ use ratatui::crossterm::event::KeyCode;
 use serde_json::json;
 
 use super::app::App;
-use super::tests::{press, sdk, type_text, until};
+use super::tests::{client, press, type_text, until};
 
 fn engine() -> FakeEngine {
     let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
@@ -12,7 +12,7 @@ fn engine() -> FakeEngine {
 }
 
 fn started(engine: &FakeEngine, data: &std::path::Path) -> App {
-    let mut app = App::new(sdk(engine, data), data.into(), None, None);
+    let mut app = App::new(client(engine, data), data.into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app
 }
@@ -41,7 +41,7 @@ fn a_reload_keeps_the_mode_and_effort_of_the_live_session() {
 fn the_first_load_still_takes_the_saved_mode_and_effort() {
     let data = tempfile::tempdir().expect("data");
     let engine = engine();
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     let models = vec![Model::new("keyed:scripted", "Scripted")];
     app.ready(Ok(models), &json!({ "mode": "plan", "effort": "max" }));
     assert_eq!((app.mode(), app.effort_label()), (PermissionMode::Plan, "max"));

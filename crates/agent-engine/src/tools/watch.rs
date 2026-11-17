@@ -111,7 +111,7 @@ pub fn before(
     input: &Value,
     workspace: &Workspace,
     model: Model<'_>,
-) -> Result<crate::hooks::Decision, String> {
+) -> Result<crate::hooks::HookOutcome, String> {
     let payload = json!({ "tool_name": name, "tool_input": input });
     let blocked = |reason: String| format!("Hook blocked {name}: {reason}");
     let hook = workspace

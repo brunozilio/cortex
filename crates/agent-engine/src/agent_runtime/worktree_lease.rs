@@ -1,13 +1,13 @@
 use super::*;
 
 #[derive(Debug)]
-pub struct Guard {
+pub struct WorktreeLease {
     pub setup: Setup,
     finished: bool,
     retained: bool,
 }
 
-impl Guard {
+impl WorktreeLease {
     pub fn new(setup: Setup) -> Self {
         Self { setup, finished: false, retained: false }
     }
@@ -30,7 +30,7 @@ impl Guard {
     }
 }
 
-impl Drop for Guard {
+impl Drop for WorktreeLease {
     fn drop(&mut self) {
         if !self.finished {
             let _ = self.finish();

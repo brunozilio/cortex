@@ -108,8 +108,8 @@ impl App {
             return self.start(outgoing);
         }
         let (ticket, cwd) = (self.turn.prepare(&text), self.cwd.clone());
-        self.spawn(move |sdk| {
-            let prompt = super::mentions::with_files(sdk, &cwd, &outgoing.prompt);
+        self.spawn(move |client| {
+            let prompt = super::mentions::with_files(client, &cwd, &outgoing.prompt);
             Msg::Prepared { ticket, outgoing: Outgoing { prompt, ..outgoing } }
         });
     }
@@ -149,8 +149,10 @@ impl App {
             let run = self.turn.run.as_ref().map(app::RunControl::id);
             if let Some(run) = run.filter(|_| super::mentions::names_a_file(&text)) {
                 let cwd = self.cwd.clone();
-                return self
-                    .spawn(move |sdk| Msg::SteerResolved { run, text: super::mentions::with_files(sdk, &cwd, &text) });
+                return self.spawn(move |client| Msg::SteerResolved {
+                    run,
+                    text: super::mentions::with_files(client, &cwd, &text),
+                });
             }
             self.turn.unresolved.pop_front();
             self.deliver_steer(text);

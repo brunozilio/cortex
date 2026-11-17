@@ -84,10 +84,10 @@ mod tests {
 
     #[test]
     fn drawing_a_long_transcript_again_renders_only_the_entry_that_changed() {
-        use crate::tui::tests::{screen, sdk, until};
+        use crate::tui::tests::{client, screen, until};
         let data = tempfile::tempdir().expect("data");
         let engine = agent_engine::fake::FakeEngine::new(vec![app::Model::new("keyed:scripted", "Scripted")], vec![]);
-        let mut app = crate::tui::app::App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+        let mut app = crate::tui::app::App::new(client(&engine, data.path()), data.path().into(), None, None);
         until(&mut app, |app| app.session.is_some());
         for number in 0..300 {
             app.transcript.push(Entry::Assistant(format!("answer {number}")));

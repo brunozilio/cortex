@@ -23,8 +23,6 @@ Trust is a first-class, per-folder decision.
 - Folders that already have sessions are not trusted automatically. Past use is not consent to what the repository contains today.
 - The policy engine consults trust as one of its inputs.
 
-This is phase 6.1 of the plan.
-
 ## Consequences
 
 - A hostile repository cannot run code or grant itself permissions before the user has agreed.

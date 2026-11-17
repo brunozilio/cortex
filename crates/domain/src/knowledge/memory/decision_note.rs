@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Decision {
+pub struct DecisionNote {
     pub decided: String,
     pub ruled_out: Vec<String>,
     pub watch_out: Vec<String>,
@@ -13,7 +13,7 @@ const DECIDED_HEADING: &str = "## Decided";
 const RULED_OUT_HEADING: &str = "## Tried and ruled out";
 const WATCH_OUT_HEADING: &str = "## Watch out";
 
-impl Decision {
+impl DecisionNote {
     pub fn new(decided: &str, ruled_out: &[String], watch_out: &[String]) -> Option<Self> {
         let clean = |items: &[String]| -> Vec<String> {
             items.iter().map(|item| tidy(item)).filter(|item| !item.is_empty()).collect()
@@ -95,8 +95,8 @@ fn tidy(text: &str) -> String {
 mod tests {
     use super::*;
 
-    fn retries() -> Decision {
-        Decision::new(
+    fn retries() -> DecisionNote {
+        DecisionNote::new(
             "Keep defaultRetryMax = 4",
             &["Raising it to 10: one Do() call could block for over an hour.".into()],
             &["RetryWaitMax caps each wait, not the total".into(), "  ".into()],
@@ -114,16 +114,17 @@ mod tests {
             "Decided: Keep defaultRetryMax = 4. Ruled out: Raising it to 10: one Do() call could block for over an \
              hour. Watch out: RetryWaitMax caps each wait, not the total."
         );
-        assert_eq!(Decision::parse(&text), Some(decision));
+        assert_eq!(DecisionNote::parse(&text), Some(decision));
     }
 
     #[test]
     fn a_decision_without_what_was_ruled_out_still_reads_back() {
-        let decision = Decision::new("Use pnpm", &[], &["The lockfile is pnpm-lock.yaml".into()]).expect("decision");
+        let decision =
+            DecisionNote::new("Use pnpm", &[], &["The lockfile is pnpm-lock.yaml".into()]).expect("decision");
         assert_eq!(decision.text(), "Decided: Use pnpm. Watch out: The lockfile is pnpm-lock.yaml.");
-        assert_eq!(Decision::parse(&decision.text()), Some(decision));
-        assert_eq!(Decision::parse("Use pnpm."), None);
-        assert_eq!(Decision::new("  ", &[], &[]), None);
+        assert_eq!(DecisionNote::parse(&decision.text()), Some(decision));
+        assert_eq!(DecisionNote::parse("Use pnpm."), None);
+        assert_eq!(DecisionNote::new("  ", &[], &[]), None);
     }
 
     #[test]
@@ -133,7 +134,7 @@ mod tests {
 
         assert!(markdown.starts_with("## Decided\n- Keep defaultRetryMax = 4\n\n## Tried and ruled out\n- Raising"));
         assert!(markdown.contains("## Watch out\n- RetryWaitMax caps each wait, not the total\n"));
-        assert_eq!(Decision::from_markdown(&markdown), Some(decision));
-        assert_eq!(Decision::from_markdown("Just a fact."), None);
+        assert_eq!(DecisionNote::from_markdown(&markdown), Some(decision));
+        assert_eq!(DecisionNote::from_markdown("Just a fact."), None);
     }
 }

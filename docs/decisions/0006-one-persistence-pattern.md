@@ -24,7 +24,7 @@ Atomic replace with fsync and private permissions is the common write path (`cra
 - UI state stays a file, written per key under the lock.
 - Secrets go to the operating system's keychain, with today's encrypted file as the fallback.
 
-This is phase 5 of the plan. The audit proposed SQLite for trace and UI state as well; the plan narrowed it to catalog and memory.
+The audit proposed SQLite for trace and UI state as well; this decision narrows it to catalog and memory.
 
 ## Consequences
 
@@ -90,7 +90,7 @@ Only the vault's 32-byte key moved to the operating system's keychain (macOS Key
 - A first start with a reachable keychain makes the key there and writes the pointer. A first start with no reachable keychain (a headless Linux, CI, a container) keeps the key in the file, as before, and moves it the first time a keychain answers. A key found in the keychain with no `secrets.key` beside it is used, not replaced.
 - Once the pointer is written, a keychain that cannot be reached, or that no longer holds the item, is an error: no new key is made, since it would leave every sealed entry unreadable. The error names `<PREFIX>_SECRETS=file` as the way out; it reaches the user as the existing "keys cannot be kept" notice, and connecting a provider or signing in is refused until then.
 - `<PREFIX>_SECRETS=file` keeps the key in the file and never writes the keychain. If the file is a pointer, the key is taken back from the keychain when it answers; when it does not, a new file key is made, which is the fallback the error offered (keys saved before must be entered again).
-- Only the user's real data folder uses the keychain. `DataRoot::under` (the SDK's `data_dir`, tests) keeps the file key, so no test touches the user's keychain; the test against the real keychain is ignored by default.
+- Only the user's real data folder uses the keychain. `DataRoot::under` (`Client::builder().data_dir`, tests) keeps the file key, so no test touches the user's keychain; the test against the real keychain is ignored by default.
 - The choice and the creation run under the same cross-process lock as before, so programs starting together end with one key and one keychain write.
 
 Consequences that are now real:

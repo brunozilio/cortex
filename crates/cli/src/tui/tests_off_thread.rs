@@ -6,7 +6,7 @@ use domain::SessionId;
 use ratatui::crossterm::event::KeyCode;
 
 use super::app::App;
-use super::tests::{press, screen, sdk, type_text, until};
+use super::tests::{client, press, screen, type_text, until};
 use super::transcript::Entry;
 
 fn script() -> Vec<EngineEvent> {
@@ -18,7 +18,7 @@ fn script() -> Vec<EngineEvent> {
 }
 
 fn started(engine: &FakeEngine, data: &std::path::Path) -> App {
-    let mut app = App::new(sdk(engine, data), data.into(), None, None);
+    let mut app = App::new(client(engine, data), data.into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app
 }

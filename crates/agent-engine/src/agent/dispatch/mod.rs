@@ -1,6 +1,6 @@
 mod after;
 mod batches;
-mod native;
+mod in_loop;
 mod task_list;
 mod watch;
 mod worktree;
@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use super::Agent;
 use super::run::ThisRun;
 use super::subagents::background::Spawn;
-use crate::hooks::{Decision, HookEvent};
+use crate::hooks::{HookEvent, HookOutcome};
 use crate::tools::{Outcome, Tool};
 use crate::transcript::{Block, Message};
 use domain::permission_rules::PermissionDecision;
@@ -74,9 +74,9 @@ impl Agent<'_> {
             && self.workspace.services.deferred.as_ref().is_some_and(|deferred| deferred.load(name))
     }
 
-    fn before(&self, id: &str, name: &str, input: &Value, known: bool) -> Decision {
+    fn before(&self, id: &str, name: &str, input: &Value, known: bool) -> HookOutcome {
         if !known || self.control.is_stopped() {
-            return Decision::default();
+            return HookOutcome::default();
         }
         self.workspace
             .hooks
@@ -87,10 +87,10 @@ impl Agent<'_> {
                 self.workspace,
                 Some((self.api, &self.request)),
             )
-            .unwrap_or_else(|error| Decision { blocked: Some(error), ..Default::default() })
+            .unwrap_or_else(|error| HookOutcome { blocked: Some(error), ..Default::default() })
     }
 
-    fn rules_for_changed_input(&self, pre: &Decision, input: &Value) -> Vec<String> {
+    fn rules_for_changed_input(&self, pre: &HookOutcome, input: &Value) -> Vec<String> {
         let mut rule_context = Vec::new();
         if pre.updated_input.is_none() {
             return rule_context;
@@ -120,7 +120,7 @@ impl Agent<'_> {
         &self,
         calling: &Calling<'_, '_>,
         input: &Value,
-        pre: &Decision,
+        pre: &HookOutcome,
         rule_context: &[String],
         offered: bool,
     ) -> Option<Outcome> {
@@ -167,9 +167,9 @@ impl Agent<'_> {
         let declared =
             calling.tool.is_some_and(|tool| tool.script().is_none()) && crate::tools::declares_execute(calling.name);
         if declared {
-            self.execute_declared(calling, input, &|input| self.native(calling, input))
+            self.execute_declared(calling, input, &|input| self.in_loop(calling, input))
         } else {
-            self.native(calling, input)
+            self.in_loop(calling, input)
         }
     }
 }

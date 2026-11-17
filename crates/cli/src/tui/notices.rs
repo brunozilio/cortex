@@ -7,7 +7,7 @@ use super::app::{App, Msg};
 pub(super) fn poll(app: &mut App) {
     if app.notices.due(Instant::now()) {
         let for_agent = !app.busy() && app.session.is_some() && app.ask.is_none();
-        app.spawn(move |sdk| Msg::Notices(sdk.notices(for_agent).unwrap_or_default()));
+        app.spawn(move |client| Msg::Notices(client.notices(for_agent).unwrap_or_default()));
     }
 }
 

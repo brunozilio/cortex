@@ -8,7 +8,7 @@ use domain::session_run::{Carried, RunWatch};
 use domain::{AskId, Decision, EngineEvent, PermissionMode, RunId};
 
 use crate::Error;
-use crate::client::dispatch::{Client, Pending};
+use crate::client::dispatch::{Dispatcher, Pending};
 
 const BACKEND_GONE: &str = "the backend went away before the run ended";
 
@@ -18,20 +18,23 @@ pub struct Run {
     events: Receiver<EngineEvent>,
     accepted: Option<Pending>,
     left_running: bool,
-    client: Arc<Client>,
+    dispatcher: Arc<Dispatcher>,
     carried: Arc<Mutex<Carried>>,
     watch: RunWatch,
     done: bool,
 }
 
 impl Run {
-    pub(crate) fn start(client: &Arc<Client>, command: impl FnOnce(RunId) -> ClientCommand) -> Result<Self, Error> {
+    pub(crate) fn start(
+        dispatcher: &Arc<Dispatcher>,
+        command: impl FnOnce(RunId) -> ClientCommand,
+    ) -> Result<Self, Error> {
         let run = RunId::new();
-        let events = client.follow(run);
-        let accepted = match client.ask(command(run)) {
+        let events = dispatcher.follow(run);
+        let accepted = match dispatcher.ask(command(run)) {
             Ok(accepted) => accepted,
             Err(error) => {
-                client.forget(run);
+                dispatcher.forget(run);
                 return Err(error);
             }
         };
@@ -40,7 +43,7 @@ impl Run {
             events,
             accepted: Some(accepted),
             left_running: false,
-            client: Arc::clone(client),
+            dispatcher: Arc::clone(dispatcher),
             carried: Arc::default(),
             watch: RunWatch::default(),
             done: false,
@@ -138,7 +141,7 @@ impl Run {
     }
 
     pub fn control(&self) -> RunControl {
-        RunControl { id: self.id, client: Arc::clone(&self.client) }
+        RunControl { id: self.id, dispatcher: Arc::clone(&self.dispatcher) }
     }
 
     pub fn text(mut self) -> Result<String, Error> {
@@ -167,7 +170,7 @@ impl Run {
 #[derive(Debug, Clone)]
 pub struct RunControl {
     id: RunId,
-    client: Arc<Client>,
+    dispatcher: Arc<Dispatcher>,
 }
 
 impl RunControl {
@@ -176,27 +179,27 @@ impl RunControl {
     }
 
     pub fn answer(&self, ask: AskId, decision: Decision) -> Result<(), Error> {
-        self.client.send(ClientCommand::AnswerAsk { run: self.id, ask, decision })
+        self.dispatcher.send(ClientCommand::AnswerAsk { run: self.id, ask, decision })
     }
 
     pub fn cancel(&self) -> Result<(), Error> {
-        self.client.send(ClientCommand::CancelRun { run: self.id })
+        self.dispatcher.send(ClientCommand::CancelRun { run: self.id })
     }
 
     pub fn set_permission(&self, mode: PermissionMode) -> Result<(), Error> {
-        self.client.send(ClientCommand::SetPermissionMode { run: self.id, mode })
+        self.dispatcher.send(ClientCommand::SetPermissionMode { run: self.id, mode })
     }
 
     pub fn steer(&self, text: &str) -> Result<(), Error> {
-        self.client.send(ClientCommand::SteerRun { run: self.id, text: text.to_owned() })
+        self.dispatcher.send(ClientCommand::SteerRun { run: self.id, text: text.to_owned() })
     }
 
     pub fn unsteer(&self) -> Result<(), Error> {
-        self.client.send(ClientCommand::UnsteerRun { run: self.id })
+        self.dispatcher.send(ClientCommand::UnsteerRun { run: self.id })
     }
 
     pub fn background(&self) -> Result<(), Error> {
-        self.client.send(ClientCommand::BackgroundRun { run: self.id })
+        self.dispatcher.send(ClientCommand::BackgroundRun { run: self.id })
     }
 }
 
@@ -213,9 +216,9 @@ impl Drop for Run {
         if self.done {
             return;
         }
-        self.client.forget(self.id);
+        self.dispatcher.forget(self.id);
         if !self.left_running {
-            let _ = self.client.send(ClientCommand::CancelRun { run: self.id });
+            let _ = self.dispatcher.send(ClientCommand::CancelRun { run: self.id });
         }
     }
 }

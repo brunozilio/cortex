@@ -26,7 +26,7 @@ impl Failure {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Verdict {
+pub enum FallbackChoice {
     Pass,
     Forward(String),
     Stop,
@@ -57,17 +57,19 @@ impl Fallback {
         }
     }
 
-    pub fn next(&mut self, current: &str, failure: Failure, verdict: Verdict) -> Option<String> {
+    pub fn next(&mut self, current: &str, failure: Failure, verdict: FallbackChoice) -> Option<String> {
         self.failed(current);
         if self.tried.len() > MAX_SWITCHES {
             return None;
         }
         let untried = |model: &String| !self.tried.contains(model);
         match verdict {
-            Verdict::Stop => None,
-            Verdict::Forward(model) => untried(&model).then_some(model),
-            Verdict::Pass if failure.moves_down_the_chain() => self.chain.iter().find(|model| untried(model)).cloned(),
-            Verdict::Pass => None,
+            FallbackChoice::Stop => None,
+            FallbackChoice::Forward(model) => untried(&model).then_some(model),
+            FallbackChoice::Pass if failure.moves_down_the_chain() => {
+                self.chain.iter().find(|model| untried(model)).cloned()
+            }
+            FallbackChoice::Pass => None,
         }
     }
 

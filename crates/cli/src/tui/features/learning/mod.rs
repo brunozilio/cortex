@@ -41,19 +41,19 @@ fn keep(app: &mut App, proposal: Proposal) {
     let cwd = app.cwd.clone();
     match keeping(&proposal) {
         Keeping::Remember(text) => {
-            app.spawn(move |sdk| match sdk.memory(cwd).remember(MemoryKind::Procedural, &text, &[]) {
+            app.spawn(move |client| match client.memory(cwd).remember(MemoryKind::Procedural, &text, &[]) {
                 Ok(_) => Msg::Notice(format!("Remembered: {text}")),
                 Err(error) => Msg::Error(error.to_string()),
             })
         }
         Keeping::Rule { kind, rule } => {
-            app.spawn(move |sdk| match sdk.keep_rule(&cwd, kind, &rule) {
+            app.spawn(move |client| match client.keep_rule(&cwd, kind, &rule) {
                 Ok(()) => Msg::Notice(format!("Kept the {} rule {rule} for this project.", kind.word())),
                 Err(error) => Msg::Error(error.to_string()),
             });
         }
         Keeping::Instruction(line) => {
-            app.spawn(move |sdk| match sdk.keep_instruction(&cwd, &line) {
+            app.spawn(move |client| match client.keep_instruction(&cwd, &line) {
                 Ok(_) => Msg::Notice(format!("Added to {}: {line}", brand::INSTRUCTIONS)),
                 Err(error) => Msg::Error(error.to_string()),
             });

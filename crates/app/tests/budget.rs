@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
-use app::{EngineEvent, Model, Sdk};
+use app::{Client, EngineEvent, Model};
 use app::{InMemorySecretStore, LocalServices};
 use domain::SessionId;
 use domain::billing::ModelUsage;
@@ -32,8 +32,8 @@ fn each_run_carries_the_budget_and_what_the_session_has_spent() {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.off.insert(domain::features::MEMORY_SEARCH.into());
     services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
-    let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
-    let session = sdk.session(data.path(), model());
+    let client = Client::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
+    let session = client.session(data.path(), model());
 
     session.send("one").expect("run").text().expect("text");
     session.set_budget(Some(5.0));

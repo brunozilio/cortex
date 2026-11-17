@@ -1,4 +1,4 @@
-use app::{Sdk, SettingsChange};
+use app::{Client, SettingsChange};
 
 const WAITING_AT_MOST: usize = 500;
 
@@ -6,7 +6,7 @@ pub trait Store: Send + 'static {
     fn change(&self, changes: Vec<SettingsChange>) -> Result<(), String>;
 }
 
-impl Store for Sdk {
+impl Store for Client {
     fn change(&self, changes: Vec<SettingsChange>) -> Result<(), String> {
         self.change_settings(changes).map_err(|error| error.to_string())
     }

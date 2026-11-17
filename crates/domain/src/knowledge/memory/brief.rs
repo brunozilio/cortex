@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::decision::Decision;
+use super::decision_note::DecisionNote;
 use super::{Memory, MemoryEdit, MemoryId, MemoryKind};
 
 pub const MEMORY_SERVER: &str = concat!(brand::command!(), "_memory");
@@ -156,7 +156,7 @@ struct RememberEntry {
 
 impl RememberEntry {
     fn edit(self) -> Option<MemoryEdit> {
-        let decision = Decision::new(&self.decided, &self.ruled_out, &self.watch_out);
+        let decision = DecisionNote::new(&self.decided, &self.ruled_out, &self.watch_out);
         let kind = match (MemoryKind::from_key(&self.kind), &decision) {
             (Some(kind), _) => kind,
             (None, Some(_)) => MemoryKind::Semantic,

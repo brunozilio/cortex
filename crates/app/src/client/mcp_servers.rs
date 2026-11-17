@@ -4,20 +4,20 @@ use crate::api::features::channels::ChannelsRequest;
 use crate::api::{ClientCommand, Reply};
 use domain::mcp_config::{McpEntry, McpListing, McpServerInfo};
 
-use crate::{Error, Sdk};
+use crate::{Client, Error};
 
-impl Sdk {
+impl Client {
     pub fn mcp_servers(&self, cwd: &Path) -> Result<Vec<McpServerInfo>, Error> {
-        self.client.call(ClientCommand::ListMcpServers { path: cwd.to_path_buf() }, listed)
+        self.dispatcher.call(ClientCommand::ListMcpServers { path: cwd.to_path_buf() }, listed)
     }
 
     pub fn approve_mcp_server(&self, cwd: &Path, name: &str, approve: bool) -> Result<Vec<McpServerInfo>, Error> {
         let command = ClientCommand::ApproveMcpServer { path: cwd.to_path_buf(), name: name.to_owned(), approve };
-        self.client.call(command, listed)
+        self.dispatcher.call(command, listed)
     }
 
     pub fn mcp_listing(&self, cwd: &Path) -> Result<McpListing, Error> {
-        self.client.call(ClientCommand::ListMcpServers { path: cwd.to_path_buf() }, |reply| match reply {
+        self.dispatcher.call(ClientCommand::ListMcpServers { path: cwd.to_path_buf() }, |reply| match reply {
             Reply::McpServers { servers, unreadable, .. } => Some(Ok(McpListing { servers, unreadable })),
             _ => None,
         })
@@ -25,7 +25,7 @@ impl Sdk {
 
     pub fn mcp_server(&self, cwd: &Path, name: &str) -> Result<McpEntry, Error> {
         let command = ClientCommand::GetMcpServer { path: cwd.to_path_buf(), name: name.to_owned() };
-        self.client.call(command, |reply| match reply {
+        self.dispatcher.call(command, |reply| match reply {
             Reply::McpServer(entry) => Some(Ok(entry)),
             _ => None,
         })
@@ -39,11 +39,11 @@ impl Sdk {
         replace: bool,
     ) -> Result<Vec<McpServerInfo>, Error> {
         let command = ClientCommand::AddMcpServer { path: cwd.to_path_buf(), name: name.to_owned(), server, replace };
-        self.client.call(command, listed)
+        self.dispatcher.call(command, listed)
     }
 
     pub fn remove_mcp_server(&self, cwd: &Path, name: &str) -> Result<Vec<McpServerInfo>, Error> {
-        self.client.call(ClientCommand::RemoveMcpServer { path: cwd.to_path_buf(), name: name.to_owned() }, listed)
+        self.dispatcher.call(ClientCommand::RemoveMcpServer { path: cwd.to_path_buf(), name: name.to_owned() }, listed)
     }
 
     pub fn sign_in_mcp_server(
@@ -53,7 +53,7 @@ impl Sdk {
         mut open: impl FnMut(&str),
     ) -> Result<Vec<McpServerInfo>, Error> {
         let command = ClientCommand::SignInMcpServer { path: cwd.to_path_buf(), name: name.to_owned() };
-        self.client.flow(command, crate::client::dispatch::sign_in_patience(), |reply| {
+        self.dispatcher.flow(command, crate::client::dispatch::sign_in_patience(), |reply| {
             if let Reply::McpAuthorizeAt { url, .. } = &reply {
                 open(url);
                 return None;
@@ -68,32 +68,32 @@ impl Sdk {
     }
 
     pub fn sign_out_mcp_server(&self, cwd: &Path, name: &str) -> Result<Vec<McpServerInfo>, Error> {
-        self.client.call(ClientCommand::SignOutMcpServer { path: cwd.to_path_buf(), name: name.to_owned() }, listed)
+        self.dispatcher.call(ClientCommand::SignOutMcpServer { path: cwd.to_path_buf(), name: name.to_owned() }, listed)
     }
 }
 
-impl Sdk {
+impl Client {
     pub fn notices(&self, for_agent: bool) -> Result<crate::api::Notices, Error> {
-        self.client.call(ClientCommand::TakeNotices { for_agent }, |reply| match reply {
+        self.dispatcher.call(ClientCommand::TakeNotices { for_agent }, |reply| match reply {
             Reply::Notices(notices) => Some(Ok(notices)),
             _ => None,
         })
     }
 
     pub fn trust_state(&self, cwd: &Path) -> Result<domain::trust::TrustReport, Error> {
-        self.client.call(ClientCommand::TrustState { path: cwd.to_path_buf() }, trust_report)
+        self.dispatcher.call(ClientCommand::TrustState { path: cwd.to_path_buf() }, trust_report)
     }
 
     pub fn set_trust(&self, cwd: &Path, trusted: bool) -> Result<domain::trust::TrustReport, Error> {
-        self.client.call(ClientCommand::Trust { path: cwd.to_path_buf(), trusted }, trust_report)
+        self.dispatcher.call(ClientCommand::Trust { path: cwd.to_path_buf(), trusted }, trust_report)
     }
 
     pub fn trust_for_this_process(&self, cwd: &Path) -> Result<domain::trust::TrustReport, Error> {
-        self.client.call(ClientCommand::TrustForThisProcess { path: cwd.to_path_buf() }, trust_report)
+        self.dispatcher.call(ClientCommand::TrustForThisProcess { path: cwd.to_path_buf() }, trust_report)
     }
 
     pub fn permissions(&self, cwd: &Path) -> Result<domain::permission_rules::PermissionsInfo, Error> {
-        self.client.call(ClientCommand::ListPermissions { path: cwd.to_path_buf() }, |reply| match reply {
+        self.dispatcher.call(ClientCommand::ListPermissions { path: cwd.to_path_buf() }, |reply| match reply {
             Reply::Permissions { permissions, .. } => Some(Ok(permissions)),
             _ => None,
         })

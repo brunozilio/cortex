@@ -6,7 +6,7 @@ use domain::{AgentAsk, AskId, AskKind};
 use ratatui::crossterm::event::KeyCode;
 
 use super::app::App;
-use super::tests::{press, screen, sdk, type_text, until};
+use super::tests::{client, press, screen, type_text, until};
 
 fn engine(script: Vec<EngineEvent>) -> FakeEngine {
     FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script)
@@ -16,7 +16,7 @@ fn engine(script: Vec<EngineEvent>) -> FakeEngine {
 fn left_on_an_empty_prompt_opens_the_sessions_and_esc_goes_back() {
     let data = tempfile::tempdir().expect("data");
     let engine = engine(Vec::new());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     press(&mut app, KeyCode::Left);
     let fleet = screen(&app);
@@ -47,7 +47,7 @@ fn slow_reply(text: &str) -> FakeEngine {
 fn a_new_session_starts_while_the_one_left_keeps_working_on_its_own() {
     let data = tempfile::tempdir().expect("data");
     let engine = slow_reply("first answer");
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "first task");
     press(&mut app, KeyCode::Enter);
@@ -68,7 +68,7 @@ fn a_new_session_starts_while_the_one_left_keeps_working_on_its_own() {
 fn enter_on_a_session_left_behind_brings_it_back_with_what_it_did_meanwhile() {
     let data = tempfile::tempdir().expect("data");
     let engine = slow_reply("first answer");
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "first task");
     press(&mut app, KeyCode::Enter);
@@ -90,14 +90,14 @@ fn enter_on_a_session_left_behind_brings_it_back_with_what_it_did_meanwhile() {
 fn an_earlier_session_of_this_folder_is_listed_and_enter_takes_it_up_again() {
     let data = tempfile::tempdir().expect("data");
     let engine = slow_reply("first answer");
-    let mut earlier = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut earlier = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut earlier, |app| app.session.is_some());
     type_text(&mut earlier, "earlier task");
     press(&mut earlier, KeyCode::Enter);
     until(&mut earlier, |app| !app.busy());
-    earlier.sdk.rename_session(&SessionId("first".into()), "Earlier work").expect("rename");
+    earlier.client.rename_session(&SessionId("first".into()), "Earlier work").expect("rename");
     drop(earlier);
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     press(&mut app, KeyCode::Left);
     until(&mut app, |app| screen(app).contains("Earlier work"));
@@ -126,7 +126,7 @@ fn a_session_left_behind_that_asks_shows_it_needs_you_and_takes_the_answer_once_
         EngineEvent::Completed { duration_ms: 5, cost_usd: None },
     ];
     let engine = engine(script).with_delay(Duration::from_millis(60));
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "run the tests");
     press(&mut app, KeyCode::Enter);

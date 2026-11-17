@@ -24,7 +24,7 @@ Data already on disk must keep opening, so the names derived from the old owner 
 - the session file name (a hash that includes the owner tag), the agent-memory folder, the secrets entry names (which are also the cipher's associated data) and the `local/` path segments are unchanged;
 - there is no data migration and the `local/` folders are not renamed.
 
-Before any removal, one commit adds anchor tests with fixtures produced by the current code (a session file name, an agent-memory folder, a `secrets.json` that must still open, the `local/` paths). Removal then goes top-down, one commit per layer. In the same phase a single data root (`DataRoot`) is introduced for the vault, MCP authorisation and sessions, which makes tests hermetic. This is phase 2.3 of the plan.
+Before any removal, one commit adds anchor tests with fixtures produced by the current code (a session file name, an agent-memory folder, a `secrets.json` that must still open, the `local/` paths). Removal then goes top-down, one commit per layer. In the same change a single data root (`DataRoot`) is introduced for the vault, MCP authorisation and sessions, which makes tests hermetic.
 
 ## Consequences
 

@@ -19,7 +19,7 @@ enum Shown {
 }
 
 pub(super) fn poll(app: &mut App) {
-    for told in app.sdk.unsolicited() {
+    for told in app.client.unsolicited() {
         arrived(app, told);
     }
 }
@@ -89,7 +89,7 @@ mod tests {
     fn what_the_backend_tells_unasked_lands_in_the_transcript() {
         let data = tempfile::tempdir().expect("data");
         let engine = agent_engine::fake::FakeEngine::new(vec![app::Model::new("keyed:scripted", "Scripted")], vec![]);
-        let mut app = App::new(crate::tui::tests::sdk(&engine, data.path()), data.path().into(), None, None);
+        let mut app = App::new(crate::tui::tests::client(&engine, data.path()), data.path().into(), None, None);
 
         arrived(&mut app, failed("keyed", "401"));
         arrived(&mut app, failed("keyed", "401"));

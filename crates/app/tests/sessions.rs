@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_engine::fake::FakeEngine;
-use app::{EngineEvent, Model, Sdk};
+use app::{Client, EngineEvent, Model};
 use app::{InMemorySecretStore, LocalServices};
 use domain::SessionId;
 use domain::conversation::SessionStatus;
@@ -25,11 +25,11 @@ fn engine() -> FakeEngine {
     )
 }
 
-fn build(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
+fn build(engine: &FakeEngine, data: &std::path::Path) -> Client {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.off.insert(domain::features::MEMORY_SEARCH.into());
     services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
-    Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
+    Client::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
 }
 
 #[test]
@@ -40,12 +40,12 @@ fn sessions_on_sibling_clients_run_at_the_same_time_without_mixing() {
 
     let runs: Vec<_> = [first.clone(), second]
         .into_iter()
-        .map(|sdk| {
+        .map(|client| {
             let cwd = data.path().to_path_buf();
             std::thread::spawn(move || {
-                let session = sdk.session(cwd, model());
+                let session = client.session(cwd, model());
                 let run = session.send("hi").expect("run");
-                let models = sdk.models().expect("a query while the run streams").len();
+                let models = client.models().expect("a query while the run streams").len();
                 (run.text().expect("text"), models)
             })
         })

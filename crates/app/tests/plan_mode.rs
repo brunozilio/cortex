@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
-use app::{EngineEvent, Model, Sdk};
+use app::{Client, EngineEvent, Model};
 use app::{InMemorySecretStore, LocalServices};
 use domain::{AgentAsk, AskId, AskKind, Criteria, PermissionMode, SessionId};
 
@@ -11,11 +11,11 @@ fn model() -> Model {
     Model::new("scripted", "Scripted")
 }
 
-fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
+fn client(engine: &FakeEngine, data: &std::path::Path) -> Client {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
     services.off.insert(domain::features::MEMORY_SEARCH.into());
     services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
-    Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
+    Client::builder().data_dir(data).services(services).build().expect(brand::COMMAND)
 }
 
 const PLAN: &str = "## Approach\nEdit it.\n\n## Verification\ncargo test passes";
@@ -37,8 +37,8 @@ fn an_approved_plan_leaves_the_session_in_the_mode_chosen_with_the_plans_criteri
     let data = tempfile::tempdir().expect("data");
     let engine =
         FakeEngine::new(vec![model()], run(vec![presented(), EngineEvent::ModeChanged(PermissionMode::AcceptEdits)]));
-    let sdk = sdk(&engine, data.path());
-    let session = sdk.session(data.path(), model()).permission(PermissionMode::Plan);
+    let client = client(&engine, data.path());
+    let session = client.session(data.path(), model()).permission(PermissionMode::Plan);
     let events: Vec<EngineEvent> = session.send("plan it").expect("run").collect();
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })));
 
@@ -54,8 +54,8 @@ fn an_approved_plan_leaves_the_session_in_the_mode_chosen_with_the_plans_criteri
 fn entering_plan_mode_keeps_the_session_planning() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], run(vec![EngineEvent::ModeChanged(PermissionMode::Plan)]));
-    let sdk = sdk(&engine, data.path());
-    let session = sdk.session(data.path(), model());
+    let client = client(&engine, data.path());
+    let session = client.session(data.path(), model());
     session.send("big change").expect("run").text().expect("text");
     assert_eq!(session.permission_mode(), PermissionMode::Plan);
 }
@@ -64,8 +64,8 @@ fn entering_plan_mode_keeps_the_session_planning() {
 fn a_runs_text_includes_the_plan_it_presented() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], run(vec![presented()]));
-    let sdk = sdk(&engine, data.path());
-    let session = sdk.session(data.path(), model()).permission(PermissionMode::Plan);
+    let client = client(&engine, data.path());
+    let session = client.session(data.path(), model()).permission(PermissionMode::Plan);
     let text = session.send("plan it").expect("run").text().expect("text");
     assert!(text.contains("## Approach") && text.ends_with("Implemented."), "{text}");
     assert_eq!(session.permission_mode(), PermissionMode::Plan, "an unanswered plan keeps planning");

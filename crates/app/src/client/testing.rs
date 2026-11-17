@@ -5,7 +5,7 @@ use crate::api::{Backend, BackendError, ClientCommand, Envelope, Reply, RequestI
 use crossbeam_channel::{Receiver, Sender};
 use platform::sync::Locked;
 
-use crate::client::dispatch::Client;
+use crate::client::dispatch::Dispatcher;
 
 pub(crate) type Command = Envelope<ClientCommand>;
 pub(crate) type Asked = Arc<Mutex<Vec<Command>>>;
@@ -48,13 +48,13 @@ impl Backend for Scripted {
     }
 }
 
-pub(crate) fn scripted(on: impl Fn(&Command, &Outlet) + Send + 'static) -> (Arc<Client>, Outlet, Asked) {
+pub(crate) fn scripted(on: impl Fn(&Command, &Outlet) + Send + 'static) -> (Arc<Dispatcher>, Outlet, Asked) {
     let (events_tx, events) = crossbeam_channel::unbounded();
     let (wake, woken) = crossbeam_channel::bounded(1);
     let outlet = Outlet { events: events_tx, wake };
     let asked = Asked::default();
     let backend = Scripted { on: Box::new(on), asked: Arc::clone(&asked), outlet: outlet.clone(), events };
-    (Arc::new(Client::new(Box::new(backend), woken)), outlet, asked)
+    (Arc::new(Dispatcher::new(Box::new(backend), woken)), outlet, asked)
 }
 
 pub(crate) struct Quiet;

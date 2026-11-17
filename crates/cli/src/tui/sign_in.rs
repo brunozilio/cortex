@@ -28,7 +28,7 @@ pub enum SecretKey {
 }
 
 pub(super) fn open(app: &mut App) {
-    app.spawn(|sdk| match sdk.providers() {
+    app.spawn(|client| match client.providers() {
         Ok(providers) => Msg::Menu(providers),
         Err(error) => Msg::Error(error.to_string()),
     });
@@ -55,14 +55,14 @@ pub(super) fn picked(app: &mut App, cursor: usize) {
 
 fn signing_in(app: &mut App, provider: ModelProvider, name: String, close: Option<(u16, u32)>) {
     let tx = app.tx.clone();
-    app.spawn(move |sdk| {
+    app.spawn(move |client| {
         let opened = |url: &str, code: Option<&str>| {
             crate::login::open(url);
             let _ = tx.send(Msg::Passing(crate::login::visit(url, code)));
         };
         let signed_in = match close {
-            Some((port, pid)) => sdk.close_and_sign_in(provider, port, pid, opened),
-            None => sdk.sign_in(provider, opened),
+            Some((port, pid)) => client.close_and_sign_in(provider, port, pid, opened),
+            None => client.sign_in(provider, opened),
         };
         match signed_in {
             Ok(SignedIn::Connected(_)) => Msg::Connected(name),
@@ -111,7 +111,7 @@ pub(super) fn secret_key(app: &mut App, key: SecretKey) {
         SecretKey::Esc => app.overlays.secret = None,
         SecretKey::Enter => {
             let Some(SecretPrompt { provider, name, text }) = app.overlays.secret.take() else { return };
-            app.spawn(move |sdk| match sdk.connect_provider(provider, &text) {
+            app.spawn(move |client| match client.connect_provider(provider, &text) {
                 Ok(_) => Msg::Connected(name),
                 Err(error) => Msg::Error(format!("{name} did not connect: {error}")),
             });

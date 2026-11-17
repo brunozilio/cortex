@@ -6,7 +6,7 @@ use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use super::{BURST, Events, apply_waiting};
 use crate::tui::app::App;
-use crate::tui::tests::{screen, sdk, until};
+use crate::tui::tests::{client, screen, until};
 
 struct Queued(VecDeque<Event>);
 
@@ -32,7 +32,7 @@ fn key(code: KeyCode, modifiers: KeyModifiers) -> Event {
 
 fn app(data: &std::path::Path) -> App {
     let engine = FakeEngine::new(vec![app::Model::new("keyed:scripted", "Scripted")], Vec::new());
-    let mut app = App::new(sdk(&engine, data), data.into(), None, None);
+    let mut app = App::new(client(&engine, data), data.into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app
 }

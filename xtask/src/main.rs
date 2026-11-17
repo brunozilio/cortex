@@ -2,6 +2,8 @@ mod brand;
 mod comments;
 mod crate_graph;
 mod crate_table;
+mod drift;
+mod env_vars;
 mod lint;
 mod web;
 

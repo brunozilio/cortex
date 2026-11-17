@@ -1,4 +1,4 @@
-use app::{PluginsReply, PluginsRequest, Sdk};
+use app::{Client, PluginsReply, PluginsRequest};
 use clap::Subcommand;
 
 #[derive(Debug, Subcommand)]
@@ -17,14 +17,14 @@ pub enum PluginAction {
     Remove { name: String },
 }
 
-pub fn run(sdk: &Sdk, action: PluginAction) -> Result<(), String> {
+pub fn run(client: &Client, action: PluginAction) -> Result<(), String> {
     let request = match action {
         PluginAction::List => PluginsRequest::List,
         PluginAction::Install { source, name } => PluginsRequest::Install { source, name },
         PluginAction::Update { name } => PluginsRequest::Update { name },
         PluginAction::Remove { name } => PluginsRequest::Remove { name },
     };
-    println!("{}", told(sdk.plugins(request).map_err(|error| error.to_string())?));
+    println!("{}", told(client.plugins(request).map_err(|error| error.to_string())?));
     Ok(())
 }
 

@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::{CommandOutput, Decision, Group, Handled, absorbed};
+use super::{CommandOutput, Group, Handled, HookOutcome, absorbed};
 
 fn printed(stdout: Value) -> CommandOutput {
     CommandOutput { code: Some(0), stdout: stdout.to_string(), stderr: String::new() }
@@ -10,8 +10,8 @@ fn exited(code: i32, stderr: &str) -> CommandOutput {
     CommandOutput { code: Some(code), stdout: String::new(), stderr: stderr.into() }
 }
 
-fn absorb(event: &str, result: CommandOutput) -> (Result<Handled, String>, Decision, Value) {
-    let (mut decision, mut input) = (Decision::default(), json!({"tool_input": {"command": "ls"}}));
+fn absorb(event: &str, result: CommandOutput) -> (Result<Handled, String>, HookOutcome, Value) {
+    let (mut decision, mut input) = (HookOutcome::default(), json!({"tool_input": {"command": "ls"}}));
     let event = super::HookEvent::named(event).expect("a hook event");
     let handled = absorbed(event, result, &mut decision, &mut input);
     (handled, decision, input)

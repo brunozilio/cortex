@@ -13,7 +13,7 @@ fn prompt(run: RunId) -> ClientCommand {
 #[test]
 fn a_run_whose_backend_went_away_ends_with_an_error_instead_of_hanging() {
     let (wake, woken) = crossbeam_channel::bounded::<()>(1);
-    let client = Arc::new(Client::new(Box::new(Quiet), woken));
+    let client = Arc::new(Dispatcher::new(Box::new(Quiet), woken));
     let mut run = Run::start(&client, prompt).expect("started");
 
     drop(wake);
@@ -32,7 +32,7 @@ fn a_run_whose_backend_went_away_ends_with_an_error_instead_of_hanging() {
 #[test]
 fn a_run_whose_backend_went_away_reads_as_failed_to_its_text() {
     let (wake, woken) = crossbeam_channel::bounded::<()>(1);
-    let client = Arc::new(Client::new(Box::new(Quiet), woken));
+    let client = Arc::new(Dispatcher::new(Box::new(Quiet), woken));
     let run = Run::start(&client, prompt).expect("started");
     drop(wake);
     let text = within_five_seconds(move || run.text());

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use app::{Model, PermissionMode, Sdk, SessionId};
+use app::{Client, Model, PermissionMode, SessionId};
 use crossbeam_channel::{Receiver, Sender};
 
 use super::ask::Pending;
@@ -17,7 +17,7 @@ use super::workers::Workers;
 pub use super::msg::Msg;
 
 pub struct App {
-    pub sdk: Sdk,
+    pub client: Client,
     pub cwd: PathBuf,
     pub session: SessionState,
     pub transcript: Transcript,
@@ -37,11 +37,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(sdk: Sdk, cwd: PathBuf, wanted: Option<String>, mode: Option<PermissionMode>) -> Self {
+    pub fn new(client: Client, cwd: PathBuf, wanted: Option<String>, mode: Option<PermissionMode>) -> Self {
         let (tx, rx) = crossbeam_channel::unbounded();
-        let saver = super::settings::Saver::start(&sdk);
+        let saver = super::settings::Saver::start(&client);
         let mut app = Self {
-            sdk,
+            client,
             cwd,
             session: SessionState::new(wanted, mode),
             transcript: Transcript::default(),
@@ -73,19 +73,19 @@ impl App {
 
     pub(super) fn load(&mut self, skills: bool) {
         self.catalog.loading = true;
-        let (sdk, tx, cwd) = (self.sdk.clone(), self.tx.clone(), self.cwd.clone());
+        let (client, tx, cwd) = (self.client.clone(), self.tx.clone(), self.cwd.clone());
         std::thread::spawn(move || {
-            if let Err(error) = sdk.register_peer(&cwd) {
+            if let Err(error) = client.register_peer(&cwd) {
                 tracing::debug!(%error, "other sessions cannot reach this one yet");
             }
-            let read = sdk.settings().map_err(|error| error.to_string());
+            let read = client.settings().map_err(|error| error.to_string());
             let (settings, unreadable) = super::settings::or_reported(read);
             if let Some(told) = unreadable {
                 let _ = tx.send(Msg::Error(told));
             }
-            let models = sdk.models().map_err(|error| error.to_string());
+            let models = client.models().map_err(|error| error.to_string());
             let _ = tx.send(Msg::Ready { models, settings });
-            if skills && let Ok(found) = sdk.skills(&cwd) {
+            if skills && let Ok(found) = client.skills(&cwd) {
                 let _ = tx.send(Msg::Skills(found.into_iter().map(|s| (s.name, s.description)).collect()));
             }
         });
@@ -121,10 +121,10 @@ impl App {
         self.ui.quitting()
     }
 
-    pub(super) fn spawn(&self, work: impl FnOnce(&Sdk) -> Msg + Send + 'static) {
-        let (sdk, tx) = (self.sdk.clone(), self.tx.clone());
+    pub(super) fn spawn(&self, work: impl FnOnce(&Client) -> Msg + Send + 'static) {
+        let (client, tx) = (self.client.clone(), self.tx.clone());
         self.workers.run(move || {
-            let _ = tx.send(work(&sdk));
+            let _ = tx.send(work(&client));
         });
     }
 }

@@ -19,7 +19,7 @@ fn gain(app: &mut App, _argument: Option<String>) {
     if !super::on(app, OUTPUT_SAVINGS) {
         return app.transcript.notice(turned_off());
     }
-    app.spawn(|sdk| match sdk.output_savings() {
+    app.spawn(|client| match client.output_savings() {
         Ok(savings) => Msg::Notice(report(&savings)),
         Err(error) => Msg::Error(error.to_string()),
     });

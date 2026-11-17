@@ -13,7 +13,7 @@ pub fn start(app: &mut App, command: String) {
         output: None,
     });
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| Msg::Shell { id, result: run(sdk, &cwd, &command), command });
+    app.spawn(move |client| Msg::Shell { id, result: run(client, &cwd, &command), command });
 }
 
 pub fn finished(app: &mut App, id: &str, command: String, result: Result<(String, bool), String>) {
@@ -31,8 +31,8 @@ pub fn finished(app: &mut App, id: &str, command: String, result: Result<(String
 
 pub use domain::conversation::with_shell as with_context;
 
-fn run(sdk: &app::Sdk, cwd: &Path, command: &str) -> Result<(String, bool), String> {
-    sdk.run_typed(cwd, command).map_err(|error| error.to_string())
+fn run(client: &app::Client, cwd: &Path, command: &str) -> Result<(String, bool), String> {
+    client.run_typed(cwd, command).map_err(|error| error.to_string())
 }
 
 #[cfg(all(test, unix))]
@@ -44,9 +44,9 @@ mod tests {
         let (data, dir) = (tempfile::tempdir().expect("data"), tempfile::tempdir().expect("dir"));
         std::fs::write(dir.path().join("a.txt"), "x").expect("write");
         let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
-        let sdk = super::super::tests::sdk(&engine, data.path());
-        assert_eq!(run(&sdk, dir.path(), "ls"), Ok(("a.txt".to_owned(), false)));
-        assert_eq!(run(&sdk, dir.path(), "echo oops >&2; exit 3"), Ok(("oops".to_owned(), true)));
+        let client = super::super::tests::client(&engine, data.path());
+        assert_eq!(run(&client, dir.path(), "ls"), Ok(("a.txt".to_owned(), false)));
+        assert_eq!(run(&client, dir.path(), "echo oops >&2; exit 3"), Ok(("oops".to_owned(), true)));
     }
 
     #[test]

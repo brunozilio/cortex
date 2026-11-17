@@ -29,7 +29,7 @@ fn load_once(app: &mut App) {
         return;
     }
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.flags(&cwd) {
+    app.spawn(move |client| match client.flags(&cwd) {
         Ok(listed) => remember(&listed),
         Err(_) => Msg::Nothing,
     });
@@ -50,10 +50,10 @@ fn run(app: &mut App, argument: Option<String>) {
         Err(error) => return app.transcript.notice(error),
     };
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| {
+    app.spawn(move |client| {
         let listed = match &toggle {
-            Some((name, on)) => sdk.set_flag(&cwd, name, *on),
-            None => sdk.flags(&cwd),
+            Some((name, on)) => client.set_flag(&cwd, name, *on),
+            None => client.flags(&cwd),
         };
         match listed {
             Ok(listed) => {

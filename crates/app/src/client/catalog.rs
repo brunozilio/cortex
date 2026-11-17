@@ -6,9 +6,9 @@ use domain::catalog::Listed;
 use domain::trace::Record;
 
 use crate::client::features::unexpected;
-use crate::{Error, Sdk};
+use crate::{Client, Error};
 
-impl Sdk {
+impl Client {
     pub fn sessions(&self) -> Result<Vec<Listed>, Error> {
         match self.ask_sessions(SessionsRequest::List)? {
             SessionsReply::Listed(listed) => Ok(listed),

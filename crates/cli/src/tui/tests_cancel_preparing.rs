@@ -6,7 +6,7 @@ use domain::SessionId;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::app::{App, Msg};
-use super::tests::{SETTLES_WITHIN, press, screen, sdk, sdk_without, type_text, until};
+use super::tests::{SETTLES_WITHIN, client, client_without, press, screen, type_text, until};
 use super::transcript::Entry;
 
 fn engine() -> FakeEngine {
@@ -61,7 +61,7 @@ fn esc_while_a_prompt_reads_its_files_takes_it_back_and_the_late_result_sends_no
     let data = tempfile::tempdir().expect("data");
     std::fs::write(data.path().join("notes.txt"), "the notes").expect("write");
     let engine = engine();
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     send(&mut app, "hello");
     until(&mut app, |app| !app.busy() && prompts(&engine).len() == 1);
@@ -91,8 +91,8 @@ fn esc_while_a_prompt_reads_its_files_takes_it_back_and_the_late_result_sends_no
 fn ctrl_c_while_the_first_prompt_waits_for_the_git_check_takes_it_back_and_the_check_runs_again_next_time() {
     let folder = tempfile::tempdir().expect("folder");
     let engine = engine();
-    let sdk = sdk_without(&engine, folder.path(), &[domain::features::MEMORY_SEARCH]);
-    let mut app = App::new(sdk, folder.path().into(), None, Some(PermissionMode::Ask));
+    let client = client_without(&engine, folder.path(), &[domain::features::MEMORY_SEARCH]);
+    let mut app = App::new(client, folder.path().into(), None, Some(PermissionMode::Ask));
     until(&mut app, |app| app.session.is_some());
 
     send(&mut app, "build a gateway");

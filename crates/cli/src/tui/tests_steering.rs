@@ -6,7 +6,7 @@ use domain::{SessionId, ToolCall};
 use ratatui::crossterm::event::KeyCode;
 
 use super::app::App;
-use super::tests::{press, screen, sdk, type_text, until};
+use super::tests::{client, press, screen, type_text, until};
 
 fn script() -> Vec<EngineEvent> {
     vec![
@@ -25,7 +25,7 @@ fn a_message_typed_while_the_agent_works_reaches_it_in_the_same_run() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script()).with_delay(Duration::from_millis(60));
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "read the code");
     press(&mut app, KeyCode::Enter);
@@ -49,7 +49,7 @@ fn up_takes_back_a_message_not_handed_over_yet_to_edit_it() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script()).with_delay(Duration::from_millis(60)).holding_steers();
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "read the code");
     press(&mut app, KeyCode::Enter);
@@ -70,7 +70,7 @@ fn the_bell_rings_when_the_agent_finishes_while_the_terminal_is_elsewhere() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "read the code");
     press(&mut app, KeyCode::Enter);
@@ -87,7 +87,7 @@ fn the_bell_rings_when_the_agent_finishes_while_the_terminal_is_elsewhere() {
 fn a_long_paste_shows_folded_and_goes_whole() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "explain ");
     let log = "line 1\nline 2\nline 3\nline 4\nline 5\nline 6";
@@ -104,7 +104,7 @@ fn ctrl_r_finds_an_earlier_prompt_and_esc_twice_opens_rewind() {
     use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     for prompt in ["run the tests", "explain main"] {
         type_text(&mut app, prompt);
@@ -143,7 +143,7 @@ fn a_message_the_engine_never_took_is_sent_as_the_next_prompt() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("keyed:scripted", "Scripted");
     let engine = FakeEngine::new(vec![model], script()).with_delay(Duration::from_millis(30)).without_steering();
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "read the code");
     press(&mut app, KeyCode::Enter);
@@ -159,7 +159,7 @@ fn a_message_the_engine_never_took_is_sent_as_the_next_prompt() {
 fn the_arrows_walk_past_a_recalled_command_until_it_is_edited() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app.prompt.input.set_history(vec!["first".into(), "/help".into(), "last".into()]);
 

@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use self::conversations::{Conversations, Kept, Resume};
 use super::run::ThisRun;
 use super::{Agent, Ending, MAX_TURNS};
-use crate::agent_runtime::Guard;
+use crate::agent_runtime::WorktreeLease;
 use crate::control::Control;
 use crate::model::{ModelError, ToolSpec, TurnRequest};
 use crate::tools::names::{self, ToolName};
@@ -206,11 +206,11 @@ impl Agent<'_> {
         planned: &Planned,
         child_workspace: &mut Workspace,
         run: &ThisRun,
-    ) -> Result<(Guard, String), Outcome> {
+    ) -> Result<(WorktreeLease, String), Outcome> {
         let config = &planned.config;
         let setup = crate::agent_runtime::prepare(config, chosen.name(), child_workspace)
             .map_err(|error| Outcome::error(format!("Agent setup failed: {error}")))?;
-        let runtime = Guard::new(setup);
+        let runtime = WorktreeLease::new(setup);
         let setup = &runtime.setup;
         child_workspace.cwd = setup.cwd.clone();
         if config.worktree {

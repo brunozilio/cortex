@@ -115,7 +115,7 @@ mod tests_steering;
 
 use std::path::PathBuf;
 
-use ::app::{Headless, PermissionMode, Sdk, SessionId};
+use ::app::{Client, Headless, PermissionMode, SessionId};
 
 pub use app::App;
 pub use settings::last_session;
@@ -135,7 +135,7 @@ pub struct Start {
 }
 
 pub fn run(
-    sdk: Sdk,
+    client: Client,
     cwd: PathBuf,
     model: Option<String>,
     mode: Option<PermissionMode>,
@@ -144,7 +144,7 @@ pub fn run(
     start: Start,
 ) -> std::io::Result<()> {
     let (inline, pick) = (start.inline, start.pick);
-    let mut app = App::new(sdk, cwd, model, mode).resuming(start.resume.clone());
+    let mut app = App::new(client, cwd, model, mode).resuming(start.resume.clone());
     prepare(&mut app, notice, start);
     let mut terminal = inline::terminal(inline);
     let mut screen = Some(Screen::enter(!inline));
@@ -173,7 +173,7 @@ fn prepare(app: &mut App, notice: Option<String>, start: Start) {
 
 fn open_channels(app: &App, names: Vec<String>) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.open_channels(&cwd, &names) {
+    app.spawn(move |client| match client.open_channels(&cwd, &names) {
         Ok((opened, failed)) if failed.is_empty() => app::Msg::Notice(format!("Channels open: {}.", opened.join(", "))),
         Ok((_, failed)) => app::Msg::Error(format!("Some channels did not open:\n{}", failed.join("\n"))),
         Err(error) => app::Msg::Error(error.to_string()),

@@ -1,6 +1,6 @@
 # 0002 The agent loop as an explicit state machine
 
-Status: Accepted, 2026-11-16
+Status: Implemented, 2026-11-17 (accepted 2026-11-16): the run's phases are in `crates/agent-engine/src/engine/phases/`, `TurnState` and `Next` in `crates/agent-engine/src/agent/turn/mod.rs`, the golden tests in `crates/agent-engine/tests/golden.rs`
 
 ## Context
 
@@ -19,7 +19,7 @@ A run becomes a sequence of typed phases, and the loop becomes a state machine.
 - Run phases, each a function with its own input and output type: `load_session`, `brief`, `equip`, `apply_policy`, `prepare_runtime`, `open`, `drive`, `close`.
 - A `TurnState` with named transitions replaces `Agent::run_loop`: awaiting the model, awaiting a permission answer, running tools, finishing.
 - Each transition is the point where the conversation is persisted (`0006-one-persistence-pattern.md`).
-- Before any of this moves, phase 7.0 adds transcript replay ("golden") tests driven through the engine's public start call with a scripted model: a turn with a tool, compaction, fallback, refusal, a blocking `Stop` hook, structured output, worktree.
+- Before any of this moves, transcript replay ("golden") tests are added, driven through the engine's public start call with a scripted model: a turn with a tool, compaction, fallback, refusal, a blocking `Stop` hook, structured output, worktree.
 - `impl Agent` is regrouped from 19 files into about five cohesive modules (`0009-function-size-lint.md`).
 
 ## Consequences

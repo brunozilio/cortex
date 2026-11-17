@@ -21,10 +21,10 @@ fn bashes(app: &mut App, argument: Option<String>) {
         Some(("kill", id)) if !id.trim().is_empty() => Some(id.trim().to_owned()),
         Some(_) => return app.transcript.notice("/bashes lists them; /bashes kill <id> stops one."),
     };
-    app.spawn(move |sdk| {
+    app.spawn(move |client| {
         let found = match &kill {
-            Some(id) => sdk.kill_background_command(id),
-            None => sdk.background_commands(),
+            Some(id) => client.kill_background_command(id),
+            None => client.background_commands(),
         };
         match found {
             Ok(commands) => Msg::Notice(listed(&commands)),

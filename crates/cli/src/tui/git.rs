@@ -4,12 +4,12 @@ pub use domain::changes::{Changes, DiffScope as Scope};
 
 use super::app::{App, Msg};
 
-pub fn changes(sdk: &app::Sdk, cwd: &Path) -> Result<Changes, String> {
-    changes_in(sdk, cwd, Scope::Uncommitted)
+pub fn changes(client: &app::Client, cwd: &Path) -> Result<Changes, String> {
+    changes_in(client, cwd, Scope::Uncommitted)
 }
 
-pub fn changes_in(sdk: &app::Sdk, cwd: &Path, scope: Scope) -> Result<Changes, String> {
-    sdk.changes(cwd, scope).map_err(|error| error.to_string())
+pub fn changes_in(client: &app::Client, cwd: &Path, scope: Scope) -> Result<Changes, String> {
+    client.changes(cwd, scope).map_err(|error| error.to_string())
 }
 
 pub(super) fn open_diffs(app: &mut App) {
@@ -19,12 +19,12 @@ pub(super) fn open_diffs(app: &mut App) {
 
 pub(super) fn show_changes(app: &App) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| Msg::Changes(changes(sdk, &cwd)));
+    app.spawn(move |client| Msg::Changes(changes(client, &cwd)));
 }
 
 pub(super) fn load_diffs(app: &App, scope: Scope) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| Msg::Diffs(scope, changes_in(sdk, &cwd, scope)));
+    app.spawn(move |client| Msg::Diffs(scope, changes_in(client, &cwd, scope)));
 }
 
 pub(super) fn shown(app: &mut App, changes: Result<Changes, String>) {

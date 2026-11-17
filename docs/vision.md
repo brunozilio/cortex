@@ -28,7 +28,7 @@ These are the differentiators the code supports today. They are hypotheses to co
 
 ## Scope today
 
-The audit found about 34 feature flags, 17 of them named experimental and all on by default, and no rule for cutting scope. Phase 2.5 of the plan assigns every flag a destiny (fixed behaviour, experimental with an owner and off by default, or removed). Until that inventory lands, the split below is provisional.
+The audit found dozens of feature flags, most of them named experimental and all on by default, and no rule for cutting scope. `feature-flags.md` (written 2026-11-16) lists every flag and proposes a destiny for each (fixed behaviour, experimental with an owner and off by default, or removed); it is the place for how many there are. Until the owner decides on those proposals, the split below is provisional.
 
 Core:
 
@@ -40,9 +40,9 @@ Core:
 - Extension points: instruction files, rules, hooks, skills, custom agents, script tools, plugins, MCP servers (HTTP and stdio).
 - The local web page: trace of runs, console, user documentation, a terminal attached to a session.
 - Remote control: the same page installed on a phone as a progressive web app, through a self-hosted relay (`decisions/0012-remote-control-through-a-blind-relay.md`).
-- Subcommands: `login`, `logout`, `models`, `mcp`, `plugin`, `config`, `doctor`, `eval`.
+- Subcommands: `login`, `logout`, `models`, `mcp`, `plugin`, `remote`, `config`, `doctor`, `eval`.
 
-Experimental or undecided (to be classified in phase 2.5):
+Experimental or undecided (to be classified by the owner from `feature-flags.md`):
 
 - Named experimental in code: the write sandbox, the dependency guard, pull-request follow, the tree-sitter code map.
 - Listed by the audit as scope without a cut criterion: project memory with scorecard, seeds and optimisation; learning; schedules and loops; fleet (several live sessions in one terminal); MCP channels; the verification judge.

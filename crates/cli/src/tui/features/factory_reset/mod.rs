@@ -145,7 +145,7 @@ mod tests {
 
     fn app(data: &Path) -> (App, agent_engine::fake::FakeEngine) {
         let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
-        let app = App::new(crate::tui::tests::sdk(&engine, data), data.into(), None, None);
+        let app = App::new(crate::tui::tests::client(&engine, data), data.into(), None, None);
         (app, engine)
     }
 
@@ -184,7 +184,7 @@ mod tests {
         let model = app::Model::new("keyed:scripted", "Scripted");
         let engine =
             agent_engine::fake::FakeEngine::new(vec![model], script).with_delay(std::time::Duration::from_millis(60));
-        let mut app = App::new(crate::tui::tests::sdk(&engine, data), data.into(), None, None);
+        let mut app = App::new(crate::tui::tests::client(&engine, data), data.into(), None, None);
         crate::tui::tests::until(&mut app, |app| app.session.is_some());
         (app, engine)
     }

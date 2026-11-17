@@ -15,9 +15,9 @@ use domain::schedule::{Scheduled, When};
 use domain::suggested_rules::Suggestion;
 
 use crate::client::features::unexpected;
-use crate::{Error, Sdk};
+use crate::{Client, Error};
 
-impl Sdk {
+impl Client {
     pub fn run_typed(&self, cwd: &Path, command: &str) -> Result<(String, bool), Error> {
         match self.ask_shell(ShellRequest::Run { command: command.to_owned(), path: cwd.to_path_buf() })? {
             ShellReply::Ran { output, failed } => Ok((output, failed)),

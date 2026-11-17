@@ -29,7 +29,7 @@ pub use api::features::plugins::{Plugin, PluginsReply, PluginsRequest};
 pub use api::features::shell::BackgroundCommand;
 pub use api::{Backend, BackendError, Wake};
 pub use catalog::{InMemorySessionCatalog, SessionCatalog, SqliteSessionCatalog};
-pub use client::{Builder, Error, Headless, ProjectMemory, Run, RunControl, Sdk, Session, SignedIn, Spending};
+pub use client::{Builder, Client, Error, Headless, ProjectMemory, Run, RunControl, Session, SignedIn, Spending};
 pub use cloudflare::{CloudflareClient, CloudflareSignIn};
 pub use data_root::DataRoot;
 pub use db::Db;

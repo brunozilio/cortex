@@ -18,10 +18,10 @@ The lint counted lines in a file. It said nothing about cohesion or about the si
 
 - The file-length check is removed. File length is not a goal.
 - Function size and complexity are linted by clippy: `too_many_lines` with a threshold of 100 lines and `cognitive_complexity`, both configured in `clippy.toml` and enabled for the workspace. Since clippy runs with warnings denied, a function over the threshold fails the gate.
-- The known oversized functions carry an explicit `#[allow]`. That list only shrinks: a new allow is not an accepted way to pass the gate, and each allow is removed when its function is split (mostly in phase 7).
-- A type's `impl` is kept in a few cohesive modules. `impl Agent` goes from 19 files to about five; `impl App` is regrouped around sub-states in phase 9.
+- The known oversized functions carry an explicit `#[allow]`. That list only shrinks: a new allow is not an accepted way to pass the gate, and each allow is removed when its function is split (mostly with the state machine of `0002-agent-loop-state-machine.md`).
+- A type's `impl` is kept in a few cohesive modules. `impl Agent` goes from 19 files to about five; `impl App` is to be regrouped around sub-states (not scheduled as of 2026-11-17).
 
-This is phase 0.4 of the plan.
+As of 2026-11-17 the only allows left are on two test functions.
 
 ## Consequences
 
@@ -34,5 +34,5 @@ What gets worse:
 - Nothing mechanical stops a file from growing to a thousand lines of short functions; keeping modules cohesive is now a review judgement, not a check.
 - A line threshold on functions can be gamed the same way the file limit was, by slicing a function into helpers that only make sense together.
 - `cognitive_complexity` is a heuristic and will flag some clear `match` tables while passing some tangled code.
-- Until phase 7 lands, the allow list makes the largest functions exempt, so the worst offenders are the ones the lint does not check.
+- While the allow list was long, it made the largest functions exempt, so the worst offenders were the ones the lint did not check.
 - Regrouping `impl` blocks is pure movement across many files and conflicts with any other change to those files.

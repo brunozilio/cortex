@@ -39,6 +39,7 @@ cortex plugin                            # plugins: list, install, update, remov
 cortex config                            # read or change the settings: list, get, set, unset
 cortex doctor                            # check this installation in this folder
 cortex eval                              # run .cortex/evals/<name>/case.json and score them
+cortex remote                            # remote control from a phone: status, up, relay, pair, devices, revoke
 ```
 
 In the chat: Enter sends, Alt+Enter (or Ctrl+J) adds a line, Esc
@@ -66,6 +67,13 @@ lists what was found.
 - `CORTEX_CONSOLE_DIR`: a folder holding an already built web page (with an `index.html`) to serve instead of the embedded one.
 - `CORTEX_DISABLE_AUTO_MEMORY`: `1`, `true` or `yes` turns off the persistent memory of custom agents.
 - `CORTEX_SECRETS`: `keychain` (any case) moves the key of `secrets.json` from `secrets.key` into the system keychain; unset, it stays in the file (a rebuilt binary has a new signature, and macOS would ask for the keychain password at every start).
+- `CORTEX_STREAM_IDLE_SECONDS`: how many seconds a model's stream may stay silent before the request is given up; the default is 300.
+- `CORTEX_OTLP_ENDPOINT`: an OpenTelemetry collector (`http://localhost:4318`) each finished run is sent to as OTLP/HTTP JSON; unset, nothing is exported.
+- `CORTEX_OTLP_HEADERS`: `name=value` pairs, separated by commas, added to each export request.
+
+Set for others: `CORTEX_PROJECT_DIR` (the project folder, for command
+hooks) and `${CORTEX_PLUGIN_ROOT}` (replaced with a plugin's folder in its
+MCP servers, language servers and hooks).
 
 Also read: `SHELL`, `VISUAL`, `EDITOR`, `HOME`, `COLORFGBG`, `COLORTERM`
 and `XDG_CONFIG_HOME`.
@@ -76,6 +84,7 @@ and `XDG_CONFIG_HOME`.
 - [docs/GLOSSARY.md](docs/GLOSSARY.md): the project's vocabulary.
 - [docs/architecture.md](docs/architecture.md): crates, request path, data on disk, threading.
 - [docs/decisions/](docs/decisions/): the decision records.
+- [docs/feature-flags.md](docs/feature-flags.md): every feature flag, what it gates and what to do with it.
 - [docs/threat-model.md](docs/threat-model.md): assets, actors, trust boundaries, known gaps.
 
 ## Where data lives
@@ -108,15 +117,15 @@ is only in `app.db`, which the older binary does not read.
 | `agent-engine` | The agent loop, tools, permissions, hooks, sub-agents, skill/agent discovery, MCP, sessions, compaction and usage metering. It reaches models through `llm-providers`. |
 | `app` | The application API, in process: the CLI's client (sessions, runs), `ClientCommand` / `ServerEvent`, and the command handler behind them: runs, memory, settings, providers, secrets. |
 | `llm-providers` | Talking to a model: the `Provider` trait, one folder per provider, the model client that sends requests over HTTP and reads the streams, the wires, the transcript types, credentials, OAuth, sign-in, catalogs, declared providers and model-family vendor folders. The subscription providers are a Cargo feature, `subscription-providers`, on by default. |
-| `cli` | The `cortex` binary: terminal chat (ratatui), `-p`, `login`, `models`, `mcp`, `config`, `doctor`. |
+| `cli` | The `cortex` binary: terminal chat (ratatui), `-p`, `login`, `logout`, `models`, `mcp`, `plugin`, `remote`, `config`, `doctor`, `eval`. |
 | `brand` | The product's name and command, from `brand.toml`. |
 | `language-servers` | Runs language servers for the `LSP` tool and edit diagnostics: client, pool, first-use installs. |
 | `code-map` | Experimental tree-sitter index of a repository's functions, types and callers, ranked against a prompt. |
 | `platform` | Per-OS IO: child processes and their trees, private files, stored documents (lock, atomic replace, corrupt set aside), data folders, the system keychain; the process's one async runtime and the run's `Stop` (cancellation token plus flag). |
 | `content` | Prompts, built-in skills and agents, embedded at build time. |
 | `script` | The QuickJS runtime for JavaScript tools, skills and providers. |
-| `console` | The live trace page behind `/trace` and `/console`: serves the browser app on localhost (whatever `cargo run -p xtask -- web` last built into `web/dist`, embedded in the binary at compile time) with the report, the sessions and their updates as server-sent events. |
-| `page` | The built web page (`web/dist`) embedded at compile time, served by `console` on the machine and by `relay` to phones. |
+| `console` | The live trace page behind `/trace` and `/console`: serves the browser app on localhost (the page `page` embeds) with the report, the sessions and their updates as server-sent events. |
+| `page` | The built web page: its `build.rs` embeds whatever `cargo run -p xtask -- web` last built into `web/dist` (nothing when it is absent), served by `console` on the machine and by `relay` to phones. |
 | `tunnel` | The remote control's wire: relay frames, machine and device keys, pairing links, the Noise handshake, and the requests a phone sends through it. |
 | `relay` | The remote control's self-hosted server: serves the page as an installable web app and forwards encrypted frames between a phone and its machine, without reading them; also as a Cloudflare Worker (`worker/relay.js`) that `remote up` publishes. |
 

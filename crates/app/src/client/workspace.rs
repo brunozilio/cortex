@@ -4,9 +4,9 @@ use crate::api::features::workspace::{WorkspaceOp, WorkspaceReply, WorkspaceRequ
 use domain::changes::{Changes, DiffScope};
 
 use crate::client::features::unexpected;
-use crate::{Error, Sdk};
+use crate::{Client, Error};
 
-impl Sdk {
+impl Client {
     pub fn changes(&self, cwd: &Path, scope: DiffScope) -> Result<Changes, Error> {
         match self.workspace(cwd, WorkspaceOp::Changes { scope })? {
             WorkspaceReply::Changes(changes) => Ok(changes),

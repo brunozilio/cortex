@@ -6,7 +6,7 @@ use app::{EngineEvent, Model};
 use domain::SessionId;
 
 use super::app::{App, Msg};
-use super::tests::{screen, sdk, until};
+use super::tests::{client, screen, until};
 use super::transcript::Entry;
 
 fn script() -> Vec<EngineEvent> {
@@ -30,7 +30,7 @@ fn prompts(engine: &FakeEngine) -> Vec<String> {
 fn a_harness_notice_is_shown_to_the_user_and_never_sent_to_the_agent() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let told = "keys cannot be kept on this machine: no data folder".to_owned();
     app.message(Msg::Notices(Notices { for_user: vec![told], for_agent: Vec::new() }));
@@ -55,7 +55,7 @@ fn a_database_that_cannot_be_opened_is_said_once_on_screen_even_while_a_run_goes
     std::fs::create_dir(data.path().join("app.db")).expect("a folder where the database should be");
     let slow = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script())
         .with_delay(Duration::from_millis(150));
-    let mut app = App::new(sdk(&slow, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&slow, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     app.send("hello".into());
     assert!(app.busy());
@@ -81,7 +81,7 @@ fn a_database_that_cannot_be_opened_is_said_once_on_screen_even_while_a_run_goes
 fn events_that_reached_the_inbox_are_sent_as_a_turn_when_idle() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
-    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let notice = domain::inbox::Notice::new("monitor bash_4", "ERROR: disk full");
     app.message(Msg::Notices(Notices { for_user: Vec::new(), for_agent: vec![notice] }));

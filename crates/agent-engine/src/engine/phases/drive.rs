@@ -38,7 +38,7 @@ impl Job {
                 session: &opened.session,
                 extra: &opened.extra,
             };
-            match mover.to(relocation, &mut opened.workspace, &mut opened.worktree.guard) {
+            match mover.to(relocation, &mut opened.workspace, &mut opened.worktree.lease) {
                 Ok(moved) => {
                     opened.template.system = moved.system;
                     emit(EngineEvent::Moved(moved.cwd));

@@ -1,10 +1,10 @@
 # Architecture
 
-How the pieces fit today, 2026-11-16, before the restructuring plan. The "Target" section at the end says where each part is going. The product is written as "the app", its binary as `<command>`; terms in use are defined in `GLOSSARY.md`.
+How the pieces fit, as of 2026-11-17. The "Target" section at the end lists the decision records that change this document and which of them are done. The product is written as "the app", its binary as `<command>`; terms in use are defined in `GLOSSARY.md`.
 
 ## Crates
 
-Twelve crates. Dependencies are one-way. These are the real non-dev edges; `xtask lint` checks them against the manifests.
+Every folder under `crates/` is a crate; the README's crate table names each one. Dependencies are one-way. These are the real non-dev edges; `xtask lint` checks them against the manifests.
 
 ```
 cli              -> app, console, relay, page, content, platform, domain, brand
@@ -56,7 +56,7 @@ The main line is `cli -> app -> agent-engine -> llm-providers -> domain`.
 
 `command` (slash commands, which reach into every area) and `features` (the flags every area is gated by) stay at the top. The crate root re-exports each module under its old name (`domain::events` is `domain::run::events`), so callers did not change with the grouping.
 
-`cli` reaches `agent-engine`, and the handler-side types of `app`, only in tests. Four crates (agent-engine, app, cli, llm-providers) register their vendors, providers, wires, builtin tools and features in written `mod` lines and explicit lists, each pinned by a test; no `build.rs` scans a folder.
+`cli` reaches `agent-engine`, and the handler-side types of `app`, only in tests. `agent-engine`, `app`, `cli` and `llm-providers` register their vendors, providers, wires, builtin tools and features in written `mod` lines and explicit lists, each pinned by a test; no `build.rs` scans a folder.
 
 ## Request path: from a keypress to the model and back
 
@@ -72,7 +72,7 @@ Everything below is one process. The seam between terminal and engine is channel
 8. The model client (`crates/llm-providers/src/model/`) asks the provider for base URL, headers and body shape, encodes the request with the model's wire, and sends it over HTTP. `ModelApi::turn` and `Http::post_streaming` are async and take the run's cancellation token; the loop, still synchronous, waits on them through `BlockingTurn::turn_blocking`. The stream is read with async IO line by line as server-sent events, each wait racing the token and the idle deadline; each delta is passed back through a callback.
 9. Tool calls in the reply go through `Agent::call` (`crates/agent-engine/src/agent/dispatch/mod.rs`): `PreToolUse` hook, permission decision (`PolicyEngine::decide` in `crates/domain/src/safety/permission/` over the effects the tool declares, with hooks and the question around it in `crates/agent-engine/src/agent/permission/`), the tool itself, `PostToolUse` hook, redaction, persistence of large output. A permission question is emitted as an `Asked` event and the run waits until the handle's `answer` is called or the run's token is cancelled, whichever comes first.
 10. Every event leaves through the `RunGate` (`crates/agent-engine/src/boundary/gate.rs`), which feeds the trace recorder and the backend's sink. The sink updates the session catalog and pushes a `ServerEvent::Run` into the outbox (`crates/app/src/handler/outbox.rs`).
-11. The `sdk-dispatch` thread drains the outbox and routes each run event to that run's channel. A thread in the TUI iterates the run and forwards each event as a message to the UI thread.
+11. The client's `client-dispatch` thread (its `Dispatcher`, `crates/app/src/client/dispatch.rs`) drains the outbox and routes each run event to that run's channel. A thread in the TUI iterates the run and forwards each event as a message to the UI thread.
 12. `App::event` (`crates/cli/src/tui/turn_flow.rs`) handles the events that change UI state and hands the rest to `Transcript::apply` in `domain`. The next frame redraws.
 
 Calls that are not runs (list models, settings, a feature) use the same path and come back as a `ServerEvent::Reply` carrying the id of the request it answers.
@@ -136,10 +136,10 @@ Housekeeping: `<hash>.lock` is removed when the run lets go of the session (unli
 
 ## Threading model
 
-The terminal client, the client library and the backend are operating-system threads, synchronous code and channels. The engine runs on one Tokio runtime (`decisions/0007-one-async-runtime.md`, stages 8.1 and 8.2 done, 8.3 done but for background sub-agents and the parallel reading batch).
+The terminal client, the client library and the backend are operating-system threads, synchronous code and channels. The engine runs on one Tokio runtime (`decisions/0007-one-async-runtime.md`, stages 1 and 2 done, stage 3 done but for background sub-agents and the parallel reading batch).
 
 - UI: one thread runs the TUI loop and wakes at least every 80 ms. Work off the UI thread is one new thread per task, reporting back with a message. A saver thread persists UI state; a watchdog thread checks the loop is not stuck.
-- Client: one `sdk-dispatch` thread per client, woken by the backend or every 250 ms.
+- Client: one `client-dispatch` thread per `app::Client`, woken by the backend or every 250 ms.
 - Backend: two worker threads, each handling its queue in series and each command inside a panic guard; extra threads for provider sign-in, model catalog discovery and MCP sign-in.
 - Engine runtime (`crates/platform/src/runtime.rs`): one multi-threaded Tokio runtime per process, built on first use, with between two and four workers (`engine-worker`, as many as the machine has cores up to four) and at most 256 blocking threads (`engine-blocking`). `Engine` holds its handle; model HTTP and the engine share it. The console server keeps its own two-worker runtime.
 - Runs: a run is a task on the engine runtime; its agent loop is still synchronous and runs on a blocking thread of that runtime (`engine/task.rs`). A panic in it is the task's error and becomes the run's `Failed`. Synchronous code waits on async code with `platform::runtime::block_on`, which drives the future on the waiting thread; a second wait started inside one is served on a short-lived thread instead of deadlocking.
@@ -160,20 +160,24 @@ Every process the application starts and keeps a handle on is a `platform::child
 
 ## Target
 
-The plan runs in eleven phases on `main`. The decisions that change this document:
+Status as of 2026-11-17. Every record in `decisions/` has a row here (`xtask lint` checks it); a record's own status line is the authority. The decisions that change this document:
 
 | Change | Record |
 |---|---|
 | A session object lives in the engine across runs; MCP servers are pooled (done) | `decisions/0001-long-lived-session.md` |
-| `Job::run`, `converse` and `run_loop` become typed phases and a `TurnState` | `decisions/0002-agent-loop-state-machine.md` |
+| `Job::run`, `converse` and `run_loop` become typed phases and a `TurnState` (done) | `decisions/0002-agent-loop-state-machine.md` |
 | Tools declare effects in Rust; one policy engine; a real shell parser (done) | `decisions/0003-effects-based-permission-policy.md` |
 | An untrusted project folder loads nothing that executes (done) | `decisions/0004-workspace-trust.md` |
 | `sdk`, `protocol` and `backend` merged into one typed `app` crate with correlation ids (done) | `decisions/0005-typed-application-api.md` |
-| One document helper, SQLite for catalog and memory, transcript split from trace and saved per transition | `decisions/0006-one-persistence-pattern.md` |
-| One Tokio runtime in the engine with structured cancellation (8.1 and 8.2 done, 8.3 in part) | `decisions/0007-one-async-runtime.md` |
+| One document helper, SQLite for catalog and memory, transcript split from trace and saved per transition, the secrets key in the keychain (done) | `decisions/0006-one-persistence-pattern.md` |
+| One Tokio runtime in the engine with structured cancellation (stages 1 and 2 done, stage 3 in part) | `decisions/0007-one-async-runtime.md` |
 | The owner concept is removed; on-disk names stay as they are | `decisions/0008-single-user-local-product.md` |
 | Function-size lint instead of a file-length limit; `impl` blocks regrouped | `decisions/0009-function-size-lint.md` |
 | Rationale lives in `docs/` | `decisions/0010-comments-stay-out-of-code.md` |
+| Code mode: the agent scripts its tools through a REPL (behind `experimental-code-mode`) | `decisions/0011-code-mode.md` |
+| Remote control: the console on a phone through a blind relay (`tunnel`, `relay`, `page`; in progress) | `decisions/0012-remote-control-through-a-blind-relay.md` |
+| Absolute paths, reads outside the project and MCP tools marked read-only stop asking | `decisions/0013-reads-that-do-not-ask.md` |
+| A hand-written OTLP/HTTP JSON exporter sends each finished run's trace | `decisions/0014-hand-written-otlp-export.md` |
 
 Provider folders, the model client, wires and the transcript types have moved from `agent-engine` to `llm-providers` (done).
 

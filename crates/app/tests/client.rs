@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
-use app::{Decision, EngineEvent, Error, Image, MemoryKind, Model, ModelProvider, Sdk};
+use app::{Client, Decision, EngineEvent, Error, Image, MemoryKind, Model, ModelProvider};
 use app::{InMemorySecretStore, LocalServices};
 use domain::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId};
 use serde_json::json;
@@ -29,18 +29,18 @@ fn services(engine: &FakeEngine) -> LocalServices {
     services
 }
 
-fn build(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
-    Sdk::builder().data_dir(data).services(services(engine)).build().expect(brand::COMMAND)
+fn build(engine: &FakeEngine, data: &std::path::Path) -> Client {
+    Client::builder().data_dir(data).services(services(engine)).build().expect(brand::COMMAND)
 }
 
 #[test]
 fn a_session_streams_a_run_and_the_next_prompt_resumes_it() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], script(Vec::new()));
-    let sdk = build(&engine, data.path());
-    assert_eq!(sdk.models().expect("models").iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["scripted"]);
+    let client = build(&engine, data.path());
+    assert_eq!(client.models().expect("models").iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["scripted"]);
 
-    let session = sdk.session(data.path(), model());
+    let session = client.session(data.path(), model());
     assert_eq!(session.send("hi").expect("run").text().expect("text"), "Hello there");
     assert_eq!(session.id(), Some(SessionId("s-1".into())));
     let events: Vec<EngineEvent> = session.send("again").expect("run").collect();
@@ -56,9 +56,9 @@ fn a_session_streams_a_run_and_the_next_prompt_resumes_it() {
 fn images_sent_with_a_prompt_reach_the_run() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], script(Vec::new()));
-    let sdk = build(&engine, data.path());
+    let client = build(&engine, data.path());
     let image = Image::from_bytes(b"\x89PNG\r\n\x1a\n pixels").expect("ok").expect("png");
-    let session = sdk.session(data.path(), model());
+    let session = client.session(data.path(), model());
     session.send_with_images("what is this?", vec![image.clone()]).expect("run").text().expect("text");
     assert_eq!(engine.requests()[0].prompt.images, [image]);
 }
@@ -72,8 +72,8 @@ fn a_question_is_answered_through_the_run() {
     };
     let engine = FakeEngine::new(vec![model()], script(vec![EngineEvent::Asked(ask)]))
         .with_delay(std::time::Duration::from_millis(40));
-    let sdk = build(&engine, data.path());
-    let mut run = sdk.session(data.path(), model()).send("list files").expect("run");
+    let client = build(&engine, data.path());
+    let mut run = client.session(data.path(), model()).send("list files").expect("run");
     while let Some(event) = run.next_event() {
         if let EngineEvent::Asked(ask) = event {
             run.answer(ask.id, Decision::Allow).expect("answer");
@@ -91,8 +91,8 @@ fn a_question_is_answered_through_the_run() {
 fn memory_can_be_written_listed_and_searched() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], Vec::new());
-    let sdk = build(&engine, data.path());
-    let memory = sdk.memory(data.path());
+    let client = build(&engine, data.path());
+    let memory = client.memory(data.path());
     assert!(memory.list().expect("list").is_empty());
     memory.remember(MemoryKind::Semantic, "The renderer uses wgpu.", &["gpu"]).expect("remember");
     let listed = memory.remember(MemoryKind::Procedural, "Run tests with nextest.", &[]).expect("remember");
@@ -111,8 +111,8 @@ fn memory_can_be_written_listed_and_searched() {
 fn memory_is_optimized_by_a_run() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
-    let sdk = build(&engine, data.path());
-    let memory = sdk.memory(data.path());
+    let client = build(&engine, data.path());
+    let memory = client.memory(data.path());
     memory.remember(MemoryKind::Semantic, "The renderer uses wgpu.", &[]).expect("remember");
     let mut run = memory.optimize(model()).expect("optimize");
     while run.next_event().is_some() {}
@@ -126,10 +126,10 @@ fn providers_are_listed_and_a_bad_key_is_refused() {
     let data = tempfile::tempdir().expect("data");
     agent_engine::providers::install_testing();
     let engine = FakeEngine::new(vec![model()], Vec::new());
-    let sdk = build(&engine, data.path());
-    assert!(sdk.providers().expect("providers").iter().all(|p| p.account.is_none()));
-    assert!(sdk.connect_provider(ModelProvider::new("keyed"), "  ").is_err());
-    let listed = sdk.connect_provider(ModelProvider::new("keyed"), "sk-key-0123456789abcd").expect("connect");
+    let client = build(&engine, data.path());
+    assert!(client.providers().expect("providers").iter().all(|p| p.account.is_none()));
+    assert!(client.connect_provider(ModelProvider::new("keyed"), "  ").is_err());
+    let listed = client.connect_provider(ModelProvider::new("keyed"), "sk-key-0123456789abcd").expect("connect");
     assert!(listed.iter().any(|p| p.provider == ModelProvider::new("keyed") && p.account.is_some()));
 }
 
@@ -137,10 +137,10 @@ fn providers_are_listed_and_a_bad_key_is_refused() {
 fn settings_are_kept_between_builds() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], Vec::new());
-    let sdk = build(&engine, data.path());
-    assert_eq!(sdk.settings().expect("settings"), json!({}));
-    sdk.save_settings(json!({"model": "scripted"})).expect("save");
-    assert_eq!(sdk.settings().expect("settings"), json!({"model": "scripted"}), "kept by the time the save returns");
+    let client = build(&engine, data.path());
+    assert_eq!(client.settings().expect("settings"), json!({}));
+    client.save_settings(json!({"model": "scripted"})).expect("save");
+    assert_eq!(client.settings().expect("settings"), json!({"model": "scripted"}), "kept by the time the save returns");
     let again = build(&engine, data.path());
     assert_eq!(again.settings().expect("settings"), json!({"model": "scripted"}));
 }
@@ -149,12 +149,12 @@ fn settings_are_kept_between_builds() {
 fn a_failed_settings_save_is_reported_to_the_caller_that_saved() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], Vec::new());
-    let sdk = build(&engine, data.path());
-    sdk.save_settings(json!({"model": "scripted"})).expect("save");
+    let client = build(&engine, data.path());
+    client.save_settings(json!({"model": "scripted"})).expect("save");
 
-    let reader = sdk.clone();
+    let reader = client.clone();
     let reading = std::thread::spawn(move || (0..20).map(|_| reader.settings()).collect::<Vec<_>>());
-    let refused = sdk.save_settings(json!({ "notes": "x".repeat(300 * 1024) }));
+    let refused = client.save_settings(json!({ "notes": "x".repeat(300 * 1024) }));
     let read = reading.join().expect("join");
 
     assert!(
@@ -168,8 +168,8 @@ fn a_failed_settings_save_is_reported_to_the_caller_that_saved() {
 fn a_session_s_effort_and_mode_reach_the_run_and_a_control_cancels_it_from_elsewhere() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], script(Vec::new())).with_delay(std::time::Duration::from_millis(100));
-    let sdk = build(&engine, data.path());
-    let mut session = sdk.session(data.path(), model()).memory(false);
+    let client = build(&engine, data.path());
+    let mut session = client.session(data.path(), model()).memory(false);
     session.set_effort(app::Effort::Max);
     session.set_permission(app::PermissionMode::Plan);
     let run = session.send("think hard").expect("run");
@@ -197,25 +197,25 @@ fn a_program_manages_the_owner_s_mcp_servers() {
     let engine = FakeEngine::new(vec![model()], Vec::new());
     let mut services = services(&engine);
     services.homes = std::sync::Arc::new(app::OwnerHome::at(home.path()));
-    let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
+    let client = Client::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
     let states = |servers: Vec<app::McpServerInfo>| -> Vec<(String, McpOrigin, McpState)> {
         servers.into_iter().map(|s| (s.name, s.origin, s.state)).collect()
     };
 
     assert_eq!(
-        states(sdk.mcp_servers(repo.path()).expect("list")),
+        states(client.mcp_servers(repo.path()).expect("list")),
         [("jira".into(), McpOrigin::Project, McpState::Untrusted)],
         "shown as skipped until the folder is trusted"
     );
-    assert!(sdk.approve_mcp_server(repo.path(), "ghost", true).is_err(), "only a server that is there");
-    assert_eq!(sdk.set_trust(repo.path(), true).expect("trust").trust, app::Trust::Trusted);
+    assert!(client.approve_mcp_server(repo.path(), "ghost", true).is_err(), "only a server that is there");
+    assert_eq!(client.set_trust(repo.path(), true).expect("trust").trust, app::Trust::Trusted);
     assert_eq!(
-        states(sdk.mcp_servers(repo.path()).expect("list")),
+        states(client.mcp_servers(repo.path()).expect("list")),
         [("jira".into(), McpOrigin::Project, McpState::Pending)]
     );
-    let approved = sdk.approve_mcp_server(repo.path(), "jira", true).expect("approve");
+    let approved = client.approve_mcp_server(repo.path(), "jira", true).expect("approve");
     assert_eq!(states(approved)[0].2, McpState::Ready);
-    let added = sdk
+    let added = client
         .add_mcp_server(
             repo.path(),
             "atlassian",
@@ -223,12 +223,12 @@ fn a_program_manages_the_owner_s_mcp_servers() {
             false,
         )
         .expect("add");
-    assert_eq!(sdk.mcp_server(repo.path(), "atlassian").expect("get").info.origin, McpOrigin::User);
-    assert!(sdk.mcp_listing(repo.path()).expect("listing").unreadable.is_empty());
+    assert_eq!(client.mcp_server(repo.path(), "atlassian").expect("get").info.origin, McpOrigin::User);
+    assert!(client.mcp_listing(repo.path()).expect("listing").unreadable.is_empty());
     assert_eq!(states(added)[1], ("atlassian".into(), McpOrigin::User, McpState::Ready));
     assert!(home.path().join(concat!(brand::dir!(), "/mcp.json")).is_file());
-    assert!(sdk.add_mcp_server(repo.path(), "plugin_x", json!({"command": "x"}), false).is_err());
-    assert_eq!(sdk.remove_mcp_server(repo.path(), "atlassian").expect("remove").len(), 1);
+    assert!(client.add_mcp_server(repo.path(), "plugin_x", json!({"command": "x"}), false).is_err());
+    assert_eq!(client.remove_mcp_server(repo.path(), "atlassian").expect("remove").len(), 1);
 }
 
 #[test]
@@ -236,8 +236,8 @@ fn a_side_question_is_answered_from_the_conversation_without_continuing_it() {
     let data = tempfile::tempdir().expect("data");
     let answer = EngineEvent::Chore(ChoreAnswer::Side("It edits main.rs.".into()));
     let engine = FakeEngine::new(vec![model()], script(vec![answer]));
-    let sdk = build(&engine, data.path());
-    let session = sdk.session(data.path(), model());
+    let client = build(&engine, data.path());
+    let session = client.session(data.path(), model());
     assert!(matches!(session.side("too early?"), Err(app::Error::NothingToAsk)));
 
     session.send("fix the bug").expect("run").text().expect("text");
@@ -255,8 +255,8 @@ fn side_calls_name_suggest_recap_and_warn_about_a_conversation() {
     let data = tempfile::tempdir().expect("data");
     let answer = EngineEvent::Chore(ChoreAnswer::Suggestion("run the tests".into()));
     let engine = FakeEngine::new(vec![model()], script(vec![answer]));
-    let sdk = build(&engine, data.path());
-    let session = sdk.session(data.path(), model());
+    let client = build(&engine, data.path());
+    let session = client.session(data.path(), model());
     assert!(matches!(session.recap(), Err(app::Error::NothingToAsk)));
     let title = session.title("fix the login page").expect("a title needs no conversation");
     assert_eq!(title.chore_answer().expect("answer"), Some(ChoreAnswer::Suggestion("run the tests".into())));
@@ -285,8 +285,8 @@ fn a_session_s_model_roles_reach_every_run() {
     use domain::model_roles::{ModelRole, ModelRoles};
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![model()], script(vec![EngineEvent::TextDelta("ok".into())]));
-    let sdk = build(&engine, data.path());
-    let mut session = sdk.session(data.path(), model()).memory(false);
+    let client = build(&engine, data.path());
+    let mut session = client.session(data.path(), model()).memory(false);
     let mut roles = ModelRoles::default();
     roles.set(ModelRole::Explore, Some("grok-subscription:grok-4.6-fast".into()));
     session.set_roles(roles.clone());

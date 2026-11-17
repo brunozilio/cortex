@@ -7,7 +7,7 @@ pub fn open(app: &mut App, query: Option<String>) {
         return app.transcript.notice("Wait for the agent to finish, or press Esc, before resuming another.");
     }
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match here(sdk, &cwd) {
+    app.spawn(move |client| match here(client, &cwd) {
         Ok(found) => {
             let query = query.unwrap_or_default();
             Msg::Conversations(found.into_iter().filter(|c| titled(c, &query)).collect())
@@ -16,10 +16,10 @@ pub fn open(app: &mut App, query: Option<String>) {
     });
 }
 
-pub fn here(sdk: &app::Sdk, cwd: &std::path::Path) -> Result<Vec<Conversation>, app::Error> {
+pub fn here(client: &app::Client, cwd: &std::path::Path) -> Result<Vec<Conversation>, app::Error> {
     let real = |path: &std::path::Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let folder = real(cwd);
-    let listed = sdk.sessions()?;
+    let listed = client.sessions()?;
     let here = listed.into_iter().filter(|row| !row.archived && real(&row.cwd) == folder);
     Ok(here.map(|row| Conversation { session: row.session, title: row.title, at: row.updated }).collect())
 }

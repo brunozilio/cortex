@@ -4,17 +4,18 @@ Written 2026-11-16 from a read of the code; no build or test was run for it.
 Paths are relative to the repository root. Where something could not be
 determined from the code, the text says so.
 
-The inventory below covers 36 flags: 29 constants in
-`crates/domain/src/features.rs` and 7 in
-`crates/domain/src/features/learnings.rs`. Since 2026-11-17 there are 7 more,
+The inventory below covers every flag constant in
+`crates/domain/src/features.rs` and
+`crates/domain/src/features/learnings.rs`. Since 2026-11-17 there are more,
 in `crates/domain/src/features/backend.rs`: the declared switches of whole
 backend features (`memory`, `memory-search`, `schedules`, `plugins`, `trace`,
 `channels`, `declared-providers`). They are described in "Backend feature
-switches" below and are not part of the recommendations table.
+switches" below and are not part of the recommendations table. The numbers
+below count the rows of each section; `xtask lint` keeps them equal.
 
 | Recommendation | Flags |
 | --- | --- |
-| Make permanent | 20 |
+| Make permanent | 21 |
 | Keep as a user setting, not a flag | 6 |
 | Keep as experimental, default off | 9 |
 | Remove the feature | 1 |
@@ -26,7 +27,7 @@ switches" below and are not part of the recommendations table.
 `Features::on(name)` returns the stored value, or, when nothing is stored,
 `true` unless the name is in `OPT_IN`. `OPT_IN` holds one name,
 `experimental-code-mode-only`. So every other flag is on from the first run,
-including the 25 whose name starts with `experimental-`.
+including every flag whose name starts with `experimental-`.
 
 The same rule applies to any string. `Features::on("typo")` is `true`. A
 misspelled name in a settings file is stored, never matches a real flag, and
@@ -131,7 +132,7 @@ There are four readers with three different lifetimes.
 | --- | --- | --- |
 | `crates/agent-engine/src/engine/job.rs` (`Job::run`) | Every run, from freshly loaded settings | Fills `workspace.policy` (sandbox, redact, snapshots, dependency guard, escalation, auto review, follow-through, affected tests, session claims, code mode, web reading, output shaping), drops the budget, filters project criteria, anchors and blast radius |
 | `crates/agent-engine/src/brief.rs` | Every run | Hides the `follow-pr` skill (`skill_flag`) |
-| `crates/app/src/services.rs`, `crates/app/src/features/flags/mod.rs` | When the SDK client is built (`crates/app/src/client/mod.rs`), and again at every `/features` list or change | The `off` set described above |
+| `crates/app/src/services.rs`, `crates/app/src/features/flags/mod.rs` | When the client is built (`crates/app/src/client/mod.rs`), and again at every `/features` list or change | The `off` set described above |
 | `crates/app/src/features/memory/*`, `code_map/mod.rs` | Every request to those features; each call reloads the settings files | Memory and code-map flags |
 | `crates/cli/src/tui/features/flags/mod.rs` | Once on the first tick, and after each `/features` call | `App::turned_off`, read by `tui::features::on` |
 
@@ -167,7 +168,7 @@ gated code is tested through `workspace.policy` directly and the one line in
 
 Security controls are marked **S** after the name.
 
-### Make permanent (20)
+### Make permanent (21)
 
 Remove the flag and the OFF path, keep the behaviour.
 

@@ -50,10 +50,17 @@ is (`xtask lint` checks it lists every crate).
 - `docs/GLOSSARY.md`: the project's vocabulary and where each term lives.
 - `docs/architecture.md`: crate map, request path, data on disk, threading.
 - `docs/decisions/`: one record per decision (`0001`…`0014`), with context and costs.
+- `docs/feature-flags.md`: every feature flag, what it gates, and what to do with each.
 - `docs/threat-model.md`: assets, actors, trust boundaries, known gaps.
 
 Files under `docs/` must not spell the product's name, command or env
 prefix (`xtask lint` checks); write "the app", `<command>`, `.<command>/`.
+`xtask lint` also fails when the docs drift from the code: a decision record
+missing from the architecture's Target table or from the range above, a
+subcommand missing from the README's usage block or the vision's list, an
+env variable the code reads missing from the README or
+`web/docs/en/environment-variables.md`, a wrong crate count, or a count of
+flags stated anywhere but `docs/feature-flags.md`'s tables.
 
 ## Before changing code
 - Follow the Cargo isolation rules below before running any Cargo command.

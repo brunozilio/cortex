@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use app::{Decision, EngineEvent, PermissionMode, Sdk};
+use app::{Client, Decision, EngineEvent, PermissionMode};
 
 use crate::print_output::{Format, Output};
 
@@ -32,13 +32,13 @@ pub fn resumed(
 }
 
 pub fn print_all(
-    sdk: &Sdk,
+    client: &Client,
     cwd: PathBuf,
     wanted: Wanted<'_>,
     prompts: impl IntoIterator<Item = Result<String, String>>,
 ) -> Result<ExitCode, String> {
     let mut output = Output::new(wanted.format, std::io::stdout().lock());
-    match answer_all(sdk, cwd, wanted, prompts, &mut output) {
+    match answer_all(client, cwd, wanted, prompts, &mut output) {
         Ok(failed) => Ok(if failed { ExitCode::FAILURE } else { ExitCode::SUCCESS }),
         Err(message) => {
             output.abandon(&message);
@@ -48,15 +48,15 @@ pub fn print_all(
 }
 
 fn answer_all(
-    sdk: &Sdk,
+    client: &Client,
     cwd: PathBuf,
     wanted: Wanted<'_>,
     prompts: impl IntoIterator<Item = Result<String, String>>,
     output: &mut Output<impl std::io::Write>,
 ) -> Result<bool, String> {
     let Wanted { model: wanted, mode, verification, add_dirs, headless, format: _, resume, fork, trust } = wanted;
-    let models = sdk.models().map_err(|e| e.to_string())?;
-    let remembered = sdk.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
+    let models = client.models().map_err(|e| e.to_string())?;
+    let remembered = client.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
     let model = domain::model::choose_model(&models, wanted.or(remembered.as_deref())).ok_or(concat!(
         "no model is available: run `",
         brand::command!(),
@@ -70,9 +70,9 @@ fn answer_all(
             brand_command = brand::COMMAND
         ));
     }
-    settle_trust(sdk, &cwd, trust, &mut std::io::stderr().lock())?;
-    warn_of_what_is_not_kept(sdk, &mut std::io::stderr().lock());
-    let mut session = sdk.session(cwd, model);
+    settle_trust(client, &cwd, trust, &mut std::io::stderr().lock())?;
+    warn_of_what_is_not_kept(client, &mut std::io::stderr().lock());
+    let mut session = client.session(cwd, model);
     if let Some(id) = resume {
         session = session.resume(id);
     }
@@ -113,28 +113,33 @@ fn answer_all(
     Ok(output.finish(failed_verification))
 }
 
-fn settle_trust(sdk: &Sdk, cwd: &std::path::Path, trust: bool, errors: &mut dyn std::io::Write) -> Result<(), String> {
-    let trusted_once = trust.then(|| sdk.trust_for_this_process(cwd));
+fn settle_trust(
+    client: &Client,
+    cwd: &std::path::Path,
+    trust: bool,
+    errors: &mut dyn std::io::Write,
+) -> Result<(), String> {
+    let trusted_once = trust.then(|| client.trust_for_this_process(cwd));
     let report = match trusted_once {
         Some(Ok(report)) => report,
         Some(Err(refused)) => {
             let _ = writeln!(errors, "{}: --trust ignored: {refused}", brand::COMMAND);
-            sdk.trust_state(cwd).map_err(|error| error.to_string())?
+            client.trust_state(cwd).map_err(|error| error.to_string())?
         }
-        None => sdk.trust_state(cwd).map_err(|error| error.to_string())?,
+        None => client.trust_state(cwd).map_err(|error| error.to_string())?,
     };
     if let Some(skipped) = report.skipped_line() {
         let _ = writeln!(errors, "{}: {skipped}", brand::COMMAND);
     }
-    let replaced = sdk.permissions(cwd).map(|info| info.notices).unwrap_or_default();
+    let replaced = client.permissions(cwd).map(|info| info.notices).unwrap_or_default();
     for notice in replaced.iter().filter(|notice| notice.contains(domain::trust::LEGACY_OPT_IN)) {
         let _ = writeln!(errors, "{}: {notice}", brand::COMMAND);
     }
     Ok(())
 }
 
-fn warn_of_what_is_not_kept(sdk: &Sdk, errors: &mut dyn std::io::Write) {
-    let notices = sdk.notices(false).map(|notices| notices.for_user).unwrap_or_default();
+fn warn_of_what_is_not_kept(client: &Client, errors: &mut dyn std::io::Write) {
+    let notices = client.notices(false).map(|notices| notices.for_user).unwrap_or_default();
     for notice in notices {
         let _ = writeln!(errors, "{}: {notice}", brand::COMMAND);
     }
@@ -163,35 +168,35 @@ mod tests {
         let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
         services.off.insert(domain::features::MEMORY_SEARCH.into());
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
-        let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
+        let client = Client::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
         let wanted = Wanted { verification: Some("tests pass".into()), ..Wanted::default() };
-        (print_all(&sdk, data.path().into(), wanted, [Ok("fix it".into())]).expect("printed"), engine)
+        (print_all(&client, data.path().into(), wanted, [Ok("fix it".into())]).expect("printed"), engine)
     }
 
-    fn scripted(data: &std::path::Path) -> (Sdk, FakeEngine) {
+    fn scripted(data: &std::path::Path) -> (Client, FakeEngine) {
         let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
         let engine = FakeEngine::new(vec![Model::new("scripted", "Scripted")], done);
         let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
         services.off.insert(domain::features::MEMORY_SEARCH.into());
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
-        (Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND), engine)
+        (Client::builder().data_dir(data).services(services).build().expect(brand::COMMAND), engine)
     }
 
     #[test]
     fn a_database_that_cannot_be_opened_is_said_once_on_the_error_stream() {
         let data = tempfile::tempdir().expect("data");
         std::fs::create_dir(data.path().join("app.db")).expect("a folder where the database should be");
-        let (sdk, _) = scripted(data.path());
+        let (client, _) = scripted(data.path());
 
         let mut errors = Vec::new();
-        warn_of_what_is_not_kept(&sdk, &mut errors);
+        warn_of_what_is_not_kept(&client, &mut errors);
         let said = String::from_utf8(errors).expect("text");
         assert!(said.starts_with(&format!("{}: The session list and memory could not be opened (", brand::COMMAND)));
         assert!(said.trim_end().ends_with("they will not be kept after this session."), "{said}");
         assert_eq!(said.lines().count(), 1, "{said}");
 
         let mut again = Vec::new();
-        warn_of_what_is_not_kept(&sdk, &mut again);
+        warn_of_what_is_not_kept(&client, &mut again);
         assert!(again.is_empty(), "said once");
         let (kept, _) = scripted(tempfile::tempdir().expect("data").path());
         warn_of_what_is_not_kept(&kept, &mut again);
@@ -201,13 +206,13 @@ mod tests {
     #[test]
     fn each_prompt_is_answered_before_the_next_one_is_read() {
         let data = tempfile::tempdir().expect("data");
-        let (sdk, engine) = scripted(data.path());
+        let (client, engine) = scripted(data.path());
         let answered_when_read = std::cell::RefCell::new(Vec::new());
         let prompts = ["first", "second", "third"].into_iter().map(|prompt| {
             answered_when_read.borrow_mut().push(engine.requests().len());
             Ok(prompt.to_owned())
         });
-        let code = print_all(&sdk, data.path().into(), Wanted::default(), prompts).expect("printed");
+        let code = print_all(&client, data.path().into(), Wanted::default(), prompts).expect("printed");
         assert_eq!(code, ExitCode::SUCCESS);
         assert_eq!(*answered_when_read.borrow(), [0, 1, 2]);
     }
@@ -215,9 +220,9 @@ mod tests {
     #[test]
     fn an_input_error_ends_the_command_after_the_prompts_before_it() {
         let data = tempfile::tempdir().expect("data");
-        let (sdk, engine) = scripted(data.path());
+        let (client, engine) = scripted(data.path());
         let prompts = [Ok("first".to_owned()), Err("input line 2: could not be read".to_owned()), Ok("x".to_owned())];
-        let ended = print_all(&sdk, data.path().into(), Wanted::default(), prompts);
+        let ended = print_all(&client, data.path().into(), Wanted::default(), prompts);
         assert_eq!(ended, Err("input line 2: could not be read".to_owned()));
         assert_eq!(engine.requests().len(), 1, "the first was answered, the one after the error never sent");
     }

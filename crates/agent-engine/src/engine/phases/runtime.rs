@@ -5,7 +5,7 @@ use domain::model_roles::{ModelRole, ModelRoles};
 use super::equip::{MainAgent, Toolbox};
 use super::load_session::LoadedSession;
 use super::policy::Governed;
-use crate::agent_runtime::{self, Guard};
+use crate::agent_runtime::{self, WorktreeLease};
 use crate::engine::job::Job;
 use crate::engine::stop::Stop;
 use crate::engine::{roles, small_model};
@@ -13,7 +13,7 @@ use crate::prompt::settings::Settings;
 use crate::tools::{self, Workspace};
 
 pub(in crate::engine) struct SessionWorktree {
-    pub(in crate::engine) guard: Guard,
+    pub(in crate::engine) lease: WorktreeLease,
     pub(in crate::engine) cleanup: Workspace,
 }
 
@@ -85,29 +85,29 @@ impl Job {
             workspace.rules.clone_from(&context.rules);
         }
         let cleanup = workspace.fork(Arc::default());
-        let mut guard = Guard::new(setup);
+        let mut lease = WorktreeLease::new(setup);
         if resumed {
-            guard.retain();
+            lease.retain();
         }
-        self.keep_worktree(&mut guard, session)?;
-        Ok(SessionWorktree { guard, cleanup })
+        self.keep_worktree(&mut lease, session)?;
+        Ok(SessionWorktree { lease, cleanup })
     }
 
-    fn keep_worktree(&self, guard: &mut Guard, session: &LoadedSession) -> Result<(), Stop> {
-        let Some(state) = guard.setup.worktree_state() else { return Ok(()) };
+    fn keep_worktree(&self, lease: &mut WorktreeLease, session: &LoadedSession) -> Result<(), Stop> {
+        let Some(state) = lease.setup.worktree_state() else { return Ok(()) };
         self.recorder.iter().for_each(|recorder| recorder.announce(&self.gate));
         let stored = self
             .sessions
             .save_for(&self.request.session.cwd, &session.id, &session.history)
             .and_then(|()| self.sessions.save_worktree(&self.request.session.cwd, &session.id, &state));
         if let Err(error) = stored {
-            return Err(Stop::failed(match guard.finish() {
+            return Err(Stop::failed(match lease.finish() {
                 Ok(Some(path)) => format!("{error}; worktree retained at {}", path.display()),
                 Err(cleanup) => format!("{error}; worktree cleanup failed: {cleanup}"),
                 _ => error,
             }));
         }
-        guard.retain();
+        lease.retain();
         Ok(())
     }
 

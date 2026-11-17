@@ -18,8 +18,8 @@ pub fn feature() -> Feature {
 fn run(app: &mut App, argument: Option<String>) {
     let cwd = app.cwd.clone();
     let keep = argument.as_deref().and_then(|text| text.strip_prefix("keep")).map(str::trim).map(str::parse::<usize>);
-    app.spawn(move |sdk| {
-        let found = match sdk.suggested_rules(&cwd) {
+    app.spawn(move |client| {
+        let found = match client.suggested_rules(&cwd) {
             Ok(found) => found,
             Err(error) => return Msg::Error(error.to_string()),
         };
@@ -27,7 +27,7 @@ fn run(app: &mut App, argument: Option<String>) {
             None => Msg::Notice(listed(&found)),
             Some(Err(_)) => Msg::Notice("Use /rules keep <n>, with n from /rules.".into()),
             Some(Ok(at)) => match found.get(at.wrapping_sub(1)) {
-                Some(suggestion) => match sdk.keep_rule(&cwd, suggestion.kind, &suggestion.rule) {
+                Some(suggestion) => match client.keep_rule(&cwd, suggestion.kind, &suggestion.rule) {
                     Ok(()) => Msg::Notice(format!(
                         "Kept {} as a {} rule in {}/settings.local.json.",
                         suggestion.rule,

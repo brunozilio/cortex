@@ -2,7 +2,7 @@ use domain::{EngineEvent, ToolCall};
 use platform::sync::Locked;
 use serde_json::Value;
 
-use super::native::Handler;
+use super::in_loop::Handler;
 use crate::agent::Agent;
 use crate::agent::run::ThisRun;
 use crate::agent::subagents::background::Spawn;

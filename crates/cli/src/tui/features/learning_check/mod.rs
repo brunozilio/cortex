@@ -19,7 +19,7 @@ fn run(app: &mut App, _argument: Option<String>) {
         return app.transcript.notice(format!("/check is turned off ({LEARNING_CHECK}); /features turns it on."));
     }
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.memory(cwd).check() {
+    app.spawn(move |client| match client.memory(cwd).check() {
         Ok(Some(prompt)) => super::reply(move |app: &mut App| app.send(prompt)),
         Ok(None) => Msg::Notice("Nothing to check: no change, or no memory is about the changed files.".into()),
         Err(error) => Msg::Error(error.to_string()),
@@ -33,14 +33,14 @@ mod tests {
     use ratatui::crossterm::event::KeyCode;
 
     use crate::tui::app::App;
-    use crate::tui::tests::{press, screen, sdk, type_text, until};
+    use crate::tui::tests::{client, press, screen, type_text, until};
 
     #[test]
     fn outside_git_the_check_says_why_it_cannot_run() {
         let data = tempfile::tempdir().expect("data");
         let model = Model::new("keyed:scripted", "Scripted");
         let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
-        let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+        let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
         until(&mut app, |app| app.session.is_some());
 
         type_text(&mut app, "/check");
@@ -68,8 +68,8 @@ mod tests {
         std::fs::write(data.path().join("client.go"), "retries = 10\n").expect("write");
         let model = Model::new("keyed:scripted", "Scripted");
         let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
-        let client = sdk(&engine, data.path());
-        let memory = client.memory(data.path());
+        let rememberer = client(&engine, data.path());
+        let memory = rememberer.memory(data.path());
         let edit = app::MemoryEdit::Remember {
             kind: app::MemoryKind::Semantic,
             text: "Keep retries at 4".into(),
@@ -77,7 +77,7 @@ mod tests {
             touches: vec!["client.go".into()],
         };
         memory.edit(vec![edit]).expect("remember");
-        let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+        let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
         until(&mut app, |app| app.session.is_some());
 
         type_text(&mut app, "/check");

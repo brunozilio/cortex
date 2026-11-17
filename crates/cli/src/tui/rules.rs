@@ -4,7 +4,7 @@ use super::app::{App, Msg};
 
 pub fn show(app: &App, hooks_only: bool) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.permissions(&cwd) {
+    app.spawn(move |client| match client.permissions(&cwd) {
         Ok(info) if hooks_only => Msg::Notice(hooks(&info)),
         Ok(info) => Msg::Notice(permissions(&info)),
         Err(error) => Msg::Error(error.to_string()),

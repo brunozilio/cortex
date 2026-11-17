@@ -4,7 +4,7 @@ use super::app::{App, Msg};
 
 pub fn skills(app: &App) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.skills(&cwd) {
+    app.spawn(move |client| match client.skills(&cwd) {
         Ok(skills) if skills.is_empty() => Msg::Notice("No skills or commands found.".into()),
         Ok(skills) => {
             let lines: Vec<String> = skills.iter().map(|s| format!("  /{:<20} {}", s.name, s.description)).collect();
@@ -16,7 +16,7 @@ pub fn skills(app: &App) {
 
 pub fn agents(app: &App) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.agents(&cwd) {
+    app.spawn(move |client| match client.agents(&cwd) {
         Ok(agents) => {
             let lines: Vec<String> = agents.iter().map(|a| format!("  {:<20} {}", a.name, a.description)).collect();
             Msg::Notice(format!("Agents:\n{}", lines.join("\n")))

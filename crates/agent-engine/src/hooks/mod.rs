@@ -55,7 +55,7 @@ fn accepted_and_dropped<'de, D: serde::Deserializer<'de>>(written: D) -> Result<
     serde::de::IgnoredAny::deserialize(written).map(|_| ())
 }
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Decision {
+pub struct HookOutcome {
     pub blocked: Option<String>,
     pub context: String,
     pub updated_input: Option<Value>,
@@ -75,7 +75,7 @@ pub struct Decision {
     #[serde(default)]
     pub prompt: Option<String>,
 }
-impl Decision {
+impl HookOutcome {
     fn without_trailing_whitespace(mut self) -> Self {
         self.blocked = self.blocked.map(|reason| reason.trim_end().to_owned());
         self.context.truncate(self.context.trim_end().len());
@@ -182,7 +182,7 @@ impl Hooks {
         subject: &str,
         input: Value,
         workspace: &Workspace,
-    ) -> Result<Decision, String> {
+    ) -> Result<HookOutcome, String> {
         self.run_with_model(event, subject, input, workspace, None)
     }
     pub fn run_with_model(
@@ -192,8 +192,8 @@ impl Hooks {
         input: Value,
         workspace: &Workspace,
         model: Option<(&dyn crate::model::ModelApi, &crate::model::TurnRequest)>,
-    ) -> Result<Decision, String> {
-        self.decided(event, subject, input, workspace, model).map(Decision::without_trailing_whitespace)
+    ) -> Result<HookOutcome, String> {
+        self.decided(event, subject, input, workspace, model).map(HookOutcome::without_trailing_whitespace)
     }
     fn decided(
         &self,
@@ -202,8 +202,8 @@ impl Hooks {
         mut input: Value,
         workspace: &Workspace,
         model: Model<'_>,
-    ) -> Result<Decision, String> {
-        let mut decision = Decision::default();
+    ) -> Result<HookOutcome, String> {
+        let mut decision = HookOutcome::default();
         input["hook_event_name"] = json!(event);
         input["session_id"] = json!(workspace.session_id);
         input["agent_type"] = json!(workspace.agent_name);
@@ -226,7 +226,7 @@ impl Hooks {
 fn absorbed(
     event: HookEvent,
     result: CommandOutput,
-    decision: &mut Decision,
+    decision: &mut HookOutcome,
     input: &mut Value,
 ) -> Result<Handled, String> {
     if result.code == Some(2) {
@@ -247,7 +247,7 @@ fn absorbed(
     Ok(if decision.blocked.is_some() { Handled::Blocked } else { Handled::GoOn })
 }
 
-fn answered(event: HookEvent, value: &Value, decision: &mut Decision, input: &mut Value) -> Result<(), String> {
+fn answered(event: HookEvent, value: &Value, decision: &mut HookOutcome, input: &mut Value) -> Result<(), String> {
     let specific = &value["hookSpecificOutput"];
     if let Some(reason) = blocking(value) {
         decision.blocked = Some(reason);
@@ -286,7 +286,7 @@ fn blocking(value: &Value) -> Option<String> {
     })
 }
 
-fn permission_answered(event: HookEvent, specific: &Value, decision: &mut Decision) -> Result<(), String> {
+fn permission_answered(event: HookEvent, specific: &Value, decision: &mut HookOutcome) -> Result<(), String> {
     let permission = if event == HookEvent::PermissionRequest {
         specific["decision"]["behavior"].as_str()
     } else {
@@ -302,7 +302,12 @@ fn permission_answered(event: HookEvent, specific: &Value, decision: &mut Decisi
     Ok(())
 }
 
-fn input_updated(event: HookEvent, specific: &Value, decision: &mut Decision, input: &mut Value) -> Result<(), String> {
+fn input_updated(
+    event: HookEvent,
+    specific: &Value,
+    decision: &mut HookOutcome,
+    input: &mut Value,
+) -> Result<(), String> {
     let updated = match event {
         HookEvent::PermissionRequest => specific["decision"].get("updatedInput"),
         HookEvent::PreToolUse => specific.get("updatedInput"),

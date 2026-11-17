@@ -7,7 +7,7 @@ model: sonnet
 
 Review `git diff` (plus untracked files) against `CLAUDE.md`. Check only:
 
-- domain rules in `domain`, none in CLI rendering or SDK glue; core stays pure (no IO);
+- domain rules in `domain`, none in CLI rendering or the `app` client glue (`crates/app/src/client/`); core stays pure (no IO);
 - crate dependencies stay one-way as in the `## Crates` graph of `CLAUDE.md`;
 - single-user local product: no `Principal`, members or authorizer come back (docs/decisions/0008);
 - new behaviour has a test; no `unwrap()` outside tests; files/functions not mixing concerns or growing past ~300 lines.
