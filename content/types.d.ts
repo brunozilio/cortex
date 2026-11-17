@@ -149,6 +149,8 @@ export interface HookInputs {
   UserPromptSubmit: { prompt: string };
   SessionStart: { source: "startup" | "resume"; model: string };
   SessionEnd: Record<string, never>;
+  RunStart: { source: "startup" | "resume"; model: string };
+  RunEnd: Record<string, never>;
   Notification: { message: string; notification_type: string };
   ModelRequest: ModelCall & {
     effort: string;

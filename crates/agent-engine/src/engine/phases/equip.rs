@@ -62,9 +62,9 @@ impl Job {
         let judge = Arc::new(self.host_judge());
         workspace.services.judge = Some(Arc::clone(&judge));
         let stop = self.control.stop_flag();
-        let servers = crate::mcp::connect_judged(&self.request, &brief.mcp(), &self.mcp, stop, &judge);
+        let servers = self.live.connect(&self.request, &brief.mcp(), &self.mcp, stop, &judge);
         tools.extend(crate::mcp::tools_of(&servers, stop));
-        tools::script_tool::join(&mut tools, tools::script_tool::load(&brief.gate(&self.request.cwd)));
+        tools::script_tool::join(&mut tools, self.live.scripts(brief, &self.request.cwd));
         if let Some(expanded) = crate::mcp::extras::expand_prompt(&servers, &self.request.prompt, stop) {
             self.request.prompt = expanded.map_err(Stop::failed)?;
         }

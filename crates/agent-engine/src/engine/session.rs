@@ -42,6 +42,7 @@ impl Job {
     }
 
     pub(super) fn open_session(&mut self, session: &SessionId) {
+        self.live.enter(session);
         let created_by_this_run = self.request.resume.is_none() || self.request.fork;
         if created_by_this_run && self.request.command.is_none() {
             self.record(session, Session::NotYetCreated).starts_unannounced();

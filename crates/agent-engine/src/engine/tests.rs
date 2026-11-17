@@ -111,6 +111,7 @@ fn staged(model: Option<Arc<ScriptedModel>>, edit: impl FnOnce(&mut PromptReques
         request,
         recorder: None,
         held: Arc::default(),
+        live: super::live::Live::of(&Arc::default()),
     };
     Staged { job, heard, store, _dir: dir }
 }

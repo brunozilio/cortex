@@ -232,6 +232,14 @@ impl Transport for StdioTransport {
     fn notify(&self, message: &Value) -> Result<(), String> {
         write(&self.input, &self.name, message)
     }
+
+    fn alive(&self) -> bool {
+        !self.heard.ended.load(Ordering::Relaxed) && self.child.is_alive()
+    }
+
+    fn close(&self) {
+        self.child.terminate(GRACE);
+    }
 }
 
 #[cfg(test)]

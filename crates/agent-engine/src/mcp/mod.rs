@@ -4,6 +4,7 @@ pub mod extras;
 mod http;
 mod http_listen;
 mod local;
+mod pool;
 mod script_server;
 mod servers;
 mod sse;
@@ -21,6 +22,7 @@ use serde_json::{Value, json};
 pub use self::configured::{McpSources, list, listing, project_config, sources};
 pub use self::http::{HttpTransport, parse};
 pub use self::local::LocalTransport;
+pub use self::pool::McpPool;
 pub use self::servers::{ServerSpec, StdioSandbox, parse_config, servers};
 pub use self::stdio::StdioTransport;
 use self::tool::outcome;
@@ -51,6 +53,10 @@ pub trait Transport: Send + Sync {
         self.notify(message)
     }
     fn listen(&self) {}
+    fn alive(&self) -> bool {
+        true
+    }
+    fn close(&self) {}
 }
 
 pub struct McpServer {
@@ -152,6 +158,14 @@ impl McpServer {
         &self.name
     }
 
+    pub fn alive(&self) -> bool {
+        self.transport.alive()
+    }
+
+    pub fn close(&self) {
+        self.transport.close();
+    }
+
     pub fn capabilities(&self) -> Value {
         self.capabilities.lock().map(|capabilities| capabilities.clone()).unwrap_or_default()
     }
@@ -241,23 +255,49 @@ pub fn connect_judged(
     stop: &std::sync::atomic::AtomicBool,
     judge: &Arc<crate::tools::host_judge::HostJudge>,
 ) -> Vec<Arc<McpServer>> {
-    let ready = |name: &str, server: Result<McpServer, String>| {
-        server
-            .and_then(|server| server.initialize_stopped(stop).map(|()| Arc::new(server)))
-            .inspect_err(|error| tracing::warn!(%error, server = name, "an MCP server is not available to this run"))
-            .ok()
-    };
-    let local = request.credentials.mcp.iter().take_while(|_| !stop.load(Ordering::Relaxed)).filter_map(|local| {
-        let transport = Box::new(LocalTransport::new(Arc::clone(&local.endpoint)));
-        ready(&local.name, Ok(McpServer::new(local.name.clone(), transport)))
-    });
-    let remote = servers(request, sources)
+    let mut connected = in_process(request, stop);
+    let remote = wanted(request, sources, judge)
+        .into_iter()
+        .take_while(|_| !stop.load(Ordering::Relaxed))
+        .filter_map(|spec| ready(spec.name(), McpServer::open_stopped(&spec, http, stop), stop));
+    connected.extend(remote);
+    connected
+}
+
+fn ready(
+    name: &str,
+    server: Result<McpServer, String>,
+    stop: &std::sync::atomic::AtomicBool,
+) -> Option<Arc<McpServer>> {
+    server
+        .and_then(|server| server.initialize_stopped(stop).map(|()| Arc::new(server)))
+        .inspect_err(|error| tracing::warn!(%error, server = name, "an MCP server is not available to this run"))
+        .ok()
+}
+
+fn in_process(request: &PromptRequest, stop: &std::sync::atomic::AtomicBool) -> Vec<Arc<McpServer>> {
+    request
+        .credentials
+        .mcp
+        .iter()
+        .take_while(|_| !stop.load(Ordering::Relaxed))
+        .filter_map(|local| {
+            let transport = Box::new(LocalTransport::new(Arc::clone(&local.endpoint)));
+            ready(&local.name, Ok(McpServer::new(local.name.clone(), transport)), stop)
+        })
+        .collect()
+}
+
+fn wanted(
+    request: &PromptRequest,
+    sources: &McpSources,
+    judge: &Arc<crate::tools::host_judge::HostJudge>,
+) -> Vec<ServerSpec> {
+    servers(request, sources)
         .into_iter()
         .filter(|spec| !request.credentials.mcp.iter().any(|local| local.name == spec.name()))
-        .take_while(|_| !stop.load(Ordering::Relaxed))
         .map(|spec| spec.signed_in(request.credentials.mcp_tokens.as_ref()).judged_by(judge))
-        .filter_map(|spec| ready(spec.name(), McpServer::open_stopped(&spec, http, stop)));
-    local.chain(remote).collect()
+        .collect()
 }
 
 pub fn tools_of(servers: &[Arc<McpServer>], stop: &std::sync::atomic::AtomicBool) -> Vec<Box<dyn Tool>> {

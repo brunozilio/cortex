@@ -91,7 +91,9 @@ fn what_a_hook_says_to_the_model_is_gathered_line_by_line() {
         absorb(event, result).1.context
     };
     assert_eq!(plain("SessionStart"), "today is monday");
+    assert_eq!(plain("RunStart"), "today is monday");
     assert_eq!(plain("UserPromptSubmit"), "today is monday");
+    assert_eq!(plain("RunEnd"), "", "a run's end has nobody left to tell");
     assert_eq!(plain("PreToolUse"), "", "plain text from any other hook is not context");
 }
 

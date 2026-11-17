@@ -125,11 +125,13 @@ fn a_user_prompt_submit_hook_adds_its_output_to_the_prompt_as_context() {
 }
 
 #[test]
-fn session_start_and_session_end_hooks_fire_once_per_run_around_the_turn_s_other_hooks() {
+fn session_start_fires_once_per_session_and_run_start_and_run_end_once_per_run_around_the_turn_s_other_hooks() {
     let stage = Stage::new();
     stage.file("notes.txt", "alpha\n");
-    let journal =
-        journal(&stage, &["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "SessionEnd"]);
+    let journal = journal(
+        &stage,
+        &["SessionStart", "RunStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "RunEnd", "SessionEnd"],
+    );
     stage.script([call("r1", "Read", json!({"file_path": "notes.txt"})), says("Read.")]);
     stage.script([says("Again.")]);
 
@@ -211,15 +213,16 @@ fn session_start_and_session_end_hooks_fire_once_per_run_around_the_turn_s_other
         event Completed
         == hooks journal ==
         SessionStart events_logged=0 messages_saved=0 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"SessionStart","model":"claude-opus-5-5","session_id":"<session-1>","source":"startup"}
+        RunStart events_logged=0 messages_saved=0 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"RunStart","model":"claude-opus-5-5","session_id":"<session-1>","source":"startup"}
         UserPromptSubmit events_logged=0 messages_saved=0 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"UserPromptSubmit","prompt":"Read the notes","session_id":"<session-1>"}
         PreToolUse events_logged=3 messages_saved=2 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"PreToolUse","session_id":"<session-1>","tool_input":{"file_path":"notes.txt"},"tool_name":"Read","tool_use_id":"r1"}
         PostToolUse events_logged=3 messages_saved=2 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"PostToolUse","session_id":"<session-1>","tool_input":{"file_path":"notes.txt"},"tool_name":"Read","tool_response":"     1\talpha\n","tool_use_id":"r1"}
         Stop events_logged=8 messages_saved=4 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"Stop","last_assistant_message":"Read.","session_id":"<session-1>","stop_hook_active":false}
-        SessionEnd events_logged=8 messages_saved=4 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"SessionEnd","session_id":"<session-1>"}
-        SessionStart events_logged=9 messages_saved=4 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"SessionStart","model":"claude-opus-5-5","session_id":"<session-1>","source":"resume"}
+        RunEnd events_logged=8 messages_saved=4 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"RunEnd","session_id":"<session-1>"}
+        RunStart events_logged=9 messages_saved=4 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"RunStart","model":"claude-opus-5-5","session_id":"<session-1>","source":"resume"}
         UserPromptSubmit events_logged=9 messages_saved=4 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"UserPromptSubmit","prompt":"And again","session_id":"<session-1>"}
         Stop events_logged=13 messages_saved=6 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"Stop","last_assistant_message":"Again.","session_id":"<session-1>","stop_hook_active":false}
-        SessionEnd events_logged=13 messages_saved=6 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"SessionEnd","session_id":"<session-1>"}
+        RunEnd events_logged=13 messages_saved=6 payload={"agent_type":"main","cwd":"<project>","hook_event_name":"RunEnd","session_id":"<session-1>"}
         "##,
     );
 }

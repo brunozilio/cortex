@@ -1,6 +1,7 @@
 mod auto_pick;
 pub(crate) mod date;
 mod job;
+mod live;
 mod moved;
 mod phases;
 mod record;
@@ -42,6 +43,7 @@ pub struct NativeEngine {
     mcp: Arc<dyn Http>,
     lsp: Arc<dyn LanguageServers>,
     launch: crate::tools::Launch,
+    live: Arc<live::LiveSessions>,
 }
 
 impl std::fmt::Debug for NativeEngine {
@@ -59,6 +61,7 @@ impl NativeEngine {
             mcp: Arc::new(NetHttp),
             lsp: Arc::new(LspPool::default()),
             launch: crate::tools::Launch::default(),
+            live: Arc::default(),
         }
     }
 
@@ -94,6 +97,7 @@ impl AgentEngine for NativeEngine {
             gate: gate.clone(),
             recorder: None,
             held: Arc::default(),
+            live: live::Live::of(&self.live),
         };
         let panic_gate = gate.clone();
         let panic_control = control.clone();

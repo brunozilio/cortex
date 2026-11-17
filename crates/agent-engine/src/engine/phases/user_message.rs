@@ -43,15 +43,7 @@ impl Job {
 
     pub(super) fn submitted(&self, mut user: Message, opening: &Opening<'_>) -> Result<Message, Stop> {
         let Opening { api, template, workspace, session } = *opening;
-        let source = if self.request.resume.is_some() { "resume" } else { "startup" };
-        let announced = [
-            (
-                "SessionStart",
-                source,
-                serde_json::json!({"source":source,"session_id":session,"model":self.request.model.id}),
-            ),
-            ("UserPromptSubmit", "", serde_json::json!({"prompt":user.text(),"session_id":session})),
-        ];
+        let announced = self.announced(workspace, session, &user);
         for (event, subject, payload) in announced {
             let hook = workspace
                 .hooks

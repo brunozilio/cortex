@@ -9,6 +9,7 @@ mod checkpoints;
 mod crash;
 mod headless;
 mod inbox;
+mod live_sessions;
 mod lsp;
 mod mcp;
 mod model_roles;

@@ -1,6 +1,6 @@
 use super::Handler;
 
-const EVENTS: [&str; 17] = [
+const EVENTS: [&str; 19] = [
     "Brief",
     "ModelRequest",
     "ModelResponse",
@@ -16,13 +16,17 @@ const EVENTS: [&str; 17] = [
     "UserPromptSubmit",
     "SessionStart",
     "SessionEnd",
+    "RunStart",
+    "RunEnd",
     "PermissionRequest",
     "Notification",
 ];
-const NO_MODEL_HOOKS: [&str; 9] = [
+const NO_MODEL_HOOKS: [&str; 11] = [
     "Brief",
     "SessionStart",
     "SessionEnd",
+    "RunStart",
+    "RunEnd",
     "SubagentStart",
     "PreCompact",
     "PostCompact",
@@ -91,6 +95,11 @@ mod tests {
         let bad = json!({"type": "prompt", "prompt": "Is it safe?"});
         let why = refused(json!({"SessionStart": [{"hooks": [ok]}, {"hooks": [bad]}]}));
         assert_eq!(why, "SessionStart hook #2: a prompt hook cannot run on SessionStart; use a command hook");
+        for event in ["RunStart", "RunEnd"] {
+            let asked = json!({"type": "prompt", "prompt": "Is it safe?"});
+            let why = refused(json!({ event: [{"hooks": [asked]}] }));
+            assert_eq!(why, format!("{event} hook #1: a prompt hook cannot run on {event}; use a command hook"));
+        }
         let slow = json!({"type": "command", "command": "x", "timeout": 0});
         assert!(refused(json!({"Stop": [{"hooks": [slow]}]})).contains("timeout 0 is outside 1..600"));
         assert!(refused(json!({"Stopp": []})).starts_with("unknown hook event \"Stopp\""));

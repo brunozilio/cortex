@@ -145,11 +145,11 @@ A settings file with an unknown event, an unknown handler type, a matcher that i
 | `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest` | The tool's name: `Bash`, `Edit`, `mcp__jira__search`… |
 | `Stop`, `SubagentStop` | The agent's name: `main` for the conversation, else the sub-agent's (`general-purpose`, `Explore`, a custom name…) |
 | `SubagentStart` | The sub-agent's kind |
-| `SessionStart` | `startup` or `resume` |
+| `SessionStart`, `RunStart` | `startup` or `resume` |
 | `PreCompact`, `PostCompact` | `manual` or `auto` |
 | `Notification` | The notification type |
 | `ModelRequest`, `ModelResponse`, `ModelError` | `main` or `sub-agent` |
-| `UserPromptSubmit`, `SessionEnd`, `Brief` | An empty string: leave the matcher empty |
+| `UserPromptSubmit`, `SessionEnd`, `RunEnd`, `Brief` | An empty string: leave the matcher empty |
 
 Groups run in order; inside a group, handlers run in order. As soon as one blocks, the rest are skipped.
 
@@ -157,8 +157,9 @@ Groups run in order; inside a group, handlers run in order. As soon as one block
 
 | Event | When it fires | Can it block? |
 |---|---|---|
-| [`Brief`](#brief) | Before each prompt, once skills, agents, rules and instruction files are found | Yes: the run does not start |
-| [`SessionStart`](#sessionstart) | At the start of each run | Yes: the run does not start |
+| [`Brief`](#brief) | When skills, agents, rules and instruction files are found: at a session's first prompt and after one of their files changed | Yes: the run does not start |
+| [`SessionStart`](#sessionstart) | Once per session, at its first prompt in this process | Yes: the run does not start |
+| [`RunStart`](#runstart) | At the start of each run (each prompt you send) | Yes: the run does not start |
 | [`UserPromptSubmit`](#userpromptsubmit) | When the prompt is sent, before the model sees it | Yes: the run does not start |
 | [`ModelRequest`](#modelrequest) | Before every model call | Yes: the run fails |
 | [`ModelResponse`](#modelresponse) | When a reply arrives, before it is shown or acted on | Yes: the model answers again |
@@ -173,7 +174,8 @@ Groups run in order; inside a group, handlers run in order. As soon as one block
 | [`Stop`](#stop) | When the main agent wants to finish | Yes: it keeps working |
 | [`PreCompact`](#precompact) | Before the conversation is summarised | Yes: compaction is cancelled |
 | [`PostCompact`](#postcompact) | After the conversation is summarised | No |
-| [`SessionEnd`](#sessionend) | At the end of each run | No |
+| [`RunEnd`](#runend) | At the end of each run | No |
+| [`SessionEnd`](#sessionend) | Once per session, when {{NAME}} lets it go | No |
 
 ## Hook input
 
@@ -194,7 +196,7 @@ Each event adds its own fields, listed below. A command hook reads the object on
 
 | Exit code | Effect |
 |---|---|
-| `0` | Success. stdout is read as JSON (see below). For `SessionStart` and `UserPromptSubmit`, stdout that is not JSON is added as context for the agent. |
+| `0` | Success. stdout is read as JSON (see below). For `SessionStart`, `RunStart` and `UserPromptSubmit`, stdout that is not JSON is added as context for the agent. |
 | `2` | Block. stderr is the reason. The remaining hooks of the event are skipped. |
 | Anything else | The hook failed. `Hook failed: <stderr>` is added to the context the agent sees, and the next hook runs. For `Brief`, `ModelRequest`, `ModelResponse` and `ModelError` the failure is only written to the log. |
 
@@ -254,11 +256,11 @@ When a hook cannot run, times out or is cancelled:
 | `PreToolUse` | The tool call is refused: `Hook blocked <tool>: hook cancelled or timed out` |
 | `PostToolUse`, `PostToolUseFailure` | The result is marked failed, with `Hook failed: …` added |
 | `PermissionRequest` | The tool call fails with the error |
-| `SessionStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `Brief` | The run stops with the error |
+| `SessionStart`, `RunStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `Brief` | The run stops with the error |
 | `SubagentStart` | The sub-agent fails |
 | `PreCompact`, `PostCompact` | Compaction fails |
 | `ModelRequest`, `ModelResponse`, `ModelError` | Logged; the call goes on as if there were no hook |
-| `Notification`, `SessionEnd` | Logged and ignored |
+| `Notification`, `RunEnd`, `SessionEnd` | Logged and ignored |
 
 ## Handler types
 
@@ -372,13 +374,13 @@ Ask a model whether a condition holds. The model gets your `prompt` and the hook
 }
 ```
 
-`prompt` and `agent` hooks work on events that run alongside the model: `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `UserPromptSubmit`, `Stop` and `SubagentStop`. They are refused on `Brief`, `SessionStart`, `SessionEnd`, `SubagentStart`, `PreCompact`, `PostCompact`, `ModelRequest`, `ModelResponse` and `ModelError`.
+`prompt` and `agent` hooks work on events that run alongside the model: `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `UserPromptSubmit`, `Stop` and `SubagentStop`. They are refused on `Brief`, `SessionStart`, `SessionEnd`, `RunStart`, `RunEnd`, `SubagentStart`, `PreCompact`, `PostCompact`, `ModelRequest`, `ModelResponse` and `ModelError`.
 
 ## Event reference
 
 ### Brief
 
-Fires before each prompt, once {{NAME}} has found the skills, agents, rules and instruction files, and before the system prompt is built. Use it to add, change or remove them, for example to inject team rules from a server.
+Fires once {{NAME}} has found the skills, agents, rules and instruction files, before the system prompt is built. They are found at a session's first prompt and kept for its later prompts until one of the files they come from (settings, instruction files, the skills, agents, rules, hooks, plugins or tools folders) changes; the next prompt then finds them again and the hook runs again. Use it to add, change or remove them, for example to inject team rules from a server.
 
 Input adds:
 
@@ -406,12 +408,20 @@ export default (input) => ({
 
 ### SessionStart
 
-Fires at the start of each run (each prompt you send).
+Fires once per session: at the first prompt {{NAME}} runs for it in this process, whether the conversation is new or resumed. Later prompts of the same session do not fire it again; [`RunStart`](#runstart) fires at every prompt.
 
 | Input field | Value |
 |---|---|
 | `source` | `resume` when the run continues an earlier conversation, else `startup` |
 | `model` | The model's id |
+
+Context from the hook (JSON `additionalContext`/`systemMessage`, or plain stdout) is added to that first message, and stays in the conversation. A block stops the run with the reason.
+
+> **Changed:** `SessionStart` and `SessionEnd` used to fire at every prompt. A hook that must run at every prompt now listens to `RunStart` or `RunEnd`: change `export const event = "SessionStart"` to `"RunStart"`, or move a settings entry from `"SessionStart"` to `"RunStart"`.
+
+### RunStart
+
+Fires at the start of each run (each prompt you send), after `SessionStart` when that one fires, before `UserPromptSubmit`. Same input as `SessionStart`.
 
 Context from the hook (JSON `additionalContext`/`systemMessage`, or plain stdout) is added to your message. A block stops the run with the reason.
 
@@ -643,9 +653,13 @@ A block cancels the compaction: `Compaction blocked by hook: <reason>`.
 
 Fires after the conversation was summarised. Same input as `PreCompact`. Context is added to the conversation after the summary.
 
+### RunEnd
+
+Fires at the end of each run, whatever its outcome, before the conversation is saved. Input has only the common fields. Its output is ignored.
+
 ### SessionEnd
 
-Fires at the end of each run, whatever its outcome. Input has only the common fields. Its output is ignored.
+Fires once per session that fired `SessionStart`, when {{NAME}} lets the session go: when you quit, or when eight other sessions have been used since in the same process. It runs with the hooks of the session's last run. Input has only the common fields. Its output is ignored. A process that is killed does not fire it.
 
 ## Environment variables
 

@@ -145,11 +145,11 @@ Um arquivo de configurações com evento desconhecido, tipo de handler desconhec
 | `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest` | O nome da ferramenta: `Bash`, `Edit`, `mcp__jira__search`… |
 | `Stop`, `SubagentStop` | O nome do agente: `main` para a conversa, senão o do subagente (`general-purpose`, `Explore`, um nome próprio…) |
 | `SubagentStart` | O tipo do subagente |
-| `SessionStart` | `startup` ou `resume` |
+| `SessionStart`, `RunStart` | `startup` ou `resume` |
 | `PreCompact`, `PostCompact` | `manual` ou `auto` |
 | `Notification` | O tipo da notificação |
 | `ModelRequest`, `ModelResponse`, `ModelError` | `main` ou `sub-agent` |
-| `UserPromptSubmit`, `SessionEnd`, `Brief` | Uma string vazia: deixe o matcher vazio |
+| `UserPromptSubmit`, `SessionEnd`, `RunEnd`, `Brief` | Uma string vazia: deixe o matcher vazio |
 
 Os grupos rodam em ordem; dentro de um grupo, os handlers rodam em ordem. Assim que um bloqueia, os demais são pulados.
 
@@ -157,8 +157,9 @@ Os grupos rodam em ordem; dentro de um grupo, os handlers rodam em ordem. Assim 
 
 | Evento | Quando dispara | Pode bloquear? |
 |---|---|---|
-| [`Brief`](#brief) | Antes de cada prompt, depois que skills, agentes, regras e arquivos de instruções foram encontrados | Sim: a execução não começa |
-| [`SessionStart`](#sessionstart) | No início de cada execução | Sim: a execução não começa |
+| [`Brief`](#brief) | Quando skills, agentes, regras e arquivos de instruções são encontrados: no primeiro prompt de uma sessão e depois que um desses arquivos mudou | Sim: a execução não começa |
+| [`SessionStart`](#sessionstart) | Uma vez por sessão, no primeiro prompt dela neste processo | Sim: a execução não começa |
+| [`RunStart`](#runstart) | No início de cada execução (cada prompt que você envia) | Sim: a execução não começa |
 | [`UserPromptSubmit`](#userpromptsubmit) | Quando o prompt é enviado, antes de o modelo vê-lo | Sim: a execução não começa |
 | [`ModelRequest`](#modelrequest) | Antes de cada chamada ao modelo | Sim: a execução falha |
 | [`ModelResponse`](#modelresponse) | Quando chega uma resposta, antes de ser mostrada ou usada | Sim: o modelo responde de novo |
@@ -173,7 +174,8 @@ Os grupos rodam em ordem; dentro de um grupo, os handlers rodam em ordem. Assim 
 | [`Stop`](#stop) | Quando o agente principal quer terminar | Sim: ele continua trabalhando |
 | [`PreCompact`](#precompact) | Antes de a conversa ser resumida | Sim: a compactação é cancelada |
 | [`PostCompact`](#postcompact) | Depois de a conversa ser resumida | Não |
-| [`SessionEnd`](#sessionend) | No fim de cada execução | Não |
+| [`RunEnd`](#runend) | No fim de cada execução | Não |
+| [`SessionEnd`](#sessionend) | Uma vez por sessão, quando o {{NAME}} a deixa | Não |
 
 ## Entrada do hook
 
@@ -194,7 +196,7 @@ Cada evento acrescenta campos próprios, listados abaixo. Um hook `command` lê 
 
 | Código de saída | Efeito |
 |---|---|
-| `0` | Sucesso. O stdout é lido como JSON (veja abaixo). Em `SessionStart` e `UserPromptSubmit`, um stdout que não é JSON entra como contexto para o agente. |
+| `0` | Sucesso. O stdout é lido como JSON (veja abaixo). Em `SessionStart`, `RunStart` e `UserPromptSubmit`, um stdout que não é JSON entra como contexto para o agente. |
 | `2` | Bloqueia. O stderr é o motivo. Os demais hooks do evento são pulados. |
 | Qualquer outro | O hook falhou. `Hook failed: <stderr>` é acrescentado ao contexto que o agente vê, e o próximo hook roda. Em `Brief`, `ModelRequest`, `ModelResponse` e `ModelError` a falha só vai para o log. |
 
@@ -254,11 +256,11 @@ Quando um hook não consegue rodar, estoura o tempo ou é cancelado:
 | `PreToolUse` | A chamada é recusada: `Hook blocked <ferramenta>: hook cancelled or timed out` |
 | `PostToolUse`, `PostToolUseFailure` | O resultado é marcado como falho, com `Hook failed: …` acrescentado |
 | `PermissionRequest` | A chamada falha com o erro |
-| `SessionStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `Brief` | A execução para com o erro |
+| `SessionStart`, `RunStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `Brief` | A execução para com o erro |
 | `SubagentStart` | O subagente falha |
 | `PreCompact`, `PostCompact` | A compactação falha |
 | `ModelRequest`, `ModelResponse`, `ModelError` | Vai para o log; a chamada segue como se não houvesse hook |
-| `Notification`, `SessionEnd` | Vai para o log e é ignorado |
+| `Notification`, `RunEnd`, `SessionEnd` | Vai para o log e é ignorado |
 
 ## Tipos de handler
 
@@ -372,13 +374,13 @@ Perguntam a um modelo se uma condição é verdadeira. O modelo recebe o seu `pr
 }
 ```
 
-Hooks `prompt` e `agent` funcionam nos eventos que rodam junto com o modelo: `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `UserPromptSubmit`, `Stop` e `SubagentStop`. São recusados em `Brief`, `SessionStart`, `SessionEnd`, `SubagentStart`, `PreCompact`, `PostCompact`, `ModelRequest`, `ModelResponse` e `ModelError`.
+Hooks `prompt` e `agent` funcionam nos eventos que rodam junto com o modelo: `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionRequest`, `UserPromptSubmit`, `Stop` e `SubagentStop`. São recusados em `Brief`, `SessionStart`, `SessionEnd`, `RunStart`, `RunEnd`, `SubagentStart`, `PreCompact`, `PostCompact`, `ModelRequest`, `ModelResponse` e `ModelError`.
 
 ## Referência de eventos
 
 ### Brief
 
-Dispara antes de cada prompt, depois que o {{NAME}} encontrou as skills, os agentes, as regras e os arquivos de instruções, e antes de o prompt de sistema ser montado. Use-o para acrescentar, mudar ou remover esses itens, por exemplo para injetar regras da equipe vindas de um servidor.
+Dispara depois que o {{NAME}} encontrou as skills, os agentes, as regras e os arquivos de instruções, antes de o prompt de sistema ser montado. Eles são encontrados no primeiro prompt de uma sessão e guardados para os prompts seguintes até que um dos arquivos de onde vêm (configurações, arquivos de instruções, as pastas de skills, agentes, regras, hooks, plugins ou ferramentas) mude; o prompt seguinte os encontra de novo e o hook roda de novo. Use-o para acrescentar, mudar ou remover esses itens, por exemplo para injetar regras da equipe vindas de um servidor.
 
 A entrada acrescenta:
 
@@ -406,12 +408,20 @@ export default (input) => ({
 
 ### SessionStart
 
-Dispara no início de cada execução (cada prompt que você envia).
+Dispara uma vez por sessão: no primeiro prompt que o {{NAME}} executa para ela neste processo, seja a conversa nova ou retomada. Os prompts seguintes da mesma sessão não o disparam de novo; [`RunStart`](#runstart) dispara a cada prompt.
 
 | Campo de entrada | Valor |
 |---|---|
 | `source` | `resume` quando a execução continua uma conversa anterior, senão `startup` |
 | `model` | O id do modelo |
+
+O contexto do hook (JSON `additionalContext`/`systemMessage`, ou stdout simples) é acrescentado a essa primeira mensagem e fica na conversa. Um bloqueio encerra a execução com o motivo.
+
+> **Mudou:** `SessionStart` e `SessionEnd` disparavam a cada prompt. Um hook que precisa rodar a cada prompt agora escuta `RunStart` ou `RunEnd`: troque `export const event = "SessionStart"` por `"RunStart"`, ou mova uma entrada das configurações de `"SessionStart"` para `"RunStart"`.
+
+### RunStart
+
+Dispara no início de cada execução (cada prompt que você envia), depois de `SessionStart` quando este dispara, antes de `UserPromptSubmit`. A mesma entrada de `SessionStart`.
 
 O contexto do hook (JSON `additionalContext`/`systemMessage`, ou stdout simples) é acrescentado à sua mensagem. Um bloqueio encerra a execução com o motivo.
 
@@ -643,9 +653,13 @@ Um bloqueio cancela a compactação: `Compaction blocked by hook: <motivo>`.
 
 Dispara depois de a conversa ser resumida. Mesma entrada de `PreCompact`. O contexto é acrescentado à conversa depois do resumo.
 
+### RunEnd
+
+Dispara no fim de cada execução, qualquer que seja o resultado, antes de a conversa ser salva. A entrada tem só os campos comuns. A saída é ignorada.
+
 ### SessionEnd
 
-Dispara no fim de cada execução, qualquer que seja o resultado. A entrada tem só os campos comuns. A saída é ignorada.
+Dispara uma vez por sessão que disparou `SessionStart`, quando o {{NAME}} deixa a sessão: quando você sai, ou quando outras oito sessões foram usadas depois dela no mesmo processo. Roda com os hooks da última execução da sessão. A entrada tem só os campos comuns. A saída é ignorada. Um processo que é morto não o dispara.
 
 ## Variáveis de ambiente
 

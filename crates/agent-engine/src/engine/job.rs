@@ -20,12 +20,14 @@ pub(super) struct Job {
     pub(super) gate: RunGate,
     pub(super) recorder: Option<Arc<super::record::Recorder>>,
     pub(super) held: Arc<Mutex<Option<crate::sessions::Hold>>>,
+    pub(super) live: super::live::Live,
 }
 
 impl Job {
     pub(super) fn run(mut self, workspace: Workspace) {
         let started = Instant::now();
         let stop = self.phases(workspace).unwrap_or_else(|stop| stop);
+        self.live.leave();
         self.end(stop, started);
     }
 

@@ -221,7 +221,9 @@ fn absorbed(event: &str, result: CommandOutput, decision: &mut Decision, input: 
     }
     match serde_json::from_str::<Value>(&result.stdout) {
         Ok(value) => answered(event, &value, decision, input)?,
-        Err(_) if matches!(event, "SessionStart" | "UserPromptSubmit") => decision.context.push_str(&result.stdout),
+        Err(_) if matches!(event, "SessionStart" | "RunStart" | "UserPromptSubmit") => {
+            decision.context.push_str(&result.stdout);
+        }
         Err(_) => {}
     }
     Ok(if decision.blocked.is_some() { Handled::Blocked } else { Handled::GoOn })
