@@ -31,7 +31,13 @@ async fn world(terminal: Launch) -> World {
     tokio::spawn(async move { axum::serve(relay_listener, relay::router(relay::Limits::default(), &[])).await });
     let console_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let console = console_listener.local_addr().unwrap();
-    let settings = Settings { token: "t".into(), port: console.port(), assets: Assets::Missing, terminal };
+    let settings = Settings {
+        token: "t".into(),
+        port: console.port(),
+        assets: Assets::Missing,
+        terminal,
+        entries: Default::default(),
+    };
     let app = console::router(settings, Live::default());
     tokio::spawn(async move { axum::serve(console_listener, app).await });
     let folder = tempfile::tempdir().unwrap();
@@ -198,6 +204,43 @@ async fn a_revoked_phone_is_cut_off() {
     let mut phone = world.pair(&StaticKey::generate().unwrap(), &link, "phone").await.unwrap();
     world.book().revoke("phone").unwrap();
     assert_eq!(next_binary(&mut phone.socket).await, None);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_paste_into_a_busy_terminal_never_freezes_the_link_and_a_revoked_phone_is_still_cut_off() {
+    let world = world(shell("yes")).await;
+    let link = world.book().invite().unwrap();
+    let mut phone = world.pair(&StaticKey::generate().unwrap(), &link, "phone").await.unwrap();
+    phone.ask(&Ask::Socket { id: 7, path: "/api/terminal?cols=80&rows=24".into() }).await;
+    assert!(matches!(phone.answer().await, Some(Answer::Head { id: 7, status: 101, .. })));
+    let Phone { socket, mut transport } = phone;
+    let (mut sink, mut stream) = socket.split();
+    let (closed, seen_closed) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        let ended = loop {
+            match tokio::time::timeout_at(deadline, stream.next()).await {
+                Err(_) => break false,
+                Ok(None | Some(Err(_) | Ok(Message::Close(_)))) => break true,
+                Ok(Some(Ok(_))) => {}
+            }
+        };
+        let _ = closed.send(ended);
+    });
+    let paste = serde_json::to_vec(&Ask::Send { id: 7, data: Payload::bytes(&[b'x'; 8 * 1024]) }).unwrap();
+    let flood = async {
+        for _ in 0..2_000 {
+            for piece in transport.seal(&paste).unwrap() {
+                if sink.send(Message::Binary(piece.into())).await.is_err() {
+                    return;
+                }
+            }
+        }
+    };
+    let _ = tokio::time::timeout(Duration::from_secs(5), flood).await;
+    world.book().revoke("phone").unwrap();
+    let cut = tokio::time::timeout(WAIT + Duration::from_secs(5), seen_closed).await;
+    assert!(matches!(cut, Ok(Ok(true))), "the link froze behind the paste and the revocation never landed");
 }
 
 #[tokio::test]

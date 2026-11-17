@@ -9,7 +9,7 @@ O `/trace` abre no navegador uma página que mostra o que o agente fez em cada s
 
 ```text
 /trace
-Live trace opened in the browser: http://127.0.0.1:53817/?token=…
+Live trace opened in the browser: http://127.0.0.1:53817/#enter=…
 ```
 
 O `/console` faz o mesmo. Na primeira vez, o {{NAME}} inicia um pequeno servidor web, abre a página no navegador padrão e imprime o endereço no chat. O servidor fica de pé até você sair do chat; os próximos `/trace` ou `/docs` o reaproveitam.
@@ -121,7 +121,7 @@ Exportar nunca atrasa um run. Um run terminado entra numa fila e uma thread em s
 ## Acesso e segurança
 
 - O servidor só escuta em `127.0.0.1`, numa porta livre escolhida ao iniciar.
-- O endereço impresso no chat carrega um token secreto. Abri-lo define um cookie `HttpOnly` e `SameSite=Strict` e tira o token do endereço; os dados da página exigem esse cookie. O cookie leva o nome da porta do servidor, então as páginas de dois chats abertos ao mesmo tempo não derrubam o acesso uma da outra.
+- O endereço impresso no chat carrega, depois do `#`, um código de entrada de uso único, que o navegador nunca envia a um servidor. A página tira o código do endereço, troca-o uma vez pelo token do console e guarda esse token no próprio armazenamento, que pertence só àquela porta; toda requisição pelos dados da página o leva. Nenhum cookie é definido, porque o navegador mandaria um cookie de `127.0.0.1` também para qualquer outro servidor local. Um código vale uma vez e por dois minutos: rode `/trace` ou `/console` de novo para um link novo.
 - O servidor só responde a requisições endereçadas a `127.0.0.1:<porta>` ou `localhost:<porta>`; qualquer outro nome de host recebe `403`.
 - Requisições que vêm de outro site são recusadas.
 - Um link de uma execução anterior do chat não funciona mais (`This console link is not valid any more.`); digite `/trace` de novo para ter um novo.

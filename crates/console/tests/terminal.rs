@@ -14,20 +14,15 @@ type Socket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStre
 
 struct Served {
     url: String,
-    port: u16,
 }
 
 impl Served {
-    fn cookie(&self, token: &str) -> String {
-        format!("console_token_{}={token}", self.port)
-    }
-
     async fn open(&self) -> Socket {
         self.open_at("").await.expect("connected")
     }
 
     async fn open_at(&self, query: &str) -> Result<Socket, Error> {
-        connect(&format!("{}{query}", self.url), Some(&self.cookie("t"))).await
+        connect(&format!("{}{query}", self.url), Some("Bearer t")).await
     }
 }
 
@@ -42,16 +37,22 @@ async fn serve(terminal: Launch) -> Served {
 async fn serve_with(terminal: Launch, live: Live) -> Served {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("listen");
     let address = listener.local_addr().expect("address");
-    let settings = Settings { token: "t".into(), port: address.port(), assets: Assets::Missing, terminal };
+    let settings = Settings {
+        token: "t".into(),
+        port: address.port(),
+        assets: Assets::Missing,
+        terminal,
+        entries: Default::default(),
+    };
     let app = console::router(settings, live);
     tokio::spawn(async move { axum::serve(listener, app).await });
-    Served { url: format!("ws://{address}/api/terminal?cols=80&rows=24"), port: address.port() }
+    Served { url: format!("ws://{address}/api/terminal?cols=80&rows=24") }
 }
 
-async fn connect(url: &str, cookie: Option<&str>) -> Result<Socket, Error> {
+async fn connect(url: &str, authorization: Option<&str>) -> Result<Socket, Error> {
     let mut request = url.into_client_request().expect("request");
-    if let Some(cookie) = cookie {
-        request.headers_mut().insert("cookie", cookie.parse().expect("cookie"));
+    if let Some(authorization) = authorization {
+        request.headers_mut().insert("authorization", authorization.parse().expect("authorization"));
     }
     tokio_tungstenite::connect_async(request).await.map(|(socket, _)| socket)
 }
@@ -126,8 +127,10 @@ async fn the_page_learns_when_the_program_ends() {
 #[tokio::test]
 async fn a_terminal_needs_the_console_token() {
     let served = serve(shell("printf secret")).await;
-    assert!(connect(&served.url, None).await.is_err(), "no cookie, no shell");
-    assert!(connect(&served.url, Some(&served.cookie("wrong"))).await.is_err(), "a wrong cookie, no shell");
+    assert!(connect(&served.url, None).await.is_err(), "no token, no shell");
+    assert!(connect(&served.url, Some("Bearer wrong")).await.is_err(), "a wrong token, no shell");
+    let in_the_query = format!("{}&{}=t", served.url, console::ACCESS_QUERY);
+    assert!(connect(&in_the_query, None).await.is_ok(), "a browser's socket carries the token in the query");
 }
 
 fn echo_arguments() -> Launch {

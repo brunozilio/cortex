@@ -11,11 +11,13 @@ use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-const COOKIE: &str = "console_token_4000=t";
+const BEARER: &str = "Bearer t";
 
 fn app(live: &Live) -> axum::Router {
     let terminal = console::Launch::this_program(std::env::temp_dir());
-    console::router(Settings { token: "t".into(), port: 4000, assets: Assets::Missing, terminal }, live.clone())
+    let settings =
+        Settings { token: "t".into(), port: 4000, assets: Assets::Missing, terminal, entries: Default::default() };
+    console::router(settings, live.clone())
 }
 
 fn started() -> console::Running {
@@ -27,7 +29,7 @@ async fn call(live: &Live, method: &str, path: &str, body: Option<Value>) -> (St
         .method(method)
         .uri(path)
         .header(header::HOST, "127.0.0.1:4000")
-        .header(header::COOKIE, COOKIE)
+        .header(header::AUTHORIZATION, BEARER)
         .header(header::CONTENT_TYPE, "application/json")
         .body(body.map_or_else(Body::empty, |body| Body::from(body.to_string())))
         .expect("request");
@@ -87,7 +89,7 @@ async fn a_body_too_large_or_not_json_is_refused_in_json() {
 
     let request = Request::post("/api/watch")
         .header(header::HOST, "127.0.0.1:4000")
-        .header(header::COOKIE, COOKIE)
+        .header(header::AUTHORIZATION, BEARER)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from("{not json"))
         .expect("request");
@@ -101,7 +103,7 @@ async fn a_body_too_large_or_not_json_is_refused_in_json() {
 fn following() -> Request<Body> {
     Request::get("/api/events")
         .header(header::HOST, "127.0.0.1:4000")
-        .header(header::COOKIE, COOKIE)
+        .header(header::AUTHORIZATION, BEARER)
         .body(Body::empty())
         .expect("request")
 }
@@ -176,9 +178,8 @@ fn events(running: &console::Running) -> BufReader<TcpStream> {
     let mut stream = TcpStream::connect(running.address()).expect("connect");
     stream.set_read_timeout(Some(Duration::from_secs(5))).expect("timeout");
     let request = format!(
-        "GET /api/events HTTP/1.1\r\nHost: {}\r\nCookie: console_token_{}={}\r\nAccept: text/event-stream\r\n\r\n",
+        "GET /api/events HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nAccept: text/event-stream\r\n\r\n",
         running.address(),
-        running.address().port(),
         running.token()
     );
     stream.write_all(request.as_bytes()).expect("request");

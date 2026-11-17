@@ -8,7 +8,7 @@ use axum::routing::{any, get};
 use serde_json::json;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{Assets, Launch, Live};
+use crate::{Assets, Entries, Launch, Live};
 
 #[derive(Debug, Clone)]
 pub struct Settings {
@@ -16,11 +16,13 @@ pub struct Settings {
     pub port: u16,
     pub assets: Assets,
     pub terminal: Launch,
+    pub entries: Arc<Entries>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Shared {
     pub token: Arc<str>,
+    pub entries: Arc<Entries>,
     pub port: u16,
     pub live: Live,
     pub terminal: Launch,
@@ -31,6 +33,7 @@ pub struct Shared {
 pub fn router(settings: Settings, live: Live) -> Router {
     let shared = Shared {
         token: settings.token.into(),
+        entries: settings.entries,
         port: settings.port,
         live,
         terminal: settings.terminal,

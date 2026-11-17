@@ -43,7 +43,7 @@ fn options(project: &std::path::Path) -> console::Options {
     console::Options { assets: console::discover(), port: 0, folder: project.to_owned() }
 }
 
-pub(crate) fn served(app: &mut App, page: &str) -> Option<(String, Live)> {
+fn running(app: &mut App) -> Option<&console::Running> {
     let project = app.cwd.clone();
     let follow = app.features.get::<Follow>(NAME)?;
     if follow.served.is_none() {
@@ -55,7 +55,19 @@ pub(crate) fn served(app: &mut App, page: &str) -> Option<(String, Live)> {
             }
         }
     }
-    follow.served.as_ref().map(|served| (served.url_at(page), served.live()))
+    app.features.get::<Follow>(NAME)?.served.as_ref()
+}
+
+pub(crate) fn served(app: &mut App, page: &str) -> Option<(String, Live)> {
+    running(app).map(|served| (served.url_at(page), served.live()))
+}
+
+pub(crate) fn remote_options(
+    app: &mut App,
+    relay: String,
+    folder: std::path::PathBuf,
+) -> Option<console::remote::Options> {
+    running(app).map(|served| console::remote::Options::for_console(served, relay, folder))
 }
 
 pub(crate) fn mirror(app: &mut App) -> Option<Mirror> {

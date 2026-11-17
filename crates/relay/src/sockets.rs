@@ -59,7 +59,7 @@ async fn serve_machine(socket: WebSocket, relay: Relay, claim: Claim, id: String
             message = stream.next() => {
                 match message {
                     Some(Ok(Message::Binary(bytes))) => {
-                        if !from_machine(&relay, &id, &bytes).await {
+                        if !from_machine(&relay, &id, &bytes) {
                             break;
                         }
                     }
@@ -82,11 +82,11 @@ async fn serve_machine(socket: WebSocket, relay: Relay, claim: Claim, id: String
     drop(claim);
 }
 
-async fn from_machine(relay: &Relay, id: &str, bytes: &[u8]) -> bool {
+fn from_machine(relay: &Relay, id: &str, bytes: &[u8]) -> bool {
     match Frame::decode(bytes) {
         Ok(Frame::Data(channel, payload)) => {
             if let Some(phone) = relay.rooms.phone(id, channel)
-                && phone.send(payload).await.is_err()
+                && phone.try_send(payload).is_err()
             {
                 relay.rooms.hang_up(id, channel);
             }

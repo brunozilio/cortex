@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use console::remote::{Book, Options, Remote, Status};
+use console::remote::{Book, Remote, Status};
 
 use super::{Feature, Slash};
 use crate::remote::{RemoteAction, answer, folder};
@@ -86,8 +86,7 @@ fn connect(app: &mut App, book: &Book) {
         return;
     }
     let Some(folder) = folder() else { return };
-    let Some((link, _)) = super::trace::follow::served(app, "/") else { return };
-    let Some(options) = Options::for_console_link(&link, relay, folder) else { return };
+    let Some(options) = super::trace::follow::remote_options(app, relay, folder) else { return };
     match console::remote::start(options) {
         Ok(remote) => {
             if let Some(linked) = app.features.get::<Linked>(NAME) {

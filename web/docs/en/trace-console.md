@@ -9,7 +9,7 @@ description: Open a live page in your browser that shows every session's runs, s
 
 ```text
 /trace
-Live trace opened in the browser: http://127.0.0.1:53817/?token=…
+Live trace opened in the browser: http://127.0.0.1:53817/#enter=…
 ```
 
 `/console` does the same. {{NAME}} starts a small web server the first time, opens the page in your default browser and prints the address in the chat. The server stays up until you quit the chat; later `/trace` or `/docs` commands reuse it.
@@ -121,7 +121,7 @@ Exporting never slows a run down. A finished run is queued and a background thre
 ## Access and security
 
 - The server listens only on `127.0.0.1`, on a free port chosen at start.
-- The address printed in the chat carries a secret token. Opening it sets an `HttpOnly`, `SameSite=Strict` cookie and removes the token from the address; the page's data needs that cookie. The cookie is named after the server's port, so the pages of two chats open at once do not sign each other out.
+- The address printed in the chat carries a one-time entry code after the `#`, which the browser never sends to a server. The page takes the code out of the address, trades it once for the console's token and keeps that token in its own storage, which belongs to that port alone; every request for the page's data carries it. No cookie is set, because the browser would send a cookie for `127.0.0.1` to every other local server too. A code works once and for two minutes: run `/trace` or `/console` again for a fresh link.
 - The server only answers requests addressed to `127.0.0.1:<port>` or `localhost:<port>`; any other host name gets `403`.
 - Requests that come from another website are refused.
 - A link from an earlier run of the chat no longer works (`This console link is not valid any more.`); type `/trace` again for a new one.

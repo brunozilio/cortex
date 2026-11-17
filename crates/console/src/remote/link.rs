@@ -135,7 +135,7 @@ async fn relay(place: &Place, connection: Connection) {
                         tokio::spawn(channel::serve(place.clone(), id, receiving, out.clone()));
                     }
                     Ok(Frame::Data(id, payload)) => {
-                        if let Some(incoming) = channels.get(&id) && incoming.send(payload).await.is_err() {
+                        if let Some(incoming) = channels.get(&id) && incoming.try_send(payload).is_err() {
                             channels.remove(&id);
                         }
                     }

@@ -68,6 +68,25 @@ async fn a_phone_and_its_machine_exchange_bytes_the_relay_only_forwards() {
     assert_eq!(next_binary(&mut phone).await.unwrap(), b"sealed reply");
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_phone_that_stops_reading_is_dropped_instead_of_holding_up_its_machine_s_other_phones() {
+    let address = relay(relay::Limits::default()).await;
+    let mut machine = socket(&address, &format!("/machine?id={ID}")).await.unwrap();
+    let _stuck = socket(&address, &format!("/phone?machine={ID}")).await.unwrap();
+    let Frame::Open(stuck) = next_frame(&mut machine).await else { panic!() };
+    let mut reading = socket(&address, &format!("/phone?machine={ID}")).await.unwrap();
+    let Frame::Open(open) = next_frame(&mut machine).await else { panic!() };
+    let chunk = vec![b'x'; 60 * 1024];
+    let flood = async {
+        for _ in 0..1_000 {
+            machine.send(Message::Binary(Frame::Data(stuck, chunk.clone()).encode().into())).await.unwrap();
+        }
+    };
+    assert!(tokio::time::timeout(Duration::from_secs(20), flood).await.is_ok(), "the machine was held up");
+    machine.send(Message::Binary(Frame::Data(open, b"still here".to_vec()).encode().into())).await.unwrap();
+    assert_eq!(next_binary(&mut reading).await.unwrap(), b"still here");
+}
+
 #[tokio::test]
 async fn the_machine_hears_when_a_phone_leaves_and_can_close_a_phone() {
     let address = relay(relay::Limits::default()).await;

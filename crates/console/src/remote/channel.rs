@@ -67,7 +67,7 @@ async fn talk(
                 let Some(sealed) = sealed else { break };
                 match transport.open(&sealed) {
                     Ok(Some(plain)) => match serde_json::from_slice::<Ask>(&plain) {
-                        Ok(ask) => take(place, ask, &answers, &mut streams).await,
+                        Ok(ask) => take(place, ask, &answers, &mut streams),
                         Err(_) => break,
                     },
                     Ok(None) => {}
@@ -107,12 +107,17 @@ async fn send(transport: &mut Transport, channel: u32, answer: &Answer, out: &mp
     true
 }
 
-async fn take(place: &Place, ask: Ask, answers: &mpsc::Sender<Answer>, streams: &mut HashMap<u32, Stream>) {
+fn take(place: &Place, ask: Ask, answers: &mpsc::Sender<Answer>, streams: &mut HashMap<u32, Stream>) {
     let id = ask.id();
     match ask {
         Ask::Send { data, .. } => {
-            if let Some(typed) = streams.get(&id).and_then(|stream| stream.typed.clone()) {
-                let _ = typed.send(data).await;
+            let typed = streams.get(&id).and_then(|stream| stream.typed.as_ref());
+            if typed.is_some_and(|typed| typed.try_send(data).is_err())
+                && let Some(stream) = streams.remove(&id)
+            {
+                stream.task.abort();
+                let error = Some("the terminal fell behind what was typed; open it again".to_owned());
+                let _ = answers.try_send(Answer::End { id, error });
             }
         }
         Ask::Close { .. } => {
@@ -122,7 +127,7 @@ async fn take(place: &Place, ask: Ask, answers: &mpsc::Sender<Answer>, streams: 
         }
         _ if streams.contains_key(&id) || streams.len() >= MOST_STREAMS => {
             let error = Some("too many requests at once on this channel".to_owned());
-            let _ = answers.send(Answer::End { id, error }).await;
+            let _ = answers.try_send(Answer::End { id, error });
         }
         Ask::Socket { path, .. } => {
             let (typed, typing) = mpsc::channel(QUEUED);

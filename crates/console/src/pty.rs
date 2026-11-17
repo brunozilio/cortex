@@ -63,14 +63,16 @@ pub struct Opened {
     pub child: Owned,
 }
 
-pub struct Owned(Box<dyn Child + Send + Sync>);
+pub struct Owned(Option<Box<dyn Child + Send + Sync>>);
 
 impl Drop for Owned {
     fn drop(&mut self) {
-        if let Ok(None) = self.0.try_wait() {
-            let _ = self.0.kill();
+        let Some(mut child) = self.0.take() else { return };
+        if let Ok(Some(_)) = child.try_wait() {
+            return;
         }
-        let _ = self.0.wait();
+        let _ = child.kill();
+        let _ = std::thread::Builder::new().name("terminal-reaper".into()).spawn(move || child.wait());
     }
 }
 
@@ -85,9 +87,29 @@ pub fn open(launch: &Launch, size: Size) -> Result<Opened, String> {
     drop(pair.slave);
     let reader = pair.master.try_clone_reader().map_err(|error| error.to_string())?;
     let writer = pair.master.take_writer().map_err(|error| error.to_string())?;
-    Ok(Opened { master: pair.master, reader, writer, child: Owned(child) })
+    Ok(Opened { master: pair.master, reader, writer, child: Owned(Some(child)) })
 }
 
 pub fn resize(master: &dyn MasterPty, size: Size) {
     let _ = master.resize(size.pty());
+}
+
+#[cfg(all(test, unix))]
+#[allow(clippy::expect_used, reason = "a failed setup step stops the test")]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn letting_go_of_a_terminal_whose_program_ignores_the_hangup_does_not_wait_for_it() {
+        let launch = Launch {
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), "trap '' HUP TERM; sleep 30".into()],
+            cwd: std::env::temp_dir(),
+        };
+        let opened = open(&launch, Size { cols: 80, rows: 24 }).expect("opened");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let started = std::time::Instant::now();
+        drop(opened);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
+    }
 }

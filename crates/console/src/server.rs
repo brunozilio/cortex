@@ -1,11 +1,12 @@
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use tokio::sync::oneshot;
 
-use crate::{Assets, Launch, Live, Settings};
+use crate::{Assets, Entries, Launch, Live, Settings};
 
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(1);
 
@@ -16,8 +17,14 @@ pub struct Options {
     pub folder: PathBuf,
 }
 
-fn settings(options: Options, token: &str, port: u16) -> Settings {
-    Settings { token: token.to_owned(), port, assets: options.assets, terminal: Launch::this_program(options.folder) }
+fn settings(options: Options, token: &str, port: u16, entries: Arc<Entries>) -> Settings {
+    Settings {
+        token: token.to_owned(),
+        port,
+        assets: options.assets,
+        terminal: Launch::this_program(options.folder),
+        entries,
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -34,6 +41,7 @@ pub enum StartError {
 pub struct Running {
     address: SocketAddr,
     token: String,
+    entries: Arc<Entries>,
     live: Live,
     stop: Option<oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
@@ -57,8 +65,11 @@ impl Running {
     }
 
     pub fn url_at(&self, path: &str) -> String {
-        let joiner = if path.contains('?') { '&' } else { '?' };
-        format!("http://{}{path}{joiner}token={}", self.address, self.token)
+        let path = path.split('#').next().unwrap_or_default();
+        match self.entries.mint() {
+            Some(code) => format!("http://{}{path}#enter={code}", self.address),
+            None => format!("http://{}{path}", self.address),
+        }
     }
 }
 
@@ -77,15 +88,16 @@ pub fn start(options: Options) -> Result<Running, StartError> {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, options.port)).map_err(StartError::Listen)?;
     listener.set_nonblocking(true).map_err(StartError::Listen)?;
     let address = listener.local_addr().map_err(StartError::Listen)?;
-    let token = secret()?;
+    let token = crate::access::random_hex().ok_or_else(|| StartError::Secret("no randomness".into()))?;
     let live = Live::default();
-    let app = crate::router(settings(options, &token, address.port()), live.clone());
+    let entries = Arc::new(Entries::default());
+    let app = crate::router(settings(options, &token, address.port(), Arc::clone(&entries)), live.clone());
     let (stop, stopped) = oneshot::channel::<()>();
     let thread = std::thread::Builder::new()
         .name("console".into())
         .spawn(move || serve(listener, app, stopped))
         .map_err(StartError::Thread)?;
-    Ok(Running { address, token, live, stop: Some(stop), thread: Some(thread) })
+    Ok(Running { address, token, entries, live, stop: Some(stop), thread: Some(thread) })
 }
 
 fn serve(listener: TcpListener, app: axum::Router, stopped: oneshot::Receiver<()>) {
@@ -111,12 +123,6 @@ fn serve(listener: TcpListener, app: axum::Router, stopped: oneshot::Receiver<()
     runtime.shutdown_timeout(SHUTDOWN_GRACE);
 }
 
-fn secret() -> Result<String, StartError> {
-    let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).map_err(|error| StartError::Secret(error.to_string()))?;
-    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,7 +131,7 @@ mod tests {
     fn the_page_s_terminal_starts_in_the_folder_the_console_was_started_for() {
         let project = PathBuf::from("/work/project");
         let options = Options { assets: Assets::Missing, port: 0, folder: project.clone() };
-        let made = settings(options, "secret", 4321);
+        let made = settings(options, "secret", 4321, Arc::default());
         assert_eq!(made.terminal.cwd, project);
         assert_eq!((made.token.as_str(), made.port), ("secret", 4321));
     }

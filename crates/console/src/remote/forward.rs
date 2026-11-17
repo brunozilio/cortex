@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use futures_util::{SinkExt, StreamExt};
-use reqwest::header::{CONTENT_TYPE, COOKIE};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -14,7 +14,7 @@ const UNREACHABLE: u16 = 502;
 #[derive(Debug, Clone)]
 pub struct Local {
     address: SocketAddr,
-    cookie: String,
+    authorization: String,
     http: reqwest::Client,
 }
 
@@ -22,9 +22,9 @@ pub type Answers = mpsc::Sender<Answer>;
 
 impl Local {
     pub fn new(address: SocketAddr, token: &str) -> Self {
-        let cookie = format!("{}={token}", crate::access::cookie_name(address.port()));
+        let authorization = format!("Bearer {token}");
         let http = reqwest::Client::builder().no_proxy().build().unwrap_or_default();
-        Self { address, cookie, http }
+        Self { address, authorization, http }
     }
 
     pub async fn fetch(&self, ask: Ask, answers: Answers) {
@@ -41,8 +41,10 @@ impl Local {
             return refuse(&answers, id, "Only the console's API is forwarded.").await;
         }
         let method = reqwest::Method::from_bytes(method.as_bytes()).unwrap_or(reqwest::Method::GET);
-        let mut request =
-            self.http.request(method, format!("http://{}{path}", self.address)).header(COOKIE, &self.cookie);
+        let mut request = self
+            .http
+            .request(method, format!("http://{}{path}", self.address))
+            .header(AUTHORIZATION, &self.authorization);
         if let Some(kind) = content_type {
             request = request.header(CONTENT_TYPE, kind);
         }
@@ -80,8 +82,8 @@ impl Local {
         let Ok(mut request) = format!("ws://{}{path}", self.address).into_client_request() else {
             return refuse(&answers, id, "That is not a socket address.").await;
         };
-        if let Ok(cookie) = self.cookie.parse() {
-            request.headers_mut().insert(COOKIE, cookie);
+        if let Ok(authorization) = self.authorization.parse() {
+            request.headers_mut().insert(AUTHORIZATION, authorization);
         }
         let socket = match tokio_tungstenite::connect_async(request).await {
             Ok((socket, _)) => socket,
