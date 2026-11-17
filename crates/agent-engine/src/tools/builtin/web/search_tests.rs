@@ -1,11 +1,11 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 
 use super::super::WebSearch;
-use crate::model::ModelError;
 use crate::model::http::ScriptedHttp;
+use crate::model::{BoxFuture, CancellationToken, ModelError, Searched};
 use crate::tools::{Network, WebSearcher};
 use crate::tools::{Tool, Workspace};
 use llm_providers::web_search::Hit;
@@ -13,9 +13,39 @@ use llm_providers::web_search::Hit;
 struct Account(Result<Vec<Hit>, ModelError>);
 
 impl crate::model::Searcher for Account {
-    fn search(&self, _query: &str, _stop: &AtomicBool) -> Option<Result<Vec<Hit>, ModelError>> {
-        Some(self.0.clone())
+    fn search<'a>(&'a self, _query: &'a str, _cancel: &'a CancellationToken) -> BoxFuture<'a, Searched> {
+        Box::pin(std::future::ready(Some(self.0.clone())))
     }
+}
+
+struct Stalled;
+
+impl crate::model::Searcher for Stalled {
+    fn search<'a>(&'a self, _query: &'a str, cancel: &'a CancellationToken) -> BoxFuture<'a, Searched> {
+        Box::pin(async move {
+            cancel.cancelled().await;
+            Some(Err(ModelError::Cancelled))
+        })
+    }
+}
+
+#[test]
+fn a_stalled_search_ends_as_soon_as_the_run_is_cancelled() {
+    let mut workspace = Workspace::new("/tmp");
+    workspace.services.search = Some(WebSearcher(Arc::new(Stalled)));
+    let workspace = Arc::new(workspace);
+    let cancelling = Arc::clone(&workspace);
+    let (marked, cancelled_at) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(30));
+        let _ = marked.send(Instant::now());
+        cancelling.stop.cancel();
+    });
+    let out = WebSearch.run(&json!({"query": "rust"}), &workspace);
+    let ended = Instant::now();
+    assert!(out.is_error && out.content.contains("cancelled"), "{out:?}");
+    let cancelled = cancelled_at.recv().expect("cancelled");
+    assert!(ended - cancelled < Duration::from_secs(1), "{:?}", ended - cancelled);
 }
 
 fn rust_hit() -> Hit {

@@ -53,6 +53,7 @@ pub fn render(path: &Path, args: &str, cwd: &Path, granted: &Granted) -> Result<
         origin: granted.origin,
         confine: granted.confine.clone(),
         stop: Arc::clone(&stop),
+        cancel: crate::model::CancellationToken::new(),
         script: format!("the skill script {shown}"),
         capabilities,
         judge: Arc::clone(&granted.judge),

@@ -5,8 +5,8 @@ mod turns;
 use super::http::Http;
 use super::{BoxFuture, CancellationToken, KeySource, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use domain::{ModelOption, ModelProvider};
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub use llm_providers::Config;
 pub use llm_providers::oauth::Tokens;
@@ -61,14 +61,12 @@ impl ProviderClient {
         self.ready()?.transport.models()
     }
 
-    pub fn search(
+    pub async fn search(
         &self,
         query: &str,
-        stop: &AtomicBool,
+        cancel: &CancellationToken,
     ) -> Option<Result<Vec<llm_providers::web_search::Hit>, ModelError>> {
-        let ready = self.ready().ok()?;
-        let _turn = ready.transport.turns.take();
-        ready.transport.search(query, stop)
+        self.ready().ok()?.transport.search(query, cancel).await
     }
 }
 
@@ -88,9 +86,13 @@ impl ModelApi for ProviderClient {
                 let Some(_turn) = ready.transport.turns.take_unless(cancel).await else {
                     return Err(ModelError::Cancelled);
                 };
-                ready.transport.config(false)?;
+                ready.transport.config_under(false, cancel).await?;
             }
             ready.api.turn(request, on, cancel).await
         })
     }
 }
+
+#[cfg(test)]
+#[path = "refresh_tests.rs"]
+mod refresh_tests;

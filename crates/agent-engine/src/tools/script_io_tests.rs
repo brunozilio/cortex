@@ -1,10 +1,68 @@
 use std::io::BufReader;
+use std::time::{Duration, Instant};
 
-use serde_json::json;
+use serde_json::{Value, json};
 
-use super::{FETCHED, fetch_over};
+use super::FETCHED;
 use crate::model::http::{Http, Response, ScriptedHttp};
+use crate::model::{BoxFuture, CancellationToken, ModelError};
 use crate::tools::script_tool::Origin;
+
+fn fetch_over(web: &dyn Http, arguments: &Value, origin: Origin) -> Result<Value, String> {
+    super::fetch_over(web, arguments, origin, &CancellationToken::new())
+}
+
+#[derive(Debug)]
+struct Stalled;
+
+impl Http for Stalled {
+    fn one_hop<'a>(
+        &'a self,
+        _url: &'a str,
+        _headers: &'a [(String, String)],
+        _body: Option<&'a str>,
+        _cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn request_cancellable<'a>(
+        &'a self,
+        _url: &'a str,
+        _headers: &'a [(String, String)],
+        _body: Option<&'a str>,
+        _cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(std::future::pending())
+    }
+
+    fn addresses(&self, _host: &str) -> Result<Vec<std::net::IpAddr>, String> {
+        Ok(vec![std::net::IpAddr::from([93, 184, 216, 34])])
+    }
+
+    fn post(&self, _url: &str, _headers: &[(String, String)], _body: &str) -> Result<Response, String> {
+        Err("not used".into())
+    }
+}
+
+#[test]
+fn a_stalled_script_fetch_ends_as_soon_as_its_token_is_cancelled() {
+    for origin in [Origin::Owner, Origin::Project] {
+        let cancel = CancellationToken::new();
+        let canceller = cancel.clone();
+        let (marked, cancelled_at) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(30));
+            let _ = marked.send(Instant::now());
+            canceller.cancel();
+        });
+        let refused = super::fetch_over(&Stalled, &json!({ "url": "https://slow.dev/" }), origin, &cancel);
+        let ended = Instant::now();
+        assert_eq!(refused, Err("cancelled".to_owned()), "{origin:?}");
+        let cancelled = cancelled_at.recv().expect("cancelled");
+        assert!(ended - cancelled < Duration::from_secs(1), "{:?}", ended - cancelled);
+    }
+}
 
 fn urls(http: &ScriptedHttp) -> Vec<String> {
     http.sent().into_iter().map(|sent| sent.url).collect()
@@ -88,6 +146,6 @@ impl Http for Endless {
 fn a_fetched_body_is_cut_at_the_cap_whoever_asks() {
     for origin in [Origin::Owner, Origin::Project] {
         let fetched = fetch_over(&Endless, &json!({ "url": "https://big.dev/" }), origin).expect("fetched");
-        assert_eq!(fetched["body"].as_str().map(str::len), usize::try_from(FETCHED).ok(), "{origin:?}");
+        assert_eq!(fetched["body"].as_str().map(str::len), Some(FETCHED), "{origin:?}");
     }
 }

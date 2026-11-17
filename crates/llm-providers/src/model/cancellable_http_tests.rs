@@ -32,10 +32,14 @@ fn an_error_names_what_caused_it_once() {
     assert_eq!(described(&repeated), "tcp connect error: refused");
 }
 
+fn got(address: &str) -> Result<Response, ModelError> {
+    let ask = Ask { total: Some(Duration::from_secs(5)), ..Ask::new(address, &[], None) };
+    platform::runtime::block_on(fetch(ask, &CancellationToken::new())).expect("runtime")
+}
+
 #[test]
 fn a_request_that_cannot_connect_says_why() {
-    let never = AtomicBool::new(false);
-    let error = send("https://127.0.0.1:1/", &[], None, &never, Duration::from_secs(5)).expect_err("refused");
+    let error = got("https://127.0.0.1:1/").expect_err("refused");
     let text = error.to_string();
     assert!(text.contains("error sending request") && text.contains("connect"), "{text}");
 }
@@ -49,7 +53,7 @@ fn keep_alive_server(answers: usize) -> (String, std::sync::Arc<std::sync::atomi
     std::thread::spawn(move || {
         let mut answered = 0;
         for stream in listener.incoming() {
-            counted.fetch_add(1, Ordering::SeqCst);
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let Ok(mut stream) = stream else { return };
             let mut reader = std::io::BufReader::new(stream.try_clone().expect("clone"));
             while answered < answers {
@@ -74,27 +78,12 @@ fn keep_alive_server(answers: usize) -> (String, std::sync::Arc<std::sync::atomi
 #[test]
 fn requests_share_one_pooled_connection() {
     let (address, accepted) = keep_alive_server(2);
-    let never = AtomicBool::new(false);
+    let never = CancellationToken::new();
     for _ in 0..2 {
-        let response = send(&address, &[], None, &never, Duration::from_secs(5)).expect("answer");
-        assert_eq!(response.text_stopped(&never).expect("body"), "ok");
+        let response = got(&address).expect("answer");
+        assert_eq!(platform::runtime::block_on(response.text(&never)).expect("runtime").expect("body"), "ok");
     }
-    assert_eq!(accepted.load(Ordering::SeqCst), 1);
-}
-
-#[test]
-fn a_stopped_request_is_cancelled_before_its_answer() {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
-    let address = format!("http://{}/", listener.local_addr().expect("address"));
-    let stop = std::sync::Arc::new(AtomicBool::new(false));
-    let stopper = stop.clone();
-    std::thread::spawn(move || {
-        let _held = listener.accept();
-        stopper.store(true, Ordering::SeqCst);
-        std::thread::park();
-    });
-    let error = send(&address, &[], None, &stop, Duration::from_secs(30)).expect_err("cancelled");
-    assert!(matches!(error, ModelError::Cancelled), "{error}");
+    assert_eq!(accepted.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
 
 fn silent_server() -> (String, std::sync::mpsc::Receiver<()>) {
@@ -131,9 +120,9 @@ fn a_cancelled_token_ends_a_request_waiting_for_its_answer_at_once() {
 }
 
 #[test]
-fn a_listened_stream_and_a_cancellable_post_end_when_their_token_is_cancelled() {
+fn every_cancellable_request_ends_when_its_token_is_cancelled() {
     use super::super::http::{Http, NetHttp};
-    for posted in [false, true] {
+    for asked in 0..4 {
         let (address, heard) = silent_server();
         let cancel = CancellationToken::new();
         let canceller = cancel.clone();
@@ -144,14 +133,13 @@ fn a_listened_stream_and_a_cancellable_post_end_when_their_token_is_cancelled() 
             let _ = marked.send(std::time::Instant::now());
             canceller.cancel();
         });
-        let asked = async {
-            if posted {
-                NetHttp.post_cancellable(&address, &[], "{}", &cancel).await
-            } else {
-                NetHttp.get_stream(&address, &[], &cancel).await
-            }
+        let request = match asked {
+            0 => NetHttp.post_cancellable(&address, &[], "{}", &cancel),
+            1 => NetHttp.get_stream(&address, &[], &cancel),
+            2 => NetHttp.one_hop(&address, &[], None, &cancel),
+            _ => NetHttp.request_cancellable(&address, &[], Some("{}"), &cancel),
         };
-        let fetched = platform::runtime::block_on(asked).expect("runtime");
+        let fetched = platform::runtime::block_on(request).expect("runtime");
         let ended = std::time::Instant::now();
         assert!(matches!(fetched, Err(ModelError::Cancelled)), "{fetched:?}");
         let cancelled = marked_at(&cancelled_at);

@@ -6,7 +6,6 @@ use tokio_util::sync::CancellationToken;
 
 use super::ModelError;
 
-pub const LEGACY_POLL: Duration = Duration::from_millis(25);
 pub const TOO_LONG: &str = "provider stream exceeds size limit";
 
 pub type Chunk = Result<Vec<u8>, String>;
@@ -220,34 +219,35 @@ impl Body {
         String::from_utf8(bytes).map_err(|_| ModelError::Network("the answer was not valid UTF-8".into()))
     }
 
+    pub async fn capped(mut self, cancel: &CancellationToken, cap: usize) -> Result<Vec<u8>, ModelError> {
+        let mut bytes = Vec::new();
+        while bytes.len() < cap {
+            let data = self.fill(cancel).await?;
+            if data.is_empty() {
+                break;
+            }
+            let count = data.len().min(cap - bytes.len());
+            bytes.extend_from_slice(&data[..count]);
+            self.consume_some(count);
+        }
+        Ok(bytes)
+    }
+
     fn arrived_blocking(&mut self) -> io::Result<Next> {
-        let pause = || io::Error::new(io::ErrorKind::TimedOut, "waiting for stream");
-        let waited = |result: Result<Next, ModelError>| result.map_err(|error| io::Error::other(error.to_string()));
+        let failed = |error: &dyn std::fmt::Display| io::Error::other(error.to_string());
         match &mut self.source {
             Source::Done => Ok(Next::End),
             Source::Reader(reader) => Self::read_reader(reader.as_mut()),
-            Source::Remote(response) => {
-                let next =
-                    platform::runtime::block_on(async { tokio::time::timeout(LEGACY_POLL, response.chunk()).await })
-                        .map_err(|error| io::Error::other(error.to_string()))?
-                        .map_err(|_| pause())?;
-                waited(match next {
-                    Ok(Some(bytes)) => Ok(Next::Bytes(bytes.to_vec())),
-                    Ok(None) => Ok(Next::End),
-                    Err(error) => Err(ModelError::Network(super::cancellable_http::described(&error))),
-                })
-            }
-            Source::Chunks(chunks) => {
-                let next =
-                    platform::runtime::block_on(async { tokio::time::timeout(LEGACY_POLL, chunks.recv()).await })
-                        .map_err(|error| io::Error::other(error.to_string()))?
-                        .map_err(|_| pause())?;
-                waited(match next {
-                    Some(Ok(bytes)) => Ok(Next::Bytes(bytes)),
-                    Some(Err(error)) => Err(ModelError::Network(error)),
-                    None => Ok(Next::End),
-                })
-            }
+            Source::Remote(response) => match platform::runtime::block_on(response.chunk()).map_err(|e| failed(&e))? {
+                Ok(Some(bytes)) => Ok(Next::Bytes(bytes.to_vec())),
+                Ok(None) => Ok(Next::End),
+                Err(error) => Err(failed(&super::cancellable_http::described(&error))),
+            },
+            Source::Chunks(chunks) => match platform::runtime::block_on(chunks.recv()).map_err(|e| failed(&e))? {
+                Some(Ok(bytes)) => Ok(Next::Bytes(bytes)),
+                Some(Err(error)) => Err(failed(&error)),
+                None => Ok(Next::End),
+            },
         }
     }
 }

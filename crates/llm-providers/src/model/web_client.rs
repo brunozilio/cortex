@@ -1,4 +1,3 @@
-use std::io::{self, BufRead};
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 
@@ -42,26 +41,6 @@ impl reqwest::dns::Resolve for PublicOnly {
             Ok(Box::new(found.into_iter()) as reqwest::dns::Addrs)
         })
     }
-}
-
-pub fn read_capped(body: &mut dyn BufRead, cap: u64) -> io::Result<Vec<u8>> {
-    let cap = usize::try_from(cap).unwrap_or(usize::MAX);
-    let mut bytes = Vec::new();
-    while bytes.len() < cap {
-        let taken = match body.fill_buf() {
-            Ok([]) => break,
-            Ok(data) => {
-                let taken = data.len().min(cap - bytes.len());
-                bytes.extend_from_slice(&data[..taken]);
-                taken
-            }
-            Err(error) if matches!(error.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) => continue,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) => return Err(error),
-        };
-        body.consume(taken);
-    }
-    Ok(bytes)
 }
 
 #[cfg(test)]

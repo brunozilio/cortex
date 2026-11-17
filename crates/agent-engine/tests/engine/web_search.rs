@@ -1,8 +1,7 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use agent_engine::model::scripted::ScriptedModel;
-use agent_engine::model::{ModelApi, ModelError, Searcher};
+use agent_engine::model::{BoxFuture, CancellationToken, ModelApi, ModelError, Searched, Searcher};
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
 use agent_engine::{ApiSource, NativeEngine};
@@ -15,12 +14,12 @@ use crate::{finish, model, start};
 struct Account;
 
 impl Searcher for Account {
-    fn search(&self, query: &str, _stop: &AtomicBool) -> Option<Result<Vec<Hit>, ModelError>> {
-        Some(Ok(vec![Hit {
+    fn search<'a>(&'a self, query: &'a str, _cancel: &'a CancellationToken) -> BoxFuture<'a, Searched> {
+        Box::pin(std::future::ready(Some(Ok(vec![Hit {
             title: format!("About {query}"),
             url: "https://example.org/found".into(),
             snippet: String::new(),
-        }]))
+        }]))))
     }
 }
 

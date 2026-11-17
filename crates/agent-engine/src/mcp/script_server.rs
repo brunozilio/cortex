@@ -123,6 +123,7 @@ impl ScriptServer {
             origin: self.origin,
             confine: self.confine.clone(),
             stop: Arc::clone(&stop),
+            cancel: crate::model::CancellationToken::new(),
             script: format!("the MCP server {}", self.name),
             capabilities: self.capabilities.clone(),
             judge: Arc::clone(&self.judge),

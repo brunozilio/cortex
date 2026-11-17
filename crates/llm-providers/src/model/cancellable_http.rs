@@ -1,12 +1,6 @@
-use super::body::{Body, LEGACY_POLL};
+use super::body::Body;
 use super::{ModelError, http::Response};
-use std::{
-    sync::{
-        OnceLock,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
-};
+use std::{sync::OnceLock, time::Duration};
 use tokio_util::sync::CancellationToken;
 
 pub const STREAM_TIMEOUT: Duration = Duration::from_secs(900);
@@ -118,62 +112,6 @@ pub(crate) async fn fetch(ask: Ask<'_>, cancel: &CancellationToken) -> Result<Re
         None => Body::remote(response),
     };
     Ok(Response { status, headers, body })
-}
-
-async fn raised(stop: &AtomicBool) {
-    while !stop.load(Ordering::Relaxed) {
-        tokio::time::sleep(LEGACY_POLL).await;
-    }
-}
-
-fn blocking(ask: Ask<'_>, stop: Option<&AtomicBool>) -> Result<Response, ModelError> {
-    if stop.is_some_and(|stop| stop.load(Ordering::Relaxed)) {
-        return Err(ModelError::Cancelled);
-    }
-    let never = CancellationToken::new();
-    platform::runtime::block_on(async {
-        match stop {
-            Some(stop) => tokio::select! {
-                biased;
-                () = raised(stop) => Err(ModelError::Cancelled),
-                fetched = fetch(ask, &never) => fetched,
-            },
-            None => fetch(ask, &never).await,
-        }
-    })
-    .map_err(|error| ModelError::Network(error.to_string()))?
-}
-
-pub fn post(url: &str, headers: &[(String, String)], body: &str, stop: &AtomicBool) -> Result<Response, ModelError> {
-    send(url, headers, Some(body), stop, STREAM_TIMEOUT)
-}
-
-pub fn send(
-    url: &str,
-    headers: &[(String, String)],
-    body: Option<&str>,
-    stop: &AtomicBool,
-    timeout: Duration,
-) -> Result<Response, ModelError> {
-    blocking(Ask { total: Some(timeout), ..Ask::new(url, headers, body) }, Some(stop))
-}
-
-pub fn unstoppable(
-    url: &str,
-    headers: &[(String, String)],
-    body: Option<&str>,
-    timeout: Duration,
-) -> Result<Response, ModelError> {
-    blocking(Ask { total: Some(timeout), ..Ask::new(url, headers, body) }, None)
-}
-
-pub fn one_hop(
-    url: &str,
-    headers: &[(String, String)],
-    body: Option<&str>,
-    timeout: Duration,
-) -> Result<Response, ModelError> {
-    blocking(Ask { total: Some(timeout), one_hop: true, ..Ask::new(url, headers, body) }, None)
 }
 
 #[cfg(test)]

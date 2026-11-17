@@ -1,12 +1,9 @@
-use agent_engine::model::http::{Http, NetHttp, read_line_stopped};
+use agent_engine::model::http::{Http, NetHttp};
+use agent_engine::model::{CancellationToken, ModelError};
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::TcpListener,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
+    sync::mpsc,
     time::Duration,
 };
 
@@ -52,16 +49,22 @@ fn cancellation_closes_stalled_connections_before_and_after_headers() {
             }
             ready_tx.send(()).expect("valid test fixture");
             let mut byte = [0];
-            socket.read(&mut byte).expect("valid test fixture") == 0
+            match socket.read(&mut byte) {
+                Ok(read) => read == 0,
+                Err(error) => error.kind() == std::io::ErrorKind::ConnectionReset,
+            }
         });
-        let stop = Arc::new(AtomicBool::new(false));
-        let signal = stop.clone();
+        let cancel = CancellationToken::new();
+        let signal = cancel.clone();
         let client = std::thread::spawn(move || {
-            let mut response = NetHttp.post_stopped(&format!("http://{address}"), &[], "{}", &signal)?;
-            read_line_stopped(&mut response.body, &mut String::new(), &signal).map(|_| ())
+            let read = async {
+                let mut response = NetHttp.post_cancellable(&format!("http://{address}"), &[], "{}", &signal).await?;
+                response.body.read_line(&mut String::new(), &signal).await.map(|_| ())
+            };
+            platform::runtime::block_on(read).map_err(|error| ModelError::Network(error.to_string()))?
         });
         ready_rx.recv_timeout(NEVER_CLOSED).expect("the server took the request");
-        stop.store(true, Ordering::Relaxed);
+        cancel.cancel();
         assert_eq!(client.join().expect("valid test fixture"), Err(agent_engine::model::ModelError::Cancelled));
         assert!(server.join().expect("valid test fixture"), "socket must close on cancellation");
     }

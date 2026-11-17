@@ -36,6 +36,7 @@ pub fn script(
         origin,
         confine: workspace.confiner(),
         stop: workspace.stop.flag(),
+        cancel: workspace.stop.token().clone(),
         script: format!("the hook {}", handler.command),
         capabilities,
         judge: workspace.host_judge(),

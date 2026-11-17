@@ -1,10 +1,8 @@
-use std::io::BufRead;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-pub use super::body::Body;
+pub use super::body::{Body, Chunk};
 use super::cancellable_http::{self, Ask};
 use super::{BoxFuture, ModelError};
 
@@ -59,18 +57,6 @@ pub trait Http: Send + Sync {
         })
     }
 
-    fn post_stopped(
-        &self,
-        url: &str,
-        headers: &[(String, String)],
-        body: &str,
-        stop: &AtomicBool,
-    ) -> Result<Response, ModelError> {
-        if stop.load(Ordering::Relaxed) {
-            return Err(ModelError::Cancelled);
-        }
-        self.post_model(url, headers, body)
-    }
     fn post_cancellable<'a>(
         &'a self,
         url: &'a str,
@@ -101,15 +87,33 @@ pub trait Http: Send + Sync {
         ))))
     }
 
-    fn one_hop(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
-        self.streamed(url, headers, body)
+    fn one_hop<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: Option<&'a str>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        self.request_cancellable(url, headers, body, cancel)
     }
 
-    fn streamed(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
-        match body {
-            Some(body) => self.post(url, headers, body),
-            None => self.get(url, headers),
-        }
+    fn request_cancellable<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: Option<&'a str>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(async move {
+            if cancel.is_cancelled() {
+                return Err(ModelError::Cancelled);
+            }
+            match body {
+                Some(body) => self.post(url, headers, body),
+                None => self.get(url, headers),
+            }
+            .map_err(ModelError::Network)
+        })
     }
 
     fn addresses(&self, host: &str) -> Result<Vec<std::net::IpAddr>, String> {
@@ -129,7 +133,7 @@ pub struct NetHttp;
 pub const SHORT_TIMEOUT: Duration = Duration::from_secs(15);
 pub const LISTENED_AT_MOST: Duration = Duration::from_secs(12 * 3600);
 
-fn reason(error: ModelError) -> String {
+pub fn reason(error: ModelError) -> String {
     match error {
         ModelError::Network(reason) => reason,
         error => error.to_string(),
@@ -165,26 +169,30 @@ impl Http for NetHttp {
         ))
     }
 
-    fn post_stopped(
-        &self,
-        url: &str,
-        headers: &[(String, String)],
-        body: &str,
-        stop: &AtomicBool,
-    ) -> Result<Response, ModelError> {
-        cancellable_http::post(url, headers, body, stop)
-    }
-
     fn get(&self, url: &str, headers: &[(String, String)]) -> Result<Response, String> {
         Self::short(url, headers, None)
     }
 
-    fn one_hop(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
-        cancellable_http::one_hop(url, headers, body, SHORT_TIMEOUT).map_err(reason)
+    fn one_hop<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: Option<&'a str>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        let ask = Ask { total: Some(SHORT_TIMEOUT), one_hop: true, ..Ask::new(url, headers, body) };
+        Box::pin(cancellable_http::fetch(ask, cancel))
     }
 
-    fn streamed(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
-        cancellable_http::unstoppable(url, headers, body, SHORT_TIMEOUT).map_err(reason)
+    fn request_cancellable<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: Option<&'a str>,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        let ask = Ask { total: Some(SHORT_TIMEOUT), ..Ask::new(url, headers, body) };
+        Box::pin(cancellable_http::fetch(ask, cancel))
     }
 
     fn post_cancellable<'a>(
@@ -212,60 +220,8 @@ impl Http for NetHttp {
     }
 }
 
-pub fn read_line_stopped(body: &mut dyn BufRead, line: &mut String, stop: &AtomicBool) -> Result<usize, ModelError> {
-    let mut bytes = Vec::new();
-    loop {
-        if stop.load(Ordering::Relaxed) {
-            return Err(ModelError::Cancelled);
-        }
-        match body.read_until(b'\n', &mut bytes) {
-            Ok(_) => {
-                let text = std::str::from_utf8(&bytes)
-                    .map_err(|_| ModelError::Network("stream did not contain valid UTF-8".into()))?;
-                line.push_str(text);
-                return Ok(bytes.len());
-            }
-            Err(error) if matches!(error.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => {
-                continue;
-            }
-            Err(error) => return Err(ModelError::Network(error.to_string())),
-        }
-    }
-}
-
-impl Response {
-    pub fn text_stopped(mut self, stop: &AtomicBool) -> Result<String, ModelError> {
-        let mut text = String::new();
-        while read_line_stopped(&mut self.body, &mut text, stop)? > 0 {}
-        Ok(text)
-    }
-}
-
 #[cfg(any(test, feature = "test-support"))]
 pub use super::scripted_http::{ScriptedHttp, Sent};
-
-pub struct Stopped<'a> {
-    pub http: &'a dyn Http,
-    pub stop: &'a AtomicBool,
-}
-impl Http for Stopped<'_> {
-    fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {
-        let response = self.http.post_stopped(url, headers, body, self.stop).map_err(|e| e.to_string())?;
-        let status = response.status;
-        let headers = response.headers.clone();
-        let text = response.text_stopped(self.stop).map_err(|e| e.to_string())?;
-        if text.len() > 8 * 1024 * 1024 {
-            return Err("authentication response exceeds size limit".into());
-        }
-        Ok(Response { status, headers, body: Body::from(text) })
-    }
-}
-
-impl std::fmt::Debug for Stopped<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("StoppedHttp")
-    }
-}
 
 #[cfg(test)]
 #[path = "http_line_tests.rs"]

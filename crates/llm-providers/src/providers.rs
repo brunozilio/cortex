@@ -31,7 +31,7 @@ pub static ALL: &[&dyn Provider] = &[
 ];
 
 #[cfg(test)]
-mod testing;
+pub(crate) mod testing;
 
 #[cfg(any(test, feature = "test-support"))]
 pub fn install_testing() {

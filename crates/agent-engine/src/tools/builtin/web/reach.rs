@@ -1,6 +1,7 @@
 use domain::permission_rules::{is_private, site};
 
-use crate::model::http::{Http, Response};
+use crate::model::CancellationToken;
+use crate::model::http::{Http, Response, reason};
 use crate::model::web_client::private_among;
 
 pub const MOST_REDIRECTS: usize = 5;
@@ -43,13 +44,21 @@ pub fn refusal(url: &str, web: &dyn Http) -> Option<String> {
     }
 }
 
-pub fn fetch(web: &dyn Http, url: &str, headers: &[(String, String)]) -> Result<Reached, String> {
+pub async fn fetch(
+    web: &dyn Http,
+    url: &str,
+    headers: &[(String, String)],
+    cancel: &CancellationToken,
+) -> Result<Reached, String> {
     let mut url = secure(url);
     for _ in 0..=MOST_REDIRECTS {
         if let Some(why) = refusal(&url, web) {
             return Err(why);
         }
-        let response = web.one_hop(&url, headers, None).map_err(|error| format!("Could not fetch {url}: {error}"))?;
+        let response = web
+            .one_hop(&url, headers, None, cancel)
+            .await
+            .map_err(|error| format!("Could not fetch {url}: {}", reason(error)))?;
         match redirected(&url, &response) {
             Some(next) => url = secure(&next),
             None => return Ok(Reached { url, response }),

@@ -71,6 +71,7 @@ fn shaper(shown: String, source: String, path: &Path) -> Shaper {
             origin: crate::tools::script_tool::Origin::Project,
             confine: crate::tools::Confiner::default(),
             stop: std::sync::Arc::clone(&stop),
+            cancel: crate::model::CancellationToken::new(),
             script: format!("the provider {shown}"),
             capabilities: crate::tools::script_tool::Capabilities::none_in("a provider's shape"),
             judge: std::sync::Arc::default(),

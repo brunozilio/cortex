@@ -71,13 +71,45 @@ fn a_bounded_body_refuses_more_than_its_limit() {
 }
 
 #[test]
-fn a_blocking_reader_is_told_to_wait_while_nothing_has_arrived() {
+fn a_blocking_reader_waits_for_what_arrives_and_wakes_with_it() {
     let (mut body, send) = fed(&[]);
-    let paused = body.fill_buf().map(<[u8]>::len).map_err(|error| error.kind());
-    assert_eq!(paused, Err(io::ErrorKind::TimedOut));
-    send.try_send(Ok(b"late".to_vec())).expect("room");
-    drop(send);
+    let (sent_at, sent) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(30));
+        let _ = sent_at.send(Instant::now());
+        send.try_send(Ok(b"late".to_vec())).expect("room");
+    });
     let mut text = String::new();
     body.read_to_string(&mut text).expect("text");
+    let woke = Instant::now();
     assert_eq!(text, "late");
+    let sent = sent.recv().expect("sent");
+    assert!(woke - sent < Duration::from_millis(20), "{:?}", woke - sent);
+}
+
+#[test]
+fn a_capped_read_stops_at_the_cap_and_a_short_body_is_read_whole() {
+    let never = CancellationToken::new();
+    assert_eq!(run(Body::from("hello").capped(&never, 1024)), Ok(b"hello".to_vec()));
+    assert_eq!(run(Body::from("hello").capped(&never, 3)), Ok(b"hel".to_vec()));
+    assert_eq!(run(Body::from("hello").capped(&never, 0)), Ok(Vec::new()));
+    let endless = Body::reader(io::BufReader::new(io::repeat(b'a')));
+    assert_eq!(run(endless.capped(&never, 100_000)).map(|bytes| bytes.len()), Ok(100_000));
+}
+
+#[test]
+fn a_capped_read_waiting_for_bytes_ends_when_cancelled() {
+    let (body, _held_open) = fed(&[b"some"]);
+    let cancel = CancellationToken::new();
+    let canceller = cancel.clone();
+    let (marked, cancelled_at) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(30));
+        let _ = marked.send(Instant::now());
+        canceller.cancel();
+    });
+    assert_eq!(run(body.capped(&cancel, 1024)), Err(ModelError::Cancelled));
+    let ended = Instant::now();
+    let cancelled = cancelled_at.recv().expect("cancelled");
+    assert!(ended - cancelled < Duration::from_secs(1), "{:?}", ended - cancelled);
 }

@@ -14,11 +14,12 @@ mod tree;
 
 use serde_json::Value;
 
-use crate::model::ToolSpec;
+use crate::model::http::{Http, reason};
+use crate::model::{CancellationToken, ModelError, ToolSpec};
 use crate::tools::{Outcome, Tool, Workspace, field, required};
 
 const SHOWN: usize = 60_000;
-const READ: u64 = 5 << 20;
+const READ: usize = 5 << 20;
 const ACCEPT: &str = "text/markdown, text/plain;q=0.9, text/html;q=0.8, application/json;q=0.8, */*;q=0.5";
 
 pub fn tools() -> Vec<Box<dyn Tool>> {
@@ -74,23 +75,52 @@ impl Tool for WebFetch {
         if reading.formats {
             headers.push(("Accept".into(), ACCEPT.into()));
         }
-        let reach::Reached { url, mut response } = match reach::fetch(&*web.0, &url, &headers) {
-            Ok(reached) => reached,
+        let cancel = workspace.stop.token();
+        let Fetched { url, content_type, bytes } = match under(cancel, fetched(&*web.0, &url, &headers, cancel)) {
+            Ok(fetched) => fetched,
             Err(why) => return Outcome::error(why),
-        };
-        if !(200..300).contains(&response.status) {
-            return Outcome::error(format!("{url} answered {}", response.status));
-        }
-        let content_type = response.header("content-type");
-        let bytes = match crate::model::web_client::read_capped(&mut response.body, READ) {
-            Ok(bytes) => bytes,
-            Err(error) => return Outcome::error(format!("Could not read {url}: {error}")),
         };
         match page::read(&String::from_utf8_lossy(&bytes), content_type.as_deref(), &url, reading) {
             Ok(text) => Outcome::ok(page::clipped(&text, SHOWN)),
             Err(page::Unreadable(why)) => Outcome::error(why),
         }
     }
+}
+
+struct Fetched {
+    url: String,
+    content_type: Option<String>,
+    bytes: Vec<u8>,
+}
+
+async fn fetched(
+    web: &dyn Http,
+    url: &str,
+    headers: &[(String, String)],
+    cancel: &CancellationToken,
+) -> Result<Fetched, String> {
+    let reach::Reached { url, response } = reach::fetch(web, url, headers, cancel).await?;
+    if !(200..300).contains(&response.status) {
+        return Err(format!("{url} answered {}", response.status));
+    }
+    let content_type = response.header("content-type");
+    let bytes =
+        response.body.capped(cancel, READ).await.map_err(|error| format!("Could not read {url}: {}", reason(error)))?;
+    Ok(Fetched { url, content_type, bytes })
+}
+
+pub fn under<T: Send>(
+    cancel: &CancellationToken,
+    work: impl std::future::Future<Output = Result<T, String>> + Send,
+) -> Result<T, String> {
+    let raced = async {
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => Err(ModelError::Cancelled.to_string()),
+            done = work => done,
+        }
+    };
+    platform::runtime::block_on(raced).unwrap_or_else(|error| Err(error.to_string()))
 }
 
 #[derive(Debug)]
@@ -166,6 +196,67 @@ mod tests {
             format!("<html><head>{}</head><body><div id='root'></div></body></html>", "<script>x</script>".repeat(800));
         let out = WebFetch.run(&json!({"url": "https://app.dev/", "prompt": "p"}), &workspace(vec![(200, shell)]));
         assert!(out.is_error && out.content.contains("JavaScript"), "{out:?}");
+    }
+
+    #[derive(Debug)]
+    struct Stalling {
+        before_headers: bool,
+        held_open: std::sync::Mutex<Vec<tokio::sync::mpsc::Sender<crate::model::http::Chunk>>>,
+    }
+
+    impl Http for Stalling {
+        fn one_hop<'a>(
+            &'a self,
+            _url: &'a str,
+            _headers: &'a [(String, String)],
+            _body: Option<&'a str>,
+            _cancel: &'a CancellationToken,
+        ) -> crate::model::BoxFuture<'a, Result<crate::model::http::Response, ModelError>> {
+            if self.before_headers {
+                return Box::pin(std::future::pending());
+            }
+            let (sender, chunks) = tokio::sync::mpsc::channel(1);
+            if let Ok(mut held) = self.held_open.lock() {
+                held.push(sender);
+            }
+            let body = crate::model::http::Body::chunks(chunks);
+            Box::pin(std::future::ready(Ok(crate::model::http::Response { status: 200, headers: Vec::new(), body })))
+        }
+
+        fn addresses(&self, _host: &str) -> Result<Vec<std::net::IpAddr>, String> {
+            Ok(vec![std::net::IpAddr::from([93, 184, 216, 34])])
+        }
+
+        fn post(
+            &self,
+            _url: &str,
+            _headers: &[(String, String)],
+            _body: &str,
+        ) -> Result<crate::model::http::Response, String> {
+            Err("not used".into())
+        }
+    }
+
+    #[test]
+    fn a_stalled_fetch_ends_as_soon_as_the_run_is_cancelled() {
+        for before_headers in [true, false] {
+            let mut workspace = Workspace::new("/tmp");
+            let stalling = Stalling { before_headers, held_open: std::sync::Mutex::new(Vec::new()) };
+            workspace.services.network = Some(Network(Arc::new(stalling)));
+            let workspace = Arc::new(workspace);
+            let cancelling = Arc::clone(&workspace);
+            let (marked, cancelled_at) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(30));
+                let _ = marked.send(std::time::Instant::now());
+                cancelling.stop.cancel();
+            });
+            let out = WebFetch.run(&json!({"url": "https://slow.dev/", "prompt": "p"}), &workspace);
+            let ended = std::time::Instant::now();
+            assert!(out.is_error && out.content.contains("cancelled"), "{before_headers}: {out:?}");
+            let cancelled = cancelled_at.recv().expect("cancelled");
+            assert!(ended - cancelled < std::time::Duration::from_secs(1), "{:?}", ended - cancelled);
+        }
     }
 
     fn workspace_answer(status: u16) -> Workspace {

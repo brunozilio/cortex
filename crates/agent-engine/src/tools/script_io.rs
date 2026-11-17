@@ -8,11 +8,12 @@ use serde_json::{Value, json};
 use super::Confiner;
 use super::host_judge::{Grounds, HostAsk, HostJudge};
 use super::script_tool::{Capabilities, Capability, Origin, ScriptAccess};
-use crate::model::http::{Http, NetHttp, Response};
-use crate::tools::builtin::web::reach;
+use crate::model::CancellationToken;
+use crate::model::http::{Http, NetHttp, Response, reason};
+use crate::tools::builtin::web::{reach, under};
 
 const OUTPUT: usize = 1 << 20;
-pub const FETCHED: u64 = 5 << 20;
+pub const FETCHED: usize = 5 << 20;
 
 pub fn exec(cwd: &Path, arguments: &Value, stop: &AtomicBool, confine: &Confiner) -> Result<Value, String> {
     let command =
@@ -31,11 +32,16 @@ pub fn exec(cwd: &Path, arguments: &Value, stop: &AtomicBool, confine: &Confiner
     Ok(json!({ "code": code, "stdout": done.stdout, "stderr": done.stderr }))
 }
 
-pub fn fetch(arguments: &Value, origin: Origin) -> Result<Value, String> {
-    fetch_over(&NetHttp, arguments, origin)
+pub fn fetch(arguments: &Value, origin: Origin, cancel: &CancellationToken) -> Result<Value, String> {
+    fetch_over(&NetHttp, arguments, origin, cancel)
 }
 
-pub fn fetch_over(web: &dyn Http, arguments: &Value, origin: Origin) -> Result<Value, String> {
+pub fn fetch_over(
+    web: &dyn Http,
+    arguments: &Value,
+    origin: Origin,
+    cancel: &CancellationToken,
+) -> Result<Value, String> {
     let url = arguments["url"].as_str().ok_or("ctx.fetch needs a url")?;
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err(format!("{url} is not an http(s) address"));
@@ -47,22 +53,33 @@ pub fn fetch_over(web: &dyn Http, arguments: &Value, origin: Origin) -> Result<V
         })
         .unwrap_or_default();
     let body = arguments["body"].as_str();
-    let mut response = match origin {
-        Origin::Owner => web.streamed(url, &headers, body)?,
-        Origin::Project => public(web, url, &headers, body)?,
-    };
-    let status = response.status;
-    let bytes = crate::model::web_client::read_capped(&mut response.body, FETCHED)
-        .map_err(|error| format!("Could not read {url}: {error}"))?;
-    Ok(json!({ "status": status, "body": String::from_utf8_lossy(&bytes) }))
+    under(cancel, async {
+        let response = match origin {
+            Origin::Owner => web.request_cancellable(url, &headers, body, cancel).await.map_err(reason)?,
+            Origin::Project => public(web, url, &headers, body, cancel).await?,
+        };
+        let status = response.status;
+        let bytes = response
+            .body
+            .capped(cancel, FETCHED)
+            .await
+            .map_err(|error| format!("Could not read {url}: {}", reason(error)))?;
+        Ok(json!({ "status": status, "body": String::from_utf8_lossy(&bytes) }))
+    })
 }
 
-fn public(web: &dyn Http, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
-    let Some(body) = body else { return reach::fetch(web, url, headers).map(|reached| reached.response) };
+async fn public(
+    web: &dyn Http,
+    url: &str,
+    headers: &[(String, String)],
+    body: Option<&str>,
+    cancel: &CancellationToken,
+) -> Result<Response, String> {
+    let Some(body) = body else { return reach::fetch(web, url, headers, cancel).await.map(|reached| reached.response) };
     let url = reach::secure(url);
     match reach::refusal(&url, web) {
         Some(why) => Err(why),
-        None => web.one_hop(&url, headers, Some(body)),
+        None => web.one_hop(&url, headers, Some(body), cancel).await.map_err(reason),
     }
 }
 
@@ -72,6 +89,7 @@ pub struct StandaloneHost {
     pub origin: Origin,
     pub confine: Confiner,
     pub stop: std::sync::Arc<AtomicBool>,
+    pub cancel: CancellationToken,
     pub script: String,
     pub capabilities: Capabilities,
     pub judge: std::sync::Arc<HostJudge>,
@@ -99,7 +117,7 @@ impl StandaloneHost {
                     .map_err(|error| format!("{}: {error}", path.display()))
             }
             Capability::Exec => exec(&self.cwd, arguments, &self.stop, &self.confine),
-            Capability::Fetch => fetch(arguments, self.origin),
+            Capability::Fetch => fetch(arguments, self.origin, &self.cancel),
         }
     }
 }

@@ -53,7 +53,7 @@ impl HostCall<'_> {
                 let confine = workspace.confiner();
                 crate::tools::script_io::exec(&workspace.cwd, arguments, &workspace.stop, &confine)
             }
-            Capability::Fetch => crate::tools::script_io::fetch(arguments, self.origin),
+            Capability::Fetch => crate::tools::script_io::fetch(arguments, self.origin, workspace.stop.token()),
         }
     }
 }

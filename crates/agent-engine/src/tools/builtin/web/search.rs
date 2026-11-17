@@ -1,33 +1,44 @@
 use llm_providers::web_search::Hit;
 
 use super::tree::{self, Element, Syntax};
+use crate::model::http::reason;
+use crate::model::{CancellationToken, ModelError};
 use crate::tools::{Outcome, Workspace};
 
 const OVER_HTTP: &str = "https://html.duckduckgo.com/html/";
-const READ: u64 = 2 << 20;
+const READ: usize = 2 << 20;
 const SHOWN: usize = 10;
 
 pub fn run(query: &str, workspace: &Workspace) -> Outcome {
-    let account = workspace.services.search.as_ref().and_then(|search| search.0.search(query, &workspace.stop));
+    let cancel = workspace.stop.token();
+    match super::under(cancel, searched(query, workspace, cancel)) {
+        Ok(hits) => Outcome::ok(listing(query, &hits)),
+        Err(why) => Outcome::error(why),
+    }
+}
+
+async fn searched(query: &str, workspace: &Workspace, cancel: &CancellationToken) -> Result<Vec<Hit>, String> {
+    let account = match &workspace.services.search {
+        Some(search) => search.0.search(query, cancel).await,
+        None => None,
+    };
     let failed = match account {
-        Some(Ok(hits)) if !hits.is_empty() => return Outcome::ok(listing(query, &hits)),
+        Some(Ok(hits)) if !hits.is_empty() => return Ok(hits),
         Some(Ok(_)) => None,
+        Some(Err(ModelError::Cancelled)) => return Err(ModelError::Cancelled.to_string()),
         Some(Err(error)) => {
             tracing::warn!(%error, "the account's web search failed; searching over HTTP");
             Some(error.to_string())
         }
         None => None,
     };
-    match over_http(query, workspace) {
-        Ok(hits) => Outcome::ok(listing(query, &hits)),
-        Err(why) => Outcome::error(match failed {
-            Some(first) => format!("The web search failed: {first}; then over HTTP: {why}"),
-            None => why,
-        }),
-    }
+    over_http(query, workspace, cancel).await.map_err(|why| match failed {
+        Some(first) => format!("The web search failed: {first}; then over HTTP: {why}"),
+        None => why,
+    })
 }
 
-fn over_http(query: &str, workspace: &Workspace) -> Result<Vec<Hit>, String> {
+async fn over_http(query: &str, workspace: &Workspace, cancel: &CancellationToken) -> Result<Vec<Hit>, String> {
     let Some(web) = &workspace.services.network else {
         return Err("The web is not available to this run.".into());
     };
@@ -36,12 +47,19 @@ fn over_http(query: &str, workspace: &Workspace) -> Result<Vec<Hit>, String> {
         url::form_urlencoded::Serializer::new(String::new()).append_pair("q", query).finish()
     );
     let headers = [("User-Agent".to_owned(), brand::NAME.to_owned())];
-    let mut response = web.0.get(&address, &headers).map_err(|error| format!("Could not search the web: {error}"))?;
+    let response = web
+        .0
+        .request_cancellable(&address, &headers, None, cancel)
+        .await
+        .map_err(|error| format!("Could not search the web: {}", reason(error)))?;
     if !(200..300).contains(&response.status) {
         return Err(format!("The web search answered {}", response.status));
     }
-    let bytes = crate::model::web_client::read_capped(&mut response.body, READ)
-        .map_err(|error| format!("Could not read the web search: {error}"))?;
+    let bytes = response
+        .body
+        .capped(cancel, READ)
+        .await
+        .map_err(|error| format!("Could not read the web search: {}", reason(error)))?;
     Ok(results(&String::from_utf8_lossy(&bytes)))
 }
 

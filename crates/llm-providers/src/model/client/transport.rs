@@ -6,10 +6,9 @@ use super::{Config, oauth};
 use llm_providers::{Provider, catalog, request};
 use serde_json::Value;
 use std::io::Read;
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use platform::sync::Locked;
+use tokio::sync::Mutex;
 
 pub(super) struct Transport {
     pub provider: &'static dyn Provider,
@@ -22,13 +21,18 @@ pub(super) struct Transport {
 
 impl Transport {
     pub(super) fn config(&self, force: bool) -> Result<Config, ModelError> {
-        self.config_stopped(force, &AtomicBool::new(false))
+        platform::runtime::block_on(self.config_under(force, &CancellationToken::new()))
+            .unwrap_or_else(|error| Err(ModelError::Network(error.to_string())))
     }
 
-    fn config_stopped(&self, force: bool, stop: &AtomicBool) -> Result<Config, ModelError> {
+    pub(super) async fn config_under(&self, force: bool, cancel: &CancellationToken) -> Result<Config, ModelError> {
         let key = self.keys.key()?;
         let raw = key.secret();
-        let mut cached = self.cached.locked();
+        let mut cached = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Err(ModelError::Cancelled),
+            held = self.cached.lock() => held,
+        };
         let mut config = match cached.as_ref() {
             Some((old, config)) if old == raw => config.clone(),
             _ => Config::parse(self.provider, raw)?,
@@ -36,11 +40,7 @@ impl Transport {
         if config.needs_refresh(self.provider, force)
             && let Some(previous) = config.auth.as_ref()
         {
-            config.auth = Some(oauth::refresh(
-                &super::super::http::Stopped { http: self.http.as_ref(), stop },
-                self.provider,
-                previous,
-            )?);
+            config.auth = Some(oauth::refresh(self.http.as_ref(), self.provider, previous, cancel).await?);
             self.keys.replace(&serde_json::to_string(&config).map_err(|e| ModelError::Provider(e.to_string()))?)?;
         }
         *cached = Some((raw.to_owned(), config.clone()));
@@ -60,31 +60,41 @@ impl Transport {
         })
     }
 
-    pub(super) fn search(
+    pub(super) async fn search(
         &self,
         query: &str,
-        stop: &AtomicBool,
+        cancel: &CancellationToken,
     ) -> Option<Result<Vec<llm_providers::web_search::Hit>, ModelError>> {
         self.provider.search(&Config::default(), query)?;
-        let ask = |force: bool| -> Result<Response, ModelError> {
-            let config = self.config_stopped(force, stop)?;
-            let call = self.provider.search(&config, query).ok_or(ModelError::Cancelled)?;
-            self.http.post_stopped(&call.url, &call.headers, call.body.as_deref().unwrap_or_default(), stop)
-        };
-        let searched = ask(false).and_then(|response| {
-            if self.provider.retries_after_refresh(response.status) { ask(true) } else { Ok(response) }
-        });
-        Some(searched.and_then(|response| {
-            status(response.status)?;
-            let text = read(response, SEARCH_LIMIT)?;
-            let value: Value = serde_json::from_str(&text)
-                .map_err(|_| ModelError::Provider("the web search answered with something other than JSON".into()))?;
-            self.provider.hits(&value).map_err(|error| ModelError::Provider(error.to_string()))
-        }))
+        let Some(_turn) = self.turns.take_unless(cancel).await else { return Some(Err(ModelError::Cancelled)) };
+        Some(self.searched(query, cancel).await)
+    }
+
+    async fn searched(
+        &self,
+        query: &str,
+        cancel: &CancellationToken,
+    ) -> Result<Vec<llm_providers::web_search::Hit>, ModelError> {
+        let mut response = self.search_once(query, false, cancel).await?;
+        if self.provider.retries_after_refresh(response.status) {
+            drop(response);
+            response = self.search_once(query, true, cancel).await?;
+        }
+        status(response.status)?;
+        let text = response.body.text(cancel, SEARCH_LIMIT).await?;
+        let value: Value = serde_json::from_str(&text)
+            .map_err(|_| ModelError::Provider("the web search answered with something other than JSON".into()))?;
+        self.provider.hits(&value).map_err(|error| ModelError::Provider(error.to_string()))
+    }
+
+    async fn search_once(&self, query: &str, force: bool, cancel: &CancellationToken) -> Result<Response, ModelError> {
+        let config = self.config_under(force, cancel).await?;
+        let call = self.provider.search(&config, query).ok_or(ModelError::Cancelled)?;
+        self.http.post_cancellable(&call.url, &call.headers, call.body.as_deref().unwrap_or_default(), cancel).await
     }
 }
 
-const SEARCH_LIMIT: u64 = 2 << 20;
+const SEARCH_LIMIT: usize = 2 << 20;
 
 impl Http for Transport {
     fn post_streaming<'a>(
@@ -108,7 +118,6 @@ impl Http for Transport {
 impl Transport {
     async fn send(&self, body: &str, cancel: &CancellationToken) -> Result<Response, ModelError> {
         let Some(_turn) = self.turns.take_unless(cancel).await else { return Err(ModelError::Cancelled) };
-        let stop = &AtomicBool::new(false);
         let mut body: Value = serde_json::from_str(body).map_err(|e| ModelError::Provider(e.to_string()))?;
         request::shape(self.provider, self.model.as_ref(), &mut body)?;
         let turn_headers = self.provider.turn_headers(self.model.as_ref(), &body);
@@ -124,12 +133,12 @@ impl Transport {
             headers.extend(turn_headers.iter().cloned());
             headers
         };
-        let mut config = self.config_stopped(false, stop)?;
+        let mut config = self.config_under(false, cancel).await?;
         let mut url = format!("{}{path}", config.base(self.provider));
         let mut response = self.http.post_streaming(&url, &headers(&config), &bound(&config), cancel).await?;
         if self.provider.retries_after_refresh(response.status) {
             drop(response);
-            config = self.config_stopped(true, stop)?;
+            config = self.config_under(true, cancel).await?;
             url = format!("{}{path}", config.base(self.provider));
             response = self.http.post_streaming(&url, &headers(&config), &bound(&config), cancel).await?;
         }

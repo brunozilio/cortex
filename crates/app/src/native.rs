@@ -134,8 +134,6 @@ pub fn engine(sessions: Arc<FileSessions>, language_servers: PathBuf) -> NativeE
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
-
     use domain::ModelProvider;
 
     use agent_engine::model::http::ScriptedHttp;
@@ -227,7 +225,9 @@ mod tests {
         let apis = NativeApis::new(http.clone());
         assert!(apis.searcher(&request(KEYED, None)).is_none(), "no key, no account search");
         let searcher = apis.searcher(&request(KEYED, Some("sk-one"))).expect("searcher");
-        assert!(searcher.search("rust", &AtomicBool::new(false)).is_none(), "this provider has no search of its own");
+        let searched =
+            platform::runtime::block_on(searcher.search("rust", &CancellationToken::new())).expect("runtime");
+        assert!(searched.is_none(), "this provider has no search of its own");
         assert!(http.sent().is_empty());
     }
 

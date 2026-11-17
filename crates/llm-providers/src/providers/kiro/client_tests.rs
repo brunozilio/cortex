@@ -5,7 +5,6 @@ use crate::transcript::Block;
 use domain::provider::{ProviderKey, ProviderKeyStore};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use domain::ModelProvider;
@@ -127,6 +126,10 @@ fn the_catalog_comes_from_the_management_service() {
     assert_eq!(serde_json::from_str::<Value>(body).ok(), Some(json!({"origin": "KIRO_CLI", "profileArn": ARN})));
 }
 
+fn search(client: &ProviderClient, query: &str) -> crate::model::Searched {
+    platform::runtime::block_on(client.search(query, &CancellationToken::new())).expect("runtime")
+}
+
 fn searched(found: &Value) -> Vec<u8> {
     let content = json!([{"type": "text", "text": found.to_string()}]);
     json!({"jsonrpc": "2.0", "id": "1", "result": {"content": content, "isError": false}}).to_string().into_bytes()
@@ -140,7 +143,7 @@ fn a_web_search_is_an_mcp_tool_call_on_the_runtime_and_its_hits_are_read() {
     let wire = Wire::new([(200, searched(&found))]);
     let client = ProviderClient::new(KIRO, wire.clone(), key());
 
-    let hits = client.search("rust 1.90", &AtomicBool::new(false)).expect("Kiro searches").expect("hits");
+    let hits = search(&client, "rust 1.90").expect("Kiro searches").expect("hits");
 
     assert_eq!(
         hits,
@@ -164,12 +167,12 @@ fn a_search_the_service_refuses_is_an_error_with_its_reason() {
     let refused =
         json!({"jsonrpc": "2.0", "id": "1", "error": {"code": -32602, "message": "Invalid tool parameters provided"}});
     let wire = Wire::new([(200, refused.to_string().into_bytes())]);
-    let result = ProviderClient::new(KIRO, wire, key()).search("x", &AtomicBool::new(false)).expect("Kiro searches");
+    let result = search(&ProviderClient::new(KIRO, wire, key()), "x").expect("Kiro searches");
     assert!(matches!(&result, Err(ModelError::Provider(why)) if why.contains("Invalid tool parameters")), "{result:?}");
 }
 
 #[test]
 fn a_provider_without_its_own_search_offers_none() {
     let client = ProviderClient::new(ModelProvider::new("openai"), Wire::new([]), key());
-    assert!(client.search("x", &AtomicBool::new(false)).is_none());
+    assert!(search(&client, "x").is_none());
 }

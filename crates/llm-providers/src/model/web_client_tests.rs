@@ -1,9 +1,14 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 
-use crate::model::http::{Http, NetHttp};
+use crate::model::http::{Http, NetHttp, Response};
+use crate::model::{CancellationToken, ModelError};
 
 const STILL_SENDING: std::time::Duration = std::time::Duration::from_secs(120);
+
+fn one_hop(url: &str) -> Result<Response, ModelError> {
+    platform::runtime::block_on(NetHttp.one_hop(url, &[], None, &CancellationToken::new())).expect("runtime")
+}
 
 fn serve(answer: impl Fn(&mut TcpStream) + Send + 'static) -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -35,7 +40,7 @@ fn a_redirect_is_handed_back_instead_of_followed() {
         let location = format!("location: http://127.0.0.1:{inner}/\r\n");
         let _ = stream.write_all(text("302 Found", &location, "moved").as_bytes());
     });
-    let response = NetHttp.one_hop(&format!("http://127.0.0.1:{outer}/"), &[], None).expect("answer");
+    let response = one_hop(&format!("http://127.0.0.1:{outer}/")).expect("answer");
     assert_eq!(response.status, 302, "the caller decides whether the next address may be read");
 }
 
@@ -44,7 +49,7 @@ fn a_name_that_resolves_to_this_computer_is_not_connected_to() {
     let port = serve(|stream| {
         let _ = stream.write_all(text("200 OK", "", "local").as_bytes());
     });
-    let error = NetHttp.one_hop(&format!("http://localhost:{port}/"), &[], None).expect_err("refused");
+    let error = one_hop(&format!("http://localhost:{port}/")).expect_err("refused").to_string();
     assert!(error.contains("private"), "{error}");
 }
 
@@ -57,20 +62,12 @@ fn a_body_without_end_is_read_only_up_to_the_cap() {
         while stream.write_all(&chunk).is_ok() {}
         let _ = hung_up.send(());
     });
-    let mut response = NetHttp.one_hop(&format!("http://127.0.0.1:{port}/"), &[], None).expect("answer");
-    let read = super::read_capped(&mut response.body, 64 * 1024).expect("read");
-    drop(response);
+    let response = one_hop(&format!("http://127.0.0.1:{port}/")).expect("answer");
+    let read = platform::runtime::block_on(response.body.capped(&CancellationToken::new(), 64 * 1024))
+        .expect("runtime")
+        .expect("read");
     assert_eq!(read.len(), 64 * 1024);
     hangs_up.recv_timeout(STILL_SENDING).expect("the endless body was let go of once the cap was read");
-}
-
-#[test]
-fn a_short_body_is_read_whole_and_a_cap_of_nothing_reads_nothing() {
-    let mut body = std::io::Cursor::new(b"hello".to_vec());
-    assert_eq!(super::read_capped(&mut body, 1024).expect("read"), b"hello");
-    let mut body = std::io::Cursor::new(b"hello".to_vec());
-    assert_eq!(super::read_capped(&mut body, 3).expect("read"), b"hel");
-    assert!(super::read_capped(&mut body, 0).expect("read").is_empty());
 }
 
 #[test]
