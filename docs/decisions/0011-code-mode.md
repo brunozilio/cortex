@@ -26,14 +26,19 @@ Two modes:
 - `experimental-code-mode` (on unless turned off, like every flag) adds `REPL` beside the other tools.
 - `experimental-code-mode-only` is the first opt-in flag: off until the owner turns it on, and a project cannot turn it on. With it, the model is offered `REPL` plus the turn-level tools (`AskUserQuestion`, plan mode, worktrees); every other tool is described inside `REPL`'s description as a TypeScript-style `declare function`, generated from its JSON schema with its documentation, sorted by name so the same tools always give the same text and the prompt cache holds. The request still carries every tool, so a script's calls pass the same "offered" check as before. Deferred tools are not declared; a script finds them with `searchTools(words)`, which loads them as ToolSearch does and returns their declarations.
 
-Helpers live in `content/repl/helpers.js`, evaluated once per context: `` $`cmd` `` runs a command through Bash with interpolated values shell-quoted. There is no `file()`/`write()` helper on purpose: Read numbers lines and cuts very long ones, so its text cannot be written back safely, and a raw read beside it would skip what guards Read (PreToolUse hooks, the refusal of secret files, redaction, which would itself corrupt a file written back). Scripts use `Read`, `Edit` and `Write` as the model does. Scripts that keep running across turns are left for later.
+Helpers live in `content/repl/helpers.js`, evaluated once per context: `` $`cmd` `` runs a command through Bash with interpolated values shell-quoted. There is no `file()`/`write()` helper on purpose: Read numbers lines and cuts very long ones, so its text cannot be written back safely, and a raw read beside it would skip what guards Read (PreToolUse hooks, the refusal of secret files, redaction, which would itself corrupt a file written back). Scripts use `Read`, `Edit` and `Write` as the model does.
+
+A script's tool calls are shown the way a sub-agent's are: on its first call the script opens an agent lane of kind `REPL` (`AgentSpawned`), its calls travel as `AgentEvent`s inside it, and the lane ends with the script. That reuses what the TUI, the trace and the console already draw, with no change to the protocol; a script that calls no tool opens no lane.
+
+Claude Code detaches a script that runs past about 30 seconds and keeps several scripts running in one context, telling their logs apart with `AsyncLocalStorage`. QuickJS has nothing like it, so two scripts sharing a context could not keep their `self.log` lines apart. Here a long script is sent to the background explicitly with `run_in_background: true`, like Bash and Agent: it becomes a background task of the run (TaskOutput, TaskStop, TaskList, cancelled when the run ends), in a fresh context of its own and a forked workspace, so neither its variables nor its tool calls touch the model's.
 
 ## Consequences
 
 - Long, mechanical work costs one model turn, and only what the script chooses to return enters the context.
 - The permission model is unchanged: a script can do nothing its tools could not, and asks the user exactly as the tools would.
 - Like every feature flag, it is on unless turned off; the extra tool description costs prompt tokens on every request.
-- A script's tool calls are shown as separate tool rows, not nested under the `REPL` call.
+- A script's lane counts among the run's agent lanes: the TUI and the trace show it as an agent of kind `REPL`.
+- A background script cannot read what the foreground scripts declared; it gets what it needs through its own code.
 - A `const` cannot be redeclared in a later call; the model is told to pick another name.
 - A context lives only in the process: it is lost on restart, and a resumed session starts with an empty one. The first script in a new context of a conversation that already ran scripts gets a note saying so.
 - Calls that finished scripts leave unawaited are not answered; their effects (a write already served) are not undone.

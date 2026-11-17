@@ -1,19 +1,65 @@
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex, OnceLock, mpsc};
+use std::time::Instant;
 
-use domain::EngineEvent;
 use domain::code_mode::{Declared, Refused, Report};
+use domain::{AgentStatus, EngineEvent};
 use platform::sync::Locked;
 use script::session::{Evaluate, Evaluation, HostCall, Limits, Message as Sent};
 use serde_json::{Value, json};
 
 use super::Agent;
 use super::tasks::Tasks;
-use crate::tools::Outcome;
-use crate::tools::repl::{REPL_TOOL, SEARCH_TOOLS, reachable, session};
+use crate::control::Control;
+use crate::tools::repl::{REPL_TOOL, Repl, SEARCH_TOOLS, helpers, reachable, session};
+use crate::tools::{Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message};
 
 impl Agent<'_> {
     pub(super) fn repl(&self, id: &str, input: &Value, tasks: &Tasks, parent: &[Message]) -> Outcome {
+        let owner = format!("{}/{}", self.workspace.session_id, self.workspace.agent_name);
+        let context = session(&owner);
+        let fresh = domain::code_mode::fresh_context(context.started_now, earlier_scripts(parent, id));
+        self.script(input, tasks, parent, &context.session, fresh)
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    pub(super) fn repl_in_background<'env>(
+        &'env self,
+        input: &Value,
+        tasks: &Tasks,
+        spawn: &dyn Fn(Box<dyn FnOnce() + Send + 'env>),
+    ) -> Outcome {
+        if input["code"].as_str().is_none_or(|code| code.trim().is_empty()) {
+            return Outcome::error("Missing required parameter `code`.");
+        }
+        let input = input.clone();
+        let job = move |control: &Arc<Control>, workspace: &Workspace| {
+            let agent = Agent { control, workspace, request: self.request.clone(), ..*self };
+            let session = script::session::Session::with_helpers(helpers());
+            agent.script(&input, &Tasks::default(), &[], &session, false)
+        };
+        match self.in_background(tasks, "script", Box::new(job), spawn) {
+            Ok(id) => Outcome::ok(
+                json!({
+                    "task_id": id,
+                    "status": "running",
+                    "instructions": "The script runs in its own JavaScript context, apart from your REPL variables. \
+                                     Collect what it returns with TaskOutput before completing the request; TaskStop stops it."
+                })
+                .to_string(),
+            ),
+            Err(refused) => refused,
+        }
+    }
+
+    fn script(
+        &self,
+        input: &Value,
+        tasks: &Tasks,
+        parent: &[Message],
+        session: &script::session::Session,
+        fresh: bool,
+    ) -> Outcome {
         let Some(code) = input["code"].as_str().filter(|code| !code.trim().is_empty()) else {
             return Outcome::error("Missing required parameter `code`.");
         };
@@ -21,31 +67,57 @@ impl Agent<'_> {
             self.request.tools.iter().map(|spec| spec.name.clone()).filter(|name| reachable(name)).collect();
         let limits = Limits { total: domain::code_mode::total_limit(input["timeout"].as_u64()), ..Limits::default() };
         let request = Evaluate { code: code.to_owned(), functions, limits, stop: Arc::clone(&self.workspace.stop) };
-        let owner = format!("{}/{}", self.workspace.session_id, self.workspace.agent_name);
-        let context = session(&owner);
         let refused: Mutex<Vec<Refused>> = Mutex::default();
+        let lane: OnceLock<usize> = OnceLock::new();
+        let started = Instant::now();
         let watch = |event: EngineEvent| {
             if let EngineEvent::Refused { tool, reason } = &event {
                 refused.locked().push(Refused { tool: tool.clone(), reason: reason.clone() });
             }
-            (self.emit)(event);
+            if !nested(&event) {
+                return (self.emit)(event);
+            }
+            let index = *lane.get_or_init(|| self.open_lane(&Repl.summary(input), code));
+            let asked = matches!(event, EngineEvent::Asked(_)).then(|| event.clone());
+            (self.emit)(EngineEvent::AgentEvent { index, event: Box::new(event) });
+            asked.into_iter().for_each(self.emit);
         };
         let watching = Agent { emit: &watch, request: self.request.clone(), ..*self };
         let evaluation = {
             let _unwatched = self.workspace.tracking.seen_files.unwatched();
             let model_s_own = std::mem::take(&mut *tasks.repeats.locked());
-            let evaluation = watching.serve_script(context.session.evaluate(request), tasks, parent);
+            let evaluation = watching.serve_script(session.evaluate(request), tasks, parent);
             *tasks.repeats.locked() = model_s_own;
             evaluation
         };
         let report = Report {
-            fresh: domain::code_mode::fresh_context(context.started_now, earlier_scripts(parent, id)),
+            fresh,
             logs: evaluation.logs,
             refused: refused.into_inner().unwrap_or_default(),
             outcome: evaluation.outcome,
         };
+        if let Some(&index) = lane.get() {
+            let status = match &report.outcome {
+                Ok(_) => AgentStatus::Done { seconds: u32::try_from(started.elapsed().as_secs()).unwrap_or(u32::MAX) },
+                Err(_) if self.control.is_stopped() => AgentStatus::Cancelled,
+                Err(_) => AgentStatus::Failed,
+            };
+            (self.emit)(EngineEvent::AgentUpdate { index, status, summary: None });
+        }
         let text = domain::code_mode::reported(&report, domain::code_mode::PART);
         if report.outcome.is_ok() { Outcome::ok(text) } else { Outcome::error(text) }
+    }
+
+    fn open_lane(&self, summary: &str, code: &str) -> usize {
+        let index = self.control.next_agent();
+        (self.emit)(EngineEvent::AgentSpawned {
+            index,
+            kind: REPL_TOOL.to_owned(),
+            summary: summary.to_owned(),
+            prompt: code.to_owned(),
+        });
+        (self.emit)(EngineEvent::AgentUpdate { index, status: AgentStatus::Running { progress: 0.0 }, summary: None });
+        index
     }
 
     fn serve_script(&self, messages: mpsc::Receiver<Sent>, tasks: &Tasks, parent: &[Message]) -> Evaluation {
@@ -94,6 +166,16 @@ impl Agent<'_> {
             .collect();
         Ok(Value::Array(found))
     }
+}
+
+fn nested(event: &EngineEvent) -> bool {
+    matches!(
+        event,
+        EngineEvent::ToolStarted(_)
+            | EngineEvent::ToolFinished { .. }
+            | EngineEvent::ToolResult { .. }
+            | EngineEvent::Asked(_)
+    )
 }
 
 fn earlier_scripts(history: &[Message], current: &str) -> usize {

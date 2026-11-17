@@ -38,6 +38,8 @@ impl Tasks {
     }
 }
 
+pub(super) type BackgroundJob<'env> = Box<dyn FnOnce(&Arc<Control>, &crate::tools::Workspace) -> Outcome + Send + 'env>;
+
 pub(super) struct StopTasksOnDrop<'a>(pub(super) &'a Tasks);
 
 impl Drop for StopTasksOnDrop<'_> {
@@ -119,9 +121,27 @@ impl Agent<'_> {
         spawn: &dyn Fn(Box<dyn FnOnce() + Send + 'env>),
     ) -> Outcome {
         let conversations = tasks.conversations.clone();
+        let input = input.clone();
+        let parent = if builtin_agents::is_fork(&input) { parent.to_vec() } else { Vec::new() };
+        let job = move |control: &Arc<Control>, workspace: &crate::tools::Workspace| {
+            self.sub_agent_with(&input, control, workspace, &parent, &conversations, None)
+        };
+        match self.in_background(tasks, "agent", Box::new(job), spawn) {
+            Ok(id) => Outcome::ok(json!({"task_id":id,"status":"running","instructions":"Use TaskOutput to collect the report before completing the request."}).to_string()),
+            Err(refused) => refused,
+        }
+    }
+
+    pub(super) fn in_background<'env>(
+        &'env self,
+        tasks: &Tasks,
+        what: &str,
+        job: BackgroundJob<'env>,
+        spawn: &dyn Fn(Box<dyn FnOnce() + Send + 'env>),
+    ) -> Result<String, Outcome> {
         let mut tasks = tasks.background.locked();
         if self.depth > 0 || tasks.len() >= 16 {
-            return Outcome::error("Background agent limit reached (16 per run; no nested agents).");
+            return Err(Outcome::error(format!("Background {what} limit reached (16 per run; no nested agents).")));
         }
         let id = format!("task-{}", tasks.len() + 1);
         let control = self.control.child();
@@ -133,16 +153,13 @@ impl Agent<'_> {
             control: control.clone(),
         });
         tasks.insert(id.clone(), task.clone());
-        let input = input.clone();
-        let parent = if builtin_agents::is_fork(&input) { parent.to_vec() } else { Vec::new() };
+        let panicked = format!("Background {what} panicked.");
         spawn(Box::new(move || {
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                self.sub_agent_with(&input, &control, &workspace, &parent, &conversations, None)
-            }))
-            .unwrap_or_else(|_| Outcome::error("Background agent panicked."));
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job(&control, &workspace)))
+                .unwrap_or_else(|_| Outcome::error(panicked));
             *task.result.locked() = Some(result);
             task.ready.notify_all();
         }));
-        Outcome::ok(json!({"task_id":id,"status":"running","instructions":"Use TaskOutput to collect the report before completing the request."}).to_string())
+        Ok(id)
     }
 }

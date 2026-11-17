@@ -51,6 +51,20 @@ fn started(rig: &Rig) -> Vec<String> {
         .into_iter()
         .filter_map(|event| match event {
             EngineEvent::ToolStarted(call) => Some(call.name),
+            EngineEvent::AgentEvent { index, event } => match *event {
+                EngineEvent::ToolStarted(call) => Some(format!("{index}>{}", call.name)),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+fn lanes(rig: &Rig) -> Vec<(usize, String, String)> {
+    rig.events()
+        .into_iter()
+        .filter_map(|event| match event {
+            EngineEvent::AgentSpawned { index, kind, summary, .. } => Some((index, kind, summary)),
             _ => None,
         })
         .collect()
@@ -72,8 +86,55 @@ fn a_script_calls_tools_and_only_what_it_returns_reaches_the_model() {
     assert!(!failed, "{content}");
     assert!(content.contains("<log>\nread true\n</log>"), "{content}");
     assert!(content.contains("\"lines\": true") && content.contains("\"grep\": true"), "{content}");
+    let lanes = lanes(&rig);
+    assert_eq!(lanes.len(), 1, "one lane for the script: {lanes:?}");
+    let (index, kind, _) = &lanes[0];
+    assert_eq!(kind, "REPL");
     let started = started(&rig);
-    assert!(started.contains(&"Read".to_owned()) && started.contains(&"Grep".to_owned()), "{started:?}");
+    assert!(started.contains(&"REPL".to_owned()), "the REPL call itself is a top-level row: {started:?}");
+    for inner in ["Read", "Grep"] {
+        assert!(started.contains(&format!("{index}>{inner}")), "{inner} shows inside the script's lane: {started:?}");
+        assert!(!started.contains(&inner.to_owned()), "{inner} is not a top-level row: {started:?}");
+    }
+    let finished = rig.events().into_iter().any(|event| {
+        matches!(event, EngineEvent::AgentUpdate { index: done, status: domain::AgentStatus::Done { .. }, .. } if done == *index)
+    });
+    assert!(finished, "the lane ends when the script does");
+}
+
+#[test]
+fn a_background_script_runs_apart_and_its_result_is_collected_with_task_output() {
+    let rig = code_mode(PermissionMode::AcceptEdits);
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("r0", "REPL", json!({ "code": "globalThis.shared = 'main'" }))]),
+        ScriptedModel::reply(vec![tool_use(
+            "r1",
+            "REPL",
+            json!({
+                "code": "const text = await Read({ file_path: 'notes.txt' }); [typeof shared, text.includes('beta')]",
+                "run_in_background": true
+            }),
+        )]),
+        ScriptedModel::reply(vec![tool_use("t0", "TaskOutput", json!({ "task_id": "task-1" }))]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    let mut history = vec![Message::user("go")];
+
+    rig.run_with(&model, &mut history, vec![Box::new(agent_engine::tools::repl::Repl)]).expect("run");
+
+    let results = results(&history);
+    assert!(results[1].0.contains("\"task_id\":\"task-1\"") && !results[1].1, "{:?}", results[1]);
+    let collected = &results[2].0;
+    assert!(collected.contains("\"undefined\"") && collected.contains("true"), "own context, real read: {collected}");
+}
+
+#[test]
+fn a_script_that_calls_no_tool_opens_no_lane() {
+    let rig = code_mode(PermissionMode::AcceptEdits);
+
+    scripts(&rig, &["1 + 1"]);
+
+    assert!(lanes(&rig).is_empty());
 }
 
 #[test]

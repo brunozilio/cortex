@@ -13,6 +13,10 @@ export const spec = {
         "description": "What the script does, in a few words of active voice, e.g. \"Count TODOs in each crate\".",
         "type": "string"
       },
+      "run_in_background": {
+        "description": "Run the script as a background task in its own fresh JavaScript context and go on working; collect what it returns with TaskOutput.",
+        "type": "boolean"
+      },
       "timeout": {
         "description": "Stop the script this many milliseconds after it starts, tool calls included (at most 600000, the default).",
         "type": "integer"
@@ -30,6 +34,8 @@ What comes back to you is the value of the script's last expression (strings as 
 Calls to read-only tools (Read, Grep, Glob, ...) started together with \`Promise.all\` run at the same time; edits, commands and anything that asks permission run one after another. Every call goes through the same permission rules, hooks and prompts as when you call the tool yourself.
 
 The context persists: variables and functions a script declares stay for the next REPL call in this session, so keep results in variables instead of reading them again. A \`const\` cannot be declared twice; use a new name or \`globalThis.name = ...\`. The context is sealed: there is no \`import\`, \`require\`, \`process\` or \`fetch\`; reach files, commands and the web through the tools. Scripts run in strict mode, one at a time.
+
+A script that waits on something long (a build, a test suite, a slow search) can run with \`run_in_background: true\`: it becomes a background task in a fresh context of its own, apart from your variables, and you go on working until you collect its result with TaskOutput (TaskStop ends it).
 
 Limits: the script's own JavaScript may run for 30 seconds (time waiting on tools does not count), the whole script stops after \`timeout\` (10 minutes at most), and one script makes at most 1,000 tool calls.
 

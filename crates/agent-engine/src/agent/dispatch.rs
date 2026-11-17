@@ -101,6 +101,9 @@ impl Agent<'_> {
                     }
                     Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
                     Some(_) if name == crate::tools::watch::WATCH_TOOL => self.watch(id, input, tasks),
+                    Some(_) if name == crate::tools::repl::REPL_TOOL && crate::tools::repl::in_background(input) => {
+                        self.repl_in_background(input, tasks, spawn)
+                    }
                     Some(_) if name == crate::tools::repl::REPL_TOOL => self.repl(id, input, tasks, parent),
                     Some(tool) => match (self.project_skill(tool.as_ref(), input), tool.script()) {
                         (Some(skill), _) => self.skill_call(id, tool.as_ref(), skill, &summary, input, permission),

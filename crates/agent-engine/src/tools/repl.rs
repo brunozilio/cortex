@@ -65,13 +65,20 @@ pub fn session(id: &str) -> Context {
         all.push(found);
         return Context { session, started_now: false };
     }
-    let helpers = content::source(HELPERS).unwrap_or_default();
-    let session = Arc::new(script::session::Session::with_helpers(helpers));
+    let session = Arc::new(script::session::Session::with_helpers(helpers()));
     all.push((id.to_owned(), Arc::clone(&session)));
     if all.len() > KEPT {
         all.remove(0);
     }
     Context { session, started_now: true }
+}
+
+pub fn helpers() -> String {
+    content::source(HELPERS).unwrap_or_default()
+}
+
+pub fn in_background(input: &Value) -> bool {
+    input["run_in_background"].as_bool() == Some(true)
 }
 
 pub fn reachable(name: &str) -> bool {
