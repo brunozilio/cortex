@@ -83,6 +83,13 @@ impl<W: Write> Output<W> {
         }
     }
 
+    pub fn abandon(&mut self, error: &str) {
+        if self.format != Format::Text {
+            self.error = Some(error.to_owned());
+            self.finish(false);
+        }
+    }
+
     pub fn finish(&mut self, failed_check: bool) -> bool {
         let failed = self.error.is_some() || failed_check;
         let result = json!({
@@ -187,6 +194,24 @@ mod tests {
         assert!(lines[..4].iter().all(|line| line["type"] == "event"));
         assert_eq!(lines[4]["type"], "result");
         assert_eq!(written(Format::Text, &run()), "Hello\n");
+    }
+
+    #[test]
+    fn a_run_that_could_not_go_on_still_ends_with_a_failed_result_in_json() {
+        let abandoned = |format: Format| {
+            let mut out = Vec::new();
+            Output::new(format, &mut out).abandon("no model is available");
+            String::from_utf8(out).expect("utf8")
+        };
+        let result: serde_json::Value = serde_json::from_str(&abandoned(Format::Json)).expect("one object");
+        assert_eq!(result["is_error"], true);
+        assert_eq!(result["subtype"], "error");
+        assert_eq!(result["error"], "no model is available");
+        let streamed = abandoned(Format::StreamJson);
+        let last: serde_json::Value = serde_json::from_str(streamed.lines().last().expect("a line")).expect("json");
+        assert_eq!(last["type"], "result");
+        assert_eq!(last["is_error"], true);
+        assert_eq!(abandoned(Format::Text), "", "text leaves the error to the caller's stderr line");
     }
 
     #[test]

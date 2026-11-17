@@ -101,7 +101,7 @@ enum Action {
         #[command(subcommand)]
         action: Option<mcp::McpAction>,
     },
-    #[command(about = "The plugins in ~/.{command}/plugins: list, install, update, remove")]
+    #[command(about = concat!("The plugins in ~/", brand::dir!(), "/plugins: list, install, update, remove"))]
     Plugin {
         #[command(subcommand)]
         action: Option<plugin::PluginAction>,
@@ -109,7 +109,11 @@ enum Action {
     #[command(about = "Check that this installation can work in the folder")]
     Doctor,
     #[command(
-        about = "Run the evals in .{command}/evals (each <name>/case.json, with an optional fixture/) and score them"
+        about = concat!(
+            "Run the evals in ",
+            brand::dir!(),
+            "/evals (each <name>/case.json, with an optional fixture/) and score them"
+        )
     )]
     Eval {
         #[arg(help = "Only these cases (all by default)")]
@@ -121,7 +125,7 @@ enum Action {
     Config {
         #[command(subcommand)]
         action: config::ConfigAction,
-        #[arg(help = "This project's .{command}/settings.local.json instead")]
+        #[arg(help = concat!("This project's ", brand::dir!(), "/settings.local.json instead"))]
         #[arg(long, global = true)]
         project: bool,
     },

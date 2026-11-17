@@ -37,7 +37,24 @@ pub fn print_all(
     wanted: Wanted<'_>,
     prompts: impl IntoIterator<Item = Result<String, String>>,
 ) -> Result<ExitCode, String> {
-    let Wanted { model: wanted, mode, verification, add_dirs, headless, format, resume, fork, trust } = wanted;
+    let mut output = Output::new(wanted.format, std::io::stdout().lock());
+    match answer_all(sdk, cwd, wanted, prompts, &mut output) {
+        Ok(failed) => Ok(if failed { ExitCode::FAILURE } else { ExitCode::SUCCESS }),
+        Err(message) => {
+            output.abandon(&message);
+            Err(message)
+        }
+    }
+}
+
+fn answer_all(
+    sdk: &Sdk,
+    cwd: PathBuf,
+    wanted: Wanted<'_>,
+    prompts: impl IntoIterator<Item = Result<String, String>>,
+    output: &mut Output<impl std::io::Write>,
+) -> Result<bool, String> {
+    let Wanted { model: wanted, mode, verification, add_dirs, headless, format: _, resume, fork, trust } = wanted;
     let models = sdk.models().map_err(|e| e.to_string())?;
     let remembered = sdk.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
     let model = domain::model::choose_model(&models, wanted.or(remembered.as_deref())).ok_or(concat!(
@@ -70,7 +87,6 @@ pub fn print_all(
     for dir in add_dirs {
         session.add_dir(dir);
     }
-    let mut output = Output::new(format, std::io::stdout().lock());
     let mut failed_verification = false;
     for prompt in prompts {
         let mut run = session.send(&prompt?).map_err(|e| e.to_string())?;
@@ -94,8 +110,7 @@ pub fn print_all(
             }
         }
     }
-    let failed = output.finish(failed_verification);
-    Ok(if failed { ExitCode::FAILURE } else { ExitCode::SUCCESS })
+    Ok(output.finish(failed_verification))
 }
 
 fn settle_trust(sdk: &Sdk, cwd: &std::path::Path, trust: bool, errors: &mut dyn std::io::Write) -> Result<(), String> {
