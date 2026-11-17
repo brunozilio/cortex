@@ -90,14 +90,6 @@ impl Catalog {
         self.rows.retain(|row| row.session != *session);
     }
 
-    pub fn orphaned(&mut self, sessions: &[SessionId]) {
-        for row in self.rows.iter_mut().filter(|row| sessions.contains(&row.session)) {
-            if matches!(row.status, SessionStatus::Running | SessionStatus::Thinking | SessionStatus::NeedsYou) {
-                row.status = SessionStatus::Cancelled;
-            }
-        }
-    }
-
     pub fn import(&mut self, owner_settings: &serde_json::Value) {
         let Some(folders) = owner_settings["conversations"].as_object() else { return };
         for (cwd, kept) in folders {

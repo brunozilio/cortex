@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::search::{Semantic, search};
+use super::search::search;
 use super::{Memory, MemoryKind};
 
 pub fn links(memories: &[Memory]) -> Vec<(usize, usize)> {
@@ -50,14 +50,8 @@ pub fn retention(memory: &Memory, now: i64) -> f32 {
     decay(memory.created) + used
 }
 
-pub fn recall(
-    prompt: &str,
-    memories: &[Memory],
-    semantic: Option<Semantic>,
-    budget: RecallBudget,
-    now: i64,
-) -> Vec<Memory> {
-    let relevance = search(prompt, memories, semantic);
+pub fn recall(prompt: &str, memories: &[Memory], budget: RecallBudget, now: i64) -> Vec<Memory> {
+    let relevance = search(prompt, memories);
     let kept: Vec<f32> = memories.iter().map(|m| retention(m, now)).collect();
     let scores: Vec<f32> = relevance.iter().zip(&kept).map(|(score, kept)| score * kept).collect();
     let ranked = |episodic: bool, take: usize| -> Vec<usize> {

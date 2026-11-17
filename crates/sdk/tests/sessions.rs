@@ -82,16 +82,3 @@ fn every_client_sees_the_sessions_the_others_ran_and_can_tidy_them() {
     first.delete_session(&id).expect("delete");
     assert!(second.sessions().expect("sessions").is_empty());
 }
-
-#[test]
-fn a_client_of_a_remote_backend_has_no_siblings() {
-    let data = tempfile::tempdir().expect("data");
-    let local = build(&engine(), data.path());
-    drop(local);
-    let services = LocalServices::with_engine(Arc::new(engine()));
-    let remote = Sdk::builder()
-        .backend(move |wake| Ok(Box::new(backend::LocalBackend::new(services, wake)?) as Box<dyn backend::Backend>))
-        .build()
-        .expect(brand::COMMAND);
-    assert!(remote.sibling().is_err());
-}

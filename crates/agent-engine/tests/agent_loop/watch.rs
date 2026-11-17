@@ -14,7 +14,6 @@ use crate::{Rig, tool_use};
 
 #[derive(Debug, Clone)]
 struct Issue {
-    read_only: bool,
     calls: Arc<AtomicUsize>,
     statuses: &'static [&'static str],
 }
@@ -45,10 +44,6 @@ impl Tool for Issue {
     fn kept(&self) -> Option<Arc<dyn Tool>> {
         Some(Arc::new(self.clone()))
     }
-
-    fn declared_read_only(&self) -> bool {
-        self.read_only
-    }
 }
 
 fn watch(id: &str, tool: &str) -> Block {
@@ -74,7 +69,7 @@ fn a_read_only_tool_is_checked_once_now_and_then_watched_without_the_model() {
     let mut rig = Rig::new(PermissionMode::Bypass);
     rig.workspace.credentials.client = 9401;
     let calls = Arc::new(AtomicUsize::new(0));
-    let issue = Issue { read_only: true, calls: Arc::clone(&calls), statuses: &["Em análise"] };
+    let issue = Issue { calls: Arc::clone(&calls), statuses: &["Em análise"] };
     let model = ScriptedModel::new([
         ScriptedModel::reply(vec![watch("w1", "mcp__jira__getIssue"), watch("w2", "Bash")]),
         ScriptedModel::reply(vec![Block::Text("Watching.".into())]),
@@ -103,7 +98,7 @@ fn without_a_rule_a_tool_that_may_change_things_is_asked_about_every_time_and_a_
     let mut rig = Rig::new(PermissionMode::Ask);
     rig.workspace.credentials.client = 9402;
     let calls = Arc::new(AtomicUsize::new(0));
-    let issue = Issue { read_only: false, calls: Arc::clone(&calls), statuses: &["Concluído"] };
+    let issue = Issue { calls: Arc::clone(&calls), statuses: &["Concluído"] };
     let model = ScriptedModel::new([
         ScriptedModel::reply(vec![watch("w1", "mcp__jira__getIssue")]),
         ScriptedModel::reply(vec![watch("w2", "mcp__jira__getIssue")]),
@@ -163,7 +158,7 @@ fn watch_once(mode: PermissionMode, client: u64, rules: PermissionRules) -> (Rig
     rig.workspace.credentials.client = client;
     rig.workspace.policy.permissions = rules;
     let calls = Arc::new(AtomicUsize::new(0));
-    let issue = Issue { read_only: false, calls: Arc::clone(&calls), statuses: &["Em análise"] };
+    let issue = Issue { calls: Arc::clone(&calls), statuses: &["Em análise"] };
     let model = ScriptedModel::new([
         ScriptedModel::reply(vec![watch("w1", "mcp__jira__getIssue")]),
         ScriptedModel::reply(vec![Block::Text("Ok.".into())]),
@@ -228,7 +223,7 @@ fn allowing_a_tool_always_also_lets_a_watch_of_it_start_without_asking_again() {
     let mut rig = Rig::new(PermissionMode::Ask);
     rig.workspace.credentials.client = 9406;
     let calls = Arc::new(AtomicUsize::new(0));
-    let issue = Issue { read_only: false, calls: Arc::clone(&calls), statuses: &["Em análise"] };
+    let issue = Issue { calls: Arc::clone(&calls), statuses: &["Em análise"] };
     let model = ScriptedModel::new([
         ScriptedModel::reply(vec![tool_use("g1", "mcp__jira__getIssue", json!({ "key": "KAN-1" }))]),
         ScriptedModel::reply(vec![watch("w1", "mcp__jira__getIssue")]),
@@ -267,7 +262,7 @@ fn after_starting_a_watch_the_run_cannot_schedule_wakeups_or_watch_the_same_call
     let mut rig = Rig::new(PermissionMode::Bypass);
     rig.workspace.credentials.client = 9403;
     let calls = Arc::new(AtomicUsize::new(0));
-    let issue = Issue { read_only: true, calls: Arc::clone(&calls), statuses: &["Em análise"] };
+    let issue = Issue { calls: Arc::clone(&calls), statuses: &["Em análise"] };
     let wakeup = json!({ "delaySeconds": 120, "prompt": "check KAN-1", "reason": "waiting" });
     let model = ScriptedModel::new([
         ScriptedModel::reply(vec![watch("w1", "mcp__jira__getIssue")]),

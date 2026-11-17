@@ -83,7 +83,6 @@ impl Transcript {
             if let Some(agent) = self.agents.get_mut(&index) {
                 agent.end(status.clone());
             }
-            self.tell(super::Change::Agent(index));
         }
     }
 }

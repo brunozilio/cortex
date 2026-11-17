@@ -12,7 +12,7 @@ pub fn relevant(memories: &[Memory], changed: &[String], diff: &str) -> Vec<Memo
         .cloned()
         .collect();
     let words: String = changed.iter().map(String::as_str).chain(changed_lines(diff)).collect::<Vec<_>>().join("\n");
-    let scores = search(&words, memories, None);
+    let scores = search(&words, memories);
     let mut by_words: Vec<usize> = (0..memories.len()).filter(|&at| scores[at] > 0.0).collect();
     by_words.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then(a.cmp(&b)));
     for at in by_words.into_iter().take(MOST_FOUND_BY_WORDS) {

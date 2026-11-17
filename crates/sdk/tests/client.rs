@@ -5,10 +5,7 @@ use std::sync::Arc;
 use agent_engine::fake::FakeEngine;
 use backend::{InMemorySecretStore, LocalServices};
 use domain::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId};
-use sdk::{
-    Agent, Command, Decision, EngineEvent, Error, Image, McpConnection, McpServer, MemoryKind, Model, ModelProvider,
-    Sdk, Skill,
-};
+use sdk::{Decision, EngineEvent, Error, Image, MemoryKind, Model, ModelProvider, Sdk};
 use serde_json::json;
 
 fn model() -> Model {
@@ -89,36 +86,6 @@ fn a_question_is_answered_through_the_run() {
         std::thread::yield_now();
     }
     assert_eq!(engine.answers(), [(AskId("a-1".into()), Decision::Allow)]);
-}
-
-#[test]
-fn agents_skills_commands_and_mcp_servers_reach_every_run() {
-    let data = tempfile::tempdir().expect("data");
-    let engine = FakeEngine::new(vec![model()], script(Vec::new()));
-    let sdk = Sdk::builder()
-        .data_dir(data.path())
-        .name("app")
-        .agent(Agent::new("reviewer", "Reviews diffs.").instructions("Review."))
-        .skill(Skill::new("release", "Cuts a release.", "Tag it."))
-        .command(Command::new("audit", "Audits a path.", "Audit $ARGUMENTS"))
-        .mcp(McpServer::new("math").tool("add", "Adds.", json!({"type": "object"}), |_| Ok(json!(3))))
-        .connect(McpConnection::http("docs", "https://docs.test/mcp").header("Authorization", "Bearer t"))
-        .services(services(&engine))
-        .build()
-        .expect(brand::COMMAND);
-    let skills: Vec<String> = sdk.skills(data.path()).expect("skills").into_iter().map(|s| s.name).collect();
-    assert!(skills.contains(&"release".to_owned()) && skills.contains(&"audit".to_owned()), "{skills:?}");
-    let agents = sdk.agents(data.path()).expect("agents");
-    assert!(agents.iter().any(|agent| agent.name == "reviewer"));
-
-    sdk.session(data.path(), model()).send("/audit src").expect("run").text().expect("text");
-    let request = engine.requests().remove(0);
-    let brief = request.extensions.expect("brief");
-    assert_eq!(brief.dirs, [data.path().join("sdk").join("app")]);
-    assert!(brief.dirs[0].join("commands/audit.md").is_file());
-    assert_eq!(request.credentials.mcp.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["math"]);
-    let config = brief.mcp_config.expect("the HTTP server joins the run's MCP config");
-    assert!(!config.exists(), "the run's private MCP config is removed when it ends");
 }
 
 #[test]

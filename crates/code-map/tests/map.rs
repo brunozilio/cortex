@@ -1,4 +1,4 @@
-use code_map::{CallSite, CodeMap, Pointer, SymbolHit, SymbolKind, extract, render};
+use code_map::{CodeMap, Pointer, SymbolHit, SymbolKind, extract, render};
 
 fn file(path: &str, source: &str) -> code_map::FileSymbols {
     extract(path, source).unwrap_or_default()
@@ -17,31 +17,6 @@ fn sample() -> CodeMap {
         file("crates/merge/src/near.rs", "fn unrelated() {}\n"),
         file("crates/cli/src/render.rs", "fn draw_status_line() {}\n"),
     ])
-}
-
-#[test]
-fn callers_lists_every_call_site_by_bare_or_qualified_name() {
-    let map = sample();
-    let site = |line, caller: &str| CallSite {
-        path: "crates/backend/src/memory.rs".into(),
-        line,
-        caller: Some(caller.into()),
-    };
-    assert_eq!(map.callers("merge_near_duplicates"), vec![site(2, "save"), site(6, "load"), site(7, "load")]);
-    assert_eq!(map.callers("dedup::merge_near_duplicates"), vec![site(2, "save")]);
-    assert!(map.callers("missing").is_empty());
-}
-
-#[test]
-fn symbols_in_returns_symbols_overlapping_the_lines() {
-    let map = sample();
-    let names = |lines| -> Vec<String> {
-        map.symbols_in("crates/domain/src/memory/dedup.rs", lines).iter().map(|s| s.name.clone()).collect()
-    };
-    assert_eq!(names(2..=2), vec!["merge_near_duplicates"]);
-    assert_eq!(names(3..=5), vec!["merge_near_duplicates", "similarity"]);
-    assert!(names(4..=4).is_empty());
-    assert!(map.symbols_in("nope.rs", 1..=100).is_empty());
 }
 
 #[test]

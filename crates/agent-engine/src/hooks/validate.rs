@@ -99,4 +99,15 @@ mod tests {
         let regex = json!({"PreToolUse": [{"matcher": "(", "hooks": []}]});
         assert!(refused(regex).starts_with("PreToolUse: matcher \"(\" is not a regex"));
     }
+
+    #[test]
+    fn a_status_message_is_accepted_and_not_kept() {
+        let told = json!({"type": "command", "command": "./check.sh", "status_message": "Checking"});
+        let plain = json!({"type": "command", "command": "./check.sh"});
+        let hooks = Hooks::parse(&json!({"Stop": [{"hooks": [told]}]})).expect("accepted");
+        assert_eq!(hooks, Hooks::parse(&json!({"Stop": [{"hooks": [plain]}]})).expect("plain"));
+        assert!(!serde_json::to_string(&hooks).expect("json").contains("status_message"));
+        let unknown = json!({"type": "command", "command": "x", "status": "Checking"});
+        assert!(refused(json!({"Stop": [{"hooks": [unknown]}]})).contains("unknown field"));
+    }
 }

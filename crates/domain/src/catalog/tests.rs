@@ -62,17 +62,6 @@ fn a_session_is_renamed_archived_and_deleted() {
 }
 
 #[test]
-fn sessions_left_running_by_a_process_that_ended_are_cancelled() {
-    let mut catalog = Catalog::default();
-    catalog.started(&id("a"), Path::new("/w"), 1);
-    catalog.started(&id("b"), Path::new("/w"), 2);
-    catalog.status(&id("b"), SessionStatus::Done, 3);
-    catalog.orphaned(&[id("a"), id("b")]);
-    assert_eq!(catalog.find(&id("a")).map(|row| row.status), Some(SessionStatus::Cancelled));
-    assert_eq!(catalog.find(&id("b")).map(|row| row.status), Some(SessionStatus::Done));
-}
-
-#[test]
 fn the_conversations_the_terminal_kept_are_brought_in_once() {
     let settings = json!({"conversations": {
         "/work/a": [{"session": "s2", "title": "Fix the test", "at": 20}, {"session": "s1", "at": 10}],

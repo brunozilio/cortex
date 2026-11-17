@@ -11,15 +11,16 @@ use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, Princ
 use protocol::{ClientCommand, Envelope, ServerEvent};
 use serde_json::json;
 
-fn sdk_folder() -> PathBuf {
-    let root = tempfile::tempdir().expect("sdk").keep();
+fn project_with_a_skill_and_an_agent() -> tempfile::TempDir {
+    let project = tempfile::tempdir().expect("project");
+    let root = project.path().join(brand::DIR);
     std::fs::create_dir_all(root.join("skills/motion")).expect("skills");
     std::fs::create_dir_all(root.join("agents")).expect("agents");
     std::fs::write(root.join("skills/motion/SKILL.md"), "---\nname: motion\ndescription: Motion\n---\nMove.")
         .expect("skill");
     std::fs::write(root.join("agents/reviewer.md"), "---\nname: reviewer\ndescription: Reviews\n---\nReview.")
         .expect("agent");
-    root
+    project
 }
 
 fn model() -> ModelOption {
@@ -32,7 +33,6 @@ fn backend(engine: FakeEngine) -> (LocalBackend, Receiver<()>) {
 
 fn backend_with(engine: FakeEngine, memory_tool: bool) -> (LocalBackend, Receiver<()>) {
     let mut services = LocalServices::with_engine(Arc::new(engine));
-    services.extensions.dirs = vec![sdk_folder()];
     services.data = None;
     if !memory_tool {
         services = services.without("memory_search");
@@ -133,7 +133,7 @@ fn queries_answer_models_skills_and_agents() {
     let models = collect(&backend, &woke, |event| matches!(event, ServerEvent::Models(_)));
     assert_eq!(models, vec![ServerEvent::Models(vec![model()])]);
 
-    let dir = tempfile::tempdir().expect("tempdir");
+    let dir = project_with_a_skill_and_an_agent();
     send(&backend, ClientCommand::ListSkills { path: dir.path().to_path_buf() });
     let skills = collect(&backend, &woke, |event| matches!(event, ServerEvent::Skills(_)));
     assert!(matches!(&skills[..], [ServerEvent::Skills(list)] if list.iter().any(|s| s.name == "motion")));

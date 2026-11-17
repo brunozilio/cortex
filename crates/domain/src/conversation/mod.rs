@@ -1,6 +1,4 @@
 mod agent;
-mod change;
-mod checkpoint;
 mod drafted;
 mod fold;
 mod lesson;
@@ -9,16 +7,12 @@ mod plan;
 mod replay;
 mod status;
 pub mod verdict;
-mod waiting;
 
 pub use agent::AgentRun;
-pub use change::Change;
-pub use checkpoint::Checkpoint;
 pub use drafted::drafted;
 pub use own_shell::{shell_note, with_shell};
 pub use plan::Outcome;
 pub use status::{Pending, SessionStatus};
-pub use waiting::RETRY_AFTER_SECONDS;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -75,12 +69,6 @@ pub struct Transcript {
     failure: Option<crate::FailureKind>,
     agents: std::collections::BTreeMap<usize, AgentRun>,
     moved: Option<std::path::PathBuf>,
-    record: bool,
-    changes: Vec<Change>,
-    checkpoints: Vec<Checkpoint>,
-    draft: Option<String>,
-    queue: Vec<String>,
-    retried: bool,
 }
 
 fn user_text(entry: &Entry) -> Option<String> {
@@ -114,7 +102,6 @@ pub fn call(name: &str, summary: &str) -> String {
 impl Transcript {
     pub fn push(&mut self, entry: Entry) {
         self.entries.push(entry);
-        self.touch(self.entries.len() - 1);
     }
 
     pub fn first_prompt(&self) -> Option<String> {
@@ -139,9 +126,7 @@ impl Transcript {
     }
 
     pub fn clear_passing(&mut self) {
-        let Some(first) = self.entries.iter().position(|entry| matches!(entry, Entry::Passing(_))) else { return };
         self.entries.retain(|entry| !matches!(entry, Entry::Passing(_)));
-        self.cut(first);
     }
 
     pub fn error(&mut self, text: impl Into<String>) {
@@ -153,20 +138,14 @@ impl Transcript {
     }
 
     pub fn begin(&mut self) {
-        let before = self.before();
         self.written = 0;
         self.activity = Some("Working".into());
         self.started_run();
-        self.tell_since(before, None);
     }
 }
 
 #[cfg(test)]
 mod agent_tests;
-#[cfg(test)]
-mod change_tests;
-#[cfg(test)]
-mod checkpoint_tests;
 #[cfg(test)]
 mod held_tests;
 #[cfg(test)]
@@ -177,5 +156,3 @@ mod replay_tests;
 mod status_tests;
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod waiting_tests;

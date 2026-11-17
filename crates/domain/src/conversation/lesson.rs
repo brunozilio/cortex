@@ -17,16 +17,13 @@ impl Transcript {
         let at = self.entries.iter().rposition(|entry| matches!(entry, Entry::Lesson { kept: None, .. }))?;
         let Entry::Lesson { proposal, kept } = &mut self.entries[at] else { return None };
         *kept = Some(keep);
-        let decided = proposal.clone();
-        self.touch(at);
-        Some(decided)
+        Some(proposal.clone())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::conversation::Change;
     use crate::learning::Lesson;
 
     fn lesson(text: &str) -> Proposal {
@@ -35,16 +32,14 @@ mod tests {
 
     #[test]
     fn a_lesson_offered_is_decided_once_and_the_newest_first() {
-        let mut transcript = Transcript::recording();
+        let mut transcript = Transcript::default();
         transcript.offer(lesson("old"));
         transcript.offer(lesson("new"));
-        transcript.take_changes();
 
         assert_eq!(transcript.lesson(), Some(&lesson("new")), "looking decides nothing");
         assert_eq!(transcript.decide(true), Some(lesson("new")));
         assert_eq!(transcript.lesson(), Some(&lesson("old")));
         assert_eq!(transcript.entries[1], Entry::Lesson { proposal: lesson("new"), kept: Some(true) });
-        assert_eq!(transcript.take_changes(), [Change::Entry(1)]);
         assert_eq!(transcript.decide(false), Some(lesson("old")));
         assert_eq!(transcript.decide(true), None, "nothing is left to decide");
     }

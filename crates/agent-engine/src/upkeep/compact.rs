@@ -24,7 +24,8 @@ pub fn summary_text(answer: &str) -> String {
     }
 }
 
-pub fn compact(
+#[cfg(test)]
+pub(super) fn compact(
     api: &dyn ModelApi,
     template: &TurnRequest,
     history: &mut Vec<Message>,

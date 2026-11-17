@@ -51,7 +51,6 @@ impl Transcript {
             && let Entry::Plan { outcome, .. } = &mut self.entries[at]
         {
             *outcome = settled;
-            self.touch(at);
         }
     }
 }

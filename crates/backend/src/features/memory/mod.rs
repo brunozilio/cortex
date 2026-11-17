@@ -111,9 +111,7 @@ impl Memories {
     fn apply(&self, owner: &Principal, project: &Path, edits: &[MemoryEdit], by: Provenance) -> Result<Value, String> {
         let mut books = self.lock();
         let changed = self.store.update(owner, project, &mut |book| {
-            let since = book.next_id();
             book.apply(edits, &by);
-            book.merge_near_duplicates(since, by.now);
         });
         let changed = match changed {
             Ok(changed) => changed,
@@ -130,7 +128,7 @@ impl Memories {
     pub fn search(&self, owner: &Principal, project: &Path, query: &str) -> Vec<(MemoryId, f32)> {
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
-        let scores = search(query, &book.memories, None);
+        let scores = search(query, &book.memories);
         let mut hits: Vec<(MemoryId, f32)> =
             book.memories.iter().zip(scores).filter(|(_, s)| *s > 0.0).map(|(m, s)| (m.id, s)).collect();
         hits.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
@@ -153,7 +151,7 @@ impl Memories {
         let mut books = self.lock();
         let book = self.book(&mut books, owner, project);
         let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
-        let scores = search(query, &known, None);
+        let scores = search(query, &known);
         let mut order: Vec<usize> = (0..known.len()).filter(|&i| scores[i] > 0.0).collect();
         order.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then(a.cmp(&b)));
         let ranked: Vec<Memory> = order.into_iter().map(|i| known[i].clone()).collect();
@@ -215,7 +213,7 @@ impl Memories {
             let mut books = self.lock();
             let book = self.book(&mut books, owner, &request.cwd);
             let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
-            let recalled = recall(&request.prompt, &known, None, budget, now());
+            let recalled = recall(&request.prompt, &known, budget, now());
             let personal: Vec<Memory> =
                 recalled.iter().filter(|memory| !domain::memory::team::is_team(memory.id)).cloned().collect();
             self.mark_used(owner, &request.cwd, book, &personal);

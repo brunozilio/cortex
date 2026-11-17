@@ -88,12 +88,12 @@ fn shared_tags_link_memories_in_a_chain() {
 #[test]
 fn activation_matches_prefixes_and_spreads_along_links() {
     let memories = book().memories;
-    assert!(activate("", &memories).iter().all(|s| *s == 0.0));
-    let scores = activate("signed dist", &memories);
+    assert!(search("", &memories).iter().all(|s| *s == 0.0));
+    let scores = search("signed dist", &memories);
     assert_eq!(scores[0], 1.0);
     assert!(scores[2] > 0.0 && scores[2] <= 0.5, "linked by the render tag: {scores:?}");
     assert_eq!((scores[1], scores[3]), (0.0, 0.0));
-    let tagged = activate("ci", &memories);
+    let tagged = search("ci", &memories);
     assert_eq!(tagged[1], 1.0);
 }
 
@@ -106,7 +106,7 @@ fn recall_keeps_facts_and_the_best_episodes() {
             &by_agent(300 + n),
         );
     }
-    let recalled = recall("usage grid", &book.memories, None, RecallBudget { facts: 2, episodes: 2 }, 400);
+    let recalled = recall("usage grid", &book.memories, RecallBudget { facts: 2, episodes: 2 }, 400);
     let ids: Vec<u32> = recalled.iter().map(|m| m.id.0).collect();
     assert_eq!(recalled.iter().filter(|m| m.kind == MemoryKind::Episodic).count(), 2);
     assert!(ids.contains(&2) && ids.contains(&8), "{ids:?}");
@@ -140,10 +140,6 @@ fn edit_files_parse_strictly() {
     assert_eq!(parse_memory_edits("nope"), None);
 }
 
-fn vectors_from(pairs: &[(f32, f32)]) -> Vec<Vec<f32>> {
-    pairs.iter().map(|(x, y)| vec![*x, *y]).collect()
-}
-
 #[test]
 fn bm25_prefers_rare_words_and_whole_short_ones() {
     let memories = book().memories;
@@ -155,43 +151,21 @@ fn bm25_prefers_rare_words_and_whole_short_ones() {
 }
 
 #[test]
-fn similarity_keeps_the_related_few() {
-    let vectors = vectors_from(&[(1.0, 0.0), (0.9, 0.1), (0.0, 1.0), (-1.0, 0.0)]);
-    let aligned: Vec<Option<&[f32]>> = vectors.iter().map(|v| Some(v.as_slice())).chain([None]).collect();
-    let scores = search::similarity(Semantic { query: &[1.0, 0.0], memories: &aligned });
-    assert!(scores[0] > scores[1] && scores[1] > 0.0);
-    assert_eq!((scores[2], scores[3], scores[4]), (0.0, 0.0, 0.0));
-}
-
-#[test]
-fn meaning_finds_what_words_miss() {
-    let memories = book().memories;
-    let vectors = vectors_from(&[(1.0, 0.0), (0.0, 1.0), (0.2, 0.8), (0.0, -1.0)]);
-    let aligned: Vec<Option<&[f32]>> = vectors.iter().map(|v| Some(v.as_slice())).collect();
-    let semantic = Semantic { query: &[0.95, 0.05], memories: &aligned };
-    assert!(activate("desenho de superfícies", &memories).iter().all(|s| *s == 0.0));
-    let scores = search("desenho de superfícies", &memories, Some(semantic));
-    assert_eq!(scores[0], 1.0);
-    assert!(scores[3] == 0.0);
-    let both = search("clippy", &memories, Some(Semantic { query: &[0.0, 1.0], memories: &aligned }));
-    assert_eq!(both[1], 1.0);
-}
-
-#[test]
-fn vectors_follow_the_model_and_the_text() {
-    let mut book = book();
-    assert_eq!(book.unembedded("mini").len(), 4);
-    book.vectors.insert(MemoryId(0), vec![1.0]);
-    book.vectors.insert(MemoryId(1), vec![1.0]);
-    assert_eq!(book.unembedded("mini").len(), 2);
-    book.apply(
-        &[MemoryEdit::Revise { id: MemoryId(0), text: "Changed".into() }, MemoryEdit::Forget { id: MemoryId(1) }],
-        &by_agent(1),
-    );
-    assert!(book.vectors.is_empty(), "revised and forgotten memories lose their vectors");
-    book.vectors.insert(MemoryId(2), vec![1.0]);
-    assert_eq!(book.unembedded("other").len(), 3, "another model starts over");
-    assert!(book.vectors.is_empty());
+fn a_book_saved_with_embeddings_still_loads_and_keeps_its_memories() {
+    let saved = r#"{
+        "next": 2,
+        "memories": [
+            {"id": 0, "kind": "semantic", "text": "Uses wgpu", "tags": ["render"], "created": 10, "author": "agent"},
+            {"id": 1, "kind": "episodic", "text": "Fixed the cache", "created": 20, "author": "user"}
+        ],
+        "vectors": {"0": [0.25, 0.75], "1": [1.0, 0.0]},
+        "model": "mini"
+    }"#;
+    let book: MemoryBook = serde_json::from_str(saved).expect("an old book");
+    assert_eq!(book.next, 2);
+    assert_eq!(book.memories.iter().map(|m| m.text.as_str()).collect::<Vec<_>>(), ["Uses wgpu", "Fixed the cache"]);
+    let written = serde_json::to_string(&book).expect("json");
+    assert!(!written.contains("vectors") && !written.contains("model"), "{written}");
 }
 
 #[test]

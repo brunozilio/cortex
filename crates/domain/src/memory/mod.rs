@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
@@ -120,10 +120,6 @@ pub struct MemoryBook {
     pub next: u32,
     #[serde(default)]
     pub memories: Vec<Memory>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub vectors: BTreeMap<MemoryId, Vec<f32>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub forgotten: Vec<Forgotten>,
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -174,7 +170,6 @@ impl MemoryBook {
                         let memory = self.memories.remove(at);
                         self.forgotten.push(Forgotten { memory, at: by.now });
                     }
-                    self.vectors.remove(id);
                 }
                 MemoryEdit::Restore { id } => {
                     if let Some(at) = self.forgotten.iter().position(|f| f.memory.id == *id) {
@@ -199,7 +194,6 @@ impl MemoryBook {
                     memory.history.push(Revision { text: old, until: by.now });
                     let extra = memory.history.len().saturating_sub(REVISIONS_KEPT);
                     memory.history.drain(..extra);
-                    self.vectors.remove(id);
                     touched.push(*id);
                 }
             }
@@ -212,18 +206,6 @@ impl MemoryBook {
             memory.uses = memory.uses.saturating_add(1);
             memory.last_used = memory.last_used.max(now);
         }
-    }
-
-    pub fn unembedded(&mut self, model: &str) -> Vec<(MemoryId, String)> {
-        if self.model.as_deref() != Some(model) {
-            self.vectors.clear();
-            self.model = Some(model.to_owned());
-        }
-        self.memories.iter().filter(|m| !self.vectors.contains_key(&m.id)).map(|m| (m.id, m.text.clone())).collect()
-    }
-
-    pub fn aligned_vectors(&self) -> Vec<Option<&[f32]>> {
-        self.memories.iter().map(|m| self.vectors.get(&m.id).map(Vec::as_slice)).collect()
     }
 
     fn after_highest(&self) -> u32 {
@@ -262,7 +244,6 @@ pub mod anchors;
 mod brief;
 pub mod check;
 pub mod decision;
-mod dedup;
 mod optimize;
 mod recall;
 mod sanitize;
@@ -276,7 +257,7 @@ pub use brief::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemoryBrief, parse_memory_edi
 pub use optimize::optimize_prompt;
 pub use recall::{RecallBudget, links, recall};
 pub use sanitize::{REDACTED, Sanitized, sanitize};
-pub use search::{Semantic, activate, search};
+pub use search::search;
 pub use searches::{MemorySearches, SearchAnswer};
 
 #[cfg(test)]

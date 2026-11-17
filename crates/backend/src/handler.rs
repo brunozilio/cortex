@@ -220,14 +220,13 @@ impl CommandHandler {
             },
             ..request.clone()
         };
-        let request = self.services.extensions.brief(run, request, self.services.home(owner))?;
+        let request = self.services.extensions.brief(request, self.services.home(owner));
         let (request, finishes) = self.with_context(owner, |context| crate::features::prepare(context, run, request));
         let sink = Arc::new(RunSink {
             runs: Arc::clone(&self.runs),
             listing: crate::catalog::Listing::of(&self.services, owner, &request),
             outbox,
             finishes: std::sync::Mutex::new(finishes),
-            extensions: request.extensions.clone(),
             outcome: std::sync::Mutex::default(),
         });
         match self.services.engine.start(run, &request, sink) {
@@ -235,10 +234,7 @@ impl CommandHandler {
                 self.runs.insert(run, owner.clone(), handle);
                 Ok(())
             }
-            Err(error) => {
-                crate::extensions::discard(request.extensions.as_ref());
-                Err(error.to_string())
-            }
+            Err(error) => Err(error.to_string()),
         }
     }
 
@@ -268,7 +264,6 @@ struct RunSink {
     listing: Option<crate::catalog::Listing>,
     outbox: Outbox,
     finishes: std::sync::Mutex<Vec<Finish>>,
-    extensions: Option<domain::Extensions>,
     outcome: std::sync::Mutex<domain::memory::scorecard::RunOutcome>,
 }
 
@@ -280,7 +275,6 @@ impl EventSink for RunSink {
         self.outcome.locked().observe(&event);
         if event.is_terminal() {
             self.runs.finish(run);
-            crate::extensions::discard(self.extensions.as_ref());
             let outcome = *self.outcome.locked();
             let finishes = std::mem::take(&mut *self.finishes.locked());
             for finished in finishes.into_iter().filter_map(|finish| finish(&outcome)) {

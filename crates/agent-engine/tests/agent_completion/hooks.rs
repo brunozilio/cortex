@@ -45,7 +45,7 @@ fn hook_timeout_kills_a_running_process_tree() {
         kind: "command".into(),
         command: "sleep 20".into(),
         timeout: 1,
-        status_message: None,
+        status_message: (),
         prompt: None,
         model: None,
         url: None,

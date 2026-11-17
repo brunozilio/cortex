@@ -62,11 +62,6 @@ impl NativeEngine {
         self.lsp = lsp;
         self
     }
-
-    pub fn with_launcher(mut self, launcher: Arc<dyn crate::tools::Launcher>) -> Self {
-        self.launch = crate::tools::Launch(launcher);
-        self
-    }
 }
 
 impl AgentEngine for NativeEngine {

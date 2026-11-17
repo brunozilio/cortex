@@ -1,73 +1,20 @@
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use domain::mcp::LocalMcp;
-use domain::{CustomAgent, ModelOption, PromptRequest, RunId, Skill};
-use serde_json::{Value, json};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum McpServerSpec {
-    Http { name: String, url: String, headers: BTreeMap<String, String> },
-    Stdio { name: String, command: String, args: Vec<String>, env: BTreeMap<String, String> },
-}
-
-impl McpServerSpec {
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Http { name, .. } | Self::Stdio { name, .. } => name,
-        }
-    }
-
-    fn config(&self) -> Value {
-        match self {
-            Self::Http { url, headers, .. } => json!({ "type": "http", "url": url, "headers": headers }),
-            Self::Stdio { command, args, env, .. } => {
-                json!({ "type": "stdio", "command": command, "args": args, "env": env })
-            }
-        }
-    }
-}
+use domain::{CustomAgent, ModelOption, PromptRequest, Skill};
 
 #[derive(Debug, Clone, Default)]
 pub struct Extensions {
-    pub dirs: Vec<PathBuf>,
-    pub mcp: Vec<McpServerSpec>,
-    pub local: Vec<LocalMcp>,
     pub plugins: Vec<PathBuf>,
 }
 
 impl Extensions {
     fn for_run(&self) -> domain::Extensions {
-        domain::Extensions { dirs: self.dirs.clone(), plugins: self.plugins.clone(), ..Default::default() }
+        domain::Extensions { plugins: self.plugins.clone(), ..Default::default() }
     }
 
-    pub(crate) fn brief(
-        &self,
-        run: RunId,
-        request: PromptRequest,
-        home: Option<PathBuf>,
-    ) -> Result<PromptRequest, String> {
-        let mut extensions = domain::Extensions { home, ..self.for_run() };
-        if !self.mcp.is_empty() {
-            let servers: serde_json::Map<String, Value> =
-                self.mcp.iter().map(|spec| (spec.name().to_owned(), spec.config())).collect();
-            let path =
-                std::env::temp_dir().join(format!("{brand_command}-mcp-{run}.json", brand_command = brand::COMMAND));
-            let text = json!({ "mcpServers": servers }).to_string();
-            platform::private_file::write(&path, text.as_bytes()).map_err(|error| error.to_string())?;
-            extensions.mcp_config = Some(path);
-        }
-        let mut credentials = request.credentials.clone();
-        credentials.mcp.extend(
-            self.local.iter().filter(|server| !server.name.starts_with(concat!(brand::command!(), "_"))).cloned(),
-        );
-        Ok(PromptRequest { extensions: (!extensions.is_empty()).then_some(extensions), credentials, ..request })
-    }
-}
-
-pub(crate) fn discard(extensions: Option<&domain::Extensions>) {
-    if let Some(path) = extensions.and_then(|extensions| extensions.mcp_config.as_ref()) {
-        let _ = std::fs::remove_file(path);
+    pub(crate) fn brief(&self, request: PromptRequest, home: Option<PathBuf>) -> PromptRequest {
+        let extensions = domain::Extensions { home, ..self.for_run() };
+        PromptRequest { extensions: (!extensions.is_empty()).then_some(extensions), ..request }
     }
 }
 
@@ -101,73 +48,24 @@ mod tests {
         let plugin = dir.path().join("acme");
         std::fs::create_dir_all(plugin.join("commands")).expect("commands");
         std::fs::write(plugin.join("commands/ship.md"), "---\ndescription: Ships\n---\nShip it.").expect("command");
-        let extensions = Extensions { plugins: vec![plugin], ..Extensions::default() };
+        let extensions = Extensions { plugins: vec![plugin] };
         let names: Vec<String> = skills(dir.path(), &extensions, None).into_iter().map(|s| s.name).collect();
         assert!(names.contains(&"acme:ship".into()), "{names:?}");
     }
 
     #[test]
-    fn a_folder_s_skills_commands_and_agents_keep_their_own_names() {
-        let dir = tempfile::tempdir().expect("dir");
-        let root = dir.path().join("sdk");
-        std::fs::create_dir_all(root.join("skills/release")).expect("skills");
-        std::fs::create_dir_all(root.join("commands")).expect("commands");
-        std::fs::create_dir_all(root.join("agents")).expect("agents");
-        std::fs::write(
-            root.join("skills/release/SKILL.md"),
-            "---\nname: release\ndescription: Cuts a release\n---\nSteps",
-        )
-        .expect("skill");
-        std::fs::write(root.join("commands/audit.md"), "---\ndescription: Audits\n---\n$ARGUMENTS").expect("command");
-        std::fs::write(root.join("agents/reviewer.md"), "---\nname: reviewer\ndescription: Reviews\n---\nReview.")
-            .expect("agent");
-        let extensions = Extensions { dirs: vec![root], ..Extensions::default() };
-        let project = dir.path().join("project");
-        std::fs::create_dir_all(&project).expect("project");
-        let names: Vec<String> = skills(&project, &extensions, None).into_iter().map(|s| s.name).collect();
-        assert!(names.contains(&"release".into()) && names.contains(&"audit".into()), "{names:?}");
-        assert!(agents(&project, &extensions, None).iter().any(|a| a.name == "reviewer"));
-    }
-
-    struct Silent;
-
-    impl domain::mcp::McpEndpoint for Silent {
-        fn handle(&self, _: &Value) -> Option<Value> {
-            None
-        }
-    }
-
-    #[test]
-    fn a_run_gets_the_host_s_folders_servers_and_in_process_tools() {
+    fn a_run_gets_the_host_s_plugins() {
         let request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
-        let run = RunId::new();
-        assert_eq!(Extensions::default().brief(run, request.clone(), None).expect("brief"), request, "nothing to add");
-        let extensions = Extensions {
-            dirs: vec!["/sdk".into()],
-            mcp: vec![McpServerSpec::Http {
-                name: "docs".into(),
-                url: "https://docs.test/mcp".into(),
-                headers: [("Authorization".to_owned(), "Bearer t".to_owned())].into(),
-            }],
-            local: vec![LocalMcp::new("host", std::sync::Arc::new(Silent))],
-            plugins: vec!["/plugins/acme".into()],
-        };
-        let briefed = extensions.brief(run, request, None).expect("brief");
-        let added = briefed.extensions.clone().expect("extensions");
-        assert_eq!(added.dirs, [PathBuf::from("/sdk")]);
+        assert_eq!(Extensions::default().brief(request.clone(), None), request, "nothing to add");
+        let extensions = Extensions { plugins: vec!["/plugins/acme".into()] };
+        let added = extensions.brief(request, None).extensions.expect("extensions");
         assert_eq!(added.plugins, [PathBuf::from("/plugins/acme")]);
-        let path = added.mcp_config.clone().expect("config");
-        let config: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("json");
-        assert_eq!(config["mcpServers"]["docs"]["headers"]["Authorization"], "Bearer t");
-        assert_eq!(briefed.credentials.mcp.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["host"]);
-        discard(Some(&added));
-        assert!(!path.exists());
     }
 
     #[test]
     fn a_run_gets_the_home_its_owner_was_given() {
         let request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
-        let briefed = Extensions::default().brief(RunId::new(), request, Some("/users/ana".into())).expect("brief");
+        let briefed = Extensions::default().brief(request, Some("/users/ana".into()));
         assert_eq!(briefed.extensions.and_then(|extensions| extensions.home), Some(PathBuf::from("/users/ana")));
     }
 

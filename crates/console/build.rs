@@ -34,11 +34,7 @@ fn watch(folder: &Path) {
         if UNWATCHED.contains(&name.as_ref()) || name.starts_with('.') {
             continue;
         }
-        if name == "packages" {
-            std::fs::read_dir(entry.path()).into_iter().flatten().flatten().for_each(|package| watch(&package.path()));
-        } else {
-            println!("cargo::rerun-if-changed={}", entry.path().display());
-        }
+        println!("cargo::rerun-if-changed={}", entry.path().display());
     }
 }
 

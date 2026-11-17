@@ -29,10 +29,6 @@ impl SymbolKind {
             SymbolKind::Macro => "macro",
         }
     }
-
-    pub fn is_callable(self) -> bool {
-        matches!(self, SymbolKind::Function | SymbolKind::Method | SymbolKind::Macro)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

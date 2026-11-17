@@ -3,7 +3,7 @@ use std::path::Path;
 
 const ALLOWED: [(&str, &[&str]); 14] = [
     ("cli", &["platform", "content", "brand", "sdk", "console", "domain"]),
-    ("sdk", &["brand", "domain", "protocol", "platform", "backend"]),
+    ("sdk", &["domain", "protocol", "platform", "backend"]),
     ("backend", &["platform", "brand", "domain", "protocol", "llm-providers", "agent-engine", "code-map"]),
     ("agent-engine", &["script", "content", "brand", "domain", "platform", "language-servers", "llm-providers"]),
     ("llm-providers", &["brand", "domain"]),

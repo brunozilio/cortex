@@ -2,7 +2,6 @@ pub mod account_pool;
 pub mod affected;
 pub mod agents;
 pub mod approval;
-pub mod attachment;
 pub mod auto_pick;
 pub mod billing;
 pub mod brief_edits;

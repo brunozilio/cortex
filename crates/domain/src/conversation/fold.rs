@@ -2,31 +2,20 @@ use super::{Entry, ToolState, Transcript, call, drafted};
 use crate::{AgentStatus, EngineEvent, ToolCall};
 
 impl Transcript {
-    pub fn apply(&mut self, event: &EngineEvent) {
-        let before = self.before();
-        self.fold(event);
-        self.tell_since(before, Some(event));
-    }
-
     #[allow(
         clippy::too_many_lines,
         reason = "split planned: one match over every engine event, to become a fold per event"
     )]
-    fn fold(&mut self, event: &EngineEvent) {
+    pub fn apply(&mut self, event: &EngineEvent) {
         self.observe(event);
         self.follow_agents(event);
-        self.mark(event);
-        self.line_up(event);
         if self.planned(event) {
             return;
         }
         match event {
             EngineEvent::ThinkingDelta(delta) => {
                 match self.entries.last_mut() {
-                    Some(Entry::Thinking { text, done: false }) => {
-                        text.push_str(delta);
-                        self.touch_last();
-                    }
+                    Some(Entry::Thinking { text, done: false }) => text.push_str(delta),
                     _ => self.push(Entry::Thinking { text: delta.clone(), done: false }),
                 }
                 self.activity = Some("Thinking".into());
@@ -34,10 +23,7 @@ impl Transcript {
             EngineEvent::TextDelta(delta) => {
                 self.close_thinking();
                 match self.entries.last_mut() {
-                    Some(Entry::Assistant(text)) => {
-                        text.push_str(delta);
-                        self.touch_last();
-                    }
+                    Some(Entry::Assistant(text)) => text.push_str(delta),
                     _ => self.push(Entry::Assistant(delta.clone())),
                 }
                 self.activity = Some("Writing".into());
@@ -158,19 +144,12 @@ impl Transcript {
         }
     }
 
-    fn touch_last(&mut self) {
-        if let Some(last) = self.entries.len().checked_sub(1) {
-            self.touch(last);
-        }
-    }
-
     fn close_thinking(&mut self) {
         let open = self.entries.iter().rposition(|entry| matches!(entry, Entry::Thinking { .. }));
         if let Some(at) = open
             && let Entry::Thinking { done: done @ false, .. } = &mut self.entries[at]
         {
             *done = true;
-            self.touch(at);
         }
     }
 
@@ -181,7 +160,6 @@ impl Transcript {
             && let Entry::Tool { state, output, .. } = &mut self.entries[at]
         {
             change(state, output);
-            self.touch(at);
         }
     }
 
@@ -203,7 +181,6 @@ impl Transcript {
             _ => return,
         };
         self.activity = Some(format!("{kind}: {doing}"));
-        self.touch(at);
     }
 
     fn agent_updated(&mut self, index: usize, status: &AgentStatus, summary: Option<&str>) {
@@ -218,26 +195,16 @@ impl Transcript {
                 AgentStatus::Running { .. } => *done = None,
             }
         }
-        self.touch(at);
     }
 
     pub(super) fn settle(&mut self, outcome: ToolState) {
         self.close_thinking();
         self.activity = None;
-        for at in 0..self.entries.len() {
-            let settled = match &mut self.entries[at] {
-                Entry::Tool { state, .. } if *state == ToolState::Running => {
-                    *state = outcome.clone();
-                    true
-                }
-                Entry::Agent { done: done @ None, .. } => {
-                    *done = Some(outcome == ToolState::Done);
-                    true
-                }
-                _ => false,
-            };
-            if settled {
-                self.touch(at);
+        for entry in &mut self.entries {
+            match entry {
+                Entry::Tool { state, .. } if *state == ToolState::Running => *state = outcome.clone(),
+                Entry::Agent { done: done @ None, .. } => *done = Some(outcome == ToolState::Done),
+                _ => {}
             }
         }
     }

@@ -13,16 +13,8 @@ const BM25_K1: f32 = 1.2;
 const BM25_B: f32 = 0.75;
 const TAG_WEIGHT: usize = 2;
 const PREFIX_MIN: usize = 3;
-pub const SEMANTIC_FLOOR: f32 = 0.35;
-pub const SEMANTIC_TOP: usize = 10;
-const RRF_K: f32 = 10.0;
+const RANK_OFFSET: f32 = 10.0;
 const SPREAD: f32 = 0.5;
-
-#[derive(Debug, Clone, Copy)]
-pub struct Semantic<'a> {
-    pub query: &'a [f32],
-    pub memories: &'a [Option<&'a [f32]>],
-}
 
 pub fn tokens(text: &str) -> Vec<String> {
     text.split(|c: char| !c.is_alphanumeric())
@@ -68,52 +60,21 @@ pub fn lexical(query: &str, memories: &[Memory]) -> Vec<f32> {
     scores
 }
 
-pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
-    if a.len() != b.len() || a.is_empty() {
-        return 0.0;
-    }
-    let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-    let norm = |v: &[f32]| v.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let denominator = norm(a) * norm(b);
-    if denominator > 0.0 { dot / denominator } else { 0.0 }
-}
-
-pub fn similarity(semantic: Semantic) -> Vec<f32> {
-    let mut scores: Vec<f32> = semantic
-        .memories
-        .iter()
-        .map(|vector| vector.map_or(0.0, |v| cosine(semantic.query, v)))
-        .map(|s| if s >= SEMANTIC_FLOOR { s } else { 0.0 })
-        .collect();
+fn by_rank(scores: &[f32]) -> Vec<f32> {
+    let mut ranked = vec![0.0f32; scores.len()];
     let mut order: Vec<usize> = (0..scores.len()).filter(|&i| scores[i] > 0.0).collect();
-    order.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]));
-    for &i in order.iter().skip(SEMANTIC_TOP) {
-        scores[i] = 0.0;
+    order.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then(a.cmp(&b)));
+    for (rank, i) in order.into_iter().enumerate() {
+        ranked[i] = 1.0 / (RANK_OFFSET + rank as f32 + 1.0);
     }
-    scores
+    ranked
 }
 
-fn fuse(rankings: &[Vec<f32>], len: usize) -> Vec<f32> {
-    let mut fused = vec![0.0f32; len];
-    for scores in rankings {
-        let mut order: Vec<usize> = (0..len).filter(|&i| scores[i] > 0.0).collect();
-        order.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then(a.cmp(&b)));
-        for (rank, i) in order.into_iter().enumerate() {
-            fused[i] += 1.0 / (RRF_K + rank as f32 + 1.0);
-        }
-    }
-    fused
-}
-
-pub fn search(query: &str, memories: &[Memory], semantic: Option<Semantic>) -> Vec<f32> {
+pub fn search(query: &str, memories: &[Memory]) -> Vec<f32> {
     if query.trim().is_empty() {
         return vec![0.0; memories.len()];
     }
-    let mut rankings = vec![lexical(query, memories)];
-    if let Some(semantic) = semantic.filter(|s| s.memories.len() == memories.len()) {
-        rankings.push(similarity(semantic));
-    }
-    let direct = fuse(&rankings, memories.len());
+    let direct = by_rank(&lexical(query, memories));
     let mut spread = direct.clone();
     for (a, b) in links(memories) {
         spread[a] = spread[a].max(direct[b] * SPREAD);
@@ -124,8 +85,4 @@ pub fn search(query: &str, memories: &[Memory], semantic: Option<Semantic>) -> V
         spread.iter_mut().for_each(|score| *score /= best);
     }
     spread
-}
-
-pub fn activate(query: &str, memories: &[Memory]) -> Vec<f32> {
-    search(query, memories, None)
 }

@@ -141,10 +141,6 @@ pub trait Tool: Send + Sync {
     fn kept(&self) -> Option<std::sync::Arc<dyn Tool>> {
         None
     }
-
-    fn declared_read_only(&self) -> bool {
-        false
-    }
 }
 
 pub fn standard() -> Vec<Box<dyn Tool>> {

@@ -29,10 +29,6 @@ impl std::fmt::Debug for LocalServices {
 }
 
 impl LocalServices {
-    pub fn detect() -> Self {
-        Self::detect_in(None)
-    }
-
     pub fn detect_in(cwd: Option<&Path>) -> Self {
         let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
         let mut services = Self::with_engine(Arc::new(crate::native::engine(&data)));

@@ -90,7 +90,6 @@ pub struct McpTool {
     pub(super) server: Arc<McpServer>,
     pub(super) name: String,
     pub(super) spec: ToolSpec,
-    pub(super) read_only: bool,
 }
 
 impl std::fmt::Debug for McpTool {
@@ -124,10 +123,6 @@ impl Tool for McpTool {
 
     fn kept(&self) -> Option<Arc<dyn Tool>> {
         Some(Arc::new(self.clone()))
-    }
-
-    fn declared_read_only(&self) -> bool {
-        self.read_only
     }
 }
 

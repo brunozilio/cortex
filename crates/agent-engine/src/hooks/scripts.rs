@@ -90,7 +90,7 @@ impl Hooks {
                     headers: BTreeMap::new(),
                     allowed_env_vars: Vec::new(),
                     timeout,
-                    status_message: None,
+                    status_message: (),
                 };
                 hooks.0.entry(event).or_default().push(Group { matcher: matcher.clone(), hooks: vec![handler] });
             }

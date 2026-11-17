@@ -6,7 +6,9 @@ mod retained;
 use domain::{ContextShare, ContextSlice, ContextUsage, ModelOption};
 
 pub use self::clear::{CLEARED, clear_old_results};
-pub use self::compact::{compact, compact_hooked, compact_hooked_on, compact_on, summary_text};
+#[cfg(test)]
+use self::compact::compact;
+pub use self::compact::{compact_hooked, compact_hooked_on, compact_on, summary_text};
 pub use self::counted::Counted;
 use crate::model::ToolSpec;
 use crate::transcript::{Block, Message};

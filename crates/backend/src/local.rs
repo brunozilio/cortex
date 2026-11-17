@@ -27,10 +27,6 @@ impl LocalBackend {
         let (event_tx, events) = crossbeam_channel::unbounded();
         Ok(Self { workers: Workers::start(services, Outbox::new(event_tx, wake))?, events })
     }
-
-    pub fn detect(wake: Wake) -> Result<Self, BackendError> {
-        Self::new(LocalServices::detect(), wake)
-    }
 }
 
 impl Backend for LocalBackend {

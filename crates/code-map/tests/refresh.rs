@@ -129,7 +129,7 @@ fn refresh_walks_a_real_directory_respecting_gitignore_and_skipped_dirs() {
     let cache = scratch.path().join("map.json");
     let map = refresh(root, &cache);
     assert_eq!(names(&map), vec!["src/lib.rs:kept", "src/lib.rs:helper", "web/app.tsx:App"]);
-    assert_eq!(map.callers("helper").len(), 1);
+    assert_eq!(map.files.iter().flat_map(|file| &file.calls).filter(|call| call.callee == "helper").count(), 1);
 
     write("src/lib.rs", "pub fn kept_changed() {}\n");
     let map = refresh(root, &cache);

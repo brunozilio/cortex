@@ -42,11 +42,14 @@ pub struct Handler {
     pub allowed_env_vars: Vec<String>,
     #[serde(default = "default_timeout")]
     pub timeout: u64,
-    #[serde(default)]
-    pub status_message: Option<String>,
+    #[serde(default, skip_serializing, deserialize_with = "accepted_and_dropped")]
+    pub status_message: (),
 }
 fn default_timeout() -> u64 {
     600
+}
+fn accepted_and_dropped<'de, D: serde::Deserializer<'de>>(written: D) -> Result<(), D::Error> {
+    serde::de::IgnoredAny::deserialize(written).map(|_| ())
 }
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Decision {

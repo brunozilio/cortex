@@ -25,7 +25,7 @@ mod settings;
 pub use authorizer::{AuthError, Authorizer, LocalAuthorizer, forbidden};
 pub use catalog::{FileSessionCatalog, InMemorySessionCatalog, SessionCatalog};
 pub use dirs::{local_data_dir, project_key};
-pub use extensions::{Extensions, McpServerSpec};
+pub use extensions::Extensions;
 pub use handler::CommandHandler;
 pub use homes::{Homes, OwnerHome};
 pub use local::LocalBackend;

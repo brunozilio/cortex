@@ -4,14 +4,28 @@ use crate::{EngineEvent, ToolCall};
 
 #[test]
 fn a_prompt_sent_with_files_is_shown_again_as_the_user_wrote_it() {
-    let prompt = crate::attachment::told("sum it", &[std::path::Path::new("/kept/7/sales.csv")]);
+    let prompt = format!("sum it\n\nby month{ATTACHED}- /kept/7/sales.csv\n- /kept/8/q1.pdf");
     let mut transcript = Transcript::default();
     transcript.replay(&[Record::Prompted { at_ms: 1, prompt }]);
 
     assert_eq!(
         transcript.entries[..2],
-        [Entry::Attached { names: vec!["sales.csv".into()] }, Entry::User("sum it".into())]
+        [
+            Entry::Attached { names: vec!["sales.csv".into(), "q1.pdf".into()] },
+            Entry::User("sum it\n\nby month".into())
+        ]
     );
+}
+
+const ATTACHED: &str = "\n\nThe user attached these files; read them as needed:\n";
+
+#[test]
+fn a_prompt_that_only_looks_like_one_sent_with_files_is_shown_whole() {
+    for prompt in ["just this\n- not a file".to_owned(), format!("quote it{ATTACHED}")] {
+        let mut transcript = Transcript::default();
+        transcript.replay(&[Record::Prompted { at_ms: 1, prompt: prompt.clone() }]);
+        assert_eq!(transcript.entries[0], Entry::User(prompt));
+    }
 }
 
 #[test]

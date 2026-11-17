@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 
-use domain::mcp_config::{self, McpOrigin, McpServerInfo, McpState};
+use domain::mcp_config;
 use domain::{ModelOption, PromptRequest};
 use protocol::ServerEvent;
 use serde_json::Value;
 
-use crate::extensions::{Extensions, McpServerSpec};
+use crate::extensions::Extensions;
 
 pub(crate) fn request_in(path: &Path, extensions: &Extensions, home: Option<&Path>) -> PromptRequest {
     let mut request = PromptRequest::plain(path.to_path_buf(), "", ModelOption::new("", ""));
@@ -19,19 +19,8 @@ pub(crate) fn request_in(path: &Path, extensions: &Extensions, home: Option<&Pat
 
 pub(crate) fn list(path: &Path, extensions: &Extensions, home: Option<&Path>) -> ServerEvent {
     let request = request_in(path, extensions, home);
-    let host = extensions.mcp.iter().map(|spec| McpServerInfo {
-        name: spec.name().to_owned(),
-        origin: McpOrigin::Host,
-        target: match spec {
-            McpServerSpec::Http { url, .. } => url.clone(),
-            McpServerSpec::Stdio { command, args, .. } => {
-                std::iter::once(command).chain(args).cloned().collect::<Vec<_>>().join(" ")
-            }
-        },
-        state: McpState::Ready,
-    });
     match agent_engine::mcp::list(&request) {
-        Ok(found) => ServerEvent::McpServers { path: path.to_path_buf(), servers: host.chain(found).collect() },
+        Ok(servers) => ServerEvent::McpServers { path: path.to_path_buf(), servers },
         Err(error) => ServerEvent::error(format!("Could not read the MCP servers: {error}")),
     }
 }
@@ -78,6 +67,7 @@ fn rewrite(file: &Path, change: impl FnOnce(Value) -> Result<Value, String>) -> 
 
 #[cfg(test)]
 mod tests {
+    use domain::mcp_config::{McpOrigin, McpState};
     use serde_json::json;
 
     use super::*;
@@ -99,34 +89,24 @@ mod tests {
         .expect("config");
         let cwd = repo.path().join("src");
         std::fs::create_dir_all(&cwd).expect("cwd");
-        let host = Extensions {
-            mcp: vec![McpServerSpec::Http {
-                name: "docs".into(),
-                url: "https://docs.test/mcp".into(),
-                headers: Default::default(),
-            }],
-            ..Extensions::default()
-        };
+        let host = Extensions::default();
         let list = || states(list(&cwd, &host, Some(home.path())));
-        assert_eq!(
-            list(),
-            [("docs".into(), McpOrigin::Host, McpState::Ready), ("jira".into(), McpOrigin::Project, McpState::Pending)]
-        );
+        assert_eq!(list(), [("jira".into(), McpOrigin::Project, McpState::Pending)]);
 
         approve(&cwd, Some(home.path()), "jira", true).expect("approve");
         assert!(
             repo.path().join(concat!(brand::dir!(), "/settings.local.json")).is_file(),
             "kept beside the project's mcp.json"
         );
-        assert_eq!(list()[1].2, McpState::Ready);
+        assert_eq!(list()[0].2, McpState::Ready);
 
         let atlassian = json!({"type": "http", "url": "https://mcp.atlassian.com/v1/mcp"});
         add(Some(home.path()), "atlassian", atlassian).expect("add");
-        assert_eq!(list()[2], ("atlassian".into(), McpOrigin::User, McpState::Ready));
+        assert_eq!(list()[1], ("atlassian".into(), McpOrigin::User, McpState::Ready));
         assert!(add(Some(home.path()), concat!(brand::command!(), "_memory"), json!({"command": "x"})).is_err());
 
         remove(Some(home.path()), "atlassian").expect("remove");
-        assert_eq!(list().len(), 2);
+        assert_eq!(list().len(), 1);
         assert!(remove(Some(home.path()), "atlassian").is_err(), "nothing left to remove");
     }
 }
