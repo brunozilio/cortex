@@ -4,7 +4,9 @@ use domain::conversation::SessionStatus;
 use serde_json::{Value, json};
 
 pub fn shown(listed: &[Listed], current: Option<&SessionId>) -> Value {
-    let mut kept: Vec<&Listed> = listed.iter().filter(|entry| !entry.archived).collect();
+    let own = |entry: &&Listed| current == Some(&entry.session);
+    let mut kept: Vec<&Listed> =
+        listed.iter().filter(|entry| !entry.archived && (own(entry) || is_active(entry))).collect();
     kept.sort_by_key(|entry| std::cmp::Reverse(entry.updated));
     let cards = kept.into_iter().map(|entry| {
         json!({
@@ -20,9 +22,11 @@ pub fn shown(listed: &[Listed], current: Option<&SessionId>) -> Value {
 }
 
 pub fn active(listed: &[Listed]) -> impl Iterator<Item = &Listed> {
-    listed.iter().filter(|entry| {
-        matches!(entry.status, SessionStatus::Running | SessionStatus::Thinking | SessionStatus::NeedsYou)
-    })
+    listed.iter().filter(|entry| is_active(entry))
+}
+
+fn is_active(entry: &Listed) -> bool {
+    matches!(entry.status, SessionStatus::Running | SessionStatus::Thinking | SessionStatus::NeedsYou)
 }
 
 #[cfg(test)]
@@ -45,13 +49,14 @@ mod tests {
     }
 
     #[test]
-    fn the_board_shows_every_folder_s_sessions_newest_first_and_marks_the_terminal_s_own() {
-        let mut shelved = listed("old", "/app", 9, SessionStatus::Done);
+    fn the_board_shows_the_terminal_s_session_and_the_active_ones_newest_first() {
+        let mut shelved = listed("old", "/app", 9, SessionStatus::Running);
         shelved.archived = true;
         let all = [
             listed("a", "/app", 1, SessionStatus::Done),
             listed("b", "/app", 5, SessionStatus::NeedsYou),
             listed("c", "/other", 7, SessionStatus::Running),
+            listed("finished", "/app", 8, SessionStatus::Done),
             shelved,
         ];
         let board = shown(&all, Some(&SessionId("a".into())));

@@ -1,6 +1,7 @@
 mod board;
-mod follow;
+pub(crate) mod follow;
 mod outside;
+mod refresh;
 
 use super::{Feature, Slash};
 use crate::tui::app::App;

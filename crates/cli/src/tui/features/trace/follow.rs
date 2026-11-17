@@ -9,6 +9,7 @@ use platform::sync::Locked;
 use serde_json::json;
 
 use super::outside::{self, Running};
+use super::refresh::Refresh;
 use super::{NAME, board};
 use crate::tui::app::{App, Msg};
 
@@ -23,6 +24,7 @@ struct Follow {
     sent: BTreeMap<String, String>,
     running: Running,
     ran_before: Vec<String>,
+    refresh: Refresh,
 }
 
 struct Wanted {
@@ -32,25 +34,48 @@ struct Wanted {
     watched: Option<String>,
 }
 
-pub(super) fn open(app: &mut App) {
-    let Some(follow) = app.features.get::<Follow>(NAME) else { return };
+pub(crate) fn served(app: &mut App, page: &str) -> Option<(String, Live)> {
+    let follow = app.features.get::<Follow>(NAME)?;
     if follow.served.is_none() {
         let options = console::Options { assets: console::discover(), port: 0 };
         match console::start(options) {
             Ok(served) => follow.served = Some(served),
-            Err(error) => return app.transcript.notice(format!("The trace page could not start: {error}")),
+            Err(error) => {
+                app.transcript.notice(format!("The {} page could not start: {error}", brand::NAME));
+                return None;
+            }
         }
     }
-    let Some(served) = &follow.served else { return };
-    let (url, live) = (served.url(), served.live());
+    follow.served.as_ref().map(|served| (served.url_at(page), served.live()))
+}
+
+pub(super) fn open(app: &mut App) {
+    let Some((url, live)) = served(app, "/") else { return };
     crate::login::open(&url);
     app.transcript.notice(format!("Live trace opened in the browser: {url}"));
+    report_all(app, live);
+}
+
+fn report_all(app: &mut App, live: Live) {
     app.spawn(move |sdk| {
         if let Ok(report) = sdk.feature(NAME, json!({ "all": true })) {
             live.show(report.to_string());
         }
-        Msg::Feature(Box::new(|_| {}))
+        Msg::Feature(Box::new(|app: &mut App| {
+            if let Some(follow) = app.features.get::<Follow>(NAME) {
+                follow.refresh.done();
+            }
+        }))
     });
+}
+
+fn report_when_changed(app: &mut App) {
+    let Some(follow) = app.features.get::<Follow>(NAME) else { return };
+    let Some(served) = &follow.served else { return };
+    let live = served.live();
+    if follow.refresh.start(Instant::now()) {
+        report_all(app, live);
+    }
 }
 
 pub(super) fn tick(app: &mut App) {
@@ -60,6 +85,7 @@ pub(super) fn tick(app: &mut App) {
     if !prompts.is_empty() {
         outside::deliver(app, prompts, &running);
     }
+    report_when_changed(app);
     let busy = app.busy();
     let current = app.session.as_ref().and_then(sdk::Session::id);
     let cwd = app.cwd.clone();
@@ -111,6 +137,7 @@ fn arrived(app: &mut App, traces: Vec<(String, String)>) {
         if follow.sent.get(&session) != Some(&text) {
             live.send(&session, &text);
             follow.sent.insert(session, text);
+            follow.refresh.changed();
         }
     }
 }
