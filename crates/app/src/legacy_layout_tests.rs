@@ -3,7 +3,9 @@ use std::path::Path;
 use domain::provider::ProviderBook;
 use domain::{SecretId, SessionId};
 
-use crate::catalog::{FileSessionCatalog, SessionCatalog};
+use crate::catalog::SessionCatalog;
+use crate::catalog::legacy::LegacySessionCatalog;
+use crate::features::memory::store::legacy::LegacyMemoryStore;
 use crate::providers::{FileProviderStore, ProviderStore};
 use crate::secrets::{Secrets, secrets_in};
 use crate::settings::{FileSettingsStore, SettingsStore};
@@ -59,10 +61,42 @@ fn providers_settings_and_the_session_catalog_stay_in_their_local_folders() {
 
     FileProviderStore::new(data.path().join("providers")).save(&ProviderBook::default()).expect("providers");
     FileSettingsStore::new(data.path().join("users")).save(&serde_json::json!({"model": "m"})).expect("save");
-    FileSessionCatalog::new(data.path().join("users"))
+    LegacySessionCatalog::new(data.path().join("users"))
         .update(&mut |catalog| catalog.started(&SessionId("anchor".into()), Path::new("/work"), 1));
 
     for kept in ["providers/local/providers.json", "users/local/settings.json", "users/local/sessions.json"] {
         assert!(data.path().join(kept).is_file(), "{kept}");
     }
+
+    let stores = crate::DataRoot::under(data.path()).stores();
+
+    assert!(stores.catalog.read().find(&SessionId("anchor".into())).is_some(), "the list was imported from there");
+    for kept in ["providers/local/providers.json", "users/local/settings.json", "app.db"] {
+        assert!(data.path().join(kept).is_file(), "{kept}");
+    }
+    assert!(data.path().join("users/local/sessions.json.imported").is_file());
+    assert!(!data.path().join("users/local/sessions.json").exists());
+    assert_eq!(stores.settings.load(), Some(serde_json::json!({"model": "m"})));
+}
+
+#[test]
+fn a_project_s_memory_is_imported_from_the_local_folder_it_was_kept_in() {
+    let data = tempfile::tempdir().expect("data");
+    let mut book = domain::MemoryBook::default();
+    let remember = domain::MemoryEdit::Remember {
+        kind: domain::MemoryKind::Semantic,
+        text: "Uses wgpu".into(),
+        tags: Vec::new(),
+        touches: Vec::new(),
+    };
+    book.apply(&[remember], &domain::Provenance { author: domain::Author::User, now: 5, origin: None });
+    LegacyMemoryStore::new(data.path().join("memory")).save(Path::new("/work/project"), &book);
+    assert!(data.path().join("memory/local/-work-project.json").is_file());
+
+    let stores = crate::DataRoot::under(data.path()).stores();
+
+    assert_eq!(stores.memories.load(Path::new("/work/project")).memories, book.memories);
+    assert!(data.path().join("memory/local/-work-project.json.imported").is_file());
+    assert!(!data.path().join("memory/local/-work-project.json").exists());
+    assert!(data.path().join("app.db").is_file());
 }

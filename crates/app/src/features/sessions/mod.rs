@@ -47,15 +47,19 @@ fn history(store: &FileSessions, cwd: &Path, id: &SessionId) -> Result<Vec<Recor
 mod tests;
 
 pub(crate) fn recent(context: &Context<'_>, cwd: &Path) -> Vec<SessionId> {
-    crate::catalog::recent_sessions(&listed(context), cwd)
+    import_what_the_settings_listed(context);
+    context.services.catalog.recent(cwd, crate::catalog::RECENT)
 }
 
 fn listed(context: &Context<'_>) -> Catalog {
-    let catalog = context.services.catalog.read();
-    if !catalog.listed().is_empty() {
-        return catalog;
-    }
-    let Some(owner_settings) = context.services.settings.load() else { return catalog };
-    context.services.catalog.update(&mut |catalog| catalog.import(&owner_settings));
+    import_what_the_settings_listed(context);
     context.services.catalog.read()
+}
+
+fn import_what_the_settings_listed(context: &Context<'_>) {
+    if !context.services.catalog.is_empty() {
+        return;
+    }
+    let Some(owner_settings) = context.services.settings.load() else { return };
+    context.services.catalog.update(&mut |catalog| catalog.import(&owner_settings));
 }

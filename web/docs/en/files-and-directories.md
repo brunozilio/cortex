@@ -103,9 +103,11 @@ In the **data folder**:
 | Path | What it is |
 |---|---|
 | `users/<user>/settings.json` | Your [remembered chat preferences](./settings#remembered-chat-preferences): model, mode, effort, style, prompt history, last conversation per folder. At most 256 KB; a file that does not parse is moved to `settings.json.broken`. |
-| `users/<user>/sessions.json` | The list of your conversations. |
+| `app.db` | A SQLite database: the list of your conversations and your memories for each project. Readable only by you. |
+| `app.db-wal`, `app.db-shm` | SQLite's working files for `app.db`. They exist while {{NAME}} is running; leave them beside it. |
+| `users/<user>/sessions.json.imported` | The conversation list an earlier version kept, renamed after it was imported into `app.db`. Not read any more. |
+| `memory/<user>/<project>.json.imported` | The memories an earlier version kept for a project, renamed after they were imported into `app.db`. Not read any more. |
 | `providers/<user>/providers.json` | Your connected providers and their accounts. |
-| `memory/<user>/<project>.json` | Your memories for each project. |
 | `code-map/<project>.json` | The code map index of each project (feature `experimental-code-map`). |
 | `console/` | An installed copy of the trace console page, if present. |
 
@@ -120,6 +122,15 @@ In the **local data folder**:
 | `lsp/` | Language servers {{NAME}} installed on first use. |
 
 `<user>` is `local` for you on your own machine, and `<project>` is the project's path with every character that is not a letter or digit replaced by `-`.
+
+Several running copies of {{NAME}} share `app.db` safely: each change is one transaction, so none of them loses what another wrote. To copy or back it up, quit {{NAME}} first, or copy `app.db`, `app.db-wal` and `app.db-shm` together.
+
+### Coming from an earlier version
+
+Earlier versions kept the conversation list in `users/<user>/sessions.json` and each project's memories in `memory/<user>/<project>.json`. The first time a version with `app.db` starts, it imports those files and renames each one by adding `.imported`. Nothing is deleted. A file that does not parse is renamed with `.corrupt-<time>` instead and the rest is imported.
+
+> [!WARNING]
+> Going back to an earlier version after the import: the earlier version looks for `sessions.json` and `<project>.json`, finds only the `.imported` files, and shows an empty conversation list and an empty memory. Your data is not lost. Quit {{NAME}} and rename the files back (remove `.imported` from each name) and the earlier version shows everything as it was at the moment of the import. Conversations listed and memories saved after the import exist only in `app.db`, which the earlier version does not read. The conversations themselves, in `native-sessions/`, are not affected either way.
 
 > [!CAUTION]
 > `/factory-reset` erases the data folder, the local data folder and `~/{{DIR}}` (sessions, memory, logins and settings) after asking you, then quits. Projects' `{{DIR}}/` folders are not touched.

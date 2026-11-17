@@ -3,14 +3,16 @@ use std::path::Path;
 use domain::PromptRequest;
 use domain::memory::scorecard::RunOutcome;
 
-use super::{Memories, team};
+use super::{Memories, keep, team};
 
 impl Memories {
     pub(super) fn holds_out(&self, project: &Path) -> bool {
         let mut held = false;
         let mut books = self.lock();
         match self.store.update(project, &mut |book| held = book.scorecard.next_held_out()) {
-            Ok(changed) => *self.book(&mut books, project) = changed,
+            Ok(changed) => {
+                keep(&mut books, project, changed);
+            }
             Err(error) => tracing::warn!(%error, "could not count the request for the memory scorecard"),
         }
         held
@@ -28,7 +30,9 @@ impl Memories {
         }
         let mut books = self.lock();
         match self.store.update(&request.cwd, &mut |book| book.scorecard.record(held, outcome)) {
-            Ok(changed) => *self.book(&mut books, &request.cwd) = changed,
+            Ok(changed) => {
+                keep(&mut books, &request.cwd, changed);
+            }
             Err(error) => tracing::warn!(%error, "could not save the memory scorecard"),
         }
     }

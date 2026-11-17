@@ -81,6 +81,20 @@ Linux: sessions, memory and settings. Keys and tokens are sealed in
 `secrets.json` there (its key in `secrets.key`, both readable only by
 you).
 
+The list of sessions and each project's memory are in `app.db` there, a
+SQLite database (with `app.db-wal` and `app.db-shm` beside it while the
+program runs), so several running instances share them without losing
+each other's changes. Conversations stay as `.jsonl` files and settings
+as JSON.
+
+Upgrading from a version that kept them as JSON: the first start imports
+`users/local/sessions.json` and `memory/local/<project>.json` into
+`app.db` and renames each file with `.imported`; nothing is deleted.
+Downgrading afterwards: the older binary finds only the `.imported`
+files and shows an empty session list and empty memory until you quit it
+and rename them back (drop `.imported`). What was saved after the import
+is only in `app.db`, which the older binary does not read.
+
 ## Layout
 
 | Crate | What it is |

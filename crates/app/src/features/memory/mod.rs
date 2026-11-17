@@ -5,12 +5,12 @@ mod optimize;
 pub mod run;
 mod score;
 mod seed;
-mod store;
+pub(crate) mod store;
 mod team;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::api::features::memory::{MemoryApplied, MemoryListing};
@@ -20,21 +20,19 @@ use domain::{
     Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, PromptRequest, Provenance, RecallBudget, RunId,
 };
 use platform::sync::Locked;
-#[cfg(test)]
-use store::{FileMemoryStore, InMemoryStore};
-use store::{MemoryStore, memory_store_in};
+use store::{InMemoryStore, MemoryStore, Revised, SqliteMemoryStore};
 
 use crate::services::LocalServices;
 
 pub use command::handle;
 
 type BookKey = PathBuf;
+type Books = HashMap<BookKey, Revised>;
 
 #[derive(Clone)]
 pub struct Memories {
     store: Arc<dyn MemoryStore>,
-    books: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
-    before_optimizing: Arc<Mutex<HashMap<BookKey, MemoryBook>>>,
+    books: Arc<Mutex<Books>>,
     homes: Arc<dyn crate::Homes>,
 }
 
@@ -47,22 +45,26 @@ impl std::fmt::Debug for Memories {
 pub fn forget(_client: u64) {}
 
 pub fn of(services: &LocalServices) -> Memories {
-    static ALL: LazyLock<Mutex<HashMap<Option<PathBuf>, Memories>>> = LazyLock::new(Mutex::default);
-    let mut all = ALL.locked();
-    let folder = services.root.memory();
-    all.entry(folder.clone())
-        .or_insert_with(|| Memories::new(memory_store_in(folder)).with_homes(Arc::clone(&services.homes)))
-        .clone()
+    services.memories.clone().with_homes(Arc::clone(&services.homes))
+}
+
+fn keep<'a>(books: &'a mut MutexGuard<Books>, project: &Path, changed: Revised) -> &'a mut MemoryBook {
+    let kept = books.entry(project.to_path_buf()).or_default();
+    *kept = changed;
+    &mut kept.book
 }
 
 impl Memories {
     pub fn new(store: Arc<dyn MemoryStore>) -> Self {
-        Self {
-            store,
-            books: Arc::default(),
-            before_optimizing: Arc::default(),
-            homes: Arc::new(crate::OwnerHome::none()),
-        }
+        Self { store, books: Arc::default(), homes: Arc::new(crate::OwnerHome::none()) }
+    }
+
+    pub(crate) fn kept_in(db: crate::db::Db) -> Self {
+        Self::new(Arc::new(SqliteMemoryStore::new(db)))
+    }
+
+    pub(crate) fn only_in_the_process() -> Self {
+        Self::new(Arc::new(InMemoryStore::default()))
     }
 
     pub fn with_homes(mut self, homes: Arc<dyn crate::Homes>) -> Self {
@@ -74,11 +76,20 @@ impl Memories {
         self.homes.home()
     }
 
-    fn book<'a>(&self, books: &'a mut MutexGuard<HashMap<BookKey, MemoryBook>>, project: &Path) -> &'a mut MemoryBook {
-        books.entry(project.to_path_buf()).or_insert_with(|| self.store.load(project))
+    fn kept<'a>(&self, books: &'a mut MutexGuard<Books>, project: &Path) -> &'a mut Revised {
+        let stored = self.store.revision(project);
+        let kept = books.entry(project.to_path_buf()).or_insert_with(|| self.store.read(project));
+        if kept.revision != stored {
+            *kept = self.store.read(project);
+        }
+        kept
     }
 
-    fn lock(&self) -> MutexGuard<'_, HashMap<BookKey, MemoryBook>> {
+    fn book<'a>(&self, books: &'a mut MutexGuard<Books>, project: &Path) -> &'a mut MemoryBook {
+        &mut self.kept(books, project).book
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Books> {
         self.books.locked()
     }
 
@@ -104,9 +115,7 @@ impl Memories {
                 return Err(format!("could not save memory: {error}"));
             }
         };
-        let book = self.book(&mut books, project);
-        *book = changed;
-        Ok(listing(project, book))
+        Ok(listing(project, keep(&mut books, project, changed)))
     }
 
     pub fn search(&self, project: &Path, query: &str) -> Vec<(MemoryId, f32)> {
@@ -122,8 +131,8 @@ impl Memories {
     pub fn find(&self, project: &Path, query: &str, limit: usize, searches: &mut MemorySearches) -> SearchAnswer {
         let shared = team::load(project, self.home().as_deref());
         let mut books = self.lock();
-        let book = self.book(&mut books, project);
-        let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
+        let kept = self.kept(&mut books, project);
+        let known: Vec<Memory> = kept.book.memories.iter().cloned().chain(shared).collect();
         let scores = search(query, &known);
         let mut order: Vec<usize> = (0..known.len()).filter(|&i| scores[i] > 0.0).collect();
         order.sort_by(|&a, &b| scores[b].total_cmp(&scores[a]).then(a.cmp(&b)));
@@ -132,7 +141,7 @@ impl Memories {
         if let SearchAnswer::Found(found) = &answer {
             let personal: Vec<Memory> =
                 found.iter().filter(|memory| !domain::memory::team::is_team(memory.id)).cloned().collect();
-            self.mark_used(project, book, &personal);
+            self.mark_used(project, kept, &personal);
         }
         answer
     }
@@ -146,16 +155,16 @@ impl Memories {
         team::share(project, self.home().as_deref(), &memory.ok_or("there is no such memory")?)
     }
 
-    fn mark_used(&self, project: &Path, book: &mut MemoryBook, given: &[Memory]) {
+    fn mark_used(&self, project: &Path, kept: &mut Revised, given: &[Memory]) {
         if given.is_empty() {
             return;
         }
         let ids: Vec<MemoryId> = given.iter().map(|m| m.id).collect();
         let at = now();
         match self.store.update(project, &mut |stored| stored.mark_used(&ids, at)) {
-            Ok(stored) => *book = stored,
+            Ok(stored) => *kept = stored,
             Err(error) => {
-                book.mark_used(&ids, at);
+                kept.book.mark_used(&ids, at);
                 tracing::warn!(%error, "could not save memory use");
             }
         }
@@ -184,13 +193,13 @@ impl Memories {
         }
         let (recalled, tool, anchored) = {
             let mut books = self.lock();
-            let book = self.book(&mut books, &request.cwd);
-            let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
+            let kept = self.kept(&mut books, &request.cwd);
+            let known: Vec<Memory> = kept.book.memories.iter().cloned().chain(shared).collect();
             let recalled = recall(&request.prompt, &known, budget, now());
             let personal: Vec<Memory> =
                 recalled.iter().filter(|memory| !domain::memory::team::is_team(memory.id)).cloned().collect();
-            self.mark_used(&request.cwd, book, &personal);
-            let tool = tool && book.holds_more_than(&recalled);
+            self.mark_used(&request.cwd, kept, &personal);
+            let tool = tool && kept.book.holds_more_than(&recalled);
             let anchored: Vec<Memory> = if anchors {
                 let unseen: Vec<Memory> =
                     known.into_iter().filter(|memory| !recalled.iter().any(|r| r.id == memory.id)).collect();

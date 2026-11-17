@@ -66,57 +66,26 @@ fn project_keys_are_flat_file_names() {
     assert_eq!(project_key(Path::new("/Users/me/sky.app")), "-Users-me-sky-app");
 }
 
-#[test]
-fn file_store_round_trips_per_project() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let store = FileMemoryStore::new(dir.path().to_path_buf());
-    let project = Path::new("/repo");
-    let mut book = MemoryBook::default();
-    book.apply(&[remember("Uses wgpu")], &by_user());
-    store.save(project, &book).expect("save");
-    assert_eq!(store.load(project), book);
-    assert_eq!(store.load(Path::new("/other")), MemoryBook::default());
+fn on_disk(data: &Path) -> Memories {
+    crate::DataRoot::under(data).stores().memories
 }
 
 #[test]
-fn memory_lives_in_the_data_folder_or_only_in_the_process() {
+fn memory_lives_in_the_data_folder_s_database_or_only_in_the_process() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let mut book = MemoryBook::default();
-    book.apply(&[remember("Uses wgpu")], &by_user());
     let project = Path::new("/repo");
 
-    let on_disk = memory_store_in(crate::DataRoot::under(dir.path()).memory());
-    on_disk.save(project, &book).expect("save");
-    assert!(dir.path().join("memory/local/-repo.json").exists());
+    on_disk(dir.path()).edit(project, &[remember("Uses wgpu")], by_user()).expect("edit");
+    assert!(dir.path().join("app.db").is_file());
+    assert!(!dir.path().join("memory").exists(), "no file per project any more");
+    assert_eq!(listed(&on_disk(dir.path()).load(project)).len(), 1, "still there for the next run of the program");
 
-    let in_process = memory_store_in(None);
-    in_process.save(project, &book).expect("save");
-    assert_eq!(in_process.load(project), book, "kept for the process, never in a temp folder");
-}
-
-#[test]
-fn an_unreadable_book_is_kept_aside_and_never_overwritten() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let store = FileMemoryStore::new(dir.path().to_path_buf());
-    let project = Path::new("/repo");
-    let mut book = MemoryBook::default();
-    book.apply(&[remember("Uses wgpu")], &by_user());
-    store.save(project, &book).expect("save");
-    let folder = dir.path().join("local");
-    let file = folder.join("-repo.json");
-    std::fs::write(&file, br#"{"next": 1, "memories": [{"id": 0, "#).expect("truncate");
-
-    assert_eq!(store.load(project), MemoryBook::default());
-    store.save(project, &MemoryBook::default()).expect("save");
-
-    let kept: Vec<String> = std::fs::read_dir(&folder)
-        .expect("folder")
-        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
-        .filter(|name| name.starts_with("-repo.json.corrupt-"))
-        .collect();
-    assert_eq!(kept.len(), 1, "the unreadable file is kept aside: {kept:?}");
-    let aside = std::fs::read(folder.join(&kept[0])).expect("read");
-    assert_eq!(aside, br#"{"next": 1, "memories": [{"id": 0, "#);
+    let root = crate::DataRoot::in_memory();
+    let in_process = root.stores().memories;
+    in_process.edit(project, &[remember("Uses wgpu")], by_user()).expect("edit");
+    assert_eq!(listed(&in_process.load(project)).len(), 1, "kept for the process");
+    assert!(root.folders().iter().all(|folder| !folder.exists()), "never in a temp folder");
+    assert!(listed(&root.stores().memories.load(project)).is_empty(), "and each such root has its own");
 }
 
 #[test]
@@ -253,7 +222,7 @@ fn the_feature_keeps_memory_in_the_data_folder_and_starts_optimisations() {
         assert!(matches!(&found, MemoryReply::Found { scores, .. } if scores[0].0 == MemoryId(0)), "{found:?}");
         assert!(handle(context, asking(MemoryOp::Undo)).is_err());
     });
-    assert!(data.path().join("memory/local").exists());
+    assert!(data.path().join("app.db").is_file());
 
     let started = std::sync::Mutex::new(Vec::new());
     let submit = |run: RunId, request: PromptRequest| {
@@ -272,12 +241,60 @@ fn the_feature_keeps_memory_in_the_data_folder_and_starts_optimisations() {
 #[test]
 fn two_processes_on_one_project_keep_each_others_memories() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let first = Memories::new(Arc::new(FileMemoryStore::new(dir.path().to_path_buf())));
-    let second = Memories::new(Arc::new(FileMemoryStore::new(dir.path().to_path_buf())));
+    let (first, second) = (on_disk(dir.path()), on_disk(dir.path()));
     let project = Path::new("/repo");
     second.load(project);
     first.edit(project, &[remember("Uses wgpu")], by_user()).expect("first");
     let answer = second.edit(project, &[remember("Ships on Linux")], by_user()).expect("second");
     let texts: Vec<String> = listed(&answer).into_iter().map(|memory| memory.text).collect();
     assert_eq!(texts, ["Uses wgpu", "Ships on Linux"]);
+}
+
+#[test]
+fn what_another_process_changed_is_read_not_what_this_one_remembers_reading() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (here, elsewhere) = (on_disk(dir.path()), on_disk(dir.path()));
+    let project = Path::new("/repo");
+    here.edit(project, &[remember("Uses wgpu")], by_user()).expect("here");
+    assert_eq!(listed(&here.load(project)).len(), 1);
+
+    elsewhere.edit(project, &[remember("Ships on Linux")], by_user()).expect("elsewhere");
+
+    assert_eq!(listed(&here.load(project)).len(), 2, "the list");
+    assert_eq!(here.search(project, "linux").first().map(|hit| hit.0), Some(MemoryId(1)), "the search");
+    let found = here.find(project, "linux", 5, &mut MemorySearches::default());
+    assert!(matches!(&found, SearchAnswer::Found(found) if found[0].text == "Ships on Linux"), "{found:?}");
+    let recalled = here.brief(RunId::new(), &request(project), false).memory.expect("brief").recalled;
+    assert_eq!(recalled.len(), 2, "what a run is briefed with");
+    let used =
+        |memories: &Memories| listed(&memories.load(project)).iter().map(|memory| memory.uses).collect::<Vec<_>>();
+    assert_eq!(used(&here), used(&elsewhere), "and both count the same uses");
+    assert!(used(&here).iter().all(|uses| *uses > 0), "{:?}", used(&here));
+
+    elsewhere.edit(project, &[MemoryEdit::Forget { id: MemoryId(0) }], by_user()).expect("forget");
+    assert_eq!(forgotten(&here.load(project)).len(), 1);
+    assert!(here.search(project, "wgpu").iter().all(|hit| hit.0 != MemoryId(0)));
+}
+
+#[test]
+fn an_optimisation_can_still_be_undone_after_the_program_restarts() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let project = tempfile::tempdir().expect("project");
+    let before = on_disk(dir.path());
+    before.edit(project.path(), &[remember("Uses wgpu"), remember("The renderer uses wgpu")], by_user()).expect("edit");
+    let request = before.optimization(project.path(), ModelOption::new("opus", "Opus"));
+    let briefed = before.brief(RunId::new(), &request, false);
+    std::fs::write(&briefed.memory.clone().expect("brief").output, r#"{"forget":[0]}"#).expect("write");
+    before.finish(&briefed, &ended(true)).expect("changed").expect("saved");
+    drop(before);
+
+    let restarted = on_disk(dir.path());
+    assert_eq!(listed(&restarted.load(project.path())).len(), 1, "optimised");
+    let undone = restarted.undo(project.path()).expect("undone");
+
+    assert_eq!(listed(&undone).len(), 2, "both memories are back");
+    assert!(on_disk(dir.path()).undo(project.path()).is_err(), "undone only once, whichever process asks");
+    restarted.brief(RunId::new(), &request, false);
+    on_disk(dir.path()).edit(project.path(), &[remember("Inter is the font")], by_user()).expect("edit");
+    assert!(restarted.undo(project.path()).is_err(), "an edit ends the undo, whichever process made it");
 }

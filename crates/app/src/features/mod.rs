@@ -3,7 +3,7 @@ mod code_map;
 pub mod context;
 mod declared_providers;
 mod flags;
-mod memory;
+pub(crate) mod memory;
 mod output_savings;
 mod plugins;
 mod schedules;

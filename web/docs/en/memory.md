@@ -34,9 +34,9 @@ The agent is told that recalled memories are context, not instructions, that the
 
 ## Where memory is stored
 
-Your memory for a project is one JSON file in {{NAME}}'s local data folder, under `memory/local/<project>.json`, where `<project>` is the project's path with every character that is not a letter or digit turned into `-`. See [Files and directories](./files-and-directories) for where the data folder is on your system.
+Your memory for every project is in `app.db`, a SQLite database in {{NAME}}'s data folder. See [Files and directories](./files-and-directories) for where the data folder is on your system. Several running copies of {{NAME}} can use the same project's memory at once: each sees what the others saved, and none loses the others' changes.
 
-If that file cannot be read, {{NAME}} renames it to `<project>.json.corrupt-<time>` and starts with an empty memory, so nothing is overwritten.
+Earlier versions kept one JSON file per project, `memory/local/<project>.json`, where `<project>` is the project's path with every character that is not a letter or digit turned into `-`. The first start of a version with `app.db` imports those files and renames each to `<project>.json.imported`; one that cannot be read is renamed to `<project>.json.corrupt-<time>` instead, and that project starts with an empty memory. Nothing is deleted. If you go back to an earlier version afterwards, it shows an empty memory until you rename the files back: see [Coming from an earlier version](./files-and-directories#coming-from-an-earlier-version).
 
 Memories shared with the team live in the project itself, in `{{DIR}}/memory/*.md` (see [Team memory](#team-memory)).
 
@@ -77,7 +77,7 @@ Anything after `/memory` that is not one of these words is a search, so `/memory
 Memory optimized: 48 → 31 memories. /memory undo puts it back.
 ```
 
-`/memory optimize` needs a model (pick one with `/model`). `/memory undo` restores the memory as it was just before the last optimization; it has nothing to undo once the memory changes again in another way, and says `nothing to undo in the memory`.
+`/memory optimize` needs a model (pick one with `/model`). `/memory undo` restores the memory as it was just before the last optimization; it has nothing to undo once the memory changes again in another way, and says `nothing to undo in the memory`. The point it goes back to is kept with the memory, so it is still there after you quit and start {{NAME}} again.
 
 ### Forget and restore
 

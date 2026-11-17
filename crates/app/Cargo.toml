@@ -22,6 +22,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+rusqlite.workspace = true
 tiny_http = "0.12"
 base64 = "0.23"
 chacha20poly1305 = "0.10"

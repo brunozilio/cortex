@@ -16,6 +16,7 @@ pub struct LocalServices {
     pub off: crate::TurnedOff,
     pub settings: Arc<dyn SettingsStore>,
     pub catalog: Arc<dyn crate::SessionCatalog>,
+    pub memories: crate::features::memory::Memories,
     pub sessions: Arc<FileSessions>,
     pub extensions: Extensions,
     pub providers: ModelProviders,
@@ -69,6 +70,7 @@ impl LocalServices {
             off: crate::TurnedOff::default(),
             settings: stores.settings,
             catalog: stores.catalog,
+            memories: stores.memories,
             sessions: stores.sessions,
             extensions: Extensions::default(),
             providers: ModelProviders::new(stores.providers, Arc::clone(&stores.secrets)),
@@ -93,6 +95,7 @@ impl LocalServices {
             root,
             settings: stores.settings,
             catalog: stores.catalog,
+            memories: stores.memories,
             sessions: stores.sessions,
             providers: self.providers.with_store(stores.providers).with_secrets(Arc::clone(&stores.secrets)),
             mcp_auth: self.mcp_auth.with_secrets(stores.secrets),
@@ -123,9 +126,23 @@ mod tests {
         });
         services.providers.connect(domain::ModelProvider::new("keyed"), "sk-proj-0123456789abcd");
 
-        for kept in ["users/local/settings.json", "users/local/sessions.json", "providers/local/providers.json"] {
+        let remember = domain::MemoryEdit::Remember {
+            kind: domain::MemoryKind::Semantic,
+            text: "Uses wgpu".into(),
+            tags: Vec::new(),
+            touches: Vec::new(),
+        };
+        let by = domain::Provenance { author: domain::Author::User, now: 5, origin: None };
+        crate::features::memory::of(&services).edit(Path::new("/work"), &[remember], by).expect("memory");
+
+        for kept in ["users/local/settings.json", "app.db", "providers/local/providers.json"] {
             assert!(data.path().join(kept).is_file(), "{kept}");
         }
+        assert!(!data.path().join("users/local/sessions.json").exists(), "the catalog is in the database");
+        assert!(!data.path().join("memory").exists(), "and so is the memory");
+        let reopened = LocalServices::with_engine(engine()).kept_in(data.path());
+        assert_eq!(reopened.catalog.read().listed().len(), 1);
+        assert_eq!(crate::features::memory::of(&reopened).load(Path::new("/work")).memories.len(), 1);
         assert!(data.path().join("secrets.json").is_file() && data.path().join("secrets.key").is_file());
         assert!(services.root.folders().iter().all(|folder| folder.starts_with(data.path())));
     }

@@ -2,9 +2,8 @@ use std::path::Path;
 
 use crate::api::features::memory::MemoryListing;
 use domain::{MemoryBook, MemoryBrief, ModelOption, PromptRequest, RunId};
-use platform::sync::Locked;
 
-use super::{Memories, edits_file, listing};
+use super::{Memories, edits_file, keep, listing};
 
 impl Memories {
     pub fn optimization(&self, project: &Path, model: ModelOption) -> PromptRequest {
@@ -20,13 +19,14 @@ impl Memories {
     }
 
     pub fn undo(&self, project: &Path) -> Result<MemoryListing, String> {
-        let key = project.to_path_buf();
-        let point = self.undo_points().remove(&key);
-        let Some(book) = point else { return Err("nothing to undo in the memory".into()) };
-        self.store.save(project, &book).map_err(|error| format!("could not save memory: {error}"))?;
-        let answer = listing(project, &book);
-        self.lock().insert(key, book);
-        Ok(answer)
+        let Some(book) = self.store.undo_point(project) else { return Err("nothing to undo in the memory".into()) };
+        let mut books = self.lock();
+        let restored = self
+            .store
+            .update(project, &mut |kept| *kept = book.clone())
+            .map_err(|error| format!("could not save memory: {error}"))?;
+        self.set_undo_point(project, None);
+        Ok(listing(project, keep(&mut books, project, restored)))
     }
 
     pub(super) fn brief_optimization(&self, run: RunId, request: &PromptRequest) -> PromptRequest {
@@ -40,15 +40,8 @@ impl Memories {
     }
 
     pub(super) fn set_undo_point(&self, project: &Path, book: Option<MemoryBook>) {
-        let key = project.to_path_buf();
-        let mut points = self.undo_points();
-        match book {
-            Some(book) => points.insert(key, book),
-            None => points.remove(&key),
-        };
-    }
-
-    fn undo_points(&self) -> std::sync::MutexGuard<'_, std::collections::HashMap<super::BookKey, MemoryBook>> {
-        self.before_optimizing.locked()
+        if let Err(error) = self.store.set_undo_point(project, book.as_ref()) {
+            tracing::warn!(%error, "could not keep the point the memory can be undone to");
+        }
     }
 }

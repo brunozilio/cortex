@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use agent_engine::sessions::FileSessions;
 
-use crate::catalog::{FileSessionCatalog, InMemorySessionCatalog, SessionCatalog};
+use crate::catalog::{InMemorySessionCatalog, SessionCatalog, SqliteSessionCatalog};
+use crate::db::Db;
+use crate::features::memory::Memories;
 use crate::providers::{FileProviderStore, InMemoryProviderStore, ProviderStore};
 use crate::secrets::{InMemorySecretStore, SecretStore};
 use crate::settings::{FileSettingsStore, InMemorySettingsStore, SettingsStore};
@@ -107,12 +109,47 @@ impl DataRoot {
         }
     }
 
+    pub fn database(&self) -> Option<PathBuf> {
+        match &self.0 {
+            Kept::System { app, .. } => app.as_ref().map(|app| app.join(crate::db::FILE)),
+            Kept::Under(folder) => Some(folder.join(crate::db::FILE)),
+            Kept::InMemory { .. } => None,
+        }
+    }
+
+    fn db(&self) -> Option<Db> {
+        let Some(file) = self.database() else {
+            if !self.keeps_nothing() {
+                tracing::error!("no app data folder; sessions and memory last only until the process ends");
+            }
+            return in_memory();
+        };
+        match Db::open(&file) {
+            Ok(db) => {
+                crate::catalog::legacy::import(&db, &self.users());
+                if let Some(memory) = self.memory() {
+                    crate::features::memory::store::legacy::import(&db, &memory);
+                }
+                Some(db)
+            }
+            Err(error) => {
+                tracing::error!(%error, "the database could not be opened; sessions and memory last only until the process ends");
+                in_memory()
+            }
+        }
+    }
+
     pub(crate) fn stores(&self) -> Stores {
         let sessions = Arc::new(FileSessions::new(self.sessions()));
+        let (catalog, memories): (Arc<dyn SessionCatalog>, Memories) = match self.db() {
+            Some(db) => (Arc::new(SqliteSessionCatalog::new(db.clone())), Memories::kept_in(db)),
+            None => (Arc::new(InMemorySessionCatalog::default()), Memories::only_in_the_process()),
+        };
         if self.keeps_nothing() {
             return Stores {
                 settings: Arc::new(InMemorySettingsStore::default()),
-                catalog: Arc::new(InMemorySessionCatalog::default()),
+                catalog,
+                memories,
                 providers: Arc::new(InMemoryProviderStore::default()),
                 secrets: Arc::new(InMemorySecretStore::default()),
                 sessions,
@@ -124,7 +161,8 @@ impl DataRoot {
         };
         Stores {
             settings: Arc::new(FileSettingsStore::new(self.users())),
-            catalog: Arc::new(FileSessionCatalog::new(self.users())),
+            catalog,
+            memories,
             providers: Arc::new(FileProviderStore::new(self.providers())),
             secrets,
             sessions,
@@ -132,9 +170,14 @@ impl DataRoot {
     }
 }
 
+fn in_memory() -> Option<Db> {
+    Db::in_memory().map_err(|error| tracing::error!(%error, "no database could be opened, not even in memory")).ok()
+}
+
 pub(crate) struct Stores {
     pub settings: Arc<dyn SettingsStore>,
     pub catalog: Arc<dyn SessionCatalog>,
+    pub memories: Memories,
     pub providers: Arc<dyn ProviderStore>,
     pub secrets: Arc<dyn SecretStore>,
     pub sessions: Arc<FileSessions>,
@@ -154,6 +197,7 @@ mod tests {
         assert_eq!(root.users(), given.join("users"));
         assert_eq!(root.providers(), given.join("providers"));
         assert_eq!(root.memory(), Some(given.join("memory")));
+        assert_eq!(root.database(), Some(given.join("app.db")));
         assert_eq!(root.secrets(), Some(given.to_path_buf()));
         assert_eq!(root.sessions(), given.join("native-sessions"));
         assert_eq!(root.language_servers(), given.join("lsp"));
@@ -164,7 +208,7 @@ mod tests {
         let (root, other) = (DataRoot::in_memory(), DataRoot::in_memory());
 
         assert!(root.keeps_nothing());
-        assert_eq!((root.secrets(), root.memory()), (None, None));
+        assert_eq!((root.secrets(), root.memory(), root.database()), (None, None, None));
         assert!(root.folders().iter().all(|folder| root.holds(folder) && !other.holds(folder)));
         assert!(root.folders().iter().all(|folder| folder.starts_with(std::env::temp_dir()) && !folder.exists()));
         let system = DataRoot::system();
@@ -181,7 +225,8 @@ mod tests {
         assert_eq!(root.users(), app.clone().unwrap_or_else(fallback).join("users"));
         assert_eq!(root.providers(), app.clone().unwrap_or_else(fallback).join("providers"));
         assert_eq!(root.code_map(), app.clone().unwrap_or_else(fallback).join("code-map"));
-        assert_eq!(root.memory(), app.map(|app| app.join("memory")));
+        assert_eq!(root.memory(), app.clone().map(|app| app.join("memory")));
+        assert_eq!(root.database(), app.map(|app| app.join("app.db")));
         assert_eq!(root.secrets(), local.clone());
         assert_eq!(root.sessions(), local.clone().unwrap_or_else(fallback).join("native-sessions"));
         assert_eq!(root.language_servers(), local.unwrap_or_else(fallback).join("lsp"));

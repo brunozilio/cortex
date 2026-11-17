@@ -34,9 +34,9 @@ O agente é orientado de que as memórias lembradas são contexto, não instruç
 
 ## Onde a memória fica guardada
 
-A sua memória de um projeto é um arquivo JSON na pasta de dados local do {{NAME}}, em `memory/local/<projeto>.json`, onde `<projeto>` é o caminho do projeto com todo caractere que não seja letra ou dígito trocado por `-`. Veja [Arquivos e diretórios](./files-and-directories) para saber onde fica a pasta de dados no seu sistema.
+A sua memória de todos os projetos fica no `app.db`, um banco de dados SQLite na pasta de dados do {{NAME}}. Veja [Arquivos e diretórios](./files-and-directories) para saber onde fica a pasta de dados no seu sistema. Várias cópias do {{NAME}} abertas ao mesmo tempo podem usar a memória do mesmo projeto: cada uma vê o que as outras salvaram, e nenhuma perde as alterações das outras.
 
-Se esse arquivo não puder ser lido, o {{NAME}} o renomeia para `<projeto>.json.corrupt-<hora>` e começa com uma memória vazia, sem sobrescrever nada.
+Versões anteriores guardavam um arquivo JSON por projeto, `memory/local/<projeto>.json`, onde `<projeto>` é o caminho do projeto com todo caractere que não seja letra ou dígito trocado por `-`. Na primeira vez que uma versão com `app.db` é aberta, ela importa esses arquivos e renomeia cada um para `<projeto>.json.imported`; um arquivo que não puder ser lido é renomeado para `<projeto>.json.corrupt-<hora>`, e esse projeto começa com a memória vazia. Nada é apagado. Se você voltar para uma versão anterior depois disso, ela mostra a memória vazia até você renomear os arquivos de volta: veja [Vindo de uma versão anterior](./files-and-directories#vindo-de-uma-versao-anterior).
 
 As memórias compartilhadas com a equipe ficam no próprio projeto, em `{{DIR}}/memory/*.md` (veja [Memória da equipe](#memoria-da-equipe)).
 
@@ -77,7 +77,7 @@ O `/memory edit` abre o `{{INSTRUCTIONS}}` na raiz do projeto, ou o `{{DIR}}/{{I
 Memory optimized: 48 → 31 memories. /memory undo puts it back.
 ```
 
-O `/memory optimize` precisa de um modelo (escolha um com `/model`). O `/memory undo` restaura a memória como estava logo antes da última otimização; quando a memória muda de outro jeito depois disso, não há mais o que desfazer e ele responde `nothing to undo in the memory`.
+O `/memory optimize` precisa de um modelo (escolha um com `/model`). O `/memory undo` restaura a memória como estava logo antes da última otimização; quando a memória muda de outro jeito depois disso, não há mais o que desfazer e ele responde `nothing to undo in the memory`. O ponto para onde ele volta é guardado junto com a memória, então continua lá depois que você fecha e abre o {{NAME}} de novo.
 
 ### Esquecer e restaurar
 

@@ -103,9 +103,11 @@ Na **pasta de dados**:
 | Caminho | O que é |
 |---|---|
 | `users/<usuário>/settings.json` | Suas [preferências guardadas do chat](./settings): modelo, modo, esforço, estilo, histórico de prompts, última conversa por pasta. No máximo 256 KB; um arquivo que não é JSON válido é movido para `settings.json.broken`. |
-| `users/<usuário>/sessions.json` | A lista das suas conversas. |
+| `app.db` | Um banco de dados SQLite: a lista das suas conversas e as suas memórias de cada projeto. Legível só por você. |
+| `app.db-wal`, `app.db-shm` | Arquivos de trabalho do SQLite para o `app.db`. Existem enquanto o {{NAME}} está aberto; deixe-os ao lado dele. |
+| `users/<usuário>/sessions.json.imported` | A lista de conversas que uma versão anterior guardava, renomeada depois de importada para o `app.db`. Não é mais lida. |
+| `memory/<usuário>/<projeto>.json.imported` | As memórias que uma versão anterior guardava de um projeto, renomeadas depois de importadas para o `app.db`. Não são mais lidas. |
 | `providers/<usuário>/providers.json` | Seus provedores conectados e as contas deles. |
-| `memory/<usuário>/<projeto>.json` | Suas memórias de cada projeto. |
 | `code-map/<projeto>.json` | O índice do mapa de código de cada projeto (recurso `experimental-code-map`). |
 | `console/` | Uma cópia instalada da página do console de trace, se existir. |
 
@@ -120,6 +122,15 @@ Na **pasta de dados locais**:
 | `lsp/` | Servidores de linguagem que o {{NAME}} instalou no primeiro uso. |
 
 `<usuário>` é `local` para você na sua própria máquina, e `<projeto>` é o caminho do projeto com todo caractere que não seja letra ou dígito trocado por `-`.
+
+Várias cópias do {{NAME}} abertas ao mesmo tempo compartilham o `app.db` com segurança: cada alteração é uma transação, então nenhuma perde o que a outra gravou. Para copiar ou fazer backup, feche o {{NAME}} antes, ou copie `app.db`, `app.db-wal` e `app.db-shm` juntos.
+
+### Vindo de uma versão anterior
+
+Versões anteriores guardavam a lista de conversas em `users/<usuário>/sessions.json` e as memórias de cada projeto em `memory/<usuário>/<projeto>.json`. Na primeira vez que uma versão com `app.db` é aberta, ela importa esses arquivos e renomeia cada um acrescentando `.imported`. Nada é apagado. Um arquivo que não é JSON válido é renomeado com `.corrupt-<hora>` e o restante é importado.
+
+> [!WARNING]
+> Voltando para uma versão anterior depois da importação: a versão anterior procura `sessions.json` e `<projeto>.json`, encontra só os arquivos `.imported` e mostra a lista de conversas vazia e a memória vazia. Seus dados não foram perdidos. Feche o {{NAME}} e renomeie os arquivos de volta (tire o `.imported` de cada nome): a versão anterior mostra tudo como estava no momento da importação. As conversas listadas e as memórias salvas depois da importação existem só no `app.db`, que a versão anterior não lê. As conversas em si, em `native-sessions/`, não são afetadas em nenhum dos casos.
 
 > [!CAUTION]
 > `/factory-reset` apaga a pasta de dados, a pasta de dados locais e `~/{{DIR}}` (sessões, memória, logins e configurações) depois de perguntar a você, e então encerra. As pastas `{{DIR}}/` dos projetos não são tocadas.
