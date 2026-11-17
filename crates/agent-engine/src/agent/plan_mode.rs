@@ -1,4 +1,4 @@
-use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, PermissionMode};
+use domain::{AskKind, Decision, EngineEvent, PermissionMode};
 use serde_json::Value;
 
 use super::Agent;
@@ -20,10 +20,7 @@ impl Agent<'_> {
             return Outcome::error("Missing the plan: pass it, in markdown, as `plan`.");
         };
         self.notify("plan_approval", concat!(brand::name!(), "'s plan is ready for your review"));
-        let ask = AskId(format!("ask-{}-{id}", uuid::Uuid::new_v4()));
-        let answer = self.control.open(ask.clone());
-        (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind: AskKind::Plan { plan: plan.to_owned() } }));
-        match answer.recv() {
+        match self.asked(id, AskKind::Plan { plan: plan.to_owned() }) {
             Ok(Decision::Approve(mode)) if mode != PermissionMode::Plan => {
                 self.control.set_mode(mode);
                 let mode = self.control.mode();

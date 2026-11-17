@@ -127,4 +127,23 @@ mod tests {
         assert_ne!(output.code, Some(0));
         assert_eq!(std::fs::read_to_string(&settings).expect("read"), "{}");
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn what_a_hook_printed_reaches_the_model_without_its_trailing_newlines() {
+        let dir = tempfile::tempdir().expect("dir");
+        let workspace = Workspace::new(dir.path());
+        let hooks = |event: &str, command: &str| {
+            let groups = serde_json::json!({ event: [{"hooks": [{"type": "command", "command": command}]}] });
+            super::super::Hooks::parse(&groups).expect("hooks")
+        };
+
+        let blocking = hooks("Stop", "printf 'not yet\\n\\n' >&2; exit 2");
+        let blocked = blocking.run("Stop", "", serde_json::json!({}), &workspace).expect("ran");
+        assert_eq!(blocked.blocked.as_deref(), Some("not yet"));
+
+        let adding = hooks("UserPromptSubmit", "printf 'Team convention:\\n  tabs.\\n'");
+        let added = adding.run("UserPromptSubmit", "", serde_json::json!({}), &workspace).expect("ran");
+        assert_eq!(added.context, "Team convention:\n  tabs.");
+    }
 }

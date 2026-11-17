@@ -59,7 +59,7 @@ fn verify(agent: &Agent<'_>, verification: &Verification, run: &[Message], attem
         | EngineEvent::ToolStarted(_)
         | EngineEvent::ToolFinished { .. }
         | EngineEvent::ToolResult { .. } => (agent.emit)(EngineEvent::AgentEvent { index, event: Box::new(event) }),
-        EngineEvent::Asked(_) => (agent.emit)(event),
+        EngineEvent::Asked(_) | EngineEvent::Answered { .. } => (agent.emit)(event),
         _ => {}
     };
     let started = std::time::Instant::now();
@@ -80,7 +80,7 @@ fn verify(agent: &Agent<'_>, verification: &Verification, run: &[Message], attem
         turn_limit: JUDGE_TURNS,
     };
     let mut history = vec![Message::user(brief(&verification.criteria, run))];
-    let verdict = match checker.run(&mut history) {
+    let verdict = match crate::agent::current::within(index, || checker.run(&mut history)) {
         Ok(_) => {
             let reply = history.iter().rev().find(|m| m.role == Role::Assistant).map(Message::text);
             Verdict::parse(&reply.unwrap_or_default(), attempt).unwrap_or_else(|e| Verdict::unavailable(e, attempt))

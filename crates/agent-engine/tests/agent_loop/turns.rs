@@ -327,8 +327,9 @@ fn a_stop_hook_that_keeps_blocking_ends_the_turn_after_three_blocks_with_a_notic
     let mut history = vec![Message::user("finish")];
     rig.run(&model, &mut history).expect("the turn ends");
     assert_eq!(model.asked().len(), 4, "the answer and three blocked attempts to stop");
-    let noticed = rig.events().iter().any(
-        |event| matches!(event, EngineEvent::TextDelta(text) if text.contains("hook") && text.contains("3 times")),
-    );
-    assert!(noticed, "{:?}", rig.events());
+    let noticed = rig
+        .events()
+        .iter()
+        .any(|event| matches!(event, EngineEvent::Notice(text) if text.contains("hook") && text.contains("3 times")));
+    assert!(noticed, "the harness says so in its own voice, not the model's: {:?}", rig.events());
 }

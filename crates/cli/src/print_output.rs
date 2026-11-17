@@ -49,6 +49,9 @@ impl<W: Write> Output<W> {
             EngineEvent::ToolStarted(call) if self.format == Format::Text => {
                 eprintln!("\x1b[2m● {}({})\x1b[0m", call.name, call.summary);
             }
+            EngineEvent::Notice(text) if self.format == Format::Text => {
+                eprintln!("\x1b[2m{text}\x1b[0m");
+            }
             EngineEvent::SessionStarted(id) => self.session = Some(id.0.clone()),
             EngineEvent::Completed { duration_ms, cost_usd } => {
                 self.duration_ms += duration_ms;

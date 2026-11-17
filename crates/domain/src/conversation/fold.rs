@@ -97,6 +97,10 @@ impl Transcript {
             }
             EngineEvent::Repeated { tool } => self.push(Entry::Repeated { tool: tool.clone() }),
             EngineEvent::Notified(all) => all.iter().for_each(|n| self.notice(format!("[{}] {}", n.source, n.text))),
+            EngineEvent::Notice(text) => {
+                self.close_thinking();
+                self.notice(text.clone());
+            }
             EngineEvent::Steered(text) => {
                 self.close_thinking();
                 self.push(Entry::User(text.clone()));
@@ -168,6 +172,10 @@ impl Transcript {
     }
 
     fn agent_step(&mut self, index: usize, event: &EngineEvent) {
+        if let EngineEvent::Usage(usage) = event {
+            self.written += usage.output;
+            return self.usage.add(usage);
+        }
         let Some(at) = self.agent_at(index) else { return };
         let Entry::Agent { kind, steps, .. } = &mut self.entries[at] else { return };
         let doing = match event {

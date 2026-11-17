@@ -202,6 +202,7 @@ fn compaction_rewind_and_interruptions_stay_in_the_timeline() {
         Record::Restarted,
         at(4, EngineEvent::Steered("faster".into())),
         at(5, EngineEvent::FellBack("small-model".into())),
+        at(5, EngineEvent::Notice("Changes retained in worktree: /tmp/w".into())),
         at(6, EngineEvent::Failed("the provider is down".into())),
         Record::Truncated { keep: 2 },
         Record::Prompted { at_ms: 20, prompt: "two".into() },
@@ -209,11 +210,24 @@ fn compaction_rewind_and_interruptions_stay_in_the_timeline() {
     ]);
     assert_eq!(
         kinds(&trace.lane),
-        vec!["prompt", "turn", "compacted", "steered", "fell_back", "failed", "rewound", "prompt", "cancelled"]
+        vec![
+            "prompt",
+            "turn",
+            "compacted",
+            "steered",
+            "fell_back",
+            "notice",
+            "failed",
+            "rewound",
+            "prompt",
+            "cancelled"
+        ]
     );
     let node = only(&trace.lane.steps[2]);
     assert_eq!(node.kind, Kind::Compacted(compaction));
-    let failed = only(&trace.lane.steps[5]);
+    let notice = only(&trace.lane.steps[5]);
+    assert_eq!(notice.kind, Kind::Note { title: "notice".into(), text: "Changes retained in worktree: /tmp/w".into() });
+    let failed = only(&trace.lane.steps[6]);
     assert!(failed.failed);
 }
 

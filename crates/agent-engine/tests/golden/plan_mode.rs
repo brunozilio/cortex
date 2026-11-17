@@ -37,6 +37,7 @@ fn plan_mode_refuses_an_edit_then_an_approved_plan_changes_mode_and_the_edit_run
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         ToolStarted p1 ExitPlanMode "" input="{\"plan\":\"1. Write out.txt\"}"
         Asked ask-<uuid>-p1 Plan { plan: "1. Write out.txt" }
+        Answered ask-<uuid>-p1 Approve(AcceptEdits)
         ModeChanged(AcceptEdits)
         ToolFinished p1
         ToolResult p1 ok "The user approved your plan and planning is over (edits run freely, commands ask first). Start implementing it now, following the plan. Track the steps with the t…
@@ -49,7 +50,7 @@ fn plan_mode_refuses_an_edit_then_an_approved_plan_changes_mode_and_the_edit_run
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentSpawned #0 kind=review summary="Reviewing the changes" prompt="# Task\nPlan, then write the file\n\n# Changed files\n- out.txt"
         AgentUpdate #0 Running(0) summary=None
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Agent #0 | Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentUpdate #0 Done(<seconds>) summary=Some("0 findings")
         Reviewed([])
         Completed duration=<ms> cost=none
@@ -87,6 +88,7 @@ fn plan_mode_refuses_an_edit_then_an_approved_plan_changes_mode_and_the_edit_run
         event Usage
         event ToolStarted p1
         event Asked
+        event Answered
         event ModeChanged
         event ToolFinished p1
         event ToolResult p1
@@ -101,8 +103,8 @@ fn plan_mode_refuses_an_edit_then_an_approved_plan_changes_mode_and_the_edit_run
         event Usage
         event AgentSpawned
         event AgentUpdate
-        called model=claude-opus-5-5 stop=EndTurn messages=1
-        event Usage
+        called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
+        event Agent #0 | Usage
         event AgentUpdate
         event Reviewed
         message user
@@ -140,6 +142,7 @@ fn a_plan_sent_back_with_a_note_keeps_plan_mode_and_tells_the_model_why() {
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         ToolStarted p1 ExitPlanMode "" input="{\"plan\":\"1. Delete everything\"}"
         Asked ask-<uuid>-p1 Plan { plan: "1. Delete everything" }
+        Answered ask-<uuid>-p1 DenyWith("too drastic")
         ToolFinished p1
         ToolResult p1 failed "The user wants to keep planning and did not approve the plan. Do not implement anything. They said: too drastic"
         Text "I will rethink."
@@ -164,6 +167,7 @@ fn a_plan_sent_back_with_a_note_keeps_plan_mode_and_tells_the_model_why() {
         event Usage
         event ToolStarted p1
         event Asked
+        event Answered
         event ToolFinished p1
         event ToolResult p1
         event TextDelta

@@ -6,6 +6,21 @@ const MAX_CONTINUATIONS: usize = 3;
 const MAX_STRUCTURED_NUDGES: usize = 3;
 const MAX_STOP_HOOK_BLOCKS: usize = 3;
 
+pub const INTERRUPTED_BY_THE_USER: &str = "\n\n[interrupted by the user]";
+
+pub(super) fn streamed(so_far: &mut String, text: String) -> String {
+    so_far.push_str(&text);
+    text
+}
+
+pub(super) fn interrupted(history: &mut Vec<Message>, shown: &str) -> Ending {
+    if !shown.trim().is_empty() {
+        let said = vec![Block::Text(shown.to_owned()), Block::Text(INTERRUPTED_BY_THE_USER.into())];
+        history.push(Message::assistant(said));
+    }
+    Ending::Cancelled
+}
+
 #[derive(Debug, Default)]
 pub(super) struct Cutoffs {
     retried_empty: bool,
@@ -30,11 +45,12 @@ impl Cutoffs {
     pub(super) fn stop_blocked(&mut self, event: &str, reason: &str, context: &str) -> Result<Message, String> {
         if self.stop_hook_blocks >= MAX_STOP_HOOK_BLOCKS {
             return Err(format!(
-                "\nThe {event} hook blocked completion {MAX_STOP_HOOK_BLOCKS} times in a row and blocked it again, so the turn ended anyway. Its reason: {reason}\n"
+                "The {event} hook blocked completion {MAX_STOP_HOOK_BLOCKS} times in a row and blocked it again, so the turn ended anyway. Its reason: {reason}"
             ));
         }
         self.stop_hook_blocks += 1;
-        Ok(Message::user(format!("Completion blocked by hook: {reason}\n{context}")))
+        let said = format!("Completion blocked by hook: {reason}\n{context}");
+        Ok(Message::user(said.trim_end()))
     }
 
     pub(super) fn stop_allowed(&mut self) {
@@ -57,7 +73,7 @@ impl Cutoffs {
         self.continuations = 0;
     }
 
-    pub(super) fn continuation(&mut self, cut: &Message) -> Result<Message, Ending> {
+    pub(super) fn continuation(&mut self, cut: Option<&Message>) -> Result<Message, Ending> {
         self.continuations += 1;
         if self.continuations > MAX_CONTINUATIONS {
             return Err(Ending::Failed(ModelError::Provider(format!(
@@ -65,7 +81,7 @@ impl Cutoffs {
                 self.continuations
             ))));
         }
-        Ok(Message::user(if cut.text().trim().is_empty() {
+        Ok(Message::user(if cut.is_none_or(|cut| cut.text().trim().is_empty()) {
             "Your output reached its token limit while you were still thinking, before any answer. Reason much more briefly and get to the answer or the next tool call."
         } else {
             "Your output reached its token limit. Continue exactly at the cutoff, with no apology and no recap. New text is appended to the same response, so preserve code fences and machine-readable syntax. If much remains, break the rest of the work into smaller pieces."

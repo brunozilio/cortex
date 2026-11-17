@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use super::ApiSource;
@@ -22,6 +22,7 @@ pub(super) struct Job {
     pub(super) control: Arc<Control>,
     pub(super) gate: RunGate,
     pub(super) recorder: Option<Arc<super::record::Recorder>>,
+    pub(super) held: Arc<Mutex<Option<crate::sessions::Hold>>>,
 }
 
 impl Job {
@@ -36,10 +37,10 @@ impl Job {
             return self.fail("There is no conversation to work on yet.", FailureKind::Other);
         }
         let answering = self.request.resume.as_ref().filter(|_| !self.request.command.is_some_and(|c| c.is_chore()));
-        let _held = match answering.map(|id| self.sessions.hold(&self.request, id)).transpose() {
-            Ok(held) => held,
+        match answering.map(|id| self.sessions.hold(&self.request, id)).transpose() {
+            Ok(held) => self.hold(held),
             Err(error) => return self.fail(&error, FailureKind::Other),
-        };
+        }
         let (session, history) = match &self.request.resume {
             Some(id) => match self.sessions.load_for_checked(&self.request, id) {
                 Ok(Some(history)) => (id.clone(), crate::sessions::repaired(history)),
@@ -68,10 +69,7 @@ impl Job {
         if let Some(SessionCommand::Branch(index)) = self.request.command {
             return self.branch(&session, &history, index, started);
         }
-        let recorder = super::record::Recorder::start(Arc::clone(&self.sessions), &self.request, &session);
-        self.gate.observe(recorder.observer());
-        self.recorder = Some(recorder);
-        self.gate.emit(EngineEvent::SessionStarted(session.clone()));
+        self.open_session(&session);
         content::install_once();
         let brief = match crate::brief::Brief::load(&self.request) {
             Ok(brief) => brief,
@@ -123,7 +121,7 @@ impl Job {
         if !settings.auto_memory {
             agent_config.memory = None;
         }
-        self.control = self.control.child_configured(agent_config.permission, agent_config.dont_ask);
+        self.control = self.control.reconfigured(agent_config.permission, agent_config.dont_ask);
         let Some(workspace) = Arc::get_mut(&mut self.workspace) else {
             return self.fail(SHARED_TOO_EARLY, FailureKind::Other);
         };
@@ -250,6 +248,7 @@ impl Job {
             runtime_guard.retain();
         }
         if let Some(state) = runtime_guard.setup.worktree_state() {
+            self.recorder.iter().for_each(|recorder| recorder.announce(&self.gate));
             let stored = self
                 .sessions
                 .save_for(&self.request, &session, &history)
@@ -286,7 +285,12 @@ impl Job {
                 Err(error) => return self.fail(&error, FailureKind::Other),
             }
         }
+        let api = match self.signed_in() {
+            Ok(api) => api,
+            Err(error) => return self.model_failed(error),
+        };
         let prepared = Prepared {
+            api,
             started,
             session,
             history,

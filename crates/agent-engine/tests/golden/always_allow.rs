@@ -44,7 +44,7 @@ fn an_edit_always_allowed_is_remembered_for_the_run_only_and_writes_no_rule() {
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentSpawned #0 kind=review summary="Reviewing the changes" prompt="# Task\nWrite the file twice\n\n# Changed files\n- out.txt"
         AgentUpdate #0 Running(0) summary=None
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Agent #0 | Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentUpdate #0 Done(<seconds>) summary=Some("0 findings")
         Reviewed([])
         Completed duration=<ms> cost=none
@@ -86,8 +86,8 @@ fn an_edit_always_allowed_is_remembered_for_the_run_only_and_writes_no_rule() {
         event Usage
         event AgentSpawned
         event AgentUpdate
-        called model=claude-opus-5-5 stop=EndTurn messages=1
-        event Usage
+        called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
+        event Agent #0 | Usage
         event AgentUpdate
         event Reviewed
         message user

@@ -43,7 +43,7 @@ fn an_edit_in_ask_mode_waits_for_the_user_and_runs_once_allowed() {
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentSpawned #0 kind=review summary="Reviewing the changes" prompt="# Task\nWrite the file\n\n# Changed files\n- out.txt"
         AgentUpdate #0 Running(0) summary=None
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Agent #0 | Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentUpdate #0 Done(<seconds>) summary=Some("0 findings")
         Reviewed([])
         Completed duration=<ms> cost=none
@@ -75,8 +75,8 @@ fn an_edit_in_ask_mode_waits_for_the_user_and_runs_once_allowed() {
         event Usage
         event AgentSpawned
         event AgentUpdate
-        called model=claude-opus-5-5 stop=EndTurn messages=1
-        event Usage
+        called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
+        event Agent #0 | Usage
         event AgentUpdate
         event Reviewed
         message user
@@ -117,11 +117,6 @@ fn an_edit_the_user_denies_never_runs_and_the_model_reads_the_refusal() {
         ToolResult w1 failed "The user did not allow Write here. Do not retry it; ask them or take another approach."
         Text "Done."
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
-        AgentSpawned #0 kind=review summary="Reviewing the changes" prompt="# Task\nWrite the file\n\n# Changed files\n- out.txt"
-        AgentUpdate #0 Running(0) summary=None
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
-        AgentUpdate #0 Done(<seconds>) summary=Some("0 findings")
-        Reviewed([])
         Completed duration=<ms> cost=none
         == prompt: conversation ==
         user:
@@ -149,12 +144,6 @@ fn an_edit_the_user_denies_never_runs_and_the_model_reads_the_refusal() {
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        event AgentSpawned
-        event AgentUpdate
-        called model=claude-opus-5-5 stop=EndTurn messages=1
-        event Usage
-        event AgentUpdate
-        event Reviewed
         message user
         message assistant
         message user
@@ -190,11 +179,6 @@ fn an_edit_denied_with_a_note_carries_the_note_to_the_model() {
         ToolResult w1 failed "The user did not allow Write here and said what to do instead: use notes.txt instead"
         Text "Done."
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
-        AgentSpawned #0 kind=review summary="Reviewing the changes" prompt="# Task\nWrite the file\n\n# Changed files\n- out.txt"
-        AgentUpdate #0 Running(0) summary=None
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
-        AgentUpdate #0 Done(<seconds>) summary=Some("0 findings")
-        Reviewed([])
         Completed duration=<ms> cost=none
         == prompt: conversation ==
         user:
@@ -222,12 +206,6 @@ fn an_edit_denied_with_a_note_carries_the_note_to_the_model() {
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        event AgentSpawned
-        event AgentUpdate
-        called model=claude-opus-5-5 stop=EndTurn messages=1
-        event Usage
-        event AgentUpdate
-        event Reviewed
         message user
         message assistant
         message user

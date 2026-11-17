@@ -3,6 +3,7 @@ use std::time::Instant;
 use domain::{EngineEvent, FailureKind, Rewound, SessionId};
 
 use super::job::Job;
+use super::record::Session;
 use crate::checkpoints::{self, Checkpoint};
 use crate::transcript::Message;
 
@@ -24,7 +25,7 @@ impl Job {
         }
     }
 
-    pub(super) fn branch(&self, session: &SessionId, history: &[Message], index: u32, started: Instant) {
+    pub(super) fn branch(&mut self, session: &SessionId, history: &[Message], index: u32, started: Instant) {
         let branched = SessionId(uuid::Uuid::new_v4().to_string());
         let made = self.sessions.load_checkpoints(&self.request, session).and_then(|all| {
             let (prompt, kept, carried) = checkpoints::branch(&all, index as usize, history)?;
@@ -34,7 +35,9 @@ impl Job {
         });
         match made {
             Ok(prompt) => {
+                let recorder = self.record(&branched, Session::Kept);
                 self.gate.emit(EngineEvent::SessionStarted(branched.clone()));
+                recorder.opened(self.run_info(None));
                 self.gate.emit(EngineEvent::Branched { from: session.clone(), checkpoint: index, prompt });
                 self.completed(started, None);
             }
@@ -42,7 +45,8 @@ impl Job {
         }
     }
 
-    pub(super) fn rewind(&self, session: &SessionId, mut history: Vec<Message>, index: u32, started: Instant) {
+    pub(super) fn rewind(&mut self, session: &SessionId, mut history: Vec<Message>, index: u32, started: Instant) {
+        self.record(session, Session::Kept).opened(self.run_info(None));
         let rewound = self.sessions.load_checkpoints(&self.request, session).and_then(|mut all| {
             let (target, restored, conversation) = checkpoints::rewind(&mut all, index as usize, &mut history)?;
             self.sessions.save_checkpoints(&self.request, session, &all)?;
@@ -53,13 +57,6 @@ impl Job {
         });
         match rewound {
             Ok(rewound) => {
-                let kept = crate::sessions::Entry::Event {
-                    at_ms: super::record::now(),
-                    event: EngineEvent::Rewound(rewound.clone()),
-                };
-                if let Err(error) = self.sessions.record(&self.request, session, &kept) {
-                    tracing::warn!(%error, "the rewind was not kept in the session's trace");
-                }
                 self.gate.emit(EngineEvent::Rewound(rewound));
                 self.completed(started, None);
             }

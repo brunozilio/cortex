@@ -22,8 +22,8 @@ impl Agent<'_> {
         let client = self.workspace.credentials.client;
         let (notices, held) = domain::inbox::admitted(crate::tools::inbox::take(client), self.control.mode());
         if !held.is_empty() {
-            (self.emit)(EngineEvent::TextDelta(format!(
-                "\n{} message(s) from channels or other sessions are held: bypass mode never lets them in.\n",
+            (self.emit)(EngineEvent::Notice(format!(
+                "{} message(s) from channels or other sessions are held: bypass mode never lets them in.",
                 held.len()
             )));
         }

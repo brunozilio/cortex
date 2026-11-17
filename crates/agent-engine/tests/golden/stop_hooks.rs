@@ -31,7 +31,7 @@ fn a_stop_hook_that_blocks_once_sends_the_model_back_to_work_then_lets_it_finish
         assistant:
           text "Finished."
         user:
-          text "Completion blocked by hook: Verify once before finishing\n"
+          text "Completion blocked by hook: Verify once before finishing"
         assistant:
           text "Verified, finished."
         == prompt: log appended ==
@@ -76,7 +76,7 @@ fn a_stop_hook_that_always_blocks_is_overruled_after_three_blocks_with_a_notice(
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         Text "Four."
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
-        Text "\nThe Stop hook blocked completion 3 times in a row and blocked it again, so the turn ended anyway. Its reason: never done\n\n"
+        Notice("The Stop hook blocked completion 3 times in a row and blocked it again, so the turn ended anyway. Its reason: never done")
         Completed duration=<ms> cost=none
         == prompt: conversation ==
         user:
@@ -85,15 +85,15 @@ fn a_stop_hook_that_always_blocks_is_overruled_after_three_blocks_with_a_notice(
         assistant:
           text "One."
         user:
-          text "Completion blocked by hook: never done\n\n"
+          text "Completion blocked by hook: never done"
         assistant:
           text "Two."
         user:
-          text "Completion blocked by hook: never done\n\n"
+          text "Completion blocked by hook: never done"
         assistant:
           text "Three."
         user:
-          text "Completion blocked by hook: never done\n\n"
+          text "Completion blocked by hook: never done"
         assistant:
           text "Four."
         == prompt: log appended ==
@@ -113,6 +113,7 @@ fn a_stop_hook_that_always_blocks_is_overruled_after_three_blocks_with_a_notice(
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=7
         event Usage
+        event Notice
         message user
         message assistant
         message user
@@ -121,7 +122,6 @@ fn a_stop_hook_that_always_blocks_is_overruled_after_three_blocks_with_a_notice(
         message assistant
         message user
         message assistant
-        event TextDelta
         event Completed
         "##,
     );

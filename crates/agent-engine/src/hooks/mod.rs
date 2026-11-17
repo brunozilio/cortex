@@ -72,6 +72,13 @@ pub struct Decision {
     #[serde(default)]
     pub prompt: Option<String>,
 }
+impl Decision {
+    fn without_trailing_whitespace(mut self) -> Self {
+        self.blocked = self.blocked.map(|reason| reason.trim_end().to_owned());
+        self.context.truncate(self.context.trim_end().len());
+        self
+    }
+}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommandOutput {
     pub code: Option<i32>,
@@ -125,11 +132,21 @@ impl Hooks {
     pub fn run(&self, event: &str, subject: &str, input: Value, workspace: &Workspace) -> Result<Decision, String> {
         self.run_with_model(event, subject, input, workspace, None)
     }
+    pub fn run_with_model(
+        &self,
+        event: &str,
+        subject: &str,
+        input: Value,
+        workspace: &Workspace,
+        model: Option<(&dyn crate::model::ModelApi, &crate::model::TurnRequest)>,
+    ) -> Result<Decision, String> {
+        self.decided(event, subject, input, workspace, model).map(Decision::without_trailing_whitespace)
+    }
     #[allow(
         clippy::too_many_lines,
         reason = "split planned: hook matching and hook execution separate in a later phase"
     )]
-    pub fn run_with_model(
+    fn decided(
         &self,
         event: &str,
         subject: &str,

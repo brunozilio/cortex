@@ -5,7 +5,7 @@ use crate::models::{Held, call, no_findings, says};
 use crate::stage::{PATIENCE, Stage};
 
 #[test]
-fn a_message_steered_during_a_tool_call_is_not_delivered_with_its_results_and_can_still_be_taken_back() {
+fn a_message_steered_during_a_tool_call_is_delivered_with_its_results_and_cannot_be_taken_back_after() {
     let stage = Stage::new();
     let (model, gate) = Held::before_turn(
         1,
@@ -36,12 +36,13 @@ fn a_message_steered_during_a_tool_call_is_not_delivered_with_its_results_and_ca
         Edited(Edited { path: "<project>/out.txt", line: 1, removed: 0, added: 1 })
         ToolFinished w1
         ToolResult w1 ok "Created out.txt · Wrote 1 lines\n    1 + written"
-        Unsteered(["Also add tests"])
+        Steered("Also add tests")
+        Unsteered([])
         Text "Written."
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentSpawned #0 kind=review summary="Reviewing the changes" prompt="# Task\nWrite the file\n\n# Changed files\n- out.txt"
         AgentUpdate #0 Running(0) summary=None
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Agent #0 | Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentUpdate #0 Done(<seconds>) summary=Some("0 findings")
         Reviewed([])
         Completed duration=<ms> cost=none
@@ -53,6 +54,7 @@ fn a_message_steered_during_a_tool_call_is_not_delivered_with_its_results_and_ca
           tool_use w1 Write "{\"content\":\"written\\n\",\"file_path\":\"out.txt\"}"
         user:
           tool_result w1 ok "Created out.txt (1 lines)."
+          text "The user sent this message while you were working:\nAlso add tests"
         assistant:
           text "Written."
         == prompt: log appended ==
@@ -68,16 +70,71 @@ fn a_message_steered_during_a_tool_call_is_not_delivered_with_its_results_and_ca
         event Edited
         event ToolFinished w1
         event ToolResult w1
+        event Steered
         event Unsteered
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
         event AgentSpawned
         event AgentUpdate
-        called model=claude-opus-5-5 stop=EndTurn messages=1
-        event Usage
+        called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
+        event Agent #0 | Usage
         event AgentUpdate
         event Reviewed
+        message user
+        message assistant
+        message user
+        message assistant
+        event Completed
+        "##,
+    );
+}
+
+#[test]
+fn a_message_steered_while_the_model_answers_without_tools_is_delivered_before_the_run_ends() {
+    let stage = Stage::new();
+    let (model, gate) = Held::before_turn(0, [says("Done."), says("Tests added too.")]);
+    stage.model(model);
+
+    let mut run = stage.start(&stage.request("Write the file"));
+    gate.reached.recv_timeout(PATIENCE).expect("the model is asked for its first answer");
+    run.steer("Also add tests");
+    gate.release.send(()).expect("the model waits at the gate");
+    stage.end("prompt", run);
+
+    stage.assert(
+        r##"
+        == prompt: events ==
+        SessionStarted <session-1>
+        Checkpoint(0)
+        Text "Done."
+        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Steered("Also add tests")
+        Text "Tests added too."
+        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Completed duration=<ms> cost=none
+        == prompt: conversation ==
+        user:
+          text "Write the file"
+          reminder "# Runtime reminder\nEdits are allowed; commands and external actions still require approval.\nCollect background agent reports before completing. Use TaskStop to cancel…
+        assistant:
+          text "Done."
+        user:
+          text "The user sent this message while you were working:\nAlso add tests"
+        assistant:
+          text "Tests added too."
+        == prompt: log appended ==
+        prompted "Write the file"
+        event SessionStarted
+        opened
+        event Checkpoint
+        event TextDelta
+        called model=claude-opus-5-5 stop=EndTurn messages=1
+        event Usage
+        event Steered
+        event TextDelta
+        called model=claude-opus-5-5 stop=EndTurn messages=3
+        event Usage
         message user
         message assistant
         message user

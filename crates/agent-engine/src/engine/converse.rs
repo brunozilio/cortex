@@ -29,6 +29,7 @@ pub(super) struct Prepared {
     pub(super) style: Option<prompt::settings::Style>,
     pub(super) git: Option<prompt::GitSnapshot>,
     pub(super) instructions: Vec<prompt::Instructions>,
+    pub(super) api: Option<Arc<dyn crate::model::ModelApi>>,
 }
 
 impl Job {
@@ -49,6 +50,7 @@ impl Job {
             style,
             git,
             instructions,
+            api,
         } = prepared;
         let git = runtime_guard.setup.context.as_ref().and_then(|b| b.git.clone()).or(git);
         let snapshot = self.session_snapshot(&session, || prompt::Snapshot {
@@ -57,16 +59,7 @@ impl Job {
             top_level: prompt::top_level(&self.workspace.cwd),
         });
         if let Some(recorder) = &self.recorder {
-            recorder.opened(domain::trace::RunInfo {
-                model: self.request.model.id.clone(),
-                provider: format!("{:?}", self.request.model.provider),
-                permission: format!("{:?}", self.request.permission),
-                effort: format!("{:?}", self.request.effort),
-                cwd: self.workspace.cwd.display().to_string(),
-                branch: snapshot.git.as_ref().map(|git| git.branch.clone()),
-                recent: snapshot.git.as_ref().map(|git| git.recent.clone()),
-                status: snapshot.git.as_ref().map(|git| git.status.clone()),
-            });
+            recorder.opened(self.run_info(snapshot.git.as_ref()));
         }
         let environment = Environment {
             cwd: self.workspace.cwd.clone(),
@@ -136,9 +129,8 @@ impl Job {
             self.gate.emit(EngineEvent::ContextMeasured(usage));
             return self.completed(started, Some(0.0));
         }
-        let api = match self.source.api(&self.request) {
-            Ok(api) => api,
-            Err(error) => return self.model_failed(error),
+        let Some(api) = api else {
+            return self.fail("This command was started without a model to answer it.", FailureKind::Other);
         };
         let ledger = Arc::new(crate::meter::Ledger::default());
         let mut template = template;
@@ -158,7 +150,7 @@ impl Job {
             let focus = Some(self.request.prompt.as_str()).filter(|focus| !focus.trim().is_empty());
             return match upkeep::compact_hooked_on(&api, &template, &mut history, &self.workspace, "manual", focus) {
                 Ok(compaction) => {
-                    if let Err(error) = self.sessions.save_for(&self.request, &session, &history) {
+                    if let Err(error) = self.save(&session, &history) {
                         return self
                             .fail(&format!("Could not save the compacted conversation: {error}"), FailureKind::Other);
                     }
@@ -216,7 +208,7 @@ impl Job {
             }
         }
         let checkpoint = self.open_checkpoint(&session, &history);
-        history.push(user);
+        crate::transcript::prompted(&mut history, user);
         let outcome = loop {
             let agent = Agent {
                 api: &api,
@@ -242,7 +234,7 @@ impl Job {
                     template.system = moved.system;
                     emit(EngineEvent::Moved(moved.cwd));
                     if let Some(kept) = moved.kept {
-                        emit(EngineEvent::TextDelta(format!("\n{kept}")));
+                        emit(EngineEvent::Notice(kept));
                     }
                 }
                 Err(error) => break Err(Ending::Failed(crate::model::ModelError::Provider(error))),
@@ -257,15 +249,15 @@ impl Job {
             self.workspace.hooks.run("SessionEnd", "", serde_json::json!({"session_id":session}), cleanup_workspace);
         match runtime_guard.finish() {
             Ok(Some(path)) => {
-                self.gate.emit(EngineEvent::TextDelta(format!("\nChanges retained in worktree: {}", path.display())));
+                self.gate.emit(EngineEvent::Notice(format!("Changes retained in worktree: {}", path.display())));
             }
             Err(error) => {
-                self.gate.emit(EngineEvent::TextDelta(format!("\nWorktree cleanup failed; files retained: {error}")));
+                self.gate.emit(EngineEvent::Notice(format!("Worktree cleanup failed; files retained: {error}")));
             }
             _ => {}
         }
         let history = crate::sessions::repaired(history);
-        if let Err(error) = self.sessions.save_for(&self.request, &session, &history) {
+        if let Err(error) = self.save(&session, &history) {
             return self.fail(&format!("Could not save the conversation: {error}"), FailureKind::Other);
         }
         self.keep_checkpoint(&session, checkpoint);

@@ -8,7 +8,7 @@ pub fn agent() -> Option<usize> {
     AGENT.with(Cell::get)
 }
 
-pub(super) fn within<T>(index: usize, run: impl FnOnce() -> T) -> T {
+pub(crate) fn within<T>(index: usize, run: impl FnOnce() -> T) -> T {
     struct Restore(Option<usize>);
     impl Drop for Restore {
         fn drop(&mut self) {

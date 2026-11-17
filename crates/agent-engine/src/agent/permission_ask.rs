@@ -1,6 +1,7 @@
 use domain::permission_rules::{self, RuleKind};
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
 use serde_json::Value;
+use std::sync::mpsc::RecvError;
 
 use super::Agent;
 use crate::tools::{Access, Outcome, Tool};
@@ -23,20 +24,13 @@ impl Agent<'_> {
             "permission_prompt",
             &format!("{brand_name} needs your permission to use {name}", brand_name = brand::NAME),
         );
-        let ask = AskId(format!("ask-{}-{id}", uuid::Uuid::new_v4()));
-        let answer = self.control.open(ask.clone());
         let kind = AskKind::Permission {
             tool: name.clone(),
             subject: shown.to_owned(),
             rememberable: self.always_asks(&name, input).is_none(),
             rule: rule.clone(),
         };
-        (self.emit)(EngineEvent::Asked(AgentAsk { id: ask.clone(), kind }));
-        let answer = answer.recv();
-        if let Ok(decision) = &answer {
-            (self.emit)(EngineEvent::Answered { ask, decision: decision.clone() });
-        }
-        match answer {
+        match self.asked(id, kind) {
             Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => self.went_ahead(id, tool, input),
             Ok(Decision::AllowAlways) => {
                 match rule {
@@ -59,6 +53,17 @@ impl Agent<'_> {
             }
             Err(_) => Outcome::error(crate::tools::stopped::while_asking(&name)),
         }
+    }
+
+    pub(super) fn asked(&self, call: &str, kind: AskKind) -> Result<Decision, RecvError> {
+        let ask = AskId(format!("ask-{}-{call}", uuid::Uuid::new_v4()));
+        let answer = self.control.open(ask.clone());
+        (self.emit)(EngineEvent::Asked(AgentAsk { id: ask.clone(), kind }));
+        let answer = answer.recv();
+        if let Ok(decision) = &answer {
+            (self.emit)(EngineEvent::Answered { ask, decision: decision.clone() });
+        }
+        answer
     }
 
     pub(super) fn notify(&self, kind: &str, message: &str) {

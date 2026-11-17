@@ -1,5 +1,5 @@
 use domain::command_policy::CommandClass;
-use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
+use domain::{AskKind, Decision, EngineEvent};
 use serde_json::{Value, json};
 
 use super::Agent;
@@ -17,10 +17,7 @@ impl Agent<'_> {
             Err(problem) => return Outcome::error(format!("The questions could not be asked: {problem}.")),
         };
         self.notify("elicitation_dialog", concat!(brand::name!(), " has questions for you"));
-        let ask = AskId(format!("ask-{}-{id}", uuid::Uuid::new_v4()));
-        let answer = self.control.open(ask.clone());
-        (self.emit)(EngineEvent::Asked(AgentAsk { id: ask, kind: AskKind::Questions(asked.clone()) }));
-        match answer.recv() {
+        match self.asked(id, AskKind::Questions(asked.clone())) {
             Ok(Decision::Answer(picks)) => Outcome::ok(ask::answers(&asked, &picks)),
             Ok(Decision::Allow | Decision::AllowAlways | Decision::Approve(_)) => {
                 Outcome::ok(ask::answers(&asked, &[]))

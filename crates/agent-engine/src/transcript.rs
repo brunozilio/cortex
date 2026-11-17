@@ -93,6 +93,33 @@ impl Message {
     }
 }
 
+pub fn replied(history: &mut Vec<Message>, reply: Message) -> bool {
+    let said = reply.blocks.iter().any(|block| !matches!(block, Block::Text(text) if text.trim().is_empty()));
+    if said {
+        history.push(reply);
+    }
+    said
+}
+
+pub fn told(history: &mut Vec<Message>, user: Message) {
+    match history.last_mut() {
+        Some(last) if last.role == Role::User => last.blocks.extend(user.blocks),
+        _ => history.push(user),
+    }
+}
+
+pub fn only_results(message: &Message) -> bool {
+    let is_result = |block: &Block| matches!(block, Block::ToolResult { .. } | Block::ToolResultRich { .. });
+    message.role == Role::User && !message.blocks.is_empty() && message.blocks.iter().all(is_result)
+}
+
+pub fn prompted(history: &mut Vec<Message>, prompt: Message) {
+    match history.last_mut() {
+        Some(last) if only_results(last) => last.blocks.extend(prompt.blocks),
+        _ => history.push(prompt),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StopReason {
     EndTurn,
@@ -139,6 +166,53 @@ mod tests {
         assert_eq!(message.text(), "Looking now");
         let calls: Vec<_> = message.tool_uses().map(|(id, name, _)| (id, name)).collect();
         assert_eq!(calls, vec![("t1", "Read")]);
+    }
+
+    #[test]
+    fn a_reply_with_nothing_in_it_is_not_kept_as_an_assistant_message() {
+        let mut history = vec![Message::user("go")];
+        assert!(!replied(&mut history, Message::assistant(Vec::new())));
+        assert!(!replied(&mut history, Message::assistant(vec![Block::Text(" \n".into())])));
+        assert_eq!(history, [Message::user("go")]);
+        let thought = Block::Thinking { text: "hm".into(), signature: None, origin: None };
+        assert!(replied(&mut history, Message::assistant(vec![thought])));
+        assert!(replied(&mut history, Message::assistant(vec![Block::Text("Done.".into())])));
+        assert_eq!(history.len(), 3);
+    }
+
+    #[test]
+    fn a_prompt_after_results_left_unanswered_joins_them_so_roles_alternate() {
+        let interrupted = Block::ToolResult { id: "t".into(), content: "cut".into(), is_error: true };
+        let mut history = vec![
+            Message::user("go"),
+            Message::assistant(vec![Block::Text("On it.".into())]),
+            Message { role: Role::User, blocks: vec![interrupted.clone()] },
+        ];
+        prompted(&mut history, Message::user("and then?"));
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[2].blocks, [interrupted, Block::Text("and then?".into())]);
+
+        history.push(Message::assistant(vec![Block::Text("Next.".into())]));
+        prompted(&mut history, Message::user("thanks"));
+        assert_eq!(history.len(), 5);
+        assert_eq!(history[4], Message::user("thanks"));
+
+        let mut unanswered = vec![Message::user("summary of what came before")];
+        prompted(&mut unanswered, Message::user("go on"));
+        assert_eq!(unanswered.len(), 2, "a prompt never joins what the user or a summary said before");
+    }
+
+    #[test]
+    fn what_the_harness_tells_the_model_mid_run_joins_the_user_message_before_it() {
+        let mut history = vec![Message::user("go")];
+        told(&mut history, Message::user("be brief"));
+        assert_eq!(
+            history,
+            [Message { role: Role::User, blocks: vec![Block::Text("go".into()), Block::Text("be brief".into())] }]
+        );
+        history.push(Message::assistant(vec![Block::Text("Ok.".into())]));
+        told(&mut history, Message::user("more"));
+        assert_eq!(history.len(), 3);
     }
 
     #[test]

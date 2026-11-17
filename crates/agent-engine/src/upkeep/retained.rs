@@ -10,10 +10,13 @@ fn is_prompt(message: &Message) -> bool {
     message.role == Role::User && message.blocks.iter().all(|b| matches!(b, Block::Text(_) | Block::Image(_)))
 }
 
+const FEWEST_TO_SPLIT: usize = 3;
+
 pub fn split(history: &[Message], budget: u64) -> Option<usize> {
     let mut kept = 0;
     let mut best = None;
-    for at in (2..history.len()).rev() {
+    let first_kept = if history.len() < FEWEST_TO_SPLIT { history.len() } else { 1 };
+    for at in (first_kept..history.len()).rev() {
         kept += message_tokens(&history[at]);
         if kept > budget {
             break;

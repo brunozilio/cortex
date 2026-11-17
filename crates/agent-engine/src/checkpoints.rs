@@ -8,7 +8,7 @@ use platform::sync::Locked;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::transcript::Message;
+use crate::transcript::{Message, only_results};
 
 const MAX_FILE: u64 = 10 * 1024 * 1024;
 
@@ -18,6 +18,8 @@ pub struct Checkpoint {
     pub history_len: usize,
     pub history_hash: String,
     pub files: BTreeMap<PathBuf, Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joined_after: Option<usize>,
 }
 
 impl Checkpoint {
@@ -27,7 +29,16 @@ impl Checkpoint {
             history_len: history.len(),
             history_hash: hash(history),
             files: BTreeMap::new(),
+            joined_after: history.last().filter(|last| only_results(last)).map(|last| last.blocks.len()),
         }
+    }
+
+    fn before(&self, history: &[Message]) -> Option<Vec<Message>> {
+        let mut before = history.get(..self.history_len)?.to_vec();
+        if let (Some(blocks), Some(last)) = (self.joined_after, before.last_mut()) {
+            last.blocks.truncate(blocks);
+        }
+        (hash(&before) == self.history_hash).then_some(before)
     }
 }
 
@@ -89,9 +100,10 @@ pub fn rewind(
     }
     restored.sort();
     let target = dropped.into_iter().next().ok_or("there is no such checkpoint")?;
-    let intact = history.len() >= target.history_len && hash(&history[..target.history_len]) == target.history_hash;
-    if intact {
-        history.truncate(target.history_len);
+    let before = target.before(history);
+    let intact = before.is_some();
+    if let Some(before) = before {
+        *history = before;
     }
     Ok((target, restored, intact))
 }
@@ -102,11 +114,9 @@ pub fn branch(
     history: &[Message],
 ) -> Result<(String, Vec<Message>, Vec<Checkpoint>), String> {
     let target = checkpoints.get(index).ok_or("there is no such checkpoint in this conversation")?;
-    let intact = history.len() >= target.history_len && hash(&history[..target.history_len]) == target.history_hash;
-    if !intact {
-        return Err("the conversation was compacted since then, so it cannot branch there".into());
-    }
-    Ok((target.prompt.clone(), history[..target.history_len].to_vec(), checkpoints[..index].to_vec()))
+    let before =
+        target.before(history).ok_or("the conversation was compacted since then, so it cannot branch there")?;
+    Ok((target.prompt.clone(), before, checkpoints[..index].to_vec()))
 }
 
 fn restore(path: &Path, before: Option<&str>) -> Result<(), String> {
@@ -129,6 +139,7 @@ fn restore(path: &Path, before: Option<&str>) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transcript::{Block, Role};
 
     fn run(dir: &Path, history: &mut Vec<Message>, prompt: &str, write: &[(&str, &str)]) -> Checkpoint {
         let mut checkpoint = Checkpoint::open(prompt, history);
@@ -199,6 +210,23 @@ mod tests {
         );
         assert!(branch(&checkpoints, 2, &history).is_err());
         assert!(branch(&checkpoints, 1, &[Message::user("summary")]).is_err(), "a compacted history cannot branch");
+    }
+
+    #[test]
+    fn a_prompt_joined_to_unanswered_results_is_cut_out_of_their_message_again() {
+        let result = Block::ToolResult { id: "t".into(), content: "ran".into(), is_error: false };
+        let before = vec![Message::user("go"), Message { role: Role::User, blocks: vec![result] }];
+        let mut history = before.clone();
+        let checkpoint = Checkpoint::open("and then?", &history);
+        crate::transcript::prompted(&mut history, Message::user("and then?"));
+        history.push(Message::user("done"));
+        assert_eq!(history.len(), 3, "the prompt joined the results");
+
+        let (_, kept, _) = branch(std::slice::from_ref(&checkpoint), 0, &history).expect("branch");
+        assert_eq!(kept, before);
+        let (_, _, cut) = rewind(&mut vec![checkpoint], 0, &mut history).expect("rewind");
+        assert!(cut);
+        assert_eq!(history, before);
     }
 
     #[test]

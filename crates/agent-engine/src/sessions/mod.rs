@@ -49,6 +49,9 @@ pub trait Sessions: Send + Sync {
     fn save_for(&self, request: &PromptRequest, id: &SessionId, history: &[Message]) -> Result<(), String> {
         self.save(&scoped_id(request, id), history)
     }
+    fn save_compacted(&self, request: &PromptRequest, id: &SessionId, history: &[Message]) -> Result<(), String> {
+        self.save_for(request, id, history)
+    }
     fn load_checkpoints(&self, _request: &PromptRequest, _id: &SessionId) -> Result<Vec<Checkpoint>, String> {
         Ok(Vec::new())
     }

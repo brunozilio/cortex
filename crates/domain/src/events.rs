@@ -97,6 +97,7 @@ pub enum EngineEvent {
         effort: crate::Effort,
     },
     Notified(Vec<crate::inbox::Notice>),
+    Notice(String),
     Moved(std::path::PathBuf),
     Tasks(Vec<TaskItem>),
     Unsteered(Vec<String>),

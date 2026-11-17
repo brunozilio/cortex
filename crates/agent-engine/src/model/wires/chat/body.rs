@@ -85,3 +85,23 @@ fn assistant(message: &Message) -> Value {
     }
     turn
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_prompt_joined_to_interrupted_results_is_sent_as_the_results_then_one_user_message() {
+        let interrupted = Block::ToolResult { id: "t1".into(), content: "interrupted".into(), is_error: true };
+        let joined = Message { role: Role::User, blocks: vec![interrupted, Block::Text("Go on".into())] };
+        let mut sent = Vec::new();
+        user(&joined, &mut sent);
+        assert_eq!(
+            sent,
+            [
+                json!({ "role": "tool", "tool_call_id": "t1", "content": "Error: interrupted" }),
+                json!({ "role": "user", "content": "Go on" }),
+            ]
+        );
+    }
+}

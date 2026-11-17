@@ -123,6 +123,7 @@ impl Builder<'_> {
                 let text = notices.iter().map(|n| format!("{}: {}", n.source, n.text)).collect::<Vec<_>>().join("\n");
                 self.note(at, "notified", text)
             }
+            EngineEvent::Notice(text) => self.note(at, "notice", text),
             _ => {}
         }
     }

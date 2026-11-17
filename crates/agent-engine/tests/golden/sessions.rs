@@ -1,5 +1,5 @@
 use agent_engine::sessions::Sessions;
-use agent_engine::transcript::{Block, Message};
+use agent_engine::transcript::{Block, Message, Role};
 use domain::{SessionCommand, SessionId};
 use serde_json::json;
 
@@ -18,7 +18,8 @@ fn a_session_cut_between_a_call_and_its_result_resumes_with_the_call_closed_as_i
 
     stage.play("resumed prompt", &stage.resuming(&session, "Go on"));
 
-    assert_eq!(model.asked()[0].messages.len(), 4);
+    let roles: Vec<_> = model.asked()[0].messages.iter().map(|message| message.role).collect();
+    assert_eq!(roles, [Role::User, Role::Assistant, Role::User], "the roles alternate");
     stage.assert(
         r##"
         == as the crash left it: conversation ==
@@ -42,7 +43,6 @@ fn a_session_cut_between_a_call_and_its_result_resumes_with_the_call_closed_as_i
           tool_use t1 Read "{\"file_path\":\"notes.txt\"}"
         user:
           tool_result t1 failed "This tool call was interrupted before it ran."
-        user:
           text "Go on"
           reminder "# Runtime reminder\nEdits are allowed; commands and external actions still require approval.\nCollect background agent reports before completing. Use TaskStop to cancel…
         assistant:
@@ -53,9 +53,8 @@ fn a_session_cut_between_a_call_and_its_result_resumes_with_the_call_closed_as_i
         opened
         event Checkpoint
         event TextDelta
-        called model=claude-opus-5-5 stop=EndTurn messages=4
+        called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
         message user
         message assistant
         event Completed
@@ -112,8 +111,10 @@ fn a_rewind_restores_the_files_cuts_the_conversation_and_drops_later_checkpoints
         assistant:
           text "Written."
         == rewind to the second prompt: log appended ==
+        opened
         truncated keep=4
         event Rewound
+        event Completed
         == after the rewind: checkpoints ==
         0: prompt="Write the notes" history_len=0 files=[<project>/notes.txt]
         == files after the rewind ==
@@ -158,6 +159,10 @@ fn a_branch_starts_a_new_session_cut_before_the_prompt_and_leaves_the_original_a
         message assistant
         message user
         message assistant
+        event SessionStarted
+        opened
+        event Branched
+        event Completed
         == the branch: checkpoints ==
         0: prompt="Write the notes" history_len=0 files=[<project>/notes.txt]
         == the original: conversation ==

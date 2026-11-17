@@ -16,7 +16,7 @@ pub struct Control {
     no_prompts: bool,
     remembered: Mutex<Remembered>,
     asks: Mutex<HashMap<AskId, Sender<Decision>>>,
-    steered: Mutex<Vec<String>>,
+    steered: Arc<Mutex<Vec<String>>>,
     moving: Mutex<Option<crate::agent_runtime::Relocation>>,
     spawned: AtomicUsize,
     children: Mutex<Vec<Weak<Control>>>,
@@ -31,7 +31,7 @@ impl Control {
             no_prompts: false,
             remembered: Mutex::default(),
             asks: Mutex::default(),
-            steered: Mutex::default(),
+            steered: Arc::default(),
             moving: Mutex::default(),
             spawned: AtomicUsize::new(0),
             children: Mutex::default(),
@@ -42,11 +42,25 @@ impl Control {
         self.child_configured(None, false)
     }
     pub fn child_configured(&self, ceiling: Option<PermissionMode>, no_prompts: bool) -> Arc<Self> {
+        self.descendant(ceiling, no_prompts, Arc::default())
+    }
+
+    pub fn reconfigured(&self, ceiling: Option<PermissionMode>, no_prompts: bool) -> Arc<Self> {
+        self.descendant(ceiling, no_prompts, Arc::clone(&self.steered))
+    }
+
+    fn descendant(
+        &self,
+        ceiling: Option<PermissionMode>,
+        no_prompts: bool,
+        steered: Arc<Mutex<Vec<String>>>,
+    ) -> Arc<Self> {
         let mut children = self.children.locked();
         let child = Arc::new(Self {
             ceiling,
             no_prompts: self.no_prompts || no_prompts,
             remembered: Mutex::new(self.remembered()),
+            steered,
             ..Self::new(self.mode().capped(ceiling), Arc::default())
         });
         children.push(Arc::downgrade(&child));
@@ -225,5 +239,29 @@ mod child_policy_tests {
         assert_eq!(read_only.mode(), PermissionMode::Plan);
         parent.cancel();
         assert!(read_only.is_stopped() && inherited.is_stopped());
+    }
+
+    #[test]
+    fn a_reconfigured_control_hears_what_its_handle_is_told_and_a_sub_agent_does_not() {
+        let handle = Control::new(PermissionMode::Ask, Arc::default());
+        let run = handle.reconfigured(Some(PermissionMode::AcceptEdits), false);
+        let sub_agent = run.child();
+        handle.steer("also the tests".into());
+        assert!(sub_agent.take_steered().is_empty());
+        assert_eq!(run.take_steered(), ["also the tests"]);
+        assert!(handle.take_steered().is_empty());
+
+        let id = AskId("a".into());
+        let waiting = run.open(id.clone());
+        handle.answer(&id, Decision::Allow);
+        assert_eq!(waiting.recv(), Ok(Decision::Allow));
+
+        handle.set_mode(PermissionMode::Bypass);
+        assert_eq!(run.mode(), PermissionMode::AcceptEdits);
+        handle.set_mode(PermissionMode::Plan);
+        assert_eq!((run.mode(), sub_agent.mode()), (PermissionMode::Plan, PermissionMode::Plan));
+
+        handle.cancel();
+        assert!(run.is_stopped() && sub_agent.is_stopped());
     }
 }

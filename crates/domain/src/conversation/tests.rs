@@ -177,6 +177,28 @@ fn a_running_tool_shows_its_latest_line_until_its_result_comes() {
 }
 
 #[test]
+fn a_harness_notice_is_shown_as_a_notice_and_never_as_the_model_s_words() {
+    let mut transcript = Transcript::default();
+    transcript.apply(&EngineEvent::TextDelta("Created.".into()));
+    transcript.apply(&EngineEvent::Notice("Changes retained in worktree: /tmp/w".into()));
+    assert_eq!(
+        transcript.entries,
+        [Entry::Assistant("Created.".into()), Entry::Notice("Changes retained in worktree: /tmp/w".into())]
+    );
+}
+
+#[test]
+fn a_sub_agent_s_spend_counts_in_the_session_s_usage_but_not_in_the_main_context() {
+    let mut transcript = Transcript::default();
+    let call = |input: u64, output: u64| ModelUsage { model: "m".into(), input, output, ..ModelUsage::default() };
+    transcript.apply(&EngineEvent::Usage(call(1_000, 40)));
+    transcript.apply(&EngineEvent::AgentEvent { index: 0, event: Box::new(EngineEvent::Usage(call(300, 7))) });
+    assert_eq!(transcript.context, 1_000, "the context meter follows the main conversation only");
+    assert_eq!(transcript.written, 47);
+    assert_eq!((transcript.usage.models[0].input, transcript.usage.models[0].output), (1_300, 47));
+}
+
+#[test]
 fn a_compaction_keeps_how_much_it_freed() {
     let mut transcript = Transcript::default();
     let compaction = crate::Compaction { before: 19_875, after: 4_917, ..crate::Compaction::default() };

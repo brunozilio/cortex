@@ -15,6 +15,7 @@ mod plugins;
 mod prompt_hooks;
 mod runs;
 mod scripts;
+mod session_hold;
 mod sessions;
 mod stable_prompt;
 mod steering;

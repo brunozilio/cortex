@@ -29,14 +29,27 @@ fn the_kept_tail_starts_where_a_call_and_its_result_stay_together() {
 }
 
 #[test]
+fn the_first_prompt_s_tool_exchange_is_kept_as_a_later_prompt_s_is() {
+    let exchange = [call("1", "Read", json!({})), result("1", "short")];
+    let mut new_session = vec![Message::user(format!("first prompt {}", "x".repeat(4000)))];
+    new_session.extend(exchange.clone());
+    assert_eq!(split(&new_session, 100), Some(1), "only the prompt is summarized");
+
+    let mut resumed = vec![Message::user("hi"), Message::assistant(vec![Block::Text("hello".into())])];
+    resumed.extend(new_session);
+    assert_eq!(split(&resumed, 100), Some(3));
+}
+
+#[test]
 fn a_kept_tail_may_start_at_the_user_s_prompt() {
     let history = vec![
         Message::user("first"),
-        Message::assistant(vec![Block::Text("ok".into())]),
+        Message::assistant(vec![Block::Text(format!("ok {}", "x".repeat(4000)))]),
         Message::user("second"),
         Message::assistant(vec![Block::Text("sure".into())]),
     ];
-    assert_eq!(split(&history, 10_000), Some(2));
+    assert_eq!(split(&history, 100), Some(2));
+    assert_eq!(split(&history, 10_000), Some(1), "when all of it fits, only the first prompt is summarized");
 }
 
 #[test]

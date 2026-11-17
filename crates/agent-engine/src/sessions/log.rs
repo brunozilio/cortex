@@ -47,6 +47,10 @@ pub(super) fn changes(kept: &[Message], history: &[Message]) -> Vec<Entry> {
     if kept.starts_with(history) {
         return vec![Entry::Truncated { keep: history.len() }];
     }
+    restarted(history)
+}
+
+pub(super) fn restarted(history: &[Message]) -> Vec<Entry> {
     std::iter::once(Entry::Restarted).chain(history.iter().cloned().map(Entry::Message)).collect()
 }
 

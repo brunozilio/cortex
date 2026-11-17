@@ -34,9 +34,10 @@ use crate::control::Control;
 use crate::model::{Delta, ModelApi, ModelError, ToolSpec, TurnRequest};
 use crate::tools::subagent::FoundAgent;
 use crate::tools::{Tool, Workspace};
-use crate::transcript::{Block, Message, Role, StopReason, Usage};
+use crate::transcript::{Block, Message, Role, StopReason, Usage, replied, told};
 
 pub const MAX_TURNS: usize = 200;
+const BACKGROUND_REPORTS: &str = "Background agents completed. Incorporate their reports into your answer:";
 const SHOWN_OUTPUT: usize = 64_000;
 
 #[derive(Debug, PartialEq)]
@@ -147,10 +148,10 @@ impl Agent<'_> {
             reminders.deliver(self.runtime_reminder(used, threshold, reminders.quiet_tasks()), history);
             let mut request = TurnRequest { messages: history.clone(), ..self.turn_template(fell_back.as_ref()) };
             self.intercept_request(&mut request, &rejections)?;
-            let holds_text = self.holds_text();
+            let (holds_text, mut shown) = (self.holds_text(), String::new());
             let mut on = |delta: Delta| match delta {
                 Delta::Text(_) if holds_text => {}
-                Delta::Text(text) => (self.emit)(EngineEvent::TextDelta(text)),
+                Delta::Text(text) => (self.emit)(EngineEvent::TextDelta(cutoffs::streamed(&mut shown, text))),
                 Delta::Thinking(text) => (self.emit)(EngineEvent::ThinkingDelta(text)),
                 Delta::ToolInput { name, piece } => (self.emit)(EngineEvent::ToolInputDelta { name, piece }),
                 Delta::Searching { id, query } => {
@@ -167,7 +168,7 @@ impl Agent<'_> {
                     fallback.succeeded();
                     reply
                 }
-                Err(ModelError::Cancelled) => return Err(Ending::Cancelled),
+                Err(ModelError::Cancelled) => return Err(cutoffs::interrupted(history, &shown)),
                 Err(ModelError::TooLong(_)) if recoveries < 2 => {
                     recoveries += 1;
                     let template = self.turn_template(fell_back.as_ref());
@@ -206,15 +207,15 @@ impl Agent<'_> {
                 safety.observe(history);
             }
             self.workspace.tracking.hear(egress::heard(history));
-            history.push(reply.message);
+            let said = replied(history, reply.message);
             counted.observe(reply.usage, history.len());
             if reply.stop != StopReason::MaxTokens {
                 cutoffs.answered();
             }
             match reply.stop {
                 StopReason::MaxTokens if calls.is_empty() => {
-                    let continuation = cutoffs.continuation(history.last().unwrap_or(&Message::user("")))?;
-                    history.push(continuation);
+                    let continuation = cutoffs.continuation(history.last().filter(|_| said))?;
+                    told(history, continuation);
                     continue;
                 }
                 StopReason::Refusal => return Err(Ending::Refused),
@@ -222,7 +223,7 @@ impl Agent<'_> {
                 _ if calls.is_empty() => {
                     let steered = self.steered();
                     if !steered.is_empty() && !self.control.is_stopped() {
-                        history.push(Message { role: Role::User, blocks: steered });
+                        told(history, Message { role: Role::User, blocks: steered });
                         continue;
                     }
                     let pending: Vec<_> =
@@ -237,36 +238,34 @@ impl Agent<'_> {
                         }
                     }
                     if !reports.is_empty() && !self.control.is_stopped() {
-                        history.push(Message::user(format!(
-                            "Background agents completed. Incorporate their reports into your answer:\n{}",
-                            reports.join("\n\n")
-                        )));
+                        let reports = reports.join("\n\n");
+                        told(history, Message::user(format!("{BACKGROUND_REPORTS}\n{reports}")));
                         continue;
                     }
                     if self.control.is_stopped() {
                         return Err(Ending::Cancelled);
                     }
                     if self.tools.iter().any(|t| t.spec().name == "StructuredOutput") && !structured {
-                        history.push(cutoffs.structured_nudge()?);
+                        told(history, cutoffs.structured_nudge()?);
                         continue;
                     }
                     let event = if self.depth > 0 { "SubagentStop" } else { "Stop" };
                     let hook = self.workspace.hooks.run_with_model(
                         event, &self.workspace.agent_name,
-                        json!({"last_assistant_message":history.last().map(Message::text),"stop_hook_active":stop_hook_active}),
+                        json!({"last_assistant_message":history.last().filter(|_| said).map(Message::text),"stop_hook_active":stop_hook_active}),
                         self.workspace,Some((self.api,&self.request)),
                     ).map_err(|e|Ending::Failed(ModelError::Provider(e)))?;
                     match hook.blocked.map(|reason| cutoffs.stop_blocked(event, &reason, &hook.context)) {
                         Some(Ok(blocked)) => {
                             stop_hook_active = true;
-                            history.push(blocked);
+                            told(history, blocked);
                             continue;
                         }
-                        Some(Err(notice)) => (self.emit)(EngineEvent::TextDelta(notice)),
+                        Some(Err(notice)) => (self.emit)(EngineEvent::Notice(notice)),
                         None => cutoffs.stop_allowed(),
                     }
                     if let Some(feedback) = self.reviewed(prompt.run(history), &mut attempts)? {
-                        history.push(feedback);
+                        told(history, feedback);
                         continue;
                     }
                     return Ok(usage);

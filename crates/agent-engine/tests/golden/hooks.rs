@@ -48,7 +48,7 @@ fn a_pre_tool_use_hook_that_exits_2_blocks_the_call_and_the_model_reads_why() {
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         ToolStarted r1 Read "notes.txt" input="{\"file_path\":\"notes.txt\"}"
         ToolFinished r1
-        ToolResult r1 failed "Hook blocked Read: reading is off today\n"
+        ToolResult r1 failed "Hook blocked Read: reading is off today"
         Text "I could not read it."
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         Completed duration=<ms> cost=none
@@ -59,7 +59,7 @@ fn a_pre_tool_use_hook_that_exits_2_blocks_the_call_and_the_model_reads_why() {
         assistant:
           tool_use r1 Read "{\"file_path\":\"notes.txt\"}"
         user:
-          tool_result r1 failed "Hook blocked Read: reading is off today\n"
+          tool_result r1 failed "Hook blocked Read: reading is off today"
         assistant:
           text "I could not read it."
         == prompt: log appended ==
@@ -93,7 +93,7 @@ fn a_user_prompt_submit_hook_adds_its_output_to_the_prompt_as_context() {
     stage.play("prompt", &stage.request("Format the file"));
 
     let sent = model.asked()[0].messages.last().map(|message| message.text()).unwrap_or_default();
-    assert_eq!(sent, "Format the fileTeam convention: tabs.\n", "the context is a text block after the prompt");
+    assert_eq!(sent, "Format the fileTeam convention: tabs.", "the context is a text block after the prompt");
     stage.assert(
         r##"
         == prompt: events ==
@@ -105,7 +105,7 @@ fn a_user_prompt_submit_hook_adds_its_output_to_the_prompt_as_context() {
         == prompt: conversation ==
         user:
           text "Format the file"
-          text "Team convention: tabs.\n"
+          text "Team convention: tabs."
           reminder "# Runtime reminder\nEdits are allowed; commands and external actions still require approval.\nCollect background agent reports before completing. Use TaskStop to cancel…
         assistant:
           text "Noted."

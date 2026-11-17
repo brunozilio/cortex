@@ -1,31 +1,49 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 
 pub fn today() -> String {
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or_default();
-    civil(secs / 86_400)
+    let now = Local::now();
+    date_at(now.with_timezone(&Utc), now.offset().fix())
 }
 
-fn civil(days: u64) -> String {
-    let z = days as i64 + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02}")
+pub fn date_at(instant: DateTime<Utc>, offset: FixedOffset) -> String {
+    instant.with_timezone(&offset).format("%Y-%m-%d").to_string()
 }
 
 #[cfg(test)]
 mod tests {
+    use chrono::TimeZone;
+
     use super::*;
 
+    fn hours(east: i32) -> FixedOffset {
+        FixedOffset::east_opt(east * 3600).expect("an offset within a day")
+    }
+
     #[test]
-    fn dates_from_days() {
-        assert_eq!(civil(0), "1970-01-01");
-        assert_eq!(civil(20_761), "2026-11-04");
-        assert_eq!(civil(11_016), "2000-02-29");
+    fn the_date_is_the_one_on_the_user_s_clock_not_the_utc_one() {
+        let early_utc_morning = Utc.with_ymd_and_hms(2026, 11, 5, 3, 30, 0).single().expect("an instant");
+        assert_eq!(date_at(early_utc_morning, hours(0)), "2026-11-05");
+        assert_eq!(date_at(early_utc_morning, hours(-8)), "2026-11-04", "still the evening before, west of UTC");
+        assert_eq!(date_at(early_utc_morning, hours(9)), "2026-11-05");
+
+        let late_utc_evening = Utc.with_ymd_and_hms(2026, 12, 31, 22, 0, 0).single().expect("an instant");
+        assert_eq!(date_at(late_utc_evening, hours(2)), "2027-01-01", "already tomorrow, east of UTC");
+        assert_eq!(date_at(late_utc_evening, hours(-5)), "2026-12-31");
+    }
+
+    #[test]
+    fn dates_are_written_year_month_day_with_leading_zeros() {
+        let leap_day = Utc.with_ymd_and_hms(2000, 2, 29, 12, 0, 0).single().expect("an instant");
+        assert_eq!(date_at(leap_day, hours(0)), "2000-02-29");
+        let epoch = Utc.timestamp_opt(0, 0).single().expect("an instant");
+        assert_eq!(date_at(epoch, hours(0)), "1970-01-01");
+    }
+
+    #[test]
+    fn today_is_the_local_date_of_now() {
+        let now = Local::now();
+        let around = [now.format("%Y-%m-%d").to_string(), today()];
+        assert!(around.contains(&today()), "{around:?}");
+        assert_eq!(today().len(), 10);
     }
 }

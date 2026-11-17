@@ -29,12 +29,12 @@ fn a_sub_agent_s_events_are_wrapped_between_its_spawn_and_its_report_to_the_pare
         ToolStarted a1 Agent "Read the notes" input="{\"description\":\"Read the notes\",\"prompt\":\"Read notes.txt and report what it says\"}"
         AgentSpawned #0 kind=general-purpose summary="Read the notes" prompt="Read notes.txt and report what it says"
         AgentUpdate #0 Running(0) summary=None
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Agent #0 | Usage model=claude-opus-5-5 input=10 output=5 cost=none
         Agent #0 | ToolStarted r1 Read "notes.txt" input="{\"file_path\":\"notes.txt\"}"
         Agent #0 | ToolFinished r1
         Agent #0 | ToolResult r1 ok "     1\talpha\n"
         Agent #0 | Text "The notes say alpha."
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Agent #0 | Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentUpdate #0 Done(<seconds>) summary=Some("Read the notes")
         ToolFinished a1
         ToolResult a1 ok "The notes say alpha.\n\nagent_id: agent-1 (SendMessage continues it)"
@@ -114,14 +114,14 @@ fn a_background_sub_agent_is_collected_before_the_run_completes() {
         [agent #0 lane]
         AgentSpawned #0 kind=general-purpose summary="Read the notes" prompt="Read notes.txt and report what it says"
         AgentUpdate #0 Running(0) summary=None
+        Usage model=claude-opus-5-5 input=10 output=5 cost=none
         ToolStarted r1 Read "notes.txt" input="{\"file_path\":\"notes.txt\"}"
         ToolFinished r1
         ToolResult r1 ok "     1\talpha\n"
         Text "The notes say alpha."
+        Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentUpdate #0 Done(<seconds>) summary=Some("Read the notes")
-        [usage, emitted unwrapped by every lane]
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        [main lane usage]
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         Usage model=claude-opus-5-5 input=10 output=5 cost=none

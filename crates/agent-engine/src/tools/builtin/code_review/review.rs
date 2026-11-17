@@ -78,7 +78,7 @@ fn reviewed(agent: &Agent<'_>, brief: &str) -> Result<Vec<domain::review::Findin
         turn_limit: REVIEW_TURNS,
     };
     let mut history = vec![Message::user(brief)];
-    let found = match reviewer.run(&mut history) {
+    let found = match crate::agent::current::within(index, || reviewer.run(&mut history)) {
         Ok(_) => {
             let reply = history.iter().rev().find(|message| message.role == Role::Assistant).map(Message::text);
             parse(&reply.unwrap_or_default())

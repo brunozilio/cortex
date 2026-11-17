@@ -183,27 +183,20 @@ fn a_provider_error_that_cannot_be_retried_fails_the_run_and_keeps_the_prompt() 
 }
 
 #[test]
-fn a_run_without_an_account_is_diagnosed_as_not_logged_in_and_saves_no_message() {
+fn a_run_without_an_account_is_diagnosed_as_not_logged_in_and_creates_no_session() {
     let stage = Stage::new();
 
     stage.play("prompt", &stage.request("hi"));
+    let kept = std::fs::read_dir(&stage.store).expect("the store").flatten();
+    stage.note("files in the session store", kept.map(|file| file.file_name().to_string_lossy().into_owned()));
 
     stage.assert(
         r##"
         == prompt: events ==
-        SessionStarted <session-1>
         Diagnosed(NotLoggedIn)
         Failure(Other)
         Failed("not signed in: no account connected")
-        == prompt: conversation ==
-        (empty)
-        == prompt: log appended ==
-        prompted "hi"
-        event SessionStarted
-        opened
-        event Diagnosed
-        event Failure
-        event Failed
+        == files in the session store ==
         "##,
     );
 }

@@ -181,6 +181,7 @@ impl Agent<'_> {
             | EngineEvent::ToolStarted(_)
             | EngineEvent::ToolFinished { .. }
             | EngineEvent::ToolResult { .. }
+            | EngineEvent::Notice(_)
             | EngineEvent::Asked(_) => {
                 match &event {
                     EngineEvent::TextDelta(text) => saying.locked().push_str(text),
@@ -191,6 +192,7 @@ impl Agent<'_> {
                 (self.emit)(EngineEvent::AgentEvent { index, event: Box::new(event) });
                 asked.into_iter().for_each(self.emit);
             }
+            EngineEvent::Answered { .. } => (self.emit)(event),
             _ => {}
         };
         let started = std::time::Instant::now();

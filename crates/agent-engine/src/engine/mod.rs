@@ -8,6 +8,7 @@ mod report;
 mod rewind;
 pub(crate) mod roles;
 mod sent;
+mod session;
 mod small_model;
 mod snapshot;
 
@@ -91,6 +92,7 @@ impl AgentEngine for NativeEngine {
             control: Arc::clone(&control),
             gate: gate.clone(),
             recorder: None,
+            held: Arc::default(),
         };
         let panic_gate = gate.clone();
         let panic_control = control.clone();

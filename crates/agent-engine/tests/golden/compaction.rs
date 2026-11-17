@@ -11,13 +11,18 @@ fn small_window(stage: &Stage, prompt: &str) -> domain::PromptRequest {
     request
 }
 
+fn a_prompt_many_times_its_tool_exchange() -> String {
+    format!("Read the notes in notes.txt and tell me what they say.{}", " Leave nothing out.".repeat(60))
+}
+
 fn reads_with_a_nearly_full_window() -> crate::models::Scripted {
     let read = Block::ToolUse { id: "r1".into(), name: "Read".into(), input: json!({"file_path": "notes.txt"}) };
     measuring(vec![read], 95_000)
 }
 
 #[test]
-fn a_nearly_full_context_window_is_compacted_mid_run_in_a_new_session() {
+fn a_nearly_full_context_window_is_compacted_mid_run_in_a_new_session_keeping_the_tool_exchange_and_restarting_the_log()
+{
     let stage = Stage::new();
     stage.file("notes.txt", "alpha\nbeta\n");
     let model = stage.script([
@@ -26,7 +31,7 @@ fn a_nearly_full_context_window_is_compacted_mid_run_in_a_new_session() {
         says("Done."),
     ]);
 
-    stage.play("prompt", &small_window(&stage, "Read the notes"));
+    stage.play("prompt", &small_window(&stage, &a_prompt_many_times_its_tool_exchange()));
 
     assert_eq!(model.asked().len(), 3);
     stage.assert(
@@ -45,13 +50,17 @@ fn a_nearly_full_context_window_is_compacted_mid_run_in_a_new_session() {
         Completed duration=<ms> cost=none
         == prompt: conversation ==
         user:
-          text "This session continues an earlier conversation, compacted into this summary:\n\nThe user asked to read the notes; they say alpha and beta."
+          text "This session continues an earlier conversation, compacted into this summary:\n\nThe user asked to read the notes; they say alpha and beta.\n\nThe messages after this summar…
           text "If you need specific details from before compaction (exact code, error messages, or content you wrote), read the full transcript at: <tmp>/<brand>-tool-results/<session-1>/…
+        assistant:
+          tool_use r1 Read "{\"file_path\":\"notes.txt\"}"
+        user:
+          tool_result r1 ok "     1\talpha\n     2\tbeta\n"
           reminder "# Runtime reminder\nEdits are allowed; commands and external actions still require approval.\nCollect background agent reports before completing. Use TaskStop to cancel…
         assistant:
           text "Done."
         == prompt: log appended ==
-        prompted "Read the notes"
+        prompted "Read the notes in notes.txt and tell me what they say. Leave nothing out. Leave nothing out. Leave nothing out. Leave nothing out. Leave nothing out. Leave nothing out. L…
         event SessionStarted
         opened
         event Checkpoint
@@ -60,12 +69,15 @@ fn a_nearly_full_context_window_is_compacted_mid_run_in_a_new_session() {
         event ToolStarted r1
         event ToolFinished r1
         event ToolResult r1
-        called model=claude-opus-5-5 stop=EndTurn messages=4
+        called model=claude-opus-5-5 stop=EndTurn messages=2
         event Usage
         event Compacted
         event TextDelta
-        called model=claude-opus-5-5 stop=EndTurn messages=1
+        called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
+        restarted
+        message user
+        message assistant
         message user
         message assistant
         event Completed

@@ -72,7 +72,7 @@ pub fn lanes(events: &[EngineEvent]) -> Vec<String> {
         lines.push(format!("[agent #{index} lane]"));
         lines.extend(self::events(&lane));
     }
-    lines.push("[usage, emitted unwrapped by every lane]".to_owned());
+    lines.push("[main lane usage]".to_owned());
     lines.extend(self::events(&usage));
     lines
 }

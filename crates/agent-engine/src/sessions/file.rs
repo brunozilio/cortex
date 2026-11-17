@@ -170,6 +170,9 @@ impl Sessions for FileSessions {
         let kept = self.conversation(id)?.unwrap_or_default();
         self.append(id, &log::changes(&kept, history))
     }
+    fn save_compacted(&self, request: &PromptRequest, id: &SessionId, history: &[Message]) -> Result<(), String> {
+        self.append(&scoped_id(request, id), &log::restarted(history))
+    }
     fn record(&self, request: &PromptRequest, id: &SessionId, entry: &Entry) -> Result<(), String> {
         self.append(&scoped_id(request, id), std::slice::from_ref(entry))
     }

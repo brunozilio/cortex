@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::trace::{ModelCall, RunInfo};
 use domain::{EngineEvent, PromptRequest, SessionId};
+use platform::sync::Locked;
 
-use crate::boundary::Observer;
+use crate::boundary::RunGate;
 use crate::meter::Calls;
 use crate::model::{Reply, TurnRequest};
 use crate::sessions::{Entry, Sessions};
@@ -18,10 +20,24 @@ pub(super) struct Recorder {
     held: Mutex<Option<(u64, EngineEvent)>>,
     seen: Mutex<HashSet<String>>,
     conversations: Mutex<super::sent::Conversations>,
+    waiting: Mutex<Option<Vec<Entry>>>,
+    started: AtomicBool,
+    compacted: AtomicBool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Session {
+    Kept,
+    NotYetCreated,
 }
 
 impl Recorder {
-    pub(super) fn start(sessions: Arc<dyn Sessions>, request: &PromptRequest, session: &SessionId) -> Arc<Self> {
+    pub(super) fn start(
+        sessions: Arc<dyn Sessions>,
+        request: &PromptRequest,
+        session: &SessionId,
+        state: Session,
+    ) -> Arc<Self> {
         let recorder = Recorder {
             sessions,
             request: request.clone(),
@@ -29,6 +45,9 @@ impl Recorder {
             held: Mutex::new(None),
             seen: Mutex::default(),
             conversations: Mutex::default(),
+            waiting: Mutex::new((state == Session::NotYetCreated).then(Vec::new)),
+            started: AtomicBool::new(false),
+            compacted: AtomicBool::new(false),
         };
         if request.command.is_none() {
             if let Some(shown) = &request.shown {
@@ -37,11 +56,6 @@ impl Recorder {
             recorder.write(Entry::Prompted { at_ms: now(), prompt: request.prompt.clone() });
         }
         Arc::new(recorder)
-    }
-
-    pub(super) fn observer(self: &Arc<Self>) -> Observer {
-        let recorder = Arc::clone(self);
-        Arc::new(move |event: &EngineEvent| recorder.see(event))
     }
 
     pub(super) fn calls(self: &Arc<Self>) -> Calls {
@@ -83,25 +97,33 @@ impl Recorder {
             added: delta.map(|delta| delta.added),
             reply: serde_json::to_value(&reply.message).ok(),
         };
-        let Ok(mut held) = self.held.lock() else { return };
-        if let Some((at_ms, event)) = held.take() {
-            self.write(Entry::Event { at_ms, event });
-        }
+        self.flush();
         self.write(Entry::Called { at_ms: now(), agent, call });
     }
 
     pub(super) fn opened(&self, run: RunInfo) {
+        self.flush();
         self.write(Entry::Opened { at_ms: now(), run });
     }
 
-    fn see(&self, event: &EngineEvent) {
+    pub(super) fn flush(&self) {
+        let streamed = self.held.locked().take();
+        if let Some((at_ms, event)) = streamed {
+            self.write(Entry::Event { at_ms, event });
+        }
+    }
+
+    pub(super) fn see(&self, event: &EngineEvent) {
         if event.is_partial_input() {
             return;
         }
-        if let (EngineEvent::Usage(_), Some(index)) = (event, crate::agent::current::agent()) {
-            return self.see(&EngineEvent::AgentEvent { index, event: Box::new(event.clone()) });
+        if matches!(event, EngineEvent::SessionStarted(_)) && self.started.swap(false, Ordering::SeqCst) {
+            return;
         }
-        let Ok(mut held) = self.held.lock() else { return };
+        if matches!(event, EngineEvent::Compacted(_)) {
+            self.compacted.store(true, Ordering::SeqCst);
+        }
+        let mut held = self.held.locked();
         if let Some((_, streaming)) = held.as_mut()
             && streaming.absorb(event)
         {
@@ -117,8 +139,35 @@ impl Recorder {
         }
     }
 
+    pub(super) fn compacted(&self) -> bool {
+        self.compacted.swap(false, Ordering::SeqCst)
+    }
+
+    pub(super) fn starts_unannounced(&self) {
+        self.write(Entry::Event { at_ms: now(), event: EngineEvent::SessionStarted(self.session.clone()) });
+        self.started.store(true, Ordering::SeqCst);
+    }
+
+    pub(super) fn announce(&self, gate: &RunGate) {
+        let Some(entries) = self.created() else { return };
+        entries.iter().for_each(|entry| self.keep(entry));
+        gate.emit(EngineEvent::SessionStarted(self.session.clone()));
+    }
+
+    fn created(&self) -> Option<Vec<Entry>> {
+        self.waiting.locked().take()
+    }
+
     fn write(&self, entry: Entry) {
-        if let Err(error) = self.sessions.record(&self.request, &self.session, &entry) {
+        let mut waiting = self.waiting.locked();
+        match waiting.as_mut() {
+            Some(waiting) => waiting.push(entry),
+            None => self.keep(&entry),
+        }
+    }
+
+    fn keep(&self, entry: &Entry) {
+        if let Err(error) = self.sessions.record(&self.request, &self.session, entry) {
             tracing::warn!(%error, "an event of this run was not kept in its session");
         }
     }

@@ -160,6 +160,11 @@ fn asks_the_user_questions_on_the_card_even_while_planning() {
         _ => None,
     });
     assert!(matches!(asked, Some(AskKind::Questions(ref q)) if q[0].options[1].label == "Postgres"), "{asked:?}");
+    let answered = rig.events().into_iter().find_map(|event| match event {
+        EngineEvent::Answered { decision, .. } => Some(decision),
+        _ => None,
+    });
+    assert_eq!(answered, Some(Decision::Answer(vec![vec![1]])), "the answer is an event, as a permission's is");
     let result = history.iter().flat_map(|m| &m.blocks).find_map(|block| match block {
         Block::ToolResult { content, is_error: false, .. } => Some(content.clone()),
         _ => None,

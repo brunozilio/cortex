@@ -53,10 +53,10 @@ fn a_main_agent_isolated_in_a_worktree_writes_there_and_the_worktree_is_retained
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentSpawned #0 kind=review summary="Reviewing the changes" prompt="# Task\nCreate the work file\n\n# Changed files\n- work.txt"
         AgentUpdate #0 Running(0) summary=None
-        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Agent #0 | Usage model=claude-opus-5-5 input=10 output=5 cost=none
         AgentUpdate #0 Done(<seconds>) summary=Some("0 findings")
         Reviewed([])
-        Text "\nChanges retained in worktree: <project>/.<brand>/worktrees/<uuid>"
+        Notice("Changes retained in worktree: <project>/.<brand>/worktrees/<uuid>")
         Completed duration=<ms> cost=none
         == prompt: conversation ==
         user:
@@ -84,15 +84,15 @@ fn a_main_agent_isolated_in_a_worktree_writes_there_and_the_worktree_is_retained
         event Usage
         event AgentSpawned
         event AgentUpdate
-        called model=claude-opus-5-5 stop=EndTurn messages=1
-        event Usage
+        called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
+        event Agent #0 | Usage
         event AgentUpdate
         event Reviewed
+        event Notice
         message user
         message assistant
         message user
         message assistant
-        event TextDelta
         event Completed
         == files ==
         work.txt in the project: false

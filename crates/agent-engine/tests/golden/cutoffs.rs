@@ -185,8 +185,6 @@ fn a_reply_cut_while_still_thinking_gets_the_briefer_reasoning_nudge() {
         user:
           text "Think hard"
           reminder "# Runtime reminder\nEdits are allowed; commands and external actions still require approval.\nCollect background agent reports before completing. Use TaskStop to cancel…
-        assistant:
-        user:
           text "Your output reached its token limit while you were still thinking, before any answer. Reason much more briefly and get to the answer or the next tool call."
         assistant:
           text "Short answer."
@@ -198,12 +196,46 @@ fn a_reply_cut_while_still_thinking_gets_the_briefer_reasoning_nudge() {
         called model=claude-opus-5-5 stop=MaxTokens messages=1
         event Usage
         event TextDelta
-        called model=claude-opus-5-5 stop=EndTurn messages=3
+        called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
         message user
         message assistant
+        event Completed
+        "##,
+    );
+}
+
+#[test]
+fn a_reply_that_is_empty_twice_ends_the_run_and_saves_no_assistant_message() {
+    let stage = Stage::new();
+    let empty = || stopping(Vec::new(), StopReason::EndTurn);
+    let model = stage.script([empty(), empty(), says("never asked")]);
+
+    stage.play("prompt", &stage.request("Say something"));
+
+    assert_eq!(model.asked().len(), 2, "an empty reply is asked for once more, then accepted");
+    stage.assert(
+        r##"
+        == prompt: events ==
+        SessionStarted <session-1>
+        Checkpoint(0)
+        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Usage model=claude-opus-5-5 input=10 output=5 cost=none
+        Completed duration=<ms> cost=none
+        == prompt: conversation ==
+        user:
+          text "Say something"
+          reminder "# Runtime reminder\nEdits are allowed; commands and external actions still require approval.\nCollect background agent reports before completing. Use TaskStop to cancel…
+        == prompt: log appended ==
+        prompted "Say something"
+        event SessionStarted
+        opened
+        event Checkpoint
+        called model=claude-opus-5-5 stop=EndTurn messages=1
+        event Usage
+        called model=claude-opus-5-5 stop=EndTurn messages=1
+        event Usage
         message user
-        message assistant
         event Completed
         "##,
     );

@@ -5,7 +5,7 @@ use crate::models::{Gated, call, says};
 use crate::stage::{PATIENCE, Stage};
 
 #[test]
-fn cancelling_while_the_model_streams_ends_in_cancelled_and_keeps_only_the_prompt() {
+fn cancelling_while_the_model_streams_ends_in_cancelled_and_keeps_what_was_said_marked_as_interrupted() {
     let stage = Stage::new();
     let (model, gate) = Gated::streaming("Partial ans");
     stage.model(model);
@@ -27,13 +27,17 @@ fn cancelling_while_the_model_streams_ends_in_cancelled_and_keeps_only_the_promp
         user:
           text "Tell me a story"
           reminder "# Runtime reminder\nEdits are allowed; commands and external actions still require approval.\nCollect background agent reports before completing. Use TaskStop to cancel…
+        assistant:
+          text "Partial ans"
+          text "\n\n[interrupted by the user]"
         == prompt: log appended ==
         prompted "Tell me a story"
         event SessionStarted
         opened
         event Checkpoint
-        message user
         event TextDelta
+        message user
+        message assistant
         event Cancelled
         "##,
     );
