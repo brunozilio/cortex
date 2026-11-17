@@ -3,7 +3,8 @@ use std::collections::HashMap;
 #[cfg(any(test, feature = "test-support"))]
 use std::sync::Mutex;
 
-use domain::{Principal, PromptRequest, SessionId};
+use domain::legacy::LEGACY_OWNER_TAG;
+use domain::{PromptRequest, SessionId};
 use sha2::{Digest, Sha256};
 
 use crate::checkpoints::Checkpoint;
@@ -69,8 +70,7 @@ pub trait Sessions: Send + Sync {
 
 fn scoped_id(request: &PromptRequest, id: &SessionId) -> SessionId {
     let cwd = request.cwd.canonicalize().unwrap_or_else(|_| request.cwd.clone());
-    let owner = request.credentials.owner.as_ref().unwrap_or(&Principal::LocalOwner);
-    let scope = (owner, cwd.to_string_lossy(), id);
+    let scope = (LEGACY_OWNER_TAG, cwd.to_string_lossy(), id);
     let bytes = serde_json::to_vec(&scope).unwrap_or_else(|_| format!("{scope:?}").into_bytes());
     SessionId(format!("{:x}", Sha256::digest(bytes)))
 }
@@ -162,9 +162,20 @@ mod scope_tests {
         let dir = std::env::temp_dir();
         let id = SessionId("s".into());
         let canonical = dir.canonicalize().unwrap_or_else(|_| dir.clone());
-        let saved = serde_json::to_vec(&(&Principal::LocalOwner, &canonical, &id)).unwrap_or_default();
+        let saved = serde_json::to_vec(&("LocalOwner", &canonical, &id)).unwrap_or_default();
         let expected = SessionId(format!("{:x}", Sha256::digest(saved)));
         assert_eq!(scoped_id(&request(dir), &id), expected);
+    }
+
+    #[test]
+    fn a_session_saved_before_the_owner_was_removed_keeps_its_file_name() {
+        const KEPT_AS: &str = "4ba81e1fb4259d80e1a25cbef34478b60acc9b4ba1bb667f76c1fea65b3d584b";
+        let cwd = std::path::PathBuf::from("/anchor-never-there/project");
+        let id = SessionId("anchor-session".into());
+        assert_eq!(scoped_id(&request(cwd.clone()), &id).0, KEPT_AS);
+        let dir = tempfile::tempdir().expect("dir");
+        FileSessions::new(dir.path()).save_for(&request(cwd), &id, &[]).expect("save");
+        assert!(dir.path().join(format!("{KEPT_AS}.jsonl")).is_file());
     }
 
     #[cfg(unix)]

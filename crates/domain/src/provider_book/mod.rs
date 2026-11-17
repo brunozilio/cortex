@@ -106,17 +106,6 @@ impl ProviderBook {
         self.accounts.remove(&provider).unwrap_or_default()
     }
 
-    pub fn over(&self, shared: &ProviderBook) -> ProviderBook {
-        let mut book = shared.clone();
-        for (provider, all) in &self.accounts {
-            book.accounts.insert(*provider, all.clone());
-            book.active.remove(provider);
-        }
-        book.active.extend(self.active.clone());
-        book.balance.extend(self.balance.clone());
-        book
-    }
-
     pub fn summaries(&self, known: impl IntoIterator<Item = ProviderInfo>) -> Vec<ProviderSummary> {
         known
             .into_iter()

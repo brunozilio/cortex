@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 use platform::sync::Locked;
 
 use agent_engine::model::http::Http;
+use domain::SecretId;
 use domain::credentials::{McpSignIns, McpTokenSource};
 use domain::mcp_oauth::{self, AuthServer, Authorize, McpTokens};
-use domain::{Principal, SecretId};
 use serde_json::{Value, json};
 
 use crate::providers::redirect::Loopback;
@@ -39,8 +39,9 @@ impl McpAuth {
         Self { secrets, http, clock, lock: Arc::default() }
     }
 
-    pub fn system() -> Self {
-        Self::new(crate::secrets::system_secrets(), Arc::new(agent_engine::model::http::NetHttp))
+    pub fn with_secrets(mut self, secrets: Arc<dyn SecretStore>) -> Self {
+        self.secrets = secrets;
+        self
     }
 
     #[cfg(test)]
@@ -49,12 +50,12 @@ impl McpAuth {
         self
     }
 
-    pub fn for_run(&self, owner: &Principal) -> McpSignIns {
-        McpSignIns(Arc::new(RunTokens { auth: self.clone(), owner: owner.clone() }))
+    pub fn for_run(&self) -> McpSignIns {
+        McpSignIns(Arc::new(RunTokens { auth: self.clone() }))
     }
 
-    pub fn sign_in(&self, owner: &Principal, server: &str, open: &mut dyn FnMut(&str)) -> Result<(), String> {
-        self.can_keep(owner)?;
+    pub fn sign_in(&self, server: &str, open: &mut dyn FnMut(&str)) -> Result<(), String> {
+        self.can_keep()?;
         let auth = self.auth_server(server)?;
         let loopback = Loopback::bind_on(0, "/callback", false).map_err(|e| e.to_string())?;
         let redirect = loopback.redirect_uri();
@@ -96,20 +97,20 @@ impl McpAuth {
         };
         let tokens = blank.answered(&answer, (self.clock)())?;
         let _guard = self.lock.locked();
-        self.save(owner, server, Some(&tokens))
+        self.save(server, Some(&tokens))
     }
 
-    pub fn sign_out(&self, owner: &Principal, server: &str) -> Result<bool, String> {
+    pub fn sign_out(&self, server: &str) -> Result<bool, String> {
         let _guard = self.lock.locked();
-        let had = self.load(owner, server).is_some();
-        self.save(owner, server, None)?;
+        let had = self.load(server).is_some();
+        self.save(server, None)?;
         Ok(had)
     }
 
-    pub fn token(&self, owner: &Principal, server: &str) -> Option<String> {
+    pub fn token(&self, server: &str) -> Option<String> {
         let tokens = {
             let _guard = self.lock.locked();
-            self.load(owner, server)?
+            self.load(server)?
         };
         let now = (self.clock)();
         if tokens.fresh(now) {
@@ -131,11 +132,11 @@ impl McpAuth {
             .inspect_err(|error| tracing::warn!(%error, server, "an MCP sign-in could not be refreshed"))
             .ok()?;
         let _guard = self.lock.locked();
-        match self.load(owner, server) {
+        match self.load(server) {
             Some(kept) if kept.access_token != tokens.access_token && kept.fresh(now) => Some(kept.access_token),
             None => None,
             Some(_) => {
-                if let Err(error) = self.save(owner, server, Some(&refreshed)) {
+                if let Err(error) = self.save(server, Some(&refreshed)) {
                     tracing::warn!(%error, server, "a refreshed MCP sign-in could not be kept");
                 }
                 Some(refreshed.access_token)
@@ -143,10 +144,10 @@ impl McpAuth {
         }
     }
 
-    fn can_keep(&self, owner: &Principal) -> Result<(), String> {
+    fn can_keep(&self) -> Result<(), String> {
         let _guard = self.lock.locked();
         self.secrets
-            .update(owner, SLOT, &mut |_| {})
+            .update(SLOT, &mut |_| {})
             .map_err(|error| format!("a sign-in could not be saved here ({error}), so the browser was not opened"))
     }
 
@@ -232,14 +233,14 @@ impl McpAuth {
         Err(format!("HTTP {status} {said}").trim_end().to_owned())
     }
 
-    fn load(&self, owner: &Principal, server: &str) -> Option<McpTokens> {
-        let kept = self.secrets.get(owner, SLOT)?;
+    fn load(&self, server: &str) -> Option<McpTokens> {
+        let kept = self.secrets.get(SLOT)?;
         serde_json::from_str(kept.get(server)?).ok()
     }
 
-    fn save(&self, owner: &Principal, server: &str, tokens: Option<&McpTokens>) -> Result<(), String> {
+    fn save(&self, server: &str, tokens: Option<&McpTokens>) -> Result<(), String> {
         let json = tokens.map(serde_json::to_string).transpose().map_err(|e| e.to_string())?;
-        self.secrets.update(owner, SLOT, &mut |kept| match &json {
+        self.secrets.update(SLOT, &mut |kept| match &json {
             Some(json) => {
                 kept.insert(server.to_owned(), json.clone());
             }
@@ -252,12 +253,11 @@ impl McpAuth {
 
 struct RunTokens {
     auth: McpAuth,
-    owner: Principal,
 }
 
 impl McpTokenSource for RunTokens {
     fn token(&self, server_url: &str) -> Option<String> {
-        self.auth.token(&self.owner, server_url)
+        self.auth.token(server_url)
     }
 }
 

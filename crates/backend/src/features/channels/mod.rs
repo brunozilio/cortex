@@ -20,7 +20,7 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let names: Vec<String> = serde_json::from_value(input["names"].clone()).map_err(|e| e.to_string())?;
     let services = context.services;
     let http: Arc<dyn Http> = Arc::new(NetHttp);
-    open(context.client, &path, &names, &services.extensions, services.home(context.principal).as_deref(), &http)
+    open(context.client, &path, &names, &services.extensions, services.home().as_deref(), &http)
 }
 
 pub fn forget(client: u64) {

@@ -1,16 +1,15 @@
 use agent_engine::sessions::{Entry, Sessions};
 use domain::trace::insights::DAY_MS;
 use domain::trace::runs::SpanKind;
-use domain::{EngineEvent, OrgId, ToolCall, UserId};
+use domain::{EngineEvent, ToolCall};
 
 use super::*;
 
 const NOW: u64 = 400 * DAY_MS;
 
-fn record(store: &FileSessions, dir: &Path, owner: &Principal, id: &str, at_ms: u64) -> SessionId {
+fn record(store: &FileSessions, dir: &Path, id: &str, at_ms: u64) -> SessionId {
     let id = SessionId(id.into());
-    let mut request = PromptRequest::plain(dir.into(), "", ModelOption::new("", ""));
-    request.credentials.owner = Some(owner.clone());
+    let request = PromptRequest::plain(dir.into(), "", ModelOption::new("", ""));
     for entry in [
         Entry::Prompted { at_ms, prompt: format!("read it in {}", id.0) },
         Entry::Event { at_ms: at_ms + 1, event: EngineEvent::ToolStarted(ToolCall::new("r", "Read", "a.txt")) },
@@ -28,13 +27,12 @@ fn record(store: &FileSessions, dir: &Path, owner: &Principal, id: &str, at_ms: 
 fn the_report_leads_with_the_session_and_adds_the_projects_recent_ones() {
     let dir = tempfile::tempdir().expect("dir");
     let store = FileSessions::new(dir.path().join("sessions"));
-    let owner = Principal::LocalOwner;
-    let current = record(&store, dir.path(), &owner, "s1", NOW - DAY_MS);
-    let recent = record(&store, dir.path(), &owner, "s2", NOW - 2 * DAY_MS);
-    let stale = record(&store, dir.path(), &owner, "s3", NOW - 40 * DAY_MS);
+    let current = record(&store, dir.path(), "s1", NOW - DAY_MS);
+    let recent = record(&store, dir.path(), "s2", NOW - 2 * DAY_MS);
+    let stale = record(&store, dir.path(), "s3", NOW - 40 * DAY_MS);
     let others = [recent, stale, SessionId("missing".into()), current.clone()];
 
-    let report = reported(&store, &owner, dir.path(), &current, &others, NOW).expect("report");
+    let report = reported(&store, dir.path(), &current, &others, NOW).expect("report");
 
     let ids: Vec<&str> = report.sessions.iter().map(|session| session.id.as_str()).collect();
     assert_eq!(ids, ["s1", "s2"]);
@@ -49,8 +47,8 @@ fn the_report_leads_with_the_session_and_adds_the_projects_recent_ones() {
 fn a_live_update_carries_only_the_session_being_followed() {
     let dir = tempfile::tempdir().expect("dir");
     let store = FileSessions::new(dir.path().join("sessions"));
-    let id = record(&store, dir.path(), &Principal::LocalOwner, "s1", NOW);
-    let update = followed(&store, &Principal::LocalOwner, dir.path(), &id, NOW).expect("update");
+    let id = record(&store, dir.path(), "s1", NOW);
+    let update = followed(&store, dir.path(), &id, NOW).expect("update");
     assert_eq!(update["id"], "s1");
     assert_eq!(update["insights"]["totals"]["runs"], 1, "the session's own overview comes with it");
     assert_eq!(update["runs"][0]["prompt"], "read it in s1");
@@ -58,27 +56,24 @@ fn a_live_update_carries_only_the_session_being_followed() {
 }
 
 #[test]
-fn another_principal_or_folder_finds_nothing_to_trace() {
+fn another_folder_finds_nothing_to_trace() {
     let dir = tempfile::tempdir().expect("dir");
     let store = FileSessions::new(dir.path().join("sessions"));
-    let id = record(&store, dir.path(), &Principal::LocalOwner, "s1", NOW);
-    let stranger = Principal::member(UserId::new(), OrgId::new());
-    assert!(reported(&store, &stranger, dir.path(), &id, &[], NOW).is_err());
-    assert!(reported(&store, &Principal::LocalOwner, &dir.path().join("elsewhere"), &id, &[], NOW).is_err());
+    let id = record(&store, dir.path(), "s1", NOW);
+    assert!(reported(&store, &dir.path().join("elsewhere"), &id, &[], NOW).is_err());
 }
 
 #[test]
 fn the_report_of_every_session_reads_each_from_its_own_folder_newest_first() {
     let root = tempfile::tempdir().expect("dir");
     let store = FileSessions::new(root.path().join("sessions"));
-    let owner = Principal::LocalOwner;
     let (app, lib) = (root.path().join("app"), root.path().join("lib"));
-    let older = record(&store, &app, &owner, "a1", NOW - 3 * DAY_MS);
-    let newer = record(&store, &lib, &owner, "l1", NOW - DAY_MS);
-    let stale = record(&store, &app, &owner, "a0", NOW - 40 * DAY_MS);
+    let older = record(&store, &app, "a1", NOW - 3 * DAY_MS);
+    let newer = record(&store, &lib, "l1", NOW - DAY_MS);
+    let stale = record(&store, &app, "a0", NOW - 40 * DAY_MS);
     let listed = [(older, app.clone()), (newer, lib.clone()), (stale, app), (SessionId("gone".into()), lib)];
 
-    let report = everything(&store, &owner, &listed, NOW);
+    let report = everything(&store, &listed, NOW);
 
     let ids: Vec<&str> = report.sessions.iter().map(|session| session.id.as_str()).collect();
     assert_eq!(ids, ["l1", "a1"]);
@@ -90,7 +85,7 @@ fn the_report_of_every_session_reads_each_from_its_own_folder_newest_first() {
 fn with_no_session_at_all_the_report_is_empty() {
     let root = tempfile::tempdir().expect("dir");
     let store = FileSessions::new(root.path().join("sessions"));
-    let report = everything(&store, &Principal::LocalOwner, &[], NOW);
+    let report = everything(&store, &[], NOW);
     assert!(report.sessions.is_empty());
     assert_eq!(report.current, "");
 }
@@ -99,10 +94,8 @@ fn with_no_session_at_all_the_report_is_empty() {
 fn a_followed_session_keeps_every_text_whole_while_the_report_stays_light() {
     let root = tempfile::tempdir().expect("dir");
     let store = FileSessions::new(root.path().join("sessions"));
-    let owner = Principal::LocalOwner;
     let id = SessionId("long".into());
-    let mut request = PromptRequest::plain(root.path().into(), "", ModelOption::new("", ""));
-    request.credentials.owner = Some(owner.clone());
+    let request = PromptRequest::plain(root.path().into(), "", ModelOption::new("", ""));
     let long = "x".repeat(30_000);
     for entry in [
         Entry::Prompted { at_ms: NOW, prompt: long.clone() },
@@ -115,11 +108,11 @@ fn a_followed_session_keeps_every_text_whole_while_the_report_stays_light() {
         store.record(&request, &id, &entry).expect("record");
     }
 
-    let followed = traced(&store, &owner, root.path(), &id).expect("runs");
+    let followed = traced(&store, root.path(), &id).expect("runs");
     let tool = followed[0].spans.iter().find(|span| span.kind == SpanKind::Tool).expect("tool");
     assert_eq!(tool.output.len(), 30_000);
 
-    let report = everything(&store, &owner, &[(id, root.path().to_path_buf())], NOW);
+    let report = everything(&store, &[(id, root.path().to_path_buf())], NOW);
     let tool = report.sessions[0].runs[0].spans.iter().find(|span| span.kind == SpanKind::Tool).expect("tool");
     assert!(tool.output.len() < 30_000);
 }

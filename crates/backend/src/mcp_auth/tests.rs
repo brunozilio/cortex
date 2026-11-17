@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use agent_engine::model::http::ScriptedHttp;
-use domain::Principal;
 use serde_json::json;
 
 use super::*;
@@ -40,10 +39,9 @@ fn signing_in_discovers_registers_and_keeps_tokens_that_are_refreshed_when_stale
         (201, json!({ "client_id": "c-1" }).to_string()),
         (200, json!({ "access_token": "a-1", "refresh_token": "r-1", "expires_in": 3600 }).to_string()),
     ]));
-    let owner = Principal::LocalOwner;
     let auth = McpAuth::new(Arc::clone(&secrets), http.clone()).at(1_000);
     let mut opened = String::new();
-    auth.sign_in(&owner, SERVER, &mut |url| {
+    auth.sign_in(SERVER, &mut |url| {
         opened = url.to_owned();
         approve(url);
     })
@@ -61,16 +59,16 @@ fn signing_in_discovers_registers_and_keeps_tokens_that_are_refreshed_when_stale
         llm_providers::oauth::challenge(verifier),
         "PKCE ties the two together"
     );
-    assert_eq!(auth.token(&owner, SERVER).as_deref(), Some("a-1"));
-    assert_eq!(auth.token(&owner, "https://other.test/mcp"), None, "only the server signed in to");
+    assert_eq!(auth.token(SERVER).as_deref(), Some("a-1"));
+    assert_eq!(auth.token("https://other.test/mcp"), None, "only the server signed in to");
 
     let refreshing = Arc::new(ScriptedHttp::new([(200, json!({ "access_token": "a-2" }).to_string())]));
     let later = McpAuth::new(Arc::clone(&secrets), refreshing.clone()).at(1_000 + 3_600);
-    assert_eq!(later.token(&owner, SERVER).as_deref(), Some("a-2"));
+    assert_eq!(later.token(SERVER).as_deref(), Some("a-2"));
     assert!(refreshing.sent()[0].body.contains("grant_type=refresh_token&refresh_token=r-1"));
 
-    assert_eq!(later.sign_out(&owner, SERVER), Ok(true));
-    assert_eq!(later.token(&owner, SERVER), None);
+    assert_eq!(later.sign_out(SERVER), Ok(true));
+    assert_eq!(later.token(SERVER), None);
 }
 
 #[test]
@@ -85,7 +83,7 @@ fn a_server_that_does_not_let_brand_register_says_so() {
         ),
     ]));
     let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
-    let error = auth.sign_in(&Principal::LocalOwner, SERVER, &mut |_| {}).expect_err("no registration");
+    let error = auth.sign_in(SERVER, &mut |_| {}).expect_err("no registration");
     assert!(error.contains("register"), "{error}");
     let with_a_token = format!("{} mcp add -H 'Authorization: Bearer ${{TOKEN}}' <name> {SERVER}", brand::COMMAND);
     assert!(error.contains(&with_a_token), "says how to use a token instead: {error}");
@@ -101,24 +99,24 @@ fn an_unsafe_sign_in_address_is_refused_before_the_browser_opens() {
     let http = Arc::new(ScriptedHttp::new([(404, String::new()), (404, String::new()), (200, metadata.to_string())]));
     let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
     let mut opened = false;
-    let error = auth.sign_in(&Principal::LocalOwner, SERVER, &mut |_| opened = true).expect_err("refused");
+    let error = auth.sign_in(SERVER, &mut |_| opened = true).expect_err("refused");
     assert!(error.contains("file:///Applications/Calculator.app") && !opened, "{error}");
     let plain = McpAuth::new(Arc::new(InMemorySecretStore::default()), Arc::new(ScriptedHttp::new([])));
-    assert!(plain.sign_in(&Principal::LocalOwner, "http://mcp.test/mcp", &mut |_| {}).is_err(), "http elsewhere");
+    assert!(plain.sign_in("http://mcp.test/mcp", &mut |_| {}).is_err(), "http elsewhere");
 }
 
 struct ReadOnlySecrets;
 
 impl SecretStore for ReadOnlySecrets {
-    fn get(&self, _: &Principal, _: domain::SecretId) -> Option<crate::secrets::Secrets> {
+    fn get(&self, _: domain::SecretId) -> Option<crate::secrets::Secrets> {
         None
     }
 
-    fn set(&self, _: &Principal, _: domain::SecretId, _: &crate::secrets::Secrets) -> Result<(), String> {
+    fn set(&self, _: domain::SecretId, _: &crate::secrets::Secrets) -> Result<(), String> {
         Err("Operation not permitted (os error 1)".into())
     }
 
-    fn delete(&self, _: &Principal, _: domain::SecretId) {}
+    fn delete(&self, _: domain::SecretId) {}
 }
 
 #[test]
@@ -126,7 +124,7 @@ fn a_sign_in_that_could_not_be_kept_stops_before_the_browser_opens() {
     let http = Arc::new(ScriptedHttp::new([]));
     let auth = McpAuth::new(Arc::new(ReadOnlySecrets), http.clone());
     let mut opened = false;
-    let error = auth.sign_in(&Principal::LocalOwner, SERVER, &mut |_| opened = true).expect_err("cannot keep it");
+    let error = auth.sign_in(SERVER, &mut |_| opened = true).expect_err("cannot keep it");
     assert!(!opened, "the user is not sent to approve a sign-in that would be lost");
     assert!(error.contains("Operation not permitted") && error.contains("saved"), "{error}");
     assert!(http.sent().is_empty(), "nothing is asked of the server either");
@@ -148,23 +146,22 @@ fn tokens_for(server: &str) -> McpTokens {
 fn two_processes_signing_in_to_different_servers_keep_both_sign_ins() {
     let dir = tempfile::tempdir().expect("dir");
     let file = dir.path().join("secrets.json");
-    let owner = Principal::LocalOwner;
     let servers: Vec<String> = (0..8).map(|n| format!("https://mcp{n}.test/mcp")).collect();
     let start = std::sync::Barrier::new(servers.len());
     std::thread::scope(|scope| {
         for server in &servers {
             let store = crate::secrets::SealedSecretStore::open(&file, [7; 32]).expect("store");
             let auth = McpAuth::new(Arc::new(store), Arc::new(ScriptedHttp::new([])));
-            let (owner, start) = (owner.clone(), &start);
+            let start = &start;
             scope.spawn(move || {
                 start.wait();
-                auth.save(&owner, server, Some(&tokens_for(server))).expect("saved");
+                auth.save(server, Some(&tokens_for(server))).expect("saved");
             });
         }
     });
     let store = crate::secrets::SealedSecretStore::open(&file, [7; 32]).expect("store");
     let reader = McpAuth::new(Arc::new(store), Arc::new(ScriptedHttp::new([])));
-    let kept: Vec<&String> = servers.iter().filter(|server| reader.token(&owner, server).is_some()).collect();
+    let kept: Vec<&String> = servers.iter().filter(|server| reader.token(server).is_some()).collect();
     assert_eq!(kept.len(), servers.len(), "kept only {kept:?}");
 }
 
@@ -191,7 +188,7 @@ fn the_scopes_the_resource_asks_for_reach_the_authorization_url() {
     ]));
     let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
     let mut opened = String::new();
-    auth.sign_in(&Principal::LocalOwner, SERVER, &mut |url| {
+    auth.sign_in(SERVER, &mut |url| {
         opened = url.to_owned();
         approve(url);
     })

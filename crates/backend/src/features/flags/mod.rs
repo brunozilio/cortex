@@ -7,7 +7,7 @@ use crate::feature::Context;
 
 pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let cwd = input["cwd"].as_str().ok_or("the flags feature needs the project's folder")?;
-    let home = context.services.home(context.principal).ok_or("no home folder to keep your settings in")?;
+    let home = context.services.home().ok_or("no home folder to keep your settings in")?;
     let home = home.as_path();
     if let Some(name) = input["name"].as_str() {
         let on = input["on"].as_bool().ok_or("say whether the feature is on or off")?;

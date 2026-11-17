@@ -1,6 +1,5 @@
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct RunCredentials {
-    pub owner: Option<crate::Principal>,
     pub model: Option<crate::provider::ProviderKey>,
     pub model_pool: Vec<crate::provider::ProviderKey>,
     pub model_accounts: Vec<String>,

@@ -1,6 +1,6 @@
 [package]
 name = "backend"
-description = "The backend: executes client commands against the agent engine. In-process today; the same seam serves a remote server later."
+description = "The backend: executes client commands against the agent engine, in process."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -15,7 +15,6 @@ crossbeam-channel.workspace = true
 agent-engine.workspace = true
 code-map.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
 tracing.workspace = true
 tiny_http = "0.12"
 base64 = "0.23"

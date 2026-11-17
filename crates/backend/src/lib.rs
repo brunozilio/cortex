@@ -1,5 +1,5 @@
-mod authorizer;
 mod catalog;
+mod data_root;
 mod dirs;
 mod extensions;
 pub mod feature;
@@ -9,6 +9,8 @@ mod features {
 mod git;
 mod handler;
 mod homes;
+#[cfg(test)]
+mod legacy_layout_tests;
 mod local;
 mod mcp_admin;
 mod mcp_auth;
@@ -22,9 +24,9 @@ mod sent;
 mod services;
 mod settings;
 
-pub use authorizer::{AuthError, Authorizer, LocalAuthorizer, forbidden};
 pub use catalog::{FileSessionCatalog, InMemorySessionCatalog, SessionCatalog};
-pub use dirs::{local_data_dir, project_key};
+pub use data_root::DataRoot;
+pub use dirs::project_key;
 pub use extensions::Extensions;
 pub use handler::CommandHandler;
 pub use homes::{Homes, OwnerHome};
@@ -32,7 +34,7 @@ pub use local::LocalBackend;
 pub use mcp_auth::McpAuth;
 pub use outbox::Outbox;
 pub use protocol::{Backend, BackendError, Wake};
-pub use providers::{InMemoryProviderStore, ModelProviders, NothingShared, ProviderStore, SharedCredentials};
+pub use providers::{InMemoryProviderStore, ModelProviders, ProviderStore};
 pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
 pub use settings::SettingsStore;

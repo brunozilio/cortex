@@ -18,7 +18,6 @@ pub(super) fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
 
 pub(super) fn sdk_without(engine: &FakeEngine, data: &std::path::Path, off: &[&str]) -> Sdk {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-    services.data = None;
     services.homes = Arc::new(backend::OwnerHome::at(data));
     services.off.extend(off.iter().map(|flag| (*flag).to_owned()));
     let secrets = Arc::new(InMemorySecretStore::default());

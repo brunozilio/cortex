@@ -3,7 +3,7 @@ use std::path::Path;
 use agent_engine::sessions::{FileSessions, Sessions, records};
 use domain::catalog::Catalog;
 use domain::trace::Record;
-use domain::{ModelOption, Principal, PromptRequest, SessionId};
+use domain::{ModelOption, PromptRequest, SessionId};
 use serde_json::{Value, json};
 
 use crate::feature::Context;
@@ -16,12 +16,11 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     let session = SessionId(input["session"].as_str().ok_or("this op needs a session")?.to_owned());
     if op == "history" || op == "length" {
         let cwd = Path::new(input["cwd"].as_str().ok_or("this op needs the session's folder")?);
-        let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
-        let store = FileSessions::new(data.join(crate::native::SESSIONS));
+        let store = context.services.sessions.as_ref();
         if op == "length" {
-            return Ok(json!({ "length": length(&store, context.principal, cwd, &session)? }));
+            return Ok(json!({ "length": length(store, cwd, &session)? }));
         }
-        return Ok(json!({ "records": history(&store, context.principal, cwd, &session)? }));
+        return Ok(json!({ "records": history(store, cwd, &session)? }));
     }
     let change: Box<dyn Fn(&mut Catalog)> = match op {
         "rename" => {
@@ -36,25 +35,22 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
         "seen" => Box::new(move |catalog| catalog.seen(&session)),
         other => return Err(format!("the sessions feature has no op {other}")),
     };
-    context.services.catalog.update(context.principal, &mut |catalog| change(catalog));
+    context.services.catalog.update(&mut |catalog| change(catalog));
     Ok(json!({}))
 }
 
 pub fn forget(_client: u64) {}
 
-fn owned(owner: &Principal, cwd: &Path) -> PromptRequest {
-    let mut request = PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""));
-    request.credentials.owner = Some(owner.clone());
-    request
+fn kept_in(cwd: &Path) -> PromptRequest {
+    PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""))
 }
 
-fn length(store: &FileSessions, owner: &Principal, cwd: &Path, id: &SessionId) -> Result<u64, String> {
-    store.length(&owned(owner, cwd), id)
+fn length(store: &FileSessions, cwd: &Path, id: &SessionId) -> Result<u64, String> {
+    store.length(&kept_in(cwd), id)
 }
 
-fn history(store: &FileSessions, owner: &Principal, cwd: &Path, id: &SessionId) -> Result<Vec<Record>, String> {
-    let request = owned(owner, cwd);
-    let told = records(store.entries(&request, id)?);
+fn history(store: &FileSessions, cwd: &Path, id: &SessionId) -> Result<Vec<Record>, String> {
+    let told = records(store.entries(&kept_in(cwd), id)?);
     Ok(told
         .into_iter()
         .filter(|record| matches!(record, Record::Prompted { .. } | Record::Shown { .. } | Record::Event { .. }))
@@ -65,11 +61,11 @@ fn history(store: &FileSessions, owner: &Principal, cwd: &Path, id: &SessionId) 
 mod tests;
 
 fn listed(context: &Context<'_>) -> Catalog {
-    let catalog = context.services.catalog.read(context.principal);
+    let catalog = context.services.catalog.read();
     if !catalog.listed().is_empty() {
         return catalog;
     }
-    let Some(owner_settings) = context.services.settings.load(context.principal) else { return catalog };
-    context.services.catalog.update(context.principal, &mut |catalog| catalog.import(&owner_settings));
-    context.services.catalog.read(context.principal)
+    let Some(owner_settings) = context.services.settings.load() else { return catalog };
+    context.services.catalog.update(&mut |catalog| catalog.import(&owner_settings));
+    context.services.catalog.read()
 }

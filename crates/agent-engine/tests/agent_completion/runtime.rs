@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use agent_engine::tools::{Workspace, subagent_config::AgentConfig};
-use domain::{OrgId, Principal, UserId};
 use serde_json::json;
 
 fn git(cwd: &Path, args: &[&str]) {
@@ -17,10 +16,9 @@ fn git(cwd: &Path, args: &[&str]) {
 }
 
 #[test]
-fn memory_persists_across_worker_invocations_and_is_separated_by_owner() {
+fn memory_persists_across_worker_invocations() {
     let dir = tempfile::tempdir().expect("dir");
-    let mut workspace = Workspace::new(dir.path());
-    workspace.credentials.owner = Some(Principal::member(UserId::new(), OrgId::new()));
+    let workspace = Workspace::new(dir.path());
     let config = AgentConfig::parse(&json!({"memory":"project","tools":["Read"]})).expect("config");
     assert!(config.allows("Write") && config.allows("Edit"));
     let first = agent_engine::agent_runtime::prepare(&config, "reviewer", &workspace).expect("first setup");
@@ -28,8 +26,7 @@ fn memory_persists_across_worker_invocations_and_is_separated_by_owner() {
     std::fs::write(memory, "Persistent project fact").expect("write memory");
     let second = agent_engine::agent_runtime::prepare(&config, "reviewer", &workspace).expect("second setup");
     assert_eq!(second.memory, "Persistent project fact");
-    workspace.credentials.owner = Some(Principal::member(UserId::new(), OrgId::new()));
-    let other = agent_engine::agent_runtime::prepare(&config, "reviewer", &workspace).expect("other owner");
+    let other = agent_engine::agent_runtime::prepare(&config, "planner", &workspace).expect("another agent");
     assert!(other.memory.is_empty());
     assert_ne!(second.memory_dir, other.memory_dir);
 }

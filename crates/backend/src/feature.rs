@@ -1,4 +1,4 @@
-use domain::{Principal, PromptRequest, RunId};
+use domain::{PromptRequest, RunId};
 use protocol::ServerEvent;
 
 use crate::services::LocalServices;
@@ -9,7 +9,6 @@ pub type Finish = Box<dyn FnOnce(&domain::memory::scorecard::RunOutcome) -> Opti
 
 pub struct Context<'a> {
     pub client: u64,
-    pub principal: &'a Principal,
     pub services: &'a LocalServices,
     pub submit: Submit<'a>,
 }
@@ -35,14 +34,13 @@ pub mod testing {
     use super::*;
 
     pub fn services(data: Option<&std::path::Path>) -> LocalServices {
-        let mut services = LocalServices::with_engine(Arc::new(FakeEngine::new(Vec::new(), Vec::new())));
-        services.data = data.map(std::path::Path::to_path_buf);
-        services
+        let root = data.map_or_else(crate::DataRoot::in_memory, crate::DataRoot::under);
+        LocalServices::in_root(Arc::new(FakeEngine::new(Vec::new(), Vec::new())), root)
     }
 
     pub fn with<T>(client: u64, services: &LocalServices, body: impl FnOnce(&Context<'_>) -> T) -> T {
         let refuse = |_: RunId, _: PromptRequest| Err::<(), String>("no runs in this test".into());
-        body(&Context { client, principal: &Principal::LocalOwner, services, submit: &refuse })
+        body(&Context { client, services, submit: &refuse })
     }
 
     pub fn local<T>(client: u64, body: impl FnOnce(&Context<'_>) -> T) -> T {

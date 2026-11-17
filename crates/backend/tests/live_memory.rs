@@ -31,8 +31,7 @@ fn seed(backend: &LocalBackend, project: &Path) {
 #[ignore = "uses a real native provider (may incur usage)"]
 fn an_agent_searches_and_writes_project_memory() {
     let project = tempfile::tempdir().expect("tempdir");
-    let mut services = LocalServices::with_engine(Arc::new(native_live::engine()));
-    services.data = None;
+    let services = LocalServices::with_engine(Arc::new(native_live::engine()));
     let wake: Wake = Arc::new(|| {});
     let backend = LocalBackend::new(services, wake).expect("backend");
     seed(&backend, project.path());

@@ -6,11 +6,11 @@ use platform::sync::Locked;
 
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
-use domain::{Principal, SecretId};
+use domain::SecretId;
+use domain::legacy::OWNER_DIR;
 use serde::{Deserialize, Serialize};
 
 use super::{SecretStore, Secrets};
-use crate::dirs::owner_key;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Sealed {
@@ -88,19 +88,19 @@ impl SealedSecretStore {
     }
 }
 
-fn name(owner: &Principal, connection: SecretId) -> String {
-    format!("{}/{connection}", owner_key(owner))
+fn name(connection: SecretId) -> String {
+    format!("{OWNER_DIR}/{connection}")
 }
 
 impl SecretStore for SealedSecretStore {
-    fn get(&self, owner: &Principal, connection: SecretId) -> Option<Secrets> {
-        let name = name(owner, connection);
+    fn get(&self, connection: SecretId) -> Option<Secrets> {
+        let name = name(connection);
         let entry = self.entries().get(&name)?.clone();
         self.opened(&name, &entry)
     }
 
-    fn set(&self, owner: &Principal, connection: SecretId, secrets: &Secrets) -> Result<(), String> {
-        let name = name(owner, connection);
+    fn set(&self, connection: SecretId, secrets: &Secrets) -> Result<(), String> {
+        let name = name(connection);
         let sealed = self.sealed(&name, secrets)?;
         let _held = self.held()?;
         let mut entries = self.entries();
@@ -108,13 +108,8 @@ impl SecretStore for SealedSecretStore {
         self.save(&entries)
     }
 
-    fn update(
-        &self,
-        owner: &Principal,
-        connection: SecretId,
-        change: &mut dyn FnMut(&mut Secrets),
-    ) -> Result<(), String> {
-        let name = name(owner, connection);
+    fn update(&self, connection: SecretId, change: &mut dyn FnMut(&mut Secrets)) -> Result<(), String> {
+        let name = name(connection);
         let _held = self.held()?;
         let mut entries = self.entries();
         let mut secrets = entries.get(&name).and_then(|entry| self.opened(&name, entry)).unwrap_or_default();
@@ -123,7 +118,7 @@ impl SecretStore for SealedSecretStore {
         self.save(&entries)
     }
 
-    fn delete(&self, owner: &Principal, connection: SecretId) {
+    fn delete(&self, connection: SecretId) {
         let _held = match platform::file_lock::Exclusive::on(&self.path) {
             Ok(held) => held,
             Err(error) => {
@@ -132,7 +127,7 @@ impl SecretStore for SealedSecretStore {
             }
         };
         let mut entries = self.entries();
-        if entries.remove(&name(owner, connection)).is_some()
+        if entries.remove(&name(connection)).is_some()
             && let Err(error) = self.save(&entries)
         {
             tracing::error!(%error, "could not forget the secrets");
@@ -190,12 +185,11 @@ mod tests {
         let file = dir.path().join("secrets.json");
         let (one, two) =
             (SealedSecretStore::open(&file, key).expect("one"), SealedSecretStore::open(&file, key).expect("two"));
-        let owner = Principal::LocalOwner;
         let (a, b) = (SecretId::new(), SecretId::new());
-        one.set(&owner, a, &Secrets::from([("k".into(), "from one".into())])).expect("set a");
-        two.set(&owner, b, &Secrets::from([("k".into(), "from two".into())])).expect("set b");
-        assert_eq!(two.get(&owner, a).and_then(|s| s.get("k").cloned()).as_deref(), Some("from one"));
-        assert_eq!(one.get(&owner, b).and_then(|s| s.get("k").cloned()).as_deref(), Some("from two"));
+        one.set(a, &Secrets::from([("k".into(), "from one".into())])).expect("set a");
+        two.set(b, &Secrets::from([("k".into(), "from two".into())])).expect("set b");
+        assert_eq!(two.get(a).and_then(|s| s.get("k").cloned()).as_deref(), Some("from one"));
+        assert_eq!(one.get(b).and_then(|s| s.get("k").cloned()).as_deref(), Some("from two"));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -208,17 +202,15 @@ mod tests {
         let dir = tempfile::tempdir().expect("dir");
         let key = SealedSecretStore::key_at(&dir.path().join("secrets.key")).expect("key");
         let file = dir.path().join("secrets.json");
-        let owner = Principal::LocalOwner;
         let ids: Vec<SecretId> = (0..8).map(|_| SecretId::new()).collect();
         std::thread::scope(|scope| {
             for id in &ids {
                 let store = SealedSecretStore::open(&file, key).expect("store");
-                let owner = owner.clone();
-                scope.spawn(move || store.set(&owner, *id, &secrets()).expect("set"));
+                scope.spawn(move || store.set(*id, &secrets()).expect("set"));
             }
         });
         let reader = SealedSecretStore::open(&file, key).expect("reader");
-        assert!(ids.iter().all(|id| reader.get(&owner, *id).is_some()));
+        assert!(ids.iter().all(|id| reader.get(*id).is_some()));
     }
 
     fn secrets() -> Secrets {
@@ -231,12 +223,9 @@ mod tests {
         let (path, key) =
             (dir.path().join("secrets.json"), SealedSecretStore::key_at(&dir.path().join("secrets.key")).expect("key"));
         let connection = SecretId::new();
-        SealedSecretStore::open(&path, key)
-            .expect("open")
-            .set(&Principal::LocalOwner, connection, &secrets())
-            .expect("set");
+        SealedSecretStore::open(&path, key).expect("open").set(connection, &secrets()).expect("set");
         let reopened = SealedSecretStore::open(&path, key).expect("reopen");
-        assert_eq!(reopened.get(&Principal::LocalOwner, connection), Some(secrets()));
+        assert_eq!(reopened.get(connection), Some(secrets()));
         assert!(!std::fs::read_to_string(&path).expect("read").contains("very_secret"));
     }
 
@@ -248,12 +237,9 @@ mod tests {
         let key = SealedSecretStore::key_at(&key_path).expect("key");
         assert_eq!(SealedSecretStore::key_at(&key_path).expect("again"), key, "made once, then read");
         let connection = SecretId::new();
-        SealedSecretStore::open(&path, key)
-            .expect("open")
-            .set(&Principal::LocalOwner, connection, &secrets())
-            .expect("set");
+        SealedSecretStore::open(&path, key).expect("open").set(connection, &secrets()).expect("set");
         let stranger = SealedSecretStore::open(&path, [9; 32]).expect("open");
-        assert_eq!(stranger.get(&Principal::LocalOwner, connection), None);
+        assert_eq!(stranger.get(connection), None);
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -268,10 +254,10 @@ mod tests {
         let dir = tempfile::tempdir().expect("dir");
         let store = SealedSecretStore::open(&dir.path().join("secrets.json"), [3; 32]).expect("open");
         let (a, b) = (SecretId::new(), SecretId::new());
-        store.set(&Principal::LocalOwner, a, &secrets()).expect("set");
-        let moved = store.entries().get(&name(&Principal::LocalOwner, a)).cloned().expect("sealed");
-        store.entries().insert(name(&Principal::LocalOwner, b), moved);
-        assert_eq!(store.get(&Principal::LocalOwner, b), None);
+        store.set(a, &secrets()).expect("set");
+        let moved = store.entries().get(&name(a)).cloned().expect("sealed");
+        store.entries().insert(name(b), moved);
+        assert_eq!(store.get(b), None);
     }
 
     #[test]
@@ -283,8 +269,8 @@ mod tests {
         let store = SealedSecretStore::open(&path, [3; 32]).expect("a fresh store opens");
 
         let connection = SecretId::new();
-        store.set(&Principal::LocalOwner, connection, &secrets()).expect("set");
-        assert_eq!(store.get(&Principal::LocalOwner, connection), Some(secrets()));
+        store.set(connection, &secrets()).expect("set");
+        assert_eq!(store.get(connection), Some(secrets()));
         let aside: Vec<String> = std::fs::read_dir(dir.path())
             .expect("list")
             .flatten()
@@ -300,8 +286,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("dir");
         let store = SealedSecretStore::open(&dir.path().join("secrets.json"), [3; 32]).expect("open");
         let connection = SecretId::new();
-        store.set(&Principal::LocalOwner, connection, &secrets()).expect("set");
-        store.delete(&Principal::LocalOwner, connection);
-        assert_eq!(store.get(&Principal::LocalOwner, connection), None);
+        store.set(connection, &secrets()).expect("set");
+        store.delete(connection);
+        assert_eq!(store.get(connection), None);
     }
 }

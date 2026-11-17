@@ -8,9 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use platform::sync::Locked;
 
-use domain::{Principal, SecretId};
-
-use crate::dirs::owner_key;
+use domain::SecretId;
 
 pub use self::sealed::SealedSecretStore;
 pub use self::unkept::{Unkept, refusal};
@@ -18,19 +16,14 @@ pub use self::unkept::{Unkept, refusal};
 pub type Secrets = BTreeMap<String, String>;
 
 pub trait SecretStore: Send + Sync {
-    fn get(&self, owner: &Principal, connection: SecretId) -> Option<Secrets>;
-    fn set(&self, owner: &Principal, connection: SecretId, secrets: &Secrets) -> Result<(), String>;
-    fn delete(&self, owner: &Principal, connection: SecretId);
+    fn get(&self, connection: SecretId) -> Option<Secrets>;
+    fn set(&self, connection: SecretId, secrets: &Secrets) -> Result<(), String>;
+    fn delete(&self, connection: SecretId);
 
-    fn update(
-        &self,
-        owner: &Principal,
-        connection: SecretId,
-        change: &mut dyn FnMut(&mut Secrets),
-    ) -> Result<(), String> {
-        let mut secrets = self.get(owner, connection).unwrap_or_default();
+    fn update(&self, connection: SecretId, change: &mut dyn FnMut(&mut Secrets)) -> Result<(), String> {
+        let mut secrets = self.get(connection).unwrap_or_default();
         change(&mut secrets);
-        self.set(owner, connection, &secrets)
+        self.set(connection, &secrets)
     }
 
     fn unkept(&self) -> Option<String> {
@@ -40,7 +33,7 @@ pub trait SecretStore: Send + Sync {
 
 pub fn system_secrets() -> Arc<dyn SecretStore> {
     static STORE: std::sync::OnceLock<Arc<dyn SecretStore>> = std::sync::OnceLock::new();
-    Arc::clone(STORE.get_or_init(|| secrets_in(crate::local_data_dir().as_deref())))
+    Arc::clone(STORE.get_or_init(|| secrets_in(crate::DataRoot::system().secrets().as_deref())))
 }
 
 pub fn secrets_in(dir: Option<&Path>) -> Arc<dyn SecretStore> {
@@ -62,33 +55,28 @@ fn sealed_in(dir: Option<&Path>) -> Result<SealedSecretStore, String> {
 
 #[derive(Debug, Default)]
 pub struct InMemorySecretStore {
-    secrets: Mutex<HashMap<(String, SecretId), Secrets>>,
+    secrets: Mutex<HashMap<SecretId, Secrets>>,
 }
 
 impl SecretStore for InMemorySecretStore {
-    fn get(&self, owner: &Principal, connection: SecretId) -> Option<Secrets> {
+    fn get(&self, connection: SecretId) -> Option<Secrets> {
         let secrets = self.secrets.locked();
-        secrets.get(&(owner_key(owner), connection)).cloned()
+        secrets.get(&connection).cloned()
     }
 
-    fn set(&self, owner: &Principal, connection: SecretId, secrets: &Secrets) -> Result<(), String> {
+    fn set(&self, connection: SecretId, secrets: &Secrets) -> Result<(), String> {
         let mut map = self.secrets.locked();
-        map.insert((owner_key(owner), connection), secrets.clone());
+        map.insert(connection, secrets.clone());
         Ok(())
     }
 
-    fn delete(&self, owner: &Principal, connection: SecretId) {
+    fn delete(&self, connection: SecretId) {
         let mut map = self.secrets.locked();
-        map.remove(&(owner_key(owner), connection));
+        map.remove(&connection);
     }
 
-    fn update(
-        &self,
-        owner: &Principal,
-        connection: SecretId,
-        change: &mut dyn FnMut(&mut Secrets),
-    ) -> Result<(), String> {
-        change(self.secrets.locked().entry((owner_key(owner), connection)).or_default());
+    fn update(&self, connection: SecretId, change: &mut dyn FnMut(&mut Secrets)) -> Result<(), String> {
+        change(self.secrets.locked().entry(connection).or_default());
         Ok(())
     }
 }
@@ -98,7 +86,7 @@ mod tests {
     use super::*;
 
     fn stored(store: &dyn SecretStore) -> Result<(), String> {
-        store.set(&Principal::LocalOwner, SecretId::new(), &Secrets::from([("k".to_owned(), "v".to_owned())]))
+        store.set(SecretId::new(), &Secrets::from([("k".to_owned(), "v".to_owned())]))
     }
 
     #[test]

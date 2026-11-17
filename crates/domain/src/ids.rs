@@ -68,19 +68,9 @@ impl<T> fmt::Display for Id<T> {
 }
 
 #[derive(Debug)]
-pub enum UserMarker {}
-#[derive(Debug)]
-pub enum OrgMarker {}
-#[derive(Debug)]
 pub enum SecretMarker {}
 
-pub type UserId = Id<UserMarker>;
-pub type OrgId = Id<OrgMarker>;
 pub type SecretId = Id<SecretMarker>;
-
-impl OrgId {
-    pub const LOCAL: Self = Self::from_uuid(Uuid::nil());
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -92,10 +82,10 @@ mod tests {
 
     #[test]
     fn ids_are_unique_and_copy() {
-        let a = UserId::new();
+        let a = SecretId::new();
         let b = a;
         assert_eq!(a, b);
-        assert_ne!(a, UserId::new());
+        assert_ne!(a, SecretId::new());
     }
 
     #[test]

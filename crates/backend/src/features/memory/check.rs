@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use domain::Principal;
 use domain::memory::Memory;
 use serde_json::{Value, json};
 
@@ -16,8 +15,8 @@ pub struct Changes {
 }
 
 impl Memories {
-    pub fn check(&self, owner: &Principal, project: &Path) -> Result<Value, String> {
-        let features = team::features(project, self.home(owner).as_deref());
+    pub fn check(&self, project: &Path) -> Result<Value, String> {
+        let features = team::features(project, self.home().as_deref());
         if !features.on(domain::features::LEARNING_CHECK) {
             return Err(format!("/check is turned off ({}).", domain::features::LEARNING_CHECK));
         }
@@ -25,7 +24,7 @@ impl Memories {
         let shared = team::load_if(project, &features);
         let known: Vec<Memory> = {
             let mut books = self.lock();
-            self.book(&mut books, owner, project).memories.iter().cloned().chain(shared).collect()
+            self.book(&mut books, project).memories.iter().cloned().chain(shared).collect()
         };
         let relevant = domain::memory::check::relevant(&known, &changes.files, &changes.diff);
         let prompt = domain::memory::check::prompt(&changes.base, &changes.files, &relevant);

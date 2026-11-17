@@ -70,7 +70,7 @@ fn remembered(texts: &[&str]) -> Memories {
             touches: vec![],
         })
         .collect();
-    memories.edit(&Principal::LocalOwner, std::path::Path::new("/repo"), &edits, by).expect("edit");
+    memories.edit(std::path::Path::new("/repo"), &edits, by).expect("edit");
     memories
 }
 
@@ -83,7 +83,7 @@ fn text_of(server: &LocalMcp, query: &str) -> String {
 fn a_run_never_gets_the_same_memory_twice_and_stops_searching_at_the_limit() {
     let memories = remembered(&["Run clippy before committing", "Run nextest for tests"]);
     let shown = MemorySearches::new([MemoryId(0)]);
-    let server = MemoryEndpoint::for_run(memories, Principal::LocalOwner, "/repo".into(), shown);
+    let server = MemoryEndpoint::for_run(memories, "/repo".into(), shown);
     assert!(text_of(&server, "clippy").contains("already in this conversation"), "recalled into the prompt");
     assert_eq!(text_of(&server, "run"), "[1] procedural: Run nextest for tests");
     assert!(text_of(&server, "jira").starts_with("Nothing in this project's memory matches"));
@@ -93,7 +93,6 @@ fn a_run_never_gets_the_same_memory_twice_and_stops_searching_at_the_limit() {
 #[test]
 fn a_run_searches_only_its_own_project_s_memory() {
     let memories = Memories::new(Arc::new(InMemoryStore::default()));
-    let owner = Principal::LocalOwner;
     let by = Provenance { author: Author::User, now: 1, origin: None };
     let edit = MemoryEdit::Remember {
         kind: MemoryKind::Procedural,
@@ -101,11 +100,10 @@ fn a_run_searches_only_its_own_project_s_memory() {
         tags: vec![],
         touches: vec![],
     };
-    memories.edit(&owner, std::path::Path::new("/repo"), &[edit], by).expect("edit");
+    memories.edit(std::path::Path::new("/repo"), &[edit], by).expect("edit");
     let call = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": MEMORY_SEARCH_TOOL, "arguments": { "query": "clippy" } } });
     let text = |project: &str| {
-        let server =
-            MemoryEndpoint::for_run(memories.clone(), owner.clone(), project.into(), MemorySearches::default());
+        let server = MemoryEndpoint::for_run(memories.clone(), project.into(), MemorySearches::default());
         assert_eq!(server.name, MEMORY_SERVER);
         server.endpoint.handle(&call).expect("answer")["result"]["content"][0]["text"].as_str().map(str::to_owned)
     };

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use domain::provider::ProviderKeyStore;
-use domain::{ModelProvider, Principal, SecretId};
+use domain::{ModelProvider, SecretId};
 use llm_providers::sign_in::{Answer, Host, Listener};
 use llm_providers::{Config, ProviderError};
 use platform::sync::Locked;
@@ -139,23 +139,22 @@ impl Answer for Pending {
 
 pub(crate) struct AccountStore {
     pub secrets: Arc<dyn SecretStore>,
-    pub owner: Principal,
     pub slot: SecretId,
     pub provider: ModelProvider,
 }
 
 impl ProviderKeyStore for AccountStore {
     fn load(&self) -> Result<String, String> {
-        let values = self.secrets.get(&self.owner, self.slot).ok_or("provider account disconnected")?;
+        let values = self.secrets.get(self.slot).ok_or("provider account disconnected")?;
         values.get(CONFIG).cloned().ok_or_else(|| "provider account has no credential".to_owned())
     }
 
     fn save(&self, value: &str) -> Result<(), String> {
         let provider = agent_engine::providers::get(self.provider).map_err(|e| e.to_string())?;
         Config::parse(provider, value).map_err(|e| e.to_string())?;
-        let mut secrets = self.secrets.get(&self.owner, self.slot).ok_or("provider account disconnected")?;
+        let mut secrets = self.secrets.get(self.slot).ok_or("provider account disconnected")?;
         secrets.insert(CONFIG.into(), value.to_owned());
-        self.secrets.set(&self.owner, self.slot, &secrets)
+        self.secrets.set(self.slot, &secrets)
     }
 }
 
@@ -174,9 +173,8 @@ mod tests {
         let secrets = Arc::new(InMemorySecretStore::default());
         let slot = SecretId::new();
         let original = r#"{"auth":{"access_token":"access-secret","refresh_token":"refresh-secret","expires_at":"2099-01-01T00:00:00Z","account_id":"acct"}}"#;
-        secrets.set(&Principal::LocalOwner, slot, &Secrets::from([(CONFIG.into(), original.into())])).expect("save");
-        let source =
-            AccountStore { secrets, owner: Principal::LocalOwner, slot, provider: ModelProvider::new("browser-sub") };
+        secrets.set(slot, &Secrets::from([(CONFIG.into(), original.into())])).expect("save");
+        let source = AccountStore { secrets, slot, provider: ModelProvider::new("browser-sub") };
         source.save(&original.replace("refresh-secret", "refresh-rotated")).expect("rotate");
         assert!(source.load().expect("load").contains("refresh-rotated"));
         assert!(source.save("not a credential").is_err(), "a broken credential is never kept");

@@ -72,10 +72,6 @@ impl Agent<'_> {
 impl Agent<'_> {
     pub(super) fn to_session(&self, input: &Value, conversations: &Conversations) -> bool {
         let to = input["to"].as_str().map(str::trim).unwrap_or_default();
-        self.depth == 0
-            && !conversations.has(to)
-            && crate::tools::peers::of_owner(self.workspace.credentials.owner.as_ref())
-                .iter()
-                .any(|peer| peer.name == to)
+        self.depth == 0 && !conversations.has(to) && crate::tools::peers::open().iter().any(|peer| peer.name == to)
     }
 }

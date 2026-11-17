@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use domain::Principal;
 use domain::provider::ModelProvider;
 use llm_providers::ProviderError;
 use platform::sync::Locked;
@@ -25,19 +24,19 @@ fn failed(provider: ModelProvider, message: String) -> ServerEvent {
 }
 
 impl ModelProviders {
-    pub fn sign_in(&self, owner: &Principal, provider: ModelProvider, outbox: &Outbox) {
+    pub fn sign_in(&self, provider: ModelProvider, outbox: &Outbox) {
         if let Some(message) = self.cannot_sign_in(provider) {
             return outbox.send(failed(provider, message));
         }
-        let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
-        platform::named::spawn("provider-sign-in", move || this.signing_in(&owner, provider, &outbox));
+        let (this, outbox) = (self.clone(), outbox.clone());
+        platform::named::spawn("provider-sign-in", move || this.signing_in(provider, &outbox));
     }
 
-    pub fn close_and_sign_in(&self, owner: &Principal, provider: ModelProvider, port: u16, pid: u32, outbox: &Outbox) {
+    pub fn close_and_sign_in(&self, provider: ModelProvider, port: u16, pid: u32, outbox: &Outbox) {
         if let Some(message) = self.secrets.unkept().map(|reason| crate::secrets::refusal(&reason)) {
             return outbox.send(failed(provider, message));
         }
-        let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
+        let (this, outbox) = (self.clone(), outbox.clone());
         platform::named::spawn("provider-sign-in", move || {
             if pid != std::process::id()
                 && this.ports.holder(port).is_some_and(|holder| holder.pid == pid)
@@ -45,7 +44,7 @@ impl ModelProviders {
             {
                 return outbox.send(failed(provider, message));
             }
-            this.signing_in(&owner, provider, &outbox);
+            this.signing_in(provider, &outbox);
         });
     }
 
@@ -56,7 +55,7 @@ impl ModelProviders {
         self.secrets.unkept().map(|reason| crate::secrets::refusal(&reason))
     }
 
-    fn signing_in(&self, owner: &Principal, provider: ModelProvider, outbox: &Outbox) {
+    fn signing_in(&self, provider: ModelProvider, outbox: &Outbox) {
         let mine = self.replacing_the_one_in_flight(provider);
         let mut open = |url: String, code: Option<String>| {
             outbox.send(ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code }));
@@ -70,9 +69,8 @@ impl ModelProviders {
             Err(ProviderError::PortInUse(port)) => return outbox.send(self.port_busy(provider, port)),
             other => other.map_err(|error| error.to_string()),
         };
-        let result =
-            config.and_then(|config| self.keep(owner, provider, agent_engine::providers::name(provider), &config));
-        outbox.send(self.answer(owner, provider, result));
+        let result = config.and_then(|config| self.keep(provider, agent_engine::providers::name(provider), &config));
+        outbox.send(self.answer(provider, result));
     }
 
     fn port_busy(&self, provider: ModelProvider, port: u16) -> ServerEvent {

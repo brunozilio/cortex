@@ -1,4 +1,4 @@
-use domain::{Principal, SecretId};
+use domain::SecretId;
 
 use super::{SecretStore, Secrets};
 
@@ -18,17 +18,17 @@ pub fn refusal(reason: &str) -> String {
 }
 
 impl SecretStore for Unkept {
-    fn get(&self, _: &Principal, _: SecretId) -> Option<Secrets> {
+    fn get(&self, _: SecretId) -> Option<Secrets> {
         None
     }
 
-    fn set(&self, _: &Principal, _: SecretId, _: &Secrets) -> Result<(), String> {
+    fn set(&self, _: SecretId, _: &Secrets) -> Result<(), String> {
         Err(refusal(&self.reason))
     }
 
-    fn delete(&self, _: &Principal, _: SecretId) {}
+    fn delete(&self, _: SecretId) {}
 
-    fn update(&self, _: &Principal, _: SecretId, _: &mut dyn FnMut(&mut Secrets)) -> Result<(), String> {
+    fn update(&self, _: SecretId, _: &mut dyn FnMut(&mut Secrets)) -> Result<(), String> {
         Err(refusal(&self.reason))
     }
 

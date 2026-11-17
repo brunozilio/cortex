@@ -79,19 +79,6 @@ fn a_book_round_trips() {
 }
 
 #[test]
-fn an_owner_s_own_accounts_win_over_the_shared_ones_which_fill_the_rest() {
-    let theirs = ModelProvider::new("theirs");
-    let mut own = ProviderBook::default();
-    own.connect(ACME, account("own", ""));
-    let mut shared = ProviderBook::default();
-    shared.connect(ACME, account("org", ""));
-    shared.connect(theirs, account("org", ""));
-    let seen = own.over(&shared);
-    assert_eq!(labels(&seen, ACME), ["own"]);
-    assert_eq!(active(&seen, theirs), Some("org"));
-}
-
-#[test]
 fn summaries_list_every_provider_with_its_active_account_and_all_of_them() {
     let mut book = ProviderBook::default();
     let (one, two) = (ModelProvider::new("one"), ModelProvider::new("two"));

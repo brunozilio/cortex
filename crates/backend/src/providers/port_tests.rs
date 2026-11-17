@@ -90,13 +90,13 @@ fn a_retry_replaces_the_sign_in_this_process_still_had_waiting_on_the_port() {
     let providers = rig().providers.with_sign_in(Arc::new(waits)).with_ports(ports.clone());
     let (outbox, rx) = outbox();
     let browser = ModelProvider::new("browser-sub");
-    providers.sign_in(&OWNER, browser, &outbox);
+    providers.sign_in(browser, &outbox);
     assert!(matches!(
         next(&rx),
         ServerEvent::Providers(ProviderEvent::AuthorizeAt { url, .. }) if url.ends_with("never-answered")
     ));
 
-    providers.sign_in(&OWNER, browser, &outbox);
+    providers.sign_in(browser, &outbox);
 
     assert!(matches!(
         next(&rx),
@@ -120,7 +120,7 @@ fn busy(holder: Option<PortHolder>) -> ServerEvent {
 fn a_taken_callback_port_names_the_app_holding_it() {
     let ports = FakePorts::held_by(998, "Visual Studio Code");
     let (outbox, rx) = outbox();
-    signing_in(&ports).sign_in(&OWNER, ModelProvider::new("browser-sub"), &outbox);
+    signing_in(&ports).sign_in(ModelProvider::new("browser-sub"), &outbox);
     assert_eq!(next(&rx), busy(Some(PortHolder { pid: 998, app: "Visual Studio Code".into() })));
     assert!(ports.closed().is_empty());
 }
@@ -130,7 +130,7 @@ fn closing_the_holder_frees_the_port_and_the_sign_in_goes_on() {
     let ports = FakePorts::held_by(998, "Visual Studio Code");
     let providers = signing_in(&ports);
     let (outbox, rx) = outbox();
-    providers.close_and_sign_in(&OWNER, ModelProvider::new("browser-sub"), PORT, 998, &outbox);
+    providers.close_and_sign_in(ModelProvider::new("browser-sub"), PORT, 998, &outbox);
     assert!(matches!(next(&rx), ServerEvent::Providers(ProviderEvent::AuthorizeAt { .. })));
     assert!(listed(&next(&rx)).iter().any(|p| p.provider == ModelProvider::new("browser-sub") && p.account.is_some()));
     assert_eq!(ports.closed(), [998]);
@@ -140,7 +140,7 @@ fn closing_the_holder_frees_the_port_and_the_sign_in_goes_on() {
 fn a_port_now_held_by_another_process_is_not_closed_and_is_asked_about_again() {
     let ports = FakePorts::held_by(1234, "Other");
     let (outbox, rx) = outbox();
-    signing_in(&ports).close_and_sign_in(&OWNER, ModelProvider::new("browser-sub"), PORT, 998, &outbox);
+    signing_in(&ports).close_and_sign_in(ModelProvider::new("browser-sub"), PORT, 998, &outbox);
     assert_eq!(next(&rx), busy(Some(PortHolder { pid: 1234, app: "Other".into() })));
     assert!(ports.closed().is_empty());
 }
@@ -149,7 +149,7 @@ fn a_port_now_held_by_another_process_is_not_closed_and_is_asked_about_again() {
 fn this_very_process_is_never_closed_to_free_the_port() {
     let ports = FakePorts::held_by(std::process::id(), "this app");
     let (outbox, rx) = outbox();
-    signing_in(&ports).close_and_sign_in(&OWNER, ModelProvider::new("browser-sub"), PORT, std::process::id(), &outbox);
+    signing_in(&ports).close_and_sign_in(ModelProvider::new("browser-sub"), PORT, std::process::id(), &outbox);
     let message = failure(&next(&rx));
     assert!(message.contains(&PORT.to_string()), "{message}");
     assert!(ports.closed().is_empty(), "closing the holder would have ended this session");

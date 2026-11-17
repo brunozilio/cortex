@@ -1,12 +1,12 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use agent_engine::lsp::{Downloads, IDLE, LspPool, Processes};
 use agent_engine::model::client::ProviderClient;
 use agent_engine::model::http::{Http, NetHttp};
 use domain::provider::ProviderKey;
-use domain::{ModelOption, ModelProvider, Principal, PromptRequest};
+use domain::{ModelOption, ModelProvider, PromptRequest};
 use platform::sync::Locked;
 
 use agent_engine::model::{ModelApi, ModelError};
@@ -76,20 +76,16 @@ impl ApiSource for NativeApis {
     }
 }
 
-pub fn keys_for(providers: &ModelProviders, owner: &Principal, model: &ModelOption) -> Vec<(String, ProviderKey)> {
-    providers.keys(owner, model.provider).unwrap_or_default()
+pub fn keys_for(providers: &ModelProviders, model: &ModelOption) -> Vec<(String, ProviderKey)> {
+    providers.keys(model.provider).unwrap_or_default()
 }
 
-pub fn other_keys(
-    providers: &ModelProviders,
-    owner: &Principal,
-    model: &ModelOption,
-) -> Vec<(ModelProvider, ProviderKey)> {
+pub fn other_keys(providers: &ModelProviders, model: &ModelOption) -> Vec<(ModelProvider, ProviderKey)> {
     agent_engine::providers::all()
         .into_iter()
         .map(|provider| ModelProvider::named(provider.id()))
         .filter(|provider| *provider != model.provider)
-        .filter_map(|provider| providers.key(owner, provider).ok().map(|key| (provider, key)))
+        .filter_map(|provider| providers.key(provider).ok().map(|key| (provider, key)))
         .collect()
 }
 
@@ -122,14 +118,10 @@ pub fn declare_providers(home: Option<&Path>, cwd: &Path) -> Vec<String> {
     described.into_iter().map(|(_, line)| line).collect()
 }
 
-pub const SESSIONS: &str = "native-sessions";
-pub const LANGUAGE_SERVERS: &str = "lsp";
-
-pub fn engine(data: &Path) -> NativeEngine {
+pub fn engine(sessions: Arc<FileSessions>, language_servers: PathBuf) -> NativeEngine {
     let apis = NativeApis::new(Arc::new(NetHttp));
-    let servers = LspPool::installing(Processes, IDLE, data.join(LANGUAGE_SERVERS), Downloads(agent_engine::NetFetch));
-    NativeEngine::new(Arc::new(apis), Arc::new(FileSessions::new(data.join(SESSIONS))))
-        .with_language_servers(Arc::new(servers))
+    let servers = LspPool::installing(Processes, IDLE, language_servers, Downloads(agent_engine::NetFetch));
+    NativeEngine::new(Arc::new(apis), sessions).with_language_servers(Arc::new(servers))
 }
 
 #[cfg(test)]
@@ -184,14 +176,13 @@ mod tests {
             Arc::new(crate::providers::InMemoryProviderStore::default()),
             Arc::new(crate::secrets::InMemorySecretStore::default()),
         );
-        let owner = Principal::LocalOwner;
         llm_providers::testing::install();
-        providers.connect(&owner, KEYED, "sk-key-0123456789abcd");
+        providers.connect(KEYED, "sk-key-0123456789abcd");
         let native = |provider| ModelOption::new("m", "M").served_by(provider);
-        let (label, key) = keys_for(&providers, &owner, &native(KEYED)).remove(0);
+        let (label, key) = keys_for(&providers, &native(KEYED)).remove(0);
         assert_eq!(label, "…abcd");
         assert!(key.secret().contains("sk-key-0123456789abcd"), "the provider's credential config");
-        assert!(keys_for(&providers, &owner, &native(KEYED_TOO)).is_empty(), "not connected");
+        assert!(keys_for(&providers, &native(KEYED_TOO)).is_empty(), "not connected");
     }
 
     #[test]

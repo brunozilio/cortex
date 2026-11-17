@@ -4,30 +4,26 @@ use std::sync::{Arc, Mutex};
 
 use platform::sync::Locked;
 
-use domain::{MemoryBook, Principal};
+use domain::MemoryBook;
+use domain::legacy::OWNER_DIR;
 
 pub trait MemoryStore: Send + Sync {
-    fn load(&self, owner: &Principal, project: &Path) -> MemoryBook;
-    fn save(&self, owner: &Principal, project: &Path, book: &MemoryBook) -> std::io::Result<()>;
+    fn load(&self, project: &Path) -> MemoryBook;
+    fn save(&self, project: &Path, book: &MemoryBook) -> std::io::Result<()>;
 
-    fn update(
-        &self,
-        owner: &Principal,
-        project: &Path,
-        change: &mut dyn FnMut(&mut MemoryBook),
-    ) -> std::io::Result<MemoryBook> {
-        let mut book = self.load(owner, project);
+    fn update(&self, project: &Path, change: &mut dyn FnMut(&mut MemoryBook)) -> std::io::Result<MemoryBook> {
+        let mut book = self.load(project);
         change(&mut book);
-        self.save(owner, project, &book)?;
+        self.save(project, &book)?;
         Ok(book)
     }
 }
 
-use crate::dirs::{owner_key, project_key};
+use crate::dirs::project_key;
 
-pub fn memory_store_in(data: Option<PathBuf>) -> Arc<dyn MemoryStore> {
-    match data {
-        Some(data) => Arc::new(FileMemoryStore::new(data.join("memory"))),
+pub fn memory_store_in(folder: Option<PathBuf>) -> Arc<dyn MemoryStore> {
+    match folder {
+        Some(folder) => Arc::new(FileMemoryStore::new(folder)),
         None => {
             tracing::error!("no app data folder; memory lasts only until the process ends");
             Arc::new(InMemoryStore::default())
@@ -45,14 +41,14 @@ impl FileMemoryStore {
         Self { root }
     }
 
-    fn path(&self, owner: &Principal, project: &Path) -> PathBuf {
-        self.root.join(owner_key(owner)).join(format!("{}.json", project_key(project)))
+    fn path(&self, project: &Path) -> PathBuf {
+        self.root.join(OWNER_DIR).join(format!("{}.json", project_key(project)))
     }
 }
 
 impl MemoryStore for FileMemoryStore {
-    fn load(&self, owner: &Principal, project: &Path) -> MemoryBook {
-        let path = self.path(owner, project);
+    fn load(&self, project: &Path) -> MemoryBook {
+        let path = self.path(project);
         let Ok(bytes) = std::fs::read(&path) else { return MemoryBook::default() };
         match serde_json::from_slice(&bytes) {
             Ok(book) => book,
@@ -67,39 +63,49 @@ impl MemoryStore for FileMemoryStore {
         }
     }
 
-    fn save(&self, owner: &Principal, project: &Path, book: &MemoryBook) -> std::io::Result<()> {
+    fn save(&self, project: &Path, book: &MemoryBook) -> std::io::Result<()> {
         let json = serde_json::to_vec_pretty(book).map_err(std::io::Error::other)?;
-        platform::private_file::replace(&self.path(owner, project), &json)
+        platform::private_file::replace(&self.path(project), &json)
     }
 
-    fn update(
-        &self,
-        owner: &Principal,
-        project: &Path,
-        change: &mut dyn FnMut(&mut MemoryBook),
-    ) -> std::io::Result<MemoryBook> {
-        let _held = platform::file_lock::Exclusive::on(&self.path(owner, project))?;
-        let mut book = self.load(owner, project);
+    fn update(&self, project: &Path, change: &mut dyn FnMut(&mut MemoryBook)) -> std::io::Result<MemoryBook> {
+        let _held = platform::file_lock::Exclusive::on(&self.path(project))?;
+        let mut book = self.load(project);
         change(&mut book);
-        self.save(owner, project, &book)?;
+        self.save(project, &book)?;
         Ok(book)
     }
 }
 
 #[derive(Debug, Default)]
 pub struct InMemoryStore {
-    books: Mutex<HashMap<(String, PathBuf), MemoryBook>>,
+    books: Mutex<HashMap<PathBuf, MemoryBook>>,
 }
 
 impl MemoryStore for InMemoryStore {
-    fn load(&self, owner: &Principal, project: &Path) -> MemoryBook {
+    fn load(&self, project: &Path) -> MemoryBook {
         let books = self.books.locked();
-        books.get(&(owner_key(owner), project.to_path_buf())).cloned().unwrap_or_default()
+        books.get(project).cloned().unwrap_or_default()
     }
 
-    fn save(&self, owner: &Principal, project: &Path, book: &MemoryBook) -> std::io::Result<()> {
+    fn save(&self, project: &Path, book: &MemoryBook) -> std::io::Result<()> {
         let mut books = self.books.locked();
-        books.insert((owner_key(owner), project.to_path_buf()), book.clone());
+        books.insert(project.to_path_buf(), book.clone());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_project_s_memory_stays_in_the_local_folder() {
+        let data = tempfile::tempdir().expect("data");
+        let store = FileMemoryStore::new(data.path().join("memory"));
+
+        store.save(Path::new("/work/project"), &MemoryBook::default()).expect("save");
+
+        assert!(data.path().join("memory/local/-work-project.json").is_file());
     }
 }

@@ -18,7 +18,7 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
 pub fn forget(_client: u64) {}
 
 pub fn pointers(context: &Context<'_>, project: &Path, prompt: &str) -> Option<String> {
-    let home = context.services.home(context.principal);
+    let home = context.services.home();
     let on = agent_engine::prompt::settings::load(project, home.as_deref(), &[])
         .is_ok_and(|settings| settings.features.on(domain::features::CODE_MAP));
     if !on || !mapped(project, home.as_deref()) {
@@ -35,8 +35,7 @@ fn mapped(project: &Path, home: Option<&Path>) -> bool {
 }
 
 fn cache(context: &Context<'_>, project: &Path) -> PathBuf {
-    let data = context.services.data.clone().unwrap_or_else(std::env::temp_dir);
-    data.join("code-map").join(format!("{}.json", crate::dirs::project_key(project)))
+    context.services.root.code_map().join(format!("{}.json", crate::dirs::project_key(project)))
 }
 
 #[cfg(test)]

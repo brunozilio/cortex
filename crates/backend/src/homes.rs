@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
-use domain::Principal;
-
 pub trait Homes: Send + Sync {
-    fn home(&self, owner: &Principal) -> Option<PathBuf>;
+    fn home(&self) -> Option<PathBuf>;
 }
 
 #[derive(Debug, Clone)]
@@ -24,25 +22,18 @@ impl OwnerHome {
 }
 
 impl Homes for OwnerHome {
-    fn home(&self, owner: &Principal) -> Option<PathBuf> {
-        owner.is_local().then(|| self.0.clone()).flatten()
+    fn home(&self) -> Option<PathBuf> {
+        self.0.clone()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use domain::{OrgId, UserId};
-
     use super::*;
 
     #[test]
-    fn the_local_owner_gets_the_machine_s_home() {
-        assert_eq!(OwnerHome::at("/home/me").home(&Principal::LocalOwner), Some(PathBuf::from("/home/me")));
-    }
-
-    #[test]
-    fn a_member_never_gets_the_machine_owner_s_home() {
-        let member = Principal::member(UserId::new(), OrgId::new());
-        assert_eq!(OwnerHome::at("/home/me").home(&member), None);
+    fn the_owner_gets_the_home_given_or_none() {
+        assert_eq!(OwnerHome::at("/home/me").home(), Some(PathBuf::from("/home/me")));
+        assert_eq!(OwnerHome::none().home(), None);
     }
 }

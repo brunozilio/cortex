@@ -85,26 +85,22 @@ fn measures_and_compacts_a_session() {
 }
 
 #[test]
-fn sessions_are_bound_to_owner_and_directory_and_owner_cannot_come_from_wire() {
+fn sessions_are_bound_to_their_directory_and_credentials_cannot_come_from_wire() {
     use agent_engine::sessions::Sessions;
-    use domain::{OrgId, Principal, UserId};
     let store = InMemorySessions::default();
     let dir = tempfile::tempdir().expect("valid test fixture");
     let mut request = PromptRequest::plain(dir.path().into(), "hello", model());
-    request.credentials.owner = Some(Principal::member(UserId::new(), OrgId::new()));
+    request.credentials.client = 7;
     let id = domain::SessionId("private-session".into());
     store.save_for(&request, &id, &[Message::user("private")]).expect("valid test fixture");
     assert!(store.load_for(&request, &id).is_some());
-    let mut other = request.clone();
-    other.credentials.owner = Some(Principal::member(UserId::new(), OrgId::new()));
-    assert!(store.load_for(&other, &id).is_none());
     let mut other = request.clone();
     other.cwd = dir.path().join("another-project");
     assert!(store.load_for(&other, &id).is_none());
     let serialized = serde_json::to_value(&request).expect("valid test fixture");
     assert!(serialized.get("credentials").is_none());
     let restored: PromptRequest = serde_json::from_value(serialized).expect("valid test fixture");
-    assert!(restored.credentials.owner.is_none());
+    assert_eq!(restored.credentials.client, 0);
 }
 #[test]
 fn corrupt_saved_history_fails_without_diagnosing_it_as_a_missing_session() {

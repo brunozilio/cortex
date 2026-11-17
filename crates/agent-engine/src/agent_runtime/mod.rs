@@ -63,7 +63,7 @@ pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace
     }
     let mut memory_config = config.clone();
     memory_config.worktree = false;
-    let mut setup = prepare_as(&memory_config, name, &owner(workspace)?, workspace)?;
+    let mut setup = prepare_as(&memory_config, name, workspace)?;
     setup.cwd = actual;
     setup.worktree_root = Some(root);
     setup.base_commit = Some(state.base_commit.clone());
@@ -88,15 +88,15 @@ pub fn prepare(config: &AgentConfig, name: &str, workspace: &Workspace) -> Resul
     if config.memory.is_none() && !config.worktree {
         return Ok(Setup { cwd: workspace.cwd.clone(), ..Default::default() });
     }
-    prepare_as(config, name, &owner(workspace)?, workspace)
+    prepare_as(config, name, workspace)
 }
 
-fn owner(workspace: &Workspace) -> Result<String, String> {
-    let owner = workspace.credentials.owner.as_ref().unwrap_or(&domain::Principal::LocalOwner);
-    serde_json::to_string(owner).map_err(|e| e.to_string())
+fn owner_folder() -> Result<String, String> {
+    let tag = serde_json::to_string(domain::legacy::LEGACY_OWNER_TAG).map_err(|e| e.to_string())?;
+    Ok(format!("{:x}", Sha256::digest(tag.as_bytes())))
 }
 
-fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspace) -> Result<Setup, String> {
+fn prepare_as(config: &AgentConfig, name: &str, workspace: &Workspace) -> Result<Setup, String> {
     if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || "_-:".contains(c)) {
         return Err("agent name must be a filesystem-safe name".into());
     }
@@ -111,9 +111,8 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
             "local" => project.join(concat!(brand::dir!(), "/agent-memory-local")),
             _ => return Err("invalid memory scope".into()),
         };
-        let owner = format!("{:x}", Sha256::digest(owner.as_bytes()));
         let name_key = format!("{}-{:x}", name.replace(':', "--"), Sha256::digest(name.as_bytes()));
-        let dir = base.join(owner).join(name_key);
+        let dir = base.join(owner_folder()?).join(name_key);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         platform::make_private_dir(&dir).map_err(|e| e.to_string())?;
         let mut bytes = Vec::new();

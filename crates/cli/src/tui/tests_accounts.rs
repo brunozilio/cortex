@@ -14,7 +14,6 @@ const KEYED: ModelProvider = ModelProvider::new("keyed");
 fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
     agent_engine::providers::install_testing();
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-    services.data = None;
     services.homes = Arc::new(backend::OwnerHome::at(data));
     services.providers = services
         .providers

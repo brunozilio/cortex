@@ -85,7 +85,7 @@ you).
 
 | Crate | What it is |
 |---|---|
-| `domain` | Domain types and rules: requests, engine events, memory, `Principal`. Pure. |
+| `domain` | Domain types and rules: requests, engine events, memory. Pure. |
 | `agent-engine` | The agent loop, tools, permissions, hooks, sub-agents, skill/agent discovery, MCP, sessions, compaction, wires and one folder per provider. |
 | `protocol` | `ClientCommand` / `ServerEvent` in an `Envelope`. |
 | `backend` | Command handler: runs, memory, settings, providers, secrets. |

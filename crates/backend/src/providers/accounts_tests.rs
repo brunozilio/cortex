@@ -7,7 +7,6 @@ use super::*;
 use crate::providers::InMemoryProviderStore;
 use crate::secrets::{InMemorySecretStore, SecretStore};
 
-const OWNER: Principal = Principal::LocalOwner;
 const KEYED: ModelProvider = ModelProvider::new("keyed");
 const FIRST: &str = "sk-proj-0123456789aaaa";
 const SECOND: &str = "sk-proj-0123456789bbbb";
@@ -21,7 +20,7 @@ fn rig() -> (ModelProviders, Arc<InMemorySecretStore>) {
 }
 
 fn in_use(providers: &ModelProviders) -> String {
-    let key = providers.key(&OWNER, KEYED).expect("key");
+    let key = providers.key(KEYED).expect("key");
     Config::parse(agent_engine::providers::get(KEYED).expect("known"), key.current().expect("load").secret())
         .expect("config")
         .api_key
@@ -39,8 +38,8 @@ fn accounts(event: &ServerEvent) -> Vec<ProviderAccount> {
 #[test]
 fn a_second_key_is_a_second_account_and_the_one_in_use() {
     let (providers, _) = rig();
-    providers.connect(&OWNER, KEYED, FIRST);
-    let event = providers.connect(&OWNER, KEYED, SECOND);
+    providers.connect(KEYED, FIRST);
+    let event = providers.connect(KEYED, SECOND);
     let labels: Vec<String> = accounts(&event).into_iter().map(|a| a.label).collect();
     assert_eq!(labels, ["…aaaa", "…bbbb"]);
     assert_eq!(in_use(&providers), SECOND);
@@ -49,43 +48,43 @@ fn a_second_key_is_a_second_account_and_the_one_in_use() {
 #[test]
 fn switching_accounts_changes_the_key_the_next_run_gets() {
     let (providers, _) = rig();
-    providers.connect(&OWNER, KEYED, FIRST);
-    providers.connect(&OWNER, KEYED, SECOND);
-    providers.use_account(&OWNER, KEYED, "1");
+    providers.connect(KEYED, FIRST);
+    providers.connect(KEYED, SECOND);
+    providers.use_account(KEYED, "1");
     assert_eq!(in_use(&providers), FIRST);
-    providers.use_account(&OWNER, KEYED, "…bbbb");
+    providers.use_account(KEYED, "…bbbb");
     assert_eq!(in_use(&providers), SECOND);
-    assert!(matches!(providers.use_account(&OWNER, KEYED, "9"), ServerEvent::Providers(ProviderEvent::Failed { .. })));
+    assert!(matches!(providers.use_account(KEYED, "9"), ServerEvent::Providers(ProviderEvent::Failed { .. })));
 }
 
 #[test]
 fn the_same_key_again_keeps_one_account() {
     let (providers, _) = rig();
-    providers.connect(&OWNER, KEYED, FIRST);
-    assert_eq!(accounts(&providers.connect(&OWNER, KEYED, FIRST)).len(), 1);
+    providers.connect(KEYED, FIRST);
+    assert_eq!(accounts(&providers.connect(KEYED, FIRST)).len(), 1);
 }
 
 #[test]
 fn removing_an_account_forgets_only_its_secret() {
     let (providers, secrets) = rig();
-    providers.connect(&OWNER, KEYED, FIRST);
-    providers.connect(&OWNER, KEYED, SECOND);
-    let second = accounts(&providers.list(&OWNER)).remove(1);
-    let event = providers.remove_account(&OWNER, KEYED, "2");
+    providers.connect(KEYED, FIRST);
+    providers.connect(KEYED, SECOND);
+    let second = accounts(&providers.list()).remove(1);
+    let event = providers.remove_account(KEYED, "2");
     assert_eq!(accounts(&event).len(), 1);
-    assert!(secrets.get(&OWNER, slot(KEYED, &second.id)).is_none());
+    assert!(secrets.get(slot(KEYED, &second.id)).is_none());
     assert_eq!(in_use(&providers), FIRST);
 }
 
 #[test]
 fn disconnecting_forgets_every_account_of_the_provider() {
     let (providers, secrets) = rig();
-    providers.connect(&OWNER, KEYED, FIRST);
-    providers.connect(&OWNER, KEYED, SECOND);
-    let second = accounts(&providers.list(&OWNER)).remove(1);
-    assert!(accounts(&providers.disconnect(&OWNER, KEYED)).is_empty());
-    assert!(secrets.get(&OWNER, slot(KEYED, "")).is_none());
-    assert!(secrets.get(&OWNER, slot(KEYED, &second.id)).is_none());
+    providers.connect(KEYED, FIRST);
+    providers.connect(KEYED, SECOND);
+    let second = accounts(&providers.list()).remove(1);
+    assert!(accounts(&providers.disconnect(KEYED)).is_empty());
+    assert!(secrets.get(slot(KEYED, "")).is_none());
+    assert!(secrets.get(slot(KEYED, &second.id)).is_none());
 }
 
 #[test]
@@ -95,8 +94,8 @@ fn a_subscription_account_is_named_by_its_email() {
         format!(r#"{{"access_token":"a","refresh_token":"r","expires_at":"2099-01-01T00:00:00Z","email":"{email}"}}"#)
     };
     let provider = ModelProvider::new("device-sub");
-    providers.connect(&OWNER, provider, &raw("a@x.io"));
-    let event = providers.connect(&OWNER, provider, &raw("b@x.io"));
+    providers.connect(provider, &raw("a@x.io"));
+    let event = providers.connect(provider, &raw("b@x.io"));
     let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
     let summary = listed.into_iter().find(|p| p.provider == provider).expect("device-sub");
     let labels: Vec<String> = summary.accounts.into_iter().map(|a| a.label).collect();
@@ -104,7 +103,7 @@ fn a_subscription_account_is_named_by_its_email() {
 }
 
 fn order(providers: &ModelProviders) -> Vec<String> {
-    let keys = providers.keys(&OWNER, KEYED).expect("keys");
+    let keys = providers.keys(KEYED).expect("keys");
     keys.into_iter()
         .map(|(_, key)| {
             let config = Config::parse(agent_engine::providers::get(KEYED).expect("known"), key.secret());
@@ -116,17 +115,17 @@ fn order(providers: &ModelProviders) -> Vec<String> {
 #[test]
 fn without_a_balance_a_run_gets_only_the_account_in_use() {
     let (providers, _) = rig();
-    providers.connect(&OWNER, KEYED, FIRST);
-    providers.connect(&OWNER, KEYED, SECOND);
+    providers.connect(KEYED, FIRST);
+    providers.connect(KEYED, SECOND);
     assert_eq!(order(&providers), [SECOND]);
 }
 
 #[test]
 fn failover_offers_the_account_in_use_first_and_the_others_after() {
     let (providers, _) = rig();
-    providers.connect(&OWNER, KEYED, FIRST);
-    providers.connect(&OWNER, KEYED, SECOND);
-    providers.set_balance(&OWNER, KEYED, domain::account_pool::Balance::Failover);
+    providers.connect(KEYED, FIRST);
+    providers.connect(KEYED, SECOND);
+    providers.set_balance(KEYED, domain::account_pool::Balance::Failover);
     assert_eq!(order(&providers), [SECOND, FIRST]);
     assert_eq!(order(&providers), [SECOND, FIRST]);
 }
@@ -134,9 +133,9 @@ fn failover_offers_the_account_in_use_first_and_the_others_after() {
 #[test]
 fn round_robin_starts_each_run_on_the_next_account() {
     let (providers, _) = rig();
-    providers.connect(&OWNER, KEYED, FIRST);
-    providers.connect(&OWNER, KEYED, SECOND);
-    let event = providers.set_balance(&OWNER, KEYED, domain::account_pool::Balance::RoundRobin);
+    providers.connect(KEYED, FIRST);
+    providers.connect(KEYED, SECOND);
+    let event = providers.set_balance(KEYED, domain::account_pool::Balance::RoundRobin);
     let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
     assert!(listed.iter().any(|p| p.provider == KEYED && p.balance == domain::account_pool::Balance::RoundRobin));
     assert_eq!(order(&providers), [FIRST, SECOND]);
@@ -153,9 +152,9 @@ fn without_an_email_the_token_s_subject_keeps_two_accounts_apart() {
         )
     };
     let provider = ModelProvider::new("device-sub");
-    providers.connect(&OWNER, provider, &raw("0f3a9c1e-user-one"));
-    providers.connect(&OWNER, provider, &raw("7b22d410-user-two"));
-    let event = providers.connect(&OWNER, provider, &raw("0f3a9c1e-user-one"));
+    providers.connect(provider, &raw("0f3a9c1e-user-one"));
+    providers.connect(provider, &raw("7b22d410-user-two"));
+    let event = providers.connect(provider, &raw("0f3a9c1e-user-one"));
     let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
     let summary = listed.into_iter().find(|p| p.provider == provider).expect("device-sub");
     let labels: Vec<String> = summary.accounts.into_iter().map(|a| a.label).collect();
@@ -168,8 +167,8 @@ fn a_sign_in_that_names_no_one_is_added_as_a_numbered_account_and_never_replaces
     let (providers, _) = rig();
     let raw = r#"{"access_token":"a","refresh_token":"r","expires_at":"2099-01-01T00:00:00Z"}"#;
     let provider = ModelProvider::new("device-sub");
-    providers.connect(&OWNER, provider, raw);
-    let event = providers.connect(&OWNER, provider, raw);
+    providers.connect(provider, raw);
+    let event = providers.connect(provider, raw);
     let ServerEvent::Providers(ProviderEvent::Listed { providers: listed }) = event else { panic!("listed") };
     let summary = listed.into_iter().find(|p| p.provider == provider).expect("device-sub");
     let labels: Vec<String> = summary.accounts.into_iter().map(|a| a.label).collect();

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use agent_engine::fake::FakeEngine;
 use backend::{Backend, LocalBackend, LocalServices, Wake};
 use crossbeam_channel::Receiver;
-use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, Principal, PromptRequest, RunId, UserId};
+use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, PromptRequest, RunId};
 use protocol::{ClientCommand, Envelope, ServerEvent};
 use serde_json::json;
 
@@ -33,7 +33,6 @@ fn backend(engine: FakeEngine) -> (LocalBackend, Receiver<()>) {
 
 fn backend_with(engine: FakeEngine, memory_tool: bool) -> (LocalBackend, Receiver<()>) {
     let mut services = LocalServices::with_engine(Arc::new(engine));
-    services.data = None;
     if !memory_tool {
         services = services.without("memory_search");
     }
@@ -190,18 +189,6 @@ fn memory(input: serde_json::Value) -> ClientCommand {
 
 fn answered(event: &ServerEvent) -> bool {
     matches!(event, ServerEvent::Feature { feature, .. } if feature == "memory")
-}
-
-#[test]
-fn remote_principals_are_rejected_locally() {
-    let (backend, woke) = backend(scripted());
-    backend
-        .send(Envelope::new(Principal::member(UserId::new(), domain::OrgId::new()), ClientCommand::ListModels))
-        .expect("send");
-    match &collect(&backend, &woke, |event| matches!(event, ServerEvent::Error { .. }))[..] {
-        [ServerEvent::Error { message }] => assert!(message.contains("may not list_models")),
-        other => panic!("unexpected {other:?}"),
-    }
 }
 
 #[test]

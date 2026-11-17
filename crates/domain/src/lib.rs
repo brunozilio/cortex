@@ -34,6 +34,7 @@ pub mod image;
 pub mod inbox;
 pub mod interception;
 pub mod learning;
+pub mod legacy;
 pub mod looping;
 pub mod lsp;
 pub mod mcp;
@@ -44,7 +45,6 @@ pub mod model;
 pub mod model_roles;
 pub mod output;
 pub mod permission_rules;
-pub mod principal;
 pub mod provider;
 pub mod provider_book;
 pub mod redact;
@@ -73,14 +73,13 @@ pub use engines::EngineProblem;
 pub use events::{EngineEvent, Rewound, RunId, ToolCall};
 pub use extensions::Extensions;
 pub use failure::FailureKind;
-pub use ids::{Id, OrgId, SecretId, SessionId, UserId};
+pub use ids::{Id, SecretId, SessionId};
 pub use image::{Image, MAX_IMAGE_BYTES};
 pub use memory::{
     Author, Forgotten, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, MemoryKind, Provenance, RecallBudget,
     Revision,
 };
 pub use model::{Access, Effort, ModelOption, ModelProvider};
-pub use principal::{Member, Principal};
 pub use request::PromptRequest;
 pub use skill::Skill;
 pub use usage::{

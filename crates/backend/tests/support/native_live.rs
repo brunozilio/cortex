@@ -19,9 +19,12 @@ pub fn model() -> ModelOption {
 struct Source;
 impl ApiSource for Source {
     fn api(&self, request: &PromptRequest) -> Result<Arc<dyn ModelApi>, ModelError> {
-        let key = match request.credentials.model.clone().or_else(|| {
-            backend::ModelProviders::system().key(&domain::Principal::LocalOwner, request.model.provider).ok()
-        }) {
+        let key = match request
+            .credentials
+            .model
+            .clone()
+            .or_else(|| backend::ModelProviders::system().key(request.model.provider).ok())
+        {
             Some(key) => key,
             None => {
                 let path =

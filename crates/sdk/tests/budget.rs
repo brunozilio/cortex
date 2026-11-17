@@ -30,7 +30,6 @@ fn each_run_carries_the_budget_and_what_the_session_has_spent() {
     let data = tempfile::tempdir().expect("data");
     let engine = costing(0.75);
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-    services.data = None;
     services.off.insert("memory_search".into());
     services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
     let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);

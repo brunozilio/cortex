@@ -16,8 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use domain::memory::scorecard::RunOutcome;
 use domain::memory::{MemorySearches, SearchAnswer, recall, search};
 use domain::{
-    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, Principal, PromptRequest, Provenance, RecallBudget,
-    RunId,
+    Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, PromptRequest, Provenance, RecallBudget, RunId,
 };
 use platform::sync::Locked;
 use serde_json::{Value, json};
@@ -31,7 +30,7 @@ pub use command::handle;
 
 pub const NAME: &str = "memory";
 
-type BookKey = (Principal, PathBuf);
+type BookKey = PathBuf;
 
 #[derive(Clone)]
 pub struct Memories {
@@ -52,10 +51,9 @@ pub fn forget(_client: u64) {}
 pub fn of(services: &LocalServices) -> Memories {
     static ALL: LazyLock<Mutex<HashMap<Option<PathBuf>, Memories>>> = LazyLock::new(Mutex::default);
     let mut all = ALL.locked();
-    all.entry(services.data.clone())
-        .or_insert_with(|| {
-            Memories::new(memory_store_in(services.data.clone())).with_homes(Arc::clone(&services.homes))
-        })
+    let folder = services.root.memory();
+    all.entry(folder.clone())
+        .or_insert_with(|| Memories::new(memory_store_in(folder)).with_homes(Arc::clone(&services.homes)))
         .clone()
 }
 
@@ -74,43 +72,31 @@ impl Memories {
         self
     }
 
-    fn home(&self, owner: &Principal) -> Option<PathBuf> {
-        self.homes.home(owner)
+    fn home(&self) -> Option<PathBuf> {
+        self.homes.home()
     }
 
-    fn book<'a>(
-        &self,
-        books: &'a mut MutexGuard<HashMap<BookKey, MemoryBook>>,
-        owner: &Principal,
-        project: &Path,
-    ) -> &'a mut MemoryBook {
-        let key = (owner.clone(), project.to_path_buf());
-        books.entry(key).or_insert_with(|| self.store.load(owner, project))
+    fn book<'a>(&self, books: &'a mut MutexGuard<HashMap<BookKey, MemoryBook>>, project: &Path) -> &'a mut MemoryBook {
+        books.entry(project.to_path_buf()).or_insert_with(|| self.store.load(project))
     }
 
     fn lock(&self) -> MutexGuard<'_, HashMap<BookKey, MemoryBook>> {
         self.books.locked()
     }
 
-    pub fn load(&self, owner: &Principal, project: &Path) -> Value {
+    pub fn load(&self, project: &Path) -> Value {
         let mut books = self.lock();
-        listing(project, self.book(&mut books, owner, project))
+        listing(project, self.book(&mut books, project))
     }
 
-    pub fn edit(
-        &self,
-        owner: &Principal,
-        project: &Path,
-        edits: &[MemoryEdit],
-        by: Provenance,
-    ) -> Result<Value, String> {
-        self.set_undo_point(owner, project, None);
-        self.apply(owner, project, edits, by)
+    pub fn edit(&self, project: &Path, edits: &[MemoryEdit], by: Provenance) -> Result<Value, String> {
+        self.set_undo_point(project, None);
+        self.apply(project, edits, by)
     }
 
-    fn apply(&self, owner: &Principal, project: &Path, edits: &[MemoryEdit], by: Provenance) -> Result<Value, String> {
+    fn apply(&self, project: &Path, edits: &[MemoryEdit], by: Provenance) -> Result<Value, String> {
         let mut books = self.lock();
-        let changed = self.store.update(owner, project, &mut |book| {
+        let changed = self.store.update(project, &mut |book| {
             book.apply(edits, &by);
         });
         let changed = match changed {
@@ -120,14 +106,14 @@ impl Memories {
                 return Err(format!("could not save memory: {error}"));
             }
         };
-        let book = self.book(&mut books, owner, project);
+        let book = self.book(&mut books, project);
         *book = changed;
         Ok(listing(project, book))
     }
 
-    pub fn search(&self, owner: &Principal, project: &Path, query: &str) -> Vec<(MemoryId, f32)> {
+    pub fn search(&self, project: &Path, query: &str) -> Vec<(MemoryId, f32)> {
         let mut books = self.lock();
-        let book = self.book(&mut books, owner, project);
+        let book = self.book(&mut books, project);
         let scores = search(query, &book.memories);
         let mut hits: Vec<(MemoryId, f32)> =
             book.memories.iter().zip(scores).filter(|(_, s)| *s > 0.0).map(|(m, s)| (m.id, s)).collect();
@@ -135,21 +121,14 @@ impl Memories {
         hits
     }
 
-    fn search_listing(&self, owner: &Principal, project: &Path, query: &str) -> Value {
-        json!({ "path": project, "query": query, "scores": self.search(owner, project, query) })
+    fn search_listing(&self, project: &Path, query: &str) -> Value {
+        json!({ "path": project, "query": query, "scores": self.search(project, query) })
     }
 
-    pub fn find(
-        &self,
-        owner: &Principal,
-        project: &Path,
-        query: &str,
-        limit: usize,
-        searches: &mut MemorySearches,
-    ) -> SearchAnswer {
-        let shared = team::load(project, self.home(owner).as_deref());
+    pub fn find(&self, project: &Path, query: &str, limit: usize, searches: &mut MemorySearches) -> SearchAnswer {
+        let shared = team::load(project, self.home().as_deref());
         let mut books = self.lock();
-        let book = self.book(&mut books, owner, project);
+        let book = self.book(&mut books, project);
         let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
         let scores = search(query, &known);
         let mut order: Vec<usize> = (0..known.len()).filter(|&i| scores[i] > 0.0).collect();
@@ -159,27 +138,27 @@ impl Memories {
         if let SearchAnswer::Found(found) = &answer {
             let personal: Vec<Memory> =
                 found.iter().filter(|memory| !domain::memory::team::is_team(memory.id)).cloned().collect();
-            self.mark_used(owner, project, book, &personal);
+            self.mark_used(project, book, &personal);
         }
         answer
     }
 
-    pub fn shared(&self, owner: &Principal, project: &Path, id: MemoryId) -> Result<PathBuf, String> {
+    pub fn shared(&self, project: &Path, id: MemoryId) -> Result<PathBuf, String> {
         let memory = {
             let mut books = self.lock();
-            let book = self.book(&mut books, owner, project);
+            let book = self.book(&mut books, project);
             book.memories.iter().find(|memory| memory.id == id).cloned()
         };
-        team::share(project, self.home(owner).as_deref(), &memory.ok_or("there is no such memory")?)
+        team::share(project, self.home().as_deref(), &memory.ok_or("there is no such memory")?)
     }
 
-    fn mark_used(&self, owner: &Principal, project: &Path, book: &mut MemoryBook, given: &[Memory]) {
+    fn mark_used(&self, project: &Path, book: &mut MemoryBook, given: &[Memory]) {
         if given.is_empty() {
             return;
         }
         let ids: Vec<MemoryId> = given.iter().map(|m| m.id).collect();
         let at = now();
-        match self.store.update(owner, project, &mut |stored| stored.mark_used(&ids, at)) {
+        match self.store.update(project, &mut |stored| stored.mark_used(&ids, at)) {
             Ok(stored) => *book = stored,
             Err(error) => {
                 book.mark_used(&ids, at);
@@ -188,17 +167,17 @@ impl Memories {
         }
     }
 
-    pub fn brief(&self, owner: &Principal, run: RunId, request: &PromptRequest, tool: bool) -> PromptRequest {
+    pub fn brief(&self, run: RunId, request: &PromptRequest, tool: bool) -> PromptRequest {
         let Some(brief) = &request.memory else { return request.clone() };
         if brief.optimizing {
-            return self.brief_optimization(owner, run, request);
+            return self.brief_optimization(run, request);
         }
         let budget = if tool { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
-        let features = team::features(&request.cwd, self.home(owner).as_deref());
+        let features = team::features(&request.cwd, self.home().as_deref());
         let anchors = features.on(domain::features::MEMORY_ANCHORS);
         let shared = team::load_if(&request.cwd, &features);
         let structured = features.on(domain::features::STRUCTURED_LEARNINGS);
-        if features.on(domain::features::MEMORY_SCORECARD) && self.holds_out(owner, &request.cwd) {
+        if features.on(domain::features::MEMORY_SCORECARD) && self.holds_out(&request.cwd) {
             let brief = MemoryBrief {
                 output: edits_file(run),
                 origin: brief.origin.clone(),
@@ -211,12 +190,12 @@ impl Memories {
         }
         let (recalled, tool, anchored) = {
             let mut books = self.lock();
-            let book = self.book(&mut books, owner, &request.cwd);
+            let book = self.book(&mut books, &request.cwd);
             let known: Vec<Memory> = book.memories.iter().cloned().chain(shared).collect();
             let recalled = recall(&request.prompt, &known, budget, now());
             let personal: Vec<Memory> =
                 recalled.iter().filter(|memory| !domain::memory::team::is_team(memory.id)).cloned().collect();
-            self.mark_used(owner, &request.cwd, book, &personal);
+            self.mark_used(&request.cwd, book, &personal);
             let tool = tool && book.holds_more_than(&recalled);
             let anchored: Vec<Memory> = if anchors {
                 let unseen: Vec<Memory> =
@@ -241,15 +220,10 @@ impl Memories {
         PromptRequest { memory: Some(brief), ..request.clone() }
     }
 
-    pub fn finish(
-        &self,
-        owner: &Principal,
-        request: &PromptRequest,
-        outcome: &RunOutcome,
-    ) -> Option<Result<Value, String>> {
+    pub fn finish(&self, request: &PromptRequest, outcome: &RunOutcome) -> Option<Result<Value, String>> {
         let brief = request.memory.as_ref()?;
         if !brief.optimizing {
-            self.keep_score(owner, request, brief.held_out, outcome);
+            self.keep_score(request, brief.held_out, outcome);
         }
         let completed = outcome.completed;
         let json = completed.then(|| std::fs::read_to_string(&brief.output).ok()).flatten();
@@ -257,15 +231,15 @@ impl Memories {
         let edits = json.and_then(|json| domain::memory::parse_memory_edits(&json)).unwrap_or_default();
         if edits.is_empty() {
             if brief.optimizing {
-                self.set_undo_point(owner, &request.cwd, None);
+                self.set_undo_point(&request.cwd, None);
             }
             return None;
         }
         let by = Provenance { author: Author::Agent, now: now(), origin: brief.origin.clone() };
         if brief.optimizing {
-            Some(self.apply(owner, &request.cwd, &edits, by))
+            Some(self.apply(&request.cwd, &edits, by))
         } else {
-            Some(self.edit(owner, &request.cwd, &edits, by))
+            Some(self.edit(&request.cwd, &edits, by))
         }
     }
 }

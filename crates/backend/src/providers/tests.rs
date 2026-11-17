@@ -20,10 +20,8 @@ fn rig() -> Rig {
     Rig { providers, secrets }
 }
 
-const OWNER: Principal = Principal::LocalOwner;
-
 fn api_key(rig: &Rig, provider: ModelProvider) -> String {
-    let key = rig.providers.key(&OWNER, provider).expect("key");
+    let key = rig.providers.key(provider).expect("key");
     Config::parse(agent_engine::providers::get(provider).expect("known"), key.current().expect("load").secret())
         .expect("config")
         .api_key
@@ -49,7 +47,7 @@ fn failure(event: &ServerEvent) -> String {
 
 #[test]
 fn an_empty_owner_lists_every_provider_with_an_account() {
-    let list = listed(&rig().providers.list(&OWNER));
+    let list = listed(&rig().providers.list());
     assert_eq!(
         list.iter().map(|s| s.provider).collect::<Vec<_>>(),
         agent_engine::providers::all().into_iter().map(llm_providers::id).collect::<Vec<_>>()
@@ -61,7 +59,7 @@ fn an_empty_owner_lists_every_provider_with_an_account() {
 #[test]
 fn a_key_is_kept_as_a_secret_and_listed_only_by_its_end() {
     let rig = rig();
-    let event = rig.providers.connect(&OWNER, ModelProvider::new("keyed"), "  sk-proj-0123456789abcd  ");
+    let event = rig.providers.connect(ModelProvider::new("keyed"), "  sk-proj-0123456789abcd  ");
     let account = account(&event, "keyed").expect("connected");
     assert_eq!((account.label.as_str(), account.since_unix), ("…abcd", 1_000));
     let json = serde_json::to_string(&event).expect("json");
@@ -72,29 +70,20 @@ fn a_key_is_kept_as_a_secret_and_listed_only_by_its_end() {
 #[test]
 fn a_blank_key_fails_and_keeps_nothing() {
     let rig = rig();
-    assert_eq!(failure(&rig.providers.connect(&OWNER, ModelProvider::new("keyed-too"), "   ")), "the key is empty");
-    assert!(rig.secrets.get(&OWNER, secret_id(ModelProvider::new("keyed-too"))).is_none());
-    let missing = rig.providers.key(&OWNER, ModelProvider::new("keyed-too")).expect_err("no key");
+    assert_eq!(failure(&rig.providers.connect(ModelProvider::new("keyed-too"), "   ")), "the key is empty");
+    assert!(rig.secrets.get(secret_id(ModelProvider::new("keyed-too"))).is_none());
+    let missing = rig.providers.key(ModelProvider::new("keyed-too")).expect_err("no key");
     assert!(missing.contains("not connected"), "{missing}");
 }
 
 #[test]
 fn a_new_key_replaces_the_old_and_disconnecting_forgets_it() {
     let rig = rig();
-    rig.providers.connect(&OWNER, ModelProvider::new("keyed"), "sk-proj-0123456789abcd");
-    rig.providers.connect(&OWNER, ModelProvider::new("keyed"), "sk-proj-0123456789wxyz");
+    rig.providers.connect(ModelProvider::new("keyed"), "sk-proj-0123456789abcd");
+    rig.providers.connect(ModelProvider::new("keyed"), "sk-proj-0123456789wxyz");
     assert_eq!(api_key(&rig, ModelProvider::new("keyed")), "sk-proj-0123456789wxyz");
-    assert!(account(&rig.providers.disconnect(&OWNER, ModelProvider::new("keyed")), "keyed").is_none());
-    assert!(rig.secrets.get(&OWNER, secret_id(ModelProvider::new("keyed"))).is_none());
-}
-
-#[test]
-fn owners_keep_their_providers_apart() {
-    let rig = rig();
-    rig.providers.connect(&OWNER, ModelProvider::new("keyed"), "sk-proj-0123456789abcd");
-    let member = Principal::member(domain::UserId::new(), domain::OrgId::new());
-    assert!(account(&rig.providers.list(&member), "keyed").is_none());
-    assert!(rig.providers.key(&member, ModelProvider::new("keyed")).is_err());
+    assert!(account(&rig.providers.disconnect(ModelProvider::new("keyed")), "keyed").is_none());
+    assert!(rig.secrets.get(secret_id(ModelProvider::new("keyed"))).is_none());
 }
 
 #[test]
@@ -102,12 +91,12 @@ fn subscriptions_accept_upstream_token_json_and_never_list_tokens() {
     let rig = rig();
     let raw = r#"{"access_token":"access-secret","refresh_token":"refresh-secret","account_id":"acct","expires_at":"2099-01-01T00:00:00Z"}"#;
     for provider in [ModelProvider::new("browser-sub"), ModelProvider::new("device-sub")] {
-        let event = rig.providers.connect(&OWNER, provider, raw);
+        let event = rig.providers.connect(provider, raw);
         assert!(listed(&event).iter().any(|p| p.provider == provider && p.account.is_some()));
         assert!(!serde_json::to_string(&event).expect("event").contains("secret"));
-        assert!(rig.providers.key(&OWNER, provider).expect("key").current().is_ok());
+        assert!(rig.providers.key(provider).expect("key").current().is_ok());
         assert!(matches!(
-            rig.providers.connect(&OWNER, provider, "sk-api-key"),
+            rig.providers.connect(provider, "sk-api-key"),
             ServerEvent::Providers(ProviderEvent::Failed { .. })
         ));
     }
@@ -144,7 +133,7 @@ fn signing_in_to_a_subscription_opens_the_browser_then_keeps_the_tokens() {
     let rig = rig();
     let providers = rig.providers.clone().with_sign_in(Arc::new(FakeSignIn(Ok(()))));
     let (outbox, rx) = outbox();
-    providers.sign_in(&OWNER, ModelProvider::new("browser-sub"), &outbox);
+    providers.sign_in(ModelProvider::new("browser-sub"), &outbox);
     assert!(matches!(
         next(&rx),
         ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, url, code: None })
@@ -152,7 +141,7 @@ fn signing_in_to_a_subscription_opens_the_browser_then_keeps_the_tokens() {
     ));
     let listed = listed(&next(&rx));
     assert!(listed.iter().any(|p| p.provider == ModelProvider::new("browser-sub") && p.account.is_some()));
-    let key = providers.key(&OWNER, ModelProvider::new("browser-sub")).expect("key");
+    let key = providers.key(ModelProvider::new("browser-sub")).expect("key");
     assert!(key.current().expect("load").secret().contains("access-secret"));
 }
 
@@ -161,7 +150,7 @@ fn a_code_sign_in_shows_the_code_to_type_and_keeps_its_own_account() {
     let rig = rig();
     let providers = rig.providers.clone().with_sign_in(Arc::new(FakeSignIn(Ok(()))));
     let (outbox, rx) = outbox();
-    providers.sign_in(&OWNER, ModelProvider::new("device-sub"), &outbox);
+    providers.sign_in(ModelProvider::new("device-sub"), &outbox);
     assert!(matches!(
         next(&rx),
         ServerEvent::Providers(ProviderEvent::AuthorizeAt { provider, code: Some(code), .. })
@@ -170,7 +159,7 @@ fn a_code_sign_in_shows_the_code_to_type_and_keeps_its_own_account() {
     let listed = listed(&next(&rx));
     let connected: Vec<_> = listed.iter().filter(|p| p.account.is_some()).map(|p| p.provider).collect();
     assert_eq!(connected, [ModelProvider::new("device-sub")]);
-    assert!(providers.key(&OWNER, ModelProvider::new("browser-sub")).is_err());
+    assert!(providers.key(ModelProvider::new("browser-sub")).is_err());
 }
 
 #[test]
@@ -181,12 +170,12 @@ fn a_failed_sign_in_or_an_api_provider_keeps_nothing() {
         .clone()
         .with_sign_in(Arc::new(FakeSignIn(Err(llm_providers::ProviderError::Invalid("closed the tab".into())))));
     let (outbox, rx) = outbox();
-    providers.sign_in(&OWNER, ModelProvider::new("browser-sub"), &outbox);
+    providers.sign_in(ModelProvider::new("browser-sub"), &outbox);
     next(&rx);
     assert_eq!(failure(&next(&rx)), "closed the tab");
-    providers.sign_in(&OWNER, ModelProvider::new("keyed-too"), &outbox);
+    providers.sign_in(ModelProvider::new("keyed-too"), &outbox);
     assert!(failure(&next(&rx)).contains("API key"));
-    assert!(listed(&providers.list(&OWNER)).iter().all(|p| p.account.is_none()));
+    assert!(listed(&providers.list()).iter().all(|p| p.account.is_none()));
 }
 
 fn unkept() -> ModelProviders {
@@ -199,10 +188,10 @@ fn unkept() -> ModelProviders {
 fn connecting_fails_clearly_when_keys_cannot_be_kept() {
     let providers = unkept();
     let refused = "keys cannot be kept on this machine: the disk is read-only";
-    assert_eq!(failure(&providers.connect(&OWNER, ModelProvider::new("keyed"), "sk-proj-0123456789abcd")), refused);
-    assert!(listed(&providers.list(&OWNER)).iter().all(|p| p.account.is_none()));
+    assert_eq!(failure(&providers.connect(ModelProvider::new("keyed"), "sk-proj-0123456789abcd")), refused);
+    assert!(listed(&providers.list()).iter().all(|p| p.account.is_none()));
     let (outbox, rx) = outbox();
-    providers.sign_in(&OWNER, ModelProvider::new("browser-sub"), &outbox);
+    providers.sign_in(ModelProvider::new("browser-sub"), &outbox);
     assert_eq!(failure(&next(&rx)), refused, "the browser is not opened for a sign-in that would be lost");
 }
 
@@ -234,7 +223,7 @@ impl ModelCatalog for ByKey {
 
 fn discovered(providers: &ModelProviders, local: Vec<domain::ModelOption>) -> (Vec<String>, Vec<ServerEvent>) {
     let (outbox, rx) = outbox();
-    providers.discover_models(&OWNER, local, &outbox);
+    providers.discover_models(local, &outbox);
     let mut others = Vec::new();
     loop {
         match next(&rx) {
@@ -248,8 +237,8 @@ fn discovered(providers: &ModelProviders, local: Vec<domain::ModelOption>) -> (V
 fn each_connected_provider_lists_its_models_and_the_engine_s_come_last() {
     let providers = rig().providers.with_catalog(Arc::new(ByKey));
     assert!(discovered(&providers, Vec::new()).0.is_empty(), "no fixed list without an account");
-    providers.connect(&OWNER, ModelProvider::new("keyed-too"), "sk-ant-0123456789");
-    providers.connect(&OWNER, ModelProvider::new("keyed"), "sk-broken-0123456789");
+    providers.connect(ModelProvider::new("keyed-too"), "sk-ant-0123456789");
+    providers.connect(ModelProvider::new("keyed"), "sk-broken-0123456789");
     let fixture = domain::ModelOption::new("fixture", "Fixture").served_by(ModelProvider::new("keyed"));
     let (models, events) = discovered(&providers, vec![fixture]);
     assert_eq!(models, ["keyed-too:sk-ant", "fixture"]);
@@ -257,33 +246,6 @@ fn each_connected_provider_lists_its_models_and_the_engine_s_come_last() {
         e,
         ServerEvent::Providers(ProviderEvent::Failed { provider, .. }) if *provider == ModelProvider::new("keyed")
     )));
-}
-
-struct OrgAccount(Principal);
-
-impl SharedCredentials for OrgAccount {
-    fn holder(&self, owner: &Principal) -> Option<Principal> {
-        (!owner.is_local()).then(|| self.0.clone())
-    }
-}
-
-#[test]
-fn a_member_uses_the_organization_s_key_until_they_connect_their_own() {
-    let org = Principal::member(domain::UserId::new(), domain::OrgId::new());
-    let member = Principal::member(domain::UserId::new(), org.org());
-    let mut rig = rig();
-    rig.providers = rig.providers.with_shared(Arc::new(OrgAccount(org.clone())));
-    let keyed = ModelProvider::new("keyed");
-    rig.providers.connect(&org, keyed, "sk-proj-org0123456789ab");
-
-    let shared = rig.providers.key(&member, keyed).expect("the organization's key");
-    assert!(shared.current().expect("load").secret().contains("sk-proj-org0123456789ab"));
-    assert_eq!(account(&rig.providers.list(&member), "keyed").map(|a| a.label), Some("…89ab".to_owned()));
-
-    rig.providers.connect(&member, keyed, "sk-proj-own0123456789cd");
-    let own = rig.providers.key(&member, keyed).expect("their own key");
-    assert!(own.current().expect("load").secret().contains("sk-proj-own0123456789cd"));
-    assert!(rig.providers.key(&OWNER, keyed).is_err(), "the local owner shares nothing");
 }
 
 #[path = "port_tests.rs"]

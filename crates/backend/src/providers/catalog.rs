@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agent_engine::model::http::NetHttp;
 use domain::provider::ProviderKey;
-use domain::{ModelOption, ModelProvider, Principal};
+use domain::{ModelOption, ModelProvider};
 use platform::sync::Locked;
 use protocol::{ProviderEvent, ServerEvent};
 
@@ -25,24 +25,22 @@ impl ModelCatalog for ProviderCatalog {
 }
 
 impl ModelProviders {
-    pub(crate) fn discover_models(&self, owner: &Principal, engine_models: Vec<ModelOption>, outbox: &Outbox) {
-        let owner_key = crate::dirs::owner_key(owner);
+    pub(crate) fn discover_models(&self, engine_models: Vec<ModelOption>, outbox: &Outbox) {
         let generation = {
-            let mut generations = self.generations.locked();
-            let value = generations.entry(owner_key.clone()).or_default();
+            let mut value = self.generation.locked();
             *value = value.wrapping_add(1);
             *value
         };
-        let (this, owner, outbox) = (self.clone(), owner.clone(), outbox.clone());
+        let (this, outbox) = (self.clone(), outbox.clone());
         platform::named::spawn("model-catalog", move || {
             let accounts: Vec<_> = agent_engine::providers::all()
                 .into_iter()
                 .map(llm_providers::id)
-                .filter_map(|provider| Some((provider, this.key(&owner, provider).ok()?)))
+                .filter_map(|provider| Some((provider, this.key(provider).ok()?)))
                 .collect();
             let mut models = list(this.catalog.as_ref(), accounts, &outbox);
             models.extend(engine_models);
-            let latest = this.generations.locked().get(&owner_key) == Some(&generation);
+            let latest = *this.generation.locked() == generation;
             if latest {
                 outbox.send(ServerEvent::Models(models));
             }

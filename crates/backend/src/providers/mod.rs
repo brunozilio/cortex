@@ -3,7 +3,6 @@ mod accounts;
 mod catalog;
 mod port;
 pub(crate) mod redirect;
-mod shared;
 mod signing;
 mod store;
 
@@ -13,15 +12,14 @@ use std::sync::{Arc, Mutex};
 
 use platform::sync::Locked;
 
-use domain::provider::{ModelProvider, ProviderAccount, ProviderBook, ProviderKey, clean_key, key_hint};
-use domain::{Principal, SecretId};
+use domain::SecretId;
+use domain::provider::{ModelProvider, ProviderAccount, ProviderKey, clean_key, key_hint};
 use llm_providers::Config;
 use protocol::{ProviderEvent, ServerEvent};
 
 pub use self::account::{BrowserSignIn, SignIn};
 pub use self::catalog::{ModelCatalog, ProviderCatalog};
 pub use self::port::{Ports, SystemPorts};
-pub use self::shared::{NothingShared, SharedCredentials};
 pub use self::store::{FileProviderStore, InMemoryProviderStore, ProviderStore};
 use crate::secrets::SecretStore;
 
@@ -45,12 +43,11 @@ type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
 pub struct ModelProviders {
     store: Arc<dyn ProviderStore>,
     secrets: Arc<dyn SecretStore>,
-    shared: Arc<dyn SharedCredentials>,
     sign_in: Arc<dyn SignIn>,
     ports: Arc<dyn Ports>,
     catalog: Arc<dyn ModelCatalog>,
-    generations: Arc<Mutex<HashMap<String, u64>>>,
-    runs: Arc<Mutex<HashMap<String, u64>>>,
+    generation: Arc<Mutex<u64>>,
+    runs: Arc<Mutex<HashMap<ModelProvider, u64>>>,
     lock: Arc<Mutex<()>>,
     in_flight: Arc<Mutex<HashMap<ModelProvider, Arc<signing::InFlight>>>>,
     told_unkept: Arc<AtomicBool>,
@@ -72,11 +69,10 @@ impl ModelProviders {
         Self {
             store,
             secrets,
-            shared: Arc::new(NothingShared),
             sign_in: Arc::new(BrowserSignIn),
             ports: Arc::new(SystemPorts),
             catalog: Arc::new(ProviderCatalog),
-            generations: Arc::default(),
+            generation: Arc::default(),
             runs: Arc::default(),
             lock: Arc::default(),
             in_flight: Arc::default(),
@@ -86,16 +82,12 @@ impl ModelProviders {
     }
 
     pub fn system() -> Self {
-        Self::new(Arc::new(FileProviderStore::system()), crate::secrets::system_secrets())
+        let stores = crate::DataRoot::system().stores();
+        Self::new(stores.providers, stores.secrets)
     }
 
     pub fn with_secrets(mut self, secrets: Arc<dyn SecretStore>) -> Self {
         self.secrets = secrets;
-        self
-    }
-
-    pub fn with_shared(mut self, shared: Arc<dyn SharedCredentials>) -> Self {
-        self.shared = shared;
         self
     }
 
@@ -125,22 +117,22 @@ impl ModelProviders {
     }
 
     pub(crate) fn for_client(mut self) -> Self {
-        self.generations = Arc::default();
+        self.generation = Arc::default();
         self
     }
 
-    pub fn list(&self, owner: &Principal) -> ServerEvent {
+    pub fn list(&self) -> ServerEvent {
         ServerEvent::Providers(ProviderEvent::Listed {
-            providers: self.book(owner).summaries(agent_engine::providers::infos()),
+            providers: self.store.load().summaries(agent_engine::providers::infos()),
         })
     }
 
-    pub fn connect(&self, owner: &Principal, provider: ModelProvider, raw: &str) -> ServerEvent {
+    pub fn connect(&self, provider: ModelProvider, raw: &str) -> ServerEvent {
         let kept = self.secrets.unkept().map_or(Ok(()), |reason| Err(crate::secrets::refusal(&reason)));
         let result = kept
             .and_then(|()| self.parse(provider, raw))
-            .and_then(|(config, label)| self.keep(owner, provider, label, &config));
-        self.answer(owner, provider, result)
+            .and_then(|(config, label)| self.keep(provider, label, &config));
+        self.answer(provider, result)
     }
 
     pub fn unkept_notice(&self) -> Option<domain::inbox::Notice> {
@@ -167,65 +159,41 @@ impl ModelProviders {
         Ok((config, key_hint(&key)))
     }
 
-    pub fn key(&self, owner: &Principal, provider: ModelProvider) -> Result<ProviderKey, String> {
-        let Some(holder) = self.holder(owner, provider) else {
+    pub fn key(&self, provider: ModelProvider) -> Result<ProviderKey, String> {
+        let Some(id) = self.store.load().get(provider).map(|account| account.id.clone()) else {
             return Err(format!("{} is not connected", agent_engine::providers::name(provider)));
         };
-        let id = self.store.load(&holder).get(provider).map(|account| account.id.clone()).unwrap_or_default();
-        self.account_key(holder, provider, &id)
+        self.account_key(provider, &id)
     }
 
-    fn account_key(&self, holder: Principal, provider: ModelProvider, id: &str) -> Result<ProviderKey, String> {
+    fn account_key(&self, provider: ModelProvider, id: &str) -> Result<ProviderKey, String> {
         use domain::provider::ProviderKeyStore;
-        let source = Arc::new(account::AccountStore {
-            secrets: self.secrets.clone(),
-            owner: holder,
-            slot: slot(provider, id),
-            provider,
-        });
+        let source =
+            Arc::new(account::AccountStore { secrets: self.secrets.clone(), slot: slot(provider, id), provider });
         Ok(ProviderKey::new(source.load()?).with_store(source))
-    }
-
-    fn shared_holder(&self, owner: &Principal) -> Option<Principal> {
-        self.shared.holder(owner).filter(|holder| holder != owner)
-    }
-
-    fn book(&self, owner: &Principal) -> ProviderBook {
-        let own = self.store.load(owner);
-        match self.shared_holder(owner) {
-            Some(holder) => own.over(&self.store.load(&holder)),
-            None => own,
-        }
-    }
-
-    fn holder(&self, owner: &Principal, provider: ModelProvider) -> Option<Principal> {
-        if self.store.load(owner).get(provider).is_some() {
-            return Some(owner.clone());
-        }
-        self.shared_holder(owner).filter(|holder| self.store.load(holder).get(provider).is_some())
     }
 
     fn now(&self) -> i64 {
         i64::try_from((self.clock)()).unwrap_or(i64::MAX)
     }
 
-    fn keep(&self, owner: &Principal, provider: ModelProvider, label: String, config: &Config) -> Result<(), String> {
+    fn keep(&self, provider: ModelProvider, label: String, config: &Config) -> Result<(), String> {
         let _guard = self.lock.locked();
         let label = accounts::identity(config, &agent_engine::providers::name(provider))
-            .unwrap_or_else(|| accounts::unnamed(config, label, self.store.load(owner).accounts(provider).len()));
-        let id = self.store.load(owner).slot_for(provider, &label, || uuid::Uuid::new_v4().to_string());
-        self.secrets.set(owner, slot(provider, &id), &account::secrets(config)?)?;
+            .unwrap_or_else(|| accounts::unnamed(config, label, self.store.load().accounts(provider).len()));
+        let id = self.store.load().slot_for(provider, &label, || uuid::Uuid::new_v4().to_string());
+        self.secrets.set(slot(provider, &id), &account::secrets(config)?)?;
         let account = ProviderAccount { label, since_unix: self.now(), id };
         self.store
-            .update(owner, &mut |book| {
+            .update(&mut |book| {
                 book.connect(provider, account.clone());
             })
             .map_err(|error| error.to_string())
     }
 
-    fn answer(&self, owner: &Principal, provider: ModelProvider, result: Result<(), String>) -> ServerEvent {
+    fn answer(&self, provider: ModelProvider, result: Result<(), String>) -> ServerEvent {
         match result {
-            Ok(()) => self.list(owner),
+            Ok(()) => self.list(),
             Err(message) => {
                 tracing::warn!(%message, ?provider, "model provider command failed");
                 ServerEvent::Providers(ProviderEvent::Failed { provider, message })

@@ -39,11 +39,10 @@ fn ended(completed: bool) -> domain::memory::scorecard::RunOutcome {
 fn every_twentieth_request_goes_without_memory_and_the_score_compares_both() {
     let dir = tempfile::tempdir().expect("tempdir");
     let memories = plain();
-    let owner = Principal::LocalOwner;
-    memories.edit(&owner, dir.path(), &[remember("The renderer uses wgpu")], by_user()).expect("edit");
+    memories.edit(dir.path(), &[remember("The renderer uses wgpu")], by_user()).expect("edit");
     let mut held = Vec::new();
     for n in 1..=20 {
-        let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), false);
+        let briefed = memories.brief(RunId::new(), &request(dir.path()), false);
         let brief = briefed.memory.clone().expect("brief");
         if brief.held_out {
             held.push(n);
@@ -53,10 +52,10 @@ fn every_twentieth_request_goes_without_memory_and_the_score_compares_both() {
         }
         let corrections = u32::from(brief.held_out);
         let outcome = domain::memory::scorecard::RunOutcome { corrections, ..ended(true) };
-        memories.finish(&owner, &briefed, &outcome);
+        memories.finish(&briefed, &outcome);
     }
     assert_eq!(held, [20]);
-    let report = memories.score(&owner, dir.path());
+    let report = memories.score(dir.path());
     assert!(report.contains("With memory: 19 runs, 0.0 corrections"), "{report}");
     assert!(report.contains("Without memory: 1 runs, 100.0 corrections"), "{report}");
 }
@@ -67,19 +66,15 @@ fn project_keys_are_flat_file_names() {
 }
 
 #[test]
-fn file_store_round_trips_per_owner() {
+fn file_store_round_trips_per_project() {
     let dir = tempfile::tempdir().expect("tempdir");
     let store = FileMemoryStore::new(dir.path().to_path_buf());
     let project = Path::new("/repo");
     let mut book = MemoryBook::default();
     book.apply(&[remember("Uses wgpu")], &by_user());
-    store.save(&Principal::LocalOwner, project, &book).expect("save");
-    assert_eq!(store.load(&Principal::LocalOwner, project), book);
-    assert_eq!(
-        store.load(&Principal::member(domain::UserId::new(), domain::OrgId::new()), project),
-        MemoryBook::default()
-    );
-    assert_eq!(store.load(&Principal::LocalOwner, Path::new("/other")), MemoryBook::default());
+    store.save(project, &book).expect("save");
+    assert_eq!(store.load(project), book);
+    assert_eq!(store.load(Path::new("/other")), MemoryBook::default());
 }
 
 #[test]
@@ -87,16 +82,15 @@ fn memory_lives_in_the_data_folder_or_only_in_the_process() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut book = MemoryBook::default();
     book.apply(&[remember("Uses wgpu")], &by_user());
-    let owner = Principal::LocalOwner;
     let project = Path::new("/repo");
 
-    let on_disk = memory_store_in(Some(dir.path().to_path_buf()));
-    on_disk.save(&owner, project, &book).expect("save");
+    let on_disk = memory_store_in(crate::DataRoot::under(dir.path()).memory());
+    on_disk.save(project, &book).expect("save");
     assert!(dir.path().join("memory/local/-repo.json").exists());
 
     let in_process = memory_store_in(None);
-    in_process.save(&owner, project, &book).expect("save");
-    assert_eq!(in_process.load(&owner, project), book, "kept for the process, never in a temp folder");
+    in_process.save(project, &book).expect("save");
+    assert_eq!(in_process.load(project), book, "kept for the process, never in a temp folder");
 }
 
 #[test]
@@ -106,13 +100,13 @@ fn an_unreadable_book_is_kept_aside_and_never_overwritten() {
     let project = Path::new("/repo");
     let mut book = MemoryBook::default();
     book.apply(&[remember("Uses wgpu")], &by_user());
-    store.save(&Principal::LocalOwner, project, &book).expect("save");
+    store.save(project, &book).expect("save");
     let folder = dir.path().join("local");
     let file = folder.join("-repo.json");
     std::fs::write(&file, br#"{"next": 1, "memories": [{"id": 0, "#).expect("truncate");
 
-    assert_eq!(store.load(&Principal::LocalOwner, project), MemoryBook::default());
-    store.save(&Principal::LocalOwner, project, &MemoryBook::default()).expect("save");
+    assert_eq!(store.load(project), MemoryBook::default());
+    store.save(project, &MemoryBook::default()).expect("save");
 
     let kept: Vec<String> = std::fs::read_dir(&folder)
         .expect("folder")
@@ -127,9 +121,8 @@ fn an_unreadable_book_is_kept_aside_and_never_overwritten() {
 #[test]
 fn edits_answer_with_the_whole_memory() {
     let memories = plain();
-    let owner = Principal::LocalOwner;
-    memories.edit(&owner, Path::new("/repo"), &[remember("Uses wgpu")], by_user()).expect("edit");
-    let answer = memories.edit(&owner, Path::new("/repo"), &[remember("Inter is the only font")], by_user());
+    memories.edit(Path::new("/repo"), &[remember("Uses wgpu")], by_user()).expect("edit");
+    let answer = memories.edit(Path::new("/repo"), &[remember("Inter is the only font")], by_user());
     let answer = answer.expect("edit");
     assert_eq!(answer["path"], "/repo");
     assert_eq!(listed(&answer).len(), 2);
@@ -139,12 +132,9 @@ fn edits_answer_with_the_whole_memory() {
 fn a_run_is_briefed_and_its_edits_applied_on_completion() {
     let dir = tempfile::tempdir().expect("tempdir");
     let memories = plain();
-    let owner = Principal::LocalOwner;
-    memories
-        .edit(&owner, dir.path(), &[remember("The renderer uses signed distance fields")], by_user())
-        .expect("edit");
+    memories.edit(dir.path(), &[remember("The renderer uses signed distance fields")], by_user()).expect("edit");
 
-    let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), false);
+    let briefed = memories.brief(RunId::new(), &request(dir.path()), false);
     let brief = briefed.memory.clone().expect("brief");
     assert_eq!(brief.recalled.len(), 1);
     assert_eq!(brief.origin.as_deref(), Some("Night sky"));
@@ -152,7 +142,7 @@ fn a_run_is_briefed_and_its_edits_applied_on_completion() {
 
     std::fs::write(&brief.output, r#"{"remember":[{"kind":"episodic","text":"Tuned the renderer"}],"forget":[0]}"#)
         .expect("write");
-    let learned = listed(&memories.finish(&owner, &briefed, &ended(true)).expect("changed").expect("saved"));
+    let learned = listed(&memories.finish(&briefed, &ended(true)).expect("changed").expect("saved"));
     assert_eq!(learned.len(), 1);
     assert_eq!((learned[0].kind, learned[0].author), (MemoryKind::Episodic, Author::Agent));
     assert_eq!(learned[0].origin.as_deref(), Some("Night sky"));
@@ -163,21 +153,20 @@ fn a_run_is_briefed_and_its_edits_applied_on_completion() {
 fn what_an_agent_is_given_counts_as_used() {
     let dir = tempfile::tempdir().expect("tempdir");
     let memories = plain();
-    let owner = Principal::LocalOwner;
     let font = MemoryEdit::Remember {
         kind: MemoryKind::Semantic,
         text: "Inter is the font".into(),
         tags: vec![],
         touches: vec![],
     };
-    memories.edit(&owner, dir.path(), &[remember("The renderer uses wgpu"), font], by_user()).expect("edit");
-    let uses = || listed(&memories.load(&owner, dir.path())).iter().map(|m| m.uses).collect::<Vec<_>>();
+    memories.edit(dir.path(), &[remember("The renderer uses wgpu"), font], by_user()).expect("edit");
+    let uses = || listed(&memories.load(dir.path())).iter().map(|m| m.uses).collect::<Vec<_>>();
 
-    memories.brief(&owner, RunId::new(), &request(dir.path()), false);
+    memories.brief(RunId::new(), &request(dir.path()), false);
     assert_eq!(uses(), vec![1, 1], "everything recalled");
-    memories.find(&owner, dir.path(), "wgpu", 5, &mut MemorySearches::default());
+    memories.find(dir.path(), "wgpu", 5, &mut MemorySearches::default());
     assert_eq!(uses(), vec![2, 1], "only what the search found");
-    memories.find(&owner, dir.path(), "wgpu", 5, &mut MemorySearches::new([MemoryId(0)]));
+    memories.find(dir.path(), "wgpu", 5, &mut MemorySearches::new([MemoryId(0)]));
     assert_eq!(uses(), vec![2, 1], "what was already shown is not counted again");
 }
 
@@ -185,55 +174,52 @@ fn what_an_agent_is_given_counts_as_used() {
 fn a_failed_run_changes_nothing() {
     let dir = tempfile::tempdir().expect("tempdir");
     let memories = plain();
-    let owner = Principal::LocalOwner;
-    let briefed = memories.brief(&owner, RunId::new(), &request(dir.path()), false);
+    let briefed = memories.brief(RunId::new(), &request(dir.path()), false);
     let output = briefed.memory.clone().expect("brief").output;
     std::fs::write(&output, r#"{"remember":[{"kind":"semantic","text":"Half done"}]}"#).expect("write");
-    assert_eq!(memories.finish(&owner, &briefed, &ended(false)), None);
+    assert_eq!(memories.finish(&briefed, &ended(false)), None);
     assert!(!output.exists());
     let mut no_memory = request(dir.path());
     no_memory.memory = None;
-    assert_eq!(memories.brief(&owner, RunId::new(), &no_memory, false), no_memory);
+    assert_eq!(memories.brief(RunId::new(), &no_memory, false), no_memory);
 }
 
 #[test]
 fn an_optimisation_can_be_undone_until_the_next_edit() {
     let dir = tempfile::tempdir().expect("tempdir");
     let memories = plain();
-    let owner = Principal::LocalOwner;
     let both = [remember("Uses wgpu"), remember("The renderer uses wgpu")];
-    memories.edit(&owner, dir.path(), &both, by_user()).expect("edit");
-    let request = memories.optimization(&owner, dir.path(), ModelOption::new("opus", "Opus"));
+    memories.edit(dir.path(), &both, by_user()).expect("edit");
+    let request = memories.optimization(dir.path(), ModelOption::new("opus", "Opus"));
     assert!(request.prompt.contains("[0] semantic (render), from the user: Uses wgpu"));
-    let briefed = memories.brief(&owner, RunId::new(), &request, false);
+    let briefed = memories.brief(RunId::new(), &request, false);
     let brief = briefed.memory.clone().expect("brief");
     assert!(brief.optimizing && brief.recalled.is_empty() && !brief.tool);
 
     std::fs::write(&brief.output, r#"{"forget":[0]}"#).expect("write");
-    let optimized = memories.finish(&owner, &briefed, &ended(true)).expect("changed").expect("saved");
+    let optimized = memories.finish(&briefed, &ended(true)).expect("changed").expect("saved");
     assert_eq!(listed(&optimized).len(), 1);
     assert_eq!(forgotten(&optimized).iter().map(|f| f.memory.id).collect::<Vec<_>>(), vec![MemoryId(0)]);
-    let undone = memories.undo(&owner, dir.path()).expect("undone");
+    let undone = memories.undo(dir.path()).expect("undone");
     assert_eq!(listed(&undone).len(), 2, "both memories are back");
     assert!(forgotten(&undone).is_empty());
-    assert!(memories.undo(&owner, dir.path()).is_err(), "undone only once");
+    assert!(memories.undo(dir.path()).is_err(), "undone only once");
 
-    let briefed = memories.brief(&owner, RunId::new(), &request, false);
+    let briefed = memories.brief(RunId::new(), &request, false);
     std::fs::write(&briefed.memory.clone().expect("brief").output, r#"{"forget":[1]}"#).expect("write");
-    let _ = memories.finish(&owner, &briefed, &ended(true));
-    memories.edit(&owner, dir.path(), &[remember("Inter is the font")], by_user()).expect("edit");
-    assert!(memories.undo(&owner, dir.path()).is_err(), "an edit ends the undo");
+    let _ = memories.finish(&briefed, &ended(true));
+    memories.edit(dir.path(), &[remember("Inter is the font")], by_user()).expect("edit");
+    assert!(memories.undo(dir.path()).is_err(), "an edit ends the undo");
 }
 
 #[test]
 fn a_tool_shortens_what_is_recalled() {
     let memories = plain();
-    let owner = Principal::LocalOwner;
     let dir = tempfile::tempdir().expect("tempdir");
     let edits: Vec<MemoryEdit> = (0..30).map(|n| remember(&format!("Fact number {n}"))).collect();
-    memories.edit(&owner, dir.path(), &edits, by_user()).expect("edit");
-    let with = memories.brief(&owner, RunId::new(), &request(dir.path()), true).memory.expect("brief");
-    let without = memories.brief(&owner, RunId::new(), &request(dir.path()), false).memory.expect("brief");
+    memories.edit(dir.path(), &edits, by_user()).expect("edit");
+    let with = memories.brief(RunId::new(), &request(dir.path()), true).memory.expect("brief");
+    let without = memories.brief(RunId::new(), &request(dir.path()), false).memory.expect("brief");
     assert_eq!((with.recalled.len(), without.recalled.len()), (RecallBudget::WITH_TOOL.facts, 30));
     assert!(with.tool);
 }
@@ -241,12 +227,11 @@ fn a_tool_shortens_what_is_recalled() {
 #[test]
 fn memory_that_fits_in_the_prompt_offers_no_search() {
     let memories = plain();
-    let owner = Principal::LocalOwner;
     let dir = tempfile::tempdir().expect("tempdir");
-    let empty = memories.brief(&owner, RunId::new(), &request(dir.path()), true).memory.expect("brief");
+    let empty = memories.brief(RunId::new(), &request(dir.path()), true).memory.expect("brief");
     assert!(!empty.tool, "an empty memory has nothing to search");
-    memories.edit(&owner, dir.path(), &[remember("Uses wgpu")], by_user()).expect("edit");
-    let small = memories.brief(&owner, RunId::new(), &request(dir.path()), true).memory.expect("brief");
+    memories.edit(dir.path(), &[remember("Uses wgpu")], by_user()).expect("edit");
+    let small = memories.brief(RunId::new(), &request(dir.path()), true).memory.expect("brief");
     assert_eq!((small.recalled.len(), small.tool), (1, false), "everything is already recalled");
 }
 
@@ -271,7 +256,7 @@ fn the_feature_keeps_memory_in_the_data_folder_and_starts_optimisations() {
         started.lock().expect("lock").push((run, request));
         Ok(())
     };
-    let context = Context { client: 1, principal: &Principal::LocalOwner, services: &services, submit: &submit };
+    let context = Context { client: 1, services: &services, submit: &submit };
     let run = RunId::new();
     let optimize = json!({ "op": "optimize", "path": path, "run": run, "model": ModelOption::new("m", "M") });
     assert_eq!(handle(&context, optimize).expect("started"), json!({ "run": run }));
@@ -285,10 +270,10 @@ fn two_processes_on_one_project_keep_each_others_memories() {
     let dir = tempfile::tempdir().expect("tempdir");
     let first = Memories::new(Arc::new(FileMemoryStore::new(dir.path().to_path_buf())));
     let second = Memories::new(Arc::new(FileMemoryStore::new(dir.path().to_path_buf())));
-    let (owner, project) = (Principal::LocalOwner, Path::new("/repo"));
-    second.load(&owner, project);
-    first.edit(&owner, project, &[remember("Uses wgpu")], by_user()).expect("first");
-    let answer = second.edit(&owner, project, &[remember("Ships on Linux")], by_user()).expect("second");
+    let project = Path::new("/repo");
+    second.load(project);
+    first.edit(project, &[remember("Uses wgpu")], by_user()).expect("first");
+    let answer = second.edit(project, &[remember("Ships on Linux")], by_user()).expect("second");
     let texts: Vec<String> = listed(&answer).into_iter().map(|memory| memory.text).collect();
     assert_eq!(texts, ["Uses wgpu", "Ships on Linux"]);
 }

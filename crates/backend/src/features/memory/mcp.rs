@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use domain::mcp::{LocalMcp, McpEndpoint, RpcError, text_result};
 use domain::memory::{MEMORY_SEARCH_TOOL, MEMORY_SERVER, MemorySearches, SearchAnswer};
-use domain::{Memory, MemoryKind, Principal};
+use domain::{Memory, MemoryKind};
 use platform::sync::Locked;
 use serde_json::{Value, json};
 
@@ -85,14 +85,13 @@ fn listing(memories: &[Memory]) -> String {
 
 pub struct MemoryEndpoint {
     memories: Memories,
-    owner: Principal,
     project: PathBuf,
     searches: Mutex<MemorySearches>,
 }
 
 impl MemoryEndpoint {
-    pub fn for_run(memories: Memories, owner: Principal, project: PathBuf, searches: MemorySearches) -> LocalMcp {
-        LocalMcp::new(MEMORY_SERVER, Arc::new(Self { memories, owner, project, searches: Mutex::new(searches) }))
+    pub fn for_run(memories: Memories, project: PathBuf, searches: MemorySearches) -> LocalMcp {
+        LocalMcp::new(MEMORY_SERVER, Arc::new(Self { memories, project, searches: Mutex::new(searches) }))
     }
 }
 
@@ -100,7 +99,7 @@ impl McpEndpoint for MemoryEndpoint {
     fn handle(&self, message: &Value) -> Option<Value> {
         respond(message, |query, limit| {
             let mut searches = self.searches.locked();
-            answer(self.memories.find(&self.owner, &self.project, query, limit, &mut searches))
+            answer(self.memories.find(&self.project, query, limit, &mut searches))
         })
     }
 }

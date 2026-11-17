@@ -3,7 +3,7 @@ use std::path::Path;
 use agent_engine::sessions::{FileSessions, records};
 use domain::memory::seed::{Candidate, candidates};
 use domain::trace::Record;
-use domain::{Author, MemoryEdit, MemoryKind, ModelOption, Principal, PromptRequest, Provenance, SessionId};
+use domain::{Author, MemoryEdit, MemoryKind, ModelOption, PromptRequest, Provenance, SessionId};
 use serde_json::{Value, json};
 
 use super::{Memories, now, team};
@@ -33,28 +33,26 @@ impl Memories {
             return Err("None of those numbers is offered (see /memory seed).".into());
         }
         let by = Provenance { author: Author::User, now: now(), origin: Some(ORIGIN.into()) };
-        self.edit(context.principal, project, &edits, by)
+        self.edit(project, &edits, by)
     }
 
     fn offered(&self, context: &Context<'_>, project: &Path) -> Result<Vec<Candidate>, String> {
-        if !team::features(project, self.home(context.principal).as_deref()).on(domain::features::MEMORY_SEED) {
+        if !team::features(project, self.home().as_deref()).on(domain::features::MEMORY_SEED) {
             return Err(format!("/memory seed is turned off ({}).", domain::features::MEMORY_SEED));
         }
-        let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
-        let store = FileSessions::new(data.join(crate::native::SESSIONS));
-        let owner_settings = context.services.settings.load(context.principal).unwrap_or_default();
+        let store = context.services.sessions.as_ref();
+        let owner_settings = context.services.settings.load().unwrap_or_default();
         let sessions = crate::settings::recent_sessions(&owner_settings, project);
         let known = {
             let mut books = self.lock();
-            self.book(&mut books, context.principal, project).memories.clone()
+            self.book(&mut books, project).memories.clone()
         };
-        Ok(candidates(&prompts(&store, context.principal, project, &sessions), &known))
+        Ok(candidates(&prompts(store, project, &sessions), &known))
     }
 }
 
-pub fn prompts(store: &FileSessions, owner: &Principal, project: &Path, sessions: &[SessionId]) -> Vec<Vec<String>> {
-    let mut request = PromptRequest::plain(project.into(), "", ModelOption::new("", ""));
-    request.credentials.owner = Some(owner.clone());
+pub fn prompts(store: &FileSessions, project: &Path, sessions: &[SessionId]) -> Vec<Vec<String>> {
+    let request = PromptRequest::plain(project.into(), "", ModelOption::new("", ""));
     sessions
         .iter()
         .filter_map(|id| store.entries(&request, id).ok())
@@ -81,14 +79,13 @@ mod tests {
     fn each_session_gives_the_prompts_typed_in_it() {
         let dir = tempfile::tempdir().expect("dir");
         let store = FileSessions::new(dir.path().join("sessions"));
-        let mut request = PromptRequest::plain(dir.path().into(), "", ModelOption::new("", ""));
-        request.credentials.owner = Some(Principal::LocalOwner);
+        let request = PromptRequest::plain(dir.path().into(), "", ModelOption::new("", ""));
         let (one, two) = (SessionId("one".into()), SessionId("two".into()));
         for (session, prompt) in [(&one, "Always run cargo nextest"), (&two, "always run cargo nextest please")] {
             store.record(&request, session, &Entry::Prompted { at_ms: 1, prompt: prompt.into() }).expect("record");
         }
 
-        let said = prompts(&store, &Principal::LocalOwner, dir.path(), &[one, two, SessionId("gone".into())]);
+        let said = prompts(&store, dir.path(), &[one, two, SessionId("gone".into())]);
 
         assert_eq!(
             said,

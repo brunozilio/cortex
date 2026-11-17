@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use domain::{Author, MemoryBrief, MemoryEdit, MemoryKind, ModelOption, Principal, PromptRequest, Provenance, RunId};
+use domain::{Author, MemoryBrief, MemoryEdit, MemoryKind, ModelOption, PromptRequest, Provenance, RunId};
 
 use super::Memories;
 use super::store::InMemoryStore;
@@ -19,19 +19,18 @@ fn remember(text: &str, touches: &[&str]) -> MemoryEdit {
 fn a_run_is_handed_the_memories_about_files_that_its_prompt_did_not_recall() {
     let project = tempfile::tempdir().expect("project");
     let memories = Memories::new(Arc::new(InMemoryStore::default()));
-    let owner = Principal::LocalOwner;
     let edits = [
         remember("Keep defaultRetryMax at 4", &["client.go"]),
         remember("The renderer draws signed distance fields", &[]),
     ];
     let by = Provenance { author: Author::User, now: 1, origin: None };
-    memories.edit(&owner, project.path(), &edits, by).expect("edit");
+    memories.edit(project.path(), &edits, by).expect("edit");
     let request = PromptRequest {
         memory: Some(MemoryBrief::new(None)),
         ..PromptRequest::plain(project.path().into(), "Tune the renderer", ModelOption::new("m", "M"))
     };
 
-    let briefed = memories.brief(&owner, RunId::new(), &request, false);
+    let briefed = memories.brief(RunId::new(), &request, false);
 
     let brief = briefed.memory.expect("brief");
     assert!(brief.anchors && brief.structured);
@@ -57,20 +56,19 @@ fn a_project_that_turns_the_context_features_off_gets_none_of_them() {
     } });
     std::fs::write(settings.join("settings.json"), off.to_string()).expect("settings");
     let memories = Memories::new(Arc::new(InMemoryStore::default()));
-    let owner = Principal::LocalOwner;
     let by = Provenance { author: Author::User, now: 1, origin: None };
-    memories.edit(&owner, project.path(), &[remember("Keep retries at 4", &["client.go"])], by).expect("edit");
+    memories.edit(project.path(), &[remember("Keep retries at 4", &["client.go"])], by).expect("edit");
     let request = PromptRequest {
         memory: Some(MemoryBrief::new(None)),
         ..PromptRequest::plain(project.path().into(), "Tune the renderer", ModelOption::new("m", "M"))
     };
 
-    let brief = memories.brief(&owner, RunId::new(), &request, false).memory.expect("brief");
+    let brief = memories.brief(RunId::new(), &request, false).memory.expect("brief");
 
     assert!(!brief.anchors && !brief.structured && brief.anchored.is_empty());
     let told = brief.instructions(true).expect("instructions");
     assert!(!told.contains("\"touches\"") && !told.contains("\"ruled_out\""), "{told}");
-    let refused = memories.check(&owner, project.path()).expect_err("off");
+    let refused = memories.check(project.path()).expect_err("off");
     assert!(refused.contains(domain::features::LEARNING_CHECK), "{refused}");
     let services = crate::feature::testing::services(None);
     let seeded = crate::feature::testing::with(1, &services, |context| memories.seed(context, project.path()));
@@ -81,8 +79,7 @@ fn a_project_that_turns_the_context_features_off_gets_none_of_them() {
 fn the_check_needs_git_and_then_names_the_memories_about_the_changes() {
     let project = tempfile::tempdir().expect("project");
     let memories = Memories::new(Arc::new(InMemoryStore::default()));
-    let owner = Principal::LocalOwner;
-    assert!(memories.check(&owner, project.path()).is_err());
+    assert!(memories.check(project.path()).is_err());
 
     let git = |args: &[&str]| {
         let done = std::process::Command::new("git")
@@ -98,13 +95,13 @@ fn the_check_needs_git_and_then_names_the_memories_about_the_changes() {
     git(&["add", "."]);
     git(&["commit", "-q", "-m", "one"]);
     let by = Provenance { author: Author::User, now: 1, origin: None };
-    memories.edit(&owner, project.path(), &[remember("Keep defaultRetryMax at 4", &["client.go"])], by).expect("edit");
+    memories.edit(project.path(), &[remember("Keep defaultRetryMax at 4", &["client.go"])], by).expect("edit");
 
-    let clean = memories.check(&owner, project.path()).expect("check");
+    let clean = memories.check(project.path()).expect("check");
     assert!(clean["prompt"].is_null(), "nothing changed: {clean}");
 
     std::fs::write(project.path().join("client.go"), "retries = 10\n").expect("write");
-    let changed = memories.check(&owner, Path::new(project.path())).expect("check");
+    let changed = memories.check(Path::new(project.path())).expect("check");
     let prompt = changed["prompt"].as_str().expect("prompt");
     assert!(prompt.contains("Keep defaultRetryMax at 4") && prompt.contains("[about client.go]"), "{prompt}");
     assert_eq!((changed["changed"].as_u64(), changed["memories"].as_u64()), (Some(1), Some(1)));

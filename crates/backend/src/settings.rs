@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 
-use domain::Principal;
-
-use crate::dirs::{app_data_dir, owner_key};
+use domain::legacy::OWNER_DIR;
+use platform::sync::Locked;
 
 const AT_MOST: usize = 256 * 1024;
 
@@ -15,8 +14,8 @@ pub(crate) fn recent_sessions(owner_settings: &serde_json::Value, cwd: &std::pat
 }
 
 pub trait SettingsStore: Send + Sync {
-    fn load(&self, owner: &Principal) -> Option<serde_json::Value>;
-    fn save(&self, owner: &Principal, settings: &serde_json::Value) -> Result<(), String>;
+    fn load(&self) -> Option<serde_json::Value>;
+    fn save(&self, settings: &serde_json::Value) -> Result<(), String>;
 }
 
 #[derive(Debug, Clone)]
@@ -29,18 +28,14 @@ impl FileSettingsStore {
         Self { root }
     }
 
-    pub fn system() -> Self {
-        Self::new(app_data_dir().unwrap_or_else(std::env::temp_dir).join("users"))
-    }
-
-    fn path(&self, owner: &Principal) -> PathBuf {
-        self.root.join(owner_key(owner)).join("settings.json")
+    fn path(&self) -> PathBuf {
+        self.root.join(OWNER_DIR).join("settings.json")
     }
 }
 
 impl SettingsStore for FileSettingsStore {
-    fn load(&self, owner: &Principal) -> Option<serde_json::Value> {
-        let path = self.path(owner);
+    fn load(&self) -> Option<serde_json::Value> {
+        let path = self.path();
         let bytes = std::fs::read(&path).ok()?;
         match serde_json::from_slice(&bytes) {
             Ok(settings) => Some(settings),
@@ -53,49 +48,66 @@ impl SettingsStore for FileSettingsStore {
         }
     }
 
-    fn save(&self, owner: &Principal, settings: &serde_json::Value) -> Result<(), String> {
+    fn save(&self, settings: &serde_json::Value) -> Result<(), String> {
         let json = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
         if json.len() > AT_MOST {
             return Err("these settings are too large to keep".to_owned());
         }
-        platform::private_file::replace(&self.path(owner), &json).map_err(|error| error.to_string())
+        platform::private_file::replace(&self.path(), &json).map_err(|error| error.to_string())
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct InMemorySettingsStore {
+    kept: std::sync::Mutex<Option<serde_json::Value>>,
+}
+
+impl SettingsStore for InMemorySettingsStore {
+    fn load(&self) -> Option<serde_json::Value> {
+        self.kept.locked().clone()
+    }
+
+    fn save(&self, settings: &serde_json::Value) -> Result<(), String> {
+        *self.kept.locked() = Some(settings.clone());
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use domain::{OrgId, UserId};
-
     use super::*;
 
     #[test]
-    fn each_user_keeps_their_own_settings() {
+    fn settings_kept_in_memory_are_read_back() {
+        let store = InMemorySettingsStore::default();
+        assert_eq!(store.load(), None);
+        store.save(&serde_json::json!({"theme": "dark"})).expect("save");
+        assert_eq!(store.load(), Some(serde_json::json!({"theme": "dark"})));
+    }
+
+    #[test]
+    fn settings_are_kept_and_a_save_too_large_is_refused() {
         let root = tempfile::tempdir().expect("root");
         let store = FileSettingsStore::new(root.path().to_path_buf());
-        let (ana, rui) =
-            (Principal::member(UserId::new(), OrgId::new()), Principal::member(UserId::new(), OrgId::new()));
-        assert_eq!(store.load(&ana), None, "never saved");
-        store.save(&ana, &serde_json::json!({"theme": "dark"})).expect("save");
-        store.save(&rui, &serde_json::json!({"theme": "light"})).expect("save");
-        assert_eq!(store.load(&ana), Some(serde_json::json!({"theme": "dark"})));
-        assert_eq!(store.load(&rui), Some(serde_json::json!({"theme": "light"})));
+        assert_eq!(store.load(), None, "never saved");
+        store.save(&serde_json::json!({"theme": "dark"})).expect("save");
+        assert_eq!(store.load(), Some(serde_json::json!({"theme": "dark"})));
         let huge = serde_json::json!({ "x": "a".repeat(AT_MOST) });
-        assert!(store.save(&ana, &huge).is_err());
-        assert_eq!(store.load(&ana), Some(serde_json::json!({"theme": "dark"})), "a refused save keeps the last");
+        assert!(store.save(&huge).is_err());
+        assert_eq!(store.load(), Some(serde_json::json!({"theme": "dark"})), "a refused save keeps the last");
     }
 
     #[test]
     fn a_settings_file_that_does_not_parse_is_kept_aside_not_overwritten() {
         let root = tempfile::tempdir().expect("root");
         let store = FileSettingsStore::new(root.path().to_path_buf());
-        let owner = Principal::LocalOwner;
-        let path = store.path(&owner);
+        let path = store.path();
         std::fs::create_dir_all(path.parent().expect("folder")).expect("folder");
         std::fs::write(&path, "{\"model\": \"opus\", oops").expect("write");
-        assert_eq!(store.load(&owner), None);
-        store.save(&owner, &serde_json::json!({"vim": true})).expect("save");
+        assert_eq!(store.load(), None);
+        store.save(&serde_json::json!({"vim": true})).expect("save");
         let kept = std::fs::read_to_string(path.with_extension("json.broken")).expect("kept aside");
         assert_eq!(kept, "{\"model\": \"opus\", oops");
-        assert_eq!(store.load(&owner), Some(serde_json::json!({"vim": true})));
+        assert_eq!(store.load(), Some(serde_json::json!({"vim": true})));
     }
 }

@@ -5,7 +5,7 @@ use agent_engine::sessions::{FileSessions, records};
 use domain::permission_rules::RuleKind;
 use domain::suggested_rules::{Suggestion, suggestions};
 use domain::trace::Record;
-use domain::{ModelOption, Principal, PromptRequest, SessionId};
+use domain::{ModelOption, PromptRequest, SessionId};
 use serde_json::{Value, json};
 
 use crate::feature::Context;
@@ -20,12 +20,11 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
     if let Some(line) = input["keep"]["instruction"].as_str() {
         return keep_instruction(cwd, line).map(|file| json!({ "file": file }));
     }
-    let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
-    let store = FileSessions::new(data.join(crate::native::SESSIONS));
-    let owner_settings = context.services.settings.load(context.principal).unwrap_or_default();
+    let store = context.services.sessions.as_ref();
+    let owner_settings = context.services.settings.load().unwrap_or_default();
     let sessions = crate::settings::recent_sessions(&owner_settings, cwd);
-    let kept = settings::load(cwd, context.services.home(context.principal).as_deref(), &[])?.permissions.listed();
-    serde_json::to_value(suggested(&store, context.principal, cwd, &sessions, &kept)).map_err(|e| e.to_string())
+    let kept = settings::load(cwd, context.services.home().as_deref(), &[])?.permissions.listed();
+    serde_json::to_value(suggested(store, cwd, &sessions, &kept)).map_err(|e| e.to_string())
 }
 
 pub fn forget(_client: u64) {}
@@ -44,15 +43,8 @@ fn keep_instruction(cwd: &Path, line: &str) -> Result<std::path::PathBuf, String
     Ok(file)
 }
 
-fn suggested(
-    store: &FileSessions,
-    owner: &Principal,
-    cwd: &Path,
-    sessions: &[SessionId],
-    kept: &[(RuleKind, String)],
-) -> Vec<Suggestion> {
-    let mut request = PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""));
-    request.credentials.owner = Some(owner.clone());
+fn suggested(store: &FileSessions, cwd: &Path, sessions: &[SessionId], kept: &[(RuleKind, String)]) -> Vec<Suggestion> {
+    let request = PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""));
     let events: Vec<_> = sessions
         .iter()
         .filter_map(|id| store.entries(&request, id).ok())
@@ -91,8 +83,7 @@ mod tests {
     fn approvals_across_the_project_s_sessions_become_a_suggestion() {
         let dir = tempfile::tempdir().expect("dir");
         let store = FileSessions::new(dir.path().join("sessions"));
-        let mut request = PromptRequest::plain(dir.path().into(), "", ModelOption::new("", ""));
-        request.credentials.owner = Some(Principal::LocalOwner);
+        let request = PromptRequest::plain(dir.path().into(), "", ModelOption::new("", ""));
         let (one, two) = (SessionId("one".into()), SessionId("two".into()));
         for at in 0..3 {
             answered(&store, &request, &one, at, "Bash(cargo test:*)");
@@ -104,7 +95,7 @@ mod tests {
             json!({ "conversations": { dir.path().to_string_lossy(): [{ "session": "one" }, { "session": "two" }] } });
 
         let sessions = crate::settings::recent_sessions(&settings, dir.path());
-        let found = suggested(&store, &Principal::LocalOwner, dir.path(), &sessions, &[]);
+        let found = suggested(&store, dir.path(), &sessions, &[]);
 
         assert_eq!(found, [Suggestion { rule: "Bash(cargo test:*)".into(), kind: RuleKind::Allow, times: 5 }]);
     }

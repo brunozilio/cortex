@@ -34,6 +34,27 @@ fn knows_the_home_rule(setup: &Setup) -> bool {
 }
 
 #[test]
+fn agent_memory_kept_before_the_owner_was_removed_stays_in_its_folder() {
+    const KEPT_IN: &str = "b9de53edd9e0fc9b237d59bb5b213e9a6c4eebb83708b060a065f80a83f7443f/\
+                           reviewer-2d70999ae1805e4bcef9b4ab3a4b827f578c61740f30076fcdc35c7ae7f586b3";
+    let project = tempfile::tempdir().expect("project");
+    let workspace = Workspace::new(project.path());
+    let config = AgentConfig { memory: Some("project".into()), ..Default::default() };
+
+    let setup = prepare(&config, "reviewer", &workspace).expect("setup");
+
+    let dir = setup.memory_dir.expect("memory dir");
+    let base = project.path().canonicalize().expect("project").join(concat!(brand::dir!(), "/agent-memory"));
+    let kept: Vec<String> = dir
+        .strip_prefix(&base)
+        .expect("under the project's agent memory")
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(kept.join("/"), KEPT_IN);
+}
+
+#[test]
 fn a_worktree_keeps_the_rules_of_the_user_s_home_when_made_and_when_resumed() {
     let project = tempfile::tempdir().expect("project");
     repo(project.path());

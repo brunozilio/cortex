@@ -1,13 +1,13 @@
 use std::sync::atomic::AtomicBool;
 
 use super::git::output;
-use super::{Setup, WorktreeState, managed, owner, prepare_as};
+use super::{Setup, WorktreeState, managed, prepare_as};
 use crate::tools::Workspace;
 use crate::tools::subagent_config::AgentConfig;
 
 pub fn enter(workspace: &Workspace) -> Result<Setup, String> {
     let config = AgentConfig { worktree: true, ..Default::default() };
-    prepare_as(&config, "main", &owner(workspace)?, workspace)
+    prepare_as(&config, "main", workspace)
 }
 
 #[derive(Debug)]

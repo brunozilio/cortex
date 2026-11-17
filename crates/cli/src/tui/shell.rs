@@ -42,10 +42,10 @@ mod tests {
 
     #[test]
     fn runs_in_the_project_and_says_whether_it_failed() {
-        let dir = tempfile::tempdir().expect("dir");
+        let (data, dir) = (tempfile::tempdir().expect("data"), tempfile::tempdir().expect("dir"));
         std::fs::write(dir.path().join("a.txt"), "x").expect("write");
         let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
-        let sdk = super::super::tests::sdk(&engine, dir.path());
+        let sdk = super::super::tests::sdk(&engine, data.path());
         assert_eq!(run(&sdk, dir.path(), "ls"), Ok(("a.txt".to_owned(), false)));
         assert_eq!(run(&sdk, dir.path(), "echo oops >&2; exit 3"), Ok(("oops".to_owned(), true)));
     }

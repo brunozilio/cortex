@@ -27,7 +27,6 @@ fn engine() -> FakeEngine {
 
 fn build(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-    services.data = None;
     services.off.insert("memory_search".into());
     services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
     Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND)

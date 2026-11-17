@@ -1,4 +1,3 @@
-use domain::Principal;
 use domain::account_pool::{self, Balance};
 use domain::provider::{ModelProvider, ProviderBook, ProviderKey};
 use llm_providers::Config;
@@ -26,36 +25,35 @@ pub(super) fn unnamed(config: &Config, label: String, kept: usize) -> String {
 }
 
 impl ModelProviders {
-    pub fn use_account(&self, owner: &Principal, provider: ModelProvider, wanted: &str) -> ServerEvent {
-        let result = self.change(owner, &mut |book| book.use_account(provider, wanted).map(|_| ()));
-        self.answer(owner, provider, result)
+    pub fn use_account(&self, provider: ModelProvider, wanted: &str) -> ServerEvent {
+        let result = self.change(&mut |book| book.use_account(provider, wanted).map(|_| ()));
+        self.answer(provider, result)
     }
 
-    pub fn remove_account(&self, owner: &Principal, provider: ModelProvider, wanted: &str) -> ServerEvent {
-        let result = self.change(owner, &mut |book| {
+    pub fn remove_account(&self, provider: ModelProvider, wanted: &str) -> ServerEvent {
+        let result = self.change(&mut |book| {
             let removed = book.remove(provider, wanted)?;
-            self.secrets.delete(owner, slot(provider, &removed.id));
+            self.secrets.delete(slot(provider, &removed.id));
             Ok(())
         });
-        self.answer(owner, provider, result)
+        self.answer(provider, result)
     }
 
-    pub fn set_balance(&self, owner: &Principal, provider: ModelProvider, balance: Balance) -> ServerEvent {
-        let result = self.change(owner, &mut |book| {
+    pub fn set_balance(&self, provider: ModelProvider, balance: Balance) -> ServerEvent {
+        let result = self.change(&mut |book| {
             book.set_balance(provider, balance);
             Ok(())
         });
-        self.answer(owner, provider, result)
+        self.answer(provider, result)
     }
 
-    pub fn keys(&self, owner: &Principal, provider: ModelProvider) -> Result<Vec<(String, ProviderKey)>, String> {
-        let first = (agent_engine::providers::name(provider), self.key(owner, provider)?);
-        let Some(holder) = self.holder(owner, provider) else { return Ok(vec![first]) };
-        let book = self.store.load(&holder);
+    pub fn keys(&self, provider: ModelProvider) -> Result<Vec<(String, ProviderKey)>, String> {
+        let first = (agent_engine::providers::name(provider), self.key(provider)?);
+        let book = self.store.load();
         let accounts = book.accounts(provider);
         let run = {
             let mut runs = self.runs.locked();
-            let counter = runs.entry(format!("{}/{provider}", crate::dirs::owner_key(&holder))).or_default();
+            let counter = runs.entry(provider).or_default();
             *counter += 1;
             *counter - 1
         };
@@ -63,32 +61,28 @@ impl ModelProviders {
         let keys: Vec<(String, ProviderKey)> = order
             .into_iter()
             .filter_map(|at| {
-                let key = self.account_key(holder.clone(), provider, &accounts[at].id).ok()?;
+                let key = self.account_key(provider, &accounts[at].id).ok()?;
                 Some((accounts[at].label.clone(), key))
             })
             .collect();
         Ok(if keys.is_empty() { vec![first] } else { keys })
     }
 
-    pub fn disconnect(&self, owner: &Principal, provider: ModelProvider) -> ServerEvent {
-        let result = self.change(owner, &mut |book| {
+    pub fn disconnect(&self, provider: ModelProvider) -> ServerEvent {
+        let result = self.change(&mut |book| {
             for account in book.disconnect(provider) {
-                self.secrets.delete(owner, slot(provider, &account.id));
+                self.secrets.delete(slot(provider, &account.id));
             }
             Ok(())
         });
-        self.answer(owner, provider, result)
+        self.answer(provider, result)
     }
 
-    fn change(
-        &self,
-        owner: &Principal,
-        change: &mut dyn FnMut(&mut ProviderBook) -> Result<(), String>,
-    ) -> Result<(), String> {
+    fn change(&self, change: &mut dyn FnMut(&mut ProviderBook) -> Result<(), String>) -> Result<(), String> {
         let _guard = self.lock.locked();
         let mut outcome = Ok(());
         self.store
-            .update(owner, &mut |book| {
+            .update(&mut |book| {
                 let mut changed = book.clone();
                 outcome = change(&mut changed);
                 if outcome.is_ok() {

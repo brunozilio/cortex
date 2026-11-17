@@ -4,7 +4,6 @@ use std::sync::{Mutex, OnceLock};
 
 use platform::sync::Locked;
 
-use domain::Principal;
 use domain::inbox::Notice;
 use serde_json::Value;
 
@@ -16,7 +15,6 @@ pub struct Peer {
     pub client: u64,
     pub name: String,
     pub cwd: PathBuf,
-    owner: String,
 }
 
 fn lock() -> std::sync::MutexGuard<'static, BTreeMap<u64, Peer>> {
@@ -24,21 +22,16 @@ fn lock() -> std::sync::MutexGuard<'static, BTreeMap<u64, Peer>> {
     ALL.get_or_init(Mutex::default).locked()
 }
 
-fn owner_key(owner: Option<&Principal>) -> String {
-    serde_json::to_string(owner.unwrap_or(&Principal::LocalOwner)).unwrap_or_default()
-}
-
-pub fn register(client: u64, owner: Option<&Principal>, cwd: &Path) -> String {
+pub fn register(client: u64, cwd: &Path) -> String {
     let mut all = lock();
     if let Some(peer) = all.get_mut(&client) {
         peer.cwd = cwd.to_path_buf();
-        peer.owner = owner_key(owner);
         return peer.name.clone();
     }
     let folder = cwd.file_name().map_or_else(|| "session".to_owned(), |name| name.to_string_lossy().into_owned());
     let folder: String = folder.chars().filter(|c| c.is_alphanumeric() || "-_.".contains(*c)).collect();
     let name = format!("{}-{client}", if folder.is_empty() { "session" } else { &folder });
-    all.insert(client, Peer { client, name: name.clone(), cwd: cwd.to_path_buf(), owner: owner_key(owner) });
+    all.insert(client, Peer { client, name: name.clone(), cwd: cwd.to_path_buf() });
     name
 }
 
@@ -46,13 +39,12 @@ pub fn forget(client: u64) {
     lock().remove(&client);
 }
 
-pub fn of_owner(owner: Option<&Principal>) -> Vec<Peer> {
-    let key = owner_key(owner);
-    lock().values().filter(|peer| peer.owner == key).cloned().collect()
+pub fn open() -> Vec<Peer> {
+    lock().values().cloned().collect()
 }
 
-pub fn send(client: u64, owner: Option<&Principal>, to: &str, message: &str) -> Result<String, String> {
-    let sessions = of_owner(owner);
+pub fn send(client: u64, to: &str, message: &str) -> Result<String, String> {
+    let sessions = open();
     let from = sessions.iter().find(|peer| peer.client == client).map_or("another session", |peer| &peer.name);
     let target = sessions.iter().find(|peer| peer.name == to).ok_or_else(|| {
         let names: Vec<&str> = sessions.iter().filter(|p| p.client != client).map(|p| p.name.as_str()).collect();
@@ -86,7 +78,7 @@ impl Tool for SessionMessage {
         if message.trim().is_empty() {
             return Outcome::error("Missing required parameter `message`.");
         }
-        match send(workspace.credentials.client, workspace.credentials.owner.as_ref(), to.trim(), message) {
+        match send(workspace.credentials.client, to.trim(), message) {
             Ok(name) => Outcome::ok(format!("Sent to session {name}; its answer, if any, reaches you as an event.")),
             Err(error) => Outcome::error(error),
         }
@@ -111,7 +103,7 @@ impl Tool for ListSessions {
 
     fn run(&self, _input: &Value, workspace: &Workspace) -> Outcome {
         let client = workspace.credentials.client;
-        let sessions = of_owner(workspace.credentials.owner.as_ref());
+        let sessions = open();
         let me = sessions.iter().find(|peer| peer.client == client).map_or("unnamed", |peer| peer.name.as_str());
         let others: Vec<String> = sessions
             .iter()
@@ -131,27 +123,24 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn sessions_message_each_other_within_one_owner() {
-        let me = register(9401, None, Path::new("/work/api"));
-        let other = register(9402, None, Path::new("/work/web"));
-        let stranger =
-            Principal::Member(domain::principal::Member { user: domain::UserId::new(), org: domain::OrgId::LOCAL });
-        register(9403, Some(&stranger), Path::new("/work/secret"));
+    fn open_sessions_message_each_other() {
+        let me = register(9401, Path::new("/work/api"));
+        let other = register(9402, Path::new("/work/web"));
         assert_eq!((me.as_str(), other.as_str()), ("api-9401", "web-9402"));
-        assert_eq!(register(9401, None, Path::new("/work/api2")), "api-9401", "the name stays");
+        assert_eq!(register(9401, Path::new("/work/api2")), "api-9401", "the name stays");
 
-        assert_eq!(send(9401, None, "web-9402", "is the API up?"), Ok("web-9402".into()));
+        assert_eq!(send(9401, "web-9402", "is the API up?"), Ok("web-9402".into()));
         assert_eq!(super::super::inbox::take(9402), [Notice::new("session api-9401", "is the API up?")]);
-        assert!(send(9401, None, "secret-9403", "hi").is_err(), "another owner's session is out of reach");
-        assert!(send(9401, None, "api-9401", "me").is_err());
-        assert!(!of_owner(None).iter().any(|peer| peer.client == 9403));
+        assert!(send(9401, "gone-9403", "hi").is_err(), "a session that is not open is out of reach");
+        assert!(send(9401, "api-9401", "me").is_err());
+        assert!(open().iter().any(|peer| peer.client == 9402));
         assert_eq!(SessionMessage.access(), Access::Executes, "another session may run unasked; this asks");
         let mut workspace = Workspace::new("/work/api");
         workspace.credentials.client = 9401;
         let sent = SessionMessage.run(&json!({"to": "web-9402", "message": "deploy?"}), &workspace);
         assert!(!sent.is_error, "{sent:?}");
         assert_eq!(super::super::inbox::take(9402)[0].text, "deploy?");
-        for client in [9401, 9402, 9403] {
+        for client in [9401, 9402] {
             forget(client);
         }
     }

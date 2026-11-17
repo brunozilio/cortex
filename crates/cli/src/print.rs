@@ -120,7 +120,6 @@ mod tests {
             vec![EngineEvent::Verified(verdict), EngineEvent::Completed { duration_ms: 1, cost_usd: None }],
         );
         let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-        services.data = None;
         services.off.insert("memory_search".into());
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
         let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
@@ -132,7 +131,6 @@ mod tests {
         let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
         let engine = FakeEngine::new(vec![Model::new("scripted", "Scripted")], done);
         let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-        services.data = None;
         services.off.insert("memory_search".into());
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
         (Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND), engine)
