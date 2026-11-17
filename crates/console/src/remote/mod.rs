@@ -108,16 +108,23 @@ mod tests {
 
     #[test]
     fn the_console_link_gives_the_address_and_token_the_tunnel_forwards_with() {
-        let options = Options::for_console_link("http://127.0.0.1:4321/?token=abc123", "https://r".into(), "/f".into()).unwrap();
+        let options =
+            Options::for_console_link("http://127.0.0.1:4321/?token=abc123", "https://r".into(), "/f".into()).unwrap();
         assert_eq!(options.console, "127.0.0.1:4321".parse().unwrap());
         assert_eq!(options.token, "abc123");
-        let deeper = Options::for_console_link("http://127.0.0.1:9/docs?x=1&token=t", "https://r".into(), "/f".into()).unwrap();
+        let deeper =
+            Options::for_console_link("http://127.0.0.1:9/docs?x=1&token=t", "https://r".into(), "/f".into()).unwrap();
         assert_eq!(deeper.token, "t");
     }
 
     #[test]
     fn a_link_without_a_loopback_address_or_a_token_gives_nothing() {
-        for link in ["https://127.0.0.1:1/?token=a", "http://127.0.0.1:1/", "http://127.0.0.1:1/?token=", "http://host:1/?token=a"] {
+        for link in [
+            "https://127.0.0.1:1/?token=a",
+            "http://127.0.0.1:1/",
+            "http://127.0.0.1:1/?token=",
+            "http://host:1/?token=a",
+        ] {
             assert!(Options::for_console_link(link, "https://r".into(), "/f".into()).is_none(), "{link}");
         }
     }

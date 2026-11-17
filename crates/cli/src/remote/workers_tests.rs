@@ -73,7 +73,10 @@ fn a_first_deploy_uploads_the_worker_with_its_durable_object_and_turns_on_worker
     assert_eq!(fake.posted.borrow()[0], json!({ "enabled": true, "previews_enabled": false }));
     let metadata = fake.metadata();
     assert_eq!(metadata["main_module"], "main.js");
-    assert_eq!(metadata["bindings"][0], json!({ "type": "durable_object_namespace", "name": "RELAY", "class_name": "Relay" }));
+    assert_eq!(
+        metadata["bindings"][0],
+        json!({ "type": "durable_object_namespace", "name": "RELAY", "class_name": "Relay" })
+    );
     assert_eq!(metadata["migrations"], json!({ "new_tag": MIGRATION, "new_sqlite_classes": ["Relay"] }));
 }
 

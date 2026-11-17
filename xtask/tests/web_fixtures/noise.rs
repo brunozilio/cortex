@@ -39,7 +39,8 @@ fn exchanged(mut phone: Transport, mut machine: Transport, with_large: bool) -> 
         content_type: None,
     })
     .expect("json");
-    let answer = serde_json::to_vec(&Answer::Data { id: 1, data: Payload::bytes(b"{\"status\":\"ok\"}") }).expect("json");
+    let answer =
+        serde_json::to_vec(&Answer::Data { id: 1, data: Payload::bytes(b"{\"status\":\"ok\"}") }).expect("json");
     let size = if with_large { 70_000u32 } else { 0 };
     let large: Vec<u8> = (0..size).map(|at| b'a' + u8::try_from(at % 26).expect("a letter")).collect();
     json!({
@@ -74,7 +75,8 @@ fn pairing() -> Value {
 fn paired() -> Value {
     let (machine, device, ephemeral, responder_ephemeral) = (key(11), key(12), key(13), key(14));
     let book = Book { device: *device.public(), code: [0; 32] };
-    let mut initiator = Initiator::paired_with(&device, machine.public(), Some(ephemeral.private())).expect("initiator");
+    let mut initiator =
+        Initiator::paired_with(&device, machine.public(), Some(ephemeral.private())).expect("initiator");
     let hello = initiator.hello(&[]).expect("hello");
     let accepted =
         accept_with_fixed_ephemeral(&machine, &hello, &book, responder_ephemeral.private()).expect("accepted");

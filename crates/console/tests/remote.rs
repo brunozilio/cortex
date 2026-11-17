@@ -36,7 +36,8 @@ async fn world(terminal: Launch) -> World {
     tokio::spawn(async move { axum::serve(console_listener, app).await });
     let folder = tempfile::tempdir().unwrap();
     let machine_id = Book::in_folder(folder.path()).machine().unwrap().machine_id();
-    let pace = Pace { idle: Duration::from_millis(50), retry: Duration::from_millis(50), taken: Duration::from_millis(50) };
+    let pace =
+        Pace { idle: Duration::from_millis(50), retry: Duration::from_millis(50), taken: Duration::from_millis(50) };
     let options = remote::Options {
         relay: format!("http://{relay}"),
         folder: folder.path().to_owned(),
@@ -223,7 +224,11 @@ fn a_second_machine_with_the_same_key_is_told_the_place_is_taken() {
             folder: world.folder.path().to_owned(),
             console: "127.0.0.1:9".parse().unwrap(),
             token: "t".into(),
-            pace: Pace { idle: Duration::from_millis(50), retry: Duration::from_millis(50), taken: Duration::from_secs(60) },
+            pace: Pace {
+                idle: Duration::from_millis(50),
+                retry: Duration::from_millis(50),
+                taken: Duration::from_secs(60),
+            },
         };
         let second = remote::start(options).unwrap();
         let mut watch = second.watch();

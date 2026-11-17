@@ -161,9 +161,7 @@ impl Book {
     pub fn set_relay(&self, address: &str) -> Result<String, BookError> {
         let address = super::link::relay_address(address)?;
         let kept = address.clone();
-        self.document
-            .update(|ledger: &mut Ledger| ledger.relay = Some(kept))
-            .map_err(stored)?;
+        self.document.update(|ledger: &mut Ledger| ledger.relay = Some(kept)).map_err(stored)?;
         Ok(address)
     }
 

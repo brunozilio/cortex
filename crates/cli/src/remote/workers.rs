@@ -28,7 +28,10 @@ pub fn script_name() -> String {
 
 pub fn modules(page: &[page::Asset], migrate: bool) -> Result<Vec<Part>, String> {
     if !page::has_index(page) {
-        return Err("This program was built without the page: run `cargo run -p xtask -- web`, build again, then run this.".into());
+        return Err(
+            "This program was built without the page: run `cargo run -p xtask -- web`, build again, then run this."
+                .into(),
+        );
     }
     let mut imports = String::new();
     let mut entries = Vec::new();
@@ -37,7 +40,11 @@ pub fn modules(page: &[page::Asset], migrate: bool) -> Result<Vec<Part>, String>
         let module = format!("page/{at}.bin");
         imports.push_str(&format!("import p{at} from {};\n", quoted(&format!("./{module}"))));
         entries.push(format!("{}: p{at}", quoted(asset.path)));
-        let bytes = if asset.path == "index.html" { relay::marked_index(asset.bytes).into_bytes() } else { asset.bytes.to_vec() };
+        let bytes = if asset.path == "index.html" {
+            relay::marked_index(asset.bytes).into_bytes()
+        } else {
+            asset.bytes.to_vec()
+        };
         parts.push(Part { name: module, content_type: DATA, bytes });
     }
     let headers: serde_json::Map<String, Value> =
@@ -73,19 +80,31 @@ fn quoted(text: &str) -> String {
 fn only_account(listed: &Value) -> Result<String, String> {
     let accounts = listed.as_array().cloned().unwrap_or_default();
     match accounts.as_slice() {
-        [one] => one["id"].as_str().map(str::to_owned).ok_or_else(|| "Cloudflare listed an account without an id.".into()),
-        [] => Err("This token reaches no Cloudflare account; give it the account's Workers Scripts: Edit permission.".into()),
+        [one] => {
+            one["id"].as_str().map(str::to_owned).ok_or_else(|| "Cloudflare listed an account without an id.".into())
+        }
+        [] => {
+            Err("This token reaches no Cloudflare account; give it the account's Workers Scripts: Edit permission."
+                .into())
+        }
         many => {
             let names: Vec<String> = many
                 .iter()
-                .map(|account| format!("{} ({})", account["name"].as_str().unwrap_or("?"), account["id"].as_str().unwrap_or("?")))
+                .map(|account| {
+                    format!("{} ({})", account["name"].as_str().unwrap_or("?"), account["id"].as_str().unwrap_or("?"))
+                })
                 .collect();
             Err(format!("This token reaches several accounts; choose one with --account: {}", names.join(", ")))
         }
     }
 }
 
-pub fn deploy(api: &dyn Api, account: Option<String>, page: &[page::Asset], say: &mut dyn FnMut(&str)) -> Result<String, String> {
+pub fn deploy(
+    api: &dyn Api,
+    account: Option<String>,
+    page: &[page::Asset],
+    say: &mut dyn FnMut(&str),
+) -> Result<String, String> {
     let account = match account {
         Some(account) => account,
         None => only_account(&api.get("/accounts").map_err(|error| {
@@ -131,17 +150,29 @@ impl Cloudflare {
     }
 
     fn send(&self, request: reqwest::blocking::RequestBuilder) -> Result<Value, String> {
-        let response = request.bearer_auth(&self.token).send().map_err(|error| format!("Cloudflare could not be reached: {error}"))?;
+        let response = request
+            .bearer_auth(&self.token)
+            .send()
+            .map_err(|error| format!("Cloudflare could not be reached: {error}"))?;
         let status = response.status();
-        let body: Value = response.json().map_err(|error| format!("Cloudflare answered {status} with no JSON: {error}"))?;
+        let body: Value =
+            response.json().map_err(|error| format!("Cloudflare answered {status} with no JSON: {error}"))?;
         if body["success"].as_bool() == Some(true) {
             return Ok(body["result"].clone());
         }
         let errors: Vec<String> = body["errors"]
             .as_array()
-            .map(|errors| errors.iter().map(|error| format!("{} ({})", error["message"].as_str().unwrap_or("?"), error["code"])).collect())
+            .map(|errors| {
+                errors
+                    .iter()
+                    .map(|error| format!("{} ({})", error["message"].as_str().unwrap_or("?"), error["code"]))
+                    .collect()
+            })
             .unwrap_or_default();
-        Err(format!("Cloudflare refused ({status}): {}", if errors.is_empty() { body.to_string() } else { errors.join("; ") }))
+        Err(format!(
+            "Cloudflare refused ({status}): {}",
+            if errors.is_empty() { body.to_string() } else { errors.join("; ") }
+        ))
     }
 }
 

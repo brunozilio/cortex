@@ -42,6 +42,16 @@ async fn next_binary(socket: &mut Socket) -> Option<Vec<u8>> {
     }
 }
 
+async fn next_text(socket: &mut Socket) -> Option<String> {
+    loop {
+        match tokio::time::timeout(WAIT, socket.next()).await.ok()?? {
+            Ok(Message::Text(text)) => return Some(text.to_string()),
+            Ok(Message::Ping(_) | Message::Pong(_)) => {}
+            _ => return None,
+        }
+    }
+}
+
 async fn next_frame(machine: &mut Socket) -> Frame {
     Frame::decode(&next_binary(machine).await.unwrap()).unwrap()
 }
@@ -149,7 +159,10 @@ async fn get(address: &str, path: &str) -> (u16, String, String, String) {
 async fn the_relay_serves_the_page_with_a_strict_policy_and_no_api() {
     let address = relay(relay::Limits::default()).await;
     let (status, cache, policy, body) = get(&address, "/").await;
-    assert_eq!((status, cache.as_str(), body.as_str()), (200, "no-cache", "<html><head><meta name=\"remote-relay\" content=\"on\"></head>phone</html>"));
+    assert_eq!(
+        (status, cache.as_str(), body.as_str()),
+        (200, "no-cache", "<html><head><meta name=\"remote-relay\" content=\"on\"></head>phone</html>")
+    );
     assert!(policy.contains("script-src 'self'") && policy.contains("frame-ancestors 'none'"));
     let (_, cache, _, body) = get(&address, "/assets/app-1a2b.js").await;
     assert_eq!((cache.as_str(), body.as_str()), ("public, max-age=31536000, immutable", "app()"));
@@ -167,8 +180,7 @@ async fn a_text_ping_is_answered_by_the_relay_and_never_reaches_the_other_side()
     let Frame::Open(channel) = next_frame(&mut machine).await else { panic!() };
     for side in [&mut phone, &mut machine] {
         side.send(Message::Text("ping".into())).await.unwrap();
-        let answer = tokio::time::timeout(WAIT, side.next()).await.unwrap().unwrap().unwrap();
-        assert_eq!(answer, Message::Text("pong".into()));
+        assert_eq!(next_text(side).await.as_deref(), Some("pong"));
     }
     phone.send(Message::Binary(b"after".to_vec().into())).await.unwrap();
     assert_eq!(next_frame(&mut machine).await, Frame::Data(channel, b"after".to_vec()));

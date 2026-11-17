@@ -39,7 +39,11 @@ impl Transport {
         }
         let pieces: Vec<&[u8]> = if message.is_empty() { vec![&[]] } else { message.chunks(PIECE_BYTES).collect() };
         let last = pieces.len() - 1;
-        pieces.iter().enumerate().map(|(at, piece)| self.seal_piece(piece, if at == last { LAST } else { MORE })).collect()
+        pieces
+            .iter()
+            .enumerate()
+            .map(|(at, piece)| self.seal_piece(piece, if at == last { LAST } else { MORE }))
+            .collect()
     }
 
     fn seal_piece(&mut self, piece: &[u8], marker: u8) -> Result<Vec<u8>, TransportError> {
@@ -55,7 +59,8 @@ impl Transport {
 
     pub fn open(&mut self, sealed: &[u8]) -> Result<Option<Vec<u8>>, TransportError> {
         let mut plain = vec![0; sealed.len()];
-        let read = self.state.read_message(sealed, &mut plain).map_err(|error| TransportError::Open(error.to_string()))?;
+        let read =
+            self.state.read_message(sealed, &mut plain).map_err(|error| TransportError::Open(error.to_string()))?;
         let Some((&marker, piece)) = plain[..read].split_first() else { return Err(TransportError::Marker) };
         if self.partial.len() + piece.len() > MOST_MESSAGE_BYTES {
             self.partial.clear();

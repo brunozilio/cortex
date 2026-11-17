@@ -9,7 +9,9 @@ use console::remote::{Book, Device, PAIRING_LASTS};
 pub enum RemoteAction {
     #[command(about = "Show the relay, this machine's id and the paired devices")]
     Status,
-    #[command(about = "Publish the relay as a Worker on your Cloudflare account (workers.dev) and use it; needs an API token")]
+    #[command(
+        about = "Publish the relay as a Worker on your Cloudflare account (workers.dev) and use it; needs an API token"
+    )]
     Up {
         #[arg(long, help = "The Cloudflare account id, when the token reaches more than one")]
         account: Option<String>,
@@ -65,7 +67,10 @@ fn up(book: &Book, account: Option<String>) -> Result<(), String> {
 pub fn answer(book: &Book, action: RemoteAction) -> Result<String, String> {
     match action {
         RemoteAction::Status => status(book),
-        RemoteAction::Up { .. } => Err(format!("`{} remote up` runs from a terminal, where it can ask for the Cloudflare token.", brand::COMMAND)),
+        RemoteAction::Up { .. } => Err(format!(
+            "`{} remote up` runs from a terminal, where it can ask for the Cloudflare token.",
+            brand::COMMAND
+        )),
         RemoteAction::Relay { address } => {
             let kept = book.set_relay(&address).map_err(|error| error.to_string())?;
             Ok(format!("Phones will reach this machine through {kept}. `{} remote pair` invites one.", brand::COMMAND))
