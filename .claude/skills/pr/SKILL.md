@@ -54,7 +54,7 @@ Use this template for writing the PR body:
 
 ## Sections
 
-Skip all preambles and keep prose brief. Use the user's domain language from `GLOSSARY.md`.
+Skip all preambles and keep prose brief. Use the user's domain language from `docs/GLOSSARY.md`, and cite a decision the change follows or alters by its file under `docs/decisions/`.
 
 ### Summary
 
@@ -103,11 +103,14 @@ src/
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI
-    participant Daemon
-    User->>UI: choose command
-    UI->>Daemon: send expanded prompt
-    Daemon-->>UI: stream result
+    participant TUI
+    participant API as App API
+    participant Engine
+    User->>TUI: submit prompt
+    TUI->>API: send prompt command
+    API->>Engine: start run
+    Engine-->>API: run events
+    API-->>TUI: stream events
 ```
 
 - Use `diff` when the point is what changes and the surrounding shape already exists. Match the diff shape to the topic.

@@ -1,24 +1,42 @@
 # ADR Format
 
-ADRs live in one file, `docs/decisions.md`: add a `## NNNN — Title` section. Code cites them as `ADR NNNN`.
+ADRs live under `docs/decisions/`, one file per decision, named `NNNN-kebab-title.md` (for example `docs/decisions/0009-function-size-lint.md`). Other documents cite one by its file name, e.g. `decisions/0010-comments-stay-out-of-code.md`. Read two existing records before writing a new one.
 
 ## Template
 
 ```md
-## NNNN — {Short title of the decision}
+# NNNN {Short title of the decision}
 
-{3-8 lines, present tense: what we decided and why.}
+Status: Accepted, YYYY-MM-DD
+
+## Context
+
+{The situation that forced a choice: what was true, what it cost, what was measured. Facts, not the answer.}
+
+## Decision
+
+{Present tense: what we decided. A short list when the decision has several parts.}
+
+## Consequences
+
+{What this buys.}
+
+What gets worse:
+
+- {Each cost the decision accepts, stated plainly.}
 ```
 
-That's it. The value is in recording *that* a decision was made and *why*, not in filling out sections. A rejected alternative earns a sentence only when someone would suggest it again.
+The value is in recording *that* a decision was made, *why*, and what it costs. Keep each section as short as the decision allows. A rejected alternative earns a sentence in Context only when someone would suggest it again.
+
+Files under `docs/` must not spell the product name: write "the app" for the product and `<command>` for its binary.
 
 ## Replacing a decision
 
-Rewrite or remove the old section; keep no history of what it replaced (git has it). Point code citations of a removed number at its successor.
+Write a new record with the next number and change the old record's status line to `Status: Superseded by NNNN-kebab-title.md`. Point citations of the old file at its successor.
 
 ## Numbering
 
-Take the highest number in `docs/decisions.md` and increment by one.
+Take the highest number among the files in `docs/decisions/` and increment by one, zero-padded to four digits.
 
 ## When to offer an ADR
 

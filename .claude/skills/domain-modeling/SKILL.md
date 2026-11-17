@@ -1,47 +1,35 @@
 ---
 name: domain-modeling
-description: Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR.
+description: Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing docs/GLOSSARY.md, or recording or editing an ADR under docs/decisions/.
 ---
 
 # Domain Modeling
 
-Actively build and sharpen the project's domain model as you design. This is the *active* discipline: challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `GLOSSARY.md` for vocabulary is not this skill: that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
+Actively build and sharpen the project's domain model as you design. This is the *active* discipline: challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `docs/GLOSSARY.md` for vocabulary is not this skill: that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
 
 ## File structure
 
-Most repos have a single context:
+This repo has a single context. Both files already exist:
 
 ```
 /
-├── GLOSSARY.md
 ├── docs/
-│   └── decisions.md
-└── src/
+│   ├── GLOSSARY.md                   ← the project's vocabulary
+│   └── decisions/
+│       ├── 0001-long-lived-session.md
+│       └── NNNN-kebab-title.md       ← one file per decision
+└── crates/
 ```
 
-If a `GLOSSARY-MAP.md` exists at the root, the repo has multiple contexts. The map points to where each one lives:
+A new term goes into `docs/GLOSSARY.md`; a new decision gets its own file under `docs/decisions/`, numbered one above the highest existing number.
 
-```
-/
-├── GLOSSARY-MAP.md
-├── docs/
-│   └── decisions.md                  ← system-wide decisions
-├── src/
-│   ├── ordering/
-│   │   ├── GLOSSARY.md
-│   │   └── docs/decisions.md         ← context-specific decisions
-│   └── shipping/
-│       ├── GLOSSARY.md
-│       └── docs/decisions.md
-```
-
-Create files lazily: only when you have something to write. If no `GLOSSARY.md` exists, create one when the first term is resolved. If no `docs/decisions.md` exists, create it when the first ADR is needed.
+Files under `docs/` must not spell the product name. Write "the app" for the product, `<command>` for its binary, `.<command>/` for its project folder and `~/.<command>/` for its user folder.
 
 ## During the session
 
 ### Challenge against the glossary
 
-When the user uses a term that conflicts with the existing language in `GLOSSARY.md`, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y. Which is it?"
+When the user uses a term that conflicts with the existing language in `docs/GLOSSARY.md`, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y. Which is it?"
 
 ### Sharpen fuzzy language
 
@@ -55,11 +43,11 @@ When domain relationships are being discussed, stress-test them with specific sc
 
 When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible. Which is right?"
 
-### Update GLOSSARY.md inline
+### Update the glossary inline
 
-When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up: capture them as they happen. Use the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
+When a term is resolved, update `docs/GLOSSARY.md` right there. Don't batch these up: capture them as they happen. Use the format in [GLOSSARY-FORMAT.md](./GLOSSARY-FORMAT.md).
 
-`GLOSSARY.md` should be totally devoid of implementation details. Do not treat `GLOSSARY.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
+An entry says what the term means and names the main place it lives in the code; nothing more. Do not treat `docs/GLOSSARY.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else; decisions go to `docs/decisions/`.
 
 ### Offer ADRs sparingly
 
@@ -69,4 +57,4 @@ Only offer to create an ADR when all three are true:
 2. **Surprising without context**: a future reader will wonder "why did they do it this way?"
 3. **The result of a real trade-off**: there were genuine alternatives and you picked one for specific reasons
 
-If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).
+If any of the three is missing, skip the ADR. Otherwise add `docs/decisions/NNNN-kebab-title.md` using the format in [ADR-FORMAT.md](./ADR-FORMAT.md).

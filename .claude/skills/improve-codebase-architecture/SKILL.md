@@ -1,6 +1,6 @@
 ---
 name: improve-codebase-architecture
-description: Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.
+description: Scan a codebase for deepening opportunities, present them as a visual HTML report, then question through whichever one you pick.
 disable-model-invocation: true
 ---
 
@@ -11,7 +11,7 @@ Surface architectural friction and propose **deepening opportunities**: refactor
 This command is _informed_ by the project's domain model and built on a shared design vocabulary:
 
 - Call the Skill tool with "codebase-design" for the architecture vocabulary (**module**, **interface**, **depth**, **seam**, **adapter**, **leverage**, **locality**) and its principles (the deletion test, "the interface is the test surface", "one adapter = hypothetical seam, two = real"). Use these terms exactly in every suggestion, and don't drift into "component," "service," "API," or "boundary."
-- The domain language in `GLOSSARY.md` gives names to good seams; ADRs in `docs/decisions.md` record decisions this command should not re-litigate.
+- The domain language in `docs/GLOSSARY.md` gives names to good seams; ADRs in `docs/decisions/` (one file per decision, `NNNN-kebab-title.md`) record decisions this command should not re-litigate.
 
 ## Process
 
@@ -22,7 +22,7 @@ This command is _informed_ by the project's domain model and built on a shared d
 - If the user named a direction (a module, a subsystem, a pain point), take it, and skip the inference below.
 - Otherwise, walk back a good stretch of the commit history (`git log --oneline`) to find the codebase's hot spots, the files and areas that keep coming up, and let those paths pull your attention first. If the changes are scattered with no clear hot spot, widen the net.
 
-Read the project's domain glossary (`GLOSSARY.md`) and any ADRs in the area you're touching first.
+Read the project's domain glossary (`docs/GLOSSARY.md`) and any ADRs in `docs/decisions/` for the area you're touching first.
 
 Then spawn a sub-agent with a fresh context window to walk the codebase. Don't follow rigid heuristics; explore organically and note where you experience friction:
 
@@ -51,21 +51,28 @@ For each candidate, render a card with:
 
 End the report with a **Top recommendation** section: which candidate you'd tackle first and why.
 
-**Use GLOSSARY.md vocabulary for the domain, and the `/codebase-design` vocabulary for the architecture.** If `GLOSSARY.md` defines "Order," talk about "the Order intake module," not "the FooBarHandler," and not "the Order service."
+**Use `docs/GLOSSARY.md` vocabulary for the domain, and the `/codebase-design` vocabulary for the architecture.** If the glossary defines "Run gate," talk about "the Run gate module," not "the FooBarHandler," and not "the gate service."
 
-**ADR conflicts**: if a candidate contradicts an existing ADR, only surface it when the friction is real enough to warrant revisiting the ADR. Mark it clearly in the card (e.g. a warning callout: _"contradicts ADR-0007, but worth reopening because…"_). Don't list every theoretical refactor an ADR forbids.
+**ADR conflicts**: if a candidate contradicts an existing ADR, only surface it when the friction is real enough to warrant revisiting the ADR. Mark it clearly in the card (e.g. a warning callout: _"contradicts decisions/0007-one-async-runtime.md, but worth reopening because…"_). Don't list every theoretical refactor an ADR forbids.
 
 See [HTML-REPORT.md](HTML-REPORT.md) for the full HTML scaffold, diagram patterns, and styling guidance.
 
 Do NOT propose interfaces yet. After the file is written, ask the user: "Which of these would you like to explore?"
 
-### 3. Grilling loop
+### 3. Questioning loop
 
-Once the user picks a candidate, call the Skill tool with "grilling" to walk the decision tree with them: constraints, dependencies, the shape of the deepened module, what sits behind the seam, what tests survive.
+Once the user picks a candidate, question them directly in the conversation; there is no separate skill for this. Walk the decision tree with them one branch at a time, asking one question per message and offering your recommended answer with each:
+
+- **Constraints**: what must not change (callers, on-disk formats, the crate dependency direction in CLAUDE.md, an existing ADR)?
+- **Dependencies**: what does the deepened module depend on, and which of those cross a seam and need an adapter?
+- **The shape of the interface**: what do callers pass in and get back, what is hidden behind the seam, and what is the smallest interface that still covers every caller?
+- **Tests**: which tests survive because they go through the interface, and which die with the internals they pinned?
+
+Answer a question from the code yourself when the code can settle it; ask the user only what is theirs to decide. Stop when every branch is resolved and you both describe the same module.
 
 Side effects happen inline as decisions crystallize; call the Skill tool with "domain-modeling" to keep the domain model current as you go:
 
-- **Naming a deepened module after a concept not in `GLOSSARY.md`?** Add the term to `GLOSSARY.md`. Create the file lazily if it doesn't exist.
-- **Sharpening a fuzzy term during the conversation?** Update `GLOSSARY.md` right there.
-- **User rejects the candidate with a load-bearing reason?** Offer an ADR, framed as: _"Want me to record this as an ADR so future architecture reviews don't re-suggest it?"_ Only offer when the reason would actually be needed by a future explorer to avoid re-suggesting the same thing; skip ephemeral reasons ("not worth it right now") and self-evident ones.
+- **Naming a deepened module after a concept not in `docs/GLOSSARY.md`?** Add the term to `docs/GLOSSARY.md`.
+- **Sharpening a fuzzy term during the conversation?** Update `docs/GLOSSARY.md` right there.
+- **User rejects the candidate with a load-bearing reason?** Offer an ADR (a new `docs/decisions/NNNN-kebab-title.md`), framed as: _"Want me to record this as an ADR so future architecture reviews don't re-suggest it?"_ Only offer when the reason would actually be needed by a future explorer to avoid re-suggesting the same thing; skip ephemeral reasons ("not worth it right now") and self-evident ones.
 - **Want to explore alternative interfaces for the deepened module?** Call the Skill tool with "codebase-design" and use its design-it-twice parallel sub-agent pattern.
