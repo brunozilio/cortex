@@ -142,6 +142,7 @@ Acompanhe e conduza as sessões desta máquina pelo celular: a mesma página do 
 |---|---|---|
 | `remote status` | | O relay, o id desta máquina e os aparelhos pareados |
 | `remote up` | `[--account <ID>]` | Publica o relay como Worker na sua conta Cloudflare (workers.dev) e passa a usá-lo |
+| `remote logout` | | Esquece o login da Cloudflare que o `remote up` guarda |
 | `remote relay` | `<https://HOST>` | Define um relay que você roda em outro lugar, pelo qual os celulares chegam a esta máquina |
 | `remote pair` | | Imprime um QR code e um link que pareiam um celular, em até dez minutos, uma vez |
 | `remote devices` | | Lista os aparelhos pareados |
@@ -159,7 +160,7 @@ A máquina fica alcançável enquanto um chat está aberto com o controle remoto
 
 `{{COMMAND}} remote up` publica o relay como um Worker na sua própria conta Cloudflare, pela API da Cloudflare, e o define como o relay desta máquina. Não precisa de servidor, nem de domínio, nem de instalar nada: o relay ganha um endereço fixo, `https://{{COMMAND}}-relay.<seu subdomínio>.workers.dev`, e continua rodando na Cloudflare; nesta máquina só fica aberto o chat. Cabe no plano gratuito da Cloudflare (um Worker e um Durable Object por máquina).
 
-Ele pede um API token da Cloudflare com a permissão **Account · Workers Scripts · Edit** (crie em [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)), ou lê de `CLOUDFLARE_API_TOKEN`. O token só é usado no envio e não é guardado. Se o token alcança mais de uma conta, escolha uma com `--account <id>`. Uma conta que nunca abriu Workers & Pages ainda não tem subdomínio workers.dev: abra uma vez no painel. Rode `remote up` de novo depois de atualizar o {{NAME}} para publicar a página nova; os celulares pareados continuam funcionando.
+Na primeira vez, ele abre o navegador para entrar na Cloudflare: escolha a conta e autorize. O login fica no cofre de credenciais do {{NAME}} e se renova sozinho, então o próximo `remote up` não pergunta de novo; `{{COMMAND}} remote logout` o esquece. Numa máquina sem navegador, defina `CLOUDFLARE_API_TOKEN` com um API token com a permissão **Account · Workers Scripts · Edit**. Se o login alcança mais de uma conta, escolha uma com `--account <id>`. Uma conta que nunca abriu Workers & Pages ainda não tem subdomínio workers.dev: abra uma vez no painel. Rode `remote up` de novo depois de atualizar o {{NAME}} para publicar a página nova; os celulares pareados continuam funcionando.
 
 A Cloudflare transporta o tráfego e entrega a página ao celular, mas o que passa entre o celular e a máquina continua cifrado de ponta a ponta.
 

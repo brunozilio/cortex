@@ -83,10 +83,7 @@ fn only_account(listed: &Value) -> Result<String, String> {
         [one] => {
             one["id"].as_str().map(str::to_owned).ok_or_else(|| "Cloudflare listed an account without an id.".into())
         }
-        [] => {
-            Err("This token reaches no Cloudflare account; give it the account's Workers Scripts: Edit permission."
-                .into())
-        }
+        [] => Err("The Cloudflare sign-in reaches no account; sign in again and allow the account for Workers.".into()),
         many => {
             let names: Vec<String> = many
                 .iter()
@@ -94,7 +91,10 @@ fn only_account(listed: &Value) -> Result<String, String> {
                     format!("{} ({})", account["name"].as_str().unwrap_or("?"), account["id"].as_str().unwrap_or("?"))
                 })
                 .collect();
-            Err(format!("This token reaches several accounts; choose one with --account: {}", names.join(", ")))
+            Err(format!(
+                "The Cloudflare sign-in reaches several accounts; choose one with --account: {}",
+                names.join(", ")
+            ))
         }
     }
 }
@@ -108,7 +108,7 @@ pub fn deploy(
     let account = match account {
         Some(account) => account,
         None => only_account(&api.get("/accounts").map_err(|error| {
-            format!("Could not list the token's accounts ({error}); give the account id with --account.")
+            format!("Could not list the Cloudflare accounts ({error}); give the account id with --account.")
         })?)?,
     };
     let subdomain = api

@@ -10,12 +10,14 @@ pub enum RemoteAction {
     #[command(about = "Show the relay, this machine's id and the paired devices")]
     Status,
     #[command(
-        about = "Publish the relay as a Worker on your Cloudflare account (workers.dev) and use it; needs an API token"
+        about = "Publish the relay as a Worker on your Cloudflare account (workers.dev) and use it; signs in to Cloudflare in the browser"
     )]
     Up {
-        #[arg(long, help = "The Cloudflare account id, when the token reaches more than one")]
+        #[arg(long, help = "The Cloudflare account id, when the sign-in reaches more than one")]
         account: Option<String>,
     },
+    #[command(about = "Forget the Cloudflare sign-in `remote up` keeps")]
+    Logout,
     #[command(about = "Name the relay phones reach this machine through, as https://<host>")]
     Relay { address: String },
     #[command(about = "Invite a phone: a QR code and a link, good for one phone within ten minutes")]
@@ -32,8 +34,13 @@ pub fn folder() -> Option<PathBuf> {
 
 pub fn run(action: RemoteAction) -> Result<(), String> {
     let book = Book::in_folder(&folder().ok_or("this system has no data folder")?);
-    if let RemoteAction::Up { account } = action {
-        return up(&book, account);
+    match action {
+        RemoteAction::Up { account } => return up(&book, account),
+        RemoteAction::Logout => {
+            println!("{}", sign_out()?);
+            return Ok(());
+        }
+        _ => {}
     }
     println!("{}", answer(&book, action)?);
     Ok(())
@@ -43,14 +50,19 @@ fn token() -> Result<String, String> {
     if let Some(token) = std::env::var(workers::TOKEN_VARIABLE).ok().filter(|token| !token.trim().is_empty()) {
         return Ok(token.trim().to_owned());
     }
-    println!(
-        "A Cloudflare API token with the permission Account · Workers Scripts · Edit (create one at \
-         https://dash.cloudflare.com/profile/api-tokens). It is used for this upload only and not kept; \
-         {} also works.",
-        workers::TOKEN_VARIABLE
-    );
-    let token = crate::login::secret("Cloudflare API token (hidden): ")?;
-    if token.trim().is_empty() { Err("No token given.".into()) } else { Ok(token.trim().to_owned()) }
+    let sign_in = app::CloudflareSignIn::system()?;
+    sign_in.token(&std::sync::Arc::default(), &mut |url| {
+        println!("Sign in to Cloudflare in the browser and choose the account for the relay:\n{url}\n");
+        crate::login::open(url);
+    })
+}
+
+fn sign_out() -> Result<String, String> {
+    Ok(if app::CloudflareSignIn::system()?.sign_out()? {
+        "Signed out of Cloudflare; the relay keeps running.".to_owned()
+    } else {
+        "Not signed in to Cloudflare.".to_owned()
+    })
 }
 
 fn up(book: &Book, account: Option<String>) -> Result<(), String> {
@@ -67,10 +79,10 @@ fn up(book: &Book, account: Option<String>) -> Result<(), String> {
 pub fn answer(book: &Book, action: RemoteAction) -> Result<String, String> {
     match action {
         RemoteAction::Status => status(book),
-        RemoteAction::Up { .. } => Err(format!(
-            "`{} remote up` runs from a terminal, where it can ask for the Cloudflare token.",
-            brand::COMMAND
-        )),
+        RemoteAction::Up { .. } => {
+            Err(format!("`{} remote up` runs from a terminal, where it can sign in to Cloudflare.", brand::COMMAND))
+        }
+        RemoteAction::Logout => sign_out(),
         RemoteAction::Relay { address } => {
             let kept = book.set_relay(&address).map_err(|error| error.to_string())?;
             Ok(format!("Phones will reach this machine through {kept}. `{} remote pair` invites one.", brand::COMMAND))

@@ -12,7 +12,7 @@ A local process that runs with the user's privileges, takes instructions from a 
 
 | Asset | Where | Why it matters |
 |---|---|---|
-| Credentials vault | `secrets.json` in the data folder; its key in `secrets.key` beside it (0600, the default), or in the system keychain (`secrets.key` then only points there) when `<PREFIX>_SECRETS=keychain` is set; provider keys and tokens, MCP OAuth tokens | Gives access to the user's model accounts and to MCP servers |
+| Credentials vault | `secrets.json` in the data folder; its key in `secrets.key` beside it (0600, the default), or in the system keychain (`secrets.key` then only points there) when `<PREFIX>_SECRETS=keychain` is set; provider keys and tokens, MCP OAuth tokens, the Cloudflare sign-in of `remote up` | Gives access to the user's model accounts, to MCP servers and to the Workers of the Cloudflare account the user allowed |
 | User files | The project, and everything else the user can read or write (home, dotfiles, SSH and cloud credentials, other repositories) | Confidentiality and integrity of the user's work and machine |
 | Shell | The ability to run commands as the user | Equivalent to the user's whole account |
 | The app's own configuration | `~/.<command>/` and the project's `.<command>/` (settings, hooks, tools, MCP servers) | Writing it grants permissions or runs code on the next run |

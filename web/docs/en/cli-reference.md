@@ -142,6 +142,7 @@ Follow and drive this machine's sessions from a phone: the same page as `/consol
 |---|---|---|
 | `remote status` | | The relay, this machine's id and the paired devices |
 | `remote up` | `[--account <ID>]` | Publish the relay as a Worker on your Cloudflare account (workers.dev) and use it |
+| `remote logout` | | Forget the Cloudflare sign-in `remote up` keeps |
 | `remote relay` | `<https://HOST>` | Name a relay you run elsewhere, which phones reach this machine through |
 | `remote pair` | | Print a QR code and a link that pair one phone, within ten minutes, once |
 | `remote devices` | | List the paired devices |
@@ -159,7 +160,7 @@ The machine is reachable while a chat is open with remote control on (`/remote`)
 
 `{{COMMAND}} remote up` publishes the relay as a Worker on your own Cloudflare account, through Cloudflare's API, and makes it this machine's relay. It needs no server, no domain and nothing installed: the relay gets a fixed address, `https://{{COMMAND}}-relay.<your subdomain>.workers.dev`, and keeps running on Cloudflare; nothing stays open on this machine but the chat. It fits in Cloudflare's free plan (a Worker and one Durable Object per machine).
 
-It asks for a Cloudflare API token with the permission **Account · Workers Scripts · Edit** (create one at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)), or reads it from `CLOUDFLARE_API_TOKEN`. The token is used for the upload only and is not kept. If the token reaches more than one account, name one with `--account <id>`. An account that never opened Workers & Pages has no workers.dev subdomain yet: open it once in the dashboard. Run `remote up` again after updating {{NAME}} to publish the new page; paired phones keep working.
+The first time, it opens the browser to sign in to Cloudflare: choose the account and allow it. The sign-in is kept in {{NAME}}'s credentials vault and renewed by itself, so the next `remote up` does not ask again; `{{COMMAND}} remote logout` forgets it. On a machine without a browser, set `CLOUDFLARE_API_TOKEN` to an API token with the permission **Account · Workers Scripts · Edit** instead. If the sign-in reaches more than one account, name one with `--account <id>`. An account that never opened Workers & Pages has no workers.dev subdomain yet: open it once in the dashboard. Run `remote up` again after updating {{NAME}} to publish the new page; paired phones keep working.
 
 Cloudflare carries the traffic and serves the page to the phone, but what passes between the phone and the machine stays end-to-end encrypted.
 

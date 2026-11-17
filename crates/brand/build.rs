@@ -38,6 +38,9 @@ fn main() {
         ("INSTRUCTIONS", format!("{env}.md")),
         ("LOCAL_INSTRUCTIONS", format!("{env}.local.md")),
         ("PLUGIN_DIR", format!(".{command}-plugin")),
+        ("CLOUDFLARE_CLIENT_ID", get("cloudflare_client_id")),
+        ("CLOUDFLARE_REDIRECT", get("cloudflare_redirect")),
+        ("CLOUDFLARE_SCOPES", get("cloudflare_scopes")),
     ];
     let mut code = String::new();
     for (name, value) in constants {
