@@ -272,6 +272,40 @@ fn brand_s_own_memory_search_runs_without_asking() {
     assert_eq!(tools[0].run(&input, &Workspace::new("/repo")), Outcome::ok("[4] Uses wgpu"));
 }
 
+struct Jira;
+
+impl domain::mcp::McpEndpoint for Jira {
+    fn handle(&self, message: &Value) -> Option<Value> {
+        let tools = || {
+            let object = json!({ "type": "object" });
+            vec![
+                json!({ "name": "search", "inputSchema": object, "annotations": { "readOnlyHint": true } }),
+                json!({ "name": "create", "inputSchema": object, "annotations": { "readOnlyHint": false } }),
+                json!({ "name": "edit", "inputSchema": object, "annotations": { "readOnlyHint": "true" } }),
+                json!({ "name": "comment", "inputSchema": object }),
+            ]
+        };
+        domain::mcp::respond(message, "jira", tools, |_, _| Ok(domain::mcp::text_result("ok", false)))
+    }
+}
+
+#[test]
+fn a_tool_its_server_marks_read_only_runs_without_asking_and_every_other_asks() {
+    let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
+    request.credentials.mcp = vec![domain::mcp::LocalMcp::new("jira", Arc::new(Jira))];
+    let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
+    let asking: Vec<(String, bool)> = tools(&request, &http).iter().map(|t| (t.spec().name, acts(&**t))).collect();
+    assert_eq!(
+        asking,
+        [
+            ("mcp__jira__search".to_owned(), false),
+            ("mcp__jira__create".to_owned(), true),
+            ("mcp__jira__edit".to_owned(), true),
+            ("mcp__jira__comment".to_owned(), true),
+        ]
+    );
+}
+
 struct SignedIn;
 
 impl domain::credentials::McpTokenSource for SignedIn {

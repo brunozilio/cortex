@@ -8,7 +8,7 @@ mod wildcards;
 
 pub use sign_in::sign_in_refused;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::destructive::words;
 use crate::permission_rules::{hides_more, normalized, split_command, without_harmless_redirects};
@@ -57,6 +57,27 @@ pub fn classify_command(command: &ShellCommand, git: &GitFacts<'_>, readable: Re
         return CommandClass::Unknown;
     }
     if parts.iter().all(|part| reads_only(part, readable)) { CommandClass::ReadOnly } else { CommandClass::Unknown }
+}
+
+pub fn paths_read_anywhere(command: &ShellCommand, home: Option<&str>) -> Option<Vec<PathBuf>> {
+    let parts = command.commands();
+    if !command.flat() || parts.is_empty() {
+        return None;
+    }
+    let mut paths = Vec::new();
+    for part in parts {
+        let part = reading::with_home(part, home);
+        if !reads_only(&part, &|_| true) {
+            return None;
+        }
+        let written = without_harmless_redirects(&part);
+        for word in words(&written) {
+            let value = word.split_once('=').map_or(word.as_str(), |(_, value)| value);
+            paths.extend([word.as_str(), value].into_iter().filter(|path| path.starts_with('/')).map(PathBuf::from));
+        }
+    }
+    paths.dedup();
+    Some(paths)
 }
 
 pub fn only_reads(part: &str) -> bool {

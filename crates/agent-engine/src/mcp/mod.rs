@@ -196,7 +196,8 @@ impl McpServer {
                     description: tool["description"].as_str().unwrap_or_default().to_owned(),
                     schema: tool.get("inputSchema").cloned().unwrap_or_else(|| json!({"type":"object"})),
                 };
-                tools.push(McpTool { server: Arc::clone(self), name, spec });
+                let marked_read_only = tool["annotations"]["readOnlyHint"].as_bool() == Some(true);
+                tools.push(McpTool { server: Arc::clone(self), name, spec, marked_read_only });
             }
             match listed.get("nextCursor") {
                 None | Some(Value::Null) => return Ok(tools),

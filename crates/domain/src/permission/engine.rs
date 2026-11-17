@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use super::rules::{install_rule, install_ruling, rule_for, suggested};
-use super::{Call, Effect, Exec, Guard, Judgement, PolicyContext, Reason, Remembered, Standing, Verdict};
+use super::rules::{Ruling, install_rule, install_ruling, rule_for, suggested};
+use super::{Call, Effect, Exec, Guard, Judgement, Place, PolicyContext, Reason, Remembered, Standing, Verdict};
 use crate::PermissionMode;
-use crate::command_policy::{CommandClass, GitFacts, classify_command, sign_in_refused};
+use crate::command_policy::{CommandClass, GitFacts, classify_command, paths_read_anywhere, sign_in_refused};
 use crate::permission_rules::RuleKind;
 
 #[derive(Debug, Clone, Copy)]
@@ -21,9 +21,15 @@ impl PolicyEngine {
     }
 
     pub fn judge(call: &Call<'_>, cx: &PolicyContext<'_>) -> Judgement {
-        let classes = classes(call, cx);
-        let stood = standing(call, cx, &classes);
-        let rule = suggested(call, &stood.subject, stood.standing == Standing::ReadsOutside);
+        let Classes { each: classes, read_outside } = classes(call, cx);
+        let reads = read_by_commands(call, &read_outside);
+        let as_read = Call { tool: "Read", subject: call.subject, effects: &reads };
+        let stood = standing(call, cx, &classes, read_outside.first());
+        let rule = if reads.is_empty() {
+            suggested(call, &stood.subject, stood.standing == Standing::ReadsOutside)
+        } else {
+            suggested(&as_read, &stood.subject, true)
+        };
         let judged = |verdict| Judgement {
             verdict,
             standing: stood.standing,
@@ -37,6 +43,7 @@ impl PolicyEngine {
         let mode = cx.mode();
         let by_mode = by_mode(mode, stood.standing, call.tool, &stood.subject, cx.remembered);
         let ruling = rule_for(call, cx, stood.guarded.is_some());
+        let ruling = if reads.is_empty() { ruling } else { stricter(ruling, rule_for(&as_read, cx, false)) };
         let asked_by = match &ruling {
             Some((RuleKind::Ask, text)) => Some(text.clone()),
             _ => None,
@@ -71,16 +78,46 @@ fn execs<'a>(call: &Call<'a>) -> impl Iterator<Item = &'a Exec> {
     })
 }
 
-fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Vec<CommandClass> {
-    execs(call)
+struct Classes {
+    each: Vec<CommandClass>,
+    read_outside: Vec<Place>,
+}
+
+fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Classes {
+    let mut read_outside = Vec::new();
+    let each = execs(call)
         .map(|exec| {
             let branches =
                 if exec.command.text().contains("push") { cx.surroundings.branches() } else { Default::default() };
             let git =
                 GitFacts { current_branch: branches.current.as_deref(), default_branch: branches.default.as_deref() };
-            classify_command(&exec.command, &git, &|path| cx.bounds.may_read(path))
+            let class = classify_command(&exec.command, &git, &|path| cx.bounds.may_read(path));
+            if class != CommandClass::Unknown {
+                return class;
+            }
+            match paths_read_anywhere(&exec.command, cx.home) {
+                Some(paths) => {
+                    let outside = paths.into_iter().filter(|path| !cx.bounds.may_read(path));
+                    read_outside.extend(outside.map(Place::at));
+                    CommandClass::ReadOnly
+                }
+                None => class,
+            }
         })
-        .collect()
+        .collect();
+    Classes { each, read_outside }
+}
+
+fn read_by_commands(call: &Call<'_>, read_outside: &[Place]) -> Vec<Effect> {
+    if call.tool == "Bash" { read_outside.iter().cloned().map(Effect::ReadPath).collect() } else { Vec::new() }
+}
+
+fn stricter(first: Ruling, then: Ruling) -> Ruling {
+    match (&first, &then) {
+        (_, Some((RuleKind::Deny, _))) if !matches!(first, Some((RuleKind::Deny, _))) => then,
+        (Some(_), _) => first,
+        (None, _) => then,
+    }
 }
 
 fn installs(call: &Call<'_>) -> Option<(String, String)> {
@@ -147,11 +184,15 @@ fn shown(path: &Path) -> String {
     path.display().to_string()
 }
 
-fn standing(call: &Call<'_>, cx: &PolicyContext<'_>, classes: &[CommandClass]) -> Stood {
-    let outside = call.effects.iter().find_map(|effect| match effect {
-        Effect::ReadPath(place) | Effect::ReadTree(place) if !cx.bounds.may_read(&place.real) => Some(place),
-        _ => None,
-    });
+fn standing(call: &Call<'_>, cx: &PolicyContext<'_>, classes: &[CommandClass], read: Option<&Place>) -> Stood {
+    let outside = call
+        .effects
+        .iter()
+        .find_map(|effect| match effect {
+            Effect::ReadPath(place) | Effect::ReadTree(place) if !cx.bounds.may_read(&place.real) => Some(place),
+            _ => None,
+        })
+        .or(read);
     let guarded = call.effects.iter().find_map(|effect| match effect {
         Effect::WritePath(place) => cx.bounds.guard(&place.real).map(|guard| (place.real.clone(), guard)),
         _ => None,

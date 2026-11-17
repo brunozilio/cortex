@@ -439,3 +439,41 @@ fn reading_by_an_absolute_path_inside_the_project_runs_without_asking_while_acce
         assert!(run(command).asks(), "{command}");
     }
 }
+
+#[test]
+fn reading_outside_the_project_by_a_command_asks_about_the_folder_like_reading_a_file() {
+    let (none, edits) = (PermissionRules::default(), PermissionMode::AcceptEdits);
+    let bounds = bounds();
+    let judged = |command: &str, rules: &PermissionRules, remembered: &Remembered| {
+        let effects = [Effect::exec(command, false)];
+        PolicyEngine::decide(
+            &Call { tool: "Bash", subject: command, effects: &effects },
+            &context(edits, rules, remembered, &bounds),
+        )
+    };
+    let fresh = Remembered::default();
+    assert_eq!(
+        judged("ls -la /opt/postman/storage 2>/dev/null | head -20", &none, &fresh),
+        Verdict::Ask {
+            reason: Reason::Outside("/opt/postman/storage".into()),
+            rememberable: true,
+            rule: Some("Read(//opt/postman/**)".into()),
+        }
+    );
+    assert!(matches!(
+        judged("ls -la ~/Library/Postman", &none, &fresh),
+        Verdict::Ask { reason: Reason::Outside(path), .. } if path == std::path::Path::new("/home/ana/Library/Postman")
+    ));
+    let mut answered = Remembered::default();
+    answered.allow_rule("Read(//opt/postman/**)");
+    assert_eq!(judged("cat /opt/postman/storage/settings.json", &none, &answered), Verdict::Allow);
+    assert!(judged("cat /etc/hosts", &none, &answered).asks(), "another folder still asks");
+    let refused = PermissionRules::default().with(RuleKind::Deny, "Read(//etc/**)");
+    assert!(judged("grep -n root /etc/passwd", &refused, &fresh).denies(), "a read rule's denial holds");
+    for acting in ["rm /opt/postman/x", "cat /opt/../etc/hosts", "cat \"$HOME\"/x"] {
+        assert!(
+            matches!(judged(acting, &none, &fresh), Verdict::Ask { reason: Reason::Mode, .. }),
+            "{acting} is no outside read"
+        );
+    }
+}

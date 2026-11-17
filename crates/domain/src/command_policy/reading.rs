@@ -21,6 +21,29 @@ pub fn expanded_by_the_shell(part: &str) -> bool {
     false
 }
 
+pub fn with_home(part: &str, home: Option<&str>) -> String {
+    let Some(home) = home.filter(|home| home.starts_with('/')) else { return part.to_owned() };
+    let mut written = String::with_capacity(part.len());
+    let (mut single, mut double, mut word_starts) = (false, false, true);
+    let mut letters = part.chars().peekable();
+    while let Some(letter) = letters.next() {
+        let quoted = single || double;
+        let alone = letters.peek().is_none_or(|next| matches!(next, '/' | ' ' | '\t'));
+        if letter == '~' && word_starts && !quoted && alone {
+            written.push_str(home.trim_end_matches('/'));
+        } else {
+            written.push(letter);
+        }
+        match letter {
+            '\'' if !double => single = !single,
+            '"' if !single => double = !double,
+            _ => {}
+        }
+        word_starts = !quoted && matches!(letter, ' ' | '\t');
+    }
+    written
+}
+
 pub fn only_reads(part: &str, words: &[&str], readable: Readable<'_>) -> bool {
     if expanded_by_the_shell(part) || !words.iter().all(|word| stays_inside(word, readable)) {
         return false;

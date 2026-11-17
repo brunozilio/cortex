@@ -90,6 +90,7 @@ pub struct McpTool {
     pub(super) server: Arc<McpServer>,
     pub(super) name: String,
     pub(super) spec: ToolSpec,
+    pub(super) marked_read_only: bool,
 }
 
 impl std::fmt::Debug for McpTool {
@@ -104,7 +105,7 @@ impl Tool for McpTool {
     }
 
     fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
-        remote_effects(&self.server.name, &self.name)
+        if self.marked_read_only { Vec::new() } else { remote_effects(&self.server.name, &self.name) }
     }
 
     fn summary(&self, input: &Value) -> String {
