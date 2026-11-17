@@ -26,7 +26,7 @@ mod system;
 #[path = "windows/mod.rs"]
 mod system;
 
-pub use bounded::{Bounds, Captured, Ended, Finished};
+pub use bounded::{Bounds, Captured, Ended, Finished, Limits};
 pub use child::Child;
 pub use stop::Stop;
 pub use system::*;

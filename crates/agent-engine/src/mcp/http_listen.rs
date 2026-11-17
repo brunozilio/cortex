@@ -1,39 +1,44 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde_json::Value;
 
 use super::Listener;
 use super::http::Shared;
-use crate::model::http::{Response, read_line_stopped};
+use crate::model::CancellationToken;
+use crate::model::http::Response;
 use crate::model::sse::SseDecoder;
 
 pub(super) const FIRST_WAIT: Duration = if cfg!(test) { Duration::from_millis(50) } else { Duration::from_secs(1) };
 pub(super) const MOST_WAIT: Duration = Duration::from_secs(60);
 
-pub(super) fn run(shared: &Shared, listener: &Listener, closed: &AtomicBool) {
+pub(super) async fn run(shared: &Shared, listener: &Listener, closed: &CancellationToken) {
     let mut wait = FIRST_WAIT;
-    while !closed.load(Ordering::Relaxed) {
-        match shared.stream(closed) {
+    while !closed.is_cancelled() {
+        match shared.stream(closed).await {
             Ok(None) => return,
             Ok(Some(stream)) => {
-                if read(shared, stream, listener, closed) {
+                if read(shared, stream, listener, closed).await {
                     wait = FIRST_WAIT;
                 }
             }
-            Err(error) => tracing::warn!(%error, server = shared.name, "an MCP server's stream is down"),
+            Err(error) if !closed.is_cancelled() => {
+                tracing::warn!(%error, server = shared.name, "an MCP server's stream is down");
+            }
+            Err(_) => return,
         }
-        pause(wait, closed);
+        if !pause(wait, closed).await {
+            return;
+        }
         wait = (wait * 2).min(MOST_WAIT);
     }
 }
 
-fn read(shared: &Shared, mut stream: Response, listener: &Listener, closed: &AtomicBool) -> bool {
+async fn read(shared: &Shared, mut stream: Response, listener: &Listener, closed: &CancellationToken) -> bool {
     let mut decoder = SseDecoder::new();
     let mut heard = false;
     loop {
         let mut line = String::new();
-        match read_line_stopped(&mut stream.body, &mut line, closed) {
+        match stream.body.read_line(&mut line, closed).await {
             Ok(0) | Err(_) => return heard,
             Ok(_) => {}
         }
@@ -43,17 +48,17 @@ fn read(shared: &Shared, mut stream: Response, listener: &Listener, closed: &Ato
         match (message.get("id"), message.get("method").and_then(Value::as_str)) {
             (None, Some(method)) => listener(method, &message["params"]),
             (Some(id), Some(method)) => {
-                let _ = shared.post(&super::sse::client_answer(id, method), closed);
+                let _ = shared.post(&super::sse::client_answer(id, method), closed).await;
             }
             _ => {}
         }
     }
 }
 
-pub(super) fn pause(wait: Duration, closed: &AtomicBool) {
-    let until = std::time::Instant::now() + wait;
-    while !closed.load(Ordering::Relaxed) && std::time::Instant::now() < until {
-        std::thread::sleep(Duration::from_millis(25));
+pub(super) async fn pause(wait: Duration, closed: &CancellationToken) -> bool {
+    tokio::select! {
+        () = closed.cancelled() => false,
+        () = tokio::time::sleep(wait) => true,
     }
 }
 

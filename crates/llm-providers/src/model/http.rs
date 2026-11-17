@@ -71,16 +71,34 @@ pub trait Http: Send + Sync {
         }
         self.post_model(url, headers, body)
     }
+    fn post_cancellable<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(async move {
+            if cancel.is_cancelled() {
+                return Err(ModelError::Cancelled);
+            }
+            self.post_model(url, headers, body)
+        })
+    }
+
     fn get(&self, _url: &str, _headers: &[(String, String)]) -> Result<Response, String> {
         Err("GET is not supported by this HTTP transport".into())
     }
-    fn get_stream(
-        &self,
-        _url: &str,
-        _headers: &[(String, String)],
-        _stop: &AtomicBool,
-    ) -> Result<Response, ModelError> {
-        Err(ModelError::Network("streaming GET is not supported by this HTTP transport".into()))
+
+    fn get_stream<'a>(
+        &'a self,
+        _url: &'a str,
+        _headers: &'a [(String, String)],
+        _cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(std::future::ready(Err(ModelError::Network(
+            "streaming GET is not supported by this HTTP transport".into(),
+        ))))
     }
 
     fn one_hop(&self, url: &str, headers: &[(String, String)], body: Option<&str>) -> Result<Response, String> {
@@ -109,6 +127,7 @@ pub trait Http: Send + Sync {
 pub struct NetHttp;
 
 pub const SHORT_TIMEOUT: Duration = Duration::from_secs(15);
+pub const LISTENED_AT_MOST: Duration = Duration::from_secs(12 * 3600);
 
 fn reason(error: ModelError) -> String {
     match error {
@@ -168,8 +187,24 @@ impl Http for NetHttp {
         cancellable_http::unstoppable(url, headers, body, SHORT_TIMEOUT).map_err(reason)
     }
 
-    fn get_stream(&self, url: &str, headers: &[(String, String)], stop: &AtomicBool) -> Result<Response, ModelError> {
-        cancellable_http::send(url, headers, None, stop, Duration::from_secs(12 * 3600))
+    fn post_cancellable<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        body: &'a str,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        let ask = Ask { total: Some(cancellable_http::STREAM_TIMEOUT), ..Ask::new(url, headers, Some(body)) };
+        Box::pin(cancellable_http::fetch(ask, cancel))
+    }
+
+    fn get_stream<'a>(
+        &'a self,
+        url: &'a str,
+        headers: &'a [(String, String)],
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(cancellable_http::fetch(Ask { total: Some(LISTENED_AT_MOST), ..Ask::new(url, headers, None) }, cancel))
     }
 
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {

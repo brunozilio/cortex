@@ -4,12 +4,13 @@ use std::sync::{Arc, Mutex};
 use serde_json::Value;
 
 use super::{Listener, MESSAGE_AT_MOST, PROTOCOL_VERSION, Transport};
+use crate::model::CancellationToken;
 use crate::model::http::{Http, Response};
 
 pub struct HttpTransport {
     shared: Arc<Shared>,
     listener: Option<Listener>,
-    closed: Arc<AtomicBool>,
+    closed: CancellationToken,
     listening: AtomicBool,
 }
 
@@ -30,7 +31,7 @@ impl std::fmt::Debug for HttpTransport {
 
 impl Drop for HttpTransport {
     fn drop(&mut self) {
-        self.closed.store(true, Ordering::Relaxed);
+        self.closed.cancel();
     }
 }
 
@@ -45,10 +46,11 @@ impl Shared {
         headers
     }
 
-    pub(super) fn post(&self, message: &Value, stop: &AtomicBool) -> Result<Response, String> {
+    pub(super) async fn post(&self, message: &Value, cancel: &CancellationToken) -> Result<Response, String> {
         let headers = self.headers("application/json, text/event-stream");
+        let body = message.to_string();
         let response =
-            self.http.post_stopped(&self.url, &headers, &message.to_string(), stop).map_err(|e| e.to_string())?;
+            self.http.post_cancellable(&self.url, &headers, &body, cancel).await.map_err(|e| e.to_string())?;
         let status = response.status;
         if let Some(session) = response.header("mcp-session-id")
             && let Ok(mut kept) = self.session.lock()
@@ -64,9 +66,9 @@ impl Shared {
         Ok(response)
     }
 
-    pub(super) fn stream(&self, stop: &AtomicBool) -> Result<Option<Response>, String> {
-        let response = self.http.get_stream(&self.url, &self.headers("text/event-stream"), stop);
-        let response = response.map_err(|e| e.to_string())?;
+    pub(super) async fn stream(&self, cancel: &CancellationToken) -> Result<Option<Response>, String> {
+        let headers = self.headers("text/event-stream");
+        let response = self.http.get_stream(&self.url, &headers, cancel).await.map_err(|e| e.to_string())?;
         match response.status {
             405 => Ok(None),
             status if (200..300).contains(&status) => Ok(Some(response)),
@@ -94,23 +96,16 @@ impl HttpTransport {
             http,
             session: Mutex::new(None),
         };
-        Self { shared: Arc::new(shared), listener, closed: Arc::default(), listening: AtomicBool::new(false) }
-    }
-}
-
-impl Transport for HttpTransport {
-    fn request(&self, message: &Value) -> Result<Value, String> {
-        self.request_stopped(message, &platform::Stop::new())
+        Self { shared: Arc::new(shared), listener, closed: CancellationToken::new(), listening: AtomicBool::new(false) }
     }
 
-    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, String> {
-        let mut response = self.shared.post(message, stop)?;
+    async fn requested(&self, message: &Value, cancel: &CancellationToken) -> Result<Value, String> {
+        let mut response = self.shared.post(message, cancel).await?;
         let mut text = String::new();
         let mut decoder = crate::model::sse::SseDecoder::new();
         loop {
             let mut line = String::new();
-            let read = crate::model::http::read_line_stopped(&mut response.body, &mut line, stop)
-                .map_err(|e| e.to_string())?;
+            let read = response.body.read_line(&mut line, cancel).await.map_err(|e| e.to_string())?;
             text.push_str(&line);
             if let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n']))
                 && let Ok(reply) = serde_json::from_str::<Value>(&event.data)
@@ -118,7 +113,7 @@ impl Transport for HttpTransport {
                 match (reply.get("id"), reply.get("method").and_then(Value::as_str)) {
                     (id, None) if id == message.get("id") => return Ok(reply),
                     (Some(id), Some(method)) => {
-                        self.notify_stopped(&super::sse::client_answer(id, method), stop)?;
+                        self.shared.post(&super::sse::client_answer(id, method), cancel).await?;
                     }
                     (None, Some(method)) => {
                         if let Some(listener) = &self.listener {
@@ -141,9 +136,22 @@ impl Transport for HttpTransport {
             }
         }
     }
+}
+
+impl Transport for HttpTransport {
+    fn request(&self, message: &Value) -> Result<Value, String> {
+        self.request_stopped(message, &platform::Stop::new())
+    }
+
+    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, String> {
+        platform::runtime::block_on(self.requested(message, stop.token()))
+            .unwrap_or_else(|error| Err(error.to_string()))
+    }
 
     fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), String> {
-        self.shared.post(message, stop).map(|_| ())
+        platform::runtime::block_on(self.shared.post(message, stop.token()))
+            .unwrap_or_else(|error| Err(error.to_string()))
+            .map(|_| ())
     }
 
     fn notify(&self, message: &Value) -> Result<(), String> {
@@ -155,13 +163,19 @@ impl Transport for HttpTransport {
         if self.listening.swap(true, Ordering::Relaxed) {
             return;
         }
-        let (shared, listener, closed) = (Arc::clone(&self.shared), Arc::clone(listener), Arc::clone(&self.closed));
-        let spawned = std::thread::Builder::new()
-            .name(format!("{brand_command}-mcp-{}-stream", shared.name, brand_command = brand::COMMAND))
-            .spawn(move || super::http_listen::run(&shared, &listener, &closed));
-        if let Err(error) = spawned {
-            tracing::warn!(%error, server = self.shared.name, "an MCP server's stream could not be opened");
+        let (shared, listener, closed) = (Arc::clone(&self.shared), Arc::clone(listener), self.closed.clone());
+        match platform::runtime::handle() {
+            Ok(runtime) => {
+                drop(runtime.spawn(async move { super::http_listen::run(&shared, &listener, &closed).await }))
+            }
+            Err(error) => {
+                tracing::warn!(%error, server = self.shared.name, "an MCP server's stream could not be opened")
+            }
         }
+    }
+
+    fn close(&self) {
+        self.closed.cancel();
     }
 }
 

@@ -99,7 +99,7 @@ impl McpServer {
                 Box::new(HttpTransport::listening(name, url, headers, Arc::clone(http), listener))
             }
             ServerSpec::Sse { name, url, headers } => {
-                Box::new(sse::SseTransport::connect(name, url, headers, Arc::clone(http), stop, listener)?)
+                Box::new(sse::SseTransport::connect(name, url, headers, Arc::clone(http), stop.token(), listener)?)
             }
             ServerSpec::Script { path, cwd, access, origin, confinement, judge, .. } => {
                 let server = script_server::ScriptServer::open(spec.name(), path, cwd, *access)?

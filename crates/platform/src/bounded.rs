@@ -6,6 +6,8 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use tokio_util::sync::CancellationToken;
+
 use crate::child::Child;
 use crate::sync::Locked;
 
@@ -19,6 +21,19 @@ pub struct Bounds<'a> {
     pub max_output: usize,
     pub stop: &'a AtomicBool,
     pub input: Option<Vec<u8>>,
+}
+
+#[derive(Debug)]
+pub struct Limits {
+    pub timeout: Duration,
+    pub max_output: usize,
+    pub input: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Until<'a> {
+    Flag(&'a AtomicBool),
+    Token(&'a CancellationToken),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,17 +86,26 @@ pub fn run(command: &mut Command, bounds: Bounds<'_>) -> io::Result<Finished> {
 }
 
 pub fn run_keeping(command: &mut Command, bounds: Bounds<'_>, keep: Keep) -> io::Result<Finished> {
-    let Captured { ended, stdout, stderr } = capture(command, bounds, keep)?;
-    let text = |bytes: Vec<u8>| String::from_utf8_lossy(&bytes).into_owned();
-    Ok(Finished { ended, stdout: text(stdout), stderr: text(stderr) })
+    let Bounds { timeout, max_output, stop, input } = bounds;
+    Ok(finished(capture(command, Limits { timeout, max_output, input }, Until::Flag(stop), keep)?))
+}
+
+pub fn run_cancellable(command: &mut Command, limits: Limits, cancel: &CancellationToken) -> io::Result<Finished> {
+    Ok(finished(capture(command, limits, Until::Token(cancel), Keep::Start)?))
 }
 
 pub fn run_raw(command: &mut Command, bounds: Bounds<'_>) -> io::Result<Captured> {
-    capture(command, bounds, Keep::Start)
+    let Bounds { timeout, max_output, stop, input } = bounds;
+    capture(command, Limits { timeout, max_output, input }, Until::Flag(stop), Keep::Start)
 }
 
-fn capture(command: &mut Command, bounds: Bounds<'_>, keep: Keep) -> io::Result<Captured> {
-    let Bounds { timeout, max_output, stop, input } = bounds;
+fn finished(Captured { ended, stdout, stderr }: Captured) -> Finished {
+    let text = |bytes: Vec<u8>| String::from_utf8_lossy(&bytes).into_owned();
+    Finished { ended, stdout: text(stdout), stderr: text(stderr) }
+}
+
+fn capture(command: &mut Command, limits: Limits, until: Until<'_>, keep: Keep) -> io::Result<Captured> {
+    let Limits { timeout, max_output, input } = limits;
     let stdin = if input.is_some() { Stdio::piped() } else { Stdio::null() };
     command.stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped());
     let child = Child::spawn(command)?;
@@ -92,10 +116,33 @@ fn capture(command: &mut Command, bounds: Bounds<'_>, keep: Keep) -> io::Result<
     }
     let stdout = Reader::of(child.take_stdout(), max_output, keep);
     let stderr = Reader::of(child.take_stderr(), max_output, keep);
-    let ended = wait(&child, timeout, stop);
+    let ended = match until {
+        Until::Flag(stop) => Ok(wait(&child, timeout, stop)),
+        Until::Token(cancel) => crate::runtime::block_on(waited(&child, timeout, cancel)).map_err(io::Error::other),
+    };
     child.kill();
     let until = Instant::now() + READ_GRACE;
-    Ok(Captured { ended, stdout: stdout.read_until(until), stderr: stderr.read_until(until) })
+    Ok(Captured { ended: ended?, stdout: stdout.read_until(until), stderr: stderr.read_until(until) })
+}
+
+async fn waited(child: &Child, timeout: Duration, cancel: &CancellationToken) -> Ended {
+    let deadline = tokio::time::Instant::now() + timeout;
+    let mut pause = FIRST_POLL;
+    loop {
+        if let Some(status) = child.try_wait() {
+            return Ended::Exited(status);
+        }
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
+            return Ended::TimedOut;
+        }
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Ended::Stopped,
+            () = tokio::time::sleep(pause.min(deadline - now)) => {}
+        }
+        pause = (pause * 2).min(POLL);
+    }
 }
 
 fn wait(child: &Child, timeout: Duration, stop: &AtomicBool) -> Ended {
@@ -225,6 +272,51 @@ mod tests {
         let done = run_raw(&mut sh("printf '\\377\\000\\376'"), with).expect("run");
         assert_eq!(done.stdout, [0xff, 0x00, 0xfe]);
         assert!(done.status().is_some_and(|status| status.success()));
+    }
+
+    #[test]
+    fn a_cancelled_token_ends_the_command_at_once_and_its_process_with_it() {
+        let dir = tempfile::tempdir().expect("dir");
+        let pid_file = dir.path().join("pid");
+        let script = format!("echo $$ > '{}'; echo started; exec sleep 30", pid_file.display());
+        let cancel = CancellationToken::new();
+        let canceller = cancel.clone();
+        let watched = pid_file.clone();
+        let cancelled_at = std::thread::spawn(move || {
+            while !watched.exists() {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            std::thread::sleep(Duration::from_millis(50));
+            let cancelled = Instant::now();
+            canceller.cancel();
+            cancelled
+        });
+        let limits = Limits { timeout: Duration::from_secs(60), max_output: 64, input: None };
+        let done = run_cancellable(&mut sh(&script), limits, &cancel).expect("run");
+        let ended = Instant::now();
+        let took = ended.saturating_duration_since(cancelled_at.join().expect("cancelled"));
+        eprintln!("cancel latency, a bounded command: {took:?}");
+        assert_eq!(done.ended, Ended::Stopped);
+        assert_eq!(done.stdout, "started\n");
+        assert!(took < Duration::from_secs(1), "{took:?}");
+        let pid: u32 = std::fs::read_to_string(&pid_file).expect("pid").trim().parse().expect("a pid");
+        assert!(!crate::alive(pid), "pid {pid} was killed and waited for");
+    }
+
+    #[test]
+    fn a_command_waited_on_with_a_token_keeps_its_output_status_and_timeout() {
+        let free = CancellationToken::new();
+        let limits = |timeout| Limits { timeout, max_output: 8, input: Some(b"in".to_vec()) };
+        let done = run_cancellable(&mut sh("cat; echo 0123456789; exit 4"), limits(Duration::from_secs(5)), &free)
+            .expect("run");
+        assert_eq!(done.stdout, "in012345");
+        assert_eq!(done.status().and_then(|status| status.code()), Some(4));
+        let slow = run_cancellable(&mut sh("sleep 5"), limits(Duration::from_millis(50)), &free).expect("run");
+        assert_eq!(slow.ended, Ended::TimedOut);
+        let cancelled = CancellationToken::new();
+        cancelled.cancel();
+        let stopped = run_cancellable(&mut sh("sleep 5"), limits(Duration::from_secs(5)), &cancelled).expect("run");
+        assert_eq!(stopped.ended, Ended::Stopped);
     }
 
     #[test]

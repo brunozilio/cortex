@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use domain::inbox::{CHANNEL_CAPABILITY, channel_notice};
@@ -54,25 +54,25 @@ impl Bridge {
     pub fn local(server: &Arc<McpServer>) -> LocalMcp {
         LocalMcp::new(server.name(), Arc::new(Self(Arc::clone(server))))
     }
-}
 
-impl McpEndpoint for Bridge {
-    fn handle(&self, message: &Value) -> Option<Value> {
-        self.handle_stopped(message, &AtomicBool::new(false))
-    }
-
-    fn handle_stopped(&self, message: &Value, flag: &AtomicBool) -> Option<Value> {
+    pub(super) fn answer(&self, message: &Value, stop: &platform::Stop) -> Option<Value> {
         let id = message.get("id")?.clone();
         let method = message["method"].as_str().unwrap_or_default();
         let answer = if method == "initialize" {
             Ok(json!({ "protocolVersion": super::PROTOCOL_VERSION, "capabilities": self.0.capabilities() }))
         } else {
-            platform::stop::following(flag, |stop| self.0.ask(method, message["params"].clone(), stop))
+            self.0.ask(method, message["params"].clone(), stop)
         };
         Some(match answer {
             Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
             Err(error) => json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32000, "message": error } }),
         })
+    }
+}
+
+impl McpEndpoint for Bridge {
+    fn handle(&self, message: &Value) -> Option<Value> {
+        self.answer(message, &platform::Stop::new())
     }
 }
 
@@ -140,23 +140,28 @@ done
             sandbox: Default::default(),
         };
         let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
-        let bridge = Bridge(open(&spec, &http, 9503).expect("channel"));
-        let stop = AtomicBool::new(false);
+        let local = Bridge::local(&open(&spec, &http, 9503).expect("channel"));
+        let bridged = crate::mcp::LocalTransport::new(Arc::clone(&local.endpoint));
+        let stop = platform::Stop::new();
         let slow = json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": { "name": "slow" } });
-        let started = Instant::now();
-        let dropped = std::thread::scope(|scope| {
-            scope.spawn(|| {
+        let (dropped, took) = std::thread::scope(|scope| {
+            let cancelled_at = scope.spawn(|| {
                 std::thread::sleep(Duration::from_millis(150));
-                stop.store(true, Ordering::Relaxed);
+                let cancelled = Instant::now();
+                stop.cancel();
+                cancelled
             });
-            bridge.handle_stopped(&slow, &stop).expect("answer")
+            let dropped = crate::mcp::Transport::request_stopped(&bridged, &slow, &stop).expect("answer");
+            let ended = Instant::now();
+            (dropped, ended.saturating_duration_since(cancelled_at.join().expect("cancelled")))
         });
-        assert!(started.elapsed() < Duration::from_secs(120), "the run stopped waiting");
+        eprintln!("cancel latency, call to a bridged channel: {took:?}");
+        assert!(took < Duration::from_secs(1), "{took:?}");
         assert_eq!(dropped["id"], 4);
         assert!(dropped["error"]["message"].as_str().is_some_and(|error| error.contains("cancelled")), "{dropped}");
 
         let call = json!({ "jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": { "name": "reply" } });
-        let replied = bridge.handle(&call).expect("answer");
+        let replied = local.endpoint.handle(&call).expect("answer");
         assert_eq!(replied["result"]["content"][0]["text"], "sent", "the channel is still up");
         assert_eq!(replied["result"]["cancelled"], 1, "and was told the call was dropped");
         let _ = inbox::take(9503);

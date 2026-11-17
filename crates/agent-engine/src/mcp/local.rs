@@ -4,6 +4,7 @@ use domain::mcp::McpEndpoint;
 use serde_json::Value;
 
 use super::Transport;
+use super::channel::Bridge;
 
 pub struct LocalTransport(Arc<dyn McpEndpoint>);
 
@@ -28,7 +29,12 @@ impl Transport for LocalTransport {
         if stop.is_stopped() {
             return Err("cancelled".into());
         }
-        self.0.handle_stopped(message, stop).ok_or_else(|| "the in-process MCP server did not reply".to_owned())
+        let endpoint: &dyn std::any::Any = &*self.0;
+        let answer = match endpoint.downcast_ref::<Bridge>() {
+            Some(bridge) => bridge.answer(message, stop),
+            None => self.0.handle_stopped(message, stop),
+        };
+        answer.ok_or_else(|| "the in-process MCP server did not reply".to_owned())
     }
 
     fn notify(&self, message: &Value) -> Result<(), String> {

@@ -1,44 +1,24 @@
-use std::io::{BufReader, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
+use tokio::sync::mpsc::{Sender, channel};
 
 use crate::mcp::{McpServer, ServerSpec};
-use crate::model::ModelError;
 use crate::model::http::{Body, Http, Response};
+use crate::model::{BoxFuture, CancellationToken, ModelError};
 use crate::tools::{Outcome, Tool, Workspace};
 
 type Posted = (String, Vec<(String, String)>);
+type Chunk = Result<Vec<u8>, String>;
 
 struct Legacy {
     endpoint: Mutex<String>,
-    stream: Mutex<Option<Sender<Vec<u8>>>>,
+    stream: Mutex<Option<Sender<Chunk>>>,
     posted: Mutex<Vec<Posted>>,
     methods: Mutex<Vec<String>>,
     down: AtomicBool,
     silent: AtomicBool,
-}
-
-struct Pipe(Receiver<Vec<u8>>, Vec<u8>);
-
-impl Read for Pipe {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.1.is_empty() {
-            match self.0.recv_timeout(std::time::Duration::from_millis(25)) {
-                Ok(bytes) => self.1 = bytes,
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    return Err(std::io::ErrorKind::TimedOut.into());
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Ok(0),
-            }
-        }
-        let n = buf.len().min(self.1.len());
-        buf[..n].copy_from_slice(&self.1[..n]);
-        self.1.drain(..n);
-        Ok(n)
-    }
 }
 
 impl Legacy {
@@ -64,27 +44,31 @@ impl Legacy {
 
     fn send(&self, event: &str, data: &str) {
         if let Some(stream) = self.stream.lock().expect("stream").as_ref() {
-            let _ = stream.send(format!("event: {event}\ndata: {data}\n\n").into_bytes());
+            let _ = stream.try_send(Ok(format!("event: {event}\ndata: {data}\n\n").into_bytes()));
         }
+    }
+
+    fn open_stream(&self) -> Result<Response, ModelError> {
+        if self.down.load(Ordering::Relaxed) {
+            return Err(ModelError::Network("the server is down".into()));
+        }
+        let (send, receive) = channel(64);
+        *self.stream.lock().expect("stream") = Some(send);
+        let endpoint = self.endpoint.lock().expect("endpoint").clone();
+        self.send("endpoint", &endpoint);
+        let body = Body::chunks(receive);
+        Ok(Response { status: 200, headers: vec![("content-type".into(), "text/event-stream".into())], body })
     }
 }
 
 impl Http for Legacy {
-    fn get_stream(
-        &self,
-        _url: &str,
-        _headers: &[(String, String)],
-        _stop: &std::sync::atomic::AtomicBool,
-    ) -> Result<Response, ModelError> {
-        if self.down.load(Ordering::Relaxed) {
-            return Err(ModelError::Network("the server is down".into()));
-        }
-        let (send, receive) = channel();
-        *self.stream.lock().expect("stream") = Some(send);
-        let endpoint = self.endpoint.lock().expect("endpoint").clone();
-        self.send("endpoint", &endpoint);
-        let body = Body::reader(BufReader::new(Pipe(receive, Vec::new())));
-        Ok(Response { status: 200, headers: vec![("content-type".into(), "text/event-stream".into())], body })
+    fn get_stream<'a>(
+        &'a self,
+        _url: &'a str,
+        _headers: &'a [(String, String)],
+        _cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(std::future::ready(self.open_stream()))
     }
 
     fn post(&self, url: &str, headers: &[(String, String)], body: &str) -> Result<Response, String> {
@@ -201,8 +185,8 @@ fn a_request_nobody_answers_gives_up_at_its_deadline() {
     let legacy = Legacy::new("/messages");
     let http: Arc<dyn Http> = legacy.clone();
     let never = platform::Stop::new();
-    let mut transport =
-        super::SseTransport::connect("legacy", "https://mcp.test/sse", &[], http, &never, None).expect("connected");
+    let mut transport = super::SseTransport::connect("legacy", "https://mcp.test/sse", &[], http, never.token(), None)
+        .expect("connected");
     assert_eq!(transport.answer_wait, crate::mcp::ANSWER_WAIT, "the same wait as every other transport");
     transport.answer_wait = std::time::Duration::from_millis(100);
     legacy.silent.store(true, Ordering::Relaxed);
@@ -214,23 +198,36 @@ fn a_request_nobody_answers_gives_up_at_its_deadline() {
     assert!(started.elapsed() < std::time::Duration::from_secs(30), "{:?}", started.elapsed());
 }
 
+fn cancelled_soon(stop: &Arc<platform::Stop>) -> std::sync::mpsc::Receiver<std::time::Instant> {
+    let (marked, cancelled_at) = std::sync::mpsc::channel();
+    let stop = Arc::clone(stop);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let _ = marked.send(std::time::Instant::now());
+        stop.cancel();
+    });
+    cancelled_at
+}
+
+fn since_cancel(cancelled_at: &std::sync::mpsc::Receiver<std::time::Instant>) -> std::time::Duration {
+    let ended = std::time::Instant::now();
+    let cancelled = cancelled_at.recv_timeout(std::time::Duration::from_secs(30)).expect("cancelled");
+    ended.saturating_duration_since(cancelled)
+}
+
 #[test]
-fn a_cancelled_run_stops_waiting_for_the_endpoint() {
-    struct Silent(Mutex<Option<Sender<Vec<u8>>>>);
+fn a_cancelled_run_stops_waiting_for_the_endpoint_at_once() {
+    struct Silent(Mutex<Option<Sender<Chunk>>>);
     impl Http for Silent {
-        fn get_stream(
-            &self,
-            _url: &str,
-            _headers: &[(String, String)],
-            _stop: &std::sync::atomic::AtomicBool,
-        ) -> Result<Response, ModelError> {
-            let (send, receive) = channel();
+        fn get_stream<'a>(
+            &'a self,
+            _url: &'a str,
+            _headers: &'a [(String, String)],
+            _cancel: &'a CancellationToken,
+        ) -> BoxFuture<'a, Result<Response, ModelError>> {
+            let (send, receive) = channel(64);
             *self.0.lock().expect("stream") = Some(send);
-            Ok(Response {
-                status: 200,
-                headers: Vec::new(),
-                body: Body::reader(BufReader::new(Pipe(receive, Vec::new()))),
-            })
+            Box::pin(std::future::ready(Ok(Response { status: 200, headers: Vec::new(), body: Body::chunks(receive) })))
         }
         fn post(&self, _: &str, _: &[(String, String)], _: &str) -> Result<Response, String> {
             Err("unused".into())
@@ -239,14 +236,50 @@ fn a_cancelled_run_stops_waiting_for_the_endpoint() {
     let silent = Arc::new(Silent(Mutex::default()));
     let http: Arc<dyn Http> = silent.clone();
     let stop = Arc::new(platform::Stop::new());
-    let flag = Arc::clone(&stop);
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        flag.store(true, std::sync::atomic::Ordering::Relaxed);
-    });
-    let started = std::time::Instant::now();
+    let cancelled_at = cancelled_soon(&stop);
     let error = McpServer::open_stopped(&spec(), &http, &stop).expect_err("gave up");
+    let took = since_cancel(&cancelled_at);
+    eprintln!("cancel latency, SSE server naming its endpoint: {took:?}");
     assert!(error.contains("in time"), "{error}");
-    assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+    assert!(took < std::time::Duration::from_secs(1), "{took:?}");
     drop(silent.0.lock().expect("stream").take());
+}
+
+#[test]
+fn a_cancelled_run_stops_waiting_for_an_answer_on_the_stream_at_once() {
+    use crate::mcp::Transport;
+    let legacy = Legacy::new("/messages");
+    let http: Arc<dyn Http> = legacy.clone();
+    let transport =
+        super::SseTransport::connect("legacy", "https://mcp.test/sse", &[], http, &CancellationToken::new(), None)
+            .expect("connected");
+    legacy.silent.store(true, Ordering::Relaxed);
+    let stop = Arc::new(platform::Stop::new());
+    let cancelled_at = cancelled_soon(&stop);
+    let error = transport
+        .request_stopped(&json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/list" }), &stop)
+        .expect_err("cancelled");
+    let took = since_cancel(&cancelled_at);
+    eprintln!("cancel latency, SSE request waiting for its answer: {took:?}");
+    assert_eq!(error, "cancelled");
+    assert!(took < std::time::Duration::from_secs(1), "{took:?}");
+    assert!(transport.waiting.lock().expect("waiting").is_empty(), "the cancelled request is forgotten");
+}
+
+#[test]
+fn closing_an_sse_server_lets_its_stream_go_at_once() {
+    use crate::mcp::Transport;
+    let legacy = Legacy::new("/messages");
+    let http: Arc<dyn Http> = legacy.clone();
+    let transport =
+        super::SseTransport::connect("legacy", "https://mcp.test/sse", &[], http, &CancellationToken::new(), None)
+            .expect("connected");
+    let streaming = || legacy.stream.lock().expect("stream").as_ref().is_some_and(|stream| !stream.is_closed());
+    assert!(streaming());
+    let closed = std::time::Instant::now();
+    transport.close();
+    until("the stream was let go", || !streaming());
+    let took = closed.elapsed();
+    eprintln!("closing an SSE server let its stream go after {took:?}");
+    assert!(took < std::time::Duration::from_secs(1), "{took:?}");
 }

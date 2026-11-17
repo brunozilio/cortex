@@ -131,6 +131,39 @@ fn a_cancelled_token_ends_a_request_waiting_for_its_answer_at_once() {
 }
 
 #[test]
+fn a_listened_stream_and_a_cancellable_post_end_when_their_token_is_cancelled() {
+    use super::super::http::{Http, NetHttp};
+    for posted in [false, true] {
+        let (address, heard) = silent_server();
+        let cancel = CancellationToken::new();
+        let canceller = cancel.clone();
+        let (marked, cancelled_at) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = heard.recv();
+            std::thread::sleep(Duration::from_millis(20));
+            let _ = marked.send(std::time::Instant::now());
+            canceller.cancel();
+        });
+        let asked = async {
+            if posted {
+                NetHttp.post_cancellable(&address, &[], "{}", &cancel).await
+            } else {
+                NetHttp.get_stream(&address, &[], &cancel).await
+            }
+        };
+        let fetched = platform::runtime::block_on(asked).expect("runtime");
+        let ended = std::time::Instant::now();
+        assert!(matches!(fetched, Err(ModelError::Cancelled)), "{fetched:?}");
+        let cancelled = marked_at(&cancelled_at);
+        assert!(ended - cancelled < Duration::from_secs(1), "{:?}", ended - cancelled);
+    }
+}
+
+fn marked_at(cancelled_at: &std::sync::mpsc::Receiver<std::time::Instant>) -> std::time::Instant {
+    cancelled_at.recv_timeout(Duration::from_secs(30)).expect("the server heard the request")
+}
+
+#[test]
 fn a_server_that_never_answers_runs_into_the_idle_deadline() {
     let (address, _heard) = silent_server();
     let ask = Ask { idle: Some(Duration::from_millis(100)), ..Ask::new(&address, &[], Some("{}")) };

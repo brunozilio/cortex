@@ -55,27 +55,6 @@ impl Stop {
     }
 }
 
-pub const FLAG_CHECK: std::time::Duration = std::time::Duration::from_millis(25);
-
-pub fn following<T>(flag: &AtomicBool, work: impl FnOnce(&Stop) -> T) -> T {
-    let stop = Stop::new();
-    let done = AtomicBool::new(false);
-    std::thread::scope(|scope| {
-        scope.spawn(|| {
-            while !done.load(Ordering::SeqCst) {
-                if flag.load(Ordering::SeqCst) {
-                    stop.cancel();
-                    return;
-                }
-                std::thread::sleep(FLAG_CHECK);
-            }
-        });
-        let worked = work(&stop);
-        done.store(true, Ordering::SeqCst);
-        worked
-    })
-}
-
 impl Deref for Stop {
     type Target = AtomicBool;
 
@@ -104,20 +83,6 @@ mod tests {
         });
         assert!(waited);
         assert!(started.elapsed() < Duration::from_secs(5));
-    }
-
-    #[test]
-    fn work_handed_a_stop_that_follows_a_flag_is_stopped_once_the_flag_is_raised() {
-        let flag = Arc::new(AtomicBool::new(false));
-        let raiser = Arc::clone(&flag);
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(30));
-            raiser.store(true, Ordering::SeqCst);
-        });
-        let stopped =
-            following(&flag, |stop| crate::runtime::block_on(async { stop.wait().await }).is_ok() && stop.is_stopped());
-        assert!(stopped);
-        assert!(!following(&AtomicBool::new(false), |stop| stop.is_stopped()));
     }
 
     #[test]

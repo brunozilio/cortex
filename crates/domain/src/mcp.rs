@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 
-pub trait McpEndpoint: Send + Sync {
+pub trait McpEndpoint: std::any::Any + Send + Sync {
     fn handle(&self, message: &Value) -> Option<Value>;
 
     fn handle_stopped(&self, message: &Value, _stop: &std::sync::atomic::AtomicBool) -> Option<Value> {

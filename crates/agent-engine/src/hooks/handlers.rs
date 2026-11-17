@@ -1,4 +1,4 @@
-use platform::{Bounds, Ended, Stop};
+use platform::{Ended, Limits, Stop};
 use serde_json::Value;
 use std::{sync::Arc, time::Duration};
 
@@ -11,9 +11,9 @@ pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Resul
     cmd.env(concat!(brand::env_prefix!(), "_PROJECT_DIR"), &workspace.cwd);
     cmd.current_dir(&workspace.cwd);
     let input = Some(serde_json::to_vec(input).map_err(|e| e.to_string())?);
-    let bounds =
-        Bounds { timeout: Duration::from_secs(handler.timeout), max_output: 64 * 1024, stop: &workspace.stop, input };
-    let done = platform::bounded::run(&mut cmd, bounds).map_err(|e| e.to_string())?;
+    let limits = Limits { timeout: Duration::from_secs(handler.timeout), max_output: 64 * 1024, input };
+    let done =
+        platform::bounded::run_cancellable(&mut cmd, limits, workspace.stop.token()).map_err(|e| e.to_string())?;
     match done.ended {
         Ended::Exited(status) => Ok(CommandOutput { code: status.code(), stdout: done.stdout, stderr: done.stderr }),
         Ended::Stopped | Ended::TimedOut => Err("hook cancelled or timed out".into()),
@@ -188,6 +188,33 @@ mod scoped {
         let ended = Instant::now();
         let cancelled = cancelled_at.lock().expect("mark").expect("cancelled");
         assert!(ended.saturating_duration_since(cancelled) < Duration::from_secs(2), "{:?}", ended - cancelled);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cancelling_the_run_ends_a_running_command_hook_at_once() {
+        let dir = tempfile::tempdir().expect("dir");
+        let started = dir.path().join("started");
+        let script = format!("touch '{}'; exec sleep 30", started.display());
+        let handler: Handler =
+            serde_json::from_value(serde_json::json!({ "type": "command", "command": script })).expect("handler");
+        let workspace = Workspace::new(dir.path());
+        let stop = Arc::clone(&workspace.stop);
+        let cancelled_at = std::thread::spawn(move || {
+            while !started.exists() {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            std::thread::sleep(Duration::from_millis(50));
+            let cancelled = Instant::now();
+            stop.cancel();
+            cancelled
+        });
+        let ran = command(&handler, &serde_json::json!({}), &workspace);
+        let ended = Instant::now();
+        let took = ended.saturating_duration_since(cancelled_at.join().expect("cancelled"));
+        eprintln!("cancel latency, a command hook: {took:?}");
+        assert_eq!(ran.map(|_| ()), Err(ENDED_EARLY.into()));
+        assert!(took < Duration::from_secs(1), "{took:?}");
     }
 
     #[test]

@@ -222,6 +222,114 @@ fn cancelling_a_run_whose_mcp_call_has_stalled_ends_it_at_once() {
     assert!(took < PROMPT_CANCEL, "cancel took {took:?}");
 }
 
+fn http_mcp(started: Sender<()>) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
+    let address = listener.local_addr().expect("address");
+    std::thread::spawn(move || {
+        for socket in listener.incoming().map_while(Result::ok) {
+            let started = started.clone();
+            std::thread::spawn(move || answer_mcp_over_http(socket, &started));
+        }
+    });
+    format!("http://{address}/mcp")
+}
+
+fn answer_mcp_over_http(socket: std::net::TcpStream, started: &Sender<()>) {
+    let mut reader = BufReader::new(socket);
+    loop {
+        let mut length = 0;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                return;
+            }
+            if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                length = value.trim().parse().unwrap_or(0);
+            }
+            if line == "\r\n" {
+                break;
+            }
+        }
+        let mut body = vec![0; length];
+        if reader.read_exact(&mut body).is_err() {
+            return;
+        }
+        let asked: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+        let result = match asked["method"].as_str() {
+            Some("tools/call") => {
+                let _ = started.send(());
+                let mut byte = [0];
+                let _ = reader.read(&mut byte);
+                return;
+            }
+            Some("tools/list") => json!({"tools": [{"name": "wait", "inputSchema": {"type": "object"}}]}),
+            _ => json!({}),
+        };
+        let answer = match asked.get("id") {
+            Some(id) => json!({"jsonrpc": "2.0", "id": id, "result": result}).to_string(),
+            None => String::new(),
+        };
+        let status = if answer.is_empty() { "202 Accepted" } else { "200 OK" };
+        let head =
+            format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n", answer.len());
+        let socket = reader.get_mut();
+        if socket.write_all(head.as_bytes()).and_then(|()| socket.write_all(answer.as_bytes())).is_err() {
+            return;
+        }
+    }
+}
+
+#[test]
+fn cancelling_a_run_whose_mcp_call_over_http_has_stalled_ends_it_at_once() {
+    let project = Project::new();
+    let (started, called) = channel();
+    let url = http_mcp(started);
+    let folder = project.repo.path().join(brand::DIR);
+    std::fs::create_dir_all(&folder).expect("project folder");
+    let config = json!({"mcpServers": {"remote": {"type": "http", "url": url}}});
+    std::fs::write(folder.join("mcp.json"), config.to_string()).expect("mcp.json");
+    std::fs::write(folder.join("settings.local.json"), json!({"enabledMcpServers": ["remote"]}).to_string())
+        .expect("approval");
+    let model: Arc<dyn ModelApi> = Arc::new(CallsTool { asked: AtomicUsize::new(0), tool: "mcp__remote__wait" });
+    let engine = NativeEngine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
+    let (events, mut handle) = start(&engine, &project.request());
+    called.recv_timeout(PATIENCE).expect("the call reached the server");
+    std::thread::sleep(Duration::from_millis(100));
+    let cancelled = Instant::now();
+    handle.cancel();
+    let (took, seen) = ended_within(&events, cancelled);
+    eprintln!("cancel latency, stalled MCP call over HTTP: {took:?}");
+    assert!(matches!(seen.last(), Some(EngineEvent::Cancelled)), "{seen:?}");
+    assert!(took < PROMPT_CANCEL, "cancel took {took:?}");
+}
+
+#[test]
+#[cfg(unix)]
+fn cancelling_a_run_whose_command_hook_is_still_running_ends_it_and_the_hook_at_once() {
+    let project = Project::new();
+    let started = project.home.path().join("hook-started");
+    let hook = format!("echo $$ > '{path}.pid'; touch '{path}'; exec sleep 30", path = started.display());
+    let settings = json!({"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": hook}]}]}});
+    let folder = project.home.path().join(brand::DIR);
+    std::fs::create_dir_all(&folder).expect("settings folder");
+    std::fs::write(folder.join("settings.json"), settings.to_string()).expect("settings");
+    let model: Arc<dyn ModelApi> =
+        Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("done".into())])]));
+    let engine = NativeEngine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
+    let (events, mut handle) = start(&engine, &project.request());
+    wait_for(&started);
+    std::thread::sleep(Duration::from_millis(100));
+    let cancelled = Instant::now();
+    handle.cancel();
+    let (took, seen) = ended_within(&events, cancelled);
+    eprintln!("cancel latency, running command hook: {took:?}");
+    assert!(matches!(seen.last(), Some(EngineEvent::Cancelled)), "{seen:?}");
+    assert!(took < PROMPT_CANCEL, "cancel took {took:?}");
+    let pid_file = format!("{}.pid", started.display());
+    let pid: u32 = std::fs::read_to_string(pid_file).expect("pid").trim().parse().expect("a pid");
+    assert!(!platform::alive(pid), "the hook's process {pid} was ended with the run");
+}
+
 struct Stalls {
     asked: AtomicUsize,
     reached: Mutex<Sender<&'static str>>,
@@ -265,6 +373,25 @@ fn threads() -> usize {
             std::process::Command::new("ps").args(["-M", "-p", &std::process::id().to_string()]).output().expect("ps");
         String::from_utf8_lossy(&listed.stdout).lines().count().saturating_sub(1)
     }
+}
+
+#[test]
+fn cancelling_a_run_with_a_background_sub_agent_waiting_on_its_model_ends_both_at_once() {
+    let project = Project::new();
+    let (reached, heard) = channel();
+    let model: Arc<dyn ModelApi> = Arc::new(Stalls { asked: AtomicUsize::new(0), reached: Mutex::new(reached) });
+    let engine = NativeEngine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
+    let (events, mut handle) = start(&engine, &project.request());
+    let mut waiting = vec![heard.recv_timeout(PATIENCE).expect("one"), heard.recv_timeout(PATIENCE).expect("two")];
+    waiting.sort_unstable();
+    assert_eq!(waiting, ["main", "sub-agent"]);
+    std::thread::sleep(Duration::from_millis(100));
+    let cancelled = Instant::now();
+    handle.cancel();
+    let (took, seen) = ended_within(&events, cancelled);
+    eprintln!("cancel latency, run with a background sub-agent: {took:?}");
+    assert!(matches!(seen.last(), Some(EngineEvent::Cancelled)), "{seen:?}");
+    assert!(took < PROMPT_CANCEL, "cancel took {took:?}");
 }
 
 #[test]

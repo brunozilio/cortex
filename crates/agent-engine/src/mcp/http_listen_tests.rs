@@ -1,37 +1,19 @@
-use std::io::{BufReader, Cursor, Read};
-use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
+use tokio::sync::mpsc::{Sender, channel};
 
 use crate::mcp::{Listener, McpServer, ServerSpec};
-use crate::model::ModelError;
 use crate::model::http::{Body, Http, Response};
+use crate::model::{BoxFuture, CancellationToken, ModelError};
+
+type Chunk = Result<Vec<u8>, String>;
 
 struct Streamable {
     get_status: u16,
-    streams: Mutex<Vec<Sender<Vec<u8>>>>,
+    streams: Mutex<Vec<Sender<Chunk>>>,
     opened: Mutex<Vec<Option<String>>>,
-}
-
-struct Pipe(Receiver<Vec<u8>>, Vec<u8>);
-
-impl Read for Pipe {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.1.is_empty() {
-            match self.0.recv_timeout(Duration::from_millis(25)) {
-                Ok(bytes) => self.1 = bytes,
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => return Err(std::io::ErrorKind::TimedOut.into()),
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Ok(0),
-            }
-        }
-        let n = buf.len().min(self.1.len());
-        buf[..n].copy_from_slice(&self.1[..n]);
-        self.1.drain(..n);
-        Ok(n)
-    }
 }
 
 fn event(message: &Value) -> String {
@@ -50,7 +32,7 @@ impl Streamable {
         if let Some(stream) = latest {
             let note =
                 json!({ "jsonrpc": "2.0", "method": "notifications/claude/channel", "params": { "content": content } });
-            let _ = stream.send(event(&note).into_bytes());
+            let _ = stream.try_send(Ok(event(&note).into_bytes()));
             streams.push(stream);
         }
     }
@@ -62,30 +44,38 @@ impl Streamable {
     fn gets(&self) -> usize {
         self.opened.lock().expect("opened").len()
     }
-}
 
-impl Http for Streamable {
-    fn get_stream(&self, _url: &str, headers: &[(String, String)], _stop: &AtomicBool) -> Result<Response, ModelError> {
+    fn is_streaming(&self) -> bool {
+        self.streams.lock().expect("streams").iter().any(|stream| !stream.is_closed())
+    }
+
+    fn open_stream(&self, headers: &[(String, String)]) -> Result<Response, ModelError> {
         let session = headers.iter().find(|(name, _)| name == "mcp-session-id").map(|(_, value)| value.clone());
         self.opened.lock().expect("opened").push(session);
         if self.get_status != 200 {
-            return Ok(Response {
-                status: self.get_status,
-                headers: Vec::new(),
-                body: Body::reader(Cursor::new(Vec::new())),
-            });
+            return Ok(Response { status: self.get_status, headers: Vec::new(), body: Body::from(Vec::new()) });
         }
-        let (send, receive) = channel();
+        let (send, receive) = channel(64);
         self.streams.lock().expect("streams").push(send);
-        let body = Body::reader(BufReader::new(Pipe(receive, Vec::new())));
-        Ok(Response { status: 200, headers: Vec::new(), body })
+        Ok(Response { status: 200, headers: Vec::new(), body: Body::chunks(receive) })
+    }
+}
+
+impl Http for Streamable {
+    fn get_stream<'a>(
+        &'a self,
+        _url: &'a str,
+        headers: &'a [(String, String)],
+        _cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, ModelError>> {
+        Box::pin(std::future::ready(self.open_stream(headers)))
     }
 
     fn post(&self, _url: &str, _headers: &[(String, String)], body: &str) -> Result<Response, String> {
         let message: Value = serde_json::from_str(body).map_err(|e| e.to_string())?;
         let session = vec![("mcp-session-id".to_owned(), "s-1".to_owned())];
         let Some(id) = message.get("id") else {
-            return Ok(Response { status: 202, headers: session, body: Body::reader(Cursor::new(Vec::new())) });
+            return Ok(Response { status: 202, headers: session, body: Body::from(Vec::new()) });
         };
         let result = match message["method"].as_str() {
             Some("initialize") => json!({ "capabilities": { "experimental": { "claude/channel": {} } } }),
@@ -93,7 +83,7 @@ impl Http for Streamable {
         };
         let progress = json!({ "jsonrpc": "2.0", "method": "notifications/claude/channel", "params": { "content": "while answering" } });
         let text = event(&progress) + &event(&json!({ "jsonrpc": "2.0", "id": id, "result": result }));
-        Ok(Response { status: 200, headers: session, body: Body::reader(Cursor::new(text.into_bytes())) })
+        Ok(Response { status: 200, headers: session, body: Body::from(text) })
     }
 }
 
@@ -153,6 +143,21 @@ fn a_stream_that_ends_is_opened_again_and_ends_with_the_server() {
     server.hang_up();
     std::thread::sleep(Duration::from_millis(300));
     assert_eq!(server.gets(), 2, "a dropped server's stream is not opened again");
+}
+
+#[test]
+fn closing_a_listened_server_ends_its_stream_at_once() {
+    let server = Streamable::new(200);
+    let (opened, _heard) = listened(&server);
+    assert!(until(|| server.is_streaming()), "the stream is open");
+    let closed = Instant::now();
+    opened.close();
+    assert!(until(|| !server.is_streaming()), "the stream was let go");
+    let took = closed.elapsed();
+    eprintln!("closing a listened HTTP server let its stream go after {took:?}");
+    assert!(took < Duration::from_secs(1), "{took:?}");
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(server.gets(), 1, "a closed server's stream is not opened again");
 }
 
 #[test]
