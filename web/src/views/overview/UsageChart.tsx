@@ -6,13 +6,10 @@ import { dailySeries, modelsByCost, periodTotal, PERIOD_DAYS, type Metric } from
 import { dayLabel, tokens, usd, usdShort } from '@/lib/format'
 import { MODEL_COLORS } from '@/lib/kinds'
 import { cn } from '@/lib/utils'
+import { useStrings } from '@/shell/strings'
 import type { Report } from '@/types'
 
-const METRICS: { key: Metric; label: string; noun: string }[] = [
-  { key: 'cost', label: 'Cost', noun: 'spent' },
-  { key: 'tokens', label: 'Tokens', noun: 'tokens' },
-  { key: 'runs', label: 'Runs', noun: 'runs' },
-]
+const METRICS: Metric[] = ['cost', 'tokens', 'runs']
 
 const TICK_EVERY_DAYS = 5
 
@@ -28,9 +25,10 @@ function axisValue(metric: Metric, value: number): string {
 }
 
 function MetricToggle({ metric, onMetric }: { metric: Metric; onMetric: (metric: Metric) => void }) {
+  const text = useStrings().usage
   return (
-    <div role="radiogroup" aria-label="Metric" className="inline-flex shrink-0 rounded-lg border bg-muted/50 p-0.5">
-      {METRICS.map(({ key, label }) => (
+    <div role="radiogroup" aria-label={text.metric} className="inline-flex shrink-0 rounded-lg border bg-muted/50 p-0.5">
+      {METRICS.map((key) => (
         <button
           key={key}
           type="button"
@@ -42,7 +40,7 @@ function MetricToggle({ metric, onMetric }: { metric: Metric; onMetric: (metric:
             metric === key && 'bg-background text-foreground shadow-sm',
           )}
         >
-          {label}
+          {text.metrics[key]}
         </button>
       ))}
     </div>
@@ -56,6 +54,8 @@ interface UsageChartProps {
 }
 
 export function UsageChart({ report, metric, onMetric }: UsageChartProps) {
+  const strings = useStrings()
+  const text = strings.usage
   const { days } = report.insights
   const models = useMemo(() => modelsByCost(days), [days])
   const config = useMemo<ChartConfig>(
@@ -65,21 +65,19 @@ export function UsageChart({ report, metric, onMetric }: UsageChartProps) {
   const data = useMemo(
     () =>
       dailySeries(days, metric, report.generated_at_ms).map((row) => ({
-        label: dayLabel(row.day),
+        label: dayLabel(row.day, strings.locale),
         total: row.total,
         ...Object.fromEntries(models.map((model, i) => [`m${i}`, row.values[model] ?? 0])),
       })),
-    [days, metric, models, report.generated_at_ms],
+    [days, metric, models, report.generated_at_ms, strings.locale],
   )
-  const noun = METRICS.find((entry) => entry.key === metric)?.noun ?? ''
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4">
         <div className="grid gap-1">
-          <h3 className="font-semibold leading-none tracking-tight">Usage by model</h3>
+          <h3 className="font-semibold leading-none tracking-tight">{text.title}</h3>
           <p className="text-sm text-muted-foreground">
-            <span className="num font-medium text-foreground">{formatMetric(metric, periodTotal(days, metric))}</span> {noun} over {PERIOD_DAYS} days,
-            stacked by model per day
+            <span className="num font-medium text-foreground">{formatMetric(metric, periodTotal(days, metric))}</span> {text.nouns[metric]} {text.over(PERIOD_DAYS)}
           </p>
         </div>
         <MetricToggle metric={metric} onMetric={onMetric} />
@@ -97,7 +95,7 @@ export function UsageChart({ report, metric, onMetric }: UsageChartProps) {
                   valueFormatter={(value) => formatMetric(metric, value)}
                   footer={(payload) => (
                     <div className="mt-1 flex border-t pt-1.5">
-                      <span className="text-muted-foreground">Total</span>
+                      <span className="text-muted-foreground">{text.total}</span>
                       <span className="ml-auto font-mono font-medium">{formatMetric(metric, Number(payload[0]?.payload?.total ?? 0))}</span>
                     </div>
                   )}

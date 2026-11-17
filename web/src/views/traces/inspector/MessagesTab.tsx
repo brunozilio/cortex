@@ -1,6 +1,8 @@
 import { Bell, Brain, Image, Sparkles, User, Wrench } from 'lucide-react'
 import { CodeBlock } from '@/components/CodeBlock'
 import { cn } from '@/lib/utils'
+import type { Strings } from '@/lib/i18n'
+import { useStrings } from '@/shell/strings'
 import type { Block, Message, Run, Span } from '@/types'
 
 export function sentMessages(run: Run, span: Span): Message[] | null {
@@ -12,7 +14,7 @@ function json(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value, null, 2)
 }
 
-function preview(message: Message): string {
+function preview(message: Message, strings: Strings): string {
   for (const block of message.blocks) {
     if ('Text' in block) return block.Text
     if ('ToolUse' in block) return `→ ${block.ToolUse.name}`
@@ -20,29 +22,30 @@ function preview(message: Message): string {
     if ('ToolResultRich' in block) return `← ${block.ToolResultRich.content}`
     if ('Reminder' in block) return block.Reminder
   }
-  return `${message.blocks.length} blocks`
+  return strings.inspector.blocks(message.blocks.length)
 }
 
 function BlockView({ block }: { block: Block }) {
+  const text = useStrings().inspector
   if ('Text' in block) return <p className="whitespace-pre-wrap break-words text-sm">{block.Text}</p>
-  if ('Reminder' in block) return <CodeBlock label="System reminder" text={block.Reminder} tall />
+  if ('Reminder' in block) return <CodeBlock label={text.reminder} text={block.Reminder} tall />
   if ('Thinking' in block)
     return (
       <div className="grid gap-1">
         <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <Brain className="size-3.5" />
-          Thinking
+          {text.thinking}
         </span>
         <p className="whitespace-pre-wrap break-words rounded border border-dashed p-2 text-sm italic text-muted-foreground">{block.Thinking.text}</p>
       </div>
     )
-  if ('ToolUse' in block) return <CodeBlock label={`Tool call · ${block.ToolUse.name} · ${block.ToolUse.id}`} text={json(block.ToolUse.input)} tall />
+  if ('ToolUse' in block) return <CodeBlock label={`${text.toolCall} · ${block.ToolUse.name} · ${block.ToolUse.id}`} text={json(block.ToolUse.input)} tall />
   if ('ToolResult' in block)
-    return <CodeBlock label={`Tool result · ${block.ToolResult.id}${block.ToolResult.is_error ? ' · error' : ''}`} text={block.ToolResult.content} tall />
+    return <CodeBlock label={`${text.toolResult} · ${block.ToolResult.id}${block.ToolResult.is_error ? ` · ${text.error}` : ''}`} text={block.ToolResult.content} tall />
   if ('ToolResultRich' in block)
     return (
       <CodeBlock
-        label={`Tool result · ${block.ToolResultRich.id}${block.ToolResultRich.is_error ? ' · error' : ''} · ${block.ToolResultRich.images.length} images`}
+        label={`${text.toolResult} · ${block.ToolResultRich.id}${block.ToolResultRich.is_error ? ` · ${text.error}` : ''} · ${text.images(block.ToolResultRich.images.length)}`}
         text={block.ToolResultRich.content}
         tall
       />
@@ -58,6 +61,8 @@ function BlockView({ block }: { block: Block }) {
 }
 
 function MessageView({ message, index, label }: { message: Message; index: number | null; label?: string }) {
+  const strings = useStrings()
+  const text = strings.inspector
   const user = message.role === 'User'
   const tools = message.blocks.some((block) => 'ToolUse' in block || 'ToolResult' in block || 'ToolResultRich' in block)
   const reminders = message.blocks.some((block) => 'Reminder' in block)
@@ -66,10 +71,10 @@ function MessageView({ message, index, label }: { message: Message; index: numbe
     <details open className={cn('group rounded-lg border', user ? 'bg-muted/30' : 'border-k-llm/20 bg-k-llm/5')}>
       <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs">
         <Icon className="size-3.5 shrink-0" />
-        <span className="font-medium">{label ?? (user ? 'User' : 'Assistant')}</span>
+        <span className="font-medium">{label ?? (user ? text.user : text.assistant)}</span>
         {index !== null ? <span className="font-mono text-muted-foreground">#{index + 1}</span> : null}
-        <span className="truncate text-muted-foreground group-open:hidden">{preview(message)}</span>
-        <span className="ml-auto shrink-0 text-muted-foreground">{message.blocks.length} blocks</span>
+        <span className="truncate text-muted-foreground group-open:hidden">{preview(message, strings)}</span>
+        <span className="ml-auto shrink-0 text-muted-foreground">{text.blocks(message.blocks.length)}</span>
       </summary>
       <div className="grid gap-3 border-t px-3 py-3">
         {message.blocks.map((block, i) => (
@@ -81,36 +86,34 @@ function MessageView({ message, index, label }: { message: Message; index: numbe
 }
 
 export function MessagesTab({ run, span }: { run: Run; span: Span }) {
+  const text = useStrings().inspector
   const messages = sentMessages(run, span)
-  if (!messages)
-    return (
-      <p className="text-sm text-muted-foreground">
-        The messages of this call were not kept: it ran before they were recorded, or this session's full detail is still loading.
-      </p>
-    )
+  if (!messages) return <p className="text-sm text-muted-foreground">{text.notKept}</p>
   return (
     <div className="grid gap-2">
-      <span className="text-xs text-muted-foreground">{messages.length} messages sent to the model</span>
+      <span className="text-xs text-muted-foreground">{text.sent(messages.length)}</span>
       {messages.map((message, index) => (
         <MessageView key={index} message={message} index={index} />
       ))}
-      {span.reply ? <MessageView message={span.reply} index={null} label="Reply" /> : null}
+      {span.reply ? <MessageView message={span.reply} index={null} label={text.reply} /> : null}
     </div>
   )
 }
 
 export function SystemTab({ run, span }: { run: Run; span: Span }) {
-  const text = span.system_id ? run.systems?.[span.system_id] : undefined
-  if (text === undefined) return <p className="text-sm text-muted-foreground">No system prompt was recorded for this call.</p>
-  return <CodeBlock label={`System prompt · ${text.length.toLocaleString()} characters`} text={text} tall />
+  const strings = useStrings()
+  const system = span.system_id ? run.systems?.[span.system_id] : undefined
+  if (system === undefined) return <p className="text-sm text-muted-foreground">{strings.inspector.noSystem}</p>
+  return <CodeBlock label={strings.inspector.systemPrompt(system.length.toLocaleString(strings.locale))} text={system} tall />
 }
 
 export function ToolsTab({ run, span }: { run: Run; span: Span }) {
+  const text = useStrings().inspector
   const tools = span.tools_id ? run.tools?.[span.tools_id] : undefined
-  if (!tools) return <p className="text-sm text-muted-foreground">No tools were recorded for this call.</p>
+  if (!tools) return <p className="text-sm text-muted-foreground">{text.noTools}</p>
   return (
     <div className="grid gap-2">
-      <span className="text-xs text-muted-foreground">{tools.length} tools offered to the model</span>
+      <span className="text-xs text-muted-foreground">{text.offered(tools.length)}</span>
       {tools.map((tool) => (
         <details key={tool.name} className="rounded-lg border">
           <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm">
@@ -119,7 +122,7 @@ export function ToolsTab({ run, span }: { run: Run; span: Span }) {
           </summary>
           <div className="grid gap-3 border-t px-3 py-3">
             {tool.description ? <p className="whitespace-pre-wrap text-sm">{tool.description}</p> : null}
-            <CodeBlock label="Schema" text={json(tool.schema ?? {})} tall />
+            <CodeBlock label={text.schema}text={json(tool.schema ?? {})} tall />
           </div>
         </details>
       ))}

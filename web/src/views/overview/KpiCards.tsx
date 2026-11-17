@@ -6,6 +6,8 @@ import { Progress } from '@/components/ui/progress'
 import { Sparkline } from '@/components/Sparkline'
 import { dailySeries, weekOverWeek } from '@/lib/days'
 import { ms, percent, usdShort } from '@/lib/format'
+import type { Strings } from '@/lib/i18n'
+import { useStrings } from '@/shell/strings'
 import type { Report } from '@/types'
 
 type Direction = 'up-is-good' | 'down-is-good' | 'neutral'
@@ -46,12 +48,13 @@ function trendVariant(up: boolean, direction: Direction): BadgeVariant {
 }
 
 function TrendChip({ change, direction }: { change: number | null; direction: Direction }) {
+  const strings = useStrings()
   if (change === null) return null
   if (Math.abs(change) < 0.005) {
     return (
       <Badge variant="secondary">
         <Minus />
-        flat
+        {strings.kpi.flat}
       </Badge>
     )
   }
@@ -70,11 +73,13 @@ function Meter({ ratio, className }: { ratio: number; className: string }) {
   return <Progress value={ratio * 100} className="h-2" indicatorClassName={className} />
 }
 
-function trendCaption(change: number | null): string {
-  return change === null ? 'no data the week before' : 'last 7 days vs the 7 before'
+function trendCaption(change: number | null, strings: Strings): string {
+  return change === null ? strings.kpi.noPrior : strings.kpi.weekOverWeek
 }
 
 export function KpiCards({ report }: { report: Report }) {
+  const strings = useStrings()
+  const text = strings.kpi
   const { totals, days, time } = report.insights
   const cost = dailySeries(days, 'cost', report.generated_at_ms)
   const runs = dailySeries(days, 'runs', report.generated_at_ms)
@@ -86,35 +91,35 @@ export function KpiCards({ report }: { report: Report }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Kpi
-        label="Spend"
+        label={text.spend}
         icon={DollarSign}
         value={usdShort(totals.cost_usd)}
         chip={<TrendChip change={costChange} direction="down-is-good" />}
-        caption={trendCaption(costChange)}
+        caption={trendCaption(costChange, strings)}
         visual={<Sparkline values={cost.slice(-14).map((row) => row.total)} color="hsl(var(--chart-1))" />}
       />
       <Kpi
-        label="Runs"
+        label={text.runs}
         icon={Activity}
         value={String(totals.runs)}
         chip={<TrendChip change={runsChange} direction="neutral" />}
-        caption={trendCaption(runsChange)}
+        caption={trendCaption(runsChange, strings)}
         visual={<Sparkline values={runs.slice(-14).map((row) => row.total)} color="hsl(var(--chart-1))" />}
       />
       <Kpi
-        label="p95 run time"
+        label={text.p95}
         icon={Clock}
         value={ms(totals.p95_run_ms)}
         chip={<Badge variant="secondary">{percent(waitingShare)}</Badge>}
-        caption={`of run time waiting on you (${ms(totals.waiting_ms)})`}
+        caption={text.waiting(ms(totals.waiting_ms))}
         visual={<Meter ratio={waitingShare} className="bg-muted-foreground" />}
       />
       <Kpi
-        label="Tool error rate"
+        label={text.errorRate}
         icon={AlertCircle}
         value={(errorRate * 100).toFixed(1) + '%'}
-        chip={errorRate > ERROR_RATE_DANGER ? <Badge variant="danger">high</Badge> : null}
-        caption="of all tool calls failed"
+        chip={errorRate > ERROR_RATE_DANGER ? <Badge variant="danger">{text.high}</Badge> : null}
+        caption={text.failedCalls}
         visual={<Meter ratio={errorRate} className={errorRate > ERROR_RATE_DANGER ? 'bg-danger' : 'bg-muted-foreground'} />}
       />
     </div>

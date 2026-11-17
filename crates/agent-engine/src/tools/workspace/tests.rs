@@ -30,6 +30,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         follow_through: true,
         affected_tests: true,
         session_claims: true,
+        load_on_call: true,
         code_mode: domain::code_mode::Mode::Only,
         code_mode_detach: Some(std::time::Duration::from_secs(5)),
         web: domain::web_reading::WebReading::none(),
@@ -44,6 +45,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
     assert_eq!(fork.sandbox, policy.sandbox, "a sub-agent's commands stay as confined as its parent's");
     assert!(fork.redact.is_some(), "a sub-agent's output is redacted like its parent's");
     assert!(fork.snapshots && fork.dependency_guard);
+    assert!(fork.load_on_call, "a sub-agent loads a waiting tool on call as its parent does");
     assert_eq!(fork.code_mode, policy.code_mode, "a sub-agent scripts its tools as its parent does");
     assert_eq!(fork.permissions, policy.permissions);
     assert_eq!(fork.scripts, ScriptGrants::none());

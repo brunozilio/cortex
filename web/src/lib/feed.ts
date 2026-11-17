@@ -1,11 +1,14 @@
 import type { SessionRuns } from '@/types'
 import { sessionRunsProblem } from './contract'
+import { EN, type Strings } from './i18n'
 import type { LiveStatus } from './live'
+
+export type FeedProblem = { kind: 'garbled' } | { kind: 'unreadable'; detail: string } | { kind: 'refetch'; message: string }
 
 export interface Feed {
   status: LiveStatus
   behind: boolean
-  problem: string | null
+  problem: FeedProblem | null
 }
 
 export type FeedEvent =
@@ -33,10 +36,10 @@ function received(feed: Feed, data: string): FeedStep {
   try {
     update = JSON.parse(data)
   } catch {
-    return { feed: { ...feed, problem: 'The terminal sent an update that is not JSON; it was left out.' }, effects: [] }
+    return { feed: { ...feed, problem: { kind: 'garbled' } }, effects: [] }
   }
-  const problem = sessionRunsProblem(update)
-  if (problem) return { feed: { ...feed, problem: `The terminal sent an update this page cannot read (${problem}); it was left out.` }, effects: [] }
+  const detail = sessionRunsProblem(update)
+  if (detail) return { feed: { ...feed, problem: { kind: 'unreadable', detail } }, effects: [] }
   return { feed: feed.problem === null ? feed : { ...feed, problem: null }, effects: [{ kind: 'session', update: update as SessionRuns }] }
 }
 
@@ -57,12 +60,19 @@ export function feedStep(feed: Feed, event: FeedEvent): FeedStep {
     case 'caught_up':
       return { feed: { ...feed, behind: false, problem: null }, effects: [] }
     case 'refetch_failed':
-      return { feed: { ...feed, problem: `The page could not reload the trace: ${event.message}.` }, effects: [] }
+      return { feed: { ...feed, problem: { kind: 'refetch', message: event.message } }, effects: [] }
   }
 }
 
-export function feedNotice(feed: Feed): string | null {
-  if (feed.status === 'reconnecting') return 'Disconnected from the terminal; what you see may be out of date. Reconnecting…'
-  if (feed.behind) return `Some updates were missed; what you see is partial until the page catches up.${feed.problem ? ` ${feed.problem}` : ''}`
-  return feed.problem
+function problemText(problem: FeedProblem, strings: Strings): string {
+  if (problem.kind === 'garbled') return strings.feed.garbled
+  if (problem.kind === 'unreadable') return strings.feed.unreadable(problem.detail)
+  return strings.feed.refetch(problem.message)
+}
+
+export function feedNotice(feed: Feed, strings: Strings = EN): string | null {
+  if (feed.status === 'reconnecting') return strings.feed.disconnected
+  const problem = feed.problem ? problemText(feed.problem, strings) : null
+  if (feed.behind) return problem ? `${strings.feed.behind} ${problem}` : strings.feed.behind
+  return problem
 }

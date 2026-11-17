@@ -7,55 +7,59 @@ import { ms, tokens, usd } from '@/lib/format'
 import { KINDS, LEGEND_KINDS } from '@/lib/kinds'
 import { isRepeated, promptTokens, refusalReason, timelineEnd, treeOrder } from '@/lib/spans'
 import { cn } from '@/lib/utils'
+import { useStrings } from '@/shell/strings'
 import type { Run, Span } from '@/types'
 
 const GRID = [0, 0.25, 0.5, 0.75, 1]
 const COLUMNS = 'grid grid-cols-[250px_1fr_72px]'
 
 export function Legend() {
+  const strings = useStrings()
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-5 py-3 text-xs text-muted-foreground">
       {LEGEND_KINDS.map((kind) => (
         <span key={kind} className="inline-flex items-center gap-1.5">
           {kind === 'event' ? <span className="size-2 rotate-45 bg-k-event" /> : <KindSwatch kind={kind} />}
-          {KINDS[kind].label}
+          {strings.kinds[kind]}
         </span>
       ))}
       <span className="inline-flex items-center gap-1.5">
         <span className="ring-err size-2.5 rounded-[3px] bg-muted" />
-        Failed
+        {strings.waterfall.failed}
       </span>
     </div>
   )
 }
 
 function SpanTip({ span }: { span: Span }) {
+  const strings = useStrings()
+  const text = strings.waterfall
   return (
     <>
       <div className="flex items-center gap-2 font-medium">
         <KindSwatch kind={span.kind} />
-        {eventTitle(span)}
+        {eventTitle(span, strings)}
       </div>
       <div className="mt-1.5 grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
         {span.kind === 'event' ? null : (
           <>
-            <span className="text-muted-foreground">Duration</span>
+            <span className="text-muted-foreground">{text.duration}</span>
             <span className="text-right font-mono">{ms(span.end_ms - span.start_ms)}</span>
           </>
         )}
-        <span className="text-muted-foreground">Starts</span>
+        <span className="text-muted-foreground">{text.starts}</span>
         <span className="text-right font-mono">{ms(span.start_ms)}</span>
         {span.usage ? (
           <>
-            <span className="text-muted-foreground">Tokens</span>
+            <span className="text-muted-foreground">{text.tokens}</span>
             <span className="text-right font-mono">
               {tokens(promptTokens(span.usage))} → {tokens(span.usage.output)}
             </span>
-            <span className="text-muted-foreground">Cost</span>
+            <span className="text-muted-foreground">{text.cost}</span>
             <span className="text-right font-mono">{usd(span.usage.cost_usd)}</span>
           </>
         ) : null}
-        {span.failed ? <span className="col-span-2 text-danger">Failed</span> : null}
+        {span.failed ? <span className="col-span-2 text-danger">{text.failed}</span> : null}
       </div>
     </>
   )
@@ -92,12 +96,14 @@ interface WaterfallProps {
 }
 
 export function Waterfall({ run, selected, onSelect }: WaterfallProps) {
+  const strings = useStrings()
+  const text = strings.waterfall
   const total = timelineEnd(run)
   return (
     <div className="thin-scroll overflow-x-auto">
       <div className="min-w-[620px] pb-2">
         <div className={cn(COLUMNS, 'h-8 items-center border-b font-mono text-[11px] text-muted-foreground')}>
-          <span className="pl-5">Span</span>
+          <span className="pl-5">{text.span}</span>
           <div className="relative h-full">
             {GRID.map((f) => (
               <span key={f} className={cn('absolute top-2 whitespace-nowrap',f === 1 ? '-translate-x-full' : f > 0 ? '-translate-x-1/2' : '')} style={{ left: `${f * 100}%` }}>
@@ -105,7 +111,7 @@ export function Waterfall({ run, selected, onSelect }: WaterfallProps) {
               </span>
             ))}
           </div>
-          <span className="pr-5 text-right">Time</span>
+          <span className="pr-5 text-right">{text.time}</span>
         </div>
         <div className="relative">
           <div className="pointer-events-none absolute inset-y-0 left-[250px] right-[72px]">
@@ -131,9 +137,9 @@ export function Waterfall({ run, selected, onSelect }: WaterfallProps) {
                     <div className="flex min-w-0 items-center gap-2 pr-3" style={{ paddingLeft: 16 + depth * 18 }}>
                       {depth ? <span className="-ml-1 h-5 w-2.5 self-start rounded-bl-md border-b border-l" /> : null}
                       <KindChip kind={span.kind} />
-                      <span className={cn('truncate', span.kind === 'llm' && 'font-mono text-[12.5px]')}>{eventTitle(span)}</span>
-                      {isRepeated(span) ? <Badge variant="danger">repeated</Badge> : null}
-                      {refused && !isRepeated(span) ? <Badge variant="danger">refused</Badge> : null}
+                      <span className={cn('truncate', span.kind === 'llm' && 'font-mono text-[12.5px]')}>{eventTitle(span, strings)}</span>
+                      {isRepeated(span) ? <Badge variant="danger">{text.repeated}</Badge> : null}
+                      {refused && !isRepeated(span) ? <Badge variant="danger">{text.refused}</Badge> : null}
                       {span.failed && !isRepeated(span) && !refused ? <AlertCircle className="size-3.5 shrink-0 text-danger" /> : null}
                     </div>
                     <div className="relative h-full">

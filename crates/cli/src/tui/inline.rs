@@ -1,19 +1,39 @@
-use ratatui::backend::Backend;
+use ratatui::backend::{Backend, CrosstermBackend};
+use ratatui::crossterm::execute;
+use ratatui::crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Widget, Wrap};
-use ratatui::{DefaultTerminal, Terminal, TerminalOptions, Viewport};
+use ratatui::{Terminal, TerminalOptions, Viewport};
 
+use super::Tty;
 use super::app::App;
 use super::entries;
+use super::mirror::Tee;
 
 pub const HEIGHT: u16 = 16;
 
-pub fn terminal(inline: bool) -> DefaultTerminal {
-    if inline {
-        ratatui::init_with_options(TerminalOptions { viewport: Viewport::Inline(HEIGHT) })
+pub fn terminal(inline: bool) -> Tty {
+    restore_on_panic();
+    let _ = enable_raw_mode();
+    let viewport = if inline {
+        Viewport::Inline(HEIGHT)
     } else {
-        ratatui::init()
+        let _ = execute!(std::io::stdout(), EnterAlternateScreen);
+        Viewport::Fullscreen
+    };
+    let backend = Tee::new(CrosstermBackend::new(std::io::stdout()));
+    match Terminal::with_options(backend, TerminalOptions { viewport }) {
+        Ok(terminal) => terminal,
+        Err(error) => panic!("the terminal could not be set up: {error}"),
     }
+}
+
+fn restore_on_panic() {
+    let earlier = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        ratatui::restore();
+        earlier(info);
+    }));
 }
 
 pub fn print<B: Backend>(terminal: &mut Terminal<B>, lines: Vec<Line<'static>>) -> Result<(), B::Error> {

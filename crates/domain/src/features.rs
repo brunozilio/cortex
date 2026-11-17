@@ -25,6 +25,7 @@ pub const FOLLOW_THROUGH: &str = "experimental-follow-through";
 pub const AFFECTED_TESTS: &str = "experimental-affected-tests";
 pub const PR_FOLLOW: &str = "experimental-pr-follow";
 pub const SESSION_CLAIMS: &str = "experimental-session-claims";
+pub const LOAD_ON_CALL: &str = "experimental-load-on-call";
 pub const OUTPUT_CLEANUP: &str = "experimental-output-cleanup";
 pub const OUTPUT_FILTERS: &str = "experimental-output-filters";
 pub const OUTPUT_SAVINGS: &str = "experimental-output-savings";
@@ -115,6 +116,10 @@ pub const KNOWN: &[Flag] = &[
     Flag {
         name: SESSION_CLAIMS,
         about: "Warn the agent when another session in the same folder edited the file it is changing",
+    },
+    Flag {
+        name: LOAD_ON_CALL,
+        about: "A tool waiting behind ToolSearch that the agent calls by name is loaded and run, not refused",
     },
     Flag {
         name: PR_FOLLOW,

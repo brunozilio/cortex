@@ -12,6 +12,7 @@ mod inbox;
 mod live_sessions;
 mod lsp;
 mod mcp;
+mod memory_edits;
 mod model_roles;
 mod plugins;
 mod prompt_hooks;
@@ -23,6 +24,7 @@ mod stable_prompt;
 mod steering;
 mod trace;
 mod verification;
+mod web_search;
 mod worktrees;
 
 use std::sync::mpsc::{Receiver, channel};

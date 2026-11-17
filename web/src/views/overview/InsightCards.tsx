@@ -4,19 +4,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { KindChip } from '@/components/KindChip'
 import { Ring } from '@/components/Ring'
 import { ms, percent } from '@/lib/format'
-import { KINDS, MODEL_COLORS, TIME_LABELS } from '@/lib/kinds'
+import { KINDS, MODEL_COLORS } from '@/lib/kinds'
 import { modelsByCost } from '@/lib/days'
 import { cn } from '@/lib/utils'
+import { useStrings } from '@/shell/strings'
 import type { Insights } from '@/types'
 
 export function TimeCard({ insights }: { insights: Insights }) {
-  const rows = insights.time.filter((entry) => TIME_LABELS[entry.kind] && entry.ms > 0).sort((a, b) => b.ms - a.ms)
+  const strings = useStrings()
+  const labels = strings.time.kinds
+  const rows = insights.time.filter((entry) => labels[entry.kind] && entry.ms > 0).sort((a, b) => b.ms - a.ms)
   const total = rows.reduce((sum, entry) => sum + entry.ms, 0) || 1
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Where the time went</CardTitle>
-        <CardDescription>Share of all run time</CardDescription>
+        <CardTitle>{strings.time.title}</CardTitle>
+        <CardDescription>{strings.time.description}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="flex h-3 overflow-hidden rounded-full bg-muted">
@@ -28,7 +31,7 @@ export function TimeCard({ insights }: { insights: Insights }) {
           {rows.map((entry) => (
             <div key={entry.kind} className="flex items-center gap-2.5">
               <KindChip kind={entry.kind} />
-              <span>{TIME_LABELS[entry.kind]}</span>
+              <span>{labels[entry.kind]}</span>
               <span className="num ml-auto text-muted-foreground">{ms(entry.ms)}</span>
               <span className="num w-10 text-right font-medium">{percent(entry.ms / total)}</span>
             </div>
@@ -40,6 +43,7 @@ export function TimeCard({ insights }: { insights: Insights }) {
 }
 
 export function CacheCard({ insights }: { insights: Insights }) {
+  const strings = useStrings()
   const order = modelsByCost(insights.days)
   const colorOf = (model: string) => {
     const i = order.indexOf(model)
@@ -48,8 +52,8 @@ export function CacheCard({ insights }: { insights: Insights }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Prompt cache</CardTitle>
-        <CardDescription>Input tokens served from cache</CardDescription>
+        <CardTitle>{strings.cache.title}</CardTitle>
+        <CardDescription>{strings.cache.description}</CardDescription>
       </CardHeader>
       <CardContent className="flex items-center gap-5">
         <Ring ratio={insights.totals.cache_ratio} color="hsl(var(--k-llm))" size={112} />
@@ -80,19 +84,21 @@ interface CheckRow {
 }
 
 export function ChecksCard({ insights }: { insights: Insights }) {
+  const strings = useStrings()
+  const text = strings.checks
   const { checks } = insights
   const rows: CheckRow[] = [
-    { icon: ShieldCheck, label: 'Verification judge', value: `${checks.verified_passed} pass · ${checks.verified_failed} fail`, variant: checks.verified_failed ? 'danger' : 'success' },
-    { icon: MessageSquare, label: 'Auto-review', value: `${checks.review_findings} findings`, variant: checks.review_findings ? 'warning' : 'secondary' },
-    { icon: Layers, label: 'Loops stopped', value: String(checks.repeated), variant: 'secondary' },
-    { icon: Ban, label: 'Calls refused', value: String(checks.refused), variant: checks.refused ? 'warning' : 'secondary' },
-    { icon: Hand, label: 'Asked you', value: String(checks.asked), variant: 'secondary' },
+    { icon: ShieldCheck, label: text.judge, value: text.judged(checks.verified_passed, checks.verified_failed), variant: checks.verified_failed ? 'danger' : 'success' },
+    { icon: MessageSquare, label: text.review, value: text.findings(checks.review_findings), variant: checks.review_findings ? 'warning' : 'secondary' },
+    { icon: Layers, label: text.loops, value: String(checks.repeated), variant: 'secondary' },
+    { icon: Ban, label: text.refused, value: String(checks.refused), variant: checks.refused ? 'warning' : 'secondary' },
+    { icon: Hand, label: text.asked, value: String(checks.asked), variant: 'secondary' },
   ]
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Checks</CardTitle>
-        <CardDescription>What the guards caught</CardDescription>
+        <CardTitle>{text.title}</CardTitle>
+        <CardDescription>{text.description}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
         {rows.map(({ icon: Icon, label, value, variant }) => (

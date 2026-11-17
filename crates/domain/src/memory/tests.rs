@@ -114,14 +114,24 @@ fn recall_keeps_facts_and_the_best_episodes() {
 }
 
 #[test]
-fn instructions_list_memories_only_on_a_fresh_session() {
+fn memories_are_listed_only_on_a_fresh_session() {
     let brief = MemoryBrief { recalled: book().memories, output: "/tmp/m.json".into(), ..MemoryBrief::default() };
-    let fresh = brief.instructions(true).expect("text");
+    let fresh = brief.recall_notes(true).expect("text");
     assert!(fresh.contains("Facts:\n- [0] The renderer") && fresh.contains("Episodes:\n- [2]"));
-    assert!(fresh.contains("/tmp/m.json"));
-    let resumed = brief.instructions(false).expect("text");
-    assert!(!resumed.contains("[0]") && resumed.contains("/tmp/m.json"));
-    assert_eq!(MemoryBrief::new(None).instructions(true), None);
+    assert!(!fresh.contains("/tmp/m.json"), "where edits go is the reminder's job");
+    assert_eq!(brief.recall_notes(false), None);
+    assert_eq!(MemoryBrief::new(None).recall_notes(true), None);
+}
+
+#[test]
+fn the_edits_format_names_no_file_and_the_reminder_names_only_the_file() {
+    let brief = MemoryBrief { output: "/tmp/m.json".into(), ..MemoryBrief::default() };
+    let format = brief.edits_format().expect("format");
+    assert!(format.contains("\"remember\"") && format.contains("\"reclassify\"") && !format.contains("/tmp/m.json"));
+    let reminder = brief.edits_reminder().expect("reminder");
+    assert!(reminder.contains("/tmp/m.json") && !reminder.contains("\"remember\""), "{reminder}");
+    assert_eq!(MemoryBrief::new(None).edits_format(), None);
+    assert_eq!(MemoryBrief::new(None).edits_reminder(), None);
 }
 
 #[test]
@@ -171,10 +181,10 @@ fn a_book_saved_with_embeddings_still_loads_and_keeps_its_memories() {
 #[test]
 fn a_search_tool_is_announced_once_and_its_empty_answer_is_final() {
     let brief = MemoryBrief { tool: true, ..MemoryBrief::default() };
-    let fresh = brief.instructions(true).expect("text");
+    let fresh = brief.recall_notes(true).expect("text");
     assert!(fresh.contains("`memory_search` tool") && fresh.contains("finds nothing is final"));
     assert!(!fresh.contains("listed above"), "nothing is listed, so nothing is called an index");
-    assert_eq!(brief.instructions(false), None, "a resumed session is not told to search again");
+    assert_eq!(brief.recall_notes(false), None, "a resumed session is not told to search again");
 }
 
 #[test]

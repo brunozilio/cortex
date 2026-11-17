@@ -1,5 +1,6 @@
 import type { Insights, Report, Run, SessionRuns } from '@/types'
 import { reportProblem } from './contract'
+import { EN, type Strings } from './i18n'
 
 const WAIT_MS = 250
 const TRIES = 40
@@ -18,15 +19,15 @@ export type Loaded =
   | { kind: 'sample'; report: Report; insights: DeriveInsights }
   | { kind: 'failed'; status: number | null; message: string }
 
-export function failureMessage(status: number | null): string {
-  if (status === null) return 'The terminal that opened this page is not answering; it may have been closed. Run /trace again and open the link the terminal printed.'
-  if (status === 401 || status === 403) return 'This page has no access to the terminal\'s data. Open it from the link the terminal printed (run /trace again for a new one).'
-  if (status === NOT_READY) return 'The terminal has not sent its report yet. Check that the chat that opened this page is still running, then reload.'
-  return `The page's server answered with an error (${status}). Open this page again from the link the terminal printed.`
+export function failureMessage(status: number | null, strings: Strings = EN): string {
+  if (status === null) return strings.failure.silent
+  if (status === 401 || status === 403) return strings.failure.denied
+  if (status === NOT_READY) return strings.failure.notReady
+  return strings.failure.server(status)
 }
 
-export function unreadableMessage(problem: string): string {
-  return `The terminal sent a report this page cannot read (${problem}). The page and the program are probably from different versions: build the page, then the program, again.`
+export function unreadableMessage(problem: string, strings: Strings = EN): string {
+  return strings.failure.unreadable(problem)
 }
 
 async function asked(fetcher: typeof fetch): Promise<{ body: unknown } | number | null> {
@@ -38,20 +39,20 @@ async function asked(fetcher: typeof fetch): Promise<{ body: unknown } | number 
   }
 }
 
-export async function loadReport(fetcher: typeof fetch = fetch, wait = WAIT_MS, sample?: () => Promise<Sample>): Promise<Loaded> {
+export async function loadReport(fetcher: typeof fetch = fetch, wait = WAIT_MS, sample?: () => Promise<Sample>, strings: Strings = EN): Promise<Loaded> {
   let status: number | null = NOT_READY
   for (let attempt = 0; attempt < TRIES && status === NOT_READY; attempt += 1) {
     if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, wait))
     const answer = await asked(fetcher)
     if (answer !== null && typeof answer === 'object') {
       const problem = reportProblem(answer.body)
-      if (problem) return { kind: 'failed', status: OK, message: unreadableMessage(problem) }
+      if (problem) return { kind: 'failed', status: OK, message: unreadableMessage(problem, strings) }
       return { kind: 'live', report: answer.body as Report }
     }
     status = answer
   }
   if (sample && status !== NOT_READY) return { kind: 'sample', ...(await sample()) }
-  return { kind: 'failed', status, message: failureMessage(status) }
+  return { kind: 'failed', status, message: failureMessage(status, strings) }
 }
 
 export interface RunRef {

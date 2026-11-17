@@ -59,7 +59,32 @@ impl Transport {
             .and_then(json_response)
         })
     }
+
+    pub(super) fn search(
+        &self,
+        query: &str,
+        stop: &AtomicBool,
+    ) -> Option<Result<Vec<llm_providers::web_search::Hit>, ModelError>> {
+        self.provider.search(&Config::default(), query)?;
+        let ask = |force: bool| -> Result<Response, ModelError> {
+            let config = self.config_stopped(force, stop)?;
+            let call = self.provider.search(&config, query).ok_or(ModelError::Cancelled)?;
+            self.http.post_stopped(&call.url, &call.headers, call.body.as_deref().unwrap_or_default(), stop)
+        };
+        let searched = ask(false).and_then(|response| {
+            if self.provider.retries_after_refresh(response.status) { ask(true) } else { Ok(response) }
+        });
+        Some(searched.and_then(|response| {
+            status(response.status)?;
+            let text = read(response, SEARCH_LIMIT)?;
+            let value: Value = serde_json::from_str(&text)
+                .map_err(|_| ModelError::Provider("the web search answered with something other than JSON".into()))?;
+            self.provider.hits(&value).map_err(|error| ModelError::Provider(error.to_string()))
+        }))
+    }
 }
+
+const SEARCH_LIMIT: u64 = 2 << 20;
 
 impl Http for Transport {
     fn post_streaming<'a>(

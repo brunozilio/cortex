@@ -9,6 +9,7 @@ mod main_content;
 mod page;
 pub mod reach;
 mod runs;
+mod search;
 mod tree;
 
 use serde_json::Value;
@@ -100,11 +101,6 @@ impl Tool for WebSearch {
         crate::tools::declared(crate::tools::WEB_SEARCH, &serde_json::Value::Null)
     }
 
-    fn offered(&self, workspace: &Workspace) -> bool {
-        let model = &workspace.models.model;
-        crate::providers::find(model.provider).is_some_and(|provider| provider.web_search(&model.id).is_some())
-    }
-
     fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
         vec![crate::tools::Effect::Net { host: None }]
     }
@@ -113,8 +109,11 @@ impl Tool for WebSearch {
         field(input, "query").unwrap_or_default().to_owned()
     }
 
-    fn run(&self, _input: &Value, _workspace: &Workspace) -> Outcome {
-        Outcome::error("Web search runs inside the model provider, and this model's provider has none.")
+    fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
+        match required(input, "query") {
+            Ok(query) => search::run(query, workspace),
+            Err(error) => error,
+        }
     }
 }
 
@@ -199,12 +198,11 @@ mod offered_tests {
     }
 
     #[test]
-    fn web_search_is_offered_only_where_the_provider_searches_itself() {
-        assert!(WebSearch.offered(&on("anthropic", "claude-opus-5-5")));
-        assert!(WebSearch.offered(&on("openai", "gpt-5.5")));
-        assert!(!WebSearch.offered(&on("kiro", "claude-sonnet-4-6")));
-        assert!(!WebSearch.offered(&on("nobody", "m")));
-        let called = WebSearch.run(&json!({"query": "rust"}), &on("kiro", "m"));
-        assert!(called.is_error && called.content.contains("has none"), "{}", called.content);
+    fn web_search_is_offered_whatever_the_provider() {
+        for (provider, model) in [("anthropic", "claude-opus-5-5"), ("kiro-subscription", "auto"), ("nobody", "m")] {
+            assert!(WebSearch.offered(&on(provider, model)), "{provider}");
+        }
+        let called = WebSearch.run(&json!({"query": "rust"}), &on("nobody", "m"));
+        assert!(called.is_error && called.content.contains("not available"), "{}", called.content);
     }
 }

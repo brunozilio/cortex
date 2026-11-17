@@ -1,6 +1,6 @@
-export type Lang = 'en' | 'pt'
+import type { Lang } from '../lib/lang'
 
-export const LANGS: Lang[] = ['en', 'pt']
+export { LANGS, type Lang } from '../lib/lang'
 
 export interface Page {
   lang: Lang

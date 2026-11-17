@@ -39,7 +39,7 @@ fn a_run_is_handed_the_memories_about_files_that_its_prompt_did_not_recall() {
     assert_eq!(anchored.len() + recalled.len(), 2, "{anchored:?} {recalled:?}");
     assert!(!anchored.iter().any(|text| recalled.contains(text)), "a recalled memory is not handed twice");
     assert!(anchored.iter().chain(&recalled).any(|text| *text == "Keep defaultRetryMax at 4"));
-    let told = brief.instructions(true).expect("instructions");
+    let told = brief.edits_format().expect("format");
     assert!(told.contains("\"touches\"") && told.contains("\"ruled_out\""), "{told}");
 }
 
@@ -66,7 +66,7 @@ fn a_project_that_turns_the_context_features_off_gets_none_of_them() {
     let brief = memories.brief(RunId::new(), &request, false).memory.expect("brief");
 
     assert!(!brief.anchors && !brief.structured && brief.anchored.is_empty());
-    let told = brief.instructions(true).expect("instructions");
+    let told = brief.edits_format().expect("format");
     assert!(!told.contains("\"touches\"") && !told.contains("\"ruled_out\""), "{told}");
     let refused = memories.check(project.path()).expect_err("off");
     assert!(refused.contains(domain::features::LEARNING_CHECK), "{refused}");

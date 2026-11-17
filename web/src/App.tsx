@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Card } from '@/components/ui/card'
 import { Header } from '@/shell/Header'
@@ -13,13 +13,25 @@ import { allRuns, defaultRun, findRun, latestRun, scoped, type DeriveInsights, t
 import { followSelection, mergeSession, readLiveConfig, refetch } from '@/lib/live'
 import { useSessions, watchSession } from '@/lib/sessions'
 import { useLiveFeed } from '@/lib/useLiveFeed'
+import { STRINGS } from '@/lib/i18n'
+import { keepLang, type Lang } from '@/lib/lang'
+import { StringsProvider } from '@/shell/strings'
 import type { Report, Run, SessionRuns } from '@/types'
 
 function refOf(run: Run | undefined): RunRef | null {
   return run ? { session: run.session, index: run.index } : null
 }
 
-export function App({ initial, sample }: { initial: Report; sample?: DeriveInsights }) {
+export function App({ initial, initialLang, sample }: { initial: Report; initialLang: Lang; sample?: DeriveInsights }) {
+  const [lang, setLang] = useState(initialLang)
+  const strings = STRINGS[lang]
+  useEffect(() => {
+    document.documentElement.lang = strings.locale
+  }, [strings])
+  const chooseLang = (next: Lang) => {
+    setLang(next)
+    keepLang(next)
+  }
   const [report, setReport] = useState(initial)
   const [config] = useState(readLiveConfig)
   const cards = useSessions(config)
@@ -71,32 +83,34 @@ export function App({ initial, sample }: { initial: Report; sample?: DeriveInsig
   }
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="min-h-screen">
-        <Header sessions={choices} activeSession={session} nowMs={report.generated_at_ms} live={live} onSession={chooseSession} />
-        <main className="grid gap-8 px-4 py-6 md:px-6">
-          {ready ? (
-            <OverviewView report={shown} metric={metric} onMetric={setMetric} scope={session ? 'session' : 'all'} />
-          ) : (
-            <Card className="p-10 text-center text-sm text-muted-foreground">Loading this session's overview…</Card>
-          )}
-          {session ? (
-            <TracesView
-              report={shown}
-              runs={runs}
-              run={run}
-              spanId={spanId}
-              tab={tab}
-              filters={filters}
-              onFilters={setFilters}
-              onRun={(target) => openRun(target, 1, tab)}
-              onSpan={setSpanId}
-              onTab={setTab}
-            />
-          ) : null}
-          {config && session ? <TerminalView key={session} session={session} /> : null}
-        </main>
-      </div>
-    </TooltipProvider>
+    <StringsProvider value={strings}>
+      <TooltipProvider delayDuration={200}>
+        <div className="min-h-screen">
+          <Header sessions={choices} activeSession={session} nowMs={report.generated_at_ms} live={live} lang={lang} onLang={chooseLang} onSession={chooseSession} />
+          <main className="grid gap-8 px-4 py-6 md:px-6">
+            {ready ? (
+              <OverviewView report={shown} metric={metric} onMetric={setMetric} scope={session ? 'session' : 'all'} />
+            ) : (
+              <Card className="p-10 text-center text-sm text-muted-foreground">{strings.loadingSession}</Card>
+            )}
+            {session ? (
+              <TracesView
+                report={shown}
+                runs={runs}
+                run={run}
+                spanId={spanId}
+                tab={tab}
+                filters={filters}
+                onFilters={setFilters}
+                onRun={(target) => openRun(target, 1, tab)}
+                onSpan={setSpanId}
+                onTab={setTab}
+              />
+            ) : null}
+            {config && session ? <TerminalView key={session} session={session} /> : null}
+          </main>
+        </div>
+      </TooltipProvider>
+    </StringsProvider>
   )
 }

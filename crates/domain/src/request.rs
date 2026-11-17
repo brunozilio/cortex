@@ -116,7 +116,7 @@ impl PromptRequest {
             out.push_str("\n\n");
             out.push_str(map);
         }
-        if let Some(memory) = self.memory.as_ref().and_then(|memory| memory.instructions(self.resume.is_none())) {
+        if let Some(memory) = self.memory.as_ref().and_then(|memory| memory.recall_notes(self.resume.is_none())) {
             out.push_str("\n\n");
             out.push_str(&memory);
         }

@@ -129,6 +129,7 @@ Uma flag cujo nome começa com `experimental-` é experimental: o comportamento 
 | `experimental-escalation` | Revisão | | Manda um agente empacado para o Advisor ou para o `escalationModel` |
 | `experimental-code-mode` | Ferramentas | | A ferramenta REPL: o agente programa suas ferramentas em JavaScript e só vê o que o script devolve |
 | `experimental-code-mode-only` | Ferramentas | | Desligada até você ligar: a REPL vira a única ferramenta do agente |
+| `experimental-load-on-call` | Ferramentas | | Uma ferramenta guardada para busca que o agente chama pelo nome é carregada e executada |
 | `experimental-learning` | Aprendizado e memória | | Oferece uma lição para guardar depois de uma execução em que você corrigiu o agente |
 | `team-memory` | Aprendizado e memória | | Lembra as memórias versionadas em `{{DIR}}/memory` |
 | `experimental-memory-anchors` | Aprendizado e memória | | Memórias citam seus arquivos e aparecem quando esses arquivos são tocados |
@@ -153,7 +154,7 @@ As seções abaixo descrevem cada flag em detalhe.
 ### `experimental-sandbox`
 
 > [!EXPERIMENTAL]
-> Flag de segurança. Padrão: ligada. Disponível só onde o sandbox é suportado (macOS); nos outros sistemas o `/features` a mostra como `(not on this system)`.
+> Flag de segurança. Padrão: ligada. Disponível só onde o sandbox é suportado (macOS; Linux 5.13 ou mais novo com Landlock); nos outros sistemas o `/features` a mostra como `(not on this system)`.
 
 Confina os comandos que o agente roda com **Bash** e **Monitor** às pastas do projeto, usando as configurações de `sandbox`. Os comandos que o agente inicia para rodar os testes de um arquivo (veja [`experimental-affected-tests`](#experimental-affected-tests)) são confinados do mesmo jeito. Com a flag desligada, os comandos rodam sem sandbox.
 
@@ -420,6 +421,13 @@ Cada chamada de um script é uma chamada de ferramenta comum: segue o seu modo d
 > Padrão: desligada. Ao contrário das outras flags, ela fica desligada até você ligar nas suas próprias configurações (`/features experimental-code-mode-only on`); as configurações de um projeto não podem ligá-la.
 
 Com a `experimental-code-mode` ligada, faz da **REPL** o único jeito de o agente usar ferramentas. O modelo recebe a REPL, a AskUserQuestion e as chaves de plan mode e de worktree; todas as outras ferramentas aparecem na descrição da REPL como funções tipadas e são chamadas de dentro dos scripts. As ferramentas guardadas para busca (quando há muitas ferramentas MCP) são encontradas num script com `searchTools("palavras")`. Permissões, regras e hooks valem para cada chamada exatamente como antes.
+
+### `experimental-load-on-call`
+
+> [!EXPERIMENTAL]
+> Padrão: ligada.
+
+Com muitas ferramentas MCP, a maioria fica guardada atrás da ToolSearch e o agente precisa carregá-las antes de chamar. Com esta flag, quando o agente chama pelo nome uma ferramenta guardada sem ter carregado, ela é carregada e executada na hora, em vez de voltar um erro pedindo a ToolSearch. A partir daí ela fica oferecida como as carregadas pela busca. Permissões, regras e hooks valem como antes. Desligada, a chamada é recusada até o agente carregar a ferramenta.
 
 ## Aprendizado e memória
 

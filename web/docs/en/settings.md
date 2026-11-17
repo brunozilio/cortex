@@ -313,6 +313,7 @@ Every feature is on until you turn it off, except `experimental-code-mode-only`,
 | `features.experimental-code-map` | `true` | Index symbols with tree-sitter and point each prompt at matching code. |
 | `features.experimental-memory-seed` | `true` | `/memory seed` offers repeated requests as memories. |
 | `features.experimental-memory-scorecard` | `true` | One request in 20 runs without recalled memory, for `/memory score`. |
+| `features.experimental-load-on-call` | `true` | A tool waiting behind ToolSearch that the agent calls by name is loaded and run, not refused. |
 | `features.experimental-code-mode` | `true` | The REPL tool: the agent writes JavaScript that calls its tools as functions. |
 | `features.experimental-code-mode-only` | `false` | With `experimental-code-mode`, REPL is the agent's only tool. |
 | `features.memory` | `true` | Project memory: recall with each prompt, and `/memory`. |

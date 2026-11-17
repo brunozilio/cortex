@@ -45,8 +45,8 @@ pub use llm_providers::web_search::WEB_SEARCH;
 pub use lsp::Lsp;
 pub(crate) use outside::settled;
 pub use workspace::{
-    Confiner, Launch, Launcher, Models, Network, OnThisMachine, Policy, Verification, Workspace, confinement_of,
-    env_secrets, temp_folders,
+    Confiner, Launch, Launcher, Models, Network, OnThisMachine, Policy, Verification, WebSearcher, Workspace,
+    confinement_of, env_secrets, temp_folders,
 };
 
 use crate::model::ToolSpec;

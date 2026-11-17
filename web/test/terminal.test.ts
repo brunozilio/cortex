@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { resizeMessage, terminalUrl } from '../src/lib/terminal'
+import { resizeMessage, screenSize, terminalUrl } from '../src/lib/terminal'
 
 describe('resizeMessage', () => {
   test('a size is sent as the JSON the console reads: whole columns and rows', () => {
@@ -41,5 +41,17 @@ describe('terminalUrl', () => {
   test('a page served over TLS opens a secure socket, and the session is escaped', () => {
     const url = terminalUrl({ protocol: 'https:', host: 'localhost:4000' }, 'a b&c', { cols: 80, rows: 24 })
     expect(url).toBe('wss://localhost:4000/api/terminal?session=a+b%26c&cols=80&rows=24')
+  })
+})
+
+describe('screenSize', () => {
+  test('the size of the session\'s own screen is read from the console\'s text message', () => {
+    expect(screenSize('{"cols":120,"rows":40}')).toEqual({ cols: 120, rows: 40 })
+  })
+
+  test('anything else is not a size', () => {
+    for (const message of ['', 'hello', '[]', 'null', '{"cols":0,"rows":40}', '{"cols":"80","rows":24}', '{"cols":80}']) {
+      expect(screenSize(message)).toBeNull()
+    }
   })
 })

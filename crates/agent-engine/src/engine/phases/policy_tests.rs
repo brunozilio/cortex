@@ -21,7 +21,7 @@ fn request() -> PromptRequest {
 
 type Reads = fn(&Policy) -> bool;
 
-const SWITCHES: [(&str, Reads); 19] = [
+const SWITCHES: [(&str, Reads); 20] = [
     (features::WEB_LINKS, |policy| policy.web.links),
     (features::WEB_SMALL_PAGES_DIRECT, |policy| policy.web.small_pages_direct),
     (features::WEB_FORMATS, |policy| policy.web.formats),
@@ -35,6 +35,7 @@ const SWITCHES: [(&str, Reads); 19] = [
     (features::FOLLOW_THROUGH, |policy| policy.follow_through),
     (features::AFFECTED_TESTS, |policy| policy.affected_tests),
     (features::SESSION_CLAIMS, |policy| policy.session_claims),
+    (features::LOAD_ON_CALL, |policy| policy.load_on_call),
     (features::CODE_MODE, |policy| policy.code_mode != Mode::Off),
     (features::WEB_MAIN_CONTENT, |policy| policy.web.main_content),
     (features::WEB_CLEANUP, |policy| policy.web.cleanup),

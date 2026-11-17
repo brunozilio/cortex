@@ -1,3 +1,5 @@
+import { EN, type Strings } from './i18n'
+
 const DAY_MS = 86_400_000
 
 export function usd(value: number): string {
@@ -32,8 +34,8 @@ export function percent(ratio: number): string {
   return Math.round(ratio * 100) + '%'
 }
 
-export function dayLabel(day: number): string {
-  return new Date(day * DAY_MS).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+export function dayLabel(day: number, locale?: string): string {
+  return new Date(day * DAY_MS).toLocaleDateString(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' })
 }
 
 export function dayOf(epochMs: number): number {
@@ -45,12 +47,12 @@ function localDayStart(epochMs: number): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
 }
 
-export function when(epochMs: number, nowMs: number): string {
-  const time = new Date(epochMs).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+export function when(epochMs: number, nowMs: number, strings: Strings = EN): string {
+  const time = new Date(epochMs).toLocaleTimeString(strings.locale, { hour: '2-digit', minute: '2-digit' })
   const daysAgo = Math.round((localDayStart(nowMs) - localDayStart(epochMs)) / DAY_MS)
-  if (daysAgo === 0) return `today ${time}`
-  if (daysAgo === 1) return `yesterday ${time}`
-  const date = new Date(epochMs).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  if (daysAgo === 0) return `${strings.today} ${time}`
+  if (daysAgo === 1) return `${strings.yesterday} ${time}`
+  const date = new Date(epochMs).toLocaleDateString(strings.locale, { month: 'short', day: 'numeric' })
   return `${date} ${time}`
 }
 

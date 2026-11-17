@@ -20,7 +20,7 @@ The page has three parts, top to bottom:
 2. **Traces**: the runs of the session you pick, one per prompt.
 3. **Terminal**: the session, live in the same CLI, inside the page.
 
-Pick a session in the header's session menu (**All sessions** by default; type in it to search). Traces and Terminal appear once a session is picked.
+Pick a session in the header's session menu (**All sessions** by default; type in it to search). Traces and Terminal appear once a session is picked. The **EN** / **PT** switch at the right of the header changes the page's language; the browser remembers the choice.
 
 ## Overview
 
@@ -32,7 +32,7 @@ The overview covers the last 30 days, for every session or for the one you picke
 | **Runs** | Number of runs, with the same trend |
 | **p95 run time** | The 95th percentile of run duration, and the share of run time spent waiting on you |
 | **Tool error rate** | The share of all tool calls that failed, marked `high` when it is |
-| Usage chart | Daily **Cost**, **Tokens** or **Runs** (pick one) |
+| **Usage by model** | Daily **Cost**, **Tokens** or **Runs** (pick one), stacked by model |
 | **Where the time went** | Share of run time in model calls, tools, waiting on you, subagents, hooks and tests, and evaluations |
 | **Prompt cache** | The share of input tokens served from the cache |
 | **Checks** | What the guards caught: verification judge passes and failures, auto-review findings, loops stopped, calls refused, times it asked you |
@@ -80,6 +80,8 @@ With a session picked, the **Terminal** panel runs `{{COMMAND}} --resume <sessio
 
 > [!WARNING]
 > The terminal in the page is a real {{NAME}} process on your computer, with your permissions. Anyone who can open the page can use it; keep the link to yourself.
+
+The session open in the chat that opened the page is not started again: the panel shows that chat's own screen, and what you type in the page reaches it as if typed in your terminal.
 
 A session the chat did not list is resumed in the project folder of the chat that opened the page. At most 4 terminals can be open from one page server at a time; a fifth is refused until one closes.
 

@@ -15,7 +15,9 @@ import {
 } from '../src/lib/contract'
 import { eventTitle } from '../src/lib/events'
 import { KINDS } from '../src/lib/kinds'
-import { CHECK_LABELS, SIGNALS, STATUS_LABELS } from '../src/lib/signals'
+import { STRINGS } from '../src/lib/i18n'
+import { LANGS } from '../src/lib/lang'
+import { SIGNALS } from '../src/lib/signals'
 import { treeOrder } from '../src/lib/spans'
 import type { Report, SessionRuns, Span } from '../src/types'
 import { fixture } from './make'
@@ -65,8 +67,13 @@ describe('what the Rust side serializes', () => {
   test('every such value has its label and style in the page', () => {
     expect(Object.keys(KINDS).sort()).toEqual([...SPAN_KINDS].sort())
     expect(Object.keys(SIGNALS).sort()).toEqual([...RUN_SIGNALS].sort())
-    expect(Object.keys(STATUS_LABELS).sort()).toEqual([...RUN_STATUSES].sort())
-    expect(Object.keys(CHECK_LABELS).sort()).toEqual([...FINDING_CHECKS].sort())
+    for (const lang of LANGS) {
+      const strings = STRINGS[lang]
+      expect(Object.keys(strings.kinds).sort()).toEqual([...SPAN_KINDS].sort())
+      expect(Object.keys(strings.signals).sort()).toEqual([...RUN_SIGNALS].sort())
+      expect(Object.keys(strings.status).sort()).toEqual([...RUN_STATUSES].sort())
+      expect(Object.keys(strings.checkNames).sort()).toEqual([...FINDING_CHECKS].sort())
+    }
   })
 
   test('the fields Rust leaves out when empty are the ones the page treats as optional', () => {
@@ -159,5 +166,13 @@ describe('a notice in the trace', () => {
     ])
     expect(named('escalated to advisor')).toBe('escalated to advisor')
     expect(eventTitle({ ...notice, kind: 'tool', name: 'notice' })).toBe('notice')
+  })
+
+  test('every note has a Portuguese title too, and an unknown name is still shown as it is', () => {
+    expect(Object.keys(STRINGS.pt.events).sort()).toEqual(Object.keys(STRINGS.en.events).sort())
+    expect(eventTitle(notice, STRINGS.pt)).toBe('Aviso')
+    expect(eventTitle({ ...notice, name: 'fell back to haiku' }, STRINGS.pt)).toBe('Fallback para haiku')
+    expect(eventTitle({ ...notice, name: 'escalated to advisor' }, STRINGS.pt)).toBe('escalated to advisor')
+    expect(eventTitle({ ...notice, name: 'constructor' })).toBe('constructor')
   })
 })

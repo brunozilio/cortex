@@ -20,7 +20,7 @@ A página tem três partes, de cima para baixo:
 2. **Traces**: as execuções da sessão escolhida, uma por prompt.
 3. **Terminal**: a sessão, ao vivo, na mesma CLI, dentro da página.
 
-Escolha uma sessão no menu de sessões do cabeçalho (**All sessions** por padrão; digite nele para buscar). Traces e Terminal aparecem depois que uma sessão é escolhida.
+Escolha uma sessão no menu de sessões do cabeçalho (**All sessions** por padrão; digite nele para buscar). Traces e Terminal aparecem depois que uma sessão é escolhida. A chave **EN** / **PT** à direita do cabeçalho muda o idioma da página; o navegador guarda a escolha.
 
 ## Overview
 
@@ -32,7 +32,7 @@ O overview cobre os últimos 30 dias, de todas as sessões ou da que você escol
 | **Runs** | O número de execuções, com a mesma tendência |
 | **p95 run time** | O percentil 95 da duração das execuções e a fração do tempo de execução gasta esperando por você |
 | **Tool error rate** | A fração de todas as chamadas de ferramenta que falharam, marcada `high` quando é alta |
-| Gráfico de uso | **Cost**, **Tokens** ou **Runs** por dia (escolha um) |
+| **Usage by model** | **Cost**, **Tokens** ou **Runs** por dia (escolha um), empilhados por modelo |
 | **Where the time went** | A fração do tempo de execução em chamadas de modelo, ferramentas, espera por você, subagentes, hooks e testes, e avaliações |
 | **Prompt cache** | A fração dos tokens de entrada servidos pelo cache |
 | **Checks** | O que as proteções pegaram: aprovações e reprovações do juiz de verificação, achados da revisão automática, loops interrompidos, chamadas recusadas, vezes que perguntou a você |
@@ -80,6 +80,8 @@ Com uma sessão escolhida, o painel **Terminal** roda `{{COMMAND}} --resume <ses
 
 > [!WARNING]
 > O terminal da página é um processo real do {{NAME}} no seu computador, com as suas permissões. Quem conseguir abrir a página consegue usá-lo; guarde o link só para você.
+
+A sessão aberta no chat que abriu a página não é iniciada de novo: o painel mostra a própria tela daquele chat, e o que você digita na página chega a ele como se fosse digitado no seu terminal.
 
 Uma sessão que o chat não listou é retomada na pasta do projeto do chat que abriu a página. No máximo 4 terminais ficam abertos ao mesmo tempo a partir de um servidor da página; um quinto é recusado até que um deles feche.
 

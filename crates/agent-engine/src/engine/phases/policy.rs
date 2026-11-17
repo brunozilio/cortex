@@ -78,6 +78,7 @@ pub(in crate::engine) fn flagged(settings: &Settings, cwd: &Path, safety_check: 
         follow_through: on(features::FOLLOW_THROUGH),
         affected_tests: on(features::AFFECTED_TESTS),
         session_claims: on(features::SESSION_CLAIMS),
+        load_on_call: on(features::LOAD_ON_CALL),
         code_mode: domain::code_mode::Mode::of(&settings.features),
         web: domain::web_reading::WebReading::from(&settings.features),
         output: domain::output::Shaping::from(&settings.features),

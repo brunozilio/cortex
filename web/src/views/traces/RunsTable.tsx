@@ -9,6 +9,7 @@ import { applyFilters, EMPTY_FILTERS, facetsFor, type Filters } from '@/lib/filt
 import { ms, percent, shortId, tokens, usd, when } from '@/lib/format'
 import { runKey, type RunRef } from '@/lib/report'
 import { cn } from '@/lib/utils'
+import { useStrings } from '@/shell/strings'
 import type { Run } from '@/types'
 
 const PAGE_SIZE = 10
@@ -25,7 +26,9 @@ interface RunsTableProps {
 }
 
 export function RunsTable({ runs, current, nowMs, selected, filters, onFilters, onSelect }: RunsTableProps) {
-  const facets = useMemo(() => facetsFor(runs, current).filter((facet) => facet.key !== 'session'), [runs, current])
+  const strings = useStrings()
+  const text = strings.traces
+  const facets = useMemo(() => facetsFor(runs, current, strings).filter((facet) => facet.key !== 'session'), [runs, current, strings])
   const visible = useMemo(() => applyFilters(runs, filters, ''), [runs, filters])
   const [page, setPage] = useState(0)
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
@@ -49,7 +52,7 @@ export function RunsTable({ runs, current, nowMs, selected, filters, onFilters, 
         ))}
         {filtered ? (
           <Button variant="ghost" onClick={reset}>
-            Reset
+            {text.reset}
             <X />
           </Button>
         ) : null}
@@ -60,13 +63,13 @@ export function RunsTable({ runs, current, nowMs, selected, filters, onFilters, 
             <TableHeader>
               <TableRow className="border-t">
                 <TableHead className="w-8 pl-4 pr-1" />
-                <TableHead className="px-3">Prompt</TableHead>
-                <TableHead className="px-3">Model</TableHead>
-                <TableHead className="px-3 text-right">Duration</TableHead>
-                <TableHead className="px-3 text-right">Tokens</TableHead>
-                <TableHead className="px-3 text-right">Cost</TableHead>
-                <TableHead className="px-3 text-right">Waste</TableHead>
-                <TableHead className="px-3 pr-4">Signals</TableHead>
+                <TableHead className="px-3">{text.columns.prompt}</TableHead>
+                <TableHead className="px-3">{text.columns.model}</TableHead>
+                <TableHead className="px-3 text-right">{text.columns.duration}</TableHead>
+                <TableHead className="px-3 text-right">{text.columns.tokens}</TableHead>
+                <TableHead className="px-3 text-right">{text.columns.cost}</TableHead>
+                <TableHead className="px-3 text-right">{text.columns.waste}</TableHead>
+                <TableHead className="px-3 pr-4">{text.columns.signals}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -85,8 +88,8 @@ export function RunsTable({ runs, current, nowMs, selected, filters, onFilters, 
                   <TableCell className="min-w-[260px] max-w-[440px] px-3">
                     <div className="truncate font-medium">{run.prompt}</div>
                     <div className="text-xs text-muted-foreground">
-                      session <span className="font-mono">{shortId(run.session)}</span>
-                      {run.session === current ? ' (current)' : ''} · run {run.index} · {when(run.started_at_ms, nowMs)}
+                      {text.session} <span className="font-mono">{shortId(run.session)}</span>
+                      {run.session === current ? text.current : ''} · {text.run} {run.index} · {when(run.started_at_ms, nowMs, strings)}
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap px-3 text-muted-foreground">{run.model}</TableCell>
@@ -101,7 +104,7 @@ export function RunsTable({ runs, current, nowMs, selected, filters, onFilters, 
                     </div>
                   </TableCell>
                   <TableCell className={cn('num px-3 text-right', run.waste > 0.2 ? 'font-medium text-warning' : 'text-muted-foreground')}>
-                    {Math.round(run.waste * 100) === 0 ? <span aria-label="none">–</span> : percent(run.waste)}
+                    {Math.round(run.waste * 100) === 0 ? <span aria-label={text.noWaste}>–</span> : percent(run.waste)}
                   </TableCell>
                   <TableCell className="px-3 pr-4">
                     <div className="flex gap-1 whitespace-nowrap">
@@ -114,14 +117,14 @@ export function RunsTable({ runs, current, nowMs, selected, filters, onFilters, 
           </Table>
           <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted-foreground">
             <span>
-              {visible.length} of {runs.length} runs
-              {pages > 1 ? ` · page ${page + 1} of ${pages}` : ''}
+              {text.shown(visible.length, runs.length)}
+              {pages > 1 ? text.page(page + 1, pages) : ''}
             </span>
             <div className="flex gap-2">
-              <Button size="icon" aria-label="Previous page" disabled={page === 0} onClick={() => setPage(page - 1)}>
+              <Button size="icon" aria-label={text.previous} disabled={page === 0} onClick={() => setPage(page - 1)}>
                 <ChevronLeft />
               </Button>
-              <Button size="icon" aria-label="Next page" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>
+              <Button size="icon" aria-label={text.next} disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>
                 <ChevronRight />
               </Button>
             </div>
@@ -130,8 +133,8 @@ export function RunsTable({ runs, current, nowMs, selected, filters, onFilters, 
       ) : (
         <div className="grid place-items-center gap-2 border-t p-10 text-center text-sm text-muted-foreground">
           <Search className="size-6" />
-          No runs match these filters.
-          <Button onClick={reset}>Reset filters</Button>
+          {text.noMatch}
+          <Button onClick={reset}>{text.resetFilters}</Button>
         </div>
       )}
     </Card>

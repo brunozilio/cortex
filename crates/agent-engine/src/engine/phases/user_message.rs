@@ -38,6 +38,9 @@ impl Job {
         };
         let mut user = Message::user(format!("{}{}{}", initial, if initial.is_empty() { "" } else { "\n\n" }, typed));
         user.blocks.splice(0..0, self.request.images.iter().cloned().map(Block::Image));
+        if let Some(reminder) = self.request.memory.as_ref().and_then(domain::MemoryBrief::edits_reminder) {
+            user.blocks.push(Block::Reminder(reminder));
+        }
         Ok(user)
     }
 

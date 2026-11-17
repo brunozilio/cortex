@@ -280,6 +280,10 @@
           "description": "/check has the agent compare the branch's changes with the memories about the files they touch",
           "type": "boolean"
         },
+        "experimental-load-on-call": {
+          "description": "A tool waiting behind ToolSearch that the agent calls by name is loaded and run, not refused",
+          "type": "boolean"
+        },
         "experimental-memory-anchors": {
           "description": "Memories name the files they are about, and the agent sees them when it reads or edits those files",
           "type": "boolean"

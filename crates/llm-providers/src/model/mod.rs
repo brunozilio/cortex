@@ -15,6 +15,8 @@ pub(crate) mod sse_read;
 pub mod web_client;
 pub mod wires;
 
+use std::sync::atomic::AtomicBool;
+
 use domain::Effort;
 use domain::provider::ProviderKey;
 use serde_json::Value;
@@ -153,5 +155,15 @@ impl<T: ModelApi + ?Sized> BlockingTurn for T {
     ) -> Result<Reply, ModelError> {
         platform::runtime::block_on(self.turn(request, on, cancel))
             .unwrap_or_else(|error| Err(ModelError::Network(error.to_string())))
+    }
+}
+
+pub trait Searcher: Send + Sync {
+    fn search(&self, query: &str, stop: &AtomicBool) -> Option<Result<Vec<crate::web_search::Hit>, ModelError>>;
+}
+
+impl Searcher for client::ProviderClient {
+    fn search(&self, query: &str, stop: &AtomicBool) -> Option<Result<Vec<crate::web_search::Hit>, ModelError>> {
+        client::ProviderClient::search(self, query, stop)
     }
 }

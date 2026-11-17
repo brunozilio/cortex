@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod idc;
 pub mod models;
+pub mod search;
 mod sign_in;
 pub mod wire;
 
@@ -80,6 +81,12 @@ impl Shape for Provider {
         let (models, next) =
             models::page(value).ok_or_else(|| ProviderError::Invalid("model catalog has no model array".into()))?;
         Ok(Page { models, next })
+    }
+    fn search(&self, config: &Config, query: &str) -> Option<Call> {
+        Some(search::call(config, query))
+    }
+    fn hits(&self, value: &Value) -> Result<Vec<llm_providers::web_search::Hit>, ProviderError> {
+        search::hits(value)
     }
     fn refresh(&self, previous: &Tokens) -> Option<TokenRequest> {
         Some(match idc::client(previous) {

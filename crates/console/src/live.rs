@@ -15,6 +15,7 @@ use futures_util::stream::{self, Stream, StreamExt};
 use serde_json::Value;
 use tokio::sync::{OwnedSemaphorePermit, broadcast};
 
+use crate::mirror::Mirror;
 use crate::routes::{Shared, failure};
 
 const KEPT_UPDATES: usize = 256;
@@ -51,15 +52,20 @@ impl Update {
 pub struct Live {
     board: Arc<Mutex<Board>>,
     updates: broadcast::Sender<Update>,
+    mirror: Mirror,
 }
 
 impl Default for Live {
     fn default() -> Self {
-        Self { board: Arc::default(), updates: broadcast::channel(KEPT_UPDATES).0 }
+        Self { board: Arc::default(), updates: broadcast::channel(KEPT_UPDATES).0, mirror: Mirror::default() }
     }
 }
 
 impl Live {
+    pub fn mirror(&self) -> &Mirror {
+        &self.mirror
+    }
+
     fn board(&self) -> MutexGuard<'_, Board> {
         self.board.lock().unwrap_or_else(PoisonError::into_inner)
     }

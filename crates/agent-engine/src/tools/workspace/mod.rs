@@ -18,7 +18,7 @@ pub use confined::{Confiner, confinement_of, temp_folders};
 pub use launcher::{Launch, Launcher, OnThisMachine};
 pub use models::Models;
 pub use policy::{Policy, env_secrets};
-pub use services::{Network, Services};
+pub use services::{Network, Services, WebSearcher};
 pub(crate) use tracking::Tracking;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

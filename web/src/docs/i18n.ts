@@ -30,23 +30,3 @@ export type Word = keyof typeof STRINGS
 export function say(lang: Lang, word: Word): string {
   return STRINGS[word][lang]
 }
-
-const KEY = 'docs-lang'
-
-export function preferredLang(): Lang {
-  try {
-    const kept = localStorage.getItem(KEY)
-    if (kept === 'en' || kept === 'pt') return kept
-  } catch {
-    return 'en'
-  }
-  return navigator.language.toLowerCase().startsWith('pt') ? 'pt' : 'en'
-}
-
-export function keepLang(lang: Lang): void {
-  try {
-    localStorage.setItem(KEY, lang)
-  } catch {
-    return
-  }
-}

@@ -52,6 +52,40 @@ fn read_only_commands_run_without_asking_even_while_planning() {
 }
 
 #[test]
+fn a_reader_behind_a_changed_environment_a_wrapper_or_a_wildcard_does_not_run_while_planning() {
+    for command in ["PATH=./bin ls", "env cat notes.txt", "cat note?.txt", "sort -o stolen.txt notes.txt"] {
+        let rig = Rig::new(PermissionMode::Plan);
+        let model = ScriptedModel::new([
+            ScriptedModel::reply(vec![bash("b1", command)]),
+            ScriptedModel::reply(vec![Block::Text("Ok.".into())]),
+        ]);
+        let mut history = vec![Message::user("look")];
+        rig.run(&model, &mut history).expect("run");
+
+        assert!(!results(&history).contains("beta"), "{command} ran: {}", results(&history));
+        assert!(!rig.dir.path().join("stolen.txt").exists(), "{command}");
+        assert!(
+            rig.events().iter().any(|event| matches!(event, EngineEvent::Refused { tool, .. } if tool == "Bash")),
+            "{command}"
+        );
+    }
+}
+
+#[test]
+fn a_wildcard_that_could_print_a_secret_file_is_refused_even_when_bypassing() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    std::fs::write(rig.dir.path().join(".env"), "API_KEY=sk-live-123").expect("write");
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![bash("b1", "cat .env*")]),
+        ScriptedModel::reply(vec![bash("b2", "cat .en?")]),
+        ScriptedModel::reply(vec![Block::Text("Ok.".into())]),
+    ]);
+    let mut history = vec![Message::user("show config")];
+    rig.run(&model, &mut history).expect("run");
+    assert!(!results(&history).contains("sk-live-123"), "{}", results(&history));
+}
+
+#[test]
 fn printing_secrets_is_refused_even_when_bypassing() {
     let rig = Rig::new(PermissionMode::Bypass);
     std::fs::write(rig.dir.path().join(".env"), "API_KEY=sk-live-123").expect("write");

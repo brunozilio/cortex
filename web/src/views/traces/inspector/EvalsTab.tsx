@@ -1,18 +1,19 @@
 import { AlertCircle, Ban, CircleCheck, Layers, ShieldCheck } from 'lucide-react'
 import { Callout } from '@/components/Callout'
 import { CopyButton } from '@/components/CopyButton'
-import { CHECK_LABELS } from '@/lib/signals'
+import { useStrings } from '@/shell/strings'
 import { findingsFor, isRepeated, refusalReason } from '@/lib/spans'
 import type { Finding, Run, Span } from '@/types'
 
 function FindingCallout({ finding }: { finding: Finding }) {
+  const strings = useStrings()
   const tone = finding.check === 'repeated' ? 'neutral' : finding.severe ? 'danger' : 'warning'
   return (
-    <Callout tone={tone} icon={finding.check === 'repeated' ? Layers : AlertCircle} title={CHECK_LABELS[finding.check]}>
+    <Callout tone={tone} icon={finding.check === 'repeated' ? Layers : AlertCircle} title={strings.checkNames[finding.check]}>
       <span>{finding.text}</span>
       {finding.check === 'review' ? (
         <div>
-          <CopyButton text={finding.text} label="Copy as next prompt" />
+          <CopyButton text={finding.text} label={strings.evals.copyPrompt} />
         </div>
       ) : null}
     </Callout>
@@ -20,14 +21,16 @@ function FindingCallout({ finding }: { finding: Finding }) {
 }
 
 function Verdict({ span }: { span: Span }) {
+  const text = useStrings().evals
   return (
-    <Callout tone={span.failed ? 'danger' : 'success'} icon={span.failed ? AlertCircle : CircleCheck} title={`${span.name} ${span.failed ? 'failed' : 'passed'}`}>
+    <Callout tone={span.failed ? 'danger' : 'success'} icon={span.failed ? AlertCircle : CircleCheck} title={`${span.name} ${span.failed ? text.failed : text.passed}`}>
       {span.output ? <span>{span.output}</span> : null}
     </Callout>
   )
 }
 
 export function EvalsTab({ run, span, findings }: { run: Run; span: Span; findings: Finding[] }) {
+  const text = useStrings().evals
   const isRoot = span.parent === 0
   const scoped = findingsFor(findings, run, span)
   const withFindings = new Set(scoped.map((finding) => finding.span))
@@ -39,21 +42,21 @@ export function EvalsTab({ run, span, findings }: { run: Run; span: Span; findin
   ]
   if (!isRoot && span.kind !== 'eval' && span.failed) {
     blocks.push(
-      <Callout key="failed" tone="danger" icon={AlertCircle} title={span.kind === 'tool' ? 'Tool error' : 'Failed'}>
-        The call failed. Its time counts as waste.
+      <Callout key="failed" tone="danger" icon={AlertCircle} title={span.kind === 'tool' ? text.toolError : text.failedTitle}>
+        {text.failedDetail}
       </Callout>,
     )
   }
   if (isRepeated(span)) {
     blocks.push(
-      <Callout key="repeated" tone="danger" icon={Layers} title="Repeated call">
-        Same call, same failure as before.
+      <Callout key="repeated" tone="danger" icon={Layers} title={text.repeated}>
+        {text.repeatedDetail}
       </Callout>,
     )
   }
   if (refused) {
     blocks.push(
-      <Callout key="refused" tone="danger" icon={Ban} title="Refused">
+      <Callout key="refused" tone="danger" icon={Ban} title={text.refused}>
         {refused}
       </Callout>,
     )
@@ -62,7 +65,7 @@ export function EvalsTab({ run, span, findings }: { run: Run; span: Span; findin
     return (
       <div className="grid place-items-center gap-2 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
         <ShieldCheck className="size-5" />
-        No check ran on this span.
+        {text.none}
       </div>
     )
   }

@@ -174,8 +174,27 @@ token)"` in their shell profile. Never read a token yourself to put it
 anywhere. Names starting with `{{COMMAND}}_`
 are reserved. New servers are picked up on the next prompt.
 
-Find the server's URL or package in the vendor's own documentation, and
-tell the user which one you used.
+Vendors that host their own remote server sign in with OAuth, and the
+sign-in picks the account and the site: do not ask the user for their
+site's address, a token or which product edition they have. Add the
+server, run the login, and check it with `{{COMMAND}} mcp list`:
+
+| Asked for | Name | URL |
+|---|---|---|
+| Jira, Confluence, Atlassian | `atlassian` | `https://mcp.atlassian.com/v2/mcp` |
+| GitHub | `github` | `https://api.githubcopilot.com/mcp/` (token header, see above) |
+| Linear | `linear` | `https://mcp.linear.app/mcp` |
+| Notion | `notion` | `https://mcp.notion.com/mcp` |
+| Sentry | `sentry` | `https://mcp.sentry.dev/mcp` |
+
+```bash
+{{COMMAND}} mcp add atlassian https://mcp.atlassian.com/v2/mcp
+{{COMMAND}} mcp login atlassian
+```
+
+For anything else, find the server's URL or package in the vendor's own
+documentation, and tell the user which one you used. If a listed URL
+stops answering, look it up the same way.
 
 ## Other model settings
 

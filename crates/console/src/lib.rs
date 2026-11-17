@@ -1,6 +1,7 @@
 mod access;
 mod assets;
 mod live;
+mod mirror;
 mod pty;
 pub mod remote;
 mod routes;
@@ -9,6 +10,7 @@ mod terminal;
 
 pub use assets::{Asset, Assets, choose, discover, embedded, locate};
 pub use live::Live;
+pub use mirror::{Mirror, ScreenSize, Shown, Viewer};
 pub use pty::Launch;
 pub use routes::{Settings, router};
 pub use server::{Options, Running, StartError, start};

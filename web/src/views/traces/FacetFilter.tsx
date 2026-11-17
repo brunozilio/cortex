@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
 import { matchesFacet, type Facet } from '@/lib/filters'
+import { useStrings } from '@/shell/strings'
 import type { Run } from '@/types'
 
 interface FacetFilterProps {
@@ -15,6 +16,7 @@ interface FacetFilterProps {
 }
 
 export function FacetFilter({ facet, runs, selected, onChange }: FacetFilterProps) {
+  const text = useStrings().traces
   const chosen = facet.options.filter((option) => selected.includes(option.value))
   const toggle = (value: string) => onChange(selected.includes(value) ? selected.filter((entry) => entry !== value) : [...selected, value])
   return (
@@ -27,7 +29,7 @@ export function FacetFilter({ facet, runs, selected, onChange }: FacetFilterProp
             <>
               <Separator orientation="vertical" className="mx-0.5 h-4" />
               {chosen.length > 2 ? (
-                <Badge variant="secondary">{chosen.length} selected</Badge>
+                <Badge variant="secondary">{text.selected(chosen.length)}</Badge>
               ) : (
                 chosen.map((option) => (
                   <Badge key={option.value} variant="secondary">
@@ -56,7 +58,7 @@ export function FacetFilter({ facet, runs, selected, onChange }: FacetFilterProp
           <>
             <Separator className="my-1" />
             <Button variant="ghost" className="w-full" onClick={() => onChange([])}>
-              Clear
+              {text.clear}
             </Button>
           </>
         ) : null}

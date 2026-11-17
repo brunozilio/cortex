@@ -3,9 +3,11 @@ import { CodeBlock } from '@/components/CodeBlock'
 import { CopyButton } from '@/components/CopyButton'
 import { eventText, eventTitle } from '@/lib/events'
 import { cn } from '@/lib/utils'
+import { useStrings } from '@/shell/strings'
 import type { Span } from '@/types'
 
 function Bubble({ who, text, tone }: { who: string; text: string; tone: 'user' | 'model' | 'thinking' }) {
+  const strings = useStrings()
   const Icon = tone === 'user' ? User : tone === 'thinking' ? Brain : Sparkles
   return (
     <div className="grid gap-1.5">
@@ -21,29 +23,31 @@ function Bubble({ who, text, tone }: { who: string; text: string; tone: 'user' |
           tone === 'thinking' && 'border border-dashed italic text-muted-foreground',
         )}
       >
-        {text || <span className="not-italic text-muted-foreground">empty</span>}
+        {text || <span className="not-italic text-muted-foreground">{strings.inspector.empty}</span>}
       </div>
     </div>
   )
 }
 
 export function IoTab({ span }: { span: Span }) {
+  const strings = useStrings()
+  const text = strings.inspector
   if (span.kind === 'llm') {
     return (
       <>
-        <Bubble who="Prompt" text={span.request ? `${span.input} · open Messages to read them` : span.input} tone="user" />
-        {span.thinking ? <Bubble who="Thinking" text={span.thinking} tone="thinking" /> : null}
-        <Bubble who="Response" text={span.output} tone="model" />
+        <Bubble who={text.prompt} text={span.request ? `${span.input} · ${text.openMessages}` : span.input} tone="user" />
+        {span.thinking ? <Bubble who={text.thinking} text={span.thinking} tone="thinking" /> : null}
+        <Bubble who={text.response} text={span.output} tone="model" />
       </>
     )
   }
-  if (span.kind === 'event') return <CodeBlock label={eventTitle(span)} text={eventText(span)} />
-  const copy = span.kind === 'tool' && span.failed && span.input ? <CopyButton text={span.input} label="Copy command" variant="ghost" size="sm" /> : null
+  if (span.kind === 'event') return <CodeBlock label={eventTitle(span, strings)} text={eventText(span)} />
+  const copy = span.kind === 'tool' && span.failed && span.input ? <CopyButton text={span.input} label={text.copyCommand} variant="ghost" size="sm" /> : null
   return (
     <>
-      <CodeBlock label="Input" text={span.input} action={copy} />
-      {span.thinking ? <Bubble who="Thinking" text={span.thinking} tone="thinking" /> : null}
-      <CodeBlock label="Output" text={span.output} />
+      <CodeBlock label={text.input} text={span.input} action={copy} />
+      {span.thinking ? <Bubble who={text.thinking} text={span.thinking} tone="thinking" /> : null}
+      <CodeBlock label={text.output} text={span.output} />
     </>
   )
 }

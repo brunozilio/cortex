@@ -2,6 +2,14 @@ use serde_json::{Value, json};
 
 pub const WEB_SEARCH: &str = "WebSearch";
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Hit {
+    pub title: String,
+    pub url: String,
+    #[serde(default)]
+    pub snippet: String,
+}
+
 const FILTERING: &[&str] = &["fable", "mythos", "opus-5", "opus-4-8", "opus-4-7", "opus-4-6", "sonnet-5", "sonnet-4-6"];
 
 pub fn anthropic(model: &str) -> Value {

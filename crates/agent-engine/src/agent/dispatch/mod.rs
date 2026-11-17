@@ -49,7 +49,7 @@ impl Agent<'_> {
         spawn: Option<Spawn<'_, 'env>>,
     ) -> Block {
         let tool = self.tool(run, name);
-        let offered = self.offers(name);
+        let offered = self.offers(name) || self.loads_on_call(name);
         let pre = self.before(id, name, input, tool.is_some() && offered);
         let input = pre.updated_input.as_ref().unwrap_or(input);
         let rule_context = self.rules_for_changed_input(&pre, input);
@@ -66,6 +66,11 @@ impl Agent<'_> {
     pub(in crate::agent) fn offers(&self, name: &str) -> bool {
         self.request.tools.iter().any(|spec| spec.name == name)
             || self.workspace.services.deferred.as_ref().is_some_and(|deferred| deferred.is_loaded(name))
+    }
+
+    fn loads_on_call(&self, name: &str) -> bool {
+        self.workspace.policy.load_on_call
+            && self.workspace.services.deferred.as_ref().is_some_and(|deferred| deferred.load(name))
     }
 
     fn before(&self, id: &str, name: &str, input: &Value, known: bool) -> Decision {

@@ -4,6 +4,7 @@ import { CacheCard, ChecksCard, TimeCard } from './InsightCards'
 import { ModelTable, ToolTable } from './StatTables'
 import { PageTitle } from '@/components/PageTitle'
 import type { Metric } from '@/lib/days'
+import { useStrings } from '@/shell/strings'
 import type { Report } from '@/types'
 
 interface OverviewViewProps {
@@ -14,9 +15,10 @@ interface OverviewViewProps {
 }
 
 export function OverviewView({ report, metric, onMetric, scope }: OverviewViewProps) {
+  const strings = useStrings()
   return (
     <section className="grid gap-4">
-      <PageTitle title="Overview" description={scope === 'session' ? 'How the agent worked in this session over the last 30 days.' : 'How the agent worked across every session over the last 30 days.'} />
+      <PageTitle title={strings.overview.title} description={scope === 'session' ? strings.overview.session : strings.overview.all} />
       <KpiCards report={report} />
       <UsageChart report={report} metric={metric} onMetric={onMetric} />
       <div className="grid gap-4 lg:grid-cols-3">

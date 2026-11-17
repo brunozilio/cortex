@@ -13,7 +13,7 @@ mod remote;
 mod schedules;
 mod shell;
 mod suggested_rules;
-mod trace;
+pub(crate) mod trace;
 pub(in crate::tui) mod trust;
 mod verification;
 

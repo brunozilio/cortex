@@ -32,6 +32,8 @@ mod listings;
 mod markdown;
 mod mcp_servers;
 mod mentions;
+mod mirror;
+mod mirror_keys;
 mod modes;
 mod motion;
 mod msg;
@@ -119,6 +121,7 @@ pub use app::App;
 pub use settings::last_session;
 
 type Screen = modes::Modes<std::io::Stdout, fn()>;
+type Tty = ratatui::Terminal<mirror::Tee<ratatui::backend::CrosstermBackend<std::io::Stdout>>>;
 
 #[derive(Debug, Default)]
 pub struct Start {

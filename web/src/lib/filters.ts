@@ -1,6 +1,7 @@
 import type { Run } from '@/types'
-import { SIGNALS, SIGNAL_ORDER, STATUS_LABELS } from './signals'
+import { SIGNAL_ORDER } from './signals'
 import { shortId } from './format'
+import { EN, type Strings } from './i18n'
 
 export type FacetKey = 'status' | 'model' | 'session' | 'signal'
 
@@ -19,17 +20,21 @@ export interface Facet {
   options: FacetOption[]
 }
 
-export function facetsFor(runs: Run[], current: string): Facet[] {
+export function facetsFor(runs: Run[], current: string, strings: Strings = EN): Facet[] {
   const unique = (values: string[]) => [...new Set(values)]
   const statuses = unique(runs.map((run) => run.status))
   const models = unique(runs.map((run) => run.model)).sort()
   const sessions = unique(runs.map((run) => run.session))
   const signals = SIGNAL_ORDER.filter((signal) => runs.some((run) => run.signals.includes(signal)))
   return [
-    { key: 'status', title: 'Status', options: statuses.map((value) => ({ value, label: STATUS_LABELS[value as Run['status']] ?? value })) },
-    { key: 'model', title: 'Model', options: models.map((value) => ({ value, label: value })) },
-    { key: 'session', title: 'Session', options: sessions.map((value) => ({ value, label: value === current ? `${shortId(value)} (current)` : shortId(value) })) },
-    { key: 'signal', title: 'Signals', options: signals.map((value) => ({ value, label: SIGNALS[value].label })) },
+    { key: 'status', title: strings.facets.status, options: statuses.map((value) => ({ value, label: strings.status[value as Run['status']] ?? value })) },
+    { key: 'model', title: strings.facets.model, options: models.map((value) => ({ value, label: value })) },
+    {
+      key: 'session',
+      title: strings.facets.session,
+      options: sessions.map((value) => ({ value, label: value === current ? `${shortId(value)}${strings.traces.current}` : shortId(value) })),
+    },
+    { key: 'signal', title: strings.facets.signal, options: signals.map((value) => ({ value, label: strings.signals[value] })) },
   ]
 }
 

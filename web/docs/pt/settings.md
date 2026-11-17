@@ -313,6 +313,7 @@ Todo recurso fica ligado até você desligá-lo, menos `experimental-code-mode-o
 | `features.experimental-code-map` | `true` | Indexa símbolos com tree-sitter e aponta cada prompt para o código relacionado. |
 | `features.experimental-memory-seed` | `true` | `/memory seed` oferece pedidos repetidos como memórias. |
 | `features.experimental-memory-scorecard` | `true` | Uma requisição a cada 20 roda sem memória recuperada, para o `/memory score`. |
+| `features.experimental-load-on-call` | `true` | Uma ferramenta que espera atrás do ToolSearch e que o agente chama pelo nome é carregada e executada, em vez de recusada. |
 | `features.experimental-code-mode` | `true` | A ferramenta REPL: o agente escreve JavaScript que chama as ferramentas dele como funções. |
 | `features.experimental-code-mode-only` | `false` | Com `experimental-code-mode`, a REPL é a única ferramenta do agente. |
 | `features.memory` | `true` | Memória do projeto: recuperação a cada prompt, e `/memory`. |

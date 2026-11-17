@@ -37,6 +37,7 @@ impl Job {
         workspace.models.small_model = self.small_model(&roles);
         workspace.models.roles = roles;
         workspace.services.network = Some(tools::Network(Arc::clone(&self.mcp)));
+        workspace.services.search = self.source.searcher(&self.request).map(tools::WebSearcher);
         workspace.added_dirs = crate::brief::added_dirs(&self.request, &settings.added_dirs, workspace.home.as_deref());
         workspace.hooks.extend(&main.config.hooks);
         let worktree = self.session_worktree(&main, &mut workspace, session)?;

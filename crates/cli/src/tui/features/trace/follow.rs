@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use console::{Live, Running as Served};
+use console::{Live, Mirror, Running as Served};
 use domain::SessionId;
 use domain::catalog::Listed;
 
@@ -56,6 +56,14 @@ pub(crate) fn served(app: &mut App, page: &str) -> Option<(String, Live)> {
         }
     }
     follow.served.as_ref().map(|served| (served.url_at(page), served.live()))
+}
+
+pub(crate) fn mirror(app: &mut App) -> Option<Mirror> {
+    let session = app.session.id();
+    let follow = app.features.get::<Follow>(NAME)?;
+    let mirror = follow.served.as_ref()?.live().mirror().clone();
+    mirror.showing(session.as_ref().map(|id| id.0.as_str()));
+    Some(mirror)
 }
 
 pub(super) fn open(app: &mut App) {

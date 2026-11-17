@@ -9,8 +9,9 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::get;
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::{OwnedSemaphorePermit, mpsc as channel};
+use tokio::sync::{OwnedSemaphorePermit, broadcast, mpsc as channel};
 
+use crate::mirror::{Mirror, Shown};
 use crate::pty::{self, Launch, Size};
 use crate::routes::{Shared, failure};
 
@@ -28,16 +29,53 @@ async fn upgrade(
     socket: WebSocketUpgrade,
 ) -> Response {
     let size = Size::asked(query.get("cols"), query.get("rows"));
+    let mirror = shared.live.mirror().clone();
     let launch = match query.get("session").map(|asked| pty::session_id(asked)) {
-        None => shared.terminal.clone(),
-        Some(Some(session)) => shared.terminal.resuming(session, shared.live.folder_of(session)),
+        None => Some(shared.terminal.clone()),
+        Some(Some(session)) if mirror.shows(session) => None,
+        Some(Some(session)) => Some(shared.terminal.resuming(session, shared.live.folder_of(session))),
         Some(None) => return failure(StatusCode::BAD_REQUEST, "validation", "That is not a session id."),
     };
     let Ok(place) = shared.terminals.clone().try_acquire_owned() else {
         let told = format!("{MOST_AT_ONCE} terminals are already open from this console; close one first.");
         return failure(StatusCode::TOO_MANY_REQUESTS, "too_many_terminals", &told);
     };
-    socket.on_upgrade(move |socket| bridge(socket, launch, size, place))
+    match launch {
+        Some(launch) => socket.on_upgrade(move |socket| bridge(socket, launch, size, place)),
+        None => socket.on_upgrade(move |socket| watch(socket, mirror, place)),
+    }
+}
+
+async fn watch(socket: WebSocket, mirror: Mirror, _place: OwnedSemaphorePermit) {
+    let (mut sink, mut stream) = socket.split();
+    let mut viewer = mirror.join();
+    if let Some(size) = viewer.size
+        && sink.send(Message::Text(size.json().into())).await.is_err()
+    {
+        return;
+    }
+    loop {
+        tokio::select! {
+            shown = viewer.shown.recv() => {
+                let message = match shown {
+                    Ok(Shown::Printed(bytes)) => Message::Binary(bytes.into()),
+                    Ok(Shown::Resized(size)) => Message::Text(size.json().into()),
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        mirror.ask_repaint();
+                        continue;
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                };
+                if sink.send(message).await.is_err() { break }
+            },
+            typed = stream.next() => match typed {
+                Some(Ok(Message::Binary(bytes))) => mirror.type_in(bytes.to_vec()),
+                Some(Ok(Message::Close(_)) | Err(_)) | None => break,
+                Some(Ok(_)) => {}
+            },
+        }
+    }
+    let _ = sink.send(Message::Close(None)).await;
 }
 
 async fn bridge(socket: WebSocket, launch: Launch, size: Size, _place: OwnedSemaphorePermit) {

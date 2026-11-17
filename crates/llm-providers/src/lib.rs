@@ -75,6 +75,14 @@ pub trait Provider: Sync {
         None
     }
 
+    fn search(&self, _config: &Config, _query: &str) -> Option<Call> {
+        None
+    }
+
+    fn hits(&self, _value: &Value) -> Result<Vec<web_search::Hit>, ProviderError> {
+        Err(ProviderError::Invalid(format!("{} has no web search of its own", self.name())))
+    }
+
     fn tools_in_conversation(&self, _model: &str) -> bool {
         false
     }

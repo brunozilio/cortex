@@ -101,6 +101,9 @@ impl Job {
         if let Some(appended) = self.request.append_system.as_deref().filter(|text| !text.trim().is_empty()) {
             extra.push_str(&format!("\n\n{}", appended.trim()));
         }
+        if let Some(format) = self.request.memory.as_ref().and_then(domain::MemoryBrief::edits_format) {
+            extra.push_str(&format!("\n\n{format}"));
+        }
         if let Some(dir) = &setup.memory_dir {
             extra.push_str(&format!(
                 "\n\n# Persistent agent memory\nRead and update MEMORY.md in {}. Keep its index under 200 lines and 25 KB.\n{}",

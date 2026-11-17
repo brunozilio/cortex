@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { useStrings } from '@/shell/strings'
 
 function lineClass(line: string): string {
   if (line.startsWith('+')) return 'text-success'
@@ -8,6 +9,7 @@ function lineClass(line: string): string {
 }
 
 export function CodeBlock({ label, text, action, tall }: { label: string; text: string; action?: ReactNode; tall?: boolean }) {
+  const strings = useStrings()
   return (
     <div className="grid min-w-0 gap-1.5">
       <div className="flex min-h-7 items-center justify-between text-xs text-muted-foreground">
@@ -21,7 +23,7 @@ export function CodeBlock({ label, text, action, tall }: { label: string; text: 
                 {line || ' '}
               </span>
             ))
-          : <span className="text-muted-foreground">empty</span>}
+          : <span className="text-muted-foreground">{strings.inspector.empty}</span>}
       </pre>
     </div>
   )

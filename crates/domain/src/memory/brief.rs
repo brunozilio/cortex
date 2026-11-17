@@ -35,7 +35,7 @@ impl MemoryBrief {
         Self { origin, ..Self::default() }
     }
 
-    pub fn instructions(&self, fresh: bool) -> Option<String> {
+    pub fn recall_notes(&self, fresh: bool) -> Option<String> {
         let mut out = Vec::new();
         if fresh && !self.recalled.is_empty() {
             let mut listing = String::from("Memory from earlier sessions in this project (ids in brackets):");
@@ -63,39 +63,57 @@ impl MemoryBrief {
                  final, so carry on with the task."
             ));
         }
-        if !self.output.as_os_str().is_empty() {
-            out.push(format!(
-                "This app keeps the project's memory; do not write memory files of your own. When you are \
-                 done, if this turn taught you something worth keeping for future sessions, write a JSON file \
-                 at {path} with any of these fields: {{\"remember\": [{{\"kind\": \"episodic\" or \"semantic\" \
-                 or \"procedural\", \"text\": \"<one or two sentences>\", \"tags\": [\"<topic>\"]}}], \
-                 \"forget\": [<id>], \"revise\": [{{\"id\": <id>, \"text\": \"<corrected text>\"}}], \
-                 \"reclassify\": [{{\"id\": <id>, \"kind\": \"<kind>\"}}]}}. Episodic: \
-                 what happened in this turn, at most one. Semantic: a durable fact about the project or the \
-                 user. Procedural: how to do something here (commands, workflows). Reuse existing tags. Forget \
-                 or revise memories that turned out wrong. Skip the file when there is nothing new; write it \
-                 with the Write tool and do not mention it in your answer.",
-                path = self.output.display()
-            ));
-            if self.anchors {
-                out.push(
-                    "A remember entry may add \"touches\": [\"<file or folder, relative to the project>\"]: the \
-                     files the memory is about. Later sessions are shown it when they read or edit them, so name \
-                     them whenever a memory is about specific code."
-                        .to_owned(),
-                );
-            }
-            if self.structured {
-                out.push(
-                    "To keep a decision, write a remember entry with \"decided\": \"<what was decided and why>\", \
-                     \"ruled_out\": [\"<what was tried or considered, and why it was dropped>\"] and \
-                     \"watch_out\": [\"<a trap to keep in mind>\"] in place of \"text\". What was ruled out is \
-                     what saves the next session from trying it again."
-                        .to_owned(),
-                );
-            }
-        }
         (!out.is_empty()).then(|| out.join("\n\n"))
+    }
+
+    fn keeps_edits(&self) -> bool {
+        !self.output.as_os_str().is_empty()
+    }
+
+    pub fn edits_format(&self) -> Option<String> {
+        if !self.keeps_edits() {
+            return None;
+        }
+        let mut out = vec![
+            "# Project memory\nThis app keeps the project's memory; do not write memory files of your own. When \
+             you are done, if the turn taught you something worth keeping for future sessions, write a JSON file \
+             at the path the turn's reminder names, with any of these fields: {\"remember\": [{\"kind\": \
+             \"episodic\" or \"semantic\" or \"procedural\", \"text\": \"<one or two sentences>\", \"tags\": \
+             [\"<topic>\"]}], \"forget\": [<id>], \"revise\": [{\"id\": <id>, \"text\": \"<corrected text>\"}], \
+             \"reclassify\": [{\"id\": <id>, \"kind\": \"<kind>\"}]}. Episodic: what happened in this turn, at \
+             most one. Semantic: a durable fact about the project or the user. Procedural: how to do something \
+             here (commands, workflows). Reuse existing tags. Forget or revise memories that turned out wrong. \
+             Skip the file when there is nothing new; write it with the Write tool and do not mention it in your \
+             answer."
+                .to_owned(),
+        ];
+        if self.anchors {
+            out.push(
+                "A remember entry may add \"touches\": [\"<file or folder, relative to the project>\"]: the \
+                 files the memory is about. Later sessions are shown it when they read or edit them, so name \
+                 them whenever a memory is about specific code."
+                    .to_owned(),
+            );
+        }
+        if self.structured {
+            out.push(
+                "To keep a decision, write a remember entry with \"decided\": \"<what was decided and why>\", \
+                 \"ruled_out\": [\"<what was tried or considered, and why it was dropped>\"] and \
+                 \"watch_out\": [\"<a trap to keep in mind>\"] in place of \"text\". What was ruled out is \
+                 what saves the next session from trying it again."
+                    .to_owned(),
+            );
+        }
+        Some(out.join("\n\n"))
+    }
+
+    pub fn edits_reminder(&self) -> Option<String> {
+        self.keeps_edits().then(|| {
+            format!(
+                "Memory edits for this turn, if any, go to {} (format under Project memory).",
+                self.output.display()
+            )
+        })
     }
 }
 

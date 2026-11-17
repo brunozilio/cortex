@@ -36,6 +36,10 @@ pub trait ApiSource: Send + Sync {
     fn catalog(&self, _request: &PromptRequest) -> Vec<ModelOption> {
         Vec::new()
     }
+
+    fn searcher(&self, _request: &PromptRequest) -> Option<Arc<dyn crate::model::Searcher>> {
+        None
+    }
 }
 
 pub struct NativeEngine {

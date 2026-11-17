@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Button, type ButtonProps } from '@/components/ui/button'
+import { useStrings } from '@/shell/strings'
 
 interface CopyButtonProps extends Omit<ButtonProps, 'onClick'> {
   text: string
@@ -24,6 +25,7 @@ async function writeClipboard(text: string): Promise<boolean> {
 }
 
 export function CopyButton({ text, label, iconOnly = false, ...props }: CopyButtonProps) {
+  const strings = useStrings()
   const [copied, setCopied] = useState(false)
   const copy = async (event: MouseEvent) => {
     event.stopPropagation()
@@ -35,7 +37,7 @@ export function CopyButton({ text, label, iconOnly = false, ...props }: CopyButt
   return (
     <Button {...props} onClick={copy} aria-label={iconOnly ? label : undefined} title={iconOnly ? label : undefined}>
       {copied ? <Check /> : <Copy />}
-      {iconOnly ? null : copied ? 'Copied' : label}
+      {iconOnly ? null : copied ? strings.inspector.copied : label}
     </Button>
   )
 }

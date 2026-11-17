@@ -129,6 +129,7 @@ A flag whose name starts with `experimental-` is experimental: its behaviour may
 | `experimental-escalation` | Review | | Sends a stuck agent to the Advisor or to `escalationModel` |
 | `experimental-code-mode` | Tools | | The REPL tool: the agent scripts its tools in JavaScript and sees only what the script returns |
 | `experimental-code-mode-only` | Tools | | Off until you turn it on: REPL becomes the agent's only tool |
+| `experimental-load-on-call` | Tools | | A tool held back for search that the agent calls by name is loaded and run |
 | `experimental-learning` | Learning and memory | | Offers one lesson to keep after a run where you corrected the agent |
 | `team-memory` | Learning and memory | | Recalls memories checked into `{{DIR}}/memory` |
 | `experimental-memory-anchors` | Learning and memory | | Memories name their files and show up when those files are touched |
@@ -153,7 +154,7 @@ The sections below describe each flag in detail.
 ### `experimental-sandbox`
 
 > [!EXPERIMENTAL]
-> Security flag. Default: on. Available only where the sandbox is supported (macOS); elsewhere `/features` shows it as `(not on this system)`.
+> Security flag. Default: on. Available only where the sandbox is supported (macOS; Linux 5.13 or later with Landlock); elsewhere `/features` shows it as `(not on this system)`.
 
 Confines the commands the agent runs with **Bash** and **Monitor** to the project's folders, using the `sandbox` settings. Commands the agent starts to find a file's tests (see [`experimental-affected-tests`](#experimental-affected-tests)) are confined the same way. When the flag is off, commands run without the sandbox.
 
@@ -420,6 +421,13 @@ Each call a script makes is an ordinary tool call: it follows your permission mo
 > Default: off. Unlike the other flags, it stays off until you turn it on in your own settings (`/features experimental-code-mode-only on`); a project's settings cannot turn it on.
 
 With `experimental-code-mode` on, makes **REPL** the agent's only way to use tools. The model is offered REPL, AskUserQuestion and the plan-mode and worktree switches; every other tool is described inside REPL's description as a typed function and is called from scripts. Tools held back for search (with many MCP tools) are found from a script with `searchTools("words")`. Permissions, rules and hooks apply to each call exactly as before.
+
+### `experimental-load-on-call`
+
+> [!EXPERIMENTAL]
+> Default: on.
+
+With many MCP tools, most are held back behind ToolSearch and the agent loads them before calling them. With this flag, when the agent calls a held-back tool by name without loading it, the tool is loaded and run right away instead of failing with a request to use ToolSearch. From then on it is offered like a tool the search loaded. Permissions, rules and hooks apply as before. Off, the call is refused until the agent loads the tool.
 
 ## Learning and memory
 

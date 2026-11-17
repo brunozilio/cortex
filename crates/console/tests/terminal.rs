@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use console::{Assets, Launch, Live, Settings};
+use console::{Assets, Launch, Live, ScreenSize, Settings};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -210,4 +210,48 @@ async fn the_terminal_starts_in_the_folder_the_console_was_given() {
     let wanted = format!("pwd:{}|", real.display());
     let seen = read_until(&mut socket, &wanted).await;
     assert!(seen.contains(&wanted), "{seen:?}");
+}
+
+async fn next_message(socket: &mut Socket) -> Option<Message> {
+    tokio::time::timeout(WAIT, socket.next()).await.ok().flatten().and_then(Result::ok)
+}
+
+#[tokio::test]
+async fn the_session_this_screen_shows_is_watched_instead_of_started_again() {
+    let live = Live::default();
+    let mirror = live.mirror().clone();
+    mirror.showing(Some("abc-123"));
+    mirror.resized(ScreenSize { cols: 120, rows: 40 });
+    let served = serve_with(echo_arguments(), live).await;
+
+    let mut socket = served.open_at("&session=abc-123").await.expect("connected");
+
+    assert_eq!(next_message(&mut socket).await, Some(Message::Text(r#"{"cols":120,"rows":40}"#.into())));
+    assert!(mirror.watched());
+    assert!(mirror.take_repaint(), "a new viewer gets the whole screen");
+    mirror.print(b"the screen".to_vec());
+    assert_eq!(next_message(&mut socket).await, Some(Message::Binary(b"the screen".to_vec().into())));
+
+    socket.send(Message::Binary(b"typed".to_vec().into())).await.expect("typed");
+    let arrived = tokio::time::timeout(WAIT, async {
+        loop {
+            let typed = mirror.typed();
+            if !typed.is_empty() {
+                return typed;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert_eq!(arrived, Ok(vec![b"typed".to_vec()]));
+
+    socket.close(None).await.expect("closed");
+    drop(socket);
+    let left = tokio::time::timeout(WAIT, async {
+        while mirror.watched() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(left.is_ok(), "a closed page stops watching");
 }

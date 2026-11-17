@@ -7,6 +7,7 @@ import { Inspector, type InspectorTab } from './inspector/Inspector'
 import type { Filters } from '@/lib/filters'
 import type { RunRef } from '@/lib/report'
 import { rootSpan, spanById } from '@/lib/spans'
+import { useStrings } from '@/shell/strings'
 import type { Report, Run } from '@/types'
 
 interface TracesViewProps {
@@ -23,12 +24,13 @@ interface TracesViewProps {
 }
 
 export function TracesView(props: TracesViewProps) {
+  const text = useStrings().traces
   const { report, runs, run, spanId, tab } = props
   const selected: RunRef | null = run ? { session: run.session, index: run.index } : null
   const span = run ? (spanById(run, spanId) ?? rootSpan(run)) : undefined
   return (
     <section className="grid gap-4">
-      <PageTitle title="Traces" description="Every prompt you sent, with what the agent did to answer it." />
+      <PageTitle title={text.title} description={text.description} />
       <RunsTable
         runs={runs}
         current={report.current}
@@ -50,7 +52,7 @@ export function TracesView(props: TracesViewProps) {
           </div>
         </div>
       ) : (
-        <Card className="p-10 text-center text-sm text-muted-foreground">No runs recorded yet.</Card>
+        <Card className="p-10 text-center text-sm text-muted-foreground">{text.none}</Card>
       )}
     </section>
   )

@@ -5,6 +5,7 @@ mod turns;
 use super::http::Http;
 use super::{BoxFuture, CancellationToken, KeySource, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use domain::{ModelOption, ModelProvider};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 pub use llm_providers::Config;
@@ -58,6 +59,16 @@ impl ProviderClient {
 
     pub fn models(&self) -> Result<Vec<ModelOption>, ModelError> {
         self.ready()?.transport.models()
+    }
+
+    pub fn search(
+        &self,
+        query: &str,
+        stop: &AtomicBool,
+    ) -> Option<Result<Vec<llm_providers::web_search::Hit>, ModelError>> {
+        let ready = self.ready().ok()?;
+        let _turn = ready.transport.turns.take();
+        ready.transport.search(query, stop)
     }
 }
 

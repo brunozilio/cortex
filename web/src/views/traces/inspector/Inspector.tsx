@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { KindChip } from '@/components/KindChip'
 import { ms, usd } from '@/lib/format'
 import { eventTitle } from '@/lib/events'
-import { KINDS } from '@/lib/kinds'
+import { useStrings } from '@/shell/strings'
 import { IoTab } from './IoTab'
 import { MetricsTab } from './MetricsTab'
 import { MetadataTab } from './MetadataTab'
@@ -15,15 +15,7 @@ export type InspectorTab = 'io' | 'messages' | 'system' | 'tools' | 'metrics' | 
 
 const LLM_TABS: InspectorTab[] = ['messages', 'system', 'tools']
 
-const TABS: { key: InspectorTab; label: string }[] = [
-  { key: 'io', label: 'Input / Output' },
-  { key: 'messages', label: 'Messages' },
-  { key: 'system', label: 'System' },
-  { key: 'tools', label: 'Tools' },
-  { key: 'metrics', label: 'Metrics' },
-  { key: 'meta', label: 'Metadata' },
-  { key: 'evals', label: 'Evaluations' },
-]
+const TABS: InspectorTab[] = ['io', 'messages', 'system', 'tools', 'metrics', 'meta', 'evals']
 
 interface InspectorProps {
   run: Run
@@ -34,19 +26,20 @@ interface InspectorProps {
 }
 
 export function Inspector({ run, span, tab, findings, onTab }: InspectorProps) {
+  const strings = useStrings()
   const llm = span.kind === 'llm'
-  const tabs = TABS.filter(({ key }) => llm || !LLM_TABS.includes(key))
-  const shown = tabs.some(({ key }) => key === tab) ? tab : 'io'
+  const tabs = TABS.filter((key) => llm || !LLM_TABS.includes(key))
+  const shown = tabs.includes(tab) ? tab : 'io'
   return (
     <Card>
       <div className="flex items-center gap-3 p-5 pb-4">
         <KindChip kind={span.kind} size="md" />
         <div className="grid min-w-0">
-          <span className="text-xs text-muted-foreground">{KINDS[span.kind].label}</span>
-          <h3 className="truncate font-semibold">{eventTitle(span)}</h3>
+          <span className="text-xs text-muted-foreground">{strings.kinds[span.kind]}</span>
+          <h3 className="truncate font-semibold">{eventTitle(span, strings)}</h3>
         </div>
         <span className="ml-auto text-right font-mono text-xs text-muted-foreground">
-          {span.kind === 'event' ? `at ${ms(span.start_ms)}` : ms(span.end_ms - span.start_ms)}
+          {span.kind === 'event' ? strings.inspector.at(ms(span.start_ms)) : ms(span.end_ms - span.start_ms)}
           {span.usage ? (
             <>
               <br />
@@ -58,9 +51,9 @@ export function Inspector({ run, span, tab, findings, onTab }: InspectorProps) {
       <Tabs value={shown} onValueChange={(value) => onTab(value as InspectorTab)}>
         <div className="px-5">
           <TabsList className="w-full">
-            {tabs.map(({ key, label }) => (
+            {tabs.map((key) => (
               <TabsTrigger key={key} value={key} className="flex-1 text-xs sm:text-sm">
-                {label}
+                {strings.inspector.tabs[key]}
               </TabsTrigger>
             ))}
           </TabsList>

@@ -51,6 +51,18 @@ impl Deferred {
         self.loaded.lock().is_ok_and(|loaded| loaded.iter().any(|loaded| loaded == name))
     }
 
+    pub fn load(&self, name: &str) -> bool {
+        if !self.specs.iter().any(|spec| spec.name == name) {
+            return false;
+        }
+        self.loaded.lock().is_ok_and(|mut loaded| {
+            if !loaded.iter().any(|loaded| loaded == name) {
+                loaded.push(name.to_owned());
+            }
+            true
+        })
+    }
+
     pub fn search(&self, query: &str) -> Vec<ToolSpec> {
         let found: Vec<&ToolSpec> = match query.strip_prefix("select:") {
             Some(names) => {

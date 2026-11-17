@@ -2,9 +2,11 @@ import { Ban, CircleCheck, CircleX, Loader } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { SIGNALS, SIGNAL_ORDER } from '@/lib/signals'
 import { cn } from '@/lib/utils'
+import { useStrings } from '@/shell/strings'
 import type { Run, Signal } from '@/types'
 
 export function SignalBadges({ signals, limit }: { signals: Signal[]; limit?: number }) {
+  const labels = useStrings().signals
   const ordered = SIGNAL_ORDER.filter((signal) => signals.includes(signal))
   const shown = limit === undefined ? ordered : ordered.slice(0, limit)
   const hidden = ordered.slice(shown.length)
@@ -16,12 +18,12 @@ export function SignalBadges({ signals, limit }: { signals: Signal[]; limit?: nu
         return (
           <Badge key={signal} variant={style.variant}>
             <Icon />
-            {style.label}
+            {labels[signal]}
           </Badge>
         )
       })}
       {hidden.length ? (
-        <Badge variant="secondary" title={hidden.map((signal) => SIGNALS[signal].label).join(', ')}>
+        <Badge variant="secondary" title={hidden.map((signal) => labels[signal]).join(', ')}>
           +{hidden.length}
         </Badge>
       ) : null}
@@ -37,6 +39,7 @@ const STATUS_STYLE: Record<Run['status'], { icon: typeof CircleCheck; text: stri
 }
 
 export function StatusIcon({ status, chip = false }: { status: Run['status']; chip?: boolean }) {
+  const labels = useStrings().status
   const style = STATUS_STYLE[status]
   const Icon = style.icon
   if (chip) {
@@ -46,5 +49,5 @@ export function StatusIcon({ status, chip = false }: { status: Run['status']; ch
       </span>
     )
   }
-  return <Icon className={cn('size-4', style.text)} aria-label={status} />
+  return <Icon className={cn('size-4', style.text)} aria-label={labels[status]} />
 }

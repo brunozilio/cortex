@@ -1,15 +1,18 @@
 use std::io::Write as _;
 use std::time::Duration;
 
-use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::SetTitle;
 
 use super::app::App;
 use super::watchdog::Dog;
-use super::{Screen, auto_retry, editor, features, inline, keys, notices, resume, selection, statusline, unsolicited};
-use super::{view, watchdog};
+use console::Mirror;
+
+use super::{
+    Screen, Tty, auto_retry, editor, features, inline, keys, notices, resume, selection, statusline, unsolicited,
+};
+use super::{mirror, mirror_keys, view, watchdog};
 
 const FRAME: Duration = Duration::from_millis(80);
 const ANIMATING: Duration = Duration::from_millis(33);
@@ -53,8 +56,9 @@ impl Events for Keyboard {
 }
 
 struct Seat<'a> {
-    terminal: &'a mut DefaultTerminal,
+    terminal: &'a mut Tty,
     screen: &'a mut Option<Screen>,
+    mirror: Option<Mirror>,
     dog: Dog,
     named: Option<String>,
     opening: Opening,
@@ -62,7 +66,7 @@ struct Seat<'a> {
 
 pub(super) fn run(
     app: &mut App,
-    terminal: &mut DefaultTerminal,
+    terminal: &mut Tty,
     screen: &mut Option<Screen>,
     opening: Opening,
 ) -> std::io::Result<()> {
@@ -70,7 +74,7 @@ pub(super) fn run(
         let width = usize::from(terminal.size()?.width.saturating_sub(2)).max(10);
         inline::print(terminal, view::welcome(app, width))?;
     }
-    let mut seat = Seat { terminal, screen, dog: watchdog::Dog::start(), named: None, opening };
+    let mut seat = Seat { terminal, screen, mirror: None, dog: watchdog::Dog::start(), named: None, opening };
     while !app.ui.quit {
         seat.frame(app)?;
     }
@@ -87,8 +91,11 @@ impl Seat<'_> {
         tick(app);
         inline::flush(self.terminal, app)?;
         self.mark(app, "drawing the screen");
+        self.mirror = features::trace::follow::mirror(app);
         self.draw(app)?;
-        let wait = if app.ui.motion.borrow().animating() { ANIMATING } else { FRAME };
+        self.mark(app, "handling what the page typed");
+        let watched = self.typed_in_the_page(app);
+        let wait = if watched || app.ui.motion.borrow().animating() { ANIMATING } else { FRAME };
         self.mark(app, "reading the keyboard");
         if Keyboard.waiting(wait)? {
             self.mark(app, "handling a key or paste");
@@ -119,12 +126,22 @@ impl Seat<'_> {
 
     fn draw(&mut self, app: &mut App) -> std::io::Result<()> {
         let mut selected = None;
-        self.terminal.draw(|frame| {
+        mirror::draw(self.terminal, self.mirror.as_ref(), |frame| {
             view::draw(frame, app);
             selected = selection::show(frame.buffer_mut(), &app.ui.selection);
         })?;
         selection::copied(app, selected);
         Ok(())
+    }
+
+    fn typed_in_the_page(&self, app: &mut App) -> bool {
+        let Some(mirror) = self.mirror.as_ref().filter(|mirror| mirror.watched()) else { return false };
+        for bytes in mirror.typed() {
+            for event in mirror_keys::decode(&bytes) {
+                apply(app, event);
+            }
+        }
+        true
     }
 
     fn after_input(&mut self, app: &mut App) -> std::io::Result<()> {

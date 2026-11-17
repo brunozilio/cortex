@@ -6,6 +6,7 @@ import { modelsByCost } from '@/lib/days'
 import { ms, percent, usd } from '@/lib/format'
 import { MODEL_COLORS } from '@/lib/kinds'
 import { cn } from '@/lib/utils'
+import { useStrings } from '@/shell/strings'
 import type { Insights, ToolStat } from '@/types'
 
 function Meter({ ratio, fill, className, color }: { ratio: number; fill?: number; className?: string; color?: string }) {
@@ -20,22 +21,23 @@ function Meter({ ratio, fill, className, color }: { ratio: number; fill?: number
 }
 
 export function ModelTable({ insights }: { insights: Insights }) {
+  const text = useStrings().models
   const order = modelsByCost(insights.days)
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Models</CardTitle>
-        <CardDescription>Latency and cost per model</CardDescription>
+        <CardTitle>{text.title}</CardTitle>
+        <CardDescription>{text.description}</CardDescription>
       </CardHeader>
       <Table>
         <TableHeader>
           <TableRow className="border-t">
-            <TableHead>Model</TableHead>
-            <TableHead className="text-right">Calls</TableHead>
+            <TableHead>{text.model}</TableHead>
+            <TableHead className="text-right">{text.calls}</TableHead>
             <TableHead className="text-right">p50</TableHead>
             <TableHead className="text-right">p95</TableHead>
-            <TableHead className="text-right">Cache</TableHead>
-            <TableHead className="text-right">Cost</TableHead>
+            <TableHead className="text-right">{text.cache}</TableHead>
+            <TableHead className="text-right">{text.cost}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -77,21 +79,22 @@ function rateColor(rate: number): string {
 }
 
 export function ToolTable({ insights }: { insights: Insights }) {
+  const text = useStrings().tools
   const worst = insights.tools.filter((tool) => tool.calls >= 5).sort((a, b) => errorRate(b) - errorRate(a))[0]
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Tools</CardTitle>
-        <CardDescription>Calls, failures and how often they asked you</CardDescription>
+        <CardTitle>{text.title}</CardTitle>
+        <CardDescription>{text.description}</CardDescription>
       </CardHeader>
       <Table>
         <TableHeader>
           <TableRow className="border-t">
-            <TableHead>Tool</TableHead>
-            <TableHead className="text-right">Calls</TableHead>
-            <TableHead className="text-right">Error rate</TableHead>
+            <TableHead>{text.tool}</TableHead>
+            <TableHead className="text-right">{text.calls}</TableHead>
+            <TableHead className="text-right">{text.errorRate}</TableHead>
             <TableHead className="text-right">p95</TableHead>
-            <TableHead className="text-right">Asked you</TableHead>
+            <TableHead className="text-right">{text.asked}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -112,8 +115,8 @@ export function ToolTable({ insights }: { insights: Insights }) {
         </TableBody>
       </Table>
       {worst && errorRate(worst) > 0.1 ? (
-        <Callout tone="warning" icon={AlertCircle} title={`${worst.name} failed ${worst.failed} of ${worst.calls} calls`} className="m-4 mt-3">
-          That is {percent(errorRate(worst))} of its calls. Open the failed runs in Traces to see the commands.
+        <Callout tone="warning" icon={AlertCircle} title={text.worst(worst.name, worst.failed, worst.calls)} className="m-4 mt-3">
+          {text.worstDetail(percent(errorRate(worst)))}
         </Callout>
       ) : null}
     </Card>

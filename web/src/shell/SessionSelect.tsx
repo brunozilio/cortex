@@ -7,6 +7,7 @@ import { shortId, when } from '@/lib/format'
 import type { SessionCard } from '@/lib/sessions'
 import { cn } from '@/lib/utils'
 import type { Report } from '@/types'
+import { useStrings } from './strings'
 
 export interface SessionChoice {
   id: string
@@ -64,6 +65,7 @@ interface SessionSelectProps {
 }
 
 export function SessionSelect({ choices, active, nowMs, onSession, onAll }: SessionSelectProps) {
+  const strings = useStrings()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const shown = useMemo(() => choices.filter((choice) => matchesChoice(choice, query)), [choices, query])
@@ -81,7 +83,7 @@ export function SessionSelect({ choices, active, nowMs, onSession, onAll }: Sess
           type="button"
           className="flex h-9 min-w-0 max-w-[min(32rem,60vw)] items-center gap-2 rounded-md border bg-background px-3 text-left text-sm shadow-sm hover:bg-accent"
         >
-          <span className="truncate font-medium">{chosen ? chosen.title : 'All sessions'}</span>
+          <span className="truncate font-medium">{chosen ? chosen.title : strings.sessions.all}</span>
           {chosen ? <span className="shrink-0 font-mono text-xs text-muted-foreground">{shortId(chosen.id)}</span> : null}
           <ChevronsUpDown className="ml-auto size-4 shrink-0 text-muted-foreground" />
         </button>
@@ -93,14 +95,14 @@ export function SessionSelect({ choices, active, nowMs, onSession, onAll }: Sess
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search sessions…"
+            placeholder={strings.sessions.search}
             className="h-10 rounded-none border-0 pl-9 shadow-none focus-visible:ring-0"
           />
         </label>
         <ScrollArea className="max-h-96">
           <div className="grid gap-0.5 p-1">
             {!query.trim() ? (
-              <Option selected={active === null} onClick={() => pick(null)} title="All sessions" detail={`${choices.length} sessions`} />
+              <Option selected={active === null} onClick={() => pick(null)} title={strings.sessions.all} detail={strings.sessions.count(choices.length)} />
             ) : null}
             {shown.map((choice) => (
               <Option
@@ -108,11 +110,11 @@ export function SessionSelect({ choices, active, nowMs, onSession, onAll }: Sess
                 selected={active === choice.id}
                 onClick={() => pick(choice.id)}
                 title={choice.title}
-                badge={choice.current ? 'current' : undefined}
-                detail={`${shortId(choice.id)} · ${choice.runs} ${choice.runs === 1 ? 'run' : 'runs'}${choice.last ? ` · ${when(choice.last, nowMs)}` : ''}${choice.folder ? ` · ${choice.folder}` : ''}`}
+                badge={choice.current ? strings.sessions.current : undefined}
+                detail={`${shortId(choice.id)} · ${strings.sessions.runs(choice.runs)}${choice.last ? ` · ${when(choice.last, nowMs, strings)}` : ''}${choice.folder ? ` · ${choice.folder}` : ''}`}
               />
             ))}
-            {!shown.length ? <p className="px-3 py-6 text-center text-sm text-muted-foreground">No session matches.</p> : null}
+            {!shown.length ? <p className="px-3 py-6 text-center text-sm text-muted-foreground">{strings.sessions.none}</p> : null}
           </div>
         </ScrollArea>
       </PopoverContent>

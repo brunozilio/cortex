@@ -74,6 +74,11 @@ impl ApiSource for NativeApis {
         catalogs.insert(provider, listed.clone());
         listed
     }
+
+    fn searcher(&self, request: &PromptRequest) -> Option<Arc<dyn agent_engine::model::Searcher>> {
+        let key = request.credentials.model.clone()?;
+        Some(Arc::new(ProviderClient::for_model(request.model.clone(), Arc::clone(&self.http), Arc::new(key))))
+    }
 }
 
 pub fn keys_for(providers: &ModelProviders, model: &ModelOption) -> Vec<(String, ProviderKey)> {
@@ -129,6 +134,7 @@ pub fn engine(sessions: Arc<FileSessions>, language_servers: PathBuf) -> NativeE
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicBool;
 
     use domain::ModelProvider;
 
@@ -213,6 +219,16 @@ mod tests {
         assert_eq!(http.sent()[1].url, "https://keyed.test/chat", "no prefix stays on the run's provider");
         let missing = ask("device-sub:auto").expect_err("not connected");
         assert!(matches!(missing, ModelError::Unauthorized(ref why) if why.contains("Device")), "{missing:?}");
+    }
+
+    #[test]
+    fn the_web_search_uses_the_run_s_account_and_needs_its_key() {
+        let http = Arc::new(ScriptedHttp::new([]));
+        let apis = NativeApis::new(http.clone());
+        assert!(apis.searcher(&request(KEYED, None)).is_none(), "no key, no account search");
+        let searcher = apis.searcher(&request(KEYED, Some("sk-one"))).expect("searcher");
+        assert!(searcher.search("rust", &AtomicBool::new(false)).is_none(), "this provider has no search of its own");
+        assert!(http.sent().is_empty());
     }
 
     #[test]
