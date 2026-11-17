@@ -19,7 +19,7 @@ pub enum Msg {
         question: String,
         answer: Result<String, String>,
     },
-    Chore(Result<Option<sdk::ChoreAnswer>, String>),
+    Chore(Option<sdk::SessionId>, Result<Option<sdk::ChoreAnswer>, String>),
     Files(Vec<String>),
     StatusLine(String),
     Providers(Vec<domain::provider::ProviderSummary>),
@@ -29,6 +29,7 @@ pub enum Msg {
         removing: bool,
     },
     Conversations(Vec<super::conversations::Conversation>),
+    Earlier(Vec<super::conversations::Conversation>),
     Context(domain::usage::ContextUsage),
     Shell {
         id: String,
@@ -47,7 +48,7 @@ impl super::app::App {
     pub fn message(&mut self, msg: Msg) {
         match msg {
             Msg::Ready { models, settings } => self.ready(models, &settings),
-            Msg::Event(run, event) => self.event(run, event),
+            Msg::Event(run, event) => super::fleet::event(self, run, event),
             Msg::Skills(skills) => self.catalog.skills = skills,
             Msg::Reloaded { skills, summary } => {
                 self.catalog.skills = skills;
@@ -65,9 +66,10 @@ impl super::app::App {
                 }
             }
             Msg::Side { question, answer } => super::side::answered(self, &question, answer),
-            Msg::Chore(answer) => self.chore_answered(answer),
+            Msg::Chore(session, answer) => super::fleet::chore(self, session, answer),
             Msg::Files(files) => self.catalog.files = Some(files),
             Msg::Conversations(found) => super::resume::listed(self, found),
+            Msg::Earlier(found) => self.fleet.earlier = found,
             Msg::Providers(providers) => super::info::connected(self, providers),
             Msg::Menu(providers) => self.menu(providers),
             Msg::Accounts { providers, removing } => self.accounts_listed(providers, removing),

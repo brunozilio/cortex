@@ -80,7 +80,7 @@ impl App {
         }
     }
 
-    fn start_session(&mut self, model: Model) {
+    pub(super) fn start_session(&mut self, model: Model) {
         let mut session = self.sdk.session(self.cwd.clone(), model);
         let resumed = self.resume.take();
         if let Some(id) = resumed.clone() {

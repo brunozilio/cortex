@@ -21,6 +21,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
     {
         return super::diff_view::draw(frame, diffs);
     }
+    if app.fleet.open && app.ask.is_none() && app.overlays.secret.is_none() {
+        return super::fleet::draw(frame, app);
+    }
     let area = frame.area();
     let panel = panel(app, area.width);
     let input_width = usize::from(area.width.saturating_sub(2)).saturating_sub(PROMPT_MARK).max(1);

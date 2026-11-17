@@ -31,9 +31,10 @@ impl App {
 
     fn chore(&self, started: Result<Run, Error>) {
         let tx = self.tx.clone();
+        let session = self.session.as_ref().and_then(sdk::Session::id);
         std::thread::spawn(move || {
             let answer = started.and_then(Run::chore_answer).map_err(|error| error.to_string());
-            let _ = tx.send(Msg::Chore(answer));
+            let _ = tx.send(Msg::Chore(session, answer));
         });
     }
 

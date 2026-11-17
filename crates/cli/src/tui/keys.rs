@@ -40,6 +40,9 @@ pub fn key(app: &mut App, event: KeyEvent) {
     if app.overlays.diffs.is_some() {
         return diffs(app, event);
     }
+    if app.fleet.open {
+        return super::fleet::key(app, event);
+    }
     if app.overlays.picker.is_some() {
         return pick(app, event);
     }
@@ -182,6 +185,7 @@ fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
     match event.code {
         KeyCode::Char('!') if !ctrl && !app.shell && app.input.is_empty() => app.shell = true,
         KeyCode::Backspace | KeyCode::Esc if app.shell && app.input.is_empty() => app.shell = false,
+        KeyCode::Left if !cmd && !alt && !ctrl && !app.shell && app.input.is_empty() => super::fleet::open(app),
         KeyCode::Left if cmd => app.input.home(),
         KeyCode::Right if cmd => app.input.end(),
         KeyCode::Backspace if cmd => app.input.delete_to_line_start(),

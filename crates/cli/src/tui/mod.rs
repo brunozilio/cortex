@@ -20,6 +20,7 @@ mod entries;
 mod export;
 mod fallbacks;
 mod features;
+mod fleet;
 mod git;
 mod git_offer;
 mod highlight;
@@ -74,6 +75,8 @@ mod tests_accounts;
 mod tests_auto_retry;
 #[cfg(test)]
 mod tests_dirs;
+#[cfg(test)]
+mod tests_fleet;
 #[cfg(test)]
 mod tests_going_on;
 #[cfg(test)]
@@ -276,6 +279,7 @@ pub fn run(
     capture_mouse(false);
     ratatui::restore();
     if let Some(chore) = app.exit_chore.take() {
+        app.saver.flush();
         drop(app);
         println!("{}", chore());
         return result;

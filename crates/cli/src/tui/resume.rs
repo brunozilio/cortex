@@ -7,17 +7,21 @@ pub fn open(app: &mut App, query: Option<String>) {
         return app.transcript.notice("Wait for the agent to finish, or press Esc, before resuming another.");
     }
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.sessions() {
-        Ok(listed) => {
+    app.spawn(move |sdk| match here(sdk, &cwd) {
+        Ok(found) => {
             let query = query.unwrap_or_default();
-            let real = |path: &std::path::Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-            let folder = real(&cwd);
-            let here = listed.into_iter().filter(|row| !row.archived && real(&row.cwd) == folder);
-            let found = here.map(|row| Conversation { session: row.session, title: row.title, at: row.updated });
-            Msg::Conversations(found.filter(|c| titled(c, &query)).collect())
+            Msg::Conversations(found.into_iter().filter(|c| titled(c, &query)).collect())
         }
         Err(error) => Msg::Error(error.to_string()),
     });
+}
+
+pub fn here(sdk: &sdk::Sdk, cwd: &std::path::Path) -> Result<Vec<Conversation>, sdk::Error> {
+    let real = |path: &std::path::Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let folder = real(cwd);
+    let listed = sdk.sessions()?;
+    let here = listed.into_iter().filter(|row| !row.archived && real(&row.cwd) == folder);
+    Ok(here.map(|row| Conversation { session: row.session, title: row.title, at: row.updated }).collect())
 }
 
 pub fn fork(app: &mut App) {

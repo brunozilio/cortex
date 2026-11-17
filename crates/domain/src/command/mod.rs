@@ -2,7 +2,7 @@ use crate::{Effort, PermissionMode};
 
 mod slash;
 mod sub;
-pub use slash::{closest, slash_name};
+pub use slash::{closest, mistyped_slash, slash_name};
 pub use sub::{McpCommand, MemoryCommand, RoleChange, VerificationCommand};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +28,7 @@ pub enum Command {
     Context,
     Vim,
     Resume(Option<String>),
+    Fleet,
     Fork,
     Export(Option<String>),
     Copy,
@@ -53,10 +54,11 @@ pub enum Command {
 }
 
 impl Command {
-    pub const HELP: [(&'static str, &'static str); 36] = [
+    pub const HELP: [(&'static str, &'static str); 37] = [
         ("help", "Show the commands and keys"),
         ("clear", "Clear the conversation and start fresh (also /new, /reset)"),
         ("resume", "Go back to an earlier conversation of this folder, /resume <words> searches the titles"),
+        ("fleet", "Show every session, running or earlier, and switch between them (← on an empty prompt)"),
         ("fork", "Go on in a copy of this conversation, leaving it as it is"),
         (
             "model",
@@ -98,7 +100,7 @@ impl Command {
         ("exit", "Quit (also /quit)"),
     ];
 
-    pub const ALIASES: [(&'static str, &'static str); 13] = [
+    pub const ALIASES: [(&'static str, &'static str); 14] = [
         ("plan", "mode plan"),
         ("new", "clear"),
         ("reset", "clear"),
@@ -112,10 +114,11 @@ impl Command {
         ("usage", "cost"),
         ("quit", "exit"),
         ("?", "help"),
+        ("sessions", "fleet"),
     ];
 
     pub const GROUPS: [(&'static str, &'static [&'static str]); 4] = [
-        ("Conversation", &["clear", "resume", "fork", "compact", "rewind", "retry", "btw", "export", "copy"]),
+        ("Conversation", &["clear", "resume", "fleet", "fork", "compact", "rewind", "retry", "btw", "export", "copy"]),
         ("Model and mode", &["model", "mode", "effort", "output-style"]),
         (
             "Project",
@@ -184,6 +187,7 @@ impl Command {
             "context" => bare(Self::Context),
             "vim" => bare(Self::Vim),
             "resume" | "continue" => Some(Self::Resume(argument)),
+            "fleet" | "sessions" => bare(Self::Fleet),
             "fork" | "branch" => bare(Self::Fork),
             "skills" | "commands" | "agents" => match argument.as_deref().map(|a| a.split_once(' ').unwrap_or((a, "")))
             {
