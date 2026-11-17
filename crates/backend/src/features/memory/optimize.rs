@@ -2,7 +2,7 @@ use std::path::Path;
 
 use domain::{MemoryBook, MemoryBrief, ModelOption, PromptRequest, RunId};
 use platform::sync::Locked;
-use serde_json::Value;
+use protocol::features::memory::MemoryListing;
 
 use super::{Memories, edits_file, listing};
 
@@ -19,7 +19,7 @@ impl Memories {
         }
     }
 
-    pub fn undo(&self, project: &Path) -> Result<Value, String> {
+    pub fn undo(&self, project: &Path) -> Result<MemoryListing, String> {
         let key = project.to_path_buf();
         let point = self.undo_points().remove(&key);
         let Some(book) = point else { return Err("nothing to undo in the memory".into()) };

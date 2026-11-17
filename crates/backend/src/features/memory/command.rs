@@ -1,40 +1,40 @@
-use std::path::PathBuf;
-
-use domain::{Author, MemoryEdit, MemoryId, ModelOption, Provenance, RunId};
-use serde_json::{Value, json};
+use domain::{Author, Provenance};
+use protocol::features::memory::{MemoryOp, MemoryReply, MemoryRequest};
 
 use super::{now, of};
 use crate::feature::Context;
 
-pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
+pub fn handle(context: &Context<'_>, request: MemoryRequest) -> Result<MemoryReply, String> {
     let memories = of(context.services);
-    let path: PathBuf = input["path"].as_str().map(PathBuf::from).ok_or("the memory feature needs a path")?;
-    match input["op"].as_str().unwrap_or("list") {
-        "list" => Ok(memories.load(&path)),
-        "search" => Ok(memories.search_listing(&path, input["query"].as_str().unwrap_or_default())),
-        "edit" => {
-            let edits: Vec<MemoryEdit> = serde_json::from_value(input["edits"].clone()).map_err(|e| e.to_string())?;
-            memories.edit(&path, &edits, Provenance { author: Author::User, now: now(), origin: None })
+    let MemoryRequest { path, op } = request;
+    match op {
+        MemoryOp::List => Ok(MemoryReply::Listing(memories.load(&path))),
+        MemoryOp::Search { query } => {
+            let scores = memories.search(&path, &query);
+            Ok(MemoryReply::Found { path, query, scores })
         }
-        "undo" => memories.undo(&path),
-        "share" => {
-            let id = MemoryId(input["id"].as_u64().and_then(|id| u32::try_from(id).ok()).ok_or("say which memory")?);
-            let shared = memories.shared(&path, id)?;
-            Ok(json!({ "path": path, "file": shared }))
+        MemoryOp::Edit { edits } => {
+            let by = Provenance { author: Author::User, now: now(), origin: None };
+            memories.edit(&path, &edits, by).map(MemoryReply::Listing)
         }
-        "check" => memories.check(&path),
-        "score" => Ok(json!({ "path": path, "report": memories.score(&path) })),
-        "seed" => memories.seed(context, &path),
-        "seed_keep" => {
-            let picked: Vec<usize> = serde_json::from_value(input["picked"].clone()).map_err(|e| e.to_string())?;
-            memories.keep_seeds(context, &path, &picked)
+        MemoryOp::Undo => memories.undo(&path).map(MemoryReply::Listing),
+        MemoryOp::Share { id } => {
+            let file = memories.shared(&path, id)?;
+            Ok(MemoryReply::Shared { path, file })
         }
-        "optimize" => {
-            let run: RunId = serde_json::from_value(input["run"].clone()).map_err(|e| e.to_string())?;
-            let model: ModelOption = serde_json::from_value(input["model"].clone()).map_err(|e| e.to_string())?;
+        MemoryOp::Check => memories.check(&path).map(MemoryReply::Check),
+        MemoryOp::Score => {
+            let report = memories.score(&path);
+            Ok(MemoryReply::Score { path, report })
+        }
+        MemoryOp::Seed => {
+            let candidates = memories.offered(context, &path)?;
+            Ok(MemoryReply::Seeds { path, candidates })
+        }
+        MemoryOp::KeepSeeds { picked } => memories.keep_seeds(context, &path, &picked).map(MemoryReply::Listing),
+        MemoryOp::Optimize { run, model } => {
             (context.submit)(run, memories.optimization(&path, model))?;
-            Ok(json!({ "run": run }))
+            Ok(MemoryReply::Optimizing { run })
         }
-        other => Err(format!("the memory feature has no {other:?}")),
     }
 }

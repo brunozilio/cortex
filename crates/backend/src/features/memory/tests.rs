@@ -1,4 +1,5 @@
 use domain::{Forgotten, MemoryKind, ModelOption};
+use protocol::features::memory::{MemoryOp, MemoryReply, MemoryRequest};
 
 use super::*;
 use crate::dirs::project_key;
@@ -8,12 +9,12 @@ fn plain() -> Memories {
     Memories::new(Arc::new(InMemoryStore::default()))
 }
 
-fn listed(answer: &Value) -> Vec<Memory> {
-    serde_json::from_value(answer["memories"].clone()).expect("memories")
+fn listed(answer: &MemoryListing) -> Vec<Memory> {
+    answer.memories.clone()
 }
 
-fn forgotten(answer: &Value) -> Vec<Forgotten> {
-    serde_json::from_value(answer["forgotten"].clone()).expect("forgotten")
+fn forgotten(answer: &MemoryListing) -> Vec<Forgotten> {
+    answer.forgotten.clone()
 }
 
 fn request(cwd: &Path) -> PromptRequest {
@@ -124,7 +125,7 @@ fn edits_answer_with_the_whole_memory() {
     memories.edit(Path::new("/repo"), &[remember("Uses wgpu")], by_user()).expect("edit");
     let answer = memories.edit(Path::new("/repo"), &[remember("Inter is the only font")], by_user());
     let answer = answer.expect("edit");
-    assert_eq!(answer["path"], "/repo");
+    assert_eq!(answer.path, Path::new("/repo"));
     assert_eq!(listed(&answer).len(), 2);
 }
 
@@ -142,7 +143,9 @@ fn a_run_is_briefed_and_its_edits_applied_on_completion() {
 
     std::fs::write(&brief.output, r#"{"remember":[{"kind":"episodic","text":"Tuned the renderer"}],"forget":[0]}"#)
         .expect("write");
-    let learned = listed(&memories.finish(&briefed, &ended(true)).expect("changed").expect("saved"));
+    let applied = memories.finish(&briefed, &ended(true)).expect("changed").expect("saved");
+    assert_eq!((applied.optimizing, applied.added, applied.changed, applied.forgotten), (false, 1, 0, 1));
+    let learned = listed(&applied.listing);
     assert_eq!(learned.len(), 1);
     assert_eq!((learned[0].kind, learned[0].author), (MemoryKind::Episodic, Author::Agent));
     assert_eq!(learned[0].origin.as_deref(), Some("Night sky"));
@@ -198,6 +201,8 @@ fn an_optimisation_can_be_undone_until_the_next_edit() {
 
     std::fs::write(&brief.output, r#"{"forget":[0]}"#).expect("write");
     let optimized = memories.finish(&briefed, &ended(true)).expect("changed").expect("saved");
+    assert_eq!((optimized.optimizing, optimized.added, optimized.forgotten), (true, 0, 1));
+    let optimized = optimized.listing;
     assert_eq!(listed(&optimized).len(), 1);
     assert_eq!(forgotten(&optimized).iter().map(|f| f.memory.id).collect::<Vec<_>>(), vec![MemoryId(0)]);
     let undone = memories.undo(dir.path()).expect("undone");
@@ -240,14 +245,13 @@ fn the_feature_keeps_memory_in_the_data_folder_and_starts_optimisations() {
     let data = tempfile::tempdir().expect("data");
     let project = tempfile::tempdir().expect("project");
     let services = crate::feature::testing::services(Some(data.path()));
-    let path = json!(project.path());
+    let asking = |op: MemoryOp| MemoryRequest { path: project.path().to_path_buf(), op };
     crate::feature::testing::with(1, &services, |context| {
-        let edit = json!({ "op": "edit", "path": path, "edits": [remember("Uses wgpu")] });
-        assert_eq!(listed(&handle(context, edit).expect("edited")).len(), 1);
-        let found = handle(context, json!({ "op": "search", "path": path, "query": "wgpu" })).expect("found");
-        assert_eq!(found["scores"][0][0], 0);
-        assert!(handle(context, json!({ "op": "list" })).is_err());
-        assert!(handle(context, json!({ "op": "undo", "path": path })).is_err());
+        let edited = handle(context, asking(MemoryOp::Edit { edits: vec![remember("Uses wgpu")] })).expect("edited");
+        assert!(matches!(&edited, MemoryReply::Listing(listing) if listing.memories.len() == 1), "{edited:?}");
+        let found = handle(context, asking(MemoryOp::Search { query: "wgpu".into() })).expect("found");
+        assert!(matches!(&found, MemoryReply::Found { scores, .. } if scores[0].0 == MemoryId(0)), "{found:?}");
+        assert!(handle(context, asking(MemoryOp::Undo)).is_err());
     });
     assert!(data.path().join("memory/local").exists());
 
@@ -258,8 +262,8 @@ fn the_feature_keeps_memory_in_the_data_folder_and_starts_optimisations() {
     };
     let context = Context { client: 1, services: &services, submit: &submit };
     let run = RunId::new();
-    let optimize = json!({ "op": "optimize", "path": path, "run": run, "model": ModelOption::new("m", "M") });
-    assert_eq!(handle(&context, optimize).expect("started"), json!({ "run": run }));
+    let optimize = asking(MemoryOp::Optimize { run, model: ModelOption::new("m", "M") });
+    assert_eq!(handle(&context, optimize).expect("started"), MemoryReply::Optimizing { run });
     let started = started.into_inner().expect("lock");
     assert_eq!(started[0].0, run);
     assert!(started[0].1.memory.as_ref().is_some_and(|brief| brief.optimizing));

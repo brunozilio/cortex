@@ -160,6 +160,8 @@ groq:llama-4                             llama-4
 
 Os ids de modelo são `<provedor>:<modelo>`. Onde quer que você indique um modelo (`--model`, `/model`, papéis, fallbacks), o {{NAME}} aceita o id completo, a parte depois dos dois-pontos ou o rótulo, sem diferenciar maiúsculas de minúsculas.
 
+Quando um provedor conectado não responde com a lista de modelos, o chat avisa uma vez para aquele provedor (`Could not list <provider>'s models: <reason>`) e segue com os modelos dos outros.
+
 ## Escolher um modelo
 
 | Onde | Como |

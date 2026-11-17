@@ -48,10 +48,7 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
         sdk.mcp_servers(cwd).map(|servers| format!("{} configured", servers.len())).map_err(|e| e.to_string()),
     ));
     found.push(check("declared providers", declared(sdk, cwd)));
-    found.push(check(
-        "sandbox",
-        sandbox(sdk.feature("flags", serde_json::json!({ "cwd": cwd })).map_err(|e| e.to_string())),
-    ));
+    found.push(check("sandbox", sandbox(sdk.flags(cwd).map_err(|e| e.to_string()))));
     found.push(check("git", program("git", &["--version"])));
     found.push(check(
         "ripgrep",
@@ -61,15 +58,14 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
 }
 
 fn declared(sdk: &Sdk, cwd: &Path) -> Result<String, String> {
-    let lines = sdk.feature("declared_providers", serde_json::json!({ "path": cwd })).map_err(|e| e.to_string())?;
-    summarize(&serde_json::from_value::<Vec<String>>(lines).map_err(|e| e.to_string())?)
+    summarize(&sdk.declare_providers(cwd).map_err(|e| e.to_string())?)
 }
 
-fn sandbox(flags: Result<serde_json::Value, String>) -> Result<String, String> {
+fn sandbox(flags: Result<Vec<sdk::ListedFlag>, String>) -> Result<String, String> {
     let flags = flags?;
-    let flag = flags.as_array().into_iter().flatten().find(|flag| flag["name"] == domain::features::SANDBOX);
-    let Some(flag) = flag else { return Ok("not offered".into()) };
-    Ok(match (flag["available"] == true, flag["on"] == true) {
+    let listed = flags.iter().find(|listed| listed.flag.name == domain::features::SANDBOX);
+    let Some(listed) = listed else { return Ok("not offered".into()) };
+    Ok(match (listed.available, listed.flag.on) {
         (false, _) => "not on this system: commands run unconfined".into(),
         (true, true) => "on: commands write only inside the project, added folders, temp and caches".into(),
         (true, false) => "off in your settings (/features experimental-sandbox on)".into(),
@@ -139,8 +135,16 @@ mod tests {
     #[test]
     fn the_sandbox_line_says_whether_commands_are_confined() {
         let flag = |on: bool, available: bool| {
-            Ok(serde_json::json!([{ "name": domain::features::SANDBOX, "on": on, "available": available }]))
+            let flag = domain::features::Listed {
+                name: domain::features::SANDBOX.into(),
+                about: String::new(),
+                on,
+                experimental: true,
+                security: true,
+            };
+            Ok(vec![sdk::ListedFlag { flag, available }])
         };
+        assert_eq!(sandbox(Ok(Vec::new())), Ok("not offered".into()));
         assert!(sandbox(flag(true, true)).is_ok_and(|text| text.starts_with("on:")));
         assert!(sandbox(flag(false, true)).is_ok_and(|text| text.contains("/features experimental-sandbox on")));
         assert!(sandbox(flag(true, false)).is_ok_and(|text| text.starts_with("not on this system")));

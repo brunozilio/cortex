@@ -118,7 +118,7 @@ fn memory_is_optimized_by_a_run() {
     while run.next_event().is_some() {}
     let request = engine.requests().pop().expect("a run");
     assert!(request.prompt.contains("[0] semantic, from the user: The renderer uses wgpu."));
-    assert!(matches!(memory.undo(), Err(Error::Backend(message)) if message.contains("nothing to undo")));
+    assert!(matches!(memory.undo(), Err(Error::Feature(failed)) if failed.to_string().contains("nothing to undo")));
 }
 
 #[test]

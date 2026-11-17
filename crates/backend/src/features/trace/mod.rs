@@ -5,6 +5,7 @@ use agent_engine::sessions::{FileSessions, records};
 use domain::trace::insights::{Report, SessionRuns, insights, recent};
 use domain::trace::runs::{Run, runs, trim, without_messages};
 use domain::{ModelOption, PromptRequest, SessionId};
+use protocol::features::trace::{TraceReply, TraceRequest};
 use serde_json::Value;
 
 use crate::feature::Context;
@@ -12,29 +13,29 @@ use crate::feature::Context;
 const CURRENT_TEXT: usize = 20_000;
 const OTHER_TEXT: usize = 2_000;
 
-pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
+pub fn handle(context: &Context<'_>, request: TraceRequest) -> Result<TraceReply, String> {
     let store = context.services.sessions.as_ref();
-    if input["all"] == true {
-        let catalog = context.services.catalog.read();
-        let listed: Vec<(SessionId, PathBuf)> = catalog
-            .listed()
-            .iter()
-            .filter(|entry| !entry.archived)
-            .map(|entry| (entry.session.clone(), entry.cwd.clone()))
-            .collect();
-        let report = everything(store, &listed, now_ms());
-        return serde_json::to_value(report).map_err(|e| e.to_string());
-    }
-    let session = input["session"].as_str().ok_or("the trace feature needs a session")?;
-    let cwd = input["cwd"].as_str().ok_or("the trace feature needs the session's folder")?;
-    if input["only"] == "current" {
-        let current = SessionId(session.into());
-        return followed(store, Path::new(cwd), &current, now_ms());
-    }
-    let owner_settings = context.services.settings.load().unwrap_or_default();
-    let others = crate::settings::recent_sessions(&owner_settings, Path::new(cwd));
-    let report = reported(store, Path::new(cwd), &SessionId(session.into()), &others, now_ms())?;
-    serde_json::to_value(report).map_err(|e| e.to_string())
+    let report = match request {
+        TraceRequest::EverySession => {
+            let catalog = context.services.catalog.read();
+            let listed: Vec<(SessionId, PathBuf)> = catalog
+                .listed()
+                .iter()
+                .filter(|entry| !entry.archived)
+                .map(|entry| (entry.session.clone(), entry.cwd.clone()))
+                .collect();
+            everything(store, &listed, now_ms())
+        }
+        TraceRequest::Session { session, cwd } => {
+            let owner_settings = context.services.settings.load().unwrap_or_default();
+            let others = crate::settings::recent_sessions(&owner_settings, &cwd);
+            reported(store, &cwd, &session, &others, now_ms())?
+        }
+        TraceRequest::Follow { session, cwd } => {
+            return followed(store, &cwd, &session, now_ms()).map(TraceReply::Followed);
+        }
+    };
+    serde_json::to_value(report).map(TraceReply::Report).map_err(|e| e.to_string())
 }
 
 pub fn forget(_client: u64) {}

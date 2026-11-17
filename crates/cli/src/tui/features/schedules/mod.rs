@@ -1,7 +1,6 @@
 use std::time::{Duration, Instant};
 
 use domain::schedule::{Scheduled, When};
-use serde_json::{Value, json};
 
 use super::{Feature, Slash};
 use crate::tui::app::{App, Msg};
@@ -34,10 +33,6 @@ pub fn feature() -> Feature {
     }
 }
 
-fn scheduled(value: &Value, key: &str) -> Vec<Scheduled> {
-    serde_json::from_value(value[key].clone()).unwrap_or_default()
-}
-
 fn poll(app: &mut App) {
     let idle = !app.busy() && app.session.is_some() && app.ask.is_none();
     let Some(poll) = app.features.get::<Poll>(NAME) else { return };
@@ -46,8 +41,7 @@ fn poll(app: &mut App) {
     }
     *poll = Poll { last: Some(Instant::now()), asking: true };
     app.spawn(|sdk| {
-        let due = sdk.feature(NAME, json!({ "take_due": true })).map(|value| scheduled(&value, "due"));
-        let due = due.unwrap_or_default();
+        let due = sdk.take_due_schedules().unwrap_or_default();
         Msg::Feature(Box::new(move |app: &mut App| arrived(app, due)))
     });
 }
@@ -72,13 +66,19 @@ fn schedules(app: &mut App, argument: Option<String>) {
         Some(("delete", id)) if !id.trim().is_empty() => Some(id.trim().to_owned()),
         Some(_) => return app.transcript.notice("/schedules lists them; /schedules delete <id> removes one."),
     };
-    app.spawn(move |sdk| match sdk.feature(NAME, json!({ "delete": delete })) {
-        Ok(found) if scheduled(&found, "scheduled").is_empty() => Msg::Notice("Nothing is scheduled.".into()),
-        Ok(found) => {
-            let lines: Vec<String> = scheduled(&found, "scheduled").iter().map(line).collect();
-            Msg::Notice(format!("Scheduled (/schedules delete <id> removes one):\n{}", lines.join("\n")))
+    app.spawn(move |sdk| {
+        let kept = match &delete {
+            Some(id) => sdk.delete_schedule(id),
+            None => sdk.scheduled(),
+        };
+        match kept {
+            Ok(scheduled) if scheduled.is_empty() => Msg::Notice("Nothing is scheduled.".into()),
+            Ok(scheduled) => {
+                let lines: Vec<String> = scheduled.iter().map(line).collect();
+                Msg::Notice(format!("Scheduled (/schedules delete <id> removes one):\n{}", lines.join("\n")))
+            }
+            Err(error) => Msg::Error(error.to_string()),
         }
-        Err(error) => Msg::Error(error.to_string()),
     });
 }
 

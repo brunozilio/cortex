@@ -19,7 +19,7 @@ use domain::{
     Author, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, PromptRequest, Provenance, RecallBudget, RunId,
 };
 use platform::sync::Locked;
-use serde_json::{Value, json};
+use protocol::features::memory::{MemoryApplied, MemoryListing};
 #[cfg(test)]
 use store::{FileMemoryStore, InMemoryStore};
 use store::{MemoryStore, memory_store_in};
@@ -27,8 +27,6 @@ use store::{MemoryStore, memory_store_in};
 use crate::services::LocalServices;
 
 pub use command::handle;
-
-pub const NAME: &str = "memory";
 
 type BookKey = PathBuf;
 
@@ -84,17 +82,17 @@ impl Memories {
         self.books.locked()
     }
 
-    pub fn load(&self, project: &Path) -> Value {
+    pub fn load(&self, project: &Path) -> MemoryListing {
         let mut books = self.lock();
         listing(project, self.book(&mut books, project))
     }
 
-    pub fn edit(&self, project: &Path, edits: &[MemoryEdit], by: Provenance) -> Result<Value, String> {
+    pub fn edit(&self, project: &Path, edits: &[MemoryEdit], by: Provenance) -> Result<MemoryListing, String> {
         self.set_undo_point(project, None);
         self.apply(project, edits, by)
     }
 
-    fn apply(&self, project: &Path, edits: &[MemoryEdit], by: Provenance) -> Result<Value, String> {
+    fn apply(&self, project: &Path, edits: &[MemoryEdit], by: Provenance) -> Result<MemoryListing, String> {
         let mut books = self.lock();
         let changed = self.store.update(project, &mut |book| {
             book.apply(edits, &by);
@@ -119,10 +117,6 @@ impl Memories {
             book.memories.iter().zip(scores).filter(|(_, s)| *s > 0.0).map(|(m, s)| (m.id, s)).collect();
         hits.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
         hits
-    }
-
-    fn search_listing(&self, project: &Path, query: &str) -> Value {
-        json!({ "path": project, "query": query, "scores": self.search(project, query) })
     }
 
     pub fn find(&self, project: &Path, query: &str, limit: usize, searches: &mut MemorySearches) -> SearchAnswer {
@@ -220,7 +214,7 @@ impl Memories {
         PromptRequest { memory: Some(brief), ..request.clone() }
     }
 
-    pub fn finish(&self, request: &PromptRequest, outcome: &RunOutcome) -> Option<Result<Value, String>> {
+    pub fn finish(&self, request: &PromptRequest, outcome: &RunOutcome) -> Option<Result<MemoryApplied, String>> {
         let brief = request.memory.as_ref()?;
         if !brief.optimizing {
             self.keep_score(request, brief.held_out, outcome);
@@ -236,16 +230,28 @@ impl Memories {
             return None;
         }
         let by = Provenance { author: Author::Agent, now: now(), origin: brief.origin.clone() };
-        if brief.optimizing {
-            Some(self.apply(&request.cwd, &edits, by))
-        } else {
-            Some(self.edit(&request.cwd, &edits, by))
-        }
+        let before = self.load(&request.cwd).memories;
+        let applied =
+            if brief.optimizing { self.apply(&request.cwd, &edits, by) } else { self.edit(&request.cwd, &edits, by) };
+        Some(applied.map(|listing| applied_since(&before, listing, brief.optimizing)))
     }
 }
 
-fn listing(project: &Path, book: &MemoryBook) -> Value {
-    json!({ "path": project, "memories": book.memories, "forgotten": book.forgotten })
+fn applied_since(before: &[Memory], listing: MemoryListing, optimizing: bool) -> MemoryApplied {
+    let was = |id: MemoryId| before.iter().find(|memory| memory.id == id);
+    let reworded =
+        |memory: &&Memory| was(memory.id).is_some_and(|old| (&old.text, old.kind) != (&memory.text, memory.kind));
+    MemoryApplied {
+        optimizing,
+        added: listing.memories.iter().filter(|memory| was(memory.id).is_none()).count(),
+        changed: listing.memories.iter().filter(reworded).count(),
+        forgotten: before.iter().filter(|old| !listing.memories.iter().any(|memory| memory.id == old.id)).count(),
+        listing,
+    }
+}
+
+fn listing(project: &Path, book: &MemoryBook) -> MemoryListing {
+    MemoryListing { path: project.to_path_buf(), memories: book.memories.clone(), forgotten: book.forgotten.clone() }
 }
 
 fn edits_file(run: RunId) -> PathBuf {

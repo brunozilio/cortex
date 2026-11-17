@@ -160,6 +160,8 @@ groq:llama-4                             llama-4
 
 Model ids are `<provider>:<model>`. Wherever you name a model (`--model`, `/model`, roles, fallbacks), {{NAME}} accepts the full id, the part after the colon, or the label, ignoring case.
 
+When a connected provider does not answer with its model list, the chat says so once for that provider (`Could not list <provider>'s models: <reason>`) and goes on with the models of the others.
+
 ## Choose a model
 
 | Where | How |

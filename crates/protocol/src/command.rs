@@ -4,7 +4,7 @@ use domain::provider::ModelProvider;
 use domain::{AskId, Decision, PermissionMode, PromptRequest, RunId};
 use serde::{Deserialize, Serialize};
 
-use crate::RequestId;
+use crate::{FeatureRequest, RequestId};
 
 pub const SIGN_IN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
@@ -20,6 +20,7 @@ pub enum ClientCommand {
     UnsteerRun { run: RunId },
     BackgroundRun { run: RunId },
     ListModels,
+    RegisterPeer { path: PathBuf },
     ListSkills { path: PathBuf },
     ListAgents { path: PathBuf },
     LoadSettings,
@@ -34,7 +35,7 @@ pub enum ClientCommand {
     SetProviderBalance { provider: ModelProvider, balance: domain::account_pool::Balance },
     ListMcpServers { path: PathBuf },
     TakeNotices,
-    Feature { feature: String, input: serde_json::Value },
+    Feature(FeatureRequest),
     ListPermissions { path: PathBuf },
     ApproveMcpServer { path: PathBuf, name: String, approve: bool },
     AddMcpServer { path: PathBuf, name: String, server: serde_json::Value },
@@ -55,6 +56,7 @@ impl ClientCommand {
             Self::UnsteerRun { .. } => "unsteer_run",
             Self::BackgroundRun { .. } => "background_run",
             Self::ListModels => "list_models",
+            Self::RegisterPeer { .. } => "register_peer",
             Self::ListSkills { .. } => "list_skills",
             Self::ListAgents { .. } => "list_agents",
             Self::LoadSettings => "load_settings",
@@ -70,7 +72,7 @@ impl ClientCommand {
             Self::ListMcpServers { .. } => "list_mcp_servers",
             Self::ListPermissions { .. } => "list_permissions",
             Self::TakeNotices => "take_notices",
-            Self::Feature { .. } => "feature",
+            Self::Feature(_) => "feature",
             Self::ApproveMcpServer { .. } => "approve_mcp_server",
             Self::AddMcpServer { .. } => "add_mcp_server",
             Self::RemoveMcpServer { .. } => "remove_mcp_server",
@@ -84,6 +86,7 @@ impl ClientCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::features::schedules::SchedulesRequest;
     use domain::ModelOption;
 
     #[test]
@@ -99,6 +102,7 @@ mod tests {
             ClientCommand::UnsteerRun { run },
             ClientCommand::BackgroundRun { run },
             ClientCommand::ListModels,
+            ClientCommand::RegisterPeer { path: "/repo".into() },
             ClientCommand::ListSkills { path: "/repo".into() },
             ClientCommand::ListAgents { path: "/repo".into() },
             ClientCommand::LoadSettings,
@@ -117,7 +121,8 @@ mod tests {
             ClientCommand::ListMcpServers { path: "/repo".into() },
             ClientCommand::ListPermissions { path: "/repo".into() },
             ClientCommand::TakeNotices,
-            ClientCommand::Feature { feature: "schedules".into(), input: serde_json::json!({"delete": "cron_1"}) },
+            ClientCommand::Feature(FeatureRequest::Schedules(SchedulesRequest::Delete { id: "cron_1".into() })),
+            ClientCommand::Feature(FeatureRequest::OutputSavings),
             ClientCommand::ApproveMcpServer { path: "/repo".into(), name: "jira".into(), approve: true },
             ClientCommand::AddMcpServer {
                 path: "/repo".into(),

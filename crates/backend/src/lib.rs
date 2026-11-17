@@ -22,6 +22,7 @@ mod secrets;
 mod sent;
 mod services;
 mod settings;
+mod turned_off;
 
 pub use catalog::{FileSessionCatalog, InMemorySessionCatalog, SessionCatalog};
 pub use data_root::DataRoot;
@@ -37,3 +38,4 @@ pub use providers::{InMemoryProviderStore, ModelCatalog, ModelProviders, Provide
 pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
 pub use settings::SettingsStore;
+pub use turned_off::TurnedOff;

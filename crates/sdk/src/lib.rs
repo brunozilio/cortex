@@ -2,12 +2,16 @@ mod account;
 mod catalog;
 mod chores;
 mod client;
+mod features;
 mod mcp_servers;
+mod memory;
 mod plan_watch;
+mod project;
 mod run;
 mod session;
 #[cfg(test)]
 mod testing;
+mod workspace;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,7 +20,8 @@ use backend::{LocalBackend, LocalServices};
 use domain::ModelOption;
 use protocol::Wake;
 
-pub use self::account::{ProjectMemory, SignedIn};
+pub use self::account::SignedIn;
+pub use self::memory::ProjectMemory;
 pub use self::run::{Run, RunControl};
 pub use self::session::{Headless, Session, Spending};
 use client::Client;
@@ -31,11 +36,16 @@ pub use domain::{
     ToolCall, Verdict,
 };
 pub use protocol;
+pub use protocol::features::flags::ListedFlag;
+pub use protocol::features::plugins::{Plugin, PluginsReply, PluginsRequest};
+pub use protocol::features::shell::BackgroundCommand;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0}")]
     Backend(String),
+    #[error(transparent)]
+    Feature(#[from] protocol::FeatureError),
     #[error("the backend did not answer in time")]
     Timeout,
     #[error("the run failed: {0}")]

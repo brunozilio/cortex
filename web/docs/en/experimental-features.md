@@ -224,7 +224,7 @@ Your answers suggest these rules (/rules keep <n> saves one):
 Kept Bash(cargo test:*) as a allow rule in {{DIR}}/settings.local.json.
 ```
 
-Turning the flag off also stops [`/learn keep`](./learning) from saving a rule or an instruction line, because both go through the same feature.
+Turning the flag off also stops [`/learn keep`](./learning) from saving a rule or an instruction line, because both go through the same feature. It takes effect at once, without restarting: with the flag off, `/rules` and `/learn keep` answer `suggested_rules is turned off (/features suggested-rules on)`.
 
 ## Command output
 

@@ -2,17 +2,16 @@ pub mod run;
 
 use std::path::{Path, PathBuf};
 
-use serde_json::{Value, json};
+use protocol::features::code_map::{CodeMapReply, CodeMapRequest};
 
 use crate::feature::Context;
 
 pub const MOST_FILES: usize = 12;
 
-pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
-    let path = input["path"].as_str().map(PathBuf::from).ok_or("the code map needs a path")?;
-    let prompt = input["prompt"].as_str().unwrap_or_default();
-    let shown = pointers(context, &path, prompt).unwrap_or_default();
-    Ok(json!({ "path": path, "map": shown }))
+pub fn handle(context: &Context<'_>, request: CodeMapRequest) -> Result<CodeMapReply, String> {
+    let CodeMapRequest { path, prompt } = request;
+    let map = pointers(context, &path, &prompt);
+    Ok(CodeMapReply { path, map })
 }
 
 pub fn forget(_client: u64) {}
@@ -80,6 +79,12 @@ mod tests {
         testing::with(1, &services, |context| {
             assert_eq!(pointers(context, plain.path(), "merge_near_duplicates"), None);
             assert_eq!(pointers(context, dir.path(), "hello there"), None);
+            let asked = |prompt: &str| CodeMapRequest { path: dir.path().to_path_buf(), prompt: prompt.into() };
+            let none = CodeMapReply { path: dir.path().to_path_buf(), map: None };
+            assert_eq!(handle(context, asked("")), Ok(none.clone()), "an empty prompt points nowhere");
+            assert_eq!(handle(context, asked("hello there")), Ok(none));
+            let found = handle(context, asked("merge_near_duplicates")).expect("answered");
+            assert!(found.map.is_some_and(|map| map.contains("src/retry.rs")));
         });
     }
 

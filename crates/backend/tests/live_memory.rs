@@ -5,10 +5,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use backend::{Backend, LocalBackend, LocalServices, Wake};
-use domain::{Effort, EngineEvent, Memory, MemoryBrief, MemoryEdit, MemoryKind, PromptRequest, RunId};
+use domain::{Effort, EngineEvent, MemoryBrief, MemoryEdit, MemoryKind, PromptRequest, RunId};
 #[path = "support/native_live.rs"]
 mod native_live;
-use protocol::{ClientCommand, Envelope, RequestId, ServerEvent, Unsolicited};
+use protocol::features::memory::{MemoryOp, MemoryRequest};
+use protocol::{ClientCommand, Envelope, FeatureRequest, RequestId, ServerEvent, Unsolicited};
 
 fn seed(backend: &LocalBackend, project: &Path) {
     let mut edits = vec![MemoryEdit::Remember {
@@ -23,10 +24,8 @@ fn seed(backend: &LocalBackend, project: &Path) {
         tags: vec![],
         touches: vec![],
     }));
-    let input = serde_json::json!({ "op": "edit", "path": project, "edits": edits });
-    backend
-        .send(Envelope::local(RequestId(1), ClientCommand::Feature { feature: "memory".into(), input }))
-        .expect("seed");
+    let request = MemoryRequest { path: project.to_path_buf(), op: MemoryOp::Edit { edits } };
+    backend.send(Envelope::local(RequestId(1), ClientCommand::Feature(FeatureRequest::Memory(request)))).expect("seed");
 }
 
 #[test]
@@ -59,10 +58,8 @@ fn an_agent_searches_and_writes_project_memory() {
                 println!("tool {} {}", call.name, call.summary);
                 searched |= call.name.contains("memory_search");
             }
-            Some(ServerEvent::Unsolicited(Unsolicited::Feature { feature, output: Ok(answer) }))
-                if feature == "memory" =>
-            {
-                learned = serde_json::from_value::<Vec<Memory>>(answer["memories"].clone()).unwrap_or_default();
+            Some(ServerEvent::Unsolicited(Unsolicited::MemoryApplied(applied))) => {
+                learned = applied.listing.memories;
             }
             Some(ServerEvent::Run { event: EngineEvent::Asked(ask), .. }) => panic!("the run asked: {ask:?}"),
             Some(ServerEvent::Run { event, .. }) if event.is_terminal() => {

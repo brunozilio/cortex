@@ -8,16 +8,15 @@ use agent_engine::mcp::McpServer;
 use agent_engine::mcp::channel::{self, Bridge};
 use agent_engine::model::http::{Http, NetHttp};
 use domain::mcp::LocalMcp;
-use serde_json::{Value, json};
+use protocol::features::channels::{ChannelsReply, ChannelsRequest};
 
 use crate::extensions::Extensions;
 use crate::feature::Context;
 
 pub mod run;
 
-pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
-    let path = input["path"].as_str().map(std::path::PathBuf::from).ok_or("channels need a path")?;
-    let names: Vec<String> = serde_json::from_value(input["names"].clone()).map_err(|e| e.to_string())?;
+pub fn handle(context: &Context<'_>, request: ChannelsRequest) -> Result<ChannelsReply, String> {
+    let ChannelsRequest { path, names } = request;
     let services = context.services;
     let http: Arc<dyn Http> = Arc::new(NetHttp);
     open(context.client, &path, &names, &services.extensions, services.home().as_deref(), &http)
@@ -39,7 +38,7 @@ fn open(
     extensions: &Extensions,
     home: Option<&Path>,
     http: &Arc<dyn Http>,
-) -> Result<Value, String> {
+) -> Result<ChannelsReply, String> {
     let request = crate::mcp_admin::request_in(path, extensions, home);
     let sources = match agent_engine::mcp::sources(&request) {
         Ok(sources) => sources,
@@ -62,7 +61,7 @@ fn open(
     }
     let opened: Vec<String> =
         lock().get(&client).map(|open| open.iter().map(|s| s.name().to_owned()).collect()).unwrap_or_default();
-    Ok(json!({ "opened": opened, "failed": failed }))
+    Ok(ChannelsReply { opened, failed })
 }
 
 fn for_run(client: u64) -> Vec<LocalMcp> {
@@ -90,8 +89,8 @@ mod tests {
         let names = vec!["chat".to_owned(), "missing".to_owned()];
         let opened =
             open(9601, project.path(), &names, &Extensions::default(), Some(home.path()), &http).expect("open");
-        assert_eq!(opened["opened"], json!(["chat"]));
-        assert!(opened["failed"][0].as_str().is_some_and(|failed| failed.starts_with("missing:")), "{opened}");
+        assert_eq!(opened.opened, ["chat"]);
+        assert!(opened.failed[0].starts_with("missing:"), "{opened:?}");
 
         let deadline = Instant::now() + Duration::from_secs(5);
         let mut notices = Vec::new();
@@ -102,7 +101,7 @@ mod tests {
         assert_eq!(notices[0].text, "hello from chat");
         assert_eq!(for_run(9601).iter().map(|local| local.name.as_str()).collect::<Vec<_>>(), ["chat"]);
         let again = open(9601, project.path(), &names[..1], &Extensions::default(), Some(home.path()), &http);
-        assert_eq!(again.expect("again")["opened"], json!(["chat"]), "opened once");
+        assert_eq!(again.expect("again").opened, ["chat"], "opened once");
         forget(9601);
         assert!(for_run(9601).is_empty());
     }

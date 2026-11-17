@@ -10,7 +10,8 @@ use backend::{Backend, LocalBackend, LocalServices};
 use domain::{
     EngineEvent, MemoryBrief, MemoryEdit, MemoryKind, ModelOption, ModelProvider, PermissionMode, PromptRequest, RunId,
 };
-use protocol::{ClientCommand, Envelope, RequestId, ServerEvent, Unsolicited};
+use protocol::features::memory::{MemoryOp, MemoryRequest};
+use protocol::{ClientCommand, Envelope, FeatureRequest, RequestId, ServerEvent, Unsolicited};
 use serde_json::json;
 use std::{
     sync::{
@@ -95,9 +96,9 @@ fn native_backend_searches_memory_and_learns() {
         tags: vec![],
         touches: vec![],
     }));
-    let input = serde_json::json!({ "op": "edit", "path": dir.path(), "edits": edits });
+    let seed = MemoryRequest { path: dir.path().to_path_buf(), op: MemoryOp::Edit { edits } };
     backend
-        .send(Envelope::local(RequestId(1), ClientCommand::Feature { feature: "memory".into(), input }))
+        .send(Envelope::local(RequestId(1), ClientCommand::Feature(FeatureRequest::Memory(seed))))
         .expect("valid test fixture");
     let model = ModelOption::new("fixture", "Fixture inference").served_by(ModelProvider::new("keyed"));
     let mut request = PromptRequest::plain(dir.path().into(), "Look it up and remember the tabs preference.", model);
@@ -121,10 +122,9 @@ fn native_backend_searches_memory_and_learns() {
                     break;
                 }
             }
-            Some(ServerEvent::Unsolicited(Unsolicited::Feature { feature, output: Ok(answer) }))
-                if feature == "memory" =>
-            {
-                learned |= answer["memories"].to_string().contains("prefers tabs");
+            Some(ServerEvent::Unsolicited(Unsolicited::MemoryApplied(applied))) => {
+                learned |= applied.added == 1
+                    && applied.listing.memories.iter().any(|memory| memory.text.contains("prefers tabs"));
             }
             Some(_) => {}
             None => std::thread::sleep(Duration::from_millis(5)),

@@ -13,40 +13,64 @@ mod trace;
 mod workspace;
 
 use domain::{PromptRequest, RunId};
-use serde_json::Value;
+use protocol::{FeatureError, FeatureName, FeatureReply, FeatureRequest};
 
 use crate::feature::{Context, Finish};
 
-type Handle = fn(&Context<'_>, Value) -> Result<Value, String>;
 type Forget = fn(u64);
 type Prepare = fn(&Context<'_>, RunId, PromptRequest) -> (PromptRequest, Option<Finish>);
 
-const ALL: [(&str, Handle, Forget); 13] = [
-    ("channels", channels::handle, channels::forget),
-    ("code_map", code_map::handle, code_map::forget),
-    ("declared_providers", declared_providers::handle, declared_providers::forget),
-    ("flags", flags::handle, flags::forget),
-    ("memory", memory::handle, memory::forget),
-    ("output_savings", output_savings::handle, output_savings::forget),
-    ("plugins", plugins::handle, plugins::forget),
-    ("schedules", schedules::handle, schedules::forget),
-    ("sessions", sessions::handle, sessions::forget),
-    ("shell", shell::handle, shell::forget),
-    ("suggested_rules", suggested_rules::handle, suggested_rules::forget),
-    ("trace", trace::handle, trace::forget),
-    ("workspace", workspace::handle, workspace::forget),
+const ALL: [(FeatureName, Forget); 13] = [
+    (FeatureName::Channels, channels::forget),
+    (FeatureName::CodeMap, code_map::forget),
+    (FeatureName::DeclaredProviders, declared_providers::forget),
+    (FeatureName::Flags, flags::forget),
+    (FeatureName::Memory, memory::forget),
+    (FeatureName::OutputSavings, output_savings::forget),
+    (FeatureName::Plugins, plugins::forget),
+    (FeatureName::Schedules, schedules::forget),
+    (FeatureName::Sessions, sessions::forget),
+    (FeatureName::Shell, shell::forget),
+    (FeatureName::SuggestedRules, suggested_rules::forget),
+    (FeatureName::Trace, trace::forget),
+    (FeatureName::Workspace, workspace::forget),
 ];
 
 const PREPARING: [(&str, Prepare); 3] =
     [("channels", channels::run::prepare), ("code_map", code_map::run::prepare), ("memory", memory::run::prepare)];
 
-pub fn handle(feature: &str, context: &Context<'_>, input: Value) -> Option<Result<Value, String>> {
-    let (_, handle, _) = ALL.iter().find(|(name, _, _)| *name == feature && context.on(name))?;
-    Some(handle(context, input))
+pub fn handle(context: &Context<'_>, request: FeatureRequest) -> Result<FeatureReply, FeatureError> {
+    let feature = request.feature();
+    if !context.on(feature.name()) {
+        return Err(FeatureError::FeatureOff { feature });
+    }
+    answer(context, request).map_err(|message| FeatureError::Failed { feature, message })
+}
+
+fn answer(context: &Context<'_>, request: FeatureRequest) -> Result<FeatureReply, String> {
+    match request {
+        FeatureRequest::Channels(request) => channels::handle(context, request).map(FeatureReply::Channels),
+        FeatureRequest::CodeMap(request) => code_map::handle(context, request).map(FeatureReply::CodeMap),
+        FeatureRequest::DeclaredProviders(request) => {
+            declared_providers::handle(context, request).map(FeatureReply::DeclaredProviders)
+        }
+        FeatureRequest::Flags(request) => flags::handle(context, request).map(FeatureReply::Flags),
+        FeatureRequest::Memory(request) => memory::handle(context, request).map(FeatureReply::Memory),
+        FeatureRequest::OutputSavings => output_savings::handle(context).map(FeatureReply::OutputSavings),
+        FeatureRequest::Plugins(request) => plugins::handle(context, request).map(FeatureReply::Plugins),
+        FeatureRequest::Schedules(request) => schedules::handle(context, request).map(FeatureReply::Schedules),
+        FeatureRequest::Sessions(request) => sessions::handle(context, request).map(FeatureReply::Sessions),
+        FeatureRequest::Shell(request) => shell::handle(context, request).map(FeatureReply::Shell),
+        FeatureRequest::SuggestedRules(request) => {
+            suggested_rules::handle(context, request).map(FeatureReply::SuggestedRules)
+        }
+        FeatureRequest::Trace(request) => trace::handle(context, request).map(FeatureReply::Trace),
+        FeatureRequest::Workspace(request) => workspace::handle(context, request).map(FeatureReply::Workspace),
+    }
 }
 
 pub fn forget(client: u64) {
-    for (_, _, forget) in ALL {
+    for (_, forget) in ALL {
         forget(client);
     }
 }
@@ -65,12 +89,17 @@ pub fn prepare(context: &Context<'_>, run: RunId, request: PromptRequest) -> (Pr
 }
 
 #[cfg(test)]
+mod requests_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{ALL, PREPARING};
 
     #[test]
     fn the_registered_features_are_these_in_this_order() {
-        let names: Vec<&str> = ALL.iter().map(|(name, _, _)| *name).collect();
+        let features: Vec<protocol::FeatureName> = ALL.iter().map(|(feature, _)| *feature).collect();
+        assert_eq!(features, protocol::FeatureName::ALL, "one entry per feature the protocol names");
+        let names: Vec<&str> = features.iter().map(|feature| feature.name()).collect();
         assert_eq!(
             names,
             [

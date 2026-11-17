@@ -1,12 +1,10 @@
 use domain::features::GIT_OFFER;
 use domain::git_offer::{self, Picked};
-use serde_json::json;
 
 use super::app::App;
 use super::ask::Pending;
 
 const KEY: &str = "git_offer";
-const WORKSPACE: &str = "workspace";
 
 #[derive(Default)]
 struct Offer {
@@ -21,8 +19,7 @@ pub(super) fn hold(app: &mut App, text: &str) -> bool {
     if std::mem::replace(&mut offer.settled, true) || !git_offer::due(first_prompt, false, turned_off) {
         return false;
     }
-    let asked = app.sdk.feature(WORKSPACE, json!({ "op": "git-offer", "path": app.cwd }));
-    if !asked.is_ok_and(|answer| answer["offer"] == true) {
+    if !app.sdk.git_offered(&app.cwd).unwrap_or(false) {
         return false;
     }
     if let Some(offer) = app.features.get::<Offer>(KEY) {
@@ -44,11 +41,11 @@ pub(super) fn answered(app: &mut App, decision: &sdk::Decision) -> bool {
     let (true, Some(text)) = (mine, held) else { return false };
     app.ask = None;
     match git_offer::picked(decision) {
-        Picked::Initialize => match app.sdk.feature(WORKSPACE, json!({ "op": "git-init", "path": app.cwd })) {
-            Ok(made) if made["committed"] == true => app
+        Picked::Initialize => match app.sdk.init_git(&app.cwd) {
+            Ok(true) => app
                 .transcript
                 .notice(format!("Initialized a git repository in {} with an empty first commit.", app.cwd.display())),
-            Ok(_) => app.transcript.notice(format!(
+            Ok(false) => app.transcript.notice(format!(
                 "Initialized a git repository in {}. Git could not make the first commit (set user.name and \
                  user.email); agents run without worktree isolation until there is one.",
                 app.cwd.display()
@@ -64,8 +61,8 @@ pub(super) fn answered(app: &mut App, decision: &sdk::Decision) -> bool {
 
 fn never_again(app: &mut App) {
     app.turned_off.insert(GIT_OFFER.to_owned());
-    let input = json!({ "cwd": app.cwd, "name": GIT_OFFER, "on": false });
-    app.spawn(move |sdk| match sdk.feature("flags", input) {
+    let cwd = app.cwd.clone();
+    app.spawn(move |sdk| match sdk.set_flag(&cwd, GIT_OFFER, false) {
         Ok(_) => super::app::Msg::Feature(Box::new(|_| {})),
         Err(error) => super::app::Msg::Error(format!("Could not keep git-offer off: {error}")),
     });

@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use serde_json::{Value, json};
+use sdk::ListedFlag;
 
 use super::{Feature, Setting, Slash};
 use crate::tui::app::{App, Msg};
@@ -28,21 +28,20 @@ fn load_once(app: &mut App) {
     if std::mem::replace(&mut loaded.0, true) {
         return;
     }
-    let input = json!({ "cwd": app.cwd });
-    app.spawn(move |sdk| match sdk.feature(NAME, input) {
+    let cwd = app.cwd.clone();
+    app.spawn(move |sdk| match sdk.flags(&cwd) {
         Ok(listed) => remember(&listed),
         Err(_) => Msg::Feature(Box::new(|_| {})),
     });
 }
 
-fn remember(listed: &Value) -> Msg {
+fn remember(listed: &[ListedFlag]) -> Msg {
     let off = turned_off(listed);
     Msg::Feature(Box::new(move |app| app.turned_off = off))
 }
 
-fn turned_off(listed: &Value) -> BTreeSet<String> {
-    let flags = listed.as_array().into_iter().flatten();
-    flags.filter(|flag| flag["on"] == false).filter_map(|flag| flag["name"].as_str().map(str::to_owned)).collect()
+fn turned_off(listed: &[ListedFlag]) -> BTreeSet<String> {
+    listed.iter().filter(|listed| !listed.flag.on).map(|listed| listed.flag.name.clone()).collect()
 }
 
 fn run(app: &mut App, argument: Option<String>) {
@@ -50,32 +49,30 @@ fn run(app: &mut App, argument: Option<String>) {
         Ok(toggle) => toggle,
         Err(error) => return app.transcript.notice(error),
     };
-    let mut input = json!({ "cwd": app.cwd });
-    if let Some((name, on)) = &toggle {
-        input["name"] = json!(name);
-        input["on"] = json!(on);
-    }
-    app.spawn(move |sdk| match sdk.feature(NAME, input) {
-        Ok(listed) => {
-            let (off, text) = (turned_off(&listed), shown(&listed, toggle.is_some()));
-            Msg::Feature(Box::new(move |app| {
-                app.turned_off = off;
-                app.transcript.notice(text);
-            }))
+    let cwd = app.cwd.clone();
+    app.spawn(move |sdk| {
+        let listed = match &toggle {
+            Some((name, on)) => sdk.set_flag(&cwd, name, *on),
+            None => sdk.flags(&cwd),
+        };
+        match listed {
+            Ok(listed) => {
+                let (off, text) = (turned_off(&listed), shown(&listed, toggle.is_some()));
+                Msg::Feature(Box::new(move |app| {
+                    app.turned_off = off;
+                    app.transcript.notice(text);
+                }))
+            }
+            Err(error) => Msg::Error(error.to_string()),
         }
-        Err(error) => Msg::Error(error.to_string()),
     });
 }
 
-fn shown(listed: &Value, changed: bool) -> String {
-    let lines = listed.as_array().into_iter().flatten().map(|flag| {
-        let state = if flag["on"] == true { "on " } else { "off" };
-        let unavailable = if flag["available"] == false { " (not on this system)" } else { "" };
-        format!(
-            "  {state}  {}{unavailable}\n       {}",
-            flag["name"].as_str().unwrap_or_default(),
-            flag["about"].as_str().unwrap_or_default()
-        )
+fn shown(listed: &[ListedFlag], changed: bool) -> String {
+    let lines = listed.iter().map(|ListedFlag { flag, available }| {
+        let state = if flag.on { "on " } else { "off" };
+        let unavailable = if *available { "" } else { " (not on this system)" };
+        format!("  {state}  {}{unavailable}\n       {}", flag.name, flag.about)
     });
     let head = if changed { "Saved in your settings; new runs follow it.\n" } else { "" };
     format!("{head}Features (/features <name> on|off):\n{}", lines.collect::<Vec<_>>().join("\n"))
@@ -85,12 +82,21 @@ fn shown(listed: &Value, changed: bool) -> String {
 mod tests {
     use super::*;
 
+    fn flag(name: &str, about: &str, on: bool, available: bool) -> ListedFlag {
+        let flag = domain::features::Listed {
+            name: name.into(),
+            about: about.into(),
+            on,
+            experimental: name.starts_with("experimental-"),
+            security: false,
+        };
+        ListedFlag { flag, available }
+    }
+
     #[test]
     fn each_flag_shows_its_state_and_whether_this_system_has_it() {
-        let listed = json!([
-            { "name": "experimental-sandbox", "about": "Confine commands", "on": false, "available": false },
-            { "name": "budget", "about": "Spend limit", "on": true, "available": true }
-        ]);
+        let listed =
+            [flag("experimental-sandbox", "Confine commands", false, false), flag("budget", "Spend limit", true, true)];
 
         let text = shown(&listed, true);
 

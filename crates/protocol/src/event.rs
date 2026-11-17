@@ -4,7 +4,8 @@ use domain::provider::ModelProvider;
 use domain::{CustomAgent, EngineEvent, ModelOption, RunId, Skill};
 use serde::{Deserialize, Serialize};
 
-use crate::{ProviderEvent, RequestId};
+use crate::features::memory::MemoryApplied;
+use crate::{FeatureError, FeatureReply, ProviderEvent, RequestId};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
@@ -25,7 +26,8 @@ pub enum Reply {
     McpServers { path: PathBuf, servers: Vec<domain::mcp_config::McpServerInfo> },
     McpAuthorizeAt { name: String, url: String },
     Notices(Vec<domain::inbox::Notice>),
-    Feature { feature: String, output: Result<serde_json::Value, String> },
+    Feature(FeatureReply),
+    FeatureFailed(FeatureError),
     Permissions { path: PathBuf, permissions: domain::permission_rules::PermissionsInfo },
     Providers(ProviderEvent),
     Error { message: String },
@@ -51,13 +53,16 @@ impl Reply {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Unsolicited {
-    Feature { feature: String, output: Result<serde_json::Value, String> },
+    MemoryApplied(MemoryApplied),
+    MemoryFailed { path: PathBuf, message: String },
     CatalogFailed { provider: ModelProvider, message: String },
 }
 
 #[cfg(test)]
 mod tests {
     use domain::provider::PortHolder;
+
+    use crate::features::memory::MemoryListing;
 
     use super::*;
 
@@ -88,8 +93,15 @@ mod tests {
             Reply::McpServers { path: "/repo".into(), servers: Vec::new() },
             Reply::McpAuthorizeAt { name: "linear".into(), url: "https://auth.test".into() },
             Reply::Notices(vec![domain::inbox::Notice::new("secrets", "keys cannot be kept")]),
-            Reply::Feature { feature: "memory".into(), output: Ok(serde_json::json!({ "memories": [] })) },
-            Reply::Feature { feature: "memory".into(), output: Err("nothing to undo".into()) },
+            Reply::Feature(FeatureReply::Sessions(crate::features::sessions::SessionsReply::Length(7))),
+            Reply::Feature(FeatureReply::Trace(crate::features::trace::TraceReply::Report(
+                serde_json::json!({ "sessions": [] }),
+            ))),
+            Reply::FeatureFailed(FeatureError::FeatureOff { feature: crate::FeatureName::Memory }),
+            Reply::FeatureFailed(FeatureError::Failed {
+                feature: crate::FeatureName::Memory,
+                message: "nothing to undo".into(),
+            }),
             Reply::Permissions { path: "/repo".into(), permissions: Default::default() },
             Reply::error("could not save the settings"),
         ];
@@ -114,9 +126,16 @@ mod tests {
         let mut events = vec![
             ServerEvent::Run { run: RunId::new(), event: EngineEvent::TextDelta("hi".into()) },
             ServerEvent::Run { run: RunId::new(), event: EngineEvent::Cancelled },
-            ServerEvent::Unsolicited(Unsolicited::Feature {
-                feature: "memory".into(),
-                output: Ok(serde_json::json!({ "memories": [] })),
+            ServerEvent::Unsolicited(Unsolicited::MemoryApplied(MemoryApplied {
+                optimizing: false,
+                added: 1,
+                changed: 0,
+                forgotten: 0,
+                listing: MemoryListing { path: "/repo".into(), memories: Vec::new(), forgotten: Vec::new() },
+            })),
+            ServerEvent::Unsolicited(Unsolicited::MemoryFailed {
+                path: "/repo".into(),
+                message: "could not save memory".into(),
             }),
             ServerEvent::Unsolicited(Unsolicited::CatalogFailed {
                 provider: ModelProvider::new("keyed"),

@@ -2,7 +2,6 @@ use domain::memory::MemorySearches;
 use domain::{PromptRequest, RunId};
 use protocol::Unsolicited;
 
-use super::NAME;
 use super::mcp::MemoryEndpoint;
 use crate::feature::{Context, Finish};
 
@@ -20,8 +19,10 @@ pub fn prepare(context: &Context<'_>, run: RunId, request: PromptRequest) -> (Pr
     }
     let kept = request.clone();
     let finish: Finish = Box::new(move |outcome| {
-        let output = memories.finish(&kept, outcome)?;
-        Some(Unsolicited::Feature { feature: NAME.into(), output })
+        Some(match memories.finish(&kept, outcome)? {
+            Ok(applied) => Unsolicited::MemoryApplied(applied),
+            Err(message) => Unsolicited::MemoryFailed { path: kept.cwd.clone(), message },
+        })
     });
     (request, Some(finish))
 }

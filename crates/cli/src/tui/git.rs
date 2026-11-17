@@ -1,16 +1,13 @@
 use std::path::Path;
 
 pub use domain::changes::{Changes, DiffScope as Scope};
-use serde_json::json;
 
 pub fn changes(sdk: &sdk::Sdk, cwd: &Path) -> Result<Changes, String> {
     changes_in(sdk, cwd, Scope::Uncommitted)
 }
 
 pub fn changes_in(sdk: &sdk::Sdk, cwd: &Path, scope: Scope) -> Result<Changes, String> {
-    let asked = sdk.feature("workspace", json!({ "op": "changes", "path": cwd, "scope": scope }));
-    let value = asked.map_err(|error| error.to_string())?;
-    serde_json::from_value(value).map_err(|error| error.to_string())
+    sdk.changes(cwd, scope).map_err(|error| error.to_string())
 }
 
 impl super::app::App {

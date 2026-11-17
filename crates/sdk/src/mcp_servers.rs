@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use domain::mcp_config::McpServerInfo;
+use protocol::features::channels::ChannelsRequest;
 use protocol::{ClientCommand, Reply};
 
 use crate::{Error, Sdk};
@@ -46,9 +47,8 @@ impl Sdk {
     }
 
     pub fn open_channels(&self, cwd: &Path, names: &[String]) -> Result<(Vec<String>, Vec<String>), Error> {
-        let answer = self.feature("channels", serde_json::json!({ "path": cwd, "names": names }))?;
-        let list = |key: &str| serde_json::from_value(answer[key].clone()).unwrap_or_default();
-        Ok((list("opened"), list("failed")))
+        let request = ChannelsRequest { path: cwd.to_path_buf(), names: names.to_vec() };
+        self.ask_channels(request).map(|reply| (reply.opened, reply.failed))
     }
 
     pub fn sign_out_mcp_server(&self, cwd: &Path, name: &str) -> Result<Vec<McpServerInfo>, Error> {
@@ -60,14 +60,6 @@ impl Sdk {
     pub fn notices(&self) -> Result<Vec<domain::inbox::Notice>, Error> {
         self.client.call(ClientCommand::TakeNotices, |reply| match reply {
             Reply::Notices(notices) => Some(Ok(notices)),
-            _ => None,
-        })
-    }
-
-    pub fn feature(&self, feature: &str, input: serde_json::Value) -> Result<serde_json::Value, Error> {
-        let command = ClientCommand::Feature { feature: feature.to_owned(), input };
-        self.client.call(command, |reply| match reply {
-            Reply::Feature { output, .. } => Some(output),
             _ => None,
         })
     }

@@ -3,45 +3,53 @@ use std::path::Path;
 use domain::SessionId;
 use domain::catalog::Listed;
 use domain::trace::Record;
-use serde_json::{Value, json};
+use protocol::features::sessions::{SessionsReply, SessionsRequest};
 
+use crate::features::unexpected;
 use crate::{Error, Sdk};
-
-const FEATURE: &str = "sessions";
 
 impl Sdk {
     pub fn sessions(&self) -> Result<Vec<Listed>, Error> {
-        let answer = self.ask(json!({ "op": "list" }))?;
-        serde_json::from_value(answer["sessions"].clone()).map_err(|error| Error::Backend(error.to_string()))
+        match self.ask_sessions(SessionsRequest::List)? {
+            SessionsReply::Listed(listed) => Ok(listed),
+            _ => Err(unexpected()),
+        }
     }
 
     pub fn history(&self, session: &SessionId, cwd: &Path) -> Result<Vec<Record>, Error> {
-        let answer = self.ask(json!({ "op": "history", "session": session.0, "cwd": cwd }))?;
-        serde_json::from_value(answer["records"].clone()).map_err(|error| Error::Backend(error.to_string()))
+        match self.ask_sessions(SessionsRequest::History { session: session.clone(), cwd: cwd.to_path_buf() })? {
+            SessionsReply::History(records) => Ok(records),
+            _ => Err(unexpected()),
+        }
     }
 
     pub fn session_length(&self, session: &SessionId, cwd: &Path) -> Result<u64, Error> {
-        let answer = self.ask(json!({ "op": "length", "session": session.0, "cwd": cwd }))?;
-        answer["length"].as_u64().ok_or_else(|| Error::Backend("the session's length was not a number".into()))
+        match self.ask_sessions(SessionsRequest::Length { session: session.clone(), cwd: cwd.to_path_buf() })? {
+            SessionsReply::Length(length) => Ok(length),
+            _ => Err(unexpected()),
+        }
     }
 
     pub fn rename_session(&self, session: &SessionId, title: &str) -> Result<(), Error> {
-        self.ask(json!({ "op": "rename", "session": session.0, "title": title })).map(drop)
+        self.change(SessionsRequest::Rename { session: session.clone(), title: title.to_owned() })
     }
 
     pub fn archive_session(&self, session: &SessionId, archived: bool) -> Result<(), Error> {
-        self.ask(json!({ "op": "archive", "session": session.0, "archived": archived })).map(drop)
+        self.change(SessionsRequest::Archive { session: session.clone(), archived })
     }
 
     pub fn seen_session(&self, session: &SessionId) -> Result<(), Error> {
-        self.ask(json!({ "op": "seen", "session": session.0 })).map(drop)
+        self.change(SessionsRequest::Seen { session: session.clone() })
     }
 
     pub fn delete_session(&self, session: &SessionId) -> Result<(), Error> {
-        self.ask(json!({ "op": "delete", "session": session.0 })).map(drop)
+        self.change(SessionsRequest::Delete { session: session.clone() })
     }
 
-    fn ask(&self, input: Value) -> Result<Value, Error> {
-        self.feature(FEATURE, input)
+    fn change(&self, request: SessionsRequest) -> Result<(), Error> {
+        match self.ask_sessions(request)? {
+            SessionsReply::Changed => Ok(()),
+            _ => Err(unexpected()),
+        }
     }
 }

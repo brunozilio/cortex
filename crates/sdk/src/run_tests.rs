@@ -1,5 +1,6 @@
 use domain::{ModelOption, PromptRequest};
-use protocol::ServerEvent;
+use protocol::features::memory::{MemoryOp, MemoryRequest};
+use protocol::{FeatureError, FeatureRequest, ServerEvent};
 
 use super::*;
 use crate::testing::{Quiet, scripted, until, within_five_seconds};
@@ -42,15 +43,16 @@ fn a_run_whose_backend_went_away_reads_as_failed_to_its_text() {
 fn a_run_the_backend_refused_fails_instead_of_waiting_for_events() {
     let (client, _, _) = scripted(|command, outlet| match &command.payload {
         ClientCommand::SubmitPrompt { .. } => outlet.reply(command.id, Reply::error("that run is already in progress")),
-        ClientCommand::Feature { feature, .. } => {
-            outlet.reply(command.id, Reply::Feature { feature: feature.clone(), output: Err("no such model".into()) });
+        ClientCommand::Feature(request) => {
+            let refused = FeatureError::Failed { feature: request.feature(), message: "no such model".into() };
+            outlet.reply(command.id, Reply::FeatureFailed(refused));
         }
         _ => {}
     });
     let mut refused = Run::start(&client, prompt).expect("sent");
-    let mut unstarted = Run::start(&client, |run| ClientCommand::Feature {
-        feature: "memory".into(),
-        input: serde_json::json!({ "op": "optimize", "run": run }),
+    let mut unstarted = Run::start(&client, |run| {
+        let op = MemoryOp::Optimize { run, model: ModelOption::new("m", "M") };
+        ClientCommand::Feature(FeatureRequest::Memory(MemoryRequest { path: "/repo".into(), op }))
     })
     .expect("sent");
 

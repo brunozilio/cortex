@@ -23,12 +23,30 @@ fn a_plugin_is_installed_listed_updated_and_removed() {
     let folder = home.path().join("plugins");
 
     let installed = install(&folder, repo.to_str().expect("path"), None).expect("installed");
-    assert_eq!(installed["installed"], "ship-it");
-    assert_eq!(list(&folder), [json!({"name": "ship-it", "description": "Ships"})]);
+    assert_eq!(installed, PluginsReply::Installed { name: "ship-it".into(), at: folder.join("ship-it") });
+    assert_eq!(list(&folder), [Plugin { name: "ship-it".into(), description: "Ships".into() }]);
     assert!(install(&folder, repo.to_str().expect("path"), None).is_err(), "not twice");
-    assert!(update(&folder, "ship-it").is_ok());
-    assert_eq!(remove(&folder, "ship-it").expect("removed")["removed"], "ship-it");
+    assert!(matches!(update(&folder, "ship-it"), Ok(PluginsReply::Updated { name, .. }) if name == "ship-it"));
+    assert_eq!(remove(&folder, "ship-it"), Ok(PluginsReply::Removed { name: "ship-it".into() }));
     assert!(list(&folder).is_empty());
+}
+
+#[test]
+fn plugins_need_a_home_and_a_blank_source_or_name_is_none_at_all() {
+    let home = tempfile::tempdir().expect("home");
+    let mut services = crate::feature::testing::services(None);
+    let homeless = crate::feature::testing::with(1, &services, |context| handle(context, PluginsRequest::List));
+    assert!(homeless.is_err(), "nowhere to keep plugins");
+    services.homes = std::sync::Arc::new(crate::OwnerHome::at(home.path()));
+    let plugins = |request: PluginsRequest| crate::feature::testing::with(1, &services, |c| handle(c, request));
+
+    assert_eq!(plugins(PluginsRequest::List), Ok(PluginsReply::Listed(Vec::new())));
+    let blank = plugins(PluginsRequest::Install { source: "  ".into(), name: None });
+    assert_eq!(blank, Err("install needs a git URL or path".into()));
+    assert_eq!(plugins(PluginsRequest::Update { name: " ".into() }), Err("update needs a plugin's name".into()));
+    assert_eq!(plugins(PluginsRequest::Remove { name: String::new() }), Err("remove needs a plugin's name".into()));
+    let unnamed = plugins(PluginsRequest::Install { source: "/".into(), name: Some("  ".into()) });
+    assert!(unnamed.is_err_and(|error| error.contains("pass --name")), "a blank name is taken from the source");
 }
 
 #[cfg(unix)]

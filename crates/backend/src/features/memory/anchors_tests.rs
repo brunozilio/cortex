@@ -71,7 +71,7 @@ fn a_project_that_turns_the_context_features_off_gets_none_of_them() {
     let refused = memories.check(project.path()).expect_err("off");
     assert!(refused.contains(domain::features::LEARNING_CHECK), "{refused}");
     let services = crate::feature::testing::services(None);
-    let seeded = crate::feature::testing::with(1, &services, |context| memories.seed(context, project.path()));
+    let seeded = crate::feature::testing::with(1, &services, |context| memories.offered(context, project.path()));
     assert!(seeded.expect_err("off").contains(domain::features::MEMORY_SEED));
 }
 
@@ -98,11 +98,11 @@ fn the_check_needs_git_and_then_names_the_memories_about_the_changes() {
     memories.edit(project.path(), &[remember("Keep defaultRetryMax at 4", &["client.go"])], by).expect("edit");
 
     let clean = memories.check(project.path()).expect("check");
-    assert!(clean["prompt"].is_null(), "nothing changed: {clean}");
+    assert!(clean.prompt.is_none(), "nothing changed: {clean:?}");
 
     std::fs::write(project.path().join("client.go"), "retries = 10\n").expect("write");
     let changed = memories.check(Path::new(project.path())).expect("check");
-    let prompt = changed["prompt"].as_str().expect("prompt");
+    let prompt = changed.prompt.as_deref().expect("prompt");
     assert!(prompt.contains("Keep defaultRetryMax at 4") && prompt.contains("[about client.go]"), "{prompt}");
-    assert_eq!((changed["changed"].as_u64(), changed["memories"].as_u64()), (Some(1), Some(1)));
+    assert_eq!((changed.changed, changed.memories), (1, 1));
 }

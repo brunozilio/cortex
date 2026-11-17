@@ -1,13 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use domain::memory::seed::Candidate;
-use domain::memory::{Forgotten, Memory, MemoryEdit, MemoryId, MemoryKind};
 use domain::provider::{ModelProvider, ProviderSummary};
 use domain::{CustomAgent, ModelOption, Skill};
 use protocol::{ClientCommand, ProviderEvent, Reply};
-use serde_json::{Value, json};
 
-use crate::{Error, Run, Sdk};
+use crate::{Error, Sdk};
 
 impl Sdk {
     pub fn models(&self) -> Result<Vec<ModelOption>, Error> {
@@ -80,6 +77,13 @@ impl Sdk {
         self.client.call(ClientCommand::RemoveProviderAccount { provider, account: account.to_owned() }, listed)
     }
 
+    pub fn register_peer(&self, cwd: &Path) -> Result<(), Error> {
+        self.client.call(ClientCommand::RegisterPeer { path: cwd.to_path_buf() }, |reply| match reply {
+            Reply::Done => Some(Ok(())),
+            _ => None,
+        })
+    }
+
     pub fn skills(&self, cwd: &Path) -> Result<Vec<Skill>, Error> {
         self.client.call(ClientCommand::ListSkills { path: cwd.to_path_buf() }, |reply| match reply {
             Reply::Skills(skills) => Some(Ok(skills)),
@@ -107,10 +111,6 @@ impl Sdk {
             _ => None,
         })
     }
-
-    pub fn memory(&self, cwd: impl Into<PathBuf>) -> ProjectMemory<'_> {
-        ProjectMemory { sdk: self, path: cwd.into() }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,106 +125,4 @@ fn listed(reply: Reply) -> Option<Result<Vec<ProviderSummary>, String>> {
         Reply::Providers(ProviderEvent::Failed { message, .. }) => Some(Err(message)),
         _ => None,
     }
-}
-
-#[derive(Debug)]
-pub struct ProjectMemory<'a> {
-    sdk: &'a Sdk,
-    path: PathBuf,
-}
-
-impl ProjectMemory<'_> {
-    pub fn list(&self) -> Result<Vec<Memory>, Error> {
-        self.answer(json!({ "op": "list" })).map(|(memories, _)| memories)
-    }
-
-    pub fn search(&self, query: &str) -> Result<Vec<(Memory, f32)>, Error> {
-        let found = self.ask(json!({ "op": "search", "query": query }))?;
-        let scores: Vec<(MemoryId, f32)> = parse(&found["scores"])?;
-        let memories = self.list()?;
-        Ok(scores
-            .into_iter()
-            .filter_map(|(id, score)| Some((memories.iter().find(|m| m.id == id)?.clone(), score)))
-            .collect())
-    }
-
-    pub fn remember(&self, kind: MemoryKind, text: &str, tags: &[&str]) -> Result<Vec<Memory>, Error> {
-        let tags = tags.iter().map(|tag| (*tag).to_owned()).collect();
-        self.edit(vec![MemoryEdit::Remember { kind, text: text.to_owned(), tags, touches: Vec::new() }])
-    }
-
-    pub fn check(&self) -> Result<Option<String>, Error> {
-        let answer = self.ask(json!({ "op": "check" }))?;
-        Ok(answer["prompt"].as_str().map(str::to_owned))
-    }
-
-    pub fn score(&self) -> Result<String, Error> {
-        let answer = self.ask(json!({ "op": "score" }))?;
-        Ok(answer["report"].as_str().unwrap_or_default().to_owned())
-    }
-
-    pub fn seed(&self) -> Result<Vec<Candidate>, Error> {
-        let answer = self.ask(json!({ "op": "seed" }))?;
-        parse(&answer["candidates"])
-    }
-
-    pub fn keep_seeds(&self, picked: &[usize]) -> Result<Vec<Memory>, Error> {
-        self.answer(json!({ "op": "seed_keep", "picked": picked })).map(|(memories, _)| memories)
-    }
-
-    pub fn forget(&self, id: MemoryId) -> Result<Vec<Memory>, Error> {
-        self.edit(vec![MemoryEdit::Forget { id }])
-    }
-
-    pub fn revise(&self, id: MemoryId, text: &str) -> Result<Vec<Memory>, Error> {
-        self.edit(vec![MemoryEdit::Revise { id, text: text.to_owned() }])
-    }
-
-    pub fn edit(&self, edits: Vec<MemoryEdit>) -> Result<Vec<Memory>, Error> {
-        self.answer(json!({ "op": "edit", "edits": edits })).map(|(memories, _)| memories)
-    }
-
-    pub fn restore(&self, id: MemoryId) -> Result<Vec<Memory>, Error> {
-        self.edit(vec![MemoryEdit::Restore { id }])
-    }
-
-    pub fn share(&self, id: MemoryId) -> Result<String, Error> {
-        let answer = self.ask(json!({ "op": "share", "id": id.0 }))?;
-        Ok(answer["file"].as_str().unwrap_or_default().to_owned())
-    }
-
-    pub fn forgotten(&self) -> Result<Vec<Forgotten>, Error> {
-        self.answer(json!({ "op": "list" })).map(|(_, forgotten)| forgotten)
-    }
-
-    pub fn optimize(&self, model: ModelOption) -> Result<Run, Error> {
-        let path = self.path.clone();
-        Run::start(&self.sdk.client, |run| ClientCommand::Feature {
-            feature: MEMORY.into(),
-            input: json!({ "op": "optimize", "path": path, "run": run, "model": model }),
-        })
-    }
-
-    pub fn undo(&self) -> Result<Vec<Memory>, Error> {
-        self.answer(json!({ "op": "undo" })).map(|(memories, _)| memories)
-    }
-
-    fn answer(&self, input: Value) -> Result<(Vec<Memory>, Vec<Forgotten>), Error> {
-        let answer = self.ask(input)?;
-        Ok((parse(&answer["memories"])?, parse(&answer["forgotten"])?))
-    }
-
-    fn ask(&self, mut input: Value) -> Result<Value, Error> {
-        input["path"] = json!(self.path);
-        self.sdk.feature(MEMORY, input)
-    }
-}
-
-const MEMORY: &str = "memory";
-
-fn parse<T: serde::de::DeserializeOwned + Default>(value: &Value) -> Result<T, Error> {
-    if value.is_null() {
-        return Ok(T::default());
-    }
-    serde_json::from_value(value.clone()).map_err(|error| Error::Backend(error.to_string()))
 }

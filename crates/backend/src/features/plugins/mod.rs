@@ -1,25 +1,31 @@
 use std::path::{Path, PathBuf};
 
-use serde_json::{Value, json};
+use protocol::features::plugins::{Plugin, PluginsReply, PluginsRequest};
+use serde_json::Value;
 
 use crate::feature::Context;
 
-pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
+pub fn handle(context: &Context<'_>, request: PluginsRequest) -> Result<PluginsReply, String> {
     let home = context.services.home().ok_or("no home folder to keep plugins in")?;
     let folder = home.join(brand::DIR).join("plugins");
-    let text = |key: &str| input[key].as_str().map(str::trim).filter(|value| !value.is_empty());
-    match input["op"].as_str().unwrap_or("list") {
-        "list" => Ok(json!(list(&folder))),
-        "install" => install(&folder, text("source").ok_or("install needs a git URL or path")?, text("name")),
-        "update" => update(&folder, text("name").ok_or("update needs a plugin's name")?),
-        "remove" => remove(&folder, text("name").ok_or("remove needs a plugin's name")?),
-        other => Err(format!("the plugins feature has no {other:?}")),
+    match request {
+        PluginsRequest::List => Ok(PluginsReply::Listed(list(&folder))),
+        PluginsRequest::Install { source, name } => {
+            let source = said(&source).ok_or("install needs a git URL or path")?;
+            install(&folder, source, name.as_deref().and_then(said))
+        }
+        PluginsRequest::Update { name } => update(&folder, said(&name).ok_or("update needs a plugin's name")?),
+        PluginsRequest::Remove { name } => remove(&folder, said(&name).ok_or("remove needs a plugin's name")?),
     }
+}
+
+fn said(text: &str) -> Option<&str> {
+    Some(text.trim()).filter(|text| !text.is_empty())
 }
 
 pub fn forget(_client: u64) {}
 
-fn list(folder: &Path) -> Vec<Value> {
+fn list(folder: &Path) -> Vec<Plugin> {
     let mut found: Vec<PathBuf> = std::fs::read_dir(folder)
         .into_iter()
         .flatten()
@@ -36,12 +42,12 @@ fn list(folder: &Path) -> Vec<Value> {
                 .and_then(|text| serde_json::from_str::<Value>(&text).ok())
                 .unwrap_or_default();
             let name = root.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-            json!({ "name": name, "description": manifest["description"].as_str().unwrap_or_default() })
+            Plugin { name, description: manifest["description"].as_str().unwrap_or_default().to_owned() }
         })
         .collect()
 }
 
-fn install(folder: &Path, source: &str, name: Option<&str>) -> Result<Value, String> {
+fn install(folder: &Path, source: &str, name: Option<&str>) -> Result<PluginsReply, String> {
     let name = match name {
         Some(name) => name.to_owned(),
         None => named_after(source).ok_or_else(|| format!("cannot tell a name from {source}; pass --name"))?,
@@ -52,25 +58,25 @@ fn install(folder: &Path, source: &str, name: Option<&str>) -> Result<Value, Str
     }
     std::fs::create_dir_all(folder).map_err(|error| error.to_string())?;
     git(folder, &["clone", "--depth", "1", "--", source, &name])?;
-    Ok(json!({ "installed": name, "at": target }))
+    Ok(PluginsReply::Installed { name, at: target })
 }
 
-fn update(folder: &Path, name: &str) -> Result<Value, String> {
+fn update(folder: &Path, name: &str) -> Result<PluginsReply, String> {
     let target = plugin(folder, name)?;
     if !target.join(".git").exists() {
         return Err(format!("{name} is not a git checkout here, so it cannot be updated"));
     }
     let pulled = git(&target, &["pull", "--ff-only"])?;
-    Ok(json!({ "updated": name, "git": pulled.trim() }))
+    Ok(PluginsReply::Updated { name: name.to_owned(), git: pulled.trim().to_owned() })
 }
 
-fn remove(folder: &Path, name: &str) -> Result<Value, String> {
+fn remove(folder: &Path, name: &str) -> Result<PluginsReply, String> {
     let target = plugin(folder, name)?;
     if !target.is_dir() {
         return Err(format!("no plugin called {name}"));
     }
     std::fs::remove_dir_all(&target).map_err(|error| error.to_string())?;
-    Ok(json!({ "removed": name }))
+    Ok(PluginsReply::Removed { name: name.to_owned() })
 }
 
 fn plugin(folder: &Path, name: &str) -> Result<PathBuf, String> {

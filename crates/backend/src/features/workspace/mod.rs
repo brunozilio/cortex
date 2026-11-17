@@ -1,30 +1,25 @@
 mod git;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use domain::changes::DiffScope;
-use serde_json::{Value, json};
+use protocol::features::workspace::{WorkspaceOp, WorkspaceReply, WorkspaceRequest};
 
 use crate::feature::Context;
 
 const MENTIONED: usize = 5;
 const KEPT: usize = 50_000;
 
-pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
-    let path: PathBuf = input["path"].as_str().map(PathBuf::from).ok_or("the workspace feature needs a path")?;
-    match input["op"].as_str().unwrap_or_default() {
-        "changes" => {
-            let scope: DiffScope = serde_json::from_value(input["scope"].clone()).map_err(|e| e.to_string())?;
-            serde_json::to_value(git::changes_in(&path, scope)?).map_err(|e| e.to_string())
-        }
-        "files" => Ok(json!(git::files(&path))),
-        "git-offer" => {
+pub fn handle(context: &Context<'_>, request: WorkspaceRequest) -> Result<WorkspaceReply, String> {
+    let WorkspaceRequest { path, op } = request;
+    match op {
+        WorkspaceOp::Changes { scope } => git::changes_in(&path, scope).map(WorkspaceReply::Changes),
+        WorkspaceOp::Files => Ok(WorkspaceReply::Files(git::files(&path))),
+        WorkspaceOp::GitOffer => {
             let turned_off = !context.on(domain::features::GIT_OFFER);
-            Ok(json!({ "offer": domain::git_offer::due(true, git::inside(&path), turned_off) }))
+            Ok(WorkspaceReply::GitOffer { offer: domain::git_offer::due(true, git::inside(&path), turned_off) })
         }
-        "git-init" => git::init(&path).map(|committed| json!({ "committed": committed })),
-        "mentions" => Ok(json!(with_files(&path, input["prompt"].as_str().unwrap_or_default()))),
-        other => Err(format!("the workspace feature has no {other:?}")),
+        WorkspaceOp::GitInit => git::init(&path).map(|committed| WorkspaceReply::GitInit { committed }),
+        WorkspaceOp::Mentions { prompt } => Ok(WorkspaceReply::Mentions(with_files(&path, &prompt))),
     }
 }
 

@@ -224,7 +224,7 @@ Your answers suggest these rules (/rules keep <n> saves one):
 Kept Bash(cargo test:*) as a allow rule in {{DIR}}/settings.local.json.
 ```
 
-Desligar a flag também impede o [`/learn keep`](./learning) de salvar uma regra ou uma linha de instrução, porque as duas passam pela mesma funcionalidade.
+Desligar a flag também impede o [`/learn keep`](./learning) de salvar uma regra ou uma linha de instrução, porque as duas passam pela mesma funcionalidade. Vale na hora, sem reiniciar: com a flag desligada, o `/rules` e o `/learn keep` respondem `suggested_rules is turned off (/features suggested-rules on)`.
 
 ## Saída de comandos
 

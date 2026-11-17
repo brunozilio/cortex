@@ -4,7 +4,7 @@ use agent_engine::sessions::{FileSessions, records};
 use domain::memory::seed::{Candidate, candidates};
 use domain::trace::Record;
 use domain::{Author, MemoryEdit, MemoryKind, ModelOption, PromptRequest, Provenance, SessionId};
-use serde_json::{Value, json};
+use protocol::features::memory::MemoryListing;
 
 use super::{Memories, now, team};
 use crate::feature::Context;
@@ -12,12 +12,7 @@ use crate::feature::Context;
 const ORIGIN: &str = "seeded from past sessions";
 
 impl Memories {
-    pub fn seed(&self, context: &Context<'_>, project: &Path) -> Result<Value, String> {
-        let offered = self.offered(context, project)?;
-        Ok(json!({ "path": project, "candidates": offered }))
-    }
-
-    pub fn keep_seeds(&self, context: &Context<'_>, project: &Path, picked: &[usize]) -> Result<Value, String> {
+    pub fn keep_seeds(&self, context: &Context<'_>, project: &Path, picked: &[usize]) -> Result<MemoryListing, String> {
         let offered = self.offered(context, project)?;
         let edits: Vec<MemoryEdit> = picked
             .iter()
@@ -36,7 +31,7 @@ impl Memories {
         self.edit(project, &edits, by)
     }
 
-    fn offered(&self, context: &Context<'_>, project: &Path) -> Result<Vec<Candidate>, String> {
+    pub fn offered(&self, context: &Context<'_>, project: &Path) -> Result<Vec<Candidate>, String> {
         if !team::features(project, self.home().as_deref()).on(domain::features::MEMORY_SEED) {
             return Err(format!("/memory seed is turned off ({}).", domain::features::MEMORY_SEED));
         }

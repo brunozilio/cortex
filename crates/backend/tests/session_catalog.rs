@@ -7,8 +7,11 @@ use std::time::{Duration, Instant};
 use agent_engine::fake::FakeEngine;
 use backend::{Backend, LocalBackend, LocalServices, Wake};
 use crossbeam_channel::Receiver;
+use domain::catalog::Listed;
+use domain::conversation::SessionStatus;
 use domain::{AgentAsk, AskId, AskKind, EngineEvent, ModelOption, PromptRequest, RunId, SessionCommand, SessionId};
-use protocol::{ClientCommand, Envelope, Reply, RequestId, ServerEvent};
+use protocol::features::sessions::{SessionsReply, SessionsRequest};
+use protocol::{ClientCommand, Envelope, FeatureReply, FeatureRequest, Reply, RequestId, ServerEvent};
 use serde_json::{Value, json};
 
 fn model() -> ModelOption {
@@ -51,15 +54,24 @@ fn run(backend: &LocalBackend, woke: &Receiver<()>, request: PromptRequest, stop
     until(backend, woke, |event| matches!(event, ServerEvent::Run { event, .. } if stop(event)));
 }
 
-fn sessions(backend: &LocalBackend, woke: &Receiver<()>, input: Value) -> Value {
+fn sessions(backend: &LocalBackend, woke: &Receiver<()>, request: SessionsRequest) -> SessionsReply {
     let asked = RequestId(2);
-    backend.send(Envelope::local(asked, ClientCommand::Feature { feature: "sessions".into(), input })).expect("send");
+    backend.send(Envelope::local(asked, ClientCommand::Feature(FeatureRequest::Sessions(request)))).expect("send");
     match until(backend, woke, |event| matches!(event, ServerEvent::Reply { id, .. } if *id == asked)) {
-        ServerEvent::Reply { reply: Reply::Feature { output, .. }, .. } => {
-            output.expect("the sessions feature answers")
-        }
+        ServerEvent::Reply { reply: Reply::Feature(FeatureReply::Sessions(reply)), .. } => reply,
         other => panic!("{other:?}"),
     }
+}
+
+fn listed(backend: &LocalBackend, woke: &Receiver<()>) -> Vec<Listed> {
+    match sessions(backend, woke, SessionsRequest::List) {
+        SessionsReply::Listed(listed) => listed,
+        other => panic!("{other:?}"),
+    }
+}
+
+fn s1() -> SessionId {
+    SessionId("s1".into())
 }
 
 fn request() -> PromptRequest {
@@ -75,21 +87,21 @@ fn a_run_lists_its_session_and_how_it_ended() {
     ]);
     run(&backend, &woke, request(), EngineEvent::is_terminal);
 
-    let listed = sessions(&backend, &woke, json!({ "op": "list" }));
-    assert_eq!(listed["sessions"].as_array().map(Vec::len), Some(1), "{listed}");
-    let row = &listed["sessions"][0];
-    assert_eq!((row["session"].as_str(), row["cwd"].as_str()), (Some("s1"), Some("/repo")));
-    assert_eq!((row["status"].as_str(), row["unread"].as_bool()), (Some("done"), Some(true)));
+    let rows = listed(&backend, &woke);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let row = &rows[0];
+    assert_eq!((&row.session, row.cwd.as_path()), (&s1(), std::path::Path::new("/repo")));
+    assert_eq!((row.status, row.unread), (SessionStatus::Done, true));
 
-    sessions(&backend, &woke, json!({ "op": "rename", "session": "s1", "title": "Greeting" }));
-    sessions(&backend, &woke, json!({ "op": "seen", "session": "s1" }));
-    let row = sessions(&backend, &woke, json!({ "op": "list" }))["sessions"][0].clone();
-    assert_eq!((row["title"].as_str(), row["unread"].as_bool()), (Some("Greeting"), Some(false)));
+    sessions(&backend, &woke, SessionsRequest::Rename { session: s1(), title: "Greeting".into() });
+    sessions(&backend, &woke, SessionsRequest::Seen { session: s1() });
+    let row = listed(&backend, &woke).remove(0);
+    assert_eq!((row.title.as_deref(), row.unread), (Some("Greeting"), false));
 
-    sessions(&backend, &woke, json!({ "op": "archive", "session": "s1", "archived": true }));
-    assert_eq!(sessions(&backend, &woke, json!({ "op": "list" }))["sessions"][0]["archived"], true);
-    sessions(&backend, &woke, json!({ "op": "delete", "session": "s1" }));
-    assert_eq!(sessions(&backend, &woke, json!({ "op": "list" }))["sessions"], json!([]));
+    sessions(&backend, &woke, SessionsRequest::Archive { session: s1(), archived: true });
+    assert!(listed(&backend, &woke)[0].archived);
+    sessions(&backend, &woke, SessionsRequest::Delete { session: s1() });
+    assert!(listed(&backend, &woke).is_empty());
 }
 
 #[test]
@@ -97,8 +109,8 @@ fn a_session_waiting_for_an_answer_is_listed_as_needing_you() {
     let ask = AgentAsk { id: AskId("a".into()), kind: AskKind::Questions(Vec::new()) };
     let (backend, woke) = backend(vec![EngineEvent::SessionStarted(SessionId("s2".into())), EngineEvent::Asked(ask)]);
     run(&backend, &woke, request(), |event| matches!(event, EngineEvent::Asked(_)));
-    let row = sessions(&backend, &woke, json!({ "op": "list" }))["sessions"][0].clone();
-    assert_eq!((row["status"].as_str(), row["unread"].as_bool()), (Some("needs_you"), Some(true)));
+    let row = listed(&backend, &woke).remove(0);
+    assert_eq!((row.status, row.unread), (SessionStatus::NeedsYou, true));
 }
 
 #[test]
@@ -109,13 +121,12 @@ fn a_side_chore_is_not_a_session_of_its_own() {
     ]);
     let titling = PromptRequest { command: Some(SessionCommand::Title), ..request() };
     run(&backend, &woke, titling, EngineEvent::is_terminal);
-    assert_eq!(sessions(&backend, &woke, json!({ "op": "list" }))["sessions"], json!([]));
+    assert!(listed(&backend, &woke).is_empty());
 }
 
 #[test]
 fn the_conversations_kept_in_the_settings_are_listed_too() {
     let settings = json!({"conversations": {"/repo": [{"session": "old", "title": "Earlier", "at": 5}]}});
     let (backend, woke) = backend_keeping(Vec::new(), &settings);
-    let listed = sessions(&backend, &woke, json!({ "op": "list" }));
-    assert_eq!(listed["sessions"][0]["title"], "Earlier");
+    assert_eq!(listed(&backend, &woke)[0].title.as_deref(), Some("Earlier"));
 }

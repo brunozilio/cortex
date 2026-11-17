@@ -1,6 +1,5 @@
 use domain::features::OUTPUT_SAVINGS;
-use domain::output::{Saving, report};
-use serde_json::json;
+use domain::output::report;
 
 use super::{Feature, Slash};
 use crate::tui::app::{App, Msg};
@@ -20,8 +19,8 @@ fn gain(app: &mut App, _argument: Option<String>) {
     if !super::on(app, OUTPUT_SAVINGS) {
         return app.transcript.notice(turned_off());
     }
-    app.spawn(|sdk| match sdk.feature("output_savings", json!({})) {
-        Ok(found) => Msg::Notice(report(&serde_json::from_value::<Vec<Saving>>(found).unwrap_or_default())),
+    app.spawn(|sdk| match sdk.output_savings() {
+        Ok(savings) => Msg::Notice(report(&savings)),
         Err(error) => Msg::Error(error.to_string()),
     });
 }

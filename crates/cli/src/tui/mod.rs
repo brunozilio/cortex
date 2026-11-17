@@ -59,6 +59,7 @@ mod theme;
 mod toggles;
 mod transcript;
 mod turn;
+mod unsolicited;
 mod view;
 mod vim;
 mod watchdog;
@@ -207,6 +208,7 @@ pub fn run(
             }
             mark(&mut app, "checking features and notices");
             notices::poll(&mut app);
+            unsolicited::poll(&mut app);
             features::tick(&mut app);
             auto_retry::tick(&mut app);
             statusline::refresh(&mut app);

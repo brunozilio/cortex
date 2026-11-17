@@ -48,6 +48,28 @@ fn a_client_is_told_with_its_notices_once_that_keys_cannot_be_kept() {
     assert!(taken().is_empty(), "said once, not at every poll");
 }
 
+#[test]
+fn a_client_becomes_a_peer_when_it_says_so_not_when_it_lists_skills() {
+    let folder = tempfile::tempdir().expect("folder");
+    let path = folder.path().to_path_buf();
+    let (handler, sent) = handler(crate::feature::testing::services(None));
+    let registered = || agent_engine::tools::peers::open().into_iter().find(|peer| peer.cwd == path);
+
+    handler.handle(Envelope::local(RequestId(1), ClientCommand::ListSkills { path: path.clone() }));
+    assert!(matches!(answer_to(&sent, 1), Reply::Skills(_)));
+    handler.handle(Envelope::local(RequestId(2), ClientCommand::ListAgents { path: path.clone() }));
+    assert!(matches!(answer_to(&sent, 2), Reply::Agents(_)));
+    assert_eq!(registered(), None, "a query registers nobody");
+
+    handler.handle(Envelope::local(RequestId(3), ClientCommand::RegisterPeer { path: path.clone() }));
+    assert_eq!(answer_to(&sent, 3), Reply::Done);
+    let peer = registered().expect("registered");
+    assert!(peer.name.ends_with(&format!("-{}", peer.client)), "{peer:?}");
+
+    drop(handler);
+    assert_eq!(registered(), None, "forgotten with its client");
+}
+
 struct ReadOnly;
 
 impl crate::settings::SettingsStore for ReadOnly {

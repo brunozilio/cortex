@@ -86,12 +86,13 @@ impl Drop for Workers {
 fn is_query(command: &ClientCommand) -> bool {
     matches!(
         command,
-        ClientCommand::ListSkills { .. }
+        ClientCommand::RegisterPeer { .. }
+            | ClientCommand::ListSkills { .. }
             | ClientCommand::ListAgents { .. }
             | ClientCommand::ListMcpServers { .. }
             | ClientCommand::ListPermissions { .. }
             | ClientCommand::TakeNotices
-            | ClientCommand::Feature { .. }
+            | ClientCommand::Feature(_)
             | ClientCommand::ApproveMcpServer { .. }
             | ClientCommand::AddMcpServer { .. }
             | ClientCommand::RemoveMcpServer { .. }

@@ -1,10 +1,10 @@
 use agent_engine::tools::builtin::shell::savings;
-use serde_json::Value;
+use protocol::features::output_savings::OutputSavingsReply;
 
 use crate::feature::Context;
 
-pub fn handle(context: &Context<'_>, _input: Value) -> Result<Value, String> {
-    serde_json::to_value(savings::list(context.client)).map_err(|error| error.to_string())
+pub fn handle(context: &Context<'_>) -> Result<OutputSavingsReply, String> {
+    Ok(OutputSavingsReply { savings: savings::list(context.client) })
 }
 
 pub fn forget(client: u64) {
@@ -14,7 +14,6 @@ pub fn forget(client: u64) {
 #[cfg(test)]
 mod tests {
     use domain::output::Saving;
-    use serde_json::json;
 
     use super::*;
 
@@ -24,11 +23,12 @@ mod tests {
         savings::record(78_101, saving.clone());
         savings::record(78_102, Saving { program: "git".into(), before: 5, after: 5 });
 
-        let listed = crate::feature::testing::local(78_101, |context| handle(context, json!({}))).expect("listed");
+        let listed = crate::feature::testing::local(78_101, handle).expect("listed");
 
-        assert_eq!(listed, json!([saving]));
+        assert_eq!(listed.savings, [saving]);
         forget(78_101);
         forget(78_102);
         assert_eq!(savings::list(78_101), []);
+        assert_eq!(crate::feature::testing::local(78_101, handle), Ok(OutputSavingsReply { savings: Vec::new() }));
     }
 }

@@ -32,8 +32,7 @@ pub fn finished(app: &mut App, id: &str, command: String, result: Result<(String
 pub use domain::conversation::with_shell as with_context;
 
 fn run(sdk: &sdk::Sdk, cwd: &Path, command: &str) -> Result<(String, bool), String> {
-    let ran = sdk.feature("shell", serde_json::json!({ "run": command, "path": cwd })).map_err(|e| e.to_string())?;
-    Ok((ran["output"].as_str().unwrap_or_default().to_owned(), ran["failed"] == true))
+    sdk.run_typed(cwd, command).map_err(|error| error.to_string())
 }
 
 #[cfg(all(test, unix))]

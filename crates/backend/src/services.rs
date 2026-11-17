@@ -13,7 +13,7 @@ use crate::settings::SettingsStore;
 pub struct LocalServices {
     pub engine: Arc<dyn AgentEngine>,
     pub root: DataRoot,
-    pub off: std::collections::BTreeSet<String>,
+    pub off: crate::TurnedOff,
     pub settings: Arc<dyn SettingsStore>,
     pub catalog: Arc<dyn crate::SessionCatalog>,
     pub sessions: Arc<FileSessions>,
@@ -45,9 +45,9 @@ impl LocalServices {
         self.turned_off_in(&cwd)
     }
 
-    pub fn turned_off_in(mut self, cwd: &Path) -> Self {
+    pub fn turned_off_in(self, cwd: &Path) -> Self {
         if let Ok(settings) = agent_engine::prompt::settings::load(cwd, self.home().as_deref(), &[]) {
-            self.off.extend(settings.features.off().flat_map(|name| [name.to_owned(), name.replace('-', "_")]));
+            self.off.follow(&settings.features);
         }
         self
     }
@@ -66,7 +66,7 @@ impl LocalServices {
         Self {
             engine,
             root,
-            off: std::collections::BTreeSet::new(),
+            off: crate::TurnedOff::default(),
             settings: stores.settings,
             catalog: stores.catalog,
             sessions: stores.sessions,
@@ -181,9 +181,10 @@ mod tests {
         assert_ne!(std::env::current_dir().ok().as_deref(), Some(repo.path()));
 
         let elsewhere = services.clone().in_project(None);
-        let asked = services.in_project(Some(repo.path()));
-
         assert!(!elsewhere.off.contains("workspace"), "the process's own folder says nothing about it");
+
+        let asked = services.in_project(Some(repo.path()));
         assert!(asked.off.contains("workspace"));
+        assert!(elsewhere.off.contains("workspace"), "services cloned from one another follow the same settings");
     }
 }

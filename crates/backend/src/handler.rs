@@ -89,8 +89,11 @@ impl CommandHandler {
                 providers.discover_models(self.services.engine.models(), replies);
                 return None;
             }
-            ClientCommand::ListSkills { path } => {
+            ClientCommand::RegisterPeer { path } => {
                 agent_engine::tools::peers::register(self.client, &path);
+                Reply::Done
+            }
+            ClientCommand::ListSkills { path } => {
                 Reply::Skills(crate::extensions::skills(&path, &self.services.extensions, home))
             }
             ClientCommand::ListAgents { path } => {
@@ -125,11 +128,11 @@ impl CommandHandler {
                 let arrived = agent_engine::tools::inbox::take(self.client);
                 Reply::Notices(unkept.into_iter().chain(arrived).collect())
             }
-            ClientCommand::Feature { feature, input } => {
-                let output = self
-                    .with_context(|context| crate::features::handle(&feature, context, input))
-                    .unwrap_or_else(|| Err(format!("there is no {feature} here")));
-                Reply::Feature { feature, output }
+            ClientCommand::Feature(request) => {
+                match self.with_context(|context| crate::features::handle(context, request)) {
+                    Ok(reply) => Reply::Feature(reply),
+                    Err(error) => Reply::FeatureFailed(error),
+                }
             }
             ClientCommand::ListPermissions { path } => crate::permissions::list(&path, &self.services.extensions, home),
             ClientCommand::ApproveMcpServer { path, name, approve } => {

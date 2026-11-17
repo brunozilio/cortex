@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 use console::{Live, Running as Served};
 use domain::SessionId;
 use domain::catalog::Listed;
-use serde_json::json;
 
 use super::refresh::Refresh;
 use super::{NAME, board};
@@ -58,7 +57,7 @@ pub(super) fn open(app: &mut App) {
 
 fn report_all(app: &mut App, live: Live) {
     app.spawn(move |sdk| {
-        if let Ok(report) = sdk.feature(NAME, json!({ "all": true })) {
+        if let Ok(report) = sdk.trace_of_every_session() {
             live.show(report.to_string());
         }
         Msg::Feature(Box::new(|app: &mut App| {
@@ -111,7 +110,7 @@ fn gathered(sdk: &sdk::Sdk, live: &Live, mut wanted: Wanted) -> Vec<(String, Str
     wanted.sessions.dedup();
     let folder = |id: &str| folder_of(&listed, id).unwrap_or_else(|| wanted.cwd.clone());
     let traces = wanted.sessions.iter().filter_map(|id| {
-        let runs = sdk.feature(NAME, json!({ "session": id, "cwd": folder(id), "only": "current" })).ok()?;
+        let runs = sdk.followed_trace(&SessionId(id.clone()), &folder(id)).ok()?;
         Some((id.clone(), runs.to_string()))
     });
     traces.collect()

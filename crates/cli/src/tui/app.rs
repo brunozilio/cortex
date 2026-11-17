@@ -157,6 +157,9 @@ impl App {
         self.catalog.loading = true;
         let (sdk, tx, cwd) = (self.sdk.clone(), self.tx.clone(), self.cwd.clone());
         std::thread::spawn(move || {
+            if let Err(error) = sdk.register_peer(&cwd) {
+                tracing::debug!(%error, "other sessions cannot reach this one yet");
+            }
             let read = sdk.settings().map_err(|error| error.to_string());
             let (settings, unreadable) = super::settings::or_reported(read);
             if let Some(told) = unreadable {

@@ -1,12 +1,10 @@
-use std::path::PathBuf;
-
-use serde_json::{Value, json};
+use protocol::features::declared_providers::{DeclaredProvidersReply, DeclaredProvidersRequest};
 
 use crate::feature::Context;
 
-pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
-    let cwd: PathBuf = input["path"].as_str().map(PathBuf::from).ok_or("declared providers need a path")?;
-    Ok(json!(crate::native::declare_providers(context.services.home().as_deref(), &cwd)))
+pub fn handle(context: &Context<'_>, request: DeclaredProvidersRequest) -> Result<DeclaredProvidersReply, String> {
+    let lines = crate::native::declare_providers(context.services.home().as_deref(), &request.path);
+    Ok(DeclaredProvidersReply { lines })
 }
 
 pub fn forget(_client: u64) {}
@@ -16,14 +14,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_folder_without_providers_lists_none_and_a_missing_path_is_refused() {
+    fn a_folder_without_providers_names_none_of_its_files() {
         let empty = tempfile::tempdir().expect("dir");
         crate::feature::testing::local(1, |context| {
-            let listed = handle(context, json!({ "path": empty.path() })).expect("listed");
-            assert!(listed.as_array().is_some_and(|lines| {
-                lines.iter().all(|line| !line.to_string().contains(&empty.path().display().to_string()))
-            }));
-            assert!(handle(context, json!({})).is_err());
+            let request = DeclaredProvidersRequest { path: empty.path().to_path_buf() };
+            let listed = handle(context, request).expect("listed");
+            assert!(listed.lines.iter().all(|line| !line.contains(&empty.path().display().to_string())));
         });
     }
 }

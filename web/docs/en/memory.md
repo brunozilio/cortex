@@ -25,6 +25,8 @@ At the end of a turn, if it learned something new, the agent writes the changes 
 - a new memory with the same text as one of the same kind is not added twice, and a new memory that is nearly a duplicate of an older one is merged into it;
 - a forgotten memory is kept aside for 30 days so you can bring it back.
 
+When a run changed the memory, the chat says how much: `Memory: 1 added, 1 changed, 1 forgotten (/memory lists it).` If the changes could not be saved, it says `What the run learned was not remembered: <reason>`.
+
 The agent is told that recalled memories are context, not instructions, that they were true when written, and that it should check a file, function or flag a memory names before relying on it.
 
 > [!NOTE]

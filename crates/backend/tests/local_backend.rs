@@ -8,7 +8,8 @@ use agent_engine::fake::FakeEngine;
 use backend::{Backend, LocalBackend, LocalServices, Wake};
 use crossbeam_channel::Receiver;
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, ModelOption, PromptRequest, RunId};
-use protocol::{ClientCommand, Envelope, Reply, RequestId, ServerEvent};
+use protocol::features::memory::{MemoryOp, MemoryRequest};
+use protocol::{ClientCommand, Envelope, FeatureError, FeatureName, FeatureRequest, Reply, RequestId, ServerEvent};
 use serde_json::json;
 
 fn project_with_a_skill_and_an_agent() -> tempfile::TempDir {
@@ -196,10 +197,10 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
         tags: vec![],
         touches: vec![],
     };
-    answer(&backend, &woke, memory(json!({ "op": "edit", "path": path, "edits": [fact] })));
+    answer(&backend, &woke, memory(&path, MemoryOp::Edit { edits: vec![fact] }));
 
     let run = RunId::new();
-    send(&backend, memory(json!({ "op": "optimize", "path": path, "run": run, "model": model() })));
+    send(&backend, memory(&path, MemoryOp::Optimize { run, model: model() }));
     collect(&backend, &woke, run_ended);
     let mut remembering = PromptRequest::plain(path.clone(), "hi", model());
     remembering.memory = Some(domain::MemoryBrief::default());
@@ -216,15 +217,16 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
     assert!(!plain.memory.as_ref().is_some_and(|brief| brief.optimizing), "a client cannot ask for it");
     assert!(plain.credentials.mcp.is_empty(), "memory that fits in the prompt is not searched");
 
-    let undo = answer(&backend, &woke, memory(json!({ "op": "undo", "path": path })));
+    let undo = answer(&backend, &woke, memory(&path, MemoryOp::Undo));
     assert!(
-        matches!(&undo, Reply::Feature { output: Err(message), .. } if message.contains("nothing to undo")),
+        matches!(&undo, Reply::FeatureFailed(FeatureError::Failed { feature: FeatureName::Memory, message })
+            if message.contains("nothing to undo")),
         "an optimization that changed nothing leaves nothing to undo: {undo:?}"
     );
 }
 
-fn memory(input: serde_json::Value) -> ClientCommand {
-    ClientCommand::Feature { feature: "memory".into(), input }
+fn memory(path: &std::path::Path, op: MemoryOp) -> ClientCommand {
+    ClientCommand::Feature(FeatureRequest::Memory(MemoryRequest { path: path.to_path_buf(), op }))
 }
 
 #[test]

@@ -235,7 +235,8 @@ fn gone() -> EngineEvent {
 
 fn refusal(reply: Reply) -> Option<String> {
     match reply {
-        Reply::Error { message } | Reply::Feature { output: Err(message), .. } => Some(message),
+        Reply::Error { message } => Some(message),
+        Reply::FeatureFailed(error) => Some(error.to_string()),
         _ => None,
     }
 }

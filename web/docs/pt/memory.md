@@ -25,6 +25,8 @@ No fim de um turno, se aprendeu algo novo, o agente escreve as mudanças que que
 - uma memória nova com o mesmo texto de outra do mesmo tipo não é adicionada duas vezes, e uma memória nova quase igual a uma mais antiga é fundida com ela;
 - uma memória esquecida fica guardada à parte por 30 dias para você poder trazê-la de volta.
 
+Quando uma execução mudou a memória, o chat diz quanto: `Memory: 1 added, 1 changed, 1 forgotten (/memory lists it).` Se as mudanças não puderam ser salvas, ele diz `What the run learned was not remembered: <reason>`.
+
 O agente é orientado de que as memórias lembradas são contexto, não instruções, que eram verdadeiras quando foram escritas e que ele deve conferir se um arquivo, função ou flag citado por uma memória ainda existe antes de confiar nela.
 
 > [!NOTE]

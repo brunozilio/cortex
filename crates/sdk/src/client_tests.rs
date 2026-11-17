@@ -121,12 +121,13 @@ fn an_unsolicited_event_is_delivered_even_when_no_call_is_waiting() {
 fn only_the_latest_unsolicited_events_are_kept_when_nobody_reads_them() {
     let (client, outlet, _) = scripted(|command, outlet| outlet.reply(command.id, Reply::Done));
     for n in 0..=UNSOLICITED_KEPT {
-        outlet.emit(ServerEvent::Unsolicited(Unsolicited::Feature { feature: n.to_string(), output: Err("x".into()) }));
+        let failed = Unsolicited::MemoryFailed { path: "/repo".into(), message: n.to_string() };
+        outlet.emit(ServerEvent::Unsolicited(failed));
     }
     client.call(ClientCommand::LoadSettings, |_| Some(Ok(()))).expect("answered after them");
     let kept = client.unsolicited();
     assert_eq!(kept.len(), UNSOLICITED_KEPT);
-    assert!(matches!(&kept[0], Unsolicited::Feature { feature, .. } if feature == "1"), "the oldest went first");
+    assert!(matches!(&kept[0], Unsolicited::MemoryFailed { message, .. } if message == "1"), "the oldest went first");
 }
 
 #[test]

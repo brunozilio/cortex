@@ -64,16 +64,14 @@ fn score(query: &str, file: &str) -> Option<i64> {
 }
 
 pub fn list(sdk: &sdk::Sdk, cwd: &Path) -> Vec<String> {
-    let listed = sdk.feature("workspace", serde_json::json!({ "op": "files", "path": cwd }));
-    listed.ok().and_then(|value| serde_json::from_value(value).ok()).unwrap_or_default()
+    sdk.project_files(cwd).unwrap_or_default()
 }
 
 pub fn with_files(sdk: &sdk::Sdk, cwd: &Path, prompt: &str) -> String {
     if !prompt.contains('@') {
         return prompt.to_owned();
     }
-    let asked = sdk.feature("workspace", serde_json::json!({ "op": "mentions", "path": cwd, "prompt": prompt }));
-    asked.ok().and_then(|value| value.as_str().map(str::to_owned)).unwrap_or_else(|| prompt.to_owned())
+    sdk.with_mentioned_files(cwd, prompt).unwrap_or_else(|_| prompt.to_owned())
 }
 
 #[cfg(test)]

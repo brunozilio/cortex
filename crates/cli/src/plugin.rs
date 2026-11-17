@@ -1,6 +1,5 @@
 use clap::Subcommand;
-use sdk::Sdk;
-use serde_json::json;
+use sdk::{PluginsReply, PluginsRequest, Sdk};
 
 #[derive(Debug, Subcommand)]
 pub enum PluginAction {
@@ -19,35 +18,47 @@ pub enum PluginAction {
 }
 
 pub fn run(sdk: &Sdk, action: PluginAction) -> Result<(), String> {
-    let input = match &action {
-        PluginAction::List => json!({ "op": "list" }),
-        PluginAction::Install { source, name } => json!({ "op": "install", "source": source, "name": name }),
-        PluginAction::Update { name } => json!({ "op": "update", "name": name }),
-        PluginAction::Remove { name } => json!({ "op": "remove", "name": name }),
+    let request = match action {
+        PluginAction::List => PluginsRequest::List,
+        PluginAction::Install { source, name } => PluginsRequest::Install { source, name },
+        PluginAction::Update { name } => PluginsRequest::Update { name },
+        PluginAction::Remove { name } => PluginsRequest::Remove { name },
     };
-    let answer = sdk.feature("plugins", input).map_err(|error| error.to_string())?;
-    match action {
-        PluginAction::List => {
-            let listed = answer.as_array().cloned().unwrap_or_default();
-            if listed.is_empty() {
-                println!("No plugins installed. `{} plugin install <git-url>` adds one.", brand::COMMAND);
-            }
-            for plugin in listed {
-                println!(
-                    "{:<24} {}",
-                    plugin["name"].as_str().unwrap_or_default(),
-                    plugin["description"].as_str().unwrap_or_default()
-                );
-            }
-        }
-        PluginAction::Install { .. } => {
-            println!(
-                "Installed {}. A new chat or /reload picks it up.",
-                answer["installed"].as_str().unwrap_or_default()
-            );
-        }
-        PluginAction::Update { name } => println!("Updated {name}: {}", answer["git"].as_str().unwrap_or_default()),
-        PluginAction::Remove { name } => println!("Removed {name}."),
-    }
+    println!("{}", told(sdk.plugins(request).map_err(|error| error.to_string())?));
     Ok(())
+}
+
+fn told(reply: PluginsReply) -> String {
+    match reply {
+        PluginsReply::Listed(listed) if listed.is_empty() => {
+            format!("No plugins installed. `{} plugin install <git-url>` adds one.", brand::COMMAND)
+        }
+        PluginsReply::Listed(listed) => listed
+            .iter()
+            .map(|plugin| format!("{:<24} {}", plugin.name, plugin.description))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        PluginsReply::Installed { name, .. } => format!("Installed {name}. A new chat or /reload picks it up."),
+        PluginsReply::Updated { name, git } => format!("Updated {name}: {git}"),
+        PluginsReply::Removed { name } => format!("Removed {name}."),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sdk::Plugin;
+
+    use super::*;
+
+    #[test]
+    fn each_answer_is_told_in_a_line_of_its_own() {
+        let listed = vec![Plugin { name: "ship-it".into(), description: "Ships".into() }];
+        assert_eq!(told(PluginsReply::Listed(listed)), format!("{:<24} Ships", "ship-it"));
+        assert!(told(PluginsReply::Listed(Vec::new())).starts_with("No plugins installed."));
+        let installed = PluginsReply::Installed { name: "ship-it".into(), at: "/home/a/plugins/ship-it".into() };
+        assert_eq!(told(installed), "Installed ship-it. A new chat or /reload picks it up.");
+        let updated = PluginsReply::Updated { name: "ship-it".into(), git: "Already up to date.".into() };
+        assert_eq!(told(updated), "Updated ship-it: Already up to date.");
+        assert_eq!(told(PluginsReply::Removed { name: "ship-it".into() }), "Removed ship-it.");
+    }
 }
