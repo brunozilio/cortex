@@ -5,7 +5,17 @@ use std::time::SystemTime;
 type Failure = Box<dyn std::error::Error>;
 
 const BUN: &str = "bun";
-const SOURCES: [&str; 5] = ["src", "docs", "index.html", "package.json", "bun.lock"];
+const SOURCES: [&str; 9] = [
+    "src",
+    "docs",
+    "public",
+    "index.html",
+    "package.json",
+    "bun.lock",
+    "vite.config.ts",
+    "tailwind.config.js",
+    "tsconfig.app.json",
+];
 const FIXTURES: &str = "web_fixtures";
 const UPDATE: &str = "UPDATE_WEB_FIXTURES";
 

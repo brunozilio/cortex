@@ -6,19 +6,17 @@ folder knows nothing of Rust beyond the shapes in `src/types.ts`.
 
 ## Building
 
-Cargo never runs Bun. The page is built by an explicit step, from the
-repository root:
+Cargo builds the page: `crates/page/build.rs` runs `bun install
+--frozen-lockfile` and `bun run build` when a source under `web/` is newer
+than `web/dist`, so `cargo build` and `cargo install --locked --path
+crates/cli` always embed a current page. Without Bun, or with
+`SKIP_WEB_BUILD=1`, the build warns and embeds what `web/dist` holds; with no
+`web/dist/index.html` the binary carries no page, and the page it serves
+instead says how to build it. To build the page alone:
 
 ```sh
 cargo run -p xtask -- web          # bun install --frozen-lockfile, then bun run build, into web/dist
-cargo build --release              # embeds whatever web/dist holds at that moment
 ```
-
-`xtask web` fails when Bun is missing or the build fails. `crates/page/build.rs`
-only reads `web/dist`: with no `web/dist/index.html` the binary carries no
-page, and the page it serves instead says to run the two commands above.
-A build that was compiled before the page existed is rebuilt by Cargo once
-`web/dist` appears or changes.
 
 Before a release, after `xtask web`:
 
@@ -27,8 +25,8 @@ cargo run -p xtask -- check-release
 ```
 
 It fails when `web/dist/index.html` is missing or older than the newest file
-under `web/src`, `web/docs`, `web/index.html`, `web/package.json` or
-`web/bun.lock`, so a release cannot carry a stale page. The normal gate
+under `web/src`, `web/docs`, `web/public`, `web/index.html`, the package
+files or the build configuration, so a release cannot carry a stale page. The normal gate
 (tests, clippy, `xtask lint`) needs neither Bun nor a built page.
 
 ## Working on it

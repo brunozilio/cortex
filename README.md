@@ -12,11 +12,12 @@ cargo run -p xtask -- web          # builds the web page into web/dist; needs Bu
 cargo install --path crates/cli    # embeds web/dist as it is at that moment
 ```
 
-Building needs a Rust toolchain (1.97 or newer) and a C compiler. Cargo
-never runs Bun: the web page (`/trace`, `/console`, `/docs`) is built by the
-first command, which needs [Bun](https://bun.sh) and fails without it. Skip
-it and everything else still builds and works; the binary then carries no
-page, and `/trace` opens one that says how to build it. Nothing else is
+Building needs a Rust toolchain (1.97 or newer) and a C compiler. The web
+page (`/trace`, `/console`, `/docs`) is built with [Bun](https://bun.sh):
+`cargo build` and `cargo install` rebuild it themselves whenever a file under
+`web/` is newer than `web/dist`. Without Bun, or with `SKIP_WEB_BUILD=1`, they
+warn and embed the page as it last was; with no page at all `/trace` opens
+one that says how to build it. Nothing else is
 needed to run it. Some tools are used when present:
 
 - `git`: `/diff` and worktrees.

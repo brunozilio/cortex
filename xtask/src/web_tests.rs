@@ -72,3 +72,12 @@ fn a_folder_that_is_not_the_page_is_refused_before_anything_runs() {
     let told = built_with("no-such-bun-program", empty.path()).expect_err("no package").to_string();
     assert!(told.contains("has no package.json"), "{told}");
 }
+
+#[test]
+fn the_page_s_build_script_watches_the_same_sources_as_the_release_check() {
+    let script = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/page/build.rs"))
+        .expect("the page's build script");
+    for source in SOURCES {
+        assert!(script.contains(&format!("\"{source}\"")), "crates/page/build.rs does not watch {source}");
+    }
+}

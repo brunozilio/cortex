@@ -31,9 +31,11 @@ code-map, platform, script, brand, page, tunnel ──► no workspace crate
 that table and this diagram in the same commit as the `Cargo.toml`.
 
 `web/` is the page `/trace`, `/console` and `/docs` open (Bun + Vite +
-React + Tailwind). Cargo never runs Bun: `cargo run -p xtask -- web` builds
-the page into `web/dist`, and `page`'s `build.rs` only embeds what is
-there (nothing when it is absent; the gate needs neither Bun nor a page).
+React + Tailwind). `page`'s `build.rs` rebuilds `web/dist` with Bun when a
+page source is newer than it (`cargo install` and `cargo build` bring the page
+up to date), then embeds it; without Bun, or with `SKIP_WEB_BUILD` set, it
+warns and embeds what is there (nothing when it is absent; the gate needs
+neither Bun nor a page). `cargo run -p xtask -- web` builds it explicitly.
 `cargo run -p xtask -- check-release` fails on a missing or stale
 `web/dist`. The page's types mirror `domain::trace` by hand; the fixtures in
 `web/test/fixtures` are written from the Rust types by `cargo run -p xtask
