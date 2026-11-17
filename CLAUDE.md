@@ -3,22 +3,35 @@
 Rust workspace: a coding agent driven from a terminal chat (CLI/TUI). The
 product's name lives in `brand.toml` (read through the `brand` crate:
 `brand::NAME`, `brand::COMMAND`; `cargo run -p xtask -- brand` writes the
-files that must spell it out). No GUI.
+files that must spell it out). It is a terminal product; it also serves a
+local web page on loopback for the trace, the console, the user docs and a
+terminal attached to a session. That page observes and documents; it is not
+an editor.
 
 ## Crates
-Dependencies are one-way; `domain` is the only crate every layer shares.
+Dependencies are one-way; the main line is
+`cli ──► sdk ──► backend ──► agent-engine ──► llm-providers ──► domain`.
+These are all the non-dev edges between workspace crates:
 
 ```
-cli ──► sdk ──► backend ──► agent-engine ──► llm-providers ──► domain
-         │        │              │
-         └────────┴──► protocol ─┴─────────────────────────────► domain
-
-leaf crates: brand (everyone), code-map (backend), console (cli), content (cli, agent-engine),
-             language-servers (agent-engine), platform (cli, console, backend, agent-engine),
-             script (agent-engine)
+cli              ──► sdk, console, content, platform, domain, brand
+sdk              ──► backend, protocol, platform, domain, brand
+backend          ──► agent-engine, llm-providers, code-map, protocol, platform, domain, brand
+agent-engine     ──► llm-providers, language-servers, script, content, platform, domain, brand
+llm-providers    ──► domain, brand
+protocol         ──► domain
+domain           ──► brand
+language-servers ──► platform, domain, brand
+content          ──► script, brand
+console          ──► platform, brand
+code-map, platform, script, brand ──► no workspace crate
 ```
 
-`web/` is the live trace page `/trace` and `/console` open (Bun + Vite +
+`xtask lint` checks crate edges: a manifest edge missing from the table in
+`xtask/src/crate_graph.rs`, or a table edge no manifest uses, fails. Change
+that table and this diagram in the same commit as the `Cargo.toml`.
+
+`web/` is the page `/trace`, `/console` and `/docs` open (Bun + Vite +
 React + Tailwind); `console` builds it into the binary when Bun is present,
 else serves `web/dist`. The CLI's trace feature pushes the report, the
 session list and each session's runs into the console's `Live` hub.
@@ -26,6 +39,16 @@ session list and each session's runs into the console's `Live` hub.
 Nothing below `sdk` knows the CLI; `cli` reaches `backend` and
 `agent-engine` only in tests. The README's crate table says what each one
 is (`xtask lint` checks it lists every crate).
+
+## Docs
+- `docs/vision.md`: the problem, who it is for, scope, non-goals, open decisions.
+- `docs/GLOSSARY.md`: the project's vocabulary and where each term lives.
+- `docs/architecture.md`: crate map, request path, data on disk, threading.
+- `docs/decisions/`: one record per decision (`0001`…`0010`), with context and costs.
+- `docs/threat-model.md`: assets, actors, trust boundaries, known gaps.
+
+Files under `docs/` must not spell the product's name, command or env
+prefix (`xtask lint` checks); write "the app", `<command>`, `.<command>/`.
 
 ## Before changing code
 - Follow the Cargo isolation rules below before running any Cargo command.
@@ -50,6 +73,7 @@ is (`xtask lint` checks it lists every crate).
 - Do not run `cargo clean` against the default target or delete the user's
   build artifacts. Separate targets isolate build locks, but Cargo's shared
   package cache can still briefly require a lock during dependency downloads.
+- Delete a task's `target/agents/<task-id>` directory when the task is done.
 
 ## Rules
 - Domain rules live in `domain` (pure, no IO), never in the CLI's
@@ -61,10 +85,12 @@ is (`xtask lint` checks it lists every crate).
   with names, types and tests instead; context belongs in the commit
   message. `.claude/hooks/no-comments.sh` rejects an edit that adds
   one and `xtask lint` fails on any.
-- Files over ~200–300 lines or functions mixing concerns get split.
+  Rationale goes to `docs/decisions/`, vocabulary to `docs/GLOSSARY.md`.
+- Functions over 100 lines fail clippy (`too_many_lines`); keep a type's
+  impl in few cohesive modules; file length is not a goal.
 - Every new behaviour gets a test; IO sits behind traits so logic is testable.
-- Every command carries a `Principal`; keep the backend seam intact for the
-  future remote, multi-user server.
+- Single-user local product: no `Principal`, members, authorizer or remote
+  server; see `docs/decisions/0008-single-user-local-product.md`.
 - No `unwrap()` outside tests.
 - Edit files with the Edit tool, not `python3`/`sed -i` rewrites.
 - Skills: `tdd` for new behaviour and fixes, `diagnosing-bugs` for anything broken or slow.
@@ -72,4 +98,6 @@ is (`xtask lint` checks it lists every crate).
 ## Workflow
 Work directly: no specs or tickets unless asked. Plan in the conversation,
 implement, verify. Work and commit on `main` in this checkout; no feature
-branches or worktrees unless asked.
+branches or worktrees unless asked. Work is sequential by default: parallel
+agents are only allowed on non-overlapping files and non-overlapping crate
+dependency cones (a crate plus everything that depends on it).

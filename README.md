@@ -11,7 +11,10 @@ From source:
 cargo install --path crates/cli
 ```
 
-Nothing else is required. Some tools are used when present:
+Building needs a Rust toolchain (1.97 or newer) and a C compiler. Bun is
+needed only to build the web page (`/trace`, `/console`, `/docs`); without
+it the build only warns and the page is not embedded in the binary. Nothing
+else is needed to run it. Some tools are used when present:
 
 - `git`: `/diff` and worktrees.
 - `pdftotext`: reading PDFs.
@@ -24,11 +27,13 @@ Nothing else is required. Some tools are used when present:
 
 ```sh
 cortex login                             # API key or subscription; lists the providers
+cortex logout                            # forget a provider
 cortex                                   # chat in the current project
 cortex -p "explain src/main.rs"          # one answer, printed
 cortex models                            # what the connected providers offer
-cortex mcp                               # MCP servers: list, add, remove, approve
-cortex config                            # read or change the settings
+cortex mcp                               # MCP servers: list, add, remove, approve, deny, login, logout
+cortex plugin                            # plugins: list, install, update, remove
+cortex config                            # read or change the settings: list, get, set, unset
 cortex doctor                            # check this installation in this folder
 cortex eval                              # run .cortex/evals/<name>/case.json and score them
 ```
@@ -49,6 +54,25 @@ instructions in `CORTEX.md` or `.cortex/CORTEX.md`, and your own in
 `~/.cortex/`. Plugins live in `~/.cortex/plugins/` (`cortex plugin
 install <git-url>`, `list`, `update`, `remove`); `/reload` in the chat
 lists what was found.
+
+## Environment variables
+
+- `CORTEX_LOG`: log filter for the log file (`logs/cortex.log` in the data folder); the default is `warn`.
+- `CORTEX_THEME`: `light` or `dark`; overrides the background detected from `COLORFGBG`.
+- `CORTEX_REDUCED_MOTION`: any value other than empty or `0` turns the animations off.
+- `CORTEX_CONSOLE_DIR`: a folder holding an already built web page (with an `index.html`) to serve instead of the embedded one.
+- `CORTEX_DISABLE_AUTO_MEMORY`: `1`, `true` or `yes` turns off the persistent memory of custom agents.
+
+Also read: `SHELL`, `VISUAL`, `EDITOR`, `HOME`, `COLORFGBG`, `COLORTERM`
+and `XDG_CONFIG_HOME`.
+
+## Docs
+
+- [docs/vision.md](docs/vision.md): what it is for, scope and non-goals (draft).
+- [docs/GLOSSARY.md](docs/GLOSSARY.md): the project's vocabulary.
+- [docs/architecture.md](docs/architecture.md): crates, request path, data on disk, threading.
+- [docs/decisions/](docs/decisions/): the decision records.
+- [docs/threat-model.md](docs/threat-model.md): assets, actors, trust boundaries, known gaps.
 
 ## Where data lives
 
