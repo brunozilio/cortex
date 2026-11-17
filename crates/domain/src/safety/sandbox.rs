@@ -2,7 +2,31 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-const GIT_RUNS: [&str; 3] = [".git/config", ".git/config.worktree", ".git/hooks"];
+const GIT_RUNS: [&str; 4] = [".git/config", ".git/config.worktree", ".git/hooks", ".git/commondir"];
+
+const CREDENTIALS: [&str; 21] = [
+    ".ssh",
+    ".aws",
+    ".config/gcloud",
+    ".azure",
+    ".kube",
+    ".docker/config.json",
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    ".gnupg",
+    "Library/Keychains",
+    ".git-credentials",
+    ".config/git/credentials",
+    ".config/gh",
+    ".config/hub",
+    ".cargo/credentials",
+    ".cargo/credentials.toml",
+    ".gem/credentials",
+    ".terraform.d/credentials.tfrc.json",
+    ".vault-token",
+    ".password-store",
+];
 
 const CACHES: [&str; 5] =
     ["Library/Caches", ".cache", ".cargo/.package-cache", ".cargo/.package-cache-mutate", ".cargo/.global-cache"];
@@ -42,6 +66,8 @@ pub struct Sandbox {
     pub required: bool,
     #[serde(default)]
     pub allow_unix_sockets: Vec<String>,
+    #[serde(default)]
+    pub allow_read: Vec<String>,
 }
 
 pub const REQUIRED_BY_DEFAULT: bool = cfg!(any(target_os = "linux", target_os = "macos"));
@@ -52,7 +78,13 @@ fn required_by_default() -> bool {
 
 impl Default for Sandbox {
     fn default() -> Self {
-        Self { allow_write: Vec::new(), network: true, required: REQUIRED_BY_DEFAULT, allow_unix_sockets: Vec::new() }
+        Self {
+            allow_write: Vec::new(),
+            network: true,
+            required: REQUIRED_BY_DEFAULT,
+            allow_unix_sockets: Vec::new(),
+            allow_read: Vec::new(),
+        }
     }
 }
 
@@ -82,6 +114,7 @@ pub struct Places<'a> {
     pub temp: &'a [PathBuf],
     pub home: Option<&'a Path>,
     pub settings_dir: &'a str,
+    pub data: &'a [PathBuf],
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -91,6 +124,8 @@ pub struct Confinement {
     pub network: bool,
     pub environment: Vec<(String, String)>,
     pub sockets: Vec<PathBuf>,
+    pub unreadable: Vec<PathBuf>,
+    pub readable: Vec<PathBuf>,
 }
 
 fn listed(value: &Value, key: &str, what: &str) -> Result<Option<Vec<String>>, String> {
@@ -134,7 +169,25 @@ impl Sandbox {
         if let Some(named) = listed(value, "allowUnixSockets", "socket paths")?.filter(|_| owners) {
             self.allow_unix_sockets.extend(named);
         }
+        if let Some(named) = listed(value, "allowRead", "paths")?.filter(|_| owners) {
+            self.allow_read.extend(named);
+        }
         Ok(self)
+    }
+
+    fn reads(&self, places: &Places<'_>) -> (Vec<PathBuf>, Vec<PathBuf>) {
+        let reopened: Vec<PathBuf> = self.allow_read.iter().filter_map(|path| owned(path, places.home)).collect();
+        let credentials = places.home.into_iter().flat_map(|home| CREDENTIALS.iter().map(move |name| home.join(name)));
+        let unreadable: Vec<PathBuf> = places
+            .data
+            .iter()
+            .cloned()
+            .chain(credentials)
+            .filter(|path| !reopened.iter().any(|open| path.starts_with(open)))
+            .collect();
+        let readable =
+            reopened.into_iter().filter(|open| unreadable.iter().any(|shut| open.starts_with(shut))).collect();
+        (unreadable, readable)
     }
 
     pub fn confinement(&self, places: &Places<'_>) -> Confinement {
@@ -173,7 +226,8 @@ impl Sandbox {
                 .collect()
         });
         let sockets = self.allow_unix_sockets.iter().filter_map(|path| owned(path, places.home)).collect();
-        Confinement { writable: kept, protected, network: self.network, environment, sockets }
+        let (unreadable, readable) = self.reads(places);
+        Confinement { writable: kept, protected, network: self.network, environment, sockets, unreadable, readable }
     }
 }
 
@@ -226,6 +280,8 @@ impl Sandbox {
             }
         }
         confinement.network = server.network.unwrap_or(true);
+        confinement.unreadable.retain(|path| places.data.iter().any(|data| path.starts_with(data)));
+        confinement.readable.retain(|path| confinement.unreadable.iter().any(|shut| path.starts_with(shut)));
         confinement
     }
 }
@@ -246,9 +302,11 @@ pub fn hint(settings_dir: &str) -> String {
         "(the sandbox may have refused this: commands write only inside the project, added folders, the \
          temporary folder and ~/.cache, and never into {settings_dir}/ folders, a repository's \
          .git/config and .git/hooks, toolchains or unpacked packages (~/.rustup, ~/.cargo, ~/.npm, go/pkg): \
-         a new dependency must be fetched outside the sandbox, for example with `cargo fetch`. Do not work \
-         around it; tell the user, who can run the command themselves or add a folder to sandbox.allowWrite \
-         in ~/{settings_dir}/settings.json)"
+         a new dependency must be fetched outside the sandbox, for example with `cargo fetch`. They cannot \
+         read credential stores (~/.ssh, ~/.aws, ~/.kube, ~/.npmrc, ~/.gnupg, …) or the app's data folder \
+         either, so git over ssh, a private registry or a signed commit may fail here. Do not work around it; \
+         tell the user, who can run the command themselves or add a folder to sandbox.allowWrite or a path to \
+         sandbox.allowRead in ~/{settings_dir}/settings.json)"
     )
 }
 
@@ -266,6 +324,7 @@ mod tests {
             temp,
             home: Some(Path::new("/Users/ana")),
             settings_dir: ".app",
+            data: &[],
         }
     }
 
@@ -332,13 +391,63 @@ mod tests {
         let confinement = Sandbox::default().confinement(&places(&added, &[]));
 
         let guarded = |root: &str| {
-            [".app", ".git/config", ".git/config.worktree", ".git/hooks"].map(|name| Path::new(root).join(name))
+            [".app", ".git/config", ".git/config.worktree", ".git/hooks", ".git/commondir"]
+                .map(|name| Path::new(root).join(name))
         };
         let mut expected: Vec<PathBuf> = guarded("/repo").into_iter().chain(guarded("/other")).collect();
         expected.push("/Users/ana/.app".into());
         expected.extend(TOOLCHAINS.map(|name| Path::new("/Users/ana").join(name)));
         assert_eq!(confinement.protected, expected);
         assert!(!confinement.protected.iter().any(|path| path.ends_with(".git")), "commits still write objects");
+    }
+
+    #[test]
+    fn credential_stores_and_the_app_s_data_folder_cannot_be_read_unless_the_owner_reopens_one() {
+        let data = [PathBuf::from("/Users/ana/Library/Application Support/App")];
+        let places = Places { data: &data, ..places(&[], &[]) };
+
+        let confinement = Sandbox::default().confinement(&places);
+
+        for unreadable in [
+            "/Users/ana/Library/Application Support/App",
+            "/Users/ana/.ssh",
+            "/Users/ana/.aws",
+            "/Users/ana/.config/gcloud",
+            "/Users/ana/.azure",
+            "/Users/ana/.kube",
+            "/Users/ana/.docker/config.json",
+            "/Users/ana/.netrc",
+            "/Users/ana/.npmrc",
+            "/Users/ana/.pypirc",
+            "/Users/ana/.gnupg",
+            "/Users/ana/Library/Keychains",
+            "/Users/ana/.git-credentials",
+            "/Users/ana/.config/gh",
+            "/Users/ana/.cargo/credentials.toml",
+        ] {
+            assert!(confinement.unreadable.contains(&PathBuf::from(unreadable)), "{unreadable} can be read");
+        }
+        assert!(confinement.readable.is_empty());
+        assert!(!confinement.unreadable.iter().any(|path| Path::new("/repo").starts_with(path)), "the project reads");
+
+        let asked = json!({ "allowRead": ["~/.ssh/known_hosts", "~/.npmrc", "/elsewhere"] });
+        assert!(Sandbox::default().layered(&asked, false).expect("project").allow_read.is_empty(), "owner only");
+        let reopened = Sandbox::default().layered(&asked, true).expect("owner").confinement(&places);
+        assert!(!reopened.unreadable.contains(&PathBuf::from("/Users/ana/.npmrc")), "reopened whole");
+        assert!(reopened.unreadable.contains(&PathBuf::from("/Users/ana/.ssh")), "the rest of ~/.ssh stays shut");
+        assert_eq!(reopened.readable, [PathBuf::from("/Users/ana/.ssh/known_hosts")]);
+        assert!(Sandbox::default().layered(&json!({ "allowRead": "~/.ssh" }), true).is_err());
+
+        let no_home = Places { home: None, ..places };
+        assert_eq!(Sandbox::default().confinement(&no_home).unreadable, data);
+    }
+
+    #[test]
+    fn an_mcp_server_may_read_the_credentials_it_was_set_up_for_but_never_the_app_s_data() {
+        let data = [PathBuf::from("/Users/ana/.local/share/app")];
+        let places = Places { data: &data, ..places(&[], &[]) };
+        let server = Sandbox::default().server_confinement(&places, &ServerSandbox::default());
+        assert_eq!(server.unreadable, data);
     }
 
     #[test]

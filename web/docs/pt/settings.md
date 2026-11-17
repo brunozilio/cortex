@@ -86,7 +86,7 @@ O `{{DIR}}/settings.json` de um projeto fica em outro lugar, então use o caminh
 ### Como os valores se combinam
 
 - **Valores únicos** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `autoMemoryEnabled`, `bashOutputLimit`, `enableAllProjectMcpServers`): vale o último arquivo lido. Na prática a pasta mais próxima de onde você trabalha vence as pastas acima dela, e `managed-settings.json` vence todas. Definir `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` ou `jsonSchema` como `null` apaga um valor definido por um arquivo anterior.
-- **Listas e mapas se somam**: regras de permissão, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`.
+- **Listas e mapas se somam**: regras de permissão, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`, `sandbox.allowUnixSockets`, `sandbox.allowRead`.
 - **Chaves de liga/desliga** (`features`, `scripts`, `sandbox.network`, `sandbox.required`): cada arquivo muda só os nomes que menciona.
 
 ### O que um arquivo do repositório não pode fazer
@@ -108,6 +108,7 @@ O `{{DIR}}/settings.json` de um projeto vem de quem escreveu o repositório, ent
 | `sandbox.network` | Só pode desligar a rede. |
 | `sandbox.allowWrite` | Ignorada. |
 | `sandbox.allowUnixSockets` | Ignorada. |
+| `sandbox.allowRead` | Ignorada. |
 | `sandbox.required` | Só pode ligá-la. |
 | `lspServers` | `command`, `args` e `env` são descartados; o projeto só pode mapear extensões, marcadores de raiz ou desativar um servidor. |
 | Todo o resto | Respeitado como nos seus próprios arquivos. |
@@ -246,6 +247,7 @@ Para desligar a rede de todos os scripts, inclusive os seus:
 | `sandbox.network` | booleano | `true` | `false` bloqueia a rede para comandos na sandbox. Um arquivo do repositório só pode desligá-la. |
 | `sandbox.allowWrite` | lista de pastas | `[]` | Pastas extras em que comandos na sandbox podem gravar. Caminhos absolutos ou `~/…`; caminhos relativos são ignorados. Lida só dos seus próprios arquivos. |
 | `sandbox.allowUnixSockets` | lista de caminhos de socket | `[]` | macOS: sockets de serviço a que comandos na sandbox podem se conectar (os sockets de Docker, Podman, containerd, BuildKit, Colima, tmux e screen são recusados fora isso). Caminhos absolutos ou `~/…`. Lida só dos seus próprios arquivos. |
+| `sandbox.allowRead` | lista de caminhos | `[]` | macOS: caminhos que comandos na sandbox podem ler embora sejam depósitos de credenciais (`~/.ssh`, `~/.aws`, `~/.kube`, `~/.npmrc`, `~/.gnupg`, …) ou a pasta de dados do app, ilegíveis fora isso. Um caminho dentro de um depósito, como `~/.ssh/known_hosts`, abre só esse caminho. Caminhos absolutos ou `~/…`. Lida só dos seus próprios arquivos. Veja [Sandbox](./sandbox-and-safety#sandbox). |
 | `sandbox.required` | booleano | `true` no Linux e no macOS, `false` nos demais | `true` recusa os comandos, e não inicia servidores MCP que rodam como processo, quando este sistema não consegue oferecer a sandbox, em vez de rodá-los sem confinamento. Desligue nas suas próprias configurações com `{ "sandbox": { "required": false } }`. Um arquivo do repositório só pode ligá-la. |
 
 ```json

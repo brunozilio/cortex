@@ -51,7 +51,7 @@ impl Tool for Bash {
         };
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         let inherited = std::env::var("GIT_CONFIG_COUNT").ok();
-        shell.envs(platform::git::environment(&workspace.cwd, inherited.as_deref()));
+        shell.envs(platform::git::environment(&workspace.cwd, inherited.as_deref(), git_run(command, workspace)));
         super::shaped::plain(&mut shell, workspace);
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
             return match super::shells::start(workspace, command, &mut shell) {
@@ -121,6 +121,15 @@ fn limited(text: &str, workspace: &Workspace) -> String {
     limit.cut(text, saved.as_deref())
 }
 
+fn git_run(command: &str, workspace: &Workspace) -> platform::git::Run {
+    let home = workspace.home.as_deref().and_then(std::path::Path::to_str);
+    if domain::command_policy::runs_as_a_read(command, home) {
+        platform::git::Run::ReadOnly
+    } else {
+        platform::git::Run::Approved
+    }
+}
+
 pub(super) fn shell(command: &str, workspace: &Workspace) -> std::process::Command {
     workspace.confined(platform::shell(command))
 }
@@ -152,7 +161,7 @@ mod tests {
         let ran = Bash.run(&json!({"command": "echo three > a.txt && echo new > b.txt"}), &workspace);
 
         assert!(!ran.is_error, "{ran:?}");
-        let recorded = workspace.services.files.as_ref().expect("files").take();
+        let recorded = workspace.services.files.as_ref().expect("files").take().files;
         assert!(recorded.keys().any(|path| path.ends_with("a.txt")), "the change was still tracked: {recorded:?}");
         assert_eq!(hostile.ran(), None, "the repository's fsmonitor, filter or hook ran");
         assert!(hostile.plain_git_runs_it(), "the same repository does run them through plain git");

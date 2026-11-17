@@ -36,13 +36,7 @@ impl StdioSandbox {
             Support::Missing(_) => Self::Unconfined,
             Support::Available => {
                 let found = sandbox.server_confinement(settled.places, &declared);
-                Self::Confined(Confinement {
-                    writable: found.writable,
-                    protected: found.protected,
-                    network: found.network,
-                    environment: found.environment,
-                    sockets: found.sockets,
-                })
+                Self::Confined(crate::tools::from_domain(found, settled.places))
             }
         }
     }
@@ -70,6 +64,7 @@ mod tests {
             temp,
             home: Some(Path::new("/Users/ana")),
             settings_dir: ".app",
+            data: &[],
         }
     }
 

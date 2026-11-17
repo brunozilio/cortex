@@ -86,7 +86,7 @@ A project's `{{DIR}}/settings.json` lives elsewhere, so use the full path to you
 ### How values combine
 
 - **Single values** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `autoMemoryEnabled`, `bashOutputLimit`, `enableAllProjectMcpServers`): the last file read wins. In practice the folder nearest to where you work beats its parents, and `managed-settings.json` beats everything. Setting `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` or `jsonSchema` to `null` clears a value set by an earlier file.
-- **Lists and maps add up**: permission rules, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`.
+- **Lists and maps add up**: permission rules, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`, `sandbox.allowUnixSockets`, `sandbox.allowRead`.
 - **Switches** (`features`, `scripts`, `sandbox.network`, `sandbox.required`): each file changes only the names it mentions.
 
 ### What a checked-in file cannot do
@@ -108,6 +108,7 @@ A project's `{{DIR}}/settings.json` comes from whoever wrote the repository, so 
 | `sandbox.network` | Can only turn the network off. |
 | `sandbox.allowWrite` | Ignored. |
 | `sandbox.allowUnixSockets` | Ignored. |
+| `sandbox.allowRead` | Ignored. |
 | `sandbox.required` | Can only turn it on. |
 | `lspServers` | `command`, `args` and `env` are dropped; a project can only map extensions, root markers or disable a server. |
 | Everything else | Honoured as in your own files. |
@@ -246,6 +247,7 @@ Turn the network off for every script, yours included:
 | `sandbox.network` | boolean | `true` | `false` blocks the network for sandboxed commands. A checked-in file can only turn it off. |
 | `sandbox.allowWrite` | list of folders | `[]` | Extra folders sandboxed commands may write to. Absolute paths or `~/…`; relative paths are ignored. Read only from your own files. |
 | `sandbox.allowUnixSockets` | list of socket paths | `[]` | macOS: service sockets sandboxed commands may connect to (the Docker, Podman, containerd, BuildKit, Colima, tmux and screen sockets are refused otherwise). Absolute paths or `~/…`. Read only from your own files. |
+| `sandbox.allowRead` | list of paths | `[]` | macOS: paths sandboxed commands may read although they are credential stores (`~/.ssh`, `~/.aws`, `~/.kube`, `~/.npmrc`, `~/.gnupg`, …) or the app's data folder, which are unreadable otherwise. A path inside a store, such as `~/.ssh/known_hosts`, opens only that path. Absolute paths or `~/…`. Read only from your own files. See [Sandbox](./sandbox-and-safety#sandbox). |
 | `sandbox.required` | boolean | `true` on Linux and macOS, `false` elsewhere | `true` refuses commands, and does not start MCP servers that run as a process, when this system cannot provide the sandbox, instead of running them unconfined. Turn it off in your own settings with `{ "sandbox": { "required": false } }`. A checked-in file can only turn it on. |
 
 ```json

@@ -98,7 +98,7 @@ mod tests {
     }
 
     fn kept(workspace: &Workspace) -> Vec<String> {
-        let files = workspace.services.files.as_ref().expect("files").take();
+        let files = workspace.services.files.as_ref().expect("files").take().files;
         let mut names: Vec<String> = files.keys().map(|path| path.display().to_string()).collect();
         names.sort();
         names
@@ -163,7 +163,7 @@ mod tests {
         let journaled = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let counted = Arc::clone(&journaled);
         let files = workspace.services.files.as_ref().expect("files");
-        files.journaled(Arc::new(move |_: &std::collections::BTreeMap<PathBuf, Option<String>>| {
+        files.journaled(Arc::new(move |_: &crate::checkpoints::Kept| {
             counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             std::thread::sleep(std::time::Duration::from_millis(5));
         }));

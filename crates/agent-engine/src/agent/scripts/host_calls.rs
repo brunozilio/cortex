@@ -44,7 +44,7 @@ impl HostCall<'_> {
             }
             Capability::WriteFile => {
                 let path = workspace.resolve(text(arguments, "path"));
-                workspace.before_write(&path);
+                let _not_said_to_a_script = workspace.before_write(&path);
                 platform::atomic::write(&path, text(arguments, "text").as_bytes())
                     .map(|_| Value::Null)
                     .map_err(|error| format!("{}: {error}", path.display()))

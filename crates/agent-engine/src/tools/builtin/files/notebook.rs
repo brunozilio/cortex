@@ -75,11 +75,11 @@ impl Tool for NotebookEdit {
             Ok(edited) => edited,
             Err(error) => return Outcome::error(error),
         };
-        workspace.before_write(&path);
+        let not_kept = workspace.before_write(&path).unwrap_or_default();
         match platform::atomic::write(&path, edited.as_bytes()) {
             Ok(_) => {
                 workspace.mark_read(&path);
-                Outcome::ok(format!("Updated {}.", path.display()))
+                Outcome::ok(format!("Updated {}.{not_kept}", path.display()))
             }
             Err(error) => Outcome::error(format!("Could not write {}: {error}", path.display())),
         }

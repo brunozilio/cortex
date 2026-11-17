@@ -265,8 +265,8 @@ fn a_file_s_state_kept_at_its_first_write_survives_a_crash_and_is_reported_not_o
     let files = FileHistory::default();
     let store = Arc::new(FileSessions::new(&kept.native));
     let (request, id, journaled) = (kept.request.clone(), kept.id.clone(), opened.clone());
-    files.journaled(Arc::new(move |files| {
-        let so_far = Checkpoint { files: files.clone(), ..journaled.clone() };
+    files.journaled(Arc::new(move |kept: &crate::checkpoints::Kept| {
+        let so_far = Checkpoint { files: kept.files.clone(), ..journaled.clone() };
         store.add_checkpoint(&request, &id, so_far).expect("kept");
     }));
 
@@ -285,6 +285,7 @@ fn a_file_s_state_kept_at_its_first_write_survives_a_crash_and_is_reported_not_o
     let rewound = rewind(&mut all, 1, &mut said).expect("rewind");
     assert_eq!(std::fs::read_to_string(&a).expect("a"), "two", "what the files became after the crash is unknown");
     assert!(b.exists());
-    assert_eq!((rewound.restored, rewound.skipped), (Vec::new(), vec![a, b]));
+    let changed = |path| domain::Skipped::new(path, domain::LeftAlone::ChangedSince);
+    assert_eq!((rewound.restored, rewound.skipped), (Vec::new(), vec![changed(a), changed(b)]));
     assert_eq!(said, history);
 }

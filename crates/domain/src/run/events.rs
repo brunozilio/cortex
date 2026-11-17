@@ -165,7 +165,61 @@ pub struct Rewound {
     pub restored: Vec<std::path::PathBuf>,
     pub conversation: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub skipped: Vec<std::path::PathBuf>,
+    pub skipped: Vec<Skipped>,
+}
+
+pub const KEPT_FILE_AT_MOST: u64 = 10 * 1024 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LeftAlone {
+    ChangedSince,
+    TooLarge,
+    Unreadable,
+    Failed(String),
+}
+
+impl LeftAlone {
+    pub fn said(&self) -> String {
+        match self {
+            Self::ChangedSince => "it changed after the agent left it".to_owned(),
+            Self::TooLarge => format!(
+                "it was larger than {} MiB, so its earlier version was not kept",
+                KEPT_FILE_AT_MOST / (1024 * 1024)
+            ),
+            Self::Unreadable => "it could not be read, so its earlier version was not kept".to_owned(),
+            Self::Failed(error) => error.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "SkippedAsKept")]
+pub struct Skipped {
+    pub path: std::path::PathBuf,
+    pub why: LeftAlone,
+}
+
+impl Skipped {
+    pub fn new(path: impl Into<std::path::PathBuf>, why: LeftAlone) -> Self {
+        Self { path: path.into(), why }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum SkippedAsKept {
+    Path(std::path::PathBuf),
+    Said { path: std::path::PathBuf, why: LeftAlone },
+}
+
+impl From<SkippedAsKept> for Skipped {
+    fn from(kept: SkippedAsKept) -> Self {
+        match kept {
+            SkippedAsKept::Path(path) => Self::new(path, LeftAlone::ChangedSince),
+            SkippedAsKept::Said { path, why } => Self::new(path, why),
+        }
+    }
 }
 
 impl EngineEvent {
@@ -219,6 +273,36 @@ mod tests {
         assert!(!text.absorb(&EngineEvent::ThinkingDelta("x".into())));
         assert!(!text.absorb(&EngineEvent::Cancelled));
         assert_eq!(text, EngineEvent::TextDelta("Hello".into()));
+    }
+
+    #[test]
+    fn a_file_a_rewind_left_alone_says_why_and_an_older_record_without_a_reason_still_reads() {
+        use super::{LeftAlone, Rewound, Skipped};
+        let older: Rewound = serde_json::from_value(serde_json::json!({
+            "checkpoint": 1, "prompt": "p", "restored": [], "conversation": true, "skipped": ["/repo/a.txt"]
+        }))
+        .expect("an older record");
+        assert_eq!(older.skipped, [Skipped::new("/repo/a.txt", LeftAlone::ChangedSince)]);
+
+        let reasons = [
+            LeftAlone::ChangedSince,
+            LeftAlone::TooLarge,
+            LeftAlone::Unreadable,
+            LeftAlone::Failed("could not restore /repo/b: denied".into()),
+        ];
+        let rewound = Rewound {
+            checkpoint: 0,
+            prompt: "p".into(),
+            restored: Vec::new(),
+            conversation: true,
+            skipped: reasons.iter().map(|why| Skipped::new("/repo/x", why.clone())).collect(),
+        };
+        let again: Rewound = serde_json::from_value(serde_json::to_value(&rewound).expect("saved")).expect("read");
+        assert_eq!(again, rewound);
+        for why in &reasons {
+            assert!(!why.said().is_empty(), "{why:?}");
+        }
+        assert!(LeftAlone::TooLarge.said().contains("10 MiB"));
     }
 
     #[test]

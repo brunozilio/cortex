@@ -23,7 +23,12 @@ pub struct McpSources {
     pub sandbox: Option<domain::sandbox::Sandbox>,
 }
 
-fn places<'a>(sources: &'a McpSources, cwd: &'a Path, temp: &'a [PathBuf]) -> domain::sandbox::Places<'a> {
+fn places<'a>(
+    sources: &'a McpSources,
+    cwd: &'a Path,
+    temp: &'a [PathBuf],
+    data: &'a [PathBuf],
+) -> domain::sandbox::Places<'a> {
     domain::sandbox::Places {
         project: cwd,
         added: &[],
@@ -31,13 +36,14 @@ fn places<'a>(sources: &'a McpSources, cwd: &'a Path, temp: &'a [PathBuf]) -> do
         temp,
         home: sources.home.as_deref(),
         settings_dir: brand::DIR,
+        data,
     }
 }
 
 fn confinement(sources: &McpSources, cwd: &Path) -> Option<platform::sandbox::Confinement> {
     let sandbox = sources.sandbox.as_ref()?;
-    let temp = crate::tools::temp_folders();
-    Some(crate::tools::confinement_of(sandbox, &places(sources, cwd, &temp)))
+    let (temp, data) = (crate::tools::temp_folders(), crate::tools::data_folders());
+    Some(crate::tools::confinement_of(sandbox, &places(sources, cwd, &temp, &data)))
 }
 
 pub(super) fn settled(server: ServerSpec, owner: bool, cwd: &Path, sources: &McpSources) -> ServerSpec {
@@ -52,8 +58,8 @@ pub(super) fn settled_on(
     support: &platform::sandbox::Support,
 ) -> ServerSpec {
     let ServerSpec::Stdio { name, command, args, env, sandbox } = server else { return server };
-    let temp = crate::tools::temp_folders();
-    let places = places(sources, cwd, &temp);
+    let (temp, data) = (crate::tools::temp_folders(), crate::tools::data_folders());
+    let places = places(sources, cwd, &temp, &data);
     let settling = super::stdio_sandbox::Settled { sandbox: sources.sandbox.as_ref(), places: &places, support };
     ServerSpec::Stdio { name, command, args, env, sandbox: sandbox.settled(owner, &settling) }
 }

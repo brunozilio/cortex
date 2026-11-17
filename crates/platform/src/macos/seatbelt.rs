@@ -48,6 +48,14 @@ pub fn profile(confinement: &Confinement) -> String {
     lines.extend(reopened.iter().map(|path| format!("(allow file-write* {})", subpath(path))));
     let within_reopened = protected.iter().filter(|path| inside(path, &reopened));
     lines.extend(within_reopened.map(|path| format!("(deny file-write* {})", subpath(path))));
+    let unreadable: Vec<PathBuf> = confinement.unreadable.iter().map(|path| real(path)).collect();
+    let mut pinned = pinned(protected.iter().chain(&unreadable), &writable);
+    let movable = |path: &&PathBuf| writable.iter().any(|open| path.starts_with(open)) && !pinned.contains(path);
+    let shut_and_movable: Vec<PathBuf> = unreadable.iter().filter(movable).cloned().collect();
+    pinned.extend(shut_and_movable);
+    lines.extend(pinned.iter().map(|path| format!("(deny file-write-unlink (literal \"{}\"))", quoted(path))));
+    lines.extend(unreadable.iter().map(|path| format!("(deny file-read-data {})", subpath(path))));
+    lines.extend(confinement.readable.iter().map(|path| format!("(allow file-read-data {})", subpath(path))));
     lines.extend(HANDING_OFF.map(str::to_owned));
     lines.push("(deny user-preference-write)".to_owned());
     lines.extend(
@@ -62,6 +70,19 @@ pub fn profile(confinement: &Confinement) -> String {
         lines.push("(deny network*)".to_owned());
     }
     lines.join("\n")
+}
+
+fn pinned<'a>(guarded: impl Iterator<Item = &'a PathBuf>, writable: &[PathBuf]) -> Vec<PathBuf> {
+    let mut pinned: Vec<PathBuf> = Vec::new();
+    for path in guarded {
+        let movable = path.ancestors().skip(1).filter(|folder| writable.iter().any(|open| folder.starts_with(open)));
+        for folder in movable {
+            if !pinned.iter().any(|known| known == folder) {
+                pinned.push(folder.to_path_buf());
+            }
+        }
+    }
+    pinned
 }
 
 fn quoted(path: &Path) -> String {
@@ -187,6 +208,126 @@ mod tests {
         let commit = format!("echo a > a.txt && {0} add a.txt && {0} commit -q -m one", git(dir));
         assert!(runs(&commit, dir, &confinement), "a commit writes objects, the index and refs");
         assert!(runs(&format!("{} log --oneline | grep -q one", git(dir)), dir, &confinement));
+    }
+
+    fn repository(dir: &Path) {
+        let made = format!("{0} init -q && echo a > a.txt && {0} add a.txt && {0} commit -q -m one", git(dir));
+        assert!(runs(&made, dir, &within(dir)), "a repository to work in");
+    }
+
+    fn guarded_repository(dir: &Path) -> Confinement {
+        let protected = [".app", ".git/config", ".git/config.worktree", ".git/hooks", ".git/commondir"]
+            .map(|name| dir.join(name))
+            .to_vec();
+        Confinement { protected, ..within(dir) }
+    }
+
+    #[test]
+    fn moving_the_git_folder_aside_to_plant_a_hook_and_moving_it_back_is_refused() {
+        let project = tempfile::tempdir().expect("project");
+        let dir = project.path();
+        repository(dir);
+        std::fs::create_dir_all(dir.join(".app")).expect("folder");
+        let confinement = guarded_repository(dir);
+
+        for trick in [
+            "mv .git .real && echo 'touch pwned' > .real/hooks/post-commit && mv .real .git",
+            "mv .git .real",
+            "mv .app .moved",
+            "echo /elsewhere > .git/commondir",
+            "ln .git/config linked && echo '[core] fsmonitor = x' >> linked",
+        ] {
+            assert!(!runs(trick, dir, &confinement), "{trick} was allowed");
+        }
+        assert!(dir.join(".git/HEAD").is_file() && dir.join(".app").is_dir(), "both stay where they were");
+        assert!(!dir.join(".git/hooks/post-commit").exists() && !dir.join(".real").exists());
+        assert!(!dir.join(".git/commondir").exists());
+
+        let everyday = format!(
+            "echo b > b.txt && {0} add b.txt && {0} commit -q -m two && {0} checkout -q -b topic && echo c > a.txt \
+             && {0} stash -q && {0} stash pop -q && {0} checkout -q main && {0} branch -D -q topic",
+            git(dir)
+        );
+        assert!(runs(&everyday, dir, &confinement), "commits, branches and stashes still work");
+
+        let config = std::fs::read(dir.join(".git/config")).expect("config");
+        let rebuilt = "cp -R .git .copy && echo 'touch pwned' > .copy/hooks/post-commit && rm -rf .git; mv .copy .git";
+        let _ = runs(rebuilt, dir, &confinement);
+        assert!(dir.join(".git").is_dir() && dir.join(".git/hooks").is_dir(), "the folder itself stays");
+        assert_eq!(std::fs::read(dir.join(".git/config")).expect("config"), config);
+        assert!(!dir.join(".git/hooks/post-commit").exists(), "no hook was planted");
+    }
+
+    #[test]
+    fn moving_the_whole_project_out_to_a_writable_folder_and_back_is_refused() {
+        let (project, scratch) = (tempfile::tempdir().expect("project"), tempfile::tempdir().expect("scratch"));
+        let dir = project.path().join("work");
+        std::fs::create_dir(&dir).expect("work");
+        repository(&dir);
+        let mut confinement = guarded_repository(&dir);
+        confinement.writable.push(scratch.path().to_path_buf());
+        let away = scratch.path().join("away");
+
+        let trick = format!(
+            "mv '{0}' '{1}' && echo 'touch pwned' > '{1}/.git/hooks/post-commit' && mv '{1}' '{0}'",
+            dir.display(),
+            away.display()
+        );
+        assert!(!runs(&trick, &dir, &confinement));
+        assert!(dir.join(".git/HEAD").is_file() && !away.exists());
+    }
+
+    #[test]
+    fn a_linked_worktree_s_git_file_cannot_be_pointed_elsewhere() {
+        let project = tempfile::tempdir().expect("project");
+        let dir = project.path();
+        std::fs::write(dir.join(".git"), "gitdir: /repo/.git/worktrees/fix\n").expect("git file");
+        let confinement = Confinement { protected: vec![dir.join(".git")], ..within(dir) };
+
+        assert!(!runs("echo 'gitdir: /tmp/evil' > .git", dir, &confinement));
+        assert!(!runs("echo x > other && mv other .git", dir, &confinement));
+        assert!(!runs("rm .git", dir, &confinement));
+        assert_eq!(std::fs::read_to_string(dir.join(".git")).expect("git file"), "gitdir: /repo/.git/worktrees/fix\n");
+    }
+
+    #[test]
+    fn credential_stores_cannot_be_read_unless_reopened_and_everything_else_still_reads() {
+        let (project, home) = (tempfile::tempdir().expect("project"), tempfile::tempdir().expect("home"));
+        let home = home.path();
+        std::fs::create_dir_all(home.join(".ssh")).expect("ssh");
+        std::fs::write(home.join(".ssh/id_ed25519"), "private").expect("key");
+        std::fs::write(home.join(".ssh/known_hosts"), "github.com ssh-ed25519 AAAA").expect("hosts");
+        std::fs::write(home.join(".npmrc"), "//registry/:_authToken=secret").expect("npmrc");
+        std::fs::write(home.join("notes.txt"), "fine").expect("notes");
+        let unreadable = vec![home.join(".ssh"), home.join(".npmrc")];
+        let confinement = Confinement {
+            unreadable,
+            readable: vec![home.join(".ssh/known_hosts")],
+            writable: vec![project.path().to_path_buf(), home.to_path_buf()],
+            ..Confinement::default()
+        };
+        let dir = project.path();
+        let at = |name: &str| home.join(name).display().to_string();
+
+        for refused in [
+            format!("cat '{}'", at(".ssh/id_ed25519")),
+            format!("ls '{}'", at(".ssh")),
+            format!("cat '{}'", at(".npmrc")),
+            format!("ln -s '{}' link && cat link", at(".ssh/id_ed25519")),
+            format!("cp '{}' copy", at(".ssh/id_ed25519")),
+            format!("mv '{}' '{}' && cat '{}/id_ed25519'", at(".ssh"), at("moved"), at("moved")),
+        ] {
+            assert!(!runs(&refused, dir, &confinement), "{refused} was allowed");
+        }
+        assert!(home.join(".ssh/id_ed25519").is_file(), "nothing was moved");
+        for allowed in [
+            format!("cat '{}'", at(".ssh/known_hosts")),
+            format!("cat '{}'", at("notes.txt")),
+            format!("ls -la '{}' > /dev/null", home.display()),
+            format!("test -d '{}'", at(".ssh")),
+        ] {
+            assert!(runs(&allowed, dir, &confinement), "{allowed} was refused");
+        }
     }
 
     #[test]

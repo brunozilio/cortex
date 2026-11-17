@@ -150,7 +150,7 @@ fn the_documented_full_example_reads_without_a_notice() {
         "scripts": { "files": true, "processes": true, "network": false },
         "sandbox": {
             "network": true, "allowWrite": ["~/.m2"], "required": true,
-            "allowUnixSockets": ["~/.docker/run/docker.sock"]
+            "allowUnixSockets": ["~/.docker/run/docker.sock"], "allowRead": ["~/.ssh/known_hosts"]
         },
         "features": { "experimental-code-map": false, "git-offer": false },
         "lspServers": {

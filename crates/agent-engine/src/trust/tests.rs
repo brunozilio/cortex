@@ -106,6 +106,22 @@ fn the_summary_lists_what_trust_would_enable_and_nothing_that_only_informs_or_re
 }
 
 #[test]
+fn a_local_setting_that_lets_sandboxed_commands_read_credentials_is_a_grant_to_ask_about() {
+    let (home, work) = (tempfile::tempdir().expect("home"), tempfile::tempdir().expect("work"));
+    let repo = repository(work.path(), "rocket");
+    write(&repo, "settings.local.json", r#"{"sandbox": {"allowRead": ["~/.ssh", "~/.aws/credentials"]}}"#);
+
+    let found = report(&repo, Some(home.path()), Trust::Untrusted);
+
+    let said: Vec<&str> = found.brings.items().iter().map(|brought| brought.what.as_str()).collect();
+    assert!(
+        said.contains(&"sandbox may read ~/.ssh") && said.contains(&"sandbox may read ~/.aws/credentials"),
+        "{said:?}"
+    );
+    assert!(found.asks());
+}
+
+#[test]
 fn a_folder_with_only_instructions_rules_and_deny_rules_has_nothing_to_ask_about() {
     let (home, work) = (tempfile::tempdir().expect("home"), tempfile::tempdir().expect("work"));
     let repo = repository(work.path(), "rocket");

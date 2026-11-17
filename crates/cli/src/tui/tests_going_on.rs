@@ -67,13 +67,17 @@ fn a_rewind_cuts_the_chat_before_its_prompt_and_gives_the_prompt_back() {
     assert_eq!(picker.items[0].0, "add more", "newest first");
 
     let restored = vec![data.path().join("more.txt")];
-    let skipped = vec![data.path().join("notes.txt")];
+    let skipped = vec![
+        domain::Skipped::new(data.path().join("notes.txt"), domain::LeftAlone::ChangedSince),
+        domain::Skipped::new(data.path().join("big.log"), domain::LeftAlone::TooLarge),
+    ];
     app.rewound(Rewound { checkpoint: 1, prompt: "add more".into(), restored, conversation: true, skipped });
     let shown = screen(&app);
     assert!(shown.contains("Written.") && !shown.contains("Added."), "{shown}");
     assert!(shown.contains("Rewound: 1 file restored"), "{shown}");
-    let skipped_notice = app.transcript.entries.iter().any(|entry| format!("{entry:?}").contains("notes.txt"));
-    assert!(shown.contains("Left as they are") && skipped_notice, "{shown}");
+    let said = |words: &str| app.transcript.entries.iter().any(|entry| format!("{entry:?}").contains(words));
+    assert!(shown.contains("Left as they are") && said("notes.txt"), "{shown}");
+    assert!(said("big.log") && said("10 MiB"), "the reason a file was left is said: {shown}");
     assert_eq!(app.prompt.input.text(), "add more", "the prompt is back to edit");
     assert_eq!(app.turn.checkpoints.iter().map(|c| c.index).collect::<Vec<_>>(), [0]);
 }

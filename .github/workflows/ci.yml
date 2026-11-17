@@ -63,12 +63,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
-      - name: check
-        run: cargo check --workspace --all-targets --locked
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: tests
         run: cargo nextest run --workspace --locked --no-fail-fast
 

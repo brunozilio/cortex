@@ -4,13 +4,14 @@ use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use domain::{LeftAlone, Skipped};
 use platform::sync::Locked;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::transcript::{Message, only_results};
 
-const MAX_FILE: u64 = 10 * 1024 * 1024;
+const MAX_FILE: u64 = domain::run::events::KEPT_FILE_AT_MOST;
 pub const KEPT_AT_MOST: usize = 50;
 pub const KEPT_BYTES_AT_MOST: usize = 64 * 1024 * 1024;
 pub const NO_LONGER_KEPT: &str = "that checkpoint is too old to rewind to: a conversation keeps the files of its \
@@ -28,17 +29,25 @@ pub struct Checkpoint {
     pub files_dropped: bool,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub left: BTreeMap<PathBuf, Option<String>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub not_kept: BTreeMap<PathBuf, LeftAlone>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Rewinding {
     pub target: Checkpoint,
     pub restored: Vec<PathBuf>,
-    pub skipped: Vec<PathBuf>,
+    pub skipped: Vec<Skipped>,
     pub conversation: bool,
 }
 
-pub type Journal = Arc<dyn Fn(&BTreeMap<PathBuf, Option<String>>) + Send + Sync>;
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Kept {
+    pub files: BTreeMap<PathBuf, Option<String>>,
+    pub not_kept: BTreeMap<PathBuf, LeftAlone>,
+}
+
+pub type Journal = Arc<dyn Fn(&Kept) + Send + Sync>;
 
 pub fn state_of(path: &Path) -> Option<String> {
     match std::fs::symlink_metadata(path) {
@@ -75,6 +84,7 @@ impl Checkpoint {
             joined_after: history.last().filter(|last| only_results(last)).map(|last| last.blocks.len()),
             files_dropped: false,
             left: BTreeMap::new(),
+            not_kept: BTreeMap::new(),
         }
     }
 
@@ -92,6 +102,7 @@ impl Checkpoint {
     fn drop_files(&mut self) {
         self.files = BTreeMap::new();
         self.left = BTreeMap::new();
+        self.not_kept = BTreeMap::new();
         self.files_dropped = true;
     }
 
@@ -141,13 +152,24 @@ fn hash(history: &[Message]) -> String {
 
 #[derive(Default)]
 pub struct FileHistory {
-    files: Mutex<BTreeMap<PathBuf, Option<String>>>,
+    kept: Mutex<Kept>,
     journal: Mutex<Option<Journal>>,
 }
 
 impl std::fmt::Debug for FileHistory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FileHistory").field("files", &self.files.locked().len()).finish_non_exhaustive()
+        f.debug_struct("FileHistory").field("files", &self.kept.locked().files.len()).finish_non_exhaustive()
+    }
+}
+
+type Before = Result<Option<String>, LeftAlone>;
+
+fn before_of(path: &Path) -> Before {
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.len() > MAX_FILE => Err(LeftAlone::TooLarge),
+        Ok(_) => std::fs::read(path).map(|bytes| Some(STANDARD.encode(bytes))).map_err(|_| LeftAlone::Unreadable),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err(LeftAlone::Unreadable),
     }
 }
 
@@ -156,8 +178,9 @@ impl FileHistory {
         *self.journal.locked() = Some(journal);
     }
 
-    pub fn before_write(&self, path: &Path) {
+    pub fn before_write(&self, path: &Path) -> Option<LeftAlone> {
         self.before_writes(std::slice::from_ref(&path.to_path_buf()));
+        self.kept.locked().not_kept.get(&written_through(path)).cloned()
     }
 
     pub fn before_writes(&self, paths: &[PathBuf]) {
@@ -165,17 +188,14 @@ impl FileHistory {
         let mut seen = std::collections::HashSet::new();
         for path in paths {
             let path = written_through(path);
-            if self.files.locked().contains_key(&path) || !seen.insert(path.clone()) {
+            let known = {
+                let kept = self.kept.locked();
+                kept.files.contains_key(&path) || kept.not_kept.contains_key(&path)
+            };
+            if known || !seen.insert(path.clone()) {
                 continue;
             }
-            let before = match std::fs::metadata(&path) {
-                Ok(meta) if meta.len() > MAX_FILE => continue,
-                Ok(_) => match std::fs::read(&path) {
-                    Ok(bytes) => Some(STANDARD.encode(bytes)),
-                    Err(_) => continue,
-                },
-                Err(_) => None,
-            };
+            let before = before_of(&path);
             found.push((path, before));
         }
         if !found.is_empty() {
@@ -188,29 +208,42 @@ impl FileHistory {
     }
 
     pub fn record_all(&self, found: Vec<(PathBuf, Option<Vec<u8>>)>) {
-        let small =
-            found.into_iter().filter(|(_, before)| before.as_ref().is_none_or(|bytes| bytes.len() as u64 <= MAX_FILE));
-        self.kept(small.map(|(path, before)| (path, before.map(|bytes| STANDARD.encode(bytes)))).collect());
+        let judged = found.into_iter().map(|(path, before)| {
+            let before = match before {
+                Some(bytes) if bytes.len() as u64 > MAX_FILE => Err(LeftAlone::TooLarge),
+                before => Ok(before.map(|bytes| STANDARD.encode(bytes))),
+            };
+            (path, before)
+        });
+        self.kept(judged.collect());
     }
 
-    fn kept(&self, found: Vec<(PathBuf, Option<String>)>) {
+    fn kept(&self, found: Vec<(PathBuf, Before)>) {
         let journal = self.journal.locked().clone();
-        let mut files = self.files.locked();
+        let mut kept = self.kept.locked();
         let mut added = false;
         for (path, before) in found {
-            if let std::collections::btree_map::Entry::Vacant(vacant) = files.entry(path) {
-                vacant.insert(before);
-                added = true;
+            if kept.files.contains_key(&path) || kept.not_kept.contains_key(&path) {
+                continue;
             }
+            match before {
+                Ok(before) => {
+                    kept.files.insert(path, before);
+                }
+                Err(why) => {
+                    kept.not_kept.insert(path, why);
+                }
+            }
+            added = true;
         }
         if let Some(journal) = journal.filter(|_| added) {
-            journal(&files);
+            journal(&kept);
         }
     }
 
-    pub fn take(&self) -> BTreeMap<PathBuf, Option<String>> {
+    pub fn take(&self) -> Kept {
         self.journal.locked().take();
-        std::mem::take(&mut *self.files.locked())
+        std::mem::take(&mut *self.kept.locked())
     }
 }
 
@@ -226,28 +259,7 @@ pub fn rewind(
         return Err(NO_LONGER_KEPT.into());
     }
     let dropped = checkpoints.split_off(index);
-    let mut decided: Vec<&PathBuf> = Vec::new();
-    let (mut restored, mut skipped) = (Vec::new(), Vec::new());
-    for checkpoint in dropped.iter().rev() {
-        for (path, before) in &checkpoint.files {
-            if !decided.contains(&path) {
-                decided.push(path);
-                let changed_since = checkpoint.left.get(path).is_none_or(|left| *left != state_of(path));
-                if changed_since {
-                    skipped.push(path.clone());
-                }
-            }
-            if skipped.contains(path) {
-                continue;
-            }
-            restore(path, before.as_deref())?;
-            if !restored.contains(path) {
-                restored.push(path.clone());
-            }
-        }
-    }
-    restored.sort();
-    skipped.sort();
+    let (restored, skipped) = restore_all(&dropped);
     let target = dropped.into_iter().next().ok_or("there is no such checkpoint")?;
     let before = target.before(history);
     let conversation = before.is_some();
@@ -266,6 +278,56 @@ pub fn branch(
     let before =
         target.before(history).ok_or("the conversation was compacted since then, so it cannot branch there")?;
     Ok((target.prompt.clone(), before, checkpoints[..index].to_vec()))
+}
+
+fn restore_all(dropped: &[Checkpoint]) -> (Vec<PathBuf>, Vec<Skipped>) {
+    let mut not_kept: BTreeMap<&PathBuf, &LeftAlone> = BTreeMap::new();
+    let mut oldest_before: BTreeMap<&PathBuf, Option<&str>> = BTreeMap::new();
+    for checkpoint in dropped {
+        for (path, why) in &checkpoint.not_kept {
+            not_kept.entry(path).or_insert(why);
+        }
+        for (path, before) in &checkpoint.files {
+            oldest_before.entry(path).or_insert(before.as_deref());
+        }
+    }
+    let mut newest_left: BTreeMap<&PathBuf, Option<&Option<String>>> = BTreeMap::new();
+    for checkpoint in dropped.iter().rev() {
+        for path in checkpoint.files.keys() {
+            newest_left.entry(path).or_insert_with(|| checkpoint.left.get(path));
+        }
+    }
+    let every: std::collections::BTreeSet<&PathBuf> = not_kept.keys().chain(oldest_before.keys()).copied().collect();
+    let (mut restored, mut skipped) = (Vec::new(), Vec::new());
+    for path in every {
+        if let Some(why) = not_kept.get(path) {
+            skipped.push(Skipped::new(path, (*why).clone()));
+            continue;
+        }
+        let before = oldest_before.get(path).copied().flatten();
+        let now = state_of(path);
+        if state_of_content(before).as_ref() == Some(&now) {
+            restored.push(path.clone());
+            continue;
+        }
+        let changed_since = newest_left.get(path).copied().flatten().is_none_or(|left| *left != now);
+        if changed_since {
+            skipped.push(Skipped::new(path, LeftAlone::ChangedSince));
+            continue;
+        }
+        match restore(path, before) {
+            Ok(()) => restored.push(path.clone()),
+            Err(error) => skipped.push(Skipped::new(path, LeftAlone::Failed(error))),
+        }
+    }
+    (restored, skipped)
+}
+
+fn state_of_content(before: Option<&str>) -> Option<Option<String>> {
+    match before {
+        None => Some(None),
+        Some(content) => STANDARD.decode(content).ok().map(|bytes| Some(format!("{:x}", Sha256::digest(bytes)))),
+    }
 }
 
 fn restore(path: &Path, before: Option<&str>) -> Result<(), String> {
@@ -295,7 +357,7 @@ mod tests {
             files.before_write(&path);
             std::fs::write(&path, content).expect("write");
         }
-        checkpoint.files = files.take();
+        checkpoint.files = files.take().files;
         checkpoint.left = left_by_the_agent(&checkpoint.files);
         history.push(Message::user(prompt));
         history.push(Message::user("done"));
@@ -464,7 +526,132 @@ mod tests {
         assert_eq!(std::fs::read_to_string(dir.path().join("c.txt")).expect("c"), "the user's now");
         assert_eq!(std::fs::read_to_string(dir.path().join("b.txt")).expect("b"), "one");
         assert_eq!(rewound.restored, [dir.path().join("b.txt")]);
-        assert_eq!(rewound.skipped, [dir.path().join("a.txt"), dir.path().join("c.txt")]);
+        assert_eq!(
+            rewound.skipped,
+            [
+                Skipped::new(dir.path().join("a.txt"), LeftAlone::ChangedSince),
+                Skipped::new(dir.path().join("c.txt"), LeftAlone::ChangedSince)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_file_too_large_to_keep_is_said_at_its_write_and_named_with_the_reason_at_the_rewind() {
+        let dir = tempfile::tempdir().expect("dir");
+        let (big, small) = (dir.path().join("big.bin"), dir.path().join("a.txt"));
+        std::fs::write(&big, vec![b'x'; usize::try_from(MAX_FILE).expect("size") + 1]).expect("big");
+        std::fs::write(&small, "one").expect("small");
+        let files = FileHistory::default();
+
+        assert_eq!(files.before_write(&big), Some(LeftAlone::TooLarge));
+        assert_eq!(files.before_write(&small), None);
+        assert_eq!(files.before_write(&big), Some(LeftAlone::TooLarge), "said again at every write");
+        std::fs::write(&big, "shrunk").expect("write");
+        std::fs::write(&small, "two").expect("write");
+        files.record_all(vec![(dir.path().join("huge.log"), Some(vec![0; 11 * 1024 * 1024]))]);
+        let kept = files.take();
+        let mut checkpoint = Checkpoint::open("edit", &[]);
+        (checkpoint.files, checkpoint.not_kept) = (kept.files, kept.not_kept);
+        checkpoint.left = left_by_the_agent(&checkpoint.files);
+        assert_eq!(checkpoint.files.keys().collect::<Vec<_>>(), [&small]);
+
+        let rewound = rewind(&mut vec![checkpoint], 0, &mut Vec::new()).expect("rewind");
+
+        assert_eq!(rewound.restored, std::slice::from_ref(&small));
+        assert_eq!(
+            rewound.skipped,
+            [Skipped::new(&big, LeftAlone::TooLarge), Skipped::new(dir.path().join("huge.log"), LeftAlone::TooLarge)]
+        );
+        assert_eq!(std::fs::read_to_string(&big).expect("big"), "shrunk", "left as it is");
+        assert_eq!(std::fs::read_to_string(&small).expect("small"), "one");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_that_could_not_be_read_is_said_at_its_write_and_named_at_the_rewind() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().expect("dir");
+        let locked = dir.path().join("locked.txt");
+        std::fs::write(&locked, "secret").expect("write");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o200)).expect("mode");
+        if std::fs::read(&locked).is_ok() {
+            return;
+        }
+        let files = FileHistory::default();
+
+        assert_eq!(files.before_write(&locked), Some(LeftAlone::Unreadable));
+        let kept = files.take();
+        let mut checkpoint = Checkpoint::open("edit", &[]);
+        (checkpoint.files, checkpoint.not_kept) = (kept.files, kept.not_kept);
+        let rewound = rewind(&mut vec![checkpoint], 0, &mut Vec::new()).expect("rewind");
+
+        assert_eq!(rewound.skipped, [Skipped::new(&locked, LeftAlone::Unreadable)]);
+        assert!(rewound.restored.is_empty());
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o600)).expect("mode");
+    }
+
+    #[test]
+    fn a_file_not_kept_by_any_rewound_turn_is_left_alone_even_if_another_turn_kept_it() {
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("a.txt");
+        std::fs::write(&path, "one").expect("write");
+        let mut history = Vec::new();
+        let first = closed(dir.path(), &mut history, "edit", &[("a.txt", "two")]);
+        let mut second = closed(dir.path(), &mut history, "grow", &[]);
+        second.not_kept.insert(path.clone(), LeftAlone::TooLarge);
+        std::fs::write(&path, "grown").expect("write");
+
+        let rewound = rewind(&mut vec![first, second], 0, &mut history).expect("rewind");
+
+        assert_eq!(rewound.skipped, [Skipped::new(&path, LeftAlone::TooLarge)]);
+        assert_eq!(std::fs::read_to_string(&path).expect("a"), "grown");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_that_cannot_be_put_back_is_reported_and_every_other_file_is_still_restored() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::create_dir(dir.path().join("sealed")).expect("folder");
+        for name in ["sealed/a.txt", "b.txt", "c.txt"] {
+            std::fs::write(dir.path().join(name), "one").expect("write");
+        }
+        let mut history = Vec::new();
+        let first =
+            closed(dir.path(), &mut history, "edit", &[("b.txt", "two"), ("sealed/a.txt", "two"), ("c.txt", "two")]);
+        let sealed = dir.path().join("sealed");
+        std::fs::set_permissions(&sealed, std::fs::Permissions::from_mode(0o555)).expect("mode");
+        let mut checkpoints = vec![first];
+
+        let rewound = rewind(&mut checkpoints, 0, &mut history);
+
+        std::fs::set_permissions(&sealed, std::fs::Permissions::from_mode(0o755)).expect("mode");
+        let rewound = rewound.expect("a failed file does not stop the rewind");
+        assert_eq!(rewound.restored, [dir.path().join("b.txt"), dir.path().join("c.txt")]);
+        assert_eq!(rewound.skipped.len(), 1, "{:?}", rewound.skipped);
+        assert_eq!(rewound.skipped[0].path, sealed.join("a.txt"));
+        assert!(
+            matches!(&rewound.skipped[0].why, LeftAlone::Failed(error) if error.contains("a.txt")),
+            "{:?}",
+            rewound.skipped
+        );
+        assert_eq!(std::fs::read_to_string(dir.path().join("c.txt")).expect("c"), "one");
+        assert!(rewound.conversation && history.is_empty() && checkpoints.is_empty());
+    }
+
+    #[test]
+    fn a_file_already_back_as_it_was_counts_as_restored_so_a_rewind_can_be_tried_again() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join("a.txt"), "one").expect("write");
+        let mut history = Vec::new();
+        let first = closed(dir.path(), &mut history, "edit", &[("a.txt", "two"), ("b.txt", "new")]);
+        std::fs::write(dir.path().join("a.txt"), "one").expect("put back by an earlier attempt");
+        std::fs::remove_file(dir.path().join("b.txt")).expect("removed by an earlier attempt");
+
+        let rewound = rewind(&mut vec![first], 0, &mut history).expect("rewind");
+
+        assert_eq!(rewound.restored, [dir.path().join("a.txt"), dir.path().join("b.txt")]);
+        assert!(rewound.skipped.is_empty(), "{:?}", rewound.skipped);
     }
 
     #[cfg(unix)]
@@ -502,8 +689,8 @@ mod tests {
         let stored: Arc<Mutex<Option<Files>>> = Arc::default();
         let files = FileHistory::default();
         let kept = Arc::clone(&stored);
-        files.journaled(Arc::new(move |files: &BTreeMap<PathBuf, Option<String>>| {
-            *kept.lock().expect("kept") = Some(files.clone());
+        files.journaled(Arc::new(move |so_far: &Kept| {
+            *kept.lock().expect("kept") = Some(so_far.files.clone());
         }));
         let history: Vec<Message> = Vec::new();
         let opened = Checkpoint::open("edit a", &history);
@@ -519,7 +706,11 @@ mod tests {
         let mut after_restart = vec![Message::user("edit a")];
         let rewound = rewind(&mut vec![reloaded], 0, &mut after_restart).expect("rewind");
         assert_eq!(std::fs::read_to_string(&path).expect("a"), "fixed by the user after the crash");
-        assert_eq!((rewound.restored, rewound.skipped), (Vec::new(), vec![path]), "unknown after-state: skipped");
+        assert_eq!(
+            (rewound.restored, rewound.skipped),
+            (Vec::new(), vec![Skipped::new(path, LeftAlone::ChangedSince)]),
+            "unknown after-state: skipped"
+        );
     }
 
     #[cfg(unix)]
@@ -533,7 +724,7 @@ mod tests {
         files.before_write(&link);
         platform::atomic::write(&link, b"two").expect("write through the link");
         let mut checkpoint = Checkpoint::open("edit", &[]);
-        checkpoint.files = files.take();
+        checkpoint.files = files.take().files;
         checkpoint.left = left_by_the_agent(&checkpoint.files);
         let real = target.canonicalize().expect("real");
         assert_eq!(checkpoint.files.keys().collect::<Vec<_>>(), [&real]);
@@ -555,9 +746,9 @@ mod tests {
         let writes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let files = FileHistory::default();
         let (counted, written) = (Arc::clone(&writes), journal.clone());
-        files.journaled(Arc::new(move |files: &BTreeMap<PathBuf, Option<String>>| {
+        files.journaled(Arc::new(move |so_far: &Kept| {
             counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            let bytes = serde_json::to_vec(files).expect("json");
+            let bytes = serde_json::to_vec(&so_far.files).expect("json");
             let mut file = std::fs::File::create(&written).expect("journal");
             std::io::Write::write_all(&mut file, &bytes).expect("write");
             file.sync_all().expect("sync");
@@ -566,7 +757,7 @@ mod tests {
         files.before_writes(&paths);
         assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
         assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 1);
-        assert_eq!(files.take().len(), 5_000);
+        assert_eq!(files.take().files.len(), 5_000);
     }
 
     #[test]
@@ -575,14 +766,14 @@ mod tests {
         let journaled = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let files = FileHistory::default();
         let count = Arc::clone(&journaled);
-        files.journaled(Arc::new(move |_: &BTreeMap<PathBuf, Option<String>>| {
+        files.journaled(Arc::new(move |_: &Kept| {
             count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }));
         files.before_write(&dir.path().join("a.txt"));
         files.before_write(&dir.path().join("a.txt"));
         files.record_all(vec![(dir.path().join("b.txt"), None), (dir.path().join("c.txt"), None)]);
         assert_eq!(journaled.load(std::sync::atomic::Ordering::SeqCst), 2, "once per first write, once per batch");
-        assert_eq!(files.take().len(), 3);
+        assert_eq!(files.take().files.len(), 3);
         files.before_write(&dir.path().join("d.txt"));
         assert_eq!(journaled.load(std::sync::atomic::Ordering::SeqCst), 2);
     }
@@ -596,6 +787,6 @@ mod tests {
         files.before_write(&path);
         std::fs::write(&path, "two").expect("write");
         files.before_write(&path);
-        assert_eq!(files.take()[&path].as_deref(), Some(STANDARD.encode("one").as_str()));
+        assert_eq!(files.take().files[&path].as_deref(), Some(STANDARD.encode("one").as_str()));
     }
 }

@@ -49,7 +49,17 @@ pub fn only_reads(part: &str, words: &[&str], readable: Readable<'_>) -> bool {
         return false;
     }
     let Some(reader) = reader_of(words) else { return false };
-    arguments_allowed(reader, &words[reader.program.len()..])
+    let arguments = &words[reader.program.len()..];
+    if reader.program.first() == Some(&"git") && arguments.iter().any(|word| checks_a_signature(word)) {
+        return false;
+    }
+    arguments_allowed(reader, arguments)
+}
+
+const SIGNATURE_PLACEHOLDERS: [&str; 2] = ["%G", "%(signature"];
+
+fn checks_a_signature(word: &str) -> bool {
+    SIGNATURE_PLACEHOLDERS.iter().any(|placeholder| word.contains(placeholder))
 }
 
 pub fn is_reader(program: &str) -> bool {

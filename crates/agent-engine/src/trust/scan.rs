@@ -167,6 +167,7 @@ fn grants(settings: &Value) -> Vec<String> {
     grants.extend(
         texts(&settings["sandbox"]["allowUnixSockets"]).map(|socket| format!("sandbox may connect to {socket}")),
     );
+    grants.extend(texts(&settings["sandbox"]["allowRead"]).map(|path| format!("sandbox may read {path}")));
     if settings["enableAllProjectMcpServers"].as_bool() == Some(true) {
         grants.push("approval of every project MCP server".to_owned());
     }

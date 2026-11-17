@@ -21,20 +21,87 @@ impl Confiner {
     }
 }
 
+const NESTED_GIT_RUNS: [&str; 4] = ["config", "config.worktree", "hooks", "commondir"];
+const NESTED_DEPTH: usize = 6;
+const NESTED_MOST: usize = 512;
+
 pub fn confinement_of(sandbox: &domain::sandbox::Sandbox, places: &Places<'_>) -> platform::sandbox::Confinement {
-    let found = sandbox.confinement(places);
-    let protected = found.protected.into_iter().filter(|path| repository_of(path).is_none_or(Path::is_dir)).collect();
+    from_domain(sandbox.confinement(places), places)
+}
+
+pub fn from_domain(found: domain::sandbox::Confinement, places: &Places<'_>) -> platform::sandbox::Confinement {
+    let mut protected: Vec<PathBuf> =
+        found.protected.into_iter().filter(|path| repository_of(path).is_none_or(Path::is_dir)).collect();
+    let roots =
+        std::iter::once(places.project).chain(places.added.iter().map(PathBuf::as_path)).chain(places.repository);
+    for root in roots {
+        for path in nested_git_runs(root) {
+            if !protected.contains(&path) {
+                protected.push(path);
+            }
+        }
+    }
     platform::sandbox::Confinement {
         writable: found.writable,
         protected,
         network: found.network,
         environment: found.environment,
         sockets: found.sockets,
+        unreadable: found.unreadable,
+        readable: found.readable,
     }
 }
 
 fn repository_of(path: &Path) -> Option<&Path> {
     path.ancestors().find(|folder| folder.file_name().is_some_and(|name| name == ".git"))
+}
+
+fn nested_git_runs(root: &Path) -> Vec<PathBuf> {
+    let git = root.join(".git");
+    match std::fs::symlink_metadata(&git) {
+        Ok(found) if found.is_file() => return vec![git],
+        Ok(found) if found.is_dir() => {}
+        _ => return Vec::new(),
+    }
+    let mut guarded = Vec::new();
+    for linked in folders_in(&git.join("worktrees")) {
+        guarded.extend(["config.worktree", "commondir"].map(|name| linked.join(name)));
+    }
+    let mut pending = vec![(git.join("modules"), 0)];
+    let mut seen = 0;
+    while let Some((folder, depth)) = pending.pop() {
+        if depth > NESTED_DEPTH || seen > NESTED_MOST {
+            break;
+        }
+        seen += 1;
+        if folder.join("HEAD").is_file() {
+            guarded.extend(NESTED_GIT_RUNS.map(|name| folder.join(name)));
+            pending.push((folder.join("modules"), depth + 1));
+        } else {
+            pending.extend(folders_in(&folder).into_iter().map(|inner| (inner, depth + 1)));
+        }
+    }
+    guarded
+}
+
+fn folders_in(folder: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(folder) else { return Vec::new() };
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .map(|entry| entry.path())
+        .take(NESTED_MOST)
+        .collect()
+}
+
+pub fn data_folders() -> Vec<PathBuf> {
+    let mut folders: Vec<PathBuf> =
+        [platform::data_dir(brand::NAME, brand::COMMAND), platform::local_data_dir(brand::NAME, brand::COMMAND)]
+            .into_iter()
+            .flatten()
+            .collect();
+    folders.dedup();
+    folders
 }
 
 pub fn temp_folders() -> [PathBuf; 2] {
@@ -77,6 +144,7 @@ impl Workspace {
     pub fn confinement(&self) -> Option<platform::sandbox::Confinement> {
         let sandbox = self.policy.sandbox.as_ref()?;
         let temp = temp_folders();
+        let data = data_folders();
         Some(confinement_of(
             sandbox,
             &Places {
@@ -86,6 +154,7 @@ impl Workspace {
                 temp: &temp,
                 home: self.home.as_deref(),
                 settings_dir: brand::DIR,
+                data: &data,
             },
         ))
     }

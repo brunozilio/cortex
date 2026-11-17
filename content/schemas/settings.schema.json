@@ -584,6 +584,13 @@
       "additionalProperties": false,
       "description": "Where sandboxed commands may write and whether they reach the network.",
       "properties": {
+        "allowRead": {
+          "description": "Paths sandboxed commands may read on macOS although they are credential stores (~/.ssh, ~/.aws, ~/.npmrc, ~/.gnupg, …) or the app's data folder, which are unreadable by default.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "allowUnixSockets": {
           "description": "Service sockets sandboxed commands may connect to on macOS, such as the Docker socket or a tmux server's (refused by default).",
           "items": {

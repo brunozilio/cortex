@@ -139,3 +139,79 @@ fn a_branch_starts_a_new_conversation_before_a_prompt_and_keeps_the_original_and
     );
     assert!(notes.exists() && more.exists(), "a branch leaves the files as they are");
 }
+
+#[derive(Default)]
+struct SavingFails {
+    kept: InMemorySessions,
+    conversation_fails: std::sync::atomic::AtomicBool,
+}
+
+impl Sessions for SavingFails {
+    fn load(&self, id: &SessionId) -> Option<Vec<agent_engine::transcript::Message>> {
+        self.kept.load(id)
+    }
+    fn save(&self, id: &SessionId, history: &[agent_engine::transcript::Message]) -> Result<(), String> {
+        if self.conversation_fails.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("the disk is full".into());
+        }
+        self.kept.save(id, history)
+    }
+    fn load_checkpoints(
+        &self,
+        cwd: &std::path::Path,
+        id: &SessionId,
+    ) -> Result<Vec<agent_engine::checkpoints::Checkpoint>, String> {
+        self.kept.load_checkpoints(cwd, id)
+    }
+    fn save_checkpoints(
+        &self,
+        cwd: &std::path::Path,
+        id: &SessionId,
+        all: &[agent_engine::checkpoints::Checkpoint],
+    ) -> Result<(), String> {
+        self.kept.save_checkpoints(cwd, id, all)
+    }
+}
+
+#[test]
+fn a_rewind_whose_conversation_cannot_be_saved_keeps_its_checkpoints_and_can_be_tried_again() {
+    let dir = tempfile::tempdir().expect("dir");
+    let (notes, more) = (dir.path().join("notes.txt"), dir.path().join("more.txt"));
+    let models = vec![writes(&notes.display().to_string(), "v1"), writes(&more.display().to_string(), "x")];
+    let sessions = Arc::new(SavingFails::default());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(models))), sessions.clone());
+    let first = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "write the notes", model())));
+    let Some(EngineEvent::SessionStarted(session)) = first.first().cloned() else { panic!("{first:?}") };
+    let mut second = PromptRequest::plain(dir.path().into(), "add more", model());
+    second.session.resume = Some(session.clone());
+    finish(&start(&engine, &second));
+    let cwd = second.session.cwd.clone();
+    let kept = |sessions: &SavingFails| sessions.load_checkpoints(&cwd, &session).expect("checkpoints").len();
+    assert_eq!(kept(&sessions), 2);
+    let rewind = || {
+        let mut request = PromptRequest::plain(dir.path().into(), "", model());
+        request.session.resume = Some(session.clone());
+        request.session.command = Some(SessionCommand::Rewind(1));
+        finish(&start(&engine, &request))
+    };
+
+    sessions.conversation_fails.store(true, std::sync::atomic::Ordering::SeqCst);
+    let failed = rewind();
+
+    let said = failed.iter().find_map(|event| match event {
+        EngineEvent::Failed(failure) => Some(format!("{failure:?}")),
+        _ => None,
+    });
+    assert!(said.as_deref().is_some_and(|said| said.contains("the disk is full")), "{failed:?}");
+    assert!(!more.exists(), "the files are restored before anything is saved");
+    assert_eq!(kept(&sessions), 2, "the checkpoints stay until the conversation is saved");
+
+    sessions.conversation_fails.store(false, std::sync::atomic::Ordering::SeqCst);
+    let again = rewind();
+    let rewound =
+        again.iter().find_map(|event| if let EngineEvent::Rewound(r) = event { Some(r.clone()) } else { None });
+    let rewound = rewound.expect("rewound on the second try");
+    assert_eq!((rewound.restored, rewound.skipped, rewound.conversation), (vec![more.clone()], Vec::new(), true));
+    assert_eq!(kept(&sessions), 1);
+    assert_eq!(sessions.load_for(&cwd, &session).map(|history| history.len()), Some(4));
+}

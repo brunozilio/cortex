@@ -108,15 +108,92 @@ fn a_repository_s_config_and_hooks_are_guarded_once_it_exists_so_a_command_can_s
             temp: &[],
             home: None,
             settings_dir: brand::DIR,
+            data: &[],
         };
         super::confined::confinement_of(&sandbox, &places).protected
     };
 
     assert_eq!(guarded(fresh.path()), [fresh.path().join(brand::DIR)], "git init may write .git/config");
     let guarded = guarded(repo.path());
-    for path in [brand::DIR, ".git/config", ".git/config.worktree", ".git/hooks"] {
+    for path in [brand::DIR, ".git/config", ".git/config.worktree", ".git/hooks", ".git/commondir"] {
         assert!(guarded.contains(&repo.path().join(path)), "{path}: {guarded:?}");
     }
+}
+
+fn guarded_in(project: &Path) -> Vec<PathBuf> {
+    let places = domain::sandbox::Places {
+        project,
+        added: &[],
+        repository: None,
+        temp: &[],
+        home: None,
+        settings_dir: brand::DIR,
+        data: &[],
+    };
+    super::confined::confinement_of(&domain::sandbox::Sandbox::default(), &places).protected
+}
+
+#[test]
+fn what_git_runs_for_a_submodule_or_a_linked_worktree_is_guarded_too() {
+    let repo = tempfile::tempdir().expect("repo");
+    let git = repo.path().join(".git");
+    for module in ["modules/lib", "modules/libs/nested/deep", "modules/lib/modules/inner"] {
+        std::fs::create_dir_all(git.join(module).join("hooks")).expect("module");
+        std::fs::write(git.join(module).join("HEAD"), "ref: refs/heads/main\n").expect("head");
+    }
+    std::fs::create_dir_all(git.join("worktrees/fix")).expect("worktree");
+
+    let guarded = guarded_in(repo.path());
+
+    for path in [
+        "modules/lib/config",
+        "modules/lib/hooks",
+        "modules/lib/commondir",
+        "modules/lib/config.worktree",
+        "modules/libs/nested/deep/hooks",
+        "modules/lib/modules/inner/config",
+        "worktrees/fix/config.worktree",
+        "worktrees/fix/commondir",
+    ] {
+        assert!(guarded.contains(&git.join(path)), "{path}: {guarded:?}");
+    }
+
+    let linked = tempfile::tempdir().expect("linked");
+    std::fs::write(linked.path().join(".git"), "gitdir: /repo/.git/worktrees/fix\n").expect("git file");
+    let guarded = guarded_in(linked.path());
+    assert!(guarded.contains(&linked.path().join(".git")), "a linked worktree's .git file: {guarded:?}");
+    let file = linked.path().join(".git");
+    assert!(!guarded.iter().any(|path| *path != file && path.starts_with(&file)), "{guarded:?}");
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn a_sandboxed_command_cannot_move_the_repository_aside_plant_a_hook_or_read_the_owner_s_keys() {
+    let (project, home) = (tempfile::tempdir().expect("project"), tempfile::tempdir().expect("home"));
+    let dir = project.path();
+    let identity = "git -c user.name=t -c user.email=t@t -c commit.gpgsign=false -c core.hooksPath=/dev/null";
+    let made = std::process::Command::new("/bin/sh")
+        .args(["-c", &format!("{identity} init -q && echo a > a && {identity} add a && {identity} commit -q -m a")])
+        .current_dir(dir)
+        .status()
+        .expect("git");
+    assert!(made.success());
+    std::fs::create_dir_all(home.path().join(".ssh")).expect("ssh");
+    std::fs::write(home.path().join(".ssh/id_ed25519"), "private").expect("key");
+    let mut workspace = Workspace::new(dir);
+    workspace.home = Some(home.path().to_path_buf());
+    workspace.policy.sandbox = Some(domain::sandbox::Sandbox::default());
+    let runs = |code: &str| {
+        let mut shell = workspace.confined(platform::script_shell(code));
+        shell.current_dir(dir).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        shell.status().expect("ran").success()
+    };
+
+    assert!(!runs("mv .git .real && echo 'touch pwned' > .real/hooks/post-commit; mv .real .git"));
+    assert!(!dir.join(".git/hooks/post-commit").exists() && dir.join(".git/HEAD").is_file());
+    let key = home.path().join(".ssh/id_ed25519");
+    assert!(!runs(&format!("cat '{}'", key.display())), "the owner's key was read");
+    assert!(runs(&format!("{identity} commit -q --allow-empty -m b && {identity} checkout -q -b topic")));
 }
 
 #[cfg(target_os = "macos")]
@@ -144,6 +221,7 @@ fn a_sandboxed_command_cannot_replace_a_toolchain_or_an_unpacked_crate_and_packa
         temp: &temp,
         home: Some(home.path()),
         settings_dir: brand::DIR,
+        data: &[],
     };
     let confinement = super::confined::confinement_of(&domain::sandbox::Sandbox::default(), &places);
     let runs = |code: &str| {

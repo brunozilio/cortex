@@ -70,6 +70,34 @@ fn a_changed_environment_or_a_wrapper_is_never_read_only() {
 }
 
 #[test]
+fn a_git_read_that_checks_a_signature_runs_the_signing_program_so_it_is_never_read_only() {
+    let slipped = read_only(&[
+        "git log --format=%GS",
+        "git log --format=%GK -1",
+        "git log --pretty=format:%GG",
+        "git log --pretty=tformat:%h%GF",
+        "git log --format=%GP",
+        "git log --format=%GT",
+        "git log '--format=%h %G?'",
+        "git log --format='%an %GS'",
+        "git log \"--pretty=format:%GK\"",
+        "git show --pretty=format:%GK -s",
+        "git show -s --format=%GG HEAD",
+        "git log --show-signature",
+        "git show --show-signature HEAD",
+        "git branch --format='%(signature)'",
+        "git tag -l --format=%(signature:key)",
+        "git tag -v v1",
+    ]);
+    assert!(slipped.is_empty(), "read-only by mistake: {slipped:?}");
+    for command in
+        ["git log --format='%h %s'", "git log --pretty=oneline", "git log -G pattern", "git log --format=%gs"]
+    {
+        assert_eq!(plain(command), CommandClass::ReadOnly, "{command}");
+    }
+}
+
+#[test]
 fn a_flag_that_writes_or_runs_a_program_is_never_read_only() {
     let slipped = read_only(&[
         "rg --pre ./script pattern",

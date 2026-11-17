@@ -62,7 +62,7 @@ impl Tool for Edit {
         };
         let before = text.find(old).map_or("", |at| &text[..at]);
         let shown = super::shown_diff::edit(&format!("Edited {name}"), before, old, new);
-        workspace.before_write(&path);
+        let not_kept = workspace.before_write(&path).unwrap_or_default();
         match platform::atomic::write(&path, changed.as_bytes()) {
             Ok(_) => {
                 workspace.mark_read(&path);
@@ -76,9 +76,8 @@ impl Tool for Edit {
                 let others = workspace.claim(&path);
                 let remembered = workspace.anchored(&path);
                 let callers = workspace.callers(&path, &text, &changed);
-                Outcome::ok(said + &workspace.diagnosed(&path, &changed) + &callers + &tests + &others + &remembered)
-                    .showing(shown)
-                    .editing(edited)
+                let notes = [workspace.diagnosed(&path, &changed), callers, tests, others, remembered, not_kept];
+                Outcome::ok(said + &notes.concat()).showing(shown).editing(edited)
             }
             Err(error) => Outcome::error(format!("Could not write {name}: {error}")),
         }

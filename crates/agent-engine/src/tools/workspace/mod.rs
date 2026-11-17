@@ -14,7 +14,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-pub use confined::{Confiner, confinement_of, temp_folders};
+pub(crate) use confined::from_domain;
+pub use confined::{Confiner, confinement_of, data_folders, temp_folders};
 pub use launcher::{Launch, Launcher, OnThisMachine};
 pub use models::Models;
 pub use policy::{Policy, env_secrets};
@@ -120,10 +121,13 @@ impl Workspace {
         }
     }
 
-    pub fn before_write(&self, path: &Path) {
-        if let Some(files) = &self.services.files {
-            files.before_write(path);
-        }
+    pub fn before_write(&self, path: &Path) -> Option<String> {
+        let why = self.services.files.as_ref()?.before_write(path)?;
+        Some(format!(
+            "\n(/rewind cannot put back the earlier version of {}: {}; it stays as it is now if this turn is rewound)",
+            path.display(),
+            why.said()
+        ))
     }
 
     pub fn language_servers(&self) -> Option<&crate::lsp::Lsp> {

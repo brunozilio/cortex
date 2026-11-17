@@ -8,6 +8,10 @@ mod shaped;
 pub mod shells;
 mod snapshot;
 
+#[cfg(all(test, unix))]
+#[path = "hostile_git_tests.rs"]
+mod hostile_git_tests;
+
 use crate::tools::Tool;
 use shells::{BashOutput, KillShell};
 

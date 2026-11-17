@@ -64,6 +64,21 @@ pub fn classify_command(command: &ShellCommand, git: &GitFacts<'_>, readable: Re
     if parts.iter().all(|part| reads_only(part, readable)) { CommandClass::ReadOnly } else { CommandClass::Unknown }
 }
 
+pub fn runs_as_a_read(command: &str, home: Option<&str>) -> bool {
+    let parsed = ShellCommand::parse(command);
+    classify_command(&parsed, &GitFacts::default(), &|_| true) == CommandClass::ReadOnly
+        || paths_read_anywhere(&parsed, home).is_some()
+}
+
+#[doc(hidden)]
+pub fn git_readers() -> Vec<&'static str> {
+    readers::READERS
+        .iter()
+        .filter(|reader| reader.program.first() == Some(&"git"))
+        .filter_map(|reader| reader.program.get(1).copied())
+        .collect()
+}
+
 pub fn paths_read_anywhere(command: &ShellCommand, home: Option<&str>) -> Option<Vec<PathBuf>> {
     let parts = command.commands();
     if !command.flat() || parts.is_empty() {

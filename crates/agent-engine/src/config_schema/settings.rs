@@ -88,6 +88,9 @@ fn properties() -> Value {
                 "allowWrite": names("Extra folders sandboxed commands may write to."),
                 "allowUnixSockets": names(
                     "Service sockets sandboxed commands may connect to on macOS, such as the Docker socket or a tmux server's (refused by default)."
+                ),
+                "allowRead": names(
+                    "Paths sandboxed commands may read on macOS although they are credential stores (~/.ssh, ~/.aws, ~/.npmrc, ~/.gnupg, …) or the app's data folder, which are unreadable by default."
                 )
             },
             "additionalProperties": false

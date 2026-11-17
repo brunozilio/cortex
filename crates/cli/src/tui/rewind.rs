@@ -99,11 +99,12 @@ impl App {
         let kept = if rewound.conversation { "" } else { "; the conversation was compacted since, so it is kept" };
         self.transcript.notice(format!("Rewound: {files}{kept}. Changes made with Bash are not undone."));
         if !rewound.skipped.is_empty() {
-            let named: Vec<String> = rewound.skipped.iter().map(|path| path.display().to_string()).collect();
-            self.transcript.notice(format!(
-                "Left as they are, because each changed after the agent left it: {}",
-                named.join(", ")
-            ));
+            let named: Vec<String> = rewound
+                .skipped
+                .iter()
+                .map(|skipped| format!("{} ({})", skipped.path.display(), skipped.why.said()))
+                .collect();
+            self.transcript.notice(format!("Left as they are: {}", named.join("; ")));
         }
         if std::mem::take(&mut self.turn.retrying) {
             self.send(rewound.prompt);

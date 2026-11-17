@@ -35,7 +35,7 @@ pub use knowledge::memory::{
 pub use models::model::{Access, Effort, ModelOption, ModelProvider};
 pub use run::approval::{AgentAsk, AskId, AskKind, Choice, Decision, PermissionMode, Question};
 pub use run::engines::EngineProblem;
-pub use run::events::{EngineEvent, Rewound, RunId, ToolCall};
+pub use run::events::{EngineEvent, LeftAlone, Rewound, RunId, Skipped, ToolCall};
 pub use run::failure::FailureKind;
 pub use run::image::{Image, MAX_IMAGE_BYTES};
 pub use run::request::{Folder, HostContext, Policy, Prompt, PromptRequest, SessionConfig};

@@ -26,7 +26,7 @@ fn repository() -> (tempfile::TempDir, Workspace) {
 }
 
 fn recorded(workspace: &Workspace) -> BTreeMap<String, Option<String>> {
-    let files = workspace.services.files.as_ref().expect("files").take();
+    let files = workspace.services.files.as_ref().expect("files").take().files;
     let text = |kept: String| String::from_utf8(STANDARD.decode(kept).expect("base64")).expect("text");
     files
         .into_iter()

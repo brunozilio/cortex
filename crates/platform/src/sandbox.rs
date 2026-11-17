@@ -8,6 +8,8 @@ pub struct Confinement {
     pub network: bool,
     pub environment: Vec<(String, String)>,
     pub sockets: Vec<PathBuf>,
+    pub unreadable: Vec<PathBuf>,
+    pub readable: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

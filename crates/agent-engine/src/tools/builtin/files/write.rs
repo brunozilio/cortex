@@ -48,7 +48,7 @@ impl Tool for Write {
             return Outcome::error(format!("Could not create {}: {error}", parent.display()));
         }
         let previous = existed.then(|| std::fs::read_to_string(&path).unwrap_or_default());
-        workspace.before_write(&path);
+        let not_kept = workspace.before_write(&path).unwrap_or_default();
         match platform::atomic::write(&path, content.as_bytes()) {
             Ok(_) => {
                 workspace.mark_read(&path);
@@ -63,7 +63,8 @@ impl Tool for Write {
                 let others = workspace.claim(&path);
                 let remembered = workspace.anchored(&path);
                 let callers = workspace.callers(&path, previous.as_deref().unwrap_or_default(), content);
-                Outcome::ok(said + &workspace.diagnosed(&path, content) + &callers + &tests + &others + &remembered)
+                let notes = [workspace.diagnosed(&path, content), callers, tests, others, remembered, not_kept];
+                Outcome::ok(said + &notes.concat())
                     .showing(super::shown_diff::created(&heading, content))
                     .editing(domain::changes::Edited::written(path.clone(), previous.as_deref(), content))
             }
@@ -92,6 +93,26 @@ mod tests {
 
         workspace.mark_read(&dir.path().join("old.txt"));
         assert!(!Write.run(&json!({"file_path": "old.txt", "content": "x"}), &workspace).is_error);
+    }
+
+    #[test]
+    fn replacing_a_file_too_large_to_keep_says_that_rewind_cannot_put_it_back() {
+        let dir = tempfile::tempdir().expect("dir");
+        let mut workspace = Workspace::new(dir.path());
+        workspace.services.files = Some(std::sync::Arc::default());
+        let (big, small) = (dir.path().join("big.log"), dir.path().join("small.txt"));
+        std::fs::write(&big, vec![b'x'; 10 * 1024 * 1024 + 1]).expect("big");
+        std::fs::write(&small, "one").expect("small");
+        workspace.mark_read(&big);
+        workspace.mark_read(&small);
+
+        let replaced = Write.run(&json!({"file_path": "big.log", "content": "short"}), &workspace);
+        let kept = Write.run(&json!({"file_path": "small.txt", "content": "two"}), &workspace);
+
+        assert!(!replaced.is_error, "{replaced:?}");
+        assert!(replaced.content.contains("/rewind cannot put back the earlier version"), "{}", replaced.content);
+        assert!(replaced.content.contains("10 MiB"), "{}", replaced.content);
+        assert!(!kept.content.contains("/rewind"), "{}", kept.content);
     }
 
     #[test]
