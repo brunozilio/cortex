@@ -53,7 +53,12 @@ mod tests {
     use std::sync::Arc;
 
     fn reply() -> Reply {
-        Reply { message: Message::assistant(Vec::new()), stop: StopReason::EndTurn, usage: Usage::default() }
+        Reply {
+            message: Message::assistant(Vec::new()),
+            stop: StopReason::EndTurn,
+            usage: Usage::default(),
+            served: None,
+        }
     }
 
     #[test]

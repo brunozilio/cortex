@@ -222,14 +222,28 @@ fn summarize(
     run.input = calls.iter().map(Usage::prompt).sum();
     run.cache_read = calls.iter().map(|usage| usage.cache_read).sum();
     run.tokens = run.input + calls.iter().map(|usage| usage.output).sum::<u64>();
-    run.model = info.map(|info| info.model).filter(|model| !model.is_empty()).unwrap_or_else(|| {
-        run.spans.iter().find(|span| span.kind == SpanKind::Llm).map(|span| span.name.clone()).unwrap_or_default()
-    });
+    run.model = info.map(|info| info.model).filter(|model| !model.is_empty()).map_or_else(
+        || run.spans.iter().find(|span| span.kind == SpanKind::Llm).map(|span| span.name.clone()).unwrap_or_default(),
+        |model| with_served(&model, &run.spans),
+    );
     let wasted: u64 =
         run.spans.iter().filter(|span| span.kind == SpanKind::Tool && span.failed).map(Span::duration).sum();
     run.waste = if run.duration_ms == 0 { 0.0 } else { (wasted as f64 / run.duration_ms as f64).min(1.0) };
     run.signals = signals(&run);
     run
+}
+
+fn with_served(model: &str, spans: &[Span]) -> String {
+    let mut served: Vec<String> = Vec::new();
+    for span in spans.iter().filter(|span| span.kind == SpanKind::Llm) {
+        if let Some(name) = span.attr(spans::SERVED_BY)
+            && spans::shown(model, Some(name)) != model
+            && !served.iter().any(|seen| seen == name)
+        {
+            served.push(name.to_owned());
+        }
+    }
+    if served.is_empty() { model.to_owned() } else { format!("{model} → {}", served.join(", ")) }
 }
 
 fn signals(run: &Run) -> Vec<Signal> {

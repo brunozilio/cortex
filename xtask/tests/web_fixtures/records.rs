@@ -58,6 +58,7 @@ fn first_call() -> ModelCall {
                 { "ToolUse": { "id": "b1", "name": "Bash", "input": { "command": "cargo test" } } }
             ]
         })),
+        served: None,
     }
 }
 

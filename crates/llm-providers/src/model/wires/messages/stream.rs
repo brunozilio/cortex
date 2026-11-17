@@ -146,7 +146,7 @@ impl Folder {
             return Err(ModelError::Network("the answer stopped before it was complete".into()));
         }
         let stop = self.stop.unwrap_or(StopReason::EndTurn);
-        Ok(Reply { message: Message::assistant(self.blocks), stop, usage: self.usage })
+        Ok(Reply { message: Message::assistant(self.blocks), stop, usage: self.usage, served: None })
     }
 }
 

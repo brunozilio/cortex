@@ -30,7 +30,12 @@ pub fn call(id: &'static str, name: &'static str, input: Value) -> Scripted {
 }
 
 pub fn stopping(blocks: Vec<Block>, stop: StopReason) -> Scripted {
-    Ok(Reply { message: Message::assistant(blocks), stop, usage: Usage { input: 10, output: 5, ..Usage::default() } })
+    Ok(Reply {
+        message: Message::assistant(blocks),
+        stop,
+        usage: Usage { input: 10, output: 5, ..Usage::default() },
+        served: None,
+    })
 }
 
 pub fn measuring(blocks: Vec<Block>, prompt_tokens: u64) -> Scripted {

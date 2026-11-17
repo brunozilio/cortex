@@ -73,6 +73,25 @@ fn a_run_keeps_its_prompt_and_every_event_in_the_session_file() {
 }
 
 #[test]
+fn a_call_keeps_the_model_that_answered_it() {
+    let dir = tempfile::tempdir().expect("dir");
+    let answered = ScriptedModel::reply(vec![Block::Text("Hi.".into())])
+        .map(|reply| agent_engine::model::Reply { served: Some("claude-haiku-4.5".into()), ..reply });
+    let talk = Arc::new(ScriptedModel::new([answered]));
+    let store = Arc::new(FileSessions::new(dir.path().join("native")));
+    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![talk]))), store.clone());
+    let request = PromptRequest::plain(dir.path().into(), "hi", model());
+    let session = session_of(&finish(&start(&engine, &request)));
+
+    let entries = store.entries(&request, &session).expect("entries");
+    let served: Vec<Option<&str>> = entries
+        .iter()
+        .filter_map(|e| if let Entry::Called { call, .. } = e { Some(call.served.as_deref()) } else { None })
+        .collect();
+    assert_eq!(served, [Some("claude-haiku-4.5")]);
+}
+
+#[test]
 fn a_compaction_keeps_what_came_before_and_the_resume_starts_at_the_summary() {
     let dir = tempfile::tempdir().expect("dir");
     let talk = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hello there.".into())])]));

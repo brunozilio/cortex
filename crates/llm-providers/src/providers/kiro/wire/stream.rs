@@ -15,6 +15,7 @@ pub struct Folder {
     context: Option<f64>,
     output_chars: u64,
     events: usize,
+    served: Option<String>,
 }
 
 impl Folder {
@@ -35,6 +36,9 @@ impl Folder {
         let kind = frame.header(":event-type").unwrap_or_default();
         if kind != "initial-response" {
             self.events += 1;
+        }
+        if let Some(model) = payload["modelId"].as_str().filter(|model| !model.is_empty()) {
+            self.served = Some(model.to_owned());
         }
         match kind {
             "assistantResponseEvent" => self.text(text(&payload["content"]), on),
@@ -134,7 +138,7 @@ impl Folder {
             _ => 0,
         };
         let usage = Usage { input, output: self.output_chars.div_ceil(4), ..Usage::default() };
-        Ok(Reply { message: Message::assistant(self.blocks), stop, usage })
+        Ok(Reply { message: Message::assistant(self.blocks), stop, usage, served: self.served })
     }
 }
 
@@ -213,6 +217,13 @@ mod tests {
         assert_eq!(seen.len(), 5);
         assert_eq!(reply.stop, StopReason::EndTurn);
         assert_eq!(reply.usage.input, 0, "no window, no estimate");
+        assert_eq!(reply.served.as_deref(), Some("claude-haiku-4.5"));
+    }
+
+    #[test]
+    fn a_stream_that_names_no_model_leaves_the_served_model_unknown() {
+        let (reply, _) = fold(include_bytes!("testdata/tool_use.bin"), None);
+        assert_eq!(reply.map(|r| r.served), Ok(None));
     }
 
     #[test]

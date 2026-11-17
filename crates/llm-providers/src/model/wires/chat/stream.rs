@@ -157,7 +157,7 @@ impl Folder {
             Some("length") => StopReason::MaxTokens,
             _ => StopReason::EndTurn,
         };
-        Ok(Reply { message, stop, usage: self.usage })
+        Ok(Reply { message, stop, usage: self.usage, served: None })
     }
 }
 

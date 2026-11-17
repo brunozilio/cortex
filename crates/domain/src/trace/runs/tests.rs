@@ -171,3 +171,40 @@ fn a_model_call_shows_the_messages_it_was_sent_its_system_prompt_its_tools_and_i
     assert!(light[0].messages.is_empty() && light[0].systems.is_empty());
     assert!(light[0].spans.iter().all(|span| span.request.is_none() && span.reply.is_none()));
 }
+
+#[test]
+fn a_model_that_picks_another_shows_which_one_answered() {
+    let call =
+        |served: &str| ModelCall { model: "kiro:auto".into(), served: Some(served.into()), ..ModelCall::default() };
+    let records = vec![
+        Record::Prompted { at_ms: 1_000, prompt: "hi".into() },
+        Record::Opened { at_ms: 1_000, run: crate::trace::RunInfo { model: "kiro:auto".into(), ..Default::default() } },
+        Record::Called { at_ms: 1_100, agent: None, call: call("claude-haiku-4.5") },
+        at(1_200, EngineEvent::TextDelta("hello".into())),
+        at(1_300, EngineEvent::Completed { duration_ms: 300, cost_usd: None }),
+        Record::Prompted { at_ms: 2_000, prompt: "again".into() },
+        Record::Called {
+            at_ms: 2_100,
+            agent: None,
+            call: ModelCall { model: "kiro:auto".into(), ..ModelCall::default() },
+        },
+        at(2_200, EngineEvent::TextDelta("hi".into())),
+        at(2_300, EngineEvent::Completed { duration_ms: 300, cost_usd: None }),
+    ];
+
+    let runs = runs("s1", &build(records));
+
+    let [llm] = named(&runs[0], SpanKind::Llm)[..] else { panic!("one model call") };
+    assert_eq!(llm.name, "kiro:auto → claude-haiku-4.5");
+    assert_eq!(llm.attr("served by"), Some("claude-haiku-4.5"));
+    assert_eq!(runs[0].model, "kiro:auto → claude-haiku-4.5");
+    let [unknown] = named(&runs[1], SpanKind::Llm)[..] else { panic!("one model call") };
+    assert_eq!((unknown.name.as_str(), unknown.attr("served by")), ("kiro:auto", None));
+}
+
+#[test]
+fn a_model_that_answered_as_itself_keeps_its_name() {
+    assert_eq!(spans::shown("kiro:claude-sonnet-4.5", Some("claude-sonnet-4.5")), "kiro:claude-sonnet-4.5");
+    assert_eq!(spans::shown("sonnet", Some("sonnet")), "sonnet");
+    assert_eq!(spans::shown("auto", None), "auto");
+}

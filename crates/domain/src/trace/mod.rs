@@ -56,6 +56,8 @@ pub struct ModelCall {
     pub added: Option<Vec<serde_json::Value>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub served: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]

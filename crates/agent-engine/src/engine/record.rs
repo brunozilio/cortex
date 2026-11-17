@@ -97,6 +97,7 @@ impl Recorder {
             keep: delta.as_ref().map_or(0, |delta| delta.keep),
             added: delta.map(|delta| delta.added),
             reply: serde_json::to_value(&reply.message).ok(),
+            served: reply.served.clone(),
         };
         self.flush();
         self.write(Entry::Called { at_ms: now(), agent, call });

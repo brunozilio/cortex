@@ -293,6 +293,7 @@ fn a_turn_that_ends_between_a_call_and_its_result_is_saved_with_the_call_closed(
         message: Message::assistant(vec![call]),
         stop: StopReason::Refusal,
         usage: Usage::default(),
+        served: None,
     });
     let engine = NativeEngine::new(
         Arc::new(Source(Mutex::new(vec![Arc::new(ScriptedModel::new([refused]))]))),

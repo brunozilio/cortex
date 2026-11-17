@@ -50,7 +50,7 @@ mod tests {
         }
         fn finish(self, _on: &mut dyn FnMut(Delta)) -> Result<Reply, ModelError> {
             let message = Message::assistant(vec![Block::Text(self.0.join(","))]);
-            Ok(Reply { message, stop: StopReason::EndTurn, usage: Usage::default() })
+            Ok(Reply { message, stop: StopReason::EndTurn, usage: Usage::default(), served: None })
         }
     }
 

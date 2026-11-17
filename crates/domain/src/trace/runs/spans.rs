@@ -30,6 +30,16 @@ fn usage(usage: &ModelUsage) -> Usage {
     }
 }
 
+pub(super) const SERVED_BY: &str = "served by";
+
+pub(super) fn shown(model: &str, served: Option<&str>) -> String {
+    let bare = model.rsplit_once(':').map_or(model, |(_, bare)| bare);
+    match served.filter(|served| *served != bare && *served != model) {
+        Some(served) => format!("{model} → {served}"),
+        None => model.to_owned(),
+    }
+}
+
 fn short(text: &str) -> String {
     let line = text.lines().next().unwrap_or_default();
     match line.char_indices().nth(SUMMARY) {
@@ -183,7 +193,10 @@ impl Spans {
         spent: &Option<ModelUsage>,
         call: &Option<ModelCall>,
     ) {
-        let name = call.as_ref().map(|c| c.model.clone()).or_else(|| spent.as_ref().map(|u| u.model.clone()));
+        let name = call
+            .as_ref()
+            .map(|c| shown(&c.model, c.served.as_deref()))
+            .or_else(|| spent.as_ref().map(|u| u.model.clone()));
         let id = self.add(parent, SpanKind::Llm, name.unwrap_or_else(|| "model".into()), at, until);
         let context = call.as_ref().zip(spent.as_ref()).map(|(call, spent)| self.context(call, spent));
         let sent = call.as_ref().map(|call| self.messages.sent(parent, call)).unwrap_or_default();
@@ -200,6 +213,9 @@ impl Spans {
                 ("max tokens".into(), call.max_tokens.to_string()),
                 ("effort".into(), call.effort.clone()),
             ];
+            if let Some(served) = &call.served {
+                span.attrs.push((SERVED_BY.into(), served.clone()));
+            }
         }
     }
 
