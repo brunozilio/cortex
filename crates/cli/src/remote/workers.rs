@@ -26,12 +26,23 @@ pub fn script_name() -> String {
     format!("{}-relay", brand::COMMAND)
 }
 
+const REMOTE_MARKER: &[u8] = b"remote-relay";
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|window| window == needle)
+}
+
 pub fn modules(page: &[page::Asset], migrate: bool) -> Result<Vec<Part>, String> {
     if !page::has_index(page) {
         return Err(
             "This program was built without the page: run `cargo run -p xtask -- web`, build again, then run this."
                 .into(),
         );
+    }
+    if !page.iter().any(|asset| asset.path.ends_with(".js") && contains(asset.bytes, REMOTE_MARKER)) {
+        return Err("This program's page was built before remote control: run `cargo run -p xtask -- web`, \
+             build again, then run this."
+            .into());
     }
     let mut imports = String::new();
     let mut entries = Vec::new();

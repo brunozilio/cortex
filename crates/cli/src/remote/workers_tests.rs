@@ -7,7 +7,7 @@ use super::*;
 
 static PAGE: &[page::Asset] = &[
     page::Asset { path: "index.html", bytes: b"<html><head></head><body></body></html>" },
-    page::Asset { path: "assets/app-1.js", bytes: b"app()" },
+    page::Asset { path: "assets/app-1.js", bytes: b"app('meta[name=\"remote-relay\"]')" },
     page::Asset { path: "icons/icon-192.png", bytes: &[137, 80, 78, 71] },
 ];
 
@@ -102,6 +102,16 @@ fn the_worker_carries_the_page_with_the_relay_marker_and_the_app_s_manifest() {
     assert!(String::from_utf8_lossy(&parts[3].bytes).contains(relay::MARKER));
     assert_eq!(parts[5].bytes, [137, 80, 78, 71]);
     assert_eq!(parts[2].bytes, relay::WORKER.as_bytes());
+}
+
+#[test]
+fn a_page_built_before_remote_control_is_not_deployed() {
+    let old: &[page::Asset] = &[
+        page::Asset { path: "index.html", bytes: b"<html><head></head></html>" },
+        page::Asset { path: "assets/app-0.js", bytes: b"fetch('/api/report')" },
+    ];
+    let refused = modules(old, true).unwrap_err();
+    assert!(refused.contains("before remote control") && refused.contains("xtask -- web"), "{refused}");
 }
 
 #[test]
