@@ -3404,13 +3404,10 @@ dependencies = [
  "axum",
  "brand",
  "futures-util",
- "http-body-util",
  "page",
- "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite",
- "tower",
  "tunnel",
 ]
 

@@ -7,15 +7,16 @@ How the pieces fit today, 2026-11-16, before the restructuring plan. The "Target
 Twelve crates. Dependencies are one-way. These are the real non-dev edges; `xtask lint` checks them against the manifests.
 
 ```
-cli              -> app, console, content, platform, domain, brand
+cli              -> app, console, relay, page, content, platform, domain, brand
 app              -> agent-engine, llm-providers, code-map, platform, domain, brand
 agent-engine     -> llm-providers, language-servers, script, content, platform, domain, brand
 llm-providers    -> platform, domain, brand
 domain           -> brand
 language-servers -> platform, domain, brand
 content          -> script, brand
-console          -> platform, brand
-code-map, platform, script, brand -> no workspace crate
+console          -> page, tunnel, platform, brand
+relay            -> page, tunnel, brand
+code-map, platform, script, brand, page, tunnel -> no workspace crate
 ```
 
 The main line is `cli -> app -> agent-engine -> llm-providers -> domain`.

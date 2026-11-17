@@ -26,7 +26,7 @@ futures-util.workspace = true
 crossbeam-channel.workspace = true
 
 [dev-dependencies]
-relay = { path = "../relay" }
+relay.workspace = true
 tempfile.workspace = true
 tower = { workspace = true, features = ["util"] }
 http-body-util.workspace = true

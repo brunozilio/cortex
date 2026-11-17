@@ -24,6 +24,7 @@ code-map = { path = "crates/code-map" }
 console = { path = "crates/console" }
 page = { path = "crates/page" }
 tunnel = { path = "crates/tunnel" }
+relay = { path = "crates/relay" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

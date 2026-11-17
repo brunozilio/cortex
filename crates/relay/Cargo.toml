@@ -10,16 +10,13 @@ license.workspace = true
 brand.workspace = true
 page.workspace = true
 tunnel.workspace = true
-serde.workspace = true
 serde_json.workspace = true
-axum = { version = "0.8", features = ["ws"] }
+axum = { workspace = true, features = ["ws"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "sync", "macros", "time", "signal"] }
-futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
+futures-util.workspace = true
 
 [dev-dependencies]
-tokio-tungstenite = "0.29"
-http-body-util = "0.1"
-tower = { version = "0.5", features = ["util"] }
+tokio-tungstenite.workspace = true
 
 [lints]
 workspace = true
