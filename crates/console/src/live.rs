@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::convert::Infallible;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -26,6 +27,7 @@ pub struct Prompt {
 #[derive(Debug, Default)]
 struct Board {
     report: Option<String>,
+    docs: Option<String>,
     sessions: Option<String>,
     latest: BTreeMap<String, String>,
     prompts: Vec<Prompt>,
@@ -33,9 +35,24 @@ struct Board {
 }
 
 #[derive(Debug, Clone)]
+enum Update {
+    Session(String),
+    Report,
+}
+
+impl Update {
+    fn event(self) -> Event {
+        match self {
+            Self::Session(line) => Event::default().data(line),
+            Self::Report => Event::default().event("report").data("changed"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Live {
     board: Arc<Mutex<Board>>,
-    updates: broadcast::Sender<String>,
+    updates: broadcast::Sender<Update>,
 }
 
 impl Default for Live {
@@ -51,6 +68,11 @@ impl Live {
 
     pub fn show(&self, report: String) {
         self.board().report = Some(report);
+        let _ = self.updates.send(Update::Report);
+    }
+
+    pub fn document(&self, docs: String) {
+        self.board().docs = Some(docs);
     }
 
     pub fn list(&self, sessions: String) {
@@ -60,7 +82,7 @@ impl Live {
     pub fn send(&self, session: &str, data: &str) {
         let line = data.replace(['\r', '\n'], " ");
         self.board().latest.insert(session.to_owned(), line.clone());
-        let _ = self.updates.send(line);
+        let _ = self.updates.send(Update::Session(line));
     }
 
     pub fn take_prompts(&self) -> Vec<Prompt> {
@@ -70,11 +92,18 @@ impl Live {
     pub fn watched(&self) -> Option<String> {
         self.board().watched.clone()
     }
+
+    pub fn folder_of(&self, session: &str) -> Option<PathBuf> {
+        let listed: Value = serde_json::from_str(self.board().sessions.as_deref()?).ok()?;
+        let card = listed.as_array()?.iter().find(|card| card["session"].as_str() == Some(session))?;
+        Some(PathBuf::from(card["cwd"].as_str()?)).filter(|folder| folder.is_dir())
+    }
 }
 
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/report", get(report))
+        .route("/api/docs", get(docs))
         .route("/api/sessions", get(sessions))
         .route("/api/events", get(events))
         .route("/api/prompt", post(prompt))
@@ -92,25 +121,31 @@ async fn report(State(shared): State<Shared>) -> Response {
     }
 }
 
+async fn docs(State(shared): State<Shared>) -> Response {
+    match shared.live.board().docs.clone() {
+        Some(docs) => json(docs),
+        None => failure(StatusCode::SERVICE_UNAVAILABLE, "not_ready", "The terminal has not sent the docs yet."),
+    }
+}
+
 async fn sessions(State(shared): State<Shared>) -> Response {
     json(shared.live.board().sessions.clone().unwrap_or_else(|| "[]".into()))
 }
 
 async fn events(State(shared): State<Shared>) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let receiver = shared.live.updates.subscribe();
-    let latest: Vec<String> = shared.live.board().latest.values().cloned().collect();
+    let latest: Vec<Update> = shared.live.board().latest.values().cloned().map(Update::Session).collect();
     let following = stream::unfold(receiver, |mut receiver| async move {
         loop {
             match receiver.recv().await {
-                Ok(line) => return Some((line, receiver)),
+                Ok(update) => return Some((update, receiver)),
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => return None,
             }
         }
     });
-    let lines = stream::iter(latest).chain(following);
-    Sse::new(lines.map(|line| Ok(Event::default().data(line))))
-        .keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
+    let updates = stream::iter(latest).chain(following);
+    Sse::new(updates.map(|update| Ok(update.event()))).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
 
 fn named(body: &Value, field: &str) -> Option<String> {

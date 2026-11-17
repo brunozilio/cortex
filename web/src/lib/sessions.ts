@@ -37,10 +37,6 @@ async function posted(config: LiveConfig, path: string, body: object): Promise<v
   if (!response.ok) throw new Error(`the terminal refused it (${response.status})`)
 }
 
-export function sendPrompt(config: LiveConfig, session: string, text: string): Promise<void> {
-  return posted(config, '/prompt', { session, text })
-}
-
 export function watchSession(config: LiveConfig, session: string): Promise<void> {
   return posted(config, '/watch', { session })
 }

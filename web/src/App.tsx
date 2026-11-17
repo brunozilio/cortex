@@ -5,13 +5,13 @@ import { Header } from '@/shell/Header'
 import { sessionChoices } from '@/shell/SessionSelect'
 import { OverviewView } from '@/views/overview/OverviewView'
 import { TracesView } from '@/views/traces/TracesView'
-import { Composer } from '@/components/Composer'
+import { TerminalView } from '@/views/terminal/TerminalView'
 import type { InspectorTab } from '@/views/traces/inspector/Inspector'
 import type { Metric } from '@/lib/days'
 import { EMPTY_FILTERS, type Filters } from '@/lib/filters'
 import { allRuns, defaultRun, findRun, latestRun, scoped, type RunRef } from '@/lib/report'
 import { followSelection, mergeSession, readLiveConfig } from '@/lib/live'
-import { sendPrompt, useSessions, watchSession } from '@/lib/sessions'
+import { useSessions, watchSession } from '@/lib/sessions'
 import { useLiveFeed } from '@/lib/useLiveFeed'
 import type { Report, Run, SessionRuns } from '@/types'
 
@@ -40,6 +40,15 @@ export function App({ initial }: { initial: Report }) {
     setReport(after)
     setSelected(next.run)
     setSpanId(next.spanId)
+  }, () => {
+    void fetch('/api/report')
+      .then((response) => (response.ok ? (response.json() as Promise<Report>) : null))
+      .then((fresh) => {
+        if (!fresh) return
+        latest.current = { ...latest.current, report: fresh }
+        setReport(fresh)
+      })
+      .catch(() => undefined)
   })
 
   const { report: shown, ready } = useMemo(() => (session ? scoped(report, session, config !== null) : { report, ready: true }), [report, session, config])
@@ -63,8 +72,6 @@ export function App({ initial }: { initial: Report }) {
     else setSelected(null)
   }
 
-  const writingTo = config ? (session ?? run?.session ?? null) : null
-
   return (
     <TooltipProvider delayDuration={200}>
       <div className="min-h-screen">
@@ -75,26 +82,21 @@ export function App({ initial }: { initial: Report }) {
           ) : (
             <Card className="p-10 text-center text-sm text-muted-foreground">Loading this session's overview…</Card>
           )}
-          <TracesView
-            report={shown}
-            runs={runs}
-            run={run}
-            spanId={spanId}
-            tab={tab}
-            filters={filters}
-            onFilters={setFilters}
-            onRun={(target) => openRun(target, 1, tab)}
-            onSpan={setSpanId}
-            onTab={setTab}
-          />
-          {config && writingTo ? (
-            <Composer
-              key={writingTo}
-              session={writingTo}
-              title={cards.find((card) => card.session === writingTo)?.title ?? null}
-              onSend={(text) => sendPrompt(config, writingTo, text)}
+          {session ? (
+            <TracesView
+              report={shown}
+              runs={runs}
+              run={run}
+              spanId={spanId}
+              tab={tab}
+              filters={filters}
+              onFilters={setFilters}
+              onRun={(target) => openRun(target, 1, tab)}
+              onSpan={setSpanId}
+              onTab={setTab}
             />
           ) : null}
+          {config && session ? <TerminalView key={session} session={session} /> : null}
         </main>
       </div>
     </TooltipProvider>

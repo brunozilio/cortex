@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use tokio::sync::oneshot;
 
-use crate::{Assets, Live, Settings};
+use crate::{Assets, Launch, Live, Settings};
 
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(1);
 
@@ -47,7 +47,12 @@ impl Running {
     }
 
     pub fn url(&self) -> String {
-        format!("http://{}/?token={}", self.address, self.token)
+        self.url_at("/")
+    }
+
+    pub fn url_at(&self, path: &str) -> String {
+        let joiner = if path.contains('?') { '&' } else { '?' };
+        format!("http://{}{path}{joiner}token={}", self.address, self.token)
     }
 }
 
@@ -68,7 +73,10 @@ pub fn start(options: Options) -> Result<Running, StartError> {
     let address = listener.local_addr().map_err(StartError::Listen)?;
     let token = secret()?;
     let live = Live::default();
-    let app = crate::router(Settings { token: token.clone(), assets: options.assets }, live.clone());
+    let app = crate::router(
+        Settings { token: token.clone(), assets: options.assets, terminal: Launch::this_program() },
+        live.clone(),
+    );
     let (stop, stopped) = oneshot::channel::<()>();
     let thread = std::thread::Builder::new()
         .name("console".into())

@@ -7,26 +7,29 @@ use axum::routing::{any, get};
 use serde_json::json;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{Assets, Live};
+use crate::{Assets, Launch, Live};
 
 #[derive(Debug, Clone)]
 pub struct Settings {
     pub token: String,
     pub assets: Assets,
+    pub terminal: Launch,
 }
 
 #[derive(Debug, Clone)]
 pub struct Shared {
     pub token: Arc<str>,
     pub live: Live,
+    pub terminal: Launch,
 }
 
 pub fn router(settings: Settings, live: Live) -> Router {
-    let shared = Shared { token: settings.token.into(), live };
+    let shared = Shared { token: settings.token.into(), live, terminal: settings.terminal };
     let api = Router::new()
         .route("/api/health", get(|| async { axum::Json(json!({ "status": "ok" })) }))
         .route("/api/instance", get(|| async { axum::Json(json!({ "name": brand::NAME })) }))
         .merge(crate::live::routes())
+        .merge(crate::terminal::routes())
         .route("/api/{*rest}", any(|| async { failure(StatusCode::NOT_FOUND, "not_found", "No such endpoint.") }));
     let app = match settings.assets {
         Assets::Folder(dist) => {

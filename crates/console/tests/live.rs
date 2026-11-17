@@ -14,7 +14,7 @@ use tower::ServiceExt;
 const COOKIE: &str = "console_token=t";
 
 fn app(live: &Live) -> axum::Router {
-    console::router(Settings { token: "t".into(), assets: Assets::Missing }, live.clone())
+    console::router(Settings { token: "t".into(), assets: Assets::Missing, terminal: console::Launch::this_program() }, live.clone())
 }
 
 async fn call(live: &Live, method: &str, path: &str, body: Option<Value>) -> (StatusCode, String) {
@@ -95,4 +95,42 @@ fn the_page_gets_each_session_s_latest_update_at_once_then_every_new_one() {
     std::thread::sleep(Duration::from_millis(200));
     live.send("s2", "{\"id\":\"s2\",\n\"runs\":[]}");
     assert_eq!(next_data(&mut reader), r#"{"id":"s2", "runs":[]}"#, "one line per event");
+}
+
+#[tokio::test]
+async fn the_docs_are_what_the_terminal_last_gave() {
+    let live = Live::default();
+    let (status, _) = call(&live, "GET", "/api/docs", None).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "nothing to show before the terminal sends them");
+
+    live.document(json!({ "groups": [] }).to_string());
+
+    assert_eq!(call(&live, "GET", "/api/docs", None).await, (StatusCode::OK, r#"{"groups":[]}"#.into()));
+}
+
+fn next_event(reader: &mut BufReader<TcpStream>) -> (Option<String>, String) {
+    let (mut name, mut line) = (None, String::new());
+    loop {
+        line.clear();
+        reader.read_line(&mut line).expect("a line in time");
+        let line = line.trim_end();
+        if let Some(event) = line.strip_prefix("event: ") {
+            name = Some(event.to_owned());
+        }
+        if let Some(data) = line.strip_prefix("data: ") {
+            return (name, data.to_owned());
+        }
+    }
+}
+
+#[test]
+fn a_new_report_tells_the_page_to_fetch_it_again() {
+    let running = console::start(Options { assets: Assets::Missing, port: 0 }).expect("server");
+    let live = running.live();
+    let mut reader = events(&running);
+    std::thread::sleep(Duration::from_millis(200));
+
+    live.show(json!({ "sessions": [] }).to_string());
+
+    assert_eq!(next_event(&mut reader), (Some("report".into()), "changed".into()));
 }
