@@ -6,6 +6,21 @@ use crate::features::{CODE_MODE, CODE_MODE_ONLY, Features};
 
 pub const TOOL: &str = "REPL";
 pub const SEARCH: &str = "searchTools";
+pub const READ_TEXT: &str = "readText";
+pub const DETACH: Duration = Duration::from_secs(30);
+
+pub fn dispatched(number: u64, task: &str, after: Duration) -> String {
+    format!(
+        "(dispatched #{number}) The script is still running after {} s, so it goes on as background task {task}, \
+         beside the scripts you send next, which share its variables. Its output comes back through TaskOutput \
+         (task_id {task}), or by itself before your turn ends; TaskStop stops it.",
+        after.as_secs()
+    )
+}
+
+pub fn throws_on_failure(tool: &str) -> bool {
+    tool.starts_with("mcp__")
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Mode {

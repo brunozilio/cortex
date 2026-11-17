@@ -1,10 +1,16 @@
 (() => {
   const begin = globalThis.__begin;
+  const log = globalThis.__log;
   delete globalThis.__begin;
+  delete globalThis.__log;
   const pending = new Map();
   const ring = [];
   const RING = 1000;
-  let logs = [];
+  const owners = () => {
+    const found = [];
+    for (const match of String(new Error().stack).matchAll(/\(script-(\d+):/g)) found.push(Number(match[1]));
+    return JSON.stringify(found);
+  };
   const fixed = (name, value) =>
     Object.defineProperty(globalThis, name, { value, writable: false, enumerable: false, configurable: false });
   fixed("__define", fixed);
@@ -34,7 +40,7 @@
   };
   const call = (name, input) =>
     new Promise((resolve, reject) => {
-      const id = begin(String(name), JSON.stringify(input === undefined ? {} : input));
+      const id = begin(String(name), JSON.stringify(input === undefined ? {} : input), owners());
       pending.set(id, { resolve, reject, name: String(name) });
     });
   const identifier = /^[A-Za-z_$][\w$]*$/;
@@ -53,12 +59,6 @@
     error.tool = waiting.name;
     waiting.reject(error);
   });
-  fixed("__drop", () => pending.clear());
-  fixed("__takeLogs", () => {
-    const taken = logs;
-    logs = [];
-    return taken;
-  });
   fixed("__show", show);
   fixed("__failure", failure);
   fixed("__finish", async (value) => {
@@ -73,7 +73,7 @@
     }
   });
   fixed("tools", new Proxy(Object.freeze({}), { get: (_, name) => (typeof name === "string" ? (input) => call(name, input) : undefined) }));
-  fixed("self", Object.freeze({ log: (...parts) => void logs.push(parts.map(show).join(" ")) }));
+  fixed("self", Object.freeze({ log: (...parts) => void log(owners(), parts.map(show).join(" ")) }));
   const remember = (...parts) => {
     ring.push(parts.map(show).join(" "));
     if (ring.length > RING) ring.splice(0, ring.length - RING);

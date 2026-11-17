@@ -35,11 +35,31 @@ impl Tool for Read {
             Ok(path) => workspace.resolve(path),
             Err(error) => return error,
         };
+        if crate::tools::raw_text::active() {
+            return raw(&path, workspace);
+        }
         let mut outcome = read(&path, input, workspace);
         if !outcome.is_error {
             outcome.content.push_str(&workspace.anchored(&path));
         }
         outcome
+    }
+}
+
+fn raw(path: &std::path::Path, workspace: &Workspace) -> Outcome {
+    if path.is_dir() {
+        return Outcome::error(format!("{} is a directory, not a file.", shown(path, workspace)));
+    }
+    let bytes = match read_bytes(path, &workspace.stop) {
+        Ok(bytes) => bytes,
+        Err(error) => return Outcome::error(format!("Could not read {}: {error}", shown(path, workspace))),
+    };
+    match String::from_utf8(bytes) {
+        Ok(text) => {
+            workspace.mark_read(path);
+            Outcome::ok(text)
+        }
+        Err(_) => Outcome::error(format!("{} is not a text file.", shown(path, workspace))),
     }
 }
 

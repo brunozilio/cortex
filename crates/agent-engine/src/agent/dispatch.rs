@@ -101,10 +101,7 @@ impl Agent<'_> {
                     }
                     Some(_) if name == SEND_MESSAGE_TOOL => self.send_message(input, &tasks.conversations),
                     Some(_) if name == crate::tools::watch::WATCH_TOOL => self.watch(id, input, tasks),
-                    Some(_) if name == crate::tools::repl::REPL_TOOL && crate::tools::repl::in_background(input) => {
-                        self.repl_in_background(input, tasks, spawn)
-                    }
-                    Some(_) if name == crate::tools::repl::REPL_TOOL => self.repl(id, input, tasks, parent),
+                    Some(_) if name == crate::tools::repl::REPL_TOOL => self.repl(id, input, tasks, parent, spawn),
                     Some(tool) => match (self.project_skill(tool.as_ref(), input), tool.script()) {
                         (Some(skill), _) => self.skill_call(id, tool.as_ref(), skill, &summary, input, permission),
                         (None, Some(script)) => self.script_call(id, script, &summary, input, parent, permission),
@@ -143,7 +140,8 @@ impl Agent<'_> {
         } else {
             native(input)
         };
-        if !pre.context.is_empty() {
+        let raw = crate::tools::raw_text::active();
+        if !pre.context.is_empty() && !raw {
             outcome.content.push_str(&format!("\nHook context: {}", pre.context));
         }
         let event = if outcome.is_error { "PostToolUseFailure" } else { "PostToolUse" };
@@ -163,14 +161,20 @@ impl Agent<'_> {
                     outcome.is_error = true;
                     outcome.content.push_str(&format!("\nHook feedback: {reason}"));
                 }
-                outcome.content.push_str(&hook.context);
+                if !raw {
+                    outcome.content.push_str(&hook.context);
+                }
             }
             Err(error) => {
                 outcome.is_error = true;
                 outcome.content.push_str(&format!("\nHook failed: {error}"));
             }
         }
-        outcome.content = self.workspace.policy.redacted(&domain::untrusted::neutralize(&outcome.content));
+        if raw {
+            outcome.shown = Some(self.workspace.policy.redacted(outcome.shown.as_deref().unwrap_or(&outcome.content)));
+        } else {
+            outcome.content = self.workspace.policy.redacted(&domain::untrusted::neutralize(&outcome.content));
+        }
         outcome.shown = outcome.shown.map(|shown| self.workspace.policy.redacted(&shown));
         if name == "WebFetch" && !outcome.is_error {
             let (url, looking_for) = (crate::tools::field(input, "url"), crate::tools::field(input, "prompt"));

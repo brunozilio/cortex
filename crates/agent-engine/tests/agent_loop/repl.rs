@@ -11,7 +11,14 @@ fn code_mode(mode: PermissionMode) -> Rig {
     code_mode_as(mode, domain::code_mode::Mode::Beside)
 }
 
+fn only_shipped_content() {
+    static EMPTY: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    let folder = EMPTY.get_or_init(|| tempfile::tempdir().expect("content folder"));
+    let _ = content::use_folder(folder.path().to_path_buf());
+}
+
 fn code_mode_as(mode: PermissionMode, code: domain::code_mode::Mode) -> Rig {
+    only_shipped_content();
     let mut rig = Rig::new(mode);
     rig.workspace.policy.code_mode = code;
     rig.workspace.session_id = format!("repl-loop-{}", uuid_like(&rig));
@@ -102,30 +109,185 @@ fn a_script_calls_tools_and_only_what_it_returns_reaches_the_model() {
     assert!(finished, "the lane ends when the script does");
 }
 
+#[derive(Debug)]
+struct Slow;
+
+impl agent_engine::tools::Tool for Slow {
+    fn spec(&self) -> agent_engine::model::ToolSpec {
+        agent_engine::model::ToolSpec {
+            name: "Slow".into(),
+            description: "Takes a while".into(),
+            schema: json!({ "type": "object" }),
+        }
+    }
+
+    fn access(&self) -> agent_engine::tools::Access {
+        agent_engine::tools::Access::Reads
+    }
+
+    fn summary(&self, _input: &serde_json::Value) -> String {
+        String::new()
+    }
+
+    fn run(
+        &self,
+        _input: &serde_json::Value,
+        _workspace: &agent_engine::tools::Workspace,
+    ) -> agent_engine::tools::Outcome {
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        agent_engine::tools::Outcome::ok("slow result")
+    }
+}
+
+fn detaching_soon() -> Rig {
+    let mut rig = code_mode(PermissionMode::AcceptEdits);
+    rig.workspace.policy.code_mode_detach = Some(std::time::Duration::from_millis(100));
+    rig
+}
+
+const SLOW_SCRIPT: &str = "self.log('waiting'); const got = await Slow({}); globalThis.fromSlow = got; \
+                           self.log('slow done'); 'finished'";
+
 #[test]
-fn a_background_script_runs_apart_and_its_result_is_collected_with_task_output() {
-    let rig = code_mode(PermissionMode::AcceptEdits);
+fn a_long_script_is_dispatched_keeps_running_and_shares_its_context() {
+    let rig = detaching_soon();
     let model = ScriptedModel::new([
-        ScriptedModel::reply(vec![tool_use("r0", "REPL", json!({ "code": "globalThis.shared = 'main'" }))]),
-        ScriptedModel::reply(vec![tool_use(
-            "r1",
-            "REPL",
-            json!({
-                "code": "const text = await Read({ file_path: 'notes.txt' }); [typeof shared, text.includes('beta')]",
-                "run_in_background": true
-            }),
-        )]),
+        ScriptedModel::reply(vec![tool_use("r0", "REPL", json!({ "code": SLOW_SCRIPT }))]),
         ScriptedModel::reply(vec![tool_use("t0", "TaskOutput", json!({ "task_id": "task-1" }))]),
+        ScriptedModel::reply(vec![tool_use("r1", "REPL", json!({ "code": "fromSlow" }))]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    let mut history = vec![Message::user("go")];
+    let tools: Vec<Box<dyn agent_engine::tools::Tool>> =
+        vec![Box::new(agent_engine::tools::repl::Repl), Box::new(Slow)];
+
+    rig.run_with(&model, &mut history, tools).expect("run");
+
+    let results = results(&history);
+    assert!(
+        results[0].0.starts_with("(dispatched #") && results[0].0.contains("task-1") && !results[0].1,
+        "{:?}",
+        results[0]
+    );
+    let collected = &results[1].0;
+    assert!(
+        collected.contains("ended.\n<log>\nwaiting\nslow done\n</log>\n<result>\nfinished\n</result>"),
+        "{collected}"
+    );
+    assert_eq!(
+        results[2],
+        ("<result>\nslow result\n</result>".to_owned(), false),
+        "the next script reads what it kept"
+    );
+}
+
+#[test]
+fn a_dispatched_script_left_uncollected_is_handed_over_before_the_turn_ends() {
+    let rig = detaching_soon();
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("r0", "REPL", json!({ "code": SLOW_SCRIPT }))]),
+        ScriptedModel::reply(vec![Block::Text("I will wait.".into())]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    let mut history = vec![Message::user("go")];
+    let tools: Vec<Box<dyn agent_engine::tools::Tool>> =
+        vec![Box::new(agent_engine::tools::repl::Repl), Box::new(Slow)];
+
+    rig.run_with(&model, &mut history, tools).expect("run");
+
+    let handed = history.iter().map(Message::text).find(|text| text.contains("ended.\n<log>")).unwrap_or_default();
+    assert!(handed.contains("<result>\nfinished\n</result>"), "{history:?}");
+}
+
+#[derive(Debug)]
+struct Broken;
+
+impl agent_engine::tools::Tool for Broken {
+    fn spec(&self) -> agent_engine::model::ToolSpec {
+        agent_engine::model::ToolSpec {
+            name: "mcp__tracker__get".into(),
+            description: "Get an issue".into(),
+            schema: json!({ "type": "object" }),
+        }
+    }
+
+    fn access(&self) -> agent_engine::tools::Access {
+        agent_engine::tools::Access::Reads
+    }
+
+    fn summary(&self, _input: &serde_json::Value) -> String {
+        String::new()
+    }
+
+    fn run(
+        &self,
+        _input: &serde_json::Value,
+        _workspace: &agent_engine::tools::Workspace,
+    ) -> agent_engine::tools::Outcome {
+        agent_engine::tools::Outcome::error("the tracker is down")
+    }
+}
+
+#[test]
+fn a_built_in_tool_resolves_with_an_error_and_an_mcp_tool_throws() {
+    let rig = code_mode(PermissionMode::AcceptEdits);
+    let code = "const missing = await Read({ file_path: 'nowhere.txt' }); \
+                let thrown = 'nothing'; \
+                try { await mcp__tracker__get({}) } catch (error) { thrown = `${error.name} ${error.tool}: ${error.message}` } \
+                [typeof missing.error, thrown]";
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("r0", "REPL", json!({ "code": code }))]),
         ScriptedModel::reply(vec![Block::Text("Done.".into())]),
     ]);
     let mut history = vec![Message::user("go")];
 
-    rig.run_with(&model, &mut history, vec![Box::new(agent_engine::tools::repl::Repl)]).expect("run");
+    let tools: Vec<Box<dyn agent_engine::tools::Tool>> =
+        vec![Box::new(agent_engine::tools::repl::Repl), Box::new(Broken)];
+    rig.run_with(&model, &mut history, tools).expect("run");
 
-    let results = results(&history);
-    assert!(results[1].0.contains("\"task_id\":\"task-1\"") && !results[1].1, "{:?}", results[1]);
-    let collected = &results[2].0;
-    assert!(collected.contains("\"undefined\"") && collected.contains("true"), "own context, real read: {collected}");
+    let (content, failed) = &results(&history)[0];
+    assert!(!failed, "{content}");
+    assert!(
+        content.contains("\"string\"") && content.contains("ToolError mcp__tracker__get: the tracker is down"),
+        "{content}"
+    );
+}
+
+#[test]
+fn file_write_and_edit_work_on_the_raw_text_through_the_tools() {
+    let rig = code_mode(PermissionMode::AcceptEdits);
+    std::fs::write(rig.dir.path().join("long.txt"), format!("{}\nend", "x".repeat(3000))).expect("write");
+    let code = "const text = await file('notes.txt').text(); \
+                await write('copy.txt', text.toUpperCase()); \
+                await edit('copy.txt', 'BETA', 'gamma'); \
+                const long = await file('long.txt').text(); \
+                [text, await file('copy.txt').lines(), long.length, await file('gone.txt').exists()]";
+
+    let history = scripts(&rig, &[code]);
+
+    let (content, failed) = &results(&history)[0];
+    assert!(!failed, "{content}");
+    assert!(content.contains("\"alpha\\nbeta\\n\""), "the text comes unnumbered: {content}");
+    assert_eq!(std::fs::read_to_string(rig.dir.path().join("copy.txt")).expect("copy"), "ALPHA\ngamma\n");
+    assert!(content.contains("3004"), "a long line is not cut: {content}");
+    assert!(content.contains("false"), "a missing file does not exist: {content}");
+}
+
+#[test]
+fn the_shell_tag_throws_on_a_failing_command_and_nothrow_gives_its_exit_code() {
+    let rig = code_mode(PermissionMode::Bypass);
+    let code = "const listed = await $`ls`; \
+                const quiet = await $`exit 3`.nothrow(); \
+                let thrown = ''; \
+                try { await $`exit 4` } catch (error) { thrown = `${error.name} ${error.exitCode}` } \
+                [listed.includes('notes.txt'), quiet.exitCode, thrown, await $`echo ${\"it's\"}`.text()]";
+
+    let history = scripts(&rig, &[code]);
+
+    let (content, failed) = &results(&history)[0];
+    assert!(!failed, "{content}");
+    assert!(content.contains("true") && content.contains("3,") && content.contains("\"ToolError 4\""), "{content}");
+    assert!(content.contains("it's"), "values are quoted for the shell: {content}");
 }
 
 #[test]
@@ -260,14 +422,14 @@ fn a_call_the_user_refuses_throws_in_the_script_and_nothing_is_written() {
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
     });
-    let code = "try { await Write({ file_path: 'made.txt', content: 'x' }); 'written' } \
-                catch (error) { `refused: ${error.name} ${error.tool}` }";
+    let code = "const written = await Write({ file_path: 'made.txt', content: 'x' }); \
+                typeof written === 'object' && typeof written.error === 'string' ? 'refused' : 'written'";
 
     let history = scripts(&rig, &[code]);
     denier.join().expect("denier");
 
     let (content, failed) = &results(&history)[0];
-    assert!(!failed && content.starts_with("<result>\nrefused: ToolError Write\n</result>\n<refused>\n"), "{content}");
+    assert!(!failed && content.starts_with("<result>\nrefused\n</result>\n<refused>\n"), "{content}");
     assert!(content.contains("- Write: "), "the refused call is listed: {content}");
     assert!(!rig.dir.path().join("made.txt").exists());
 }

@@ -275,6 +275,71 @@ fn broken_helpers_fail_every_script_with_their_error() {
     assert!(failure.starts_with("the helpers failed: Error: no helpers"), "{failure}");
 }
 
+fn start(session: &Session, code: &str) -> mpsc::Receiver<Message> {
+    session.evaluate(Evaluate {
+        code: code.to_owned(),
+        functions: vec!["Read".into()],
+        limits: Limits::default(),
+        stop: Arc::new(AtomicBool::new(false)),
+    })
+}
+
+fn next(messages: &mpsc::Receiver<Message>) -> Message {
+    messages.recv_timeout(Duration::from_secs(20)).expect("a message")
+}
+
+#[test]
+fn scripts_run_side_by_side_in_one_context_and_keep_their_own_logs() {
+    let session = Session::start();
+    let first = start(
+        &session,
+        "self.log('first starts'); const text = await Read({}); self.log('first got', text); globalThis.got = text; 'first'",
+    );
+    let Message::Call(held) = next(&first) else { panic!("the first script calls Read") };
+
+    let second = start(&session, "self.log('second runs'); typeof got");
+    let Message::Done(second) = next(&second) else { panic!("the second script ends while the first waits") };
+    held.reply.send(Ok(json!("words")));
+    let Message::Done(first) = next(&first) else { panic!("the first script ends") };
+    let third = evaluate(&session, "got", nothing);
+
+    assert_eq!((second.outcome, second.logs), (Ok("undefined".to_owned()), vec!["second runs".to_owned()]));
+    assert_eq!(first.outcome, Ok("first".to_owned()));
+    assert_eq!(first.logs, ["first starts", "first got words"]);
+    assert!(first.number < second.number);
+    assert_eq!(third.outcome, Ok("words".to_owned()), "they share one context");
+}
+
+#[test]
+fn a_function_an_earlier_script_declared_serves_the_script_that_calls_it() {
+    let session = Session::start();
+    let answer =
+        |_: &str, input: &Value| Ok(json!(format!("text of {}", input["file_path"].as_str().unwrap_or_default())));
+    evaluate(
+        &session,
+        "async function both(a, b) { const one = await Read({ file_path: a }); self.log('read', a); return [one, await Read({ file_path: b })] }",
+        answer,
+    );
+
+    let (done, seen) =
+        evaluate_within(&session, "await both('a', 'b')", Limits::default(), Arc::new(AtomicBool::new(false)), answer);
+
+    assert_eq!(seen.len(), 2, "both calls reach the script that is running");
+    assert_eq!(done.logs, ["read a"]);
+    assert!(done.outcome.expect("both read").contains("text of b"));
+}
+
+#[test]
+fn a_script_stuck_on_another_s_promise_ends_only_when_nothing_can_settle_it() {
+    let session = Session::start();
+    let waiting = start(&session, "globalThis.gate = {}; await new Promise((open) => { gate.open = open })");
+    let opener = evaluate(&session, "gate.open('opened'); 'done'", nothing);
+    let Message::Done(waited) = next(&waiting) else { panic!("the waiting script ends") };
+
+    assert_eq!(opener.outcome, Ok("done".to_owned()));
+    assert_eq!(waited.outcome, Ok("opened".to_owned()), "a script may wait on a promise another one settles");
+}
+
 #[test]
 fn a_call_left_unawaited_by_an_ended_script_never_lands_in_the_next_one() {
     let session = Session::start();

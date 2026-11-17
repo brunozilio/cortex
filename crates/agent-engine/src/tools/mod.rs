@@ -10,6 +10,7 @@ pub mod peers;
 pub mod persisted;
 pub mod plan_mode;
 pub mod progress;
+pub mod raw_text;
 pub mod read_files;
 pub mod repl;
 mod rule_target;

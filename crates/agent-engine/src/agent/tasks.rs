@@ -38,6 +38,14 @@ impl Tasks {
     }
 }
 
+const BACKGROUND_AT_MOST: usize = 16;
+
+impl Agent<'_> {
+    pub(super) fn can_background(&self, tasks: &Tasks) -> bool {
+        self.depth == 0 && tasks.background.locked().len() < BACKGROUND_AT_MOST
+    }
+}
+
 pub(super) type BackgroundJob<'env> = Box<dyn FnOnce(&Arc<Control>, &crate::tools::Workspace) -> Outcome + Send + 'env>;
 
 pub(super) struct StopTasksOnDrop<'a>(pub(super) &'a Tasks);
@@ -139,8 +147,11 @@ impl Agent<'_> {
         job: BackgroundJob<'env>,
         spawn: &dyn Fn(Box<dyn FnOnce() + Send + 'env>),
     ) -> Result<String, Outcome> {
+        if !self.can_background(tasks) {
+            return Err(Outcome::error(format!("Background {what} limit reached (16 per run; no nested agents).")));
+        }
         let mut tasks = tasks.background.locked();
-        if self.depth > 0 || tasks.len() >= 16 {
+        if tasks.len() >= BACKGROUND_AT_MOST {
             return Err(Outcome::error(format!("Background {what} limit reached (16 per run; no nested agents).")));
         }
         let id = format!("task-{}", tasks.len() + 1);

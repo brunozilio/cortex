@@ -25,6 +25,7 @@ pub struct Policy {
     pub affected_tests: bool,
     pub session_claims: bool,
     pub code_mode: domain::code_mode::Mode,
+    pub code_mode_detach: Option<std::time::Duration>,
     pub web: WebReading,
     pub output: domain::output::Shaping,
 }
@@ -46,6 +47,7 @@ impl Policy {
             affected_tests: self.affected_tests,
             session_claims: self.session_claims,
             code_mode: self.code_mode,
+            code_mode_detach: self.code_mode_detach,
             web: self.web,
             output: self.output,
         }

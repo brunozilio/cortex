@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use domain::code_mode::{Declared, Mode};
 use platform::sync::Locked;
@@ -7,9 +8,10 @@ use serde_json::Value;
 use super::{Access, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
-pub use domain::code_mode::{SEARCH as SEARCH_TOOLS, TOOL as REPL_TOOL};
+pub use domain::code_mode::{READ_TEXT, SEARCH as SEARCH_TOOLS, TOOL as REPL_TOOL};
 
 const KEPT: usize = 8;
+const IDLE: Duration = Duration::from_secs(600);
 const HELPERS: &str = "repl/helpers.js";
 
 pub const OUT_OF_REACH: [&str; 5] = [REPL_TOOL, "EnterPlanMode", "ExitPlanMode", "EnterWorktree", "ExitWorktree"];
@@ -48,37 +50,39 @@ impl Tool for Repl {
     }
 }
 
-type Contexts = Mutex<Vec<(String, Arc<script::session::Session>)>>;
-
 #[derive(Debug)]
 pub struct Context {
     pub session: Arc<script::session::Session>,
     pub started_now: bool,
 }
 
+#[derive(Debug, Default)]
+struct Contexts(Vec<(String, Arc<script::session::Session>, Instant)>);
+
+impl Contexts {
+    fn get(&mut self, id: &str, now: Instant, start: impl FnOnce() -> script::session::Session) -> Context {
+        if let Some(at) = self.0.iter().position(|(owner, ..)| owner == id) {
+            let (owner, session, _) = self.0.remove(at);
+            self.0.push((owner, Arc::clone(&session), now));
+            return Context { session, started_now: false };
+        }
+        let session = Arc::new(start());
+        self.0.push((id.to_owned(), Arc::clone(&session), now));
+        while self.0.len() > KEPT && self.0.first().is_some_and(|(.., used)| now.duration_since(*used) >= IDLE) {
+            self.0.remove(0);
+        }
+        Context { session, started_now: true }
+    }
+}
+
 pub fn session(id: &str) -> Context {
-    static ALL: OnceLock<Contexts> = OnceLock::new();
+    static ALL: OnceLock<Mutex<Contexts>> = OnceLock::new();
     let mut all = ALL.get_or_init(Mutex::default).locked();
-    if let Some(at) = all.iter().position(|(owner, _)| owner == id) {
-        let found = all.remove(at);
-        let session = Arc::clone(&found.1);
-        all.push(found);
-        return Context { session, started_now: false };
-    }
-    let session = Arc::new(script::session::Session::with_helpers(helpers()));
-    all.push((id.to_owned(), Arc::clone(&session)));
-    if all.len() > KEPT {
-        all.remove(0);
-    }
-    Context { session, started_now: true }
+    all.get(id, Instant::now(), || script::session::Session::with_helpers(helpers()))
 }
 
 pub fn helpers() -> String {
     content::source(HELPERS).unwrap_or_default()
-}
-
-pub fn in_background(input: &Value) -> bool {
-    input["run_in_background"].as_bool() == Some(true)
 }
 
 pub fn reachable(name: &str) -> bool {
@@ -127,16 +131,24 @@ mod tests {
     }
 
     #[test]
-    fn one_session_keeps_one_context_and_the_oldest_ones_are_let_go() {
-        let first = session("repl-test-a");
+    fn one_session_keeps_one_context_and_only_long_idle_ones_are_let_go() {
+        let mut contexts = Contexts::default();
+        let start = Instant::now();
+        let first = contexts.get("a", start, script::session::Session::start);
         assert!(first.started_now);
-        let again = session("repl-test-a");
+        let again = contexts.get("a", start, script::session::Session::start);
         assert!(Arc::ptr_eq(&first.session, &again.session) && !again.started_now);
         for n in 0..KEPT {
-            session(&format!("repl-test-other-{n}"));
+            contexts.get(&format!("other-{n}"), start, script::session::Session::start);
         }
-        let renewed = session("repl-test-a");
-        assert!(!Arc::ptr_eq(&first.session, &renewed.session), "a context unused for longest is let go");
+        let busy = contexts.get("a", start, script::session::Session::start);
+        assert!(Arc::ptr_eq(&first.session, &busy.session), "a context in use is never let go, however many there are");
+        let later = start + IDLE;
+        for n in 0..KEPT {
+            contexts.get(&format!("later-{n}"), later, script::session::Session::start);
+        }
+        let renewed = contexts.get("a", later, script::session::Session::start);
+        assert!(!Arc::ptr_eq(&first.session, &renewed.session), "past the limit, a long idle context is let go");
         assert!(renewed.started_now);
     }
 
