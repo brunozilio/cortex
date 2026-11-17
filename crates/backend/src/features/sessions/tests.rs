@@ -54,3 +54,20 @@ fn another_owner_or_folder_has_no_history_of_it() {
     assert_eq!(history(&store, &other, dir.path(), &id).expect("history"), []);
     assert_eq!(history(&store, &owner, Path::new("/elsewhere"), &id).expect("history"), []);
 }
+
+#[test]
+fn a_sessions_length_grows_with_what_is_written_and_is_its_owner_s_alone() {
+    let dir = tempfile::tempdir().expect("dir");
+    let store = FileSessions::new(dir.path().join("sessions"));
+    let (owner, id) = (Principal::LocalOwner, SessionId("s1".into()));
+    assert_eq!(length(&store, &owner, dir.path(), &id), Ok(0));
+
+    kept(&store, dir.path(), &owner, &id, vec![Entry::Prompted { at_ms: 1, prompt: "one".into() }]);
+    let once = length(&store, &owner, dir.path(), &id).expect("length");
+    kept(&store, dir.path(), &owner, &id, vec![Entry::Prompted { at_ms: 2, prompt: "two".into() }]);
+
+    assert!(once > 0);
+    assert!(length(&store, &owner, dir.path(), &id).expect("length") > once);
+    let other = Principal::member(UserId::new(), OrgId::new());
+    assert_eq!(length(&store, &other, dir.path(), &id), Ok(0));
+}

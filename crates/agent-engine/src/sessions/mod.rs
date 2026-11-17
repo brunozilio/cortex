@@ -36,6 +36,12 @@ pub trait Sessions: Send + Sync {
     fn record(&self, _request: &PromptRequest, _id: &SessionId, _entry: &Entry) -> Result<(), String> {
         Ok(())
     }
+    fn hold(&self, _request: &PromptRequest, _id: &SessionId) -> Result<Hold, String> {
+        Ok(Hold::none())
+    }
+    fn length(&self, _request: &PromptRequest, _id: &SessionId) -> Result<u64, String> {
+        Ok(0)
+    }
     fn load_for_checked(&self, request: &PromptRequest, id: &SessionId) -> Result<Option<Vec<Message>>, String> {
         Ok(self.load_for(request, id))
     }
@@ -132,10 +138,12 @@ impl Sessions for InMemorySessions {
 }
 
 mod file;
+mod hold;
 mod log;
 mod records;
 
 pub use file::FileSessions;
+pub use hold::{ANSWERING_ELSEWHERE, Hold};
 pub use log::Entry;
 pub use records::records;
 

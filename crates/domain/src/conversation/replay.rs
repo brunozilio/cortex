@@ -4,10 +4,18 @@ use crate::trace::Record;
 
 impl Transcript {
     pub fn replay(&mut self, records: &[Record]) {
-        let mut shown = None;
-        for record in records {
+        self.follow(records);
+        self.left_unfinished();
+    }
+
+    pub fn follow(&mut self, records: &[Record]) -> usize {
+        let (mut shown, mut used) = (None, 0);
+        for (at, record) in records.iter().enumerate() {
             match record {
-                Record::Shown { text, attached } => shown = Some((text.clone(), attached.clone())),
+                Record::Shown { text, attached } => {
+                    shown = Some((text.clone(), attached.clone()));
+                    continue;
+                }
                 Record::Prompted { prompt, .. } => {
                     self.left_unfinished();
                     let (prompt, names) = shown.take().unwrap_or_else(|| crate::attachment::written(prompt));
@@ -20,8 +28,9 @@ impl Transcript {
                 Record::Event { event, .. } => self.apply(event),
                 _ => {}
             }
+            used = at + 1;
         }
-        self.left_unfinished();
+        used
     }
 
     fn left_unfinished(&mut self) {

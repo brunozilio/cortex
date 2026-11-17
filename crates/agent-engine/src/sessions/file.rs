@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use domain::{PromptRequest, SessionId};
 
 use super::log::{self, Entry};
-use super::{Sessions, scoped_id};
+use super::{Hold, Sessions, scoped_id};
 use crate::checkpoints::Checkpoint;
 use crate::transcript::Message;
 
@@ -147,6 +147,16 @@ impl Sessions for FileSessions {
     }
     fn record(&self, request: &PromptRequest, id: &SessionId, entry: &Entry) -> Result<(), String> {
         self.append(&scoped_id(request, id), std::slice::from_ref(entry))
+    }
+    fn hold(&self, request: &PromptRequest, id: &SessionId) -> Result<Hold, String> {
+        super::hold::take(&self.path(&scoped_id(request, id), "lock")?)
+    }
+    fn length(&self, request: &PromptRequest, id: &SessionId) -> Result<u64, String> {
+        match std::fs::metadata(self.path(&scoped_id(request, id), "jsonl")?) {
+            Ok(metadata) => Ok(metadata.len()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(0),
+            Err(error) => Err(error.to_string()),
+        }
     }
 }
 

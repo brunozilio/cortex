@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use agent_engine::sessions::{FileSessions, records};
+use agent_engine::sessions::{FileSessions, Sessions, records};
 use domain::catalog::Catalog;
 use domain::trace::Record;
 use domain::{ModelOption, Principal, PromptRequest, SessionId};
@@ -14,11 +14,14 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
         return Ok(json!({ "sessions": listed(context).listed() }));
     }
     let session = SessionId(input["session"].as_str().ok_or("this op needs a session")?.to_owned());
-    if op == "history" {
-        let cwd = input["cwd"].as_str().ok_or("history needs the session's folder")?;
+    if op == "history" || op == "length" {
+        let cwd = Path::new(input["cwd"].as_str().ok_or("this op needs the session's folder")?);
         let data = crate::local_data_dir().unwrap_or_else(std::env::temp_dir);
         let store = FileSessions::new(data.join(crate::native::SESSIONS));
-        return Ok(json!({ "records": history(&store, context.principal, Path::new(cwd), &session)? }));
+        if op == "length" {
+            return Ok(json!({ "length": length(&store, context.principal, cwd, &session)? }));
+        }
+        return Ok(json!({ "records": history(&store, context.principal, cwd, &session)? }));
     }
     let change: Box<dyn Fn(&mut Catalog)> = match op {
         "rename" => {
@@ -39,9 +42,18 @@ pub fn handle(context: &Context<'_>, input: Value) -> Result<Value, String> {
 
 pub fn forget(_client: u64) {}
 
-fn history(store: &FileSessions, owner: &Principal, cwd: &Path, id: &SessionId) -> Result<Vec<Record>, String> {
+fn owned(owner: &Principal, cwd: &Path) -> PromptRequest {
     let mut request = PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""));
     request.credentials.owner = Some(owner.clone());
+    request
+}
+
+fn length(store: &FileSessions, owner: &Principal, cwd: &Path, id: &SessionId) -> Result<u64, String> {
+    store.length(&owned(owner, cwd), id)
+}
+
+fn history(store: &FileSessions, owner: &Principal, cwd: &Path, id: &SessionId) -> Result<Vec<Record>, String> {
+    let request = owned(owner, cwd);
     let told = records(store.entries(&request, id)?);
     Ok(told
         .into_iter()

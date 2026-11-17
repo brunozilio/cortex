@@ -30,6 +30,11 @@ impl Job {
         if self.request.command.is_some_and(|c| c != SessionCommand::Title) && self.request.resume.is_none() {
             return self.fail("There is no conversation to work on yet.", FailureKind::Other);
         }
+        let answering = self.request.resume.as_ref().filter(|_| !self.request.command.is_some_and(|c| c.is_chore()));
+        let _held = match answering.map(|id| self.sessions.hold(&self.request, id)).transpose() {
+            Ok(held) => held,
+            Err(error) => return self.fail(&error, FailureKind::Other),
+        };
         let (session, history) = match &self.request.resume {
             Some(id) => match self.sessions.load_for_checked(&self.request, id) {
                 Ok(Some(history)) => (id.clone(), history),

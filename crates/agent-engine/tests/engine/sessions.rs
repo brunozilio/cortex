@@ -239,3 +239,24 @@ fn a_main_worktree_and_its_uncommitted_files_survive_resume_after_engine_restart
     assert!(format!("{:?}", second.asked()[1].messages).contains("Persistent work"));
     assert_eq!(std::fs::read_dir(root.join("worktrees")).expect("worktrees").count(), 1);
 }
+
+#[test]
+fn a_conversation_answering_in_another_window_turns_the_next_message_away_and_keeps_its_history() {
+    use agent_engine::sessions::{ANSWERING_ELSEWHERE, FileSessions, Sessions};
+
+    let dir = tempfile::tempdir().expect("dir");
+    let sessions = Arc::new(FileSessions::new(dir.path().join("native")));
+    let first = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("One.".into())])]));
+    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&first)]))), Arc::clone(&sessions) as _);
+    let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "one", model())));
+    let Some(EngineEvent::SessionStarted(session)) = events.first().cloned() else { panic!("{events:?}") };
+
+    let mut again = PromptRequest::plain(dir.path().into(), "two", model());
+    again.resume = Some(session.clone());
+    let elsewhere = sessions.hold(&again, &session).expect("another window answers");
+    let events = finish(&start(&engine, &again));
+    drop(elsewhere);
+
+    assert_eq!(events.last(), Some(&EngineEvent::Failed(ANSWERING_ELSEWHERE.into())), "{events:?}");
+    assert_eq!(sessions.load_for(&again, &session).map(|history| history.len()), Some(2), "nothing was written");
+}

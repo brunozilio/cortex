@@ -20,6 +20,11 @@ impl Sdk {
         serde_json::from_value(answer["records"].clone()).map_err(|error| Error::Backend(error.to_string()))
     }
 
+    pub fn session_length(&self, session: &SessionId, cwd: &Path) -> Result<u64, Error> {
+        let answer = self.ask(json!({ "op": "length", "session": session.0, "cwd": cwd }))?;
+        answer["length"].as_u64().ok_or_else(|| Error::Backend("the session's length was not a number".into()))
+    }
+
     pub fn rename_session(&self, session: &SessionId, title: &str) -> Result<(), Error> {
         self.ask(json!({ "op": "rename", "session": session.0, "title": title })).map(drop)
     }

@@ -84,3 +84,47 @@ fn a_history_that_ended_well_is_a_finished_session() {
     ]);
     assert_eq!(transcript.status(), SessionStatus::Done);
 }
+
+fn turn(at_ms: u64, prompt: &str, answer: &str) -> Vec<Record> {
+    vec![
+        Record::Prompted { at_ms, prompt: prompt.into() },
+        Record::Event { at_ms: at_ms + 1, event: EngineEvent::TextDelta(answer.into()) },
+        Record::Event { at_ms: at_ms + 2, event: EngineEvent::Completed { duration_ms: 1, cost_usd: None } },
+    ]
+}
+
+#[test]
+fn following_a_conversation_in_pieces_shows_what_replaying_it_at_once_shows() {
+    let records: Vec<Record> = turn(1, "one", "First.").into_iter().chain(turn(10, "two", "Second.")).collect();
+    let mut whole = Transcript::default();
+    whole.replay(&records);
+
+    let mut followed = Transcript::default();
+    let used = followed.follow(&records[..4]);
+    let used = used + followed.follow(&records[used..]);
+
+    assert_eq!(used, records.len());
+    assert_eq!(followed.entries, whole.entries);
+}
+
+#[test]
+fn a_turn_still_going_elsewhere_stays_open_while_followed() {
+    let records = &turn(1, "one", "Working on it")[..2];
+    let mut transcript = Transcript::default();
+
+    transcript.follow(records);
+
+    assert_eq!(transcript.status(), SessionStatus::Running);
+    assert!(transcript.entries.contains(&Entry::User("one".into())));
+}
+
+#[test]
+fn what_the_user_saw_waits_for_its_prompt_before_it_is_followed() {
+    let shown = Record::Shown { text: "read @notes.txt".into(), attached: Vec::new() };
+    let prompted = Record::Prompted { at_ms: 1, prompt: "read @notes.txt\n\n<file path=\"notes.txt\">\nalpha\n</file>".into() };
+    let mut transcript = Transcript::default();
+
+    assert_eq!(transcript.follow(std::slice::from_ref(&shown)), 0, "kept for the next look");
+    assert_eq!(transcript.follow(&[shown, prompted]), 2);
+    assert_eq!(transcript.entries.last(), Some(&Entry::User("read @notes.txt".into())));
+}

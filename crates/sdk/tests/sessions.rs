@@ -78,6 +78,7 @@ fn every_client_sees_the_sessions_the_others_ran_and_can_tidy_them() {
     assert_eq!((row.title.as_deref(), row.unread, row.archived), (Some("Greeting"), false, true));
 
     assert!(first.history(&id, data.path()).expect("history").is_empty(), "the scripted engine keeps no log");
+    assert_eq!(first.session_length(&id, data.path()).expect("length"), 0, "nor any length");
     first.delete_session(&id).expect("delete");
     assert!(second.sessions().expect("sessions").is_empty());
 }
