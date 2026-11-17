@@ -141,7 +141,8 @@ Acompanhe e conduza as sessões desta máquina pelo celular: a mesma página do 
 | Comando | Argumentos | O que faz |
 |---|---|---|
 | `remote status` | | O relay, o id desta máquina e os aparelhos pareados |
-| `remote relay` | `<https://HOST>` | Define o relay pelo qual os celulares chegam a esta máquina |
+| `remote up` | `[--hostname <HOST>]` `[--port <PORTA>]` | Roda o relay nesta máquina e o publica por um túnel do Cloudflare; fica em primeiro plano |
+| `remote relay` | `<https://HOST>` | Define um relay que você roda em outro lugar, pelo qual os celulares chegam a esta máquina |
 | `remote pair` | | Imprime um QR code e um link que pareiam um celular, em até dez minutos, uma vez |
 | `remote devices` | | Lista os aparelhos pareados |
 | `remote revoke` | `<NOME>` | Esquece um aparelho; as conexões abertas dele fecham em segundos |
@@ -152,6 +153,20 @@ A máquina fica alcançável enquanto um chat está aberto com o controle remoto
 {{COMMAND}} remote relay https://relay.example.com
 {{COMMAND}} remote pair
 {{COMMAND}} remote revoke "iPhone"
+```
+
+#### Sem servidor: `remote up`
+
+`{{COMMAND}} remote up` roda o relay nesta máquina, escutando só em `127.0.0.1`, e o publica com o [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (`brew install cloudflared` no macOS). Nenhuma porta é aberta: o túnel se conecta ao Cloudflare de dentro para fora. Deixe rodando num terminal; o chat se conecta direto ao relay desta máquina, e os celulares chegam pelo Cloudflare. Ctrl-C para os dois.
+
+- `remote up --hostname relay.example.com`: um túnel nomeado, com endereço que nunca muda; use um host de um domínio da sua conta Cloudflare. Na primeira vez ele abre o navegador para entrar no Cloudflare, cria o túnel `{{COMMAND}}-relay` e aponta o host para ele; depois, `remote up` sozinho reaproveita tudo. É o jeito certo para um celular que mantém a página na tela inicial.
+- `remote up` sem host: um quick tunnel em `*.trycloudflare.com`, sem conta. O endereço muda a cada vez, e uma página instalada no celular pertence a um endereço, então o celular pareia de novo a cada início. Bom para experimentar.
+
+O Cloudflare transporta o tráfego e entrega a página ao celular, mas o que passa entre o celular e a máquina continua cifrado de ponta a ponta.
+
+```bash
+{{COMMAND}} remote up --hostname relay.example.com   # uma vez; depois só `{{COMMAND}} remote up`
+{{COMMAND}} remote up                                # quick tunnel, para experimentar
 ```
 
 ### doctor

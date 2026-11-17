@@ -141,7 +141,8 @@ Follow and drive this machine's sessions from a phone: the same page as `/consol
 | Command | Arguments | What it does |
 |---|---|---|
 | `remote status` | | The relay, this machine's id and the paired devices |
-| `remote relay` | `<https://HOST>` | Name the relay phones reach this machine through |
+| `remote up` | `[--hostname <HOST>]` `[--port <PORT>]` | Run the relay on this machine and publish it through a Cloudflare tunnel; stays in the foreground |
+| `remote relay` | `<https://HOST>` | Name a relay you run elsewhere, which phones reach this machine through |
 | `remote pair` | | Print a QR code and a link that pair one phone, within ten minutes, once |
 | `remote devices` | | List the paired devices |
 | `remote revoke` | `<NAME>` | Forget a device; its open connections close within seconds |
@@ -152,6 +153,20 @@ The machine is reachable while a chat is open with remote control on (`/remote`)
 {{COMMAND}} remote relay https://relay.example.com
 {{COMMAND}} remote pair
 {{COMMAND}} remote revoke "iPhone"
+```
+
+#### Without a server: `remote up`
+
+`{{COMMAND}} remote up` runs the relay on this machine, listening on `127.0.0.1` only, and publishes it with [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (`brew install cloudflared` on macOS). No port is opened: the tunnel connects out to Cloudflare. Leave it running in a terminal; a chat connects to the relay on this machine directly, and phones reach it through Cloudflare. Ctrl-C stops both.
+
+- `remote up --hostname relay.example.com`: a named tunnel with an address that never changes; use a host on a domain in your Cloudflare account. The first time it opens the browser to sign in to Cloudflare, creates the tunnel `{{COMMAND}}-relay` and points the host at it; after that `remote up` alone reuses them. This is the way for a phone that keeps the page on its home screen.
+- `remote up` with no host name: a quick tunnel on `*.trycloudflare.com`, with no account. Its address changes every time, and a page installed on a phone belongs to one address, so the phone pairs again after every start. Good for trying it out.
+
+Cloudflare carries the traffic and serves the page to the phone, but what passes between the phone and the machine stays end-to-end encrypted.
+
+```bash
+{{COMMAND}} remote up --hostname relay.example.com   # once; afterwards just `{{COMMAND}} remote up`
+{{COMMAND}} remote up                                # a quick tunnel, to try it
 ```
 
 ### doctor

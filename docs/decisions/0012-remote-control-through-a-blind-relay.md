@@ -27,6 +27,8 @@ The console's terminal starts the app's own binary in a pseudo-terminal: whoever
 
 **The page.** One build serves both places. On the machine it talks to `/api/` directly; served by the relay, it talks through the tunnel. Its network calls (one fetch helper, the event feed, the terminal socket) go through a transport chosen at start. The service worker caches only the page's own files, never an API answer.
 
+**A relay on the machine itself.** For an owner without a server, `<command> remote up` runs the same relay inside the CLI, on `127.0.0.1` only, and publishes it with Cloudflare's `cloudflared`: a named tunnel on the owner's own host name (signing in, creating the tunnel and pointing the DNS the first time), or a quick tunnel on a `trycloudflare.com` address that changes at every start. The tunnel connects out, so the machine still opens no port. The remote book then keeps two addresses: the public one, written into pairing links, and the local one, which the chat connects to directly. A page installed on a phone belongs to one origin, so with a quick tunnel the phone pairs again after every start; the named tunnel is the way for daily use.
+
 The vision's non-goal "not a network-reachable surface" becomes: the machine accepts no connection from the network; it reaches out to a relay its owner runs, and only paired devices get through.
 
 ## Consequences

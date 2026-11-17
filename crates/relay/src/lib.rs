@@ -1,4 +1,5 @@
 mod rooms;
+mod serve;
 mod sockets;
 
 use std::time::Duration;
@@ -10,6 +11,8 @@ use axum::routing::get;
 use serde_json::json;
 
 pub use rooms::{Rooms, valid_machine_id};
+pub use page::embedded as embedded_page;
+pub use serve::{Serving, spawn};
 
 const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
 img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; \

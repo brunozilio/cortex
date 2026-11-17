@@ -37,6 +37,10 @@ pub struct Ledger {
     pending: Vec<Pending>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     relay: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    local_relay: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    hostname: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -161,8 +165,38 @@ impl Book {
     pub fn set_relay(&self, address: &str) -> Result<String, BookError> {
         let address = super::link::relay_address(address)?;
         let kept = address.clone();
-        self.document.update(|ledger: &mut Ledger| ledger.relay = Some(kept)).map_err(stored)?;
+        self.document
+            .update(|ledger: &mut Ledger| {
+                ledger.relay = Some(kept);
+                ledger.local_relay = None;
+            })
+            .map_err(stored)?;
         Ok(address)
+    }
+
+    pub fn serve_here(&self, public: &str, local: &str, hostname: Option<&str>) -> Result<String, BookError> {
+        let public = super::link::relay_address(public)?;
+        let local = super::link::relay_address(local)?;
+        let kept = (public.clone(), hostname.map(str::to_owned));
+        self.document
+            .update(|ledger: &mut Ledger| {
+                ledger.relay = Some(kept.0);
+                ledger.local_relay = Some(local);
+                if kept.1.is_some() {
+                    ledger.hostname = kept.1;
+                }
+            })
+            .map_err(stored)?;
+        Ok(public)
+    }
+
+    pub fn machine_relay(&self) -> Option<String> {
+        let ledger = self.document.read_or_default::<Ledger>();
+        ledger.local_relay.or(ledger.relay)
+    }
+
+    pub fn hostname(&self) -> Option<String> {
+        self.document.read_or_default::<Ledger>().hostname
     }
 
     pub fn anyone_to_serve(&self) -> bool {
@@ -310,6 +344,21 @@ mod tests {
         assert_eq!(book.relay().as_deref(), Some("https://relay.example"));
         assert!(book.set_relay("http://relay.example").is_err());
         assert_eq!(book.relay().as_deref(), Some("https://relay.example"));
+    }
+
+    #[test]
+    fn a_relay_on_this_machine_is_reached_locally_and_shown_to_phones_by_its_public_address() {
+        let folder = tempfile::tempdir().unwrap();
+        let book = book(folder.path());
+        book.serve_here("https://relay.example", "http://127.0.0.1:7468", Some("relay.example")).unwrap();
+        assert_eq!(book.relay().as_deref(), Some("https://relay.example"));
+        assert_eq!(book.machine_relay().as_deref(), Some("http://127.0.0.1:7468"));
+        assert_eq!(book.hostname().as_deref(), Some("relay.example"));
+        book.serve_here("https://abc.trycloudflare.com", "http://127.0.0.1:7468", None).unwrap();
+        assert_eq!(book.hostname().as_deref(), Some("relay.example"));
+        book.set_relay("https://elsewhere.example").unwrap();
+        assert_eq!(book.machine_relay().as_deref(), Some("https://elsewhere.example"));
+        assert!(book.serve_here("https://relay.example", "http://10.0.0.2:1", None).is_err());
     }
 
     #[test]

@@ -1,3 +1,6 @@
+mod cloudflare;
+mod up;
+
 use std::path::PathBuf;
 
 use clap::Subcommand;
@@ -7,6 +10,13 @@ use console::remote::{Book, Device, PAIRING_LASTS};
 pub enum RemoteAction {
     #[command(about = "Show the relay, this machine's id and the paired devices")]
     Status,
+    #[command(about = "Run a relay on this machine and publish it through a Cloudflare tunnel; stays in the foreground")]
+    Up {
+        #[arg(long, help = "A host name on a domain in your Cloudflare account, for an address that never changes")]
+        hostname: Option<String>,
+        #[arg(long, default_value_t = up::DEFAULT_PORT, help = "The local port the relay listens on, on 127.0.0.1")]
+        port: u16,
+    },
     #[command(about = "Name the relay phones reach this machine through, as https://<host>")]
     Relay { address: String },
     #[command(about = "Invite a phone: a QR code and a link, good for one phone within ten minutes")]
@@ -23,6 +33,9 @@ pub fn folder() -> Option<PathBuf> {
 
 pub fn run(action: RemoteAction) -> Result<(), String> {
     let book = Book::in_folder(&folder().ok_or("this system has no data folder")?);
+    if let RemoteAction::Up { hostname, port } = action {
+        return up::run(&book, &up::Plan { hostname, port });
+    }
     println!("{}", answer(&book, action)?);
     Ok(())
 }
@@ -30,6 +43,7 @@ pub fn run(action: RemoteAction) -> Result<(), String> {
 pub fn answer(book: &Book, action: RemoteAction) -> Result<String, String> {
     match action {
         RemoteAction::Status => status(book),
+        RemoteAction::Up { .. } => Err(format!("`{} remote up` runs in a terminal of its own.", brand::COMMAND)),
         RemoteAction::Relay { address } => {
             let kept = book.set_relay(&address).map_err(|error| error.to_string())?;
             Ok(format!("Phones will reach this machine through {kept}. `{} remote pair` invites one.", brand::COMMAND))

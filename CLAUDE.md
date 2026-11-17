@@ -14,7 +14,7 @@ Dependencies are one-way; the main line is
 These are all the non-dev edges between workspace crates:
 
 ```
-cli              ──► app, console, content, platform, domain, brand
+cli              ──► app, console, relay, content, platform, domain, brand
 app              ──► agent-engine, llm-providers, code-map, platform, domain, brand
 agent-engine     ──► llm-providers, language-servers, script, content, platform, domain, brand
 llm-providers    ──► platform, domain, brand

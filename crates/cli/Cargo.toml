@@ -32,6 +32,7 @@ syntect = { version = "5.3.0", default-features = false, features = ["default-sy
 tachyonfx = { version = "0.25.2", default-features = false, features = ["std", "std-duration"] }
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "std"] }
+relay = { path = "../relay" }
 qrcode = { version = "0.14", default-features = false }
 jiff.workspace = true
 
