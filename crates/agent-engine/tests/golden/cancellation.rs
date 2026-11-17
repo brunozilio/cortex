@@ -35,8 +35,8 @@ fn cancelling_while_the_model_streams_ends_in_cancelled_and_keeps_what_was_said_
         event SessionStarted
         opened
         event Checkpoint
-        event TextDelta
         message user
+        event TextDelta
         message assistant
         event Cancelled
         "##,
@@ -80,14 +80,14 @@ fn cancelling_while_an_edit_waits_for_permission_ends_in_cancelled_and_saves_the
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted w1
         event Asked
         event ToolFinished w1
         event ToolResult w1
-        message user
-        message assistant
         message user
         event Cancelled
         == out.txt ==
@@ -133,14 +133,14 @@ fn cancelling_while_a_shell_command_runs_ends_in_cancelled_and_saves_the_stopped
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted b1
         event ToolProgress b1
         event ToolFinished b1
         event ToolResult b1
-        message user
-        message assistant
         message user
         event Cancelled
         "##,

@@ -18,6 +18,7 @@ impl Agent<'_> {
         let budget = self.upkeep(turn)?;
         let reminder = self.runtime_reminder(&budget, turn.reminders.quiet_tasks(), run);
         turn.reminders.deliver(reminder, turn.history);
+        run.transition(turn.history);
         let mut request = TurnRequest { messages: turn.history.clone(), ..self.turn_template(turn.fell_back.as_ref()) };
         self.intercept_request(&mut request, &turn.rejections)?;
         let mut shown = String::new();

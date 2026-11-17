@@ -48,18 +48,18 @@ fn a_structured_result_is_emitted_when_the_model_calls_the_output_tool() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted s1
         event ToolFinished s1
         event ToolResult s1
         event StructuredOutput
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,
@@ -112,23 +112,23 @@ fn a_model_that_forgets_the_structured_result_is_nudged_until_it_calls_the_tool(
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
+        message assistant
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=3
         event Usage
+        message assistant
         event ToolStarted s1
         event ToolFinished s1
         event ToolResult s1
         event StructuredOutput
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=5
         event Usage
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,
@@ -183,25 +183,25 @@ fn a_structured_result_that_breaks_the_schema_is_refused_and_not_emitted() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted s1
         event ToolFinished s1
         event ToolResult s1
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=3
         event Usage
+        message assistant
         event ToolStarted s2
         event ToolFinished s2
         event ToolResult s2
         event StructuredOutput
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=5
         event Usage
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,
@@ -255,25 +255,25 @@ fn a_model_that_never_gives_the_structured_result_fails_the_run_after_three_nudg
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=5
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=7
         event Usage
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
         message assistant
         event Failure
         event Failed

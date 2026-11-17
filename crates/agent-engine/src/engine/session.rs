@@ -7,6 +7,7 @@ use platform::sync::Locked;
 use super::job::Job;
 use super::record::{Recorder, Session};
 use super::stop::Stop;
+use crate::agent::Keep;
 use crate::boundary::Observer;
 use crate::meter::{Ledger, Metered};
 use crate::model::ModelApi;
@@ -71,14 +72,19 @@ impl Job {
     }
 
     pub(super) fn save(&self, session: &SessionId, history: &[Message]) -> Result<(), String> {
-        let compacted_since_the_last_save = self.recorder.as_ref().is_some_and(|recorder| {
-            recorder.flush();
-            recorder.compacted()
-        });
-        if compacted_since_the_last_save {
-            return self.sessions.save_compacted(&self.request, session, history);
+        match &self.recorder {
+            Some(recorder) => recorder.kept(history),
+            None => self.sessions.save_for(&self.request, session, history),
         }
-        self.sessions.save_for(&self.request, session, history)
+    }
+
+    pub(super) fn kept_at_every_transition(&self) -> Option<Keep> {
+        let recorder = self.recorder.clone()?;
+        Some(Arc::new(move |history: &[Message]| {
+            if let Err(error) = recorder.kept(history) {
+                tracing::warn!(%error, "the conversation was not saved at this step; it is saved again at the next");
+            }
+        }))
     }
 
     pub(super) fn run_info(&self, cwd: &std::path::Path, git: Option<&GitSnapshot>) -> RunInfo {

@@ -30,10 +30,10 @@ fn a_refusal_stop_reason_fails_the_run_and_keeps_what_was_said() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=Refusal messages=1
         event Usage
-        message user
         message assistant
         event Failure
         event Failed
@@ -77,15 +77,15 @@ fn a_reply_cut_at_the_output_limit_is_nudged_to_continue_until_it_ends() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=MaxTokens messages=1
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,
@@ -139,25 +139,25 @@ fn a_reply_cut_four_times_in_a_row_stops_the_run_at_the_cap() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=MaxTokens messages=1
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=MaxTokens messages=3
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=MaxTokens messages=5
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=MaxTokens messages=7
         event Usage
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
         message assistant
         event Failure
         event Failed
@@ -193,12 +193,14 @@ fn a_reply_cut_while_still_thinking_gets_the_briefer_reasoning_nudge() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=MaxTokens messages=1
         event Usage
+        restarted
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
-        message user
         message assistant
         event Completed
         "##,
@@ -231,11 +233,11 @@ fn a_reply_that_is_empty_twice_ends_the_run_and_saves_no_assistant_message() {
         event SessionStarted
         opened
         event Checkpoint
-        called model=claude-opus-5-5 stop=EndTurn messages=1
-        event Usage
-        called model=claude-opus-5-5 stop=EndTurn messages=1
-        event Usage
         message user
+        called model=claude-opus-5-5 stop=EndTurn messages=1
+        event Usage
+        called model=claude-opus-5-5 stop=EndTurn messages=1
+        event Usage
         event Completed
         "##,
     );

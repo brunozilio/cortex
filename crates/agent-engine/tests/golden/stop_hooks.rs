@@ -39,15 +39,15 @@ fn a_stop_hook_that_blocks_once_sends_the_model_back_to_work_then_lets_it_finish
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,
@@ -101,27 +101,27 @@ fn a_stop_hook_that_always_blocks_is_overruled_after_three_blocks_with_a_notice(
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=5
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=7
         event Usage
+        message assistant
         event Notice
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
-        message assistant
         event Completed
         "##,
     );

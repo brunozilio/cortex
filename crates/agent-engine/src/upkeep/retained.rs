@@ -65,12 +65,24 @@ pub fn save_transcript(history: &[Message], dir: &Path) -> Option<PathBuf> {
     }
 }
 
+const POINTER: &str = "If you need specific details from before compaction (exact code, error messages, or content \
+                       you wrote), read the full transcript at: ";
+pub const TRANSCRIPT_GONE: &str = "The full transcript from before compaction was a temporary file and is no longer \
+                                   there. Work from the summary, and ask the user for details it does not hold.";
+
 pub fn transcript_pointer(path: &Path) -> String {
-    format!(
-        "If you need specific details from before compaction (exact code, error messages, or content you wrote), read \
-         the full transcript at: {}",
-        path.display()
-    )
+    format!("{POINTER}{}", path.display())
+}
+
+pub fn forget_lost_transcripts(history: &mut [Message]) {
+    for block in history.iter_mut().flat_map(|message| &mut message.blocks) {
+        if let Block::Text(text) = block
+            && let Some(path) = text.strip_prefix(POINTER)
+            && !Path::new(path).exists()
+        {
+            *text = TRANSCRIPT_GONE.to_owned();
+        }
+    }
 }
 
 pub fn invoked_skills(history: &[Message], kept: &[Message]) -> Option<String> {

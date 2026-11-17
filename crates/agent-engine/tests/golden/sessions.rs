@@ -52,10 +52,10 @@ fn a_session_cut_between_a_call_and_its_result_resumes_with_the_call_closed_as_i
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
         message assistant
         event Completed
         "##,

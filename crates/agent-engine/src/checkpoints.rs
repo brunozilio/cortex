@@ -11,6 +11,10 @@ use sha2::{Digest, Sha256};
 use crate::transcript::{Message, only_results};
 
 const MAX_FILE: u64 = 10 * 1024 * 1024;
+pub const KEPT_AT_MOST: usize = 50;
+pub const KEPT_BYTES_AT_MOST: usize = 64 * 1024 * 1024;
+pub const NO_LONGER_KEPT: &str = "that checkpoint is too old to rewind to: a conversation keeps the files of its \
+                                  newest 50 checkpoints, and at most 64 MiB of them";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -20,6 +24,8 @@ pub struct Checkpoint {
     pub files: BTreeMap<PathBuf, Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joined_after: Option<usize>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub files_dropped: bool,
 }
 
 impl Checkpoint {
@@ -30,7 +36,17 @@ impl Checkpoint {
             history_hash: hash(history),
             files: BTreeMap::new(),
             joined_after: history.last().filter(|last| only_results(last)).map(|last| last.blocks.len()),
+            files_dropped: false,
         }
+    }
+
+    fn bytes(&self) -> usize {
+        self.files.values().flatten().map(String::len).sum()
+    }
+
+    fn drop_files(&mut self) {
+        self.files = BTreeMap::new();
+        self.files_dropped = true;
     }
 
     fn before(&self, history: &[Message]) -> Option<Vec<Message>> {
@@ -39,6 +55,28 @@ impl Checkpoint {
             last.blocks.truncate(blocks);
         }
         (hash(&before) == self.history_hash).then_some(before)
+    }
+}
+
+pub fn cap(checkpoints: &mut [Checkpoint]) {
+    cap_at(checkpoints, KEPT_AT_MOST, KEPT_BYTES_AT_MOST);
+}
+
+fn cap_at(checkpoints: &mut [Checkpoint], kept_at_most: usize, bytes_at_most: usize) {
+    let mut kept = 0;
+    let mut bytes = 0;
+    for checkpoint in checkpoints.iter_mut().rev() {
+        if checkpoint.files_dropped {
+            continue;
+        }
+        bytes += checkpoint.bytes();
+        let newest = kept == 0;
+        if newest || (kept < kept_at_most && bytes <= bytes_at_most) {
+            kept += 1;
+        } else {
+            kept = kept_at_most;
+            checkpoint.drop_files();
+        }
     }
 }
 
@@ -87,6 +125,9 @@ pub fn rewind(
 ) -> Result<(Checkpoint, Vec<PathBuf>, bool), String> {
     if index >= checkpoints.len() {
         return Err("there is no such checkpoint in this conversation".into());
+    }
+    if checkpoints[index..].iter().any(|checkpoint| checkpoint.files_dropped) {
+        return Err(NO_LONGER_KEPT.into());
     }
     let dropped = checkpoints.split_off(index);
     let mut restored = Vec::new();
@@ -227,6 +268,69 @@ mod tests {
         let (_, _, cut) = rewind(&mut vec![checkpoint], 0, &mut history).expect("rewind");
         assert!(cut);
         assert_eq!(history, before);
+    }
+
+    fn holding(prompt: &str, bytes: usize) -> Checkpoint {
+        let mut checkpoint = Checkpoint::open(prompt, &[]);
+        checkpoint.files.insert(PathBuf::from("/project/a.txt"), Some("x".repeat(bytes)));
+        checkpoint.files.insert(PathBuf::from("/project/made.txt"), None);
+        checkpoint
+    }
+
+    #[test]
+    fn only_the_newest_checkpoints_keep_their_files_and_every_one_keeps_its_place() {
+        let mut checkpoints: Vec<Checkpoint> = (0..5).map(|at| holding(&format!("prompt {at}"), 10)).collect();
+        cap_at(&mut checkpoints, 3, 1_000);
+        let dropped: Vec<bool> = checkpoints.iter().map(|checkpoint| checkpoint.files_dropped).collect();
+        assert_eq!(dropped, [true, true, false, false, false]);
+        assert_eq!(checkpoints[0].prompt, "prompt 0", "a dropped checkpoint still says what it was");
+        assert!(checkpoints[0].files.is_empty() && checkpoints[4].files.len() == 2);
+
+        checkpoints.push(holding("prompt 5", 10));
+        cap_at(&mut checkpoints, 3, 1_000);
+        assert_eq!(checkpoints.iter().filter(|checkpoint| !checkpoint.files_dropped).count(), 3);
+        assert!(checkpoints[2].files_dropped && !checkpoints[3].files_dropped);
+    }
+
+    #[test]
+    fn the_oldest_files_go_first_when_together_they_are_too_large_and_the_newest_always_stays() {
+        let mut checkpoints = vec![holding("a", 40), holding("b", 40), holding("c", 40)];
+        cap_at(&mut checkpoints, 50, 100);
+        let dropped: Vec<bool> = checkpoints.iter().map(|checkpoint| checkpoint.files_dropped).collect();
+        assert_eq!(dropped, [true, false, false]);
+
+        let mut huge = vec![holding("small", 1), holding("huge", 500)];
+        cap_at(&mut huge, 50, 100);
+        assert!(huge[0].files_dropped && !huge[1].files_dropped, "the last prompt can always be undone");
+    }
+
+    #[test]
+    fn rewinding_to_a_checkpoint_whose_files_were_dropped_says_so_and_changes_nothing() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join("a.txt"), "one").expect("write");
+        let mut history = Vec::new();
+        let first = run(dir.path(), &mut history, "edit a", &[("a.txt", "two")]);
+        let second = run(dir.path(), &mut history, "edit a again", &[("a.txt", "three")]);
+        let mut checkpoints = vec![first, second];
+        cap_at(&mut checkpoints, 1, 1_000);
+        let said = history.clone();
+
+        assert_eq!(rewind(&mut checkpoints, 0, &mut history).err(), Some(NO_LONGER_KEPT.to_owned()));
+        assert_eq!((checkpoints.len(), &history), (2, &said));
+        assert_eq!(std::fs::read_to_string(dir.path().join("a.txt")).expect("a"), "three");
+
+        assert!(branch(&checkpoints, 0, &history).is_ok(), "a branch needs the conversation, not the files");
+        let (target, _, cut) = rewind(&mut checkpoints, 1, &mut history).expect("the newest still rewinds");
+        assert_eq!((target.prompt.as_str(), cut), ("edit a again", true));
+        assert_eq!(std::fs::read_to_string(dir.path().join("a.txt")).expect("a"), "two");
+    }
+
+    #[test]
+    fn a_checkpoint_saved_before_the_cap_reads_as_one_that_keeps_its_files() {
+        let saved = r#"{"prompt":"p","history_len":0,"history_hash":"h","files":{}}"#;
+        let read: Checkpoint = serde_json::from_str(saved).expect("old checkpoint");
+        assert!(!read.files_dropped);
+        assert!(!serde_json::to_string(&read).expect("json").contains("files_dropped"));
     }
 
     #[test]

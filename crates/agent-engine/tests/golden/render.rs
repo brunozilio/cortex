@@ -207,6 +207,7 @@ fn entry(entry: &Entry) -> String {
     match entry {
         Entry::Message(message) => format!("message {:?}", message.role).to_lowercase(),
         Entry::Truncated { keep } => format!("truncated keep={keep}"),
+        Entry::Amended { keep } => format!("amended keep={keep}"),
         Entry::Restarted => "restarted".to_owned(),
         Entry::Event { event, .. } => format!("event {}", kind(event)),
         Entry::Prompted { prompt, .. } => format!("prompted {}", quoted(prompt)),
@@ -220,6 +221,21 @@ fn entry(entry: &Entry) -> String {
         ),
         Entry::Opened { .. } => "opened".to_owned(),
     }
+}
+
+pub fn line(line: &str) -> String {
+    let kept: serde_json::Value = serde_json::from_str(line).expect("a whole line of JSON");
+    let kind = kept["kind"].as_str().unwrap_or("?");
+    let numbered = if kept["seq"].is_u64() { "numbered" } else { "unnumbered" };
+    let what = match kind {
+        "message" => kept["role"].as_str().unwrap_or("?").to_lowercase(),
+        "event" => match &kept["event"] {
+            serde_json::Value::Object(named) => named.keys().next().cloned().unwrap_or_default(),
+            other => other.as_str().unwrap_or("?").to_owned(),
+        },
+        _ => String::new(),
+    };
+    format!("{kind} {what}").trim_end().to_owned() + " (" + numbered + ")"
 }
 
 pub fn log(entries: &[Entry]) -> Vec<String> {

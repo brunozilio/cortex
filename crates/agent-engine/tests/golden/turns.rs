@@ -31,10 +31,10 @@ fn a_plain_answer_starts_a_session_and_a_second_prompt_resumes_it() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
-        message user
         message assistant
         event Completed
         == second prompt: events ==
@@ -59,10 +59,10 @@ fn a_plain_answer_starts_a_session_and_a_second_prompt_resumes_it() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
         message assistant
         event Completed
         "##,
@@ -104,19 +104,53 @@ fn a_tool_turn_starts_finishes_and_reports_the_tool_before_the_answer() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted r1
         event ToolFinished r1
         event ToolResult r1
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
+        "##,
+    );
+}
+
+#[test]
+fn a_tool_turn_keeps_the_conversation_in_one_file_and_the_trace_in_another() {
+    let stage = Stage::new();
+    stage.file("notes.txt", "alpha\n");
+    stage.script([call("r1", "Read", json!({"file_path": "notes.txt"})), says("It says alpha.")]);
+
+    stage.prepare(&stage.request("Read the notes"));
+    stage.files("after the run");
+
+    stage.assert(
+        r##"
+        == after the run: conversation file ==
+        message user (numbered)
+        message assistant (numbered)
+        message user (numbered)
+        message assistant (numbered)
+        == after the run: trace file ==
+        prompted (numbered)
+        event SessionStarted (numbered)
+        opened (numbered)
+        event Checkpoint (numbered)
+        called (numbered)
+        event Usage (numbered)
+        event ToolStarted (numbered)
+        event ToolFinished (numbered)
+        event ToolResult (numbered)
+        event TextDelta (numbered)
+        called (numbered)
+        event Usage (numbered)
+        event Completed (numbered)
         "##,
     );
 }
@@ -166,20 +200,20 @@ fn two_read_only_calls_in_one_reply_run_as_a_batch_and_answer_in_call_order() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted r1
         event ToolFinished r1
         event ToolResult r1
         event ToolStarted r2
         event ToolFinished r2
         event ToolResult r2
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,

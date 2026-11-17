@@ -5,9 +5,7 @@ use super::Entry;
 use crate::transcript::{Block, Message, Role};
 
 pub fn records(entries: Vec<Entry>) -> Vec<Record> {
-    let traced = entries
-        .iter()
-        .position(|entry| !matches!(entry, Entry::Message(_) | Entry::Restarted | Entry::Truncated { .. }));
+    let traced = entries.iter().position(|entry| !entry.is_conversation());
     let legacy = traced.unwrap_or(entries.len());
     let mut records = Vec::new();
     if entries[..legacy].iter().any(|entry| matches!(entry, Entry::Message(_))) {
@@ -16,7 +14,7 @@ pub fn records(entries: Vec<Entry>) -> Vec<Record> {
     for (at, entry) in entries.into_iter().enumerate() {
         match entry {
             Entry::Message(message) if at < legacy => records.extend(replayed(message)),
-            Entry::Message(_) => {}
+            Entry::Message(_) | Entry::Amended { .. } => {}
             Entry::Truncated { keep } => records.push(Record::Truncated { keep }),
             Entry::Restarted => records.push(Record::Restarted),
             Entry::Event { at_ms, event } => records.push(Record::Event { at_ms, event }),

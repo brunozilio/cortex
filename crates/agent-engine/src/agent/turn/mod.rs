@@ -87,6 +87,7 @@ impl Agent<'_> {
         let mut turn = TurnState::starting(history, self.workspace.models.fallbacks.clone());
         let mut next = Next::AskModel;
         loop {
+            let kept_before_the_call = matches!(next, Next::AskModel);
             let step = match next {
                 Next::Done(outcome) => return outcome,
                 Next::AskModel if turn.asked == limit => Err(Ending::TooManyTurns),
@@ -99,6 +100,9 @@ impl Agent<'_> {
                 Next::Finishing { said } => self.finish(&mut turn, run, said),
             };
             next = step.unwrap_or_else(|ending| Next::Done(Err(ending)));
+            if !kept_before_the_call {
+                run.transition(turn.history);
+            }
         }
     }
 }

@@ -56,8 +56,10 @@ fn a_sub_agent_s_events_are_wrapped_between_its_spawn_and_its_report_to_the_pare
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted a1
         event AgentSpawned
         event AgentUpdate
@@ -72,12 +74,10 @@ fn a_sub_agent_s_events_are_wrapped_between_its_spawn_and_its_report_to_the_pare
         event AgentUpdate
         event ToolFinished a1
         event ToolResult a1
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,
@@ -145,22 +145,22 @@ fn a_background_sub_agent_is_collected_before_the_run_completes() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted a1
         event ToolFinished a1
         event ToolResult a1
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
+        message assistant
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=5
         event Usage
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         [agent #0 lane]

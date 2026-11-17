@@ -17,11 +17,7 @@ impl Job {
 
     pub(super) fn keep_checkpoint(&self, session: &SessionId, mut checkpoint: Checkpoint, workspace: &Workspace) {
         checkpoint.files = workspace.services.files.as_ref().map(|files| files.take()).unwrap_or_default();
-        let saved = self.sessions.load_checkpoints(&self.request, session).and_then(|mut all| {
-            all.push(checkpoint);
-            self.sessions.save_checkpoints(&self.request, session, &all)
-        });
-        if let Err(error) = saved {
+        if let Err(error) = self.sessions.add_checkpoint(&self.request, session, checkpoint) {
             tracing::warn!(%error, "this run's checkpoint was not kept; it cannot be rewound to");
         }
     }

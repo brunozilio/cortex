@@ -73,15 +73,19 @@ fn a_main_agent_isolated_in_a_worktree_writes_there_and_the_worktree_is_retained
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted w1
         event Edited
         event ToolFinished w1
         event ToolResult w1
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
+        message assistant
         event AgentSpawned
         event AgentUpdate
         called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
@@ -89,10 +93,6 @@ fn a_main_agent_isolated_in_a_worktree_writes_there_and_the_worktree_is_retained
         event AgentUpdate
         event Reviewed
         event Notice
-        message user
-        message assistant
-        message user
-        message assistant
         event Completed
         == files ==
         work.txt in the project: false

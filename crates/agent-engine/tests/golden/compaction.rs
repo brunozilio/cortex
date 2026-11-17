@@ -64,21 +64,24 @@ fn a_nearly_full_context_window_is_compacted_mid_run_in_a_new_session_keeping_th
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted r1
         event ToolFinished r1
         event ToolResult r1
+        message user
         called model=claude-opus-5-5 stop=EndTurn messages=2
         event Usage
         event Compacted
-        event TextDelta
-        called model=claude-opus-5-5 stop=EndTurn messages=3
-        event Usage
         restarted
         message user
         message assistant
         message user
+        event TextDelta
+        called model=claude-opus-5-5 stop=EndTurn messages=3
+        event Usage
         message assistant
         event Completed
         "##,
@@ -120,10 +123,10 @@ fn a_nearly_full_context_window_is_compacted_mid_run_and_a_resumed_session_s_log
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
-        message user
         message assistant
         event Completed
         == second prompt: events ==
@@ -154,21 +157,24 @@ fn a_nearly_full_context_window_is_compacted_mid_run_and_a_resumed_session_s_log
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=3
         event Usage
+        message assistant
         event ToolStarted r1
         event ToolFinished r1
         event ToolResult r1
+        message user
         called model=claude-opus-5-5 stop=EndTurn messages=4
         event Usage
         event Compacted
-        event TextDelta
-        called model=claude-opus-5-5 stop=EndTurn messages=3
-        event Usage
         restarted
         message user
         message assistant
         message user
+        event TextDelta
+        called model=claude-opus-5-5 stop=EndTurn messages=3
+        event Usage
         message assistant
         event Completed
         "##,
@@ -207,10 +213,10 @@ fn the_compact_command_summarises_a_kept_session_and_the_log_restarts() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
-        message user
         message assistant
         event Completed
         == compact command: events ==
@@ -251,10 +257,10 @@ fn the_compact_command_summarises_a_kept_session_and_the_log_restarts() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=2
         event Usage
-        message user
         message assistant
         event Completed
         "##,

@@ -26,7 +26,7 @@ impl Job {
                 turn_limit: opened.turn_limit,
             };
             let before = opened.history.len();
-            let outcome = agent.run(&mut opened.history);
+            let outcome = agent.run_keeping(&mut opened.history, self.kept_at_every_transition());
             drop(agent);
             let said = &opened.history[before.min(opened.history.len())..];
             let used = said.iter().filter(|message| message.role == Role::Assistant).count();

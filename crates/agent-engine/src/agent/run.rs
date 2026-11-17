@@ -18,9 +18,16 @@ pub(in crate::agent) struct ThisRun {
     pub(in crate::agent) repeats: Mutex<domain::repeats::Repeats>,
     pub(in crate::agent) watches: Watches,
     pub(in crate::agent) stuck: StuckWatch,
+    pub(in crate::agent) keep: Option<super::Keep>,
 }
 
 impl ThisRun {
+    pub(in crate::agent) fn transition(&self, history: &[crate::transcript::Message]) {
+        if let Some(keep) = &self.keep {
+            keep(history);
+        }
+    }
+
     pub(in crate::agent) fn admit(&self, name: &str, input: &Value, may_change: bool) -> bool {
         self.repeats.locked().admit(name, &input.to_string(), may_change)
     }

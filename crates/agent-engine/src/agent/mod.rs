@@ -17,6 +17,8 @@ use crate::tools::subagent::FoundAgent;
 use crate::tools::{Tool, Workspace};
 use crate::transcript::{Message, Usage};
 
+pub type Keep = std::sync::Arc<dyn Fn(&[Message]) + Send + Sync>;
+
 pub const MAX_TURNS: usize = 200;
 const SHOWN_OUTPUT: usize = 64_000;
 
@@ -58,6 +60,10 @@ impl Agent<'_> {
 
     pub fn run(&self, history: &mut Vec<Message>) -> Result<Usage, Ending> {
         self.run_in(&ThisRun::default(), history)
+    }
+
+    pub fn run_keeping(&self, history: &mut Vec<Message>, keep: Option<Keep>) -> Result<Usage, Ending> {
+        self.run_in(&ThisRun { keep, ..ThisRun::default() }, history)
     }
 
     fn run_in(&self, run: &ThisRun, history: &mut Vec<Message>) -> Result<Usage, Ending> {

@@ -37,6 +37,8 @@ pub trait Sessions: Send + Sync {
     fn record(&self, _request: &PromptRequest, _id: &SessionId, _entry: &Entry) -> Result<(), String> {
         Ok(())
     }
+    fn flush_trace(&self, _request: &PromptRequest, _id: &SessionId) {}
+    fn end_trace(&self, _request: &PromptRequest, _id: &SessionId) {}
     fn hold(&self, _request: &PromptRequest, _id: &SessionId) -> Result<Hold, String> {
         Ok(Hold::none())
     }
@@ -57,6 +59,12 @@ pub trait Sessions: Send + Sync {
     }
     fn save_checkpoints(&self, _request: &PromptRequest, _id: &SessionId, _all: &[Checkpoint]) -> Result<(), String> {
         Ok(())
+    }
+    fn add_checkpoint(&self, request: &PromptRequest, id: &SessionId, checkpoint: Checkpoint) -> Result<(), String> {
+        let mut all = self.load_checkpoints(request, id)?;
+        all.push(checkpoint);
+        crate::checkpoints::cap(&mut all);
+        self.save_checkpoints(request, id, &all)
     }
     fn load_snapshot(&self, _request: &PromptRequest, _id: &SessionId) -> Option<crate::prompt::Snapshot> {
         None
@@ -140,12 +148,16 @@ impl Sessions for InMemorySessions {
     }
 }
 
+mod durable;
 mod file;
 mod hold;
 mod log;
 mod records;
 mod repair;
+mod seq;
+mod trace_file;
 
+pub use durable::Written;
 pub use file::FileSessions;
 pub use hold::{ANSWERING_ELSEWHERE, Hold};
 pub use log::Entry;

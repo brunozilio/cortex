@@ -62,8 +62,10 @@ fn a_message_steered_during_a_tool_call_is_delivered_with_its_results_and_cannot
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted w1
         event Asked
         event Answered
@@ -71,20 +73,18 @@ fn a_message_steered_during_a_tool_call_is_delivered_with_its_results_and_cannot
         event ToolFinished w1
         event ToolResult w1
         event Steered
+        message user
         event Unsteered
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
+        message assistant
         event AgentSpawned
         event AgentUpdate
         called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
         event Agent #0 | Usage
         event AgentUpdate
         event Reviewed
-        message user
-        message assistant
-        message user
-        message assistant
         event Completed
         "##,
     );
@@ -128,16 +128,16 @@ fn a_message_steered_while_the_model_answers_without_tools_is_delivered_before_t
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
+        message assistant
         event Steered
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,

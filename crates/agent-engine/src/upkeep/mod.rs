@@ -10,6 +10,7 @@ pub use self::clear::{CLEARED, clear_old_results};
 use self::compact::compact;
 pub use self::compact::{compact_hooked, compact_hooked_on, compact_on, summary_text};
 pub use self::counted::Counted;
+pub use self::retained::{TRANSCRIPT_GONE, forget_lost_transcripts};
 use crate::model::ToolSpec;
 use crate::transcript::{Block, Message};
 

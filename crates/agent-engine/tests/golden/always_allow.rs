@@ -67,35 +67,35 @@ fn an_edit_always_allowed_is_remembered_for_the_run_only_and_writes_no_rule() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted w1
         event Asked
         event Answered
         event Edited
         event ToolFinished w1
         event ToolResult w1
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=3
         event Usage
+        message assistant
         event ToolStarted w2
         event Edited
         event ToolFinished w2
         event ToolResult w2
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=5
         event Usage
+        message assistant
         event AgentSpawned
         event AgentUpdate
         called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
         event Agent #0 | Usage
         event AgentUpdate
         event Reviewed
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
-        message assistant
         event Completed
         == out.txt ==
         rewritten
@@ -162,28 +162,28 @@ fn a_command_always_allowed_runs_and_keeps_its_rule_in_the_project_s_local_setti
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted b1
         event Asked
         event Answered
         event ToolProgress b1
         event ToolFinished b1
         event ToolResult b1
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=3
         event Usage
+        message assistant
         event ToolStarted b2
         event ToolProgress b2
         event ToolFinished b2
         event ToolResult b2
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=5
         event Usage
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         == settings.local.json ==

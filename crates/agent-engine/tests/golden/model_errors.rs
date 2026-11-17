@@ -65,11 +65,11 @@ fn an_overloaded_model_falls_back_to_the_next_model_and_answers_once() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event FellBack
         event TextDelta
         called model=claude-sonnet-5 stop=EndTurn messages=1
         event Usage
-        message user
         message assistant
         event Completed
         "##,
@@ -109,10 +109,10 @@ fn a_conversation_too_long_for_the_model_is_compacted_and_the_turn_asked_again()
         event SessionStarted
         opened
         event Checkpoint
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=1
         event Usage
-        message user
         message assistant
         event Completed
         == second prompt: events ==
@@ -137,15 +137,16 @@ fn a_conversation_too_long_for_the_model_is_compacted_and_the_turn_asked_again()
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=EndTurn messages=4
         event Usage
         event Compacted
-        event TextDelta
-        called model=claude-opus-5-5 stop=EndTurn messages=2
-        event Usage
         restarted
         message user
         message user
+        event TextDelta
+        called model=claude-opus-5-5 stop=EndTurn messages=2
+        event Usage
         message assistant
         event Completed
         "##,

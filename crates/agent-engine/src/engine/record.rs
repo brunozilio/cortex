@@ -12,6 +12,7 @@ use crate::boundary::RunGate;
 use crate::meter::Calls;
 use crate::model::{Reply, TurnRequest};
 use crate::sessions::{Entry, Sessions};
+use crate::transcript::Message;
 
 pub(super) struct Recorder {
     sessions: Arc<dyn Sessions>,
@@ -137,6 +138,21 @@ impl Recorder {
         } else {
             self.write(Entry::Event { at_ms: now(), event: event.clone() });
         }
+        drop(held);
+        if event.is_terminal() {
+            self.sessions.end_trace(&self.request, &self.session);
+        }
+    }
+
+    pub(super) fn kept(&self, history: &[Message]) -> Result<(), String> {
+        self.flush();
+        let saved = if self.compacted() {
+            self.sessions.save_compacted(&self.request, &self.session, history)
+        } else {
+            self.sessions.save_for(&self.request, &self.session, history)
+        };
+        self.sessions.flush_trace(&self.request, &self.session);
+        saved
     }
 
     pub(super) fn compacted(&self) -> bool {

@@ -52,6 +52,7 @@ impl std::fmt::Debug for NativeEngine {
 
 impl NativeEngine {
     pub fn new(source: Arc<dyn ApiSource>, sessions: Arc<dyn Sessions>) -> Self {
+        crate::tools::persisted::forget_old_results_once();
         Self {
             source,
             sessions,

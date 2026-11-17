@@ -62,27 +62,27 @@ fn an_edit_in_ask_mode_waits_for_the_user_and_runs_once_allowed() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted w1
         event Asked
         event Answered
         event Edited
         event ToolFinished w1
         event ToolResult w1
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
+        message assistant
         event AgentSpawned
         event AgentUpdate
         called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
         event Agent #0 | Usage
         event AgentUpdate
         event Reviewed
-        message user
-        message assistant
-        message user
-        message assistant
         event Completed
         == out.txt ==
         written
@@ -133,20 +133,20 @@ fn an_edit_the_user_denies_never_runs_and_the_model_reads_the_refusal() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted w1
         event Asked
         event Answered
         event Refused
         event ToolFinished w1
         event ToolResult w1
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         == out.txt ==
@@ -195,20 +195,20 @@ fn an_edit_denied_with_a_note_carries_the_note_to_the_model() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted w1
         event Asked
         event Answered
         event Refused
         event ToolFinished w1
         event ToolResult w1
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,

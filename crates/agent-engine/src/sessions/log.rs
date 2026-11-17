@@ -11,6 +11,10 @@ pub enum Entry {
     Truncated {
         keep: usize,
     },
+    #[serde(skip)]
+    Amended {
+        keep: usize,
+    },
     Restarted,
     Event {
         at_ms: u64,
@@ -33,21 +37,49 @@ pub enum Entry {
     },
 }
 
+impl Entry {
+    pub fn is_conversation(&self) -> bool {
+        matches!(self, Entry::Message(_) | Entry::Truncated { .. } | Entry::Amended { .. } | Entry::Restarted)
+    }
+}
+
 const CONVERSATION: [&str; 3] = ["message", "truncated", "restarted"];
+const KIND_FIRST: &str = "{\"kind\":\"";
 
 #[derive(Deserialize)]
-struct Kind {
+struct Head {
     kind: String,
+    #[serde(default)]
+    seq: Option<u64>,
+    #[serde(default)]
+    amended: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Line {
+    pub(super) seq: Option<u64>,
+    pub(super) entry: Entry,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Holds {
+    Conversation,
+    TraceOnly,
 }
 
 pub(super) fn changes(kept: &[Message], history: &[Message]) -> Vec<Entry> {
-    if history.starts_with(kept) {
-        return history[kept.len()..].iter().cloned().map(Entry::Message).collect();
+    let same = kept.iter().zip(history).take_while(|(kept, said)| kept == said).count();
+    let added = || history[same..].iter().cloned().map(Entry::Message);
+    if same == kept.len() {
+        return added().collect();
     }
-    if kept.starts_with(history) {
-        return vec![Entry::Truncated { keep: history.len() }];
+    if same == history.len() {
+        return vec![Entry::Truncated { keep: same }];
     }
-    restarted(history)
+    if same == 0 {
+        return restarted(history);
+    }
+    std::iter::once(Entry::Amended { keep: same }).chain(added()).collect()
 }
 
 pub(super) fn restarted(history: &[Message]) -> Vec<Entry> {
@@ -59,7 +91,7 @@ pub(super) fn conversation(entries: impl IntoIterator<Item = Entry>) -> Vec<Mess
     for entry in entries {
         match entry {
             Entry::Message(message) => history.push(message),
-            Entry::Truncated { keep } => history.truncate(keep),
+            Entry::Truncated { keep } | Entry::Amended { keep } => history.truncate(keep),
             Entry::Restarted => history.clear(),
             Entry::Event { .. }
             | Entry::Prompted { .. }
@@ -71,44 +103,125 @@ pub(super) fn conversation(entries: impl IntoIterator<Item = Entry>) -> Vec<Mess
     history
 }
 
+pub(super) fn encoded(entry: &Entry, seq: u64) -> Result<String, String> {
+    let mut line = match entry {
+        Entry::Amended { keep } => format!("{{\"kind\":\"truncated\",\"keep\":{keep},\"amended\":true}}"),
+        other => serde_json::to_string(other).map_err(|error| error.to_string())?,
+    };
+    if line.pop() != Some('}') {
+        return Err("a session entry is not a JSON object".into());
+    }
+    line.push_str(&format!(",\"seq\":{seq}}}\n"));
+    Ok(line)
+}
+
+fn decoded(line: &str) -> Result<Line, serde_json::Error> {
+    let head: Head = serde_json::from_str(line)?;
+    let entry = match serde_json::from_str(line)? {
+        Entry::Truncated { keep } if head.amended => Entry::Amended { keep },
+        entry => entry,
+    };
+    Ok(Line { seq: head.seq, entry })
+}
+
+fn kind_at_the_start(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix(KIND_FIRST)?;
+    rest.split_once('"').map(|(kind, _)| kind)
+}
+
+fn is_trace_line(line: &str) -> bool {
+    kind_at_the_start(line).is_some_and(|kind| !CONVERSATION.contains(&kind))
+}
+
 pub(super) fn written(text: &str) -> &str {
     if text.is_empty() || text.ends_with('\n') {
         return text;
     }
     let last = text.rfind('\n').map_or(0, |at| at + 1);
-    if serde_json::from_str::<Kind>(&text[last..]).is_ok() {
+    if serde_json::from_str::<Head>(&text[last..]).is_ok() {
         return text;
     }
     tracing::warn!(bytes = text.len() - last, "dropping the last line of a saved conversation: it was cut mid-write");
     &text[..last]
 }
 
-pub(super) fn resume(text: &str) -> Result<Vec<Message>, String> {
+#[derive(Debug, Default, PartialEq)]
+pub(super) struct Resumed {
+    pub(super) history: Vec<Message>,
+    pub(super) last_seq: u64,
+}
+
+pub(super) fn resume(text: &str) -> Result<Resumed, String> {
     let lines: Vec<&str> = written(text).lines().filter(|line| !line.trim().is_empty()).collect();
     let mut since_restart = Vec::new();
+    let mut last_seq = 0;
     for line in lines.iter().rev() {
-        let kind = serde_json::from_str::<Kind>(line).map_err(invalid)?.kind;
-        let restarted = kind == "restarted";
-        if CONVERSATION.contains(&kind.as_str()) {
+        let head = match serde_json::from_str::<Head>(line) {
+            Ok(head) => head,
+            Err(error) if is_trace_line(line) => {
+                tracing::warn!(%error, "skipping a trace line that does not parse; the conversation is unaffected");
+                continue;
+            }
+            Err(error) => return Err(invalid(error)),
+        };
+        last_seq = last_seq.max(head.seq.unwrap_or(0));
+        if CONVERSATION.contains(&head.kind.as_str()) {
             since_restart.push(*line);
         }
-        if restarted {
+        if head.kind == "restarted" {
             break;
         }
     }
     let entries: Result<Vec<Entry>, String> =
-        since_restart.into_iter().rev().map(|line| serde_json::from_str(line).map_err(invalid)).collect();
-    Ok(conversation(entries?))
+        since_restart.into_iter().rev().map(|line| decoded(line).map(|line| line.entry).map_err(invalid)).collect();
+    Ok(Resumed { history: conversation(entries?), last_seq })
 }
 
-pub(super) fn all(text: &str) -> Result<Vec<Entry>, String> {
-    written(text)
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| serde_json::from_str(line).map_err(invalid))
+pub(super) fn lines(text: &str, file: Holds) -> Result<Vec<Line>, String> {
+    let mut read = Vec::new();
+    for line in written(text).lines().filter(|line| !line.trim().is_empty()) {
+        match decoded(line) {
+            Ok(line) => read.push(line),
+            Err(error) if file == Holds::TraceOnly || is_trace_line(line) => {
+                tracing::warn!(%error, "skipping a trace line that does not parse");
+            }
+            Err(error) => return Err(invalid(error)),
+        }
+    }
+    Ok(read)
+}
+
+pub(super) fn merged(conversation: Vec<Line>, trace: Vec<Line>) -> Vec<Entry> {
+    let mut conversation = keyed(conversation).into_iter().peekable();
+    let mut trace = keyed(trace).into_iter().peekable();
+    let mut entries = Vec::new();
+    loop {
+        let from_trace = match (conversation.peek(), trace.peek()) {
+            (Some((said, _)), Some((traced, _))) => traced < said,
+            (None, Some(_)) => true,
+            (Some(_), None) => false,
+            (None, None) => return entries,
+        };
+        let next = if from_trace { trace.next() } else { conversation.next() };
+        entries.extend(next.map(|(_, entry)| entry));
+    }
+}
+
+fn keyed(lines: Vec<Line>) -> Vec<(u64, Entry)> {
+    let mut last = 0;
+    lines
+        .into_iter()
+        .map(|line| {
+            last = last.max(line.seq.unwrap_or(last));
+            (last, line.entry)
+        })
         .collect()
 }
 
 fn invalid(error: serde_json::Error) -> String {
     format!("the saved conversation is invalid: {error}")
 }
+
+#[cfg(test)]
+#[path = "log_tests.rs"]
+mod tests;

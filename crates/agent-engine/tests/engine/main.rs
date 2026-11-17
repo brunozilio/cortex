@@ -6,6 +6,7 @@ mod anchors;
 mod auto_pick;
 mod brand_only;
 mod checkpoints;
+mod crash;
 mod headless;
 mod inbox;
 mod lsp;

@@ -63,6 +63,27 @@ fn the_transcript_is_saved_as_readable_records() {
 }
 
 #[test]
+fn a_pointer_to_a_transcript_that_is_gone_says_so_and_one_still_there_is_left_alone() {
+    let dir = tempfile::tempdir().expect("dir");
+    let path = save_transcript(&[Message::user("hello")], dir.path()).expect("saved");
+    let pointed = || {
+        let mut summary = Message::user("<summary>kept</summary>");
+        summary.blocks.push(Block::Text(transcript_pointer(&path)));
+        vec![summary, Message::user("next")]
+    };
+
+    let mut still_there = pointed();
+    forget_lost_transcripts(&mut still_there);
+    assert_eq!(still_there, pointed());
+
+    std::fs::remove_file(&path).expect("the temporary folder was cleaned");
+    let mut gone = pointed();
+    forget_lost_transcripts(&mut gone);
+    assert_eq!(gone[0].blocks[1], Block::Text(TRANSCRIPT_GONE.into()));
+    assert_eq!(gone[0].blocks[0], pointed()[0].blocks[0], "the summary itself is untouched");
+}
+
+#[test]
 fn skills_whose_results_were_summarized_are_carried_over_once() {
     let history = vec![
         Message::user("go"),

@@ -99,9 +99,11 @@ fn recording_into_a_conversation_saved_in_the_old_format_keeps_the_conversation(
     let legacy = native.join(format!("{}.json", scoped_id(&request, &id).0));
     std::fs::write(&legacy, serde_json::to_vec(&[Message::user("old")]).expect("json")).expect("old file");
 
-    store.record(&request, &id, &Entry::Prompted { at_ms: 1, prompt: "new".into() }).expect("record");
+    let prompted = Entry::Prompted { at_ms: 1, prompt: "new".into() };
+    store.record(&request, &id, &prompted).expect("record");
     assert_eq!(store.load_for(&request, &id), Some(vec![Message::user("old")]));
-    assert!(!legacy.exists());
+    assert_eq!(store.entries(&request, &id).expect("entries"), [Entry::Message(Message::user("old")), prompted]);
+    assert!(legacy.exists(), "the trace has its own file, so the old conversation is left as it was");
 }
 
 #[test]

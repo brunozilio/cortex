@@ -78,43 +78,45 @@ fn plan_mode_refuses_an_edit_then_an_approved_plan_changes_mode_and_the_edit_run
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted w1
         event Refused
         event ToolFinished w1
         event ToolResult w1
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=3
         event Usage
+        message assistant
         event ToolStarted p1
         event Asked
         event Answered
         event ModeChanged
         event ToolFinished p1
         event ToolResult p1
+        message user
+        amended keep=4
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=5
         event Usage
+        message assistant
         event ToolStarted w2
         event Edited
         event ToolFinished w2
         event ToolResult w2
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=7
         event Usage
+        message assistant
         event AgentSpawned
         event AgentUpdate
         called model=claude-opus-5-5 stop=EndTurn messages=1 agent=#0
         event Agent #0 | Usage
         event AgentUpdate
         event Reviewed
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
-        message assistant
-        message user
-        message assistant
         event Completed
         == out.txt ==
         planned
@@ -163,19 +165,19 @@ fn a_plan_sent_back_with_a_note_keeps_plan_mode_and_tells_the_model_why() {
         event SessionStarted
         opened
         event Checkpoint
+        message user
         called model=claude-opus-5-5 stop=ToolUse messages=1
         event Usage
+        message assistant
         event ToolStarted p1
         event Asked
         event Answered
         event ToolFinished p1
         event ToolResult p1
+        message user
         event TextDelta
         called model=claude-opus-5-5 stop=EndTurn messages=3
         event Usage
-        message user
-        message assistant
-        message user
         message assistant
         event Completed
         "##,

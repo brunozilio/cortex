@@ -1,6 +1,6 @@
 # 0006 One persistence pattern
 
-Status: Accepted, 2026-11-16. The SQLite part (session catalog and project memory) is implemented, 2026-11-17; see "Implemented" below.
+Status: Accepted, 2026-11-16. The SQLite part (session catalog and project memory) is implemented, 2026-11-17; see "Implemented: the database" below. The transcript part (conversation split from the trace, saved at every transition) is implemented, 2026-11-17; see "Implemented: the transcript" below.
 
 ## Context
 
@@ -57,3 +57,26 @@ Consequences that are now real:
 - Downgrade: an older binary started after the import finds `sessions.json.imported` and `<project>.json.imported` where it expects `sessions.json` and `<project>.json`, so it shows an empty session list and an empty memory. Nothing is lost: quitting and renaming the files back (dropping `.imported`) gives the older binary the data as it was at the moment of the import. What the newer binary wrote after the import is only in `app.db` and the older binary does not see it. Going forward again, the newer binary does not import a second time, because its database is not empty; it leaves the renamed-back files where they are.
 - The catalog and the memory are no longer files to open in a text editor; `sqlite3 app.db` reads them.
 - Tests and the in-memory data root use an in-memory SQLite database, so the same SQL runs in both; the in-memory implementations of the two traits remain as test doubles and as the last fallback, and one shared test drives every implementation through the same script.
+
+## Implemented: the transcript (2026-11-17)
+
+A session is two append-only files in `native-sessions/` (`crates/agent-engine/src/sessions/`): `<hash>.jsonl` holds the conversation (`message`, `truncated`, `restarted`) and `<hash>.trace.jsonl` holds the trace (`prompted`, `shown`, `opened`, `event`, `called`). The conversation kept its file name, so an older and a newer binary find it in the same place.
+
+- Every line written since the split carries `seq`, a number that only grows within a process and starts from the clock in microseconds, so it also grows from one process to the next; a process that loads a conversation never numbers below what it read. Readers of the trace merge the files by it. A line with no number takes the number of the line before it in its file. That gives three cases, all read for good: an old mixed file alone reads in the order it was written; an old mixed file that grew afterwards keeps its old part first, then the new conversation lines in it and the new trace lines beside it in the order they were written; two new files read as one log.
+- Resuming reads `<hash>.jsonl` only. A trace file that is missing, unreadable or does not parse costs the trace and a warning in the log, never the conversation; a trace line that does not parse inside an old mixed file is skipped the same way. A conversation line that does not parse still fails the load, as before.
+- The conversation is saved at every transition of the turn state machine (`0002-agent-loop-state-machine.md`): before each model call, after each reply is recorded, after each batch of tool results. The save in `close` remains and normally writes nothing. A run killed between two transitions resumes with everything up to the last one, and a tool call left without its result is closed as interrupted.
+- A save is one `write` of the new lines and one `sync_data`. The store keeps, per session, the number of messages persisted, a digest of them and the file's length, and appends only what follows when the file still has that length and the digest still matches; otherwise it reads the file once. The conversation is hashed in memory at each save, the file is not read.
+- An already saved message that changes (a reminder joining tool results, a prompt joining the results an interruption left) is written as `truncated` to the first changed message, marked `amended: true`, followed by the new version. An older binary reads it as the truncation it is; the trace does not show it as a rewind.
+- The trace goes through one buffered file per run: opened once, flushed at each transition and at the terminal event, never synced. Past 64 MiB it is renamed `<hash>.trace.1.jsonl`, replacing the earlier one, and a new file starts.
+- Housekeeping done with it: the session's `.lock` file is removed on release; checkpoints are added in one `Document::update` and capped (the newest 50 and 64 MiB of file content keep their files, older ones keep their place only); tool-result folders in the temporary directory are removed after seven days without a write.
+
+Consequences that are now real:
+
+- One `fsync` per transition, two per turn with tools plus one for the prompt and one for the answer. Measured on the development machine (APFS, release build): about 3.6 ms per synced append and about 0.4 ms to hash a 225 KB conversation, against the single unsynced write per run it replaces. A turn with tools costs about 8 ms more than before.
+- Hashing the conversation at every save is work proportional to the conversation, not to what was added; only the bytes written are proportional to what was added.
+- Two files per session instead of one, three after a trace rotation. Copying a session by hand means copying all of them; deleting only the trace files is safe.
+- A trace older than the last two 64 MiB parts is gone.
+- Downgrade: an older binary opening a session written by this one finds the conversation in `<hash>.jsonl` and resumes it (unknown fields are ignored and an amendment is a truncation), but it reads no `<hash>.trace.jsonl`, so its trace view shows that conversation as one saved before traces existed. What it then appends, conversation and trace mixed and unnumbered, is read back by this version in file order.
+- An older binary does not expect a session's `.lock` file to disappear: if it opens the file just before this version removes it and locks it just after, both can hold the session at once. The window is a few microseconds at the end of a run.
+- The hooks' view of the disk changed: a hook that reads the session files during a run now finds the messages of the turn so far, and trace entries only up to the last transition.
+- A checkpoint whose files were dropped cannot be rewound to. An older binary does not know the marker and would rewind to it without restoring files.

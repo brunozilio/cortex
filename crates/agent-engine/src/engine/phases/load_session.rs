@@ -47,7 +47,11 @@ impl Job {
             return Ok(LoadedSession { id: new_id(), history: Vec::new() });
         };
         let history = match self.sessions.load_for_checked(&self.request, id) {
-            Ok(Some(history)) => crate::sessions::repaired(history),
+            Ok(Some(history)) => {
+                let mut history = crate::sessions::repaired(history);
+                crate::upkeep::forget_lost_transcripts(&mut history);
+                history
+            }
             Err(error) => return Err(Stop::failed(format!("Could not restore the conversation: {error}"))),
             Ok(None) if self.request.command.is_some_and(SessionCommand::is_chore) => Vec::new(),
             Ok(None) => {
