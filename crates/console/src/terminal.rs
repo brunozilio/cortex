@@ -16,6 +16,9 @@ use crate::routes::{Shared, failure};
 
 const CHUNK: usize = 8192;
 const QUEUED: usize = 64;
+pub const MOST_MESSAGE_BYTES: usize = 64 * 1024;
+pub const MOST_TYPED_AHEAD: usize = 64;
+const FELL_BEHIND: &str = "\r\nThe program stopped reading what was typed; the terminal was closed.\r\n";
 pub const MOST_AT_ONCE: usize = 4;
 
 pub fn routes() -> Router<Shared> {
@@ -39,6 +42,7 @@ async fn upgrade(
         let told = format!("{MOST_AT_ONCE} terminals are already open from this console; close one first.");
         return failure(StatusCode::TOO_MANY_REQUESTS, "too_many_terminals", &told);
     };
+    let socket = socket.max_message_size(MOST_MESSAGE_BYTES);
     match launch {
         Some(launch) => socket.on_upgrade(move |socket| bridge(socket, launch, size, place)),
         None => socket.on_upgrade(move |socket| watch(socket, mirror, place)),
@@ -98,7 +102,14 @@ async fn bridge(socket: WebSocket, launch: Launch, size: Size, _place: OwnedSema
                 if sink.send(Message::Binary(bytes.into())).await.is_err() { break }
             },
             typed = stream.next() => match typed {
-                Some(Ok(Message::Binary(bytes))) => if input.send(bytes.to_vec()).is_err() { break },
+                Some(Ok(Message::Binary(bytes))) => match input.try_send(bytes.to_vec()) {
+                    Ok(()) => {}
+                    Err(crossbeam_channel::TrySendError::Full(_)) => {
+                        let _ = sink.send(Message::Binary(FELL_BEHIND.as_bytes().to_vec().into())).await;
+                        break;
+                    }
+                    Err(crossbeam_channel::TrySendError::Disconnected(_)) => break,
+                },
                 Some(Ok(Message::Text(text))) => if let Some(size) = Size::from_json(&text) { pty::resize(master.as_ref(), size) },
                 Some(Ok(Message::Close(_)) | Err(_)) | None => break,
                 Some(Ok(_)) => {}
@@ -122,7 +133,7 @@ fn pump_out(mut reader: Box<dyn Read + Send>) -> channel::Receiver<Vec<u8>> {
 }
 
 fn pump_in(mut writer: Box<dyn Write + Send>) -> crossbeam_channel::Sender<Vec<u8>> {
-    let (sender, receiver) = crossbeam_channel::unbounded::<Vec<u8>>();
+    let (sender, receiver) = crossbeam_channel::bounded::<Vec<u8>>(MOST_TYPED_AHEAD);
     std::thread::spawn(move || {
         for bytes in receiver {
             if writer.write_all(&bytes).and_then(|()| writer.flush()).is_err() {

@@ -207,6 +207,39 @@ async fn a_device_that_saw_the_pairing_id_but_not_the_code_is_never_paired() {
 }
 
 #[tokio::test]
+async fn a_relay_cannot_open_more_channels_than_the_machine_serves_at_once() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let folder = tempfile::tempdir().unwrap();
+    Book::in_folder(folder.path()).invite().unwrap();
+    let pace = Pace { idle: Duration::from_millis(50), retry: Duration::from_secs(60), taken: Duration::from_secs(60) };
+    let options = remote::Options {
+        relay: format!("http://{address}"),
+        folder: folder.path().to_owned(),
+        console: "127.0.0.1:9".parse().unwrap(),
+        token: "t".into(),
+        pace,
+    };
+    let _remote = remote::start(options).unwrap();
+    let (tcp, _) = tokio::time::timeout(WAIT, listener.accept()).await.unwrap().unwrap();
+    let mut machine = tokio_tungstenite::accept_async(tcp).await.unwrap();
+    let extra = 5;
+    let opened = u32::try_from(remote::MOST_CHANNELS + extra).unwrap();
+    for channel in 1..=opened {
+        machine.send(Message::Binary(tunnel::Frame::Open(channel).encode().into())).await.unwrap();
+    }
+    let mut closed = Vec::new();
+    while closed.len() < extra {
+        let Ok(Some(Ok(Message::Binary(bytes)))) = tokio::time::timeout(WAIT, machine.next()).await else { break };
+        if let Ok(tunnel::Frame::Close(channel)) = tunnel::Frame::decode(&bytes) {
+            closed.push(channel);
+        }
+    }
+    let expected: Vec<u32> = (opened - u32::try_from(extra).unwrap() + 1..=opened).collect();
+    assert_eq!(closed, expected, "the channels past the cap are closed at once, the others wait for a hello");
+}
+
+#[tokio::test]
 async fn an_invitation_is_used_once() {
     let world = world(shell("sleep 5")).await;
     let link = world.book().invite().unwrap();

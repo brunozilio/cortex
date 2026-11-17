@@ -10,6 +10,7 @@ use super::Status;
 use super::channel::{self, Place};
 
 const QUEUED: usize = 64;
+pub const MOST_CHANNELS: usize = 32;
 const PING: Duration = Duration::from_secs(25);
 
 #[derive(Debug, Clone)]
@@ -129,6 +130,11 @@ async fn relay(place: &Place, connection: Connection) {
                     Some(Ok(_)) => continue,
                 };
                 match Frame::decode(&bytes) {
+                    Ok(Frame::Open(id)) if channels.len() >= MOST_CHANNELS || channels.contains_key(&id) => {
+                        if sink.send(Message::Binary(Frame::Close(id).encode().into())).await.is_err() {
+                            break;
+                        }
+                    }
                     Ok(Frame::Open(id)) => {
                         let (incoming, receiving) = mpsc::channel(QUEUED);
                         channels.insert(id, incoming);

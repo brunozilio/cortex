@@ -55,7 +55,22 @@ pub fn router(settings: Settings, live: Live) -> Router {
     };
     app.layer(DefaultBodyLimit::max(crate::live::MOST_BODY_BYTES))
         .layer(axum::middleware::from_fn_with_state(shared.clone(), crate::access::guard))
+        .layer(axum::middleware::map_response(guarded))
         .with_state(shared)
+}
+
+pub const PAGE_HEADERS: [(&str, &str); 4] = [
+    ("x-frame-options", "DENY"),
+    ("content-security-policy", "frame-ancestors 'none'"),
+    ("x-content-type-options", "nosniff"),
+    ("referrer-policy", "no-referrer"),
+];
+
+async fn guarded(mut response: Response) -> Response {
+    for (name, value) in PAGE_HEADERS {
+        response.headers_mut().insert(name, axum::http::HeaderValue::from_static(value));
+    }
+    response
 }
 
 pub fn failure(status: StatusCode, code: &str, message: &str) -> Response {

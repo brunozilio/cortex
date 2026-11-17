@@ -258,3 +258,21 @@ async fn the_session_this_screen_shows_is_watched_instead_of_started_again() {
     .await;
     assert!(left.is_ok(), "a closed page stops watching");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_program_that_stops_reading_closes_the_terminal_instead_of_queueing_without_end() {
+    let served = serve(shell("stty raw -echo; printf ready; sleep 30")).await;
+    let mut socket = served.open().await;
+    assert!(read_until(&mut socket, "ready").await.contains("ready"));
+    let paste = vec![b'x'; 60 * 1024];
+    let flood = async {
+        for _ in 0..400 {
+            if socket.send(Message::Binary(paste.clone().into())).await.is_err() {
+                return;
+            }
+        }
+    };
+    let _ = tokio::time::timeout(Duration::from_secs(10), flood).await;
+    let seen = read_until(&mut socket, "stopped reading").await;
+    assert!(seen.contains("stopped reading what was typed"), "{seen:?}");
+}

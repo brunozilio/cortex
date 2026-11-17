@@ -276,3 +276,16 @@ async fn the_app_built_into_the_binary_is_served_with_its_type_and_pages_fall_ba
     assert_eq!((status, body.as_str()), (StatusCode::OK, "<html>bundled</html>"));
     assert_eq!(headers[header::CONTENT_TYPE], "text/html");
 }
+
+#[tokio::test]
+async fn no_other_site_can_frame_the_console_even_when_it_refuses() {
+    for request in
+        [get("/"), Request::get("/api/health").header(header::HOST, HOST).body(Body::empty()).expect("request")]
+    {
+        let (_, headers, _) = send(app(None), request).await;
+        assert_eq!(headers["x-frame-options"], "DENY");
+        assert_eq!(headers["content-security-policy"], "frame-ancestors 'none'");
+        assert_eq!(headers["x-content-type-options"], "nosniff");
+        assert_eq!(headers["referrer-policy"], "no-referrer");
+    }
+}
