@@ -83,6 +83,8 @@ O chat informa o que aconteceu, por exemplo `Rewound: 3 files restored. Changes 
 > [!WARNING]
 > O rewind restaura o que as ferramentas de arquivo do agente mudaram. Alterações feitas com comandos Bash não são desfeitas. O recurso `destructive-snapshot` guarda os arquivos não rastreados antes de comandos como `rm -r` ou `git reset --hard`, para o rewind poder trazê-los de volta; veja [Sandbox e segurança](./sandbox-and-safety).
 
+Um arquivo que você mudou depois que o agente o deixou não é sobrescrito: o rewind o deixa como está e o lista (`Left as they are, because each changed after the agent left it: …`). Os arquivos voltam inteiros (uma queda no meio nunca deixa um arquivo pela metade), mantêm suas permissões, e um link posto no lugar de um arquivo é substituído em vez de seguido. O estado de cada arquivo é salvo antes da primeira escrita do agente nele, então um prompt interrompido por uma queda ainda pode ser desfeito quando você abrir de novo.
+
 Se a conversa foi compactada depois daquele prompt, os arquivos são restaurados mas a conversa fica como está (`the conversation was compacted since, so it is kept`). O rewind fica indisponível enquanto o agente trabalha.
 
 ## Repetir (retry)

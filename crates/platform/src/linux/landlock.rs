@@ -73,6 +73,7 @@ pub fn confined(mut command: Command, confinement: &Confinement) -> Command {
     if support() != Support::Available {
         return command;
     }
+    command.envs(confinement.environment.iter().map(|(key, value)| (key, value)));
     let mut ruleset = match ruleset(confinement) {
         Ok(ruleset) => Some(ruleset),
         Err(error) => {
@@ -108,7 +109,7 @@ mod tests {
         let project = tempfile::tempdir().expect("project");
         let elsewhere = tempfile::tempdir().expect("elsewhere");
         let confinement =
-            Confinement { writable: vec![project.path().to_path_buf()], protected: Vec::new(), network: true };
+            Confinement { writable: vec![project.path().to_path_buf()], network: true, ..Confinement::default() };
         assert!(runs("echo in > made.txt", project.path(), &confinement));
         assert!(project.path().join("made.txt").exists());
         let outside = elsewhere.path().join("made.txt");

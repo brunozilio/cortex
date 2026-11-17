@@ -24,7 +24,7 @@ pub async fn read_sse(
         }
         line.clear();
         let read = body.read_line(&mut line, cancel).await?;
-        let event = if read == 0 { decoder.finish() } else { decoder.line(line.trim_end_matches('\n')) };
+        let event = if read == 0 { decoder.finish() } else { decoder.line(line.trim_end_matches('\n'))? };
         if let Some(event) = event {
             folder.event(&event.data, on)?;
         }

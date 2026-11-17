@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::rules::{Ruling, install_rule, install_ruling, rule_for, suggested};
+use super::rules::{Ruling, install_rule, install_ruling, rule_for, suggested, unseen_denial};
 use super::{Call, Effect, Exec, Guard, Judgement, Place, PolicyContext, Reason, Remembered, Standing, Verdict};
 use crate::PermissionMode;
 use crate::command_policy::{
@@ -56,7 +56,8 @@ impl PolicyEngine {
             Verdict::Deny(reason) => Verdict::Deny(reason),
             settled => {
                 let asks = settled.asks();
-                let concern = cx.concern(call, risk(&classes), leaves_the_sandbox(call, cx));
+                let unseen = unseen_denial(call, cx).map(Reason::Hidden);
+                let concern = unseen.or_else(|| cx.concern(call, risk(&classes), leaves_the_sandbox(call, cx)));
                 let reason = concern.or_else(|| install_concern(call, cx)).or_else(|| {
                     asks.then(|| match (asked_by, &stood.guarded, stood.standing) {
                         (Some(rule), ..) => Reason::Rule(rule),

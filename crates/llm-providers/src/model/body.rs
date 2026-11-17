@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use super::ModelError;
 
 pub const TOO_LONG: &str = "provider stream exceeds size limit";
+pub const LINE_AT_MOST: usize = 8 * 1024 * 1024;
 
 pub type Chunk = Result<Vec<u8>, String>;
 
@@ -165,6 +166,15 @@ impl Body {
     }
 
     pub async fn read_line(&mut self, line: &mut String, cancel: &CancellationToken) -> Result<usize, ModelError> {
+        self.read_line_within(line, cancel, LINE_AT_MOST).await
+    }
+
+    pub async fn read_line_within(
+        &mut self,
+        line: &mut String,
+        cancel: &CancellationToken,
+        most: usize,
+    ) -> Result<usize, ModelError> {
         let mut bytes = Vec::new();
         loop {
             let data = self.fill(cancel).await?;
@@ -175,6 +185,9 @@ impl Body {
                 Some(at) => (at + 1, true),
                 None => (data.len(), false),
             };
+            if bytes.len() + taken > most {
+                return Err(ModelError::Oversized(most));
+            }
             bytes.extend_from_slice(&data[..taken]);
             self.consume_some(taken);
             if ended {

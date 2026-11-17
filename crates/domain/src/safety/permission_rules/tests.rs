@@ -163,10 +163,14 @@ fn a_program_named_by_a_variable_or_run_inside_a_construct_is_asked_about_when_r
 #[test]
 fn a_command_hidden_inside_another_is_asked_about_when_rules_restrict() {
     let rules = rules(&["Bash"], &[], &["Bash(rm:*)"]);
-    for line in ["bash -c 'rm x'", "eval 'rm x'", "sh -c \"$(cat script)\"", "echo 'unclosed; rm x"] {
+    for line in ["sh -c \"$(cat script)\"", "echo 'unclosed; rm x"] {
         assert_eq!(command(&rules, line), Some(RuleKind::Ask), "{line}");
     }
     for line in [
+        "bash -c 'rm x'",
+        "eval 'rm x'",
+        "eval rm x",
+        "sh -ec \"cd a && rm x\"",
         "echo $(rm -rf x)",
         "echo `rm x`",
         "echo \"$(rm x)\"",

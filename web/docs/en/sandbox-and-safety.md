@@ -98,7 +98,7 @@ Shell commands the agent runs (the `Bash` and `Monitor` tools), command hooks, b
   - the [additional folders](./permissions#additional-directories);
   - the repository, when the session works in its own worktree;
   - the temporary folders (the system temporary folder and `/tmp`);
-  - package caches in your home folder: `Library/Caches`, `.cache`, `.npm`, `.cargo/registry`, `.cargo/git`, `.cargo/.package-cache`, `.cargo/.package-cache-mutate`, `.cargo/.global-cache`, `go/pkg`, `.gradle`, `.rustup`, `.pnpm-store`, `.yarn`;
+  - in your home folder, `Library/Caches`, `.cache` and cargo's lock files (`.cargo/.package-cache`, `.cargo/.package-cache-mutate`, `.cargo/.global-cache`), but never a toolchain or unpacked packages that run outside the sandbox later: `.rustup`, `.cargo/bin`, `.cargo/registry`, `.cargo/git`, `.npm`, `.yarn`, `.pnpm-store`, `go/pkg`, `.gradle` stay read-only. `npm`, `yarn`, `pnpm` and `go` get a cache of their own in the temporary folder (through `npm_config_cache`, `YARN_CACHE_FOLDER`, `npm_config_store_dir` and `GOMODCACHE`), so `npm install` works in the sandbox and downloads into it. `cargo build` works when the crates it needs are already downloaded; a new dependency needs `cargo fetch` run once outside the sandbox (by you, or by the agent after asking). Installing a toolchain, `cargo install` and Gradle need the same;
   - the folders in `sandbox.allowWrite`;
   - terminal devices such as `/dev/null` and `/dev/tty`.
 - On macOS, a sandboxed command can **never** write the `{{DIR}}/` folder of the project, of the added folders or of your home folder, nor a repository's `.git/config`, `.git/config.worktree` or `.git/hooks/` (once the repository exists, so `git init` still works), so a command cannot grant itself permissions or leave behind something git or {{NAME}} would run later. Commits, branches and fetches still work; commands that change the repository's configuration (`git config`, `git remote add`, `git push -u`, `git submodule init`) fail in the sandbox, so run them yourself or let the agent ask to run them outside it. A sandboxed command also cannot start `launchctl` or open apps through Launch Services (`open`, AppleScript's `activate`). Landlock can only allow folders, not carve an exception out of one, so on Linux these paths stay writable by a sandboxed command; the `Write` and `Edit` tools still ask before writing them, and {{NAME}}'s own git commands ignore what a repository's configuration would run (see [Workspace trust](#workspace-trust)).
@@ -243,10 +243,14 @@ These are asked about every time, even in bypass mode and even with an allow rul
 - `git push` to the default branch, or with `--force`, `--force-with-lease`, `--mirror`, `--delete`, `--prune`, or refspecs starting with `+` or `:`;
 - `cargo`, `npm`, `pnpm` or `yarn` `publish`;
 - `gh pr merge`, `gh release create|delete|edit`, `gh api`;
-- `docker push`, `podman push`;
+- `docker push`, `podman push`, `docker image push`;
 - fetching an address that never appeared in the conversation, after the session has read content from the web or an MCP server (such content can tell an agent to send data to an address it makes up).
 
+Options written before the subcommand do not hide them: `git -C . push --force`, `git --git-dir=.git push -f`, `npm --prefix . publish` and `cargo +nightly publish` are asked about too.
+
 A deny rule still refuses them. See [Permissions](./permissions#actions-that-always-ask).
+
+The `git status`, `git diff`, `git log -p` and other reads the agent runs without asking never run what a repository's own configuration names: the agent's shell commands get git settings that turn off `core.fsmonitor`, empty the repository's filters, and replace its external diff and `textconv` programs with plain `diff` and `cat` (git 2.31 or later).
 
 ## Safety check in bypass mode
 

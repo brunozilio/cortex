@@ -105,3 +105,21 @@ fn outside_a_repository_nothing_is_watched() {
     workspace.services.files = Some(Arc::default());
     assert!(before(&workspace).is_none());
 }
+
+#[test]
+fn a_file_git_could_not_show_is_never_recorded_as_one_that_did_not_exist() {
+    let (dir, _workspace) = repository();
+    let free = std::sync::atomic::AtomicBool::new(false);
+    let working = Git::stopped_by(&free);
+    let head = working.text(dir.path(), &["rev-parse", "HEAD"]).expect("head");
+    let head = head.trim();
+
+    assert_eq!(committed(&working, dir.path(), Some(head), "z.txt"), Committed::Was(Some(b"one\n".to_vec())));
+    assert_eq!(committed(&working, dir.path(), Some(head), "new.txt"), Committed::Was(None));
+    assert_eq!(committed(&working, dir.path(), None, "z.txt"), Committed::Was(None), "nothing committed yet");
+
+    let stopped = std::sync::atomic::AtomicBool::new(true);
+    let failing = Git::stopped_by(&stopped);
+    assert_eq!(committed(&failing, dir.path(), Some(head), "z.txt"), Committed::Unknown);
+    assert_eq!(committed(&failing, dir.path(), Some(head), "new.txt"), Committed::Unknown);
+}

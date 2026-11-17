@@ -248,3 +248,42 @@ fn a_checkpoint_is_added_in_one_update_and_old_ones_lose_their_files() {
     assert!(all[..10].iter().all(|checkpoint| checkpoint.files_dropped && checkpoint.files.is_empty()));
     assert!(live.iter().all(|checkpoint| checkpoint.files.len() == 1));
 }
+
+#[test]
+fn a_file_s_state_kept_at_its_first_write_survives_a_crash_and_rewinds_after_a_restart() {
+    use std::sync::Arc;
+
+    use crate::checkpoints::{Checkpoint, FileHistory, rewind};
+    let kept = Kept::new();
+    let work = tempfile::tempdir().expect("work");
+    let (a, b) = (work.path().join("a.txt"), work.path().join("b.txt"));
+    std::fs::write(&a, "one").expect("a");
+    let earlier = Checkpoint::open("earlier", &[]);
+    kept.store.add_checkpoint(&kept.request, &kept.id, earlier).expect("earlier");
+    let history = vec![Message::user("earlier"), Message::user("done")];
+    let opened = Checkpoint::open("edit a, make b", &history);
+    let files = FileHistory::default();
+    let store = Arc::new(FileSessions::new(&kept.native));
+    let (request, id, journaled) = (kept.request.clone(), kept.id.clone(), opened.clone());
+    files.journaled(Arc::new(move |files| {
+        let so_far = Checkpoint { files: files.clone(), ..journaled.clone() };
+        store.add_checkpoint(&request, &id, so_far).expect("kept");
+    }));
+
+    files.before_write(&a);
+    std::fs::write(&a, "two").expect("a");
+    files.before_write(&b);
+    std::fs::write(&b, "made").expect("b");
+    drop(files);
+
+    let restarted = FileSessions::new(&kept.native);
+    let mut all = restarted.load_checkpoints(&kept.request, &kept.id).expect("checkpoints");
+    assert_eq!(all.len(), 2, "the turn cut short has one checkpoint, updated in place");
+    let mut said = history.clone();
+    said.push(Message::user("edit a, make b"));
+    let rewound = rewind(&mut all, 1, &mut said).expect("rewind");
+    assert_eq!(std::fs::read_to_string(&a).expect("a"), "one");
+    assert!(!b.exists());
+    assert_eq!(rewound.restored, [a, b]);
+    assert_eq!(said, history);
+}

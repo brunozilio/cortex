@@ -112,8 +112,8 @@ impl StandaloneHost {
             }
             Capability::WriteFile => {
                 let path = resolve(&text("path"));
-                std::fs::write(&path, text("text"))
-                    .map(|()| Value::Null)
+                platform::atomic::write(&path, text("text").as_bytes())
+                    .map(|_| Value::Null)
                     .map_err(|error| format!("{}: {error}", path.display()))
             }
             Capability::Exec => exec(&self.cwd, arguments, &self.stop, &self.confine),

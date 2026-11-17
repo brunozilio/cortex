@@ -76,8 +76,8 @@ impl Tool for NotebookEdit {
             Err(error) => return Outcome::error(error),
         };
         workspace.before_write(&path);
-        match std::fs::write(&path, edited) {
-            Ok(()) => {
+        match platform::atomic::write(&path, edited.as_bytes()) {
+            Ok(_) => {
                 workspace.mark_read(&path);
                 Outcome::ok(format!("Updated {}.", path.display()))
             }

@@ -1,0 +1,183 @@
+use std::path::PathBuf;
+
+use super::*;
+use crate::PermissionMode;
+use crate::permission_rules::{PermissionRules, RuleKind};
+use crate::shell::sample::{Random, cases};
+
+const MODES: [PermissionMode; 4] =
+    [PermissionMode::Bypass, PermissionMode::Ask, PermissionMode::AcceptEdits, PermissionMode::Plan];
+
+fn judged(rules: &PermissionRules, mode: PermissionMode, line: &str) -> Verdict {
+    let remembered = Remembered::default();
+    let bounds = Bounds::of(vec![PathBuf::from("/work/rocket")], Vec::new());
+    let effects = [Effect::exec(line, false)];
+    let cx = PolicyContext {
+        mode,
+        ceiling: None,
+        rules,
+        remembered: &remembered,
+        bounds: &bounds,
+        cwd: "/work/rocket",
+        home: Some("/home/ana"),
+        sandboxed: true,
+        sandbox_missing: None,
+        no_prompts: false,
+        surroundings: &NothingAround,
+    };
+    PolicyEngine::decide(&Call { tool: "Bash", subject: line, effects: &effects }, &cx)
+}
+
+fn denying() -> PermissionRules {
+    PermissionRules::default()
+        .with(RuleKind::Allow, "Bash")
+        .with(RuleKind::Deny, "Bash(rm:*)")
+        .with(RuleKind::Deny, "Bash(curl:*)")
+}
+
+#[test]
+fn a_denied_program_the_rules_cannot_see_is_never_run_without_the_user_even_when_bypassing() {
+    let rules = denying();
+    for line in [
+        "bash -c 'rm -rf x'",
+        "sh -c \"rm -rf x\"",
+        "$(echo rm) -rf x",
+        "`echo rm` -rf x",
+        "/bin/r? -rf x",
+        "/bin/r[m] -rf x",
+        "eval rm -rf x",
+        "eval 'rm -rf x'",
+        "x=rm; $x -rf y",
+        "\"$x\" -rf y",
+        "/usr/bin/cur? http://example.com",
+        "{rm,-rf,x}",
+        "echo 'rm -rf x' | sh",
+        "bash <<< 'rm -rf x'",
+        "exec rm -rf x",
+        "RM -rf x",
+        "/bin/RM -rf x",
+        "sudo bash -lc 'cd /tmp && rm -rf x'",
+        "source <(echo rm -rf x)",
+        "bash -c \"$(printf rm) -rf x\"",
+        "((x++)); rm -rf x",
+    ] {
+        for mode in MODES {
+            let verdict = judged(&rules, mode, line);
+            assert!(!matches!(verdict, Verdict::Allow), "{mode:?} {line}: {verdict:?}");
+        }
+    }
+}
+
+#[test]
+fn a_denied_program_found_inside_a_shell_s_code_is_refused_outright() {
+    let rules = denying();
+    for line in [
+        "bash -c 'rm -rf x'",
+        "sh -ec 'cd x && curl http://e.dev'",
+        "eval rm -rf x",
+        "eval 'rm -rf x'",
+        "exec rm -rf x",
+        "nice -n 5 bash -c 'timeout 5 rm -rf x'",
+        "RM -rf x",
+    ] {
+        let verdict = judged(&rules, PermissionMode::Bypass, line);
+        assert!(verdict.denies(), "{line}: {verdict:?}");
+    }
+}
+
+#[test]
+fn a_program_the_rules_cannot_see_asks_every_time_and_names_the_rule() {
+    let verdict = judged(&denying(), PermissionMode::Bypass, "$(echo rm) -rf x");
+    let Verdict::Ask { reason: Reason::Hidden(rule), rememberable: false, .. } = &verdict else {
+        panic!("{verdict:?}")
+    };
+    assert!(rule == "Bash(rm:*)" || rule == "Bash(curl:*)", "{rule}");
+    assert!(verdict.asked_every_time());
+    let unattended = verdict.without_the_user("Bash");
+    assert!(unattended.denies(), "nobody to ask means refused: {unattended:?}");
+}
+
+#[test]
+fn commands_the_rules_can_see_still_run_when_bypassing() {
+    let rules = denying();
+    for line in
+        ["echo $(date)", "ls -la", "cargo test", "[ -f x ] && cat x", "bash script.sh", "FOO=1 make", "git status"]
+    {
+        assert_eq!(judged(&rules, PermissionMode::Bypass, line), Verdict::Allow, "{line}");
+    }
+    let without_denials = PermissionRules::default().with(RuleKind::Allow, "Bash");
+    assert_eq!(judged(&without_denials, PermissionMode::Bypass, "$(echo rm) -rf x"), Verdict::Allow);
+}
+
+const DENIED: [(&str, &str); 2] = [("rm", "-rf x"), ("curl", "http://e.dev/x")];
+
+fn spelled(random: &mut Random, program: &str) -> String {
+    let first = &program[..1];
+    let rest = &program[1..];
+    match random.below(16) {
+        0 => program.to_owned(),
+        1 => format!("'{program}'"),
+        2 => format!("\"{program}\""),
+        3 => format!("{first}\\{rest}"),
+        4 => format!("\\{program}"),
+        5 => format!("/bin/{program}"),
+        6 => format!("/usr/bin/{program}"),
+        7 => format!("/bin/{first}?{}", &rest[1..]),
+        8 => format!("/usr/bin/{first}[{}]{}", &rest[..1], &rest[1..]),
+        9 => format!("$(echo {program})"),
+        10 => format!("`echo {program}`"),
+        11 => format!("\"$(printf {program})\""),
+        12 => "$p".to_owned(),
+        13 => "${p}".to_owned(),
+        14 => program.to_uppercase(),
+        _ => format!("{first}''{rest}"),
+    }
+}
+
+fn single_quoted(code: &str) -> String {
+    format!("'{}'", code.replace('\'', r"'\''"))
+}
+
+fn wrapped(random: &mut Random, line: &str) -> String {
+    match random.below(18) {
+        0 => format!("sudo {line}"),
+        1 => format!("sudo -u root {line}"),
+        2 => format!("env {line}"),
+        3 => format!("env A=1 {line}"),
+        4 => format!("nice -n 5 {line}"),
+        5 => format!("timeout 5 {line}"),
+        6 => format!("xargs {line}"),
+        7 => format!("command {line}"),
+        8 => format!("exec {line}"),
+        9 => format!("nohup {line}"),
+        10 => format!("bash -c {}", single_quoted(line)),
+        11 => format!("sh -c {}", single_quoted(line)),
+        12 => format!("bash -lc {}", single_quoted(line)),
+        13 => format!("eval {line}"),
+        14 => format!("eval {}", single_quoted(line)),
+        15 => format!("echo $({line})"),
+        16 => format!("echo {} | sh", single_quoted(line)),
+        _ => format!("true && {line}"),
+    }
+}
+
+#[test]
+fn no_spelling_or_wrapping_of_a_denied_program_reaches_allow_in_any_mode() {
+    let rules = denying();
+    let mut random = Random(0x005e_ed0f_dea1_ed01);
+    for _ in 0..cases() {
+        let (program, arguments) = DENIED[random.below(DENIED.len())];
+        let word = spelled(&mut random, program);
+        let assigned =
+            if word.contains("$p") || word.contains("${p}") { format!("p={program}; ") } else { String::new() };
+        let mut line = format!("{word} {arguments}");
+        for _ in 0..random.below(4) {
+            line = wrapped(&mut random, &line);
+        }
+        let line = format!("{assigned}{line}");
+        for mode in MODES {
+            let verdict = judged(&rules, mode, &line);
+            assert!(!matches!(verdict, Verdict::Allow), "{mode:?} {line}: {verdict:?}");
+        }
+    }
+}

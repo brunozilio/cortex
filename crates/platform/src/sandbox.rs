@@ -6,6 +6,7 @@ pub struct Confinement {
     pub writable: Vec<PathBuf>,
     pub protected: Vec<PathBuf>,
     pub network: bool,
+    pub environment: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -73,7 +73,7 @@ fn an_amendment_is_a_truncation_to_a_program_that_does_not_know_the_word() {
 fn a_file_from_before_the_split_reads_in_the_order_it_was_written() {
     let written = [Entry::Message(Message::user("old")), steered(1), Entry::Message(reply("answer")), steered(2)];
     let text: String = written.iter().map(before_the_split).collect();
-    let read = lines(&text, Holds::Conversation).expect("lines");
+    let read = lines(&text, Holds::Conversation).0;
     assert!(read.iter().all(|line| line.seq.is_none()));
     assert_eq!(merged(read, Vec::new()), written);
 }
@@ -139,26 +139,30 @@ fn a_trace_line_that_does_not_parse_never_stops_the_conversation_from_resuming()
         before_the_split(&Entry::Message(reply("two"))),
     ]
     .concat();
-    assert_eq!(resume(&text).expect("resumed").history, [Message::user("one"), reply("two")]);
-    let read = lines(&text, Holds::Conversation).expect("lines");
+    assert_eq!(resume(&text).history, [Message::user("one"), reply("two")]);
+    let read = lines(&text, Holds::Conversation).0;
     assert_eq!(read.len(), 3, "the trace goes on without the broken line");
 }
 
 #[test]
-fn a_conversation_line_that_does_not_parse_still_stops_the_load() {
-    let broken = "{\"kind\":\"message\",\"role\":\"User\",\"blocks\":[{\"Te\n";
-    let text = [broken.to_owned(), before_the_split(&Entry::Message(reply("two")))].concat();
-    assert!(resume(&text).is_err());
-    assert!(lines(&text, Holds::Conversation).is_err());
-    assert!(resume("not json at all\n{\"kind\":\"restarted\"}\n").is_ok(), "nothing before a restart is read");
-    assert!(resume("{\"kind\":\"restarted\"}\nnot json at all\n").is_err());
+fn a_conversation_line_that_does_not_parse_is_set_aside_and_the_rest_still_loads() {
+    let broken = "{\"kind\":\"message\",\"role\":\"User\",\"blocks\":[{\"Te";
+    let one = before_the_split(&Entry::Message(Message::user("one")));
+    let text = [one, format!("{broken}\n"), before_the_split(&Entry::Message(reply("two")))].concat();
+    let resumed = resume(&text);
+    assert_eq!(resumed.history, [Message::user("one"), reply("two")]);
+    assert_eq!(resumed.skipped, [broken]);
+    let (read, skipped) = lines(&text, Holds::Conversation);
+    assert_eq!((read.len(), skipped.as_slice()), (2, [broken.to_owned()].as_slice()));
+    assert!(resume("not json at all\n{\"kind\":\"restarted\"}\n").skipped.is_empty(), "nothing before a restart");
+    assert_eq!(resume("{\"kind\":\"restarted\"}\nnot json at all\n").skipped, ["not json at all"]);
 }
 
 #[test]
 fn a_trace_file_is_read_around_whatever_does_not_parse() {
     let text =
         format!("{}garbage\n{{\"kind\":\"message\"\n{}", before_the_split(&steered(1)), before_the_split(&steered(2)));
-    let read = lines(&text, Holds::TraceOnly).expect("lines");
+    let read = lines(&text, Holds::TraceOnly).0;
     assert_eq!(read.into_iter().map(|line| line.entry).collect::<Vec<_>>(), [steered(1), steered(2)]);
 }
 
@@ -169,5 +173,5 @@ fn the_greatest_number_on_file_is_reported_so_new_entries_follow_it() {
         encoded(&Entry::Message(reply("two")), 90).expect("line"),
     ]
     .concat();
-    assert_eq!(resume(&text).expect("resumed").last_seq, 90);
+    assert_eq!(resume(&text).last_seq, 90);
 }

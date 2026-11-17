@@ -98,7 +98,7 @@ Os comandos de shell que o agente executa (as ferramentas `Bash` e `Monitor`), o
   - as [pastas adicionais](./permissions);
   - o repositório, quando a sessão trabalha na própria worktree;
   - as pastas temporárias (a pasta temporária do sistema e `/tmp`);
-  - caches de pacotes na sua pasta pessoal: `Library/Caches`, `.cache`, `.npm`, `.cargo/registry`, `.cargo/git`, `.cargo/.package-cache`, `.cargo/.package-cache-mutate`, `.cargo/.global-cache`, `go/pkg`, `.gradle`, `.rustup`, `.pnpm-store`, `.yarn`;
+  - na sua pasta pessoal, `Library/Caches`, `.cache` e os arquivos de trava do cargo (`.cargo/.package-cache`, `.cargo/.package-cache-mutate`, `.cargo/.global-cache`), mas nunca um toolchain ou pacotes descompactados que depois rodam fora do sandbox: `.rustup`, `.cargo/bin`, `.cargo/registry`, `.cargo/git`, `.npm`, `.yarn`, `.pnpm-store`, `go/pkg`, `.gradle` ficam só para leitura. `npm`, `yarn`, `pnpm` e `go` ganham um cache próprio na pasta temporária (por `npm_config_cache`, `YARN_CACHE_FOLDER`, `npm_config_store_dir` e `GOMODCACHE`), então `npm install` funciona no sandbox e baixa para lá. `cargo build` funciona quando os crates de que precisa já foram baixados; uma dependência nova pede `cargo fetch` rodado uma vez fora do sandbox (por você, ou pelo agente depois de perguntar). Instalar um toolchain, `cargo install` e o Gradle pedem o mesmo;
   - as pastas em `sandbox.allowWrite`;
   - dispositivos de terminal como `/dev/null` e `/dev/tty`.
 - No macOS, um comando na sandbox **nunca** pode gravar a pasta `{{DIR}}/` do projeto, das pastas adicionais ou da sua pasta pessoal, nem o `.git/config`, o `.git/config.worktree` ou o `.git/hooks/` de um repositório (depois que o repositório existe, então `git init` continua funcionando), para que um comando não consiga se dar permissões nem deixar algo que o git ou o {{NAME}} executariam depois. Commits, branches e fetches continuam funcionando; comandos que mudam a configuração do repositório (`git config`, `git remote add`, `git push -u`, `git submodule init`) falham na sandbox, então rode-os você mesmo ou deixe o agente pedir para rodá-los fora dela. Um comando na sandbox também não consegue iniciar o `launchctl` nem abrir apps pelo Launch Services (`open`, o `activate` do AppleScript). O Landlock só libera pastas, não abre exceções dentro de uma pasta liberada, então no Linux esses caminhos continuam graváveis por um comando na sandbox; as ferramentas `Write` e `Edit` continuam perguntando antes de gravá-los, e os comandos git do próprio {{NAME}} ignoram o que a configuração de um repositório executaria (veja [Confiança na pasta](#confianca-na-pasta)).
@@ -243,10 +243,14 @@ Estas são perguntadas toda vez, mesmo no modo bypass e mesmo com uma regra allo
 - `git push` para o branch padrão, ou com `--force`, `--force-with-lease`, `--mirror`, `--delete`, `--prune`, ou refspecs começando com `+` ou `:`;
 - `publish` do `cargo`, `npm`, `pnpm` ou `yarn`;
 - `gh pr merge`, `gh release create|delete|edit`, `gh api`;
-- `docker push`, `podman push`;
+- `docker push`, `podman push`, `docker image push`;
 - buscar um endereço que nunca apareceu na conversa, depois que a sessão leu conteúdo da web ou de um servidor MCP (esse conteúdo pode mandar um agente enviar dados para um endereço inventado).
 
+Opções escritas antes do subcomando não as escondem: `git -C . push --force`, `git --git-dir=.git push -f`, `npm --prefix . publish` e `cargo +nightly publish` também geram pergunta.
+
 Uma regra deny continua recusando-as. Veja [Permissões](./permissions).
+
+Os `git status`, `git diff`, `git log -p` e outras leituras que o agente roda sem perguntar nunca executam o que a configuração do próprio repositório indica: os comandos de shell do agente recebem ajustes do git que desligam `core.fsmonitor`, esvaziam os filtros do repositório e trocam seus programas de diff externo e `textconv` por `diff` e `cat` simples (git 2.31 ou mais novo).
 
 ## Verificação de segurança no modo bypass
 

@@ -9,7 +9,7 @@ use platform::child::{GRACE, Spawn, Stderr, last_lines};
 use platform::sync::Locked;
 use platform::{Child, Stop};
 use serde_json::{Value, json};
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 use super::{ANSWER_WAIT, Listener, MESSAGE_AT_MOST, McpError, Transport};
 
@@ -19,6 +19,7 @@ const STDERR_LINES: usize = 5;
 type Waiting = Arc<Mutex<HashMap<String, oneshot::Sender<Value>>>>;
 
 enum Answer {
+    Unsent,
     Replied(Option<Value>),
     Ended(&'static str),
 }
@@ -33,7 +34,7 @@ struct Heard {
 pub struct StdioTransport {
     name: String,
     child: Arc<Child>,
-    input: Arc<Mutex<ChildStdin>>,
+    input: Input,
     heard: Arc<Heard>,
     shared: bool,
 }
@@ -44,9 +45,27 @@ impl std::fmt::Debug for StdioTransport {
     }
 }
 
-fn write(input: &Mutex<ChildStdin>, name: &str, message: &Value) -> Result<(), String> {
-    let mut input = input.lock().map_err(|_| "the server's input is unavailable")?;
-    writeln!(input, "{message}").and_then(|()| input.flush()).map_err(|error| format!("{name}: {error}"))
+type Input = mpsc::Sender<String>;
+
+const QUEUED_AT_MOST: usize = 64;
+
+fn write(input: &Input, name: &str, message: &Value) -> Result<(), String> {
+    input.try_send(message.to_string()).map_err(|error| match error {
+        mpsc::error::TrySendError::Full(_) => format!("{name} is not reading what it is sent"),
+        mpsc::error::TrySendError::Closed(_) => format!("{name}: its input is closed"),
+    })
+}
+
+fn writer(name: &str, mut stdin: ChildStdin) -> std::io::Result<Input> {
+    let (input, mut queued) = mpsc::channel::<String>(QUEUED_AT_MOST);
+    std::thread::Builder::new().name(format!("{}-mcp-{name}-input", brand::COMMAND)).spawn(move || {
+        while let Some(line) = queued.blocking_recv() {
+            if writeln!(stdin, "{line}").and_then(|()| stdin.flush()).is_err() {
+                return;
+            }
+        }
+    })?;
+    Ok(input)
 }
 
 fn line(output: &mut impl BufRead, into: &mut Vec<u8>) -> Result<bool, String> {
@@ -99,13 +118,13 @@ impl StdioTransport {
         let transport = Self {
             name: name.to_owned(),
             child: Arc::new(child),
-            input: Arc::new(Mutex::new(input)),
+            input: writer(name, input).map_err(|error| format!("{name}: {error}"))?,
             heard,
             shared: listener.is_some(),
         };
         let reading = Reading {
             server: name.to_owned(),
-            input: Arc::clone(&transport.input),
+            input: transport.input.clone(),
             heard: Arc::clone(&transport.heard),
             child: Arc::downgrade(&transport.child),
             listener,
@@ -149,7 +168,7 @@ impl StdioTransport {
 
 struct Reading {
     server: String,
-    input: Arc<Mutex<ChildStdin>>,
+    input: Input,
     heard: Arc<Heard>,
     child: Weak<Child>,
     listener: Option<Listener>,
@@ -214,20 +233,28 @@ impl Transport for StdioTransport {
             forget();
             return Err(self.stopped().into());
         }
-        if let Err(error) = write(&self.input, &self.name, message) {
-            forget();
-            return Err(if self.child.is_alive() { error } else { self.stopped() }.into());
-        }
+        let line = message.to_string();
         let waited = platform::runtime::block_on(async {
+            let answered = async {
+                if self.input.send(line).await.is_err() {
+                    return Answer::Unsent;
+                }
+                Answer::Replied(receive.await.ok())
+            };
             tokio::select! {
                 biased;
-                reply = receive => Answer::Replied(reply.ok()),
+                answer = answered => answer,
                 () = stop.wait() => Answer::Ended("cancelled"),
                 () = tokio::time::sleep(ANSWER_WAIT) => Answer::Ended("timed out"),
             }
         })
         .map_err(|error| error.to_string())?;
         match waited {
+            Answer::Unsent => {
+                forget();
+                let closed = format!("{}: its input is closed", self.name);
+                Err(if self.child.is_alive() { closed } else { self.stopped() }.into())
+            }
             Answer::Replied(Some(reply)) => Ok(reply),
             Answer::Replied(None) => Err(self.stopped().into()),
             Answer::Ended(reason) => {

@@ -101,7 +101,7 @@ fn sessions_are_bound_to_their_directory_and_credentials_cannot_come_from_wire()
     assert_eq!(restored.host.credentials.client, 0);
 }
 #[test]
-fn corrupt_saved_history_fails_without_diagnosing_it_as_a_missing_session() {
+fn corrupt_saved_history_is_said_and_set_aside_without_diagnosing_it_as_a_missing_session() {
     use agent_engine::sessions::{FileSessions, Sessions};
     let dir = tempfile::tempdir().expect("valid test fixture");
     let store = FileSessions::new(dir.path());
@@ -114,12 +114,13 @@ fn corrupt_saved_history_fails_without_diagnosing_it_as_a_missing_session() {
         .map(|e| e.path())
         .find(|p| p.extension().is_some_and(|ext| ext == "jsonl"));
     std::fs::write(saved.expect("the saved conversation"), "{broken\n").expect("corrupt it");
-    assert!(store.load_for_checked(&request.session.cwd, &id).is_err());
     let engine = Engine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(store));
     let mut resumed = request;
     resumed.session.resume = Some(id);
     let events = finish(&start(&engine, &resumed));
-    assert!(matches!(events.last(),Some(EngineEvent::Failed(message)) if message.contains("restore")));
+    let said =
+        events.iter().any(|event| matches!(event, EngineEvent::Notice(notice) if notice.contains("could not be read")));
+    assert!(said, "{events:?}");
     assert!(!events.contains(&EngineEvent::Diagnosed(EngineProblem::SessionNotFound)));
 }
 

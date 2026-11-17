@@ -52,7 +52,11 @@ impl Job {
         let Some(id) = &self.request.session.resume else {
             return Ok(LoadedSession { id: new_id(), history: Vec::new() });
         };
-        let history = match self.sessions.load_for_checked(&self.request.session.cwd, id) {
+        let loaded = self.sessions.load_for_checked(&self.request.session.cwd, id);
+        for notice in self.sessions.take_notices() {
+            self.gate.emit(EngineEvent::Notice(notice));
+        }
+        let history = match loaded {
             Ok(Some(history)) => {
                 let mut history = crate::sessions::repaired(history);
                 crate::upkeep::forget_lost_transcripts(&mut history);

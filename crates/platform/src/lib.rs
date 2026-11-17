@@ -1,3 +1,4 @@
+pub mod atomic;
 pub mod bounded;
 pub mod child;
 pub mod file_lock;

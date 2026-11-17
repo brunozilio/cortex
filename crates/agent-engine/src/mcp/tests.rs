@@ -134,8 +134,8 @@ done
 "#;
     let confinement = platform::sandbox::Confinement {
         writable: vec![project.path().to_path_buf()],
-        protected: Vec::new(),
         network: true,
+        ..platform::sandbox::Confinement::default()
     };
     let spec = ServerSpec::Stdio {
         name: "writer".into(),

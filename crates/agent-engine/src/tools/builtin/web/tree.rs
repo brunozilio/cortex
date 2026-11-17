@@ -161,7 +161,8 @@ fn open(tag: &str, syntax: Syntax) -> Option<Element> {
     if name.is_empty() || !name.starts_with(|c: char| c.is_ascii_alphabetic()) {
         return None;
     }
-    Some(Element { attrs: super::attrs::parse(&tag[name.len()..]), name, children: Vec::new() })
+    let written = tag.find(|c: char| c.is_whitespace() || c == '/' || c == '>').unwrap_or(tag.len());
+    Some(Element { attrs: super::attrs::parse(&tag[written..]), name, children: Vec::new() })
 }
 
 fn push_text(stack: &mut [Element], text: &str) {
@@ -227,5 +228,27 @@ mod tests {
         );
         assert_eq!(root.first("link").map(Element::text).as_deref(), Some("https://a.dev/1"));
         assert_eq!(root.first("description").map(Element::text).as_deref(), Some("<p>Hi</p>"));
+    }
+
+    #[test]
+    fn a_prefixed_tag_in_any_script_keeps_its_attributes_and_never_panics() {
+        let root = parse("<日本:item kind=\"a\">x</日本:item><dc:creator id='7'>y</dc:creator>", Syntax::Xml);
+        assert_eq!(root.first("item").and_then(|item| item.attr("kind")), Some("a"));
+        assert_eq!(root.first("creator").and_then(|creator| creator.attr("id")), Some("7"));
+
+        const PIECES: [&str; 14] = ["a", "日本", "é", ":", "x", "-", "/", " ", "=", "\"", "'", ">", "<", "ü"];
+        let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+        for _ in 0..5_000 {
+            let mut name = String::new();
+            for _ in 0..1 + seed % 8 {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                name.push_str(PIECES[usize::try_from(seed % PIECES.len() as u64).unwrap_or(0)]);
+            }
+            let text = format!("<{name} k=\"v\">t</{name}><{name}/>");
+            let _ = parse(&text, Syntax::Xml);
+            let _ = parse(&text, Syntax::Html);
+        }
     }
 }

@@ -4,21 +4,35 @@ use serde_json::Value;
 
 const GIT_RUNS: [&str; 3] = [".git/config", ".git/config.worktree", ".git/hooks"];
 
-const CACHES: [&str; 13] = [
-    "Library/Caches",
-    ".cache",
-    ".npm",
+const CACHES: [&str; 5] =
+    ["Library/Caches", ".cache", ".cargo/.package-cache", ".cargo/.package-cache-mutate", ".cargo/.global-cache"];
+
+const TOOLCHAINS: [&str; 13] = [
+    ".rustup",
+    ".cargo/bin",
     ".cargo/registry",
     ".cargo/git",
-    ".cargo/.package-cache",
-    ".cargo/.package-cache-mutate",
-    ".cargo/.global-cache",
+    ".npm",
+    ".yarn",
+    ".pnpm-store",
+    "Library/pnpm",
+    ".local/share/pnpm",
     "go/pkg",
     ".gradle",
-    ".rustup",
-    ".pnpm-store",
-    ".yarn",
+    ".cache/pre-commit",
+    "Library/Caches/Yarn",
 ];
+
+const OWN_CACHES: [(&str, &str); 4] = [
+    ("npm_config_cache", "npm"),
+    ("YARN_CACHE_FOLDER", "yarn"),
+    ("npm_config_store_dir", "pnpm-store"),
+    ("GOMODCACHE", "go-mod"),
+];
+
+pub fn own_caches(temp: &Path) -> PathBuf {
+    temp.join(format!("{}-sandbox-caches", brand::COMMAND))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Sandbox {
@@ -73,6 +87,7 @@ pub struct Confinement {
     pub writable: Vec<PathBuf>,
     pub protected: Vec<PathBuf>,
     pub network: bool,
+    pub environment: Vec<(String, String)>,
 }
 
 impl Sandbox {
@@ -135,13 +150,21 @@ impl Sandbox {
             .flat_map(|root| {
                 std::iter::once(root.join(places.settings_dir)).chain(GIT_RUNS.iter().map(move |name| root.join(name)))
             });
+        let home = places.home.map(|home| home.join(places.settings_dir));
+        let toolchains = places.home.into_iter().flat_map(|home| TOOLCHAINS.iter().map(move |name| home.join(name)));
         let mut protected: Vec<PathBuf> = Vec::new();
-        for path in roots.chain(places.home.map(|home| home.join(places.settings_dir))) {
+        for path in roots.chain(home).chain(toolchains) {
             if !protected.contains(&path) {
                 protected.push(path);
             }
         }
-        Confinement { writable: kept, protected, network: self.network }
+        let environment = places.temp.first().map(|temp| own_caches(temp)).map_or_else(Vec::new, |caches| {
+            OWN_CACHES
+                .iter()
+                .map(|(name, folder)| ((*name).to_owned(), caches.join(folder).to_string_lossy().into_owned()))
+                .collect()
+        });
+        Confinement { writable: kept, protected, network: self.network, environment }
     }
 }
 
@@ -212,9 +235,11 @@ pub fn blocked(output: &str) -> bool {
 pub fn hint(settings_dir: &str) -> String {
     format!(
         "(the sandbox may have refused this: commands write only inside the project, added folders, the \
-         temporary folder and package caches, and never into {settings_dir}/ folders or a repository's \
-         .git/config and .git/hooks. Do not work around it; tell the user, who can add a folder to \
-         sandbox.allowWrite in ~/{settings_dir}/settings.json or run the command themselves)"
+         temporary folder and ~/.cache, and never into {settings_dir}/ folders, a repository's \
+         .git/config and .git/hooks, toolchains or unpacked packages (~/.rustup, ~/.cargo, ~/.npm, go/pkg): \
+         a new dependency must be fetched outside the sandbox, for example with `cargo fetch`. Do not work \
+         around it; tell the user, who can run the command themselves or add a folder to sandbox.allowWrite \
+         in ~/{settings_dir}/settings.json)"
     )
 }
 
@@ -242,10 +267,54 @@ mod tests {
         let confinement = Sandbox::default().confinement(&places(&added, &temp));
 
         assert_eq!(confinement.writable[..3], [PathBuf::from("/repo"), "/other".into(), "/tmp".into()]);
-        assert!(confinement.writable.contains(&PathBuf::from("/Users/ana/.cargo/registry")));
+        assert!(confinement.writable.contains(&PathBuf::from("/Users/ana/.cargo/.package-cache")));
+        assert!(confinement.writable.contains(&PathBuf::from("/Users/ana/.cache")));
         assert!(!confinement.writable.iter().any(|path| path == Path::new("/Users/ana")));
         assert!(!confinement.writable.iter().any(|path| path == Path::new("/Users/ana/.cargo")));
         assert!(confinement.network);
+    }
+
+    #[test]
+    fn toolchains_and_unpacked_packages_that_run_outside_the_sandbox_are_never_writable() {
+        let temp = [PathBuf::from("/tmp")];
+        let confinement = Sandbox::default().confinement(&places(&[], &temp));
+        for kept in [
+            "/Users/ana/.rustup",
+            "/Users/ana/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo",
+            "/Users/ana/.cargo/bin/cargo-nextest",
+            "/Users/ana/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.0/src/lib.rs",
+            "/Users/ana/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f/serde-1.0.0.crate",
+            "/Users/ana/.cargo/registry/index/index.crates.io-1949cf8c6b5b557f/config.json",
+            "/Users/ana/.cargo/git/checkouts/dep-1/abc/build.rs",
+            "/Users/ana/.npm/_npx/1/node_modules/.bin/tool",
+            "/Users/ana/.npm/_cacache/index-v5/00/aa",
+            "/Users/ana/go/pkg/mod/example.com/m@v1.0.0/m.go",
+            "/Users/ana/.gradle/wrapper/dists/gradle-8/bin/gradle",
+            "/Users/ana/.pnpm-store/v3/files/00/aa",
+            "/Users/ana/.yarn/berry/cache/a.zip",
+        ] {
+            let path = Path::new(kept);
+            assert!(!confinement.writable.iter().any(|folder| path.starts_with(folder)), "{kept} is writable");
+        }
+        for guarded in ["/Users/ana/.rustup", "/Users/ana/.cargo/bin", "/Users/ana/.cargo/registry", "/Users/ana/.npm"]
+        {
+            assert!(confinement.protected.contains(&PathBuf::from(guarded)), "{guarded} is not guarded");
+        }
+        assert!(confinement.protected.contains(&PathBuf::from("/Users/ana/.cache/pre-commit")));
+    }
+
+    #[test]
+    fn package_managers_in_the_sandbox_keep_their_caches_in_a_folder_of_their_own() {
+        let temp = [PathBuf::from("/tmp")];
+        let confinement = Sandbox::default().confinement(&places(&[], &temp));
+        let own = own_caches(Path::new("/tmp"));
+        let named: Vec<&str> = confinement.environment.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(named, ["npm_config_cache", "YARN_CACHE_FOLDER", "npm_config_store_dir", "GOMODCACHE"]);
+        for (name, folder) in &confinement.environment {
+            assert!(Path::new(folder).starts_with(&own), "{name}={folder}");
+            assert!(confinement.writable.iter().any(|writable| Path::new(folder).starts_with(writable)), "{name}");
+        }
+        assert!(Sandbox::default().confinement(&places(&[], &[])).environment.is_empty(), "no temp, no overlay");
     }
 
     #[test]
@@ -258,6 +327,7 @@ mod tests {
         };
         let mut expected: Vec<PathBuf> = guarded("/repo").into_iter().chain(guarded("/other")).collect();
         expected.push("/Users/ana/.app".into());
+        expected.extend(TOOLCHAINS.map(|name| Path::new("/Users/ana").join(name)));
         assert_eq!(confinement.protected, expected);
         assert!(!confinement.protected.iter().any(|path| path.ends_with(".git")), "commits still write objects");
     }

@@ -124,8 +124,8 @@ Especificadores de caminho funcionam como no `.gitignore`:
 As regras de shell leem o comando do jeito que o shell vai executá-lo. A linha é analisada em cada comando simples que ela executa, inclusive os que estão dentro de `if`, `for`, `while`, `case`, funções, subshells, `{ …; }`, `$(…)`, crases, `<(…)` e o comando que `find -exec` executa:
 
 - **Comandos compostos** (`&&`, `;`, `|`, quebras de linha, estruturas de controle): todas as partes precisam ser liberadas. Partes somente leitura (`ls`, `cat`, `git status`…) e `cd` para uma pasta dentro do projeto passam sem regra. Uma parte negada recusa o comando inteiro.
-- **Comandos escondidos** (`$(…)`, crases, `<(…)`, `bash -c '…'`, `eval`, um programa dado por uma variável) e **redirecionamentos para arquivos** nunca são liberados por uma regra allow. Os comandos dentro de uma substituição são partes próprias, então uma regra deny que cite um deles recusa a linha inteira; o que não dá para ver (`bash -c '…'`, `eval`, `$X`) gera pergunta quando existem regras deny ou ask com especificador.
-- **Regras deny enxergam através de disfarces**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` casam com `Bash(rm:*)`. Os invólucros desmontados são `sudo`, `doas`, `env`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs` e `busybox`.
+- **Comandos escondidos** (`$(…)`, crases, `<(…)`, `bash -c '…'`, `eval`, um programa dado por uma variável) e **redirecionamentos para arquivos** nunca são liberados por uma regra allow. Os comandos dentro de uma substituição são partes próprias, então uma regra deny que cite um deles recusa a linha inteira, e o mesmo vale para o código de `bash -c '…'`, `sh -c "…"` e `eval …`: `bash -c 'rm -rf x'` é recusado por `Bash(rm:*)`. Um programa que as regras não conseguem ver (`$(echo rm) x`, `$X x`, `` `echo rm` x ``, um curinga como `/bin/r? x` ou `{rm,x}`, um shell lendo comandos de um pipe como `echo … | sh`) gera pergunta **toda vez, em todo modo, inclusive bypass**, enquanto existir uma regra deny com especificador; sem ninguém para perguntar, é recusado. Nomes de programa são comparados sem diferenciar maiúsculas (`RM`, `/bin/RM`).
+- **Regras deny enxergam através de disfarces**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` casam com `Bash(rm:*)`. Os invólucros desmontados são `sudo`, `doas`, `env`, `exec`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs` e `busybox`.
 - **Regras allow leem o comando como foi escrito**: `LD_PRELOAD=/tmp/x.so git status` não casa com `Bash(git status:*)`.
 - **Uma linha que não dá para analisar com segurança** (aspas não fechadas, aritmética como `$((…))` com um comando dentro, `coproc`, um heredoc cujo corpo executa uma substituição) nunca é liberada por uma regra com especificador e gera pergunta quando existem regras deny ou ask com especificador.
 
@@ -175,7 +175,9 @@ Algumas ações são perguntadas toda vez, seja qual for o modo e as regras (exc
 - Push para o branch padrão, ou push forçado, que apaga ou reescreve o histórico remoto.
 - `cargo publish`, `npm publish`, `pnpm publish`, `yarn publish`.
 - `gh pr merge`, `gh release create|delete|edit`, `gh api`.
-- `docker push`, `podman push`.
+- `docker push`, `podman push`, `docker image push`.
+- Os mesmos comandos com opções globais antes do subcomando (`git -C . push -f`, `npm --prefix . publish`).
+- Um comando de shell cujo programa as regras não conseguem ver, enquanto existir uma regra deny de `Bash` com especificador (veja acima).
 - Buscar um endereço que nunca apareceu na conversa, depois que a sessão leu conteúdo de fora (páginas web, ferramentas MCP).
 - Rodar um comando fora da sandbox, instalar um pacote suspeito e instalar um servidor de linguagem (a menos que uma regra allow como `LSP(install:pyright)` o nomeie). Veja [Sandbox e segurança](./sandbox-and-safety).
 

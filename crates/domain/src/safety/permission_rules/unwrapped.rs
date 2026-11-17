@@ -10,7 +10,8 @@ const fn wrapper(name: &'static str, valued: &'static [&'static str]) -> Wrapper
     Wrapper { name, valued, positionals: 0 }
 }
 
-const WRAPPERS: [Wrapper; 14] = [
+const WRAPPERS: [Wrapper; 15] = [
+    wrapper("exec", &["-a"]),
     wrapper(
         "xargs",
         &[
@@ -123,6 +124,70 @@ pub fn program_at(words: &[&str]) -> usize {
         }
     }
     at
+}
+
+pub fn shell_words(text: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut started = false;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for c in text.chars() {
+        if escaped {
+            current.push(c);
+            escaped = false;
+            continue;
+        }
+        match (quote, c) {
+            (None | Some('"'), '\\') => escaped = true,
+            (None, '\'' | '"') => quote = Some(c),
+            (Some(open), _) if c == open => quote = None,
+            (None, _) if c.is_whitespace() => {
+                if started {
+                    words.push(std::mem::take(&mut current));
+                    started = false;
+                }
+                continue;
+            }
+            _ => {}
+        }
+        current.push(c);
+        started = true;
+    }
+    if started {
+        words.push(current);
+    }
+    words
+}
+
+pub fn dequoted(word: &str) -> String {
+    let mut value = String::new();
+    let mut quote: Option<char> = None;
+    let mut chars = word.chars().peekable();
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (None, '\\') => value.extend(chars.next()),
+            (Some('"'), '\\') => match chars.peek() {
+                Some('"' | '\\' | '$' | '`') => value.extend(chars.next()),
+                _ => value.push('\\'),
+            },
+            (None, '\'' | '"') => quote = Some(c),
+            (Some(open), _) if c == open => quote = None,
+            _ => value.push(c),
+        }
+    }
+    value
+}
+
+pub fn program_word(words: &[String]) -> Option<(usize, &str)> {
+    let borrowed: Vec<&str> = words.iter().map(String::as_str).collect();
+    let at = program_at(&borrowed);
+    words.get(at).map(|word| (at, opened(word)))
+}
+
+pub fn program_name(word: &str) -> String {
+    let program = unquoted(opened(word));
+    program.rsplit('/').next().unwrap_or_default().to_lowercase()
 }
 
 pub fn run(words: &[&str]) -> String {

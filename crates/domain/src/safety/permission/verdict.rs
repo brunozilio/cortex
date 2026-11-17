@@ -33,6 +33,7 @@ pub enum Reason {
     Outside(PathBuf),
     Guarded { path: PathBuf, guard: Guard },
     Risky(String),
+    Hidden(String),
     Address(String),
     LeavesTheSandbox,
     Package(String),
@@ -43,17 +44,23 @@ impl Reason {
     pub fn every_time(&self) -> bool {
         matches!(
             self,
-            Self::Risky(_) | Self::Address(_) | Self::LeavesTheSandbox | Self::Package(_) | Self::Install { .. }
+            Self::Risky(_)
+                | Self::Hidden(_)
+                | Self::Address(_)
+                | Self::LeavesTheSandbox
+                | Self::Package(_)
+                | Self::Install { .. }
         )
     }
 
     pub fn rememberable(&self) -> bool {
-        !matches!(self, Self::Risky(_) | Self::Address(_))
+        !matches!(self, Self::Risky(_) | Self::Hidden(_) | Self::Address(_))
     }
 
     pub fn heading(&self) -> Option<String> {
         match self {
             Self::Risky(why) | Self::Address(why) => Some(why.clone()),
+            Self::Hidden(rule) => Some(format!("{} Run it anyway?", hidden_heading(rule))),
             Self::LeavesTheSandbox => Some("Run OUTSIDE the sandbox (it may write anywhere):".to_owned()),
             Self::Package(concern) => Some(format!("Check the package first: {concern}")),
             Self::Install { .. } => Some("Install software on this computer first:".to_owned()),
@@ -64,6 +71,10 @@ impl Reason {
     pub fn unattended(&self, tool: &str) -> String {
         match self {
             Self::Risky(why) | Self::Address(why) => format!("Not run: {why} The user cannot be asked here."),
+            Self::Hidden(rule) => format!(
+                "Not run: {} The user cannot be asked here; spell the command out so the rules can see it.",
+                hidden_heading(rule)
+            ),
             Self::LeavesTheSandbox => {
                 "Not run: leaving the sandbox needs the user, who cannot be asked here.".to_owned()
             }
@@ -78,6 +89,13 @@ impl Reason {
             }
         }
     }
+}
+
+fn hidden_heading(rule: &str) -> String {
+    format!(
+        "This command names a program the permission rules cannot see (a shell's code, a variable, a substitution \
+         or a wildcard), and the rule {rule} refuses what it might run."
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

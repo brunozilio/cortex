@@ -64,12 +64,14 @@ pub trait Sessions: Send + Sync {
     }
     fn add_checkpoint(&self, cwd: &Path, id: &SessionId, checkpoint: Checkpoint) -> Result<(), String> {
         let mut all = self.load_checkpoints(cwd, id)?;
-        all.push(checkpoint);
-        crate::checkpoints::cap(&mut all);
+        crate::checkpoints::put(&mut all, checkpoint);
         self.save_checkpoints(cwd, id, &all)
     }
     fn load_snapshot(&self, _cwd: &Path, _id: &SessionId) -> Option<crate::prompt::Snapshot> {
         None
+    }
+    fn take_notices(&self) -> Vec<String> {
+        Vec::new()
     }
     fn save_snapshot(&self, _cwd: &Path, _id: &SessionId, _snapshot: &crate::prompt::Snapshot) -> Result<(), String> {
         Ok(())

@@ -24,7 +24,12 @@ impl Confiner {
 pub fn confinement_of(sandbox: &domain::sandbox::Sandbox, places: &Places<'_>) -> platform::sandbox::Confinement {
     let found = sandbox.confinement(places);
     let protected = found.protected.into_iter().filter(|path| repository_of(path).is_none_or(Path::is_dir)).collect();
-    platform::sandbox::Confinement { writable: found.writable, protected, network: found.network }
+    platform::sandbox::Confinement {
+        writable: found.writable,
+        protected,
+        network: found.network,
+        environment: found.environment,
+    }
 }
 
 fn repository_of(path: &Path) -> Option<&Path> {

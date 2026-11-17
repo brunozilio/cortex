@@ -77,6 +77,8 @@ pub enum ModelError {
     Network(String),
     #[error("the provider sent nothing for {0} seconds")]
     Stalled(u64),
+    #[error("the provider sent a line or event longer than {0} bytes")]
+    Oversized(usize),
     #[error("cancelled")]
     Cancelled,
 }
@@ -118,7 +120,7 @@ impl ModelError {
             Self::Unauthorized(_) => Some(Failure::Unauthorized),
             Self::Overloaded(_) => Some(Failure::Overloaded),
             Self::TooLong(_) => Some(Failure::TooLong),
-            Self::Provider(_) => Some(Failure::Provider),
+            Self::Provider(_) | Self::Oversized(_) => Some(Failure::Provider),
             Self::Network(_) | Self::Stalled(_) => Some(Failure::Network),
             Self::Cancelled => None,
         }

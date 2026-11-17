@@ -113,3 +113,34 @@ fn a_capped_read_waiting_for_bytes_ends_when_cancelled() {
     let cancelled = cancelled_at.recv().expect("cancelled");
     assert!(ended - cancelled < Duration::from_secs(1), "{:?}", ended - cancelled);
 }
+
+#[test]
+fn a_line_that_never_ends_is_refused_at_its_cap_instead_of_filling_memory() {
+    let (body, feeding) = fed(&[]);
+    let mut body = body;
+    let feeder = std::thread::spawn(move || {
+        let chunk = vec![b'a'; 64 * 1024];
+        let mut sent = 0usize;
+        while feeding.blocking_send(Ok(chunk.clone())).is_ok() && sent < 64 * 1024 * 1024 {
+            sent += chunk.len();
+        }
+        sent
+    });
+    let mut line = String::new();
+    let read = run(body.read_line_within(&mut line, &CancellationToken::new(), 256 * 1024));
+    assert_eq!(read, Err(ModelError::Oversized(256 * 1024)));
+    assert!(line.is_empty());
+    drop(body);
+    assert!(feeder.join().expect("feeder") < 64 * 1024 * 1024, "reading stopped at the cap");
+    assert!(!ModelError::Oversized(1).is_transient());
+    assert_eq!(LINE_AT_MOST, 8 * 1024 * 1024);
+}
+
+#[test]
+fn a_line_just_under_the_cap_still_reads() {
+    let text = format!("{}\n", "b".repeat(1023));
+    let mut body = Body::from(text.as_str());
+    let mut line = String::new();
+    assert_eq!(run(body.read_line_within(&mut line, &CancellationToken::new(), 1024)), Ok(1024));
+    assert_eq!(line, text);
+}

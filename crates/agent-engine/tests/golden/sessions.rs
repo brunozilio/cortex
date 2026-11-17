@@ -98,7 +98,7 @@ fn a_rewind_restores_the_files_cuts_the_conversation_and_drops_later_checkpoints
         0: prompt="Write the notes" history_len=0 files=[<project>/notes.txt]
         1: prompt="Add more" history_len=4 files=[<project>/more.txt]
         == rewind to the second prompt: events ==
-        Rewound(Rewound { checkpoint: 1, prompt: "Add more", restored: ["<project>/more.txt"], conversation: true })
+        Rewound(Rewound { checkpoint: 1, prompt: "Add more", restored: ["<project>/more.txt"], conversation: true, skipped: [] })
         Completed duration=<ms> cost=none
         == rewind to the second prompt: conversation ==
         user:

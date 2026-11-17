@@ -83,6 +83,8 @@ The chat reports what happened, for example `Rewound: 3 files restored. Changes 
 > [!WARNING]
 > Rewind restores what the agent's file tools changed. Changes made with Bash commands are not undone. The `destructive-snapshot` feature keeps untracked files before commands like `rm -r` or `git reset --hard` so rewind can bring them back; see [Sandbox and safety](./sandbox-and-safety).
 
+A file you changed after the agent left it is not overwritten: the rewind leaves it as it is and lists it (`Left as they are, because each changed after the agent left it: …`). Files are put back whole (a crash mid-way never leaves a half-written file), keep their permissions, and a link put in a file's place is replaced rather than followed. Each file's state is saved before the agent's first write to it, so a prompt interrupted by a crash can still be rewound after you start again.
+
 If the conversation was compacted after that prompt, the files are restored but the conversation is kept as it is (`the conversation was compacted since, so it is kept`). Rewind is not available while the agent works.
 
 ## Retry

@@ -80,7 +80,7 @@ async fn endpoint_of(
             Ok(0) => return Err(format!("{name} closed its stream before naming its endpoint")),
             Ok(_) => {}
         }
-        if let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n']))
+        if let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n'])).map_err(|error| error.to_string())?
             && event.event == "endpoint"
         {
             return same_site(url, event.data.trim())
@@ -167,7 +167,11 @@ impl Listening {
                 Ok(0) | Err(_) => return heard,
                 Ok(_) => {}
             }
-            let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n'])) else { continue };
+            let event = match decoder.line(line.trim_end_matches(['\r', '\n'])) {
+                Ok(Some(event)) => event,
+                Ok(None) => continue,
+                Err(_) => return heard,
+            };
             let Ok(message) = serde_json::from_str::<Value>(&event.data) else { continue };
             heard = true;
             match (message.get("id"), message.get("method").and_then(Value::as_str)) {

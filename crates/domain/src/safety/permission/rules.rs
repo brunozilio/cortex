@@ -90,6 +90,18 @@ pub fn suggested(call: &Call<'_>, subject: &str, outside: bool) -> Option<String
     from_effect.unwrap_or_else(|| suggest(call.tool, subject, outside))
 }
 
+pub(super) fn unseen_denial(call: &Call<'_>, cx: &PolicyContext<'_>) -> Option<String> {
+    let recalled = cx.remembered.rules();
+    call.effects.iter().find_map(|effect| match effect {
+        Effect::Exec(exec) => {
+            let target = Target::Command(exec.command.text());
+            let tool = ToolName::Bash.as_str();
+            cx.rules.unseen_denial(tool, &target).or_else(|| recalled.unseen_denial(tool, &target))
+        }
+        _ => None,
+    })
+}
+
 pub fn install_rule(tool: &str, server: &str) -> String {
     format!("{tool}(install:{server})")
 }

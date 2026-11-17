@@ -63,8 +63,8 @@ impl Tool for Edit {
         let before = text.find(old).map_or("", |at| &text[..at]);
         let shown = super::shown_diff::edit(&format!("Edited {name}"), before, old, new);
         workspace.before_write(&path);
-        match std::fs::write(&path, &changed) {
-            Ok(()) => {
+        match platform::atomic::write(&path, changed.as_bytes()) {
+            Ok(_) => {
                 workspace.mark_read(&path);
                 let said = if count == 1 {
                     format!("Edited {name}.")

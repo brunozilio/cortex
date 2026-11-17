@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
+use platform::store::Document;
 use serde_json::Value;
 
 #[derive(Debug, Clone, Subcommand)]
@@ -23,41 +24,39 @@ pub fn file(cwd: &Path, project: bool) -> Result<PathBuf, String> {
 }
 
 pub fn run(path: &Path, action: ConfigAction) -> Result<String, String> {
-    let mut settings = read(path)?;
+    let kept = Document::hand_edited(path);
+    let shown = |value: &Value| serde_json::to_string_pretty(value).unwrap_or_default();
     match action {
-        ConfigAction::List => Ok(serde_json::to_string_pretty(&settings).unwrap_or_default()),
-        ConfigAction::Get { key } => match lookup(&settings, &key) {
-            Some(value) => Ok(serde_json::to_string_pretty(value).unwrap_or_default()),
+        ConfigAction::List => Ok(shown(&read(&kept)?)),
+        ConfigAction::Get { key } => match lookup(&read(&kept)?, &key) {
+            Some(value) => Ok(shown(value)),
             None => Err(format!("{key} is not set in {}", path.display())),
         },
         ConfigAction::Set { key, value } => {
             let value = serde_json::from_str(&value).unwrap_or(Value::String(value));
-            place(&mut settings, &key, Some(value))?;
-            write(path, &settings)?;
+            changed(&kept, |settings| place(settings, &key, Some(value)))?;
             Ok(format!("Set {key} in {}.", path.display()))
         }
         ConfigAction::Unset { key } => {
-            place(&mut settings, &key, None)?;
-            write(path, &settings)?;
+            changed(&kept, |settings| place(settings, &key, None))?;
             Ok(format!("Removed {key} from {}.", path.display()))
         }
     }
 }
 
-fn read(path: &Path) -> Result<Value, String> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Value::Object(Default::default())),
-        Err(e) => Err(format!("{}: {e}", path.display())),
-    }
+fn read(kept: &Document) -> Result<Value, String> {
+    let read: Option<Value> = kept.read().map_err(|error| error.to_string())?;
+    Ok(read.unwrap_or_else(|| Value::Object(Default::default())))
 }
 
-fn write(path: &Path, settings: &Value) -> Result<(), String> {
-    if let Some(folder) = path.parent() {
-        std::fs::create_dir_all(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    }
-    let text = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())? + "\n";
-    std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
+fn changed(kept: &Document, change: impl FnOnce(&mut Value) -> Result<(), String>) -> Result<(), String> {
+    kept.try_update(|settings: &mut Value| {
+        if settings.is_null() {
+            *settings = Value::Object(Default::default());
+        }
+        change(settings)
+    })
+    .map_err(|error| error.to_string())?
 }
 
 fn lookup<'a>(settings: &'a Value, key: &str) -> Option<&'a Value> {
@@ -102,5 +101,28 @@ mod tests {
         assert_eq!(run(&path, ConfigAction::Get { key: "outputStyle".into() }), Ok("\"concise\"".into()));
         run(&path, ConfigAction::Unset { key: "outputStyle".into() }).expect("unset");
         assert!(run(&path, ConfigAction::Get { key: "outputStyle".into() }).is_err());
+    }
+
+    #[test]
+    fn settings_set_at_the_same_time_are_all_kept_and_a_broken_file_is_left_as_it_was() {
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("settings.json");
+        std::thread::scope(|scope| {
+            for writer in 0..8 {
+                let path = &path;
+                scope.spawn(move || {
+                    for key in 0..10 {
+                        let set = ConfigAction::Set { key: format!("k{writer}_{key}"), value: "1".into() };
+                        run(path, set).expect("set");
+                    }
+                });
+            }
+        });
+        let settings: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("json");
+        assert_eq!(settings.as_object().map(serde_json::Map::len), Some(80), "no setting was lost");
+
+        std::fs::write(&path, "{ broken").expect("broken");
+        assert!(run(&path, ConfigAction::Set { key: "a".into(), value: "1".into() }).is_err());
+        assert_eq!(std::fs::read_to_string(&path).expect("read"), "{ broken");
     }
 }

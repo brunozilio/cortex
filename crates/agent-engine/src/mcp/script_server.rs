@@ -193,8 +193,8 @@ mod tests {
         std::fs::write(&file, source).expect("server");
         let confinement = platform::sandbox::Confinement {
             writable: vec![project.path().to_path_buf()],
-            protected: Vec::new(),
             network: true,
+            ..platform::sandbox::Confinement::default()
         };
         let judge = Arc::new(HostJudge::unattended());
         let mut grounds = Grounds::at(project.path());

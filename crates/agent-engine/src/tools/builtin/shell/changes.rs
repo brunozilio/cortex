@@ -60,21 +60,42 @@ impl Watched {
     pub fn after(self, workspace: &Workspace) {
         let git = Git::stopped_by(&workspace.stop);
         let (Some(files), Some(now)) = (workspace.services.files.as_ref(), changed(&git, &self.root)) else { return };
+        let mut found = Vec::new();
         for (path, held) in &self.edited {
             let Held::Was(before) = held else { continue };
             let file = self.root.join(path);
             if std::fs::read(&file).ok() != *before {
-                files.record(&file, before.clone());
+                found.push((file, before.clone()));
             }
         }
         let fresh = now.into_iter().map(|(_, path)| path);
         for path in fresh.filter(|path| !self.untracked.contains(path) && !self.edited.contains_key(path)) {
-            let committed = self
-                .head
-                .as_ref()
-                .and_then(|head| git.bytes(&self.root, &["show", &format!("{head}:{path}")], SHOWN_AT_MOST));
-            files.record(&self.root.join(&path), committed);
+            match committed(&git, &self.root, self.head.as_deref(), &path) {
+                Committed::Was(before) => found.push((self.root.join(&path), before)),
+                Committed::Unknown => tracing::warn!(%path, "git could not say what this file was before the command"),
+            }
         }
+        files.record_all(found);
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Committed {
+    Was(Option<Vec<u8>>),
+    Unknown,
+}
+
+fn committed(git: &Git<'_>, root: &Path, head: Option<&str>, path: &str) -> Committed {
+    let Some(head) = head else { return Committed::Was(None) };
+    let Some(listed) = git.bytes(root, &["ls-tree", "-z", "--name-only", head, "--", path], SHOWN_AT_MOST) else {
+        return Committed::Unknown;
+    };
+    if listed.is_empty() {
+        return Committed::Was(None);
+    }
+    match git.bytes(root, &["show", &format!("{head}:{path}")], SHOWN_AT_MOST) {
+        Some(bytes) => Committed::Was(Some(bytes)),
+        None => Committed::Unknown,
     }
 }
 

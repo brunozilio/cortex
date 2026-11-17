@@ -18,6 +18,7 @@ const CONVERSATION: &str = "jsonl";
 const TRACE: &str = "trace.jsonl";
 const EARLIER_TRACE: &str = "trace.1.jsonl";
 const BEFORE_THE_LOG: &str = "json";
+const CORRUPT: &str = "jsonl.corrupt";
 
 #[derive(Debug)]
 pub struct FileSessions {
@@ -25,11 +26,18 @@ pub struct FileSessions {
     persisted: Mutex<HashMap<String, Persisted>>,
     traces: Mutex<Traces>,
     counted: Counted,
+    notices: Mutex<Vec<String>>,
 }
 
 impl FileSessions {
     pub fn new(dir: impl Into<PathBuf>) -> Self {
-        Self { dir: dir.into(), persisted: Mutex::default(), traces: Mutex::default(), counted: Counted::default() }
+        Self {
+            dir: dir.into(),
+            persisted: Mutex::default(),
+            traces: Mutex::default(),
+            counted: Counted::default(),
+            notices: Mutex::default(),
+        }
     }
 
     pub fn rotating_the_trace_at(self, bytes: u64) -> Self {
@@ -44,7 +52,11 @@ impl FileSessions {
     pub fn entries(&self, cwd: &Path, id: &SessionId) -> Result<Vec<Entry>, String> {
         let id = scoped_id(cwd, id);
         let said = match read(&self.path(&id, CONVERSATION)?)? {
-            Some(text) => log::lines(&text, Holds::Conversation)?,
+            Some(text) => {
+                let (said, skipped) = log::lines(&text, Holds::Conversation);
+                self.set_aside(&id, &skipped);
+                said
+            }
             None => self.before_the_log(&id)?.into_iter().flatten().map(unnumbered).collect(),
         };
         Ok(log::merged(said, self.traced(&id)))
@@ -55,7 +67,7 @@ impl FileSessions {
         let mut traced = Vec::new();
         for generation in [EARLIER_TRACE, TRACE] {
             let read = self.path(id, generation).and_then(|path| read(&path));
-            match read.and_then(|text| log::lines(&text.unwrap_or_default(), Holds::TraceOnly)) {
+            match read.map(|text| log::lines(&text.unwrap_or_default(), Holds::TraceOnly).0) {
                 Ok(lines) => traced.extend(lines),
                 Err(error) => tracing::warn!(%error, "a trace file could not be read; the trace goes on without it"),
             }
@@ -79,9 +91,12 @@ impl FileSessions {
             self.persisted.locked().remove(&id.0);
             return self.before_the_log(id);
         };
-        let resumed = log::resume(&text)?;
+        let resumed = log::resume(&text);
         seq::follows(resumed.last_seq);
-        let whole = (text.is_empty() || text.ends_with('\n')) && !text.contains(char::REPLACEMENT_CHARACTER);
+        self.set_aside(id, &resumed.skipped);
+        let whole = (text.is_empty() || text.ends_with('\n'))
+            && !text.contains(char::REPLACEMENT_CHARACTER)
+            && resumed.skipped.is_empty();
         let mut persisted = self.persisted.locked();
         if whole {
             persisted.insert(id.0.clone(), Persisted::of(&resumed.history, text.len() as u64));
@@ -138,6 +153,32 @@ impl FileSessions {
         traces.append(&id.0, &paths, &line).map_err(|e| e.to_string())
     }
 
+    fn set_aside(&self, id: &SessionId, skipped: &[String]) {
+        if skipped.is_empty() {
+            return;
+        }
+        let Ok(path) = self.path(id, CORRUPT) else { return };
+        let kept = Document::at(&path).leaving_no_lock_file().update_text(|text| {
+            let fresh: Vec<&String> =
+                skipped.iter().filter(|line| !text.lines().any(|kept| kept == line.as_str())).collect();
+            for line in &fresh {
+                text.push_str(line);
+                text.push('\n');
+            }
+            fresh.len()
+        });
+        match kept {
+            Ok(0) => {}
+            Ok(count) => self.notices.locked().push(format!(
+                "{count} line(s) of the saved conversation could not be read and were left out; they are kept in {}.",
+                path.display()
+            )),
+            Err(error) => {
+                tracing::warn!(%error, "a line of the saved conversation that does not parse was not kept aside")
+            }
+        }
+    }
+
     fn side_file(&self, name: String) -> Document {
         Document::at(self.dir.join(name)).compact().leaving_no_lock_file()
     }
@@ -190,11 +231,11 @@ impl Sessions for FileSessions {
     }
     fn add_checkpoint(&self, cwd: &Path, id: &SessionId, checkpoint: Checkpoint) -> Result<(), String> {
         self.side_file(format!("checkpoints-{}.json", scoped_id(cwd, id).0))
-            .update(|all: &mut Vec<Checkpoint>| {
-                all.push(checkpoint);
-                checkpoints::cap(all);
-            })
+            .update(|all: &mut Vec<Checkpoint>| checkpoints::put(all, checkpoint))
             .map_err(|error| error.to_string())
+    }
+    fn take_notices(&self) -> Vec<String> {
+        std::mem::take(&mut *self.notices.locked())
     }
     fn load_snapshot(&self, cwd: &Path, id: &SessionId) -> Option<crate::prompt::Snapshot> {
         self.read_json(format!("snapshot-{}.json", scoped_id(cwd, id).0)).ok().flatten()

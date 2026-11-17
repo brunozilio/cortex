@@ -140,9 +140,64 @@ fn a_submodule_s_own_config_runs_nothing_either() {
 #[test]
 fn a_filter_the_user_set_up_outside_the_repository_still_applies() {
     let listed = "global\tfilter.lfs.clean\nlocal\tfilter.evil.clean\nworktree\tfilter.odd.name.process\n\
-                  system\tfilter.sys.smudge\nlocal\tfilter.evil.smudge\ncommand\tfilter.x.clean\n";
-    assert_eq!(drivers_in(listed), BTreeSet::from(["evil".to_owned(), "odd.name".to_owned()]));
+                  system\tfilter.sys.smudge\nlocal\tfilter.evil.smudge\ncommand\tfilter.x.clean\n\
+                  local\tdiff.pdf.textconv\nglobal\tdiff.mine.textconv\nworktree\tdiff.tool.command\n\
+                  local\tdiff.external\nglobal\tdiff.external\n";
+    let driver = |section, name: &str| Driver { section, name: name.to_owned() };
+    assert_eq!(
+        drivers_in(listed),
+        BTreeSet::from([
+            driver("filter", "evil"),
+            driver("filter", "odd.name"),
+            driver("diff", "diff.pdf.textconv"),
+            driver("diff", "diff.tool.command"),
+            driver("diff", "diff.external"),
+        ])
+    );
+    let harmless: Vec<String> = drivers_in(listed).iter().flat_map(emptied).collect();
+    assert!(harmless.contains(&"diff.pdf.textconv=cat".to_owned()), "{harmless:?}");
+    assert!(harmless.contains(&format!("diff.external={PLAIN_DIFF}")), "{harmless:?}");
     assert!(drivers_in("").is_empty());
+}
+
+#[test]
+fn the_agent_s_own_git_reads_run_nothing_the_repository_names() {
+    let hostile = hostile_repository();
+    let dir = hostile.repo.path();
+    let hardening = environment(dir, None);
+
+    for args in [
+        &["status"][..],
+        &["status", "--short"],
+        &["diff"],
+        &["diff", "HEAD"],
+        &["diff", "--stat"],
+        &["log", "-p"],
+        &["log", "-1", "--stat"],
+        &["show"],
+        &["show", "HEAD:a.txt"],
+        &["blame", "a.txt"],
+        &["grep", "two"],
+    ] {
+        let done = Command::new("git").args(args).envs(hardening.clone()).current_dir(dir).output().expect("git");
+        assert!(done.status.success() || args[0] == "grep", "{args:?}: {}", String::from_utf8_lossy(&done.stderr));
+    }
+
+    assert_eq!(hostile.ran(), Vec::<&PathBuf>::new(), "nothing the repository named ran");
+    let _ = Command::new("git").args(["diff", "HEAD"]).current_dir(dir).output().expect("plain git");
+    assert!(!hostile.ran().is_empty(), "plain git does run them");
+}
+
+#[test]
+fn the_agent_s_git_settings_come_after_the_ones_it_inherited() {
+    let dir = tempfile::tempdir().expect("dir");
+    let fresh = environment(dir.path(), None);
+    assert!(fresh.contains(&("GIT_CONFIG_KEY_0".to_owned(), "core.fsmonitor".to_owned())), "{fresh:?}");
+    assert!(fresh.contains(&("GIT_CONFIG_KEY_4".to_owned(), "log.showSignature".to_owned())), "{fresh:?}");
+    assert_eq!(fresh.last(), Some(&("GIT_CONFIG_COUNT".to_owned(), "5".to_owned())));
+    let after = environment(dir.path(), Some("2"));
+    assert!(after.contains(&("GIT_CONFIG_KEY_2".to_owned(), "core.fsmonitor".to_owned())), "{after:?}");
+    assert_eq!(after.last(), Some(&("GIT_CONFIG_COUNT".to_owned(), "7".to_owned())));
 }
 
 #[test]

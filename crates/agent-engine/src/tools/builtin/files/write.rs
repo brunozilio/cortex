@@ -49,8 +49,8 @@ impl Tool for Write {
         }
         let previous = existed.then(|| std::fs::read_to_string(&path).unwrap_or_default());
         workspace.before_write(&path);
-        match std::fs::write(&path, content) {
-            Ok(()) => {
+        match platform::atomic::write(&path, content.as_bytes()) {
+            Ok(_) => {
                 workspace.mark_read(&path);
                 let lines = content.lines().count();
                 let said = if existed {

@@ -1,5 +1,5 @@
 use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 use crate::model::http::{Http, NetHttp, Response};
 use crate::model::{CancellationToken, ModelError};
@@ -68,6 +68,29 @@ fn a_body_without_end_is_read_only_up_to_the_cap() {
         .expect("read");
     assert_eq!(read.len(), 64 * 1024);
     hangs_up.recv_timeout(STILL_SENDING).expect("the endless body was let go of once the cap was read");
+}
+
+#[test]
+fn through_a_proxy_a_name_is_still_resolved_and_a_private_target_refused_before_the_proxy_is_asked() {
+    let proxy = TcpListener::bind("127.0.0.1:0").expect("proxy");
+    proxy.set_nonblocking(true).expect("nonblocking");
+    let to_this_computer = |_: &str| Ok(vec!["127.0.0.1".parse().expect("address")]);
+    let found = super::addresses_for("intranet.dev", true, &to_this_computer).expect("resolved");
+    let why = super::private_among("intranet.dev", &found).expect("refused");
+    assert!(why.contains("127.0.0.1"), "{why}");
+
+    for literal in ["10.0.0.2", "[::1]", "169.254.169.254"] {
+        let found = super::addresses_for(literal, true, &|_| Err(std::io::Error::other("no dns"))).expect("literal");
+        assert!(super::private_among(literal, &found).is_some(), "{literal}");
+    }
+    let unresolvable = super::addresses_for("public.dev", true, &|_| Err(std::io::Error::other("no dns")));
+    assert_eq!(unresolvable, Ok(Vec::new()), "behind a proxy without DNS the proxy resolves the name");
+    assert!(super::addresses_for("public.dev", false, &|_| Err(std::io::Error::other("no dns"))).is_err());
+    assert!(proxy.accept().is_err(), "the proxy was never asked");
+    let found = super::addresses_for("localhost", true, &|host| {
+        (host, 443).to_socket_addrs().map(|found| found.map(|address| address.ip()).collect())
+    });
+    assert!(super::private_among("localhost", &found.expect("localhost")).is_some());
 }
 
 #[test]

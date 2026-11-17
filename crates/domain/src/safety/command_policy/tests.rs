@@ -350,6 +350,44 @@ fn publishing_and_merging_are_asked_about() {
 }
 
 #[test]
+fn global_options_before_the_subcommand_do_not_hide_a_risky_command() {
+    let feature = on("feature");
+    for command in [
+        "git -C . push --force origin main",
+        "git -C repo push -f",
+        "git --git-dir=.git push -f",
+        "git --git-dir .git --work-tree . push --force",
+        "git -c push.default=current push --force",
+        "git --no-pager -P --bare push --mirror",
+        "git --namespace=x --exec-path=/usr/lib/git push origin :old",
+        "git --literal-pathspecs --no-optional-locks push origin main",
+        "git --unknown-flag value push -f",
+        "npm --prefix . publish",
+        "npm -C . --registry https://r.dev publish",
+        "npm --workspace pkg --loglevel silent publish",
+        "pnpm --filter pkg publish",
+        "pnpm -r publish",
+        "yarn --cwd pkg publish",
+        "yarn workspace pkg npm publish",
+        "yarn npm publish",
+        "cargo +nightly publish",
+        "cargo --locked -Z unstable-options publish",
+        "cargo --config net.offline=true publish",
+        "cargo -C crate publish",
+        "gh -R owner/repo release create v1",
+        "gh --repo owner/repo pr merge 3",
+        "docker --context remote push org/image",
+        "docker -H tcp://h:2375 push org/image",
+        "podman --log-level debug push org/image",
+    ] {
+        assert!(risky(command, &feature), "{command}");
+    }
+    for command in ["git -C . status", "git -c core.pager=cat log", "npm --prefix . install", "cargo +nightly build"] {
+        assert!(!risky(command, &feature), "{command}");
+    }
+}
+
+#[test]
 fn signing_in_to_an_mcp_server_is_refused_inside_the_sandbox_only() {
     let cmd = brand::COMMAND;
     for command in [

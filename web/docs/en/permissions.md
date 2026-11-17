@@ -124,8 +124,8 @@ Path specifiers match like `.gitignore`:
 Shell rules read the command the way the shell will run it. The line is parsed into every simple command it runs, including those inside `if`, `for`, `while`, `case`, functions, subshells, `{ …; }`, `$(…)`, backticks, `<(…)` and the command `find -exec` runs:
 
 - **Compound commands** (`&&`, `;`, `|`, newlines, control structures): every part must be allowed. Read-only parts (`ls`, `cat`, `git status`…) and `cd` into a folder inside the project go along without a rule. One denied part refuses the whole command.
-- **Hidden commands** (`$(…)`, backticks, `<(…)`, `bash -c '…'`, `eval`, a program named by a variable) and **redirections to files** are never allowed by an allow rule. The commands inside a substitution are parts of their own, so a deny rule naming one refuses the whole line; what cannot be seen (`bash -c '…'`, `eval`, `$X`) is asked about when deny or ask rules with a specifier exist.
-- **Deny rules see through disguises**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` all match `Bash(rm:*)`. The wrappers taken apart are `sudo`, `doas`, `env`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs` and `busybox`.
+- **Hidden commands** (`$(…)`, backticks, `<(…)`, `bash -c '…'`, `eval`, a program named by a variable) and **redirections to files** are never allowed by an allow rule. The commands inside a substitution are parts of their own, so a deny rule naming one refuses the whole line, and so is the code of `bash -c '…'`, `sh -c "…"` and `eval …`: `bash -c 'rm -rf x'` is refused by `Bash(rm:*)`. A program the rules cannot see (`$(echo rm) x`, `$X x`, `` `echo rm` x ``, a wildcard such as `/bin/r? x` or `{rm,x}`, a shell reading its commands from a pipe like `echo … | sh`) is asked about **every time, in every mode including bypass**, while a deny rule with a specifier exists; with nobody to ask it is refused. Program names are compared ignoring case (`RM`, `/bin/RM`).
+- **Deny rules see through disguises**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` all match `Bash(rm:*)`. The wrappers taken apart are `sudo`, `doas`, `env`, `exec`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs` and `busybox`.
 - **Allow rules read the command as written**: `LD_PRELOAD=/tmp/x.so git status` does not match `Bash(git status:*)`.
 - **A line that cannot be parsed with confidence** (an unclosed quote, arithmetic such as `$((…))` holding a command, `coproc`, a heredoc whose body runs a substitution) is never allowed by a rule with a specifier and is asked about when deny or ask rules with a specifier exist.
 
@@ -175,7 +175,9 @@ Some actions are asked about every time, whatever the mode and rules (except a d
 - Pushing to the default branch, or force-pushing, deleting or rewriting remote history.
 - `cargo publish`, `npm publish`, `pnpm publish`, `yarn publish`.
 - `gh pr merge`, `gh release create|delete|edit`, `gh api`.
-- `docker push`, `podman push`.
+- `docker push`, `podman push`, `docker image push`.
+- The same commands with global options before the subcommand (`git -C . push -f`, `npm --prefix . publish`).
+- A shell command whose program the rules cannot see, while a deny rule for `Bash` with a specifier exists (see above).
 - Fetching an address that never appeared in the conversation, once the session has read content from outside (web pages, MCP tools).
 - Running a command outside the sandbox, installing a suspicious package, and installing a language server (unless an allow rule such as `LSP(install:pyright)` names it). See [Sandbox and safety](./sandbox-and-safety).
 

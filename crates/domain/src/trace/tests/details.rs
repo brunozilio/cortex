@@ -153,6 +153,7 @@ fn a_rewind_names_what_it_restored_and_a_fallback_names_the_model_it_left() {
                 prompt: "fix it".into(),
                 restored: vec!["src/a.rs".into()],
                 conversation: true,
+                skipped: Vec::new(),
             }),
         ),
     ]);

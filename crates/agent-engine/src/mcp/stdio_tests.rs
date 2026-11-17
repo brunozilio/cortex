@@ -121,6 +121,41 @@ fn a_server_that_says_nothing_after_a_cancelled_call_is_ended() {
 }
 
 #[test]
+fn a_server_that_never_reads_its_input_cannot_hang_a_call_past_its_stop() {
+    use super::StdioTransport;
+    use crate::mcp::Transport;
+
+    let flooding = ["-c".to_owned(), "while :; do echo '{}'; done".to_owned()];
+    let transport = Arc::new(StdioTransport::spawn("deaf", "/bin/sh", &flooding, &[]).expect("spawn"));
+    let big = "x".repeat(4 * 1024 * 1024);
+    let (done, finished) = std::sync::mpsc::channel();
+    for id in 1..=2 {
+        let (transport, done, big) = (Arc::clone(&transport), done.clone(), big.clone());
+        std::thread::spawn(move || {
+            let stop = Arc::new(platform::Stop::new());
+            let stopping = Arc::clone(&stop);
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(300));
+                stopping.cancel();
+            });
+            let message = json!({ "jsonrpc": "2.0", "id": id, "method": "tools/call", "params": { "big": big } });
+            let _ = done.send(transport.request_stopped(&message, &stop).is_err());
+        });
+    }
+
+    for _ in 0..2 {
+        let refused = finished.recv_timeout(Duration::from_secs(20)).expect("the call came back after its stop");
+        assert!(refused, "the call was stopped, not answered");
+    }
+    let started = Instant::now();
+    for _ in 0..64 {
+        let _ = transport.notify(&json!({ "jsonrpc": "2.0", "method": "notifications/x", "params": "y" }));
+    }
+    assert!(started.elapsed() < Duration::from_secs(5), "a notice waits for no full pipe: {:?}", started.elapsed());
+    transport.close();
+}
+
+#[test]
 fn a_line_longer_than_the_limit_is_an_error_and_is_not_read_whole() {
     let endless = "read -r line; head -c 17000000 /dev/zero | tr '\\0' 'a'; echo; sleep 60";
     let fixture = Fixture::running(endless);

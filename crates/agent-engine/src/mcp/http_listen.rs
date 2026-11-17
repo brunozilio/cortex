@@ -42,7 +42,11 @@ async fn read(shared: &Shared, mut stream: Response, listener: &Listener, closed
             Ok(0) | Err(_) => return heard,
             Ok(_) => {}
         }
-        let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n'])) else { continue };
+        let event = match decoder.line(line.trim_end_matches(['\r', '\n'])) {
+            Ok(Some(event)) => event,
+            Ok(None) => continue,
+            Err(_) => return heard,
+        };
         let Ok(message) = serde_json::from_str::<Value>(&event.data) else { continue };
         heard = true;
         match (message.get("id"), message.get("method").and_then(Value::as_str)) {

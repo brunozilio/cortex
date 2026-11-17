@@ -1,3 +1,4 @@
+mod hidden;
 mod kind;
 mod pattern;
 mod site;
@@ -150,6 +151,8 @@ struct Part<'a> {
     written: String,
     run: String,
     hides: bool,
+    program: String,
+    program_hidden: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -215,30 +218,100 @@ impl PermissionRules {
         let covered = parts.iter().all(|part| allowed(part) || along(part)) && parts.iter().any(allowed);
         covered.then(|| (RuleKind::Allow, String::new()))
     }
+
+    pub fn unseen_denial(&self, tool: &str, target: &Target<'_>) -> Option<String> {
+        let denials: Vec<&Rule> = self
+            .rules
+            .iter()
+            .filter(|(kind, rule)| *kind == RuleKind::Deny && rule.names(tool) && rule.specifier.is_some())
+            .map(|(_, rule)| rule)
+            .collect();
+        if denials.is_empty() {
+            return None;
+        }
+        parts(target).iter().filter(|part| part.hides).find_map(|part| {
+            let could_be =
+                |rule: &Rule| part.program_hidden || rule.program().is_none_or(|named| named == part.program);
+            denials.iter().find(|rule| could_be(rule)).map(|rule| rule.text.clone())
+        })
+    }
+}
+
+impl Rule {
+    fn program(&self) -> Option<String> {
+        let specifier = self.specifier.as_deref()?;
+        let specifier = specifier.strip_suffix(":*").unwrap_or(specifier);
+        let first = unwrapped::shell_words(specifier).into_iter().next()?;
+        let named = unwrapped::program_name(&first);
+        (!named.is_empty() && !named.contains(['*', '?'])).then_some(named)
+    }
 }
 
 fn parts<'a>(target: &Target<'a>) -> Vec<Part<'a>> {
     let Target::Command(line) = target else {
-        return vec![Part { target: *target, written: String::new(), run: String::new(), hides: false }];
+        let part = Part {
+            target: *target,
+            written: String::new(),
+            run: String::new(),
+            hides: false,
+            program: String::new(),
+            program_hidden: false,
+        };
+        return vec![part];
     };
     let (commands, balanced) = pattern::split_command(line);
-    commands
-        .into_iter()
-        .map(|command| Part {
-            target: Target::Command(command),
-            written: pattern::collapsed(command),
-            run: pattern::normalized(command),
-            hides: !balanced || pattern::hides_more(command),
-        })
-        .collect()
+    let mut found = Vec::new();
+    for command in commands {
+        for code in add_part(&mut found, Target::Command(command), command, balanced, false) {
+            add_inner_parts(&mut found, line, &code, 1);
+        }
+    }
+    found
+}
+
+fn add_part<'a>(
+    found: &mut Vec<Part<'a>>,
+    target: Target<'a>,
+    command: &str,
+    balanced: bool,
+    inner: bool,
+) -> Vec<String> {
+    let seen = hidden::seen(command, balanced);
+    found.push(Part {
+        target,
+        written: pattern::collapsed(command),
+        run: pattern::normalized(command),
+        hides: inner || !balanced || seen.hidden || pattern::hides_more(command),
+        program: seen.program,
+        program_hidden: seen.hidden,
+    });
+    seen.code
+}
+
+fn add_inner_parts<'a>(found: &mut Vec<Part<'a>>, line: &'a str, code: &str, depth: usize) {
+    let (commands, balanced) = pattern::split_command(code);
+    for command in commands {
+        let codes = add_part(found, Target::Command(line), command, balanced, true);
+        if !codes.is_empty() && hidden::deep_enough(depth) {
+            if let Some(last) = found.last_mut() {
+                last.program_hidden = true;
+            }
+            continue;
+        }
+        for code in codes {
+            add_inner_parts(found, line, &code, depth + 1);
+        }
+    }
 }
 
 fn restricts(rule: &Rule, part: &Part<'_>, cwd: &str, home: Option<&str>) -> bool {
     let Some(specifier) = &rule.specifier else { return true };
     match part.target {
         Target::Command(_) => {
+            let folded = |text: &str| unwrapped::unquoted(text).to_lowercase();
             pattern::command_matches(specifier, &part.run)
                 || pattern::command_matches(&unwrapped::unquoted(specifier), &unwrapped::unquoted(&part.run))
+                || pattern::command_matches(&folded(specifier), &folded(&part.run))
         }
         Target::Path(path) => pattern::path_matches(specifier, path, cwd, home, true),
         Target::Tree(tree) => pattern::tree_meets(specifier, tree, cwd, home),

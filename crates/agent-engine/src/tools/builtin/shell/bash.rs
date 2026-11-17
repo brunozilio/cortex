@@ -50,6 +50,8 @@ impl Tool for Bash {
             shell(command, workspace)
         };
         shell.current_dir(&workspace.cwd).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let inherited = std::env::var("GIT_CONFIG_COUNT").ok();
+        shell.envs(platform::git::environment(&workspace.cwd, inherited.as_deref()));
         super::shaped::plain(&mut shell, workspace);
         if input.get("run_in_background").and_then(Value::as_bool) == Some(true) {
             return match super::shells::start(workspace, command, &mut shell) {
@@ -154,6 +156,20 @@ mod tests {
         let recorded = workspace.services.files.as_ref().expect("files").take();
         assert!(recorded.keys().any(|path| path.ends_with("a.txt")), "the change was still tracked: {recorded:?}");
         assert_eq!(hostile.ran(), None, "the repository's fsmonitor, filter or hook ran");
+        assert!(hostile.plain_git_runs_it(), "the same repository does run them through plain git");
+    }
+
+    #[test]
+    fn the_git_reads_the_agent_runs_without_asking_run_nothing_the_repository_s_config_names() {
+        let hostile = crate::hostile_repository::Hostile::new();
+        let workspace = Workspace::new(hostile.path());
+
+        for command in ["git status", "git diff", "git log -p", "git show HEAD", "git diff HEAD --stat"] {
+            let ran = Bash.run(&json!({ "command": command }), &workspace);
+            assert!(!ran.is_error, "{command}: {ran:?}");
+        }
+
+        assert_eq!(hostile.ran(), None, "the repository's fsmonitor or filter ran");
         assert!(hostile.plain_git_runs_it(), "the same repository does run them through plain git");
     }
 

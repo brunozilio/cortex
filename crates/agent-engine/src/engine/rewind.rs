@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use domain::{EngineEvent, Rewound, SessionId};
 
 use super::job::Job;
@@ -9,14 +11,31 @@ use crate::tools::Workspace;
 use crate::transcript::Message;
 
 impl Job {
-    pub(super) fn open_checkpoint(&self, session: &SessionId, history: &[Message]) -> Checkpoint {
+    pub(super) fn open_checkpoint(
+        &self,
+        session: &SessionId,
+        history: &[Message],
+        workspace: &Workspace,
+    ) -> Checkpoint {
         let kept = self.sessions.load_checkpoints(&self.request.session.cwd, session).map(|all| all.len()).unwrap_or(0);
         self.gate.emit(EngineEvent::Checkpoint(u32::try_from(kept).unwrap_or(u32::MAX)));
-        Checkpoint::open(&self.request.prompt.text, history)
+        let checkpoint = Checkpoint::open(&self.request.prompt.text, history);
+        if let Some(files) = &workspace.services.files {
+            let (sessions, cwd, id) = (Arc::clone(&self.sessions), self.request.session.cwd.clone(), session.clone());
+            let opened = checkpoint.clone();
+            files.journaled(Arc::new(move |files| {
+                let so_far = Checkpoint { files: files.clone(), ..opened.clone() };
+                if let Err(error) = sessions.add_checkpoint(&cwd, &id, so_far) {
+                    tracing::warn!(%error, "a file's state before this run's write was not kept on disk");
+                }
+            }));
+        }
+        checkpoint
     }
 
     pub(super) fn keep_checkpoint(&self, session: &SessionId, mut checkpoint: Checkpoint, workspace: &Workspace) {
         checkpoint.files = workspace.services.files.as_ref().map(|files| files.take()).unwrap_or_default();
+        checkpoint.left = checkpoints::left_by_the_agent(&checkpoint.files);
         if let Err(error) = self.sessions.add_checkpoint(&self.request.session.cwd, session, checkpoint) {
             tracing::warn!(%error, "this run's checkpoint was not kept; it cannot be rewound to");
         }
@@ -46,12 +65,13 @@ impl Job {
         let LoadedSession { id, mut history } = session;
         self.record(&id, Session::Kept).opened(self.run_info(&self.request.session.cwd, None));
         let rewound = self.sessions.load_checkpoints(&self.request.session.cwd, &id).and_then(|mut all| {
-            let (target, restored, conversation) = checkpoints::rewind(&mut all, index as usize, &mut history)?;
+            let checkpoints::Rewinding { target, restored, skipped, conversation } =
+                checkpoints::rewind(&mut all, index as usize, &mut history)?;
             self.sessions.save_checkpoints(&self.request.session.cwd, &id, &all)?;
             if conversation {
                 self.sessions.save_for(&self.request.session.cwd, &id, &history)?;
             }
-            Ok(Rewound { checkpoint: index, prompt: target.prompt, restored, conversation })
+            Ok(Rewound { checkpoint: index, prompt: target.prompt, restored, conversation, skipped })
         });
         match rewound {
             Ok(rewound) => {

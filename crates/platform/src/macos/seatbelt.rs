@@ -18,6 +18,7 @@ pub fn confined(inner: &Command, confinement: &Confinement) -> Command {
             None => outer.env_remove(key),
         };
     }
+    outer.envs(confinement.environment.iter().map(|(key, value)| (key, value)));
     if let Some(dir) = inner.get_current_dir() {
         outer.current_dir(dir);
     }
@@ -90,7 +91,7 @@ mod tests {
     }
 
     fn within(project: &Path) -> Confinement {
-        Confinement { writable: vec![project.to_path_buf()], protected: Vec::new(), network: true }
+        Confinement { writable: vec![project.to_path_buf()], network: true, ..Confinement::default() }
     }
 
     #[test]

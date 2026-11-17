@@ -54,7 +54,7 @@ impl Job {
         let user = self.user_message(&main.config, &brief.skills, &workspace, history.is_empty())?;
         let opening = Opening { api: &api, template: &template, workspace: &workspace, session: &session };
         let user = self.submitted(user, &opening)?;
-        let checkpoint = self.open_checkpoint(&session, &history);
+        let checkpoint = self.open_checkpoint(&session, &history, &workspace);
         crate::transcript::prompted(&mut history, user);
         Ok(Opened { workspace, toolbox, worktree, api, template, extra, session, history, checkpoint, turn_limit })
     }

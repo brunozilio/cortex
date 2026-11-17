@@ -119,6 +119,52 @@ fn a_repository_s_config_and_hooks_are_guarded_once_it_exists_so_a_command_can_s
     }
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn a_sandboxed_command_cannot_replace_a_toolchain_or_an_unpacked_crate_and_package_managers_still_cache() {
+    let (project, home) = (tempfile::tempdir().expect("project"), tempfile::tempdir().expect("home"));
+    let temp = [project.path().join("tmp")];
+    std::fs::create_dir(&temp[0]).expect("temp");
+    let planted = |name: &str, text: &str| {
+        let path = home.path().join(name);
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("folder");
+        std::fs::write(&path, text).expect("file");
+        path
+    };
+    let cargo = planted(".rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo", "#!/bin/sh\n");
+    let source = planted(".cargo/registry/src/index.crates.io-0/serde-1.0.0/src/lib.rs", "pub fn ok() {}\n");
+    let archive = planted(".cargo/registry/cache/index.crates.io-0/serde-1.0.1.crate", "archive");
+    let installed = planted(".cargo/bin/cargo-nextest", "#!/bin/sh\n");
+    let hook = planted(".cache/pre-commit/repo1/hook.py", "print()\n");
+    let lock = home.path().join(".cargo/.package-cache");
+    let places = domain::sandbox::Places {
+        project: project.path(),
+        added: &[],
+        repository: None,
+        temp: &temp,
+        home: Some(home.path()),
+        settings_dir: brand::DIR,
+    };
+    let confinement = super::confined::confinement_of(&domain::sandbox::Sandbox::default(), &places);
+    let runs = |code: &str| {
+        let mut shell = platform::sandbox::confined(platform::script_shell(code), &confinement);
+        shell.current_dir(project.path()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        shell.status().expect("the sandbox starts").success()
+    };
+
+    for path in [&cargo, &source, &archive, &installed, &hook] {
+        assert!(!runs(&format!("echo evil >> '{}'", path.display())), "{} was written", path.display());
+        assert!(!runs(&format!("rm '{}'", path.display())), "{} was removed", path.display());
+    }
+    assert!(!runs(&format!("mkdir '{}/.rustup/toolchains/evil'", home.path().display())));
+    assert_eq!(std::fs::read_to_string(&cargo).expect("cargo"), "#!/bin/sh\n");
+    assert_eq!(std::fs::read_to_string(&source).expect("source"), "pub fn ok() {}\n");
+    assert!(runs(&format!("touch '{}'", lock.display())), "cargo still takes its package cache lock");
+    assert!(runs(r#"mkdir -p "$npm_config_cache/_cacache" && echo x > "$npm_config_cache/_cacache/probe""#));
+    assert!(runs(r#"mkdir -p "$GOMODCACHE" && echo x > "$GOMODCACHE/probe""#));
+    assert!(domain::sandbox::own_caches(&temp[0]).join("npm/_cacache/probe").is_file());
+}
+
 #[test]
 fn a_forked_workspace_keeps_models_and_drops_verification_and_worktree() {
     let mut workspace = Workspace::new("/repo");

@@ -20,11 +20,25 @@ pub fn private_among(host: &str, addresses: &[IpAddr]) -> Option<String> {
 }
 
 pub fn system_addresses(host: &str) -> Result<Vec<IpAddr>, String> {
-    if proxied() {
-        return Ok(Vec::new());
+    addresses_for(host, proxied(), &|host| {
+        (host, 443).to_socket_addrs().map(|found| found.map(|address| address.ip()).collect())
+    })
+}
+
+pub fn addresses_for(
+    host: &str,
+    proxied: bool,
+    resolve: &dyn Fn(&str) -> std::io::Result<Vec<IpAddr>>,
+) -> Result<Vec<IpAddr>, String> {
+    let literal = host.trim_start_matches('[').trim_end_matches(']').parse::<IpAddr>();
+    if let Ok(address) = literal {
+        return Ok(vec![address]);
     }
-    let found = (host, 443).to_socket_addrs().map_err(|error| format!("{host} could not be resolved: {error}"))?;
-    Ok(found.map(|address| address.ip()).collect())
+    match resolve(host) {
+        Ok(found) => Ok(found),
+        Err(_) if proxied => Ok(Vec::new()),
+        Err(error) => Err(format!("{host} could not be resolved: {error}")),
+    }
 }
 
 struct PublicOnly;

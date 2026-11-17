@@ -107,7 +107,7 @@ impl HttpTransport {
             let mut line = String::new();
             let read = response.body.read_line(&mut line, cancel).await.map_err(|e| e.to_string())?;
             text.push_str(&line);
-            if let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n']))
+            if let Some(event) = decoder.line(line.trim_end_matches(['\r', '\n'])).map_err(|e| e.to_string())?
                 && let Ok(reply) = serde_json::from_str::<Value>(&event.data)
             {
                 match (reply.get("id"), reply.get("method").and_then(Value::as_str)) {

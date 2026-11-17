@@ -164,6 +164,8 @@ pub struct Rewound {
     pub prompt: String,
     pub restored: Vec<std::path::PathBuf>,
     pub conversation: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<std::path::PathBuf>,
 }
 
 impl EngineEvent {

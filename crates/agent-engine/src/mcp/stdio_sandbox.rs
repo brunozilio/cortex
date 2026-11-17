@@ -40,6 +40,7 @@ impl StdioSandbox {
                     writable: found.writable,
                     protected: found.protected,
                     network: found.network,
+                    environment: found.environment,
                 })
             }
         }

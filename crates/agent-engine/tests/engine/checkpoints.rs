@@ -87,7 +87,13 @@ fn a_rewind_puts_files_back_and_cuts_the_conversation() {
     let before_second = 4;
     assert_eq!(
         rewind(1),
-        Some(Rewound { checkpoint: 1, prompt: "add more".into(), restored: vec![more.clone()], conversation: true })
+        Some(Rewound {
+            checkpoint: 1,
+            prompt: "add more".into(),
+            restored: vec![more.clone()],
+            conversation: true,
+            skipped: Vec::new()
+        })
     );
     assert!(!more.exists() && notes.exists(), "only what the second prompt wrote is undone");
     assert_eq!(history(&session), before_second);

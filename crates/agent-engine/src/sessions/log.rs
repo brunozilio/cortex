@@ -149,11 +149,13 @@ pub(super) fn written(text: &str) -> &str {
 pub(super) struct Resumed {
     pub(super) history: Vec<Message>,
     pub(super) last_seq: u64,
+    pub(super) skipped: Vec<String>,
 }
 
-pub(super) fn resume(text: &str) -> Result<Resumed, String> {
+pub(super) fn resume(text: &str) -> Resumed {
     let lines: Vec<&str> = written(text).lines().filter(|line| !line.trim().is_empty()).collect();
     let mut since_restart = Vec::new();
+    let mut skipped = Vec::new();
     let mut last_seq = 0;
     for line in lines.iter().rev() {
         let head = match serde_json::from_str::<Head>(line) {
@@ -162,7 +164,11 @@ pub(super) fn resume(text: &str) -> Result<Resumed, String> {
                 tracing::warn!(%error, "skipping a trace line that does not parse; the conversation is unaffected");
                 continue;
             }
-            Err(error) => return Err(invalid(error)),
+            Err(error) => {
+                tracing::warn!(%error, "skipping a conversation line that does not parse");
+                skipped.push((*line).to_owned());
+                continue;
+            }
         };
         last_seq = last_seq.max(head.seq.unwrap_or(0));
         if CONVERSATION.contains(&head.kind.as_str()) {
@@ -172,23 +178,35 @@ pub(super) fn resume(text: &str) -> Result<Resumed, String> {
             break;
         }
     }
-    let entries: Result<Vec<Entry>, String> =
-        since_restart.into_iter().rev().map(|line| decoded(line).map(|line| line.entry).map_err(invalid)).collect();
-    Ok(Resumed { history: conversation(entries?), last_seq })
+    skipped.reverse();
+    let mut entries = Vec::new();
+    for line in since_restart.into_iter().rev() {
+        match decoded(line) {
+            Ok(line) => entries.push(line.entry),
+            Err(error) => {
+                tracing::warn!(%error, "skipping a conversation line that does not parse");
+                skipped.push(line.to_owned());
+            }
+        }
+    }
+    Resumed { history: conversation(entries), last_seq, skipped }
 }
 
-pub(super) fn lines(text: &str, file: Holds) -> Result<Vec<Line>, String> {
-    let mut read = Vec::new();
+pub(super) fn lines(text: &str, file: Holds) -> (Vec<Line>, Vec<String>) {
+    let (mut read, mut skipped) = (Vec::new(), Vec::new());
     for line in written(text).lines().filter(|line| !line.trim().is_empty()) {
         match decoded(line) {
             Ok(line) => read.push(line),
             Err(error) if file == Holds::TraceOnly || is_trace_line(line) => {
                 tracing::warn!(%error, "skipping a trace line that does not parse");
             }
-            Err(error) => return Err(invalid(error)),
+            Err(error) => {
+                tracing::warn!(%error, "skipping a conversation line that does not parse");
+                skipped.push(line.to_owned());
+            }
         }
     }
-    Ok(read)
+    (read, skipped)
 }
 
 pub(super) fn merged(conversation: Vec<Line>, trace: Vec<Line>) -> Vec<Entry> {
@@ -216,10 +234,6 @@ fn keyed(lines: Vec<Line>) -> Vec<(u64, Entry)> {
             (last, line.entry)
         })
         .collect()
-}
-
-fn invalid(error: serde_json::Error) -> String {
-    format!("the saved conversation is invalid: {error}")
 }
 
 #[cfg(test)]

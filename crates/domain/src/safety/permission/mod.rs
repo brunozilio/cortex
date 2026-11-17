@@ -6,6 +6,8 @@ mod rules;
 mod verdict;
 
 #[cfg(test)]
+mod hidden_tests;
+#[cfg(test)]
 mod tests;
 
 pub use context::{Bounds, Branches, Call, NothingAround, PolicyContext, Protected, Surroundings};

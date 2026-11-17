@@ -126,15 +126,29 @@ fn a_conversation_saved_in_the_old_format_still_resumes_and_is_kept_when_it_grow
 }
 
 #[test]
-fn a_corrupt_line_fails_the_load_instead_of_losing_the_conversation() {
+fn a_corrupt_line_is_kept_aside_once_and_said_and_the_conversation_loads_without_it() {
     let dir = tempfile::tempdir().expect("dir");
     let native = dir.path().join("native");
     let store = FileSessions::new(&native);
     let (request, id) = (request(dir.path()), SessionId("s1".into()));
     store.save_for(&request, &id, &[Message::user("one")]).expect("save");
     let saved = std::fs::read_dir(&native).expect("dir").flatten().next().expect("one file").path();
-    std::fs::write(&saved, "{broken\n").expect("corrupt");
-    assert!(store.load_for_checked(&request, &id).is_err());
+    let whole = std::fs::read_to_string(&saved).expect("read");
+    let after = serde_json::to_string(&Entry::Message(reply("two"))).expect("json");
+    std::fs::write(&saved, format!("{whole}{{broken\n{after}\n")).expect("corrupt");
+
+    assert_eq!(store.load_for_checked(&request, &id), Ok(Some(vec![Message::user("one"), reply("two")])));
+    let notices = store.take_notices();
+    assert!(notices.len() == 1 && notices[0].contains("could not be read"), "{notices:?}");
+    let aside = saved.with_extension("jsonl.corrupt");
+    assert_eq!(std::fs::read_to_string(&aside).expect("kept aside"), "{broken\n");
+
+    assert!(store.load_for_checked(&request, &id).is_ok());
+    assert!(store.take_notices().is_empty(), "said once");
+    assert_eq!(std::fs::read_to_string(&aside).expect("kept aside"), "{broken\n", "kept once");
+    let grown = vec![Message::user("one"), reply("two"), Message::user("three")];
+    store.save_for(&request, &id, &grown).expect("save after the skipped line");
+    assert_eq!(store.load_for_checked(&request, &id), Ok(Some(grown)));
 }
 
 fn cut_mid_write(native: &std::path::Path) -> std::path::PathBuf {
@@ -163,7 +177,7 @@ fn a_last_line_cut_mid_write_is_dropped_and_the_conversation_resumes_and_grows()
 }
 
 #[test]
-fn a_corrupt_line_before_the_last_one_still_fails_the_load() {
+fn a_corrupt_line_before_the_last_one_is_skipped_and_the_last_one_kept() {
     let dir = tempfile::tempdir().expect("dir");
     let native = dir.path().join("native");
     let store = FileSessions::new(&native);
@@ -173,5 +187,5 @@ fn a_corrupt_line_before_the_last_one_still_fails_the_load() {
     let cut = std::fs::read_to_string(&saved).expect("read");
     let line = serde_json::to_string(&Entry::Message(reply("after"))).expect("json");
     std::fs::write(&saved, format!("{cut}\n{line}\n")).expect("corrupt");
-    assert!(store.load_for_checked(&request, &id).is_err());
+    assert_eq!(store.load_for_checked(&request, &id), Ok(Some(vec![Message::user("one"), reply("after")])));
 }
