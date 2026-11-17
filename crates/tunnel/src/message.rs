@@ -97,6 +97,7 @@ pub fn forwardable(path: &str) -> bool {
     let route = path.split('?').next().unwrap_or_default();
     route.starts_with(API)
         && !route.split('/').any(|part| part == ".." || part == ".")
+        && !["%2e", "%2f", "%5c"].iter().any(|encoded| route.to_ascii_lowercase().contains(encoded))
         && !path.contains(['#', '\\'])
         && !path.chars().any(|letter| letter.is_control() || letter.is_whitespace())
         && !path.contains("//")
@@ -145,6 +146,11 @@ mod tests {
             "api/health",
             "/api/../secret",
             "/api/./health",
+            "/api/%2e%2e/index.html",
+            "/api/%2E./x",
+            "/api/.%2e/x",
+            "/api/x%2f..%2findex.html",
+            "/api/x%5C..",
             "//evil.example/api/x",
             "/api//x",
             "http://evil.example/api/x",
