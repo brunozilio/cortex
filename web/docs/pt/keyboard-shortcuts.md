@@ -68,7 +68,7 @@ Funcionam seja o que for que estiver em foco.
 | `Alt+D`, `Alt+Delete`, `Ctrl+Delete` | Apaga a palavra depois do cursor. |
 | `Cmd+Backspace` | Apaga até o início da linha. |
 | `Ctrl+U` | Limpa o prompt inteiro. |
-| `Esc` `Esc` | Limpa o prompt (quando tem texto): o primeiro `Esc` arma (`Press Esc again to clear the prompt`), o segundo limpa. |
+| `Esc` `Esc` | Limpa o prompt (quando tem texto): o primeiro `Esc` arma (`Press Esc again to clear the prompt`), o segundo limpa. Com o prompt vazio a linha diz `Press Esc again to go back to an earlier prompt`, e um segundo `Esc` dentro de um segundo abre a lista de rewind. |
 
 ## Prompt: histórico, sugestões e começos especiais
 

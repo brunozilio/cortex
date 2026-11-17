@@ -32,7 +32,7 @@ pub(super) fn complete(app: &mut super::app::App, file: &str) {
 
 pub fn typing(text: &str, cursor: usize) -> Option<(usize, &str)> {
     let before = &text[..cursor];
-    let start = before.rfind(char::is_whitespace).map_or(0, |at| at + 1);
+    let start = super::input::after_last_whitespace(before);
     let word = &before[start..];
     word.strip_prefix('@').map(|rest| (start, rest))
 }
@@ -86,6 +86,13 @@ mod tests {
         assert_eq!(typing("@", 1), Some((0, "")));
         assert_eq!(typing("mail me@home now", 16), None);
         assert_eq!(typing("plain words", 11), None);
+    }
+
+    #[test]
+    fn a_multibyte_space_before_the_at_word_still_ends_the_word_before_it() {
+        assert_eq!(typing("olha\u{a0}@src", 10), Some((6, "src")));
+        assert_eq!(typing("見て\u{3000}@src", 13), Some((9, "src")));
+        assert_eq!(typing("olha\u{a0}src", 9), None);
     }
 
     #[test]

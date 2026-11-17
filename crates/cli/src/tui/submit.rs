@@ -14,6 +14,9 @@ impl App {
         self.input.take();
         self.suggestion = 0;
         self.saver.remember_prompt(&self.cwd, &text);
+        if let Some((run, argument)) = feature_over_alias(&text) {
+            return run(self, argument);
+        }
         if let Some(command) = Command::parse(&text) {
             return super::commands::run(self, command);
         }
@@ -40,16 +43,18 @@ impl App {
         }
         self.send(text);
     }
+}
 
-    pub fn take_prompt(&mut self, text: String) {
-        if let Some(run) = &self.turn.run {
-            let text = super::mentions::with_files(&self.sdk, &self.cwd, &text);
-            let _ = run.steer(&text);
-            self.turn.queued.push(text);
-            return;
-        }
-        self.send(text);
+pub(super) fn built_in(name: &str) -> bool {
+    Command::HELP.iter().any(|(known, _)| known.eq_ignore_ascii_case(name))
+}
+
+fn feature_over_alias(text: &str) -> Option<(super::features::Run, Option<String>)> {
+    let name = domain::command::slash_name(text)?;
+    if built_in(name) {
+        return None;
     }
+    super::features::command(text)
 }
 
 #[cfg(test)]

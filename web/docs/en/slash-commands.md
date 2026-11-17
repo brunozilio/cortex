@@ -30,7 +30,7 @@ Slash commands control the chat itself: the conversation, the model, the project
 | `/clear` | `/new`, `/reset` | Start a fresh conversation |
 | `/resume [words]` | `/continue` | Go back to an earlier conversation of this folder |
 | `/fleet` | `/sessions` | Show every session, running or earlier, and switch between them |
-| `/fork` | `/branch` (with no argument) | Go on in a copy of this conversation |
+| `/fork` | | Go on in a copy of this conversation |
 | `/compact [what to keep]` | | Summarize the conversation to free context |
 | `/rewind` | `/undo` | Go back to before an earlier prompt: files and conversation |
 | `/retry` | | Send the last prompt again, from where it started |
@@ -63,7 +63,7 @@ Slash commands control the chat itself: the conversation, the model, the project
 | `/doctor` | | Check that this installation can work here |
 | `/terminal-setup` | | How to make `Shift+Enter` add a line |
 | `/exit` | `/quit` | Quit |
-| `/branch <n>` | | Start a new conversation from before prompt n |
+| `/branch [n]` | | List the prompts to branch from, or start a new conversation from before prompt n |
 | `/budget [dollars \| off]` | | Cap what this session spends |
 | `/verification [criteria \| off]` | | Judge runs against criteria |
 | `/memory [subcommand]` | | List, search and manage the project's memory |
@@ -100,7 +100,7 @@ Opens the sessions list: this conversation first, then the sessions you left run
 
 ### /fork
 
-Makes the next message go on in a copy of this conversation, leaving this one as it is. Needs a conversation with at least one message ("Nothing to fork yet: send a message first."). `/branch` with no argument is the same command. Takes no arguments.
+Makes the next message go on in a copy of this conversation, leaving this one as it is. Needs a conversation with at least one message ("Nothing to fork yet: send a message first."). Takes no arguments.
 
 ### /compact
 
@@ -292,7 +292,7 @@ These commands come from the chat's feature modules. Some depend on a feature be
 `/branch <n>` starts a new conversation from before prompt number `n` of this one (numbered oldest first), keeping this one: the conversation is cut there and the prompt put back in the input, and the original stays in `/resume`. Not available while the agent works. Needs the `branches` feature (`/features branches on`).
 
 > [!NOTE]
-> `/branch` with no argument is an alias of `/fork`. See [Branches and git](./branches-and-git).
+> `/branch` with no argument lists the numbered prompts you can branch from. See [Branches and git](./branches-and-git).
 
 ### /budget
 

@@ -30,7 +30,7 @@ O `/help` agrupa os comandos em **Conversation**, **Model and mode**, **Project*
 | `/clear` | `/new`, `/reset` | Começa uma conversa nova |
 | `/resume [palavras]` | `/continue` | Volta a uma conversa anterior desta pasta |
 | `/fleet` | `/sessions` | Mostra todas as sessões, em andamento ou anteriores, e alterna entre elas |
-| `/fork` | `/branch` (sem argumento) | Continua numa cópia desta conversa |
+| `/fork` | | Continua numa cópia desta conversa |
 | `/compact [o que manter]` | | Resume a conversa para liberar contexto |
 | `/rewind` | `/undo` | Volta para antes de um prompt anterior: arquivos e conversa |
 | `/retry` | | Envia o último prompt de novo, de onde ele começou |
@@ -63,7 +63,7 @@ O `/help` agrupa os comandos em **Conversation**, **Model and mode**, **Project*
 | `/doctor` | | Verifica se esta instalação funciona aqui |
 | `/terminal-setup` | | Como fazer `Shift+Enter` quebrar linha |
 | `/exit` | `/quit` | Sai |
-| `/branch <n>` | | Começa uma conversa nova de antes do prompt n |
+| `/branch [n]` | | Lista os prompts de onde ramificar, ou começa uma conversa nova de antes do prompt n |
 | `/budget [dólares \| off]` | | Limita o gasto desta sessão |
 | `/verification [critérios \| off]` | | Julga execuções contra critérios |
 | `/memory [subcomando]` | | Lista, busca e gerencia a memória do projeto |
@@ -100,7 +100,7 @@ Abre a lista de sessões: primeiro esta conversa, depois as sessões que você d
 
 ### /fork
 
-Faz a próxima mensagem continuar numa cópia desta conversa, deixando esta como está. Precisa de uma conversa com pelo menos uma mensagem ("Nothing to fork yet: send a message first."). `/branch` sem argumento é o mesmo comando. Não aceita argumentos.
+Faz a próxima mensagem continuar numa cópia desta conversa, deixando esta como está. Precisa de uma conversa com pelo menos uma mensagem ("Nothing to fork yet: send a message first."). Não aceita argumentos.
 
 ### /compact
 
@@ -292,7 +292,7 @@ Estes comandos vêm dos módulos de recursos do chat. Alguns dependem de um recu
 `/branch <n>` começa uma conversa nova a partir de antes do prompt número `n` desta (numerados do mais antigo para o mais novo), mantendo esta: a conversa é cortada ali, o prompt volta para a entrada e a original continua no `/resume`. Indisponível enquanto o agente trabalha. Precisa do recurso `branches` (`/features branches on`).
 
 > [!NOTE]
-> `/branch` sem argumento é apelido de `/fork`. Veja [Branches e git](./branches-and-git).
+> `/branch` sem argumento lista os prompts numerados de onde você pode ramificar. Veja [Branches e git](./branches-and-git).
 
 ### /budget
 

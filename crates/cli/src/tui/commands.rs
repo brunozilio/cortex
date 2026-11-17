@@ -63,8 +63,9 @@ pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, Str
     let builtin = Command::HELP
         .into_iter()
         .flat_map(|(name, about)| {
-            let aliases =
-                Command::ALIASES.into_iter().filter(move |(_, of)| of.split_whitespace().next() == Some(name));
+            let aliases = Command::ALIASES
+                .into_iter()
+                .filter(move |(alias, of)| of.split_whitespace().next() == Some(name) && !feature_named(alias));
             std::iter::once((name.to_owned(), about.to_owned()))
                 .chain(aliases.map(move |(alias, of)| (alias.to_owned(), format!("Same as /{of}: {about}"))))
         })
@@ -77,6 +78,10 @@ pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, Str
         }));
     let skills = skills.iter().map(|(name, about)| (name.clone(), about.clone()));
     builtin.chain(skills).filter(|(name, _)| name.starts_with(typed)).collect()
+}
+
+fn feature_named(name: &str) -> bool {
+    super::features::commands().iter().any(|(names, _)| names.iter().any(|known| known.eq_ignore_ascii_case(name)))
 }
 
 pub const SHOWN: usize = 8;
@@ -116,11 +121,14 @@ mod tests {
             ["reset", "resume"]
         );
         let feature_names: usize = super::super::features::commands().iter().map(|(names, _)| names.len()).sum();
+        let shadowed = Command::ALIASES.iter().filter(|(alias, _)| feature_named(alias)).count();
         assert_eq!(
             suggestions("", &skills).len(),
-            Command::HELP.len() + Command::ALIASES.len() + feature_names + 2,
+            Command::HELP.len() + Command::ALIASES.len() - shadowed + feature_names + 2,
             "every match, not just a screenful"
         );
+        let branch: Vec<String> = suggestions("branch", &[]).into_iter().map(|(_, about)| about).collect();
+        assert!(matches!(branch.as_slice(), [about] if !about.starts_with("Same as")), "{branch:?}");
     }
 
     #[test]

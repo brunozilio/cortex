@@ -1,27 +1,47 @@
-import type { Report, Run } from '@/types'
-import { sampleReport } from '@/sample'
-import { sampleInsights } from '@/sample/insights'
+import type { Insights, Report, Run, SessionRuns } from '@/types'
 
 const WAIT_MS = 250
 const TRIES = 40
+const NOT_READY = 503
 
-export interface Loaded {
+export type DeriveInsights = (sessions: SessionRuns[], now: number) => Insights
+
+export interface Sample {
   report: Report
-  live: boolean
+  insights: DeriveInsights
 }
 
-export async function loadReport(fetcher: typeof fetch = fetch, wait = WAIT_MS): Promise<Loaded> {
-  for (let attempt = 0; attempt < TRIES; attempt += 1) {
-    try {
-      const response = await fetcher('/api/report')
-      if (response.ok) return { report: (await response.json()) as Report, live: true }
-      if (response.status !== 503) break
-    } catch {
-      break
-    }
-    await new Promise((resolve) => setTimeout(resolve, wait))
+export type Loaded =
+  | { kind: 'live'; report: Report }
+  | { kind: 'sample'; report: Report; insights: DeriveInsights }
+  | { kind: 'failed'; status: number | null; message: string }
+
+export function failureMessage(status: number | null): string {
+  if (status === null) return 'The terminal that opened this page is not answering; it may have been closed. Run /trace again and open the link the terminal printed.'
+  if (status === 401 || status === 403) return 'This page has no access to the terminal\'s data. Open it from the link the terminal printed (run /trace again for a new one).'
+  if (status === NOT_READY) return 'The terminal has not sent its report yet. Check that the chat that opened this page is still running, then reload.'
+  return `The page's server answered with an error (${status}). Open this page again from the link the terminal printed.`
+}
+
+async function asked(fetcher: typeof fetch): Promise<Report | number | null> {
+  try {
+    const response = await fetcher('/api/report')
+    return response.ok ? ((await response.json()) as Report) : response.status
+  } catch {
+    return null
   }
-  return { report: sampleReport(), live: false }
+}
+
+export async function loadReport(fetcher: typeof fetch = fetch, wait = WAIT_MS, sample?: () => Promise<Sample>): Promise<Loaded> {
+  let status: number | null = NOT_READY
+  for (let attempt = 0; attempt < TRIES && status === NOT_READY; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+    const answer = await asked(fetcher)
+    if (answer !== null && typeof answer === 'object') return { kind: 'live', report: answer }
+    status = answer
+  }
+  if (sample && status !== NOT_READY) return { kind: 'sample', ...(await sample()) }
+  return { kind: 'failed', status, message: failureMessage(status) }
 }
 
 export interface RunRef {
@@ -59,9 +79,9 @@ export interface Scoped {
   ready: boolean
 }
 
-export function scoped(report: Report, session: string, live: boolean): Scoped {
+export function scoped(report: Report, session: string, derive?: DeriveInsights): Scoped {
   const entry = report.sessions.find((candidate) => candidate.id === session) ?? { id: session, runs: [] }
-  const own = entry.insights ?? (live ? undefined : sampleInsights([entry], report.generated_at_ms))
+  const own = entry.insights ?? derive?.([entry], report.generated_at_ms)
   const findings = report.insights.findings.filter((finding) => finding.session === session)
   const insights = own ?? { ...report.insights, findings }
   return { report: { ...report, current: session, sessions: [entry], insights }, ready: own !== undefined }

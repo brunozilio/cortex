@@ -105,3 +105,23 @@ fn a_mistyped_command_is_refused_instead_of_starting_a_session() {
     assert!(submit(&mut app, "/").contains("/help"));
     assert!(engine.requests().is_empty(), "nothing reached the agent");
 }
+
+#[test]
+fn branch_alone_lists_the_prompts_to_branch_from_instead_of_forking() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = engine();
+    let mut app = ready(data.path(), &engine);
+    let notice = submit(&mut app, "/branch");
+    assert_eq!(notice, "Nothing to branch from in this chat yet.");
+    assert!(engine.requests().is_empty(), "nothing was forked");
+}
+
+#[test]
+fn no_feature_command_takes_the_name_of_a_built_in_command() {
+    for (names, _) in super::super::features::commands() {
+        for name in names {
+            let taken = domain::Command::HELP.iter().any(|(known, _)| known.eq_ignore_ascii_case(name));
+            assert!(!taken, "/{name} is a built-in command: the feature's command would never run");
+        }
+    }
+}

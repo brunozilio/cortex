@@ -9,13 +9,14 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::get;
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::mpsc as channel;
+use tokio::sync::{OwnedSemaphorePermit, mpsc as channel};
 
 use crate::pty::{self, Launch, Size};
 use crate::routes::{Shared, failure};
 
 const CHUNK: usize = 8192;
 const QUEUED: usize = 64;
+pub const MOST_AT_ONCE: usize = 4;
 
 pub fn routes() -> Router<Shared> {
     Router::new().route("/api/terminal", get(upgrade))
@@ -32,10 +33,14 @@ async fn upgrade(
         Some(Some(session)) => shared.terminal.resuming(session, shared.live.folder_of(session)),
         Some(None) => return failure(StatusCode::BAD_REQUEST, "validation", "That is not a session id."),
     };
-    socket.on_upgrade(move |socket| bridge(socket, launch, size))
+    let Ok(place) = shared.terminals.clone().try_acquire_owned() else {
+        let told = format!("{MOST_AT_ONCE} terminals are already open from this console; close one first.");
+        return failure(StatusCode::TOO_MANY_REQUESTS, "too_many_terminals", &told);
+    };
+    socket.on_upgrade(move |socket| bridge(socket, launch, size, place))
 }
 
-async fn bridge(socket: WebSocket, launch: Launch, size: Size) {
+async fn bridge(socket: WebSocket, launch: Launch, size: Size, _place: OwnedSemaphorePermit) {
     let (mut sink, mut stream) = socket.split();
     let opened = match pty::open(&launch, size) {
         Ok(opened) => opened,

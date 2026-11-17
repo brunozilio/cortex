@@ -28,12 +28,20 @@ pub(super) fn hold(app: &mut App, text: &str) -> bool {
     if let Some(offer) = app.features.get::<Offer>(KEY) {
         offer.held = Some(text.to_owned());
     }
-    app.ask = Some(Pending::new(git_offer::ask()));
+    app.ask = Some(Pending::local(git_offer::ask()));
     true
 }
 
+pub(super) fn replaced(app: &mut App) {
+    if let Some(text) = app.features.get::<Offer>(KEY).and_then(|offer| offer.held.take()) {
+        app.back_in_prompt(text);
+    }
+}
+
 pub(super) fn answered(app: &mut App, decision: &sdk::Decision) -> bool {
-    let Some(text) = app.features.get::<Offer>(KEY).and_then(|offer| offer.held.take()) else { return false };
+    let mine = app.ask.as_ref().is_some_and(|pending| pending.is_local(git_offer::ASK));
+    let held = app.features.get::<Offer>(KEY).and_then(|offer| offer.held.take());
+    let (true, Some(text)) = (mine, held) else { return false };
     app.ask = None;
     match git_offer::picked(decision) {
         Picked::Initialize => match app.sdk.feature(WORKSPACE, json!({ "op": "git-init", "path": app.cwd })) {

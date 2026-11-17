@@ -3,6 +3,8 @@ use std::path::Path;
 
 use sdk::{Effort, PermissionMode, Sdk, SessionId};
 
+use super::store::{Change, Store, apply};
+
 #[derive(Debug, Default, PartialEq)]
 pub struct Saved {
     pub model: Option<String>,
@@ -38,6 +40,20 @@ pub fn title(settings: &serde_json::Value, cwd: &Path, session: &SessionId) -> O
     (kept["session"].as_str() == Some(session.0.as_str())).then(|| kept["title"].as_str().map(str::to_owned))?
 }
 
+pub fn or_reported(read: Result<serde_json::Value, String>) -> (serde_json::Value, Option<String>) {
+    match read {
+        Ok(settings) => (settings, None),
+        Err(error) => {
+            tracing::warn!(%error, "could not read the settings at startup");
+            let told = format!(
+                "Could not read your settings ({error}): this chat starts with the defaults. \
+                 What is saved stays as it is."
+            );
+            (serde_json::json!({}), Some(told))
+        }
+    }
+}
+
 const HISTORY: usize = 100;
 
 pub fn history(settings: &serde_json::Value, cwd: &Path) -> Vec<String> {
@@ -46,8 +62,6 @@ pub fn history(settings: &serde_json::Value, cwd: &Path) -> Vec<String> {
         .map(|sent| sent.iter().filter_map(|p| p.as_str().map(str::to_owned)).collect())
         .unwrap_or_default()
 }
-
-type Change = Box<dyn FnOnce(&mut serde_json::Value) + Send>;
 
 enum Job {
     Change(Change),
@@ -61,30 +75,24 @@ pub struct Saver(crossbeam_channel::Sender<Job>);
 
 impl Saver {
     pub fn start(sdk: &Sdk) -> Self {
+        Self::over(sdk.clone())
+    }
+
+    pub fn over(store: impl Store) -> Self {
         let (tx, rx) = crossbeam_channel::unbounded::<Job>();
-        let sdk = sdk.clone();
         std::thread::spawn(move || {
+            let mut waiting: Vec<Change> = Vec::new();
             while let Ok(job) = rx.recv() {
-                let mut changes = vec![job];
-                changes.extend(rx.try_iter());
-                let (edits, flushes): (Vec<Job>, Vec<Job>) =
-                    changes.into_iter().partition(|job| matches!(job, Job::Change(_)));
-                if !edits.is_empty() {
-                    let mut settings = sdk.settings().unwrap_or_else(|_| serde_json::json!({}));
-                    if !settings.is_object() {
-                        settings = serde_json::json!({});
+                let mut flushes = Vec::new();
+                for job in std::iter::once(job).chain(rx.try_iter()) {
+                    match job {
+                        Job::Change(change) => waiting.push(change),
+                        Job::Flush(done) => flushes.push(done),
                     }
-                    for job in edits {
-                        if let Job::Change(change) = job {
-                            change(&mut settings);
-                        }
-                    }
-                    let _ = sdk.save_settings(settings);
                 }
-                for job in flushes {
-                    if let Job::Flush(done) = job {
-                        let _ = done.send(());
-                    }
+                apply(&store, &mut waiting);
+                for done in flushes {
+                    let _ = done.send(());
                 }
             }
         });
@@ -171,6 +179,14 @@ mod tests {
         }
         saver.flush();
         assert_eq!(sdk.settings().expect("settings")["last"], json!("49"));
+    }
+
+    #[test]
+    fn settings_that_cannot_be_read_at_startup_are_reported_not_taken_as_empty_silently() {
+        assert_eq!(or_reported(Ok(json!({"mode": "plan"}))), (json!({"mode": "plan"}), None));
+        let (settings, told) = or_reported(Err("timed out".into()));
+        assert_eq!(settings, json!({}));
+        assert!(told.is_some_and(|told| told.contains("timed out") && told.contains("stays as it is")));
     }
 
     #[test]

@@ -13,6 +13,7 @@ pub struct Pending {
     pub cursor: usize,
     pub picked: Vec<Vec<usize>>,
     pub note: Option<String>,
+    pub local: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,7 +28,15 @@ pub enum Key {
 
 impl Pending {
     pub fn new(ask: AgentAsk) -> Self {
-        Self { ask, question: 0, cursor: 0, picked: Vec::new(), note: None }
+        Self { ask, question: 0, cursor: 0, picked: Vec::new(), note: None, local: false }
+    }
+
+    pub fn local(ask: AgentAsk) -> Self {
+        Self { local: true, ..Self::new(ask) }
+    }
+
+    pub fn is_local(&self, id: &str) -> bool {
+        self.local && self.ask.id.0 == id
     }
 
     pub fn questions(&self) -> &[Question] {

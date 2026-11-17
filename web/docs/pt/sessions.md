@@ -53,7 +53,7 @@ Depois da primeira execução, uma tarefa em segundo plano dá à conversa um t�
 
 ## Fazer fork de uma conversa
 
-`/fork` faz a próxima mensagem continuar numa cópia desta conversa; a original fica como está e pode ser retomada depois. Precisa de pelo menos uma mensagem antes. `/branch` sem argumento faz o mesmo. Na linha de comando, `--fork-session` com `-c` ou `-r` faz o fork da conversa que você continua.
+`/fork` faz a próxima mensagem continuar numa cópia desta conversa; a original fica como está e pode ser retomada depois. Precisa de pelo menos uma mensagem antes. `/branch` sem argumento lista os prompts de onde você pode ramificar. Na linha de comando, `--fork-session` com `-c` ou `-r` faz o fork da conversa que você continua.
 
 ## Ramificar a partir de um prompt anterior
 

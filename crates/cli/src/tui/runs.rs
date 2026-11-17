@@ -14,7 +14,9 @@ impl App {
         }
         match &event {
             EngineEvent::Asked(ask) => {
-                self.ask = Some(Pending::new(ask.clone()));
+                if self.ask.replace(Pending::new(ask.clone())).is_some_and(|replaced| replaced.local) {
+                    super::git_offer::replaced(self);
+                }
                 if let Some(watch) = &mut self.turn.started {
                     watch.pause(Instant::now());
                 }
@@ -48,7 +50,7 @@ impl App {
         }
         if event.is_terminal() {
             self.turn.run = None;
-            self.ask = None;
+            self.ask.take_if(|pending| !pending.local);
             self.turn.started = None;
             if let Some(rewound) = self.turn.rewound.take() {
                 self.rewound(rewound);
@@ -106,7 +108,7 @@ impl App {
         self.back_in_prompt(text);
     }
 
-    fn back_in_prompt(&mut self, mut text: String) {
+    pub(super) fn back_in_prompt(&mut self, mut text: String) {
         if !self.input.is_empty() {
             text = format!("{text}\n\n{}", self.input.text());
         }
@@ -149,7 +151,7 @@ impl App {
         }
         let pending = self.ask.take();
         self.ask_closed();
-        if let (Some(pending), Some(run)) = (pending, &self.turn.run)
+        if let (Some(pending), Some(run)) = (pending.filter(|pending| !pending.local), &self.turn.run)
             && let Err(error) = run.answer(pending.ask.id, decision)
         {
             self.transcript.error(error.to_string());

@@ -81,15 +81,9 @@ Com uma sessão escolhida, o painel **Terminal** roda `{{COMMAND}} --resume <ses
 > [!WARNING]
 > O terminal da página é um processo real do {{NAME}} no seu computador, com as suas permissões. Quem conseguir abrir a página consegue usá-lo; guarde o link só para você.
 
-### Prompts enviados à página
+Uma sessão que o chat não listou é retomada na pasta do projeto do chat que abriu a página. No máximo 4 terminais ficam abertos ao mesmo tempo a partir de um servidor da página; um quinto é recusado até que um deles feche.
 
-O servidor da página também aceita prompts para uma sessão (`POST /api/prompt` com o corpo JSON `{"session": "<id>", "text": "<prompt>"}`), e o chat que abriu a página os entrega:
-
-- para a sessão aberta no chat: enviado como uma mensagem que você digitou (ou acrescentado à execução quando o agente está trabalhando);
-- para uma sessão que já está rodando um prompt enviado pela página: acrescentado a essa execução;
-- para qualquer outra sessão: rodado em segundo plano, retomando essa sessão na pasta dela com o modelo, o modo de permissão e o esforço do chat.
-
-Um prompt que falha é informado no chat como `The prompt sent from the trace page to <session> failed: …`.
+O terminal é a única forma de conduzir uma sessão pela página: o servidor da página não aceita prompts.
 
 ## Ler a documentação com /docs
 
@@ -103,7 +97,8 @@ O `/docs` abre esta documentação no mesmo servidor da página, com os nomes re
 ## Acesso e segurança
 
 - O servidor só escuta em `127.0.0.1`, numa porta livre escolhida ao iniciar.
-- O endereço impresso no chat carrega um token secreto. Abri-lo define um cookie `HttpOnly` e `SameSite=Strict` e tira o token do endereço; os dados da página exigem esse cookie.
+- O endereço impresso no chat carrega um token secreto. Abri-lo define um cookie `HttpOnly` e `SameSite=Strict` e tira o token do endereço; os dados da página exigem esse cookie. O cookie leva o nome da porta do servidor, então as páginas de dois chats abertos ao mesmo tempo não derrubam o acesso uma da outra.
+- O servidor só responde a requisições endereçadas a `127.0.0.1:<porta>` ou `localhost:<porta>`; qualquer outro nome de host recebe `403`.
 - Requisições que vêm de outro site são recusadas.
 - Um link de uma execução anterior do chat não funciona mais (`This console link is not valid any more.`); digite `/trace` de novo para ter um novo.
 

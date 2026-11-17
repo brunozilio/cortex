@@ -201,7 +201,7 @@ The bottom line shows, separated by `·`:
 8. Commands in the background (`2 background`).
 9. The session's cost (`$0.42`).
 
-On the right, when there is room: `shift+tab mode · /help`. The line also shows `Press Ctrl+C again to quit` and `Press Esc again to clear the prompt` when those are armed.
+On the right, when there is room: `shift+tab mode · /help`. The line also shows `Press Ctrl+C again to quit` and `Press Esc again to clear the prompt` (or, on an empty prompt, `Press Esc again to go back to an earlier prompt`) when those are armed.
 
 `/statusline <command>` replaces it with your own command's output; see [Status line](./statusline).
 

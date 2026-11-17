@@ -26,7 +26,7 @@ After branching:
 Branching never changes files on disk. To also put the files back as they were at that prompt, use `/rewind` instead (see [Sessions](./sessions)).
 
 > [!NOTE]
-> `/branch` without a number is the same as `/fork`: it continues in a copy of the whole conversation. Only `/branch <n>` branches from an earlier prompt.
+> `/branch` without a number lists the prompts you can branch from, numbered oldest first (`Nothing to branch from in this chat yet.` when there is none). To continue in a copy of the whole conversation, use `/fork`.
 
 Branching is refused while the agent is working (`Wait for the agent to finish, or press Esc, before branching.`), for a number that matches no prompt (`There is no such prompt; /branch lists them.`), and when the conversation was compacted after that prompt (`the conversation was compacted since then, so it cannot branch there`).
 

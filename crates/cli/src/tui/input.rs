@@ -131,7 +131,7 @@ impl Input {
     pub fn delete_word(&mut self) {
         let before = &self.text[..self.cursor];
         let trimmed = before.trim_end();
-        let start = trimmed.rfind(char::is_whitespace).map_or(0, |at| at + 1);
+        let start = after_last_whitespace(trimmed);
         self.text.replace_range(start..self.cursor, "");
         self.cursor = start;
     }
@@ -194,6 +194,10 @@ impl Input {
     }
 }
 
+pub fn after_last_whitespace(text: &str) -> usize {
+    text.char_indices().rev().find(|(_, c)| c.is_whitespace()).map_or(0, |(at, c)| at + c.len_utf8())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -216,6 +220,17 @@ mod tests {
         input.end();
         input.delete_word();
         assert_eq!(input.text(), "ol ");
+    }
+
+    #[test]
+    fn deleting_a_word_after_a_multibyte_space_keeps_the_space() {
+        for space in ['\u{a0}', '\u{3000}'] {
+            let mut input = Input::default();
+            input.set(&format!("olá{space}mundo"));
+            input.delete_word();
+            assert_eq!(input.text(), format!("olá{space}"));
+            assert_eq!(input.cursor(), input.text().len());
+        }
     }
 
     #[test]

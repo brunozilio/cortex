@@ -3,6 +3,10 @@ import { latestRun, runKey, type RunRef } from './report'
 
 export type LiveStatus = 'static' | 'connecting' | 'live' | 'reconnecting'
 
+export function liveNotice(status: LiveStatus): string | null {
+  return status === 'reconnecting' ? 'Reconnecting to the terminal…' : null
+}
+
 export interface LiveConfig {
   events: string
 }

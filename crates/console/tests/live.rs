@@ -6,24 +6,27 @@ use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
-use console::{Assets, Live, Options, Prompt, Settings};
+use console::{Assets, Live, Options, Settings};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-const COOKIE: &str = "console_token=t";
+const COOKIE: &str = "console_token_4000=t";
 
 fn app(live: &Live) -> axum::Router {
-    console::router(
-        Settings { token: "t".into(), assets: Assets::Missing, terminal: console::Launch::this_program() },
-        live.clone(),
-    )
+    let terminal = console::Launch::this_program(std::env::temp_dir());
+    console::router(Settings { token: "t".into(), port: 4000, assets: Assets::Missing, terminal }, live.clone())
+}
+
+fn started() -> console::Running {
+    console::start(Options { assets: Assets::Missing, port: 0, folder: std::env::temp_dir() }).expect("server")
 }
 
 async fn call(live: &Live, method: &str, path: &str, body: Option<Value>) -> (StatusCode, String) {
     let request = Request::builder()
         .method(method)
         .uri(path)
+        .header(header::HOST, "127.0.0.1:4000")
         .header(header::COOKIE, COOKIE)
         .header(header::CONTENT_TYPE, "application/json")
         .body(body.map_or_else(Body::empty, |body| Body::from(body.to_string())))
@@ -49,25 +52,29 @@ async fn the_report_and_the_session_list_are_what_the_terminal_last_gave() {
 }
 
 #[tokio::test]
-async fn a_prompt_and_a_watch_from_the_page_wait_for_the_terminal() {
+async fn a_watch_from_the_page_waits_for_the_terminal() {
     let live = Live::default();
-    let (status, _) = call(&live, "POST", "/api/prompt", Some(json!({ "session": "s1", "text": "  go on " }))).await;
+    let (status, _) = call(&live, "POST", "/api/watch", Some(json!({ "session": "s2" }))).await;
     assert_eq!(status, StatusCode::ACCEPTED);
-    let (status, _) = call(&live, "POST", "/api/prompt", Some(json!({ "session": "s1", "text": "   " }))).await;
+    let (status, _) = call(&live, "POST", "/api/watch", Some(json!({ "session": "  " }))).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    call(&live, "POST", "/api/watch", Some(json!({ "session": "s2" }))).await;
-
-    assert_eq!(live.take_prompts(), vec![Prompt { session: "s1".into(), text: "go on".into() }]);
-    assert!(live.take_prompts().is_empty());
     assert_eq!(live.watched().as_deref(), Some("s2"));
+}
+
+#[tokio::test]
+async fn the_page_cannot_send_a_prompt_to_a_session() {
+    let live = Live::default();
+    let (status, body) = call(&live, "POST", "/api/prompt", Some(json!({ "session": "s1", "text": "go on" }))).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
 }
 
 fn events(running: &console::Running) -> BufReader<TcpStream> {
     let mut stream = TcpStream::connect(running.address()).expect("connect");
     stream.set_read_timeout(Some(Duration::from_secs(5))).expect("timeout");
     let request = format!(
-        "GET /api/events HTTP/1.1\r\nHost: {}\r\nCookie: console_token={}\r\nAccept: text/event-stream\r\n\r\n",
+        "GET /api/events HTTP/1.1\r\nHost: {}\r\nCookie: console_token_{}={}\r\nAccept: text/event-stream\r\n\r\n",
         running.address(),
+        running.address().port(),
         running.token()
     );
     stream.write_all(request.as_bytes()).expect("request");
@@ -87,7 +94,7 @@ fn next_data(reader: &mut BufReader<TcpStream>) -> String {
 
 #[test]
 fn the_page_gets_each_session_s_latest_update_at_once_then_every_new_one() {
-    let running = console::start(Options { assets: Assets::Missing, port: 0 }).expect("server");
+    let running = started();
     let live = running.live();
     live.send("s1", r#"{"id":"s1","runs":[1]}"#);
     live.send("s1", r#"{"id":"s1","runs":[1,2]}"#);
@@ -128,7 +135,7 @@ fn next_event(reader: &mut BufReader<TcpStream>) -> (Option<String>, String) {
 
 #[test]
 fn a_new_report_tells_the_page_to_fetch_it_again() {
-    let running = console::start(Options { assets: Assets::Missing, port: 0 }).expect("server");
+    let running = started();
     let live = running.live();
     let mut reader = events(&running);
     std::thread::sleep(Duration::from_millis(200));

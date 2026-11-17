@@ -201,7 +201,7 @@ A linha do rodapé mostra, separados por `·`:
 8. Comandos em segundo plano (`2 background`).
 9. O custo da sessão (`$0.42`).
 
-À direita, quando cabe: `shift+tab mode · /help`. A linha também mostra `Press Ctrl+C again to quit` e `Press Esc again to clear the prompt` quando essas ações estão armadas.
+À direita, quando cabe: `shift+tab mode · /help`. A linha também mostra `Press Ctrl+C again to quit` e `Press Esc again to clear the prompt` (ou, com o prompt vazio, `Press Esc again to go back to an earlier prompt`) quando essas ações estão armadas.
 
 `/statusline <comando>` troca a linha pela saída do seu próprio comando; veja [Linha de status](./statusline).
 

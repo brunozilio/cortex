@@ -5,10 +5,8 @@ use std::time::{Duration, Instant};
 use console::{Live, Running as Served};
 use domain::SessionId;
 use domain::catalog::Listed;
-use platform::sync::Locked;
 use serde_json::json;
 
-use super::outside::{self, Running};
 use super::refresh::Refresh;
 use super::{NAME, board};
 use crate::tui::app::{App, Msg};
@@ -22,8 +20,6 @@ struct Follow {
     asking: bool,
     busy_before: bool,
     sent: BTreeMap<String, String>,
-    running: Running,
-    ran_before: Vec<String>,
     refresh: Refresh,
 }
 
@@ -34,11 +30,15 @@ struct Wanted {
     watched: Option<String>,
 }
 
+fn options(project: &std::path::Path) -> console::Options {
+    console::Options { assets: console::discover(), port: 0, folder: project.to_owned() }
+}
+
 pub(crate) fn served(app: &mut App, page: &str) -> Option<(String, Live)> {
+    let project = app.cwd.clone();
     let follow = app.features.get::<Follow>(NAME)?;
     if follow.served.is_none() {
-        let options = console::Options { assets: console::discover(), port: 0 };
-        match console::start(options) {
+        match console::start(options(&project)) {
             Ok(served) => follow.served = Some(served),
             Err(error) => {
                 app.transcript.notice(format!("The {} page could not start: {error}", brand::NAME));
@@ -79,12 +79,6 @@ fn report_when_changed(app: &mut App) {
 }
 
 pub(super) fn tick(app: &mut App) {
-    let Some(follow) = app.features.get::<Follow>(NAME) else { return };
-    let Some(served) = &follow.served else { return };
-    let (prompts, running) = (served.live().take_prompts(), std::sync::Arc::clone(&follow.running));
-    if !prompts.is_empty() {
-        outside::deliver(app, prompts, &running);
-    }
     report_when_changed(app);
     let busy = app.busy();
     let current = app.session.as_ref().and_then(sdk::Session::id);
@@ -95,13 +89,12 @@ pub(super) fn tick(app: &mut App) {
         return;
     }
     let live = served.live();
-    let ran: Vec<String> = follow.running.locked().keys().cloned().collect();
-    let mut sessions: Vec<String> = ran.iter().chain(&follow.ran_before).cloned().collect();
+    let mut sessions: Vec<String> = Vec::new();
     if let Some(id) = current.as_ref().filter(|_| busy || follow.busy_before) {
         sessions.push(id.0.clone());
     }
     let watched = live.watched().filter(|id| !follow.sent.contains_key(id));
-    (follow.busy_before, follow.ran_before, follow.asking, follow.last) = (busy, ran, true, Some(Instant::now()));
+    (follow.busy_before, follow.asking, follow.last) = (busy, true, Some(Instant::now()));
     let wanted = Wanted { cwd, current, sessions, watched };
     app.spawn(move |sdk| {
         let traces = gathered(sdk, &live, wanted);
@@ -139,5 +132,14 @@ fn arrived(app: &mut App, traces: Vec<(String, String)>) {
             follow.sent.insert(session, text);
             follow.refresh.changed();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_page_s_terminal_is_started_in_the_project_folder() {
+        let project = std::path::Path::new("/work/project");
+        assert_eq!(super::options(project).folder, project);
     }
 }

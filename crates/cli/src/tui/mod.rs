@@ -24,6 +24,7 @@ mod fleet;
 mod git;
 mod git_offer;
 mod highlight;
+mod hints;
 mod info;
 mod inline;
 mod input;
@@ -52,6 +53,7 @@ mod side;
 mod slash;
 mod statusline;
 mod stopwatch;
+mod store;
 mod submit;
 mod theme;
 mod toggles;
@@ -63,6 +65,7 @@ mod watchdog;
 mod wrap;
 
 mod model_roles;
+mod modes;
 #[cfg(test)]
 mod shots;
 #[cfg(test)]
@@ -86,6 +89,8 @@ mod tests_notices;
 #[cfg(test)]
 mod tests_plan;
 #[cfg(test)]
+mod tests_ready;
+#[cfg(test)]
 mod tests_shell_mode;
 #[cfg(test)]
 mod tests_steering;
@@ -93,23 +98,28 @@ mod tests_steering;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ratatui::crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-    PushKeyboardEnhancementFlags,
-};
+use ratatui::DefaultTerminal;
+use ratatui::crossterm::event::{self, Event};
 use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{SetTitle, supports_keyboard_enhancement};
+use ratatui::crossterm::terminal::SetTitle;
 use sdk::{PermissionMode, Sdk};
 
 pub use app::App;
 pub use settings::last_session;
 
-fn capture_mouse(on: bool) {
-    let _ = if on {
-        execute!(std::io::stdout(), event::EnableMouseCapture)
-    } else {
-        execute!(std::io::stdout(), event::DisableMouseCapture)
-    };
+type Screen = modes::Modes<std::io::Stdout, fn()>;
+
+fn outside_the_screen<T>(
+    terminal: &mut DefaultTerminal,
+    screen: &mut Option<Screen>,
+    inline: bool,
+    work: impl FnOnce() -> T,
+) -> T {
+    *screen = None;
+    let done = work();
+    *terminal = inline::terminal(inline);
+    *screen = Some(Screen::enter(!inline));
+    done
 }
 
 const FRAME: Duration = Duration::from_millis(80);
@@ -157,18 +167,11 @@ pub fn run(
         });
     }
     let mut terminal = inline::terminal(start.inline);
+    let mut screen = Some(Screen::enter(!start.inline));
     if start.inline {
         let width = usize::from(terminal.size()?.width.saturating_sub(2)).max(10);
         inline::print(&mut terminal, view::welcome(&app, width))?;
     }
-    let _ = execute!(std::io::stdout(), EnableBracketedPaste, event::EnableFocusChange);
-    capture_mouse(!start.inline);
-    let enhanced = supports_keyboard_enhancement().unwrap_or(false)
-        && execute!(
-            std::io::stdout(),
-            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
-        )
-        .is_ok();
     let result = (|| -> std::io::Result<()> {
         let mut first = prompt;
         let mut named: Option<String> = None;
@@ -236,13 +239,9 @@ pub fn run(
             }
             if std::mem::take(&mut app.external_edit) {
                 dog.pause();
-                let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange);
-                capture_mouse(false);
-                ratatui::restore();
-                let edited = editor::edit(&editor::named(), app.input.text());
-                terminal = inline::terminal(app.inline.is_some());
-                let _ = execute!(std::io::stdout(), EnableBracketedPaste, event::EnableFocusChange);
-                capture_mouse(app.inline.is_none());
+                let edited = outside_the_screen(&mut terminal, &mut screen, app.inline.is_some(), || {
+                    editor::edit(&editor::named(), app.input.text())
+                });
                 match edited {
                     Ok(text) => app.input.set(&text),
                     Err(error) => app.transcript.error(error),
@@ -250,13 +249,9 @@ pub fn run(
             }
             if let Some(path) = app.edit_file.take() {
                 dog.pause();
-                let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange);
-                capture_mouse(false);
-                ratatui::restore();
-                let opened = editor::open(&editor::named(), &path);
-                terminal = inline::terminal(app.inline.is_some());
-                let _ = execute!(std::io::stdout(), EnableBracketedPaste, event::EnableFocusChange);
-                capture_mouse(app.inline.is_none());
+                let opened = outside_the_screen(&mut terminal, &mut screen, app.inline.is_some(), || {
+                    editor::open(&editor::named(), &path)
+                });
                 match opened {
                     Ok(()) => app
                         .transcript
@@ -273,12 +268,7 @@ pub fn run(
         Ok(())
     })();
     app.cancel();
-    if enhanced {
-        let _ = execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
-    }
-    let _ = execute!(std::io::stdout(), DisableBracketedPaste, event::DisableFocusChange);
-    capture_mouse(false);
-    ratatui::restore();
+    drop(screen);
     if let Some(chore) = app.exit_chore.take() {
         app.saver.flush();
         drop(app);

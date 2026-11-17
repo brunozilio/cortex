@@ -206,16 +206,14 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         }
         Some(Action::Config { .. }) => Ok(ExitCode::SUCCESS),
         None if cli.print => {
-            let prompts = match cli.input_format.as_str() {
-                "stream-json" => print_output::prompts(std::io::stdin().lines().map_while(Result::ok))?,
-                "text" => vec![prompt.ok_or("--print needs a prompt")?],
+            let prompts: Box<dyn Iterator<Item = Result<String, String>>> = match cli.input_format.as_str() {
+                "stream-json" => Box::new(print_output::prompts(std::io::stdin().lines())),
+                "text" => Box::new(std::iter::once(Ok(prompt.ok_or("--print needs a prompt")?))),
                 other => return Err(format!("unknown input format {other}: text or stream-json")),
             };
-            let resume = match cli.pick.as_deref() {
-                Some(id) if !id.is_empty() => Some(sdk::SessionId(id.to_owned())),
-                _ if cli.resume => tui::last_session(&sdk.settings().map_err(|e| e.to_string())?, &cwd),
-                _ => None,
-            };
+            let resume = print::resumed(cli.pick.as_deref(), cli.resume, || {
+                Ok(tui::last_session(&sdk.settings().map_err(|e| e.to_string())?, &cwd))
+            })?;
             let wanted = print::Wanted {
                 model: cli.model.as_deref(),
                 mode: cli.mode,
@@ -226,7 +224,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 resume,
                 fork: cli.fork_session,
             };
-            print::print_all(&sdk, cwd, wanted, &prompts)
+            print::print_all(&sdk, cwd, wanted, prompts)
         }
         None => {
             let resume = if cli.resume {

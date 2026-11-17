@@ -22,12 +22,14 @@ pub enum PickerKind {
     PortBusy,
 }
 
-const MODES: [(PermissionMode, &str); 4] = [
-    (PermissionMode::Ask, "Ask before edits and commands"),
-    (PermissionMode::AcceptEdits, "Edit files freely, ask before commands"),
-    (PermissionMode::Plan, "Read and plan only"),
-    (PermissionMode::Bypass, "Never ask (a safety check still grades risky actions)"),
-];
+fn mode_about(mode: PermissionMode) -> &'static str {
+    match mode {
+        PermissionMode::Ask => "Ask before edits and commands",
+        PermissionMode::AcceptEdits => "Edit files freely, ask before commands",
+        PermissionMode::Plan => "Read and plan only",
+        PermissionMode::Bypass => "Never ask (a safety check still grades risky actions)",
+    }
+}
 
 #[derive(Debug)]
 pub struct Picker {
@@ -58,11 +60,9 @@ impl App {
         for problem in saved.problems.iter().filter(|_| first) {
             self.transcript.notice(problem.clone());
         }
-        if !self.mode_given {
-            self.mode = saved.mode.unwrap_or(self.mode);
+        if self.session.is_none() {
+            self.take_saved_choices(&saved);
         }
-        self.effort = saved.effort.unwrap_or(self.effort);
-        self.auto_effort = saved.auto;
         match models {
             Ok(models) => self.catalog.models = models,
             Err(error) => return self.transcript.error(format!("Could not list the models: {error}")),
@@ -78,6 +78,14 @@ impl App {
                 self.login();
             }
         }
+    }
+
+    fn take_saved_choices(&mut self, saved: &settings::Saved) {
+        if !self.mode_given {
+            self.mode = saved.mode.unwrap_or(self.mode);
+        }
+        self.effort = saved.effort.unwrap_or(self.effort);
+        self.auto_effort = saved.auto;
     }
 
     pub(super) fn start_session(&mut self, model: Model) {
@@ -141,8 +149,9 @@ impl App {
     }
 
     pub(super) fn mode_picker(&mut self) {
-        let cursor = MODES.iter().position(|(mode, _)| *mode == self.mode).unwrap_or(0);
-        let items = MODES.iter().map(|(mode, about)| (mode_label(*mode).to_owned(), (*about).to_owned())).collect();
+        let modes = PermissionMode::ALL;
+        let cursor = modes.iter().position(|mode| *mode == self.mode).unwrap_or(0);
+        let items = modes.iter().map(|mode| (mode_label(*mode).to_owned(), mode_about(*mode).to_owned())).collect();
         self.overlays.picker = Some(Picker { kind: PickerKind::Mode, title: "Permission mode".into(), items, cursor });
     }
 
@@ -195,6 +204,8 @@ impl App {
             self.start_session(model);
         }
         self.transcript = Transcript::default();
+        self.pastes = Default::default();
+        self.attachments = Default::default();
         self.turn.queued.clear();
         self.turn.checkpoints.clear();
         self.title = None;

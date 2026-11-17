@@ -158,7 +158,11 @@ impl App {
         self.catalog.loading = true;
         let (sdk, tx, cwd) = (self.sdk.clone(), self.tx.clone(), self.cwd.clone());
         std::thread::spawn(move || {
-            let settings = sdk.settings().unwrap_or_else(|_| serde_json::json!({}));
+            let read = sdk.settings().map_err(|error| error.to_string());
+            let (settings, unreadable) = super::settings::or_reported(read);
+            if let Some(told) = unreadable {
+                let _ = tx.send(Msg::Error(told));
+            }
             let models = sdk.models().map_err(|error| error.to_string());
             let _ = tx.send(Msg::Ready { models, settings });
             if skills && let Ok(found) = sdk.skills(&cwd) {

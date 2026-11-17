@@ -145,12 +145,7 @@ fn tail(text: &str, columns: usize) -> String {
 }
 
 pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let cwd = app.cwd.display().to_string();
-    let cwd = match cwd.strip_prefix(&home) {
-        Some(rest) if !home.is_empty() => format!("~{rest}"),
-        _ => cwd,
-    };
+    let cwd = super::hints::home_relative(&app.cwd, std::env::home_dir().as_deref());
     vec![
         Line::from(""),
         Line::from(vec![brand::name!().bold(), format!(" · {}", tail(&cwd, width.saturating_sub(18))).dim()]),
@@ -221,8 +216,9 @@ fn status(app: &App) -> Line<'static> {
     if app.quitting() {
         return Line::from(" Press Ctrl+C again to quit").fg(Color::Yellow);
     }
-    if app.clear_armed.is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(2)) {
-        return Line::from(" Press Esc again to clear the prompt").fg(Color::Yellow);
+    let armed = app.clear_armed.map(|at| at.elapsed());
+    if let Some(hint) = armed.and_then(|armed_for| super::hints::second_esc(app.input.is_empty(), armed_for)) {
+        return Line::from(format!(" {hint}")).fg(Color::Yellow);
     }
     if let Some(line) = &app.status.text {
         return Line::from(format!(" {line}")).dim();

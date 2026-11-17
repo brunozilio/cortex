@@ -1,6 +1,5 @@
 mod board;
 pub(crate) mod follow;
-mod outside;
 mod refresh;
 
 use super::{Feature, Slash};

@@ -166,7 +166,8 @@ printf '%s\n' \
 
 - Only lines with `"type":"user"` are prompts; other lines are skipped, and so are blank lines.
 - `message.content` is either a string or a list of blocks; the `text` of each block is joined with newlines.
-- A line that is not JSON, or whose content is not text, stops the command with `input line <n>: ...`.
+- Each line is answered as soon as it arrives, so another program can write a prompt, read the answer, and write the next one.
+- A line that is not JSON, whose content is not text, or that cannot be read (for example invalid UTF-8) stops the command with `input line <n>: ...`; the lines before it were already answered.
 
 All of standard input is read before the first prompt is sent.
 
@@ -195,7 +196,7 @@ With `--verification`, each verdict is a note (`✓ verification passed (score 0
 | Option | Effect |
 |---|---|
 | `-c`, `--continue` | Go on with the last conversation in this folder |
-| `-r <id>`, `--resume <id>` | Go on with the conversation with that id |
+| `-r <id>`, `--resume <id>` | Go on with the conversation with that id. With `--print` the id is required: `--resume needs a session id with --print` |
 | `--fork-session` | With `-c` or `-r`: go on in a copy, leaving the original as it is |
 
 The `session_id` of a `json` result is the id to pass to `--resume`:

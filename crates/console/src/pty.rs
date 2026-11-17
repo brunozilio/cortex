@@ -14,9 +14,8 @@ pub struct Launch {
 }
 
 impl Launch {
-    pub fn this_program() -> Self {
+    pub fn this_program(cwd: PathBuf) -> Self {
         let program = std::env::current_exe().unwrap_or_else(|_| PathBuf::from(brand::COMMAND));
-        let cwd = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
         Self { program, args: Vec::new(), cwd }
     }
 

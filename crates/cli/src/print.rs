@@ -17,7 +17,25 @@ pub struct Wanted<'a> {
     pub fork: bool,
 }
 
-pub fn print_all(sdk: &Sdk, cwd: PathBuf, wanted: Wanted<'_>, prompts: &[String]) -> Result<ExitCode, String> {
+pub fn resumed(
+    picked: Option<&str>,
+    continuing: bool,
+    last: impl FnOnce() -> Result<Option<sdk::SessionId>, String>,
+) -> Result<Option<sdk::SessionId>, String> {
+    match picked {
+        Some("") => Err("--resume needs a session id with --print".to_owned()),
+        Some(id) => Ok(Some(sdk::SessionId(id.to_owned()))),
+        None if continuing => last(),
+        None => Ok(None),
+    }
+}
+
+pub fn print_all(
+    sdk: &Sdk,
+    cwd: PathBuf,
+    wanted: Wanted<'_>,
+    prompts: impl IntoIterator<Item = Result<String, String>>,
+) -> Result<ExitCode, String> {
     let Wanted { model: wanted, mode, verification, add_dirs, headless, format, resume, fork } = wanted;
     let models = sdk.models().map_err(|e| e.to_string())?;
     let remembered = sdk.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
@@ -52,7 +70,7 @@ pub fn print_all(sdk: &Sdk, cwd: PathBuf, wanted: Wanted<'_>, prompts: &[String]
     let mut output = Output::new(format, std::io::stdout().lock());
     let mut failed_verification = false;
     for prompt in prompts {
-        let mut run = session.send(prompt).map_err(|e| e.to_string())?;
+        let mut run = session.send(&prompt?).map_err(|e| e.to_string())?;
         while let Some(event) = run.next_event() {
             output.event(&event);
             match event {
@@ -99,7 +117,53 @@ mod tests {
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
         let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
         let wanted = Wanted { verification: Some("tests pass".into()), ..Wanted::default() };
-        (print_all(&sdk, data.path().into(), wanted, &["fix it".into()]).expect("printed"), engine)
+        (print_all(&sdk, data.path().into(), wanted, [Ok("fix it".into())]).expect("printed"), engine)
+    }
+
+    fn scripted(data: &std::path::Path) -> (Sdk, FakeEngine) {
+        let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
+        let engine = FakeEngine::new(vec![Model::new("scripted", "Scripted")], done);
+        let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
+        services.data = None;
+        services.off.insert("memory_search".into());
+        services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
+        (Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND), engine)
+    }
+
+    #[test]
+    fn each_prompt_is_answered_before_the_next_one_is_read() {
+        let data = tempfile::tempdir().expect("data");
+        let (sdk, engine) = scripted(data.path());
+        let answered_when_read = std::cell::RefCell::new(Vec::new());
+        let prompts = ["first", "second", "third"].into_iter().map(|prompt| {
+            answered_when_read.borrow_mut().push(engine.requests().len());
+            Ok(prompt.to_owned())
+        });
+        let code = print_all(&sdk, data.path().into(), Wanted::default(), prompts).expect("printed");
+        assert_eq!(code, ExitCode::SUCCESS);
+        assert_eq!(*answered_when_read.borrow(), [0, 1, 2]);
+    }
+
+    #[test]
+    fn an_input_error_ends_the_command_after_the_prompts_before_it() {
+        let data = tempfile::tempdir().expect("data");
+        let (sdk, engine) = scripted(data.path());
+        let prompts = [Ok("first".to_owned()), Err("input line 2: could not be read".to_owned()), Ok("x".to_owned())];
+        let ended = print_all(&sdk, data.path().into(), Wanted::default(), prompts);
+        assert_eq!(ended, Err("input line 2: could not be read".to_owned()));
+        assert_eq!(engine.requests().len(), 1, "the first was answered, the one after the error never sent");
+    }
+
+    #[test]
+    fn resume_without_an_id_is_an_error_when_printing() {
+        let none = || Ok(None);
+        assert_eq!(resumed(Some(""), false, none), Err("--resume needs a session id with --print".to_owned()));
+        assert_eq!(resumed(Some("s-1"), false, none), Ok(Some(sdk::SessionId("s-1".into()))));
+        assert_eq!(
+            resumed(None, true, || Ok(Some(sdk::SessionId("last".into())))),
+            Ok(Some(sdk::SessionId("last".into())))
+        );
+        assert_eq!(resumed(None, false, || Err("never read".to_owned())), Ok(None));
     }
 
     #[test]

@@ -53,7 +53,7 @@ After the first run, a background task gives the conversation a short title. The
 
 ## Fork a conversation
 
-`/fork` makes the next message go on in a copy of this conversation; the original stays as it is and can be resumed later. It needs at least one message first. `/branch` with no argument does the same. On the command line, `--fork-session` with `-c` or `-r` forks the conversation you continue.
+`/fork` makes the next message go on in a copy of this conversation; the original stays as it is and can be resumed later. It needs at least one message first. `/branch` with no argument lists the prompts you can branch from. On the command line, `--fork-session` with `-c` or `-r` forks the conversation you continue.
 
 ## Branch from an earlier prompt
 

@@ -107,25 +107,38 @@ impl<W: Write> Output<W> {
     }
 }
 
-pub fn prompts(lines: impl Iterator<Item = String>) -> Result<Vec<String>, String> {
-    let mut prompts = Vec::new();
-    for (at, line) in lines.enumerate().filter(|(_, line)| !line.trim().is_empty()) {
-        let value: serde_json::Value =
-            serde_json::from_str(&line).map_err(|e| format!("input line {}: {e}", at + 1))?;
-        if value["type"] != "user" {
-            continue;
-        }
-        let content = &value["message"]["content"];
-        let text = match content {
-            serde_json::Value::String(text) => text.clone(),
-            serde_json::Value::Array(blocks) => {
-                blocks.iter().filter_map(|block| block["text"].as_str()).collect::<Vec<_>>().join("\n")
+pub fn prompts(lines: impl Iterator<Item = std::io::Result<String>>) -> impl Iterator<Item = Result<String, String>> {
+    let mut ended = false;
+    lines
+        .enumerate()
+        .map_while(move |(at, line)| {
+            if ended {
+                return None;
             }
-            _ => return Err(format!("input line {}: message.content is not text", at + 1)),
-        };
-        prompts.push(text);
+            let read = line
+                .map_err(|e| format!("input line {}: could not be read: {e}", at + 1))
+                .and_then(|line| prompt(&line).map_err(|e| format!("input line {}: {e}", at + 1)));
+            ended = read.is_err();
+            Some(read.transpose())
+        })
+        .flatten()
+}
+
+fn prompt(line: &str) -> Result<Option<String>, String> {
+    if line.trim().is_empty() {
+        return Ok(None);
     }
-    Ok(prompts)
+    let value: serde_json::Value = serde_json::from_str(line).map_err(|e| e.to_string())?;
+    if value["type"] != "user" {
+        return Ok(None);
+    }
+    match &value["message"]["content"] {
+        serde_json::Value::String(text) => Ok(Some(text.clone())),
+        serde_json::Value::Array(blocks) => {
+            Ok(Some(blocks.iter().filter_map(|block| block["text"].as_str()).collect::<Vec<_>>().join("\n")))
+        }
+        _ => Err("message.content is not text".to_owned()),
+    }
 }
 
 #[cfg(test)]
@@ -181,7 +194,32 @@ mod tests {
             r#"{"type":"user","message":{"content":[{"type":"text","text":"second"}]}}"#,
             r#"{"type":"control","x":1}"#,
         ];
-        assert_eq!(prompts(lines.iter().map(|l| (*l).to_owned())), Ok(vec!["first".into(), "second".into()]));
-        assert!(prompts(["not json".to_owned()].into_iter()).is_err());
+        let read: Vec<_> = prompts(lines.iter().map(|l| Ok((*l).to_owned()))).collect();
+        assert_eq!(read, [Ok("first".to_owned()), Ok("second".to_owned())]);
+        let bad: Vec<_> = prompts([Ok("not json".to_owned())].into_iter()).collect();
+        assert!(matches!(bad.as_slice(), [Err(message)] if message.starts_with("input line 1:")), "{bad:?}");
+    }
+
+    #[test]
+    fn each_prompt_is_given_as_soon_as_its_line_arrives() {
+        let pulled = std::cell::Cell::new(0);
+        let lines =
+            [r#"{"type":"user","message":{"content":"first"}}"#, r#"{"type":"user","message":{"content":"x"}}"#];
+        let mut read = prompts(lines.iter().map(|l| Ok((*l).to_owned())).inspect(|_| pulled.set(pulled.get() + 1)));
+        assert_eq!(read.next(), Some(Ok("first".to_owned())));
+        assert_eq!(pulled.get(), 1, "the second line was not waited for");
+    }
+
+    #[test]
+    fn a_line_that_cannot_be_read_ends_the_input_with_an_error() {
+        let lines = vec![
+            Ok(r#"{"type":"user","message":{"content":"first"}}"#.to_owned()),
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "stream did not contain valid UTF-8")),
+            Ok(r#"{"type":"user","message":{"content":"never"}}"#.to_owned()),
+        ];
+        let read: Vec<_> = prompts(lines.into_iter()).collect();
+        assert_eq!(read.len(), 2, "{read:?}");
+        assert_eq!(read[0], Ok("first".to_owned()));
+        assert!(matches!(&read[1], Err(message) if message.contains("input line 2") && message.contains("UTF-8")));
     }
 }

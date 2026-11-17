@@ -18,19 +18,12 @@ use crate::routes::{Shared, failure};
 
 const KEPT_UPDATES: usize = 256;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Prompt {
-    pub session: String,
-    pub text: String,
-}
-
 #[derive(Debug, Default)]
 struct Board {
     report: Option<String>,
     docs: Option<String>,
     sessions: Option<String>,
     latest: BTreeMap<String, String>,
-    prompts: Vec<Prompt>,
     watched: Option<String>,
 }
 
@@ -85,10 +78,6 @@ impl Live {
         let _ = self.updates.send(Update::Session(line));
     }
 
-    pub fn take_prompts(&self) -> Vec<Prompt> {
-        std::mem::take(&mut self.board().prompts)
-    }
-
     pub fn watched(&self) -> Option<String> {
         self.board().watched.clone()
     }
@@ -106,7 +95,6 @@ pub fn routes() -> Router<Shared> {
         .route("/api/docs", get(docs))
         .route("/api/sessions", get(sessions))
         .route("/api/events", get(events))
-        .route("/api/prompt", post(prompt))
         .route("/api/watch", post(watch))
 }
 
@@ -150,14 +138,6 @@ async fn events(State(shared): State<Shared>) -> Sse<impl Stream<Item = Result<E
 
 fn named(body: &Value, field: &str) -> Option<String> {
     body[field].as_str().map(str::trim).filter(|text| !text.is_empty()).map(str::to_owned)
-}
-
-async fn prompt(State(shared): State<Shared>, axum::Json(body): axum::Json<Value>) -> Response {
-    let (Some(session), Some(text)) = (named(&body, "session"), named(&body, "text")) else {
-        return failure(StatusCode::BAD_REQUEST, "validation", "A prompt needs a session and some text.");
-    };
-    shared.live.board().prompts.push(Prompt { session, text });
-    StatusCode::ACCEPTED.into_response()
 }
 
 async fn watch(State(shared): State<Shared>, axum::Json(body): axum::Json<Value>) -> Response {

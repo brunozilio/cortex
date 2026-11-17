@@ -68,7 +68,7 @@ These work whatever has focus.
 | `Alt+D`, `Alt+Delete`, `Ctrl+Delete` | Delete the word after the cursor. |
 | `Cmd+Backspace` | Delete to the start of the line. |
 | `Ctrl+U` | Clear the whole prompt. |
-| `Esc` `Esc` | Clear the prompt (when it has text): the first `Esc` arms it (`Press Esc again to clear the prompt`), the second clears. |
+| `Esc` `Esc` | Clear the prompt (when it has text): the first `Esc` arms it (`Press Esc again to clear the prompt`), the second clears. On an empty prompt the line says `Press Esc again to go back to an earlier prompt` instead, and a second `Esc` within a second opens the rewind list. |
 
 ## Prompt: history, completion and special starts
 

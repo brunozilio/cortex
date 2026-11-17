@@ -12,6 +12,7 @@ use crate::{Assets, Launch, Live};
 #[derive(Debug, Clone)]
 pub struct Settings {
     pub token: String,
+    pub port: u16,
     pub assets: Assets,
     pub terminal: Launch,
 }
@@ -19,12 +20,20 @@ pub struct Settings {
 #[derive(Debug, Clone)]
 pub struct Shared {
     pub token: Arc<str>,
+    pub port: u16,
     pub live: Live,
     pub terminal: Launch,
+    pub terminals: Arc<tokio::sync::Semaphore>,
 }
 
 pub fn router(settings: Settings, live: Live) -> Router {
-    let shared = Shared { token: settings.token.into(), live, terminal: settings.terminal };
+    let shared = Shared {
+        token: settings.token.into(),
+        port: settings.port,
+        live,
+        terminal: settings.terminal,
+        terminals: Arc::new(tokio::sync::Semaphore::new(crate::terminal::MOST_AT_ONCE)),
+    };
     let api = Router::new()
         .route("/api/health", get(|| async { axum::Json(json!({ "status": "ok" })) }))
         .route("/api/instance", get(|| async { axum::Json(json!({ "name": brand::NAME })) }))

@@ -12,33 +12,17 @@ export interface SessionCard {
   cwd?: string
 }
 
-export type Column = 'need' | 'run' | 'done' | 'failed'
-
-export const COLUMNS: { key: Column; label: string }[] = [
-  { key: 'need', label: 'Needs you' },
-  { key: 'run', label: 'Running' },
-  { key: 'done', label: 'Done' },
-  { key: 'failed', label: 'Failed' },
-]
-
-export function columnOf(status: Status): Column {
-  if (status === 'needs_you') return 'need'
-  if (status === 'running' || status === 'thinking') return 'run'
-  if (status === 'failed') return 'failed'
-  return 'done'
-}
-
-export function served(_config: LiveConfig, path: string): string {
+export function served(path: string): string {
   return `/api${path}`
 }
 
-async function posted(config: LiveConfig, path: string, body: object): Promise<void> {
-  const response = await fetch(served(config, path), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+async function posted(path: string, body: object): Promise<void> {
+  const response = await fetch(served(path), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   if (!response.ok) throw new Error(`the terminal refused it (${response.status})`)
 }
 
-export function watchSession(config: LiveConfig, session: string): Promise<void> {
-  return posted(config, '/watch', { session })
+export function watchSession(session: string): Promise<void> {
+  return posted('/watch', { session })
 }
 
 const EVERY_MS = 2000
@@ -50,7 +34,7 @@ export function useSessions(config: LiveConfig | null): SessionCard[] {
     let stopped = false
     const load = async () => {
       try {
-        const response = await fetch(served(config, '/sessions'))
+        const response = await fetch(served('/sessions'))
         if (response.ok && !stopped) setCards((await response.json()) as SessionCard[])
       } catch {
         return

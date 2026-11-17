@@ -92,3 +92,33 @@ fn a_folder_that_is_a_repository_gets_no_offer() {
     assert!(app.ask.is_none());
     assert_eq!(reached(&mut app, &engine, 1), ["build a gateway"]);
 }
+
+#[test]
+fn an_agent_question_over_the_offer_is_answered_to_the_agent_and_the_held_prompt_returns_to_the_input() {
+    let folder = tempfile::tempdir().expect("folder");
+    let ask = domain::AgentAsk {
+        id: domain::AskId("a-1".into()),
+        kind: domain::AskKind::Permission {
+            tool: "Bash".into(),
+            subject: "ls".into(),
+            rememberable: false,
+            rule: None,
+        },
+    };
+    let script = vec![EngineEvent::Asked(ask), EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script)
+        .with_delay(std::time::Duration::from_millis(60));
+    let mut app = outside_a_repository(folder.path(), &engine);
+
+    send(&mut app, "build a gateway");
+    assert!(app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == domain::git_offer::ASK));
+    app.send_as("a notice arrived".into(), "notice".into());
+    until(&mut app, |app| app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == "a-1"));
+    assert_eq!(app.input.text(), "build a gateway", "the held prompt is not lost");
+
+    press(&mut app, KeyCode::Enter);
+    until(&mut app, |_| !engine.answers().is_empty());
+    assert_eq!(engine.answers(), [(domain::AskId("a-1".into()), sdk::Decision::Allow)]);
+    assert!(!folder.path().join(".git").exists(), "the answer was for the agent, not the offer");
+    assert_eq!(sent(&engine), ["a notice arrived"]);
+}

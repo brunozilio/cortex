@@ -6,18 +6,31 @@ use axum::response::{IntoResponse, Response};
 
 use crate::routes::{Shared, failure};
 
-pub const COOKIE: &str = "console_token";
+const COOKIE: &str = "console_token";
 const LINK: &str = "token";
+const LOCAL_NAMES: [&str; 2] = ["127.0.0.1", "localhost"];
+
+fn cookie_name(port: u16) -> String {
+    format!("{COOKIE}_{port}")
+}
 
 pub async fn guard(State(shared): State<Shared>, request: Request, next: Next) -> Response {
+    if !addressed_here(&request, shared.port) {
+        return failure(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "This console only answers on this computer's own address.",
+        );
+    }
     if let Some(offered) = link_token(request.uri()) {
-        return enter(&shared.token, &offered, request.uri());
+        return enter(&shared, &offered, request.uri());
     }
     if foreign_origin(request.headers()) {
         return failure(StatusCode::FORBIDDEN, "forbidden", "This request came from another site.");
     }
     let api = request.uri().path().starts_with("/api/");
-    if api && !cookie_token(request.headers()).is_some_and(|token| same(token, &shared.token)) {
+    let cookie = cookie_name(shared.port);
+    if api && !cookie_token(request.headers(), &cookie).is_some_and(|token| same(token, &shared.token)) {
         return failure(
             StatusCode::UNAUTHORIZED,
             "unauthorized",
@@ -27,11 +40,17 @@ pub async fn guard(State(shared): State<Shared>, request: Request, next: Next) -
     next.run(request).await
 }
 
-fn enter(token: &str, offered: &str, uri: &Uri) -> Response {
-    if !same(offered, token) {
+fn addressed_here(request: &Request, port: u16) -> bool {
+    let named = request.headers().get(header::HOST).and_then(|host| host.to_str().ok());
+    let asked = named.or_else(|| request.uri().authority().map(|authority| authority.as_str()));
+    asked.is_some_and(|host| LOCAL_NAMES.iter().any(|name| host == format!("{name}:{port}")))
+}
+
+fn enter(shared: &Shared, offered: &str, uri: &Uri) -> Response {
+    if !same(offered, &shared.token) {
         return failure(StatusCode::UNAUTHORIZED, "unauthorized", "This console link is not valid any more.");
     }
-    let cookie = format!("{COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict");
+    let cookie = format!("{}={}; Path=/; HttpOnly; SameSite=Strict", cookie_name(shared.port), shared.token);
     let mut response = Response::new(Body::empty());
     *response.status_mut() = StatusCode::SEE_OTHER;
     let headers = response.headers_mut();
@@ -59,14 +78,14 @@ fn without_token(uri: &Uri) -> String {
     if kept.is_empty() { uri.path().to_owned() } else { format!("{}?{}", uri.path(), kept.join("&")) }
 }
 
-fn cookie_token(headers: &HeaderMap) -> Option<&str> {
+fn cookie_token<'a>(headers: &'a HeaderMap, cookie: &str) -> Option<&'a str> {
     headers
         .get_all(header::COOKIE)
         .iter()
         .filter_map(|value| value.to_str().ok())
         .flat_map(|value| value.split(';'))
         .filter_map(|pair| pair.trim().split_once('='))
-        .find(|(name, _)| *name == COOKIE)
+        .find(|(name, _)| *name == cookie)
         .map(|(_, value)| value)
 }
 

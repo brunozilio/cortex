@@ -166,7 +166,8 @@ printf '%s\n' \
 
 - Só as linhas com `"type":"user"` são prompts; as outras são ignoradas, assim como as linhas em branco.
 - `message.content` é uma string ou uma lista de blocos; o `text` de cada bloco é unido com quebras de linha.
-- Uma linha que não é JSON, ou cujo conteúdo não é texto, encerra o comando com `input line <n>: ...`.
+- Cada linha é respondida assim que chega, então outro programa pode escrever um prompt, ler a resposta e escrever o próximo.
+- Uma linha que não é JSON, cujo conteúdo não é texto, ou que não pode ser lida (por exemplo UTF-8 inválido) encerra o comando com `input line <n>: ...`; as linhas anteriores já foram respondidas.
 
 Toda a entrada padrão é lida antes de o primeiro prompt ser enviado.
 
@@ -195,7 +196,7 @@ Com `--verification`, cada veredito vira uma nota (`✓ verification passed (sco
 | Opção | Efeito |
 |---|---|
 | `-c`, `--continue` | Continua a última conversa desta pasta |
-| `-r <id>`, `--resume <id>` | Continua a conversa com esse id |
+| `-r <id>`, `--resume <id>` | Continua a conversa com esse id. Com `--print` o id é obrigatório: `--resume needs a session id with --print` |
 | `--fork-session` | Com `-c` ou `-r`: continua numa cópia, deixando a original como está |
 
 O `session_id` de um resultado `json` é o id a passar para `--resume`:

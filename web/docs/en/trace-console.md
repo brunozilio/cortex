@@ -81,15 +81,9 @@ With a session picked, the **Terminal** panel runs `{{COMMAND}} --resume <sessio
 > [!WARNING]
 > The terminal in the page is a real {{NAME}} process on your computer, with your permissions. Anyone who can open the page can use it; keep the link to yourself.
 
-### Prompts sent to the page
+A session the chat did not list is resumed in the project folder of the chat that opened the page. At most 4 terminals can be open from one page server at a time; a fifth is refused until one closes.
 
-The page's server also accepts prompts for a session (`POST /api/prompt` with a JSON body `{"session": "<id>", "text": "<prompt>"}`), and the chat that opened the page delivers them:
-
-- to the session open in the chat: sent like a message you typed (or added to the run when the agent is working);
-- to a session that is already running a prompt sent from the page: added to that run;
-- to any other session: run in the background, resuming that session in its folder with the chat's model, permission mode and effort.
-
-A prompt that fails is reported in the chat as `The prompt sent from the trace page to <session> failed: …`.
+The terminal is the only way to drive a session from the page: the page's server does not accept prompts.
 
 ## Read the docs with /docs
 
@@ -103,7 +97,8 @@ A prompt that fails is reported in the chat as `The prompt sent from the trace p
 ## Access and security
 
 - The server listens only on `127.0.0.1`, on a free port chosen at start.
-- The address printed in the chat carries a secret token. Opening it sets an `HttpOnly`, `SameSite=Strict` cookie and removes the token from the address; the page's data needs that cookie.
+- The address printed in the chat carries a secret token. Opening it sets an `HttpOnly`, `SameSite=Strict` cookie and removes the token from the address; the page's data needs that cookie. The cookie is named after the server's port, so the pages of two chats open at once do not sign each other out.
+- The server only answers requests addressed to `127.0.0.1:<port>` or `localhost:<port>`; any other host name gets `403`.
 - Requests that come from another website are refused.
 - A link from an earlier run of the chat no longer works (`This console link is not valid any more.`); type `/trace` again for a new one.
 

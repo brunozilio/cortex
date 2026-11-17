@@ -26,7 +26,7 @@ Depois de ramificar:
 Ramificar nunca muda arquivos no disco. Para também voltar os arquivos ao estado daquele prompt, use o `/rewind` (veja [Sessões](./sessions)).
 
 > [!NOTE]
-> O `/branch` sem número é o mesmo que `/fork`: continua numa cópia da conversa inteira. Só o `/branch <n>` ramifica a partir de um prompt anterior.
+> O `/branch` sem número lista os prompts de onde você pode ramificar, numerados do mais antigo para o mais novo (`Nothing to branch from in this chat yet.` quando não há nenhum). Para continuar numa cópia da conversa inteira, use `/fork`.
 
 A ramificação é recusada enquanto o agente trabalha (`Wait for the agent to finish, or press Esc, before branching.`), para um número que não corresponde a nenhum prompt (`There is no such prompt; /branch lists them.`) e quando a conversa foi compactada depois daquele prompt (`the conversation was compacted since then, so it cannot branch there`).
 

@@ -27,6 +27,13 @@ pub fn feature() -> Feature {
 
 fn run(app: &mut App, _argument: Option<String>) {
     let found = existing(targets(platform_dirs()));
+    guarded(app, found);
+}
+
+fn guarded(app: &mut App, found: Vec<PathBuf>) {
+    if app.busy() {
+        return app.transcript.notice("Wait for the agent to finish (Esc interrupts it) before a factory reset.");
+    }
     offer(app, found);
 }
 
@@ -38,11 +45,13 @@ fn offer(app: &mut App, found: Vec<PathBuf>) {
     if let Some(asked) = app.features.get::<Asked>(NAME) {
         asked.0 = Some(found);
     }
-    app.ask = Some(Pending::new(domain::factory_reset::ask(brand::NAME, &folders)));
+    app.ask = Some(Pending::local(domain::factory_reset::ask(brand::NAME, &folders)));
 }
 
 fn answered(app: &mut App, decision: &sdk::Decision) -> bool {
-    let Some(found) = app.features.get::<Asked>(NAME).and_then(|asked| asked.0.take()) else { return false };
+    let mine = app.ask.as_ref().is_some_and(|pending| pending.is_local(domain::factory_reset::ASK));
+    let found = app.features.get::<Asked>(NAME).and_then(|asked| asked.0.take());
+    let (true, Some(found)) = (mine, found) else { return false };
     app.ask = None;
     if domain::factory_reset::confirmed(decision) {
         app.exit_chore = Some(Box::new(move || report(&wipe(&found))));
@@ -158,6 +167,85 @@ mod tests {
         let chore = app.exit_chore.take().expect("the erase waits for the exit");
         assert!(chore().contains("is reset"));
         assert!(!kept.exists());
+    }
+
+    fn agent_question() -> domain::AgentAsk {
+        let choice = |label: &str| domain::Choice { label: label.into(), description: String::new() };
+        let question = domain::Question {
+            header: "Port".into(),
+            text: "Which port?".into(),
+            options: vec![choice("3000"), choice("8080")],
+            multi: false,
+        };
+        domain::AgentAsk { id: domain::AskId("a-1".into()), kind: domain::AskKind::Questions(vec![question]) }
+    }
+
+    fn asking(data: &Path, script: Vec<sdk::EngineEvent>) -> (App, agent_engine::fake::FakeEngine) {
+        let model = sdk::Model::new("keyed:scripted", "Scripted");
+        let engine =
+            agent_engine::fake::FakeEngine::new(vec![model], script).with_delay(std::time::Duration::from_millis(60));
+        let mut app = App::new(crate::tui::tests::sdk(&engine, data), data.into(), None, None);
+        crate::tui::tests::until(&mut app, |app| app.session.is_some());
+        (app, engine)
+    }
+
+    fn second_option() -> sdk::Decision {
+        sdk::Decision::Answer(vec![vec![1]])
+    }
+
+    #[test]
+    fn an_agent_question_over_the_reset_question_is_answered_to_the_agent_and_erases_nothing() {
+        let root = tempfile::tempdir().expect("dir");
+        let kept = root.path().join("kept");
+        std::fs::create_dir_all(&kept).expect("kept");
+        let done = sdk::EngineEvent::Completed { duration_ms: 1, cost_usd: None };
+        let (mut app, engine) = asking(root.path(), vec![sdk::EngineEvent::Asked(agent_question()), done]);
+        offer(&mut app, vec![kept.clone()]);
+        app.send("pick a port".into());
+        crate::tui::tests::until(&mut app, |app| app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == "a-1"));
+
+        app.answer(second_option());
+        assert!(!app.quit && app.exit_chore.is_none(), "the answer was for the agent, not the reset");
+        crate::tui::tests::until(&mut app, |_| !engine.answers().is_empty());
+        assert_eq!(engine.answers(), [(domain::AskId("a-1".into()), second_option())]);
+        assert!(kept.exists());
+    }
+
+    #[test]
+    fn a_run_ending_keeps_the_reset_question_and_a_later_agent_answer_erases_nothing() {
+        let root = tempfile::tempdir().expect("dir");
+        let kept = root.path().join("kept");
+        std::fs::create_dir_all(&kept).expect("kept");
+        let (mut app, _engine) =
+            asking(root.path(), vec![sdk::EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
+        offer(&mut app, vec![kept.clone()]);
+        app.send("quick one".into());
+        crate::tui::tests::until(&mut app, |app| !app.busy() && app.transcript.entries.len() > 1);
+        assert!(
+            app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == domain::factory_reset::ASK),
+            "the run that ended never asked it, so it stays"
+        );
+
+        app.ask = Some(Pending::new(agent_question()));
+        app.answer(second_option());
+        assert!(!app.quit && app.exit_chore.is_none());
+        assert!(kept.exists());
+    }
+
+    #[test]
+    fn the_reset_is_refused_while_the_agent_works() {
+        let root = tempfile::tempdir().expect("dir");
+        let done = sdk::EngineEvent::Completed { duration_ms: 1, cost_usd: None };
+        let (mut app, engine) = asking(root.path(), vec![sdk::EngineEvent::Asked(agent_question()), done]);
+        app.send("pick a port".into());
+        crate::tui::tests::until(&mut app, |app| app.ask.is_some());
+        guarded(&mut app, vec![root.path().to_owned()]);
+        assert!(app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == "a-1"), "the agent's question stays");
+        let last = format!("{:?}", app.transcript.entries.last());
+        assert!(last.contains("Wait for the agent to finish"), "{last}");
+        app.answer(second_option());
+        assert!(!app.quit && app.exit_chore.is_none());
+        crate::tui::tests::until(&mut app, |_| !engine.answers().is_empty());
     }
 
     #[test]

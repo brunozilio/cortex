@@ -73,7 +73,7 @@ impl super::app::App {
             Msg::Providers(providers) => super::info::connected(self, providers),
             Msg::Menu(providers) => self.menu(providers),
             Msg::Accounts { providers, removing } => self.accounts_listed(providers, removing),
-            Msg::StatusLine(line) => self.status.text = self.status.command.is_some().then_some(line),
+            Msg::StatusLine(line) => super::statusline::arrived(self, line),
             Msg::Context(usage) => {
                 self.window = Some(usage.window);
                 self.transcript.notice(super::context::view(&usage));
