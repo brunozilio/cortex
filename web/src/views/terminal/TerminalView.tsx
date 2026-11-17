@@ -46,7 +46,8 @@ export function TerminalView({ session }: { session: string }) {
       if (socket.readyState === WebSocket.OPEN) socket.send(Uint8Array.from(data, (char) => char.charCodeAt(0)))
     })
     const resizing = terminal.onResize((size) => {
-      if (socket.readyState === WebSocket.OPEN) socket.send(resizeMessage(size))
+      const message = resizeMessage(size)
+      if (message && socket.readyState === WebSocket.OPEN) socket.send(message)
     })
     const observer = new ResizeObserver(() => fit.fit())
     observer.observe(element)

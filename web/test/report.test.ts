@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { liveNotice } from '../src/lib/live'
 import { loadReport, scoped } from '../src/lib/report'
-import type { Insights, Report } from '../src/types'
+import type { Report } from '../src/types'
+import { INSIGHTS, answers, fixture } from './make'
 
-const INSIGHTS = { days: [], findings: [] } as unknown as Insights
 const REPORT: Report = { project: 'real', current: 's1', generated_at_ms: 1, sessions: [{ id: 's1', runs: [] }], insights: INSIGHTS }
 const SAMPLE: Report = { ...REPORT, project: 'sample' }
 
@@ -68,11 +67,28 @@ describe('scoped', () => {
   })
 })
 
-describe('liveNotice', () => {
-  test('only a lost connection is pointed out', () => {
-    expect(liveNotice('reconnecting')).toContain('Reconnecting')
-    expect(liveNotice('live')).toBeNull()
-    expect(liveNotice('connecting')).toBeNull()
-    expect(liveNotice('static')).toBeNull()
+describe('a report the page cannot read', () => {
+  test('is a failure that says which field is wrong, not a page drawn from it', async () => {
+    const { fetcher, asked } = answers({ '/api/report': { body: { ...REPORT, sessions: [{ id: 's1', runs: [{ session: 's1' }] }] } } })
+
+    const loaded = await loadReport(fetcher, 0)
+
+    expect(loaded.kind).toBe('failed')
+    if (loaded.kind !== 'failed') return
+    expect(loaded.message).toContain('report.sessions[0].runs[0].index should be a number, not missing')
+    expect(loaded.message).toContain('different versions')
+    expect(asked.length).toBe(1)
+  })
+
+  test('is not replaced by sample data, even in development', async () => {
+    const { fetcher } = answers({ '/api/report': { body: [] } })
+    const loaded = await loadReport(fetcher, 0, async () => ({ report: SAMPLE, insights: () => INSIGHTS }))
+    expect(loaded.kind).toBe('failed')
+  })
+
+  test('while the report the Rust side serializes loads', async () => {
+    const report = fixture('report.json')
+    const { fetcher } = answers({ '/api/report': { body: report } })
+    expect(await loadReport(fetcher, 0)).toEqual({ kind: 'live', report: report as Report })
   })
 })

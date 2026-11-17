@@ -12,7 +12,15 @@ export function parseRoute(pathname: string, search: string, hash: string): Rout
   const lang = parts[0] === 'en' || parts[0] === 'pt' ? parts[0] : null
   const slug = (lang ? parts[1] : parts[0]) ?? null
   const query = new URLSearchParams(search).get('q') ?? ''
-  return { lang, slug, hash: decodeURIComponent(hash.replace(/^#/, '')), query }
+  return { lang, slug, hash: decoded(hash.replace(/^#/, '')), query }
+}
+
+function decoded(text: string): string {
+  try {
+    return decodeURIComponent(text)
+  } catch {
+    return text
+  }
 }
 
 export function pathOf(lang: Lang, slug: string, id = ''): string {
@@ -20,6 +28,7 @@ export function pathOf(lang: Lang, slug: string, id = ''): string {
 }
 
 export function internalTarget(href: string): { slug: string; id: string } | null {
+  if (/^\/docs\/(?:en|pt)\/?$/.test(href)) return null
   const match = /^(?:\.\/|\/docs\/(?:en\/|pt\/)?)?([a-z0-9-]+)?(?:#(.+))?$/.exec(href)
   if (!match || href.includes('://') || (!match[1] && !match[2])) return null
   return { slug: match[1] ?? '', id: match[2] ?? '' }

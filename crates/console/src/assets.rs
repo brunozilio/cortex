@@ -6,8 +6,11 @@ use axum::response::{Html, IntoResponse, Response};
 pub const MISSING: &str = "<!doctype html><html><head><meta charset=\"utf-8\"><title>Console</title></head>\
 <body style=\"font-family: system-ui; max-width: 40rem; margin: 4rem auto; line-height: 1.5\">\
 <h1>The console app is not built yet</h1>\
-<p>Install <a href=\"https://bun.sh\">Bun</a> and build the CLI again, or build the app once from the repository and reload this page:</p>\
-<pre>cd web &amp;&amp; bun install &amp;&amp; bun run build</pre></body></html>";
+<p>This program was compiled without the page. From the repository, with <a href=\"https://bun.sh\">Bun</a> installed, \
+build the page and then the program again:</p>\
+<pre>cargo run -p xtask -- web\ncargo build --release</pre>\
+<p>The first command writes the page to <code>web/dist</code>; the second builds it into the program. \
+Then start the program again and open this page from the new link it prints.</p></body></html>";
 
 #[derive(Debug)]
 pub struct Asset {
@@ -45,8 +48,11 @@ pub fn choose(
 pub fn discover() -> Assets {
     let chosen = std::env::var_os(brand::env("CONSOLE_DIR")).map(PathBuf::from);
     let installed = platform::data_dir(brand::NAME, brand::COMMAND).map(|data| data.join("console"));
-    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../web/dist");
-    choose(chosen, BUNDLE, [installed, Some(source)])
+    choose(chosen, BUNDLE, [installed])
+}
+
+pub fn embedded() -> &'static [Asset] {
+    BUNDLE
 }
 
 pub fn serve(bundle: &'static [Asset], uri: &Uri) -> Response {

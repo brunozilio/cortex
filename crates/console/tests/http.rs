@@ -171,7 +171,39 @@ async fn the_built_app_is_served_and_any_page_falls_back_to_its_index() {
 async fn without_a_built_app_the_page_says_how_to_build_it() {
     let (status, _, body) = send(app(None), get("/")).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-    assert!(body.contains("bun run build"), "{body}");
+    assert!(body.contains("cargo run -p xtask -- web"), "{body}");
+    assert!(body.contains("cargo build"), "the page has to be built into the program afterwards: {body}");
+}
+
+#[tokio::test]
+async fn every_api_route_needs_the_cookie() {
+    let routes = [
+        ("GET", "/api/health"),
+        ("GET", "/api/instance"),
+        ("GET", "/api/report"),
+        ("GET", "/api/docs"),
+        ("GET", "/api/sessions"),
+        ("GET", "/api/latest"),
+        ("GET", "/api/events"),
+        ("POST", "/api/watch"),
+        ("GET", "/api/terminal"),
+        ("GET", "/api/no/such/route"),
+    ];
+    for (method, path) in routes {
+        for cookie in [None, Some("console_token_4000=wrong"), Some("console_token_4001=secret-token")] {
+            let mut request = Request::builder().method(method).uri(path).header(header::HOST, HOST);
+            if let Some(cookie) = cookie {
+                request = request.header(header::COOKIE, cookie);
+            }
+            let (status, _, body) = send(app(None), request.body(Body::empty()).expect("request")).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED, "{method} {path} with {cookie:?}");
+            assert_eq!(serde_json::from_str::<Value>(&body).expect("json")["error"]["code"], "unauthorized");
+        }
+        let known =
+            Request::builder().method(method).uri(path).header(header::HOST, HOST).header(header::COOKIE, COOKIE);
+        let response = app(None).oneshot(known.body(Body::empty()).expect("request")).await.expect("response");
+        assert_ne!(response.status(), StatusCode::UNAUTHORIZED, "{method} {path} with the cookie");
+    }
 }
 
 static BUNDLE: &[Asset] = &[

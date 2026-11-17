@@ -1,6 +1,7 @@
 import { Brain, Sparkles, User } from 'lucide-react'
 import { CodeBlock } from '@/components/CodeBlock'
 import { CopyButton } from '@/components/CopyButton'
+import { eventText, eventTitle } from '@/lib/events'
 import { cn } from '@/lib/utils'
 import type { Span } from '@/types'
 
@@ -36,7 +37,7 @@ export function IoTab({ span }: { span: Span }) {
       </>
     )
   }
-  if (span.kind === 'event') return <CodeBlock label="Event" text={span.output || span.input || span.name} />
+  if (span.kind === 'event') return <CodeBlock label={eventTitle(span)} text={eventText(span)} />
   const copy = span.kind === 'tool' && span.failed && span.input ? <CopyButton text={span.input} label="Copy command" variant="ghost" size="sm" /> : null
   return (
     <>

@@ -2,6 +2,7 @@ import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { KindChip } from '@/components/KindChip'
 import { ms, usd } from '@/lib/format'
+import { eventTitle } from '@/lib/events'
 import { KINDS } from '@/lib/kinds'
 import { IoTab } from './IoTab'
 import { MetricsTab } from './MetricsTab'
@@ -42,7 +43,7 @@ export function Inspector({ run, span, tab, findings, onTab }: InspectorProps) {
         <KindChip kind={span.kind} size="md" />
         <div className="grid min-w-0">
           <span className="text-xs text-muted-foreground">{KINDS[span.kind].label}</span>
-          <h3 className="truncate font-semibold">{span.name}</h3>
+          <h3 className="truncate font-semibold">{eventTitle(span)}</h3>
         </div>
         <span className="ml-auto text-right font-mono text-xs text-muted-foreground">
           {span.kind === 'event' ? `at ${ms(span.start_ms)}` : ms(span.end_ms - span.start_ms)}

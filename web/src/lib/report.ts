@@ -1,8 +1,10 @@
 import type { Insights, Report, Run, SessionRuns } from '@/types'
+import { reportProblem } from './contract'
 
 const WAIT_MS = 250
 const TRIES = 40
 const NOT_READY = 503
+const OK = 200
 
 export type DeriveInsights = (sessions: SessionRuns[], now: number) => Insights
 
@@ -23,10 +25,14 @@ export function failureMessage(status: number | null): string {
   return `The page's server answered with an error (${status}). Open this page again from the link the terminal printed.`
 }
 
-async function asked(fetcher: typeof fetch): Promise<Report | number | null> {
+export function unreadableMessage(problem: string): string {
+  return `The terminal sent a report this page cannot read (${problem}). The page and the program are probably from different versions: build the page, then the program, again.`
+}
+
+async function asked(fetcher: typeof fetch): Promise<{ body: unknown } | number | null> {
   try {
     const response = await fetcher('/api/report')
-    return response.ok ? ((await response.json()) as Report) : response.status
+    return response.ok ? { body: await response.json() } : response.status
   } catch {
     return null
   }
@@ -37,7 +43,11 @@ export async function loadReport(fetcher: typeof fetch = fetch, wait = WAIT_MS, 
   for (let attempt = 0; attempt < TRIES && status === NOT_READY; attempt += 1) {
     if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, wait))
     const answer = await asked(fetcher)
-    if (answer !== null && typeof answer === 'object') return { kind: 'live', report: answer }
+    if (answer !== null && typeof answer === 'object') {
+      const problem = reportProblem(answer.body)
+      if (problem) return { kind: 'failed', status: OK, message: unreadableMessage(problem) }
+      return { kind: 'live', report: answer.body as Report }
+    }
     status = answer
   }
   if (sample && status !== NOT_READY) return { kind: 'sample', ...(await sample()) }

@@ -30,8 +30,14 @@ code-map, platform, script, brand ──► no workspace crate
 that table and this diagram in the same commit as the `Cargo.toml`.
 
 `web/` is the page `/trace`, `/console` and `/docs` open (Bun + Vite +
-React + Tailwind); `console` builds it into the binary when Bun is present,
-else serves `web/dist`. The CLI's trace feature pushes the report, the
+React + Tailwind). Cargo never runs Bun: `cargo run -p xtask -- web` builds
+the page into `web/dist`, and `console`'s `build.rs` only embeds what is
+there (nothing when it is absent; the gate needs neither Bun nor a page).
+`cargo run -p xtask -- check-release` fails on a missing or stale
+`web/dist`. The page's types mirror `domain::trace` by hand; the fixtures in
+`web/test/fixtures` are written from the Rust types by `cargo run -p xtask
+-- web-fixtures` and checked by `cargo test -p xtask` and `bun test`
+(`web/README.md`). The CLI's trace feature pushes the report, the
 session list and each session's runs into the console's `Live` hub.
 
 Nothing below `cli` knows the CLI; `cli` reaches `agent-engine`, and the

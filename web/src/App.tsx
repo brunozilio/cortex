@@ -10,7 +10,7 @@ import type { InspectorTab } from '@/views/traces/inspector/Inspector'
 import type { Metric } from '@/lib/days'
 import { EMPTY_FILTERS, type Filters } from '@/lib/filters'
 import { allRuns, defaultRun, findRun, latestRun, scoped, type DeriveInsights, type RunRef } from '@/lib/report'
-import { followSelection, mergeSession, readLiveConfig } from '@/lib/live'
+import { followSelection, mergeSession, readLiveConfig, refetch } from '@/lib/live'
 import { useSessions, watchSession } from '@/lib/sessions'
 import { useLiveFeed } from '@/lib/useLiveFeed'
 import type { Report, Run, SessionRuns } from '@/types'
@@ -32,23 +32,21 @@ export function App({ initial, sample }: { initial: Report; sample?: DeriveInsig
   const latest = useRef({ report, selection: { run: selected, spanId } })
   latest.current = { report, selection: { run: selected, spanId } }
 
-  const live = useLiveFeed((update: SessionRuns) => {
-    const before = latest.current.report
-    const after = mergeSession(before, update)
-    const next = followSelection(before, after, update, latest.current.selection)
-    latest.current = { report: after, selection: next }
-    setReport(after)
-    setSelected(next.run)
-    setSpanId(next.spanId)
-  }, () => {
-    void fetch('/api/report')
-      .then((response) => (response.ok ? (response.json() as Promise<Report>) : null))
-      .then((fresh) => {
-        if (!fresh) return
-        latest.current = { ...latest.current, report: fresh }
-        setReport(fresh)
-      })
-      .catch(() => undefined)
+  const live = useLiveFeed({
+    onSession: (update: SessionRuns) => {
+      const before = latest.current.report
+      const after = mergeSession(before, update)
+      const next = followSelection(before, after, update, latest.current.selection)
+      latest.current = { report: after, selection: next }
+      setReport(after)
+      setSelected(next.run)
+      setSpanId(next.spanId)
+    },
+    onRefetch: async () => {
+      const fresh = await refetch()
+      latest.current = { ...latest.current, report: fresh }
+      setReport(fresh)
+    },
   })
 
   const { report: shown, ready } = useMemo(() => (session ? scoped(report, session, sample) : { report, ready: true }), [report, session, sample])

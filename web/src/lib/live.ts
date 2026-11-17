@@ -1,11 +1,8 @@
 import type { Report, SessionRuns } from '@/types'
+import { isSessionRuns, reportProblem } from './contract'
 import { latestRun, runKey, type RunRef } from './report'
 
 export type LiveStatus = 'static' | 'connecting' | 'live' | 'reconnecting'
-
-export function liveNotice(status: LiveStatus): string | null {
-  return status === 'reconnecting' ? 'Reconnecting to the terminal…' : null
-}
 
 export interface LiveConfig {
   events: string
@@ -19,6 +16,27 @@ export function mergeSession(report: Report, update: SessionRuns): Report {
   const exists = report.sessions.some((session) => session.id === update.id)
   const sessions = exists ? report.sessions.map((session) => (session.id === update.id ? update : session)) : [update, ...report.sessions]
   return { ...report, sessions }
+}
+
+async function latestUpdates(fetcher: typeof fetch): Promise<SessionRuns[]> {
+  try {
+    const response = await fetcher('/api/latest')
+    if (!response.ok) return []
+    const updates: unknown = await response.json()
+    return Array.isArray(updates) ? updates.filter(isSessionRuns) : []
+  } catch {
+    return []
+  }
+}
+
+export async function refetch(fetcher: typeof fetch = fetch): Promise<Report> {
+  const response = await fetcher('/api/report')
+  if (!response.ok) throw new Error(`the console answered ${response.status} for the report`)
+  const report: unknown = await response.json()
+  const problem = reportProblem(report)
+  if (problem) throw new Error(`the console sent a report this page cannot read (${problem})`)
+  const updates = await latestUpdates(fetcher)
+  return updates.reduce(mergeSession, report as Report)
 }
 
 export interface Selection {

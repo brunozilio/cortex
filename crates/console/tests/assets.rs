@@ -51,3 +51,20 @@ fn without_a_bundle_a_folder_on_disk_is_used_and_otherwise_nothing() {
     assert!(matches!(assets, console::Assets::Folder(folder) if folder == disk.path()));
     assert!(matches!(console::choose(None, &[], [None]), console::Assets::Missing));
 }
+
+#[test]
+fn the_binary_holds_the_page_exactly_when_it_was_built_before_compiling() {
+    let dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/dist");
+    let built = dist.join("index.html").is_file();
+    let embedded = console::embedded();
+
+    assert_eq!(embedded.iter().any(|asset| asset.path == "index.html"), built, "{} files embedded", embedded.len());
+    if built {
+        let index = embedded.iter().find(|asset| asset.path == "index.html").expect("index");
+        assert_eq!(index.bytes, std::fs::read(dist.join("index.html")).expect("index on disk").as_slice());
+        assert!(embedded.iter().any(|asset| asset.path.starts_with("assets/") && asset.path.ends_with(".js")));
+        assert!(embedded.iter().all(|asset| !asset.bytes.is_empty() && !asset.path.ends_with(".map")));
+    } else {
+        assert!(embedded.is_empty());
+    }
+}

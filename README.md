@@ -8,13 +8,16 @@ commands, skills, memory, plugins and MCP servers (HTTP and stdio).
 From source:
 
 ```sh
-cargo install --path crates/cli
+cargo run -p xtask -- web          # builds the web page into web/dist; needs Bun
+cargo install --path crates/cli    # embeds web/dist as it is at that moment
 ```
 
-Building needs a Rust toolchain (1.97 or newer) and a C compiler. Bun is
-needed only to build the web page (`/trace`, `/console`, `/docs`); without
-it the build only warns and the page is not embedded in the binary. Nothing
-else is needed to run it. Some tools are used when present:
+Building needs a Rust toolchain (1.97 or newer) and a C compiler. Cargo
+never runs Bun: the web page (`/trace`, `/console`, `/docs`) is built by the
+first command, which needs [Bun](https://bun.sh) and fails without it. Skip
+it and everything else still builds and works; the binary then carries no
+page, and `/trace` opens one that says how to build it. Nothing else is
+needed to run it. Some tools are used when present:
 
 - `git`: `/diff` and worktrees.
 - `pdftotext`: reading PDFs.
@@ -110,7 +113,7 @@ is only in `app.db`, which the older binary does not read.
 | `platform` | Per-OS IO: child processes and their trees, private files, stored documents (lock, atomic replace, corrupt set aside), data folders. |
 | `content` | Prompts, built-in skills and agents, embedded at build time. |
 | `script` | The QuickJS runtime for JavaScript tools, skills and providers. |
-| `console` | The live trace page behind `/trace` and `/console`: serves the browser app on localhost (built from `web/` into the binary when Bun is present, else `web/dist`) with the report, the sessions and their updates as server-sent events. |
+| `console` | The live trace page behind `/trace` and `/console`: serves the browser app on localhost (whatever `cargo run -p xtask -- web` last built into `web/dist`, embedded in the binary at compile time) with the report, the sessions and their updates as server-sent events. |
 
 ## Developing
 
@@ -123,3 +126,17 @@ cargo nextest run --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo run -q -p xtask -- lint
 ```
+
+None of these needs Bun or a built page. The web page in `web/` is built
+and checked by its own steps ([web/README.md](web/README.md) has the
+details):
+
+```sh
+cargo run -p xtask -- web             # bun install --frozen-lockfile + bun run build, into web/dist
+cargo run -p xtask -- check-release   # before a release: fails if web/dist is missing or older than its sources
+cargo run -p xtask -- web-fixtures    # after changing a trace type: rewrites web/test/fixtures from the Rust types
+(cd web && bun test)                  # the page's tests, including the fixtures against its types
+```
+
+`cargo build` embeds `web/dist` when it exists and nothing when it does
+not; it never starts Bun or touches the network for the page.

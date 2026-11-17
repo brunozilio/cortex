@@ -2,6 +2,7 @@ import { AlertCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { KindChip, KindSwatch } from '@/components/KindChip'
+import { eventTitle } from '@/lib/events'
 import { ms, tokens, usd } from '@/lib/format'
 import { KINDS, LEGEND_KINDS } from '@/lib/kinds'
 import { isRepeated, promptTokens, refusalReason, timelineEnd, treeOrder } from '@/lib/spans'
@@ -33,7 +34,7 @@ function SpanTip({ span }: { span: Span }) {
     <>
       <div className="flex items-center gap-2 font-medium">
         <KindSwatch kind={span.kind} />
-        {span.name}
+        {eventTitle(span)}
       </div>
       <div className="mt-1.5 grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5">
         {span.kind === 'event' ? null : (
@@ -130,7 +131,7 @@ export function Waterfall({ run, selected, onSelect }: WaterfallProps) {
                     <div className="flex min-w-0 items-center gap-2 pr-3" style={{ paddingLeft: 16 + depth * 18 }}>
                       {depth ? <span className="-ml-1 h-5 w-2.5 self-start rounded-bl-md border-b border-l" /> : null}
                       <KindChip kind={span.kind} />
-                      <span className={cn('truncate', span.kind === 'llm' && 'font-mono text-[12.5px]')}>{span.name}</span>
+                      <span className={cn('truncate', span.kind === 'llm' && 'font-mono text-[12.5px]')}>{eventTitle(span)}</span>
                       {isRepeated(span) ? <Badge variant="danger">repeated</Badge> : null}
                       {refused && !isRepeated(span) ? <Badge variant="danger">refused</Badge> : null}
                       {span.failed && !isRepeated(span) && !refused ? <AlertCircle className="size-3.5 shrink-0 text-danger" /> : null}

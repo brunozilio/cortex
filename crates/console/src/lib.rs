@@ -6,7 +6,7 @@ mod routes;
 mod server;
 mod terminal;
 
-pub use assets::{Asset, Assets, choose, discover, locate};
+pub use assets::{Asset, Assets, choose, discover, embedded, locate};
 pub use live::Live;
 pub use pty::Launch;
 pub use routes::{Settings, router};

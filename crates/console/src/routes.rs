@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::http::{StatusCode, Uri};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{any, get};
@@ -24,6 +25,7 @@ pub struct Shared {
     pub live: Live,
     pub terminal: Launch,
     pub terminals: Arc<tokio::sync::Semaphore>,
+    pub subscribers: Arc<tokio::sync::Semaphore>,
 }
 
 pub fn router(settings: Settings, live: Live) -> Router {
@@ -33,6 +35,7 @@ pub fn router(settings: Settings, live: Live) -> Router {
         live,
         terminal: settings.terminal,
         terminals: Arc::new(tokio::sync::Semaphore::new(crate::terminal::MOST_AT_ONCE)),
+        subscribers: Arc::new(tokio::sync::Semaphore::new(crate::live::MOST_SUBSCRIBERS)),
     };
     let api = Router::new()
         .route("/api/health", get(|| async { axum::Json(json!({ "status": "ok" })) }))
@@ -47,7 +50,9 @@ pub fn router(settings: Settings, live: Live) -> Router {
         Assets::Bundle(bundle) => api.fallback(move |uri: Uri| async move { crate::assets::serve(bundle, &uri) }),
         Assets::Missing => api.fallback(|| async { (StatusCode::SERVICE_UNAVAILABLE, Html(crate::assets::MISSING)) }),
     };
-    app.layer(axum::middleware::from_fn_with_state(shared.clone(), crate::access::guard)).with_state(shared)
+    app.layer(DefaultBodyLimit::max(crate::live::MOST_BODY_BYTES))
+        .layer(axum::middleware::from_fn_with_state(shared.clone(), crate::access::guard))
+        .with_state(shared)
 }
 
 pub fn failure(status: StatusCode, code: &str, message: &str) -> Response {

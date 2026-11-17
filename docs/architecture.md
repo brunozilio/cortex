@@ -35,7 +35,7 @@ The main line is `cli -> app -> agent-engine -> llm-providers -> domain`.
 | `platform` | Per-OS IO: child processes, private files, file locks, data folders, sandbox |
 | `brand` | The product's name and command, from `brand.toml` |
 
-`web/` is the browser app the console serves (trace, console, documentation, terminal). `content/` is JavaScript and Markdown, not a crate. `xtask/` holds the repository lint.
+`web/` is the browser app the console serves (trace, console, documentation, terminal). `content/` is JavaScript and Markdown, not a crate. `xtask/` holds the repository lint, the web page's build (`xtask web`), the release check on it and the fixtures that tie the page's types to `domain`'s.
 
 `cli` reaches `agent-engine`, and the handler-side types of `app`, only in tests. Four crates (agent-engine, app, cli, llm-providers) register their vendors, providers, wires, builtin tools and features in written `mod` lines and explicit lists, each pinned by a test; no `build.rs` scans a folder.
 
@@ -63,6 +63,12 @@ What the application itself has to tell the user (keys cannot be kept, `app.db` 
 ## The local web page
 
 `/trace`, `/console` and `/docs` start the console server on first use: loopback, an ephemeral port, a random token in the URL exchanged for a cookie. The TUI pushes the trace report, the session list and each session's runs into the console's `Live` hub; the page reads them over HTTP and server-sent events. The terminal view opens a WebSocket to a pseudo-terminal running the app's own binary with `--resume`. The console knows none of the payload formats: it carries JSON strings, and the TypeScript types are written by hand.
+
+The page is built outside Cargo. `cargo run -p xtask -- web` runs `bun install --frozen-lockfile` and `bun run build` in `web/` and fails when Bun is missing; `crates/console/build.rs` starts no process and reaches no network, it only embeds the files of `web/dist` when `web/dist/index.html` exists, and Cargo runs it again when that folder changes. At run time the console serves, in order, the folder named by `<COMMAND>_CONSOLE_DIR`, the embedded copy, then a `console` folder in the data folder; no path of the build machine is kept in the binary. With none of them it serves a page that says to run `cargo run -p xtask -- web` and build again. `cargo run -p xtask -- check-release` is the release's check: it fails when `web/dist/index.html` is missing or older than the page's sources. The gate (tests, clippy, lint) needs neither Bun nor a built page.
+
+The hand-written types are held to the Rust ones by fixtures. `xtask/tests/web_fixtures/` builds a report, a followed session update and a session list from `domain`'s own types and compares them with `web/test/fixtures/*.json` (`cargo run -p xtask -- web-fixtures` rewrites them); `web/test/contract.test.ts` checks those files against the runtime guards in `web/src/lib/contract.ts`, which the page also applies to what it receives: a report, a live update or a session list of the wrong shape is refused with the name of the wrong field instead of being drawn. `domain` is a dev-dependency of `xtask` only, so `xtask lint` and the comment hook build without it.
+
+Every `/api/` route needs the cookie, which is named after the port, and a request addressed to any host other than `127.0.0.1:<port>` or `localhost:<port>` is refused. A request body is limited to 64 KiB, at most 32 pages follow `/api/events` at once and at most four terminals are open at once (each answered `429` in JSON beyond that), and `POST /api/watch` takes only what the terminal takes as a session id. The events hub keeps the last 256 updates; a page that reads too slowly and misses some is sent a `resync` event, on which it fetches `/api/report` and `/api/latest` (each session's latest update) again, as it does after its connection was lost and came back. Meanwhile its header says the data is out of date or partial.
 
 ## Where data lives
 

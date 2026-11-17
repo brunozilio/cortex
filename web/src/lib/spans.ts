@@ -24,7 +24,12 @@ export function treeOrder(spans: Span[]): PlacedSpan[] {
     }
   }
   walk(0, 0)
-  for (const span of spans) if (!seen.has(span.id)) out.push({ span, depth: 1 })
+  for (const span of spans) {
+    if (seen.has(span.id)) continue
+    seen.add(span.id)
+    out.push({ span, depth: 1 })
+    walk(span.id, 2)
+  }
   return out
 }
 

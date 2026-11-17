@@ -1,0 +1,58 @@
+[
+  {
+    "current": false,
+    "cwd": "/work/app",
+    "session": "session-0",
+    "status": "idle",
+    "title": null,
+    "updated": 1800000000
+  },
+  {
+    "current": true,
+    "cwd": "/work/app",
+    "session": "session-1",
+    "status": "running",
+    "title": "Session number 1",
+    "updated": 1799999999
+  },
+  {
+    "current": false,
+    "cwd": "/work/app",
+    "session": "session-2",
+    "status": "thinking",
+    "title": "Session number 2",
+    "updated": 1799999998
+  },
+  {
+    "current": false,
+    "cwd": "/work/app",
+    "session": "session-3",
+    "status": "needs_you",
+    "title": "Session number 3",
+    "updated": 1799999997
+  },
+  {
+    "current": false,
+    "cwd": "/work/app",
+    "session": "session-4",
+    "status": "done",
+    "title": "Session number 4",
+    "updated": 1799999996
+  },
+  {
+    "current": false,
+    "cwd": "/work/app",
+    "session": "session-5",
+    "status": "failed",
+    "title": "Session number 5",
+    "updated": 1799999995
+  },
+  {
+    "current": false,
+    "cwd": "/work/app",
+    "session": "session-6",
+    "status": "cancelled",
+    "title": "Session number 6",
+    "updated": 1799999994
+  }
+]

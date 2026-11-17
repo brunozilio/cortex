@@ -1,0 +1,1424 @@
+{
+  "current": "session-current",
+  "generated_at_ms": 1800000000000,
+  "insights": {
+    "checks": {
+      "asked": 1,
+      "refused": 1,
+      "repeated": 1,
+      "review_findings": 2,
+      "verified_failed": 1,
+      "verified_passed": 0
+    },
+    "days": [
+      {
+        "day": 20804,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20805,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20806,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20807,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20808,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20809,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20810,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20811,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20812,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20813,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20814,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20815,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20816,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20817,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20818,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20819,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20820,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20821,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20822,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20823,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20824,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20825,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20826,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20827,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20828,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20829,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20830,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20831,
+        "models": [
+          {
+            "cost_usd": 0.001,
+            "model": "haiku",
+            "runs": 1,
+            "tokens": 60
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20832,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.0,
+            "model": "sonnet",
+            "runs": 0,
+            "tokens": 0
+          }
+        ]
+      },
+      {
+        "day": 20833,
+        "models": [
+          {
+            "cost_usd": 0.0,
+            "model": "haiku",
+            "runs": 0,
+            "tokens": 0
+          },
+          {
+            "cost_usd": 0.033,
+            "model": "sonnet",
+            "runs": 2,
+            "tokens": 1351
+          }
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "at_ms": 1799996408700,
+        "check": "review",
+        "run": 0,
+        "session": "session-current",
+        "severe": true,
+        "span": 17,
+        "text": "src/invoice.rs:42 rounds twice"
+      },
+      {
+        "at_ms": 1799996408700,
+        "check": "review",
+        "run": 0,
+        "session": "session-current",
+        "severe": false,
+        "span": 17,
+        "text": "src/invoice.rs unused import"
+      },
+      {
+        "at_ms": 1799996408600,
+        "check": "judge",
+        "run": 0,
+        "session": "session-current",
+        "severe": true,
+        "span": 16,
+        "text": "tests pass: 1 failed"
+      },
+      {
+        "at_ms": 1799996406100,
+        "check": "refused",
+        "run": 0,
+        "session": "session-current",
+        "severe": false,
+        "span": 5,
+        "text": "outside the project"
+      },
+      {
+        "at_ms": 1799996401100,
+        "check": "repeated",
+        "run": 0,
+        "session": "session-current",
+        "severe": false,
+        "span": 3,
+        "text": "Bash cargo test was repeated with the same failure"
+      }
+    ],
+    "models": [
+      {
+        "cache_ratio": 0.6998444790046656,
+        "calls": 3,
+        "cost_usd": 0.033,
+        "model": "sonnet",
+        "p50_ms": 900,
+        "p95_ms": 1000
+      },
+      {
+        "cache_ratio": 0.19230769230769232,
+        "calls": 1,
+        "cost_usd": 0.001,
+        "model": "haiku",
+        "p50_ms": 800,
+        "p95_ms": 800
+      }
+    ],
+    "time": [
+      {
+        "kind": "tool",
+        "ms": 5400
+      },
+      {
+        "kind": "llm",
+        "ms": 3500
+      },
+      {
+        "kind": "wait",
+        "ms": 500
+      },
+      {
+        "kind": "task",
+        "ms": 40
+      }
+    ],
+    "tools": [
+      {
+        "asked": 0,
+        "calls": 1,
+        "failed": 0,
+        "name": "Agent",
+        "p95_ms": 900
+      },
+      {
+        "asked": 1,
+        "calls": 1,
+        "failed": 1,
+        "name": "Bash",
+        "p95_ms": 4900
+      },
+      {
+        "asked": 0,
+        "calls": 1,
+        "failed": 0,
+        "name": "Grep",
+        "p95_ms": 300
+      },
+      {
+        "asked": 0,
+        "calls": 1,
+        "failed": 0,
+        "name": "Read",
+        "p95_ms": 0
+      },
+      {
+        "asked": 0,
+        "calls": 1,
+        "failed": 1,
+        "name": "Write",
+        "p95_ms": 100
+      }
+    ],
+    "totals": {
+      "cache_ratio": 0.680119581464873,
+      "cost_usd": 0.044000000000000004,
+      "p95_run_ms": 9000,
+      "runs": 4,
+      "tokens": 1411,
+      "tool_error_rate": 0.4,
+      "waiting_ms": 500
+    }
+  },
+  "project": "/work/app",
+  "sessions": [
+    {
+      "id": "session-current",
+      "runs": [
+        {
+          "cache_read": 900,
+          "cost_usd": 0.04,
+          "duration_ms": 9000,
+          "index": 0,
+          "input": 1224,
+          "messages": [
+            {
+              "blocks": [
+                {
+                  "Text": "Fix the rounding in the invoice totals"
+                }
+              ],
+              "role": "User"
+            },
+            {
+              "blocks": [
+                {
+                  "Text": "I will run the tests first."
+                }
+              ],
+              "role": "Assistant"
+            },
+            {
+              "blocks": [
+                {
+                  "ToolResult": {
+                    "content": "1 failed",
+                    "id": "b1",
+                    "is_error": true
+                  }
+                }
+              ],
+              "role": "User"
+            }
+          ],
+          "model": "sonnet",
+          "prompt": "Fix the rounding in the invoice totals",
+          "session": "session-current",
+          "signals": [
+            "tool_error",
+            "eval_failed",
+            "review",
+            "subagent",
+            "waste",
+            "repeated",
+            "fell_back",
+            "compacted",
+            "refused"
+          ],
+          "spans": [
+            {
+              "attrs": [
+                [
+                  "model",
+                  "sonnet"
+                ],
+                [
+                  "provider",
+                  "anthropic"
+                ],
+                [
+                  "permission",
+                  "AcceptEdits"
+                ],
+                [
+                  "effort",
+                  "high"
+                ],
+                [
+                  "folder",
+                  "/work/app"
+                ],
+                [
+                  "branch",
+                  "main"
+                ],
+                [
+                  "git status",
+                  "M src/invoice.rs"
+                ]
+              ],
+              "context": null,
+              "end_ms": 9000,
+              "failed": false,
+              "flags": [],
+              "id": 1,
+              "input": "Fix the rounding in the invoice totals",
+              "kind": "run",
+              "name": "run",
+              "output": "The totals now round half up.",
+              "parent": 0,
+              "start_ms": 0,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [
+                [
+                  "messages",
+                  "1"
+                ],
+                [
+                  "max tokens",
+                  "8000"
+                ],
+                [
+                  "effort",
+                  "high"
+                ]
+              ],
+              "context": {
+                "conversation": 387,
+                "system": 7,
+                "tools": 18
+              },
+              "end_ms": 1000,
+              "failed": false,
+              "flags": [],
+              "id": 2,
+              "input": "1 messages",
+              "kind": "llm",
+              "name": "sonnet",
+              "output": "I will run the tests first.",
+              "parent": 1,
+              "reply": {
+                "blocks": [
+                  {
+                    "Thinking": {
+                      "signature": null,
+                      "text": "The totals are summed as floats."
+                    }
+                  },
+                  {
+                    "Text": "I will run the tests first."
+                  },
+                  {
+                    "ToolUse": {
+                      "id": "b1",
+                      "input": {
+                        "command": "cargo test"
+                      },
+                      "name": "Bash"
+                    }
+                  }
+                ],
+                "role": "Assistant"
+              },
+              "request": [
+                0
+              ],
+              "start_ms": 0,
+              "stop": "tool_use",
+              "system_id": "sys-1",
+              "thinking": "The totals are summed as floats.",
+              "tools_id": "tools-1",
+              "usage": {
+                "cache_read": 300,
+                "cache_write": 12,
+                "cost_usd": 0.01,
+                "input": 100,
+                "model": "sonnet",
+                "output": 20
+              }
+            },
+            {
+              "attrs": [
+                [
+                  "tool",
+                  "Bash"
+                ],
+                [
+                  "call",
+                  "b1"
+                ]
+              ],
+              "context": null,
+              "end_ms": 6000,
+              "failed": true,
+              "flags": [
+                "repeated"
+              ],
+              "id": 3,
+              "input": "{\n  \"command\": \"cargo test\"\n}",
+              "kind": "tool",
+              "name": "Bash cargo test",
+              "output": "test invoice::rounds ... FAILED\n1 failed",
+              "parent": 1,
+              "start_ms": 1100,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 1700,
+              "failed": false,
+              "flags": [],
+              "id": 4,
+              "input": "",
+              "kind": "wait",
+              "name": "permission · Bash",
+              "output": "allowed once",
+              "parent": 3,
+              "start_ms": 1200,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [
+                [
+                  "tool",
+                  "Write"
+                ],
+                [
+                  "call",
+                  "w1"
+                ]
+              ],
+              "context": null,
+              "end_ms": 6200,
+              "failed": true,
+              "flags": [
+                "refused: outside the project"
+              ],
+              "id": 5,
+              "input": "{\n  \"path\": \"/etc/hosts\"\n}",
+              "kind": "tool",
+              "name": "Write /etc/hosts",
+              "output": "refused: outside the project",
+              "parent": 1,
+              "start_ms": 6100,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [
+                [
+                  "tool",
+                  "Agent"
+                ],
+                [
+                  "call",
+                  "x1"
+                ]
+              ],
+              "context": null,
+              "end_ms": 7200,
+              "failed": false,
+              "flags": [],
+              "id": 6,
+              "input": "{\n  \"prompt\": \"Find every caller\"\n}",
+              "kind": "tool",
+              "name": "Agent map the callers",
+              "output": "round_total is called from src/invoice.rs:42",
+              "parent": 1,
+              "start_ms": 6300,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 7200,
+              "failed": false,
+              "flags": [],
+              "id": 7,
+              "input": "Find every caller of round_total",
+              "kind": "agent",
+              "name": "Explore · map the callers",
+              "output": "",
+              "parent": 6,
+              "start_ms": 6300,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 6600,
+              "failed": false,
+              "flags": [],
+              "id": 8,
+              "input": "",
+              "kind": "llm",
+              "name": "model",
+              "output": "Searching the callers.",
+              "parent": 7,
+              "start_ms": 6400,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [
+                [
+                  "tool",
+                  "Grep"
+                ],
+                [
+                  "call",
+                  "g1"
+                ]
+              ],
+              "context": null,
+              "end_ms": 6900,
+              "failed": false,
+              "flags": [],
+              "id": 9,
+              "input": "{\n  \"pattern\": \"round_total\"\n}",
+              "kind": "tool",
+              "name": "Grep round_total",
+              "output": "src/invoice.rs:42",
+              "parent": 7,
+              "start_ms": 6600,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 7300,
+              "failed": false,
+              "flags": [],
+              "id": 10,
+              "input": "",
+              "kind": "event",
+              "name": "compacted",
+              "output": "9000 → 400 tokens\nThey fixed a rounding bug.",
+              "parent": 1,
+              "start_ms": 7300,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 7400,
+              "failed": false,
+              "flags": [],
+              "id": 11,
+              "input": "",
+              "kind": "event",
+              "name": "fell back to haiku",
+              "output": "from sonnet",
+              "parent": 1,
+              "start_ms": 7400,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 7500,
+              "failed": false,
+              "flags": [],
+              "id": 12,
+              "input": "",
+              "kind": "event",
+              "name": "steered",
+              "output": "keep the public API",
+              "parent": 1,
+              "start_ms": 7500,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 7600,
+              "failed": false,
+              "flags": [],
+              "id": 13,
+              "input": "",
+              "kind": "event",
+              "name": "notice",
+              "output": "Changes retained in worktree: /work/app/.worktrees/w1",
+              "parent": 1,
+              "start_ms": 7600,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 7700,
+              "failed": false,
+              "flags": [],
+              "id": 14,
+              "input": "",
+              "kind": "event",
+              "name": "notified",
+              "output": "monitor: the build finished",
+              "parent": 1,
+              "start_ms": 7700,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [
+                [
+                  "messages",
+                  "3"
+                ],
+                [
+                  "max tokens",
+                  "8000"
+                ],
+                [
+                  "effort",
+                  "high"
+                ]
+              ],
+              "context": {
+                "conversation": 787,
+                "system": 7,
+                "tools": 18
+              },
+              "end_ms": 8500,
+              "failed": false,
+              "flags": [],
+              "id": 15,
+              "input": "3 messages",
+              "kind": "llm",
+              "name": "sonnet",
+              "output": "The totals now round half up.",
+              "parent": 1,
+              "reply": {
+                "blocks": [
+                  {
+                    "Text": "The totals now round half up."
+                  }
+                ],
+                "role": "Assistant"
+              },
+              "request": [
+                0,
+                1,
+                2
+              ],
+              "start_ms": 7700,
+              "stop": "end_turn",
+              "system_id": "sys-1",
+              "thinking": "",
+              "tools_id": "tools-1",
+              "usage": {
+                "cache_read": 600,
+                "cache_write": 12,
+                "cost_usd": 0.02,
+                "input": 200,
+                "model": "sonnet",
+                "output": 40
+              }
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 8600,
+              "failed": true,
+              "flags": [],
+              "id": 16,
+              "input": "",
+              "kind": "eval",
+              "name": "verification judge",
+              "output": "fail tests pass: 1 failed",
+              "parent": 1,
+              "start_ms": 8600,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 8700,
+              "failed": true,
+              "flags": [],
+              "id": 17,
+              "input": "",
+              "kind": "eval",
+              "name": "auto-review",
+              "output": "high src/invoice.rs:42 rounds twice\nlow src/invoice.rs unused import",
+              "parent": 1,
+              "start_ms": 8700,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [
+                [
+                  "hook",
+                  "PostToolUse"
+                ]
+              ],
+              "context": null,
+              "end_ms": 6290,
+              "failed": false,
+              "flags": [],
+              "id": 18,
+              "input": "cargo fmt",
+              "kind": "task",
+              "name": "hook PostToolUse",
+              "output": "formatted 1 file",
+              "parent": 1,
+              "start_ms": 6250,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            }
+          ],
+          "started_at_ms": 1799996400000,
+          "status": "ok",
+          "systems": {
+            "sys-1": "You are a careful coding agent."
+          },
+          "tokens": 1284,
+          "tools": {
+            "tools-1": [
+              {
+                "description": "Runs a command",
+                "name": "Bash",
+                "schema": {
+                  "type": "object"
+                }
+              }
+            ]
+          },
+          "waiting_ms": 500,
+          "waste": 0.5555555555555556
+        },
+        {
+          "cache_read": 0,
+          "cost_usd": 0.003,
+          "duration_ms": 1000,
+          "index": 1,
+          "input": 62,
+          "model": "sonnet",
+          "prompt": "Now publish the release",
+          "session": "session-current",
+          "signals": [],
+          "spans": [
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 1000,
+              "failed": false,
+              "flags": [],
+              "id": 1,
+              "input": "Now publish the release",
+              "kind": "run",
+              "name": "run",
+              "output": "Publishing.",
+              "parent": 0,
+              "start_ms": 0,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 900,
+              "failed": false,
+              "flags": [],
+              "id": 2,
+              "input": "",
+              "kind": "llm",
+              "name": "sonnet",
+              "output": "Publishing.",
+              "parent": 1,
+              "start_ms": 0,
+              "stop": null,
+              "thinking": "",
+              "usage": {
+                "cache_read": 0,
+                "cache_write": 12,
+                "cost_usd": 0.003,
+                "input": 50,
+                "model": "sonnet",
+                "output": 5
+              }
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 1000,
+              "failed": true,
+              "flags": [],
+              "id": 3,
+              "input": "",
+              "kind": "event",
+              "name": "failed",
+              "output": "the provider is down",
+              "parent": 1,
+              "start_ms": 1000,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            }
+          ],
+          "started_at_ms": 1799996460000,
+          "status": "failed",
+          "tokens": 67,
+          "waiting_ms": 0,
+          "waste": 0.0
+        },
+        {
+          "cache_read": 0,
+          "cost_usd": 0.0,
+          "duration_ms": 100,
+          "index": 2,
+          "input": 0,
+          "model": "",
+          "prompt": "Read the changelog",
+          "session": "session-current",
+          "signals": [],
+          "spans": [
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 100,
+              "failed": false,
+              "flags": [],
+              "id": 1,
+              "input": "Read the changelog",
+              "kind": "run",
+              "name": "run",
+              "output": "",
+              "parent": 0,
+              "start_ms": 0,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [
+                [
+                  "tool",
+                  "Read"
+                ],
+                [
+                  "call",
+                  "r1"
+                ]
+              ],
+              "context": null,
+              "end_ms": 100,
+              "failed": false,
+              "flags": [],
+              "id": 2,
+              "input": "{\n  \"path\": \"CHANGELOG.md\"\n}",
+              "kind": "tool",
+              "name": "Read CHANGELOG.md",
+              "output": "",
+              "parent": 1,
+              "start_ms": 100,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            }
+          ],
+          "started_at_ms": 1799996520000,
+          "status": "running",
+          "tokens": 0,
+          "waiting_ms": 0,
+          "waste": 0.0
+        }
+      ]
+    },
+    {
+      "id": "session-other",
+      "runs": [
+        {
+          "cache_read": 10,
+          "cost_usd": 0.001,
+          "duration_ms": 900,
+          "index": 0,
+          "input": 52,
+          "model": "haiku",
+          "prompt": "Explain the build",
+          "session": "session-other",
+          "signals": [],
+          "spans": [
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 900,
+              "failed": false,
+              "flags": [],
+              "id": 1,
+              "input": "Explain the build",
+              "kind": "run",
+              "name": "run",
+              "output": "The build has two steps.",
+              "parent": 0,
+              "start_ms": 0,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 800,
+              "failed": false,
+              "flags": [],
+              "id": 2,
+              "input": "",
+              "kind": "llm",
+              "name": "haiku",
+              "output": "The build has two steps.",
+              "parent": 1,
+              "start_ms": 0,
+              "stop": null,
+              "thinking": "",
+              "usage": {
+                "cache_read": 10,
+                "cache_write": 12,
+                "cost_usd": 0.001,
+                "input": 30,
+                "model": "haiku",
+                "output": 8
+              }
+            },
+            {
+              "attrs": [],
+              "context": null,
+              "end_ms": 900,
+              "failed": false,
+              "flags": [],
+              "id": 3,
+              "input": "",
+              "kind": "event",
+              "name": "cancelled",
+              "output": "",
+              "parent": 1,
+              "start_ms": 900,
+              "stop": null,
+              "thinking": "",
+              "usage": null
+            }
+          ],
+          "started_at_ms": 1799827200000,
+          "status": "cancelled",
+          "tokens": 60,
+          "waiting_ms": 0,
+          "waste": 0.0
+        }
+      ]
+    }
+  ]
+}
