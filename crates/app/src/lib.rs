@@ -13,6 +13,10 @@ mod git;
 mod handler;
 mod homes;
 #[cfg(test)]
+#[cfg(unix)]
+#[path = "hostile_repository_tests.rs"]
+mod hostile_repository;
+#[cfg(test)]
 mod legacy_layout_tests;
 mod mcp_admin;
 mod mcp_auth;

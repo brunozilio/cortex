@@ -48,6 +48,10 @@ Continuam valendo numa pasta em que você não confiou, porque só informam ou r
 
 A sua própria pasta, `~/{{DIR}}/`, é sempre confiável: seus hooks, ferramentas, servidores e configurações funcionam em qualquer pasta.
 
+Com ou sem confiança, os comandos git que o {{NAME}} roda por conta própria (o status do git no prompt, o acompanhamento do que um comando de shell mudou, worktrees, `/check`, a visão de mudanças) nunca executam o que a configuração git do próprio repositório indica: nada de hooks, `core.fsmonitor`, filtros clean ou smudge definidos no `.git/config` ou no de um submódulo, diff externo ou `textconv`, nem remoto `ext::`. Filtros que você configurou na sua própria configuração do git (o Git LFS, por exemplo) continuam valendo.
+
+Um arquivo de configurações que não pode ser lido (JSON quebrado, ou um valor que o {{NAME}} não consegue usar) no projeto ou numa pasta acima dele é ignorado com um aviso que nomeia o arquivo, e a execução segue com o resto. Só as suas próprias configurações em `~/{{DIR}}/` (e o `settings.local.json` de uma pasta confiável) interrompem a execução até você corrigi-las.
+
 ### Confiar em uma pasta
 
 Quando você abre o chat em uma pasta não confiável que traz algo da tabela, o {{NAME}} pergunta antes de enviar o seu primeiro prompt. A pergunta mostra a pasta e lista o que a confiança habilitaria.
@@ -97,7 +101,7 @@ Os comandos de shell que o agente executa (as ferramentas `Bash` e `Monitor`), o
   - caches de pacotes na sua pasta pessoal: `Library/Caches`, `.cache`, `.npm`, `.cargo/registry`, `.cargo/git`, `.cargo/.package-cache`, `.cargo/.package-cache-mutate`, `.cargo/.global-cache`, `go/pkg`, `.gradle`, `.rustup`, `.pnpm-store`, `.yarn`;
   - as pastas em `sandbox.allowWrite`;
   - dispositivos de terminal como `/dev/null` e `/dev/tty`.
-- No macOS, `{{DIR}}/settings.json` e `{{DIR}}/settings.local.json` no projeto e nas pastas adicionais **nunca** podem ser gravados por um comando na sandbox, para que um comando não consiga se dar permissões. O Landlock só libera pastas, não abre exceções dentro de uma pasta liberada, então no Linux esses arquivos continuam graváveis por um comando na sandbox; as ferramentas `Write` e `Edit` continuam perguntando antes de gravá-los.
+- No macOS, um comando na sandbox **nunca** pode gravar a pasta `{{DIR}}/` do projeto, das pastas adicionais ou da sua pasta pessoal, nem o `.git/config`, o `.git/config.worktree` ou o `.git/hooks/` de um repositório (depois que o repositório existe, então `git init` continua funcionando), para que um comando não consiga se dar permissões nem deixar algo que o git ou o {{NAME}} executariam depois. Commits, branches e fetches continuam funcionando; comandos que mudam a configuração do repositório (`git config`, `git remote add`, `git push -u`, `git submodule init`) falham na sandbox, então rode-os você mesmo ou deixe o agente pedir para rodá-los fora dela. Um comando na sandbox também não consegue iniciar o `launchctl` nem abrir apps pelo Launch Services (`open`, o `activate` do AppleScript). O Landlock só libera pastas, não abre exceções dentro de uma pasta liberada, então no Linux esses caminhos continuam graváveis por um comando na sandbox; as ferramentas `Write` e `Edit` continuam perguntando antes de gravá-los, e os comandos git do próprio {{NAME}} ignoram o que a configuração de um repositório executaria (veja [Confiança na pasta](#confianca-na-pasta)).
 - O acesso à **rede** é permitido, a menos que `sandbox.network` seja `false`. No Linux isso bloqueia conexões TCP de saída, e só a partir do Linux 6.7.
 
 ### Quando o sistema não tem sandbox
@@ -230,7 +234,7 @@ Um curinga ou uma expansão de chaves que possa nomear um desses arquivos (`cat 
 
 ## Comandos somente leitura
 
-Um comando de shell roda sem perguntar só quando o analisador consegue seguir a linha inteira, a linha é uma lista ou pipeline simples, e cada comando nela é um programa de leitura da lista com flags listadas, sem prefixo `VAR=valor`, sem invólucro, sem redirecionamento para arquivo, sem palavra que o shell expandiria e sem caminho fora do projeto. Veja [Permissões](./permissions#comandos-somente-leitura).
+Um comando de shell roda sem perguntar só quando o analisador consegue seguir a linha inteira, a linha é uma lista ou pipeline simples, e cada comando nela é um programa de leitura da lista com flags listadas, sem prefixo `VAR=valor`, sem invólucro, sem redirecionamento para arquivo, sem palavra que o shell expandiria e sem caminho fora do projeto. Cada arquivo ou pasta que esse comando nomeia (e a pasta que uma busca recursiva como `rg`, `grep -r` ou `find` percorre) também é julgado pelas suas regras `Read`, então `Read(secrets/**)` em `deny` recusa `cat secrets/key` e `rg token` como recusa as ferramentas `Read` e `Grep`. Veja [Permissões](./permissions#comandos-somente-leitura).
 
 ## Ações que sempre perguntam
 

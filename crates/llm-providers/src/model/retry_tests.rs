@@ -155,3 +155,18 @@ fn retry_after_is_read_in_milliseconds_seconds_or_as_a_date() {
     assert_eq!(after("retry-after", "soon"), None);
     assert_eq!(retry_after(&[], now), None);
 }
+
+#[test]
+fn a_retry_after_too_large_to_be_a_duration_gives_up_instead_of_panicking() {
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_445_412_470);
+    let after = |value: &str| retry_after(&[("retry-after-ms".to_owned(), value.to_owned())], now);
+    for huge in ["1e300", "1.8e22", &f64::MAX.to_string()] {
+        let asked = after(huge).expect("a wait was asked");
+        assert!(asked > RETRY_AFTER_AT_MOST, "{huge}: {asked:?}");
+        assert_eq!(pause(Duration::from_secs(1), Some(asked)), None, "{huge}: longer than the app waits");
+    }
+    for unusable in ["-5", "NaN", "inf", "-inf"] {
+        assert_eq!(after(unusable), None, "{unusable}");
+    }
+    assert_eq!(after("60000"), Some(RETRY_AFTER_AT_MOST));
+}

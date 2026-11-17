@@ -41,7 +41,14 @@ pub fn checks(client: &Client, cwd: &Path) -> Vec<Check> {
         "settings",
         client
             .permissions(cwd)
-            .map(|info| format!("{} permission rules, {} hooks", info.rules.len(), info.hooks.len()))
+            .map_err(|e| e.to_string())
+            .and_then(|info| match info.skipped_files.as_slice() {
+                [] => Ok(format!("{} permission rules, {} hooks", info.rules.len(), info.hooks.len())),
+                skipped => {
+                    let named: Vec<String> = skipped.iter().map(|path| path.display().to_string()).collect();
+                    Err(format!("{} does not read and is skipped", named.join(", ")))
+                }
+            })
             .map_err(|e| format!("{e} (fix the file it names)")),
     ));
     found.push(check("trust", client.trust_state(cwd).map(|report| trust(&report)).map_err(|e| e.to_string())));

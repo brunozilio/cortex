@@ -204,7 +204,17 @@ mod loading {
             r#"{"permissions": {"deny": ["Bash(rm"]}}"#,
         )
         .expect("write");
-        let error = load(repo.path(), None, &[]).expect_err("malformed");
+        let skipped = load(repo.path(), None, &[]).expect("a project's malformed file is skipped").notices;
+        assert!(skipped.iter().any(|notice| notice.contains("permissions.deny")), "{skipped:?}");
+
+        let home = tempfile::tempdir().expect("home");
+        std::fs::create_dir_all(home.path().join(brand::DIR)).expect("dir");
+        std::fs::write(
+            home.path().join(concat!(brand::dir!(), "/settings.json")),
+            r#"{"permissions": {"deny": ["Bash(rm"]}}"#,
+        )
+        .expect("write");
+        let error = load(repo.path(), Some(home.path()), &[]).expect_err("the owner's malformed file stops the run");
         assert!(error.contains("permissions.deny"), "{error}");
     }
 }

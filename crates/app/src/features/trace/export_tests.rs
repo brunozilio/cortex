@@ -164,6 +164,10 @@ fn a_collector_that_is_down_or_refuses_never_holds_up_a_run_and_is_logged_once()
     }
     assert!(started.elapsed() < Duration::from_secs(1), "queuing took {:?}", started.elapsed());
     assert!(refusing.received.recv_timeout(WAIT).is_ok(), "it was still tried");
+    let deadline = Instant::now() + WAIT;
+    while !exporter.said.once.load(std::sync::atomic::Ordering::Relaxed) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
     assert!(exporter.said.once.load(std::sync::atomic::Ordering::Relaxed), "the refusal or the full queue was said");
 
     let closed = std::net::TcpListener::bind("127.0.0.1:0").expect("port");

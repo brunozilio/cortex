@@ -19,8 +19,8 @@ impl<'a> Git<'a> {
     }
 
     pub(super) fn bytes(&self, cwd: &Path, args: &[&str], most: usize) -> Option<Vec<u8>> {
-        let mut command = platform::command("git");
-        command.args(["-c", "core.quotepath=off"]).args(args).current_dir(cwd).env("GIT_OPTIONAL_LOCKS", "0");
+        let mut command = platform::git::command(cwd);
+        command.args(["-c", "core.quotepath=off"]).args(args);
         let bounds = Bounds { timeout: self.wait, max_output: most, stop: self.stop, input: None };
         let done = platform::bounded::run_raw(&mut command, bounds).ok()?;
         done.status().is_some_and(|status| status.success()).then_some(done.stdout)

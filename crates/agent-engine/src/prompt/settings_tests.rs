@@ -65,9 +65,16 @@ fn judge_and_fallback_models_are_model_names() {
     std::fs::write(root.join("settings.json"), r#"{"fallbackModel":["chatgpt:a","kiro:b"]}"#).expect("write");
     assert_eq!(load(repo.path(), None, &[]).expect("settings").fallbacks, ["chatgpt:a", "kiro:b"]);
     std::fs::write(root.join("settings.json"), r#"{"judgeModel":"two words"}"#).expect("write");
-    assert!(load(repo.path(), None, &[]).is_err());
+    let skipped = load(repo.path(), None, &[]).expect("a project's file that does not read is skipped");
+    assert_eq!(skipped.judge, None);
+    assert!(skipped.notices.iter().any(|notice| notice.contains("must be a model name")), "{:?}", skipped.notices);
     std::fs::write(root.join("settings.json"), r#"{"fallbackModel":["ok","two words"]}"#).expect("write");
-    assert!(load(repo.path(), None, &[]).is_err());
+    assert!(load(repo.path(), None, &[]).expect("skipped").fallbacks.is_empty());
+
+    let home = tempfile::tempdir().expect("home");
+    std::fs::create_dir_all(home.path().join(brand::DIR)).expect("dir");
+    std::fs::write(home.path().join(brand::DIR).join("settings.json"), r#"{"judgeModel":"two words"}"#).expect("write");
+    assert!(load(repo.path(), Some(home.path()), &[]).is_err(), "the owner's own file still stops the run");
 }
 
 #[test]

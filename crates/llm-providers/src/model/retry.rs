@@ -37,7 +37,7 @@ pub(crate) fn retry_after(headers: &[(String, String)], now: SystemTime) -> Opti
         && millis.is_finite()
         && millis >= 0.0
     {
-        return Some(Duration::from_secs_f64(millis / 1000.0));
+        return Some(Duration::try_from_secs_f64(millis / 1000.0).unwrap_or(Duration::MAX));
     }
     let value = header("retry-after")?;
     if let Ok(seconds) = value.parse::<u64>() {

@@ -48,6 +48,10 @@ These still apply in a folder you have not trusted, because they only inform the
 
 Your own folder, `~/{{DIR}}/`, is always trusted: your hooks, tools, servers and settings work in every folder.
 
+Trusted or not, the git commands {{NAME}} runs on its own (the git status in the prompt, tracking what a shell command changed, worktrees, `/check`, the changes view) never run what the repository's own git configuration names: no hooks, no `core.fsmonitor`, no clean or smudge filter defined in `.git/config` or a submodule's, no external diff or `textconv`, no `ext::` remote. Filters you set up in your own git configuration (Git LFS, for example) still apply.
+
+A settings file that does not read (broken JSON, or a value {{NAME}} cannot use) in the project or a folder above it is skipped with a notice naming the file, and the run goes on with the rest. Only your own settings in `~/{{DIR}}/` (and a trusted folder's `settings.local.json`) stop the run until you fix them.
+
 ### Trusting a folder
 
 When you open the chat in a folder that is not trusted and brings something from the table, {{NAME}} asks before your first prompt is sent. The question names the folder and lists what trusting it would enable.
@@ -97,7 +101,7 @@ Shell commands the agent runs (the `Bash` and `Monitor` tools), command hooks, b
   - package caches in your home folder: `Library/Caches`, `.cache`, `.npm`, `.cargo/registry`, `.cargo/git`, `.cargo/.package-cache`, `.cargo/.package-cache-mutate`, `.cargo/.global-cache`, `go/pkg`, `.gradle`, `.rustup`, `.pnpm-store`, `.yarn`;
   - the folders in `sandbox.allowWrite`;
   - terminal devices such as `/dev/null` and `/dev/tty`.
-- On macOS, `{{DIR}}/settings.json` and `{{DIR}}/settings.local.json` in the project and in the added folders can **never** be written by a sandboxed command, so a command cannot grant itself permissions. Landlock can only allow folders, not carve an exception out of one, so on Linux these files stay writable by a sandboxed command; the `Write` and `Edit` tools still ask before writing them.
+- On macOS, a sandboxed command can **never** write the `{{DIR}}/` folder of the project, of the added folders or of your home folder, nor a repository's `.git/config`, `.git/config.worktree` or `.git/hooks/` (once the repository exists, so `git init` still works), so a command cannot grant itself permissions or leave behind something git or {{NAME}} would run later. Commits, branches and fetches still work; commands that change the repository's configuration (`git config`, `git remote add`, `git push -u`, `git submodule init`) fail in the sandbox, so run them yourself or let the agent ask to run them outside it. A sandboxed command also cannot start `launchctl` or open apps through Launch Services (`open`, AppleScript's `activate`). Landlock can only allow folders, not carve an exception out of one, so on Linux these paths stay writable by a sandboxed command; the `Write` and `Edit` tools still ask before writing them, and {{NAME}}'s own git commands ignore what a repository's configuration would run (see [Workspace trust](#workspace-trust)).
 - **Network** access is allowed unless `sandbox.network` is `false`. On Linux that blocks outgoing TCP connections, on Linux 6.7 or later only.
 
 ### When the system has no sandbox
@@ -230,7 +234,7 @@ A wildcard or a brace expansion that could name one of these files (`cat .env*`,
 
 ## Read-only commands
 
-A shell command runs without asking only when the parser can follow the whole line, the line is a plain list or pipeline, and every command in it is a listed reading program with listed flags, no `VAR=value` prefix, no wrapper, no redirection to a file, no word the shell would expand, and no path outside the project. See [Permissions](./permissions#read-only-commands).
+A shell command runs without asking only when the parser can follow the whole line, the line is a plain list or pipeline, and every command in it is a listed reading program with listed flags, no `VAR=value` prefix, no wrapper, no redirection to a file, no word the shell would expand, and no path outside the project. Every file or folder such a command names (and the folder a recursive search like `rg`, `grep -r` or `find` walks) is also judged by your `Read` rules, so `Read(secrets/**)` in `deny` refuses `cat secrets/key` and `rg token` as it refuses the `Read` and `Grep` tools. See [Permissions](./permissions#read-only-commands).
 
 ## Actions that always ask
 

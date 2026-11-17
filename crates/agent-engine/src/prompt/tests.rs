@@ -151,6 +151,18 @@ fn finds_brand_md_first_then_agents_md() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn the_snapshot_of_a_repository_runs_nothing_its_config_names() {
+    let hostile = crate::hostile_repository::Hostile::new();
+
+    let found = snapshot(hostile.path()).expect("snapshot");
+
+    assert!(found.status.contains("a.txt"), "{found:?}");
+    assert_eq!(hostile.ran(), None, "the repository's fsmonitor, filter or hook ran");
+    assert!(hostile.plain_git_runs_it(), "the same repository does run them through plain git");
+}
+
 #[test]
 fn reads_a_real_repository() {
     let repo = tempfile::tempdir().expect("repo");

@@ -32,11 +32,11 @@ jobs:
       - name: format
         run: cargo fmt --all -- --check
       - name: tests
-        run: cargo nextest run --workspace
+        run: cargo nextest run --workspace --locked
       - name: doctests
-        run: cargo test --doc --workspace
+        run: cargo test --doc --workspace --locked
       - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: lint
         run: cargo run -q -p xtask -- lint
 
@@ -51,14 +51,19 @@ jobs:
           arguments: --locked
 
   windows:
-    name: build (windows-latest)
+    name: tests (windows-latest)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - name: check
-        run: cargo check --workspace --all-targets
+        run: cargo check --workspace --all-targets --locked
+      - name: tests
+        run: cargo nextest run --workspace --locked --no-fail-fast
 
   web:
     name: web

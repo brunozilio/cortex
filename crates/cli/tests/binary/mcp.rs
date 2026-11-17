@@ -97,15 +97,13 @@ fn a_user_config_that_is_not_json_is_named_when_changing_it() {
 }
 
 #[test]
-fn a_project_settings_file_that_is_not_json_fails_the_list_naming_it() {
+fn a_project_settings_file_that_is_not_json_does_not_stop_the_list() {
     let sandbox = Sandbox::fresh();
     let file = sandbox.project_dir().join("settings.json");
     sandbox.write(&file, "{broken");
     let ran = sandbox.run(&["mcp", "list"]);
-    ran.failed_with(1)
-        .quiet_on_stdout()
-        .complained("Could not read the MCP servers")
-        .complained(&file.display().to_string());
+    ran.succeeded();
+    assert!(!ran.stderr.contains("Could not read the MCP servers"), "{ran:?}");
 }
 
 fn project_servers(sandbox: &Sandbox, servers: &str) {

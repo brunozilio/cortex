@@ -102,6 +102,7 @@ pub fn permissions(folder: Folder<'_>) -> Result<domain::permission_rules::Permi
         added_dirs: settings.added_dirs,
         hooks: settings.hooks.listed(),
         notices: settings.notices,
+        skipped_files: settings.skipped_files,
     })
 }
 

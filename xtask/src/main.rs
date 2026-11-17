@@ -4,6 +4,7 @@ mod crate_graph;
 mod crate_table;
 mod drift;
 mod env_vars;
+mod git_commands;
 mod lint;
 mod web;
 

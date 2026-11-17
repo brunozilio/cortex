@@ -3,7 +3,9 @@ use std::path::Path;
 use super::rules::{Ruling, install_rule, install_ruling, rule_for, suggested};
 use super::{Call, Effect, Exec, Guard, Judgement, Place, PolicyContext, Reason, Remembered, Standing, Verdict};
 use crate::PermissionMode;
-use crate::command_policy::{CommandClass, GitFacts, classify_command, paths_read_anywhere, sign_in_refused};
+use crate::command_policy::{
+    CommandClass, GitFacts, classify_command, paths_read, paths_read_anywhere, sign_in_refused,
+};
 use crate::permission_rules::RuleKind;
 use crate::tool_name::ToolName;
 
@@ -22,7 +24,7 @@ impl PolicyEngine {
     }
 
     pub fn judge(call: &Call<'_>, cx: &PolicyContext<'_>) -> Judgement {
-        let Classes { each: classes, read_outside } = classes(call, cx);
+        let Classes { each: classes, read_outside, read_anywhere } = classes(call, cx);
         let reads = read_by_commands(call, &read_outside);
         let as_read = Call { tool: "Read", subject: call.subject, effects: &reads };
         let stood = standing(call, cx, &classes, read_outside.first());
@@ -45,6 +47,7 @@ impl PolicyEngine {
         let by_mode = by_mode(mode, stood.standing, call.tool, &stood.subject, cx.remembered);
         let ruling = rule_for(call, cx, stood.guarded.is_some());
         let ruling = if reads.is_empty() { ruling } else { stricter(ruling, rule_for(&as_read, cx, false)) };
+        let ruling = harsher(ruling, read_rule(call, cx, &read_anywhere));
         let asked_by = match &ruling {
             Some((RuleKind::Ask, text)) => Some(text.clone()),
             _ => None,
@@ -82,10 +85,12 @@ fn execs<'a>(call: &Call<'a>) -> impl Iterator<Item = &'a Exec> {
 struct Classes {
     each: Vec<CommandClass>,
     read_outside: Vec<Place>,
+    read_anywhere: Vec<Effect>,
 }
 
 fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Classes {
     let mut read_outside = Vec::new();
+    let mut read_anywhere = Vec::new();
     let each = execs(call)
         .map(|exec| {
             let branches =
@@ -93,6 +98,10 @@ fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Classes {
             let git =
                 GitFacts { current_branch: branches.current.as_deref(), default_branch: branches.default.as_deref() };
             let class = classify_command(&exec.command, &git, &|path| cx.bounds.may_read(path));
+            read_anywhere.extend(paths_read(&exec.command, cx.cwd, cx.home).into_iter().map(|operand| {
+                let place = Place::at(operand.path);
+                if operand.tree { Effect::ReadTree(place) } else { Effect::ReadPath(place) }
+            }));
             if class != CommandClass::Unknown {
                 return class;
             }
@@ -106,7 +115,25 @@ fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Classes {
             }
         })
         .collect();
-    Classes { each, read_outside }
+    Classes { each, read_outside, read_anywhere }
+}
+
+fn read_rule(call: &Call<'_>, cx: &PolicyContext<'_>, reads: &[Effect]) -> Ruling {
+    if reads.is_empty() || ToolName::of(call.tool) != ToolName::Bash {
+        return None;
+    }
+    let as_read = Call { tool: ToolName::Read.as_str(), subject: call.subject, effects: reads };
+    rule_for(&as_read, cx, false).filter(|(kind, _)| *kind != RuleKind::Allow)
+}
+
+fn harsher(first: Ruling, then: Ruling) -> Ruling {
+    let rank = |ruling: &Ruling| match ruling {
+        Some((RuleKind::Deny, _)) => 3,
+        Some((RuleKind::Ask, _)) => 2,
+        Some((RuleKind::Allow, _)) => 1,
+        None => 0,
+    };
+    if rank(&then) > rank(&first) { then } else { first }
 }
 
 fn read_by_commands(call: &Call<'_>, read_outside: &[Place]) -> Vec<Effect> {

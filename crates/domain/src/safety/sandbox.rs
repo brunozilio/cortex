@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-const SETTINGS: [&str; 2] = ["settings.json", "settings.local.json"];
+const GIT_RUNS: [&str; 3] = [".git/config", ".git/config.worktree", ".git/hooks"];
 
 const CACHES: [&str; 13] = [
     "Library/Caches",
@@ -129,9 +129,18 @@ impl Sandbox {
                 kept.push(path);
             }
         }
-        let roots = std::iter::once(places.project).chain(places.added.iter().map(PathBuf::as_path));
-        let protected =
-            roots.flat_map(|root| SETTINGS.iter().map(move |name| root.join(places.settings_dir).join(name))).collect();
+        let roots = std::iter::once(places.project)
+            .chain(places.added.iter().map(PathBuf::as_path))
+            .chain(places.repository)
+            .flat_map(|root| {
+                std::iter::once(root.join(places.settings_dir)).chain(GIT_RUNS.iter().map(move |name| root.join(name)))
+            });
+        let mut protected: Vec<PathBuf> = Vec::new();
+        for path in roots.chain(places.home.map(|home| home.join(places.settings_dir))) {
+            if !protected.contains(&path) {
+                protected.push(path);
+            }
+        }
         Confinement { writable: kept, protected, network: self.network }
     }
 }
@@ -203,8 +212,9 @@ pub fn blocked(output: &str) -> bool {
 pub fn hint(settings_dir: &str) -> String {
     format!(
         "(the sandbox may have refused this: commands write only inside the project, added folders, the \
-         temporary folder and package caches. Do not work around it; tell the user, who can add a folder to \
-         sandbox.allowWrite in ~/{settings_dir}/settings.json)"
+         temporary folder and package caches, and never into {settings_dir}/ folders or a repository's \
+         .git/config and .git/hooks. Do not work around it; tell the user, who can add a folder to \
+         sandbox.allowWrite in ~/{settings_dir}/settings.json or run the command themselves)"
     )
 }
 
@@ -239,19 +249,17 @@ mod tests {
     }
 
     #[test]
-    fn the_settings_that_grant_permissions_stay_out_of_reach() {
+    fn the_app_s_folders_and_what_git_runs_on_its_own_stay_out_of_reach() {
         let added = [PathBuf::from("/other")];
         let confinement = Sandbox::default().confinement(&places(&added, &[]));
 
-        assert_eq!(
-            confinement.protected,
-            [
-                PathBuf::from("/repo/.app/settings.json"),
-                "/repo/.app/settings.local.json".into(),
-                "/other/.app/settings.json".into(),
-                "/other/.app/settings.local.json".into(),
-            ]
-        );
+        let guarded = |root: &str| {
+            [".app", ".git/config", ".git/config.worktree", ".git/hooks"].map(|name| Path::new(root).join(name))
+        };
+        let mut expected: Vec<PathBuf> = guarded("/repo").into_iter().chain(guarded("/other")).collect();
+        expected.push("/Users/ana/.app".into());
+        assert_eq!(confinement.protected, expected);
+        assert!(!confinement.protected.iter().any(|path| path.ends_with(".git")), "commits still write objects");
     }
 
     #[test]
@@ -262,6 +270,9 @@ mod tests {
         let confinement = Sandbox::default().confinement(&places);
 
         assert_eq!(confinement.writable[..2], [PathBuf::from("/repo/.app/worktrees/fix"), "/repo".into()]);
+        for guarded in ["/repo/.app", "/repo/.git/config", "/repo/.git/hooks", "/repo/.app/worktrees/fix/.app"] {
+            assert!(confinement.protected.contains(&PathBuf::from(guarded)), "{guarded}");
+        }
     }
 
     #[test]
@@ -374,7 +385,8 @@ mod tests {
         }
         assert!(!confinement.writable.iter().any(|path| path.ends_with("relative")));
         assert!(confinement.network, "MCP servers keep the network by default");
-        assert!(confinement.protected.contains(&PathBuf::from("/repo/.app/settings.json")));
+        assert!(confinement.protected.contains(&PathBuf::from("/repo/.app")));
+        assert!(confinement.protected.contains(&PathBuf::from("/repo/.git/hooks")));
         let offline = ServerSandbox { network: Some(false), ..ServerSandbox::default() };
         assert!(!commands.server_confinement(&places(&[], &temp), &offline).network);
     }

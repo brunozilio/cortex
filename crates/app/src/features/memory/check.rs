@@ -40,14 +40,17 @@ pub fn changes(project: &Path) -> Result<Changes, String> {
         .filter(|base| !base.is_empty() && *base != head)
         .map_or_else(|| "HEAD".to_owned(), |base| base.chars().take(12).collect());
     let base = if head.is_empty() { git_empty_tree(project) } else { base };
-    let mut files: Vec<String> =
-        git(project, &["diff", "--name-only", &base])?.lines().map(str::to_owned).filter(|f| !f.is_empty()).collect();
+    let mut files: Vec<String> = git(project, &["diff", "--no-ext-diff", "--no-textconv", "--name-only", &base])?
+        .lines()
+        .map(str::to_owned)
+        .filter(|f| !f.is_empty())
+        .collect();
     for file in git(project, &["ls-files", "--others", "--exclude-standard"])?.lines() {
         if !file.is_empty() && !files.iter().any(|known| known == file) {
             files.push(file.to_owned());
         }
     }
-    let mut diff = git(project, &["diff", &base])?;
+    let mut diff = git(project, &["diff", "--no-ext-diff", "--no-textconv", &base])?;
     if diff.len() > MOST_DIFF_BYTES {
         let cut = (0..=MOST_DIFF_BYTES).rev().find(|&at| diff.is_char_boundary(at)).unwrap_or(0);
         diff.truncate(cut);
@@ -121,5 +124,17 @@ mod tests {
         let changes = changes(dir.path()).expect("changes");
 
         assert_eq!((changes.base.as_str(), changes.files.as_slice()), ("HEAD", ["a.rs".to_owned()].as_slice()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reading_the_changes_runs_nothing_the_repository_s_config_names() {
+        let hostile = crate::hostile_repository::Hostile::new();
+
+        let changes = changes(hostile.path()).expect("changes");
+
+        assert!(changes.diff.contains("+two"), "{}", changes.diff);
+        assert_eq!(hostile.ran(), None, "the repository's fsmonitor, filter or diff program ran");
+        assert!(hostile.plain_git_runs_it(), "the same repository does run them through plain git");
     }
 }

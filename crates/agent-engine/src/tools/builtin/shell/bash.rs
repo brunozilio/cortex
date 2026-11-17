@@ -142,6 +142,21 @@ mod tests {
         assert_eq!(Bash.run(&json!({"command": "true"}), &workspace).content, "(no output)");
     }
 
+    #[test]
+    fn a_command_s_change_tracking_runs_nothing_the_repository_s_config_names() {
+        let hostile = crate::hostile_repository::Hostile::new();
+        let mut workspace = Workspace::new(hostile.path());
+        workspace.services.files = Some(std::sync::Arc::default());
+
+        let ran = Bash.run(&json!({"command": "echo three > a.txt && echo new > b.txt"}), &workspace);
+
+        assert!(!ran.is_error, "{ran:?}");
+        let recorded = workspace.services.files.as_ref().expect("files").take();
+        assert!(recorded.keys().any(|path| path.ends_with("a.txt")), "the change was still tracked: {recorded:?}");
+        assert_eq!(hostile.ran(), None, "the repository's fsmonitor, filter or hook ran");
+        assert!(hostile.plain_git_runs_it(), "the same repository does run them through plain git");
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn a_sandboxed_command_writes_in_the_project_only_and_is_told_why_it_failed() {

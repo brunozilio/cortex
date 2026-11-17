@@ -56,7 +56,7 @@ pub fn is_reader(program: &str) -> bool {
     READERS.iter().any(|reader| reader.program.first() == Some(&program))
 }
 
-fn reader_of<'a>(words: &[&str]) -> Option<&'a Reader> {
+pub(super) fn reader_of<'a>(words: &[&str]) -> Option<&'a Reader> {
     READERS.iter().filter(|reader| words.starts_with(reader.program)).max_by_key(|reader| reader.program.len())
 }
 

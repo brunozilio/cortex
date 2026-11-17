@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use domain::sandbox::Places;
@@ -23,7 +23,12 @@ impl Confiner {
 
 pub fn confinement_of(sandbox: &domain::sandbox::Sandbox, places: &Places<'_>) -> platform::sandbox::Confinement {
     let found = sandbox.confinement(places);
-    platform::sandbox::Confinement { writable: found.writable, protected: found.protected, network: found.network }
+    let protected = found.protected.into_iter().filter(|path| repository_of(path).is_none_or(Path::is_dir)).collect();
+    platform::sandbox::Confinement { writable: found.writable, protected, network: found.network }
+}
+
+fn repository_of(path: &Path) -> Option<&Path> {
+    path.ancestors().find(|folder| folder.file_name().is_some_and(|name| name == ".git"))
 }
 
 pub fn temp_folders() -> [PathBuf; 2] {

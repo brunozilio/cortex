@@ -441,6 +441,57 @@ fn reading_by_an_absolute_path_inside_the_project_runs_without_asking_while_acce
 }
 
 #[test]
+fn a_read_rule_holds_for_a_command_that_reads_inside_the_project() {
+    let bounds = bounds();
+    let fresh = Remembered::default();
+    let denied = PermissionRules::default().with(RuleKind::Deny, "Read(secrets/**)");
+    let judged = |command: &str, mode: PermissionMode, rules: &PermissionRules| {
+        let effects = [Effect::exec(command, false)];
+        PolicyEngine::decide(
+            &Call { tool: "Bash", subject: command, effects: &effects },
+            &context(mode, rules, &fresh, &bounds),
+        )
+    };
+    let reaching = [
+        "cat secrets/key",
+        "cat ./secrets/key",
+        "head -n 5 secrets/a",
+        "grep -r token secrets",
+        "grep -rn token .",
+        "rg -n . secrets",
+        "rg token",
+        "find . -name '*.pem'",
+        "ls -R secrets",
+        "wc -l src/main.rs secrets/a",
+        "cat /work/rocket/secrets/key",
+        "git diff -- secrets/key",
+    ];
+    for mode in PermissionMode::ALL {
+        for command in reaching {
+            assert!(
+                judged(command, mode, &denied).denies(),
+                "{command} in {mode:?}: {:?}",
+                judged(command, mode, &denied)
+            );
+        }
+        for command in ["cat src/main.rs", "grep -rn token src", "rg -n fn src", "ls", "ls secrets_notes", "git status"]
+        {
+            assert_eq!(judged(command, mode, &denied), Verdict::Allow, "{command} in {mode:?}");
+        }
+    }
+    let asked = PermissionRules::default().with(RuleKind::Ask, "Read(secrets/**)");
+    assert!(judged("cat secrets/key", PermissionMode::AcceptEdits, &asked).asks());
+    let allowed =
+        PermissionRules::default().with(RuleKind::Allow, "Bash(cat:*)").with(RuleKind::Ask, "Read(secrets/**)");
+    assert!(
+        judged("cat secrets/key", PermissionMode::AcceptEdits, &allowed).asks(),
+        "a read rule's question outranks it"
+    );
+    let none = PermissionRules::default();
+    assert_eq!(judged("cat secrets/key", PermissionMode::Plan, &none), Verdict::Allow, "no rule, nothing changes");
+}
+
+#[test]
 fn reading_outside_the_project_by_a_command_asks_about_the_folder_like_reading_a_file() {
     let (none, edits) = (PermissionRules::default(), PermissionMode::AcceptEdits);
     let bounds = bounds();

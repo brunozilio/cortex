@@ -162,6 +162,54 @@ fn the_replaced_opt_in_is_read_without_error_says_so_and_enables_nothing() {
 }
 
 #[test]
+fn a_broken_settings_file_a_folder_brings_is_skipped_with_a_notice_and_the_run_goes_on() {
+    let (home, work) = (tempfile::tempdir().expect("home"), tempfile::tempdir().expect("work"));
+    let repo = repository(work.path(), "rocket");
+    write(work.path(), "settings.json", "{ not json");
+    write(&repo, "settings.json", r#"{"permissions": {"deny": ["Bash(curl:*)"]}"#);
+    write(home.path(), "settings.json", r#"{"permissions": {"deny": ["Bash(wget:*)"]}}"#);
+
+    for gate in [untrusted(&repo, home.path()), trusted(&repo, home.path())] {
+        let settings = load(&gate, &[]).expect("a file the owner did not write never stops the run");
+
+        assert_eq!(decided(&settings, &repo, "wget evil.test"), Some(RuleKind::Deny), "the owner's file applies");
+        assert_eq!(
+            settings.skipped_files,
+            [work.path().join(brand::DIR).join("settings.json"), repo.join(brand::DIR).join("settings.json")]
+        );
+        for skipped in [work.path().join(brand::DIR).join("settings.json"), repo.join(brand::DIR).join("settings.json")]
+        {
+            let shown = skipped.display().to_string();
+            assert!(
+                settings.notices.iter().any(|notice| notice.starts_with("Skipped ") && notice.contains(&shown)),
+                "{shown} in {:?}",
+                settings.notices
+            );
+        }
+    }
+    write(&repo, "settings.local.json", "[1,");
+    let settings =
+        load(&untrusted(&repo, home.path()), &[]).expect("an untrusted folder's local file is not the owner's");
+    let local = repo.join(brand::DIR).join("settings.local.json").display().to_string();
+    assert!(settings.notices.iter().any(|notice| notice.contains(&local)), "{:?}", settings.notices);
+}
+
+#[test]
+fn a_broken_settings_file_the_owner_wrote_still_stops_the_run() {
+    let (home, work) = (tempfile::tempdir().expect("home"), tempfile::tempdir().expect("work"));
+    let repo = repository(work.path(), "rocket");
+    write(home.path(), "settings.json", "{ not json");
+    let refused = load(&untrusted(&repo, home.path()), &[]).expect_err("the owner's own file is not skipped");
+    assert!(refused.contains("settings.json"), "{refused}");
+
+    let (home, work) = (tempfile::tempdir().expect("home"), tempfile::tempdir().expect("work"));
+    let repo = repository(work.path(), "rocket");
+    write(&repo, "settings.local.json", "{ not json");
+    let refused = load(&trusted(&repo, home.path()), &[]).expect_err("a trusted folder's local file is the owner's");
+    assert!(refused.contains("settings.local.json"), "{refused}");
+}
+
+#[test]
 fn the_folder_s_permissions_listing_carries_the_one_notice_and_no_skipped_hook() {
     let (home, work) = (tempfile::tempdir().expect("home"), tempfile::tempdir().expect("work"));
     let repo = repository(work.path(), "rocket");

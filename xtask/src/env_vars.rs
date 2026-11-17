@@ -17,7 +17,7 @@ pub fn findings(root: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> 
     Ok(undocumented(&names, &readme, &web, &prefix))
 }
 
-fn rust_files(dir: &Path, files: &mut Vec<PathBuf>) {
+pub fn rust_files(dir: &Path, files: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         let path = entry.path();

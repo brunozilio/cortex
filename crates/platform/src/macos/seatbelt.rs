@@ -24,11 +24,27 @@ pub fn confined(inner: &Command, confinement: &Confinement) -> Command {
     outer
 }
 
+const HANDING_OFF: [&str; 3] = [
+    "(deny appleevent-send)",
+    "(deny mach-lookup (global-name \"com.apple.coreservices.launchservicesd\") (global-name \
+     \"com.apple.coreservices.quarantine-resolver\"))",
+    "(deny process-exec (literal \"/bin/launchctl\"))",
+];
+
 pub fn profile(confinement: &Confinement) -> String {
     let mut lines = vec!["(version 1)".to_owned(), "(allow default)".to_owned(), "(deny file-write*)".to_owned()];
     lines.push(DEVICES.to_owned());
-    lines.extend(confinement.writable.iter().map(|path| format!("(allow file-write* {})", subpath(path))));
-    lines.extend(confinement.protected.iter().map(|path| format!("(deny file-write* {})", subpath(path))));
+    let writable: Vec<PathBuf> = confinement.writable.iter().map(|path| real(path)).collect();
+    let protected: Vec<PathBuf> = confinement.protected.iter().map(|path| real(path)).collect();
+    let inside =
+        |path: &PathBuf, folders: &[PathBuf]| folders.iter().any(|folder| path != folder && path.starts_with(folder));
+    let reopened: Vec<PathBuf> = writable.iter().filter(|path| inside(path, &protected)).cloned().collect();
+    lines.extend(writable.iter().map(|path| format!("(allow file-write* {})", subpath(path))));
+    lines.extend(protected.iter().map(|path| format!("(deny file-write* {})", subpath(path))));
+    lines.extend(reopened.iter().map(|path| format!("(allow file-write* {})", subpath(path))));
+    let within_reopened = protected.iter().filter(|path| inside(path, &reopened));
+    lines.extend(within_reopened.map(|path| format!("(deny file-write* {})", subpath(path))));
+    lines.extend(HANDING_OFF.map(str::to_owned));
     if !confinement.network {
         lines.push("(deny network*)".to_owned());
     }
@@ -125,6 +141,68 @@ mod tests {
         assert!(runs(&reach, project.path(), &within(project.path())));
         let offline = Confinement { network: false, ..within(project.path()) };
         assert!(!runs(&reach, project.path(), &offline));
+    }
+
+    fn guarded(project: &Path) -> Confinement {
+        let protected = vec![project.join(".app"), project.join(".git/config"), project.join(".git/hooks")];
+        Confinement { protected, ..within(project) }
+    }
+
+    fn git(dir: &Path) -> String {
+        let identity = "git -c user.name=t -c user.email=t@t -c commit.gpgsign=false -c core.hooksPath=/dev/null";
+        format!("{identity} -C '{}'", dir.display())
+    }
+
+    #[test]
+    fn a_command_can_commit_but_not_change_what_git_runs_or_the_app_s_folder() {
+        let project = tempfile::tempdir().expect("project");
+        let dir = project.path();
+        assert!(runs(&format!("{} init -q", git(dir)), dir, &within(dir)), "git init is not confined here");
+        std::fs::create_dir_all(dir.join(".app")).expect("folder");
+        let config = std::fs::read(dir.join(".git/config")).expect("config");
+        let confinement = guarded(dir);
+
+        assert!(!runs("echo '[core]\n\tfsmonitor = ./x.sh' >> .git/config", dir, &confinement));
+        assert!(!runs("echo 'touch pwned' > .git/hooks/post-commit", dir, &confinement));
+        assert!(!runs("echo '{}' > .app/settings.json", dir, &confinement));
+        assert!(!runs("mkdir .app/hooks", dir, &confinement));
+        assert_eq!(std::fs::read(dir.join(".git/config")).expect("config"), config);
+        assert!(!dir.join(".git/hooks/post-commit").exists());
+
+        let commit = format!("echo a > a.txt && {0} add a.txt && {0} commit -q -m one", git(dir));
+        assert!(runs(&commit, dir, &confinement), "a commit writes objects, the index and refs");
+        assert!(runs(&format!("{} log --oneline | grep -q one", git(dir)), dir, &confinement));
+    }
+
+    #[test]
+    fn a_writable_folder_inside_a_guarded_one_stays_writable_but_its_own_guards_hold() {
+        let repo = tempfile::tempdir().expect("repo");
+        let worktree = repo.path().join(".app/worktrees/fix");
+        std::fs::create_dir_all(worktree.join(".app")).expect("folders");
+        let mut confinement = guarded(repo.path());
+        confinement.writable.push(worktree.clone());
+        confinement.protected.push(worktree.join(".app"));
+
+        assert!(runs("echo ok > done.txt", &worktree, &confinement), "the worktree is the session's project");
+        assert!(!runs("echo x > .app/settings.json", &worktree, &confinement), "its own folder stays guarded");
+        assert!(!runs("echo x > ../other.txt", &worktree, &confinement), "the rest of the app's folder too");
+        assert!(worktree.join("done.txt").is_file());
+    }
+
+    #[test]
+    fn a_command_cannot_hand_work_to_launchd_or_another_app() {
+        let project = tempfile::tempdir().expect("project");
+        assert!(!runs("/bin/launchctl version", project.path(), &within(project.path())));
+        let text = profile(&within(project.path()));
+        for line in [
+            "(deny appleevent-send)",
+            "(global-name \"com.apple.coreservices.launchservicesd\")",
+            "(global-name \"com.apple.coreservices.quarantine-resolver\")",
+            "(deny process-exec (literal \"/bin/launchctl\"))",
+        ] {
+            assert!(text.contains(line), "{line} in {text}");
+        }
+        assert!(runs("git --version && cargo --version", project.path(), &within(project.path())));
     }
 
     #[test]

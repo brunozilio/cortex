@@ -93,6 +93,20 @@ fn a_session_worktree_starts_from_the_checked_out_commit_and_leaves_uncommitted_
     let _ = cleanup(&entered.setup);
 }
 
+#[cfg(unix)]
+#[test]
+fn making_and_removing_a_worktree_runs_nothing_the_repository_s_config_names() {
+    let hostile = crate::hostile_repository::Hostile::new();
+    let workspace = Workspace::new(hostile.path());
+
+    let entered = enter(&workspace).expect("worktree");
+    assert!(entered.setup.cwd.join("a.txt").is_file(), "the commit is checked out");
+    cleanup(&entered.setup).expect("removed");
+
+    assert_eq!(hostile.ran(), None, "the repository's fsmonitor, filter or hook ran");
+    assert!(hostile.plain_git_runs_it(), "the same repository does run them through plain git");
+}
+
 #[test]
 fn a_worktree_keeps_the_rules_of_the_user_s_home_when_made_and_when_resumed() {
     let project = tempfile::tempdir().expect("project");

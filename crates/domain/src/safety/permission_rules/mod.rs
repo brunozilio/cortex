@@ -45,6 +45,8 @@ pub struct PermissionsInfo {
     pub hooks: Vec<HookInfo>,
     #[serde(default)]
     pub notices: Vec<String>,
+    #[serde(default)]
+    pub skipped_files: Vec<std::path::PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

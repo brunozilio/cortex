@@ -96,6 +96,30 @@ fn a_forked_tracking_starts_with_no_refusals_seen_files_or_seen_rules() {
 }
 
 #[test]
+fn a_repository_s_config_and_hooks_are_guarded_once_it_exists_so_a_command_can_still_make_one() {
+    let (fresh, repo) = (tempfile::tempdir().expect("fresh"), tempfile::tempdir().expect("repo"));
+    std::fs::create_dir(repo.path().join(".git")).expect("repository");
+    let sandbox = domain::sandbox::Sandbox::default();
+    let guarded = |project: &Path| {
+        let places = domain::sandbox::Places {
+            project,
+            added: &[],
+            repository: None,
+            temp: &[],
+            home: None,
+            settings_dir: brand::DIR,
+        };
+        super::confined::confinement_of(&sandbox, &places).protected
+    };
+
+    assert_eq!(guarded(fresh.path()), [fresh.path().join(brand::DIR)], "git init may write .git/config");
+    let guarded = guarded(repo.path());
+    for path in [brand::DIR, ".git/config", ".git/config.worktree", ".git/hooks"] {
+        assert!(guarded.contains(&repo.path().join(path)), "{path}: {guarded:?}");
+    }
+}
+
+#[test]
 fn a_forked_workspace_keeps_models_and_drops_verification_and_worktree() {
     let mut workspace = Workspace::new("/repo");
     workspace.models = Models { small_model: Some("small".into()), ..Models::default() };

@@ -64,12 +64,32 @@ fn updating_a_plugin_never_lets_git_ask_at_the_terminal() {
     let run = |args: &[&str]| {
         assert!(Command::new("git").args(args).current_dir(&target).output().expect("git").status.success());
     };
-    run(&["config", "protocol.ext.allow", "always"]);
-    run(&["remote", "add", "origin", &format!("ext::sh {}", remote.display())]);
+    run(&["config", "core.sshCommand", &format!("sh {}", remote.display())]);
+    run(&["remote", "add", "origin", "ssh://example.invalid/acme/asks.git"]);
 
     let refused = update(&folder, "asks").expect_err("the remote fails");
 
     assert!(refused.contains("prompt=0"), "{refused}");
+}
+
+#[test]
+fn a_plugin_s_own_config_cannot_turn_a_remote_into_a_command() {
+    let home = tempfile::tempdir().expect("home");
+    let folder = home.path().join("plugins");
+    let target = folder.join("runs");
+    std::fs::create_dir_all(&target).expect("target");
+    repository(&target);
+    let marker = home.path().join("ran");
+    let run = |args: &[&str]| {
+        assert!(Command::new("git").args(args).current_dir(&target).output().expect("git").status.success());
+    };
+    run(&["config", "protocol.ext.allow", "always"]);
+    run(&["remote", "add", "origin", &format!("ext::sh -c touch% {}", marker.display())]);
+
+    let refused = update(&folder, "runs").expect_err("refused");
+
+    assert!(refused.contains("'ext' not allowed"), "{refused}");
+    assert!(!marker.exists());
 }
 
 #[test]

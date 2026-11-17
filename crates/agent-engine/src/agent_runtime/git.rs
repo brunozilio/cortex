@@ -19,8 +19,8 @@ pub(crate) fn git_stopped(workspace: &Workspace, cwd: &Path, args: &[&OsStr]) ->
 }
 
 pub(crate) fn has_commit(workspace: &Workspace) -> Result<bool, String> {
-    let mut command = platform::command("git");
-    command.arg("-C").arg(&workspace.cwd).args(["rev-parse", "--verify", "HEAD"]);
+    let mut command = platform::git::command(&workspace.cwd);
+    command.args(["rev-parse", "--verify", "HEAD"]);
     let bounds = Bounds { timeout: TIMEOUT, max_output: MAX_OUTPUT, stop: &workspace.stop, input: None };
     match platform::bounded::run(&mut command, bounds).map_err(|e| e.to_string())?.ended {
         Ended::Exited(status) => Ok(status.success()),
@@ -29,8 +29,8 @@ pub(crate) fn has_commit(workspace: &Workspace) -> Result<bool, String> {
 }
 
 pub(crate) fn output(cwd: &Path, args: &[&OsStr], stop: &AtomicBool) -> Result<String, String> {
-    let mut command = platform::command("git");
-    command.arg("-C").arg(cwd).args(args);
+    let mut command = platform::git::command(cwd);
+    command.args(args);
     let bounds = Bounds { timeout: TIMEOUT, max_output: MAX_OUTPUT, stop, input: None };
     let done = platform::bounded::run(&mut command, bounds).map_err(|e| e.to_string())?;
     match done.ended {

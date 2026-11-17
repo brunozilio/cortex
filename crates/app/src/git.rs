@@ -1,5 +1,5 @@
-use std::ffi::OsStr;
 use std::path::Path;
+use std::process::Command;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
@@ -10,12 +10,11 @@ pub const REMOTE: Duration = Duration::from_secs(120);
 const MOST_OUTPUT: usize = 16 << 20;
 
 pub fn run(cwd: &Path, args: &[&str], limit: Duration) -> Result<String, String> {
-    run_program(OsStr::new("git"), cwd, args, limit)
+    run_command(platform::git::command(cwd), args, limit)
 }
 
-fn run_program(program: &OsStr, cwd: &Path, args: &[&str], limit: Duration) -> Result<String, String> {
-    let mut command = platform::command(program);
-    command.args(args).current_dir(cwd).env("GIT_TERMINAL_PROMPT", "0");
+fn run_command(mut command: Command, args: &[&str], limit: Duration) -> Result<String, String> {
+    command.args(args);
     let never = AtomicBool::new(false);
     let bounds = Bounds { timeout: limit, max_output: MOST_OUTPUT, stop: &never, input: None };
     let finished = platform::bounded::run(&mut command, bounds).map_err(|error| format!("git: {error}"))?;
@@ -37,10 +36,12 @@ mod tests {
 
     use super::*;
 
-    fn script(dir: &Path, body: &str) -> String {
+    fn script(dir: &Path, body: &str) -> Command {
         let path = dir.join("fake-git.sh");
         std::fs::write(&path, body).expect("script");
-        path.to_string_lossy().into_owned()
+        let mut shell = platform::command("/bin/sh");
+        shell.arg(path).current_dir(dir);
+        shell
     }
 
     #[test]
@@ -48,18 +49,23 @@ mod tests {
         let dir = tempfile::tempdir().expect("dir");
         let hangs = script(dir.path(), "sleep 30\n");
         let asked = Instant::now();
-        let stopped = run_program(OsStr::new("/bin/sh"), dir.path(), &[&hangs, "clone"], Duration::from_millis(200))
-            .expect_err("stopped");
+        let stopped = run_command(hangs, &["clone"], Duration::from_millis(200)).expect_err("stopped");
         assert!(asked.elapsed() < Duration::from_secs(10), "waited {:?}", asked.elapsed());
         assert!(stopped.contains("did not finish"), "{stopped}");
     }
 
     #[test]
-    fn git_cannot_prompt_and_has_nothing_to_read() {
+    fn git_has_nothing_to_read() {
         let dir = tempfile::tempdir().expect("dir");
-        let asks = script(dir.path(), "printf 'prompt=%s|' \"$GIT_TERMINAL_PROMPT\"\ncat\necho read-nothing\n");
-        let said = run_program(OsStr::new("/bin/sh"), dir.path(), &[&asks], LOCAL).expect("ran");
-        assert_eq!(said, "prompt=0|read-nothing\n");
+        let reads = script(dir.path(), "cat\necho read-nothing\n");
+        assert_eq!(run_command(reads, &[], LOCAL).expect("ran"), "read-nothing\n");
+    }
+
+    #[test]
+    fn every_git_the_app_runs_is_the_hardened_one() {
+        let dir = tempfile::tempdir().expect("dir");
+        let said = run(dir.path(), &["config", "--get", "core.hooksPath"], LOCAL).expect("ran");
+        assert_eq!(said.trim(), "/dev/null");
     }
 
     #[test]

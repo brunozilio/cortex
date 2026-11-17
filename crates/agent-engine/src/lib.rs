@@ -25,6 +25,11 @@ pub mod tools;
 pub mod trust;
 pub mod upkeep;
 
+#[cfg(test)]
+#[cfg(unix)]
+#[path = "hostile_repository_tests.rs"]
+mod hostile_repository;
+
 pub use llm_providers::{model, providers, transcript};
 
 pub use boundary::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};

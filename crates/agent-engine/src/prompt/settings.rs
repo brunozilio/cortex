@@ -55,6 +55,8 @@ pub struct Settings {
     #[serde(default)]
     pub notices: Vec<String>,
     #[serde(default)]
+    pub skipped_files: Vec<PathBuf>,
+    #[serde(default)]
     pub bash_output: domain::output::OutputLimit,
 }
 
@@ -83,6 +85,7 @@ impl Default for Settings {
             features: Default::default(),
             sandbox: Default::default(),
             notices: Vec::new(),
+            skipped_files: Vec::new(),
             bash_output: Default::default(),
         }
     }
@@ -114,18 +117,37 @@ pub fn load(gate: &Gate, plugins: &[crate::plugins::Plugin]) -> Result<Settings,
     let mut style = String::from("Default");
     let mut replaced_opt_in = false;
     let mut problems = Vec::new();
+    let mut skipped = Vec::new();
     for (path, users) in files(&roots, home) {
-        let Some(value) = read(&path)? else { continue };
+        let honoured = users || gate.honours(&path);
+        let owners = users || (honoured && path.file_name().is_some_and(|name| name == LOCAL));
+        let value = match read(&path) {
+            Ok(Some(value)) => value,
+            Ok(None) => continue,
+            Err(error) if owners => return Err(error),
+            Err(error) => {
+                skipped.push((path, error));
+                continue;
+            }
+        };
         let checked = crate::config_schema::checked_settings(value);
         problems.extend(checked.located(&path));
         let value = checked.value;
-        let honoured = users || gate.honours(&path);
-        let owners = users || (honoured && path.file_name().is_some_and(|name| name == LOCAL));
         replaced_opt_in |= users && value.get(domain::trust::LEGACY_OPT_IN).is_some();
         let layer = Layer { path: &path, value: &value, owners, runs_hooks: honoured };
-        layer.merge_into(&mut merged, &mut style)?;
+        if owners {
+            layer.merge_into(&mut merged, &mut style)?;
+            continue;
+        }
+        let (mut tried, mut tried_style) = (merged.clone(), style.clone());
+        match layer.merge_into(&mut tried, &mut tried_style) {
+            Ok(()) => (merged, style) = (tried, tried_style),
+            Err(error) => skipped.push((path, error)),
+        }
     }
     add_plugins(&mut merged, plugins);
+    problems.extend(skipped.iter().map(|(path, error)| skipped_layer(path, error)));
+    merged.skipped_files = skipped.into_iter().map(|(path, _)| path).collect();
     merged.notices = gate.skipped_notice().into_iter().collect();
     merged.notices.extend(replaced_opt_in.then(domain::trust::legacy_notice));
     crate::config_schema::logged_once(&problems);
@@ -160,6 +182,12 @@ fn files(roots: &[PathBuf], home: Option<&Path>) -> Vec<(PathBuf, bool)> {
         .collect();
     files.extend(home.map(|home| (home.join(brand::DIR).join(MANAGED), true)));
     files
+}
+
+fn skipped_layer(path: &Path, error: &str) -> String {
+    let shown = path.display().to_string();
+    let why = error.strip_prefix(&shown).and_then(|rest| rest.strip_prefix(": ")).unwrap_or(error);
+    format!("Skipped {shown}: {why}; the rest of the settings apply. Fix or remove that file.")
 }
 
 fn read(path: &Path) -> Result<Option<Value>, String> {
