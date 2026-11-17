@@ -1,6 +1,7 @@
 pub mod bounded;
 pub mod child;
 pub mod file_lock;
+pub mod keychain;
 pub mod named;
 pub mod private_file;
 pub mod sandbox;

@@ -1,29 +1,139 @@
 use std::path::Path;
 
+use platform::keychain::Keychain;
+
 use super::sealed::{hex, unhex};
 
-pub fn at(path: &Path) -> Result<[u8; 32], String> {
-    if let Some(key) = kept(path)? {
+pub const IN_KEYCHAIN: &str = "keychain";
+pub const CHOICE: &str = concat!(brand::env_prefix!(), "_SECRETS");
+
+#[derive(Clone, Copy)]
+pub enum Keeper<'a> {
+    File,
+    FileInsteadOf(&'a dyn Keychain),
+    Keychain(&'a dyn Keychain),
+}
+
+impl<'a> Keeper<'a> {
+    pub fn chosen(choice: Option<&str>, keychain: &'a dyn Keychain) -> Self {
+        if choice.is_some_and(|choice| choice.trim().eq_ignore_ascii_case("file")) {
+            Self::FileInsteadOf(keychain)
+        } else {
+            Self::Keychain(keychain)
+        }
+    }
+}
+
+pub fn at(path: &Path, keeper: Keeper<'_>) -> Result<[u8; 32], String> {
+    if let Some(key) = kept(path, keeper)? {
         return Ok(key);
     }
-    let made = platform::store::Document::at(path).try_update_text(|text| {
-        if !text.is_empty() {
-            return read(path, text);
-        }
-        let mut key = [0u8; 32];
-        getrandom::fill(&mut key).map_err(|error| error.to_string())?;
-        *text = hex(&key);
-        Ok(key)
-    });
+    let made = platform::store::Document::at(path).try_update_text(|text| settled(path, keeper, text));
     made.map_err(|error| unusable(&error))?
 }
 
-fn kept(path: &Path) -> Result<Option<[u8; 32]>, String> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => read(path, &text).map(Some),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(unusable(&format!("{}: {error}", path.display()))),
+fn kept(path: &Path, keeper: Keeper<'_>) -> Result<Option<[u8; 32]>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(unusable(&format!("{}: {error}", path.display()))),
+    };
+    match (keeper, text.trim()) {
+        (Keeper::Keychain(keychain), IN_KEYCHAIN) => from_keychain(path, keychain).map(Some),
+        (Keeper::Keychain(_), _) | (_, IN_KEYCHAIN) => Ok(None),
+        (_, text) => read(path, text).map(Some),
     }
+}
+
+fn settled(path: &Path, keeper: Keeper<'_>, text: &mut String) -> Result<[u8; 32], String> {
+    match (keeper, text.trim()) {
+        (Keeper::Keychain(keychain), IN_KEYCHAIN) => from_keychain(path, keychain),
+        (Keeper::Keychain(keychain), "") => first_in(path, keychain, text),
+        (Keeper::Keychain(keychain), kept) => {
+            let key = read(path, kept)?;
+            if stored(path, keychain, &key) {
+                IN_KEYCHAIN.clone_into(text);
+            }
+            Ok(key)
+        }
+        (Keeper::FileInsteadOf(keychain), IN_KEYCHAIN) => {
+            let key = match keychain.get(&account(path)) {
+                Ok(Some(kept)) => read(path, &kept)?,
+                _ => fresh()?,
+            };
+            *text = hex(&key);
+            Ok(key)
+        }
+        (_, "") => {
+            let key = fresh()?;
+            *text = hex(&key);
+            Ok(key)
+        }
+        (_, kept) => read(path, kept),
+    }
+}
+
+fn first_in(path: &Path, keychain: &dyn Keychain, text: &mut String) -> Result<[u8; 32], String> {
+    match keychain.get(&account(path)) {
+        Ok(Some(kept)) => {
+            let key = read(path, &kept)?;
+            IN_KEYCHAIN.clone_into(text);
+            Ok(key)
+        }
+        Ok(None) => {
+            let key = fresh()?;
+            *text = if stored(path, keychain, &key) { IN_KEYCHAIN.to_owned() } else { hex(&key) };
+            Ok(key)
+        }
+        Err(error) => {
+            tracing::warn!(%error, "no keychain can be reached; the secrets key is kept in a file");
+            let key = fresh()?;
+            *text = hex(&key);
+            Ok(key)
+        }
+    }
+}
+
+fn stored(path: &Path, keychain: &dyn Keychain, key: &[u8; 32]) -> bool {
+    let (account, written) = (account(path), hex(key));
+    let read_back = keychain.set(&account, &written).and_then(|()| keychain.get(&account));
+    match read_back {
+        Ok(Some(found)) if found == written => true,
+        Ok(_) => {
+            tracing::warn!("the keychain did not give the secrets key back; it stays in its file");
+            false
+        }
+        Err(error) => {
+            tracing::warn!(%error, "the keychain did not keep the secrets key; it stays in its file");
+            false
+        }
+    }
+}
+
+fn from_keychain(path: &Path, keychain: &dyn Keychain) -> Result<[u8; 32], String> {
+    let fallback =
+        format!("to keep keys in a file instead, set {CHOICE}=file (keys saved before must then be entered again)");
+    match keychain.get(&account(path)) {
+        Ok(Some(kept)) => read(path, &kept),
+        Ok(None) => Err(format!(
+            "the secrets key is not in the system keychain, where {} says it is; saved keys cannot be opened; {fallback}",
+            path.display()
+        )),
+        Err(error) => Err(format!(
+            "the system keychain, which holds the secrets key, cannot be reached ({error}); \
+             saved keys stay sealed until it can; {fallback}"
+        )),
+    }
+}
+
+fn account(path: &Path) -> String {
+    path.display().to_string()
+}
+
+fn fresh() -> Result<[u8; 32], String> {
+    let mut key = [0u8; 32];
+    getrandom::fill(&mut key).map_err(|error| error.to_string())?;
+    Ok(key)
 }
 
 fn read(path: &Path, text: &str) -> Result<[u8; 32], String> {
@@ -37,54 +147,5 @@ fn unusable(error: &dyn std::fmt::Display) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[cfg(unix)]
-    #[test]
-    fn a_key_that_cannot_be_read_is_an_error_and_is_left_as_it_was() {
-        use std::os::unix::fs::PermissionsExt;
-        let dir = tempfile::tempdir().expect("dir");
-        let path = dir.path().join("secrets.key");
-        let key = at(&path).expect("made");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).expect("lock out");
-        if std::fs::read(&path).is_ok() {
-            return;
-        }
-
-        let error = at(&path).expect_err("an unreadable key is not replaced");
-
-        assert!(error.contains("secrets.key"), "{error}");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).expect("let in");
-        assert_eq!(std::fs::read_to_string(&path).expect("read"), hex(&key), "the vault's key is still the one made");
-    }
-
-    #[test]
-    fn a_folder_where_the_key_should_be_is_an_error_not_a_new_key() {
-        let dir = tempfile::tempdir().expect("dir");
-        let path = dir.path().join("secrets.key");
-        std::fs::create_dir(&path).expect("folder");
-        assert!(at(&path).is_err());
-        assert!(path.is_dir());
-    }
-
-    #[test]
-    fn first_runs_at_once_end_with_one_key() {
-        let dir = tempfile::tempdir().expect("dir");
-        let path = dir.path().join("secrets.key");
-        let start = std::sync::Barrier::new(16);
-        let made: Vec<[u8; 32]> = std::thread::scope(|scope| {
-            let runs: Vec<_> = (0..16)
-                .map(|_| {
-                    scope.spawn(|| {
-                        start.wait();
-                        at(&path).expect("key")
-                    })
-                })
-                .collect();
-            runs.into_iter().map(|run| run.join().expect("join")).collect()
-        });
-        let kept = at(&path).expect("kept");
-        assert!(made.iter().all(|key| *key == kept), "every first run seals with the key that was kept");
-    }
-}
+#[path = "key_tests.rs"]
+mod key_tests;

@@ -65,6 +65,7 @@ lists what was found.
 - `CORTEX_REDUCED_MOTION`: any value other than empty or `0` turns the animations off.
 - `CORTEX_CONSOLE_DIR`: a folder holding an already built web page (with an `index.html`) to serve instead of the embedded one.
 - `CORTEX_DISABLE_AUTO_MEMORY`: `1`, `true` or `yes` turns off the persistent memory of custom agents.
+- `CORTEX_SECRETS`: `file` keeps the key of `secrets.json` in `secrets.key` instead of the system keychain (CI, containers, headless machines).
 
 Also read: `SHELL`, `VISUAL`, `EDITOR`, `HOME`, `COLORFGBG`, `COLORTERM`
 and `XDG_CONFIG_HOME`.
@@ -81,8 +82,8 @@ and `XDG_CONFIG_HOME`.
 
 `~/Library/Application Support/Cortex` on macOS, `~/.config/cortex` on
 Linux: sessions, memory and settings. Keys and tokens are sealed in
-`secrets.json` there (its key in `secrets.key`, both readable only by
-you).
+`secrets.json` there (readable only by you); its key is in the system
+keychain, or in `secrets.key` where no keychain answers.
 
 The list of sessions and each project's memory are in `app.db` there, a
 SQLite database (with `app.db-wal` and `app.db-shm` beside it while the
@@ -110,7 +111,7 @@ is only in `app.db`, which the older binary does not read.
 | `brand` | The product's name and command, from `brand.toml`. |
 | `language-servers` | Runs language servers for the `LSP` tool and edit diagnostics: client, pool, first-use installs. |
 | `code-map` | Experimental tree-sitter index of a repository's functions, types and callers, ranked against a prompt. |
-| `platform` | Per-OS IO: child processes and their trees, private files, stored documents (lock, atomic replace, corrupt set aside), data folders. |
+| `platform` | Per-OS IO: child processes and their trees, private files, stored documents (lock, atomic replace, corrupt set aside), data folders, the system keychain. |
 | `content` | Prompts, built-in skills and agents, embedded at build time. |
 | `script` | The QuickJS runtime for JavaScript tools, skills and providers. |
 | `console` | The live trace page behind `/trace` and `/console`: serves the browser app on localhost (whatever `cargo run -p xtask -- web` last built into `web/dist`, embedded in the binary at compile time) with the report, the sessions and their updates as server-sent events. |

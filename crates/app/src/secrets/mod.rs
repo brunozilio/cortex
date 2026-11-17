@@ -10,6 +10,8 @@ use platform::sync::Locked;
 
 use domain::SecretId;
 
+use self::key::Keeper;
+
 pub use self::sealed::SealedSecretStore;
 pub use self::unkept::{Unkept, refusal};
 
@@ -33,11 +35,23 @@ pub trait SecretStore: Send + Sync {
 
 pub fn system_secrets() -> Arc<dyn SecretStore> {
     static STORE: std::sync::OnceLock<Arc<dyn SecretStore>> = std::sync::OnceLock::new();
-    Arc::clone(STORE.get_or_init(|| secrets_in(crate::DataRoot::system().secrets().as_deref())))
+    Arc::clone(STORE.get_or_init(|| {
+        let keychain = platform::keychain::SystemKeychain::new(brand::NAME);
+        let choice = std::env::var(key::CHOICE).ok();
+        kept_in(crate::DataRoot::system().secrets().as_deref(), system_keeper(choice.as_deref(), &keychain))
+    }))
+}
+
+fn system_keeper<'a>(choice: Option<&str>, keychain: &'a dyn platform::keychain::Keychain) -> Keeper<'a> {
+    if cfg!(test) { Keeper::File } else { Keeper::chosen(choice, keychain) }
 }
 
 pub fn secrets_in(dir: Option<&Path>) -> Arc<dyn SecretStore> {
-    match sealed_in(dir) {
+    kept_in(dir, Keeper::File)
+}
+
+fn kept_in(dir: Option<&Path>, keeper: Keeper<'_>) -> Arc<dyn SecretStore> {
+    match sealed_in(dir, keeper) {
         Ok(store) => Arc::new(store),
         Err(reason) => {
             tracing::error!(%reason, "the sealed secrets file is unusable; no key can be kept");
@@ -46,10 +60,10 @@ pub fn secrets_in(dir: Option<&Path>) -> Arc<dyn SecretStore> {
     }
 }
 
-fn sealed_in(dir: Option<&Path>) -> Result<SealedSecretStore, String> {
+fn sealed_in(dir: Option<&Path>, keeper: Keeper<'_>) -> Result<SealedSecretStore, String> {
     let dir = dir.ok_or("this user has no data folder")?;
     std::fs::create_dir_all(dir).map_err(|error| format!("{} cannot be made: {error}", dir.display()))?;
-    let key = SealedSecretStore::key_at(&dir.join("secrets.key"))?;
+    let key = key::at(&dir.join("secrets.key"), keeper)?;
     SealedSecretStore::open(&dir.join("secrets.json"), key)
 }
 
@@ -105,6 +119,52 @@ mod tests {
         assert!(reason.contains("no data folder"), "{reason}");
         let refused = stored(&*store).expect_err("nothing pretends to be saved");
         assert_eq!(refused, format!("keys cannot be kept on this machine: {reason}"));
+    }
+
+    #[derive(Debug, Default)]
+    struct Keychain {
+        item: Mutex<Option<String>>,
+        gone: std::sync::atomic::AtomicBool,
+    }
+
+    impl platform::keychain::Keychain for Keychain {
+        fn get(&self, _: &str) -> Result<Option<String>, platform::keychain::Unreachable> {
+            if self.gone.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(platform::keychain::Unreachable("locked out".to_owned()));
+            }
+            Ok(self.item.locked().clone())
+        }
+
+        fn set(&self, _: &str, secret: &str) -> Result<(), platform::keychain::Unreachable> {
+            *self.item.locked() = Some(secret.to_owned());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_vault_whose_keychain_is_gone_keeps_nothing_and_says_how_to_fall_back_to_a_file() {
+        let dir = tempfile::tempdir().expect("dir");
+        let keychain = Keychain::default();
+        let connection = SecretId::new();
+        let secrets = Secrets::from([("k".to_owned(), "v".to_owned())]);
+        kept_in(Some(dir.path()), Keeper::Keychain(&keychain)).set(connection, &secrets).expect("kept");
+        assert_eq!(kept_in(Some(dir.path()), Keeper::Keychain(&keychain)).get(connection), Some(secrets));
+        keychain.gone.store(true, std::sync::atomic::Ordering::SeqCst);
+
+        let store = kept_in(Some(dir.path()), Keeper::Keychain(&keychain));
+
+        let reason = store.unkept().expect("says why");
+        assert!(reason.contains("locked out") && reason.contains("_SECRETS=file"), "{reason}");
+        assert!(stored(&*store).is_err());
+        assert!(
+            std::fs::read_to_string(dir.path().join("secrets.json")).expect("vault").contains(&connection.to_string())
+        );
+    }
+
+    #[test]
+    fn unit_tests_that_open_the_system_vault_never_reach_the_real_keychain() {
+        let keychain = Keychain::default();
+        assert!(matches!(system_keeper(None, &keychain), Keeper::File));
     }
 
     #[test]

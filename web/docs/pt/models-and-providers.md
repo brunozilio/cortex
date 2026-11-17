@@ -42,7 +42,7 @@ Dentro do chat, `/login` abre a mesma lista como um seletor.
 | Chave de API | Você cola uma chave do console do provedor | O provedor cobra a chave por token |
 | Assinatura | Você faz login no navegador ou com um código de dispositivo | O plano de assinatura que você já tem |
 
-Chaves e tokens de login ficam guardados na sua pasta de dados, selados em `secrets.json` (a chave dele em `secrets.key`, os dois legíveis só por você). Os tokens de assinatura são renovados sozinhos quando expiram. Veja [Arquivos e diretórios](./files-and-directories).
+Chaves e tokens de login ficam guardados na sua pasta de dados, selados em `secrets.json` (legível só por você), cuja chave fica no chaveiro do sistema, ou em `secrets.key` onde não há um. Os tokens de assinatura são renovados sozinhos quando expiram. Veja [Arquivos e diretórios](./files-and-directories).
 
 > [!NOTE]
 > As chaves vêm só do que você conecta com `{{COMMAND}} login` ou `/login`. O {{NAME}} não lê chaves de provedores de variáveis de ambiente.

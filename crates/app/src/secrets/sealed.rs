@@ -61,8 +61,9 @@ impl SealedSecretStore {
         serde_json::from_slice(&opened).ok()
     }
 
-    pub fn key_at(path: &Path) -> Result<[u8; 32], String> {
-        super::key::at(path)
+    #[cfg(test)]
+    fn key_at(path: &Path) -> Result<[u8; 32], String> {
+        super::key::at(path, super::key::Keeper::File)
     }
 }
 

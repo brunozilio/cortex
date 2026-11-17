@@ -1,6 +1,6 @@
 # 0006 One persistence pattern
 
-Status: Accepted, 2026-11-16. The SQLite part (session catalog and project memory) is implemented, 2026-11-17; see "Implemented: the database" below. The transcript part (conversation split from the trace, saved at every transition) is implemented, 2026-11-17; see "Implemented: the transcript" below.
+Status: Accepted, 2026-11-16. The SQLite part (session catalog and project memory) is implemented, 2026-11-17; see "Implemented: the database" below. The transcript part (conversation split from the trace, saved at every transition) is implemented, 2026-11-17; see "Implemented: the transcript" below. The keychain part is implemented, 2026-11-17; see "Implemented: the secrets key in the keychain" below.
 
 ## Context
 
@@ -80,3 +80,22 @@ Consequences that are now real:
 - An older binary does not expect a session's `.lock` file to disappear: if it opens the file just before this version removes it and locks it just after, both can hold the session at once. The window is a few microseconds at the end of a run.
 - The hooks' view of the disk changed: a hook that reads the session files during a run now finds the messages of the turn so far, and trace entries only up to the last transition.
 - A checkpoint whose files were dropped cannot be rewound to. An older binary does not know the marker and would rewind to it without restoring files.
+
+## Implemented: the secrets key in the keychain (2026-11-17)
+
+Only the vault's 32-byte key moved to the operating system's keychain (macOS Keychain, the Secret Service over D-Bus on Linux, Windows Credential Manager); the entries stay sealed in `secrets.json` as before (`crates/app/src/secrets/key.rs`, `crates/platform/src/keychain.rs`). The alternative, one keychain item per secret, was set aside: it changes the data format and needs a migration of every entry, macOS asks once per item when a rebuilt binary first reads it, and an MCP server's or a subscription's tokens are rewritten on every refresh, which would be a keychain write each time. With one item, the vault, its locking and its tests are unchanged and the keychain is touched once per process.
+
+- The item's service is the app's name and its account is the full path of `secrets.key`, so two data folders never share a key.
+- `secrets.key` becomes a pointer: after the key is in the keychain the file holds the word `keychain` and no key material. The file is rewritten (atomically, under the vault's lock) only after the key was written to the keychain and read back equal; a read-back that fails or differs leaves the file key where it was, and the next start tries again.
+- A first start with a reachable keychain makes the key there and writes the pointer. A first start with no reachable keychain (a headless Linux, CI, a container) keeps the key in the file, as before, and moves it the first time a keychain answers. A key found in the keychain with no `secrets.key` beside it is used, not replaced.
+- Once the pointer is written, a keychain that cannot be reached, or that no longer holds the item, is an error: no new key is made, since it would leave every sealed entry unreadable. The error names `<PREFIX>_SECRETS=file` as the way out; it reaches the user as the existing "keys cannot be kept" notice, and connecting a provider or signing in is refused until then.
+- `<PREFIX>_SECRETS=file` keeps the key in the file and never writes the keychain. If the file is a pointer, the key is taken back from the keychain when it answers; when it does not, a new file key is made, which is the fallback the error offered (keys saved before must be entered again).
+- Only the user's real data folder uses the keychain. `DataRoot::under` (the SDK's `data_dir`, tests) keeps the file key, so no test touches the user's keychain; the test against the real keychain is ignored by default.
+- The choice and the creation run under the same cross-process lock as before, so programs starting together end with one key and one keychain write.
+
+Consequences that are now real:
+
+- On Linux the Secret Service is reached through `keyring` 3 with its pure-Rust D-Bus client (`zbus` 4); three of its crates are unmaintained (merged into `zbus` 6) and are listed in `deny.toml` with that reason. No C library is added.
+- On macOS the item is trusted for the binary that created it; a rebuilt or updated binary is asked once by the system ("Always Allow").
+- Downgrade: an older binary reads the pointer as a key that is not 64 hex digits and refuses to keep keys, without making a new one. Running this version with `<PREFIX>_SECRETS=file` once puts the key back in the file for it.
+- A process running as the user can still ask the keychain for the key; the keychain may ask the user first (macOS) or not (an unlocked Secret Service collection).

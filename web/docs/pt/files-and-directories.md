@@ -117,7 +117,7 @@ Na **pasta de dados locais**:
 |---|---|
 | `native-sessions/` | Conversas. Para cada uma: `<sessão>.jsonl` (a conversa em si, salva a cada passo, então ela sobrevive a uma falha ou a um terminal fechado), `<sessão>.trace.jsonl` (o que o `/trace` mostra; ao passar de 64 MB é renomeado para `<sessão>.trace.1.jsonl` e um novo começa, então só a parte mais recente e a anterior são mantidas), `checkpoints-<sessão>.json` (para o `/rewind`: os arquivos dos 50 prompts mais recentes, até 64 MB) e `worktree-<sessão>.json`. Um arquivo `<sessão>.lock` existe só enquanto a conversa está respondendo. Apagar os arquivos de trace perde o trace, nunca a conversa. |
 | `secrets.json` | Chaves de API e tokens, cifrados. Legível só por você. |
-| `secrets.key` | A chave que abre o `secrets.json`. Legível só por você. |
+| `secrets.key` | Onde está a chave que abre o `secrets.json`. Normalmente ele contém só a palavra `keychain`: a chave em si fica no chaveiro do sistema (Keychain no macOS, Secret Service no Linux, Gerenciador de Credenciais no Windows). Onde nenhum chaveiro responde (um servidor sem sessão gráfica, CI, um contêiner), ou com `{{ENV}}_SECRETS=file`, a chave fica neste arquivo. Legível só por você. Não o apague: sem ele, as chaves do `secrets.json` não podem ser abertas. |
 | `logs/{{COMMAND}}.log` | O log (nível definido por `{{ENV}}_LOG`). Passando de 5 MB, é renomeado para `{{COMMAND}}.log.1` e um novo começa. |
 | `lsp/` | Servidores de linguagem que o {{NAME}} instalou no primeiro uso. |
 

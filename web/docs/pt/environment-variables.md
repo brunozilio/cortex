@@ -21,6 +21,7 @@ Quase tudo no {{NAME}} se configura nos [arquivos de configuração](./settings)
 | `{{ENV}}_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | não definida | Desliga a memória automática, como `"autoMemoryEnabled": false`. Veja [Memória](./memory). |
 | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | não definida | O mesmo que `{{ENV}}_DISABLE_AUTO_MEMORY`, para ambientes compartilhados com o Claude Code. |
 | `{{ENV}}_CONSOLE_DIR` | Uma pasta com um `index.html` | não definida | Serve a página do [console de trace](./trace-console) a partir desta pasta em vez da cópia embutida no binário. |
+| `{{ENV}}_SECRETS` | `file` (sem diferenciar maiúsculas) | não definida: o chaveiro do sistema | Guarda a chave que abre suas chaves de API e tokens salvos em `secrets.key` em vez do chaveiro do sistema, e nunca escreve no chaveiro. Para CI, contêineres e servidores sem chaveiro. Se a chave estava no chaveiro, ela volta para o arquivo quando o chaveiro responde; quando ele não responde, uma chave nova é criada e as chaves salvas antes precisam ser informadas de novo. Veja [Arquivos e diretórios](./files-and-directories). |
 
 ## Variáveis padrão que ele respeita
 

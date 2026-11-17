@@ -32,7 +32,7 @@ The main line is `cli -> app -> agent-engine -> llm-providers -> domain`.
 | `script` | The QuickJS runtime |
 | `console` | The local HTTP server behind the web page |
 | `code-map` | Tree-sitter index of a repository, ranked against a prompt |
-| `platform` | Per-OS IO: child processes, private files, file locks, data folders, sandbox |
+| `platform` | Per-OS IO: child processes, private files, file locks, data folders, sandbox, system keychain |
 | `brand` | The product's name and command, from `brand.toml` |
 
 `web/` is the browser app the console serves (trace, console, documentation, terminal). `content/` is JavaScript and Markdown, not a crate. `xtask/` holds the repository lint, the web page's build (`xtask web`), the release check on it and the fixtures that tie the page's types to `domain`'s.
@@ -76,7 +76,8 @@ The data folder is `~/Library/Application Support/<Name>` on macOS and `$XDG_CON
 
 | Path | Content | Written by |
 |---|---|---|
-| `secrets.key`, `secrets.json` | Vault key and encrypted entries | `app` secrets |
+| `secrets.json` | The vault's encrypted entries | `app` secrets |
+| `secrets.key` | The word `keychain` once the vault key is in the system keychain (service: the app's name, account: this file's path); the key itself, as 64 hex digits, where no keychain answers or `<PREFIX>_SECRETS=file` is set | `app` secrets, through `platform::keychain` |
 | `providers/local/providers.json` | Accounts per provider | `app` providers |
 | `users/local/settings.json` | UI state: model, mode, prompt history, last session per folder | TUI saver through `app` |
 | `users/local/trusted-folders.json` | The project folders the user trusts: a compact list of `{ "path", "trusted_at" }`, keyed by canonical trust root | `app` trust store, on `ClientCommand::Trust` |
