@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use sdk::EngineEvent;
+use app::EngineEvent;
 use serde_json::json;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -143,7 +143,7 @@ fn prompt(line: &str) -> Result<Option<String>, String> {
 
 #[cfg(test)]
 mod tests {
-    use sdk::SessionId;
+    use app::SessionId;
 
     use super::*;
 

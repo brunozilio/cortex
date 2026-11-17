@@ -1,4 +1,4 @@
-use sdk::{AgentAsk, AskKind, Decision, PermissionMode, Question};
+use app::{AgentAsk, AskKind, Decision, PermissionMode, Question};
 
 const PLAN_CHOICES: [(&str, Option<PermissionMode>); 3] = [
     ("Yes, and auto-accept edits", Some(PermissionMode::AcceptEdits)),
@@ -168,7 +168,7 @@ impl Pending {
 
 #[cfg(test)]
 mod tests {
-    use sdk::{AskId, Choice};
+    use app::{AskId, Choice};
 
     use super::*;
 

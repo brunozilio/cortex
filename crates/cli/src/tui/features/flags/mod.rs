@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use sdk::ListedFlag;
+use app::ListedFlag;
 
 use super::{Feature, Setting, Slash};
 use crate::tui::app::{App, Msg};

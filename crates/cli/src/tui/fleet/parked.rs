@@ -1,6 +1,6 @@
 use std::mem::swap;
 
-use sdk::Session;
+use app::Session;
 
 use super::super::app::App;
 use super::super::ask::Pending;
@@ -47,7 +47,7 @@ impl Parked {
         self.turn.run.as_ref().is_some_and(|control| control.id() == run)
     }
 
-    pub fn is(&self, id: &sdk::SessionId) -> bool {
+    pub fn is(&self, id: &app::SessionId) -> bool {
         self.session.as_ref().and_then(Session::id).as_ref() == Some(id)
     }
 }

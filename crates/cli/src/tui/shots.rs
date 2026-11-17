@@ -2,12 +2,12 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use agent_engine::fake::FakeEngine;
+use app::{EngineEvent, Model};
 use domain::events::TaskItem;
 use domain::{AgentAsk, AskId, AskKind, SessionId, ToolCall};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::KeyCode;
-use sdk::{EngineEvent, Model};
 
 use super::app::App;
 use super::motion::Motion;

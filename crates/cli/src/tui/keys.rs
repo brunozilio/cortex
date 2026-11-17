@@ -1,5 +1,5 @@
+use app::{Effort, PermissionMode};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use sdk::{Effort, PermissionMode};
 
 use super::app::App;
 use super::ask;

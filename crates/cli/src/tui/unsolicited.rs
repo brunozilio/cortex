@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
-use sdk::protocol::Unsolicited;
-use sdk::protocol::features::memory::MemoryApplied;
+use app::api::Unsolicited;
+use app::api::features::memory::MemoryApplied;
 
 use super::app::App;
 
@@ -62,8 +62,8 @@ fn learned(applied: &MemoryApplied) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use sdk::ModelProvider;
-    use sdk::protocol::features::memory::MemoryListing;
+    use app::ModelProvider;
+    use app::api::features::memory::MemoryListing;
 
     use super::*;
 
@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn what_the_backend_tells_unasked_lands_in_the_transcript() {
         let data = tempfile::tempdir().expect("data");
-        let engine = agent_engine::fake::FakeEngine::new(vec![sdk::Model::new("keyed:scripted", "Scripted")], vec![]);
+        let engine = agent_engine::fake::FakeEngine::new(vec![app::Model::new("keyed:scripted", "Scripted")], vec![]);
         let mut app = App::new(crate::tui::tests::sdk(&engine, data.path()), data.path().into(), None, None);
 
         arrived(&mut app, failed("keyed", "401"));

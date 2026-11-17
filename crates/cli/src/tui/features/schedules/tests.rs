@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use agent_engine::fake::FakeEngine;
+use app::{EngineEvent, Model};
 use domain::SessionId;
 use domain::schedule::{Scheduled, When};
 use ratatui::crossterm::event::KeyCode;
-use sdk::{EngineEvent, Model};
 
 use super::arrived;
 use crate::tui::app::App;

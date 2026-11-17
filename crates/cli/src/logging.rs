@@ -67,7 +67,7 @@ mod tests {
     fn warnings_are_kept_unless_another_filter_is_asked() {
         assert_eq!(filter(None).to_string(), "warn");
         assert_eq!(filter(Some("  ")).to_string(), "warn");
-        assert_eq!(filter(Some("backend=debug")).to_string(), "backend=debug");
+        assert_eq!(filter(Some("app=debug")).to_string(), "app=debug");
         assert_eq!(filter(Some("=[")).to_string(), "warn");
     }
 

@@ -2,8 +2,8 @@ mod draw;
 mod parked;
 mod rows;
 
+use app::EngineEvent;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
-use sdk::EngineEvent;
 
 use super::app::{App, Msg};
 use super::conversations::Conversation;
@@ -84,7 +84,7 @@ pub fn event(app: &mut App, run: domain::RunId, event: EngineEvent) {
     }
 }
 
-pub fn chore(app: &mut App, session: Option<sdk::SessionId>, answer: Result<Option<sdk::ChoreAnswer>, String>) {
+pub fn chore(app: &mut App, session: Option<app::SessionId>, answer: Result<Option<app::ChoreAnswer>, String>) {
     let at = session.and_then(|id| app.fleet.parked.iter().position(|parked| parked.is(&id)));
     match at {
         Some(at) => within(app, at, |app| app.chore_answered(answer), false),

@@ -1,5 +1,5 @@
+use app::{Error, Forgotten, Memory, ProjectMemory};
 use domain::command::MemoryCommand;
-use sdk::{Error, Forgotten, Memory, ProjectMemory};
 
 use super::{Feature, Slash};
 use crate::tui::app::{App, Msg};
@@ -73,18 +73,18 @@ fn run(app: &mut App, command: MemoryCommand) {
 
 fn remember(app: &mut App, note: String) {
     let cwd = app.cwd.clone();
-    app.spawn(move |sdk| match sdk.memory(cwd).remember(sdk::MemoryKind::Semantic, &note, &["user"]) {
+    app.spawn(move |sdk| match sdk.memory(cwd).remember(app::MemoryKind::Semantic, &note, &["user"]) {
         Ok(_) => Msg::Notice(format!("Remembered: {note}")),
         Err(error) => Msg::Error(error.to_string()),
     });
 }
 
-fn optimize(memory: &ProjectMemory<'_>, model: sdk::Model) -> Result<String, Error> {
+fn optimize(memory: &ProjectMemory<'_>, model: app::Model) -> Result<String, Error> {
     let before = memory.list()?.len();
     let mut run = memory.optimize(model)?;
     let mut failed = None;
     while let Some(event) = run.next_event() {
-        if let sdk::EngineEvent::Failed(message) = event {
+        if let app::EngineEvent::Failed(message) = event {
             failed = Some(message);
         }
     }
@@ -103,7 +103,7 @@ fn listing(title: &str, memories: &[Memory]) -> String {
     format!("{title}:\n{}", lines.join("\n"))
 }
 
-fn seed_listing(offered: &[sdk::SeedCandidate]) -> String {
+fn seed_listing(offered: &[app::SeedCandidate]) -> String {
     if offered.is_empty() {
         return "Nothing you asked for in two or more past sessions is left to remember.".to_owned();
     }
@@ -144,8 +144,8 @@ mod tests {
     }
 
     use agent_engine::fake::FakeEngine;
+    use app::{EngineEvent, MemoryKind, Model};
     use ratatui::crossterm::event::KeyCode;
-    use sdk::{EngineEvent, MemoryKind, Model};
 
     use crate::tui::app::App;
     use crate::tui::tests::{press, screen, sdk, type_text, until};
@@ -165,7 +165,7 @@ mod tests {
         let memory = sdk.memory(data.path());
         memory.remember(MemoryKind::Semantic, "Uses wgpu", &[]).expect("remember");
         memory.remember(MemoryKind::Semantic, "Inter is the font", &[]).expect("remember");
-        memory.forget(sdk::MemoryId(0)).expect("forget");
+        memory.forget(app::MemoryId(0)).expect("forget");
         let mut app = App::new(sdk, data.path().into(), None, None);
         until(&mut app, |app| app.session.is_some());
 

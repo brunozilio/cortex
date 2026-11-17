@@ -2,11 +2,11 @@ use std::path::Path;
 
 pub use domain::changes::{Changes, DiffScope as Scope};
 
-pub fn changes(sdk: &sdk::Sdk, cwd: &Path) -> Result<Changes, String> {
+pub fn changes(sdk: &app::Sdk, cwd: &Path) -> Result<Changes, String> {
     changes_in(sdk, cwd, Scope::Uncommitted)
 }
 
-pub fn changes_in(sdk: &sdk::Sdk, cwd: &Path, scope: Scope) -> Result<Changes, String> {
+pub fn changes_in(sdk: &app::Sdk, cwd: &Path, scope: Scope) -> Result<Changes, String> {
     sdk.changes(cwd, scope).map_err(|error| error.to_string())
 }
 

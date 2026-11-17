@@ -35,10 +35,10 @@ pub struct Feature {
     pub prefix: Option<(char, Run)>,
     pub status: Option<fn(&App) -> Option<String>>,
     pub setting: Option<Setting>,
-    pub answer: Option<fn(&mut App, &sdk::Decision) -> bool>,
+    pub answer: Option<fn(&mut App, &app::Decision) -> bool>,
 }
 
-pub fn answered(app: &mut App, decision: &sdk::Decision) -> bool {
+pub fn answered(app: &mut App, decision: &app::Decision) -> bool {
     all().into_iter().filter_map(|feature| feature.answer).any(|answer| answer(app, decision))
 }
 

@@ -1,5 +1,5 @@
+use app::Model;
 use domain::provider::ProviderSummary;
-use sdk::Model;
 
 #[derive(Default)]
 pub struct Catalog {

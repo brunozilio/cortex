@@ -1,4 +1,4 @@
-use sdk::{ChoreAnswer, Error, HeadsUp, Run};
+use app::{ChoreAnswer, Error, HeadsUp, Run};
 
 use super::app::{App, Msg};
 
@@ -31,7 +31,7 @@ impl App {
 
     fn chore(&self, started: Result<Run, Error>) {
         let tx = self.tx.clone();
-        let session = self.session.as_ref().and_then(sdk::Session::id);
+        let session = self.session.as_ref().and_then(app::Session::id);
         std::thread::spawn(move || {
             let answer = started.and_then(Run::chore_answer).map_err(|error| error.to_string());
             let _ = tx.send(Msg::Chore(session, answer));
@@ -41,7 +41,7 @@ impl App {
     pub(super) fn chore_answered(&mut self, answer: Result<Option<ChoreAnswer>, String>) {
         match answer {
             Ok(Some(ChoreAnswer::Title(title))) => {
-                if let Some(id) = self.session.as_ref().and_then(sdk::Session::id) {
+                if let Some(id) = self.session.as_ref().and_then(app::Session::id) {
                     self.saver.remember_title(&self.cwd, &id, &title);
                     let (sdk, named) = (self.sdk.clone(), title.clone());
                     std::thread::spawn(move || {

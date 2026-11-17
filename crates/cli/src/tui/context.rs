@@ -1,5 +1,5 @@
+use app::EngineEvent;
 use domain::usage::{ContextSlice, ContextUsage};
-use sdk::EngineEvent;
 
 use super::app::{App, Msg};
 use super::entries::tokens;

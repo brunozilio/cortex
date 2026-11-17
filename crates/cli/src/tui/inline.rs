@@ -47,8 +47,8 @@ pub fn flush<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()
 #[cfg(test)]
 mod tests {
     use agent_engine::fake::FakeEngine;
+    use app::{EngineEvent, Model, SessionId};
     use ratatui::backend::TestBackend;
-    use sdk::{EngineEvent, Model, SessionId};
 
     use super::*;
     use crate::tui::tests::{sdk, type_text, until};

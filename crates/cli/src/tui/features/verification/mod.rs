@@ -1,5 +1,5 @@
+use app::{Criteria, CriteriaSource};
 use domain::command::VerificationCommand;
-use sdk::{Criteria, CriteriaSource};
 
 use super::{Feature, Setting, Slash};
 use crate::tui::app::App;
@@ -11,7 +11,7 @@ pub fn feature() -> Feature {
             about: "Judge runs: /verification <criteria>, or off",
             run: |app, argument| run(app, VerificationCommand::parse(argument)),
         }],
-        status: Some(|app| app.session.as_ref().and_then(sdk::Session::verification).map(|c| marker(&c))),
+        status: Some(|app| app.session.as_ref().and_then(app::Session::verification).map(|c| marker(&c))),
         setting: Some(Setting {
             name: "Verification",
             value: |_| String::new(),
@@ -62,8 +62,8 @@ fn source(criteria: &Criteria) -> &'static str {
 #[cfg(test)]
 mod tests {
     use agent_engine::fake::FakeEngine;
+    use app::{EngineEvent, Model, PermissionMode};
     use ratatui::crossterm::event::KeyCode;
-    use sdk::{EngineEvent, Model, PermissionMode};
 
     use super::*;
     use crate::tui::tests::{press, screen, sdk, type_text, until};

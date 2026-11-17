@@ -236,7 +236,7 @@ See [Sessions](./sessions).
 
 | Variable | Effect |
 |---|---|
-| `{{ENV}}_LOG` | What goes to the log file, as a filter like `warn` or `backend=debug`. Default `warn`. See [Troubleshooting](./troubleshooting#logs). |
+| `{{ENV}}_LOG` | What goes to the log file, as a filter like `warn` or `app=debug`. Default `warn`. See [Troubleshooting](./troubleshooting#logs). |
 | `{{ENV}}_THEME` | `light` or `dark`: the chat's colours, instead of following the terminal |
 | `{{ENV}}_REDUCED_MOTION` | `1` turns the chat's animations off |
 

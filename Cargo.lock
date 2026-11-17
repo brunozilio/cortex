@@ -170,6 +170,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "app"
+version = "0.0.0"
+dependencies = [
+ "agent-engine",
+ "base64 0.23.1",
+ "brand",
+ "chacha20poly1305",
+ "chrono",
+ "code-map",
+ "crossbeam-channel",
+ "domain",
+ "getrandom 0.3.4",
+ "llm-providers",
+ "platform",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tiny_http",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -273,31 +298,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "backend"
-version = "0.0.0"
-dependencies = [
- "agent-engine",
- "base64 0.23.1",
- "brand",
- "chacha20poly1305",
- "chrono",
- "code-map",
- "crossbeam-channel",
- "domain",
- "getrandom 0.3.4",
- "llm-providers",
- "platform",
- "protocol",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
- "tiny_http",
- "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -593,7 +593,7 @@ name = "cli"
 version = "0.0.0"
 dependencies = [
  "agent-engine",
- "backend",
+ "app",
  "brand",
  "clap",
  "console",
@@ -602,7 +602,6 @@ dependencies = [
  "domain",
  "platform",
  "ratatui",
- "sdk",
  "serde_json",
  "syntect",
  "tachyonfx",
@@ -2408,16 +2407,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "protocol"
-version = "0.0.0"
-dependencies = [
- "domain",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "psm"
 version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2988,24 +2977,6 @@ version = "0.0.0"
 dependencies = [
  "rquickjs",
  "serde_json",
-]
-
-[[package]]
-name = "sdk"
-version = "0.0.0"
-dependencies = [
- "agent-engine",
- "backend",
- "brand",
- "crossbeam-channel",
- "domain",
- "platform",
- "protocol",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
 ]
 
 [[package]]

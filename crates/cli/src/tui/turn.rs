@@ -1,4 +1,4 @@
-use sdk::RunControl;
+use app::RunControl;
 
 use super::rewind::Checkpoint;
 use super::stopwatch::Stopwatch;

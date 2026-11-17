@@ -12,8 +12,8 @@ mod tui;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use app::{PermissionMode, Sdk};
 use clap::{Parser, Subcommand};
-use sdk::{PermissionMode, Sdk};
 
 #[derive(Debug, Parser)]
 #[command(name = brand::COMMAND, version, about = concat!("Talk to ", brand::name!(), "'s coding agent in your project."))]
@@ -160,7 +160,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
     let sdk = Sdk::builder().cwd(&cwd).build().map_err(|e| e.to_string())?;
     let prompt = (!cli.prompt.is_empty()).then(|| cli.prompt.join(" "));
     let add_dirs = cli.add_dir.iter().map(|typed| tui::dirs::folder(&cwd, typed)).collect::<Result<Vec<_>, _>>()?;
-    let headless = sdk::Headless {
+    let headless = app::Headless {
         max_turns: cli.max_turns,
         allowed_tools: cli.allowed_tools.iter().flat_map(|rules| rule_list(rules)).collect(),
         disallowed_tools: cli.disallowed_tools.iter().flat_map(|rules| rule_list(rules)).collect(),
@@ -241,7 +241,7 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 None
             };
             let (resume, pick) = match cli.pick {
-                Some(id) if !id.is_empty() => (Some(sdk::SessionId(id)), false),
+                Some(id) if !id.is_empty() => (Some(app::SessionId(id)), false),
                 Some(_) => (resume, true),
                 None => (resume, false),
             };

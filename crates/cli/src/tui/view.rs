@@ -1,10 +1,10 @@
+use app::PermissionMode;
 use domain::command::mode_label;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph};
-use sdk::PermissionMode;
 
 use super::app::App;
 use super::entries;

@@ -1,7 +1,7 @@
 use domain::command::{level_named, mode_named};
 use std::path::Path;
 
-use sdk::{Effort, PermissionMode, Sdk, SessionId};
+use app::{Effort, PermissionMode, Sdk, SessionId};
 
 use super::store::{Change, Store, apply};
 

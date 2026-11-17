@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use sdk::{EngineEvent, Run};
+use app::{EngineEvent, Run};
 
 use super::app::{App, Msg};
 use super::ask::Pending;
@@ -115,7 +115,7 @@ impl App {
         self.input.set(&text);
     }
 
-    pub(super) fn follow(&mut self, started: Result<Run, sdk::Error>) {
+    pub(super) fn follow(&mut self, started: Result<Run, app::Error>) {
         match started {
             Ok(run) => {
                 self.turn.run = Some(run.control());
@@ -145,7 +145,7 @@ impl App {
         }
     }
 
-    pub fn answer(&mut self, decision: sdk::Decision) {
+    pub fn answer(&mut self, decision: app::Decision) {
         if super::git_offer::answered(self, &decision) || super::features::answered(self, &decision) {
             return;
         }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use sdk::{Decision, EngineEvent, PermissionMode, Sdk};
+use app::{Decision, EngineEvent, PermissionMode, Sdk};
 
 use crate::print_output::{Format, Output};
 
@@ -11,20 +11,20 @@ pub struct Wanted<'a> {
     pub mode: Option<PermissionMode>,
     pub verification: Option<String>,
     pub add_dirs: Vec<PathBuf>,
-    pub headless: sdk::Headless,
+    pub headless: app::Headless,
     pub format: Format,
-    pub resume: Option<sdk::SessionId>,
+    pub resume: Option<app::SessionId>,
     pub fork: bool,
 }
 
 pub fn resumed(
     picked: Option<&str>,
     continuing: bool,
-    last: impl FnOnce() -> Result<Option<sdk::SessionId>, String>,
-) -> Result<Option<sdk::SessionId>, String> {
+    last: impl FnOnce() -> Result<Option<app::SessionId>, String>,
+) -> Result<Option<app::SessionId>, String> {
     match picked {
         Some("") => Err("--resume needs a session id with --print".to_owned()),
-        Some(id) => Ok(Some(sdk::SessionId(id.to_owned()))),
+        Some(id) => Ok(Some(app::SessionId(id.to_owned()))),
         None if continuing => last(),
         None => Ok(None),
     }
@@ -75,7 +75,7 @@ pub fn print_all(
         while let Some(event) = run.next_event() {
             output.event(&event);
             match event {
-                EngineEvent::Asked(sdk::AgentAsk { id, kind: sdk::AskKind::Plan { plan } }) => {
+                EngineEvent::Asked(app::AgentAsk { id, kind: app::AskKind::Plan { plan } }) => {
                     output.push_text(&plan);
                     output.note("plan not carried out: run again with --mode edits to implement it");
                     run.answer(id, Decision::Deny).map_err(|e| e.to_string())?;
@@ -108,8 +108,8 @@ mod tests {
     use std::sync::Arc;
 
     use agent_engine::fake::FakeEngine;
-    use backend::{InMemorySecretStore, LocalServices};
-    use sdk::{Criteria, Model, Verdict};
+    use app::{Criteria, Model, Verdict};
+    use app::{InMemorySecretStore, LocalServices};
 
     use super::*;
 
@@ -156,7 +156,7 @@ mod tests {
         git(repo.path(), &["add", "-A"]);
         let engine = FakeEngine::new(vec![Model::new("scripted", "Scripted")], Vec::new());
         let mut services = LocalServices::with_engine(Arc::new(engine));
-        services.homes = Arc::new(backend::OwnerHome::at(home.path()));
+        services.homes = Arc::new(app::OwnerHome::at(home.path()));
         let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
 
         let mut errors = Vec::new();
@@ -199,10 +199,10 @@ mod tests {
     fn resume_without_an_id_is_an_error_when_printing() {
         let none = || Ok(None);
         assert_eq!(resumed(Some(""), false, none), Err("--resume needs a session id with --print".to_owned()));
-        assert_eq!(resumed(Some("s-1"), false, none), Ok(Some(sdk::SessionId("s-1".into()))));
+        assert_eq!(resumed(Some("s-1"), false, none), Ok(Some(app::SessionId("s-1".into()))));
         assert_eq!(
-            resumed(None, true, || Ok(Some(sdk::SessionId("last".into())))),
-            Ok(Some(sdk::SessionId("last".into())))
+            resumed(None, true, || Ok(Some(app::SessionId("last".into())))),
+            Ok(Some(app::SessionId("last".into())))
         );
         assert_eq!(resumed(None, false, || Err("never read".to_owned())), Ok(None));
     }

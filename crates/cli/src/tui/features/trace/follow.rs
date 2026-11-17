@@ -80,7 +80,7 @@ fn report_when_changed(app: &mut App) {
 pub(super) fn tick(app: &mut App) {
     report_when_changed(app);
     let busy = app.busy();
-    let current = app.session.as_ref().and_then(sdk::Session::id);
+    let current = app.session.as_ref().and_then(app::Session::id);
     let cwd = app.cwd.clone();
     let Some(follow) = app.features.get::<Follow>(NAME) else { return };
     let Some(served) = &follow.served else { return };
@@ -101,7 +101,7 @@ pub(super) fn tick(app: &mut App) {
     });
 }
 
-fn gathered(sdk: &sdk::Sdk, live: &Live, mut wanted: Wanted) -> Vec<(String, String)> {
+fn gathered(sdk: &app::Sdk, live: &Live, mut wanted: Wanted) -> Vec<(String, String)> {
     let listed = sdk.sessions().unwrap_or_default();
     live.list(board::shown(&listed, wanted.current.as_ref()).to_string());
     wanted.sessions.extend(board::active(&listed).map(|entry| entry.session.0.clone()));

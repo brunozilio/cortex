@@ -79,7 +79,7 @@ O {{NAME}} escreve um arquivo de log na pasta local de dados:
 | Linux | `$XDG_CONFIG_HOME/{{COMMAND}}/logs/{{COMMAND}}.log`, ou `~/.config/{{COMMAND}}/logs/{{COMMAND}}.log` |
 | Windows | `%LOCALAPPDATA%\{{NAME}}\logs\{{COMMAND}}.log` |
 
-Por padrão, só avisos e erros são gravados. Defina `{{ENV}}_LOG` para registrar mais, com um filtro como `info`, `debug` ou `backend=debug`:
+Por padrão, só avisos e erros são gravados. Defina `{{ENV}}_LOG` para registrar mais, com um filtro como `info`, `debug` ou `app=debug`:
 
 ```bash
 {{ENV}}_LOG=debug {{COMMAND}} -p "hello"

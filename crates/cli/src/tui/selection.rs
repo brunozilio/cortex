@@ -111,9 +111,9 @@ fn text(buffer: &Buffer, span: (Cell, Cell)) -> String {
 #[cfg(test)]
 mod tests {
     use agent_engine::fake::FakeEngine;
+    use app::Model;
     use ratatui::crossterm::event::KeyModifiers;
     use ratatui::layout::Rect;
-    use sdk::Model;
 
     use super::*;
     use crate::tui::tests::{sdk, type_text, until};

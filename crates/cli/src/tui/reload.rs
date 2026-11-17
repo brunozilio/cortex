@@ -1,4 +1,4 @@
-use sdk::{CustomAgent, McpOrigin, McpServerInfo, McpState};
+use app::{CustomAgent, McpOrigin, McpServerInfo, McpState};
 
 use super::app::{App, Msg};
 
@@ -8,7 +8,7 @@ pub fn run(app: &mut App) {
     app.spawn(move |sdk| {
         let _ = sdk.declare_providers(&cwd);
         let found =
-            (|| -> Result<_, sdk::Error> { Ok((sdk.skills(&cwd)?, sdk.agents(&cwd)?, sdk.mcp_servers(&cwd)?)) })();
+            (|| -> Result<_, app::Error> { Ok((sdk.skills(&cwd)?, sdk.agents(&cwd)?, sdk.mcp_servers(&cwd)?)) })();
         match found {
             Ok((skills, agents, servers)) => {
                 let names: Vec<String> = skills.iter().map(|s| s.name.clone()).collect();

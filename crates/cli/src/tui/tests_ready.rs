@@ -1,6 +1,6 @@
 use agent_engine::fake::FakeEngine;
+use app::{EngineEvent, Model, PermissionMode};
 use ratatui::crossterm::event::KeyCode;
-use sdk::{EngineEvent, Model, PermissionMode};
 use serde_json::json;
 
 use super::app::App;
@@ -23,7 +23,7 @@ fn a_reload_keeps_the_mode_and_effort_of_the_live_session() {
     let engine = engine();
     let mut app = started(&engine, data.path());
     app.set_mode(PermissionMode::Plan);
-    app.set_effort_from(Some(sdk::Effort::High));
+    app.set_effort_from(Some(app::Effort::High));
 
     let models = vec![Model::new("keyed:scripted", "Scripted")];
     app.ready(Ok(models), &json!({ "mode": "bypass", "effort": "auto" }));
@@ -34,7 +34,7 @@ fn a_reload_keeps_the_mode_and_effort_of_the_live_session() {
     press(&mut app, KeyCode::Enter);
     until(&mut app, |_| !engine.requests().is_empty());
     let sent = engine.requests().remove(0);
-    assert_eq!((sent.permission, sent.effort), (PermissionMode::Plan, sdk::Effort::High));
+    assert_eq!((sent.permission, sent.effort), (PermissionMode::Plan, app::Effort::High));
 }
 
 #[test]

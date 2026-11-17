@@ -1,0 +1,28 @@
+use crate::api::Unsolicited;
+use domain::memory::MemorySearches;
+use domain::{PromptRequest, RunId};
+
+use super::mcp::MemoryEndpoint;
+use crate::features::context::{Context, Finish};
+
+pub const TOOL: &str = "memory_search";
+
+pub fn prepare(context: &Context<'_>, run: RunId, request: PromptRequest) -> (PromptRequest, Option<Finish>) {
+    let Some(brief) = &request.memory else { return (request, None) };
+    let memories = super::of(context.services);
+    let wanted = !brief.optimizing && context.on(TOOL);
+    let mut request = memories.brief(run, &request, wanted);
+    if let Some(brief) = request.memory.as_ref().filter(|brief| brief.tool) {
+        let shown = if request.resume.is_none() { brief.recalled.iter().map(|m| m.id).collect() } else { Vec::new() };
+        let searches = MemorySearches::new(shown);
+        request.credentials.mcp.push(MemoryEndpoint::for_run(memories.clone(), request.cwd.clone(), searches));
+    }
+    let kept = request.clone();
+    let finish: Finish = Box::new(move |outcome| {
+        Some(match memories.finish(&kept, outcome)? {
+            Ok(applied) => Unsolicited::MemoryApplied(applied),
+            Err(message) => Unsolicited::MemoryFailed { path: kept.cwd.clone(), message },
+        })
+    });
+    (request, Some(finish))
+}

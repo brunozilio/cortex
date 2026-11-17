@@ -1,5 +1,5 @@
+use app::{McpOrigin, McpServerInfo, McpState, Sdk};
 use clap::Subcommand;
-use sdk::{McpOrigin, McpServerInfo, McpState, Sdk};
 
 #[derive(Debug, Subcommand)]
 pub enum McpAction {

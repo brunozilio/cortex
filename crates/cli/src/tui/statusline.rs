@@ -59,7 +59,7 @@ pub fn state(app: &App) -> Value {
     json!({
         "model": { "id": model.map(|m| m.id.clone()), "display_name": model.map(|m| m.label.clone()) },
         "workspace": { "current_dir": app.cwd.display().to_string() },
-        "session_id": app.session.as_ref().and_then(sdk::Session::id).map(|id| id.0),
+        "session_id": app.session.as_ref().and_then(app::Session::id).map(|id| id.0),
         "mode": domain::command::mode_label(app.mode()),
         "output_style": app.output_style.clone().unwrap_or_else(|| "default".into()),
         "cost": { "total_cost_usd": app.transcript.cost },

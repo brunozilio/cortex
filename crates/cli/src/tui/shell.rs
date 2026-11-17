@@ -31,7 +31,7 @@ pub fn finished(app: &mut App, id: &str, command: String, result: Result<(String
 
 pub use domain::conversation::with_shell as with_context;
 
-fn run(sdk: &sdk::Sdk, cwd: &Path, command: &str) -> Result<(String, bool), String> {
+fn run(sdk: &app::Sdk, cwd: &Path, command: &str) -> Result<(String, bool), String> {
     sdk.run_typed(cwd, command).map_err(|error| error.to_string())
 }
 

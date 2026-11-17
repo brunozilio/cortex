@@ -1,9 +1,9 @@
 use std::time::{Duration, Instant};
 
 use agent_engine::fake::FakeEngine;
+use app::{Decision, EngineEvent, Model};
 use domain::{AgentAsk, AskId, AskKind, ChoreAnswer, Rewound, SessionCommand, SessionId};
 use ratatui::crossterm::event::KeyCode;
-use sdk::{Decision, EngineEvent, Model};
 
 use super::app::App;
 use super::tests::{SETTLES_WITHIN, press, screen, sdk, type_text, until};
@@ -101,7 +101,7 @@ fn effort_without_a_level_opens_a_picker_at_the_current_one() {
     press(&mut app, KeyCode::Down);
     press(&mut app, KeyCode::Enter);
     assert!(app.overlays.picker.is_none());
-    assert_eq!(app.effort, sdk::Effort::High, "the level after medium");
+    assert_eq!(app.effort, app::Effort::High, "the level after medium");
 }
 
 fn asking_script(then: EngineEvent) -> Vec<EngineEvent> {
@@ -158,8 +158,8 @@ fn a_taken_sign_in_port_asks_to_close_the_app_holding_it() {
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
-    let holder = sdk::PortHolder { pid: 998, app: "Visual Studio Code".into() };
-    app.port_busy(sdk::ModelProvider::new("browser-sub"), "Kiro".into(), 49153, Some(holder));
+    let holder = app::PortHolder { pid: 998, app: "Visual Studio Code".into() };
+    app.port_busy(app::ModelProvider::new("browser-sub"), "Kiro".into(), 49153, Some(holder));
     let picker = app.overlays.picker.as_ref().expect("a picker");
     assert_eq!(picker.title, "Port 49153 is in use by Visual Studio Code (PID 998)");
     let choices: Vec<_> = picker.items.iter().map(|(label, _)| label.as_str()).collect();
@@ -177,7 +177,7 @@ fn a_taken_sign_in_port_with_no_known_holder_offers_to_try_again() {
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
-    app.port_busy(sdk::ModelProvider::new("browser-sub"), "Kiro".into(), 49153, None);
+    app.port_busy(app::ModelProvider::new("browser-sub"), "Kiro".into(), 49153, None);
     let picker = app.overlays.picker.as_ref().expect("a picker");
     assert_eq!(picker.title, "Port 49153 is in use by another app");
     let choices: Vec<_> = picker.items.iter().map(|(label, _)| label.as_str()).collect();

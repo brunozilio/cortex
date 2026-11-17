@@ -14,13 +14,11 @@ brand = { path = "crates/brand" }
 content = { path = "crates/content" }
 script = { path = "crates/script" }
 domain = { path = "crates/domain" }
-protocol = { path = "crates/protocol" }
-backend = { path = "crates/backend" }
+app = { path = "crates/app" }
 platform = { path = "crates/platform" }
 agent-engine = { path = "crates/agent-engine" }
 language-servers = { path = "crates/language-servers" }
 llm-providers = { path = "crates/llm-providers" }
-sdk = { path = "crates/sdk" }
 code-map = { path = "crates/code-map" }
 console = { path = "crates/console" }
 

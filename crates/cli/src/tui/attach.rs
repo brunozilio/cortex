@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use sdk::Image;
+use app::Image;
 
 use super::app::{App, Msg};
 
@@ -69,7 +69,7 @@ fn unescape(text: &str) -> String {
 
 pub fn image_file(path: &Path) -> Result<Option<Image>, String> {
     let size = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
-    if size > sdk::MAX_IMAGE_BYTES as u64 {
+    if size > app::MAX_IMAGE_BYTES as u64 {
         return Err("The image is over the 20 MiB limit.".into());
     }
     Image::from_bytes(&std::fs::read(path).map_err(|e| e.to_string())?)

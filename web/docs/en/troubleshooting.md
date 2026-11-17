@@ -79,7 +79,7 @@ See [Declared providers](./models-and-providers#declared-providers).
 | Linux | `$XDG_CONFIG_HOME/{{COMMAND}}/logs/{{COMMAND}}.log`, or `~/.config/{{COMMAND}}/logs/{{COMMAND}}.log` |
 | Windows | `%LOCALAPPDATA%\{{NAME}}\logs\{{COMMAND}}.log` |
 
-By default only warnings and errors are written. Set `{{ENV}}_LOG` to log more, with a filter such as `info`, `debug` or `backend=debug`:
+By default only warnings and errors are written. Set `{{ENV}}_LOG` to log more, with a filter such as `info`, `debug` or `app=debug`:
 
 ```bash
 {{ENV}}_LOG=debug {{COMMAND}} -p "hello"

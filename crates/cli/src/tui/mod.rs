@@ -99,11 +99,11 @@ mod tests_steering;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use ::app::{Headless, PermissionMode, Sdk, Session, SessionId};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::SetTitle;
-use sdk::{PermissionMode, Sdk};
 
 pub use app::App;
 pub use settings::last_session;
@@ -128,10 +128,10 @@ const ANIMATING: Duration = Duration::from_millis(33);
 
 #[derive(Debug, Default)]
 pub struct Start {
-    pub resume: Option<sdk::SessionId>,
+    pub resume: Option<SessionId>,
     pub add_dirs: Vec<PathBuf>,
     pub pick: bool,
-    pub headless: sdk::Headless,
+    pub headless: Headless,
     pub fork: bool,
     pub inline: bool,
     pub channels: Vec<String>,
@@ -277,7 +277,7 @@ pub fn run(
         println!("{}", chore());
         return result;
     }
-    if app.session.as_ref().and_then(sdk::Session::id).is_some() {
+    if app.session.as_ref().and_then(Session::id).is_some() {
         println!("Continue this conversation with: {brand_command} -c", brand_command = brand::COMMAND);
     }
     result

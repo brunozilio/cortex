@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use app::{Effort, Model, PermissionMode, Sdk, Session, SessionId};
 use crossbeam_channel::{Receiver, Sender};
-use sdk::{Effort, Model, PermissionMode, Sdk, Session, SessionId};
 
 use super::ask::Pending;
 use super::catalog::Catalog;
@@ -34,7 +34,7 @@ pub struct App {
     pub window: Option<u64>,
     pub conversations: Vec<super::conversations::Conversation>,
     pub status: super::statusline::Status,
-    pub headless: sdk::Headless,
+    pub headless: app::Headless,
     pub fork_resumed: bool,
     pub output_style: Option<String>,
     pub roles: domain::model_roles::ModelRoles,

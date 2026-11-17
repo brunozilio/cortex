@@ -1,6 +1,6 @@
 use agent_engine::fake::FakeEngine;
+use app::{EngineEvent, Model, PermissionMode};
 use ratatui::crossterm::event::KeyCode;
-use sdk::{EngineEvent, Model, PermissionMode};
 
 use super::super::app::App;
 use super::super::tests::{press, screen, sdk_without, type_text, until};
@@ -118,7 +118,7 @@ fn an_agent_question_over_the_offer_is_answered_to_the_agent_and_the_held_prompt
 
     press(&mut app, KeyCode::Enter);
     until(&mut app, |_| !engine.answers().is_empty());
-    assert_eq!(engine.answers(), [(domain::AskId("a-1".into()), sdk::Decision::Allow)]);
+    assert_eq!(engine.answers(), [(domain::AskId("a-1".into()), app::Decision::Allow)]);
     assert!(!folder.path().join(".git").exists(), "the answer was for the agent, not the offer");
     assert_eq!(sent(&engine), ["a notice arrived"]);
 }

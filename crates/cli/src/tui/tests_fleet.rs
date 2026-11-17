@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use agent_engine::fake::FakeEngine;
+use app::{Decision, EngineEvent, Model, SessionId};
 use domain::{AgentAsk, AskId, AskKind};
 use ratatui::crossterm::event::KeyCode;
-use sdk::{Decision, EngineEvent, Model, SessionId};
 
 use super::app::App;
 use super::tests::{press, screen, sdk, type_text, until};
@@ -104,7 +104,7 @@ fn an_earlier_session_of_this_folder_is_listed_and_enter_takes_it_up_again() {
     press(&mut app, KeyCode::Enter);
     assert!(!app.fleet.open);
     assert_eq!(app.title.as_deref(), Some("Earlier work"));
-    assert_eq!(app.session.as_ref().and_then(sdk::Session::id), Some(SessionId("first".into())));
+    assert_eq!(app.session.as_ref().and_then(app::Session::id), Some(SessionId("first".into())));
     press(&mut app, KeyCode::Left);
     let fleet = screen(&app);
     assert_eq!(fleet.matches("Earlier work").count(), 1, "listed once, as the one here: {fleet}");

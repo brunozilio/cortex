@@ -1,8 +1,8 @@
 use std::io::{BufRead, Write};
 
+use app::{Sdk, SignedIn};
 use domain::Access;
 use domain::provider::ProviderSummary;
-use sdk::{Sdk, SignedIn};
 
 pub fn how(access: Access) -> &'static str {
     match access {
@@ -45,7 +45,7 @@ pub fn login(sdk: &Sdk) -> Result<(), String> {
     Ok(())
 }
 
-fn signed_in(sdk: &Sdk, provider: sdk::ModelProvider) -> Result<Vec<ProviderSummary>, String> {
+fn signed_in(sdk: &Sdk, provider: app::ModelProvider) -> Result<Vec<ProviderSummary>, String> {
     let shown = |url: &str, code: Option<&str>| {
         eprintln!("{}", visit(url, code));
         open(url);

@@ -1,0 +1,33 @@
+[package]
+name = "app"
+description = "The application API: the client the terminal calls, the command handler behind it, and the messages between them, in process."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+platform.workspace = true
+brand.workspace = true
+domain.workspace = true
+llm-providers.workspace = true
+crossbeam-channel.workspace = true
+agent-engine.workspace = true
+code-map.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+tiny_http = "0.12"
+base64 = "0.23"
+chacha20poly1305 = "0.10"
+getrandom = "0.3"
+chrono = "0.4"
+
+[dev-dependencies]
+agent-engine = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "rustls-tls-native-roots"] }
+
+[lints]
+workspace = true

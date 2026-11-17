@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use agent_engine::fake::FakeEngine;
+use app::{EngineEvent, Model, PermissionMode};
 use domain::{AgentAsk, AskId, AskKind, SessionId, ToolCall};
 use ratatui::crossterm::event::KeyCode;
-use sdk::{EngineEvent, Model, PermissionMode};
 
 use super::app::App;
 use super::tests::{press, screen, sdk, type_text, until};

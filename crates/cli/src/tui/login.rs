@@ -1,5 +1,5 @@
+use app::{ModelProvider, PortHolder, SignedIn};
 use domain::provider::ProviderSummary;
-use sdk::{ModelProvider, PortHolder, SignedIn};
 
 use super::app::{App, Msg};
 use super::choices::{Picker, PickerKind};

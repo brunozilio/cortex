@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use agent_engine::fake::FakeEngine;
-use backend::{InMemoryProviderStore, InMemorySecretStore, LocalServices};
+use app::{InMemoryProviderStore, InMemorySecretStore, LocalServices};
+use app::{Model, Sdk};
 use domain::provider::ModelProvider;
 use ratatui::crossterm::event::KeyCode;
-use sdk::{Model, Sdk};
 
 use super::app::App;
 use super::tests::{press, screen, type_text, until};
@@ -14,7 +14,7 @@ const KEYED: ModelProvider = ModelProvider::new("keyed");
 #[derive(Debug)]
 struct NothingListed;
 
-impl backend::ModelCatalog for NothingListed {
+impl app::ModelCatalog for NothingListed {
     fn models(
         &self,
         _provider: ModelProvider,
@@ -27,7 +27,7 @@ impl backend::ModelCatalog for NothingListed {
 fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
     agent_engine::providers::install_testing();
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-    services.homes = Arc::new(backend::OwnerHome::at(data));
+    services.homes = Arc::new(app::OwnerHome::at(data));
     services.providers = services
         .providers
         .with_secrets(Arc::new(InMemorySecretStore::default()))

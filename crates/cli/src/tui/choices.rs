@@ -1,6 +1,6 @@
+use app::{Effort, Model, PermissionMode};
 use domain::command::mode_label;
 use domain::model::choose_model;
-use sdk::{Effort, Model, PermissionMode};
 
 use super::app::App;
 use super::settings;

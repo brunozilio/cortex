@@ -2,12 +2,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_engine::fake::FakeEngine;
-use backend::{InMemorySecretStore, LocalServices};
+use app::{Decision, EngineEvent, Model, PermissionMode, Sdk};
+use app::{InMemorySecretStore, LocalServices};
 use domain::{AgentAsk, AskId, AskKind, ChoreAnswer, SessionCommand, SessionId, ToolCall};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use sdk::{Decision, EngineEvent, Model, PermissionMode, Sdk};
 
 use super::app::App;
 use super::{keys, view};
@@ -18,7 +18,7 @@ pub(super) fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
 
 pub(super) fn sdk_without(engine: &FakeEngine, data: &std::path::Path, off: &[&str]) -> Sdk {
     let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-    services.homes = Arc::new(backend::OwnerHome::at(data));
+    services.homes = Arc::new(app::OwnerHome::at(data));
     services.off.extend(off.iter().map(|flag| (*flag).to_owned()));
     let secrets = Arc::new(InMemorySecretStore::default());
     services.providers = services.providers.with_secrets(secrets);
@@ -185,7 +185,7 @@ fn a_dropped_image_is_attached_to_the_prompt_that_names_it() {
     until(&mut app, |app| !app.busy() && !engine.requests().is_empty());
     let sent = engine.requests().remove(0);
     assert_eq!(sent.prompt, "what is [Image #1] not a file");
-    assert_eq!(sent.images, [sdk::Image::from_bytes(png).expect("ok").expect("png")]);
+    assert_eq!(sent.images, [app::Image::from_bytes(png).expect("ok").expect("png")]);
 }
 
 #[test]

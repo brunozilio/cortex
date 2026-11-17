@@ -1,6 +1,6 @@
+use app::AskKind;
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
-use sdk::AskKind;
 
 use super::app::App;
 use super::ask::Pending;

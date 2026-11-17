@@ -63,11 +63,11 @@ fn score(query: &str, file: &str) -> Option<i64> {
     Some(100 - gaps.min(99))
 }
 
-pub fn list(sdk: &sdk::Sdk, cwd: &Path) -> Vec<String> {
+pub fn list(sdk: &app::Sdk, cwd: &Path) -> Vec<String> {
     sdk.project_files(cwd).unwrap_or_default()
 }
 
-pub fn with_files(sdk: &sdk::Sdk, cwd: &Path, prompt: &str) -> String {
+pub fn with_files(sdk: &app::Sdk, cwd: &Path, prompt: &str) -> String {
     if !prompt.contains('@') {
         return prompt.to_owned();
     }

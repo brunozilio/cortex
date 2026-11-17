@@ -1,5 +1,5 @@
+use app::{PluginsReply, PluginsRequest, Sdk};
 use clap::Subcommand;
-use sdk::{PluginsReply, PluginsRequest, Sdk};
 
 #[derive(Debug, Subcommand)]
 pub enum PluginAction {
@@ -46,7 +46,7 @@ fn told(reply: PluginsReply) -> String {
 
 #[cfg(test)]
 mod tests {
-    use sdk::Plugin;
+    use app::Plugin;
 
     use super::*;
 

@@ -1,4 +1,4 @@
-use sdk::{Session, SessionId};
+use app::{Session, SessionId};
 
 use super::super::app::App;
 use super::super::conversations::{self, Conversation};

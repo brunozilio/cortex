@@ -15,7 +15,7 @@ pub fn feature() -> Feature {
 }
 
 fn tick(app: &mut App) {
-    let session = app.session.as_ref().and_then(sdk::Session::id);
+    let session = app.session.as_ref().and_then(app::Session::id);
     let busy = app.busy();
     let cwd = app.cwd.clone();
     let Some(watch) = app.features.get::<Watch>(NAME) else { return };

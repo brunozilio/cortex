@@ -35,7 +35,7 @@ pub(super) fn replaced(app: &mut App) {
     }
 }
 
-pub(super) fn answered(app: &mut App, decision: &sdk::Decision) -> bool {
+pub(super) fn answered(app: &mut App, decision: &app::Decision) -> bool {
     let mine = app.ask.as_ref().is_some_and(|pending| pending.is_local(git_offer::ASK));
     let held = app.features.get::<Offer>(KEY).and_then(|offer| offer.held.take());
     let (true, Some(text)) = (mine, held) else { return false };

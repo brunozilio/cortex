@@ -1,6 +1,6 @@
 use agent_engine::fake::FakeEngine;
+use app::{EngineEvent, Model, PermissionMode};
 use ratatui::crossterm::event::KeyCode;
-use sdk::{EngineEvent, Model, PermissionMode};
 
 use super::super::app::App;
 use super::super::tests::{press, sdk, type_text, until};

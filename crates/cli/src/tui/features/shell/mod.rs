@@ -1,4 +1,4 @@
-use sdk::BackgroundCommand;
+use app::BackgroundCommand;
 
 use super::{Feature, Slash};
 use crate::tui::app::{App, Msg};

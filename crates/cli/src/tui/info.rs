@@ -108,7 +108,7 @@ impl App {
 }
 
 fn status(app: &App) -> String {
-    let session = app.session.as_ref().and_then(sdk::Session::id).map_or("not started".to_owned(), |id| id.0);
+    let session = app.session.as_ref().and_then(app::Session::id).map_or("not started".to_owned(), |id| id.0);
     let model = app.model().map_or("none".to_owned(), |m| format!("{} ({})", m.label, m.id));
     let mut text = format!(
         "{brand_name} {}\n  Model    {model}\n  Mode     {}\n  Effort   {}\n  Folder   {}\n  Session  {session}",

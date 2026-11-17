@@ -29,8 +29,8 @@ fn run(app: &mut App, _argument: Option<String>) {
 #[cfg(test)]
 mod tests {
     use agent_engine::fake::FakeEngine;
+    use app::{EngineEvent, Model};
     use ratatui::crossterm::event::KeyCode;
-    use sdk::{EngineEvent, Model};
 
     use crate::tui::app::App;
     use crate::tui::tests::{press, screen, sdk, type_text, until};
@@ -70,8 +70,8 @@ mod tests {
         let engine = FakeEngine::new(vec![model], vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }]);
         let client = sdk(&engine, data.path());
         let memory = client.memory(data.path());
-        let edit = sdk::MemoryEdit::Remember {
-            kind: sdk::MemoryKind::Semantic,
+        let edit = app::MemoryEdit::Remember {
+            kind: app::MemoryKind::Semantic,
             text: "Keep retries at 4".into(),
             tags: Vec::new(),
             touches: vec!["client.go".into()],

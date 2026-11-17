@@ -1,4 +1,4 @@
-use sdk::{EngineEvent, Model};
+use app::{EngineEvent, Model};
 
 pub enum Msg {
     Ready { models: Result<Vec<Model>, String>, settings: serde_json::Value },
@@ -6,11 +6,11 @@ pub enum Msg {
     Skills(Vec<(String, String)>),
     Reloaded { skills: Vec<(String, String)>, summary: String },
     Connected(String),
-    Clipboard(Result<Option<sdk::Image>, String>),
+    Clipboard(Result<Option<app::Image>, String>),
     Changes(Result<super::git::Changes, String>),
     Diffs(super::git::Scope, Result<super::git::Changes, String>),
     Side { question: String, answer: Result<String, String> },
-    Chore(Option<sdk::SessionId>, Result<Option<sdk::ChoreAnswer>, String>),
+    Chore(Option<app::SessionId>, Result<Option<app::ChoreAnswer>, String>),
     Files(Vec<String>),
     StatusLine(String),
     Providers(Vec<domain::provider::ProviderSummary>),

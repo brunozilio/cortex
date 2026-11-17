@@ -10,16 +10,14 @@ an editor.
 
 ## Crates
 Dependencies are one-way; the main line is
-`cli ──► sdk ──► backend ──► agent-engine ──► llm-providers ──► domain`.
+`cli ──► app ──► agent-engine ──► llm-providers ──► domain`.
 These are all the non-dev edges between workspace crates:
 
 ```
-cli              ──► sdk, console, content, platform, domain, brand
-sdk              ──► backend, protocol, platform, domain, brand
-backend          ──► agent-engine, llm-providers, code-map, protocol, platform, domain, brand
+cli              ──► app, console, content, platform, domain, brand
+app              ──► agent-engine, llm-providers, code-map, platform, domain, brand
 agent-engine     ──► llm-providers, language-servers, script, content, platform, domain, brand
 llm-providers    ──► domain, brand
-protocol         ──► domain
 domain           ──► brand
 language-servers ──► platform, domain, brand
 content          ──► script, brand
@@ -36,8 +34,8 @@ React + Tailwind); `console` builds it into the binary when Bun is present,
 else serves `web/dist`. The CLI's trace feature pushes the report, the
 session list and each session's runs into the console's `Live` hub.
 
-Nothing below `sdk` knows the CLI; `cli` reaches `backend` and
-`agent-engine` only in tests. The README's crate table says what each one
+Nothing below `cli` knows the CLI; `cli` reaches `agent-engine`, and the
+handler side of `app`, only in tests. The README's crate table says what each one
 is (`xtask lint` checks it lists every crate).
 
 ## Docs
@@ -77,7 +75,7 @@ prefix (`xtask lint` checks); write "the app", `<command>`, `.<command>/`.
 
 ## Rules
 - Domain rules live in `domain` (pure, no IO), never in the CLI's
-  rendering or the `sdk` glue (the CLI's internal client).
+  rendering or the `app` client glue (`crates/app/src/client/`).
 - No comments in code: no `//`, `///`, `//!` or `/* */` in Rust, no `#`
   comments in shell, Python or TOML (a script's `#!` line is fine). The
   one exception: JSDoc type annotations (`@type`, `@param`) in `content/`

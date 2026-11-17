@@ -16,7 +16,7 @@ pub fn open(app: &mut App, query: Option<String>) {
     });
 }
 
-pub fn here(sdk: &sdk::Sdk, cwd: &std::path::Path) -> Result<Vec<Conversation>, sdk::Error> {
+pub fn here(sdk: &app::Sdk, cwd: &std::path::Path) -> Result<Vec<Conversation>, app::Error> {
     let real = |path: &std::path::Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let folder = real(cwd);
     let listed = sdk.sessions()?;
@@ -40,7 +40,7 @@ fn titled(conversation: &Conversation, query: &str) -> bool {
 }
 
 pub fn listed(app: &mut App, found: Vec<Conversation>) {
-    let current = app.session.as_ref().and_then(sdk::Session::id);
+    let current = app.session.as_ref().and_then(app::Session::id);
     let found: Vec<Conversation> = found.into_iter().filter(|c| Some(&c.session) != current.as_ref()).collect();
     if found.is_empty() {
         return app.transcript.notice("No earlier conversation in this folder matches.");
@@ -70,7 +70,7 @@ mod tests {
     use super::*;
 
     fn titled_as(title: Option<&str>) -> Conversation {
-        Conversation { session: sdk::SessionId("s".into()), title: title.map(str::to_owned), at: 0 }
+        Conversation { session: app::SessionId("s".into()), title: title.map(str::to_owned), at: 0 }
     }
 
     #[test]

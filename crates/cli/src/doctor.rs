@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use sdk::Sdk;
+use app::Sdk;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
@@ -61,7 +61,7 @@ fn declared(sdk: &Sdk, cwd: &Path) -> Result<String, String> {
     summarize(&sdk.declare_providers(cwd).map_err(|e| e.to_string())?)
 }
 
-fn sandbox(flags: Result<Vec<sdk::ListedFlag>, String>) -> Result<String, String> {
+fn sandbox(flags: Result<Vec<app::ListedFlag>, String>) -> Result<String, String> {
     let flags = flags?;
     let listed = flags.iter().find(|listed| listed.flag.name == domain::features::SANDBOX);
     let Some(listed) = listed else { return Ok("not offered".into()) };
@@ -142,7 +142,7 @@ mod tests {
                 experimental: true,
                 security: true,
             };
-            Ok(vec![sdk::ListedFlag { flag, available }])
+            Ok(vec![app::ListedFlag { flag, available }])
         };
         assert_eq!(sandbox(Ok(Vec::new())), Ok("not offered".into()));
         assert!(sandbox(flag(true, true)).is_ok_and(|text| text.starts_with("on:")));

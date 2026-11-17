@@ -1,6 +1,6 @@
 use agent_engine::fake::FakeEngine;
+use app::{EngineEvent, Model};
 use domain::SessionId;
-use sdk::{EngineEvent, Model};
 
 use super::app::{App, Msg};
 use super::tests::{screen, sdk, until};
