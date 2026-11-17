@@ -1,6 +1,7 @@
 use super::*;
 
 #[test]
+#[allow(clippy::cognitive_complexity, reason = "test scenario")]
 fn commands_parse_with_their_arguments() {
     assert_eq!(Command::parse("  /CLEAR "), Some(Command::New));
     assert_eq!(Command::parse("/reset"), Some(Command::New));

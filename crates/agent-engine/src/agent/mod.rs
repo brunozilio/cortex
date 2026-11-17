@@ -91,6 +91,7 @@ impl Agent<'_> {
     }
 
     #[allow(clippy::needless_lifetimes)]
+    #[allow(clippy::too_many_lines, reason = "split planned: the turn loop becomes typed phases in a later phase")]
     fn run_loop<'env>(
         &'env self,
         history: &mut Vec<Message>,

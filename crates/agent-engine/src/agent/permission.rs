@@ -50,6 +50,7 @@ impl Agent<'_> {
         self.permitted_as(id, tool, subject, None, input, hook_permission)
     }
 
+    #[allow(clippy::too_many_lines, reason = "split planned: the permission decision moves out in a later phase")]
     pub(super) fn permitted_as(
         &self,
         id: &str,

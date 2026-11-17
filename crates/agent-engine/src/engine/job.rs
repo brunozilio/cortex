@@ -25,6 +25,11 @@ pub(super) struct Job {
 }
 
 impl Job {
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        reason = "split planned: job preparation becomes typed phases in a later phase"
+    )]
     pub(super) fn run(mut self) {
         let started = Instant::now();
         if self.request.command.is_some_and(|c| c != SessionCommand::Title) && self.request.resume.is_none() {

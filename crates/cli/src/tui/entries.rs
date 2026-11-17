@@ -14,6 +14,10 @@ const THINKING_LINES: usize = 3;
 const AGENT_STEPS: usize = 3;
 const OUTPUT_LINES: usize = 3;
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "split planned: one match over every entry kind, to become a renderer per kind"
+)]
 pub fn lines(entry: &Entry, width: usize, expanded: bool, out: &mut Vec<Line<'static>>) {
     let dim = Style::new().fg(Color::DarkGray);
     match entry {

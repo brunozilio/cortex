@@ -128,6 +128,7 @@ fn corrupt_saved_history_fails_without_diagnosing_it_as_a_missing_session() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines, reason = "test scenario")]
 fn a_main_worktree_and_its_uncommitted_files_survive_resume_after_engine_restart() {
     let dir = tempfile::tempdir().expect("dir");
     let git = |args: &[&str]| {

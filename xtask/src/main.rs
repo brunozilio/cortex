@@ -1,5 +1,6 @@
 mod brand;
 mod comments;
+mod crate_graph;
 mod crate_table;
 mod lint;
 

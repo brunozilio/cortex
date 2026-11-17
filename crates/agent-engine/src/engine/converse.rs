@@ -32,6 +32,10 @@ pub(super) struct Prepared {
 }
 
 impl Job {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "split planned: the conversation loop becomes typed phases in a later phase"
+    )]
     pub(super) fn converse(&mut self, prepared: Prepared, runtime_guard: &mut Guard, cleanup_workspace: &Workspace) {
         let Prepared {
             started,

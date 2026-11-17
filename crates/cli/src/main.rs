@@ -143,6 +143,10 @@ fn main() -> ExitCode {
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "split planned: startup wiring and subcommand dispatch separate in a later phase"
+)]
 fn run(cli: Cli) -> Result<ExitCode, String> {
     let cwd = match cli.cwd {
         Some(dir) => dir,

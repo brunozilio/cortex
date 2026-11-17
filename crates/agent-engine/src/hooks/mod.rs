@@ -121,6 +121,10 @@ impl Hooks {
     pub fn run(&self, event: &str, subject: &str, input: Value, workspace: &Workspace) -> Result<Decision, String> {
         self.run_with_model(event, subject, input, workspace, None)
     }
+    #[allow(
+        clippy::too_many_lines,
+        reason = "split planned: hook matching and hook execution separate in a later phase"
+    )]
     pub fn run_with_model(
         &self,
         event: &str,

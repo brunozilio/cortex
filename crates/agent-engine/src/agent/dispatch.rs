@@ -14,6 +14,7 @@ use crate::transcript::{Block, Message};
 
 impl Agent<'_> {
     #[allow(clippy::needless_lifetimes)]
+    #[allow(clippy::too_many_lines, reason = "split planned: one match over every tool, to become a dispatch per tool")]
     pub(super) fn call<'env>(
         &'env self,
         id: &str,

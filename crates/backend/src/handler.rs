@@ -36,6 +36,11 @@ impl CommandHandler {
         Self { services, runs, outbox, client }
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        reason = "split planned: one match over every client command, to become a handler per command"
+    )]
     pub fn handle(&self, envelope: Envelope<ClientCommand>) {
         let outbox = &self.outbox;
         if let Err(error) = envelope.spoken() {

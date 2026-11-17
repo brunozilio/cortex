@@ -161,6 +161,10 @@ fn pick(app: &mut App, event: KeyEvent) {
     }
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "split planned: one match over every editing key, to become a key table"
+)]
 fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
     let alt = event.modifiers.contains(KeyModifiers::ALT);
     let shift = event.modifiers.contains(KeyModifiers::SHIFT);

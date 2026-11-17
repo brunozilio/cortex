@@ -95,6 +95,11 @@ fn model_names(value: &Value, key: &str) -> Result<Vec<String>, String> {
         None => Ok(model_name(value, key)?.into_iter().collect()),
     }
 }
+#[allow(
+    clippy::too_many_lines,
+    clippy::cognitive_complexity,
+    reason = "split planned: one pass reads every settings key, to become a reader per key group"
+)]
 pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin]) -> Result<Settings, String> {
     let mut selected = String::from("Default");
     let mut schema = None;

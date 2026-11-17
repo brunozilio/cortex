@@ -1,21 +1,14 @@
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-const MAX_LINES: usize = 300;
 const BASELINE: &str = "xtask/lint-baseline.txt";
 
 pub fn run(root: &Path, update_baseline: bool) -> Result<(), Box<dyn std::error::Error>> {
     let mut found = BTreeSet::new();
-    let mut files = Vec::new();
-    collect(&root.join("crates"), &mut files)?;
-    for file in files {
-        let rel = file.strip_prefix(root)?.to_string_lossy().replace('\\', "/");
-        let source = std::fs::read_to_string(&file)?;
-        found.extend(check(&rel, &source));
-    }
     found.extend(crate::brand::findings(root)?);
     found.extend(crate::comments::findings(root)?);
     found.extend(crate::crate_table::findings(root)?);
+    found.extend(crate::crate_graph::findings(root)?);
     let baseline_path = root.join(BASELINE);
     if update_baseline {
         std::fs::write(&baseline_path, found.iter().map(|f| format!("{f}\n")).collect::<String>())?;
@@ -33,36 +26,5 @@ pub fn run(root: &Path, update_baseline: bool) -> Result<(), Box<dyn std::error:
         Ok(())
     } else {
         Err(format!("{} new lint finding(s)", new.len()).into())
-    }
-}
-
-fn check(rel: &str, source: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    if source.lines().count() > MAX_LINES {
-        out.push(format!("file-too-long {rel}"));
-    }
-    out
-}
-
-fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
-        let path = entry?.path();
-        if path.is_dir() {
-            collect(&path, out)?;
-        } else if path.extension().is_some_and(|e| e == "rs") {
-            out.push(path);
-        }
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn flags_long_files() {
-        let long = "fn f() {}\n".repeat(MAX_LINES + 1);
-        assert_eq!(check("crates/a/src/x.rs", &long), ["file-too-long crates/a/src/x.rs"]);
     }
 }

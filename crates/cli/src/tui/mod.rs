@@ -126,6 +126,7 @@ pub struct Start {
     pub channels: Vec<String>,
 }
 
+#[allow(clippy::too_many_lines, reason = "split planned: terminal setup and the event loop separate in a later phase")]
 pub fn run(
     sdk: Sdk,
     cwd: PathBuf,

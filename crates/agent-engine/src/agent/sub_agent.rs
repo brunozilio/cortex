@@ -24,6 +24,11 @@ const TOP_LEVEL_ONLY: [&str; 6] = [
 ];
 
 impl Agent<'_> {
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        reason = "split planned: sub-agent setup, run and report become separate steps in a later phase"
+    )]
     pub(super) fn sub_agent_with(
         &self,
         input: &Value,

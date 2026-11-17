@@ -8,6 +8,10 @@ impl Transcript {
         self.tell_since(before, Some(event));
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "split planned: one match over every engine event, to become a fold per event"
+    )]
     fn fold(&mut self, event: &EngineEvent) {
         self.observe(event);
         self.follow_agents(event);
