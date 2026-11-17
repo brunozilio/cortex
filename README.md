@@ -65,7 +65,7 @@ lists what was found.
 - `CORTEX_REDUCED_MOTION`: any value other than empty or `0` turns the animations off.
 - `CORTEX_CONSOLE_DIR`: a folder holding an already built web page (with an `index.html`) to serve instead of the embedded one.
 - `CORTEX_DISABLE_AUTO_MEMORY`: `1`, `true` or `yes` turns off the persistent memory of custom agents.
-- `CORTEX_SECRETS`: `file` keeps the key of `secrets.json` in `secrets.key` instead of the system keychain (CI, containers, headless machines).
+- `CORTEX_SECRETS`: `keychain` (any case) moves the key of `secrets.json` from `secrets.key` into the system keychain; unset, it stays in the file (a rebuilt binary has a new signature, and macOS would ask for the keychain password at every start).
 
 Also read: `SHELL`, `VISUAL`, `EDITOR`, `HOME`, `COLORFGBG`, `COLORTERM`
 and `XDG_CONFIG_HOME`.
@@ -82,8 +82,9 @@ and `XDG_CONFIG_HOME`.
 
 `~/Library/Application Support/Cortex` on macOS, `~/.config/cortex` on
 Linux: sessions, memory and settings. Keys and tokens are sealed in
-`secrets.json` there (readable only by you); its key is in the system
-keychain, or in `secrets.key` where no keychain answers.
+`secrets.json` there (readable only by you); its key is in `secrets.key`
+beside it (also readable only by you), or in the system keychain if you
+set `CORTEX_SECRETS=keychain`.
 
 The list of sessions and each project's memory are in `app.db` there, a
 SQLite database (with `app.db-wal` and `app.db-shm` beside it while the

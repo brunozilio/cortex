@@ -42,7 +42,7 @@ Inside the chat, `/login` opens the same list as a picker.
 | API key | You paste a key from the provider's console | The provider bills the key per token |
 | Subscription | You sign in in the browser or with a device code | Your existing subscription plan |
 
-Keys and sign-in tokens are kept in your data folder, sealed in `secrets.json` (readable only by you), whose key is in your system keychain, or in `secrets.key` where there is none. Subscription tokens are renewed on their own when they expire. See [Files and directories](./files-and-directories).
+Keys and sign-in tokens are kept in your data folder, sealed in `secrets.json` (readable only by you), whose key is in `secrets.key` beside it, or in your system keychain if you set `{{ENV}}_SECRETS=keychain`. Subscription tokens are renewed on their own when they expire. See [Files and directories](./files-and-directories).
 
 > [!NOTE]
 > Keys are read only from what you connect with `{{COMMAND}} login` or `/login`. {{NAME}} does not read provider keys from environment variables.

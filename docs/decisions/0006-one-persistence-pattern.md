@@ -99,3 +99,11 @@ Consequences that are now real:
 - On macOS the item is trusted for the binary that created it; a rebuilt or updated binary is asked once by the system ("Always Allow").
 - Downgrade: an older binary reads the pointer as a key that is not 64 hex digits and refuses to keep keys, without making a new one. Running this version with `<PREFIX>_SECRETS=file` once puts the key back in the file for it.
 - A process running as the user can still ask the keychain for the key; the keychain may ask the user first (macOS) or not (an unlocked Secret Service collection).
+
+## Changed 2026-11-17: keychain is opt-in
+
+The vault key now stays in `secrets.key` by default; the keychain is used only with `<PREFIX>_SECRETS=keychain` (any case, trimmed). Reason: a binary rebuilt or reinstalled with cargo gets a new code signature, so macOS asked for the keychain password at every start, which the "Always Allow" consequence above did not prevent. The history above is kept; where it says the keychain is the default, read it as the behaviour with `=keychain`.
+
+- Default: a `secrets.key` holding the pointer word `keychain` (from an earlier version) is taken back into the file once, with one keychain prompt on macOS, and the keychain is never written. If the keychain does not answer then, a new file key is made and keys saved before must be entered again.
+- With `=keychain`: the behaviour described above (an existing file key moves after read-back, a pointer is left, a keychain that stops answering refuses a new key and points at `<PREFIX>_SECRETS=file`); any other value means file.
+- Cost: by default the key sits beside the vault in a 0600 file, so a copy of the data folder opens the vault, and a same-user process reads the key without a prompt. Choosing the keychain costs a prompt after each rebuild on macOS.
