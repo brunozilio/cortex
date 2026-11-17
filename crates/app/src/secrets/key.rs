@@ -16,10 +16,10 @@ pub enum Keeper<'a> {
 
 impl<'a> Keeper<'a> {
     pub fn chosen(choice: Option<&str>, keychain: &'a dyn Keychain) -> Self {
-        if choice.is_some_and(|choice| choice.trim().eq_ignore_ascii_case("file")) {
-            Self::FileInsteadOf(keychain)
-        } else {
+        if choice.is_some_and(|choice| choice.trim().eq_ignore_ascii_case(IN_KEYCHAIN)) {
             Self::Keychain(keychain)
+        } else {
+            Self::FileInsteadOf(keychain)
         }
     }
 }

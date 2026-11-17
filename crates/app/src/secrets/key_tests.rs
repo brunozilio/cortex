@@ -210,12 +210,28 @@ fn choosing_the_file_while_the_keychain_is_gone_starts_a_new_key_in_a_file() {
 }
 
 #[test]
-fn anything_but_file_prefers_the_keychain() {
+fn only_asking_for_the_keychain_uses_it_and_the_file_is_the_default() {
     let keychain = FakeKeychain::default();
-    for choice in [None, Some(""), Some("keychain"), Some("files")] {
+    for choice in [Some("keychain"), Some(" KEYCHAIN ")] {
         assert!(matches!(Keeper::chosen(choice, &keychain), Keeper::Keychain(_)), "{choice:?}");
     }
+    for choice in [None, Some(""), Some("file"), Some("keychains")] {
+        assert!(matches!(Keeper::chosen(choice, &keychain), Keeper::FileInsteadOf(_)), "{choice:?}");
+    }
     assert_eq!(CHOICE, format!("{}_SECRETS", brand::ENV));
+}
+
+#[test]
+fn by_default_a_fresh_install_keeps_its_key_in_a_file_and_never_touches_the_keychain() {
+    let dir = tempfile::tempdir().expect("dir");
+    let path = dir.path().join("secrets.key");
+    let keychain = FakeKeychain::default();
+
+    let key = at(&path, Keeper::chosen(None, &keychain)).expect("made");
+
+    assert_eq!(on_disk(&path), hex(&key));
+    assert_eq!(keychain.sets.load(Ordering::SeqCst), 0);
+    assert_eq!(at(&path, Keeper::chosen(None, &keychain)).expect("again"), key);
 }
 
 #[test]
