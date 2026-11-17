@@ -1,6 +1,6 @@
 use crate::model::ModelApi;
-use crate::model::http::ScriptedHttp;
 use crate::model::client::ProviderClient;
+use crate::model::http::ScriptedHttp;
 use domain::ModelOption;
 use domain::model::ModelCapabilities;
 use domain::provider::ProviderKey;
@@ -37,7 +37,8 @@ fn claude_goes_to_messages_on_the_account_api() {
         &["/chat/completions", "/v1/messages"],
         ModelCapabilities { adaptive_thinking: true, ..ModelCapabilities::default() },
     );
-    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../../../tests/fixtures/messages_tool_use.sse").into())]));
+    let http =
+        Arc::new(ScriptedHttp::new([(200, include_str!("../../../tests/fixtures/messages_tool_use.sse").into())]));
     let client = ProviderClient::for_model(claude, http.clone(), key());
     client
         .turn(&request("copilot-subscription:claude-sonnet-4.5"), &mut |_| {}, &AtomicBool::new(false))
@@ -59,7 +60,8 @@ fn gpt_goes_to_responses_with_an_offered_effort() {
         &["/chat/completions", "/responses"],
         ModelCapabilities { reasoning_levels: vec!["low".into(), "medium".into()], ..ModelCapabilities::default() },
     );
-    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../../../tests/fixtures/responses_tool_use.sse").into())]));
+    let http =
+        Arc::new(ScriptedHttp::new([(200, include_str!("../../../tests/fixtures/responses_tool_use.sse").into())]));
     ProviderClient::for_model(gpt, http.clone(), key())
         .turn(&request("copilot-subscription:gpt-5"), &mut |_| {}, &AtomicBool::new(false))
         .expect("turn");

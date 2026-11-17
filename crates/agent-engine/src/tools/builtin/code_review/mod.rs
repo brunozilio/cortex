@@ -2,10 +2,6 @@ pub mod review;
 
 use crate::transcript::{Message, Role};
 
-pub fn tools() -> Vec<Box<dyn crate::tools::Tool>> {
-    Vec::new()
-}
-
 const TOOLS: [&str; 3] = ["Read", "Glob", "Grep"];
 const KIND: &str = "review";
 const CHANGING: [&str; 3] = ["Edit", "Write", "NotebookEdit"];

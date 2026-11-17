@@ -46,9 +46,7 @@ fn message(message: &Message) -> Option<Value> {
         .blocks
         .iter()
         .filter(|block| match block {
-            Block::Thinking { origin, signature, .. } => {
-                *origin == Some(super::ORIGIN) && signature.is_some()
-            }
+            Block::Thinking { origin, signature, .. } => *origin == Some(super::ORIGIN) && signature.is_some(),
             Block::Native { origin, .. } => *origin == super::ORIGIN,
             _ => true,
         })
@@ -152,7 +150,8 @@ mod tests {
     #[test]
     fn a_server_search_goes_back_as_it_came_only_to_its_own_wire() {
         let mut request = request();
-        let searched = json!({"type": "web_search_tool_result", "tool_use_id": "s1", "content": [{"encrypted_content": "Eq"}]});
+        let searched =
+            json!({"type": "web_search_tool_result", "tool_use_id": "s1", "content": [{"encrypted_content": "Eq"}]});
         let elsewhere = crate::transcript::ReasoningOrigin::of("responses");
         request.messages[1].blocks.push(Block::Native { origin: super::super::ORIGIN, item: searched.clone() });
         request.messages[1].blocks.push(Block::Native { origin: elsewhere, item: json!({"type": "web_search_call"}) });

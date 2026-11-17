@@ -4,10 +4,6 @@ use domain::Criteria;
 
 use crate::transcript::{Message, Role};
 
-pub fn tools() -> Vec<Box<dyn crate::tools::Tool>> {
-    Vec::new()
-}
-
 pub const TOOLS: [&str; 5] = ["Read", "Glob", "Grep", "Bash", "Skill"];
 
 pub const KIND: &str = "verification";

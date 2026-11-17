@@ -3,9 +3,7 @@ mod data_root;
 mod dirs;
 mod extensions;
 pub mod feature;
-mod features {
-    include!(concat!(env!("OUT_DIR"), "/features.rs"));
-}
+mod features;
 mod git;
 mod handler;
 mod homes;

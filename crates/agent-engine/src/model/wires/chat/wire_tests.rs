@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use crate::model::wires::chat::{Chat, Endpoint, Endpoints};
 use crate::model::http::ScriptedHttp;
+use crate::model::wires::chat::{Chat, Endpoint, Endpoints};
 use crate::model::{Delta, ModelApi, ModelError, ToolSpec, TurnRequest};
 use crate::transcript::{Block, Message, StopReason};
 use domain::Effort;
@@ -37,7 +37,8 @@ fn request() -> TurnRequest {
 
 #[test]
 fn folds_thinking_text_and_a_call_from_a_streamed_answer() {
-    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../../../../tests/fixtures/chat_tool_use.sse").to_owned())]));
+    let http =
+        Arc::new(ScriptedHttp::new([(200, include_str!("../../../../tests/fixtures/chat_tool_use.sse").to_owned())]));
     let mut deltas = Vec::new();
     let reply = Chat::new(http.clone(), served())
         .turn(&request(), &mut |delta| deltas.push(delta), &AtomicBool::new(false))
@@ -90,14 +91,11 @@ fn folds_a_recorded_chat_answer_with_reasoning_and_a_tool_call() {
 
 #[test]
 fn asks_the_served_model_with_the_whole_conversation_and_the_tools() {
-    let http = Arc::new(ScriptedHttp::new([(200, include_str!("../../../../tests/fixtures/chat_tool_use.sse").to_owned())]));
+    let http =
+        Arc::new(ScriptedHttp::new([(200, include_str!("../../../../tests/fixtures/chat_tool_use.sse").to_owned())]));
     let mut request = request();
     request.messages.push(Message::assistant(vec![
-        Block::Thinking {
-            text: "hm".into(),
-            signature: None,
-            origin: Some(crate::model::wires::chat::ORIGIN),
-        },
+        Block::Thinking { text: "hm".into(), signature: None, origin: Some(crate::model::wires::chat::ORIGIN) },
         Block::Text("Reading.".into()),
         Block::ToolUse { id: "call_0".into(), name: "Read".into(), input: json!({"file_path": "a"}) },
     ]));
@@ -196,7 +194,8 @@ fn pixel() -> domain::Image {
 fn an_image_in_a_tool_result_is_sent_visually() {
     let image = pixel();
     let body = super::body(&with_image(&image), "fixture");
-    let visual = body["messages"].as_array().expect("messages").iter().find(|m| m["content"].is_array()).expect("parts");
+    let visual =
+        body["messages"].as_array().expect("messages").iter().find(|m| m["content"].is_array()).expect("parts");
     let parts = visual["content"].as_array().expect("parts");
     assert!(parts.iter().any(|part| part["type"] == "image_url" && part["image_url"]["url"] == image.data_url()));
 }

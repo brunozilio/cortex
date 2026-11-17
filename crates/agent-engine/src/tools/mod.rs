@@ -1,7 +1,5 @@
 pub mod ask;
-pub mod builtin {
-    include!(concat!(env!("OUT_DIR"), "/builtin_tools.rs"));
-}
+pub mod builtin;
 pub mod builtin_agents;
 #[cfg(test)]
 mod builtin_skills;

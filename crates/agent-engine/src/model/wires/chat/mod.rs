@@ -27,7 +27,6 @@ impl Endpoints for SameModel {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Endpoint {
     pub base_url: String,

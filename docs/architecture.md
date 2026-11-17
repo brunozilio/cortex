@@ -41,7 +41,7 @@ The main line is `cli -> sdk -> backend -> agent-engine -> llm-providers -> doma
 
 `web/` is the browser app the console serves (trace, console, documentation, terminal). `content/` is JavaScript and Markdown, not a crate. `xtask/` holds the repository lint.
 
-`cli` reaches `backend` and `agent-engine` only in tests. Four crates (agent-engine, backend, cli, llm-providers) register modules by scanning folders in `build.rs`, so 47 modules have no written `mod` line.
+`cli` reaches `backend` and `agent-engine` only in tests. Four crates (agent-engine, backend, cli, llm-providers) register their vendors, providers, wires, builtin tools and features in written `mod` lines and explicit lists, each pinned by a test; no `build.rs` scans a folder.
 
 ## Request path: from a keypress to the model and back
 
@@ -120,4 +120,4 @@ The plan runs in eleven phases on `main`. The decisions that change this documen
 | Function-size lint instead of a file-length limit; `impl` blocks regrouped | `decisions/0009-function-size-lint.md` |
 | Rationale lives in `docs/` | `decisions/0010-comments-stay-out-of-code.md` |
 
-Also planned, without a record of their own: provider folders and wires move from `agent-engine` to `llm-providers`; `domain`'s 67 top-level modules are grouped into eight areas; `build.rs` module registration is replaced by written `mod` lines.
+Also planned, without a record of their own: provider folders and wires move from `agent-engine` to `llm-providers`; `domain`'s 67 top-level modules are grouped into eight areas.

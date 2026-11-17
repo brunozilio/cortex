@@ -2,7 +2,23 @@ use domain::ModelProvider;
 use domain::provider::ProviderInfo;
 use llm_providers::{Provider, ProviderError, declared};
 
-include!(concat!(env!("OUT_DIR"), "/providers.rs"));
+pub mod anthropic;
+pub mod chatgpt;
+pub mod claude;
+pub mod copilot;
+pub mod grok;
+pub mod kiro;
+pub mod openai;
+
+pub static ALL: &[&dyn Provider] = &[
+    &anthropic::Provider,
+    &chatgpt::Provider,
+    &claude::Provider,
+    &copilot::Provider,
+    &grok::Provider,
+    &kiro::Provider,
+    &openai::Provider,
+];
 
 #[cfg(test)]
 mod testing;
@@ -60,6 +76,23 @@ pub(crate) fn output_limit(model: Option<&domain::ModelOption>, body: &serde_jso
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_built_in_providers_are_these_in_this_order() {
+        let ids: Vec<&str> = ALL.iter().map(|provider| provider.id()).collect();
+        assert_eq!(
+            ids,
+            [
+                "anthropic",
+                "openai-subscription",
+                "claude-subscription",
+                "copilot-subscription",
+                "grok-subscription",
+                "kiro-subscription",
+                "openai",
+            ]
+        );
+    }
 
     #[test]
     fn every_built_in_provider_has_its_own_id_rank_and_secret_slot() {

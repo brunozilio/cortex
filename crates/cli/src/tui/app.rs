@@ -46,7 +46,6 @@ pub struct App {
     pub expanded: bool,
     pub ask: Option<Pending>,
     pub notices: super::notices::Poll,
-    #[allow(dead_code, reason = "the feature folders use it, and any of them may be removed")]
     pub features: super::features::States,
     pub turned_off: std::collections::BTreeSet<String>,
     pub added_dirs: Vec<PathBuf>,

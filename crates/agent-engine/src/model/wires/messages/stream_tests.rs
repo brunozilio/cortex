@@ -39,7 +39,10 @@ fn a_recorded_answer_folds_into_signed_thinking_text_and_a_call() {
 #[test]
 fn usage_keeps_cache_reads_and_writes_apart_from_input() {
     let (reply, _) = fold(&recorded());
-    assert_eq!(reply.expect("reply").usage, Usage { input: 12, output: 87, cache_read: 4000, cache_write: 0, searches: 0 });
+    assert_eq!(
+        reply.expect("reply").usage,
+        Usage { input: 12, output: 87, cache_read: 4000, cache_write: 0, searches: 0 }
+    );
 }
 
 #[test]

@@ -12,10 +12,7 @@ mod scripted_http;
 pub mod sse;
 pub(crate) mod sse_read;
 pub mod web_client;
-
-pub mod wires {
-    include!(concat!(env!("OUT_DIR"), "/wires.rs"));
-}
+pub mod wires;
 
 use std::sync::atomic::AtomicBool;
 

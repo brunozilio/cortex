@@ -120,10 +120,7 @@ impl Provider {
 
 fn window(item: &Value) -> Option<u64> {
     let largest = item["context_windows"].as_array().and_then(|all| all.iter().filter_map(Value::as_u64).max());
-    largest
-        .or_else(|| item["context_window"].as_u64())
-        .or_else(|| item["context_length"].as_u64())
-        .filter(|n| *n > 0)
+    largest.or_else(|| item["context_window"].as_u64()).or_else(|| item["context_length"].as_u64()).filter(|n| *n > 0)
 }
 
 #[cfg(test)]

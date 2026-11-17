@@ -8,11 +8,8 @@ pub mod sign_in;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
 mod vendor;
+pub mod vendors;
 pub mod web_search;
-
-pub mod vendors {
-    include!(concat!(env!("OUT_DIR"), "/vendors.rs"));
-}
 
 pub use vendor::{Vendor, effort, owner, rated, rates, search_price, vendor};
 

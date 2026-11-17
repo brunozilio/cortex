@@ -19,7 +19,6 @@ pub fn open(http: Arc<dyn Http>, _model: Option<&domain::ModelOption>) -> Arc<dy
     Arc::new(Messages::new(http, Arc::new(domain::provider::ProviderKey::new("transport-owned"))))
 }
 
-
 pub const API: &str = "https://api.anthropic.com";
 pub const VERSION: &str = "2026-10-21";
 

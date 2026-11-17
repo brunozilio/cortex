@@ -1,3 +1,20 @@
+mod branches;
+mod budget;
+mod cache_warning;
+mod docs;
+mod elsewhere;
+mod factory_reset;
+mod flags;
+mod learning;
+mod learning_check;
+mod memory;
+mod output_savings;
+mod schedules;
+mod shell;
+mod suggested_rules;
+mod trace;
+mod verification;
+
 use std::any::Any;
 use std::collections::HashMap;
 
@@ -43,7 +60,26 @@ pub fn settings() -> Vec<Setting> {
     all().into_iter().filter_map(|feature| feature.setting).collect()
 }
 
-include!(concat!(env!("OUT_DIR"), "/features.rs"));
+pub fn all() -> Vec<Feature> {
+    vec![
+        branches::feature(),
+        budget::feature(),
+        cache_warning::feature(),
+        docs::feature(),
+        elsewhere::feature(),
+        factory_reset::feature(),
+        flags::feature(),
+        learning::feature(),
+        learning_check::feature(),
+        memory::feature(),
+        output_savings::feature(),
+        schedules::feature(),
+        shell::feature(),
+        suggested_rules::feature(),
+        trace::feature(),
+        verification::feature(),
+    ]
+}
 
 pub fn command(text: &str) -> Option<(Run, Option<String>)> {
     let text = text.trim().strip_prefix('/')?;
@@ -79,7 +115,6 @@ pub fn tick(app: &mut App) {
 }
 
 #[derive(Default)]
-#[allow(dead_code, reason = "the feature folders use it, and any of them may be removed")]
 pub struct States(HashMap<&'static str, Box<dyn Any>>);
 
 impl std::fmt::Debug for States {
@@ -88,7 +123,6 @@ impl std::fmt::Debug for States {
     }
 }
 
-#[allow(dead_code, reason = "the feature folders use it, and any of them may be removed")]
 impl States {
     pub fn get<T: Default + 'static>(&mut self, key: &'static str) -> Option<&mut T> {
         let slot = self.0.entry(key).or_insert_with(|| Box::new(T::default()));
@@ -112,6 +146,36 @@ mod tests {
         assert_eq!(states.get::<u32>("a").copied(), Some(2));
         assert_eq!(states.get::<String>("a").cloned(), Some(String::new()), "another type starts over");
         assert_eq!(states.get::<u32>("b").copied(), Some(0));
+    }
+
+    #[test]
+    fn the_registered_features_bring_these_commands_in_this_order() {
+        let listed: Vec<String> = all()
+            .into_iter()
+            .map(|feature| feature.commands.iter().map(|slash| slash.names.join("|")).collect::<Vec<_>>().join(" "))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                "branch",
+                "budget",
+                "",
+                "docs",
+                "",
+                "factory-reset",
+                "features",
+                "learn",
+                "check",
+                "memory",
+                "gain",
+                "schedules loop",
+                "bashes",
+                "rules",
+                "trace|console",
+                "verification",
+            ],
+            "one entry per feature folder, empty for cache_warning and elsewhere, which bring no command"
+        );
     }
 
     #[test]

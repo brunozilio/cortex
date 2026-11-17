@@ -34,7 +34,9 @@ fn listed(shells: &serde_json::Value) -> String {
     }
     let lines: Vec<String> = shells
         .iter()
-        .map(|(id, command, running)| format!("  {id:<10} {} {command}", if *running { "running " } else { "finished" }))
+        .map(|(id, command, running)| {
+            format!("  {id:<10} {} {command}", if *running { "running " } else { "finished" })
+        })
         .collect();
     format!("In the background (/bashes kill <id> stops one):\n{}", lines.join("\n"))
 }

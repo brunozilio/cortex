@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use crate::model::wires::messages::Messages;
 use crate::model::http::ScriptedHttp;
+use crate::model::wires::messages::Messages;
 use crate::model::{Delta, ModelApi, ModelError, TurnRequest};
 use crate::transcript::{Block, Message, StopReason};
 use domain::Effort;

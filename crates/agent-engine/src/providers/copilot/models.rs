@@ -1,5 +1,5 @@
-use domain::model::ModelCapabilities;
 use domain::ModelOption;
+use domain::model::ModelCapabilities;
 use serde_json::Value;
 
 pub fn model(item: &Value) -> Option<ModelOption> {
