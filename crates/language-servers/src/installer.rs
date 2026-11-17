@@ -4,7 +4,7 @@ use std::process::Command;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use domain::lsp::install::{Install, Recipe};
+use crate::install::{Install, Recipe};
 use platform::{Bounds, Ended};
 
 use super::Fetch;
@@ -67,7 +67,7 @@ fn fill(fetch: &dyn Fetch, install: &Install, staging: &Path, stop: &AtomicBool)
 
 fn npm_install(npm: PathBuf, staging: &Path, packages: &[String]) -> Command {
     let mut command = platform::command(npm);
-    command.arg("install").arg("--prefix").arg(staging).args(domain::lsp::install::NPM_FLAGS).args(packages);
+    command.arg("install").arg("--prefix").arg(staging).args(crate::install::NPM_FLAGS).args(packages);
     command
 }
 

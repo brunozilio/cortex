@@ -39,7 +39,7 @@ What gets worse:
 
 ## As implemented
 
-The rule lives in `crates/domain/src/trust/` (pure), the gate in `crates/agent-engine/src/trust/`, the store in `crates/app/src/trust.rs`, the dialog and `/trust` in `crates/cli/src/tui/features/trust/`.
+The rule lives in `crates/domain/src/safety/trust/` (pure), the gate in `crates/agent-engine/src/trust/`, the store in `crates/app/src/trust.rs`, the dialog and `/trust` in `crates/cli/src/tui/features/trust/`.
 
 ### Which folder is trusted
 

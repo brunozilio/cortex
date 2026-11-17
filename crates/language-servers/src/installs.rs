@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::install::{Install, install_for};
 use domain::lsp::ServerSpec;
-use domain::lsp::install::{Install, install_for};
 
 use super::Wait;
 

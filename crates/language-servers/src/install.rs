@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use super::ServerSpec;
+use domain::lsp::ServerSpec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Archive {
@@ -50,7 +50,7 @@ const CLANGD: &str = "23.1.0";
 const RUST_ANALYZER: &str = "2026-11-09";
 
 pub fn install_for(spec: &ServerSpec, os: &str, arch: &str) -> Option<Install> {
-    let built_in = super::defaults().into_iter().any(|own| own.name == spec.name && own.command == spec.command);
+    let built_in = domain::lsp::defaults().into_iter().any(|own| own.name == spec.name && own.command == spec.command);
     if !built_in {
         return None;
     }
@@ -128,7 +128,7 @@ fn npm(packages: &[&str], command: &str, os: &str) -> Option<Install> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lsp::defaults;
+    use domain::lsp::defaults;
 
     fn install(name: &str, os: &str, arch: &str) -> Option<Install> {
         let spec = defaults().into_iter().find(|spec| spec.name == name).expect("built in");

@@ -1,95 +1,49 @@
-pub mod account_pool;
-pub mod affected;
-pub mod agents;
-pub mod approval;
-pub mod auto_pick;
-pub mod billing;
-pub mod brief_edits;
-pub mod budget;
-pub mod cache_window;
-pub mod catalog;
-pub mod changes;
-pub mod claims;
-pub mod code_mode;
 pub mod command;
-pub mod command_policy;
-pub mod conversation;
-pub mod credentials;
-pub mod dependencies;
-pub mod destructive;
-pub mod egress;
-pub mod engines;
-pub mod evals;
-pub mod events;
-pub mod executable;
-pub mod extensions;
-pub mod factory_reset;
-pub mod failure;
-pub mod fallback;
 pub mod features;
-pub mod follow_through;
-pub mod git_offer;
-pub mod hooks;
-pub mod ids;
-pub mod image;
-pub mod inbox;
-pub mod interception;
-pub mod learning;
-pub mod legacy;
-pub mod looping;
-pub mod lsp;
-pub mod mcp;
-pub mod mcp_config;
-pub mod mcp_oauth;
-pub mod memory;
-pub mod model;
-pub mod model_roles;
-pub mod output;
-pub mod permission;
-pub mod permission_rules;
-pub mod provider;
-pub mod provider_book;
-pub mod redact;
-pub mod repeats;
-pub mod request;
-pub mod review;
-pub mod routing;
-pub mod sandbox;
-pub mod schedule;
-pub mod session_run;
-pub mod shell;
-pub mod skill;
-pub mod small_model;
-pub mod stuck;
-pub mod suggested_rules;
-pub mod tool_name;
+pub mod identity;
+pub mod knowledge;
+pub mod models;
+pub mod run;
+pub mod safety;
+pub mod session;
+pub mod tools;
 pub mod trace;
-pub mod trust;
-pub mod untrusted;
-pub mod usage;
-pub mod verification;
-pub mod watch;
-pub mod watchdog;
-pub mod web_reading;
 
-pub use agents::{AgentStatus, CustomAgent};
-pub use approval::{AgentAsk, AskId, AskKind, Choice, Decision, PermissionMode, Question};
+pub use identity::{account_pool, credentials, ids, legacy, provider, provider_book};
+pub use knowledge::{learning, memory};
+pub use models::{auto_pick, billing, cache_window, fallback, model, model_roles, routing, small_model};
+pub use run::{
+    affected, approval, budget, changes, claims, engines, evals, events, factory_reset, failure, follow_through,
+    git_offer, image, interception, request, review, session_run, stuck, verification, watchdog,
+};
+pub use safety::{
+    command_policy, dependencies, destructive, egress, permission, permission_rules, redact, sandbox, shell,
+    suggested_rules, trust, untrusted,
+};
+pub use session::{catalog, conversation, repeats, usage};
+pub use tools::{
+    agents, brief_edits, code_mode, executable, extensions, hooks, inbox, looping, lsp, mcp, mcp_config, mcp_oauth,
+    output, schedule, skill, tool_name, watch, web_reading,
+};
+
 pub use command::Command;
-pub use engines::EngineProblem;
-pub use events::{EngineEvent, Rewound, RunId, ToolCall};
-pub use extensions::Extensions;
-pub use failure::FailureKind;
-pub use ids::{Id, SecretId, SessionId};
-pub use image::{Image, MAX_IMAGE_BYTES};
-pub use memory::{
+pub use identity::ids::{Id, SecretId, SessionId};
+pub use knowledge::memory::{
     Author, Forgotten, Memory, MemoryBook, MemoryBrief, MemoryEdit, MemoryId, MemoryKind, Provenance, RecallBudget,
     Revision,
 };
-pub use model::{Access, Effort, ModelOption, ModelProvider};
-pub use request::{Folder, HostContext, Policy, Prompt, PromptRequest, SessionConfig};
-pub use skill::Skill;
-pub use tool_name::ToolName;
-pub use usage::{
+pub use models::model::{Access, Effort, ModelOption, ModelProvider};
+pub use run::approval::{AgentAsk, AskId, AskKind, Choice, Decision, PermissionMode, Question};
+pub use run::engines::EngineProblem;
+pub use run::events::{EngineEvent, Rewound, RunId, ToolCall};
+pub use run::failure::FailureKind;
+pub use run::image::{Image, MAX_IMAGE_BYTES};
+pub use run::request::{Folder, HostContext, Policy, Prompt, PromptRequest, SessionConfig};
+pub use run::verification::{Criteria, CriteriaSource, Verdict, Verifications};
+pub use session::usage::{
     ChoreAnswer, Compaction, ContextShare, ContextSlice, ContextUsage, HeadsUp, SessionCommand, compact_tokens,
 };
-pub use verification::{Criteria, CriteriaSource, Verdict, Verifications};
+pub use tools::agents::{AgentStatus, CustomAgent};
+pub use tools::extensions::Extensions;
+pub use tools::skill::Skill;
+pub use tools::tool_name::ToolName;

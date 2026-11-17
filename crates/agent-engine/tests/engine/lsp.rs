@@ -5,12 +5,12 @@ use std::time::Duration;
 
 use agent_engine::NativeEngine;
 use agent_engine::lsp::fake::ScriptedServer;
+use agent_engine::lsp::install::Install;
 use agent_engine::lsp::{Installer, LanguageServer, LspPool, Starter};
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
 use domain::lsp::ServerSpec;
-use domain::lsp::install::Install;
 use domain::{EngineEvent, PromptRequest};
 use serde_json::json;
 

@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use domain::lsp::install::Archive;
+use crate::install::Archive;
 use sha2::{Digest, Sha256};
 
 use super::Fetch;

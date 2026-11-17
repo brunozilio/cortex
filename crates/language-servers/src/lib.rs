@@ -6,6 +6,7 @@ mod download;
 #[cfg(any(test, feature = "test-support"))]
 pub mod fake;
 pub mod framing;
+pub mod install;
 mod installer;
 mod installs;
 mod pool;
