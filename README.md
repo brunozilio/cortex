@@ -140,3 +140,42 @@ cargo run -p xtask -- web-fixtures    # after changing a trace type: rewrites we
 
 `cargo build` embeds `web/dist` when it exists and nothing when it does
 not; it never starts Bun or touches the network for the page.
+
+## Supply chain
+
+`deny.toml` configures [cargo-deny](https://embarkstudios.github.io/cargo-deny/);
+the `deny` job in CI runs it on every push and pull request.
+
+```sh
+cargo install --locked cargo-deny
+cargo deny --locked check
+```
+
+It checks four things: advisories from the RustSec database (a yanked
+version fails), licenses (only the ones listed in `deny.toml`, which are
+the ones the dependency tree uses today; the workspace's own crates are
+private and skipped), bans (a `*` version requirement fails, two versions
+of one crate only warn) and sources (crates.io only, no git dependency).
+An advisory is ignored only by an entry in `deny.toml` with its id and the
+reason. A new dependency under a licence not yet listed fails the job
+until the licence is added to `allow` on purpose.
+
+## Releasing
+
+`.github/workflows/release.yml` runs when a `v*` tag is pushed. For each of
+`aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`
+and `aarch64-unknown-linux-gnu` it builds the web page
+(`cargo run -p xtask -- web`), checks it (`cargo run -p xtask --
+check-release`), builds the binary with `--release --locked`, and packs it
+with this README into `<command>-<tag>-<target>.tar.gz` beside a
+`.sha256`. The archives are then attached to a draft GitHub release;
+nothing is public until you publish the draft. Windows is not released.
+
+1. Set `version` under `[workspace.package]` in `Cargo.toml`, run
+   `cargo metadata --format-version 1 > /dev/null` so `Cargo.lock` follows,
+   and commit both.
+2. Wait for CI on `main` to pass.
+3. `git tag v<version>` and `git push origin v<version>`. The workflow
+   fails at once when the tag is not `v` followed by the workspace version.
+4. Read the draft under the repository's Releases, check an archive against
+   its `.sha256` (`shasum -a 256 -c <file>.sha256`), and publish it.

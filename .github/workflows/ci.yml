@@ -40,6 +40,16 @@ jobs:
       - name: lint
         run: cargo run -q -p xtask -- lint
 
+  deny:
+    name: deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --locked
+
   windows:
     name: build (windows-latest)
     runs-on: windows-latest
