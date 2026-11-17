@@ -38,9 +38,11 @@ Comandos que não podem ser descritos com segurança (dois comandos juntos, `$(�
 | Modo | Nome em `--mode` e `/mode` | Edições | Comandos e outras ações | Use quando |
 |---|---|---|---|---|
 | Ask | `ask` (ou `default`) | Pergunta | Pergunta | Você quer aprovar cada mudança. |
-| Edits | `edits` (ou `acceptedits`, `accept-edits`) | Liberadas | Pergunta | Padrão. Você confia nas edições no projeto, não nos comandos. |
+| Edits | `edits` (ou `acceptEdits`, `accept-edits`) | Liberadas | Pergunta | Padrão. Você confia nas edições no projeto, não nos comandos. |
 | Plan | `plan` | Recusadas | Recusados | O agente só lê, pesquisa e propõe um plano para você aprovar. |
-| Bypass | `bypass` (ou `yolo`) | Liberadas | Liberados, depois de uma verificação de segurança | Trabalho sem supervisão em um ambiente descartável. |
+| Bypass | `bypass` (ou `bypassPermissions`, `bypass-permissions`, `yolo`) | Liberadas | Liberados, depois de uma verificação de segurança | Trabalho sem supervisão em um ambiente descartável. |
+
+O nome da segunda coluna é o que o app mostra e grava. Os outros, entre parênteses, são lidos como o mesmo modo, em maiúsculas ou minúsculas, onde quer que um modo seja dado: `--mode`, `/mode`, a configuração `mode` guardada e o `permissionMode` de um subagente.
 
 Em qualquer modo, ler e pesquisar dentro do projeto, nas pastas adicionais e com comandos de shell somente leitura (`ls`, `git status`…) roda sem perguntar. Ler fora delas pergunta, exceto no modo bypass.
 

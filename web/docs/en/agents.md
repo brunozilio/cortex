@@ -145,6 +145,8 @@ Anything else makes the call fail with *the agent model must be served by the cu
 | `bypassPermissions` | `bypass`, if the conversation allows it |
 | `dontAsk` | `ask`, but never shows a prompt: what would be asked is refused |
 
+The app's own names (`ask`, `edits`, `plan`, `bypass`) and the other spellings listed in [Permission modes](./permissions#permission-modes) are read too, in any letter case.
+
 ### Memory
 
 `memory` gives the agent a private folder that survives between runs, and the `Read`, `Write` and `Edit` tools to use it:

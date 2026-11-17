@@ -38,9 +38,11 @@ Commands that cannot be described safely (two commands joined, `$(…)`, a scrip
 | Mode | Name in `--mode` and `/mode` | Edits | Commands and other actions | Use it when |
 |---|---|---|---|---|
 | Ask | `ask` (also `default`) | Ask | Ask | You want to approve every change. |
-| Edits | `edits` (also `acceptedits`, `accept-edits`) | Allowed | Ask | Default. You trust edits in the project, not commands. |
+| Edits | `edits` (also `acceptEdits`, `accept-edits`) | Allowed | Ask | Default. You trust edits in the project, not commands. |
 | Plan | `plan` | Refused | Refused | The agent only reads, searches and proposes a plan for you to approve. |
-| Bypass | `bypass` (also `yolo`) | Allowed | Allowed, after a safety check | Unattended work in a disposable environment. |
+| Bypass | `bypass` (also `bypassPermissions`, `bypass-permissions`, `yolo`) | Allowed | Allowed, after a safety check | Unattended work in a disposable environment. |
+
+The name in the second column is the one the app shows and writes. The others in brackets are read as the same mode, in any letter case, wherever a mode is given: `--mode`, `/mode`, the saved `mode` setting and a sub-agent's `permissionMode`.
 
 In every mode, reading and searching inside the project, the [additional folders](#additional-directories), and read-only shell commands (`ls`, `git status`…) run without asking. Reading outside them asks, except in bypass mode.
 

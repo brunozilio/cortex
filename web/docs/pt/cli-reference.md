@@ -234,7 +234,7 @@ Lê ou muda o seu arquivo de configurações, `~/{{DIR}}/settings.json`. Com `--
 |---|---|---|---|---|
 | `--model` | `-m` | id ou nome do modelo | o último usado | O modelo. O id completo, a parte depois dos dois-pontos ou o rótulo. |
 | `--fallback-model` | | id ou nome do modelo | | O modelo com que seguir quando o escolhido está sobrecarregado. Tem prioridade sobre os fallbacks definidos no chat e nas configurações. |
-| `--mode` | | `ask`, `edits`, `plan` ou `bypass` | | O modo de permissão. `default` também é lido como `ask`, `acceptedits` e `accept-edits` como `edits`, `yolo` como `bypass`. |
+| `--mode` | | `ask`, `edits`, `plan` ou `bypass` | | O modo de permissão. `default` também é lido como `ask`, `acceptEdits` e `accept-edits` como `edits`, `bypassPermissions`, `bypass-permissions` e `yolo` como `bypass`, em maiúsculas ou minúsculas. |
 | `--allowedTools` | | regras | | Regras permitidas sem perguntar, como `Bash(git diff:*) Edit`. Pode repetir. Também `--allowed-tools`. |
 | `--disallowedTools` | | regras | | Regras recusadas, como `Bash(rm:*)`. Pode repetir. Também `--disallowed-tools`. |
 | `--append-system-prompt` | | texto | | Texto adicionado ao fim do prompt de sistema |

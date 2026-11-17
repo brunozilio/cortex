@@ -35,7 +35,7 @@ fn a_stalled_search_ends_as_soon_as_the_run_is_cancelled() {
     workspace.services.search = Some(WebSearcher(Arc::new(Stalled)));
     let workspace = Arc::new(workspace);
     let cancelling = Arc::clone(&workspace);
-    let (marked, cancelled_at) = std::sync::mpsc::channel();
+    let (marked, cancelled_at) = crossbeam_channel::unbounded();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(30));
         let _ = marked.send(Instant::now());

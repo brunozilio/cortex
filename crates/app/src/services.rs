@@ -44,7 +44,7 @@ impl LocalServices {
     pub fn detect_in(cwd: Option<&Path>) -> Self {
         let root = DataRoot::system();
         let stores = root.stores();
-        let engine = crate::native::engine(Arc::clone(&stores.sessions), root.language_servers());
+        let engine = crate::engine::build(Arc::clone(&stores.sessions), root.language_servers());
         let mut services = Self::of(Arc::new(engine), root, stores);
         services.homes = Arc::new(crate::OwnerHome::system());
         services.in_project(cwd)
@@ -61,7 +61,7 @@ impl LocalServices {
             self.off.follow(&settings.features);
         }
         if !self.off.contains(domain::features::DECLARED_PROVIDERS) {
-            let _ = crate::native::declare_providers(&self.gate(cwd));
+            let _ = crate::engine::declare_providers(&self.gate(cwd));
         }
     }
 

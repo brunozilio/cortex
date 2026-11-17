@@ -245,7 +245,7 @@ mod tests {
             workspace.services.network = Some(Network(Arc::new(stalling)));
             let workspace = Arc::new(workspace);
             let cancelling = Arc::clone(&workspace);
-            let (marked, cancelled_at) = std::sync::mpsc::channel();
+            let (marked, cancelled_at) = crossbeam_channel::unbounded();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_millis(30));
                 let _ = marked.send(std::time::Instant::now());

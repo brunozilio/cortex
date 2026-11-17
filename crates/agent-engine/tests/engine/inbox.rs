@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -22,10 +22,8 @@ fn a_notice_reaches_the_model_with_the_next_tool_results() {
         }]),
         ScriptedModel::reply(vec![Block::Text("Seen.".into())]),
     ]));
-    let engine = NativeEngine::new(
-        Arc::new(Source(Mutex::new(vec![Arc::clone(&scripted)]))),
-        Arc::new(InMemorySessions::default()),
-    );
+    let engine =
+        Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&scripted)]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(dir.path().into(), "read it", model());
     request.policy.permission = PermissionMode::Bypass;
     request.policy.safety_check = false;

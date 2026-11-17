@@ -1,5 +1,5 @@
 use agent_engine::{
-    ApiSource, NativeEngine,
+    ApiSource, Engine,
     model::{ModelApi, ModelError, client::ProviderClient, http::NetHttp},
     sessions::InMemorySessions,
 };
@@ -49,6 +49,6 @@ impl ApiSource for Source {
         Ok(Arc::new(ProviderClient::for_model(request.session.model.clone(), Arc::new(NetHttp), Arc::new(key))))
     }
 }
-pub fn engine() -> NativeEngine {
-    NativeEngine::new(Arc::new(Source), Arc::new(InMemorySessions::default()))
+pub fn engine() -> Engine {
+    Engine::new(Arc::new(Source), Arc::new(InMemorySessions::default()))
 }

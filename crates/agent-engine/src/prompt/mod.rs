@@ -128,12 +128,7 @@ pub const fn platform() -> &'static str {
 mod tests;
 
 pub fn reminder(mode: domain::PermissionMode, depth: usize, style: Option<&str>) -> String {
-    let mode = match mode {
-        domain::PermissionMode::Plan => "plan",
-        domain::PermissionMode::Ask => "ask",
-        domain::PermissionMode::AcceptEdits => "edits",
-        domain::PermissionMode::Bypass => "bypass",
-    };
+    let mode = domain::command::mode_label(mode);
     let data = serde_json::json!({ "mode": mode, "depth": depth, "style": style });
     render("prompts/reminder.js", &data)
 }

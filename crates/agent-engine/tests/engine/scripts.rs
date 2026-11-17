@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -41,10 +41,8 @@ fn a_javascript_tool_reads_through_another_tool_and_asks_the_model() {
         ScriptedModel::reply(vec![Block::Text("A short summary.".into())]),
         ScriptedModel::reply(vec![Block::Text("done".into())]),
     ]));
-    let engine = NativeEngine::new(
-        Arc::new(Source(Mutex::new(vec![Arc::clone(&model_api)]))),
-        Arc::new(InMemorySessions::default()),
-    );
+    let engine =
+        Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&model_api)]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(dir.path().into(), "Summarize the notes.", model());
     request.policy.permission = PermissionMode::Bypass;
     request.policy.safety_check = false;

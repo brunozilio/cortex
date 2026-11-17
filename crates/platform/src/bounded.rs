@@ -2,8 +2,9 @@ use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
+
+use crossbeam_channel::Receiver;
 use std::time::{Duration, Instant};
 
 use tokio_util::sync::CancellationToken;
@@ -169,7 +170,7 @@ struct Reader {
 impl Reader {
     fn of(pipe: Option<impl Read + Send + 'static>, cap: usize, keep: Keep) -> Self {
         let kept = Arc::new(Mutex::new(VecDeque::new()));
-        let (end, ended) = std::sync::mpsc::channel();
+        let (end, ended) = crossbeam_channel::bounded(1);
         let into = Arc::clone(&kept);
         drop(crate::named::spawn("process-output", move || {
             if let Some(pipe) = pipe {

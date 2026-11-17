@@ -11,22 +11,22 @@ use platform::sync::Locked;
 
 use agent_engine::model::{ModelApi, ModelError};
 use agent_engine::sessions::FileSessions;
-use agent_engine::{ApiSource, NativeEngine};
+use agent_engine::{ApiSource, Engine};
 
 use crate::providers::ModelProviders;
 
-pub struct NativeApis {
+pub struct ProviderApis {
     http: Arc<dyn Http>,
     catalogs: Mutex<HashMap<ModelProvider, Vec<ModelOption>>>,
 }
 
-impl NativeApis {
+impl ProviderApis {
     pub fn new(http: Arc<dyn Http>) -> Self {
         Self { http, catalogs: Mutex::default() }
     }
 }
 
-impl ApiSource for NativeApis {
+impl ApiSource for ProviderApis {
     fn api(&self, request: &PromptRequest) -> Result<Arc<dyn ModelApi>, ModelError> {
         let provider = request.session.model.provider;
         let key = request.host.credentials.model.clone().ok_or_else(|| {
@@ -126,10 +126,10 @@ pub fn declare_providers(gate: &agent_engine::trust::Gate) -> Vec<String> {
     described.into_iter().map(|(_, line)| line).collect()
 }
 
-pub fn engine(sessions: Arc<FileSessions>, language_servers: PathBuf) -> NativeEngine {
-    let apis = NativeApis::new(Arc::new(NetHttp));
+pub fn build(sessions: Arc<FileSessions>, language_servers: PathBuf) -> Engine {
+    let apis = ProviderApis::new(Arc::new(NetHttp));
     let servers = LspPool::installing(Processes, IDLE, language_servers, Downloads(agent_engine::NetFetch));
-    NativeEngine::new(Arc::new(apis), sessions).with_language_servers(Arc::new(servers))
+    Engine::new(Arc::new(apis), sessions).with_language_servers(Arc::new(servers))
 }
 
 #[cfg(test)]
@@ -152,7 +152,7 @@ mod tests {
         request
     }
 
-    fn calls(apis: &NativeApis, http: &ScriptedHttp, request: &PromptRequest) -> String {
+    fn calls(apis: &ProviderApis, http: &ScriptedHttp, request: &PromptRequest) -> String {
         let api = apis.api(request).expect("api");
         let turn = TurnRequest {
             model: "m".into(),
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn each_provider_is_called_through_its_own_api() {
         let http = Arc::new(ScriptedHttp::new((0..2).map(|_| (400, "{}".to_owned()))));
-        let apis = NativeApis::new(http.clone());
+        let apis = ProviderApis::new(http.clone());
         let first = calls(&apis, &http, &request(KEYED, Some("sk-one")));
         let second = calls(&apis, &http, &request(KEYED_TOO, Some("sk-two")));
         assert_eq!(first, "https://keyed.test/chat");
@@ -177,7 +177,7 @@ mod tests {
     }
 
     #[test]
-    fn only_a_native_run_of_a_connected_provider_carries_a_key() {
+    fn only_a_run_of_a_connected_provider_carries_a_key() {
         let providers = ModelProviders::new(
             Arc::new(crate::providers::InMemoryProviderStore::default()),
             Arc::new(crate::secrets::InMemorySecretStore::default()),
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn a_provider_prefixed_model_goes_to_that_provider_with_its_own_key() {
         let http = Arc::new(ScriptedHttp::new((0..3).map(|_| (400, "{}".to_owned()))));
-        let apis = NativeApis::new(http.clone());
+        let apis = ProviderApis::new(http.clone());
         let mut run = request(KEYED, Some("sk-one"));
         run.host.credentials.other_models = vec![(KEYED_TOO, ProviderKey::new("sk-two"))];
         let api = apis.api(&run).expect("api");
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn the_web_search_uses_the_run_s_account_and_needs_its_key() {
         let http = Arc::new(ScriptedHttp::new([]));
-        let apis = NativeApis::new(http.clone());
+        let apis = ProviderApis::new(http.clone());
         assert!(apis.searcher(&request(KEYED, None)).is_none(), "no key, no account search");
         let searcher = apis.searcher(&request(KEYED, Some("sk-one"))).expect("searcher");
         let searched =
@@ -235,7 +235,7 @@ mod tests {
     fn a_provider_s_catalog_is_listed_once_and_only_with_its_key() {
         let page = r#"{"data":[{"id":"big"},{"id":"tiny"}]}"#.to_owned();
         let http = Arc::new(ScriptedHttp::new([(200, page)]));
-        let apis = NativeApis::new(http.clone());
+        let apis = ProviderApis::new(http.clone());
         assert!(apis.catalog(&request(KEYED, None)).is_empty(), "no key, no listing");
         let ids = |listed: Vec<ModelOption>| listed.into_iter().map(|m| m.id).collect::<Vec<_>>();
         assert_eq!(ids(apis.catalog(&request(KEYED, Some("sk-one")))), ["keyed:big", "keyed:tiny"]);
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn a_signed_out_account_hands_the_turn_to_the_next_account_of_the_pool() {
         let http = Arc::new(ScriptedHttp::new([(401, "{}".to_owned()), (400, "{}".to_owned())]));
-        let apis = NativeApis::new(http.clone());
+        let apis = ProviderApis::new(http.clone());
         let mut run = request(KEYED, Some("sk-one"));
         run.host.credentials.model_pool = vec![ProviderKey::new("sk-two")];
         let api = apis.api(&run).expect("api");
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn a_provider_without_a_key_says_so() {
-        let apis = NativeApis::new(Arc::new(ScriptedHttp::new([])));
+        let apis = ProviderApis::new(Arc::new(ScriptedHttp::new([])));
         let missing = apis.api(&request(KEYED, None)).err().expect("no key");
         assert!(matches!(missing, ModelError::Unauthorized(ref why) if why.contains("Keyed")), "{missing:?}");
     }

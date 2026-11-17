@@ -3,8 +3,9 @@ use std::io::{BufReader, Read, Write};
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Condvar, Mutex};
+
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
 use std::time::{Duration, Instant};
 
 use domain::lsp::answer::RequestError;
@@ -140,7 +141,7 @@ impl LspClient {
             return Err(RequestError::Failed(self.stopped()));
         }
         let id = self.next.fetch_add(1, Ordering::Relaxed);
-        let (send, answer) = channel();
+        let (send, answer) = unbounded();
         shared
             .pending
             .lock()

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -8,8 +8,8 @@ use domain::{Effort, EngineEvent, PromptRequest};
 
 use crate::{Source, finish, model, start};
 
-fn engine(model: &Arc<ScriptedModel>) -> NativeEngine {
-    NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(model)]))), Arc::new(InMemorySessions::default()))
+fn engine(model: &Arc<ScriptedModel>) -> Engine {
+    Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(model)]))), Arc::new(InMemorySessions::default()))
 }
 
 fn auto(prompt: &str) -> (tempfile::TempDir, PromptRequest) {

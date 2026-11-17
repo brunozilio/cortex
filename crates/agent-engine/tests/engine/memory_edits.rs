@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::{Block, Role};
@@ -15,8 +15,7 @@ fn asked_with(output: &str) -> agent_engine::model::TurnRequest {
 
 fn asked_in(dir: &tempfile::TempDir, output: &str) -> agent_engine::model::TurnRequest {
     let agent = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Listed.".into())])]));
-    let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![agent.clone()]))), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![agent.clone()]))), Arc::new(InMemorySessions::default()));
     let brief = MemoryBrief { output: output.into(), ..MemoryBrief::default() };
     let mut request = PromptRequest::plain(dir.path().into(), "list the issues", model());
     request.host.memory = Some(brief);

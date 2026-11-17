@@ -1,11 +1,12 @@
-use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
+
+use crossbeam_channel::unbounded;
 use std::time::Duration;
 
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::{FileSessions, Sessions};
 use agent_engine::transcript::Block;
-use agent_engine::{AgentEngine, NativeEngine};
+use agent_engine::{AgentEngine, Engine};
 use domain::{EngineEvent, PromptRequest, RunId, SessionId};
 
 use crate::{Source, finish, model, start};
@@ -22,13 +23,13 @@ struct Ended {
 }
 
 fn run_to_its_end(
-    engine: &NativeEngine,
+    engine: &Engine,
     sessions: &Arc<FileSessions>,
     request: &PromptRequest,
     session: &SessionId,
     cancel_at_once: bool,
 ) -> Ended {
-    let (send, ended) = channel();
+    let (send, ended) = unbounded();
     let send = Mutex::new(send);
     let (store, asked, held) = (Arc::clone(sessions), request.clone(), session.clone());
     let sink = Arc::new(move |_run: RunId, event: EngineEvent| {
@@ -44,11 +45,11 @@ fn run_to_its_end(
     ended.recv_timeout(Duration::from_secs(10)).expect("the run ends")
 }
 
-fn kept_session(dir: &std::path::Path, later: Vec<Arc<ScriptedModel>>) -> (NativeEngine, Arc<FileSessions>, SessionId) {
+fn kept_session(dir: &std::path::Path, later: Vec<Arc<ScriptedModel>>) -> (Engine, Arc<FileSessions>, SessionId) {
     let sessions = Arc::new(FileSessions::new(dir.join("native")));
     let mut models = vec![answering("One.")];
     models.extend(later);
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(models))), Arc::clone(&sessions) as _);
+    let engine = Engine::new(Arc::new(Source(Mutex::new(models))), Arc::clone(&sessions) as _);
     let events = finish(&start(&engine, &PromptRequest::plain(dir.into(), "one", model())));
     let Some(EngineEvent::SessionStarted(session)) = events.first().cloned() else { panic!("{events:?}") };
     (engine, sessions, session)

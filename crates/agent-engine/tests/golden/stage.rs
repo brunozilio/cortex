@@ -1,13 +1,14 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
+
+use crossbeam_channel::unbounded;
 use std::time::Duration;
 
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{ModelApi, ModelError, Reply};
 use agent_engine::sessions::{FileSessions, Sessions};
-use agent_engine::{AgentEngine, ApiSource, NativeEngine};
+use agent_engine::{AgentEngine, ApiSource, Engine};
 use domain::{EngineEvent, Extensions, ModelOption, PromptRequest, RunId, SessionId};
 
 use crate::render;
@@ -32,7 +33,7 @@ pub struct Stage {
     pub store: PathBuf,
     pub sessions: Arc<FileSessions>,
     models: Arc<Models>,
-    engine: NativeEngine,
+    engine: Engine,
     known: Mutex<Vec<SessionId>>,
     logged: Mutex<HashMap<SessionId, usize>>,
     transcript: Mutex<Vec<String>>,
@@ -55,7 +56,7 @@ impl Stage {
         }
         let sessions = Arc::new(FileSessions::new(&store));
         let models = Arc::new(Models::default());
-        let engine = NativeEngine::new(Arc::clone(&models) as Arc<dyn ApiSource>, Arc::clone(&sessions) as _);
+        let engine = Engine::new(Arc::clone(&models) as Arc<dyn ApiSource>, Arc::clone(&sessions) as _);
         Self {
             root,
             project,
@@ -116,7 +117,7 @@ impl Stage {
     }
 
     pub fn start(&self, request: &PromptRequest) -> Run {
-        let (send, events) = channel();
+        let (send, events) = unbounded();
         let send = Mutex::new(send);
         let sink = Arc::new(move |_run: RunId, event: EngineEvent| {
             let _ = send.lock().expect("send").send(event);

@@ -13,7 +13,7 @@ use crate::tools::Workspace;
 pub(super) fn runtime() -> Result<Handle, EngineError> {
     platform::runtime::shared()
         .map(|runtime| runtime.handle().clone())
-        .map_err(|error| EngineError::Spawn { engine: "the native engine", source: std::io::Error::other(error) })
+        .map_err(|error| EngineError::Spawn { engine: "the engine", source: std::io::Error::other(error) })
 }
 
 pub(super) fn spawn(
@@ -26,7 +26,7 @@ pub(super) fn spawn(
     runtime.spawn(async move {
         if tokio::task::spawn_blocking(move || job.run(workspace)).await.is_err() {
             control.cancel();
-            for event in RunFailure::other("The native engine stopped unexpectedly.").events() {
+            for event in RunFailure::other("The engine stopped unexpectedly.").events() {
                 gate.emit(event);
             }
         }

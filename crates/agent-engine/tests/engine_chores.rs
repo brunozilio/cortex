@@ -1,7 +1,8 @@
 #![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
 
-use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
+
+use crossbeam_channel::{Receiver, unbounded};
 use std::time::Duration;
 
 use agent_engine::AgentEngine;
@@ -9,7 +10,7 @@ use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{ModelApi, ModelError};
 use agent_engine::sessions::{InMemorySessions, Sessions};
 use agent_engine::transcript::{Block, Message};
-use agent_engine::{ApiSource, NativeEngine};
+use agent_engine::{ApiSource, Engine};
 use domain::{ChoreAnswer, EngineEvent, ModelOption, PromptRequest, RunId, SessionCommand};
 
 struct Source(Mutex<Vec<Arc<ScriptedModel>>>);
@@ -20,8 +21,8 @@ impl ApiSource for Source {
     }
 }
 
-fn finish(engine: &NativeEngine, request: &PromptRequest) -> Vec<EngineEvent> {
-    let (send, receive): (_, Receiver<EngineEvent>) = channel();
+fn finish(engine: &Engine, request: &PromptRequest) -> Vec<EngineEvent> {
+    let (send, receive): (_, Receiver<EngineEvent>) = unbounded();
     let send = Mutex::new(send);
     let sink = Arc::new(move |_run: RunId, event: EngineEvent| {
         let _ = send.lock().expect("send").send(event);
@@ -51,7 +52,7 @@ fn a_title_needs_no_session_and_keeps_none() {
     let dir = tempfile::tempdir().expect("dir");
     let titler = says("{\"title\": \"Login page\"}");
     let sessions = Arc::new(InMemorySessions::default());
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&titler)]))), sessions);
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&titler)]))), sessions);
     let mut request = PromptRequest::plain(dir.path().into(), "fix the login page please", model());
     request.session.command = Some(SessionCommand::Title);
     let events = finish(&engine, &request);
@@ -72,7 +73,7 @@ fn a_suggestion_reads_the_kept_session() {
     let history = vec![Message::user("fix the bug"), Message::assistant(vec![Block::Text("Fixed it.".into())])];
     sessions.save_for(&request.session.cwd, &id, &history).expect("save");
     let guesser = says("run the tests");
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&guesser)]))), sessions);
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&guesser)]))), sessions);
     request.session.resume = Some(id);
     request.session.command = Some(SessionCommand::Suggest);
     let events = finish(&engine, &request);
@@ -86,10 +87,8 @@ fn a_suggestion_reads_the_kept_session() {
 fn the_style_picked_in_settings_reaches_the_prompt() {
     let dir = tempfile::tempdir().expect("dir");
     let model_api = says("Done.");
-    let engine = NativeEngine::new(
-        Arc::new(Source(Mutex::new(vec![Arc::clone(&model_api)]))),
-        Arc::new(InMemorySessions::default()),
-    );
+    let engine =
+        Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&model_api)]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(dir.path().into(), "hi", model());
     request.session.output_style = Some("concise".into());
     finish(&engine, &request);
@@ -103,10 +102,8 @@ fn the_style_picked_in_settings_reaches_the_prompt() {
 fn a_side_question_on_a_session_not_kept_yet_is_answered_not_reported_lost() {
     let dir = tempfile::tempdir().expect("dir");
     let answerer = says("Nothing has been said yet.");
-    let engine = NativeEngine::new(
-        Arc::new(Source(Mutex::new(vec![Arc::clone(&answerer)]))),
-        Arc::new(InMemorySessions::default()),
-    );
+    let engine =
+        Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&answerer)]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(dir.path().into(), "what is it doing?", model());
     request.session.resume = Some(domain::SessionId("first-run".into()));
     request.session.command = Some(SessionCommand::Side);

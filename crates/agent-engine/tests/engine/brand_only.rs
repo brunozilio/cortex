@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -47,7 +47,7 @@ fn nothing_of_claude_code_s_folders_reaches_a_run() {
 
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
+        Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(r.into(), "/sentinel go", model());
     request.host.extensions = Some(Extensions { home: Some(h.to_path_buf()), ..Extensions::default() });
     let events = finish(&start(&engine, &request));

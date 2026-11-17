@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::RecvError;
 use std::sync::{Arc, Mutex, Weak};
+
+use crossbeam_channel::RecvError;
 
 use tokio::sync::oneshot;
 

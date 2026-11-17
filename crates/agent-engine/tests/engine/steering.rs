@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -26,10 +26,8 @@ fn the_task_list_is_shown_whenever_the_agent_changes_it() {
         }]),
         ScriptedModel::reply(vec![Block::Text("Working.".into())]),
     ]));
-    let engine = NativeEngine::new(
-        Arc::new(Source(Mutex::new(vec![Arc::clone(&scripted)]))),
-        Arc::new(InMemorySessions::default()),
-    );
+    let engine =
+        Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&scripted)]))), Arc::new(InMemorySessions::default()));
     let request = PromptRequest::plain(dir.path().into(), "plan it", model());
     let (events, _handle) = start_with_handle(&engine, &request);
     let lists: Vec<Vec<domain::events::TaskItem>> = finish(&events)
@@ -58,10 +56,8 @@ fn messages_taken_back_before_the_next_turn_never_reach_the_model() {
         }]),
         ScriptedModel::reply(vec![Block::Text("Skipped.".into())]),
     ]));
-    let engine = NativeEngine::new(
-        Arc::new(Source(Mutex::new(vec![Arc::clone(&scripted)]))),
-        Arc::new(InMemorySessions::default()),
-    );
+    let engine =
+        Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&scripted)]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(dir.path().into(), "say hi", model());
     request.policy.permission = PermissionMode::Ask;
     let (events, mut handle) = start_with_handle(&engine, &request);

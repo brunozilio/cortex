@@ -199,8 +199,8 @@ fn a_request_nobody_answers_gives_up_at_its_deadline() {
     assert!(started.elapsed() < std::time::Duration::from_secs(30), "{:?}", started.elapsed());
 }
 
-fn cancelled_soon(stop: &Arc<platform::Stop>) -> std::sync::mpsc::Receiver<std::time::Instant> {
-    let (marked, cancelled_at) = std::sync::mpsc::channel();
+fn cancelled_soon(stop: &Arc<platform::Stop>) -> crossbeam_channel::Receiver<std::time::Instant> {
+    let (marked, cancelled_at) = crossbeam_channel::unbounded();
     let stop = Arc::clone(stop);
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -210,7 +210,7 @@ fn cancelled_soon(stop: &Arc<platform::Stop>) -> std::sync::mpsc::Receiver<std::
     cancelled_at
 }
 
-fn since_cancel(cancelled_at: &std::sync::mpsc::Receiver<std::time::Instant>) -> std::time::Duration {
+fn since_cancel(cancelled_at: &crossbeam_channel::Receiver<std::time::Instant>) -> std::time::Duration {
     let ended = std::time::Instant::now();
     let cancelled = cancelled_at.recv_timeout(std::time::Duration::from_secs(30)).expect("cancelled");
     ended.saturating_duration_since(cancelled)

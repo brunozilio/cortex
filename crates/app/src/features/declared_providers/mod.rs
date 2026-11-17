@@ -3,7 +3,7 @@ use crate::api::features::declared_providers::{DeclaredProvidersReply, DeclaredP
 use crate::features::context::Context;
 
 pub fn handle(context: &Context<'_>, request: DeclaredProvidersRequest) -> Result<DeclaredProvidersReply, String> {
-    let lines = crate::native::declare_providers(&context.services.gate(&request.path));
+    let lines = crate::engine::declare_providers(&context.services.gate(&request.path));
     Ok(DeclaredProvidersReply { lines })
 }
 

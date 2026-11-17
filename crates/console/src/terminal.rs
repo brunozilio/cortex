@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::mpsc;
 
 use axum::Router;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -122,8 +121,8 @@ fn pump_out(mut reader: Box<dyn Read + Send>) -> channel::Receiver<Vec<u8>> {
     receiver
 }
 
-fn pump_in(mut writer: Box<dyn Write + Send>) -> mpsc::Sender<Vec<u8>> {
-    let (sender, receiver) = mpsc::channel::<Vec<u8>>();
+fn pump_in(mut writer: Box<dyn Write + Send>) -> crossbeam_channel::Sender<Vec<u8>> {
+    let (sender, receiver) = crossbeam_channel::unbounded::<Vec<u8>>();
     std::thread::spawn(move || {
         for bytes in receiver {
             if writer.write_all(&bytes).and_then(|()| writer.flush()).is_err() {

@@ -229,14 +229,22 @@ pub const fn mode_label(mode: PermissionMode) -> &'static str {
     }
 }
 
+pub const MODE_ALIASES: [(&str, PermissionMode); 6] = [
+    ("default", PermissionMode::Ask),
+    ("acceptedits", PermissionMode::AcceptEdits),
+    ("accept-edits", PermissionMode::AcceptEdits),
+    ("bypasspermissions", PermissionMode::Bypass),
+    ("bypass-permissions", PermissionMode::Bypass),
+    ("yolo", PermissionMode::Bypass),
+];
+
 pub fn mode_named(name: &str) -> Option<PermissionMode> {
-    Some(match name.to_ascii_lowercase().as_str() {
-        "ask" | "default" => PermissionMode::Ask,
-        "edits" | "acceptedits" | "accept-edits" => PermissionMode::AcceptEdits,
-        "plan" => PermissionMode::Plan,
-        "bypass" | "yolo" => PermissionMode::Bypass,
-        _ => return None,
-    })
+    let name = name.trim().to_ascii_lowercase();
+    PermissionMode::ALL
+        .into_iter()
+        .map(|mode| (mode_label(mode), mode))
+        .chain(MODE_ALIASES)
+        .find_map(|(spelled, mode)| (spelled == name).then_some(mode))
 }
 
 pub fn level_named(name: &str) -> Option<Effort> {

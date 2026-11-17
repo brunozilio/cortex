@@ -13,19 +13,26 @@ struct Collector {
 }
 
 fn collector(answer: u16) -> Collector {
-    let server = tiny_http::Server::http("127.0.0.1:0").expect("collector");
-    let url = format!("http://{}", server.server_addr().to_ip().expect("address"));
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("collector");
+    listener.set_nonblocking(true).expect("non-blocking");
+    let url = format!("http://{}", listener.local_addr().expect("address"));
     let (sent, received) = crossbeam_channel::unbounded();
-    std::thread::spawn(move || {
-        for mut request in server.incoming_requests() {
-            let mut body = String::new();
-            let _ = request.as_reader().read_to_string(&mut body);
-            let headers =
-                request.headers().iter().map(|h| (h.field.to_string().to_lowercase(), h.value.to_string())).collect();
-            let path_ok = request.url() == "/v1/traces";
-            let _ = request.respond(tiny_http::Response::empty(if path_ok { answer } else { 404 }));
-            let _ = sent.send((serde_json::from_str(&body).unwrap_or(Value::Null), headers));
-        }
+    let answer = axum::http::StatusCode::from_u16(answer).expect("status");
+    let router =
+        axum::Router::new().fallback(move |uri: axum::http::Uri, headers: axum::http::HeaderMap, body: String| {
+            let sent = sent.clone();
+            async move {
+                let headers = headers
+                    .iter()
+                    .map(|(name, value)| (name.as_str().to_owned(), value.to_str().unwrap_or_default().to_owned()))
+                    .collect();
+                let _ = sent.send((serde_json::from_str(&body).unwrap_or(Value::Null), headers));
+                if uri.path() == "/v1/traces" { answer } else { axum::http::StatusCode::NOT_FOUND }
+            }
+        });
+    platform::runtime::shared().expect("runtime").spawn(async move {
+        let listener = tokio::net::TcpListener::from_std(listener).expect("listener");
+        let _ = axum::serve(listener, router).await;
     });
     Collector { url, received }
 }

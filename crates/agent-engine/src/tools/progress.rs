@@ -1,7 +1,8 @@
 use std::cell::RefCell;
-use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+use crossbeam_channel::RecvTimeoutError;
 
 use platform::sync::Locked;
 
@@ -31,7 +32,7 @@ pub fn last_line(output: &str) -> Option<String> {
 pub fn watched<T>(show: &(dyn Fn(String) + Sync), run: impl FnOnce() -> T) -> T {
     let slot: Slot = Arc::default();
     let previous = SLOT.with(|current| current.replace(Some(Arc::clone(&slot))));
-    let (done, finished) = std::sync::mpsc::channel::<()>();
+    let (done, finished) = crossbeam_channel::bounded::<()>(1);
     let result = std::thread::scope(|scope| {
         scope.spawn(move || {
             let mut shown: Option<String> = None;

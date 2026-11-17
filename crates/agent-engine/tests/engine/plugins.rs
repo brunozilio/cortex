@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -48,7 +48,7 @@ fn a_plugin_brings_its_command_hook_and_mcp_tools_to_a_run() {
 
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
+        Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(repo.path().into(), "/acme:hello world", model());
     request.host.extensions = Some(Extensions { plugins: vec![root.to_path_buf()], ..Extensions::default() });
     let events = finish(&start(&engine, &request));

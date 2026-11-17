@@ -4,7 +4,7 @@ use agent_engine::model::ModelApi;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::{Block, Role};
-use agent_engine::{ApiSource, NativeEngine};
+use agent_engine::{ApiSource, Engine};
 use domain::{EngineEvent, EngineProblem, PromptRequest};
 use serde_json::json;
 
@@ -23,7 +23,7 @@ fn runs_a_prompt_and_continues_the_session() {
         ScriptedModel::reply(vec![Block::Text(brand::INSTRUCTIONS.into())]),
     ]));
     let second = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Yes.".into())])]));
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![Arc::clone(&first), Arc::clone(&second)]))),
         Arc::new(InMemorySessions::default()),
     );
@@ -49,7 +49,7 @@ fn runs_a_prompt_and_continues_the_session() {
 #[test]
 fn without_an_account_it_says_so_and_fails() {
     let dir = tempfile::tempdir().expect("dir");
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(InMemorySessions::default()));
     let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "hi", model())));
     assert!(events.contains(&EngineEvent::Diagnosed(EngineProblem::NotLoggedIn)), "{events:?}");
     assert!(matches!(events.last(), Some(EngineEvent::Failed(_))));
@@ -59,10 +59,8 @@ fn without_an_account_it_says_so_and_fails() {
 fn attached_images_reach_the_model_before_the_prompt() {
     let dir = tempfile::tempdir().expect("dir");
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("A cat.".into())])]));
-    let engine = NativeEngine::new(
-        Arc::new(Source(Mutex::new(vec![Arc::clone(&model_api)]))),
-        Arc::new(InMemorySessions::default()),
-    );
+    let engine =
+        Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&model_api)]))), Arc::new(InMemorySessions::default()));
     let image = domain::Image::from_bytes(b"\x89PNG\r\n\x1a\n pixels").expect("ok").expect("png");
     let mut request = PromptRequest::plain(dir.path().into(), "What is this?", model());
     request.prompt.images = vec![image.clone()];
@@ -79,7 +77,7 @@ fn provider_failure_during_turn_remains_a_failure_and_is_not_relabelled_cancelle
     let failing = Arc::new(ScriptedModel::new([Err(agent_engine::model::ModelError::Provider(
         "provider fixture failure".into(),
     ))]));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![failing]))), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![failing]))), Arc::new(InMemorySessions::default()));
     let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "test", model())));
     assert!(
         matches!(events.last(),Some(EngineEvent::Failed(message)) if message=="provider fixture failure"),
@@ -97,7 +95,7 @@ fn an_unexpected_provider_panic_still_emits_one_terminal_failure() {
         }
     }
     let dir = tempfile::tempdir().expect("dir");
-    let engine = NativeEngine::new(Arc::new(Panicking), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(Panicking), Arc::new(InMemorySessions::default()));
     let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "test", model())));
     assert!(matches!(events.last(),Some(EngineEvent::Failed(message)) if message.contains("unexpectedly")));
     assert_eq!(events.iter().filter(|e| e.is_terminal()).count(), 1);
@@ -121,8 +119,7 @@ fn nested_instruction_is_delivered_before_the_first_matching_tool_batch_executes
         }])
     };
     let model = Arc::new(ScriptedModel::new([call(), call(), ScriptedModel::reply(vec![Block::Text("done".into())])]));
-    let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model.clone()]))), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![model.clone()]))), Arc::new(InMemorySessions::default()));
     let events = finish(&start(
         &engine,
         &PromptRequest::plain(dir.path().into(), "read nested", domain::ModelOption::new("fixture", "Fixture")),

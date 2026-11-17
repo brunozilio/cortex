@@ -2,7 +2,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -28,7 +28,7 @@ fn later_prompts_of_a_session_send_the_system_prompt_of_its_first() {
     let first = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("One.".into())])]));
     let second = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Two.".into())])]));
     let fresh = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Three.".into())])]));
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![Arc::clone(&first), Arc::clone(&second), Arc::clone(&fresh)]))),
         Arc::new(InMemorySessions::default()),
     );

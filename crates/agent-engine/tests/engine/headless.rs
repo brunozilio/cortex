@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -9,8 +9,8 @@ use serde_json::json;
 
 use crate::{Source, finish, model, start};
 
-fn engine(scripted: &Arc<ScriptedModel>) -> NativeEngine {
-    NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(scripted)]))), Arc::new(InMemorySessions::default()))
+fn engine(scripted: &Arc<ScriptedModel>) -> Engine {
+    Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(scripted)]))), Arc::new(InMemorySessions::default()))
 }
 
 #[test]

@@ -29,4 +29,4 @@ pub use llm_providers::{model, providers, transcript};
 
 pub use boundary::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};
 pub use engine::date::today;
-pub use engine::{ApiSource, NativeEngine};
+pub use engine::{ApiSource, Engine};

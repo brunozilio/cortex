@@ -2,8 +2,9 @@ use std::collections::VecDeque;
 use std::io::{self, Read};
 use std::process::{ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock};
+
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use std::time::{Duration, Instant};
 
 use crate::sync::Locked;
@@ -178,7 +179,7 @@ impl Drop for Child {
 fn hand_over(tree: Tree) -> Result<(), Tree> {
     static REAPER: OnceLock<Option<Sender<Tree>>> = OnceLock::new();
     let reaper = REAPER.get_or_init(|| {
-        let (leaving, left) = channel();
+        let (leaving, left) = unbounded();
         std::thread::Builder::new().name("child-reaper".to_owned()).spawn(move || reap(&left)).ok().map(|_| leaving)
     });
     match reaper {

@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::{Entry, FileSessions, INTERRUPTED, Sessions};
 use agent_engine::transcript::{Block, Message, Role};
@@ -81,7 +81,7 @@ fn crashed_after(saves: usize) -> Crashed {
     std::fs::write(dir.path().join("notes.txt"), "alpha\n").expect("file");
     let store = dir.path().join("native");
     let dying = DiesAfter::saves(&store, saves);
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![read_then_answer()]))), dying.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![read_then_answer()]))), dying.clone());
     let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "read the notes", model())));
     assert!(dying.is_dead(), "the run was meant to die: {events:?}");
     assert!(matches!(events.last(), Some(EngineEvent::Failed(_))), "{events:?}");
@@ -95,7 +95,7 @@ fn crashed_after(saves: usize) -> Crashed {
 fn resumed(crashed: &Crashed) -> (Vec<Message>, Vec<Message>) {
     let later = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Going on.".into())])]));
     let sessions = Arc::new(FileSessions::new(&crashed.store));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![later.clone()]))), sessions.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![later.clone()]))), sessions.clone());
     let mut request = PromptRequest::plain(crashed.dir.path().into(), "go on", model());
     request.session.resume = Some(crashed.session.clone());
     let on_disk = sessions.load_for_checked(&request.session.cwd, &crashed.session).expect("readable").expect("kept");
@@ -183,7 +183,7 @@ fn a_run_of_many_turns_writes_each_message_once_and_never_reads_the_file_back() 
     let store = dir.path().join("native");
     let sessions = Arc::new(FileSessions::new(&store));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::new(ScriptedModel::new(replies))]))), sessions.clone());
+        Engine::new(Arc::new(Source(Mutex::new(vec![Arc::new(ScriptedModel::new(replies))]))), sessions.clone());
     let mut request = PromptRequest::plain(dir.path().into(), "read it many times", model());
     request.policy.max_turns = Some(100);
     let events = finish(&start(&engine, &request));

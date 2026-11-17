@@ -13,6 +13,7 @@ thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "sync", "macros"] }
 tokio-util.workspace = true
+crossbeam-channel.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

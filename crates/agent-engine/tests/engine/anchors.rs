@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -44,8 +44,7 @@ fn run(anchors: bool) -> String {
 fn run_in(dir: tempfile::TempDir, anchors: bool) -> String {
     std::fs::write(dir.path().join("client.go"), "retries = 4\n").expect("file");
     let agent = reading_twice();
-    let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![agent.clone()]))), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![agent.clone()]))), Arc::new(InMemorySessions::default()));
     let brief = MemoryBrief { anchored: vec![retries()], anchors, ..MemoryBrief::default() };
     let mut request = PromptRequest::plain(dir.path().into(), "look at client.go", model());
     request.host.memory = Some(brief);

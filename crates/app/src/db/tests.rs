@@ -1,5 +1,6 @@
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
+
+use crossbeam_channel::unbounded;
 
 use super::schema::MIGRATIONS;
 use super::*;
@@ -171,8 +172,8 @@ fn a_reader_is_not_stopped_by_a_writer_and_sees_what_was_committed() {
     let file = dir.path().join(FILE);
     let (writer, reader) = (Db::opened(&file, WAIT, &[NOTES]).expect("writer"), Db::open_beside(&file, SHORT));
     noted(&writer, "committed");
-    let (writing, wrote) = mpsc::channel();
-    let (read, done) = mpsc::channel::<()>();
+    let (writing, wrote) = unbounded();
+    let (read, done) = unbounded::<()>();
 
     std::thread::scope(|scope| {
         scope.spawn(move || {
@@ -197,8 +198,8 @@ fn a_writer_kept_waiting_past_the_timeout_gets_an_error_that_says_so() {
     let dir = tempfile::tempdir().expect("dir");
     let file = dir.path().join(FILE);
     let (holder, waiter) = (Db::opened(&file, WAIT, &[NOTES]).expect("holder"), Db::open_beside(&file, SHORT));
-    let (holding, held) = mpsc::channel();
-    let (gave_up, release) = mpsc::channel::<()>();
+    let (holding, held) = unbounded();
+    let (gave_up, release) = unbounded::<()>();
 
     std::thread::scope(|scope| {
         scope.spawn(move || {

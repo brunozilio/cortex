@@ -153,9 +153,9 @@ Os papéis são `plan` (modo plan e o agente Plan), `explore` (o agente Explore 
 | Modo | Também aceito | Significado |
 |---|---|---|
 | `ask` | `default` | Pergunta antes de edições e comandos |
-| `edits` | `acceptedits`, `accept-edits` | Edita arquivos livremente, pergunta antes de comandos |
+| `edits` | `acceptEdits`, `accept-edits` | Edita arquivos livremente, pergunta antes de comandos |
 | `plan` | | Só lê e planeja |
-| `bypass` | `yolo` | Nunca pergunta (uma checagem de segurança ainda avalia ações arriscadas) |
+| `bypass` | `bypassPermissions`, `bypass-permissions`, `yolo` | Nunca pergunta (uma checagem de segurança ainda avalia ações arriscadas) |
 
 `/plan` é o atalho de `/mode plan`. `Shift+Tab` alterna os modos. O modo fica guardado para os próximos chats, a não ser que você tenha passado `--mode` na linha de comando. Veja [Permissões](./permissions).
 

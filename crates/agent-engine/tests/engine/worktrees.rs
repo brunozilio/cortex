@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::transcript::Block;
 use domain::{EngineEvent, PermissionMode, PromptRequest, SessionId};
@@ -77,7 +77,7 @@ fn the_session_moves_into_a_worktree_and_back() {
         ),
     ];
     let store = tempfile::tempdir().expect("store");
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(runs))),
         Arc::new(agent_engine::sessions::FileSessions::new(store.path())),
     );
@@ -124,7 +124,7 @@ fn only_the_main_agent_outside_a_worktree_enters_one() {
         ],
         "Done.",
     );
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![run]))),
         Arc::new(agent_engine::sessions::FileSessions::new(dir.path().join("sessions"))),
     );
@@ -149,7 +149,7 @@ fn a_worktree_entered_in_a_run_that_then_fails_is_still_the_session_s() {
         name: "EnterWorktree".into(),
         input: json!({}),
     }])]));
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![run]))),
         Arc::new(agent_engine::sessions::FileSessions::new(dir.path().join("sessions"))),
     );
@@ -172,7 +172,7 @@ fn a_main_agent_asking_for_a_worktree_outside_a_repository_works_in_the_folder()
         .expect("agent");
     let run = script(vec![("write", "Write", json!({"file_path": "work.txt", "content": "In the folder"}))], "Done.");
     let store = tempfile::tempdir().expect("store");
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![run]))),
         Arc::new(agent_engine::sessions::FileSessions::new(store.path())),
     );

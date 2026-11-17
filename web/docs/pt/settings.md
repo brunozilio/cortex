@@ -336,7 +336,7 @@ As escolhas que você faz no chat não vão para o `settings.json`. Elas ficam g
 | Chave | Tipo | Definida por | Descrição |
 |---|---|---|---|
 | `model` | texto | `/model`, `--model` | O modelo inicial. Também usado pelo `-p` quando `--model` não é informado. |
-| `mode` | texto | `/mode`, Shift+Tab | `ask`, `edits`, `plan` ou `bypass`. `--mode` vence naquela abertura. |
+| `mode` | texto | `/mode`, Shift+Tab | `ask`, `edits`, `plan` ou `bypass` (as outras grafias de [Modos de permissão](./permissions#modos-de-permissao) também são lidas). `--mode` vence naquela abertura. |
 | `effort` | texto | `/effort` | `low`, `medium`, `high`, `xhigh`, `max` ou `auto`. |
 | `outputStyle` | texto | `/output-style` | Vence o `outputStyle` dos arquivos de configuração. |
 | `vim` | `"on"` ou `"off"` | `/vim` | Teclas do vim no prompt. |

@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 
 use app::{Backend, LocalBackend, LocalServices, Wake};
 use domain::{Effort, EngineEvent, MemoryBrief, MemoryEdit, MemoryKind, PromptRequest, RunId};
-#[path = "support/native_live.rs"]
-mod native_live;
+#[path = "support/live_engine.rs"]
+mod live_engine;
 use app::api::features::memory::{MemoryOp, MemoryRequest};
 use app::api::{ClientCommand, Envelope, FeatureRequest, RequestId, ServerEvent, Unsolicited};
 
@@ -29,10 +29,10 @@ fn seed(backend: &LocalBackend, project: &Path) {
 }
 
 #[test]
-#[ignore = "uses a real native provider (may incur usage)"]
+#[ignore = "uses a real provider (may incur usage)"]
 fn an_agent_searches_and_writes_project_memory() {
     let project = tempfile::tempdir().expect("tempdir");
-    let services = LocalServices::with_engine(Arc::new(native_live::engine()));
+    let services = LocalServices::with_engine(Arc::new(live_engine::engine()));
     let wake: Wake = Arc::new(|| {});
     let backend = LocalBackend::new(services, wake).expect("backend");
     seed(&backend, project.path());
@@ -40,7 +40,7 @@ fn an_agent_searches_and_writes_project_memory() {
         project.path().to_path_buf(),
         "Find the release codename in the project's memory with your memory search tool, then remember \
          (semantic) that the user prefers tabs over spaces. Reply with the codename only.",
-        native_live::model(),
+        live_engine::model(),
     )
     .remembering(MemoryBrief::new(Some("Live memory".into())));
     request.session.effort = Effort::Low;

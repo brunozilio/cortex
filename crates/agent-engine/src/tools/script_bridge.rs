@@ -1,4 +1,6 @@
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
+
+use crossbeam_channel::{Sender, bounded, unbounded};
 
 use platform::Stop;
 use serde_json::Value;
@@ -10,7 +12,7 @@ use crate::transcript::Message;
 struct Request {
     function: String,
     arguments: Value,
-    reply: mpsc::Sender<Result<Value, String>>,
+    reply: Sender<Result<Value, String>>,
 }
 
 enum Hosted {
@@ -18,11 +20,11 @@ enum Hosted {
     Done,
 }
 
-struct Bridge(Mutex<mpsc::Sender<Hosted>>);
+struct Bridge(Mutex<Sender<Hosted>>);
 
 impl script::Host for Bridge {
     fn call(&self, function: &str, arguments: Value) -> Result<Value, String> {
-        let (reply, answer) = mpsc::channel();
+        let (reply, answer) = bounded(1);
         let request = Hosted::Call(Request { function: function.to_owned(), arguments, reply });
         self.0.lock().map_err(|_| "the agent is unavailable")?.send(request).map_err(|_| "the agent is gone")?;
         answer.recv().map_err(|_| "the agent did not answer".to_owned())?
@@ -34,7 +36,7 @@ pub(crate) fn hosted(
     run: impl FnOnce(Arc<dyn script::Host>) -> Result<Value, String> + Send,
     mut serve: impl FnMut(&str, Value) -> Result<Value, String>,
 ) -> Result<Value, String> {
-    let (send, calls) = mpsc::channel::<Hosted>();
+    let (send, calls) = unbounded::<Hosted>();
     let finished = send.clone();
     let host: Arc<dyn script::Host> = Arc::new(Bridge(Mutex::new(send)));
     std::thread::scope(|scope| {

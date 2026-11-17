@@ -4,8 +4,9 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
+
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use std::time::{Duration, Instant};
 
 use agent_engine::model::http::NetHttp;
@@ -14,7 +15,7 @@ use agent_engine::model::wires::chat::{Chat, Endpoint, Endpoints};
 use agent_engine::model::{BoxFuture, CancellationToken, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
-use agent_engine::{AgentEngine, ApiSource, NativeEngine, RunHandle};
+use agent_engine::{AgentEngine, ApiSource, Engine, RunHandle};
 use domain::{EngineEvent, ModelOption, PermissionMode, PromptRequest, RunId};
 use serde_json::json;
 
@@ -81,8 +82,8 @@ done"#
     )
 }
 
-fn start(engine: &NativeEngine, request: &PromptRequest) -> (Receiver<EngineEvent>, Box<dyn RunHandle>) {
-    let (send, receive) = channel();
+fn start(engine: &Engine, request: &PromptRequest) -> (Receiver<EngineEvent>, Box<dyn RunHandle>) {
+    let (send, receive) = unbounded();
     let send = Mutex::new(send);
     let sink = Arc::new(move |_run: RunId, event: EngineEvent| {
         let _ = send.lock().expect("send").send(event);
@@ -105,7 +106,7 @@ fn ended_within(events: &Receiver<EngineEvent>, cancelled: Instant) -> (Duration
 fn stalled_stream() -> (String, Receiver<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
     let address = listener.local_addr().expect("address");
-    let (streaming, heard) = channel();
+    let (streaming, heard) = unbounded();
     std::thread::spawn(move || {
         let Ok((socket, _)) = listener.accept() else { return };
         let mut reader = BufReader::new(socket);
@@ -147,7 +148,7 @@ fn cancelling_a_run_whose_model_stream_has_stalled_ends_it_at_once() {
     let project = Project::new();
     let (base, streaming) = stalled_stream();
     let chat: Arc<dyn ModelApi> = Arc::new(Chat::new(Arc::new(NetHttp), Arc::new(Local(base))).without_backoff());
-    let engine = NativeEngine::new(Arc::new(One(chat)), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(One(chat)), Arc::new(InMemorySessions::default()));
     let (events, mut handle) = start(&engine, &project.request());
     streaming.recv_timeout(PATIENCE).expect("the model stream opened");
     std::thread::sleep(Duration::from_millis(100));
@@ -210,7 +211,7 @@ fn cancelling_a_run_whose_mcp_call_has_stalled_ends_it_at_once() {
     let call = format!("touch '{}'; sleep 30", started.display());
     project.servers(&[("slow", server("wait", &call))]);
     let model: Arc<dyn ModelApi> = Arc::new(CallsTool { asked: AtomicUsize::new(0), tool: "mcp__slow__wait" });
-    let engine = NativeEngine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
     let (events, mut handle) = start(&engine, &project.request());
     wait_for(&started);
     std::thread::sleep(Duration::from_millis(100));
@@ -282,7 +283,7 @@ fn answer_mcp_over_http(socket: std::net::TcpStream, started: &Sender<()>) {
 #[test]
 fn cancelling_a_run_whose_mcp_call_over_http_has_stalled_ends_it_at_once() {
     let project = Project::new();
-    let (started, called) = channel();
+    let (started, called) = unbounded();
     let url = http_mcp(started);
     let folder = project.repo.path().join(brand::DIR);
     std::fs::create_dir_all(&folder).expect("project folder");
@@ -291,7 +292,7 @@ fn cancelling_a_run_whose_mcp_call_over_http_has_stalled_ends_it_at_once() {
     std::fs::write(folder.join("settings.local.json"), json!({"enabledMcpServers": ["remote"]}).to_string())
         .expect("approval");
     let model: Arc<dyn ModelApi> = Arc::new(CallsTool { asked: AtomicUsize::new(0), tool: "mcp__remote__wait" });
-    let engine = NativeEngine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
     let (events, mut handle) = start(&engine, &project.request());
     called.recv_timeout(PATIENCE).expect("the call reached the server");
     std::thread::sleep(Duration::from_millis(100));
@@ -315,7 +316,7 @@ fn cancelling_a_run_whose_command_hook_is_still_running_ends_it_and_the_hook_at_
     std::fs::write(folder.join("settings.json"), settings.to_string()).expect("settings");
     let model: Arc<dyn ModelApi> =
         Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("done".into())])]));
-    let engine = NativeEngine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
     let (events, mut handle) = start(&engine, &project.request());
     wait_for(&started);
     std::thread::sleep(Duration::from_millis(100));
@@ -378,9 +379,9 @@ fn threads() -> usize {
 #[test]
 fn cancelling_a_run_with_a_background_sub_agent_waiting_on_its_model_ends_both_at_once() {
     let project = Project::new();
-    let (reached, heard) = channel();
+    let (reached, heard) = unbounded();
     let model: Arc<dyn ModelApi> = Arc::new(Stalls { asked: AtomicUsize::new(0), reached: Mutex::new(reached) });
-    let engine = NativeEngine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
     let (events, mut handle) = start(&engine, &project.request());
     let mut waiting = vec![heard.recv_timeout(PATIENCE).expect("one"), heard.recv_timeout(PATIENCE).expect("two")];
     waiting.sort_unstable();
@@ -401,10 +402,10 @@ fn threads_during_a_run_with_three_mcp_servers_and_a_background_agent() {
     let project = Project::new();
     let ping = "printf '%s\\n' '{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"content\":[]}}'";
     project.servers(&[("one", server("ping", ping)), ("two", server("ping", ping)), ("three", server("ping", ping))]);
-    let (reached, heard) = channel();
+    let (reached, heard) = unbounded();
     let model: Arc<dyn ModelApi> = Arc::new(Stalls { asked: AtomicUsize::new(0), reached: Mutex::new(reached) });
     let before = threads();
-    let engine = NativeEngine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
     let (events, mut handle) = start(&engine, &project.request());
     let mut waiting = vec![heard.recv_timeout(PATIENCE).expect("one"), heard.recv_timeout(PATIENCE).expect("two")];
     waiting.sort_unstable();
@@ -427,7 +428,7 @@ fn cancelling_a_run_waiting_for_the_user_s_answer_ends_it_at_once() {
         ScriptedModel::reply(vec![Block::ToolUse { id: "w1".into(), name: "Write".into(), input }]),
         ScriptedModel::reply(vec![Block::Text("done".into())]),
     ]));
-    let engine = NativeEngine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(One(model)), Arc::new(InMemorySessions::default()));
     let (events, mut handle) = start(&engine, &request);
     let until = Instant::now() + PATIENCE;
     loop {
@@ -465,7 +466,7 @@ impl ModelApi for Where {
 fn a_run_is_a_task_of_the_engine_s_one_runtime() {
     let project = Project::new();
     let model = Arc::new(Where(Mutex::default()));
-    let engine = NativeEngine::new(Arc::new(One(model.clone())), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(One(model.clone())), Arc::new(InMemorySessions::default()));
     for _ in 0..2 {
         let (events, _handle) = start(&engine, &project.request());
         let (_, seen) = ended_within(&events, Instant::now());

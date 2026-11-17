@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -34,7 +34,7 @@ export default () => "Team: ACME";"#,
     .expect("hook");
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Ok".into())])]));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
+        Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(repo.path().into(), "my password 1234 leaks", model());
     request.host.extensions = Some(Extensions { home: Some(home.path().into()), ..Extensions::default() });
 

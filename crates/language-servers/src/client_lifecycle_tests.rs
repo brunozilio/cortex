@@ -1,5 +1,6 @@
 use std::path::PathBuf;
-use std::sync::mpsc::channel;
+
+use crossbeam_channel::unbounded as channel;
 
 use domain::lsp::uri::uri_of;
 

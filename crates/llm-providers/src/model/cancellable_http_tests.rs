@@ -86,10 +86,10 @@ fn requests_share_one_pooled_connection() {
     assert_eq!(accepted.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
 
-fn silent_server() -> (String, std::sync::mpsc::Receiver<()>) {
+fn silent_server() -> (String, crossbeam_channel::Receiver<()>) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
     let address = format!("http://{}/", listener.local_addr().expect("address"));
-    let (accepted, heard) = std::sync::mpsc::channel();
+    let (accepted, heard) = crossbeam_channel::unbounded();
     std::thread::spawn(move || {
         let held = listener.accept();
         let _ = accepted.send(());
@@ -126,7 +126,7 @@ fn every_cancellable_request_ends_when_its_token_is_cancelled() {
         let (address, heard) = silent_server();
         let cancel = CancellationToken::new();
         let canceller = cancel.clone();
-        let (marked, cancelled_at) = std::sync::mpsc::channel();
+        let (marked, cancelled_at) = crossbeam_channel::unbounded();
         std::thread::spawn(move || {
             let _ = heard.recv();
             std::thread::sleep(Duration::from_millis(20));
@@ -147,7 +147,7 @@ fn every_cancellable_request_ends_when_its_token_is_cancelled() {
     }
 }
 
-fn marked_at(cancelled_at: &std::sync::mpsc::Receiver<std::time::Instant>) -> std::time::Instant {
+fn marked_at(cancelled_at: &crossbeam_channel::Receiver<std::time::Instant>) -> std::time::Instant {
     cancelled_at.recv_timeout(Duration::from_secs(30)).expect("the server heard the request")
 }
 

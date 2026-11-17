@@ -27,13 +27,14 @@ mod verification;
 mod web_search;
 mod worktrees;
 
-use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
+
+use crossbeam_channel::{Receiver, unbounded};
 use std::time::Duration;
 
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{ModelApi, ModelError};
-use agent_engine::{AgentEngine, ApiSource, NativeEngine};
+use agent_engine::{AgentEngine, ApiSource, Engine};
 use domain::{EngineEvent, ModelOption, PromptRequest, RunId};
 
 struct Source(Mutex<Vec<Arc<ScriptedModel>>>);
@@ -48,12 +49,12 @@ impl ApiSource for Source {
     }
 }
 
-fn start(engine: &NativeEngine, request: &PromptRequest) -> Receiver<EngineEvent> {
+fn start(engine: &Engine, request: &PromptRequest) -> Receiver<EngineEvent> {
     start_with_handle(engine, request).0
 }
 
 fn start_with_handle(
-    engine: &NativeEngine,
+    engine: &Engine,
     request: &PromptRequest,
 ) -> (Receiver<EngineEvent>, Box<dyn agent_engine::RunHandle>) {
     static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
@@ -62,7 +63,7 @@ fn start_with_handle(
     let extensions = request.host.extensions.get_or_insert_with(Default::default);
     extensions.home.get_or_insert(home);
     let request = &request;
-    let (send, receive) = channel();
+    let (send, receive) = unbounded();
     let send = Mutex::new(send);
     let sink = Arc::new(move |_run: RunId, event: EngineEvent| {
         let _ = send.lock().expect("send").send(event);

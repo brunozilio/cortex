@@ -55,7 +55,7 @@ fn a_name_that_resolves_to_this_computer_is_not_connected_to() {
 
 #[test]
 fn a_body_without_end_is_read_only_up_to_the_cap() {
-    let (hung_up, hangs_up) = std::sync::mpsc::channel();
+    let (hung_up, hangs_up) = crossbeam_channel::unbounded();
     let port = serve(move |stream| {
         let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nconnection: close\r\n\r\n");
         let chunk = [b'a'; 16 * 1024];

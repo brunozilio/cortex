@@ -1,7 +1,7 @@
+use crossbeam_channel::RecvError;
 use domain::permission::Judgement;
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
 use serde_json::Value;
-use std::sync::mpsc::RecvError;
 
 use super::{Asking, Called};
 use crate::agent::Agent;

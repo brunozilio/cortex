@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -25,7 +25,7 @@ fn configured_main_agent_applies_initial_prompt_once_and_blocks_unadvertised_too
         ScriptedModel::reply(vec![Block::Text("Reviewed".into())]),
     ]));
     let second = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Again".into())])]));
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![first.clone(), second.clone()]))),
         Arc::new(InMemorySessions::default()),
     );
@@ -66,7 +66,7 @@ fn an_untrusted_folder_s_agent_keeps_its_instructions_and_loses_its_first_prompt
         ScriptedModel::reply(vec![Block::Text("Reviewed".into())]),
     ]));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![scripted.clone()]))), Arc::new(InMemorySessions::default()));
+        Engine::new(Arc::new(Source(Mutex::new(vec![scripted.clone()]))), Arc::new(InMemorySessions::default()));
 
     let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "Check this project", model())));
 
@@ -94,7 +94,7 @@ fn disabling_auto_memory_prevents_configured_agent_memory_setup() {
     .expect("agent");
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Reviewed".into())])]));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
+        Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     assert!(matches!(
         finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "Review", model()))).last(),
         Some(EngineEvent::Completed { .. })
@@ -124,7 +124,7 @@ fn initial_prompt_expands_an_explicit_skill_before_the_first_model_call_through_
     .expect("skill");
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Reviewed".into())])]));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
+        Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let events = finish(&start(&engine, &crate::trusted(dir.path(), "Review this")));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let first = model_api.asked()[0].messages.last().expect("first user").text();
@@ -151,7 +151,7 @@ fn initial_prompt_expands_a_custom_command() {
     .expect("command");
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Reviewed".into())])]));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
+        Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let events = finish(&start(&engine, &crate::trusted(dir.path(), "Review this")));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     assert!(
@@ -168,10 +168,8 @@ fn a_typed_slash_command_becomes_its_text_and_a_path_stays_as_typed() {
         .expect("command");
     for (typed, expected) in [("/audit project-C", "TYPED_COMMAND_SENTINEL project-C"), ("/etc/hosts", "/etc/hosts")] {
         let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done".into())])]));
-        let engine = NativeEngine::new(
-            Arc::new(Source(Mutex::new(vec![model_api.clone()]))),
-            Arc::new(InMemorySessions::default()),
-        );
+        let engine =
+            Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
         let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), typed, model())));
         assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
         let sent = model_api.asked()[0].messages.last().expect("user").text();
@@ -200,10 +198,8 @@ export default (args) => `JS_SKILL ${args.split(" ").filter(Boolean).length} wor
     .expect("skill");
     for (typed, expected) in [("/greet ana", "JS_COMMAND greet ANA"), ("/count one two three", "JS_SKILL 3 words")] {
         let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done".into())])]));
-        let engine = NativeEngine::new(
-            Arc::new(Source(Mutex::new(vec![model_api.clone()]))),
-            Arc::new(InMemorySessions::default()),
-        );
+        let engine =
+            Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
         let events = finish(&start(&engine, &crate::trusted(dir.path(), typed)));
         assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
         let sent = model_api.asked()[0].messages.last().expect("user").text();

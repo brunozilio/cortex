@@ -1,6 +1,6 @@
 [package]
 name = "agent-engine"
-description = "The native agent engine: the agent loop and its tools, in process; models are reached through llm-providers."
+description = "The agent engine:the agent loop and its tools, in process; models are reached through llm-providers."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -33,9 +33,8 @@ jsonschema = { version = "0.33", default-features = false }
 jiff.workspace = true
 url.workspace = true
 uuid.workspace = true
-flate2.workspace = true
-zip.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "macros"] }
+crossbeam-channel.workspace = true
 
 [dev-dependencies]
 agent-engine = { path = ".", default-features = false, features = ["test-support"] }

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::{Block, Message};
@@ -12,7 +12,7 @@ use crate::{Source, finish, model, start};
 #[test]
 fn a_lost_session_is_diagnosed() {
     let dir = tempfile::tempdir().expect("dir");
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(dir.path().into(), "hi", model());
     request.session.resume = Some(domain::SessionId("gone".into()));
     let events = finish(&start(&engine, &request));
@@ -25,7 +25,7 @@ fn a_fork_goes_on_under_a_new_session_and_leaves_the_original() {
     let first = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("One.".into())])]));
     let forked = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Two.".into())])]));
     let original = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Three.".into())])]));
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![Arc::clone(&first), Arc::clone(&forked), Arc::clone(&original)]))),
         Arc::new(InMemorySessions::default()),
     );
@@ -51,7 +51,7 @@ fn measures_and_compacts_a_session() {
     let dir = tempfile::tempdir().expect("dir");
     let talk = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hello there.".into())])]));
     let summary = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("They said hi.".into())])]));
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![Arc::clone(&talk), Arc::clone(&summary)]))),
         Arc::new(InMemorySessions::default()),
     );
@@ -115,7 +115,7 @@ fn corrupt_saved_history_fails_without_diagnosing_it_as_a_missing_session() {
         .find(|p| p.extension().is_some_and(|ext| ext == "jsonl"));
     std::fs::write(saved.expect("the saved conversation"), "{broken\n").expect("corrupt it");
     assert!(store.load_for_checked(&request.session.cwd, &id).is_err());
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(store));
+    let engine = Engine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(store));
     let mut resumed = request;
     resumed.session.resume = Some(id);
     let events = finish(&start(&engine, &resumed));
@@ -157,7 +157,7 @@ fn a_main_worktree_and_its_uncommitted_files_survive_resume_after_engine_restart
         ScriptedModel::reply(vec![Block::Text("Created".into())]),
     ]));
     let store = dir.path().join("sessions");
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![first.clone()]))),
         Arc::new(agent_engine::sessions::FileSessions::new(&store)),
     );
@@ -219,7 +219,7 @@ fn a_main_worktree_and_its_uncommitted_files_survive_resume_after_engine_restart
         }
     }
     let fail = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![second.clone()]))),
         Arc::new(Store { inner: agent_engine::sessions::FileSessions::new(&store), fail: fail.clone() }),
     );
@@ -244,7 +244,7 @@ fn a_conversation_answering_in_another_window_turns_the_next_message_away_and_ke
     let dir = tempfile::tempdir().expect("dir");
     let sessions = Arc::new(FileSessions::new(dir.path().join("native")));
     let first = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("One.".into())])]));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&first)]))), Arc::clone(&sessions) as _);
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&first)]))), Arc::clone(&sessions) as _);
     let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "one", model())));
     let Some(EngineEvent::SessionStarted(session)) = events.first().cloned() else { panic!("{events:?}") };
 
@@ -281,7 +281,7 @@ fn a_saved_call_that_never_got_its_result_is_closed_when_the_conversation_resume
         .save_for(&request.session.cwd, &id, &[Message::user("read it"), Message::assistant(vec![dangling])])
         .expect("save");
     let resumed = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done.".into())])]));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&resumed)]))), sessions);
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&resumed)]))), sessions);
     request.session.resume = Some(id);
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
@@ -301,7 +301,7 @@ fn a_turn_that_ends_between_a_call_and_its_result_is_saved_with_the_call_closed(
         usage: Usage::default(),
         served: None,
     });
-    let engine = NativeEngine::new(
+    let engine = Engine::new(
         Arc::new(Source(Mutex::new(vec![Arc::new(ScriptedModel::new([refused]))]))),
         Arc::clone(&sessions) as Arc<dyn Sessions>,
     );

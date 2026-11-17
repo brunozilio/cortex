@@ -42,7 +42,7 @@ pub trait ApiSource: Send + Sync {
     }
 }
 
-pub struct NativeEngine {
+pub struct Engine {
     source: Arc<dyn ApiSource>,
     sessions: Arc<dyn Sessions>,
     mcp: Arc<dyn Http>,
@@ -52,13 +52,13 @@ pub struct NativeEngine {
     runtime: Result<tokio::runtime::Handle, String>,
 }
 
-impl std::fmt::Debug for NativeEngine {
+impl std::fmt::Debug for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NativeEngine").finish_non_exhaustive()
+        f.debug_struct("Engine").finish_non_exhaustive()
     }
 }
 
-impl NativeEngine {
+impl Engine {
     pub fn new(source: Arc<dyn ApiSource>, sessions: Arc<dyn Sessions>) -> Self {
         crate::tools::persisted::forget_old_results_once();
         Self {
@@ -78,7 +78,7 @@ impl NativeEngine {
     }
 }
 
-impl AgentEngine for NativeEngine {
+impl AgentEngine for Engine {
     fn models(&self) -> Vec<ModelOption> {
         Vec::new()
     }
@@ -106,10 +106,10 @@ impl AgentEngine for NativeEngine {
             held: Arc::default(),
             live: live::Live::of(&self.live),
         };
-        let runtime = self.runtime.as_ref().map_err(|why| EngineError::Spawn {
-            engine: "the native engine",
-            source: std::io::Error::other(why.clone()),
-        })?;
+        let runtime = self
+            .runtime
+            .as_ref()
+            .map_err(|why| EngineError::Spawn { engine: "the engine", source: std::io::Error::other(why.clone()) })?;
         task::spawn(runtime, job, workspace, Arc::clone(&control), gate.clone());
         Ok(Box::new(Handle { control, gate, detach }))
     }

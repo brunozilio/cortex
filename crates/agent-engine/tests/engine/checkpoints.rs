@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::{InMemorySessions, Sessions};
 use agent_engine::transcript::Block;
@@ -42,7 +42,7 @@ fn a_rewind_also_undoes_what_a_shell_command_changed_in_the_repository() {
         ScriptedModel::reply(vec![Block::Text("Done.".into())]),
     ]));
     let sessions = Arc::new(InMemorySessions::default());
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![shell]))), sessions);
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![shell]))), sessions);
     let mut request = PromptRequest::plain(dir.path().into(), "change things", model());
     request.policy.allowed_tools = vec!["Bash".into()];
     let events = finish(&start(&engine, &request));
@@ -65,7 +65,7 @@ fn a_rewind_puts_files_back_and_cuts_the_conversation() {
     let (notes, more) = (dir.path().join("notes.txt"), dir.path().join("more.txt"));
     let models = vec![writes(&notes.display().to_string(), "v1"), writes(&more.display().to_string(), "x")];
     let sessions = Arc::new(InMemorySessions::default());
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(models))), sessions.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(models))), sessions.clone());
 
     let first = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "write the notes", model())));
     let Some(EngineEvent::SessionStarted(session)) = first.first().cloned() else { panic!("{first:?}") };
@@ -103,7 +103,7 @@ fn a_branch_starts_a_new_conversation_before_a_prompt_and_keeps_the_original_and
     let (notes, more) = (dir.path().join("notes.txt"), dir.path().join("more.txt"));
     let models = vec![writes(&notes.display().to_string(), "v1"), writes(&more.display().to_string(), "x")];
     let sessions = Arc::new(InMemorySessions::default());
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(models))), sessions.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(models))), sessions.clone());
     let first = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "write the notes", model())));
     let Some(EngineEvent::SessionStarted(session)) = first.first().cloned() else { panic!("{first:?}") };
     let mut second = PromptRequest::plain(dir.path().into(), "add more", model());

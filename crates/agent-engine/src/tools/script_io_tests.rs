@@ -50,7 +50,7 @@ fn a_stalled_script_fetch_ends_as_soon_as_its_token_is_cancelled() {
     for origin in [Origin::Owner, Origin::Project] {
         let cancel = CancellationToken::new();
         let canceller = cancel.clone();
-        let (marked, cancelled_at) = std::sync::mpsc::channel();
+        let (marked, cancelled_at) = crossbeam_channel::unbounded();
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(30));
             let _ = marked.send(Instant::now());

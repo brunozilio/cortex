@@ -56,7 +56,7 @@ Updated 2026-11-17.
 
 ### 8.2 One runtime, a run is a task: done
 
-- One multi-threaded runtime per process (`platform::runtime`), built on first use with two to four named workers and at most 256 named blocking threads; `NativeEngine` takes its handle when built, and model HTTP uses the same one. Building it per engine would have split the HTTP connection pool across runtimes.
+- One multi-threaded runtime per process (`platform::runtime`), built on first use with two to four named workers and at most 256 named blocking threads; `Engine` (then `NativeEngine`) takes its handle when built, and model HTTP uses the same one. Building it per engine would have split the HTTP connection pool across runtimes.
 - `AgentEngine::start` stays synchronous and spawns the run as a task; the agent loop is still synchronous code and runs on a blocking thread of the runtime, so a panic is the task's error and becomes the run's failure. Live sessions and their MCP pools are untouched.
 - A permission question or an `AskUserQuestion` waits on a oneshot answer selected against the run's token (`control::Awaited`), so cancelling ends the wait at once.
 

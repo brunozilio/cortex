@@ -1,6 +1,13 @@
+use std::net::{Ipv4Addr, TcpListener};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+
+use axum::extract::State;
+use axum::http::{HeaderValue, StatusCode, Uri, header};
+use axum::response::{IntoResponse, Response};
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
+use tokio::sync::oneshot;
 
 use crate::api::SIGN_IN_TIMEOUT;
 use llm_providers::ProviderError;
@@ -9,10 +16,19 @@ use super::callback;
 
 const STOP_POLL: Duration = Duration::from_millis(100);
 
+const SERVER_END_WAIT: Duration = Duration::from_secs(2);
+
 const TEMPLATE: &str = include_str!("done.html");
 
+struct Arrived {
+    url: String,
+    answer: oneshot::Sender<Response>,
+}
+
 pub struct Loopback {
-    server: tiny_http::Server,
+    arrived: Receiver<Arrived>,
+    shut: Option<oneshot::Sender<()>>,
+    ended: Receiver<()>,
     port: u16,
     path: String,
     localhost: bool,
@@ -22,6 +38,15 @@ pub struct Loopback {
 impl std::fmt::Debug for Loopback {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Loopback").field("port", &self.port).finish_non_exhaustive()
+    }
+}
+
+impl Drop for Loopback {
+    fn drop(&mut self) {
+        if let Some(shut) = self.shut.take() {
+            let _ = shut.send(());
+        }
+        let _ = self.ended.recv_timeout(SERVER_END_WAIT);
     }
 }
 
@@ -35,14 +60,15 @@ impl Loopback {
         if !path.starts_with('/') || path.contains('?') {
             return Err(ProviderError::Invalid("invalid callback path".into()));
         }
-        let server =
-            tiny_http::Server::http(format!("127.0.0.1:{port}")).map_err(|error| bind_failed(port, &*error))?;
-        let port = server
-            .server_addr()
-            .to_ip()
-            .map(|addr| addr.port())
-            .ok_or_else(|| ProviderError::Invalid("no loopback port".into()))?;
-        Ok(Self { server, port, path: path.to_owned(), localhost, stop: None })
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).map_err(|error| bind_failed(port, &error))?;
+        listener.set_nonblocking(true).map_err(|error| ProviderError::Invalid(error.to_string()))?;
+        let port = listener.local_addr().map_err(|error| ProviderError::Invalid(error.to_string()))?.port();
+        let runtime = platform::runtime::shared().map_err(|error| ProviderError::Invalid(error.to_string()))?;
+        let (to, arrived) = crossbeam_channel::unbounded();
+        let (shut, shut_down) = oneshot::channel();
+        let (end, ended) = crossbeam_channel::bounded(1);
+        runtime.spawn(serve(listener, to, shut_down, end));
+        Ok(Self { arrived, shut: Some(shut), ended, port, path: path.to_owned(), localhost, stop: None })
     }
 
     pub fn stopped_by(mut self, stop: Arc<AtomicBool>) -> Self {
@@ -98,29 +124,54 @@ impl Loopback {
             if self.stopped() {
                 return Err("this sign-in was cancelled or replaced by a newer one".to_owned());
             }
-            let waited = self.server.recv_timeout(left.min(STOP_POLL)).map_err(|error| error.to_string())?;
-            let Some(request) = waited else { continue };
-            let url = request.url().to_owned();
-            let (path, query) = url.split_once('?').unwrap_or((&url, ""));
+            let request = match self.arrived.recv_timeout(left.min(STOP_POLL)) {
+                Ok(request) => request,
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => return Err("the sign-in's local listener stopped".to_owned()),
+            };
+            let (path, query) = request.url.split_once('?').unwrap_or((&request.url, ""));
             if path != self.path && !others.contains(&path) {
                 let message = concat!(brand::name!(), " is not waiting for this address.");
-                let _ = request.respond(page(screen(false, "Wrong address", message), 404));
+                let _ = request.answer.send(page(screen(false, "Wrong address", message), StatusCode::NOT_FOUND));
                 continue;
             }
             if state_of(query).as_deref() != Some(state) {
                 let message = concat!("This is not the sign-in ", brand::name!(), " is waiting for.");
-                let _ = request.respond(page(screen(false, "Not this sign-in", message), 400));
+                let _ = request.answer.send(page(screen(false, "Not this sign-in", message), StatusCode::BAD_REQUEST));
                 continue;
             }
-            return Ok(Pending { path: path.to_owned(), query: query.to_owned(), request: Some(request) });
+            return Ok(Pending { path: path.to_owned(), query: query.to_owned(), answer: Some(request.answer) });
         }
     }
+}
+
+async fn serve(listener: TcpListener, to: Sender<Arrived>, shut_down: oneshot::Receiver<()>, end: Sender<()>) {
+    let Ok(listener) = tokio::net::TcpListener::from_std(listener) else { return };
+    let router = axum::Router::new().fallback(arrived).with_state(to);
+    tokio::select! {
+        _ = axum::serve(listener, router) => {}
+        _ = shut_down => {}
+    }
+    let _ = end.try_send(());
+}
+
+async fn arrived(State(to): State<Sender<Arrived>>, uri: Uri) -> Response {
+    let url = uri.path_and_query().map_or_else(|| uri.path().to_owned(), |whole| whole.as_str().to_owned());
+    let (answer, answered) = oneshot::channel();
+    if to.send(Arrived { url, answer }).is_err() {
+        return not_waiting();
+    }
+    answered.await.unwrap_or_else(|_| not_waiting())
+}
+
+fn not_waiting() -> Response {
+    page(screen(false, "Sign-in failed", "See the terminal for what went wrong."), StatusCode::OK)
 }
 
 pub struct Pending {
     pub path: String,
     pub query: String,
-    request: Option<tiny_http::Request>,
+    answer: Option<oneshot::Sender<Response>>,
 }
 
 impl std::fmt::Debug for Pending {
@@ -136,17 +187,15 @@ impl Pending {
     }
 
     pub fn redirect(mut self, to: &str) {
-        let Some(request) = self.request.take() else { return };
-        let response = tiny_http::Response::empty(302);
-        match tiny_http::Header::from_bytes("Location", to) {
-            Ok(location) => {
-                let _ = request.respond(response.with_header(location));
-            }
-            Err(()) => {
-                let _ = request
-                    .respond(page(screen(false, "Sign-in failed", "The sign-in sent an invalid next address."), 500));
-            }
-        }
+        let Some(answer) = self.answer.take() else { return };
+        let response = match HeaderValue::from_str(to) {
+            Ok(location) => (StatusCode::FOUND, [(header::LOCATION, location)]).into_response(),
+            Err(_) => page(
+                screen(false, "Sign-in failed", "The sign-in sent an invalid next address."),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ),
+        };
+        let _ = answer.send(response);
     }
 
     pub fn finish(self, result: Result<(), &String>) {
@@ -163,17 +212,16 @@ impl Pending {
     }
 
     fn respond(mut self, body: String) {
-        if let Some(request) = self.request.take() {
-            let _ = request.respond(page(body, 200));
+        if let Some(answer) = self.answer.take() {
+            let _ = answer.send(page(body, StatusCode::OK));
         }
     }
 }
 
 impl Drop for Pending {
     fn drop(&mut self) {
-        if let Some(request) = self.request.take() {
-            let _ =
-                request.respond(page(screen(false, "Sign-in failed", "See the terminal for what went wrong."), 200));
+        if let Some(answer) = self.answer.take() {
+            let _ = answer.send(not_waiting());
         }
     }
 }
@@ -182,12 +230,8 @@ fn state_of(query: &str) -> Option<String> {
     query.split('&').find_map(|pair| pair.strip_prefix("state=")).map(super::decode)
 }
 
-fn page(body: String, status: u16) -> tiny_http::Response<std::io::Cursor<Vec<u8>>> {
-    let response = tiny_http::Response::from_string(body).with_status_code(status);
-    match tiny_http::Header::from_bytes("Content-Type", "text/html; charset=utf-8") {
-        Ok(header) => response.with_header(header),
-        Err(()) => response,
-    }
+fn page(body: String, status: StatusCode) -> Response {
+    (status, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], body).into_response()
 }
 
 fn screen(signed_in: bool, title: &str, message: &str) -> String {
@@ -208,9 +252,9 @@ fn status(url: String) -> Result<u16, String> {
     client.get(url).send().map(|r| r.status().as_u16()).map_err(|e| e.to_string())
 }
 
-fn bind_failed(port: u16, error: &(dyn std::error::Error + 'static)) -> ProviderError {
-    match error.downcast_ref::<std::io::Error>() {
-        Some(io) if io.kind() == std::io::ErrorKind::AddrInUse => ProviderError::PortInUse(port),
+fn bind_failed(port: u16, error: &std::io::Error) -> ProviderError {
+    match error.kind() {
+        std::io::ErrorKind::AddrInUse => ProviderError::PortInUse(port),
         _ => ProviderError::Invalid(error.to_string()),
     }
 }
@@ -242,6 +286,38 @@ mod tests {
         let page = hit.join().expect("join");
         assert!(page.contains("As dev@example.com. Return to"), "{page}");
         assert!(page.contains("class=\"ok\""));
+    }
+
+    #[test]
+    fn a_pending_sign_in_can_send_the_browser_on() {
+        let loopback = Loopback::bind().expect("bind");
+        let uri = format!("{}?code=c&state=s", loopback.redirect_uri());
+        let hit = std::thread::spawn(move || {
+            let client = reqwest::blocking::Client::builder()
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .expect("client");
+            let answer = client.get(uri).send().expect("answer");
+            (answer.status().as_u16(), answer.headers().get("location").cloned())
+        });
+        loopback.next_within("s", &[], SIGN_IN_TIMEOUT).expect("callback").redirect("https://example.com/next");
+        let (status, location) = hit.join().expect("join");
+        assert_eq!(status, 302);
+        assert_eq!(location.as_ref().and_then(|value| value.to_str().ok()), Some("https://example.com/next"));
+    }
+
+    #[test]
+    fn a_callback_left_unanswered_still_gets_a_page_and_the_port_is_freed() {
+        let loopback = Loopback::bind().expect("bind");
+        let port = loopback.port();
+        let uri = format!("{}?code=c&state=s", loopback.redirect_uri());
+        let hit = std::thread::spawn(move || status(uri));
+        let arrived = loopback.next_within("s", &[], SIGN_IN_TIMEOUT).expect("callback");
+        drop(arrived);
+        drop(loopback);
+        assert_eq!(hit.join().expect("join"), Ok(200));
+        Loopback::bind_on(port, "/callback", false).expect("the port is free again");
     }
 
     #[test]

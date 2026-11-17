@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -16,7 +16,7 @@ fn offered(repo: &std::path::Path) -> Vec<String> {
 fn offered_to(request: &PromptRequest) -> Vec<String> {
     let model_api = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hi".into())])]));
     let engine =
-        NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
+        Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let events = finish(&start(&engine, request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     model_api.asked()[0].tools.iter().map(|tool| tool.name.clone()).collect()

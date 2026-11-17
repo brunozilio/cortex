@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -11,8 +11,8 @@ use crate::{Source, finish, model, start};
 
 const GROK: &str = "grok-subscription:grok-4.6";
 
-fn engine(model: &Arc<ScriptedModel>) -> NativeEngine {
-    NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(model)]))), Arc::new(InMemorySessions::default()))
+fn engine(model: &Arc<ScriptedModel>) -> Engine {
+    Engine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(model)]))), Arc::new(InMemorySessions::default()))
 }
 
 fn request(dir: &tempfile::TempDir, role: ModelRole, chosen: &str) -> PromptRequest {

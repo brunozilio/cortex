@@ -83,6 +83,35 @@ fn anything_else_is_left_to_the_engine() {
 }
 
 #[test]
+fn every_spelling_of_a_mode_reads_as_that_mode_and_shows_as_its_one_label() {
+    let spelled = [
+        ("ask", PermissionMode::Ask),
+        ("default", PermissionMode::Ask),
+        ("edits", PermissionMode::AcceptEdits),
+        ("acceptEdits", PermissionMode::AcceptEdits),
+        ("acceptedits", PermissionMode::AcceptEdits),
+        ("accept-edits", PermissionMode::AcceptEdits),
+        ("plan", PermissionMode::Plan),
+        ("bypass", PermissionMode::Bypass),
+        ("bypassPermissions", PermissionMode::Bypass),
+        ("bypass-permissions", PermissionMode::Bypass),
+        ("yolo", PermissionMode::Bypass),
+        (" EDITS ", PermissionMode::AcceptEdits),
+    ];
+    for (name, mode) in spelled {
+        assert_eq!(mode_named(name), Some(mode), "{name}");
+        assert_eq!(Command::parse(&format!("/mode {}", name.trim())), Some(Command::Mode(Some(mode))), "{name}");
+    }
+    let labels: Vec<&str> = PermissionMode::ALL.into_iter().map(mode_label).collect();
+    assert_eq!(labels, ["ask", "edits", "plan", "bypass"]);
+    for (alias, _) in MODE_ALIASES {
+        assert!(!labels.contains(&alias), "{alias} is an alias, not a label");
+    }
+    assert_eq!(mode_named("dontAsk"), None);
+    assert_eq!(mode_named("auto"), None);
+}
+
+#[test]
 fn modes_and_levels_read_back_from_their_names() {
     for mode in PermissionMode::ALL {
         assert_eq!(mode_named(mode_label(mode)), Some(mode));

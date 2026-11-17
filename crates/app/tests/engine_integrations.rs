@@ -1,7 +1,7 @@
 #![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
 
 use agent_engine::{
-    ApiSource, NativeEngine,
+    ApiSource, Engine,
     model::{
         BoxFuture, CancellationToken, Delta, ModelApi, ModelError, OnDelta, Reply, TurnRequest, scripted::ScriptedModel,
     },
@@ -91,7 +91,7 @@ impl Model {
 #[test]
 fn native_backend_searches_memory_and_learns() {
     let dir = tempfile::tempdir().expect("valid test fixture");
-    let engine = NativeEngine::new(Arc::new(Source), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(Source), Arc::new(InMemorySessions::default()));
     let mut services = LocalServices::with_engine(Arc::new(engine)).kept_in(&dir.path().join("data"));
     services.providers = services.providers.with_store(Arc::new(app::InMemoryProviderStore::default()));
     let backend = LocalBackend::new(services, Arc::new(|| {})).expect("valid test fixture");

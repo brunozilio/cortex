@@ -2,8 +2,9 @@
 
 use std::net::TcpListener;
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
+
+use crossbeam_channel::{Receiver, unbounded};
 
 use domain::ModelProvider;
 use domain::provider::ProviderKey;
@@ -50,7 +51,7 @@ impl Http for Silent {
 fn silent_server() -> (String, Receiver<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let address = format!("http://{}/", listener.local_addr().expect("address"));
-    let (accepted, heard) = mpsc::channel();
+    let (accepted, heard) = unbounded();
     std::thread::spawn(move || {
         let held = listener.accept();
         let _ = accepted.send(());
@@ -68,7 +69,7 @@ fn a_refresh_against_a_silent_server_ends_as_soon_as_the_call_is_cancelled() {
         ProviderClient::new(GROK, Arc::new(Silent { address }), Arc::new(ProviderKey::new(expired.to_string())));
     let cancel = CancellationToken::new();
     let canceller = cancel.clone();
-    let (marked, cancelled_at) = mpsc::channel();
+    let (marked, cancelled_at) = unbounded();
     std::thread::spawn(move || {
         if heard.recv_timeout(Duration::from_secs(30)).is_ok() {
             std::thread::sleep(Duration::from_millis(20));

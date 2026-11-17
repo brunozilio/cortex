@@ -3,7 +3,6 @@ use agent_engine::model::{CancellationToken, ModelError};
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::TcpListener,
-    sync::mpsc,
     time::Duration,
 };
 
@@ -14,7 +13,7 @@ fn cancellation_closes_stalled_connections_before_and_after_headers() {
     for headers in [false, true] {
         let listener = TcpListener::bind("127.0.0.1:0").expect("valid test fixture");
         let address = listener.local_addr().expect("valid test fixture");
-        let (ready_tx, ready_rx) = mpsc::channel();
+        let (ready_tx, ready_rx) = crossbeam_channel::unbounded();
         let server = std::thread::spawn(move || {
             let (socket, _) = listener.accept().expect("valid test fixture");
             socket.set_read_timeout(Some(NEVER_CLOSED)).expect("valid test fixture");

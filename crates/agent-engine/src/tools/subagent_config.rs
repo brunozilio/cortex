@@ -78,15 +78,12 @@ impl AgentConfig {
         }
         if let Some(mode) = value.get("permissionMode") {
             config.permission = Some(match mode.as_str() {
-                Some("dontAsk") => {
+                Some(name) if name.eq_ignore_ascii_case("dontAsk") => {
                     config.dont_ask = true;
                     PermissionMode::Ask
                 }
-                Some("default") => PermissionMode::Ask,
-                Some("plan") => PermissionMode::Plan,
-                Some("acceptEdits") => PermissionMode::AcceptEdits,
-                Some("bypassPermissions") => PermissionMode::Bypass,
-                _ => return Err("unsupported custom-agent permissionMode".into()),
+                Some(name) => domain::command::mode_named(name).ok_or("unsupported custom-agent permissionMode")?,
+                None => return Err("unsupported custom-agent permissionMode".into()),
             });
         }
         if let Some(turns) = value.get("maxTurns") {
@@ -174,5 +171,25 @@ mod tests {
         assert!(config.allows("Read") && config.allows("mcp__docs__read"));
         assert!(!config.allows("mcp__docs__write") && !config.allows("mcp__other__read"));
         assert!(config.background);
+    }
+
+    #[test]
+    fn a_permission_mode_reads_in_the_front_matter_spelling_and_the_app_s_own() {
+        let mode = |name: &str| {
+            let config = AgentConfig::parse(&json!({ "permissionMode": name })).expect(name);
+            (config.permission, config.dont_ask)
+        };
+        for (names, expected) in [
+            (["default", "ask"], PermissionMode::Ask),
+            (["acceptEdits", "edits"], PermissionMode::AcceptEdits),
+            (["plan", "Plan"], PermissionMode::Plan),
+            (["bypassPermissions", "bypass"], PermissionMode::Bypass),
+        ] {
+            for name in names {
+                assert_eq!(mode(name), (Some(expected), false), "{name}");
+            }
+        }
+        assert_eq!(mode("dontAsk"), (Some(PermissionMode::Ask), true));
+        assert!(AgentConfig::parse(&json!({ "permissionMode": 3 })).is_err());
     }
 }

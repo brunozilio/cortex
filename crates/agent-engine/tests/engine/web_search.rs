@@ -4,7 +4,7 @@ use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{BoxFuture, CancellationToken, ModelApi, ModelError, Searched, Searcher};
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
-use agent_engine::{ApiSource, NativeEngine};
+use agent_engine::{ApiSource, Engine};
 use domain::{EngineEvent, PromptRequest};
 use llm_providers::web_search::Hit;
 use serde_json::json;
@@ -43,7 +43,7 @@ fn a_run_searches_the_web_through_its_account() {
         ScriptedModel::reply(vec![search]),
         ScriptedModel::reply(vec![Block::Text("Found it.".into())]),
     ]));
-    let engine = NativeEngine::new(Arc::new(Searching(agent.clone())), Arc::new(InMemorySessions::default()));
+    let engine = Engine::new(Arc::new(Searching(agent.clone())), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(dir.path().into(), "search the web for kiro mcp", model());
     request.policy.allowed_tools = vec!["WebSearch".into()];
 

@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
@@ -28,8 +28,8 @@ impl Project {
         Self { home: tempfile::tempdir().expect("home"), repo: tempfile::tempdir().expect("repo"), models }
     }
 
-    fn engine(&self) -> NativeEngine {
-        NativeEngine::new(Arc::new(Source(Mutex::new(self.models.clone()))), Arc::new(InMemorySessions::default()))
+    fn engine(&self) -> Engine {
+        Engine::new(Arc::new(Source(Mutex::new(self.models.clone()))), Arc::new(InMemorySessions::default()))
     }
 
     fn journal(&self) -> PathBuf {
@@ -76,7 +76,7 @@ impl Project {
     }
 }
 
-fn run(engine: &NativeEngine, request: &PromptRequest) -> SessionId {
+fn run(engine: &Engine, request: &PromptRequest) -> SessionId {
     let events = finish(&start(engine, request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     match events.first() {

@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::lsp::fake::ScriptedServer;
 use agent_engine::lsp::install::Install;
 use agent_engine::lsp::{Installer, LanguageServer, LspPool, Starter};
@@ -16,8 +16,8 @@ use serde_json::json;
 
 use crate::{Source, finish, model, start};
 
-fn engine(models: Vec<Arc<ScriptedModel>>) -> NativeEngine {
-    NativeEngine::new(Arc::new(Source(Mutex::new(models))), Arc::new(InMemorySessions::default()))
+fn engine(models: Vec<Arc<ScriptedModel>>) -> Engine {
+    Engine::new(Arc::new(Source(Mutex::new(models))), Arc::new(InMemorySessions::default()))
 }
 
 fn offered(model: &ScriptedModel) -> Vec<String> {

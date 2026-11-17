@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_engine::NativeEngine;
+use agent_engine::Engine;
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::sessions::{Entry, FileSessions, Sessions};
 use agent_engine::transcript::Block;
@@ -38,7 +38,7 @@ fn a_run_keeps_its_prompt_and_every_event_in_the_session_file() {
         ScriptedModel::reply(vec![Block::Text("It says alpha.".into())]),
     ]));
     let store = Arc::new(FileSessions::new(dir.path().join("native")));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![talk]))), store.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![talk]))), store.clone());
     let request = PromptRequest::plain(dir.path().into(), "what is in a.txt?", model());
     let seen = finish(&start(&engine, &request));
     let session = session_of(&seen);
@@ -79,7 +79,7 @@ fn a_call_keeps_the_model_that_answered_it() {
         .map(|reply| agent_engine::model::Reply { served: Some("claude-haiku-4.5".into()), ..reply });
     let talk = Arc::new(ScriptedModel::new([answered]));
     let store = Arc::new(FileSessions::new(dir.path().join("native")));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![talk]))), store.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![talk]))), store.clone());
     let request = PromptRequest::plain(dir.path().into(), "hi", model());
     let session = session_of(&finish(&start(&engine, &request)));
 
@@ -97,7 +97,7 @@ fn a_compaction_keeps_what_came_before_and_the_resume_starts_at_the_summary() {
     let talk = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Hello there.".into())])]));
     let summary = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("They said hi.".into())])]));
     let store = Arc::new(FileSessions::new(dir.path().join("native")));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![talk, summary]))), store.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![talk, summary]))), store.clone());
     let request = PromptRequest::plain(dir.path().into(), "hi", model());
     let session = session_of(&finish(&start(&engine, &request)));
 
@@ -130,7 +130,7 @@ fn a_run_notes_how_it_was_set_up_and_a_rewind_names_what_it_restored() {
         }]),
         ScriptedModel::reply(vec![Block::Text("Written.".into())]),
     ]));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![writes]))), store.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![writes]))), store.clone());
     let request = PromptRequest::plain(dir.path().into(), "write it", model());
     let session = session_of(&finish(&start(&engine, &request)));
 
@@ -163,7 +163,7 @@ fn a_sub_agents_model_calls_and_tokens_are_kept_as_its_own() {
         ScriptedModel::reply(vec![Block::Text("It is in src/main.rs.".into())]),
     ]));
     let store = Arc::new(FileSessions::new(dir.path().join("native")));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![scripted]))), store.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(vec![scripted]))), store.clone());
     let request = PromptRequest::plain(dir.path().into(), "where is main?", model());
     let session = session_of(&finish(&start(&engine, &request)));
 
@@ -183,7 +183,7 @@ fn a_sub_agents_model_calls_and_tokens_are_kept_as_its_own() {
 fn a_command_that_finds_no_session_leaves_no_file_behind() {
     let dir = tempfile::tempdir().expect("dir");
     let store = Arc::new(FileSessions::new(dir.path().join("native")));
-    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), store.clone());
+    let engine = Engine::new(Arc::new(Source(Mutex::new(Vec::new()))), store.clone());
     let mut request = PromptRequest::plain(dir.path().into(), "", model());
     request.session.resume = Some(SessionId("missing".into()));
     request.session.command = Some(SessionCommand::Title);

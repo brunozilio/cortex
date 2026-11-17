@@ -153,9 +153,9 @@ The roles are `plan` (plan mode and the Plan agent), `explore` (the Explore agen
 | Mode | Also accepted | Meaning |
 |---|---|---|
 | `ask` | `default` | Ask before edits and commands |
-| `edits` | `acceptedits`, `accept-edits` | Edit files freely, ask before commands |
+| `edits` | `acceptEdits`, `accept-edits` | Edit files freely, ask before commands |
 | `plan` | | Read and plan only |
-| `bypass` | `yolo` | Never ask (a safety check still grades risky actions) |
+| `bypass` | `bypassPermissions`, `bypass-permissions`, `yolo` | Never ask (a safety check still grades risky actions) |
 
 `/plan` is short for `/mode plan`. `Shift+Tab` cycles the modes. The mode is remembered for the next chats unless you gave `--mode` on the command line. See [Permissions](./permissions).
 

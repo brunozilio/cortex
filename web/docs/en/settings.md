@@ -336,7 +336,7 @@ Choices you make in the chat are not written to `settings.json`. They are rememb
 | Key | Type | Set by | Description |
 |---|---|---|---|
 | `model` | string | `/model`, `--model` | The model to start with. Also used by `-p` when `--model` is not given. |
-| `mode` | string | `/mode`, Shift+Tab | `ask`, `edits`, `plan` or `bypass`. `--mode` wins for that start. |
+| `mode` | string | `/mode`, Shift+Tab | `ask`, `edits`, `plan` or `bypass` (the other spellings in [Permission modes](./permissions#permission-modes) are read too). `--mode` wins for that start. |
 | `effort` | string | `/effort` | `low`, `medium`, `high`, `xhigh`, `max` or `auto`. |
 | `outputStyle` | string | `/output-style` | Wins over `outputStyle` in the settings files. |
 | `vim` | `"on"` or `"off"` | `/vim` | Vim keys in the prompt. |

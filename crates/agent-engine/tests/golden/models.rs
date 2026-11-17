@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
+
+use crossbeam_channel::{Receiver, Sender, unbounded};
 
 use agent_engine::model::scripted::ScriptedModel;
 use agent_engine::model::{BoxFuture, CancellationToken, Delta, ModelApi, ModelError, OnDelta, Reply, TurnRequest};
@@ -56,8 +57,8 @@ pub struct Gate {
 
 impl Gated {
     pub fn streaming(partial: &'static str) -> (Arc<Self>, Gate) {
-        let (reached, at_gate) = channel();
-        let (release, released) = channel();
+        let (reached, at_gate) = unbounded();
+        let (release, released) = unbounded();
         let model = Self { partial, reached: Mutex::new(reached), release: Mutex::new(released) };
         (Arc::new(model), Gate { reached: at_gate, release })
     }
@@ -92,8 +93,8 @@ pub struct Held {
 
 impl Held {
     pub fn before_turn(turn: usize, replies: impl IntoIterator<Item = Scripted>) -> (Arc<Self>, Gate) {
-        let (reached, at_gate) = channel();
-        let (release, released) = channel();
+        let (reached, at_gate) = unbounded();
+        let (release, released) = unbounded();
         let model = Self {
             script: ScriptedModel::new(replies),
             turn,

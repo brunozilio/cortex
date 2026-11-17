@@ -73,7 +73,7 @@ fn a_bounded_body_refuses_more_than_its_limit() {
 #[test]
 fn a_blocking_reader_waits_for_what_arrives_and_wakes_with_it() {
     let (mut body, send) = fed(&[]);
-    let (sent_at, sent) = std::sync::mpsc::channel();
+    let (sent_at, sent) = crossbeam_channel::unbounded();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(30));
         let _ = sent_at.send(Instant::now());
@@ -102,7 +102,7 @@ fn a_capped_read_waiting_for_bytes_ends_when_cancelled() {
     let (body, _held_open) = fed(&[b"some"]);
     let cancel = CancellationToken::new();
     let canceller = cancel.clone();
-    let (marked, cancelled_at) = std::sync::mpsc::channel();
+    let (marked, cancelled_at) = crossbeam_channel::unbounded();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(30));
         let _ = marked.send(Instant::now());

@@ -220,14 +220,14 @@ impl CommandHandler {
         agent_engine::tools::peers::register(self.client, &request.session.cwd);
         let outbox = self.outbox.clone();
         let (model_accounts, mut keys): (Vec<String>, Vec<_>) =
-            crate::native::keys_for(&self.services.providers, &request.session.model).into_iter().unzip();
+            crate::engine::keys_for(&self.services.providers, &request.session.model).into_iter().unzip();
         let model = (!keys.is_empty()).then(|| keys.remove(0));
         let mut request = request.clone();
         request.host.credentials = domain::credentials::RunCredentials {
             model,
             model_pool: keys,
             model_accounts,
-            other_models: crate::native::other_keys(&self.services.providers, &request.session.model),
+            other_models: crate::engine::other_keys(&self.services.providers, &request.session.model),
             mcp: Vec::new(),
             client: self.client,
             mcp_tokens: Some(self.services.mcp_auth.for_run()),

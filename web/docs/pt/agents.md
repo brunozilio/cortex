@@ -145,6 +145,8 @@ Qualquer outra coisa faz a chamada falhar com *the agent model must be served by
 | `bypassPermissions` | `bypass`, se a conversa permitir |
 | `dontAsk` | `ask`, mas nunca mostra um pedido: o que seria perguntado é recusado |
 
+Os nomes do próprio app (`ask`, `edits`, `plan`, `bypass`) e as outras grafias listadas em [Modos de permissão](./permissions#modos-de-permissao) também são lidos, em maiúsculas ou minúsculas.
+
 ### Memória
 
 `memory` dá ao agente uma pasta privada que sobrevive entre execuções, e as ferramentas `Read`, `Write` e `Edit` para usá-la:

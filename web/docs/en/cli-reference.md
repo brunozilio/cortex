@@ -234,7 +234,7 @@ Reads or changes your settings file, `~/{{DIR}}/settings.json`. With `--project`
 |---|---|---|---|---|
 | `--model` | `-m` | model id or name | the last one used | The model. The full id, the part after the colon, or the label. |
 | `--fallback-model` | | model id or name | | The model to go on with when the chosen one is overloaded. It takes precedence over the fallbacks set in the chat and in the settings. |
-| `--mode` | | `ask`, `edits`, `plan` or `bypass` | | The permission mode. `default` is also read as `ask`, `acceptedits` and `accept-edits` as `edits`, `yolo` as `bypass`. |
+| `--mode` | | `ask`, `edits`, `plan` or `bypass` | | The permission mode. `default` is also read as `ask`, `acceptEdits` and `accept-edits` as `edits`, `bypassPermissions`, `bypass-permissions` and `yolo` as `bypass`, in any letter case. |
 | `--allowedTools` | | rules | | Rules allowed without asking, like `Bash(git diff:*) Edit`. Repeatable. Also `--allowed-tools`. |
 | `--disallowedTools` | | rules | | Rules refused, like `Bash(rm:*)`. Repeatable. Also `--disallowed-tools`. |
 | `--append-system-prompt` | | text | | Text added at the end of the system prompt |

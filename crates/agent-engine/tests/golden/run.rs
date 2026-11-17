@@ -1,4 +1,4 @@
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use crossbeam_channel::{Receiver, RecvTimeoutError};
 
 use agent_engine::RunHandle;
 use domain::{AgentAsk, Decision, EngineEvent, PromptRequest};

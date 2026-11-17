@@ -20,11 +20,11 @@ pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>, client: u64) -> Result<Arc<
         }
     });
     let given_up = platform::Stop::new();
-    let (opened, waiting) = std::sync::mpsc::channel::<()>();
+    let (opened, waiting) = crossbeam_channel::bounded::<()>(1);
     let server = std::thread::scope(|scope| {
         let given_up = &given_up;
         scope.spawn(move || {
-            if let Err(std::sync::mpsc::RecvTimeoutError::Timeout) = waiting.recv_timeout(OPEN_WAIT) {
+            if let Err(crossbeam_channel::RecvTimeoutError::Timeout) = waiting.recv_timeout(OPEN_WAIT) {
                 given_up.store(true, Ordering::Relaxed);
             }
         });
