@@ -150,9 +150,11 @@ struct Part<'a> {
     target: Target<'a>,
     written: String,
     run: String,
+    run_as_written: String,
     hides: bool,
     program: String,
     program_hidden: bool,
+    named_later: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -229,9 +231,12 @@ impl PermissionRules {
         if denials.is_empty() {
             return None;
         }
-        parts(target).iter().filter(|part| part.hides).find_map(|part| {
-            let could_be =
-                |rule: &Rule| part.program_hidden || rule.program().is_none_or(|named| named == part.program);
+        parts(target).iter().find_map(|part| {
+            let named_later = |rule: &Rule| rule.program().is_some_and(|named| part.named_later.contains(&named));
+            let could_be = |rule: &Rule| {
+                (part.hides && (part.program_hidden || rule.program().is_none_or(|named| named == part.program)))
+                    || named_later(rule)
+            };
             denials.iter().find(|rule| could_be(rule)).map(|rule| rule.text.clone())
         })
     }
@@ -253,9 +258,11 @@ fn parts<'a>(target: &Target<'a>) -> Vec<Part<'a>> {
             target: *target,
             written: String::new(),
             run: String::new(),
+            run_as_written: String::new(),
             hides: false,
             program: String::new(),
             program_hidden: false,
+            named_later: Vec::new(),
         };
         return vec![part];
     };
@@ -276,14 +283,17 @@ fn add_part<'a>(
     balanced: bool,
     inner: bool,
 ) -> Vec<String> {
-    let seen = hidden::seen(command, balanced);
+    let bare = crate::shell::SimpleCommand::bare(command);
+    let seen = hidden::seen(&bare, balanced);
     found.push(Part {
         target,
         written: pattern::collapsed(command),
         run: pattern::normalized(command),
+        run_as_written: pattern::as_written(command),
         hides: inner || !balanced || seen.hidden || pattern::hides_more(command),
         program: seen.program,
         program_hidden: seen.hidden,
+        named_later: seen.named_later,
     });
     seen.code
 }
@@ -309,9 +319,11 @@ fn restricts(rule: &Rule, part: &Part<'_>, cwd: &str, home: Option<&str>) -> boo
     match part.target {
         Target::Command(_) => {
             let folded = |text: &str| unwrapped::unquoted(text).to_lowercase();
-            pattern::command_matches(specifier, &part.run)
-                || pattern::command_matches(&unwrapped::unquoted(specifier), &unwrapped::unquoted(&part.run))
-                || pattern::command_matches(&folded(specifier), &folded(&part.run))
+            [&part.run, &part.run_as_written].into_iter().any(|run| {
+                pattern::command_matches(specifier, run)
+                    || pattern::command_matches(&unwrapped::unquoted(specifier), &unwrapped::unquoted(run))
+                    || pattern::command_matches(&folded(specifier), &folded(run))
+            })
         }
         Target::Path(path) => pattern::path_matches(specifier, path, cwd, home, true),
         Target::Tree(tree) => pattern::tree_meets(specifier, tree, cwd, home),

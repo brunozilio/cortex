@@ -40,6 +40,8 @@ pub struct Sandbox {
     pub network: bool,
     #[serde(default = "required_by_default")]
     pub required: bool,
+    #[serde(default)]
+    pub allow_unix_sockets: Vec<String>,
 }
 
 pub const REQUIRED_BY_DEFAULT: bool = cfg!(any(target_os = "linux", target_os = "macos"));
@@ -50,7 +52,7 @@ fn required_by_default() -> bool {
 
 impl Default for Sandbox {
     fn default() -> Self {
-        Self { allow_write: Vec::new(), network: true, required: REQUIRED_BY_DEFAULT }
+        Self { allow_write: Vec::new(), network: true, required: REQUIRED_BY_DEFAULT, allow_unix_sockets: Vec::new() }
     }
 }
 
@@ -88,6 +90,15 @@ pub struct Confinement {
     pub protected: Vec<PathBuf>,
     pub network: bool,
     pub environment: Vec<(String, String)>,
+    pub sockets: Vec<PathBuf>,
+}
+
+fn listed(value: &Value, key: &str, what: &str) -> Result<Option<Vec<String>>, String> {
+    let Some(paths) = value.get(key) else { return Ok(None) };
+    let refused = || format!("sandbox.{key} must be a list of {what}");
+    let paths = paths.as_array().ok_or_else(refused)?;
+    let named: Option<Vec<String>> = paths.iter().map(|path| path.as_str().map(str::to_owned)).collect();
+    named.map(Some).ok_or_else(refused)
 }
 
 impl Sandbox {
@@ -117,14 +128,11 @@ impl Sandbox {
             let flag = flag.as_bool().ok_or("sandbox.required must be true or false")?;
             self.required = if owners { flag } else { self.required || flag };
         }
-        if let Some(paths) = value.get("allowWrite") {
-            let paths = paths.as_array().ok_or("sandbox.allowWrite must be a list of folders")?;
-            let named = paths.iter().map(|path| path.as_str().map(str::to_owned));
-            let named: Option<Vec<String>> = named.collect();
-            let named = named.ok_or("sandbox.allowWrite must be a list of folders")?;
-            if owners {
-                self.allow_write.extend(named);
-            }
+        if let Some(named) = listed(value, "allowWrite", "folders")?.filter(|_| owners) {
+            self.allow_write.extend(named);
+        }
+        if let Some(named) = listed(value, "allowUnixSockets", "socket paths")?.filter(|_| owners) {
+            self.allow_unix_sockets.extend(named);
         }
         Ok(self)
     }
@@ -164,7 +172,8 @@ impl Sandbox {
                 .map(|(name, folder)| ((*name).to_owned(), caches.join(folder).to_string_lossy().into_owned()))
                 .collect()
         });
-        Confinement { writable: kept, protected, network: self.network, environment }
+        let sockets = self.allow_unix_sockets.iter().filter_map(|path| owned(path, places.home)).collect();
+        Confinement { writable: kept, protected, network: self.network, environment, sockets }
     }
 }
 
@@ -361,6 +370,22 @@ mod tests {
         let off = Sandbox { network: false, ..Sandbox::default() };
         let back_on = off.layered(&json!({ "network": true }), false).expect("settings");
         assert!(!back_on.network, "a project cannot turn the network back on");
+    }
+
+    #[test]
+    fn only_the_owner_lets_commands_reach_a_service_socket() {
+        assert!(Sandbox::default().confinement(&places(&[], &[])).sockets.is_empty(), "none by default");
+        let asked = json!({ "allowUnixSockets": ["~/.docker/run/docker.sock", "/var/run/docker.sock", "rel.sock"] });
+        let project = Sandbox::default().layered(&asked, false).expect("settings");
+        assert!(project.confinement(&places(&[], &[])).sockets.is_empty(), "a project cannot open one");
+        let owners = Sandbox::default().layered(&asked, true).expect("settings");
+        assert_eq!(
+            owners.confinement(&places(&[], &[])).sockets,
+            [PathBuf::from("/Users/ana/.docker/run/docker.sock"), PathBuf::from("/var/run/docker.sock")]
+        );
+        assert!(Sandbox::default().layered(&json!({ "allowUnixSockets": "/x.sock" }), true).is_err());
+        let stored: Sandbox = serde_json::from_value(json!({ "allow_write": [], "network": true })).expect("read");
+        assert!(stored.allow_unix_sockets.is_empty());
     }
 
     #[test]

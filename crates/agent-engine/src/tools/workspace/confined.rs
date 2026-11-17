@@ -29,6 +29,7 @@ pub fn confinement_of(sandbox: &domain::sandbox::Sandbox, places: &Places<'_>) -
         protected,
         network: found.network,
         environment: found.environment,
+        sockets: found.sockets,
     }
 }
 

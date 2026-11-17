@@ -125,7 +125,9 @@ Shell rules read the command the way the shell will run it. The line is parsed i
 
 - **Compound commands** (`&&`, `;`, `|`, newlines, control structures): every part must be allowed. Read-only parts (`ls`, `cat`, `git status`…) and `cd` into a folder inside the project go along without a rule. One denied part refuses the whole command.
 - **Hidden commands** (`$(…)`, backticks, `<(…)`, `bash -c '…'`, `eval`, a program named by a variable) and **redirections to files** are never allowed by an allow rule. The commands inside a substitution are parts of their own, so a deny rule naming one refuses the whole line, and so is the code of `bash -c '…'`, `sh -c "…"` and `eval …`: `bash -c 'rm -rf x'` is refused by `Bash(rm:*)`. A program the rules cannot see (`$(echo rm) x`, `$X x`, `` `echo rm` x ``, a wildcard such as `/bin/r? x` or `{rm,x}`, a shell reading its commands from a pipe like `echo … | sh`) is asked about **every time, in every mode including bypass**, while a deny rule with a specifier exists; with nobody to ask it is refused. Program names are compared ignoring case (`RM`, `/bin/RM`).
-- **Deny rules see through disguises**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` all match `Bash(rm:*)`. The wrappers taken apart are `sudo`, `doas`, `env`, `exec`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs` and `busybox`.
+- **Deny rules see through disguises**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` all match `Bash(rm:*)`. The wrappers taken apart are `sudo`, `doas`, `env`, `exec`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs`, `busybox`, `setsid`, `chroot`, `flock`, `watch`, `script`, `caffeinate`, `xcrun`, `taskset`, `su`, `runuser`, `sg`, `pkexec`, `unbuffer`, `arch` and `strace`; the command they are given as text (`su -c '…'`, `flock f -c '…'`, `script -c '…'`, `watch '…'`, `sg group '…'`, `env -S '…'`) is ruled like the line itself.
+- **Redirections do not hide a program**: rules are matched on each command with its redirections taken out, so `2>/dev/null rm -rf y`, `<x rm -rf y`, `rm</dev/null -rf y` and `curl<<<x …` match `Bash(rm:*)` and `Bash(curl:*)`. A file read through an input redirection (`<secrets/k cat`, `cat < secrets/k`) is judged by the `Read` rules, whatever the command.
+- **A denied program handed to an unknown one asks**: when a program the rules do not know is given a word naming a denied program (`frobnicate rm -rf x`, `python3 -c 'import os; os.system("rm -rf x")'`, `osascript -e '… rm …'`), the line is asked about every time, bypass included. `echo`, `printf`, the read-only programs and a subcommand right after `docker`, `npm`, `cargo` and the like (`docker rm`) are left out.
 - **Allow rules read the command as written**: `LD_PRELOAD=/tmp/x.so git status` does not match `Bash(git status:*)`.
 - **A line that cannot be parsed with confidence** (an unclosed quote, arithmetic such as `$((…))` holding a command, `coproc`, a heredoc whose body runs a substitution) is never allowed by a rule with a specifier and is asked about when deny or ask rules with a specifier exist.
 
@@ -139,7 +141,7 @@ A shell command runs without asking, in every mode, only when the whole line is 
 - has no `VAR=value` prefix and no wrapper (`sudo ls` asks);
 - redirects only to `/dev/null` or between its own outputs (`2>&1`), never to a file;
 - has no word the shell would change: no `$`, backtick or backslash outside single quotes, no unquoted `*`, `?`, `[`, `{` or `<`, and no `~` that names a home folder. Quoted patterns are plain words: `find . -name '*.rs'` and `grep 'a.*b' notes.txt` are read-only, `find . -name *.rs` is not. `git diff HEAD~1` is read-only;
-- names no path outside the project (`/…`, `..`).
+- names no path outside the project (`/…`, `..`), including through a symbolic link: `cat ./link` where `link` leads out of the project asks like `Read` does, and `Read` rules judge where the link leads as well as the name written.
 
 ### Tools and their effects
 
@@ -147,7 +149,7 @@ Each built-in tool says, from its input, what the call will do, and the decision
 
 | Tool | Treated as |
 |---|---|
-| `Read`, `LSP` | reading that file (asks outside the project) |
+| `Read`, `LSP` | reading that file (asks outside the project); `LSP` starts no server in a folder you have not trusted |
 | `Glob`, `Grep` | reading the folder they search |
 | `Write`, `Edit`, `NotebookEdit` | writing that file (asks outside the project and the added folders, in `.git/` or in `{{DIR}}/`; there only a rule that names the path, such as `Edit(.git/hooks/**)`, allows it, not a bare `Edit`) |
 | `Bash`, `Monitor` | running the command (read-only commands run freely) |

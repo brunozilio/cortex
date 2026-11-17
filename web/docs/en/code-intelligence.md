@@ -22,6 +22,8 @@ Besides reading files and searching text, {{NAME}} uses two sources of knowledge
 
 A server is used when its command is on your `PATH`, or when {{NAME}} can install it for you.
 
+> A language server runs the project's own code: rust-analyzer runs build scripts (`build.rs`) and procedural macros, tsserver loads the TypeScript in the project's `node_modules/typescript`, and other servers read the project's configuration in their own ways. So in a folder you have not [trusted](./sandbox-and-safety#workspace-trust) no language server starts: the `LSP` tool answers that the folder is not trusted and that you can trust it with `/trust`, and edits come back without diagnostics or callers. In a trusted folder servers run as described here, outside the sandbox.
+
 ### Installed on first use
 
 When a built-in server is missing, the first **LSP** question about one of its files installs it into {{NAME}}'s local data folder, under `lsp/<server>`, and the question waits for the install:

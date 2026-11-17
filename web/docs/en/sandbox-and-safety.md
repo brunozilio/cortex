@@ -43,6 +43,7 @@ A project folder can bring files that run code on your computer or widen what th
 | Script tools in `{{DIR}}/tools/` | Not registered |
 | Skills and commands written as scripts (`SKILL.js`, `commands/*.js`) | Not offered. Skills and commands written in Markdown still load. |
 | `hooks`, `mcpServers`, `permissionMode` and `initialPrompt` in a project agent's frontmatter | Dropped. The agent and its instructions are still offered. |
+| Language servers (rust-analyzer, tsserver, pyright, gopls, clangd) | Not started. A language server runs the project's own code (rust-analyzer runs build scripts and procedural macros, tsserver loads `node_modules/typescript`), so the `LSP` tool says the folder is not trusted and edits come back without diagnostics. See [Code intelligence](./code-intelligence). |
 
 These still apply in a folder you have not trusted, because they only inform the agent or restrict it: instruction files, rules in `{{DIR}}/rules/`, `deny` and `ask` permission rules, output styles and `{{DIR}}/verification.md`.
 
@@ -101,7 +102,7 @@ Shell commands the agent runs (the `Bash` and `Monitor` tools), command hooks, b
   - in your home folder, `Library/Caches`, `.cache` and cargo's lock files (`.cargo/.package-cache`, `.cargo/.package-cache-mutate`, `.cargo/.global-cache`), but never a toolchain or unpacked packages that run outside the sandbox later: `.rustup`, `.cargo/bin`, `.cargo/registry`, `.cargo/git`, `.npm`, `.yarn`, `.pnpm-store`, `go/pkg`, `.gradle` stay read-only. `npm`, `yarn`, `pnpm` and `go` get a cache of their own in the temporary folder (through `npm_config_cache`, `YARN_CACHE_FOLDER`, `npm_config_store_dir` and `GOMODCACHE`), so `npm install` works in the sandbox and downloads into it. `cargo build` works when the crates it needs are already downloaded; a new dependency needs `cargo fetch` run once outside the sandbox (by you, or by the agent after asking). Installing a toolchain, `cargo install` and Gradle need the same;
   - the folders in `sandbox.allowWrite`;
   - terminal devices such as `/dev/null` and `/dev/tty`.
-- On macOS, a sandboxed command can **never** write the `{{DIR}}/` folder of the project, of the added folders or of your home folder, nor a repository's `.git/config`, `.git/config.worktree` or `.git/hooks/` (once the repository exists, so `git init` still works), so a command cannot grant itself permissions or leave behind something git or {{NAME}} would run later. Commits, branches and fetches still work; commands that change the repository's configuration (`git config`, `git remote add`, `git push -u`, `git submodule init`) fail in the sandbox, so run them yourself or let the agent ask to run them outside it. A sandboxed command also cannot start `launchctl` or open apps through Launch Services (`open`, AppleScript's `activate`). Landlock can only allow folders, not carve an exception out of one, so on Linux these paths stay writable by a sandboxed command; the `Write` and `Edit` tools still ask before writing them, and {{NAME}}'s own git commands ignore what a repository's configuration would run (see [Workspace trust](#workspace-trust)).
+- On macOS, a sandboxed command can **never** write the `{{DIR}}/` folder of the project, of the added folders or of your home folder, nor a repository's `.git/config`, `.git/config.worktree` or `.git/hooks/` (once the repository exists, so `git init` still works), so a command cannot grant itself permissions or leave behind something git or {{NAME}} would run later. Commits, branches and fetches still work; commands that change the repository's configuration (`git config`, `git remote add`, `git push -u`, `git submodule init`) fail in the sandbox, so run them yourself or let the agent ask to run them outside it. A sandboxed command also cannot start `launchctl` or open apps through Launch Services (`open`, AppleScript's `activate`), cannot change preferences through the preferences service (`defaults write` fails; reading preferences still works), and cannot connect to the sockets of Docker, Podman, containerd, BuildKit, Colima, tmux or GNU screen, which would let it act outside the sandbox (start a container with your home folder mounted, type into another terminal). If a command must reach one of them, add its socket to `sandbox.allowUnixSockets` in your own settings, or run the command outside the sandbox. Landlock can only allow folders, not carve an exception out of one, so on Linux these paths stay writable by a sandboxed command; the `Write` and `Edit` tools still ask before writing them, and {{NAME}}'s own git commands ignore what a repository's configuration would run (see [Workspace trust](#workspace-trust)).
 - **Network** access is allowed unless `sandbox.network` is `false`. On Linux that blocks outgoing TCP connections, on Linux 6.7 or later only.
 
 ### When the system has no sandbox
@@ -132,6 +133,7 @@ When a command fails with "operation not permitted", {{NAME}} adds a hint to its
 | Key | Default | Description |
 |---|---|---|
 | `sandbox.allowWrite` | `[]` | Extra writable folders: absolute or starting with `~/`. Relative paths are ignored. Only read from your own settings files. |
+| `sandbox.allowUnixSockets` | `[]` | macOS: service sockets sandboxed commands may connect to, such as `~/.docker/run/docker.sock`. Absolute or starting with `~/`. Only read from your own settings files. |
 | `sandbox.network` | `true` | `false` blocks all network access for sandboxed commands. A project's checked-in settings can turn it off but not back on. |
 | `sandbox.required` | `true` on Linux and macOS, `false` elsewhere | `true` refuses commands (and does not start process MCP servers) when this system cannot provide the sandbox, instead of running them unconfined. A project's checked-in settings can turn it on but not off. |
 
@@ -201,6 +203,8 @@ With `destructive-snapshot` on (the default), {{NAME}} keeps a copy of the files
 - `git stash -u`, `--include-untracked`, `-a`, `--all`.
 
 At most 5,000 files and 200 MB are kept per command; when more would be needed, the output says how many were left out. See [Sessions](./sessions) for `/rewind`.
+
+For a file that was committed and that a command changed, the copy is what git checks out (end-of-line rules and your own filters such as Git LFS applied). A file whose `filter` attribute names a filter configured in the repository itself (git-crypt, for example) is not kept, since {{NAME}}'s git never runs those filters; the command's output says `/rewind` cannot restore it.
 
 ## Dependency guard
 
@@ -357,7 +361,7 @@ Where nobody can be asked (a `-p` run, or a run with questions turned off), the 
 
 A bare `LSP` allow rule does not cover installs; a deny rule such as `LSP(install:gopls)` refuses them.
 
-- Nothing is ever installed for a folder you have not [trusted](#workspace-trust), in any mode. The tool says so instead.
+- Nothing is ever installed, and no language server is started, for a folder you have not [trusted](#workspace-trust), in any mode. The tool says so instead.
 - npm installs run with `--ignore-scripts`, so no package script runs.
 - Every download is checked against a SHA-256 pinned in {{NAME}}; a mismatch installs nothing.
 - `go install` builds Go code from the Go module proxy, checked by Go's own checksum database.

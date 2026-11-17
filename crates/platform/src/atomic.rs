@@ -11,7 +11,7 @@ pub fn replace_entry(path: &Path, bytes: &[u8]) -> io::Result<()> {
     crate::private_file::replace_keeping_mode(path, bytes)
 }
 
-fn resolved(path: &Path) -> io::Result<PathBuf> {
+pub fn resolved(path: &Path) -> io::Result<PathBuf> {
     let mut at = path.to_path_buf();
     for _ in 0..40 {
         match std::fs::symlink_metadata(&at) {

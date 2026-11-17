@@ -73,13 +73,22 @@ fn pieces(text: &str) -> Vec<Piece> {
 }
 
 fn meet(a: &[Piece], b: &[Piece]) -> bool {
-    match (a.split_first(), b.split_first()) {
-        (None, None) => true,
-        (Some((Piece::Run, rest)), _) => meet(rest, b) || (!b.is_empty() && meet(a, &b[1..])),
-        (_, Some((Piece::Run, rest))) => meet(a, rest) || (!a.is_empty() && meet(&a[1..], b)),
-        (None, _) | (_, None) => false,
-        (Some((x, a)), Some((y, b))) => alike(x, y) && meet(a, b),
+    let width = b.len() + 1;
+    let mut meets = vec![false; (a.len() + 1) * width];
+    for i in (0..=a.len()).rev() {
+        for j in (0..=b.len()).rev() {
+            let at = |i: usize, j: usize| meets[i * width + j];
+            let met = match (a.get(i), b.get(j)) {
+                (None, None) => true,
+                (Some(Piece::Run), _) => at(i + 1, j) || (j < b.len() && at(i, j + 1)),
+                (_, Some(Piece::Run)) => at(i, j + 1) || (i < a.len() && at(i + 1, j)),
+                (None, _) | (_, None) => false,
+                (Some(x), Some(y)) => alike(x, y) && at(i + 1, j + 1),
+            };
+            meets[i * width + j] = met;
+        }
     }
+    meets[0]
 }
 
 fn alike(a: &Piece, b: &Piece) -> bool {
@@ -109,6 +118,41 @@ mod tests {
         for (word, pattern) in [("*.txt", "*.pem"), ("*.rs", ".env"), ("id_?", "id_rsa"), ("notes*", ".env.*")] {
             assert!(!could_match(word, pattern), "{word} {pattern}");
         }
+    }
+
+    fn met_by_trying_every_way(a: &[Piece], b: &[Piece]) -> bool {
+        match (a.split_first(), b.split_first()) {
+            (None, None) => true,
+            (Some((Piece::Run, rest)), _) => {
+                met_by_trying_every_way(rest, b) || (!b.is_empty() && met_by_trying_every_way(a, &b[1..]))
+            }
+            (_, Some((Piece::Run, rest))) => {
+                met_by_trying_every_way(a, rest) || (!a.is_empty() && met_by_trying_every_way(&a[1..], b))
+            }
+            (None, _) | (_, None) => false,
+            (Some((x, a)), Some((y, b))) => alike(x, y) && met_by_trying_every_way(a, b),
+        }
+    }
+
+    #[test]
+    fn two_wildcards_meet_exactly_when_trying_every_way_says_they_do() {
+        const PIECES: [&str; 7] = ["*", "?", "[ab]", "a", "b", ".", "e"];
+        let mut random = crate::shell::sample::Random(0x0bad_5eed_c0ff_ee01);
+        for _ in 0..crate::shell::sample::cases().max(2_000) {
+            let mut word = || (0..random.below(7)).map(|_| PIECES[random.below(PIECES.len())]).collect::<String>();
+            let (a, b) = (word(), word());
+            let (x, y) = (pieces(&a), pieces(&b));
+            assert_eq!(meet(&x, &y), met_by_trying_every_way(&x, &y), "{a:?} {b:?}");
+        }
+    }
+
+    #[test]
+    fn many_stars_are_matched_at_once_not_tried_one_way_after_another() {
+        let started = std::time::Instant::now();
+        assert!(!meet(&pieces(&format!("{}Z", "*".repeat(200))), &pieces("id_*.pub.pem.key.X")));
+        assert!(!could_match(&format!("{}Z", "*".repeat(90)), "*.pem"));
+        assert!(could_match(&format!("{}m", "*".repeat(90)), "*.pem"));
+        assert!(started.elapsed() < std::time::Duration::from_millis(50), "{:?}", started.elapsed());
     }
 
     #[test]

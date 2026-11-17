@@ -164,6 +164,9 @@ fn grants(settings: &Value) -> Vec<String> {
         grants.push("sandbox network access".to_owned());
     }
     grants.extend(texts(&settings["sandbox"]["allowWrite"]).map(|dir| format!("sandbox may write to {dir}")));
+    grants.extend(
+        texts(&settings["sandbox"]["allowUnixSockets"]).map(|socket| format!("sandbox may connect to {socket}")),
+    );
     if settings["enableAllProjectMcpServers"].as_bool() == Some(true) {
         grants.push("approval of every project MCP server".to_owned());
     }

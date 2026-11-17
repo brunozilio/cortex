@@ -99,18 +99,25 @@ pub(crate) fn symbol(node: Node, bytes: &[u8], kind: SymbolKind) -> Option<Defin
     Some(Definition::Symbol { name: field_text(node, "name", bytes)?, kind, container: None })
 }
 
+pub(crate) const FOLLOWED_AT_MOST: usize = 16;
+
 pub(crate) fn callee_name(node: Node, bytes: &[u8]) -> Option<String> {
-    match node.kind() {
-        "identifier"
-        | "field_identifier"
-        | "property_identifier"
-        | "private_property_identifier"
-        | "type_identifier" => text(node, bytes),
-        _ => ["name", "field", "property", "attribute", "function", "type"]
-            .iter()
-            .find_map(|field| node.child_by_field_name(field))
-            .and_then(|child| callee_name(child, bytes)),
+    let mut node = node;
+    for _ in 0..FOLLOWED_AT_MOST {
+        match node.kind() {
+            "identifier"
+            | "field_identifier"
+            | "property_identifier"
+            | "private_property_identifier"
+            | "type_identifier" => return text(node, bytes),
+            _ => {
+                node = ["name", "field", "property", "attribute", "function", "type"]
+                    .iter()
+                    .find_map(|field| node.child_by_field_name(field))?;
+            }
+        }
     }
+    None
 }
 
 pub(crate) fn call_through(node: Node, bytes: &[u8], field: &str) -> Option<Callee> {
@@ -119,9 +126,69 @@ pub(crate) fn call_through(node: Node, bytes: &[u8], field: &str) -> Option<Call
 }
 
 pub(crate) fn first_descendant<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
-    if node.kind() == kind {
-        return Some(node);
-    }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor).find_map(|child| first_descendant(child, kind))
+    let mut depth = 0usize;
+    loop {
+        if cursor.node().kind() == kind {
+            return Some(cursor.node());
+        }
+        if depth < FOLLOWED_AT_MOST && cursor.goto_first_child() {
+            depth += 1;
+            continue;
+        }
+        loop {
+            if depth == 0 {
+                return None;
+            }
+            if cursor.goto_next_sibling() {
+                break;
+            }
+            cursor.goto_parent();
+            depth -= 1;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    fn on_a_small_stack<T: Send>(work: impl FnOnce() -> T + Send) -> T {
+        std::thread::scope(|scope| {
+            std::thread::Builder::new().stack_size(2 << 20).spawn_scoped(scope, work).expect("thread").join()
+        })
+        .expect("the work ran to its end without overflowing its stack")
+    }
+
+    #[test]
+    fn a_call_of_a_call_of_a_call_without_end_is_indexed_without_overflowing_the_stack() {
+        let (ten_times, as_found) = ("()".repeat(200_000), "()".repeat(40_000));
+        for (path, source) in [
+            ("a.py", format!("f{ten_times}\n")),
+            ("a.rs", format!("fn m() {{ f{ten_times}; }}\n")),
+            ("a.js", format!("f{as_found};\n")),
+            ("a.ts", format!("f{as_found};\n")),
+            ("a.go", format!("package a\nfunc m() {{ f{as_found} }}\n")),
+        ] {
+            let started = Instant::now();
+            let found = on_a_small_stack(|| crate::extract(path, &source));
+            assert!(found.is_some(), "{path}");
+            assert!(started.elapsed() < Duration::from_secs(60), "{path}: {:?}", started.elapsed());
+        }
+    }
+
+    #[test]
+    fn a_short_chain_of_calls_still_names_its_callee() {
+        let found = crate::extract("a.py", "def m():\n    f()()()\n").expect("python");
+        assert!(found.calls.iter().any(|call| call.callee == "f"), "{:?}", found.calls);
+        let found = crate::extract("a.go", "package a\nfunc (s *Server) Run() { s.Go() }\n").expect("go");
+        assert!(found.symbols.iter().any(|symbol| symbol.container.as_deref() == Some("Server")), "{found:?}");
+    }
+
+    #[test]
+    fn a_type_wrapped_in_references_without_end_names_nothing_rather_than_overflowing() {
+        let source = format!("impl {}T {{ fn a() {{}} }}\n", "&".repeat(100_000));
+        let found = on_a_small_stack(|| crate::extract("a.rs", &source));
+        assert!(found.is_some());
+    }
 }

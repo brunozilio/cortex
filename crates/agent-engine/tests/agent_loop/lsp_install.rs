@@ -161,7 +161,7 @@ fn an_untrusted_folder_never_installs_a_language_server_even_when_bypassing() {
 
 #[test]
 fn a_server_already_there_is_used_without_asking() {
-    let (rig, server) = rig(PermissionMode::AcceptEdits, Trust::Untrusted, false);
+    let (rig, server) = rig(PermissionMode::AcceptEdits, Trust::Trusted, false);
     let (content, is_error) = hover(&rig);
     assert!(!is_error, "{content}");
     assert!(asked(&rig).is_empty());

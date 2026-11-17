@@ -7,6 +7,7 @@ pub struct Confinement {
     pub protected: Vec<PathBuf>,
     pub network: bool,
     pub environment: Vec<(String, String)>,
+    pub sockets: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

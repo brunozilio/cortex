@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::html::decode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,19 +73,120 @@ impl Element {
     }
 }
 
+pub const DEEPEST: usize = 256;
+
+struct Open {
+    stack: Vec<Element>,
+    named: HashMap<String, usize>,
+}
+
+impl Open {
+    fn new() -> Self {
+        Self { stack: vec![Element { name: "#document".into(), ..Element::default() }], named: HashMap::new() }
+    }
+
+    fn full(&self) -> bool {
+        self.stack.len() > DEEPEST
+    }
+
+    fn push(&mut self, element: Element) {
+        *self.named.entry(element.name.clone()).or_default() += 1;
+        self.stack.push(element);
+    }
+
+    fn holds(&self, name: &str) -> bool {
+        self.named.get(name).is_some_and(|count| *count > 0)
+    }
+
+    fn text(&mut self, text: &str) {
+        if !text.is_empty() {
+            self.node(Node::Text(decode(text)));
+        }
+    }
+
+    fn node(&mut self, node: Node) {
+        if let Some(top) = self.stack.last_mut() {
+            top.children.push(node);
+        }
+    }
+
+    fn fold(&mut self) {
+        if self.stack.len() < 2 {
+            return;
+        }
+        if let Some(done) = self.stack.pop() {
+            if let Some(count) = self.named.get_mut(&done.name) {
+                *count = count.saturating_sub(1);
+            }
+            self.node(Node::Element(done));
+        }
+    }
+
+    fn fold_to(&mut self, at: usize) {
+        while self.stack.len() > at.max(1) {
+            self.fold();
+        }
+    }
+
+    fn close(&mut self, name: &str) {
+        if !self.holds(name) {
+            return;
+        }
+        if let Some(at) = self.stack.iter().rposition(|open| open.name == name).filter(|at| *at > 0) {
+            self.fold_to(at);
+        }
+    }
+
+    fn close_sibling(&mut self, name: &str) {
+        if !self.holds(name) {
+            return;
+        }
+        let scope: &[&str] = match name {
+            "li" => &["ul", "ol"],
+            "td" | "th" | "tr" => &["table", "tbody", "thead"],
+            "option" => &["select", "datalist"],
+            _ => &["div", "section", "article", "main", "body", "td", "li", "blockquote"],
+        };
+        let open = self.stack.iter().rposition(|element| element.name == name);
+        let fence = self.stack.iter().rposition(|element| scope.contains(&element.name.as_str()));
+        if let Some(at) = open.filter(|at| fence.is_none_or(|fence| *at > fence)) {
+            self.fold_to(at);
+        }
+    }
+
+    fn finished(mut self) -> Element {
+        self.fold_to(1);
+        self.stack.pop().unwrap_or_default()
+    }
+}
+
+fn closing_tag(rest: &str, name: &str) -> usize {
+    let bytes = rest.as_bytes();
+    let mut from = 0;
+    while let Some(found) = rest[from..].find("</") {
+        let at = from + found;
+        let after = at + 2;
+        if bytes.get(after..after + name.len()).is_some_and(|written| written.eq_ignore_ascii_case(name.as_bytes())) {
+            return at;
+        }
+        from = after;
+    }
+    rest.len()
+}
+
 pub fn parse(source: &str, syntax: Syntax) -> Element {
-    let mut stack = vec![Element { name: "#document".into(), ..Element::default() }];
+    let mut open = Open::new();
     let mut rest = source;
     while !rest.is_empty() {
         let Some(at) = rest.find('<') else {
-            push_text(&mut stack, rest);
+            open.text(rest);
             break;
         };
-        push_text(&mut stack, &rest[..at]);
+        open.text(&rest[..at]);
         rest = &rest[at..];
         if let Some(after) = rest.strip_prefix("<![CDATA[") {
             let end = after.find("]]>").unwrap_or(after.len());
-            push_node(&mut stack, Node::Text(after[..end].to_owned()));
+            open.node(Node::Text(after[..end].to_owned()));
             rest = after.get(end + 3..).unwrap_or("");
             continue;
         }
@@ -96,45 +199,43 @@ pub fn parse(source: &str, syntax: Syntax) -> Element {
             continue;
         }
         let Some(end) = tag_end(rest) else {
-            push_text(&mut stack, rest);
+            open.text(rest);
             break;
         };
         let tag = &rest[1..end];
         rest = &rest[end + 1..];
         if let Some(closing) = tag.strip_prefix('/') {
-            close(&mut stack, &name_of(closing, syntax));
+            open.close(&name_of(closing, syntax));
             continue;
         }
-        let Some(element) = open(tag, syntax) else {
-            push_text(&mut stack, "<");
+        let Some(element) = opened(tag, syntax) else {
+            open.text("<");
             continue;
         };
         let leaf = tag.ends_with('/') || (syntax == Syntax::Html && VOID.contains(&element.name.as_str()));
         if syntax == Syntax::Html && RAW.contains(&element.name.as_str()) {
-            let lower = rest.to_ascii_lowercase();
-            let end = lower.find(&format!("</{}", element.name)).unwrap_or(rest.len());
+            let end = closing_tag(rest, &element.name);
             let mut raw = element;
             if raw.name != "script" && raw.name != "style" {
                 raw.children.push(Node::Text(decode(&rest[..end])));
             }
-            push_node(&mut stack, Node::Element(raw));
+            open.node(Node::Element(raw));
             rest = &rest[end..];
             rest = rest.find('>').map_or("", |close| &rest[close + 1..]);
             continue;
         }
         if leaf {
-            push_node(&mut stack, Node::Element(element));
+            open.node(Node::Element(element));
             continue;
         }
         if syntax == Syntax::Html && CLOSED_BY_SELF.contains(&element.name.as_str()) {
-            close_sibling(&mut stack, &element.name);
+            open.close_sibling(&element.name);
         }
-        stack.push(element);
+        if !open.full() {
+            open.push(element);
+        }
     }
-    while stack.len() > 1 {
-        fold(&mut stack);
-    }
-    stack.pop().unwrap_or_default()
+    open.finished()
 }
 
 fn tag_end(rest: &str) -> Option<usize> {
@@ -156,55 +257,13 @@ fn name_of(tag: &str, syntax: Syntax) -> String {
     name.to_ascii_lowercase()
 }
 
-fn open(tag: &str, syntax: Syntax) -> Option<Element> {
+fn opened(tag: &str, syntax: Syntax) -> Option<Element> {
     let name = name_of(tag, syntax);
     if name.is_empty() || !name.starts_with(|c: char| c.is_ascii_alphabetic()) {
         return None;
     }
     let written = tag.find(|c: char| c.is_whitespace() || c == '/' || c == '>').unwrap_or(tag.len());
     Some(Element { attrs: super::attrs::parse(&tag[written..]), name, children: Vec::new() })
-}
-
-fn push_text(stack: &mut [Element], text: &str) {
-    if !text.is_empty() {
-        push_node(stack, Node::Text(decode(text)));
-    }
-}
-
-fn push_node(stack: &mut [Element], node: Node) {
-    if let Some(top) = stack.last_mut() {
-        top.children.push(node);
-    }
-}
-
-fn fold(stack: &mut Vec<Element>) {
-    if let Some(done) = stack.pop() {
-        push_node(stack, Node::Element(done));
-    }
-}
-
-fn close(stack: &mut Vec<Element>, name: &str) {
-    if let Some(at) = stack.iter().rposition(|open| open.name == name).filter(|at| *at > 0) {
-        while stack.len() > at {
-            fold(stack);
-        }
-    }
-}
-
-fn close_sibling(stack: &mut Vec<Element>, name: &str) {
-    let scope: &[&str] = match name {
-        "li" => &["ul", "ol"],
-        "td" | "th" | "tr" => &["table", "tbody", "thead"],
-        "option" => &["select", "datalist"],
-        _ => &["div", "section", "article", "main", "body", "td", "li", "blockquote"],
-    };
-    let open = stack.iter().rposition(|element| element.name == name);
-    let fence = stack.iter().rposition(|element| scope.contains(&element.name.as_str()));
-    if let Some(at) = open.filter(|at| fence.is_none_or(|fence| *at > fence)) {
-        while stack.len() > at {
-            fold(stack);
-        }
-    }
 }
 
 #[cfg(test)]
@@ -218,6 +277,52 @@ mod tests {
         assert_eq!(items.iter().map(|li| li.text()).collect::<Vec<_>>(), ["one", "two bold"]);
         assert_eq!(root.first("p").map(Element::text).as_deref(), Some("x & y"));
         assert!(root.text().contains("x & y") && !root.text().contains("if (a"));
+    }
+
+    fn on_a_small_stack<T: Send>(work: impl FnOnce() -> T + Send) -> T {
+        std::thread::scope(|scope| {
+            std::thread::Builder::new().stack_size(2 << 20).spawn_scoped(scope, work).expect("thread").join()
+        })
+        .expect("the work ran to its end without overflowing its stack")
+    }
+
+    #[test]
+    fn a_page_nested_without_end_is_read_flat_past_a_depth_and_never_overflows_the_stack() {
+        let deep = format!("{}deepest{}", "<b>".repeat(200_000), "</b>".repeat(200_000));
+        for syntax in [Syntax::Html, Syntax::Xml] {
+            let text = on_a_small_stack(|| {
+                let root = parse(&deep, syntax);
+                let found = root.find(&|element| element.name == "b").len();
+                (root.text(), found)
+            });
+            assert_eq!(text.0, "deepest");
+            assert!(text.1 > 0 && text.1 <= DEEPEST, "{}", text.1);
+        }
+        let read = on_a_small_stack(|| {
+            super::super::distill::distill(&deep, "https://a.dev", domain::web_reading::WebReading::default())
+        });
+        assert!(read.contains("deepest"), "{read}");
+    }
+
+    #[test]
+    fn five_mebibytes_of_tags_are_read_in_one_pass() {
+        let five = 5usize << 20;
+        let titles = "<title></title>".repeat(five / 15);
+        let open = "<i>".repeat(15_000);
+        let closes = format!("{open}{}", "</x>".repeat((five - open.len()) / 4));
+        let raw = "<SCRIPT>a</SCRIPT><Style>b</sTyle>".repeat(five / 34);
+        for page in [titles, closes, raw] {
+            let started = std::time::Instant::now();
+            on_a_small_stack(|| parse(&page, Syntax::Html));
+            assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+        }
+    }
+
+    #[test]
+    fn a_raw_element_ends_at_its_closing_tag_in_any_case() {
+        let root = parse("<TITLE>Hi <b>there</b></TiTlE><p>after</p>", Syntax::Html);
+        assert_eq!(root.first("title").map(Element::text).as_deref(), Some("Hi <b>there</b>"));
+        assert_eq!(root.first("p").map(Element::text).as_deref(), Some("after"));
     }
 
     #[test]

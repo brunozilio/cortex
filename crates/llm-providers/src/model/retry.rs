@@ -55,11 +55,13 @@ pub(crate) async fn refusal(
 ) -> Failed {
     let retry_after = retry_after(&response.headers, SystemTime::now());
     let status = response.status;
-    match response.text(cancel).await {
-        Ok(text) => Failed { error: judge(status, &text), retry_after },
+    match response.body.capped(cancel, ERROR_BODY_AT_MOST).await {
+        Ok(bytes) => Failed { error: judge(status, &String::from_utf8_lossy(&bytes)), retry_after },
         Err(error) => error.into(),
     }
 }
+
+pub(crate) const ERROR_BODY_AT_MOST: usize = 64 * 1024;
 
 pub(crate) fn jittered(wait: Duration, random: u64) -> Duration {
     let half = wait / 2;

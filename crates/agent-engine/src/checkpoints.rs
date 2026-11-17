@@ -52,6 +52,15 @@ pub fn state_of(path: &Path) -> Option<String> {
     }
 }
 
+fn written_through(path: &Path) -> PathBuf {
+    match std::fs::symlink_metadata(path) {
+        Ok(found) if found.file_type().is_symlink() => {
+            path.canonicalize().or_else(|_| platform::atomic::resolved(path)).unwrap_or_else(|_| path.to_path_buf())
+        }
+        _ => path.to_path_buf(),
+    }
+}
+
 pub fn left_by_the_agent(files: &BTreeMap<PathBuf, Option<String>>) -> BTreeMap<PathBuf, Option<String>> {
     files.keys().map(|path| (path.clone(), state_of(path))).collect()
 }
@@ -148,18 +157,30 @@ impl FileHistory {
     }
 
     pub fn before_write(&self, path: &Path) {
-        if self.files.locked().contains_key(path) {
-            return;
+        self.before_writes(std::slice::from_ref(&path.to_path_buf()));
+    }
+
+    pub fn before_writes(&self, paths: &[PathBuf]) {
+        let mut found = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for path in paths {
+            let path = written_through(path);
+            if self.files.locked().contains_key(&path) || !seen.insert(path.clone()) {
+                continue;
+            }
+            let before = match std::fs::metadata(&path) {
+                Ok(meta) if meta.len() > MAX_FILE => continue,
+                Ok(_) => match std::fs::read(&path) {
+                    Ok(bytes) => Some(STANDARD.encode(bytes)),
+                    Err(_) => continue,
+                },
+                Err(_) => None,
+            };
+            found.push((path, before));
         }
-        let before = match std::fs::metadata(path) {
-            Ok(meta) if meta.len() > MAX_FILE => return,
-            Ok(_) => match std::fs::read(path) {
-                Ok(bytes) => Some(STANDARD.encode(bytes)),
-                Err(_) => return,
-            },
-            Err(_) => None,
-        };
-        self.kept(vec![(path.to_owned(), before)]);
+        if !found.is_empty() {
+            self.kept(found);
+        }
     }
 
     pub fn record(&self, path: &Path, before: Option<Vec<u8>>) {
@@ -211,7 +232,7 @@ pub fn rewind(
         for (path, before) in &checkpoint.files {
             if !decided.contains(&path) {
                 decided.push(path);
-                let changed_since = checkpoint.left.get(path).is_some_and(|left| *left != state_of(path));
+                let changed_since = checkpoint.left.get(path).is_none_or(|left| *left != state_of(path));
                 if changed_since {
                     skipped.push(path.clone());
                 }
@@ -275,6 +296,7 @@ mod tests {
             std::fs::write(&path, content).expect("write");
         }
         checkpoint.files = files.take();
+        checkpoint.left = left_by_the_agent(&checkpoint.files);
         history.push(Message::user(prompt));
         history.push(Message::user("done"));
         checkpoint
@@ -463,6 +485,7 @@ mod tests {
         std::fs::remove_file(&script).expect("remove");
         std::os::unix::fs::symlink(&bystander, &script).expect("link");
         history.clear();
+        checkpoint.left = left_by_the_agent(&checkpoint.files);
         checkpoints = vec![std::mem::take(&mut checkpoint)];
         rewind(&mut checkpoints, 0, &mut history).expect("rewind");
 
@@ -471,7 +494,7 @@ mod tests {
     }
 
     #[test]
-    fn what_a_turn_cut_short_wrote_is_kept_at_its_first_write_and_rewinds_after_a_restart() {
+    fn what_a_turn_cut_short_wrote_is_kept_at_its_first_write_but_never_rewound_over_the_user() {
         let dir = tempfile::tempdir().expect("dir");
         let path = dir.path().join("a.txt");
         std::fs::write(&path, "one").expect("write");
@@ -491,10 +514,59 @@ mod tests {
 
         let mut reloaded = opened;
         reloaded.files = stored.lock().expect("kept").clone().expect("kept at the first write");
+        assert_eq!(reloaded.files[&path].as_deref(), Some(STANDARD.encode("one").as_str()));
+        std::fs::write(&path, "fixed by the user after the crash").expect("user");
         let mut after_restart = vec![Message::user("edit a")];
         let rewound = rewind(&mut vec![reloaded], 0, &mut after_restart).expect("rewind");
-        assert_eq!(std::fs::read_to_string(&path).expect("a"), "one");
-        assert_eq!(rewound.restored, [path]);
+        assert_eq!(std::fs::read_to_string(&path).expect("a"), "fixed by the user after the crash");
+        assert_eq!((rewound.restored, rewound.skipped), (Vec::new(), vec![path]), "unknown after-state: skipped");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_written_through_a_link_is_kept_and_rewound_where_the_link_leads() {
+        let (dir, elsewhere) = (tempfile::tempdir().expect("dir"), tempfile::tempdir().expect("elsewhere"));
+        let (target, link) = (elsewhere.path().join("real.txt"), dir.path().join("link.txt"));
+        std::fs::write(&target, "one").expect("target");
+        std::os::unix::fs::symlink(&target, &link).expect("link");
+        let files = FileHistory::default();
+        files.before_write(&link);
+        platform::atomic::write(&link, b"two").expect("write through the link");
+        let mut checkpoint = Checkpoint::open("edit", &[]);
+        checkpoint.files = files.take();
+        checkpoint.left = left_by_the_agent(&checkpoint.files);
+        let real = target.canonicalize().expect("real");
+        assert_eq!(checkpoint.files.keys().collect::<Vec<_>>(), [&real]);
+
+        let rewound = rewind(&mut vec![checkpoint], 0, &mut Vec::new()).expect("rewind");
+        assert_eq!(rewound.restored, [real]);
+        assert!(std::fs::symlink_metadata(&link).expect("link").file_type().is_symlink(), "the link stays a link");
+        assert_eq!(std::fs::read_to_string(&target).expect("target"), "one");
+    }
+
+    #[test]
+    fn many_files_kept_before_one_command_are_written_down_once() {
+        let dir = tempfile::tempdir().expect("dir");
+        let paths: Vec<PathBuf> = (0..5_000).map(|n| dir.path().join(format!("f{n}.txt"))).collect();
+        for path in &paths {
+            std::fs::write(path, "small").expect("write");
+        }
+        let journal = dir.path().join("journal.json");
+        let writes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let files = FileHistory::default();
+        let (counted, written) = (Arc::clone(&writes), journal.clone());
+        files.journaled(Arc::new(move |files: &BTreeMap<PathBuf, Option<String>>| {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let bytes = serde_json::to_vec(files).expect("json");
+            let mut file = std::fs::File::create(&written).expect("journal");
+            std::io::Write::write_all(&mut file, &bytes).expect("write");
+            file.sync_all().expect("sync");
+        }));
+        let started = std::time::Instant::now();
+        files.before_writes(&paths);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
+        assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(files.take().len(), 5_000);
     }
 
     #[test]

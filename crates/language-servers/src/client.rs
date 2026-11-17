@@ -5,7 +5,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
+use crossbeam_channel::{Receiver, RecvTimeoutError, SendTimeoutError, Sender, bounded, unbounded};
 use std::time::{Duration, Instant};
 
 use domain::lsp::answer::RequestError;
@@ -27,12 +27,35 @@ type Answer = Result<Value, RequestError>;
 
 struct Shared {
     name: String,
-    writer: Mutex<Box<dyn Write + Send>>,
+    input: Sender<Vec<u8>>,
     pending: Mutex<HashMap<u64, Sender<Answer>>>,
     documents: Mutex<Documents>,
     published: Mutex<Published>,
     arrived: Condvar,
-    alive: AtomicBool,
+    alive: Arc<AtomicBool>,
+}
+
+const QUEUED_AT_MOST: usize = 64;
+const NOT_READING_AFTER: Duration = Duration::from_secs(10);
+
+fn writing(
+    name: &str,
+    mut writer: impl Write + Send + 'static,
+    alive: Arc<AtomicBool>,
+) -> Result<Sender<Vec<u8>>, String> {
+    let (input, queued) = bounded::<Vec<u8>>(QUEUED_AT_MOST);
+    std::thread::Builder::new()
+        .name(format!("{}-lsp-{name}-input", brand::COMMAND))
+        .spawn(move || {
+            for message in queued {
+                if writer.write_all(&message).and_then(|()| writer.flush()).is_err() {
+                    alive.store(false, Ordering::Relaxed);
+                    return;
+                }
+            }
+        })
+        .map_err(|error| error.to_string())?;
+    Ok(input)
 }
 
 pub struct LspClient {
@@ -88,14 +111,15 @@ impl LspClient {
         child: Option<Child>,
         stop: &AtomicBool,
     ) -> Result<Self, String> {
+        let alive = Arc::new(AtomicBool::new(true));
         let shared = Arc::new(Shared {
             name: name.to_owned(),
-            writer: Mutex::new(Box::new(writer)),
+            input: writing(name, writer, Arc::clone(&alive))?,
             pending: Mutex::default(),
             documents: Mutex::default(),
             published: Mutex::default(),
             arrived: Condvar::new(),
-            alive: AtomicBool::new(true),
+            alive,
         });
         let reading = Arc::clone(&shared);
         std::thread::Builder::new()
@@ -257,10 +281,17 @@ impl LspClient {
 
 impl Shared {
     fn send(&self, message: &Value) -> Result<(), String> {
-        let mut writer = self.writer.lock().map_err(|_| "the server's input is unavailable")?;
-        write_message(&mut *writer, message).map_err(|_| {
+        if !self.alive.load(Ordering::Relaxed) {
+            return Err(format!("{} stopped", self.name));
+        }
+        let mut framed = Vec::new();
+        write_message(&mut framed, message).map_err(|error| format!("{}: {error}", self.name))?;
+        self.input.send_timeout(framed, NOT_READING_AFTER).map_err(|error| {
             self.alive.store(false, Ordering::Relaxed);
-            format!("{} stopped", self.name)
+            match error {
+                SendTimeoutError::Timeout(_) => format!("{} stopped reading what it is sent", self.name),
+                SendTimeoutError::Disconnected(_) => format!("{} stopped", self.name),
+            }
         })
     }
 

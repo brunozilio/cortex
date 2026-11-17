@@ -53,6 +53,10 @@ pub fn environment(cwd: &Path, inherited: Option<&str>) -> Vec<(String, String)>
     environment
 }
 
+pub fn emptied_filters(cwd: &Path) -> BTreeSet<String> {
+    repository_drivers(cwd).into_iter().filter(|driver| driver.section == "filter").map(|driver| driver.name).collect()
+}
+
 fn emptied(driver: &Driver) -> Vec<String> {
     let Driver { section, name } = driver;
     if *section == "diff" {

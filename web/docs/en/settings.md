@@ -107,6 +107,7 @@ A project's `{{DIR}}/settings.json` comes from whoever wrote the repository, so 
 | `features.*` | Can turn an ordinary feature off, and can turn a security feature (`experimental-sandbox`, `redact-secrets`, `experimental-dependency-guard`) on, never the other way round. |
 | `sandbox.network` | Can only turn the network off. |
 | `sandbox.allowWrite` | Ignored. |
+| `sandbox.allowUnixSockets` | Ignored. |
 | `sandbox.required` | Can only turn it on. |
 | `lspServers` | `command`, `args` and `env` are dropped; a project can only map extensions, root markers or disable a server. |
 | Everything else | Honoured as in your own files. |
@@ -244,6 +245,7 @@ Turn the network off for every script, yours included:
 |---|---|---|---|
 | `sandbox.network` | boolean | `true` | `false` blocks the network for sandboxed commands. A checked-in file can only turn it off. |
 | `sandbox.allowWrite` | list of folders | `[]` | Extra folders sandboxed commands may write to. Absolute paths or `~/…`; relative paths are ignored. Read only from your own files. |
+| `sandbox.allowUnixSockets` | list of socket paths | `[]` | macOS: service sockets sandboxed commands may connect to (the Docker, Podman, containerd, BuildKit, Colima, tmux and screen sockets are refused otherwise). Absolute paths or `~/…`. Read only from your own files. |
 | `sandbox.required` | boolean | `true` on Linux and macOS, `false` elsewhere | `true` refuses commands, and does not start MCP servers that run as a process, when this system cannot provide the sandbox, instead of running them unconfined. Turn it off in your own settings with `{ "sandbox": { "required": false } }`. A checked-in file can only turn it on. |
 
 ```json

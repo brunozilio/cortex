@@ -528,3 +528,38 @@ fn reading_outside_the_project_by_a_command_asks_about_the_folder_like_reading_a
         );
     }
 }
+
+struct Linked;
+
+impl Surroundings for Linked {
+    fn real_path(&self, path: &std::path::Path) -> PathBuf {
+        match path.strip_prefix(CWD) {
+            Ok(rest) if rest.starts_with("link") => PathBuf::from("/home/ana/.ssh/id_ed25519"),
+            Ok(rest) if rest.starts_with("docs") => PathBuf::from(CWD).join("documents").join(rest),
+            _ => path.to_path_buf(),
+        }
+    }
+}
+
+#[test]
+fn a_command_reading_through_a_link_is_judged_by_where_the_link_leads() {
+    let (none, fresh, bounds) = (PermissionRules::default(), Remembered::default(), bounds());
+    let judged = |command: &str, mode: PermissionMode, rules: &PermissionRules| {
+        let effects = [Effect::exec(command, false)];
+        let cx = PolicyContext { surroundings: &Linked, ..context(mode, rules, &fresh, &bounds) };
+        PolicyEngine::decide(&Call { tool: "Bash", subject: command, effects: &effects }, &cx)
+    };
+    for mode in [PermissionMode::Plan, PermissionMode::Ask, PermissionMode::AcceptEdits] {
+        for command in ["cat ./link", "head -n 3 link"] {
+            assert!(
+                matches!(judged(command, mode, &none), Verdict::Ask { reason: Reason::Outside(_), .. }),
+                "{mode:?} {command}: {:?}",
+                judged(command, mode, &none)
+            );
+        }
+        assert!(!matches!(judged("wc -l < link", mode, &none), Verdict::Allow), "{mode:?}");
+        assert_eq!(judged("cat docs/a.md", mode, &none), Verdict::Allow, "a link that stays inside reads freely");
+    }
+    let refused = PermissionRules::default().with(RuleKind::Deny, "Read(~/.ssh/**)");
+    assert!(judged("cat ./link", PermissionMode::Bypass, &refused).denies(), "a read rule judges where it leads");
+}

@@ -118,6 +118,7 @@ mod tests {
         *server.diagnostics.lock().expect("diagnostics") = Some(vec![json!({"severity": 2, "message": "unused",
             "range": {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 3}}})]);
         workspace.services.lsp = Some(server.lsp());
+        workspace.policy.trust = domain::trust::Trust::Trusted;
         let written = Write.run(&json!({"file_path": "src/a.py", "content": "import os\nx = 1\n"}), &workspace);
         assert_eq!(
             written.content,

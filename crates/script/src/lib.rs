@@ -13,6 +13,11 @@ pub trait Host: Send + Sync {
 
 const MOST_MEMORY: usize = 64 << 20;
 const MOST_STACK: usize = 1 << 20;
+pub(crate) const BEYOND_THE_LIMIT: usize = 4 << 20;
+
+fn on_its_own_stack<T>(work: impl FnOnce() -> T) -> T {
+    stacker::grow(MOST_STACK + BEYOND_THE_LIMIT, work)
+}
 
 pub(crate) fn runtime() -> rquickjs::Result<Runtime> {
     let runtime = Runtime::new()?;
@@ -114,6 +119,20 @@ pub fn run_limited(
     stop: Arc<AtomicBool>,
     limit: Limit,
 ) -> Result<Value, String> {
+    on_its_own_stack(|| run_here(name, source, export, arguments, data, host, stop, limit))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_here(
+    name: &str,
+    source: &str,
+    export: &str,
+    arguments: &[Value],
+    data: &Value,
+    host: Arc<dyn Host>,
+    stop: Arc<AtomicBool>,
+    limit: Limit,
+) -> Result<Value, String> {
     let runtime = runtime().map_err(|error| error.to_string())?;
     let flag = Arc::clone(&stop);
     let timed_out = Arc::new(AtomicBool::new(false));
@@ -192,6 +211,10 @@ fn evaluate<'js>(
 }
 
 pub fn exported(name: &str, source: &str, export: &str) -> Result<Value, String> {
+    on_its_own_stack(|| exported_here(name, source, export))
+}
+
+fn exported_here(name: &str, source: &str, export: &str) -> Result<Value, String> {
     let runtime = runtime().map_err(|error| error.to_string())?;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
@@ -211,6 +234,10 @@ const EMPTY_FUNCTION: &str = r"(value) => typeof value === 'function'
   && /^(async\s*)?(function\s*[\w$]*\s*)?\([^)]*\)\s*(=>\s*)?\{\s*\}$/.test(value.toString().trim())";
 
 pub fn empty_function(name: &str, source: &str, export: &str) -> bool {
+    on_its_own_stack(|| empty_function_here(name, source, export))
+}
+
+fn empty_function_here(name: &str, source: &str, export: &str) -> bool {
     let Ok(runtime) = runtime() else { return false };
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));
@@ -228,6 +255,10 @@ pub fn empty_function(name: &str, source: &str, export: &str) -> bool {
 }
 
 pub fn exports(name: &str, source: &str, export: &str) -> bool {
+    on_its_own_stack(|| exports_here(name, source, export))
+}
+
+fn exports_here(name: &str, source: &str, export: &str) -> bool {
     let Ok(runtime) = runtime() else { return false };
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     runtime.set_interrupt_handler(Some(Box::new(move || std::time::Instant::now() > deadline)));

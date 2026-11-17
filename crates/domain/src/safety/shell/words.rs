@@ -6,6 +6,12 @@ const REDIRECTS: [&str; 12] = ["&>>", "&>", ">>", ">&", ">|", "<<<", "<<-", "<<"
 
 const RUNS_IN_A_HEREDOC: [&str; 3] = ["$(", "`", "${"];
 
+#[derive(Debug, Default)]
+pub(super) struct Lexed {
+    pub(super) words: Vec<Range<usize>>,
+    pub(super) redirections: Vec<(&'static str, Range<usize>)>,
+}
+
 fn holds(bytes: &[u8], needle: &str) -> bool {
     bytes.windows(needle.len()).any(|window| window == needle.as_bytes())
 }
@@ -23,7 +29,7 @@ impl Parser<'_> {
                 Some(b'(') => return Err(Opaque),
                 _ => {}
             }
-            if !self.redirect()? {
+            if self.redirect()?.is_none() {
                 let word = self.at;
                 self.word()?;
                 words.push(word..self.at);
@@ -42,20 +48,38 @@ impl Parser<'_> {
     pub(super) fn redirects(&mut self) -> Parse<()> {
         loop {
             self.skip_blanks();
-            if !self.redirect()? {
+            if self.redirect()?.is_none() {
                 return Ok(());
             }
         }
     }
 
-    fn redirect(&mut self) -> Parse<bool> {
+    pub(super) fn lexed(&mut self) -> Parse<Lexed> {
+        let mut lexed = Lexed::default();
+        loop {
+            self.skip_blanks();
+            if self.peek().is_none() {
+                return Ok(lexed);
+            }
+            match self.redirect()? {
+                Some(redirection) => lexed.redirections.push(redirection),
+                None => {
+                    let word = self.at;
+                    self.word()?;
+                    lexed.words.push(word..self.at);
+                }
+            }
+        }
+    }
+
+    fn redirect(&mut self) -> Parse<Option<(&'static str, Range<usize>)>> {
         if self.starts("<(") || self.starts(">(") {
-            return Ok(false);
+            return Ok(None);
         }
         let digits = self.bytes[self.at..self.end].iter().take_while(|byte| byte.is_ascii_digit()).count();
         let rest = &self.bytes[self.at + digits..self.end];
         let Some(operator) = REDIRECTS.into_iter().find(|operator| rest.starts_with(operator.as_bytes())) else {
-            return Ok(false);
+            return Ok(None);
         };
         self.at += digits + operator.len();
         self.skip_blanks();
@@ -67,7 +91,7 @@ impl Parser<'_> {
         if operator == "<<" || operator == "<<-" {
             self.heredocs.push(heredoc(&self.bytes[target..self.at], operator == "<<-"));
         }
-        Ok(true)
+        Ok(Some((operator, target..self.at)))
     }
 
     pub(super) fn word(&mut self) -> Parse<()> {

@@ -43,10 +43,29 @@ fn the_agent_asks_the_file_s_language_server() {
         ScriptedModel::reply(vec![Block::Text("Found it.".into())]),
     ]));
     let engine = engine(vec![agent.clone()]).with_language_servers(server.lsp().servers);
-    let events = finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "outline a.rs", model())));
+    let events = finish(&start(&engine, &crate::trusted(dir.path(), "outline a.rs")));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     assert!(offered(&agent).contains(&"LSP".to_owned()));
     assert!(results(&agent).contains("struct Grep (line 1)"), "{}", results(&agent));
+}
+
+#[test]
+fn a_folder_nobody_trusted_never_starts_its_language_server() {
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::write(dir.path().join("a.rs"), "struct Grep;\n").expect("file");
+    let server = ScriptedServer::answering([]);
+    let agent = Arc::new(ScriptedModel::new([
+        ScriptedModel::reply(vec![Block::ToolUse {
+            id: "l".into(),
+            name: "LSP".into(),
+            input: json!({"operation": "documentSymbol", "file_path": "a.rs"}),
+        }]),
+        ScriptedModel::reply(vec![Block::Text("Untrusted.".into())]),
+    ]));
+    let engine = engine(vec![agent.clone()]).with_language_servers(server.lsp().servers);
+    finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "outline a.rs", model())));
+    assert!(results(&agent).contains("/trust"), "{}", results(&agent));
+    assert_eq!(server.opened.load(std::sync::atomic::Ordering::SeqCst), 0, "a server started");
 }
 
 #[test]
@@ -134,7 +153,7 @@ fn a_file_whose_server_is_missing_is_answered_with_what_to_install() {
     ]));
     let pool = Arc::new(LspPool::new(Only("gopls"), Duration::from_secs(60)));
     let engine = engine(vec![agent.clone()]).with_language_servers(pool);
-    finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "outline a.rs", model())));
+    finish(&start(&engine, &crate::trusted(dir.path(), "outline a.rs")));
     assert!(results(&agent).contains("rust-analyzer is not installed"), "{}", results(&agent));
     let system = &agent.asked()[0].system;
     let line = system.lines().find(|line| line.starts_with("- Language servers")).expect("named");

@@ -114,5 +114,34 @@ fn an_error_answer_and_a_server_that_ends_are_reported() {
     assert!(!client.is_alive());
 }
 
+#[test]
+fn a_server_that_stops_reading_cannot_hold_a_call_past_its_wait_or_a_cancel() {
+    let (done, finished) = std::sync::mpsc::channel();
+    let (client, _server) = connected(move |mut server| {
+        server.handshake();
+        let _keep = server;
+        let _ = finished.recv();
+    });
+    let client = std::sync::Arc::new(client);
+    let started = std::time::Instant::now();
+    let syncing = {
+        let client = std::sync::Arc::clone(&client);
+        std::thread::spawn(move || {
+            let text = "x".repeat(1 << 20);
+            (0..256).map(|n| client.sync(Path::new(&format!("/w/{n}.rs")), "rust", &text)).find(Result::is_err)
+        })
+    };
+    let refused = syncing.join().expect("sync thread");
+    assert!(refused.is_some(), "every write was taken although nobody reads");
+    assert!(started.elapsed() < Duration::from_secs(30), "{:?}", started.elapsed());
+
+    let cancelled = AtomicBool::new(true);
+    let asked = std::time::Instant::now();
+    let answer = client.request("textDocument/hover", json!({}), &cancelled, Duration::from_secs(2));
+    assert!(answer.is_err());
+    assert!(asked.elapsed() < Duration::from_secs(5), "{:?}", asked.elapsed());
+    let _ = done.send(());
+}
+
 #[path = "client_lifecycle_tests.rs"]
 mod lifecycle;

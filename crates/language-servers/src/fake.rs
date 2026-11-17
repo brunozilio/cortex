@@ -19,6 +19,7 @@ pub struct ScriptedServer {
     pub published: Mutex<Vec<(String, Vec<Value>)>>,
     pub missing: Mutex<Option<String>>,
     pub installs: std::sync::atomic::AtomicUsize,
+    pub opened: std::sync::atomic::AtomicUsize,
 }
 
 impl ScriptedServer {
@@ -75,6 +76,7 @@ impl LanguageServers for ScriptedServers {
         wait: Wait,
     ) -> Result<Opened, String> {
         let (_, language) = domain::lsp::server_for(file, specs).ok_or("No language server handles it.")?;
+        self.0.opened.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut missing = self.0.missing.lock().map_err(|_| "missing")?;
         if missing.is_some() {
             if wait == Wait::Never {

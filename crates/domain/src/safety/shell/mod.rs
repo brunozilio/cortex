@@ -41,6 +41,47 @@ impl ShellCommand {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Redirection {
+    pub operator: &'static str,
+    pub target: String,
+}
+
+impl Redirection {
+    pub fn reads_a_file(&self) -> bool {
+        matches!(self.operator, "<" | "<>")
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SimpleCommand {
+    pub words: Vec<String>,
+    pub redirections: Vec<Redirection>,
+}
+
+impl SimpleCommand {
+    pub fn of(text: &str) -> Option<Self> {
+        let bytes = text.as_bytes();
+        let mut parser = parser::Parser::over(bytes, 0, text.len(), 0);
+        let lexed = parser.lexed().ok()?;
+        let piece = |range: Range<usize>| text.get(range).map(str::to_owned);
+        let words = lexed.words.into_iter().map(piece).collect::<Option<Vec<_>>>()?;
+        let redirections = lexed
+            .redirections
+            .into_iter()
+            .map(|(operator, target)| piece(target).map(|target| Redirection { operator, target }))
+            .collect::<Option<Vec<_>>>()?;
+        Some(Self { words, redirections })
+    }
+
+    pub fn bare(text: &str) -> String {
+        match Self::of(text) {
+            Some(simple) if !simple.redirections.is_empty() => simple.words.join(" "),
+            _ => text.to_owned(),
+        }
+    }
+}
+
 pub fn simple_commands(text: &str) -> (Vec<&str>, bool) {
     let (commands, _, opaque) = ranges(text);
     (slices(text, &commands), !opaque)

@@ -250,7 +250,7 @@ fn a_checkpoint_is_added_in_one_update_and_old_ones_lose_their_files() {
 }
 
 #[test]
-fn a_file_s_state_kept_at_its_first_write_survives_a_crash_and_rewinds_after_a_restart() {
+fn a_file_s_state_kept_at_its_first_write_survives_a_crash_and_is_reported_not_overwritten_after_a_restart() {
     use std::sync::Arc;
 
     use crate::checkpoints::{Checkpoint, FileHistory, rewind};
@@ -281,9 +281,10 @@ fn a_file_s_state_kept_at_its_first_write_survives_a_crash_and_rewinds_after_a_r
     assert_eq!(all.len(), 2, "the turn cut short has one checkpoint, updated in place");
     let mut said = history.clone();
     said.push(Message::user("edit a, make b"));
+    assert!(all[1].files.contains_key(&a) && all[1].files.contains_key(&b), "both first states were kept");
     let rewound = rewind(&mut all, 1, &mut said).expect("rewind");
-    assert_eq!(std::fs::read_to_string(&a).expect("a"), "one");
-    assert!(!b.exists());
-    assert_eq!(rewound.restored, [a, b]);
+    assert_eq!(std::fs::read_to_string(&a).expect("a"), "two", "what the files became after the crash is unknown");
+    assert!(b.exists());
+    assert_eq!((rewound.restored, rewound.skipped), (Vec::new(), vec![a, b]));
     assert_eq!(said, history);
 }

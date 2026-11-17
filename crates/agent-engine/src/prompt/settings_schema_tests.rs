@@ -148,7 +148,10 @@ fn the_documented_full_example_reads_without_a_notice() {
         },
         "verification": { "allow": ["Bash(cargo test:*)"] },
         "scripts": { "files": true, "processes": true, "network": false },
-        "sandbox": { "network": true, "allowWrite": ["~/.m2"], "required": true },
+        "sandbox": {
+            "network": true, "allowWrite": ["~/.m2"], "required": true,
+            "allowUnixSockets": ["~/.docker/run/docker.sock"]
+        },
         "features": { "experimental-code-map": false, "git-offer": false },
         "lspServers": {
             "zls": { "command": "zls", "args": [], "extensionToLanguage": { ".zig": "zig" },
@@ -169,6 +172,7 @@ fn the_documented_full_example_reads_without_a_notice() {
     let settings = load(repo.path(), Some(home.path()), &[]).expect("settings");
 
     assert!(settings.notices.is_empty(), "{:?}", settings.notices);
+    assert_eq!(settings.sandbox.allow_unix_sockets, ["~/.docker/run/docker.sock"]);
 }
 
 fn one_value_per_published_key() -> Vec<(&'static str, Value)> {

@@ -27,6 +27,10 @@ pub fn collapsed(part: &str) -> String {
 }
 
 pub fn normalized(part: &str) -> String {
+    as_written(&crate::shell::SimpleCommand::bare(part))
+}
+
+pub(super) fn as_written(part: &str) -> String {
     let collapsed = collapsed(part);
     let words: Vec<&str> = collapsed.split(' ').collect();
     super::unwrapped::run(&words)

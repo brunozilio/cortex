@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use domain::permission::{
-    Bounds, Call, Judgement, NothingAround, Place, PolicyContext, PolicyEngine, Remembered, Verdict,
+    Bounds, Call, Judgement, Place, PolicyContext, PolicyEngine, Remembered, Surroundings, Verdict,
 };
 use domain::permission_rules::PermissionRules;
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent, PermissionMode};
@@ -13,6 +13,14 @@ use super::Workspace;
 use super::outside::settled;
 use super::script_tool::Capability;
 use crate::control::Control;
+
+struct Resolving;
+
+impl Surroundings for Resolving {
+    fn real_path(&self, path: &Path) -> PathBuf {
+        settled(path)
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct HostAsk<'a> {
@@ -134,7 +142,7 @@ impl HostJudge {
             sandboxed: grounds.sandboxed,
             sandbox_missing: grounds.sandbox_missing.as_deref(),
             no_prompts: false,
-            surroundings: &NothingAround,
+            surroundings: &Resolving,
         };
         PolicyEngine::judge(call, &context)
     }

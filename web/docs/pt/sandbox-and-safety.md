@@ -43,6 +43,7 @@ A pasta de um projeto pode trazer arquivos que rodam código no seu computador o
 | Ferramentas de script em `{{DIR}}/tools/` | Não são registradas |
 | Skills e comandos escritos como script (`SKILL.js`, `commands/*.js`) | Não são oferecidos. Skills e comandos em Markdown continuam carregando. |
 | `hooks`, `mcpServers`, `permissionMode` e `initialPrompt` no frontmatter de um agente do projeto | São descartados. O agente e as instruções dele continuam disponíveis. |
+| Servidores de linguagem (rust-analyzer, tsserver, pyright, gopls, clangd) | Não são iniciados. Um servidor de linguagem roda código do próprio projeto (o rust-analyzer roda build scripts e macros procedurais, o tsserver carrega `node_modules/typescript`), então a ferramenta `LSP` diz que a pasta não é confiável e as edições voltam sem diagnósticos. Veja [Inteligência de código](./code-intelligence). |
 
 Continuam valendo numa pasta em que você não confiou, porque só informam ou restringem o agente: arquivos de instruções, regras em `{{DIR}}/rules/`, regras de permissão `deny` e `ask`, estilos de saída e o `{{DIR}}/verification.md`.
 
@@ -101,7 +102,7 @@ Os comandos de shell que o agente executa (as ferramentas `Bash` e `Monitor`), o
   - na sua pasta pessoal, `Library/Caches`, `.cache` e os arquivos de trava do cargo (`.cargo/.package-cache`, `.cargo/.package-cache-mutate`, `.cargo/.global-cache`), mas nunca um toolchain ou pacotes descompactados que depois rodam fora do sandbox: `.rustup`, `.cargo/bin`, `.cargo/registry`, `.cargo/git`, `.npm`, `.yarn`, `.pnpm-store`, `go/pkg`, `.gradle` ficam só para leitura. `npm`, `yarn`, `pnpm` e `go` ganham um cache próprio na pasta temporária (por `npm_config_cache`, `YARN_CACHE_FOLDER`, `npm_config_store_dir` e `GOMODCACHE`), então `npm install` funciona no sandbox e baixa para lá. `cargo build` funciona quando os crates de que precisa já foram baixados; uma dependência nova pede `cargo fetch` rodado uma vez fora do sandbox (por você, ou pelo agente depois de perguntar). Instalar um toolchain, `cargo install` e o Gradle pedem o mesmo;
   - as pastas em `sandbox.allowWrite`;
   - dispositivos de terminal como `/dev/null` e `/dev/tty`.
-- No macOS, um comando na sandbox **nunca** pode gravar a pasta `{{DIR}}/` do projeto, das pastas adicionais ou da sua pasta pessoal, nem o `.git/config`, o `.git/config.worktree` ou o `.git/hooks/` de um repositório (depois que o repositório existe, então `git init` continua funcionando), para que um comando não consiga se dar permissões nem deixar algo que o git ou o {{NAME}} executariam depois. Commits, branches e fetches continuam funcionando; comandos que mudam a configuração do repositório (`git config`, `git remote add`, `git push -u`, `git submodule init`) falham na sandbox, então rode-os você mesmo ou deixe o agente pedir para rodá-los fora dela. Um comando na sandbox também não consegue iniciar o `launchctl` nem abrir apps pelo Launch Services (`open`, o `activate` do AppleScript). O Landlock só libera pastas, não abre exceções dentro de uma pasta liberada, então no Linux esses caminhos continuam graváveis por um comando na sandbox; as ferramentas `Write` e `Edit` continuam perguntando antes de gravá-los, e os comandos git do próprio {{NAME}} ignoram o que a configuração de um repositório executaria (veja [Confiança na pasta](#confianca-na-pasta)).
+- No macOS, um comando na sandbox **nunca** pode gravar a pasta `{{DIR}}/` do projeto, das pastas adicionais ou da sua pasta pessoal, nem o `.git/config`, o `.git/config.worktree` ou o `.git/hooks/` de um repositório (depois que o repositório existe, então `git init` continua funcionando), para que um comando não consiga se dar permissões nem deixar algo que o git ou o {{NAME}} executariam depois. Commits, branches e fetches continuam funcionando; comandos que mudam a configuração do repositório (`git config`, `git remote add`, `git push -u`, `git submodule init`) falham na sandbox, então rode-os você mesmo ou deixe o agente pedir para rodá-los fora dela. Um comando na sandbox também não consegue iniciar o `launchctl` nem abrir apps pelo Launch Services (`open`, o `activate` do AppleScript), não consegue mudar preferências pelo serviço de preferências (`defaults write` falha; ler preferências continua funcionando) e não consegue se conectar aos sockets de Docker, Podman, containerd, BuildKit, Colima, tmux ou GNU screen, que o deixariam agir fora da sandbox (subir um contêiner com a sua pasta pessoal montada, digitar em outro terminal). Se um comando precisa alcançar um deles, coloque o socket em `sandbox.allowUnixSockets` nas suas próprias configurações, ou rode o comando fora da sandbox. O Landlock só libera pastas, não abre exceções dentro de uma pasta liberada, então no Linux esses caminhos continuam graváveis por um comando na sandbox; as ferramentas `Write` e `Edit` continuam perguntando antes de gravá-los, e os comandos git do próprio {{NAME}} ignoram o que a configuração de um repositório executaria (veja [Confiança na pasta](#confianca-na-pasta)).
 - O acesso à **rede** é permitido, a menos que `sandbox.network` seja `false`. No Linux isso bloqueia conexões TCP de saída, e só a partir do Linux 6.7.
 
 ### Quando o sistema não tem sandbox
@@ -132,6 +133,7 @@ Quando um comando falha com "operation not permitted", o {{NAME}} acrescenta à 
 | Chave | Padrão | Descrição |
 |---|---|---|
 | `sandbox.allowWrite` | `[]` | Pastas extras com gravação liberada: absolutas ou começando com `~/`. Caminhos relativos são ignorados. Lida só dos seus próprios arquivos de configuração. |
+| `sandbox.allowUnixSockets` | `[]` | macOS: sockets de serviço a que comandos na sandbox podem se conectar, como `~/.docker/run/docker.sock`. Absolutos ou começando com `~/`. Lida só dos seus próprios arquivos de configuração. |
 | `sandbox.network` | `true` | `false` bloqueia todo acesso à rede para comandos na sandbox. As configurações versionadas de um projeto podem desligá-la, mas não religá-la. |
 | `sandbox.required` | `true` no Linux e no macOS, `false` nos demais | `true` recusa os comandos (e não inicia servidores MCP de processo) quando este sistema não consegue oferecer a sandbox, em vez de rodá-los sem confinamento. As configurações versionadas de um projeto podem ligá-la, mas não desligá-la. |
 
@@ -201,6 +203,8 @@ Com `destructive-snapshot` ligado (o padrão), o {{NAME}} guarda uma cópia dos 
 - `git stash -u`, `--include-untracked`, `-a`, `--all`.
 
 São guardados no máximo 5.000 arquivos e 200 MB por comando; quando seria preciso mais, a saída informa quantos ficaram de fora. Veja [Sessões](./sessions) para o `/rewind`.
+
+Para um arquivo versionado que um comando mudou, a cópia é o que o git entrega no checkout (regras de fim de linha e os seus próprios filtros, como o Git LFS, aplicados). Um arquivo cujo atributo `filter` nomeia um filtro configurado no próprio repositório (o git-crypt, por exemplo) não é guardado, porque o git do {{NAME}} nunca roda esses filtros; a saída do comando diz que o `/rewind` não consegue restaurá-lo.
 
 ## Proteção de dependências
 
@@ -357,7 +361,7 @@ Onde ninguém pode ser consultado (uma execução `-p`, ou uma execução com as
 
 Uma regra allow `LSP` sozinha não cobre instalações; uma regra deny como `LSP(install:gopls)` as recusa.
 
-- Nada é instalado para uma pasta em que você não confiou, em nenhum modo. A ferramenta diz isso em vez de instalar.
+- Nada é instalado, e nenhum servidor de linguagem é iniciado, para uma pasta em que você não confiou, em nenhum modo. A ferramenta diz isso em vez de instalar.
 - As instalações pelo npm rodam com `--ignore-scripts`, então nenhum script de pacote roda.
 - Todo download é conferido com um SHA-256 fixado no {{NAME}}; se não bater, nada é instalado.
 - O `go install` compila código Go do proxy de módulos do Go, conferido pelo banco de checksums do próprio Go.

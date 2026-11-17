@@ -26,6 +26,27 @@ fn go(source: &str, export: &str, arguments: &[Value], data: Value) -> (Result<V
 }
 
 #[test]
+fn recursion_without_end_is_an_error_whatever_stack_the_caller_has_left() {
+    let endless = "export default function f() { return f() + 1; }";
+    let small = std::thread::Builder::new().stack_size(256 * 1024);
+    let ran = small
+        .spawn(move || {
+            let (result, _) = go(endless, "default", &[], json!({}));
+            let spec = exported("spec.js", "function f() { return f() + 1; }\nexport default f();", "default");
+            let found = exports("spec.js", "function f() { return f() + 1; }\nf();\nexport const run = 1;", "run");
+            let empty = empty_function("spec.js", "function f() { return f() + 1; }\nf();", "default");
+            (result, spec, found, empty)
+        })
+        .expect("thread")
+        .join()
+        .expect("a runaway script never takes the caller's thread down");
+    let refused = ran.0.expect_err("the stack runs out");
+    assert!(refused.to_lowercase().contains("stack"), "{refused}");
+    assert!(ran.1.is_err());
+    assert!(!ran.2 && !ran.3);
+}
+
+#[test]
 fn a_script_that_keeps_allocating_fails_instead_of_taking_the_machine_s_memory() {
     let hog = r#"
       export default function () {

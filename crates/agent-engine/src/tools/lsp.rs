@@ -120,8 +120,16 @@ fn diagnose(lsp: &crate::lsp::Lsp, scope: Scope, input: &Value, workspace: &Work
     Ok(with_install(installed, answer))
 }
 
+pub const NOT_TRUSTED: &str = "Language servers do not start in a folder that is not trusted: a server runs the \
+                                project's own code (rust-analyzer runs build scripts and procedural macros, \
+                                tsserver loads node_modules/typescript). The user can trust this folder with /trust; \
+                                until then, read and search the code instead.";
+
 fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
     let lsp = workspace.services.lsp.as_ref().ok_or("No language servers are available in this run.")?;
+    if !trusted(workspace) {
+        return Err(NOT_TRUSTED.to_owned());
+    }
     if let Some(scope) = field(input, "operation").and_then(Scope::named) {
         return diagnose(lsp, scope, input, workspace);
     }

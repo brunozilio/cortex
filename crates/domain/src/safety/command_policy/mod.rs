@@ -8,6 +8,7 @@ mod sign_in;
 mod wildcards;
 
 pub use operands::{Operand, paths_read};
+pub use reading::is_reader;
 pub use sign_in::sign_in_refused;
 
 use std::path::{Path, PathBuf};

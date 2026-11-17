@@ -107,6 +107,39 @@ fn outside_a_repository_nothing_is_watched() {
 }
 
 #[test]
+fn a_committed_file_is_kept_as_it_was_checked_out_not_as_git_stores_it() {
+    let (dir, workspace) = repository();
+    std::fs::write(dir.path().join(".gitattributes"), "*.txt text eol=crlf\n").expect("attributes");
+    git(dir.path(), &["add", ".gitattributes"]);
+    git(dir.path(), &["commit", "-qm", "attributes"]);
+    let watched = before(&workspace).expect("a repository");
+    std::fs::write(dir.path().join("z.txt"), "changed\n").expect("z.txt");
+    let skipped = watched.after(&workspace);
+    assert!(skipped.is_empty(), "{skipped:?}");
+    assert_eq!(recorded(&workspace).get("z.txt"), Some(&Some("one\r\n".to_owned())));
+}
+
+#[test]
+fn a_file_whose_filter_the_repository_names_is_left_out_and_said() {
+    let (dir, workspace) = repository();
+    git(dir.path(), &["config", "filter.crypt.smudge", "tr a-z n-za-m"]);
+    git(dir.path(), &["config", "filter.crypt.clean", "tr a-z n-za-m"]);
+    std::fs::write(dir.path().join(".gitattributes"), "secret.txt filter=crypt\n").expect("attributes");
+    std::fs::write(dir.path().join("secret.txt"), "plain\n").expect("secret");
+    let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    let secret = std::fs::File::options().write(true).open(dir.path().join("secret.txt")).expect("secret");
+    secret.set_modified(an_hour_ago).expect("an mtime git will not doubt");
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-qm", "secret"]);
+    let watched = before(&workspace).expect("a repository");
+    std::fs::write(dir.path().join("secret.txt"), "overwritten\n").expect("secret");
+    let skipped = watched.after(&workspace);
+    assert_eq!(skipped, [dir.path().canonicalize().expect("root").join("secret.txt")]);
+    assert_eq!(recorded(&workspace).get("secret.txt"), None, "the stored text is not what was checked out");
+    assert!(not_kept(&skipped).is_some_and(|note| note.contains("secret.txt")));
+}
+
+#[test]
 fn a_file_git_could_not_show_is_never_recorded_as_one_that_did_not_exist() {
     let (dir, _workspace) = repository();
     let free = std::sync::atomic::AtomicBool::new(false);

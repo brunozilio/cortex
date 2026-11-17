@@ -32,6 +32,9 @@ const HANDING_OFF: [&str; 3] = [
     "(deny process-exec (literal \"/bin/launchctl\"))",
 ];
 
+const SERVICE_SOCKETS: [&str; 4] =
+    [r"(^|/)(docker|podman|containerd|buildkitd|colima)\.sock$", r"/tmux-[0-9]+/", r"/screens/S-[^/]+/", r"/\.screen/"];
+
 pub fn profile(confinement: &Confinement) -> String {
     let mut lines = vec!["(version 1)".to_owned(), "(allow default)".to_owned(), "(deny file-write*)".to_owned()];
     lines.push(DEVICES.to_owned());
@@ -46,16 +49,27 @@ pub fn profile(confinement: &Confinement) -> String {
     let within_reopened = protected.iter().filter(|path| inside(path, &reopened));
     lines.extend(within_reopened.map(|path| format!("(deny file-write* {})", subpath(path))));
     lines.extend(HANDING_OFF.map(str::to_owned));
+    lines.push("(deny user-preference-write)".to_owned());
+    lines.extend(
+        SERVICE_SOCKETS
+            .map(|pattern| format!("(deny network-outbound (remote unix-socket (path-regex #\"{pattern}\")))")),
+    );
+    lines.extend(confinement.sockets.iter().map(|socket| {
+        let real = quoted(&real(socket));
+        format!("(allow network-outbound (remote unix-socket (path-literal \"{real}\")))")
+    }));
     if !confinement.network {
         lines.push("(deny network*)".to_owned());
     }
     lines.join("\n")
 }
 
+fn quoted(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 fn subpath(path: &Path) -> String {
-    let real = real(path);
-    let text = real.to_string_lossy().replace('\\', "\\\\").replace('"', "\\\"");
-    format!("(subpath \"{text}\")")
+    format!("(subpath \"{}\")", quoted(&real(path)))
 }
 
 fn real(path: &Path) -> PathBuf {
@@ -204,6 +218,82 @@ mod tests {
             assert!(text.contains(line), "{line} in {text}");
         }
         assert!(runs("git --version && cargo --version", project.path(), &within(project.path())));
+    }
+
+    struct Forgotten(String);
+
+    impl Drop for Forgotten {
+        fn drop(&mut self) {
+            let _ = Command::new("/usr/bin/defaults")
+                .args(["delete", &self.0])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            if let Some(home) = std::env::var_os("HOME") {
+                let _ = std::fs::remove_file(Path::new(&home).join(format!("Library/Preferences/{}.plist", self.0)));
+            }
+        }
+    }
+
+    #[test]
+    fn a_command_cannot_change_a_preference_through_the_preferences_service() {
+        let project = tempfile::tempdir().expect("project");
+        let domain = format!("dev.sandbox-test.preferences.{}", std::process::id());
+        let _forgotten = Forgotten(domain.clone());
+        let write = format!("/usr/bin/defaults write {domain} reached yes");
+        assert!(!runs(&write, project.path(), &within(project.path())), "the preference was written");
+        let read = Command::new("/usr/bin/defaults").args(["read", &domain]).output().expect("defaults");
+        assert!(!read.status.success(), "{}", String::from_utf8_lossy(&read.stdout));
+        assert!(
+            runs("/usr/bin/defaults read -g > /dev/null", project.path(), &within(project.path())),
+            "reads still work"
+        );
+    }
+
+    fn listening(path: &Path) -> std::os::unix::net::UnixListener {
+        std::fs::create_dir_all(path.parent().expect("folder")).expect("folder");
+        std::os::unix::net::UnixListener::bind(path).expect("socket")
+    }
+
+    fn connects(socket: &Path, dir: &Path, confinement: &Confinement) -> bool {
+        let reach = format!(
+            "/usr/bin/perl -MIO::Socket::UNIX -e 'IO::Socket::UNIX->new(Peer => $ARGV[0]) or exit 1' '{}'",
+            socket.display()
+        );
+        runs(&reach, dir, confinement)
+    }
+
+    #[test]
+    fn a_command_cannot_reach_a_container_engine_or_a_terminal_multiplexer_unless_allowed() {
+        let project = tempfile::tempdir().expect("project");
+        let sockets = tempfile::tempdir().expect("sockets");
+        let docker = sockets.path().join("run/docker.sock");
+        let tmux = sockets.path().join("tmux-501/default");
+        let screen = sockets.path().join("screens/S-ana/123.tty.host");
+        let other = sockets.path().join("app.sock");
+        let _held = [&docker, &tmux, &screen, &other].map(|path| listening(path));
+        let confined = within(project.path());
+
+        assert!(connects(&other, project.path(), &confined), "another socket is reached");
+        for refused in [&docker, &tmux, &screen] {
+            assert!(!connects(refused, project.path(), &confined), "{} was reached", refused.display());
+        }
+        let allowed = Confinement { sockets: vec![docker.clone()], ..within(project.path()) };
+        assert!(connects(&docker, project.path(), &allowed), "a socket the settings allow is reached");
+        assert!(!connects(&tmux, project.path(), &allowed));
+    }
+
+    #[test]
+    fn everyday_developer_tools_still_work_inside() {
+        let project = tempfile::tempdir().expect("project");
+        let confined = within(project.path());
+        let identity = "git -c user.name=t -c user.email=t@t -c commit.gpgsign=false -c core.hooksPath=/dev/null";
+        let everyday = format!(
+            "{identity} init -q && echo a > a && {identity} add a && {identity} commit -q -m one && git status --short \
+             && cargo --version && python3 -c 'import json, sqlite3; print(json.dumps(1))' \
+             && (command -v npm > /dev/null || exit 0) && npm --version && node -e 'process.exit(0)'"
+        );
+        assert!(runs(&everyday, project.path(), &confined));
     }
 
     #[test]

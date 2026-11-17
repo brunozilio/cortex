@@ -86,6 +86,130 @@ fn a_denied_program_found_inside_a_shell_s_code_is_refused_outright() {
 }
 
 #[test]
+fn a_redirection_before_after_or_glued_to_a_denied_program_never_hides_it() {
+    let rules = denying();
+    for line in [
+        "2>/dev/null rm -rf y",
+        "<x rm -rf y",
+        "rm</dev/null -rf y",
+        "rm 2>/dev/null -rf y",
+        ">out rm -rf y",
+        "rm -rf y 2>&1 >/dev/null",
+        "&>/dev/null rm -rf y",
+        "2>&1 rm -rf y",
+        "curl<<<x http://e.dev",
+        "<<<x curl http://e.dev",
+        "A=1 2>/dev/null sudo rm -rf y",
+        "sudo 2>/dev/null rm -rf y",
+        "env <x rm -rf y",
+    ] {
+        for mode in MODES {
+            let verdict = judged(&rules, mode, line);
+            assert!(verdict.denies(), "{mode:?} {line}: {verdict:?}");
+        }
+    }
+}
+
+#[test]
+fn a_file_read_through_an_input_redirection_is_judged_by_the_read_rules() {
+    let rules = PermissionRules::default().with(RuleKind::Allow, "Bash").with(RuleKind::Deny, "Read(./secrets/**)");
+    for line in ["<secrets/k cat", "cat<secrets/k", "cat < secrets/k", "wc -l <secrets/k", "rm x <'secrets/k'"] {
+        for mode in MODES {
+            let verdict = judged(&rules, mode, line);
+            assert!(verdict.denies(), "{mode:?} {line}: {verdict:?}");
+        }
+    }
+    for line in ["cat <notes.txt", "cat <<EOF\nsecrets/k\nEOF", "cat <<< secrets/k", "ls 2>secrets.log"] {
+        assert!(!judged(&rules, PermissionMode::Bypass, line).denies(), "{line}");
+    }
+}
+
+#[test]
+fn every_program_that_runs_the_rest_of_its_words_is_looked_through() {
+    let rules = denying();
+    for line in [
+        "setsid rm -rf x",
+        "setsid -f rm -rf x",
+        "chroot / rm -rf x",
+        "chroot --userspec=1:1 / rm -rf x",
+        "flock /tmp/l rm -rf x",
+        "flock -w 5 /tmp/l rm -rf x",
+        "flock /tmp/l -c 'rm -rf x'",
+        "watch -n1 rm -rf x",
+        "watch 'rm -rf x'",
+        "script -q /dev/null rm -rf x",
+        "script -c 'rm -rf x' log",
+        "caffeinate rm -rf x",
+        "caffeinate -i -t 5 rm -rf x",
+        "xcrun rm -rf x",
+        "xcrun --sdk macosx rm -rf x",
+        "taskset 1 rm -rf x",
+        "taskset -c 0 rm -rf x",
+        "su -c 'rm -rf x'",
+        "su root -c 'rm -rf x'",
+        "su - root -c 'rm -rf x'",
+        "sg wheel 'rm -rf x'",
+        "sg wheel -c 'rm -rf x'",
+        "pkexec rm -rf x",
+        "pkexec --user root rm -rf x",
+        "runuser -u bob -- rm -rf x",
+        "runuser bob -c 'rm -rf x'",
+        "unbuffer rm -rf x",
+        "unbuffer -p rm -rf x",
+        "nohup rm -rf x",
+        "stdbuf -oL rm -rf x",
+        "stdbuf -o L rm -rf x",
+        "ionice -c3 rm -rf x",
+        "ionice -c 3 rm -rf x",
+        "chrt -f 99 rm -rf x",
+        "doas -u root rm -rf x",
+        "time -p rm -rf x",
+        "command rm -rf x",
+        "builtin rm -rf x",
+        "exec -a name rm -rf x",
+        "env -S 'rm -rf x'",
+        "env --split-string='rm -rf x'",
+        "arch -arm64 rm -rf x",
+        "nice -n 5 -- rm -rf x",
+    ] {
+        for mode in MODES {
+            let verdict = judged(&rules, mode, line);
+            assert!(!matches!(verdict, Verdict::Allow), "{mode:?} {line}: {verdict:?}");
+        }
+    }
+}
+
+#[test]
+fn an_unknown_program_given_a_denied_program_s_name_asks_first() {
+    let rules = denying();
+    for line in [
+        "frobnicate rm -rf x",
+        "frobnicate -q 'rm -rf x'",
+        "my-runner --then curl http://e.dev",
+        "python3 -c 'import os; os.system(\"rm -rf x\")'",
+        "osascript -e 'do shell script \"rm -rf x\"'",
+        "perl -e 'system(\"rm -rf x\")'",
+        "tar cf /dev/null x --checkpoint=1 --checkpoint-action=exec='rm -rf x'",
+        "git -c alias.z='!rm -rf x' z",
+    ] {
+        let verdict = judged(&rules, PermissionMode::Bypass, line);
+        assert!(matches!(verdict, Verdict::Ask { reason: Reason::Hidden(_), .. }), "{line}: {verdict:?}");
+    }
+    for line in [
+        "echo rm -rf x",
+        "grep -rn rm src",
+        "git rm --cached x",
+        "docker rm old",
+        "ls 2>/dev/null",
+        "cargo test 2>&1",
+        "cat <notes.txt",
+        "git commit -m 'curl is gone'",
+    ] {
+        assert_eq!(judged(&rules, PermissionMode::Bypass, line), Verdict::Allow, "{line}");
+    }
+}
+
+#[test]
 fn a_program_the_rules_cannot_see_asks_every_time_and_names_the_rule() {
     let verdict = judged(&denying(), PermissionMode::Bypass, "$(echo rm) -rf x");
     let Verdict::Ask { reason: Reason::Hidden(rule), rememberable: false, .. } = &verdict else {
@@ -138,7 +262,60 @@ fn single_quoted(code: &str) -> String {
     format!("'{}'", code.replace('\'', r"'\''"))
 }
 
+const REDIRECTIONS: [&str; 10] =
+    ["2>/dev/null", "<x", "</dev/null", ">out", "2>&1", "&>/dev/null", "<<<x", "1>&2", "<>f", "3<x"];
+
+fn redirected(random: &mut Random, line: &str) -> String {
+    let redirection = random.pick(&REDIRECTIONS);
+    match random.below(4) {
+        0 => format!("{redirection} {line}"),
+        1 => format!("{line} {redirection}"),
+        2 => {
+            let glued = redirection.trim_start_matches(|c: char| c.is_ascii_digit());
+            match line.split_once(' ') {
+                Some((program, rest)) => format!("{program}{glued} {rest}"),
+                None => format!("{line}{glued}"),
+            }
+        }
+        _ => match line.split_once(' ') {
+            Some((program, rest)) => format!("{program} {redirection} {rest}"),
+            None => format!("{line} {redirection}"),
+        },
+    }
+}
+
+fn wrapped_more(random: &mut Random, line: &str) -> String {
+    match random.below(20) {
+        0 => format!("setsid {line}"),
+        1 => format!("chroot / {line}"),
+        2 => format!("flock /tmp/l {line}"),
+        3 => format!("flock /tmp/l -c {}", single_quoted(line)),
+        4 => format!("watch -n1 {line}"),
+        5 => format!("watch {}", single_quoted(line)),
+        6 => format!("script -q /dev/null {line}"),
+        7 => format!("script -c {} log", single_quoted(line)),
+        8 => format!("caffeinate -i {line}"),
+        9 => format!("xcrun {line}"),
+        10 => format!("taskset -c 0 {line}"),
+        11 => format!("su -c {}", single_quoted(line)),
+        12 => format!("sg wheel {}", single_quoted(line)),
+        13 => format!("pkexec {line}"),
+        14 => format!("runuser -u bob -- {line}"),
+        15 => format!("unbuffer {line}"),
+        16 => format!("stdbuf -oL {line}"),
+        17 => format!("ionice -c3 {line}"),
+        18 => format!("env -S {}", single_quoted(line)),
+        _ => format!("chrt -f 99 {line}"),
+    }
+}
+
 fn wrapped(random: &mut Random, line: &str) -> String {
+    if random.chance(3) {
+        return redirected(random, line);
+    }
+    if random.chance(3) {
+        return wrapped_more(random, line);
+    }
     match random.below(18) {
         0 => format!("sudo {line}"),
         1 => format!("sudo -u root {line}"),

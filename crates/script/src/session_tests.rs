@@ -37,6 +37,19 @@ fn nothing(_: &str, _: &Value) -> Result<Value, String> {
 }
 
 #[test]
+fn recursion_without_end_is_an_error_the_session_survives() {
+    let session = Session::start();
+
+    let done = evaluate(&session, "function f() { return f() + 1 }\nf()", nothing);
+    let refused = done.outcome.expect_err("the stack runs out");
+    assert!(refused.to_lowercase().contains("stack"), "{refused}");
+
+    let nested = evaluate(&session, "JSON.parse('['.repeat(200000) + ']'.repeat(200000)).length", nothing);
+    assert!(nested.outcome.is_err() || nested.outcome == Ok("1".to_owned()), "{:?}", nested.outcome);
+    assert_eq!(evaluate(&session, "1 + 1", nothing).outcome, Ok("2".to_owned()));
+}
+
+#[test]
 fn the_last_expression_is_the_result_and_top_level_await_works() {
     let session = Session::start();
 

@@ -85,7 +85,10 @@ fn properties() -> Value {
             "properties": {
                 "network": switch("false blocks the network for sandboxed commands."),
                 "required": switch("true refuses commands when the sandbox cannot be provided."),
-                "allowWrite": names("Extra folders sandboxed commands may write to.")
+                "allowWrite": names("Extra folders sandboxed commands may write to."),
+                "allowUnixSockets": names(
+                    "Service sockets sandboxed commands may connect to on macOS, such as the Docker socket or a tmux server's (refused by default)."
+                )
             },
             "additionalProperties": false
         },

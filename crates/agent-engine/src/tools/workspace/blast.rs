@@ -7,7 +7,8 @@ impl Workspace {
         if !self.blast_radius || !path.starts_with(&self.cwd) {
             return String::new();
         }
-        let (Some(lsp), Some(lines)) = (&self.services.lsp, domain::lsp::blast::changed_lines(before, after)) else {
+        let (Some(lsp), Some(lines)) = (self.language_servers(), domain::lsp::blast::changed_lines(before, after))
+        else {
             return String::new();
         };
         lsp.callers(path, after, lines, &self.cwd, &self.stop).map(|block| format!("\n\n{block}")).unwrap_or_default()
@@ -33,6 +34,7 @@ mod tests {
         let server = crate::lsp::fake::ScriptedServer::answering([Ok(symbols), Ok(references)]);
         let mut workspace = Workspace::new(dir.path());
         workspace.services.lsp = Some(server.lsp());
+        workspace.policy.trust = domain::trust::Trust::Trusted;
 
         assert_eq!(workspace.callers(&file, "fn retry() {}\n", "fn retry() { x }\n"), "");
 

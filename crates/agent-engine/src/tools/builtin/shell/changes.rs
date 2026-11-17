@@ -56,10 +56,27 @@ fn held(path: &Path, room: &mut u64) -> Held {
     }
 }
 
+pub fn not_kept(skipped: &[PathBuf]) -> Option<String> {
+    let named: Vec<String> = skipped.iter().take(5).map(|path| path.display().to_string()).collect();
+    let more = skipped.len().saturating_sub(named.len());
+    let more = if more > 0 { format!(" and {more} more") } else { String::new() };
+    (!skipped.is_empty()).then(|| {
+        format!(
+            "(/rewind cannot restore {}{more}: the repository runs a filter on them that was not run here, so what \
+             git stores is not what was checked out)",
+            named.join(", ")
+        )
+    })
+}
+
 impl Watched {
-    pub fn after(self, workspace: &Workspace) {
+    pub fn after(self, workspace: &Workspace) -> Vec<PathBuf> {
         let git = Git::stopped_by(&workspace.stop);
-        let (Some(files), Some(now)) = (workspace.services.files.as_ref(), changed(&git, &self.root)) else { return };
+        let (Some(files), Some(now)) = (workspace.services.files.as_ref(), changed(&git, &self.root)) else {
+            return Vec::new();
+        };
+        let emptied = platform::git::emptied_filters(&self.root);
+        let mut skipped = Vec::new();
         let mut found = Vec::new();
         for (path, held) in &self.edited {
             let Held::Was(before) = held else { continue };
@@ -70,22 +87,42 @@ impl Watched {
         }
         let fresh = now.into_iter().map(|(_, path)| path);
         for path in fresh.filter(|path| !self.untracked.contains(path) && !self.edited.contains_key(path)) {
-            match committed(&git, &self.root, self.head.as_deref(), &path) {
+            match committed_through(&git, &self.root, self.head.as_deref(), &path, &emptied) {
                 Committed::Was(before) => found.push((self.root.join(&path), before)),
+                Committed::Filtered => skipped.push(self.root.join(&path)),
                 Committed::Unknown => tracing::warn!(%path, "git could not say what this file was before the command"),
             }
         }
         files.record_all(found);
+        skipped
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum Committed {
     Was(Option<Vec<u8>>),
+    Filtered,
     Unknown,
 }
 
+fn filter_of(git: &Git<'_>, root: &Path, path: &str) -> Option<String> {
+    let said = git.bytes(root, &["check-attr", "-z", "filter", "--", path], SHOWN_AT_MOST)?;
+    let value = said.split(|byte| *byte == 0).nth(2).map(|value| String::from_utf8_lossy(value).into_owned())?;
+    Some(value).filter(|value| !matches!(value.as_str(), "unspecified" | "unset" | ""))
+}
+
+#[cfg(test)]
 fn committed(git: &Git<'_>, root: &Path, head: Option<&str>, path: &str) -> Committed {
+    committed_through(git, root, head, path, &std::collections::BTreeSet::new())
+}
+
+fn committed_through(
+    git: &Git<'_>,
+    root: &Path,
+    head: Option<&str>,
+    path: &str,
+    emptied: &std::collections::BTreeSet<String>,
+) -> Committed {
     let Some(head) = head else { return Committed::Was(None) };
     let Some(listed) = git.bytes(root, &["ls-tree", "-z", "--name-only", head, "--", path], SHOWN_AT_MOST) else {
         return Committed::Unknown;
@@ -93,7 +130,10 @@ fn committed(git: &Git<'_>, root: &Path, head: Option<&str>, path: &str) -> Comm
     if listed.is_empty() {
         return Committed::Was(None);
     }
-    match git.bytes(root, &["show", &format!("{head}:{path}")], SHOWN_AT_MOST) {
+    if filter_of(git, root, path).is_some_and(|filter| emptied.contains(&filter)) {
+        return Committed::Filtered;
+    }
+    match git.bytes(root, &["cat-file", "--filters", &format!("{head}:{path}")], SHOWN_AT_MOST) {
         Some(bytes) => Committed::Was(Some(bytes)),
         None => Committed::Unknown,
     }

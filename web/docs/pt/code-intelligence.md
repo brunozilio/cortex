@@ -22,6 +22,8 @@ Além de ler arquivos e buscar texto, o {{NAME}} usa duas fontes de conhecimento
 
 Um servidor é usado quando o comando dele está no seu `PATH`, ou quando o {{NAME}} consegue instalá-lo para você.
 
+> Um servidor de linguagem roda código do próprio projeto: o rust-analyzer roda build scripts (`build.rs`) e macros procedurais, o tsserver carrega o TypeScript de `node_modules/typescript` do projeto, e outros servidores leem a configuração do projeto do seu jeito. Por isso, numa pasta em que você não [confiou](./sandbox-and-safety#confianca-na-pasta), nenhum servidor de linguagem é iniciado: a ferramenta `LSP` responde que a pasta não é confiável e que você pode confiar nela com `/trust`, e as edições voltam sem diagnósticos nem chamadores. Numa pasta confiável os servidores rodam como descrito aqui, fora da sandbox.
+
 ### Instalados no primeiro uso
 
 Quando falta um servidor embutido, a primeira pergunta da ferramenta **LSP** sobre um arquivo dele o instala na pasta de dados local do {{NAME}}, em `lsp/<servidor>`, e a pergunta espera a instalação:

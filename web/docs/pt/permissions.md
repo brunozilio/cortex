@@ -125,7 +125,9 @@ As regras de shell leem o comando do jeito que o shell vai executá-lo. A linha 
 
 - **Comandos compostos** (`&&`, `;`, `|`, quebras de linha, estruturas de controle): todas as partes precisam ser liberadas. Partes somente leitura (`ls`, `cat`, `git status`…) e `cd` para uma pasta dentro do projeto passam sem regra. Uma parte negada recusa o comando inteiro.
 - **Comandos escondidos** (`$(…)`, crases, `<(…)`, `bash -c '…'`, `eval`, um programa dado por uma variável) e **redirecionamentos para arquivos** nunca são liberados por uma regra allow. Os comandos dentro de uma substituição são partes próprias, então uma regra deny que cite um deles recusa a linha inteira, e o mesmo vale para o código de `bash -c '…'`, `sh -c "…"` e `eval …`: `bash -c 'rm -rf x'` é recusado por `Bash(rm:*)`. Um programa que as regras não conseguem ver (`$(echo rm) x`, `$X x`, `` `echo rm` x ``, um curinga como `/bin/r? x` ou `{rm,x}`, um shell lendo comandos de um pipe como `echo … | sh`) gera pergunta **toda vez, em todo modo, inclusive bypass**, enquanto existir uma regra deny com especificador; sem ninguém para perguntar, é recusado. Nomes de programa são comparados sem diferenciar maiúsculas (`RM`, `/bin/RM`).
-- **Regras deny enxergam através de disfarces**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` casam com `Bash(rm:*)`. Os invólucros desmontados são `sudo`, `doas`, `env`, `exec`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs` e `busybox`.
+- **Regras deny enxergam através de disfarces**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` casam com `Bash(rm:*)`. Os invólucros desmontados são `sudo`, `doas`, `env`, `exec`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs`, `busybox`, `setsid`, `chroot`, `flock`, `watch`, `script`, `caffeinate`, `xcrun`, `taskset`, `su`, `runuser`, `sg`, `pkexec`, `unbuffer`, `arch` e `strace`; o comando que recebem como texto (`su -c '…'`, `flock f -c '…'`, `script -c '…'`, `watch '…'`, `sg grupo '…'`, `env -S '…'`) é julgado como a própria linha.
+- **Redirecionamentos não escondem um programa**: as regras casam com cada comando sem os seus redirecionamentos, então `2>/dev/null rm -rf y`, `<x rm -rf y`, `rm</dev/null -rf y` e `curl<<<x …` casam com `Bash(rm:*)` e `Bash(curl:*)`. Um arquivo lido por um redirecionamento de entrada (`<secrets/k cat`, `cat < secrets/k`) é julgado pelas regras `Read`, seja qual for o comando.
+- **Um programa negado entregue a um desconhecido pergunta**: quando um programa que as regras não conhecem recebe uma palavra que nomeia um programa negado (`frobnicate rm -rf x`, `python3 -c 'import os; os.system("rm -rf x")'`, `osascript -e '… rm …'`), a linha é perguntada toda vez, inclusive no bypass. `echo`, `printf`, os programas só de leitura e um subcomando logo depois de `docker`, `npm`, `cargo` e afins (`docker rm`) ficam de fora.
 - **Regras allow leem o comando como foi escrito**: `LD_PRELOAD=/tmp/x.so git status` não casa com `Bash(git status:*)`.
 - **Uma linha que não dá para analisar com segurança** (aspas não fechadas, aritmética como `$((…))` com um comando dentro, `coproc`, um heredoc cujo corpo executa uma substituição) nunca é liberada por uma regra com especificador e gera pergunta quando existem regras deny ou ask com especificador.
 
@@ -139,7 +141,7 @@ Um comando de shell roda sem perguntar, em qualquer modo, só quando a linha int
 - não tem prefixo `VAR=valor` nem invólucro (`sudo ls` pergunta);
 - redireciona só para `/dev/null` ou entre as próprias saídas (`2>&1`), nunca para um arquivo;
 - não tem palavra que o shell mudaria: nada de `$`, crase ou barra invertida fora de aspas simples, nada de `*`, `?`, `[`, `{` ou `<` sem aspas, nem `~` que indique uma pasta pessoal. Padrões entre aspas são palavras comuns: `find . -name '*.rs'` e `grep 'a.*b' notes.txt` são somente leitura, `find . -name *.rs` não é. `git diff HEAD~1` é somente leitura;
-- não cita caminho fora do projeto (`/…`, `..`).
+- não cita caminho fora do projeto (`/…`, `..`), nem por um link simbólico: `cat ./link`, quando `link` leva para fora do projeto, pergunta como o `Read`, e as regras `Read` julgam para onde o link leva além do nome escrito.
 
 ### Ferramentas e seus efeitos
 
@@ -147,7 +149,7 @@ Cada ferramenta embutida diz, a partir da entrada, o que a chamada vai fazer, e 
 
 | Ferramenta | Tratada como |
 |---|---|
-| `Read`, `LSP` | leitura daquele arquivo (pergunta fora do projeto) |
+| `Read`, `LSP` | leitura daquele arquivo (pergunta fora do projeto); o `LSP` não inicia servidor numa pasta em que você não confiou |
 | `Glob`, `Grep` | leitura da pasta pesquisada |
 | `Write`, `Edit`, `NotebookEdit` | escrita naquele arquivo (pergunta fora do projeto e das pastas adicionadas, em `.git/` ou em `{{DIR}}/`; ali só uma regra que nomeia o caminho, como `Edit(.git/hooks/**)`, libera, não um `Edit` sozinho) |
 | `Bash`, `Monitor` | execução do comando (comandos somente leitura rodam livres) |

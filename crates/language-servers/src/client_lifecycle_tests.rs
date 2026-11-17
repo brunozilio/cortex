@@ -47,6 +47,10 @@ fn the_document_used_longest_ago_is_closed_when_too_many_are_open() {
     assert_eq!(heard.recv_timeout(WAIT).expect("heard"), Some(uri_of(&file(1))));
     assert_eq!(client.shared.documents.lock().expect("documents").len(), MOST_OPEN);
     server.join().expect("server");
+    let deadline = std::time::Instant::now() + WAIT;
+    while client.is_alive() && std::time::Instant::now() < deadline {
+        std::thread::yield_now();
+    }
     assert_eq!(client.sync(&file(0), "rust", "").ok(), None, "the server is gone");
 }
 

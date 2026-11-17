@@ -24,9 +24,13 @@ impl Response {
     }
 
     pub async fn text(self, cancel: &CancellationToken) -> Result<String, ModelError> {
-        self.body.text(cancel, usize::MAX).await
+        self.body.text(cancel, SHORT_ANSWER_AT_MOST).await
     }
 }
+
+pub const SHORT_ANSWER_AT_MOST: usize = 32 * 1024 * 1024;
+
+impl Response {}
 
 pub const STREAM_IDLE: Duration = Duration::from_secs(300);
 

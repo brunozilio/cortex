@@ -157,6 +157,38 @@ fn retry_after_is_read_in_milliseconds_seconds_or_as_a_date() {
 }
 
 #[test]
+fn an_error_answer_without_end_is_read_only_as_far_as_its_first_part() {
+    let endless = std::io::BufReader::new(std::io::repeat(b'x'));
+    let response = super::super::http::Response {
+        status: 500,
+        headers: Vec::new(),
+        body: super::super::http::Body::reader(endless),
+    };
+    static SAID: AtomicUsize = AtomicUsize::new(usize::MAX);
+    fn judge(_: u16, text: &str) -> ModelError {
+        SAID.store(text.len(), Ordering::SeqCst);
+        ModelError::Provider(String::new())
+    }
+    let started = Instant::now();
+    let failed = platform::runtime::block_on(refusal(response, &CancellationToken::new(), judge)).expect("runtime");
+    assert!(matches!(failed.error, ModelError::Provider(_)));
+    assert!(SAID.load(Ordering::SeqCst) <= ERROR_BODY_AT_MOST, "{}", SAID.load(Ordering::SeqCst));
+    assert!(started.elapsed() < Duration::from_secs(10), "{:?}", started.elapsed());
+}
+
+#[test]
+fn a_short_answer_without_end_is_refused_past_its_limit() {
+    let endless = std::io::BufReader::new(std::io::repeat(b'x'));
+    let response = super::super::http::Response {
+        status: 200,
+        headers: Vec::new(),
+        body: super::super::http::Body::reader(endless),
+    };
+    let read = platform::runtime::block_on(response.text(&CancellationToken::new())).expect("runtime");
+    assert!(read.is_err());
+}
+
+#[test]
 fn a_retry_after_too_large_to_be_a_duration_gives_up_instead_of_panicking() {
     let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_445_412_470);
     let after = |value: &str| retry_after(&[("retry-after-ms".to_owned(), value.to_owned())], now);

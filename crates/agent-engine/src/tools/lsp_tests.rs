@@ -14,7 +14,28 @@ fn project(server: &Arc<ScriptedServer>) -> (tempfile::TempDir, Workspace) {
     std::fs::write(dir.path().join("src/tools.rs"), "/// Runs.\npub fn run(a: &str, b: u8) {}\n").expect("tools");
     let mut workspace = Workspace::new(dir.path());
     workspace.services.lsp = Some(server.lsp());
+    workspace.policy.trust = domain::trust::Trust::Trusted;
     (dir, workspace)
+}
+
+#[test]
+fn no_language_server_starts_for_a_folder_that_is_not_trusted() {
+    let server = ScriptedServer::answering([Ok(json!([]))]);
+    let (dir, mut workspace) = project(&server);
+    workspace.policy.trust = domain::trust::Trust::Untrusted;
+    for input in [
+        json!({"operation": "goToDefinition", "file_path": "src/main.rs", "line": 3, "character": 18}),
+        json!({"operation": "diagnostics", "file_path": "src/main.rs"}),
+    ] {
+        let refused = Lsp.run(&input, &workspace);
+        assert!(refused.is_error && refused.content.contains("/trust"), "{}", refused.content);
+    }
+    let file = dir.path().join("src/main.rs");
+    assert_eq!(workspace.diagnosed(&file, "fn main() {}\n"), "");
+    workspace.blast_radius = true;
+    assert_eq!(workspace.callers(&file, "fn main() {}\n", "fn main() { x }\n"), "");
+    assert!(server.asked().is_empty() && server.synced.lock().expect("synced").is_empty(), "the server was used");
+    assert_eq!(server.opened.load(std::sync::atomic::Ordering::SeqCst), 0, "a server was started");
 }
 
 fn range(line: u32, character: u32) -> Value {
@@ -98,6 +119,7 @@ fn the_workspace_s_diagnostics_are_every_file_the_server_reported_on() {
 fn asking_for_diagnostics_installs_a_missing_server_only_in_a_trusted_folder() {
     let server = ScriptedServer::answering([]);
     let (_dir, mut workspace) = project(&server);
+    workspace.policy.trust = domain::trust::Trust::Untrusted;
     *server.missing.lock().expect("missing") = Some("install rust-analyzer".into());
     *server.diagnostics.lock().expect("diagnostics") = Some(Vec::new());
     let asked = json!({"operation": "diagnostics", "file_path": "src/main.rs"});

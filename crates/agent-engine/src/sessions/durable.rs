@@ -161,14 +161,24 @@ fn end_unfinished_line(path: &Path) -> io::Result<&'static str> {
     if last == *b"\n" {
         return Ok("");
     }
-    let mut text = String::new();
+    let mut bytes = Vec::new();
     file.seek(SeekFrom::Start(0))?;
-    file.read_to_string(&mut text)?;
-    let written = log::written(&text).len();
-    if written == text.len() {
+    file.read_to_end(&mut bytes)?;
+    let last = bytes.iter().rposition(|byte| *byte == b'\n').map_or(0, |at| at + 1);
+    let whole = match std::str::from_utf8(&bytes[last..]) {
+        Ok(line) => log::written(line).len() == line.len(),
+        Err(_) => {
+            tracing::warn!(
+                bytes = bytes.len() - last,
+                "dropping the last line of a saved conversation: it was cut inside a character"
+            );
+            false
+        }
+    };
+    if whole {
         return Ok("\n");
     }
-    file.set_len(written as u64)?;
+    file.set_len(last as u64)?;
     Ok("")
 }
 

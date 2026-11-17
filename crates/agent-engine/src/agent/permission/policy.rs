@@ -28,6 +28,10 @@ impl Surroundings for Around<'_, '_> {
     fn package_concern(&self, _call: &Call<'_>) -> Option<String> {
         self.agent.package_concerns(self.tool, self.input)
     }
+
+    fn real_path(&self, path: &Path) -> std::path::PathBuf {
+        crate::tools::settled(path)
+    }
 }
 
 fn branches(cwd: &Path, stop: &AtomicBool) -> Branches {

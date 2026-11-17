@@ -99,10 +99,14 @@ fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Classes {
             let git =
                 GitFacts { current_branch: branches.current.as_deref(), default_branch: branches.default.as_deref() };
             let class = classify_command(&exec.command, &git, &|path| cx.bounds.may_read(path));
-            read_anywhere.extend(paths_read(&exec.command, cx.cwd, cx.home).into_iter().map(|operand| {
-                let place = Place::at(operand.path);
-                if operand.tree { Effect::ReadTree(place) } else { Effect::ReadPath(place) }
-            }));
+            for operand in paths_read(&exec.command, cx.cwd, cx.home) {
+                let real = cx.surroundings.real_path(&operand.path);
+                let place = Place { written: operand.path, real };
+                if !cx.bounds.may_read(&place.real) && !read_outside.contains(&place) {
+                    read_outside.push(place.clone());
+                }
+                read_anywhere.push(if operand.tree { Effect::ReadTree(place) } else { Effect::ReadPath(place) });
+            }
             if class != CommandClass::Unknown {
                 return class;
             }

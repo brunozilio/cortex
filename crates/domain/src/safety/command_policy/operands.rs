@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 use super::readers::Reader;
 use super::reading::{reader_of, with_home};
 use super::{reads_only, without_harmless_redirects, words};
-use crate::shell::ShellCommand;
+use crate::shell::{Redirection, ShellCommand, SimpleCommand};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Operand {
@@ -38,11 +38,30 @@ const RECURSIVE_WHEN_ASKED: [&[&str]; 5] = [&["grep"], &["egrep"], &["fgrep"], &
 
 const REVISIONS_AND_PATHS: [&[&str]; 4] = [&["git", "diff"], &["git", "log"], &["git", "show"], &["git", "blame"]];
 
+fn redirected_reads(command: &ShellCommand, cwd: &Path, home: Option<&str>) -> Vec<Operand> {
+    let targets = command
+        .commands()
+        .into_iter()
+        .filter_map(SimpleCommand::of)
+        .flat_map(|simple| simple.redirections)
+        .filter(Redirection::reads_a_file)
+        .map(|redirection| redirection.target.chars().filter(|c| !matches!(c, '\'' | '"' | '\\')).collect::<String>());
+    let homed = |target: String| match (target.strip_prefix("~/"), home) {
+        (Some(rest), Some(home)) => format!("{}/{rest}", home.trim_end_matches('/')),
+        _ => target,
+    };
+    targets
+        .map(homed)
+        .filter(|target| !target.is_empty() && !target.contains(['$', '`', '*', '?', '[']))
+        .map(|target| Operand { path: joined(cwd, &target), tree: false })
+        .collect()
+}
+
 pub fn paths_read(command: &ShellCommand, cwd: &str, home: Option<&str>) -> Vec<Operand> {
+    let mut found = redirected_reads(command, Path::new(cwd), home);
     if !command.flat() {
-        return Vec::new();
+        return found;
     }
-    let mut found = Vec::new();
     for part in command.commands() {
         let part = with_home(part, home);
         if !reads_only(&part, &|_| true) {
@@ -186,6 +205,20 @@ mod tests {
         assert_eq!(read("tr a-z A-Z"), []);
         assert_eq!(read("rm secrets/key"), []);
         assert_eq!(read("cat $(echo secrets/key)"), []);
+    }
+
+    #[test]
+    fn a_file_an_input_redirection_names_is_read_whatever_the_command() {
+        assert_eq!(read("<secrets/k cat"), [file("/work/secrets/k")]);
+        assert_eq!(read("cat<secrets/k"), [file("/work/secrets/k")]);
+        assert_eq!(read("rm x < '/etc/hosts'"), [file("/etc/hosts")]);
+        assert_eq!(read("sort <~/notes"), [file("/home/ana/notes")]);
+        assert_eq!(read("if true; then wc -l <a; fi"), [file("/work/a")]);
+        assert_eq!(read("cat <<EOF\nsecrets/k\nEOF"), []);
+        assert_eq!(read("cat <<< secrets/k"), []);
+        assert_eq!(read("cat <&3"), []);
+        assert_eq!(read("cat <$f"), []);
+        assert!(read("ls >out 2>err").is_empty(), "a file written to is not read");
     }
 
     #[test]

@@ -83,7 +83,9 @@ The chat reports what happened, for example `Rewound: 3 files restored. Changes 
 > [!WARNING]
 > Rewind restores what the agent's file tools changed. Changes made with Bash commands are not undone. The `destructive-snapshot` feature keeps untracked files before commands like `rm -r` or `git reset --hard` so rewind can bring them back; see [Sandbox and safety](./sandbox-and-safety).
 
-A file you changed after the agent left it is not overwritten: the rewind leaves it as it is and lists it (`Left as they are, because each changed after the agent left it: …`). Files are put back whole (a crash mid-way never leaves a half-written file), keep their permissions, and a link put in a file's place is replaced rather than followed. Each file's state is saved before the agent's first write to it, so a prompt interrupted by a crash can still be rewound after you start again.
+A file you changed after the agent left it is not overwritten: the rewind leaves it as it is and lists it (`Left as they are, because each changed after the agent left it: …`). Files are put back whole (a crash mid-way never leaves a half-written file), keep their permissions, and a link put in a file's place is replaced rather than followed. A file the agent edited through a symbolic link is saved and restored where the link leads, and the link stays a link. Each file's state is saved before the agent's first write to it, so a prompt interrupted by a crash keeps it; but what the agent left in each file was never written down, so a rewind after the crash cannot tell your later fixes from the agent's work: it lists those files as left as they are, and you can restore them by hand.
+
+A conversation file whose last line was cut mid-write (even in the middle of a character) is repaired on the next save: the cut line is dropped and saving goes on.
 
 If the conversation was compacted after that prompt, the files are restored but the conversation is kept as it is (`the conversation was compacted since, so it is kept`). Rewind is not available while the agent works.
 

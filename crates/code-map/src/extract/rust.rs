@@ -1,7 +1,7 @@
 use tree_sitter::{Language, Node};
 
 use super::SymbolKind;
-use super::walk::{Callee, Definition, Grammar, callee_name, field_text, symbol, text};
+use super::walk::{Callee, Definition, FOLLOWED_AT_MOST, Grammar, callee_name, field_text, symbol, text};
 
 pub(crate) fn grammar() -> Grammar {
     Grammar { language: Language::new(tree_sitter_rust::LANGUAGE), define, call }
@@ -21,12 +21,15 @@ fn define(node: Node, bytes: &[u8]) -> Option<Definition> {
 }
 
 fn type_name(node: Node, bytes: &[u8]) -> Option<String> {
-    match node.kind() {
-        "generic_type" => type_name(node.child_by_field_name("type")?, bytes),
-        "scoped_type_identifier" => field_text(node, "name", bytes),
-        "reference_type" => type_name(node.child_by_field_name("type")?, bytes),
-        _ => text(node, bytes),
+    let mut node = node;
+    for _ in 0..FOLLOWED_AT_MOST {
+        match node.kind() {
+            "generic_type" | "reference_type" => node = node.child_by_field_name("type")?,
+            "scoped_type_identifier" => return field_text(node, "name", bytes),
+            _ => return text(node, bytes),
+        }
     }
+    None
 }
 
 fn call(node: Node, bytes: &[u8]) -> Option<Callee> {
@@ -42,9 +45,13 @@ fn call(node: Node, bytes: &[u8]) -> Option<Callee> {
 }
 
 fn qualified(function: Node, bytes: &[u8]) -> Option<String> {
-    match function.kind() {
-        "scoped_identifier" => text(function, bytes).map(|path| path.split_whitespace().collect()),
-        "generic_function" => qualified(function.child_by_field_name("function")?, bytes),
-        _ => None,
+    let mut function = function;
+    for _ in 0..FOLLOWED_AT_MOST {
+        match function.kind() {
+            "scoped_identifier" => return text(function, bytes).map(|path| path.split_whitespace().collect()),
+            "generic_function" => function = function.child_by_field_name("function")?,
+            _ => return None,
+        }
     }
+    None
 }

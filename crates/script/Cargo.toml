@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 rquickjs = "0.14"
 serde_json.workspace = true
+stacker = "0.1.25"
 
 [lints]
 workspace = true

@@ -177,6 +177,27 @@ fn a_last_line_cut_mid_write_is_dropped_and_the_conversation_resumes_and_grows()
 }
 
 #[test]
+fn a_last_line_cut_inside_a_character_is_dropped_and_saving_goes_on() {
+    let dir = tempfile::tempdir().expect("dir");
+    let native = dir.path().join("native");
+    let store = FileSessions::new(&native);
+    let (request, id) = (request(dir.path()), SessionId("s1".into()));
+    let kept = vec![Message::user("one")];
+    store.save_for(&request, &id, &kept).expect("save");
+    let saved = std::fs::read_dir(&native).expect("dir").flatten().next().expect("one file").path();
+    let mut bytes = std::fs::read(&saved).expect("read");
+    let line = serde_json::to_string(&Entry::Message(reply("olá, ação"))).expect("json");
+    let inside = line.find('ç').expect("a character of two bytes") + 1;
+    bytes.extend_from_slice(&line.as_bytes()[..inside]);
+    std::fs::write(&saved, &bytes).expect("cut inside a character");
+
+    let reopened = FileSessions::new(&native);
+    let grown = [kept, vec![reply("after the cut")]].concat();
+    reopened.save_for(&request, &id, &grown).expect("saving goes on after a cut inside a character");
+    assert_eq!(reopened.load_for_checked(&request, &id), Ok(Some(grown)));
+}
+
+#[test]
 fn a_corrupt_line_before_the_last_one_is_skipped_and_the_last_one_kept() {
     let dir = tempfile::tempdir().expect("dir");
     let native = dir.path().join("native");

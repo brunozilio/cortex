@@ -41,6 +41,7 @@ impl StdioSandbox {
                     protected: found.protected,
                     network: found.network,
                     environment: found.environment,
+                    sockets: found.sockets,
                 })
             }
         }

@@ -40,6 +40,7 @@ pub fn keep(workspace: &Workspace, command: &str) -> Kept {
     found.extend(outside_the_index(&Git::stopped_by(&workspace.stop), &workspace.cwd, &destroys));
     let mut kept = Kept::default();
     let mut bytes = 0;
+    let mut keeping = Vec::new();
     for path in found {
         let size = std::fs::symlink_metadata(&path).map(|meta| meta.len()).unwrap_or(0);
         if kept.files >= MOST_FILES || bytes + size > MOST_BYTES {
@@ -48,8 +49,9 @@ pub fn keep(workspace: &Workspace, command: &str) -> Kept {
         }
         bytes += size;
         kept.files += 1;
-        files.before_write(&path);
+        keeping.push(path);
     }
+    files.before_writes(&keeping);
     kept
 }
 
@@ -148,6 +150,27 @@ mod tests {
         workspace.policy.snapshots = false;
         assert_eq!(keep(&workspace, "rm a.txt"), Kept::default());
         assert!(kept(&workspace).is_empty());
+    }
+
+    #[test]
+    fn removing_thousands_of_small_files_writes_the_checkpoint_down_once() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::create_dir(dir.path().join("build")).expect("build");
+        for n in 0..MOST_FILES {
+            std::fs::write(dir.path().join(format!("build/{n}.o")), "o").expect("file");
+        }
+        let workspace = workspace(dir.path());
+        let journaled = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&journaled);
+        let files = workspace.services.files.as_ref().expect("files");
+        files.journaled(Arc::new(move |_: &std::collections::BTreeMap<PathBuf, Option<String>>| {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }));
+        let started = std::time::Instant::now();
+        assert_eq!(keep(&workspace, "rm -rf build"), Kept { files: MOST_FILES, left_out: 0 });
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "{:?}", started.elapsed());
+        assert_eq!(journaled.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[test]

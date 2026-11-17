@@ -72,9 +72,8 @@ impl Tool for Bash {
             Err(error) => return Outcome::error(format!("Could not start the shell: {error}")),
         };
         let waited = super::shells::wait(&id, timeout, &workspace.stop, &workspace.detach);
-        if let Some(watched) = watched {
-            watched.after(workspace);
-        }
+        let not_kept =
+            watched.map(|watched| watched.after(workspace)).and_then(|skipped| super::changes::not_kept(&skipped));
         let mut outcome = match waited {
             Waited::Exited { output, success: true, .. } => {
                 let text = limited(&shaped(command, &output, workspace), workspace);
@@ -106,7 +105,7 @@ impl Tool for Bash {
                     .to_owned(),
             ),
         };
-        if let Some(note) = kept.note() {
+        for note in kept.note().into_iter().chain(not_kept) {
             outcome.content = format!("{}\n{note}", outcome.content);
         }
         outcome

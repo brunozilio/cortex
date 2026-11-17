@@ -584,6 +584,13 @@
       "additionalProperties": false,
       "description": "Where sandboxed commands may write and whether they reach the network.",
       "properties": {
+        "allowUnixSockets": {
+          "description": "Service sockets sandboxed commands may connect to on macOS, such as the Docker socket or a tmux server's (refused by default).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "allowWrite": {
           "description": "Extra folders sandboxed commands may write to.",
           "items": {

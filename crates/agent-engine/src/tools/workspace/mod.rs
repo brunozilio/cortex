@@ -126,8 +126,12 @@ impl Workspace {
         }
     }
 
+    pub fn language_servers(&self) -> Option<&crate::lsp::Lsp> {
+        self.services.lsp.as_ref().filter(|_| self.policy.trust == domain::trust::Trust::Trusted)
+    }
+
     pub fn diagnosed(&self, path: &Path, text: &str) -> String {
-        let problems = self.services.lsp.as_ref().and_then(|lsp| lsp.problems(path, text, &self.cwd, &self.stop));
+        let problems = self.language_servers().and_then(|lsp| lsp.problems(path, text, &self.cwd, &self.stop));
         problems.map(|block| format!("\n\n{block}")).unwrap_or_default()
     }
 

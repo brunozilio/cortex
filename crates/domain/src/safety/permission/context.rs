@@ -29,6 +29,10 @@ pub trait Surroundings {
     fn package_concern(&self, _call: &Call<'_>) -> Option<String> {
         None
     }
+
+    fn real_path(&self, path: &Path) -> PathBuf {
+        path.to_path_buf()
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]

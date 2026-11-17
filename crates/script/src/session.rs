@@ -14,6 +14,7 @@ const PRELUDE: &str = include_str!("session_prelude.js");
 const POLL: Duration = Duration::from_millis(25);
 const MEMORY: usize = 512 * 1024 * 1024;
 const STACK: usize = 4 * 1024 * 1024;
+const THREAD_STACK: usize = STACK + crate::BEYOND_THE_LIMIT;
 const STOPPED: &str = "Stopped: the user interrupted the script";
 const STUCK: &str = "The script is waiting for a promise that nothing will settle";
 
@@ -107,7 +108,8 @@ impl Session {
 
     pub fn with_helpers(helpers: String) -> Self {
         let (jobs, waiting) = mpsc::channel::<Job>();
-        std::thread::spawn(move || serve(&waiting, &helpers));
+        let thread = std::thread::Builder::new().name("script-session".into()).stack_size(THREAD_STACK);
+        let _unanswered_jobs_say_the_context_is_gone = thread.spawn(move || serve(&waiting, &helpers));
         Self { jobs: Mutex::new((jobs, 0)) }
     }
 
