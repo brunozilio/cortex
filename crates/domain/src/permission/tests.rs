@@ -422,3 +422,20 @@ fn an_install_nobody_can_be_asked_about_is_refused_and_says_which_rule_allows_it
     let denied = PermissionRules::default().with(RuleKind::Deny, "LSP(install:rust-analyzer)");
     assert!(decide("LSP", "hover main.rs", &effects, PermissionMode::Bypass, &denied).denies());
 }
+
+#[test]
+fn reading_by_an_absolute_path_inside_the_project_runs_without_asking_while_accepting_edits() {
+    let (none, edits) = (PermissionRules::default(), PermissionMode::AcceptEdits);
+    let run = |command: &str| decide("Bash", command, &[Effect::exec(command, false)], edits, &none);
+    for command in [
+        "file /work/rocket/app.exe",
+        "ls -la /work/rocket/",
+        "grep -n main /work/rocket/src/main.rs | head -5",
+        "cat /data/results/run.log",
+    ] {
+        assert_eq!(run(command), Verdict::Allow, "{command}");
+    }
+    for command in ["file /etc/hosts", "ls -la /work/rocketeer", "cat /work/rocket/../other/x", "/work/rocket/bin/ls"] {
+        assert!(run(command).asks(), "{command}");
+    }
+}

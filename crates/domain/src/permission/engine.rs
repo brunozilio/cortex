@@ -78,7 +78,7 @@ fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Vec<CommandClass> {
                 if exec.command.text().contains("push") { cx.surroundings.branches() } else { Default::default() };
             let git =
                 GitFacts { current_branch: branches.current.as_deref(), default_branch: branches.default.as_deref() };
-            classify_command(&exec.command, &git)
+            classify_command(&exec.command, &git, &|path| cx.bounds.may_read(path))
         })
         .collect()
 }

@@ -8,6 +8,8 @@ mod wildcards;
 
 pub use sign_in::sign_in_refused;
 
+use std::path::Path;
+
 use crate::destructive::words;
 use crate::permission_rules::{hides_more, normalized, split_command, without_harmless_redirects};
 use crate::shell::ShellCommand;
@@ -26,11 +28,17 @@ pub struct GitFacts<'a> {
     pub default_branch: Option<&'a str>,
 }
 
-pub fn classify(command: &str, git: &GitFacts<'_>) -> CommandClass {
-    classify_command(&ShellCommand::parse(command), git)
+pub type Readable<'a> = &'a dyn Fn(&Path) -> bool;
+
+pub fn nowhere(_: &Path) -> bool {
+    false
 }
 
-pub fn classify_command(command: &ShellCommand, git: &GitFacts<'_>) -> CommandClass {
+pub fn classify(command: &str, git: &GitFacts<'_>, readable: Readable<'_>) -> CommandClass {
+    classify_command(&ShellCommand::parse(command), git, readable)
+}
+
+pub fn classify_command(command: &ShellCommand, git: &GitFacts<'_>, readable: Readable<'_>) -> CommandClass {
     let parts = command.commands();
     if let Some(why) = parts.iter().find_map(|part| secrets::exposes(part)) {
         return CommandClass::Forbidden(format!(
@@ -48,15 +56,21 @@ pub fn classify_command(command: &ShellCommand, git: &GitFacts<'_>) -> CommandCl
     if !command.flat() || parts.is_empty() {
         return CommandClass::Unknown;
     }
-    if parts.iter().all(|part| only_reads(part)) { CommandClass::ReadOnly } else { CommandClass::Unknown }
+    if parts.iter().all(|part| reads_only(part, readable)) { CommandClass::ReadOnly } else { CommandClass::Unknown }
 }
 
 pub fn only_reads(part: &str) -> bool {
+    reads_only(part, &nowhere)
+}
+
+fn reads_only(part: &str, readable: Readable<'_>) -> bool {
     let written = without_harmless_redirects(part);
     let (_, balanced) = split_command(&written);
     let words = words(&written);
     let words: Vec<&str> = words.iter().map(String::as_str).collect();
-    balanced && !hides_more(part) && (reading::only_reads(&written, &words) || describing::only_describes(part))
+    balanced
+        && !hides_more(part)
+        && (reading::only_reads(&written, &words, readable) || describing::only_describes(part))
 }
 
 #[cfg(test)]

@@ -136,7 +136,7 @@ fn a_read_only_command_writes_nothing_changes_no_environment_and_uses_only_liste
     let mut read_only = 0;
     for _ in 0..cases() {
         let line = line(&mut random);
-        if classify(&line, &GitFacts::default()) == CommandClass::ReadOnly {
+        if classify(&line, &GitFacts::default(), &nowhere) == CommandClass::ReadOnly {
             read_only += 1;
             assert_only_reads(&line);
         }
@@ -163,13 +163,13 @@ fn a_wrapper_or_a_control_structure_never_lifts_a_denial() {
     for _ in 0..cases() {
         let line = line(&mut random);
         let ruling = ruled(&rules, &line);
-        let class = classify(&line, &plain);
+        let class = classify(&line, &plain, &nowhere);
         for wrapped in [format!("sudo {line}"), format!("env X=1 {line}"), format!("if true; then {line}\nfi")] {
             if ruling == Some(RuleKind::Deny) {
                 let now = ruled(&rules, &wrapped);
                 assert!(matches!(now, Some(RuleKind::Deny | RuleKind::Ask)), "{wrapped:?} is {now:?}");
             }
-            let now = classify(&wrapped, &plain);
+            let now = classify(&wrapped, &plain, &nowhere);
             if matches!(class, CommandClass::Forbidden(_)) {
                 assert!(matches!(now, CommandClass::Forbidden(_)), "{wrapped:?} is {now:?}");
             }

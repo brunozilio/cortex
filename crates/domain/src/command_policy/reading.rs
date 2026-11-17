@@ -1,3 +1,6 @@
+use std::path::Path;
+
+use super::Readable;
 use super::readers::{READERS, Reader};
 
 pub fn expanded_by_the_shell(part: &str) -> bool {
@@ -18,8 +21,8 @@ pub fn expanded_by_the_shell(part: &str) -> bool {
     false
 }
 
-pub fn only_reads(part: &str, words: &[&str]) -> bool {
-    if expanded_by_the_shell(part) || !words.iter().all(|word| stays_inside(word)) {
+pub fn only_reads(part: &str, words: &[&str], readable: Readable<'_>) -> bool {
+    if expanded_by_the_shell(part) || !words.iter().all(|word| stays_inside(word, readable)) {
         return false;
     }
     let Some(reader) = reader_of(words) else { return false };
@@ -34,9 +37,11 @@ fn reader_of<'a>(words: &[&str]) -> Option<&'a Reader> {
     READERS.iter().filter(|reader| words.starts_with(reader.program)).max_by_key(|reader| reader.program.len())
 }
 
-fn stays_inside(word: &str) -> bool {
+fn stays_inside(word: &str, readable: Readable<'_>) -> bool {
     let value = word.split_once('=').map_or(word, |(_, value)| value);
-    [word, value].iter().all(|path| !path.starts_with('/') && !path.split('/').any(|segment| segment == ".."))
+    [word, value].iter().all(|path| {
+        !path.split('/').any(|segment| segment == "..") && (!path.starts_with('/') || readable(Path::new(path)))
+    })
 }
 
 fn arguments_allowed(reader: &Reader, arguments: &[&str]) -> bool {

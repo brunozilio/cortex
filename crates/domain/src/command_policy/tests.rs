@@ -1,7 +1,7 @@
 use super::*;
 
 fn plain(command: &str) -> CommandClass {
-    classify(command, &GitFacts::default())
+    classify(command, &GitFacts::default(), &nowhere)
 }
 
 #[test]
@@ -224,6 +224,29 @@ fn a_listed_reader_with_listed_flags_and_plain_words_is_read_only() {
 }
 
 #[test]
+fn dumping_bytes_counting_lines_or_translating_characters_only_reads() {
+    for command in [
+        "strings app.exe | grep -iE 'login|token' | head -100",
+        "strings -n 8 -a app.exe",
+        "hexdump -C app.exe | head -20",
+        "od -A x -t x1z -N 64 app.exe",
+        "sort notes.txt | uniq -c | sort -rn",
+        "cut -d: -f1 notes.txt | tr -d ' ' | tr a-z A-Z",
+    ] {
+        assert_eq!(plain(command), CommandClass::ReadOnly, "{command}");
+    }
+    let slipped = read_only(&[
+        "uniq notes.txt out.txt",
+        "hexdump -f format.txt app.exe",
+        "strings -T bfd app.exe",
+        "xxd app.exe out.hex",
+        "xxd -r dump.hex app.exe",
+        "awk 'BEGIN { system(\"id\") }'",
+    ]);
+    assert!(slipped.is_empty(), "read-only by mistake: {slipped:?}");
+}
+
+#[test]
 fn printing_secrets_is_refused_whatever_else_the_command_does() {
     for command in [
         "cat .env",
@@ -279,7 +302,7 @@ fn on(branch: &str) -> GitFacts<'_> {
 }
 
 fn risky(command: &str, git: &GitFacts<'_>) -> bool {
-    matches!(classify(command, git), CommandClass::Risky(_))
+    matches!(classify(command, git, &nowhere), CommandClass::Risky(_))
 }
 
 #[test]
