@@ -1,8 +1,8 @@
 use super::sign_in::{Host, post};
 use super::{Provider, ProviderError};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
+use jiff::{SignedDuration, Timestamp};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -15,8 +15,8 @@ pub struct Tokens {
     pub refresh_token: String,
     #[serde(default)]
     pub account_id: String,
-    #[serde(default)]
-    pub expires_at: Option<DateTime<Utc>>,
+    #[serde(default, serialize_with = "write_expiry", deserialize_with = "read_expiry")]
+    pub expires_at: Option<Timestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -37,8 +37,35 @@ impl Tokens {
     }
 
     pub fn expired(&self) -> bool {
-        self.expires_at.is_none_or(|at| Utc::now() + Duration::seconds(60) > at)
+        self.expires_at.is_none_or(|at| at.duration_since(Timestamp::now()) < SignedDuration::from_secs(60))
     }
+}
+
+pub fn expiry(now: Timestamp, lifetime_secs: i64) -> Option<Timestamp> {
+    now.checked_add(SignedDuration::from_secs(lifetime_secs)).ok()
+}
+
+fn rfc3339(at: Timestamp) -> String {
+    let digits = match at.subsec_nanosecond() {
+        0 => 0,
+        nanos if nanos % 1_000_000 == 0 => 3,
+        nanos if nanos % 1_000 == 0 => 6,
+        _ => 9,
+    };
+    format!("{at:.digits$}")
+}
+
+fn write_expiry<S: Serializer>(at: &Option<Timestamp>, serializer: S) -> Result<S::Ok, S::Error> {
+    match at {
+        Some(at) => serializer.serialize_str(&rfc3339(*at)),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn read_expiry<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Timestamp>, D::Error> {
+    Option::<String>::deserialize(deserializer)?
+        .map(|text| text.parse::<Timestamp>().map_err(serde::de::Error::custom))
+        .transpose()
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -81,7 +108,7 @@ pub fn standard(
     status: u16,
     body: &str,
     previous: Option<&Tokens>,
-    now: DateTime<Utc>,
+    now: Timestamp,
     account: impl FnOnce(&Value) -> Result<String, ProviderError>,
 ) -> Result<Tokens, ProviderError> {
     let unauthorized = |why: String| ProviderError::Unauthorized(why);
@@ -102,7 +129,7 @@ pub fn standard(
             .or_else(|| previous.map(|p| p.refresh_token.clone()))
             .unwrap_or_default(),
         account_id: account(&value)?,
-        expires_at: Some(now + Duration::seconds(value["expires_in"].as_i64().unwrap_or(0))),
+        expires_at: expiry(now, value["expires_in"].as_i64().unwrap_or(0)),
         client: None,
         email: account_label(body).or_else(|| previous.and_then(|p| p.email.clone())),
         subject: account_subject(body).or_else(|| previous.and_then(|p| p.subject.clone())),
@@ -191,6 +218,46 @@ mod tests {
     }
 
     #[test]
+    fn the_expiry_is_written_to_disk_in_rfc_3339_utc_with_three_six_or_nine_fraction_digits() {
+        let cases = [
+            ("2026-11-05T03:30:00Z", "2026-11-05T03:30:00Z"),
+            ("2026-11-05T03:30:00.000Z", "2026-11-05T03:30:00Z"),
+            ("2026-11-05T03:30:00.1Z", "2026-11-05T03:30:00.100Z"),
+            ("2026-11-05T03:30:00.120Z", "2026-11-05T03:30:00.120Z"),
+            ("2026-11-05T03:30:00.1234Z", "2026-11-05T03:30:00.123400Z"),
+            ("2026-11-05T03:30:00.123456Z", "2026-11-05T03:30:00.123456Z"),
+            ("2026-11-05T03:30:00.0000005Z", "2026-11-05T03:30:00.000000500Z"),
+            ("1999-12-31T23:59:59.999999999Z", "1999-12-31T23:59:59.999999999Z"),
+            ("2026-11-05T05:30:00+02:00", "2026-11-05T03:30:00Z"),
+            ("2026-11-04T22:30:00-05:00", "2026-11-05T03:30:00Z"),
+            ("2099-01-01T00:00:00+00:00", "2099-01-01T00:00:00Z"),
+        ];
+        for (read, written) in cases {
+            let tokens: Tokens = serde_json::from_value(json!({"access_token": "a", "expires_at": read}))
+                .unwrap_or_else(|e| panic!("{read}: {e}"));
+            let saved = serde_json::to_value(&tokens).unwrap_or_else(|e| panic!("{e}"));
+            assert_eq!(saved["expires_at"], written, "{read}");
+        }
+    }
+
+    #[test]
+    fn saved_tokens_keep_their_field_order_and_an_unknown_expiry_is_null() {
+        let tokens: Tokens =
+            serde_json::from_str(r#"{"access_token":"a","expires_at":null}"#).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(tokens.expires_at, None);
+        let saved = serde_json::to_string(&tokens).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(saved, r#"{"access_token":"a","refresh_token":"","account_id":"","expires_at":null}"#);
+        let dated: Tokens = serde_json::from_str(r#"{"access_token":"a","expires_at":"2099-01-01T00:00:00Z"}"#)
+            .unwrap_or_else(|e| panic!("{e}"));
+        let saved = serde_json::to_string(&dated).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(
+            saved,
+            r#"{"access_token":"a","refresh_token":"","account_id":"","expires_at":"2099-01-01T00:00:00Z"}"#
+        );
+        assert!(serde_json::from_str::<Tokens>(r#"{"access_token":"a","expires_at":"tomorrow"}"#).is_err());
+    }
+
+    #[test]
     fn the_challenge_matches_the_rfc_example() {
         assert_eq!(
             challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
@@ -201,12 +268,12 @@ mod tests {
     #[test]
     fn a_refresh_keeps_the_refresh_token_the_answer_omits() {
         let previous = Tokens { refresh_token: "r0".into(), ..Tokens::bearer("old") };
-        let now = Utc::now();
+        let now = Timestamp::now();
         let fresh =
             standard(200, r#"{"access_token":"new","expires_in":60}"#, Some(&previous), now, |_| Ok("a".into()));
         let fresh = fresh.unwrap_or_else(|e| panic!("{e}"));
         assert_eq!((fresh.refresh_token.as_str(), fresh.account_id.as_str()), ("r0", "a"));
-        assert_eq!(fresh.expires_at, Some(now + Duration::seconds(60)));
+        assert_eq!(fresh.expires_at, Some(now + SignedDuration::from_secs(60)));
         assert!(matches!(standard(400, "{}", None, now, |_| Ok(String::new())), Err(ProviderError::Unauthorized(_))));
     }
 
@@ -219,7 +286,7 @@ mod tests {
         assert_eq!(account_subject(&from_access).as_deref(), Some("user-2"));
         assert_eq!(account_label(&from_access).as_deref(), Some("two@x.ai"));
         assert_eq!(account_subject(r#"{"access_token":"opaque"}"#), None);
-        let now = Utc::now();
+        let now = Timestamp::now();
         let first = standard(200, &from_id, None, now, |_| Ok(String::new())).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(first.subject.as_deref(), Some("user-1"));
         let again = standard(200, r#"{"access_token":"b"}"#, Some(&first), now, |_| Ok(String::new()));
@@ -230,10 +297,28 @@ mod tests {
     fn the_account_s_email_is_kept_and_survives_a_refresh_that_omits_it() {
         let claims = URL_SAFE_NO_PAD.encode(r#"{"email":"dev@example.com"}"#);
         let answer = format!(r#"{{"access_token":"a","refresh_token":"r","id_token":"h.{claims}.s"}}"#);
-        let now = Utc::now();
+        let now = Timestamp::now();
         let first = standard(200, &answer, None, now, |_| Ok(String::new())).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(first.email.as_deref(), Some("dev@example.com"));
         let again = standard(200, r#"{"access_token":"b"}"#, Some(&first), now, |_| Ok(String::new()));
         assert_eq!(again.unwrap_or_else(|e| panic!("{e}")).email.as_deref(), Some("dev@example.com"));
+    }
+
+    #[test]
+    fn a_lifetime_past_the_calendar_leaves_the_expiry_unknown_instead_of_panicking() {
+        let now = Timestamp::UNIX_EPOCH;
+        let answer = format!(r#"{{"access_token":"a","expires_in":{}}}"#, i64::MAX);
+        let tokens = standard(200, &answer, None, now, |_| Ok(String::new())).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(tokens.expires_at, None);
+        assert!(tokens.expired(), "an unknown expiry is refreshed");
+        assert_eq!(expiry(now, -1).map(rfc3339).as_deref(), Some("1969-12-31T23:59:59Z"));
+    }
+
+    #[test]
+    fn a_token_counts_as_expired_a_minute_before_its_expiry() {
+        let in_seconds = |secs: i64| Tokens { expires_at: expiry(Timestamp::now(), secs), ..Tokens::bearer("a") };
+        assert!(in_seconds(30).expired());
+        assert!(in_seconds(-30).expired());
+        assert!(!in_seconds(120).expired());
     }
 }

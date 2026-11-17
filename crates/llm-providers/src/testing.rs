@@ -153,8 +153,8 @@ impl Host for ScriptedHost {
     fn sleep(&self, duration: std::time::Duration) {
         self.log.borrow_mut().waits.push(duration);
     }
-    fn now(&self) -> chrono::DateTime<chrono::Utc> {
-        chrono::DateTime::UNIX_EPOCH
+    fn now(&self) -> jiff::Timestamp {
+        jiff::Timestamp::UNIX_EPOCH
     }
 }
 

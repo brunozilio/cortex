@@ -4,6 +4,7 @@ description = "Runs the JavaScript the agent is extended with (prompts, tools, c
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 rquickjs = "0.14"

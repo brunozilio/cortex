@@ -4,6 +4,7 @@ description = "Talking to a model: the Provider trait, one folder per provider, 
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [features]
 default = ["subscription-providers"]
@@ -19,12 +20,12 @@ thiserror.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 uuid.workspace = true
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots"] }
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "time", "macros"] }
-base64 = "0.23"
-chrono = { version = "0.4", features = ["serde"] }
-url = "2"
-sha2 = "0.10"
+reqwest.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "net", "time", "macros"] }
+base64.workspace = true
+jiff.workspace = true
+url.workspace = true
+sha2.workspace = true
 
 [lints]
 workspace = true

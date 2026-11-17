@@ -4,8 +4,9 @@ use std::sync::{Mutex, OnceLock};
 
 use platform::sync::Locked;
 
-use chrono::{DateTime, Datelike, Local, TimeZone, Timelike};
 use domain::schedule::{MOST, Moment, Scheduled, When};
+use jiff::Timestamp;
+use jiff::tz::TimeZone;
 use serde_json::Value;
 
 use crate::model::ToolSpec;
@@ -22,13 +23,18 @@ fn lock() -> std::sync::MutexGuard<'static, HashMap<u64, Vec<Entry>>> {
 }
 
 fn moment(secs: i64) -> Option<Moment> {
-    let local: DateTime<Local> = Local.timestamp_opt(secs, 0).single()?;
+    moment_in(&TimeZone::system(), secs)
+}
+
+fn moment_in(zone: &TimeZone, secs: i64) -> Option<Moment> {
+    let local = Timestamp::from_second(secs).ok()?.to_zoned(zone.clone());
+    let field = |value: i8| u32::try_from(value).ok();
     Some(Moment {
-        minute: local.minute(),
-        hour: local.hour(),
-        day: local.day(),
-        month: local.month(),
-        weekday: local.weekday().num_days_from_sunday(),
+        minute: field(local.minute())?,
+        hour: field(local.hour())?,
+        day: field(local.day())?,
+        month: field(local.month())?,
+        weekday: field(local.weekday().to_sunday_zero_offset())?,
     })
 }
 
@@ -86,11 +92,16 @@ pub fn forget_client(client: u64) {
 }
 
 pub fn now() -> i64 {
-    Local::now().timestamp()
+    Timestamp::now().as_second()
+}
+
+fn minute_in(zone: &TimeZone, secs: i64) -> Option<String> {
+    let at = Timestamp::from_second(secs).ok()?.to_zoned(zone.clone());
+    Some(at.strftime("%Y-%m-%d %H:%M").to_string())
 }
 
 fn shown(scheduled: &Scheduled) -> String {
-    let at = Local.timestamp_opt(scheduled.next, 0).single().map(|at| at.format("%Y-%m-%d %H:%M").to_string());
+    let at = minute_in(&TimeZone::system(), scheduled.next);
     let how = match &scheduled.when {
         When::Cron { expr, recurring: true } => format!("`{expr}`, recurring"),
         When::Cron { expr, recurring: false } => format!("`{expr}`, once"),

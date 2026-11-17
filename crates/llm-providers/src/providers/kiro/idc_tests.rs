@@ -73,11 +73,11 @@ fn the_code_and_later_the_refresh_token_go_to_the_region_s_token_endpoint() {
         json!({"clientId": "cid", "clientSecret": "secret", "grantType": "authorization_code", "code": "code",
             "redirectUri": "http://127.0.0.1:49153/oauth/callback", "codeVerifier": "verifier"})
     );
-    let now = Utc::now();
+    let now = Timestamp::now();
     let fresh = tokens(&client(), 200, r#"{"accessToken":"a","refreshToken":"r","expiresIn":900}"#, None, now);
     let mut fresh = fresh.unwrap_or_else(|e| panic!("{e}"));
     assert_eq!((fresh.access_token.as_str(), fresh.refresh_token.as_str()), ("a", "r"));
-    assert_eq!(fresh.expires_at, Some(now + Duration::seconds(900)));
+    assert_eq!(fresh.expires_at, Some(now + jiff::SignedDuration::from_secs(900)));
     assert_eq!(super::client(&fresh), Some(client()), "kept for refreshes");
 
     fresh.account_id = ARN.into();

@@ -4,6 +4,7 @@ description = "The application API: the client the terminal calls, the command h
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [features]
 default = ["subscription-providers"]
@@ -24,15 +25,15 @@ tracing.workspace = true
 uuid.workspace = true
 rusqlite.workspace = true
 tiny_http = "0.12"
-base64 = "0.23"
+base64.workspace = true
 chacha20poly1305 = "0.10"
-getrandom = "0.3"
-chrono = "0.4"
+getrandom.workspace = true
+jiff.workspace = true
 
 [dev-dependencies]
 agent-engine = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "rustls-tls-native-roots"] }
+reqwest = { workspace = true, features = ["blocking"] }
 
 [lints]
 workspace = true

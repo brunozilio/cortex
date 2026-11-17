@@ -4,11 +4,12 @@ description = "A tree-sitter index of a repository's functions and types and who
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-ignore = "0.4"
+ignore.workspace = true
 tree-sitter = "0.27"
 tree-sitter-rust = "0.24"
 tree-sitter-typescript = "0.23"

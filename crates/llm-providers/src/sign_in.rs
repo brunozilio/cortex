@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use std::time::Duration;
 
 use super::{ProviderError, TokenRequest};
@@ -10,7 +10,7 @@ pub trait Host {
     fn listen(&self, port: u16, path: &str) -> Result<Box<dyn Listener>, ProviderError>;
     fn random(&self, bytes: usize) -> Result<String, ProviderError>;
     fn sleep(&self, duration: Duration);
-    fn now(&self) -> DateTime<Utc>;
+    fn now(&self) -> Timestamp;
 }
 
 pub trait Listener {

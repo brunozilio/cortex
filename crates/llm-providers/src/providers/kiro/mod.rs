@@ -4,8 +4,8 @@ pub mod models;
 mod sign_in;
 pub mod wire;
 
-use chrono::{DateTime, Utc};
 use domain::{Access, ModelOption};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use llm_providers::{Call, Config, Host, Page, Provider as Shape, ProviderError, TokenRequest, Tokens};
@@ -92,7 +92,7 @@ impl Shape for Provider {
         status: u16,
         body: &str,
         previous: Option<&Tokens>,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Tokens, ProviderError> {
         match previous.and_then(idc::client) {
             Some(client) => idc::tokens(&client, status, body, previous, now),

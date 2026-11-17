@@ -1,7 +1,7 @@
 use super::*;
 
 fn minute_start() -> i64 {
-    let now = Local::now().timestamp();
+    let now = Timestamp::now().as_second();
     now - now.rem_euclid(60)
 }
 
@@ -47,6 +47,30 @@ fn prompts_belong_to_their_client_until_it_leaves() {
     forget_client(7103);
     assert!(list(7103).is_empty());
     assert!(add(7103, "x", When::Cron { expr: "nope".into(), recurring: true }, start).is_err());
+}
+
+fn hours(east: i8) -> TimeZone {
+    jiff::tz::Offset::from_hours(east).expect("an offset within a day").to_time_zone()
+}
+
+#[test]
+fn a_schedule_is_shown_at_the_minute_on_the_user_s_clock() {
+    let early_utc_morning = 1_793_849_400;
+    assert_eq!(minute_in(&hours(0), early_utc_morning).as_deref(), Some("2026-11-05 03:30"));
+    assert_eq!(minute_in(&hours(-8), early_utc_morning).as_deref(), Some("2026-11-04 19:30"));
+    assert_eq!(minute_in(&hours(9), early_utc_morning + 59).as_deref(), Some("2026-11-05 12:30"));
+    assert_eq!(minute_in(&hours(0), 0).as_deref(), Some("1970-01-01 00:00"));
+}
+
+#[test]
+fn a_cron_expression_matches_the_moment_on_the_user_s_clock() {
+    let early_utc_morning = 1_793_849_400;
+    let utc = moment_in(&hours(0), early_utc_morning).expect("a moment");
+    assert_eq!((utc.minute, utc.hour, utc.day, utc.month, utc.weekday), (30, 3, 5, 11, 4), "a Thursday");
+    let west = moment_in(&hours(-8), early_utc_morning).expect("a moment");
+    assert_eq!((west.minute, west.hour, west.day, west.month, west.weekday), (30, 19, 4, 11, 3));
+    let sunday = moment_in(&hours(0), 1_794_096_000).expect("a moment");
+    assert_eq!((sunday.hour, sunday.day, sunday.weekday), (0, 8, 0), "Sunday is day zero");
 }
 
 #[test]

@@ -1,5 +1,5 @@
 use super::*;
-use chrono::Duration;
+use jiff::SignedDuration;
 
 fn jwt(claims: Value) -> String {
     format!("h.{}.s", URL_SAFE_NO_PAD.encode(claims.to_string()))
@@ -31,11 +31,11 @@ fn the_code_is_exchanged_with_a_form_without_state() {
 #[test]
 fn a_refresh_keeps_the_account_the_answer_omits() {
     let previous = Tokens { refresh_token: "r0".into(), account_id: "acct".into(), ..Tokens::bearer("old") };
-    let now = Utc::now();
+    let now = Timestamp::now();
     let fresh = Provider.tokens(200, r#"{"access_token":"new","expires_in":60}"#, Some(&previous), now);
     let fresh = fresh.unwrap_or_else(|e| panic!("{e}"));
     assert_eq!((fresh.refresh_token.as_str(), fresh.account_id.as_str()), ("r0", "acct"));
-    assert_eq!(fresh.expires_at, Some(now + Duration::seconds(60)));
+    assert_eq!(fresh.expires_at, Some(now + SignedDuration::from_secs(60)));
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn the_id_token_names_the_account_when_the_access_token_does_not() {
         json!({"access_token": jwt(json!({})), "id_token": jwt(id_token), "refresh_token": "r", "expires_in": 3600})
             .to_string()
     };
-    let account = |body: String| Provider.tokens(200, &body, None, Utc::now()).map(|tokens| tokens.account_id);
+    let account = |body: String| Provider.tokens(200, &body, None, Timestamp::now()).map(|tokens| tokens.account_id);
     let nested = response(json!({"https://api.openai.com/auth": {"chatgpt_account_id": "acct-id"}}));
     assert_eq!(account(nested), Ok("acct-id".into()));
     assert_eq!(account(response(json!({"chatgpt_account_id": "acct-flat"}))), Ok("acct-flat".into()));

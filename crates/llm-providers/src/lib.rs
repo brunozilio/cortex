@@ -100,7 +100,7 @@ pub trait Provider: Sync {
         status: u16,
         _body: &str,
         _previous: Option<&Tokens>,
-        _now: chrono::DateTime<chrono::Utc>,
+        _now: jiff::Timestamp,
     ) -> Result<Tokens, ProviderError> {
         Err(ProviderError::Unauthorized(format!("{} returned HTTP {status} and keeps no tokens", self.name())))
     }

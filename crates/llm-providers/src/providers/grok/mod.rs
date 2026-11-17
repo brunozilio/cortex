@@ -1,8 +1,8 @@
 pub mod device;
 mod sign_in;
 
-use chrono::{DateTime, Utc};
 use domain::{Access, ModelOption};
+use jiff::Timestamp;
 use serde_json::Value;
 
 use llm_providers::catalog::{self, Call, Page};
@@ -92,7 +92,7 @@ impl Shape for Provider {
         status: u16,
         body: &str,
         previous: Option<&Tokens>,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Tokens, ProviderError> {
         oauth::standard(status, body, previous, now, |_| Ok(String::new()))
     }

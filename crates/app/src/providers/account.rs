@@ -99,8 +99,8 @@ impl Host for NetHost<'_> {
             std::thread::sleep(left.min(STOP_POLL));
         }
     }
-    fn now(&self) -> chrono::DateTime<chrono::Utc> {
-        chrono::Utc::now()
+    fn now(&self) -> jiff::Timestamp {
+        jiff::Timestamp::now()
     }
 }
 

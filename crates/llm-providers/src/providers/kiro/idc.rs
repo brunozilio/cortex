@@ -1,9 +1,9 @@
-use chrono::{DateTime, Duration, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use llm_providers::ProviderError;
-use llm_providers::oauth::{TokenRequest, Tokens, form};
+use llm_providers::oauth::{TokenRequest, Tokens, expiry, form};
 
 pub const SCOPES: [&str; 3] = ["codewhisperer:completions", "codewhisperer:analysis", "codewhisperer:conversations"];
 pub const PROFILE_REGIONS: [&str; 2] = ["us-east-1", "eu-central-1"];
@@ -160,7 +160,7 @@ pub fn tokens(
     status: u16,
     body: &str,
     previous: Option<&Tokens>,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> Result<Tokens, ProviderError> {
     let unauthorized = |why: String| ProviderError::Unauthorized(why);
     if status != 200 {
@@ -178,7 +178,7 @@ pub fn tokens(
         access_token,
         refresh_token,
         account_id: previous.map(|p| p.account_id.clone()).unwrap_or_default(),
-        expires_at: Some(now + Duration::seconds(lifetime)),
+        expires_at: expiry(now, lifetime),
         client: serde_json::to_value(client).ok(),
         email: None,
         subject: None,

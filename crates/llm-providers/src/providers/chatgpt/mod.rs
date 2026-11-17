@@ -1,7 +1,7 @@
 use base64::Engine;
 use base64::engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD};
-use chrono::{DateTime, Utc};
 use domain::{Access, ModelOption};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use llm_providers::catalog::{self, Call, Fields, Page};
@@ -118,7 +118,7 @@ impl Shape for Provider {
         status: u16,
         body: &str,
         previous: Option<&Tokens>,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Tokens, ProviderError> {
         oauth::standard(status, body, previous, now, |value| {
             account_id(value["id_token"].as_str().unwrap_or_default())

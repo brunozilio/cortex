@@ -4,6 +4,7 @@ description = "Developer tasks: the repo lint and applying brand.toml."
 version.workspace = true
 edition.workspace = true
 publish = false
+license.workspace = true
 
 [dev-dependencies]
 domain.workspace = true

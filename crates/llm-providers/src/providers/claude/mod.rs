@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use domain::{Access, ModelOption};
+use jiff::Timestamp;
 use serde_json::{Value, json};
 
 use llm_providers::catalog::{self, Call, Page, STANDARD};
@@ -103,7 +103,7 @@ impl Shape for Provider {
         status: u16,
         body: &str,
         previous: Option<&Tokens>,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> Result<Tokens, ProviderError> {
         oauth::standard(status, body, previous, now, |_| Ok(String::new()))
     }

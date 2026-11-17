@@ -11,5 +11,5 @@ pub fn refresh(http: &dyn Http, provider: &dyn Provider, previous: &Tokens) -> R
         .map_err(ModelError::Network)?;
     let status = response.status;
     let body = if status == 200 { super::transport::read(response, TOKEN_LIMIT)? } else { String::new() };
-    Ok(provider.tokens(status, &body, Some(previous), chrono::Utc::now())?)
+    Ok(provider.tokens(status, &body, Some(previous), jiff::Timestamp::now())?)
 }

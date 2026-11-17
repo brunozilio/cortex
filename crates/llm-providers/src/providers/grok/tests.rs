@@ -35,7 +35,7 @@ fn a_refresh_is_a_form_to_the_xai_token_endpoint() {
 fn a_rotated_refresh_token_replaces_the_old_one() {
     let previous = Tokens { refresh_token: "r0".into(), ..Tokens::bearer("old") };
     let body = r#"{"access_token":"new","refresh_token":"r1","expires_in":21600}"#;
-    let fresh = Provider.tokens(200, body, Some(&previous), Utc::now()).unwrap_or_else(|e| panic!("{e}"));
+    let fresh = Provider.tokens(200, body, Some(&previous), Timestamp::now()).unwrap_or_else(|e| panic!("{e}"));
     assert_eq!((fresh.access_token.as_str(), fresh.refresh_token.as_str()), ("new", "r1"));
 }
 

@@ -1,6 +1,6 @@
-use chrono::{DateTime, Duration, Utc};
+use jiff::Timestamp;
 use llm_providers::ProviderError;
-use llm_providers::oauth::{TokenRequest, Tokens, form};
+use llm_providers::oauth::{TokenRequest, Tokens, expiry, form};
 use serde_json::{Value, json};
 
 pub const PORTAL: &str = "https://app.kiro.dev/signin";
@@ -47,7 +47,7 @@ pub fn refresh(previous: &Tokens) -> TokenRequest {
     TokenRequest { url: REFRESH.into(), content_type: "application/json", body: body.to_string() }
 }
 
-pub fn tokens(status: u16, body: &str, previous: Option<&Tokens>, now: DateTime<Utc>) -> Result<Tokens, ProviderError> {
+pub fn tokens(status: u16, body: &str, previous: Option<&Tokens>, now: Timestamp) -> Result<Tokens, ProviderError> {
     let unauthorized = |why: String| ProviderError::Unauthorized(why);
     if status != 200 {
         return Err(unauthorized(format!("Kiro's auth service returned HTTP {status}")));
@@ -67,7 +67,7 @@ pub fn tokens(status: u16, body: &str, previous: Option<&Tokens>, now: DateTime<
         access_token,
         refresh_token,
         account_id,
-        expires_at: Some(now + Duration::seconds(lifetime)),
+        expires_at: expiry(now, lifetime),
         client: None,
         email: None,
         subject: None,
@@ -114,12 +114,12 @@ mod tests {
 
     #[test]
     fn an_answer_keeps_the_profile_arn_and_its_lifetime() {
-        let now = Utc::now();
+        let now = Timestamp::now();
         let body = format!(r#"{{"accessToken":"a","refreshToken":"r","profileArn":"{ARN}","expiresIn":3600}}"#);
         let fresh = tokens(200, &body, None, now).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!((fresh.access_token.as_str(), fresh.refresh_token.as_str()), ("a", "r"));
         assert_eq!(fresh.account_id, ARN);
-        assert_eq!(fresh.expires_at, Some(now + Duration::seconds(3600)));
+        assert_eq!(fresh.expires_at, Some(now + jiff::SignedDuration::from_secs(3600)));
     }
 
     #[test]
@@ -134,10 +134,10 @@ mod tests {
             subject: None,
         };
         assert_eq!(serde_json::from_str::<Value>(&refresh(&previous).body).ok(), Some(json!({"refreshToken": "r0"})));
-        let fresh = tokens(200, r#"{"accessToken":"new"}"#, Some(&previous), Utc::now());
+        let fresh = tokens(200, r#"{"accessToken":"new"}"#, Some(&previous), Timestamp::now());
         let fresh = fresh.unwrap_or_else(|e| panic!("{e}"));
         assert_eq!((fresh.refresh_token.as_str(), fresh.account_id.as_str()), ("r0", ARN));
-        assert!(matches!(tokens(401, "{}", Some(&previous), Utc::now()), Err(ProviderError::Unauthorized(_))));
-        assert!(tokens(200, r#"{"accessToken":"a","refreshToken":"r"}"#, None, Utc::now()).is_err(), "no ARN");
+        assert!(matches!(tokens(401, "{}", Some(&previous), Timestamp::now()), Err(ProviderError::Unauthorized(_))));
+        assert!(tokens(200, r#"{"accessToken":"a","refreshToken":"r"}"#, None, Timestamp::now()).is_err(), "no ARN");
     }
 }

@@ -31,6 +31,16 @@ tracing = "0.1"
 tempfile = "3"
 crossbeam-channel = "0.5"
 rusqlite = { version = "0.41.1", default-features = false, features = ["bundled"] }
+base64 = "0.23"
+sha2 = "0.10"
+url = "2"
+flate2 = "1"
+zip = { version = "9.5.1", default-features = false, features = ["deflate-flate2"] }
+ignore = "0.4"
+getrandom = "0.3"
+tokio = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots"] }
+jiff = "0.2.38"
 
 [workspace.lints.rust]
 unsafe_code = "warn"
