@@ -23,6 +23,15 @@ pub struct LocalServices {
     pub providers: ModelProviders,
     pub homes: Arc<dyn crate::Homes>,
     pub mcp_auth: crate::McpAuth,
+    pub(crate) exporter: Option<crate::features::trace::export::Exporter>,
+}
+
+fn exporter(sessions: &Arc<FileSessions>) -> Option<crate::features::trace::export::Exporter> {
+    use crate::features::trace::export::{Exporter, Otlp, Traced};
+    let otlp = Otlp::from(|key| std::env::var(key).ok())?;
+    let store = Arc::clone(sessions);
+    let traced: Traced = Arc::new(move |cwd, id| crate::features::trace::traced(&store, cwd, id));
+    Exporter::start(otlp, traced, Arc::new(agent_engine::model::http::NetHttp))
 }
 
 impl std::fmt::Debug for LocalServices {
@@ -90,6 +99,7 @@ impl LocalServices {
             catalog: stores.catalog,
             memories: stores.memories,
             database: stores.database,
+            exporter: exporter(&stores.sessions),
             sessions: stores.sessions,
             extensions: Extensions { trusts: crate::trust::Trusts::kept(stores.trusts), ..Extensions::default() },
             providers: ModelProviders::new(stores.providers, Arc::clone(&stores.secrets)),
@@ -116,6 +126,7 @@ impl LocalServices {
             catalog: stores.catalog,
             memories: stores.memories,
             database: stores.database,
+            exporter: exporter(&stores.sessions),
             sessions: stores.sessions,
             extensions: Extensions {
                 plugins: self.extensions.plugins,

@@ -30,7 +30,7 @@ All checks passed:
   ✓ declared providers none (~/{{DIR}}/providers/*.js adds one)
   ✓ sandbox      on: commands write only inside the project, added folders, temp and caches
   ✓ git          git version 2.47.0
-  ✓ ripgrep      ripgrep 14.1.1
+  ✓ ripgrep      ripgrep 14.1.1 (Grep searches with it)
 ```
 
 Quando uma verificação falha, a primeira linha conta os problemas (`1 problem(s):`) e a verificação aparece marcada com `✗`. O `{{COMMAND}} doctor` sai com 0 quando todas passam e com 1 caso contrário, então dá para usá-lo em scripts. Use `-C <caminho>` para conferir outra pasta.
@@ -69,7 +69,7 @@ A linha `declared providers` diz `none (~/{{DIR}}/providers/*.js adds one)` quan
 Veja [Provedores declarados](./models-and-providers#provedores-declarados).
 
 > [!NOTE]
-> O `ripgrep` é opcional: a ferramenta `Grep` funciona sem ele, então a verificação passa com `not installed (Grep works without it)`. O `git` é necessário para o `/diff` e para worktrees.
+> O `ripgrep` é opcional. Quando o `rg` está no `PATH`, a ferramenta `Grep` o usa para achar os arquivos que casam, o que é bem mais rápido em projetos grandes; sem ele, o `Grep` busca com o motor embutido e dá os mesmos resultados. Nos dois casos a verificação passa, com `not installed (Grep uses its built-in search, slower on large projects)` quando ele falta. O `git` é necessário para o `/diff` e para worktrees.
 
 ## Logs
 

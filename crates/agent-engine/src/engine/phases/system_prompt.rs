@@ -8,7 +8,7 @@ use crate::agent::Agent;
 use crate::agent_runtime::Setup;
 use crate::brief::Brief;
 use crate::engine::MAX_OUTPUT;
-use crate::engine::date::today;
+use crate::engine::date::{time_zone, today};
 use crate::engine::job::Job;
 use crate::engine::stop::Stop;
 use crate::model::TurnRequest;
@@ -62,6 +62,7 @@ impl Job {
         let git = moved_to.and_then(|context| context.git.clone()).or_else(|| brief.git.clone());
         let snapshot = self.session_snapshot(session, || prompt::Snapshot {
             date: today(),
+            time_zone: time_zone(),
             git,
             top_level: prompt::top_level(&workspace.cwd),
         });
@@ -74,6 +75,7 @@ impl Job {
             added_dirs: workspace.added_dirs.clone(),
             platform: prompt::platform(),
             date: snapshot.date,
+            time_zone: snapshot.time_zone,
             top_level: snapshot.top_level,
             model: self.request.session.model.label.clone(),
             language_servers: language_servers

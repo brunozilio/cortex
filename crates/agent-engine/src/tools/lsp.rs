@@ -3,7 +3,8 @@ use std::time::Duration;
 
 use domain::lsp::Query;
 use domain::lsp::answer::{describe, explain};
-use domain::lsp::uri::uri_of;
+use domain::lsp::diagnostics::{Scope, listed};
+use domain::lsp::uri::{path_of, uri_of};
 use serde_json::Value;
 
 use super::{Outcome, Tool, Workspace, clip, field, shown};
@@ -49,6 +50,7 @@ impl Tool for Lsp {
 
 const OUTPUT: usize = 30_000;
 const ANSWER_WAIT: Duration = Duration::from_secs(60);
+const DIAGNOSTICS_WAIT: Duration = Duration::from_secs(10);
 
 fn trusted(workspace: &Workspace) -> bool {
     workspace.policy.trust == domain::trust::Trust::Trusted
@@ -73,8 +75,56 @@ fn installing(workspace: &Workspace) -> crate::lsp::Installing {
     }
 }
 
+fn with_install(installed: Option<String>, answer: String) -> String {
+    match installed {
+        Some(name) => format!("Installed the {name} language server on first use.\n\n{answer}"),
+        None => answer,
+    }
+}
+
+fn diagnose(lsp: &crate::lsp::Lsp, scope: Scope, input: &Value, workspace: &Workspace) -> Result<String, String> {
+    let file = workspace.resolve(field(input, "file_path").ok_or("Missing required parameter `file_path`.")?);
+    let named = shown(&file, workspace);
+    let text = std::fs::read_to_string(&file).map_err(|error| format!("Cannot read {named}: {error}"))?;
+    let (opened, installed) = lsp.open(&file, &workspace.cwd, &workspace.stop, installing(workspace))?;
+    let version = opened.server.sync(&file, &opened.language, &text)?;
+    let found = opened.server.diagnostics(&file, version, DIAGNOSTICS_WAIT);
+    let answer = match scope {
+        Scope::File => match found {
+            Some(items) => {
+                listed(&[(named.clone(), items)]).unwrap_or_else(|| format!("No errors or warnings in {named}."))
+            }
+            None => format!(
+                "The language server said nothing about {named} within {} seconds; it may still be checking. Ask \
+                 again shortly.",
+                DIAGNOSTICS_WAIT.as_secs()
+            ),
+        },
+        Scope::Workspace => {
+            let real = workspace.cwd.canonicalize().unwrap_or_else(|_| workspace.cwd.clone());
+            let relative = |path: &Path| {
+                let inside = path.strip_prefix(&workspace.cwd).or_else(|_| path.strip_prefix(&real));
+                inside.unwrap_or(path).display().to_string()
+            };
+            let files: Vec<(String, Vec<Value>)> = opened
+                .server
+                .published()
+                .into_iter()
+                .filter_map(|(uri, items)| Some((relative(&path_of(&uri)?), items)))
+                .collect();
+            listed(&files).unwrap_or_else(|| {
+                "The language server reports no errors or warnings in the files it has checked.".to_owned()
+            })
+        }
+    };
+    Ok(with_install(installed, answer))
+}
+
 fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
     let lsp = workspace.services.lsp.as_ref().ok_or("No language servers are available in this run.")?;
+    if let Some(scope) = field(input, "operation").and_then(Scope::named) {
+        return diagnose(lsp, scope, input, workspace);
+    }
     let query = Query::parse(input)?;
     let file = workspace.resolve(&query.file);
     let text =
@@ -94,10 +144,7 @@ fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
     };
     let real = workspace.cwd.canonicalize().unwrap_or_else(|_| workspace.cwd.clone());
     let described = describe(query.operation, &answer, &[&workspace.cwd, &real], lines);
-    Ok(match installed {
-        Some(name) => format!("Installed the {name} language server on first use.\n\n{described}"),
-        None => described,
-    })
+    Ok(with_install(installed, described))
 }
 
 #[cfg(test)]

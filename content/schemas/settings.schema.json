@@ -160,6 +160,13 @@
       "description": "false turns off the persistent memory of agents that declare a memory scope.",
       "type": "boolean"
     },
+    "bashOutputLimit": {
+      "default": 30000,
+      "description": "Characters of a command's output the agent sees; past it, the start and the end are kept and the whole output is saved to a file the agent is pointed to.",
+      "maximum": 1000000,
+      "minimum": 1000,
+      "type": "integer"
+    },
     "disabledMcpServers": {
       "description": "Project MCP servers you turned off; wins over the approvals.",
       "items": {

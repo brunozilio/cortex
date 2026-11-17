@@ -240,6 +240,11 @@ impl CommandHandler {
             outbox,
             finishes: std::sync::Mutex::new(finishes),
             outcome: std::sync::Mutex::default(),
+            exported: self
+                .services
+                .exporter
+                .as_ref()
+                .map(|exporter| exporter.watch(&request.session.cwd, request.session.resume.as_ref())),
         });
         match self.services.engine.start(run, &request, sink) {
             Ok(handle) => {
@@ -273,12 +278,16 @@ struct RunSink {
     outbox: Outbox,
     finishes: std::sync::Mutex<Vec<Finish>>,
     outcome: std::sync::Mutex<domain::memory::scorecard::RunOutcome>,
+    exported: Option<crate::features::trace::export::Watch>,
 }
 
 impl EventSink for RunSink {
     fn emit(&self, run: RunId, event: EngineEvent) {
         if let Some(listing) = &self.listing {
             listing.observe(&event);
+        }
+        if let Some(exported) = &self.exported {
+            exported.observe(&event);
         }
         self.outcome.locked().observe(&event);
         if event.is_terminal() {

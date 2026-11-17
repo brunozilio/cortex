@@ -19,7 +19,7 @@ Algumas ferramentas são usadas quando estão presentes, e nada quebra sem elas:
 |---|---|
 | `git` | `/diff`, `/diffs`, comparação com a branch e worktrees. |
 | `pdftotext` | Ler PDFs. |
-| `ripgrep` | Comandos que o agente roda com `Bash`; o `doctor` informa se está instalado. O `Grep` embutido não precisa dele. |
+| `ripgrep` | Opcional. A ferramenta `Grep` usa o `rg` quando ele está no `PATH` (mais rápido em projetos grandes, mesmos resultados) e a busca embutida caso contrário; o `doctor` informa qual. |
 | Language servers (rust-analyzer, clangd…) | A ferramenta `LSP` e os diagnósticos depois de edições. Veja [Inteligência de código](./code-intelligence). |
 | `node` / `npx` | Só para servidores MCP que precisam deles. |
 

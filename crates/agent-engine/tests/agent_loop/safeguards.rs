@@ -25,8 +25,13 @@ fn a_long_output_is_saved_to_a_file_the_agent_may_read() {
     ]);
     rig.run(&model, &mut vec![Message::user("print a lot")]).expect("run");
     let content = first_result(&model);
-    assert!(content.contains("Full output saved to: ") && content.len() < 10_000, "{content}");
-    let path = content.split("Full output saved to: ").nth(1).and_then(|rest| rest.lines().next()).expect("path");
+    assert!(content.starts_with("[Output cut: 99999 characters in 20000 lines"), "{content}");
+    assert!(content.chars().count() < domain::output::DEFAULT_LIMIT + 400, "{}", content.len());
+    let path = content
+        .split("The full output is in ")
+        .nth(1)
+        .and_then(|rest| rest.split(": Read or Grep it for the rest.]").next())
+        .expect("path");
     assert_eq!(std::fs::read_to_string(path).expect("saved").lines().count(), 20_000);
     assert!(rig.workspace.may_read(std::path::Path::new(path)));
 }

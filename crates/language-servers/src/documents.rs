@@ -62,6 +62,13 @@ impl Published {
         self.of.get(uri)
     }
 
+    pub(crate) fn all(&self) -> Vec<(String, Vec<Value>)> {
+        let mut all: Vec<(String, Vec<Value>)> =
+            self.of.iter().map(|(uri, found)| (uri.clone(), found.items.clone())).collect();
+        all.sort_by(|a, b| a.0.cmp(&b.0));
+        all
+    }
+
     pub(crate) fn forget(&mut self, uri: &str) {
         self.of.remove(uri);
     }

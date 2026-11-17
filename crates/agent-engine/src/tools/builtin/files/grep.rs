@@ -1,7 +1,8 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+use super::ripgrep::{self, Asked};
 use crate::model::ToolSpec;
 use crate::tools::{Outcome, Tool, Workspace, clip, field, required, shown};
 
@@ -20,6 +21,12 @@ enum Mode {
     Count,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Engine {
+    BuiltIn,
+    Ripgrep(PathBuf),
+}
+
 impl Tool for Grep {
     fn spec(&self) -> ToolSpec {
         crate::tools::declared("Grep", &serde_json::Value::Null)
@@ -34,69 +41,136 @@ impl Tool for Grep {
     }
 
     fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
-        let pattern = match required(input, "pattern") {
-            Ok(pattern) => pattern,
-            Err(error) => return error,
-        };
-        let flag = |name: &str| input.get(name).and_then(Value::as_bool).unwrap_or(false);
-        let number = |name: &str| input.get(name).and_then(Value::as_u64).map(|n| n as usize);
-        let multiline = flag("multiline");
-        let regex = match regex::RegexBuilder::new(pattern)
-            .case_insensitive(flag("-i"))
-            .multi_line(true)
-            .dot_matches_new_line(multiline)
-            .build()
-        {
-            Ok(regex) => regex,
-            Err(error) => return Outcome::error(format!("Invalid pattern: {error}")),
-        };
-        let mode = match field(input, "output_mode") {
-            Some("content") => Mode::Content,
-            Some("count") => Mode::Count,
-            _ => Mode::Files,
-        };
-        let filter = match field(input, "glob").map(globset::Glob::new) {
-            Some(Ok(glob)) => Some(glob.compile_matcher()),
-            Some(Err(error)) => return Outcome::error(format!("Invalid glob: {error}")),
-            None => None,
-        };
-        let context = number("-C").unwrap_or(0);
-        let (before, after) = (number("-B").unwrap_or(context), number("-A").unwrap_or(context));
-        let root = field(input, "path").map_or_else(|| workspace.cwd.clone(), |path| workspace.resolve(path));
-
-        let limit = number("head_limit").filter(|limit| *limit > 0).unwrap_or(RESULTS);
-        let mut results = Results::default();
-        let walk =
-            ignore::WalkBuilder::new(&root).hidden(false).filter_entry(|entry| entry.file_name() != ".git").build();
-        for entry in walk.filter_map(Result::ok) {
-            if workspace.stop.load(std::sync::atomic::Ordering::Relaxed) {
-                break;
-            }
-            let path = entry.path();
-            if !entry.file_type().is_some_and(|kind| kind.is_file()) || !matches_glob(filter.as_ref(), path) {
-                continue;
-            }
-            let Ok(bytes) = super::read::read_bytes(path, &workspace.stop) else { continue };
-            let Ok(text) = String::from_utf8(bytes) else { continue };
-            let name = shown(path, workspace);
-            match mode {
-                Mode::Files if regex.is_match(&text) => results.entry(name, limit),
-                Mode::Count => {
-                    let count = regex.find_iter(&text).count();
-                    if count > 0 {
-                        results.entry(format!("{name}:{count}"), limit);
-                    }
-                }
-                Mode::Content => results.file(&name, lines(&regex, &text, flag("-n"), (before, after)), limit),
-                Mode::Files => {}
-            }
-        }
-        if results.shown.is_empty() {
-            return Outcome::ok("No matches found.");
-        }
-        let between = if mode == Mode::Content { "\n\n" } else { "\n" };
-        Outcome::ok(clip(&results.text(between), OUTPUT))
+        let engine = ripgrep::program().map_or(Engine::BuiltIn, Engine::Ripgrep);
+        search(input, workspace, &engine)
     }
+}
+
+struct Matcher {
+    regex: regex::Regex,
+    multiline: bool,
+}
+
+impl Matcher {
+    fn any(&self, text: &str) -> bool {
+        if self.multiline { self.regex.is_match(text) } else { text.lines().any(|line| self.regex.is_match(line)) }
+    }
+
+    fn count(&self, text: &str) -> usize {
+        if self.multiline {
+            self.regex.find_iter(text).count()
+        } else {
+            text.lines().map(|line| self.regex.find_iter(line).count()).sum()
+        }
+    }
+
+    fn hit_lines(&self, text: &str, lines: usize) -> Vec<usize> {
+        if !self.multiline {
+            return text.lines().enumerate().filter(|(_, line)| self.regex.is_match(line)).map(|(at, _)| at).collect();
+        }
+        let starts: Vec<usize> = std::iter::once(0)
+            .chain(text.match_indices('\n').map(|(at, _)| at + 1))
+            .filter(|at| *at < text.len().max(1))
+            .collect();
+        let line_of = |offset: usize| starts.partition_point(|start| *start <= offset).saturating_sub(1);
+        let mut hits: Vec<usize> = Vec::new();
+        for found in self.regex.find_iter(text) {
+            let last = if found.end() > found.start() { found.end() - 1 } else { found.start() };
+            hits.extend(line_of(found.start())..=line_of(last));
+        }
+        hits.retain(|line| *line < lines);
+        hits.sort_unstable();
+        hits.dedup();
+        hits
+    }
+}
+
+pub(super) fn search(input: &Value, workspace: &Workspace, engine: &Engine) -> Outcome {
+    let pattern = match required(input, "pattern") {
+        Ok(pattern) => pattern,
+        Err(error) => return error,
+    };
+    let flag = |name: &str| input.get(name).and_then(Value::as_bool).unwrap_or(false);
+    let number = |name: &str| input.get(name).and_then(Value::as_u64).map(|n| n as usize);
+    let (multiline, ignore_case) = (flag("multiline"), flag("-i"));
+    let regex = match regex::RegexBuilder::new(pattern)
+        .case_insensitive(ignore_case)
+        .multi_line(true)
+        .dot_matches_new_line(multiline)
+        .build()
+    {
+        Ok(regex) => regex,
+        Err(error) => return Outcome::error(format!("Invalid pattern: {error}")),
+    };
+    let matcher = Matcher { regex, multiline };
+    let mode = match field(input, "output_mode") {
+        Some("content") => Mode::Content,
+        Some("count") => Mode::Count,
+        _ => Mode::Files,
+    };
+    let filter = match field(input, "glob").map(globset::Glob::new) {
+        Some(Ok(glob)) => Some(glob.compile_matcher()),
+        Some(Err(error)) => return Outcome::error(format!("Invalid glob: {error}")),
+        None => None,
+    };
+    let context = number("-C").unwrap_or(0);
+    let around = (number("-B").unwrap_or(context), number("-A").unwrap_or(context));
+    let root = field(input, "path").map_or_else(|| workspace.cwd.clone(), |path| workspace.resolve(path));
+    let limit = number("head_limit").filter(|limit| *limit > 0).unwrap_or(RESULTS);
+
+    let asked = Asked { pattern, ignore_case, multiline };
+    let candidates = match engine {
+        Engine::Ripgrep(program) => ripgrep::candidates(program, &root, &asked, &workspace.stop),
+        Engine::BuiltIn => None,
+    };
+    let mut files = candidates.unwrap_or_else(|| walk(&root, workspace));
+    files.retain(|path| matches_glob(filter.as_ref(), path));
+    files.sort();
+    files.dedup();
+
+    let mut results = Results::default();
+    for path in files {
+        if workspace.stop.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
+        }
+        let Ok(bytes) = super::read::read_bytes(&path, &workspace.stop) else { continue };
+        let Ok(text) = String::from_utf8(bytes) else { continue };
+        let name = shown(&path, workspace);
+        match mode {
+            Mode::Files if matcher.any(&text) => results.entry(name, limit),
+            Mode::Count => {
+                let count = matcher.count(&text);
+                if count > 0 {
+                    results.entry(format!("{name}:{count}"), limit);
+                }
+            }
+            Mode::Content => results.file(&name, lines(&matcher, &text, flag("-n"), around), limit),
+            Mode::Files => {}
+        }
+    }
+    if results.shown.is_empty() {
+        return Outcome::ok("No matches found.");
+    }
+    let between = if mode == Mode::Content { "\n\n" } else { "\n" };
+    Outcome::ok(clip(&results.text(between), OUTPUT))
+}
+
+fn walk(root: &Path, workspace: &Workspace) -> Vec<PathBuf> {
+    let walk = ignore::WalkBuilder::new(root)
+        .hidden(false)
+        .add_custom_ignore_filename(".rgignore")
+        .filter_entry(|entry| entry.file_name() != ".git")
+        .build();
+    let mut files = Vec::new();
+    for entry in walk.filter_map(Result::ok) {
+        if workspace.stop.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
+        }
+        if entry.file_type().is_some_and(|kind| kind.is_file()) {
+            files.push(entry.into_path());
+        }
+    }
+    files
 }
 
 #[derive(Default)]
@@ -155,112 +229,27 @@ fn matches_glob(filter: Option<&globset::GlobMatcher>, path: &Path) -> bool {
     filter.is_none_or(|glob| path.file_name().is_some_and(|name| glob.is_match(name)) || glob.is_match(path))
 }
 
-fn lines(regex: &regex::Regex, text: &str, numbered: bool, (before, after): (usize, usize)) -> Matches {
+fn lines(matcher: &Matcher, text: &str, numbered: bool, (before, after): (usize, usize)) -> Matches {
     let all: Vec<&str> = text.lines().collect();
-    let hits: Vec<usize> = all.iter().enumerate().filter(|(_, line)| regex.is_match(line)).map(|(at, _)| at).collect();
+    let hits = matcher.hit_lines(text, all.len());
     let more = hits.len().saturating_sub(PER_FILE);
     let mut out = Vec::new();
     let mut shown_until = 0;
-    for hit in hits.into_iter().take(PER_FILE) {
+    for &hit in hits.iter().take(PER_FILE) {
         let start = hit.saturating_sub(before).max(shown_until);
-        let end = (hit + after + 1).min(all.len());
+        let end = (hit + after + 1).min(all.len()).max(start);
         if start > shown_until && shown_until > 0 && (before > 0 || after > 0) {
             out.push("--".to_owned());
         }
         for (at, line) in all.iter().enumerate().take(end).skip(start) {
-            let mark = if at == hit { ':' } else { '-' };
+            let mark = if hits.binary_search(&at).is_ok() { ':' } else { '-' };
             out.push(if numbered { format!("{}{mark}{}", at + 1, cut(line)) } else { cut(line) });
         }
-        shown_until = end;
+        shown_until = shown_until.max(end);
     }
     Matches { lines: out, more }
 }
 
 #[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::*;
-
-    fn workspace() -> (tempfile::TempDir, Workspace) {
-        let dir = tempfile::tempdir().expect("dir");
-        std::fs::create_dir(dir.path().join("src")).expect("dir");
-        std::fs::write(dir.path().join("src/a.rs"), "fn main() {\n    run();\n}\n").expect("write");
-        std::fs::write(dir.path().join("src/b.md"), "Run it\nrun again\n").expect("write");
-        let workspace = Workspace::new(dir.path());
-        (dir, workspace)
-    }
-
-    #[test]
-    fn lists_files_counts_and_lines() {
-        let (_dir, workspace) = workspace();
-        let mut files: Vec<String> = Grep
-            .run(&json!({"pattern": "run"}), &workspace)
-            .content
-            .lines()
-            .map(|line| line.replace('\\', "/"))
-            .collect();
-        files.sort();
-        assert_eq!(files, vec!["src/a.rs", "src/b.md"]);
-
-        let count =
-            Grep.run(&json!({"pattern": "run", "-i": true, "glob": "*.md", "output_mode": "count"}), &workspace);
-        assert_eq!(count.content.replace('\\', "/"), "src/b.md:2");
-
-        let content =
-            Grep.run(&json!({"pattern": "run\\(", "output_mode": "content", "-n": true, "-B": 1}), &workspace);
-        assert_eq!(content.content.replace('\\', "/"), "src/a.rs\n1-fn main() {\n2:    run();");
-    }
-
-    fn content_of(dir: &tempfile::TempDir, input: &Value) -> String {
-        Grep.run(input, &Workspace::new(dir.path())).content
-    }
-
-    #[test]
-    fn matching_lines_are_grouped_under_their_file() {
-        let dir = tempfile::tempdir().expect("dir");
-        std::fs::write(dir.path().join("a.txt"), "hit one\nmiss\nhit two\n").expect("write");
-        std::fs::write(dir.path().join("b.txt"), "hit three\n").expect("write");
-        let found = content_of(&dir, &json!({"pattern": "hit", "output_mode": "content", "-n": true}));
-        let mut groups: Vec<&str> = found.split("\n\n").collect();
-        groups.sort_unstable();
-        assert_eq!(groups, vec!["a.txt\n1:hit one\n3:hit two", "b.txt\n1:hit three"]);
-    }
-
-    #[test]
-    fn a_long_line_is_cut_and_says_how_much_was_left_out() {
-        let dir = tempfile::tempdir().expect("dir");
-        std::fs::write(dir.path().join("min.js"), format!("hit{}\n", "x".repeat(1_000))).expect("write");
-        let found = content_of(&dir, &json!({"pattern": "hit", "output_mode": "content"}));
-        assert_eq!(found, format!("min.js\nhit{}… [+703 characters]", "x".repeat(297)));
-    }
-
-    #[test]
-    fn one_file_shows_its_first_matches_and_counts_the_rest() {
-        let dir = tempfile::tempdir().expect("dir");
-        std::fs::write(dir.path().join("log.txt"), "hit\n".repeat(30)).expect("write");
-        let found = content_of(&dir, &json!({"pattern": "hit", "output_mode": "content"}));
-        assert_eq!(found, format!("log.txt\n{}… [5 more matches in this file]", "hit\n".repeat(25)));
-    }
-
-    #[test]
-    fn results_stop_at_a_default_limit_that_head_limit_replaces() {
-        let dir = tempfile::tempdir().expect("dir");
-        for at in 0..205 {
-            std::fs::write(dir.path().join(format!("f{at}.txt")), "hit\n").expect("write");
-        }
-        let listed = content_of(&dir, &json!({"pattern": "hit"}));
-        assert_eq!(listed.lines().count(), 201);
-        assert!(listed.ends_with("\n… [5 more results; narrow the search or raise head_limit]"), "{listed}");
-        assert_eq!(content_of(&dir, &json!({"pattern": "hit", "head_limit": 300})).lines().count(), 205);
-        let two = content_of(&dir, &json!({"pattern": "hit", "head_limit": 2}));
-        assert!(two.ends_with("\n… [203 more results; narrow the search or raise head_limit]"), "{two}");
-    }
-
-    #[test]
-    fn reports_no_match_and_bad_patterns() {
-        let (_dir, workspace) = workspace();
-        assert_eq!(Grep.run(&json!({"pattern": "absent"}), &workspace).content, "No matches found.");
-        assert!(Grep.run(&json!({"pattern": "("}), &workspace).is_error);
-    }
-}
+#[path = "grep_tests.rs"]
+mod tests;

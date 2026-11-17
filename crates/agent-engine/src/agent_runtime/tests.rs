@@ -54,6 +54,45 @@ fn agent_memory_kept_before_the_owner_was_removed_stays_in_its_folder() {
     assert_eq!(kept.join("/"), KEPT_IN);
 }
 
+fn git_in(dir: &Path, args: &[&str]) -> String {
+    let done = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid"])
+        .args(args)
+        .output()
+        .expect("git");
+    assert!(done.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&done.stderr));
+    String::from_utf8_lossy(&done.stdout).trim().to_owned()
+}
+
+#[test]
+fn a_session_worktree_starts_from_the_checked_out_commit_and_leaves_uncommitted_changes_behind() {
+    let project = tempfile::tempdir().expect("project");
+    repo(project.path());
+    git_in(project.path(), &["checkout", "-q", "-b", "feature"]);
+    std::fs::write(project.path().join("feature.txt"), "work").expect("feature");
+    git_in(project.path(), &["add", "feature.txt"]);
+    git_in(project.path(), &["commit", "-qm", "Add the feature"]);
+    let head = git_in(project.path(), &["rev-parse", "HEAD"]);
+    std::fs::write(project.path().join("README.md"), "edited").expect("edit");
+    std::fs::write(project.path().join("scratch.txt"), "new").expect("untracked");
+    let workspace = Workspace::new(project.path());
+
+    let entered = enter(&workspace).expect("worktree");
+
+    assert_eq!(entered.setup.base_commit.as_deref(), Some(head.as_str()));
+    assert_eq!(git_in(&entered.setup.cwd, &["rev-parse", "HEAD"]), head);
+    assert!(entered.setup.cwd.join("feature.txt").exists(), "the branch's own commit is there");
+    assert_eq!(std::fs::read_to_string(entered.setup.cwd.join("README.md")).expect("readme"), "base");
+    assert!(!entered.setup.cwd.join("scratch.txt").exists());
+    assert_eq!(entered.commit, head[..entered.commit.len()]);
+    assert!(entered.commit.len() >= 7, "{}", entered.commit);
+    assert_eq!(entered.subject, "Add the feature");
+    assert_eq!(entered.left_behind, 2);
+    let _ = cleanup(&entered.setup);
+}
+
 #[test]
 fn a_worktree_keeps_the_rules_of_the_user_s_home_when_made_and_when_resumed() {
     let project = tempfile::tempdir().expect("project");

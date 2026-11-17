@@ -81,6 +81,8 @@ fn a_file_is_opened_once_then_changed_and_its_diagnostics_awaited_by_version() {
             "params": {"uri": uri, "version": version, "diagnostics": [{"message": message}]}})
         };
         server.send(publish(1, "stale"));
+        server.send(json!({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics",
+            "params": {"uri": "file:///w/src/other.rs", "diagnostics": [{"message": "elsewhere"}]}}));
         server.send(publish(2, "fresh"));
     });
     let file = Path::new("/w/src/a.rs");
@@ -89,6 +91,10 @@ fn a_file_is_opened_once_then_changed_and_its_diagnostics_awaited_by_version() {
     let found = client.diagnostics(file, 2, WAIT).expect("diagnostics");
     assert_eq!(found, [json!({"message": "fresh"})]);
     server.join().expect("server");
+    let every: Vec<(String, Vec<Value>)> = client.published();
+    let uris: Vec<&str> = every.iter().map(|(uri, _)| uri.as_str()).collect();
+    assert_eq!(uris, [domain::lsp::uri::uri_of(file).as_str(), "file:///w/src/other.rs"]);
+    assert_eq!(every[1].1, [json!({"message": "elsewhere"})]);
 }
 
 #[test]

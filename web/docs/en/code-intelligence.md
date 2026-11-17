@@ -57,8 +57,20 @@ When at least one server is available, the agent gets the **LSP** tool. It asks 
 | `incomingCalls` / `outgoingCalls` | Who calls a function, and what it calls |
 | `documentSymbol` | The outline of a file |
 | `workspaceSymbol` | A symbol found by name across the project (with `query`) |
+| `diagnostics` | The file's current errors and warnings |
+| `workspaceDiagnostics` | Every error and warning the file's server has reported for the project so far |
 
 Lines and columns count from 1, as **Read** shows them. The agent is told to prefer it over Grep to find where a symbol is defined or used, and to ask `documentSymbol` before reading a long file.
+
+`diagnostics` sends the file as it is on disk to its server and waits up to 10 seconds for the server's report. `workspaceDiagnostics` does the same, then lists what the server has reported for every file so far (servers such as rust-analyzer check the whole project; others report only the files that were opened). Both answer with a count and one line per problem, errors first, hints left out, at most 50 lines:
+
+```text
+1 error and 1 warning in 2 files
+src/parse.rs:42:9 error: mismatched types: expected `u32`, found `i64`
+src/lib.rs:7:5 warning: unused import: `std::fs`
+```
+
+When the server is not installed yet, the question asks first, as any first use does, and nothing is installed in a folder you have not trusted.
 
 ### Errors after every edit
 

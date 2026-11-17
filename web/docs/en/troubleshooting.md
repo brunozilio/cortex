@@ -30,7 +30,7 @@ All checks passed:
   ✓ declared providers none (~/{{DIR}}/providers/*.js adds one)
   ✓ sandbox      on: commands write only inside the project, added folders, temp and caches
   ✓ git          git version 2.47.0
-  ✓ ripgrep      ripgrep 14.1.1
+  ✓ ripgrep      ripgrep 14.1.1 (Grep searches with it)
 ```
 
 When a check fails, the first line counts the problems (`1 problem(s):`) and the check is marked `✗`. `{{COMMAND}} doctor` exits with 0 when every check passes and 1 otherwise, so you can use it in scripts. Use `-C <path>` to check another folder.
@@ -69,7 +69,7 @@ The `declared providers` line says `none (~/{{DIR}}/providers/*.js adds one)` wh
 See [Declared providers](./models-and-providers#declared-providers).
 
 > [!NOTE]
-> `ripgrep` is optional: the `Grep` tool works without it, so the check passes with `not installed (Grep works without it)`. `git` is needed for `/diff` and worktrees.
+> `ripgrep` is optional. When `rg` is on `PATH`, the `Grep` tool uses it to find the files that match, which is much faster on large projects; without it, `Grep` searches with its built-in engine and gives the same results. Either way the check passes, with `not installed (Grep uses its built-in search, slower on large projects)` when it is missing. `git` is needed for `/diff` and worktrees.
 
 ## Logs
 

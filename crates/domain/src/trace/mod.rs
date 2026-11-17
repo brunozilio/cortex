@@ -1,6 +1,7 @@
 pub mod insights;
 mod lane;
 pub mod marks;
+pub mod otlp;
 mod route;
 pub mod runs;
 

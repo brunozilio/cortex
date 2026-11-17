@@ -58,6 +58,7 @@ pub struct Environment {
     pub added_dirs: Vec<PathBuf>,
     pub platform: &'static str,
     pub date: String,
+    pub time_zone: String,
     pub top_level: Option<Vec<String>>,
     pub model: String,
     pub language_servers: Vec<LanguageServer>,
@@ -76,6 +77,7 @@ impl Environment {
             "added_dirs": self.added_dirs.iter().map(|dir| shown(dir)).collect::<Vec<_>>(),
             "platform": self.platform,
             "date": self.date,
+            "time_zone": self.time_zone,
             "top_level": self.top_level,
             "model": self.model,
             "language_servers": self.language_servers.iter().map(|server| serde_json::json!({

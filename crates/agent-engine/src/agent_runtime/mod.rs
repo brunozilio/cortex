@@ -135,20 +135,10 @@ fn prepare_as(config: &AgentConfig, name: &str, workspace: &Workspace) -> Result
     if config.worktree && git::has_commit(workspace)? {
         let root =
             PathBuf::from(git_stopped(workspace, &workspace.cwd, &["rev-parse".as_ref(), "--show-toplevel".as_ref()])?);
-        let base = git_stopped(workspace, &root, &["symbolic-ref".as_ref(), "refs/remotes/origin/HEAD".as_ref()])
-            .or_else(|_| {
-                for name in ["main", "master"] {
-                    if git_stopped(workspace, &root, &["rev-parse".as_ref(), "--verify".as_ref(), name.as_ref()])
-                        .is_ok()
-                    {
-                        return Ok(name.into());
-                    }
-                }
-                Ok::<_, String>("HEAD".into())
-            })?;
+        let base = git_stopped(workspace, &root, &["rev-parse".as_ref(), "--verify".as_ref(), "HEAD".as_ref()])?;
         let target = root.join(concat!(brand::dir!(), "/worktrees")).join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(target.parent().ok_or("worktree parent missing")?).map_err(|e| e.to_string())?;
-        setup.base_commit = Some(git_stopped(workspace, &root, &["rev-parse".as_ref(), base.as_ref()])?);
+        setup.base_commit = Some(base.clone());
         setup.cwd = target.clone();
         setup.worktree_root = Some(root.clone());
         if let Err(error) = git_stopped(
@@ -196,7 +186,7 @@ fn managed(root: &std::path::Path, path: &std::path::Path) -> bool {
 mod guard;
 mod session_worktree;
 pub use guard::Guard;
-pub use session_worktree::{Relocation, enter, removable, remove};
+pub use session_worktree::{Entered, Relocation, enter, removable, remove};
 
 #[cfg(test)]
 mod tests;

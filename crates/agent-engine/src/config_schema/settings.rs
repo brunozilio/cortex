@@ -36,6 +36,14 @@ fn properties() -> Value {
         },
         "agent": { "type": ["string", "null"], "description": "Runs the main conversation as this agent." },
         "autoMemoryEnabled": switch("false turns off the persistent memory of agents that declare a memory scope."),
+        "bashOutputLimit": {
+            "type": "integer",
+            "minimum": domain::output::SMALLEST_LIMIT,
+            "maximum": domain::output::LARGEST_LIMIT,
+            "default": domain::output::DEFAULT_LIMIT,
+            "description": "Characters of a command's output the agent sees; past it, the start and the end are kept \
+                            and the whole output is saved to a file the agent is pointed to."
+        },
         "advisorModel": model("Model for the advisor the agent consults."),
         "judgeModel": model("Model for the judge that checks finished work."),
         "smallModel": model("Model for background chores: titles, effort picks, web reading."),

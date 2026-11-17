@@ -57,8 +57,20 @@ Quando há pelo menos um servidor disponível, o agente ganha a ferramenta **LSP
 | `incomingCalls` / `outgoingCalls` | Quem chama uma função, e o que ela chama |
 | `documentSymbol` | O esboço de um arquivo |
 | `workspaceSymbol` | Um símbolo encontrado pelo nome no projeto inteiro (com `query`) |
+| `diagnostics` | Os erros e avisos atuais do arquivo |
+| `workspaceDiagnostics` | Todos os erros e avisos que o servidor do arquivo já relatou para o projeto |
 
 Linhas e colunas contam a partir de 1, como o **Read** mostra. O agente é orientado a preferi-la ao Grep para achar onde um símbolo é definido ou usado, e a pedir o `documentSymbol` antes de ler um arquivo longo.
+
+O `diagnostics` manda o arquivo como está no disco ao servidor dele e espera até 10 segundos pelo relatório do servidor. O `workspaceDiagnostics` faz o mesmo e depois lista o que o servidor já relatou para cada arquivo (servidores como o rust-analyzer verificam o projeto inteiro; outros só relatam os arquivos que foram abertos). Os dois respondem com uma contagem e uma linha por problema, erros primeiro, dicas de fora, no máximo 50 linhas:
+
+```text
+1 error and 1 warning in 2 files
+src/parse.rs:42:9 error: mismatched types: expected `u32`, found `i64`
+src/lib.rs:7:5 warning: unused import: `std::fs`
+```
+
+Quando o servidor ainda não está instalado, a pergunta pede permissão antes, como qualquer primeiro uso, e nada é instalado numa pasta em que você não confiou.
 
 ### Erros depois de cada edição
 

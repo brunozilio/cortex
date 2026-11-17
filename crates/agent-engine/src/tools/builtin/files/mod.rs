@@ -4,6 +4,7 @@ mod grep;
 mod notebook;
 mod pdf;
 mod read;
+mod ripgrep;
 mod shown_diff;
 mod write;
 

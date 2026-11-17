@@ -47,7 +47,7 @@ Se o git não conseguir fazer o primeiro commit (geralmente porque `user.name` e
 
 ## Worktrees
 
-Uma worktree do git é um checkout separado do mesmo repositório. O {{NAME}} cria as suas worktrees em `{{DIR}}/worktrees/<id>` na raiz do repositório, destacadas (detached) na branch base: `origin/HEAD` quando o remoto tem uma, senão `main`, senão `master`, senão o `HEAD` atual.
+Uma worktree do git é um checkout separado do mesmo repositório. O {{NAME}} cria as suas worktrees em `{{DIR}}/worktrees/<id>` na raiz do repositório, destacadas (detached) no commit atual (`HEAD`), então elas têm os commits da branch em que você está. Mudanças não commitadas, em stage ou não, e arquivos não rastreados não vão junto: faça o commit antes se a worktree precisar deles. O resultado do EnterWorktree diz o commit (hash curto e assunto) e quantas mudanças não commitadas ficaram para trás.
 
 As worktrees precisam de um repositório com pelo menos um commit. Sem isso, o trabalho roda na pasta do projeto e o resultado diz `Ran without isolation: this folder is not a git repository with a commit, so no worktree was made.`
 

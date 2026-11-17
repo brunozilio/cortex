@@ -16,6 +16,7 @@ pub struct ScriptedServer {
     pub asked: Mutex<Vec<(String, Value)>>,
     pub synced: Mutex<Vec<(PathBuf, String, String)>>,
     pub diagnostics: Mutex<Option<Vec<Value>>>,
+    pub published: Mutex<Vec<(String, Vec<Value>)>>,
     pub missing: Mutex<Option<String>>,
     pub installs: std::sync::atomic::AtomicUsize,
 }
@@ -50,6 +51,10 @@ impl LanguageServer for ScriptedServer {
 
     fn diagnostics(&self, _: &Path, _: i64, _: Duration) -> Option<Vec<Value>> {
         self.diagnostics.lock().ok()?.clone()
+    }
+
+    fn published(&self) -> Vec<(String, Vec<Value>)> {
+        self.published.lock().map(|published| published.clone()).unwrap_or_default()
     }
 
     fn is_alive(&self) -> bool {

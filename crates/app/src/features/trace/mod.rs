@@ -10,6 +10,8 @@ use serde_json::Value;
 
 use crate::features::context::Context;
 
+pub mod export;
+
 const CURRENT_TEXT: usize = 20_000;
 const OTHER_TEXT: usize = 2_000;
 
@@ -71,7 +73,7 @@ fn everything(store: &FileSessions, listed: &[(SessionId, PathBuf)], now_ms: u64
     Report { project: String::new(), current, generated_at_ms: now_ms, sessions, insights }
 }
 
-fn traced(store: &FileSessions, cwd: &Path, id: &SessionId) -> Result<Vec<Run>, String> {
+pub(crate) fn traced(store: &FileSessions, cwd: &Path, id: &SessionId) -> Result<Vec<Run>, String> {
     let records = records(store.entries(cwd, id)?);
     if records.is_empty() {
         return Err("this session has nothing to trace yet".into());

@@ -82,6 +82,7 @@ pub(in crate::engine) fn flagged(settings: &Settings, cwd: &Path, safety_check: 
         code_mode: domain::code_mode::Mode::of(&settings.features),
         web: domain::web_reading::WebReading::from(&settings.features),
         output: domain::output::Shaping::from(&settings.features),
+        bash_output: settings.bash_output,
         safety: safety_check.then(|| Arc::new(crate::guard::Safety::default())),
         ..Policy::default()
     }

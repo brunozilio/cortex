@@ -47,7 +47,7 @@ If git cannot make the first commit (usually because `user.name` and `user.email
 
 ## Worktrees
 
-A git worktree is a separate checkout of the same repository. {{NAME}} creates its worktrees under `{{DIR}}/worktrees/<id>` at the repository root, detached at the base branch: `origin/HEAD` when the remote has one, otherwise `main`, otherwise `master`, otherwise the current `HEAD`.
+A git worktree is a separate checkout of the same repository. {{NAME}} creates its worktrees under `{{DIR}}/worktrees/<id>` at the repository root, detached at the current commit (`HEAD`), so it holds the commits of the branch you are on. Uncommitted changes, staged or not, and untracked files are not carried over: commit them first if the worktree needs them. EnterWorktree's result names the commit (short hash and subject) and says how many uncommitted changes stayed behind.
 
 Worktrees need a repository with at least one commit. Without one, work runs in the project folder and the result says `Ran without isolation: this folder is not a git repository with a commit, so no worktree was made.`
 

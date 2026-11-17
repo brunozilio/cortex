@@ -30,6 +30,7 @@ pub struct Policy {
     pub code_mode_detach: Option<std::time::Duration>,
     pub web: WebReading,
     pub output: domain::output::Shaping,
+    pub bash_output: domain::output::OutputLimit,
 }
 
 impl Policy {
@@ -54,6 +55,7 @@ impl Policy {
             code_mode_detach: self.code_mode_detach,
             web: self.web,
             output: self.output,
+            bash_output: self.bash_output,
         }
     }
 

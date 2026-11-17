@@ -176,6 +176,7 @@ fn one_value_per_published_key() -> Vec<(&'static str, Value)> {
         ("outputStyle", json!("concise")),
         ("agent", json!("reviewer")),
         ("autoMemoryEnabled", json!(false)),
+        ("bashOutputLimit", json!(4_000)),
         ("advisorModel", json!("a")),
         ("judgeModel", json!("j")),
         ("smallModel", json!("s")),

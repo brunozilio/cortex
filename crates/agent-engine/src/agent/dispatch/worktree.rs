@@ -2,8 +2,31 @@ use serde_json::Value;
 
 use crate::agent::Agent;
 use crate::agent::run::ThisRun;
-use crate::agent_runtime::{self, Relocation, Setup};
+use crate::agent_runtime::{self, Entered, Relocation, Setup};
 use crate::tools::Outcome;
+
+fn entered_text(entered: &Entered) -> String {
+    let path = entered.setup.cwd.display();
+    let from = match (entered.commit.as_str(), entered.subject.as_str()) {
+        ("", _) => String::new(),
+        (commit, "") => format!(" from the current commit {commit}"),
+        (commit, subject) => format!(" from the current commit {commit} ({subject})"),
+    };
+    let left = match entered.left_behind {
+        0 => String::new(),
+        1 => " The one uncommitted change in the checkout was not carried over; commit it first if the worktree \
+               needs it."
+            .to_owned(),
+        count => format!(
+            " The {count} uncommitted changes in the checkout were not carried over; commit them first if the \
+             worktree needs them."
+        ),
+    };
+    format!(
+        "Created a worktree at {path}{from}.{left} From your next step on, the session works there (files, commands \
+         and later prompts) until ExitWorktree."
+    )
+}
 
 impl Agent<'_> {
     pub(super) fn enter_worktree(&self, run: &ThisRun) -> Outcome {
@@ -17,14 +40,10 @@ impl Agent<'_> {
             ));
         }
         match agent_runtime::enter(self.workspace) {
-            Ok(setup) => {
-                let path = setup.cwd.clone();
-                self.control.move_to(Relocation { setup, remove: None });
-                Outcome::ok(format!(
-                    "Created a worktree at {}. From your next step on, the session works there (files, commands \
-                     and later prompts) until ExitWorktree.",
-                    path.display()
-                ))
+            Ok(entered) => {
+                let said = entered_text(&entered);
+                self.control.move_to(Relocation { setup: entered.setup, remove: None });
+                Outcome::ok(said)
             }
             Err(error) => Outcome::error(format!("Could not create a worktree: {error}")),
         }
@@ -65,5 +84,30 @@ impl Agent<'_> {
             ));
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entered(commit: &str, subject: &str, left_behind: usize) -> Entered {
+        let setup = Setup { cwd: "/repo/wt".into(), ..Default::default() };
+        Entered { setup, commit: commit.into(), subject: subject.into(), left_behind }
+    }
+
+    #[test]
+    fn entering_says_which_commit_the_worktree_starts_from_and_what_stayed_behind() {
+        let clean = entered_text(&entered("abc1234", "Add the feature", 0));
+        assert!(
+            clean.starts_with("Created a worktree at /repo/wt from the current commit abc1234 (Add the feature). From")
+        );
+        let one = entered_text(&entered("abc1234", "", 1));
+        assert!(
+            one.contains("commit abc1234. The one uncommitted change in the checkout was not carried over"),
+            "{one}"
+        );
+        let many = entered_text(&entered("abc1234", "x", 3));
+        assert!(many.contains("The 3 uncommitted changes in the checkout were not carried over"), "{many}");
     }
 }

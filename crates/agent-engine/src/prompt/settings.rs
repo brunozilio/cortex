@@ -54,6 +54,8 @@ pub struct Settings {
     pub sandbox: domain::sandbox::Sandbox,
     #[serde(default)]
     pub notices: Vec<String>,
+    #[serde(default)]
+    pub bash_output: domain::output::OutputLimit,
 }
 
 pub type LspLayer = std::collections::BTreeMap<String, domain::lsp::ServerConfig>;
@@ -81,6 +83,7 @@ impl Default for Settings {
             features: Default::default(),
             sandbox: Default::default(),
             notices: Vec::new(),
+            bash_output: Default::default(),
         }
     }
 }
@@ -223,6 +226,10 @@ impl Layer<'_> {
     fn merge_agent(&self, merged: &mut Settings) -> Result<(), String> {
         if let Some(value) = self.value.get("autoMemoryEnabled") {
             merged.auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;
+        }
+        if let Some(value) = self.value.get("bashOutputLimit") {
+            let characters = value.as_u64().ok_or("bashOutputLimit must be a whole number of characters")?;
+            merged.bash_output = domain::output::OutputLimit::of(characters);
         }
         if let Some(value) = self.value.get("agent") {
             merged.agent = if value.is_null() {

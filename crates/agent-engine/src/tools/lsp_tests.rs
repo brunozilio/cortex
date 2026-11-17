@@ -50,6 +50,71 @@ fn calls_are_asked_in_two_steps() {
     assert_eq!(methods, ["textDocument/prepareCallHierarchy", "callHierarchy/incomingCalls"]);
 }
 
+fn problem(severity: u64, line: u32, message: &str) -> Value {
+    json!({"severity": severity, "message": message, "range": range(line, 4)})
+}
+
+#[test]
+fn a_file_s_diagnostics_are_asked_after_syncing_it_and_said_compactly() {
+    let server = ScriptedServer::answering([]);
+    let (_dir, workspace) = project(&server);
+    *server.diagnostics.lock().expect("diagnostics") = Some(vec![problem(2, 0, "unused"), problem(1, 2, "no `go`")]);
+    let asked = json!({"operation": "diagnostics", "file_path": "src/main.rs"});
+    let outcome = Lsp.run(&asked, &workspace);
+    assert!(!outcome.is_error, "{}", outcome.content);
+    assert_eq!(
+        outcome.content,
+        "1 error and 1 warning in 1 file\nsrc/main.rs:3:5 error: no `go`\nsrc/main.rs:1:5 warning: unused"
+    );
+    assert!(server.synced.lock().expect("synced")[0].2.contains("tools::run"), "the file on disk is sent first");
+    assert!(server.asked().is_empty(), "diagnostics are read from what the server published");
+
+    *server.diagnostics.lock().expect("diagnostics") = Some(Vec::new());
+    assert_eq!(Lsp.run(&asked, &workspace).content, "No errors or warnings in src/main.rs.");
+    *server.diagnostics.lock().expect("diagnostics") = None;
+    let silent = Lsp.run(&asked, &workspace);
+    assert!(!silent.is_error && silent.content.contains("may still be checking"), "{}", silent.content);
+}
+
+#[test]
+fn the_workspace_s_diagnostics_are_every_file_the_server_reported_on() {
+    let server = ScriptedServer::answering([]);
+    let (dir, workspace) = project(&server);
+    *server.published.lock().expect("published") = vec![
+        (domain::lsp::uri::uri_of(&dir.path().join("src/tools.rs")), vec![problem(2, 1, "unused `b`")]),
+        (domain::lsp::uri::uri_of(&dir.path().join("src/main.rs")), vec![problem(1, 2, "no `go`")]),
+        ("file:///elsewhere/lib.rs".into(), vec![problem(4, 0, "a hint")]),
+    ];
+    let asked = json!({"operation": "workspaceDiagnostics", "file_path": "src/main.rs"});
+    assert_eq!(
+        Lsp.run(&asked, &workspace).content,
+        "1 error and 1 warning in 2 files\nsrc/main.rs:3:5 error: no `go`\nsrc/tools.rs:2:5 warning: unused `b`"
+    );
+    server.published.lock().expect("published").clear();
+    assert!(Lsp.run(&asked, &workspace).content.starts_with("The language server reports no errors or warnings"));
+}
+
+#[test]
+fn asking_for_diagnostics_installs_a_missing_server_only_in_a_trusted_folder() {
+    let server = ScriptedServer::answering([]);
+    let (_dir, mut workspace) = project(&server);
+    *server.missing.lock().expect("missing") = Some("install rust-analyzer".into());
+    *server.diagnostics.lock().expect("diagnostics") = Some(Vec::new());
+    let asked = json!({"operation": "diagnostics", "file_path": "src/main.rs"});
+    let effects = Lsp.effects(&asked, &workspace);
+    assert!(!effects.iter().any(|effect| matches!(effect, crate::tools::Effect::Install { .. })), "untrusted");
+    let refused = Lsp.run(&asked, &workspace);
+    assert!(refused.is_error && refused.content.contains("not trusted"), "{}", refused.content);
+
+    workspace.policy.trust = domain::trust::Trust::Trusted;
+    let effects = Lsp.effects(&asked, &workspace);
+    assert!(effects.iter().any(|effect| matches!(effect, crate::tools::Effect::Install { .. })), "asks first");
+    let installed = Lsp.run(&asked, &workspace);
+    assert!(installed.content.starts_with("Installed the "), "{}", installed.content);
+    assert!(installed.content.ends_with("No errors or warnings in src/main.rs."), "{}", installed.content);
+    assert_eq!(server.installs.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
 #[test]
 fn what_cannot_be_asked_is_an_error_that_says_why() {
     let server =

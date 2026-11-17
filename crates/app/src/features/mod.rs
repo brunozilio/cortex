@@ -10,7 +10,7 @@ mod schedules;
 mod sessions;
 mod shell;
 mod suggested_rules;
-mod trace;
+pub(crate) mod trace;
 mod workspace;
 
 use crate::api::{FeatureError, FeatureName, FeatureReply, FeatureRequest};

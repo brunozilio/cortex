@@ -99,10 +99,18 @@ fn tool(called: &str, state: &ToolState, output: Option<&str>, width: usize, exp
 }
 
 fn tool_output(output: &str, width: usize, expanded: bool, out: &mut Lines) {
+    let (note, output) = match output.split_once('\n') {
+        Some((first, rest)) if first.starts_with(domain::output::CUT_NOTE) => (Some(first), rest),
+        _ => (None, output),
+    };
+    let noted: Vec<String> = note.map(|note| wrap(note, width.saturating_sub(4))).unwrap_or_default();
+    for (i, line) in noted.iter().enumerate() {
+        out.push(under(i, line, width));
+    }
     let shown: Vec<&str> = output.lines().take(if expanded { usize::MAX } else { OUTPUT_LINES }).collect();
     let more = output.lines().count().saturating_sub(shown.len());
     for (i, line) in shown.iter().enumerate() {
-        out.push(under(i, line, width));
+        out.push(under(noted.len() + i, line, width));
     }
     if more > 0 {
         out.push(Line::styled(format!("    … +{more} lines ({})", diffs::EXPAND), dim()));

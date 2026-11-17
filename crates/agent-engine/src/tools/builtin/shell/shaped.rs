@@ -27,7 +27,7 @@ pub(super) fn shaped(command: &str, output: &str, workspace: &Workspace) -> Stri
     text
 }
 
-fn kept_whole(text: &str, workspace: &Workspace) -> Option<PathBuf> {
+pub(super) fn kept_whole(text: &str, workspace: &Workspace) -> Option<PathBuf> {
     static NEXT: AtomicU64 = AtomicU64::new(1);
     let dir = crate::tools::persisted::results_dir(&workspace.session_id);
     let name = format!("bash-{}-{}.txt", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));

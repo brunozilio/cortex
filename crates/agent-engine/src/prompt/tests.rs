@@ -68,6 +68,18 @@ fn shows_the_top_level_of_the_working_directory_when_known() {
 }
 
 #[test]
+fn says_the_time_zone_beside_the_date_when_it_is_known() {
+    let mut zoned = environment();
+    zoned.time_zone = "America/Sao_Paulo, UTC-03:00".into();
+    let built_in = |environment: &Environment| {
+        let prompt = content::render_in(None, "prompts/system.js", &content::with_brand(&environment.data()));
+        prompt.lines().find(|line| line.starts_with("- Today")).unwrap_or_default().to_owned()
+    };
+    assert_eq!(built_in(&zoned), "- Today: 2026-11-07 (time zone America/Sao_Paulo, UTC-03:00)");
+    assert_eq!(built_in(&environment()), "- Today: 2026-11-07");
+}
+
+#[test]
 fn says_when_the_repository_has_no_commits_yet() {
     let mut environment = environment();
     environment.git = Some(GitSnapshot { branch: "main".into(), status: String::new(), recent: String::new() });

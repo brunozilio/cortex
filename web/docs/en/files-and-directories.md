@@ -116,7 +116,7 @@ In the **local data folder**:
 
 | Path | What it is |
 |---|---|
-| `native-sessions/` | Conversations. For each one: `<session>.jsonl` (the conversation itself, saved after every step, so it survives a crash or a closed terminal), `<session>.trace.jsonl` (what `/trace` shows; when it passes 64 MB it is renamed to `<session>.trace.1.jsonl` and a new one starts, so only the latest part and the one before it are kept), `checkpoints-<session>.json` (for `/rewind`: the files of the 50 most recent prompts, up to 64 MB), `snapshot-<session>.json` (the date, git state and top-level files the conversation started with, so its prompt stays the same) and `worktree-<session>.json`. A `<session>.lock` file exists only while the conversation is answering. Deleting the trace files loses the trace, never the conversation. |
+| `native-sessions/` | Conversations. For each one: `<session>.jsonl` (the conversation itself, saved after every step, so it survives a crash or a closed terminal), `<session>.trace.jsonl` (what `/trace` shows; when it passes 64 MB it is renamed to `<session>.trace.1.jsonl` and a new one starts, so only the latest part and the one before it are kept), `checkpoints-<session>.json` (for `/rewind`: the files of the 50 most recent prompts, up to 64 MB), `snapshot-<session>.json` (the date and local time zone, such as `America/Sao_Paulo, UTC-03:00`, the git state and top-level files the conversation started with, so its prompt stays the same) and `worktree-<session>.json`. A `<session>.lock` file exists only while the conversation is answering. Deleting the trace files loses the trace, never the conversation. |
 | `secrets.json` | API keys and tokens, encrypted. Readable only by you. |
 | `secrets.key` | Where the key that opens `secrets.json` is. By default it holds the key itself, as 64 hex digits. Only with `{{ENV}}_SECRETS=keychain` does it hold just the word `keychain`, the key being in your system keychain (macOS Keychain, the Secret Service on Linux, Windows Credential Manager). Readable only by you. Do not delete it: without it, the keys in `secrets.json` cannot be opened. |
 | `logs/{{COMMAND}}.log` | The log (level from `{{ENV}}_LOG`). Over 5 MB it is renamed to `{{COMMAND}}.log.1` and a new one starts. |
@@ -144,7 +144,7 @@ In the system temporary folder (`TMPDIR` on macOS and Linux):
 
 | Path | What it is |
 |---|---|
-| `{{COMMAND}}-tool-results/<session>/` | Tool outputs too long for the conversation (over 30,000 characters), and whole command outputs that were filtered, so the agent can read them in parts. A conversation's folder is removed once nothing has been written to it for 7 days. |
+| `{{COMMAND}}-tool-results/<session>/` | Tool outputs too long for the conversation (over 30,000 characters), whole Bash outputs that passed `bashOutputLimit`, and whole command outputs that were filtered, so the agent can read them in parts. A conversation's folder is removed once nothing has been written to it for 7 days. |
 | `{{COMMAND}}-prompt-<random>.md` | The prompt while you edit it in your editor (Ctrl+G); readable only by you, removed afterwards. |
 | `{{COMMAND}}-claims/<hash>.json` | Which session last edited which file, per project, for the `experimental-session-claims` warning. |
 | `{{COMMAND}}-memory/<run>.json` | The memory changes a run asks for, before {{NAME}} applies them. |

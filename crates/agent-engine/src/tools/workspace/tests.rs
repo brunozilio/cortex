@@ -35,6 +35,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         code_mode_detach: Some(std::time::Duration::from_secs(5)),
         web: domain::web_reading::WebReading::none(),
         output: domain::output::Shaping { cleanup: true, filters: false, savings: true },
+        bash_output: domain::output::OutputLimit::of(4_000),
     };
 
     let fork = policy.fork();
@@ -42,6 +43,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
     assert_eq!(fork.trust, policy.trust, "a sub-agent works in a folder as trusted as its parent's");
     assert_eq!(fork.web, policy.web, "a sub-agent reads the web as its parent does");
     assert_eq!(fork.output, policy.output, "a sub-agent's command output is shaped as its parent's");
+    assert_eq!(fork.bash_output, policy.bash_output, "a sub-agent's command output is cut as its parent's");
     assert_eq!(fork.sandbox, policy.sandbox, "a sub-agent's commands stay as confined as its parent's");
     assert!(fork.redact.is_some(), "a sub-agent's output is redacted like its parent's");
     assert!(fork.snapshots && fork.dependency_guard);

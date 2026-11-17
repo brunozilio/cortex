@@ -267,6 +267,23 @@ fn diffs_browses_the_changes_full_screen_by_file_and_scope() {
 }
 
 #[test]
+fn a_cut_command_output_shows_its_whole_note_above_the_folded_lines() {
+    let data = tempfile::tempdir().expect("data");
+    let model = Model::new("keyed:scripted", "Scripted");
+    let engine = FakeEngine::new(vec![model], Vec::new());
+    let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    let text = (1..=3000).map(|n| n.to_string()).collect::<Vec<_>>().join("\n");
+    let cut = domain::output::OutputLimit::of(1_000).cut(&text, Some("/tmp/results/bash-9-1.txt"));
+    app.transcript.apply(&EngineEvent::ToolStarted(ToolCall::new("t", "Bash", "seq 3000")));
+    app.transcript.apply(&EngineEvent::ToolResult { id: "t".into(), output: cut, failed: false });
+    let shown: String = screen(&app).split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(shown.contains("[Output cut: 13892 characters in 3000 lines"), "{shown}");
+    assert!(shown.contains("/tmp/results/bash-9-1.txt: Read or Grep it for the rest.]"), "{shown}");
+    assert!(shown.contains("ctrl+o to expand"), "{shown}");
+}
+
+#[test]
 fn ctrl_o_unfolds_a_long_output() {
     let data = tempfile::tempdir().expect("data");
     let model = Model::new("keyed:scripted", "Scripted");

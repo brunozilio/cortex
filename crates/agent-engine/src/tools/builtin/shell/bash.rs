@@ -1,7 +1,6 @@
 use std::process::Stdio;
 use std::time::Duration;
 
-use super::clip_middle;
 use super::shaped::shaped;
 use super::shells::Waited;
 use crate::model::ToolSpec;
@@ -11,7 +10,7 @@ use serde_json::{Value, json};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_TIMEOUT: Duration = Duration::from_secs(600);
-const OUTPUT: usize = 2_000_000;
+const OUTPUT: usize = domain::output::DEFAULT_LIMIT;
 
 #[derive(Debug)]
 pub struct Bash;
@@ -76,7 +75,7 @@ impl Tool for Bash {
         }
         let mut outcome = match waited {
             Waited::Exited { output, success: true, .. } => {
-                let text = clip_middle(&shaped(command, &output, workspace), OUTPUT);
+                let text = limited(&shaped(command, &output, workspace), workspace);
                 Outcome::ok(if text.is_empty() { "(no output)".to_owned() } else { text })
             }
             Waited::Exited { output, code, .. } => {
@@ -84,7 +83,7 @@ impl Tool for Bash {
                 let refused = workspace.sandboxed() && domain::sandbox::blocked(&output);
                 let hint = if refused { format!("\n{}", domain::sandbox::hint(brand::DIR)) } else { String::new() };
                 Outcome::error(
-                    format!("{}\n(exit code {code}){hint}", clip_middle(&shaped(command, &output, workspace), OUTPUT))
+                    format!("{}\n(exit code {code}){hint}", limited(&shaped(command, &output, workspace), workspace))
                         .trim_start()
                         .to_owned(),
                 )
@@ -97,10 +96,10 @@ impl Tool for Bash {
                 ))
             }
             Waited::Stopped(output) => {
-                Outcome::error(crate::tools::stopped::while_running(&clip_middle(&output, OUTPUT)))
+                Outcome::error(crate::tools::stopped::while_running(&limited(&output, workspace)))
             }
             Waited::TimedOut(output) => Outcome::error(
-                format!("{}\n(stopped after {} ms)", clip_middle(&output, OUTPUT), timeout.as_millis())
+                format!("{}\n(stopped after {} ms)", limited(&output, workspace), timeout.as_millis())
                     .trim_start()
                     .to_owned(),
             ),
@@ -110,6 +109,15 @@ impl Tool for Bash {
         }
         outcome
     }
+}
+
+fn limited(text: &str, workspace: &Workspace) -> String {
+    let limit = workspace.policy.bash_output;
+    if !limit.exceeded_by(text) {
+        return text.to_owned();
+    }
+    let saved = super::shaped::kept_whole(text, workspace).map(|path| path.display().to_string());
+    limit.cut(text, saved.as_deref())
 }
 
 pub(super) fn shell(command: &str, workspace: &Workspace) -> std::process::Command {
@@ -164,6 +172,32 @@ mod tests {
 
         workspace.policy.output.cleanup = true;
         assert_eq!(Bash.run(&command, &workspace), Outcome::ok("1"));
+    }
+
+    #[test]
+    fn a_long_output_is_cut_to_the_limit_with_a_first_line_saying_how_much_and_where_the_whole_is() {
+        let mut workspace = Workspace::new(std::env::temp_dir());
+        workspace.session_id = format!("bash-limit-{}", std::process::id());
+        workspace.policy.bash_output = domain::output::OutputLimit::of(1_000);
+        let outcome = Bash.run(&json!({"command": "seq 1 2000"}), &workspace);
+        assert!(!outcome.is_error, "{}", outcome.content);
+        let (note, rest) = outcome.content.split_once('\n').expect("note");
+        assert!(note.starts_with("[Output cut: 8892 characters in 2000 lines, over the limit of 1000"), "{note}");
+        let path = note
+            .split_once("The full output is in ")
+            .and_then(|(_, after)| after.strip_suffix(": Read or Grep it for the rest.]"))
+            .expect("the path");
+        let whole = std::fs::read_to_string(path).expect("saved");
+        let _ = std::fs::remove_dir_all(crate::tools::persisted::results_dir(&workspace.session_id));
+        assert_eq!(whole.lines().count(), 2000);
+        assert!(rest.starts_with("1\n2\n3\n") && rest.ends_with("\n1999\n2000"), "{rest}");
+        assert!(rest.chars().count() < 1_100);
+
+        let failed = Bash.run(&json!({"command": "seq 1 2000; exit 4"}), &workspace);
+        assert!(failed.is_error && failed.content.starts_with("[Output cut: "), "{}", failed.content);
+        assert!(failed.content.ends_with("\n2000\n(exit code 4)"), "{}", failed.content);
+        let _ = std::fs::remove_dir_all(crate::tools::persisted::results_dir(&workspace.session_id));
+        assert_eq!(Bash.run(&json!({"command": "seq 1 3"}), &workspace).content, "1\n2\n3");
     }
 
     #[test]

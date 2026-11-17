@@ -96,6 +96,28 @@ O terminal é a única forma de conduzir uma sessão pela página: o servidor da
 
 O `/docs` abre esta documentação no mesmo servidor da página, com os nomes reais do {{NAME}} preenchidos. O `/docs <assunto>` a abre já com uma busca pelo assunto.
 
+## Exportar para o OpenTelemetry
+
+O {{NAME}} também pode mandar cada run terminado a um coletor OpenTelemetry (Jaeger, Grafana Tempo, Honeycomb, um `otelcol` seu), como OTLP sobre HTTP com corpo JSON. Fica desligado até você indicar um coletor:
+
+```bash
+{{ENV}}_OTLP_ENDPOINT=http://localhost:4318 {{COMMAND}}
+{{ENV}}_OTLP_ENDPOINT=https://api.honeycomb.io {{ENV}}_OTLP_HEADERS="x-honeycomb-team=<chave>" {{COMMAND}}
+```
+
+Os spans vão para `<endpoint>/v1/traces` (um endpoint que já termina em `/v1/traces` é usado como está). O que é mandado:
+
+| Na página de trace | No OpenTelemetry |
+|---|---|
+| Um run (um prompt e tudo o que ele causou) | Um trace, cujo span raiz é `run`. Atributos: `session.id`, `{{COMMAND}}.run.index`, `{{COMMAND}}.run.status`, `gen_ai.request.model`, `{{COMMAND}}.tokens`, `{{COMMAND}}.cost_usd`, `{{COMMAND}}.waiting_ms`, e o modelo, o provedor, o modo de permissão, o esforço, a pasta e a branch do run como `{{COMMAND}}.*` |
+| Uma chamada ao modelo | Um span `chat <modelo>` (tipo client) com `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read_input_tokens`, `gen_ai.usage.cache_creation_input_tokens`, `gen_ai.response.finish_reasons` e `{{COMMAND}}.cost_usd` |
+| Uma chamada de ferramenta | Um span `execute_tool <nome>` com `gen_ai.tool.name`; uma chamada que falhou tem status de erro |
+| Subagentes, esperas, verificações e eventos | Spans com os nomes da página, sob o span que os iniciou |
+
+Todo span leva `{{COMMAND}}.span.kind` e `{{COMMAND}}.duration_ms`, e os horários reais de início e fim. Prompts, respostas, entradas e saídas de ferramentas nunca são mandados: só nomes, contagens, custos e tempos.
+
+Exportar nunca atrasa um run. Um run terminado entra numa fila e uma thread em segundo plano lê o trace dele, espera até dois segundos por outros runs que terminem para irem no mesmo pedido, e os envia. Um run ainda respondendo é mandado quando termina; cada run é mandado uma vez, e o primeiro run visto de uma sessão retomada é o mais recente, não o histórico inteiro. Quando o coletor está fora do ar ou responde com erro, os runs daquele pedido são descartados e o problema é escrito uma vez no [arquivo de log](./troubleshooting) (falhas seguintes só no nível `debug`); o chat não diz nada.
+
 ## Acesso e segurança
 
 - O servidor só escuta em `127.0.0.1`, numa porta livre escolhida ao iniciar.

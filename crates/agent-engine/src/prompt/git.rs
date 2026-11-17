@@ -12,6 +12,8 @@ pub struct GitSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Snapshot {
     pub date: String,
+    #[serde(default)]
+    pub time_zone: String,
     pub git: Option<GitSnapshot>,
     #[serde(default)]
     pub top_level: Option<Vec<String>>,

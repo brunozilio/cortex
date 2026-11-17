@@ -53,7 +53,9 @@ pub fn checks(sdk: &Sdk, cwd: &Path) -> Vec<Check> {
     found.push(check("git", program("git", &["--version"])));
     found.push(check(
         "ripgrep",
-        program("rg", &["--version"]).or_else(|_| Ok("not installed (Grep works without it)".into())),
+        program("rg", &["--version"])
+            .map(|version| format!("{version} (Grep searches with it)"))
+            .or_else(|_| Ok("not installed (Grep uses its built-in search, slower on large projects)".into())),
     ));
     found
 }

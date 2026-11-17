@@ -245,6 +245,10 @@ impl LspClient {
         }
     }
 
+    pub fn published(&self) -> Vec<(String, Vec<Value>)> {
+        self.shared.published.lock().map(|published| published.all()).unwrap_or_default()
+    }
+
     pub fn is_alive(&self) -> bool {
         self.shared.alive.load(Ordering::Relaxed)
     }

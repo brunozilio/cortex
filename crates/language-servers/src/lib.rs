@@ -39,6 +39,7 @@ pub trait LanguageServer: Send + Sync {
     fn request(&self, method: &str, params: Value, stop: &AtomicBool, wait: Duration) -> Result<Value, RequestError>;
     fn sync(&self, file: &Path, language: &str, text: &str) -> Result<i64, String>;
     fn diagnostics(&self, file: &Path, version: i64, wait: Duration) -> Option<Vec<Value>>;
+    fn published(&self) -> Vec<(String, Vec<Value>)>;
     fn is_alive(&self) -> bool;
 }
 
@@ -162,6 +163,9 @@ impl LanguageServer for LspClient {
     }
     fn diagnostics(&self, file: &Path, version: i64, wait: Duration) -> Option<Vec<Value>> {
         LspClient::diagnostics(self, file, version, wait)
+    }
+    fn published(&self) -> Vec<(String, Vec<Value>)> {
+        LspClient::published(self)
     }
     fn is_alive(&self) -> bool {
         LspClient::is_alive(self)

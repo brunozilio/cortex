@@ -116,7 +116,7 @@ Na **pasta de dados locais**:
 
 | Caminho | O que é |
 |---|---|
-| `native-sessions/` | Conversas. Para cada uma: `<sessão>.jsonl` (a conversa em si, salva a cada passo, então ela sobrevive a uma falha ou a um terminal fechado), `<sessão>.trace.jsonl` (o que o `/trace` mostra; ao passar de 64 MB é renomeado para `<sessão>.trace.1.jsonl` e um novo começa, então só a parte mais recente e a anterior são mantidas), `checkpoints-<sessão>.json` (para o `/rewind`: os arquivos dos 50 prompts mais recentes, até 64 MB), `snapshot-<sessão>.json` (a data, o estado do git e os arquivos do topo com que a conversa começou, para o prompt dela não mudar) e `worktree-<sessão>.json`. Um arquivo `<sessão>.lock` existe só enquanto a conversa está respondendo. Apagar os arquivos de trace perde o trace, nunca a conversa. |
+| `native-sessions/` | Conversas. Para cada uma: `<sessão>.jsonl` (a conversa em si, salva a cada passo, então ela sobrevive a uma falha ou a um terminal fechado), `<sessão>.trace.jsonl` (o que o `/trace` mostra; ao passar de 64 MB é renomeado para `<sessão>.trace.1.jsonl` e um novo começa, então só a parte mais recente e a anterior são mantidas), `checkpoints-<sessão>.json` (para o `/rewind`: os arquivos dos 50 prompts mais recentes, até 64 MB), `snapshot-<sessão>.json` (a data e o fuso horário local, por exemplo `America/Sao_Paulo, UTC-03:00`, o estado do git e os arquivos do topo com que a conversa começou, para o prompt dela não mudar) e `worktree-<sessão>.json`. Um arquivo `<sessão>.lock` existe só enquanto a conversa está respondendo. Apagar os arquivos de trace perde o trace, nunca a conversa. |
 | `secrets.json` | Chaves de API e tokens, cifrados. Legível só por você. |
 | `secrets.key` | Onde está a chave que abre o `secrets.json`. Por padrão ele contém a própria chave, em 64 dígitos hexadecimais. Só com `{{ENV}}_SECRETS=keychain` ele contém apenas a palavra `keychain`, e a chave fica no chaveiro do sistema (Keychain no macOS, Secret Service no Linux, Gerenciador de Credenciais no Windows). Legível só por você. Não o apague: sem ele, as chaves do `secrets.json` não podem ser abertas. |
 | `logs/{{COMMAND}}.log` | O log (nível definido por `{{ENV}}_LOG`). Passando de 5 MB, é renomeado para `{{COMMAND}}.log.1` e um novo começa. |
@@ -144,7 +144,7 @@ Na pasta temporária do sistema (`TMPDIR` no macOS e no Linux):
 
 | Caminho | O que é |
 |---|---|
-| `{{COMMAND}}-tool-results/<sessão>/` | Saídas de ferramentas longas demais para a conversa (mais de 30.000 caracteres) e saídas completas de comandos que foram filtradas, para que o agente as leia em partes. A pasta de uma conversa é removida depois de 7 dias sem nada ser gravado nela. |
+| `{{COMMAND}}-tool-results/<sessão>/` | Saídas de ferramentas longas demais para a conversa (mais de 30.000 caracteres), saídas completas de comandos Bash que passaram do `bashOutputLimit` e saídas completas de comandos que foram filtradas, para que o agente as leia em partes. A pasta de uma conversa é removida depois de 7 dias sem nada ser gravado nela. |
 | `{{COMMAND}}-prompt-<aleatório>.md` | O prompt enquanto você o edita no seu editor (Ctrl+G); só você pode lê-lo, e ele é removido depois. |
 | `{{COMMAND}}-claims/<hash>.json` | Qual sessão editou por último cada arquivo, por projeto, para o aviso do `experimental-session-claims`. |
 | `{{COMMAND}}-memory/<execução>.json` | As mudanças de memória que uma execução pede, antes de o {{NAME}} aplicá-las. |

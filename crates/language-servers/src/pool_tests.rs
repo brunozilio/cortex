@@ -33,6 +33,9 @@ impl LanguageServer for Fake {
     fn diagnostics(&self, _: &Path, _: i64, _: Duration) -> Option<Vec<Value>> {
         None
     }
+    fn published(&self) -> Vec<(String, Vec<Value>)> {
+        Vec::new()
+    }
     fn is_alive(&self) -> bool {
         self.alive.load(Ordering::Relaxed)
     }

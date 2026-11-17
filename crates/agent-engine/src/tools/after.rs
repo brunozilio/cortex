@@ -27,7 +27,7 @@ pub fn after(name: &str) -> Option<After> {
 }
 
 pub fn kept_whole(name: &str) -> bool {
-    ToolName::of(name) == ToolName::Read
+    matches!(ToolName::of(name), ToolName::Read | ToolName::Bash)
 }
 
 #[cfg(test)]
@@ -57,7 +57,8 @@ mod tests {
         for name in [names::READ, names::BASH, "WebSearch", "mcp__docs__fetch"] {
             assert!(after(name).is_none(), "{name}");
         }
-        assert!(kept_whole(names::READ) && !kept_whole(names::WEB_FETCH) && !kept_whole(names::BASH));
+        assert!(kept_whole(names::READ) && kept_whole(names::BASH), "they cut their own output");
+        assert!(!kept_whole(names::WEB_FETCH) && !kept_whole("BashOutput"));
     }
 
     #[test]

@@ -1,11 +1,13 @@
 mod cleanup;
 mod filters;
 mod invoked;
+mod limit;
 mod savings;
 
 pub use cleanup::{PLAIN_ENV, clean};
 pub use filters::{Filtered, filter};
 pub use invoked::program;
+pub use limit::{CUT_NOTE, DEFAULT_LIMIT, LARGEST_LIMIT, OutputLimit, SMALLEST_LIMIT};
 pub use savings::{Saving, report};
 
 use crate::features::{Features, OUTPUT_CLEANUP, OUTPUT_FILTERS, OUTPUT_SAVINGS};

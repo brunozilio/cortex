@@ -5,9 +5,27 @@ use super::{Setup, WorktreeState, managed, prepare_as};
 use crate::tools::Workspace;
 use crate::tools::subagent_config::AgentConfig;
 
-pub fn enter(workspace: &Workspace) -> Result<Setup, String> {
+#[derive(Debug)]
+pub struct Entered {
+    pub setup: Setup,
+    pub commit: String,
+    pub subject: String,
+    pub left_behind: usize,
+}
+
+pub fn enter(workspace: &Workspace) -> Result<Entered, String> {
     let config = AgentConfig { worktree: true, ..Default::default() };
-    prepare_as(&config, "main", workspace)
+    let setup = prepare_as(&config, "main", workspace)?;
+    let Some(root) = setup.worktree_root.clone() else {
+        return Ok(Entered { setup, commit: String::new(), subject: String::new(), left_behind: 0 });
+    };
+    let stop = &workspace.stop;
+    let described = output(&setup.cwd, &["log".as_ref(), "-1".as_ref(), "--format=%h %s".as_ref()], stop)?;
+    let (commit, subject) = described.trim().split_once(' ').unwrap_or((described.trim(), ""));
+    let status = output(&root, &["status".as_ref(), "--porcelain".as_ref(), "--untracked-files=all".as_ref()], stop)?;
+    let worktrees = concat!(brand::dir!(), "/worktrees/");
+    let left_behind = status.lines().filter(|line| line.len() > 3 && !line[3..].starts_with(worktrees)).count();
+    Ok(Entered { commit: commit.to_owned(), subject: subject.to_owned(), left_behind, setup })
 }
 
 #[derive(Debug)]

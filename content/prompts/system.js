@@ -37,7 +37,7 @@ export default function system(ctx) {
   }
   prompt += `- Git repository: ${ctx.git ? "yes" : "no"}\n`;
   prompt += `- Platform: ${ctx.platform}\n`;
-  prompt += `- Today: ${ctx.date}\n`;
+  prompt += ctx.time_zone ? `- Today: ${ctx.date} (time zone ${ctx.time_zone})\n` : `- Today: ${ctx.date}\n`;
   if (ctx.top_level && ctx.top_level.length === 0) {
     prompt +=
       "- The working directory was empty when the conversation started (no files or folders except hidden ones starting with `.`), so there is nothing in it to list, search or read: do not call Glob, Grep or Read on it, nor start an agent to explore it, before you have created files. This is not updated as you work.\n";

@@ -26,7 +26,9 @@ impl Query {
         let text = |name: &str| input.get(name).and_then(Value::as_str);
         let name = text("operation").unwrap_or_default();
         let operation = Operation::named(name).ok_or_else(|| {
-            format!("Unknown operation `{name}`; use one of: {}.", Operation::NAMES.map(|(n, _)| n).join(", "))
+            let known =
+                Operation::NAMES.map(|(n, _)| n).into_iter().chain(super::diagnostics::Scope::NAMES.map(|(n, _)| n));
+            format!("Unknown operation `{name}`; use one of: {}.", known.collect::<Vec<_>>().join(", "))
         })?;
         let file = text("file_path").ok_or("Missing required parameter `file_path`.")?.to_owned();
         let query = text("query").unwrap_or_default().to_owned();
@@ -152,6 +154,9 @@ mod tests {
         );
         assert!(error(json!({"operation": "workspaceSymbol", "file_path": "a.rs"})).contains("query"));
         assert!(error(json!({"operation": "rename", "file_path": "a.rs"})).contains("goToDefinition"));
+        assert!(
+            error(json!({"operation": "rename", "file_path": "a.rs"})).ends_with("diagnostics, workspaceDiagnostics.")
+        );
         assert!(error(json!({"operation": "hover"})).contains("file_path"));
     }
 }
