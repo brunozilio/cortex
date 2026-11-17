@@ -63,6 +63,11 @@ async fn serve_machine(socket: WebSocket, relay: Relay, claim: Claim, id: String
                             break;
                         }
                     }
+                    Some(Ok(Message::Text(text))) if text.as_str() == crate::KEEPALIVE => {
+                        if sink.send(Message::Text(crate::KEEPALIVE_ANSWER.into())).await.is_err() {
+                            break;
+                        }
+                    }
                     Some(Ok(Message::Text(_) | Message::Close(_))) | Some(Err(_)) | None => break,
                     Some(Ok(_)) => {}
                 }
@@ -128,6 +133,11 @@ async fn serve_phone(socket: WebSocket, relay: Relay, seat: Seat, mut payloads: 
                 match message {
                     Some(Ok(Message::Binary(bytes))) => {
                         if seat.to_machine.send(Frame::Data(seat.channel, bytes.to_vec())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(Ok(Message::Text(text))) if text.as_str() == crate::KEEPALIVE => {
+                        if sink.send(Message::Text(crate::KEEPALIVE_ANSWER.into())).await.is_err() {
                             break;
                         }
                     }

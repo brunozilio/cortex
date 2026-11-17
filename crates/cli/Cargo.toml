@@ -33,6 +33,8 @@ tachyonfx = { version = "0.25.2", default-features = false, features = ["std", "
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "std"] }
 relay = { path = "../relay" }
+page.workspace = true
+reqwest = { workspace = true, features = ["blocking", "multipart", "json"] }
 qrcode = { version = "0.14", default-features = false }
 jiff.workspace = true
 

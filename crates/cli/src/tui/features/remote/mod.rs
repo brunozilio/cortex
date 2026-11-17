@@ -80,7 +80,7 @@ fn described(status: Option<&Status>) -> String {
 }
 
 fn connect(app: &mut App, book: &Book) {
-    let Some(relay) = book.machine_relay() else { return };
+    let Some(relay) = book.relay() else { return };
     let running = app.features.get::<Linked>(NAME).is_some_and(|linked| linked.remote.is_some());
     if running {
         return;
@@ -108,7 +108,7 @@ fn tick(app: &mut App) {
     let off = linked.off;
     let status = linked.remote.as_ref().map(Remote::status);
     if status.is_none() && !off {
-        if let Some(book) = book().filter(|book| book.machine_relay().is_some() && book.anyone_to_serve()) {
+        if let Some(book) = book().filter(|book| book.relay().is_some() && book.anyone_to_serve()) {
             connect(app, &book);
         }
         return;

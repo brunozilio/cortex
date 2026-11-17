@@ -118,7 +118,7 @@ is only in `app.db`, which the older binary does not read.
 | `console` | The live trace page behind `/trace` and `/console`: serves the browser app on localhost (whatever `cargo run -p xtask -- web` last built into `web/dist`, embedded in the binary at compile time) with the report, the sessions and their updates as server-sent events. |
 | `page` | The built web page (`web/dist`) embedded at compile time, served by `console` on the machine and by `relay` to phones. |
 | `tunnel` | The remote control's wire: relay frames, machine and device keys, pairing links, the Noise handshake, and the requests a phone sends through it. |
-| `relay` | The remote control's self-hosted server: serves the page as an installable web app and forwards encrypted frames between a phone and its machine, without reading them. |
+| `relay` | The remote control's self-hosted server: serves the page as an installable web app and forwards encrypted frames between a phone and its machine, without reading them; also as a Cloudflare Worker (`worker/relay.js`) that `remote up` publishes. |
 
 ## Developing
 

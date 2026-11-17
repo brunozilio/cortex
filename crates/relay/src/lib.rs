@@ -1,5 +1,4 @@
 mod rooms;
-mod serve;
 mod sockets;
 
 use std::time::Duration;
@@ -12,7 +11,6 @@ use serde_json::json;
 
 pub use rooms::{Rooms, valid_machine_id};
 pub use page::embedded as embedded_page;
-pub use serve::{Serving, spawn};
 
 const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
 img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; \
@@ -45,7 +43,7 @@ pub fn router(limits: Limits, bundle: &'static [page::Asset]) -> Router {
         .route("/machine", get(sockets::machine))
         .route("/phone", get(sockets::phone))
         .route("/relay.json", get(|| async { axum::Json(json!({ "relay": true })) }))
-        .route("/manifest.webmanifest", get(|| async { web_manifest() }))
+        .route("/manifest.webmanifest", get(|| async { manifest_file() }))
         .route(
             "/api/{*rest}",
             get(|| async {
@@ -57,28 +55,40 @@ pub fn router(limits: Limits, bundle: &'static [page::Asset]) -> Router {
 }
 
 pub const MARKER: &str = "<meta name=\"remote-relay\" content=\"on\">";
+pub const WORKER: &str = include_str!("../worker/relay.js");
+pub const KEEPALIVE: &str = "ping";
+pub const KEEPALIVE_ANSWER: &str = "pong";
+
+pub const SECURITY_HEADERS: [(&str, &str); 4] = [
+    ("content-security-policy", CONTENT_SECURITY_POLICY),
+    ("x-content-type-options", "nosniff"),
+    ("referrer-policy", "no-referrer"),
+    ("cross-origin-opener-policy", "same-origin"),
+];
+
+pub fn marked_index(index: &[u8]) -> String {
+    String::from_utf8_lossy(index).replacen("<head>", &format!("<head>{MARKER}"), 1)
+}
 
 fn page_file(bundle: &'static [page::Asset], uri: &Uri) -> Response {
     let mut response = match page::resolve(bundle, uri) {
         Some(asset) if asset.path == "index.html" => {
-            let marked = String::from_utf8_lossy(asset.bytes).replacen("<head>", &format!("<head>{MARKER}"), 1);
-            ([(header::CONTENT_TYPE, page::content_type(asset))], marked).into_response()
+            ([(header::CONTENT_TYPE, page::content_type(asset))], marked_index(asset.bytes)).into_response()
         }
         _ => page::serve(bundle, uri),
     };
     let headers = response.headers_mut();
-    headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(CONTENT_SECURITY_POLICY));
-    headers.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
-    headers.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
-    headers.insert(HeaderName::from_static("cross-origin-opener-policy"), HeaderValue::from_static("same-origin"));
+    for (name, value) in SECURITY_HEADERS {
+        headers.insert(HeaderName::from_static(name), HeaderValue::from_static(value));
+    }
     let fresh = NEVER_CACHED.contains(&uri.path()) || !uri.path().starts_with("/assets/");
     let cache = if fresh { "no-cache" } else { "public, max-age=31536000, immutable" };
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
     response
 }
 
-fn web_manifest() -> Response {
-    let manifest = json!({
+pub fn web_manifest() -> String {
+    json!({
         "name": brand::NAME,
         "short_name": brand::NAME,
         "description": "Follow and drive your coding sessions from your phone.",
@@ -91,8 +101,12 @@ fn web_manifest() -> Response {
             { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
             { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
         ],
-    });
-    ([(header::CONTENT_TYPE, "application/manifest+json"), (header::CACHE_CONTROL, "no-cache")], manifest.to_string())
+    })
+    .to_string()
+}
+
+fn manifest_file() -> Response {
+    ([(header::CONTENT_TYPE, "application/manifest+json"), (header::CACHE_CONTROL, "no-cache")], web_manifest())
         .into_response()
 }
 

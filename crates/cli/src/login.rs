@@ -92,7 +92,7 @@ fn ask(question: &str) -> Result<String, String> {
     Ok(line.trim().to_owned())
 }
 
-fn secret(question: &str) -> Result<String, String> {
+pub(crate) fn secret(question: &str) -> Result<String, String> {
     use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, read};
     use ratatui::crossterm::terminal::{disable_raw_mode, enable_raw_mode};
     enable_raw_mode().map_err(|e| e.to_string())?;

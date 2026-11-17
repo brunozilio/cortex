@@ -33,7 +33,7 @@ The main line is `cli -> app -> agent-engine -> llm-providers -> domain`.
 | `console` | The local HTTP server behind the web page, and `remote`: the machine's side of remote control (remote book, relay link, forwarding to itself) |
 | `page` | The built web page embedded at compile time, served by `console` and `relay` |
 | `tunnel` | Remote control's wire: relay frames, keys, pairing links, the Noise handshake and transport, the phone's requests and the machine's answers |
-| `relay` | The self-hosted relay binary: serves the page as an installable web app and forwards encrypted frames between phones and their machine |
+| `relay` | The self-hosted relay binary: serves the page as an installable web app and forwards encrypted frames between phones and their machine, and the same relay as a Cloudflare Worker (`worker/relay.js`), published by `<command> remote up` |
 | `code-map` | Tree-sitter index of a repository, ranked against a prompt |
 | `platform` | Per-OS IO: child processes, private files, file locks, data folders, sandbox, system keychain |
 | `brand` | The product's name and command, from `brand.toml` |

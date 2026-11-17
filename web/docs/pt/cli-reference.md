@@ -141,7 +141,7 @@ Acompanhe e conduza as sessões desta máquina pelo celular: a mesma página do 
 | Comando | Argumentos | O que faz |
 |---|---|---|
 | `remote status` | | O relay, o id desta máquina e os aparelhos pareados |
-| `remote up` | `[--hostname <HOST>]` `[--port <PORTA>]` | Roda o relay nesta máquina e o publica por um túnel do Cloudflare; fica em primeiro plano |
+| `remote up` | `[--account <ID>]` | Publica o relay como Worker na sua conta Cloudflare (workers.dev) e passa a usá-lo |
 | `remote relay` | `<https://HOST>` | Define um relay que você roda em outro lugar, pelo qual os celulares chegam a esta máquina |
 | `remote pair` | | Imprime um QR code e um link que pareiam um celular, em até dez minutos, uma vez |
 | `remote devices` | | Lista os aparelhos pareados |
@@ -157,16 +157,15 @@ A máquina fica alcançável enquanto um chat está aberto com o controle remoto
 
 #### Sem servidor: `remote up`
 
-`{{COMMAND}} remote up` roda o relay nesta máquina, escutando só em `127.0.0.1`, e o publica com o [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (`brew install cloudflared` no macOS). Nenhuma porta é aberta: o túnel se conecta ao Cloudflare de dentro para fora. Deixe rodando num terminal; o chat se conecta direto ao relay desta máquina, e os celulares chegam pelo Cloudflare. Ctrl-C para os dois.
+`{{COMMAND}} remote up` publica o relay como um Worker na sua própria conta Cloudflare, pela API da Cloudflare, e o define como o relay desta máquina. Não precisa de servidor, nem de domínio, nem de instalar nada: o relay ganha um endereço fixo, `https://{{COMMAND}}-relay.<seu subdomínio>.workers.dev`, e continua rodando na Cloudflare; nesta máquina só fica aberto o chat. Cabe no plano gratuito da Cloudflare (um Worker e um Durable Object por máquina).
 
-- `remote up --hostname relay.example.com`: um túnel nomeado, com endereço que nunca muda; use um host de um domínio da sua conta Cloudflare. Na primeira vez ele abre o navegador para entrar no Cloudflare, cria o túnel `{{COMMAND}}-relay` e aponta o host para ele; depois, `remote up` sozinho reaproveita tudo. É o jeito certo para um celular que mantém a página na tela inicial.
-- `remote up` sem host: um quick tunnel em `*.trycloudflare.com`, sem conta. O endereço muda a cada vez, e uma página instalada no celular pertence a um endereço, então o celular pareia de novo a cada início. Bom para experimentar.
+Ele pede um API token da Cloudflare com a permissão **Account · Workers Scripts · Edit** (crie em [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)), ou lê de `CLOUDFLARE_API_TOKEN`. O token só é usado no envio e não é guardado. Se o token alcança mais de uma conta, escolha uma com `--account <id>`. Uma conta que nunca abriu Workers & Pages ainda não tem subdomínio workers.dev: abra uma vez no painel. Rode `remote up` de novo depois de atualizar o {{NAME}} para publicar a página nova; os celulares pareados continuam funcionando.
 
-O Cloudflare transporta o tráfego e entrega a página ao celular, mas o que passa entre o celular e a máquina continua cifrado de ponta a ponta.
+A Cloudflare transporta o tráfego e entrega a página ao celular, mas o que passa entre o celular e a máquina continua cifrado de ponta a ponta.
 
 ```bash
-{{COMMAND}} remote up --hostname relay.example.com   # uma vez; depois só `{{COMMAND}} remote up`
-{{COMMAND}} remote up                                # quick tunnel, para experimentar
+{{COMMAND}} remote up
+CLOUDFLARE_API_TOKEN=… {{COMMAND}} remote up --account 0123abcd…
 ```
 
 ### doctor

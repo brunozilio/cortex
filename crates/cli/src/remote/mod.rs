@@ -1,5 +1,4 @@
-mod cloudflare;
-mod up;
+mod workers;
 
 use std::path::PathBuf;
 
@@ -10,12 +9,10 @@ use console::remote::{Book, Device, PAIRING_LASTS};
 pub enum RemoteAction {
     #[command(about = "Show the relay, this machine's id and the paired devices")]
     Status,
-    #[command(about = "Run a relay on this machine and publish it through a Cloudflare tunnel; stays in the foreground")]
+    #[command(about = "Publish the relay as a Worker on your Cloudflare account (workers.dev) and use it; needs an API token")]
     Up {
-        #[arg(long, help = "A host name on a domain in your Cloudflare account, for an address that never changes")]
-        hostname: Option<String>,
-        #[arg(long, default_value_t = up::DEFAULT_PORT, help = "The local port the relay listens on, on 127.0.0.1")]
-        port: u16,
+        #[arg(long, help = "The Cloudflare account id, when the token reaches more than one")]
+        account: Option<String>,
     },
     #[command(about = "Name the relay phones reach this machine through, as https://<host>")]
     Relay { address: String },
@@ -33,17 +30,42 @@ pub fn folder() -> Option<PathBuf> {
 
 pub fn run(action: RemoteAction) -> Result<(), String> {
     let book = Book::in_folder(&folder().ok_or("this system has no data folder")?);
-    if let RemoteAction::Up { hostname, port } = action {
-        return up::run(&book, &up::Plan { hostname, port });
+    if let RemoteAction::Up { account } = action {
+        return up(&book, account);
     }
     println!("{}", answer(&book, action)?);
+    Ok(())
+}
+
+fn token() -> Result<String, String> {
+    if let Some(token) = std::env::var(workers::TOKEN_VARIABLE).ok().filter(|token| !token.trim().is_empty()) {
+        return Ok(token.trim().to_owned());
+    }
+    println!(
+        "A Cloudflare API token with the permission Account · Workers Scripts · Edit (create one at \
+         https://dash.cloudflare.com/profile/api-tokens). It is used for this upload only and not kept; \
+         {} also works.",
+        workers::TOKEN_VARIABLE
+    );
+    let token = crate::login::secret("Cloudflare API token (hidden): ")?;
+    if token.trim().is_empty() { Err("No token given.".into()) } else { Ok(token.trim().to_owned()) }
+}
+
+fn up(book: &Book, account: Option<String>) -> Result<(), String> {
+    let api = workers::Cloudflare::new(token()?)?;
+    let address = workers::deploy(&api, account, relay::embedded_page(), &mut |line| println!("{line}"))?;
+    let kept = book.set_relay(&address).map_err(|error| error.to_string())?;
+    println!("\nThe relay is up at {kept}. A new workers.dev address can take a minute to answer.");
+    if book.devices().is_empty() {
+        println!("\n{}", pair(book)?);
+    }
     Ok(())
 }
 
 pub fn answer(book: &Book, action: RemoteAction) -> Result<String, String> {
     match action {
         RemoteAction::Status => status(book),
-        RemoteAction::Up { .. } => Err(format!("`{} remote up` runs in a terminal of its own.", brand::COMMAND)),
+        RemoteAction::Up { .. } => Err(format!("`{} remote up` runs from a terminal, where it can ask for the Cloudflare token.", brand::COMMAND)),
         RemoteAction::Relay { address } => {
             let kept = book.set_relay(&address).map_err(|error| error.to_string())?;
             Ok(format!("Phones will reach this machine through {kept}. `{} remote pair` invites one.", brand::COMMAND))

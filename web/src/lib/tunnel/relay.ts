@@ -8,7 +8,7 @@ export interface SocketLike {
   onmessage: ((event: MessageEvent) => void) | null
   onclose: ((event: CloseEvent | Event) => void) | null
   onerror: ((event: Event) => void) | null
-  send(data: ArrayBufferView | ArrayBuffer): void
+  send(data: ArrayBufferView | ArrayBuffer | string): void
   close(): void
 }
 
@@ -25,6 +25,7 @@ export interface RelayOptions {
 }
 
 const OPEN = 1
+export const KEEPALIVE_MS = 25_000
 
 export class RelayChannel implements AnswerChannel {
   onAnswer: (answer: Answer) => void = () => undefined
@@ -52,7 +53,11 @@ export class RelayChannel implements AnswerChannel {
     return new Promise((resolve, reject) => {
       let greeted = false
       socket.onopen = () => socket.send(initiator.hello(payload))
+      const keepalive = setInterval(() => {
+        if (socket.readyState === OPEN) socket.send('ping')
+      }, KEEPALIVE_MS)
       socket.onmessage = (event: MessageEvent) => {
+        if (typeof event.data === 'string') return
         const bytes = new Uint8Array(event.data as ArrayBuffer)
         if (!greeted) {
           greeted = true
@@ -69,6 +74,7 @@ export class RelayChannel implements AnswerChannel {
         this.received(bytes)
       }
       socket.onclose = () => {
+        clearInterval(keepalive)
         const reason = greeted ? 'the connection to the machine closed' : 'the machine did not let this device in'
         if (this.socket === socket) {
           this.socket = null

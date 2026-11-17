@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 const ALLOWED: [(&str, &[&str]); 15] = [
-    ("cli", &["platform", "content", "brand", "app", "console", "domain", "relay"]),
+    ("cli", &["platform", "content", "brand", "app", "console", "domain", "relay", "page"]),
     ("app", &["platform", "brand", "domain", "llm-providers", "agent-engine", "code-map"]),
     ("agent-engine", &["script", "content", "brand", "domain", "platform", "language-servers", "llm-providers"]),
     ("llm-providers", &["brand", "domain", "platform"]),

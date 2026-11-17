@@ -158,3 +158,18 @@ async fn the_relay_serves_the_page_with_a_strict_policy_and_no_api() {
     assert!(body.contains("\"relay\""));
     assert!(get(&address, "/relay.json").await.3.contains("\"relay\":true"));
 }
+
+#[tokio::test]
+async fn a_text_ping_is_answered_by_the_relay_and_never_reaches_the_other_side() {
+    let address = relay(relay::Limits::default()).await;
+    let mut machine = socket(&address, &format!("/machine?id={ID}")).await.unwrap();
+    let mut phone = socket(&address, &format!("/phone?machine={ID}")).await.unwrap();
+    let Frame::Open(channel) = next_frame(&mut machine).await else { panic!() };
+    for side in [&mut phone, &mut machine] {
+        side.send(Message::Text("ping".into())).await.unwrap();
+        let answer = tokio::time::timeout(WAIT, side.next()).await.unwrap().unwrap().unwrap();
+        assert_eq!(answer, Message::Text("pong".into()));
+    }
+    phone.send(Message::Binary(b"after".to_vec().into())).await.unwrap();
+    assert_eq!(next_frame(&mut machine).await, Frame::Data(channel, b"after".to_vec()));
+}

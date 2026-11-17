@@ -144,7 +144,7 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 ## Remote control
 
-**Relay.** The owner's own server that phones and the machine both connect to: it serves the page and forwards encrypted frames between a phone's WebSocket and the machine's, on numbered channels, without reading them. One machine per machine id. See `decisions/0012-remote-control-through-a-blind-relay.md`. Lives in `crates/relay/`.
+**Relay.** The owner's own server that phones and the machine both connect to: it serves the page and forwards encrypted frames between a phone's WebSocket and the machine's, on numbered channels, without reading them. One machine per machine id. See `decisions/0012-remote-control-through-a-blind-relay.md`. Lives in `crates/relay/`. It exists twice, speaking one protocol: the Rust binary in `crates/relay/src/`, and the Cloudflare Worker in `crates/relay/worker/relay.js` that `<command> remote up` publishes on the owner's account.
 
 **Machine id.** The first 16 bytes of the SHA-256 of the machine's public key, in hex: the name the relay knows the machine by. `tunnel::machine_id`.
 

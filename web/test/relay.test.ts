@@ -90,3 +90,19 @@ describe('the relay channel', () => {
     expect(sockets).toHaveLength(2)
   })
 })
+
+describe('keeping the connection alive', () => {
+  test('the relay\'s pong is ignored and the machine\'s answers still arrive', async () => {
+    const { relay, sockets } = channel()
+    const answers: Answer[] = []
+    relay.onAnswer = (answer) => answers.push(answer)
+    const connected = relay.connect()
+    sockets[0].opened()
+    sockets[0].receive(t.reply)
+    await connected
+    sockets[0].onmessage?.(new MessageEvent('message', { data: 'pong' }))
+    for (const piece of t.transport.machine_to_phone.sealed) sockets[0].receive(piece)
+    expect(answers).toHaveLength(1)
+    expect(sockets[0].readyState).toBe(1)
+  })
+})

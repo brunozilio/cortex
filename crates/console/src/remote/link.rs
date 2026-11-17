@@ -155,7 +155,7 @@ async fn relay(place: &Place, connection: Connection) {
                 }
             }
             _ = ping.tick() => {
-                if sink.send(Message::Ping(Vec::new().into())).await.is_err() {
+                if sink.send(Message::Text("ping".into())).await.is_err() {
                     break;
                 }
             }

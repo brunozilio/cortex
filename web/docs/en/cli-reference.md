@@ -141,7 +141,7 @@ Follow and drive this machine's sessions from a phone: the same page as `/consol
 | Command | Arguments | What it does |
 |---|---|---|
 | `remote status` | | The relay, this machine's id and the paired devices |
-| `remote up` | `[--hostname <HOST>]` `[--port <PORT>]` | Run the relay on this machine and publish it through a Cloudflare tunnel; stays in the foreground |
+| `remote up` | `[--account <ID>]` | Publish the relay as a Worker on your Cloudflare account (workers.dev) and use it |
 | `remote relay` | `<https://HOST>` | Name a relay you run elsewhere, which phones reach this machine through |
 | `remote pair` | | Print a QR code and a link that pair one phone, within ten minutes, once |
 | `remote devices` | | List the paired devices |
@@ -157,16 +157,15 @@ The machine is reachable while a chat is open with remote control on (`/remote`)
 
 #### Without a server: `remote up`
 
-`{{COMMAND}} remote up` runs the relay on this machine, listening on `127.0.0.1` only, and publishes it with [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (`brew install cloudflared` on macOS). No port is opened: the tunnel connects out to Cloudflare. Leave it running in a terminal; a chat connects to the relay on this machine directly, and phones reach it through Cloudflare. Ctrl-C stops both.
+`{{COMMAND}} remote up` publishes the relay as a Worker on your own Cloudflare account, through Cloudflare's API, and makes it this machine's relay. It needs no server, no domain and nothing installed: the relay gets a fixed address, `https://{{COMMAND}}-relay.<your subdomain>.workers.dev`, and keeps running on Cloudflare; nothing stays open on this machine but the chat. It fits in Cloudflare's free plan (a Worker and one Durable Object per machine).
 
-- `remote up --hostname relay.example.com`: a named tunnel with an address that never changes; use a host on a domain in your Cloudflare account. The first time it opens the browser to sign in to Cloudflare, creates the tunnel `{{COMMAND}}-relay` and points the host at it; after that `remote up` alone reuses them. This is the way for a phone that keeps the page on its home screen.
-- `remote up` with no host name: a quick tunnel on `*.trycloudflare.com`, with no account. Its address changes every time, and a page installed on a phone belongs to one address, so the phone pairs again after every start. Good for trying it out.
+It asks for a Cloudflare API token with the permission **Account · Workers Scripts · Edit** (create one at [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)), or reads it from `CLOUDFLARE_API_TOKEN`. The token is used for the upload only and is not kept. If the token reaches more than one account, name one with `--account <id>`. An account that never opened Workers & Pages has no workers.dev subdomain yet: open it once in the dashboard. Run `remote up` again after updating {{NAME}} to publish the new page; paired phones keep working.
 
 Cloudflare carries the traffic and serves the page to the phone, but what passes between the phone and the machine stays end-to-end encrypted.
 
 ```bash
-{{COMMAND}} remote up --hostname relay.example.com   # once; afterwards just `{{COMMAND}} remote up`
-{{COMMAND}} remote up                                # a quick tunnel, to try it
+{{COMMAND}} remote up
+CLOUDFLARE_API_TOKEN=… {{COMMAND}} remote up --account 0123abcd…
 ```
 
 ### doctor
