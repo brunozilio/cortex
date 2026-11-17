@@ -119,7 +119,7 @@ fn corrupt_saved_history_fails_without_diagnosing_it_as_a_missing_session() {
         .flatten()
         .map(|e| e.path())
         .find(|p| p.extension().is_some_and(|ext| ext == "jsonl"));
-    std::fs::write(saved.expect("the saved conversation"), "{broken").expect("corrupt it");
+    std::fs::write(saved.expect("the saved conversation"), "{broken\n").expect("corrupt it");
     assert!(store.load_for_checked(&request, &id).is_err());
     let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), Arc::new(store));
     let events = finish(&start(&engine, &PromptRequest { resume: Some(id), ..request }));
@@ -260,4 +260,51 @@ fn a_conversation_answering_in_another_window_turns_the_next_message_away_and_ke
 
     assert_eq!(events.last(), Some(&EngineEvent::Failed(ANSWERING_ELSEWHERE.into())), "{events:?}");
     assert_eq!(sessions.load_for(&again, &session).map(|history| history.len()), Some(2), "nothing was written");
+}
+
+fn interrupted(history: &[Message], id: &str) -> bool {
+    history.iter().flat_map(|message| &message.blocks).any(|block| {
+        matches!(block, Block::ToolResult { id: answered, content, is_error: true }
+            if answered == id && content == agent_engine::sessions::INTERRUPTED)
+    })
+}
+
+#[test]
+fn a_saved_call_that_never_got_its_result_is_closed_when_the_conversation_resumes() {
+    use agent_engine::sessions::Sessions;
+    let dir = tempfile::tempdir().expect("dir");
+    let sessions = Arc::new(InMemorySessions::default());
+    let id = domain::SessionId("cut".into());
+    let mut request = PromptRequest::plain(dir.path().into(), "go on", model());
+    let dangling = Block::ToolUse { id: "t1".into(), name: "Read".into(), input: json!({"file_path": "a"}) };
+    sessions.save_for(&request, &id, &[Message::user("read it"), Message::assistant(vec![dangling])]).expect("save");
+    let resumed = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Done.".into())])]));
+    let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::clone(&resumed)]))), sessions);
+    request.resume = Some(id);
+    let events = finish(&start(&engine, &request));
+    assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
+    assert!(interrupted(&resumed.asked()[0].messages, "t1"), "{:?}", resumed.asked()[0].messages);
+}
+
+#[test]
+fn a_turn_that_ends_between_a_call_and_its_result_is_saved_with_the_call_closed() {
+    use agent_engine::sessions::Sessions;
+    use agent_engine::transcript::{StopReason, Usage};
+    let dir = tempfile::tempdir().expect("dir");
+    let sessions = Arc::new(InMemorySessions::default());
+    let call = Block::ToolUse { id: "t1".into(), name: "Read".into(), input: json!({"file_path": "a"}) };
+    let refused = Ok(agent_engine::model::Reply {
+        message: Message::assistant(vec![call]),
+        stop: StopReason::Refusal,
+        usage: Usage::default(),
+    });
+    let engine = NativeEngine::new(
+        Arc::new(Source(Mutex::new(vec![Arc::new(ScriptedModel::new([refused]))]))),
+        Arc::clone(&sessions) as Arc<dyn Sessions>,
+    );
+    let request = PromptRequest::plain(dir.path().into(), "read it", model());
+    let events = finish(&start(&engine, &request));
+    let Some(EngineEvent::SessionStarted(session)) = events.first().cloned() else { panic!("{events:?}") };
+    let saved = sessions.load_for(&request, &session).expect("saved");
+    assert!(interrupted(&saved, "t1"), "{saved:?}");
 }

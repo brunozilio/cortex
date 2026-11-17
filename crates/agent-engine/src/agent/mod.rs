@@ -19,6 +19,7 @@ mod sub_agent_model;
 mod sub_agent_report;
 mod tasks;
 mod template;
+mod this_prompt;
 mod watch;
 mod worktree;
 
@@ -109,7 +110,7 @@ impl Agent<'_> {
         let mut rejections = domain::interception::Rejections::default();
         let mut stop_hook_active = false;
         let mut cutoffs = cutoffs::Cutoffs::default();
-        let (prompt_at, mut attempts) = (history.len().saturating_sub(1), 0);
+        let (mut prompt, mut attempts) = (this_prompt::ThisPrompt::last_of(history), 0);
         for _ in 0..self.turn_limit.min(MAX_TURNS) {
             if self.control.is_stopped() {
                 return Err(Ending::Cancelled);
@@ -129,12 +130,18 @@ impl Agent<'_> {
             }
             if history.len() > 2 && used >= threshold && compacted_at != Some(history.len()) {
                 let template = self.turn_template(fell_back.as_ref());
-                let compaction = crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto")
-                    .map_err(Ending::Failed)?;
-                counted.forget();
-                reminders.resend();
-                (self.emit)(EngineEvent::Compacted(compaction));
-                compacted_at = Some(history.len());
+                let compacted = crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto");
+                prompt.compacted(history);
+                match compacted {
+                    Ok(compaction) => {
+                        counted.forget();
+                        reminders.resend();
+                        (self.emit)(EngineEvent::Compacted(compaction));
+                        compacted_at = Some(history.len());
+                    }
+                    Err(ModelError::Cancelled) => return Err(Ending::Cancelled),
+                    Err(error) => tracing::warn!(%error, "automatic compaction failed; the turn goes on without it"),
+                }
             }
             reminders.deliver(self.runtime_reminder(used, threshold, reminders.quiet_tasks()), history);
             let mut request = TurnRequest { messages: history.clone(), ..self.turn_template(fell_back.as_ref()) };
@@ -166,6 +173,7 @@ impl Agent<'_> {
                     let compaction =
                         crate::upkeep::compact_hooked(self.api, &template, history, self.workspace, "auto")
                             .map_err(Ending::Failed)?;
+                    prompt.compacted(history);
                     counted.forget();
                     reminders.resend();
                     (self.emit)(EngineEvent::Compacted(compaction));
@@ -238,7 +246,7 @@ impl Agent<'_> {
                         return Err(Ending::Cancelled);
                     }
                     if self.tools.iter().any(|t| t.spec().name == "StructuredOutput") && !structured {
-                        history.push(Message::user("The configured response contract requires calling StructuredOutput with a valid result before completing. Use the tool now."));
+                        history.push(cutoffs.structured_nudge()?);
                         continue;
                     }
                     let event = if self.depth > 0 { "SubagentStop" } else { "Stop" };
@@ -247,12 +255,16 @@ impl Agent<'_> {
                         json!({"last_assistant_message":history.last().map(Message::text),"stop_hook_active":stop_hook_active}),
                         self.workspace,Some((self.api,&self.request)),
                     ).map_err(|e|Ending::Failed(ModelError::Provider(e)))?;
-                    if let Some(reason) = hook.blocked {
-                        stop_hook_active = true;
-                        history.push(Message::user(format!("Completion blocked by hook: {reason}\n{}", hook.context)));
-                        continue;
+                    match hook.blocked.map(|reason| cutoffs.stop_blocked(event, &reason, &hook.context)) {
+                        Some(Ok(blocked)) => {
+                            stop_hook_active = true;
+                            history.push(blocked);
+                            continue;
+                        }
+                        Some(Err(notice)) => (self.emit)(EngineEvent::TextDelta(notice)),
+                        None => cutoffs.stop_allowed(),
                     }
-                    if let Some(feedback) = self.reviewed(&history[prompt_at..], &mut attempts)? {
+                    if let Some(feedback) = self.reviewed(prompt.run(history), &mut attempts)? {
                         history.push(feedback);
                         continue;
                     }
@@ -260,7 +272,7 @@ impl Agent<'_> {
                 }
                 _ => {}
             }
-            let new_rules = self.pending_rules(&calls)?;
+            let new_rules = self.pending_rules(&calls);
             let mut results: Vec<Block> = self.results(&calls, &new_rules, tasks, history, spawn);
             for ((_, name, input), result) in calls.iter().zip(&results) {
                 if name == "StructuredOutput" && matches!(result, Block::ToolResult { is_error: false, .. }) {

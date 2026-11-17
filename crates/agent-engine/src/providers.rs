@@ -46,6 +46,17 @@ pub fn name(provider: ModelProvider) -> String {
     find(provider).map_or_else(|| provider.id().to_owned(), |known| known.name().to_owned())
 }
 
+const UNDECLARED_OUTPUT_LIMIT: u64 = 8192;
+
+pub(crate) fn output_limit(model: Option<&domain::ModelOption>, body: &serde_json::Value) -> u64 {
+    let declared = model.and_then(|model| model.capabilities.as_ref()).and_then(|caps| caps.max_output_tokens);
+    match (declared.map(u64::from), body["max_tokens"].as_u64()) {
+        (Some(declared), Some(asked)) => declared.min(asked),
+        (Some(declared), None) => declared,
+        (None, _) => UNDECLARED_OUTPUT_LIMIT,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

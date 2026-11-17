@@ -134,3 +134,42 @@ fn a_corrupt_line_fails_the_load_instead_of_losing_the_conversation() {
     std::fs::write(&saved, "{broken\n").expect("corrupt");
     assert!(store.load_for_checked(&request, &id).is_err());
 }
+
+fn cut_mid_write(native: &std::path::Path) -> std::path::PathBuf {
+    let saved = std::fs::read_dir(native).expect("dir").flatten().next().expect("one file").path();
+    let whole = std::fs::read_to_string(&saved).expect("read");
+    let line = serde_json::to_string(&Entry::Message(reply("never finished"))).expect("json");
+    std::fs::write(&saved, format!("{whole}{}", &line[..line.len() / 2])).expect("cut");
+    saved
+}
+
+#[test]
+fn a_last_line_cut_mid_write_is_dropped_and_the_conversation_resumes_and_grows() {
+    let dir = tempfile::tempdir().expect("dir");
+    let native = dir.path().join("native");
+    let store = FileSessions::new(&native);
+    let (request, id) = (request(dir.path()), SessionId("s1".into()));
+    let kept = vec![Message::user("one"), reply("two")];
+    store.save_for(&request, &id, &kept).expect("save");
+    cut_mid_write(&native);
+
+    assert_eq!(store.load_for_checked(&request, &id), Ok(Some(kept.clone())));
+    assert_eq!(messages(store.entries(&request, &id).expect("entries")), kept);
+    let grown = [kept, vec![Message::user("three")]].concat();
+    store.save_for(&request, &id, &grown).expect("save after the cut");
+    assert_eq!(store.load_for_checked(&request, &id), Ok(Some(grown)), "the cut line does not swallow the next one");
+}
+
+#[test]
+fn a_corrupt_line_before_the_last_one_still_fails_the_load() {
+    let dir = tempfile::tempdir().expect("dir");
+    let native = dir.path().join("native");
+    let store = FileSessions::new(&native);
+    let (request, id) = (request(dir.path()), SessionId("s1".into()));
+    store.save_for(&request, &id, &[Message::user("one")]).expect("save");
+    let saved = cut_mid_write(&native);
+    let cut = std::fs::read_to_string(&saved).expect("read");
+    let line = serde_json::to_string(&Entry::Message(reply("after"))).expect("json");
+    std::fs::write(&saved, format!("{cut}\n{line}\n")).expect("corrupt");
+    assert!(store.load_for_checked(&request, &id).is_err());
+}

@@ -2,9 +2,8 @@ use domain::{EngineEvent, ToolCall};
 use platform::sync::Locked;
 use serde_json::{Value, json};
 
+use super::Agent;
 use super::tasks::Tasks;
-use super::{Agent, Ending};
-use crate::model::ModelError;
 use crate::tools::ask::ASK_TOOL;
 use crate::tools::plan_mode::{ENTER_PLAN_TOOL, EXIT_PLAN_TOOL};
 use crate::tools::send_message::SEND_MESSAGE_TOOL;
@@ -13,7 +12,7 @@ use crate::tools::worktree::{ENTER_WORKTREE, EXIT_WORKTREE};
 use crate::transcript::{Block, Message};
 
 impl Agent<'_> {
-    pub(super) fn pending_rules(&self, calls: &[(String, String, Value)]) -> Result<Vec<String>, Ending> {
+    pub(super) fn pending_rules(&self, calls: &[(String, String, Value)]) -> Vec<String> {
         let mut new_rules = Vec::new();
         let mut seen = self.workspace.tracking.seen_rules.locked();
         for (_, _, input) in calls {
@@ -24,12 +23,14 @@ impl Agent<'_> {
                     Ok(true) if !rule.patterns.is_empty() && seen.insert(rule.path.clone()) => {
                         new_rules.push(format!("{}:\n{}", rule.path.display(), rule.text))
                     }
-                    Err(error) => return Err(Ending::Failed(ModelError::Provider(error))),
+                    Err(error) if rule.error.is_none() || seen.insert(rule.path.clone()) => {
+                        tracing::warn!(file = %rule.path.display(), %error, "skipping a rule file that could not be read as a rule");
+                    }
                     _ => {}
                 }
             }
         }
-        Ok(new_rules)
+        new_rules
     }
 
     #[allow(clippy::needless_lifetimes)]

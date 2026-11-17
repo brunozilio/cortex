@@ -28,6 +28,11 @@ impl Tool for Edit {
         };
         let all = input.get("replace_all").and_then(Value::as_bool).unwrap_or(false);
         let name = shown(&path, workspace);
+        if old.is_empty() {
+            return Outcome::error(
+                "`old_string` is empty; give the exact text to replace, or use Write to create or overwrite the file.",
+            );
+        }
         if old == new {
             return Outcome::error("`old_string` and `new_string` are the same; nothing to change.");
         }
@@ -122,6 +127,17 @@ mod tests {
         std::fs::write(dir.path().join("g.rs"), "x").expect("write");
         let unread = Edit.run(&json!({"file_path": "g.rs", "old_string": "x", "new_string": "y"}), &workspace);
         assert!(unread.content.starts_with("Read g.rs"));
+    }
+
+    #[test]
+    fn an_empty_old_string_is_refused_whether_or_not_every_match_is_replaced() {
+        let (dir, workspace) = setup("ab");
+        for all in [true, false] {
+            let edit = json!({"file_path": "f.rs", "old_string": "", "new_string": "-", "replace_all": all});
+            let outcome = Edit.run(&edit, &workspace);
+            assert!(outcome.is_error && outcome.content.contains("`old_string` is empty"), "{all}: {outcome:?}");
+            assert_eq!(content(&dir), "ab", "replace_all {all}");
+        }
     }
 
     #[test]

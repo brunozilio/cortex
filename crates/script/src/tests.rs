@@ -113,3 +113,15 @@ fn a_function_with_an_empty_body_is_known_as_empty() {
     assert!(!empty("export default (input) => { return input };"));
     assert!(!empty("export const event = 'Stop';"));
 }
+
+#[test]
+fn a_script_past_its_time_limit_fails_without_stopping_its_caller() {
+    let host = Arc::new(Recorder::default());
+    let stop = Arc::new(AtomicBool::new(false));
+    let limit = Some(std::time::Duration::from_millis(100));
+    let source = "export function run() { for (;;) {} }";
+    let result = run_within("loop.js", source, "run", &[], &json!({}), host, Arc::clone(&stop), limit);
+    let error = result.expect_err("the limit ends it");
+    assert!(error.contains("timed out"), "{error}");
+    assert!(!stop.load(Ordering::Relaxed), "the caller's stop flag is the caller's to set");
+}

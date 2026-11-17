@@ -67,9 +67,14 @@ pub fn resume(config: &AgentConfig, name: &str, state: &WorktreeState, workspace
     setup.cwd = actual;
     setup.worktree_root = Some(root);
     setup.base_commit = Some(state.base_commit.clone());
-    let request = domain::PromptRequest::plain(setup.cwd.clone(), "", workspace.models.model.clone());
-    setup.context = Some(crate::brief::Brief::load(&request)?);
+    setup.context = Some(brief_in(&setup.cwd, workspace)?);
     Ok(setup)
+}
+
+fn brief_in(cwd: &std::path::Path, workspace: &Workspace) -> Result<crate::brief::Brief, String> {
+    let mut request = domain::PromptRequest::plain(cwd.to_path_buf(), "", workspace.models.model.clone());
+    request.extensions = Some(domain::Extensions { home: workspace.home.clone(), ..Default::default() });
+    crate::brief::Brief::load(&request)
 }
 
 pub const RAN_WITHOUT_ISOLATION: &str =
@@ -158,8 +163,7 @@ fn prepare_as(config: &AgentConfig, name: &str, owner: &str, workspace: &Workspa
                 Err(cleanup) => format!("{error}; inspect partial checkout {}: {cleanup}", target.display()),
             });
         }
-        let request = domain::PromptRequest::plain(setup.cwd.clone(), "", workspace.models.model.clone());
-        setup.context = match crate::brief::Brief::load(&request) {
+        setup.context = match brief_in(&setup.cwd, workspace) {
             Ok(brief) => Some(brief),
             Err(error) => {
                 let _ = cleanup(&setup);
@@ -194,3 +198,6 @@ mod guard;
 mod session_worktree;
 pub use guard::Guard;
 pub use session_worktree::{Relocation, enter, removable, remove};
+
+#[cfg(test)]
+mod tests;

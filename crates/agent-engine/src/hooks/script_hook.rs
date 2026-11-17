@@ -160,4 +160,23 @@ export default function (input, ctx) {
         assert!(blocked.contains("stays inside the project"), "{blocked}");
         assert!(blocked.contains("only read-only tools"), "{blocked}");
     }
+
+    #[test]
+    fn a_script_hook_that_runs_out_of_time_fails_alone_and_the_run_goes_on() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join("slow.js"), "export default function () { for (;;) {} }").expect("hook");
+        let mut workspace = Workspace::new(dir.path());
+        let command = dir.path().join("slow.js").display().to_string();
+        workspace.hooks = super::super::Hooks::parse(&json!({"PreToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "script", "command": command, "timeout": 1}
+        ]}]}))
+        .expect("hooks");
+        let input = json!({"tool_name": "Bash", "tool_input": {"command": "ls"}});
+        let model = ScriptedModel::new([]);
+        for model in [None, Some((&model as &dyn ModelApi, &template()))] {
+            let decision = workspace.hooks.run_with_model("PreToolUse", "Bash", input.clone(), &workspace, model);
+            assert_eq!(decision.expect("ran").blocked, None, "a failing hook does not block");
+            assert!(!workspace.stop.load(std::sync::atomic::Ordering::Relaxed), "the run was not cancelled");
+        }
+    }
 }

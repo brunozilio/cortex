@@ -141,11 +141,13 @@ mod file;
 mod hold;
 mod log;
 mod records;
+mod repair;
 
 pub use file::FileSessions;
 pub use hold::{ANSWERING_ELSEWHERE, Hold};
 pub use log::Entry;
 pub use records::records;
+pub use repair::{INTERRUPTED, repaired};
 
 #[cfg(test)]
 mod scope_tests {

@@ -42,7 +42,7 @@ impl Job {
         };
         let (session, history) = match &self.request.resume {
             Some(id) => match self.sessions.load_for_checked(&self.request, id) {
-                Ok(Some(history)) => (id.clone(), history),
+                Ok(Some(history)) => (id.clone(), crate::sessions::repaired(history)),
                 Err(error) => {
                     return self.fail(&format!("Could not restore the conversation: {error}"), FailureKind::Other);
                 }

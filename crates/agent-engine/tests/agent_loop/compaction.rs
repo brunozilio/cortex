@@ -57,3 +57,40 @@ fn the_provider_s_own_token_count_decides_when_to_compact() {
     let summary = asked[1].messages.last().map(Message::text).unwrap_or_default();
     assert!(summary.contains("Write a detailed summary"), "the second call summarises: {summary}");
 }
+
+#[test]
+fn a_long_resumed_conversation_that_compacts_mid_turn_still_finishes() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    rig.workspace.models.model = ModelOption::new("m", "M").with_window(100_000);
+    let mut history = Vec::new();
+    for i in 0..20 {
+        history.push(Message::user(format!("earlier question {i}")));
+        history.push(Message::assistant(vec![Block::Text(format!("earlier answer {i}"))]));
+    }
+    history.push(Message::user("read the notes"));
+    let before = history.len();
+    let model = ScriptedModel::new([
+        measured(vec![tool_use("r", "Read", json!({"file_path": "notes.txt"}))], 95_000),
+        ScriptedModel::reply(vec![Block::Text("<summary>read notes</summary>".into())]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    rig.run(&model, &mut history).expect("run");
+    assert!(history.len() < before, "the conversation was compacted: {}", history.len());
+    assert_eq!(history.last().map(Message::text).as_deref(), Some("Done."));
+}
+
+#[test]
+fn a_failed_automatic_summary_leaves_the_conversation_whole_and_the_turn_goes_on() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    rig.workspace.models.model = ModelOption::new("m", "M").with_window(100_000);
+    let model = ScriptedModel::new([
+        measured(vec![tool_use("r", "Read", json!({"file_path": "notes.txt"}))], 95_000),
+        Err(ModelError::Provider("overloaded".into())),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    let mut history = vec![Message::user("read the notes"), Message::assistant(vec![]), Message::user("go")];
+    rig.run(&model, &mut history).expect("the turn survives the failed summary");
+    assert_eq!(history.last().map(Message::text).as_deref(), Some("Done."));
+    assert_eq!(history.len(), 6, "nothing was summarised away");
+    assert!(!rig.events().iter().any(|event| matches!(event, domain::EngineEvent::Compacted(_))));
+}

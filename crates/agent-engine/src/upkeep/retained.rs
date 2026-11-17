@@ -52,7 +52,7 @@ pub fn records(history: &[Message]) -> String {
 pub fn save_transcript(history: &[Message], dir: &Path) -> Option<PathBuf> {
     let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     let path = dir.join(format!("transcript-{at}.txt"));
-    let saved = std::fs::create_dir_all(dir).and_then(|()| std::fs::write(&path, records(history)));
+    let saved = crate::tools::persisted::write_private(dir, &path, &records(history));
     match saved {
         Ok(()) => Some(path),
         Err(error) => {

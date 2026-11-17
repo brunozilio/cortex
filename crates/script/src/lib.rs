@@ -54,19 +54,23 @@ pub fn run_within(
 ) -> Result<Value, String> {
     let runtime = Runtime::new().map_err(|error| error.to_string())?;
     let flag = Arc::clone(&stop);
+    let timed_out = Arc::new(AtomicBool::new(false));
+    let late = Arc::clone(&timed_out);
     let deadline = limit.map(|limit| std::time::Instant::now() + limit);
     runtime.set_interrupt_handler(Some(Box::new(move || {
-        let late = deadline.is_some_and(|deadline| std::time::Instant::now() > deadline);
-        if late {
-            flag.store(true, Ordering::Relaxed);
+        if deadline.is_some_and(|deadline| std::time::Instant::now() > deadline) {
+            late.store(true, Ordering::Relaxed);
         }
-        flag.load(Ordering::Relaxed)
+        late.load(Ordering::Relaxed) || flag.load(Ordering::Relaxed)
     })));
     let context = Context::full(&runtime).map_err(|error| error.to_string())?;
     context.with(|ctx| {
         let result = evaluate(&ctx, name, source, export, arguments, data, host);
         if stop.load(Ordering::Relaxed) {
             return Err("cancelled".to_owned());
+        }
+        if timed_out.load(Ordering::Relaxed) {
+            return Err(format!("the script timed out after {:?}", limit.unwrap_or_default()));
         }
         result.map_err(|error| describe(&ctx, error))
     })

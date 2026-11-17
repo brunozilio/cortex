@@ -63,3 +63,14 @@ fn skills_whose_results_were_summarized_are_carried_over_once() {
     assert!(!carried.contains("verify"), "a skill still in the kept messages is not repeated");
     assert_eq!(invoked_skills(&history[..1], &[]), None);
 }
+
+#[cfg(unix)]
+#[test]
+fn the_saved_transcript_and_its_folder_are_readable_by_the_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().expect("dir");
+    let folder = dir.path().join("session");
+    let path = save_transcript(&[Message::user("a secret")], &folder).expect("saved");
+    let mode = |path: &Path| std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777;
+    assert_eq!((mode(&folder), mode(&path)), (0o700, 0o600));
+}

@@ -67,8 +67,20 @@ pub(super) fn conversation(entries: impl IntoIterator<Item = Entry>) -> Vec<Mess
     history
 }
 
+pub(super) fn written(text: &str) -> &str {
+    if text.is_empty() || text.ends_with('\n') {
+        return text;
+    }
+    let last = text.rfind('\n').map_or(0, |at| at + 1);
+    if serde_json::from_str::<Kind>(&text[last..]).is_ok() {
+        return text;
+    }
+    tracing::warn!(bytes = text.len() - last, "dropping the last line of a saved conversation: it was cut mid-write");
+    &text[..last]
+}
+
 pub(super) fn resume(text: &str) -> Result<Vec<Message>, String> {
-    let lines: Vec<&str> = text.lines().filter(|line| !line.trim().is_empty()).collect();
+    let lines: Vec<&str> = written(text).lines().filter(|line| !line.trim().is_empty()).collect();
     let mut since_restart = Vec::new();
     for line in lines.iter().rev() {
         let kind = serde_json::from_str::<Kind>(line).map_err(invalid)?.kind;
@@ -86,7 +98,8 @@ pub(super) fn resume(text: &str) -> Result<Vec<Message>, String> {
 }
 
 pub(super) fn all(text: &str) -> Result<Vec<Entry>, String> {
-    text.lines()
+    written(text)
+        .lines()
         .filter(|line| !line.trim().is_empty())
         .map(|line| serde_json::from_str(line).map_err(invalid))
         .collect()

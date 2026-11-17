@@ -7,6 +7,12 @@ pub fn results_dir(session_id: &str) -> PathBuf {
     std::env::temp_dir().join(concat!(brand::command!(), "-tool-results")).join(session_id)
 }
 
+pub fn write_private(dir: &Path, path: &Path, content: &str) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    platform::make_private_dir(dir)?;
+    platform::private_file::write(path, content.as_bytes())
+}
+
 fn cut_at(text: &str, at: usize) -> usize {
     (0..=at.min(text.len())).rev().find(|&i| text.is_char_boundary(i)).unwrap_or(0)
 }
@@ -31,7 +37,7 @@ pub fn persist(content: &str, dir: &Path, id: &str) -> Option<String> {
     }
     let name: String = id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect();
     let path = dir.join(format!("{name}.txt"));
-    let written = std::fs::create_dir_all(dir).and_then(|()| std::fs::write(&path, content));
+    let written = write_private(dir, &path, content);
     match written {
         Ok(()) => Some(preview(content, &path)),
         Err(error) => {
@@ -62,5 +68,16 @@ mod tests {
         assert!(shown.contains(&saved.display().to_string()) && shown.contains("Output too large"));
         assert!(shown.contains("START") && shown.contains("END") && shown.contains("characters omitted"));
         assert!(shown.len() < 3 * PREVIEW + 500);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_saved_output_and_its_folder_are_readable_by_the_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().expect("dir");
+        let folder = dir.path().join("session");
+        persist(&"x".repeat(PERSIST_OVER + 1), &folder, "call_1").expect("persisted");
+        let mode = |path: &Path| std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!((mode(&folder), mode(&folder.join("call_1.txt"))), (0o700, 0o600));
     }
 }

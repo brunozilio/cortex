@@ -55,7 +55,7 @@ impl Shape for Provider {
     }
     fn shape(&self, model: Option<&ModelOption>, body: &mut Value, effort: &str) -> Result<(), ProviderError> {
         let caps = model.and_then(|model| model.capabilities.as_ref());
-        let max_tokens = caps.and_then(|c| c.max_output_tokens).unwrap_or(8192).min(8192);
+        let max_tokens = crate::providers::output_limit(model, body);
         body["max_tokens"] = json!(max_tokens);
         remove(body, &["thinking", "output_config"]);
         if let Some(caps) = caps.filter(|c| c.reasoning && (c.adaptive_thinking || max_tokens > 1)) {
@@ -116,7 +116,32 @@ mod tests {
             "output_config": {"effort": "high"}});
         llm_providers::request::shape(&Provider, Some(&model), &mut body).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(body["system"], json!([{"text": "a"}, {"text": "b"}]));
-        assert_eq!(body["thinking"], json!({"type": "enabled", "budget_tokens": 4096}));
+        assert_eq!(body["thinking"], json!({"type": "enabled", "budget_tokens": 16000}));
+    }
+
+    fn shaped(declared: Option<u32>, asked: Option<u64>) -> Value {
+        let mut model = ModelOption::new("anthropic:claude-opus-4-1", "Opus");
+        model.capabilities =
+            Some(ModelCapabilities { reasoning: true, max_output_tokens: declared, ..ModelCapabilities::default() });
+        let mut body = json!({"model": "anthropic:claude-opus-4-1", "output_config": {"effort": "max"}});
+        if let Some(asked) = asked {
+            body["max_tokens"] = json!(asked);
+        }
+        llm_providers::request::shape(&Provider, Some(&model), &mut body).unwrap_or_else(|e| panic!("{e}"));
+        body
+    }
+
+    #[test]
+    fn the_output_limit_is_the_smaller_of_what_the_model_declares_and_what_the_request_asks() {
+        assert_eq!(shaped(Some(32_000), Some(64_000))["max_tokens"], 32_000, "the model's limit");
+        assert_eq!(shaped(Some(128_000), Some(64_000))["max_tokens"], 64_000, "the request's limit");
+        assert_eq!(shaped(Some(32_000), None)["max_tokens"], 32_000);
+        assert_eq!(shaped(None, Some(64_000))["max_tokens"], 8192, "a model that declares nothing");
+        for body in [shaped(Some(32_000), Some(64_000)), shaped(Some(128_000), Some(2_000)), shaped(None, None)] {
+            let (most, thinking) = (body["max_tokens"].as_u64(), body["thinking"]["budget_tokens"].as_u64());
+            assert!(thinking < most, "thinking leaves room for the answer: {body}");
+        }
+        assert!(shaped(Some(128_000), Some(300)).get("thinking").is_none(), "too little room to think");
     }
 
     #[test]

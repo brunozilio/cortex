@@ -32,7 +32,7 @@ fn kept_whole(text: &str, workspace: &Workspace) -> Option<PathBuf> {
     let dir = crate::tools::persisted::results_dir(&workspace.session_id);
     let name = format!("bash-{}-{}.txt", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
     let path = dir.join(name);
-    match std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&path, workspace.policy.redacted(text))) {
+    match crate::tools::persisted::write_private(&dir, &path, &workspace.policy.redacted(text)) {
         Ok(()) => Some(path),
         Err(error) => {
             tracing::warn!(%error, "could not keep a command's whole output");
@@ -75,6 +75,18 @@ mod tests {
         let mut shell = std::process::Command::new("true");
         plain(&mut shell, &workspace);
         assert!(shell.get_envs().any(|(name, value)| name == "NO_COLOR" && value == Some("1".as_ref())));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_command_s_whole_output_is_kept_for_the_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let workspace = workspace(Shaping::default(), 92_004);
+        let path = kept_whole("secret output", &workspace).expect("kept");
+        let mode = |path: &std::path::Path| std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777;
+        let modes = (mode(path.parent().expect("folder")), mode(&path));
+        let _ = std::fs::remove_dir_all(path.parent().expect("folder"));
+        assert_eq!(modes, (0o700, 0o600));
     }
 
     #[test]

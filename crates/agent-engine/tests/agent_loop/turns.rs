@@ -280,3 +280,55 @@ fn independent_reads_overlap_and_results_keep_the_model_call_order() {
         matches!(&history[2].blocks[..],[Block::ToolResult{id:first,is_error:false,..},Block::ToolResult{id:second,is_error:false,..}] if first=="r1"&&second=="r2")
     );
 }
+
+#[test]
+fn a_rule_file_with_broken_frontmatter_is_skipped_and_the_turn_goes_on() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    let rules = rig.dir.path().join(concat!(brand::dir!(), "/rules"));
+    std::fs::create_dir_all(&rules).expect("rules");
+    std::fs::write(rules.join("broken.md"), "---\npaths: [unterminated\n---\nNever applied.").expect("rule");
+    rig.workspace.rules = agent_engine::prompt::rules::discover(rig.dir.path(), None);
+    assert_eq!(rig.workspace.rules.len(), 1);
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("r", "Read", json!({"file_path": "notes.txt"}))]),
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+    ]);
+    let mut history = vec![Message::user("read the notes")];
+    rig.run(&model, &mut history).expect("the broken rule does not fail the turn");
+    let sent = format!("{:?}", model.asked()[1].messages);
+    assert!(sent.contains("alpha"), "the call ran: {sent}");
+    assert!(!sent.contains("broken.md"), "the broken rule is not sent as a rule: {sent}");
+}
+
+fn done_many(times: usize) -> ScriptedModel {
+    ScriptedModel::new((0..times).map(|_| ScriptedModel::reply(vec![Block::Text("Done.".into())])))
+}
+
+#[test]
+fn a_model_that_never_gives_the_structured_result_is_asked_three_times_then_the_run_fails() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    let model = done_many(10);
+    let contract = agent_engine::tools::structured::Structured::new(json!({"type": "object"})).expect("schema");
+    let mut history = vec![Message::user("answer in the contract")];
+    let ending = rig.run_with(&model, &mut history, vec![Box::new(contract)]).expect_err("the run fails");
+    assert_eq!(model.asked().len(), 4, "the answer and three reminders");
+    let Ending::Failed(ModelError::Provider(why)) = ending else { panic!("{ending:?}") };
+    assert!(why.contains("StructuredOutput") && why.contains("3 times"), "{why}");
+}
+
+#[test]
+fn a_stop_hook_that_keeps_blocking_ends_the_turn_after_three_blocks_with_a_notice() {
+    let mut rig = Rig::new(PermissionMode::Bypass);
+    rig.workspace.hooks = agent_engine::hooks::Hooks::parse(&json!({"Stop": [{"hooks": [
+        {"type": "command", "command": "echo '{\"decision\":\"block\",\"reason\":\"not yet\"}'"}
+    ]}]}))
+    .expect("hooks");
+    let model = done_many(10);
+    let mut history = vec![Message::user("finish")];
+    rig.run(&model, &mut history).expect("the turn ends");
+    assert_eq!(model.asked().len(), 4, "the answer and three blocked attempts to stop");
+    let noticed = rig.events().iter().any(|event| {
+        matches!(event, EngineEvent::TextDelta(text) if text.contains("hook") && text.contains("3 times"))
+    });
+    assert!(noticed, "{:?}", rig.events());
+}

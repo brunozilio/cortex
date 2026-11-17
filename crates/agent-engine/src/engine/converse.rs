@@ -264,6 +264,7 @@ impl Job {
             }
             _ => {}
         }
+        let history = crate::sessions::repaired(history);
         if let Err(error) = self.sessions.save_for(&self.request, &session, &history) {
             return self.fail(&format!("Could not save the conversation: {error}"), FailureKind::Other);
         }

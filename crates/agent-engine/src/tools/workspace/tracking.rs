@@ -73,7 +73,7 @@ impl Tracking {
         let seen = self.seen_rules.locked();
         rules
             .iter()
-            .filter(|r| r.patterns.is_empty() || seen.contains(&r.path))
+            .filter(|r| r.error.is_none() && (r.patterns.is_empty() || seen.contains(&r.path)))
             .map(|r| format!("\n\n# Project rule: {}\n{}", r.path.display(), r.text))
             .collect::<Vec<_>>()
             .join("")

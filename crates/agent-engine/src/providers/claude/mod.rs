@@ -74,7 +74,7 @@ impl Shape for Provider {
             blocks.extend(existing.iter().cloned());
         }
         body["system"] = json!(blocks);
-        body["max_tokens"] = json!(8192);
+        body["max_tokens"] = json!(crate::providers::output_limit(model, body));
         remove(body, &["thinking", "output_config"]);
         llm_providers::effort(self.vendor(), body, model, effort, false)
     }
@@ -171,6 +171,23 @@ mod tests {
         llm_providers::request::shape(&Provider, None, &mut body).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(body["system"][0]["text"], "You are Claude Code, Anthropic's official CLI for Claude.");
         assert_eq!(body["max_tokens"], 8192);
+    }
+
+    #[test]
+    fn the_output_limit_is_the_smaller_of_what_the_model_declares_and_what_the_request_asks() {
+        let shaped = |declared: Option<u32>, asked: u64| {
+            let mut model = ModelOption::new("claude-subscription:claude-sonnet-4-5", "Sonnet");
+            model.capabilities = Some(domain::model::ModelCapabilities {
+                max_output_tokens: declared,
+                ..domain::model::ModelCapabilities::default()
+            });
+            let mut body = json!({"model": "claude-subscription:claude-sonnet-4-5", "max_tokens": asked});
+            llm_providers::request::shape(&Provider, Some(&model), &mut body).unwrap_or_else(|e| panic!("{e}"));
+            body["max_tokens"].as_u64()
+        };
+        assert_eq!(shaped(Some(32_000), 64_000), Some(32_000), "the model's limit");
+        assert_eq!(shaped(Some(128_000), 64_000), Some(64_000), "the request's limit");
+        assert_eq!(shaped(None, 64_000), Some(8192), "a model that declares nothing");
     }
 
     #[test]

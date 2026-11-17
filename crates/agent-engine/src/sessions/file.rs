@@ -1,5 +1,5 @@
 use std::fs::OpenOptions;
-use std::io::{ErrorKind, Write};
+use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 use domain::{PromptRequest, SessionId};
@@ -55,9 +55,10 @@ impl FileSessions {
             lines.push('\n');
         }
         std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+        let unfinished = end_unfinished_line(&path).map_err(|e| e.to_string())?;
         let mut file = platform::private_file::open(OpenOptions::new().create(true).append(true), &path)
             .map_err(|e| e.to_string())?;
-        file.write_all(lines.as_bytes()).map_err(|e| e.to_string())?;
+        file.write_all(format!("{unfinished}{lines}").as_bytes()).map_err(|e| e.to_string())?;
         if legacy.is_some() {
             std::fs::remove_file(self.path(id, "json")?).map_err(|e| e.to_string())?;
         }
@@ -82,6 +83,30 @@ impl FileSessions {
         }
         result.map_err(|e: std::io::Error| e.to_string())
     }
+}
+
+fn end_unfinished_line(path: &PathBuf) -> std::io::Result<&'static str> {
+    let mut file = match OpenOptions::new().read(true).write(true).open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(""),
+        Err(error) => return Err(error),
+    };
+    let mut last = *b"\n";
+    if file.seek(SeekFrom::End(-1)).is_ok() {
+        file.read_exact(&mut last)?;
+    }
+    if last == *b"\n" {
+        return Ok("");
+    }
+    let mut text = String::new();
+    file.seek(SeekFrom::Start(0))?;
+    file.read_to_string(&mut text)?;
+    let written = log::written(&text).len();
+    if written == text.len() {
+        return Ok("\n");
+    }
+    file.set_len(written as u64)?;
+    Ok("")
 }
 
 fn read(path: &PathBuf) -> Result<Option<String>, String> {

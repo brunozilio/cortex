@@ -103,13 +103,18 @@ pub fn read_line_stopped(
     line: &mut String,
     stop: &std::sync::atomic::AtomicBool,
 ) -> Result<usize, super::ModelError> {
-    let before = line.len();
+    let mut bytes = Vec::new();
     loop {
         if stop.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(super::ModelError::Cancelled);
         }
-        match body.read_line(line) {
-            Ok(_) => return Ok(line.len() - before),
+        match body.read_until(b'\n', &mut bytes) {
+            Ok(_) => {
+                let text = std::str::from_utf8(&bytes)
+                    .map_err(|_| super::ModelError::Network("stream did not contain valid UTF-8".into()))?;
+                line.push_str(text);
+                return Ok(bytes.len());
+            }
             Err(error) if matches!(error.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => {
                 continue;
             }
@@ -193,3 +198,7 @@ impl std::fmt::Debug for Stopped<'_> {
         f.write_str("StoppedHttp")
     }
 }
+
+#[cfg(test)]
+#[path = "http_line_tests.rs"]
+mod line_tests;
