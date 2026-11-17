@@ -6,7 +6,7 @@ description: Todas as feature flags que o {{NAME}} conhece, o que cada uma muda 
 O {{NAME}} traz um conjunto de funcionalidades com nome que você pode ligar ou desligar uma a uma: proteções de segurança, formas de enxugar a saída de comandos e de páginas web, revisores que conferem o trabalho do agente, ajudas de memória e mais. Cada uma é uma **feature flag** com um nome fixo, como `budget` ou `experimental-sandbox`.
 
 > [!IMPORTANT]
-> Toda flag fica **ligada** até você desligá-la, inclusive as que começam com `experimental-`. Uma flag que você nunca mexeu está ligada.
+> Toda flag fica **ligada** até você desligá-la, inclusive as que começam com `experimental-`. Uma flag que você nunca mexeu está ligada. A única exceção é a [`experimental-code-mode-only`](#experimental-code-mode-only), que vem desligada porque faz da REPL a única ferramenta do agente.
 
 ## Ligar ou desligar uma flag
 
@@ -97,6 +97,8 @@ Os arquivos são lidos em ordem, e um arquivo seu lido depois prevalece. O `/fea
 ## Flags estáveis e experimentais
 
 Uma flag cujo nome começa com `experimental-` é experimental: o comportamento ainda pode mudar ou ser removido. As outras são estáveis. Os dois tipos começam ligados.
+
+As funcionalidades experimentais já vêm ligadas para que sejam usadas. Cada uma caminha para um de dois fins: depois de rodar no uso diário sem nenhum problema relatado, vira parte permanente do {{NAME}} (a flag some, ou vira uma configuração comum), ou é removida. Até lá, você pode desligar qualquer uma com `/features <nome> off`. A `experimental-code-mode-only` é a única que começa desligada: ela não acrescenta nada ao lado das outras ferramentas, ela as substitui pela REPL, então quem liga é você.
 
 ## Visão geral das flags
 

@@ -6,7 +6,7 @@ description: Every feature flag {{NAME}} knows, what each one changes, and how t
 {{NAME}} ships a set of named features that you can switch on or off one by one: safety guards, ways of shaping command and web output, reviewers that check the agent's work, memory helpers and more. Each one is a **feature flag** with a fixed name such as `budget` or `experimental-sandbox`.
 
 > [!IMPORTANT]
-> Every flag is **on** until you turn it off, including the ones whose name starts with `experimental-`. A flag you never touched is on.
+> Every flag is **on** until you turn it off, including the ones whose name starts with `experimental-`. A flag you never touched is on. The one exception is [`experimental-code-mode-only`](#experimental-code-mode-only), which is off because it makes REPL the agent's only tool.
 
 ## Turn a flag on or off
 
@@ -97,6 +97,8 @@ Files are read in order and a later file you own wins. `/features` writes `~/{{D
 ## Stable and experimental flags
 
 A flag whose name starts with `experimental-` is experimental: its behaviour may still change or be removed. The other flags are stable. Both kinds start on.
+
+Experimental features ship on so that they get used. Each one is on its way to one of two ends: once it has run in daily use without a reported problem it becomes a permanent part of {{NAME}} (its flag goes away, or it turns into an ordinary setting), or it is removed. Until then you can turn any of them off with `/features <name> off`. `experimental-code-mode-only` is the only one that starts off: it does not add something beside the other tools, it replaces them with REPL, so you turn it on yourself.
 
 ## Flags at a glance
 

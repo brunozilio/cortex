@@ -5,8 +5,10 @@ product's name lives in `config.toml` (read through the `brand` crate:
 `brand::NAME`, `brand::COMMAND`; `cargo run -p xtask -- brand` writes the
 files that must spell it out). It is a terminal product; it also serves a
 local web page on loopback for the trace, the console, the user docs and a
-terminal attached to a session. That page observes and documents; it is not
-an editor.
+terminal attached to a session. That page observes, documents and, from the
+owner's paired devices through a relay the owner hosts
+(`docs/decisions/0012-remote-control-through-a-blind-relay.md`), drives the
+owner's sessions; it is not an editor.
 
 ## Crates
 Dependencies are one-way; the main line is
@@ -103,8 +105,9 @@ flags stated anywhere but `docs/feature-flags.md`'s tables.
 - Functions over 100 lines fail clippy (`too_many_lines`); keep a type's
   impl in few cohesive modules; file length is not a goal.
 - Every new behaviour gets a test; IO sits behind traits so logic is testable.
-- Single-user local product: no `Principal`, members, authorizer or remote
-  server; see `docs/decisions/0008-single-user-local-product.md`.
+- Single-user local product: no `Principal`, members, authorizer, accounts or
+  multi-user server; the only server is the owner's self-hosted remote-control
+  relay; see `docs/decisions/0008-single-user-local-product.md` and `0012`.
 - No `unwrap()` outside tests.
 - Edit files with the Edit tool, not `python3`/`sed -i` rewrites.
 - Skills: `tdd` for new behaviour and fixes, `diagnosing-bugs` for anything broken or slow.

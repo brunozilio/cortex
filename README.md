@@ -81,7 +81,7 @@ and `XDG_CONFIG_HOME`.
 
 ## Docs
 
-- [docs/vision.md](docs/vision.md): what it is for, scope and non-goals (draft).
+- [docs/vision.md](docs/vision.md): what it is for, scope and non-goals.
 - [docs/GLOSSARY.md](docs/GLOSSARY.md): the project's vocabulary.
 - [docs/architecture.md](docs/architecture.md): crates, request path, data on disk, threading.
 - [docs/decisions/](docs/decisions/): the decision records.

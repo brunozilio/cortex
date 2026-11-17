@@ -1,6 +1,6 @@
 # Vision
 
-Status: DRAFT written from the 2026-11-16 audit, for the owner to review; nothing here is approved until the sign-off listed under "Open decisions".
+Status: Approved by the owner, 2026-11-17. Written from the 2026-11-16 audit; the owner's decisions of 2026-11-17 on remote control (`decisions/0012-remote-control-through-a-blind-relay.md`) and on experimental features are folded in.
 
 This document names the product as "the app" and its binary as `<command>`; the real name lives in `config.toml`.
 
@@ -12,23 +12,25 @@ The second problem is trust. A coding agent runs shell commands and edits files 
 
 ## Who it is for
 
-Individual developers who want one terminal agent across several model providers, working in their own repositories, on their own machine.
+Individual developers who want one terminal agent across several model providers, working in their own repositories, on their own machine, and following or driving that work from their own phone when they are away from it.
 
-The audit found no written target user; this is the working assumption. It implies: one person, one machine, local files, no administrator, no team server.
+It implies: one person, their own machine and devices, local files, no administrator, no team server.
 
 ## What it does that alternatives do not
 
-These are the differentiators the code supports today. They are hypotheses to confirm, not claims to publish.
+These are the differentiators the code supports today, each with the part of the code that carries it.
 
-- One agent, several providers. The same chat, tools, permission rules and session history work over API-key providers and sign-in providers, and over providers a user declares in a small JavaScript file.
-- Models have roles. A session can use different models for the main loop, planning, exploring, review, a small model for auxiliary work and an advisor, with a fallback chain and several accounts per provider.
-- The agent's behaviour is content, not code. Prompts, tool descriptions, hooks, output styles, built-in agents and skills are JavaScript and Markdown files embedded in the binary, and a user can override any of them.
-- Runs are observable. Every run is recorded and can be inspected in a local web page (runs, spans, model calls, cost), beside the terminal.
-- Everything is local. Sessions, memory, settings and credentials stay in the user's data folder; nothing requires a server run by the project.
+- One agent, several providers. The same chat, tools, permission rules and session history work over API-key providers and sign-in providers, and over providers a user declares in a small JavaScript file (`llm-providers`, `script`).
+- Models have roles. A session can use different models for the main loop, planning, exploring, review, a small model for auxiliary work and an advisor, with a fallback chain and several accounts per provider (`llm-providers`, `agent-engine`).
+- The agent's behaviour is content, not code. Prompts, tool descriptions, hooks, output styles, built-in agents and skills are JavaScript and Markdown files embedded in the binary, and a user can override any of them (`content`).
+- Runs are observable. Every run is recorded and can be inspected in a local web page (runs, spans, model calls, cost), beside the terminal (`domain::trace`, `console`, `page`). The same runs can be exported to the user's own OpenTelemetry collector over OTLP (`decisions/0014-hand-written-otlp-export.md`).
+- Runs can be measured. `<command> eval` runs a folder of eval cases against a model and scores them, so a change to a prompt, a tool or a model can be judged on cases rather than by feel.
+- Remote control without a hosted service. The owner follows and drives their own sessions, terminal included, from a paired phone, through a relay they host themselves that forwards end-to-end encrypted frames it cannot read (`tunnel`, `relay`; `decisions/0012-remote-control-through-a-blind-relay.md`).
+- Everything is local-first. Sessions, memory, settings and credentials stay in the user's data folder; nothing requires a server run by the project. The only server is the optional relay, and it is the owner's.
 
 ## Scope today
 
-The audit found dozens of feature flags, most of them named experimental and all on by default, and no rule for cutting scope. `feature-flags.md` (written 2026-11-16) lists every flag and proposes a destiny for each (fixed behaviour, experimental with an owner and off by default, or removed); it is the place for how many there are. Until the owner decides on those proposals, the split below is provisional.
+`feature-flags.md` lists every feature flag, what it gates and what to do with it; it is the place for how many there are.
 
 Core:
 
@@ -39,22 +41,24 @@ Core:
 - Providers: connect by API key or sign-in, model catalog, model roles, fallback chain, several accounts.
 - Extension points: instruction files, rules, hooks, skills, custom agents, script tools, plugins, MCP servers (HTTP and stdio).
 - The local web page: trace of runs, console, user documentation, a terminal attached to a session.
-- Remote control: the same page installed on a phone as a progressive web app, through a self-hosted relay (`decisions/0012-remote-control-through-a-blind-relay.md`).
+- Trace export to an OpenTelemetry collector (OTLP over HTTP, opt-in through an environment variable).
+- Evals: cases in a folder, run and scored by `<command> eval`.
+- Remote control: the same page installed on a phone as a progressive web app, through a self-hosted relay, with the terminal on by default for paired devices (`decisions/0012-remote-control-through-a-blind-relay.md`).
 - Subcommands: `login`, `logout`, `models`, `mcp`, `plugin`, `remote`, `config`, `doctor`, `eval`.
 
-Experimental or undecided (to be classified by the owner from `feature-flags.md`):
+Experimental:
 
-- Named experimental in code: the write sandbox, the dependency guard, pull-request follow, the tree-sitter code map.
-- Listed by the audit as scope without a cut criterion: project memory with scorecard, seeds and optimisation; learning; schedules and loops; fleet (several live sessions in one terminal); MCP channels; the verification judge.
+- Every flag whose name starts with `experimental-`, among them the write sandbox, the dependency guard, pull-request follow and the tree-sitter code map. They ship on (see non-goal 5); `feature-flags.md` gives each one an owner and an exit criterion.
+- Scope the audit listed without a cut criterion, now under the same rule: project memory with scorecard, seeds and optimisation; learning; schedules and loops; fleet (several live sessions in one terminal); MCP channels; the verification judge.
 - Platforms: macOS and Linux are the tested targets. Windows is compiled but several platform functions are stubs.
 
 ## Non-goals
 
-1. Not a multi-user or hosted service. One user, one machine. There is no account system, no organisation, no remote server (see `decisions/0008-single-user-local-product.md`).
+1. Not a multi-user or hosted service. One user, their own machine and devices. There is no account system, no organisation, no multi-user server, and no service run by the project. The one server the app has is the optional remote-control relay, which the owner hosts themselves (on a server of their own, or as a Worker on their own Cloudflare account) and which only forwards encrypted frames between the owner's machine and the owner's paired devices (see `decisions/0008-single-user-local-product.md` and `decisions/0012-remote-control-through-a-blind-relay.md`).
 2. Not an embeddable SDK. The client code between the terminal and the engine is internal; no API is offered for building other products on top of the agent (see `decisions/0005-typed-application-api.md`).
-3. Not an IDE or a GUI editor. The local web page is for observing runs and reading documentation; code is edited through the agent and the user's own editor.
+3. Not an IDE or a GUI editor. The web page observes runs, documents the app and, from the owner's paired devices, drives the owner's sessions (the console and the terminal attached to a session); code is edited through the agent and the user's own editor.
 4. Not a network-reachable surface. The web page binds to loopback with a per-process token and accepts no connection from the network. Remote control reaches a session only through a relay the owner runs, to which the machine connects out, and only from paired devices, end to end encrypted (see `decisions/0012-remote-control-through-a-blind-relay.md`).
-5. Not breadth for its own sake. A feature without an owner and a user is removed, and an experimental feature starts off. The audit's finding that "nothing was refused" in the first eight days is the reason this is written down.
+5. Not breadth for its own sake. A feature without an owner and a user is removed. An experimental feature ships on, with an owner and an exit criterion; the owner turns it off or promotes it to permanent. The audit's finding that "nothing was refused" in the first eight days is the reason this is written down.
 
 ## Open decisions
 
@@ -62,4 +66,3 @@ Owned by the tech lead. This document does not take a position on them.
 
 - Subscription providers' client identity.
 - License.
-- Product-vision sign-off: this document, including the target user and the five non-goals.
