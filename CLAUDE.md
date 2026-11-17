@@ -21,7 +21,7 @@ llm-providers    ──► platform, domain, brand
 domain           ──► brand
 language-servers ──► platform, domain, brand
 content          ──► script, brand
-console          ──► page, platform, brand
+console          ──► page, tunnel, platform, brand
 relay            ──► page, tunnel
 code-map, platform, script, brand, page, tunnel ──► no workspace crate
 ```

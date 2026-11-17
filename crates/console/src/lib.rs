@@ -2,6 +2,7 @@ mod access;
 mod assets;
 mod live;
 mod pty;
+pub mod remote;
 mod routes;
 mod server;
 mod terminal;

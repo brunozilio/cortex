@@ -10,7 +10,7 @@ const COOKIE: &str = "console_token";
 const LINK: &str = "token";
 const LOCAL_NAMES: [&str; 2] = ["127.0.0.1", "localhost"];
 
-fn cookie_name(port: u16) -> String {
+pub(crate) fn cookie_name(port: u16) -> String {
     format!("{COOKIE}_{port}")
 }
 

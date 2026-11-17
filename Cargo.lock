@@ -864,6 +864,7 @@ name = "console"
 version = "0.0.1"
 dependencies = [
  "axum",
+ "base64 0.23.1",
  "brand",
  "futures-util",
  "getrandom 0.3.4",
@@ -871,6 +872,9 @@ dependencies = [
  "page",
  "platform",
  "portable-pty",
+ "relay",
+ "reqwest",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
@@ -878,6 +882,7 @@ dependencies = [
  "tokio-tungstenite",
  "tower",
  "tower-http",
+ "tunnel",
 ]
 
 [[package]]
@@ -3431,12 +3436,14 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tokio-rustls",
+ "tokio-util",
  "tower",
  "tower-http",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "webpki-roots",
 ]
@@ -4316,7 +4323,11 @@ checksum = "8f72a05e828585856dacd553fba484c242c46e391fb0e58917c942ee9202915c"
 dependencies = [
  "futures-util",
  "log",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pki-types",
  "tokio",
+ "tokio-rustls",
  "tungstenite",
 ]
 
@@ -4566,6 +4577,8 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.5",
+ "rustls",
+ "rustls-pki-types",
  "sha1",
  "thiserror 2.0.21",
 ]
@@ -4834,6 +4847,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "wasm-streams"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15053d8d85c7eccdbefef60f06769760a563c7f0a9d6902a13d35c7800b0ad65"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
