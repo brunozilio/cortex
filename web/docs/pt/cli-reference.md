@@ -1,0 +1,243 @@
+---
+title: Referência da CLI
+description: Todos os comandos, subcomandos e opções do programa {{COMMAND}}.
+---
+
+`{{COMMAND}}` abre o chat na pasta atual. Com um prompt, o chat começa com ele; com `--print`, responde uma vez e sai; com um subcomando, faz só aquilo.
+
+```bash
+{{COMMAND}} [OPTIONS] [PROMPT]...
+{{COMMAND}} [OPTIONS] <COMMAND>
+```
+
+## Usos comuns
+
+```bash
+{{COMMAND}}                                   # chat no projeto atual
+{{COMMAND}} "why does the build fail?"        # chat, começando com este prompt
+{{COMMAND}} -p "explain src/main.rs"          # uma resposta, impressa
+{{COMMAND}} -c                                # continua a última conversa daqui
+{{COMMAND}} -r                                # escolhe uma conversa anterior desta pasta
+{{COMMAND}} -m claude-opus-5-5 --mode plan    # começa com este modelo, no modo plan
+{{COMMAND}} -C ../other-project               # trabalha em outra pasta
+{{COMMAND}} login                             # conecta um provedor
+{{COMMAND}} models                            # lista os modelos
+{{COMMAND}} doctor                            # confere esta instalação aqui
+```
+
+## Subcomandos
+
+| Comando | O que faz |
+|---|---|
+| `{{COMMAND}} login` | Conecta um provedor de LLM com chave de API ou assinatura; lista os provedores para escolher |
+| `{{COMMAND}} logout` | Esquece as credenciais de um provedor |
+| `{{COMMAND}} models` | Lista os modelos que os provedores conectados oferecem |
+| `{{COMMAND}} mcp` | Os servidores MCP que uma sessão aqui pode usar: listar, adicionar, remover, aprovar |
+| `{{COMMAND}} plugin` | Os plugins em `~/{{DIR}}/plugins`: listar, instalar, atualizar, remover |
+| `{{COMMAND}} doctor` | Confere se esta instalação funciona na pasta |
+| `{{COMMAND}} eval` | Roda os evals em `{{DIR}}/evals` e os pontua |
+| `{{COMMAND}} config` | Lê ou muda as configurações: as suas, ou as deste projeto com `--project` |
+| `{{COMMAND}} help` | Imprime a ajuda, ou a ajuda de um subcomando |
+
+As opções globais (`--cwd`, `--model` e as demais) vêm antes do subcomando: `{{COMMAND}} -C ../app doctor`.
+
+### login
+
+```bash
+{{COMMAND}} login
+```
+
+Imprime os provedores, cada um com a forma de conectar (`paste an API key`, `sign in with the browser`, `sign in with a code`), e pergunta `Choose 1-<n>:`. A chave é digitada oculta; um login abre o navegador. Termina com `Connected <provedor> (<conta>).` Conectar um provedor que já está conectado adiciona outra conta. Veja [Modelos e provedores](./models-and-providers) e [Contas](./accounts).
+
+### logout
+
+```bash
+{{COMMAND}} logout
+```
+
+Lista os provedores conectados e pergunta `Forget which?`. O provedor é esquecido com todas as contas dele. Sem nada conectado, imprime `No provider is connected.`
+
+### models
+
+```bash
+{{COMMAND}} models
+```
+
+Imprime uma linha por modelo: o id, completado até 40 caracteres, e depois o rótulo.
+
+### mcp
+
+```bash
+{{COMMAND}} mcp [COMMAND]
+```
+
+Sem comando, lista os servidores. Todo comando imprime a lista de servidores no fim: o nome, de onde vem (`host`, `project`, `user` ou `plugin <nome>`), o estado (`ready`, `waiting for approval` ou `off`) e a URL ou o comando. Veja [MCP](./mcp).
+
+| Comando | Argumentos | O que faz |
+|---|---|---|
+| `mcp list` | | Lista os servidores, de onde vêm e se iniciam |
+| `mcp add` | `<NAME> <TARGET> [ARGS]...` | Adiciona um servidor seu: uma URL (HTTP) ou um comando e seus argumentos |
+| `mcp remove` | `<NAME>` | Remove um servidor seu |
+| `mcp approve` | `<NAME>` | Deixa um servidor do `.mcp.json` deste projeto iniciar |
+| `mcp deny` | `<NAME>` | Desliga um servidor do `.mcp.json` deste projeto |
+| `mcp login` | `<NAME>` | Faz login num servidor remoto pelo navegador (OAuth) |
+| `mcp logout` | `<NAME>` | Esquece o login de um servidor remoto |
+
+Argumentos e opções de `mcp add`:
+
+| Argumento ou opção | Valor | Padrão | Descrição |
+|---|---|---|---|
+| `<NAME>` | texto | | O nome do servidor: letras, dígitos, `-` e `_` |
+| `<TARGET>` | texto | | Uma URL começando com `https://` ou `http://` para um servidor HTTP; qualquer outra coisa é o comando a iniciar |
+| `[ARGS]...` | texto | | Os argumentos do comando. Tudo depois do target é pego como está, mesmo valores que começam com `-`. |
+| `-e`, `--env` | `KEY=VALUE` | | Uma variável de ambiente para um servidor de comando (pode repetir). `${VAR}` é lido quando o servidor inicia. |
+| `-H`, `--header` | `"Name: value"` | | Um cabeçalho para um servidor HTTP (pode repetir) |
+| `--transport` | `http` ou `sse` | `http` | `sse` para um servidor no transporte antigo HTTP+SSE |
+
+Como os argumentos pegam tudo depois do target, coloque as opções antes do nome:
+
+```bash
+{{COMMAND}} mcp add -H "Authorization: Bearer $TOKEN" docs https://mcp.example.com/mcp
+{{COMMAND}} mcp add --transport sse legacy https://old.example.com/sse
+{{COMMAND}} mcp add -e API_KEY='${API_KEY}' files npx -y @example/files-mcp --root .
+{{COMMAND}} mcp approve jira
+```
+
+### plugin
+
+```bash
+{{COMMAND}} plugin [COMMAND]
+```
+
+Sem comando, lista os plugins instalados. Veja [Plugins](./plugins).
+
+| Comando | Argumentos e opções | O que faz |
+|---|---|---|
+| `plugin list` | | Lista os plugins instalados: nome e descrição |
+| `plugin install` | `<SOURCE>` `[--name <NAME>]` | Instala um plugin de uma URL git ou de um caminho. `--name` define o nome da pasta; senão ele vem da origem. |
+| `plugin update` | `<NAME>` | Puxa os commits mais recentes de um plugin |
+| `plugin remove` | `<NAME>` | Remove a pasta de um plugin |
+
+Depois de instalar, um chat novo ou `/reload` carrega o plugin.
+
+```bash
+{{COMMAND}} plugin install https://github.com/example/{{COMMAND}}-plugin.git
+{{COMMAND}} plugin install ./my-plugin --name mine
+{{COMMAND}} plugin update mine
+```
+
+### doctor
+
+```bash
+{{COMMAND}} doctor
+```
+
+Roda as verificações da instalação para a pasta e sai com 0 quando todas passam, 1 caso contrário. Veja [Solução de problemas](./troubleshooting#rodar-o-doctor).
+
+### eval
+
+```bash
+{{COMMAND}} eval [OPTIONS] [NAMES]...
+```
+
+| Argumento ou opção | Descrição |
+|---|---|
+| `[NAMES]...` | Só estes casos (todos por padrão) |
+| `--json` | Imprime as pontuações em JSON |
+
+Cada caso é `{{DIR}}/evals/<nome>/case.json`, com uma `fixture/` opcional. `--model`, passado antes de `eval`, vale para todos os casos. Sai com 0 quando todos os casos passaram, 1 caso contrário. Veja [Evals](./evals).
+
+### config
+
+```bash
+{{COMMAND}} config [--project] <COMMAND>
+```
+
+Lê ou muda o seu arquivo de configurações, `~/{{DIR}}/settings.json`. Com `--project`, trabalha no `{{DIR}}/settings.local.json` deste projeto. `--project` pode vir antes ou depois do comando. Veja [Configurações](./settings).
+
+| Comando | Argumentos | O que faz |
+|---|---|---|
+| `config list` | | Imprime todas as configurações, em JSON |
+| `config get` | `<KEY>` | Imprime uma configuração. A chave é um caminho com pontos, como `permissions.allow`. |
+| `config set` | `<KEY> <VALUE>` | Define uma. O valor é lido como JSON (`true`, `["Bash(ls:*)"]`), ou senão como texto. |
+| `config unset` | `<KEY>` | Remove uma |
+
+```bash
+{{COMMAND}} config set permissions.allow '["Bash(ls:*)"]'
+{{COMMAND}} config set outputStyle concise
+{{COMMAND}} config get permissions.allow
+{{COMMAND}} config --project set permissions.allow '["Bash(cargo test:*)"]'
+{{COMMAND}} config unset outputStyle
+```
+
+`set` e `unset` criam o arquivo e a pasta quando preciso e imprimem `Set <key> in <file>.` ou `Removed <key> from <file>.` Um `get` de chave que não está definida falha com `<key> is not set in <file>`.
+
+## Opções
+
+### Prompt e saída
+
+| Opção | Curta | Valor | Padrão | Exige | Descrição |
+|---|---|---|---|---|---|
+| `[PROMPT]...` | | texto | | | O que perguntar. As palavras são unidas com espaços. Abre o chat com ele, a menos que `--print` seja passado. |
+| `--print` | `-p` | | desligado | | Responde uma vez, imprime a resposta e sai. Veja [Modo headless](./headless). |
+| `--output-format` | | `text`, `json` ou `stream-json` | `text` | `--print` | `text` transmite a resposta; `json` imprime um objeto de resultado; `stream-json` imprime cada evento como uma linha JSON, e depois o resultado |
+| `--input-format` | | `text` ou `stream-json` | `text` | `--print` | `text` pega o prompt da linha de comando; `stream-json` lê mensagens de usuário como linhas JSON na entrada padrão e responde uma de cada vez |
+| `--max-turns` | | número | 200 | `--print` | O máximo de turnos do modelo que uma execução pode usar |
+| `--verification` | | texto | | `--print` | Julga o trabalho por estes critérios antes de terminar; o comando sai com 1 quando eles não são atendidos |
+
+### Modelo e comportamento
+
+| Opção | Curta | Valor | Padrão | Descrição |
+|---|---|---|---|---|
+| `--model` | `-m` | id ou nome do modelo | o último usado | O modelo. O id completo, a parte depois dos dois-pontos ou o rótulo. |
+| `--fallback-model` | | id ou nome do modelo | | O modelo com que seguir quando o escolhido está sobrecarregado. Tem prioridade sobre os fallbacks definidos no chat e nas configurações. |
+| `--mode` | | `ask`, `edits`, `plan` ou `bypass` | | O modo de permissão. `default` também é lido como `ask`, `acceptedits` e `accept-edits` como `edits`, `yolo` como `bypass`. |
+| `--allowedTools` | | regras | | Regras permitidas sem perguntar, como `Bash(git diff:*) Edit`. Pode repetir. Também `--allowed-tools`. |
+| `--disallowedTools` | | regras | | Regras recusadas, como `Bash(rm:*)`. Pode repetir. Também `--disallowed-tools`. |
+| `--append-system-prompt` | | texto | | Texto adicionado ao fim do prompt de sistema |
+
+As regras de `--allowedTools` e `--disallowedTools` são separadas por espaços ou vírgulas fora dos parênteses. Veja [Permissões](./permissions).
+
+### Conversas
+
+| Opção | Curta | Valor | Conflita com | Descrição |
+|---|---|---|---|---|
+| `--continue` | `-c` | | `--resume` | Continua a última conversa desta pasta. Se não houver nenhuma, aparece `no earlier conversation in this folder; starting a new one`. |
+| `--resume` | `-r` | id opcional | `--continue` | Continua uma conversa anterior: o id dela, ou, sem id, escolha uma desta pasta no chat |
+| `--fork-session` | | | | Com `-c` ou `-r`: continua numa cópia daquela conversa, deixando-a como está |
+
+Veja [Sessões](./sessions).
+
+### Pastas e terminal
+
+| Opção | Curta | Valor | Padrão | Descrição |
+|---|---|---|---|---|
+| `--cwd` | `-C` | caminho | a pasta atual | A pasta do projeto |
+| `--add-dir` | | caminho | | Deixa o agente ler esta pasta como se fosse o projeto. Pode repetir. Caminhos relativos partem da pasta do projeto; `~/` parte da sua pasta pessoal. A pasta precisa existir. |
+| `--inline` | | | desligado | Chat na parte de baixo do terminal, com a conversa no histórico de rolagem do próprio terminal, em vez de tela cheia |
+| `--channels` | | nomes, separados por vírgula | | Servidores MCP a manter ativos como canais: o que eles enviam (mensagens de um chat, um webhook) chega ao agente como evento. Veja [Canais](./channels). |
+
+### Ajuda e versão
+
+| Opção | Curta | Descrição |
+|---|---|---|
+| `--help` | `-h` | Imprime a ajuda. `{{COMMAND}} <comando> --help` imprime a ajuda de um subcomando. |
+| `--version` | `-V` | Imprime a versão |
+
+## Códigos de saída
+
+| Código | Quando |
+|---|---|
+| `0` | Sucesso |
+| `1` | Uma falha: execução que falhou, verificação ou eval reprovado, verificação do doctor que falhou, ou um erro como uma pasta ilegível. A mensagem sai na saída de erro como `{{COMMAND}}: <mensagem>`. |
+| `2` | A linha de comando está errada: opção ou valor desconhecido, argumento faltando, ou opção usada sem aquela que ela exige |
+
+## Variáveis de ambiente
+
+| Variável | Efeito |
+|---|---|
+| `{{ENV}}_LOG` | O que vai para o arquivo de log, como um filtro do tipo `warn` ou `backend=debug`. Padrão `warn`. Veja [Solução de problemas](./troubleshooting#logs). |
+| `{{ENV}}_THEME` | `light` ou `dark`: as cores do chat, em vez de seguir o terminal |
+| `{{ENV}}_REDUCED_MOTION` | `1` desliga as animações do chat |
+
+Veja [Variáveis de ambiente](./environment-variables) para a lista completa.

@@ -1,0 +1,63 @@
+---
+title: Environment variables
+description: The environment variables {{NAME}} reads, the standard ones it honours, and the ones it sets for the programs it starts.
+---
+
+Most of {{NAME}} is configured in [settings files](./settings). Environment variables cover what has to be known before those files are read (logging, colours, where data lives) and a few switches that are handy in scripts and CI.
+
+```bash
+{{ENV}}_LOG=debug {{COMMAND}}
+{{ENV}}_THEME=light {{ENV}}_REDUCED_MOTION=1 {{COMMAND}}
+{{ENV}}_DISABLE_AUTO_MEMORY=1 {{COMMAND}} -p "summarise the open TODOs"
+```
+
+## {{NAME}} variables
+
+| Variable | Values | Default | Purpose |
+|---|---|---|---|
+| `{{ENV}}_LOG` | A log filter: `error`, `warn`, `info`, `debug`, `trace`, or per module (`agent_engine=debug,warn`) | `warn` | How much goes to the log file `logs/{{COMMAND}}.log` in the [data folder](./files-and-directories#data-folder). An empty or invalid filter falls back to `warn`. |
+| `{{ENV}}_THEME` | `light`, `dark` (any case) | detected | Forces the chat's light or dark colours instead of detecting the terminal's background. |
+| `{{ENV}}_REDUCED_MOTION` | Any non-empty value other than `0` | unset | Turns the chat's animations off. |
+| `{{ENV}}_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | unset | Turns automatic memory off, like `"autoMemoryEnabled": false`. See [Memory](./memory). |
+| `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | unset | Same as `{{ENV}}_DISABLE_AUTO_MEMORY`, for setups shared with Claude Code. |
+| `{{ENV}}_CONSOLE_DIR` | A folder containing `index.html` | unset | Serves the [trace console](./trace-console) page from this folder instead of the copy built into the binary. |
+
+## Standard variables it honours
+
+| Variable | Used for |
+|---|---|
+| `HOME` | Your home folder: `~/{{DIR}}` (settings, skills, agents, plugins…), `~/` in rules and paths, and the `~` shown for the project in the welcome screen. On Windows the user profile folder is used. |
+| `XDG_CONFIG_HOME` | Linux: the [data folder](./files-and-directories#data-folder) is `$XDG_CONFIG_HOME/{{COMMAND}}`; `~/.config/{{COMMAND}}` when unset or empty. |
+| `APPDATA` | Windows: the data folder is `%APPDATA%\{{NAME}}`; `~\AppData\Roaming\{{NAME}}` when unset. |
+| `LOCALAPPDATA` | Windows: the local data folder (sessions, logs, keys) is `%LOCALAPPDATA%\{{NAME}}`; `~\AppData\Local\{{NAME}}` when unset. Also where Git Bash is looked for (`Programs\Git\bin\bash.exe`). |
+| `ProgramFiles` | Windows: where Git Bash is looked for (`Git\bin\bash.exe`). Without Git Bash, commands run in Windows PowerShell. |
+| `SHELL` | macOS and Linux: the shell that runs the agent's commands (`$SHELL -c …`); `/bin/sh` when unset or empty. Hooks and scripts always use `/bin/sh`. |
+| `VISUAL`, `EDITOR` | The editor Ctrl+G opens to write the prompt, and the one `/memory edit` opens the project's `{{INSTRUCTIONS}}` in. `VISUAL` first, then `EDITOR`, then `vi`. The value may include arguments (`code --wait`). |
+| `COLORFGBG` | Detects a light or dark terminal background when `{{ENV}}_THEME` is not set; dark when it is missing. |
+| `COLORTERM` | `truecolor` or `24bit` turns on true colour in the chat. |
+| `PATH` | Where language servers (`rust-analyzer`, `gopls`…) and other programs are found. |
+| `TMPDIR` | macOS and Linux: the temporary folder for long tool outputs, the prompt being edited and sandbox write access. |
+
+The `${VAR}` and `${VAR:-default}` forms in `mcp.json` files are filled in from the environment; a variable that is unset and has no default is left as written. See [MCP](./mcp).
+
+HTTP [hooks](./hooks) can use `$VAR` or `${VAR}` in their `headers`, but only for the variables listed in the hook's `allowed_env_vars`; others become empty.
+
+> [!NOTE]
+> Provider keys and tokens are not read from the environment. Connect providers with `{{COMMAND}} login` (or `/login`); credentials are sealed in the data folder. See [Accounts](./accounts).
+
+## Variables it sets for other programs
+
+| Variable | Set for | Value |
+|---|---|---|
+| `{{ENV}}_PROJECT_DIR` | Command hooks | The project folder the run works in. |
+| `{{ENV}}_PLUGIN_ROOT` | Plugin configuration | Not an environment variable: `${{{ENV}}_PLUGIN_ROOT}` in a plugin's MCP servers, language servers and hooks is replaced with the plugin's folder. See [Plugins](./plugins). |
+| `NO_COLOR=1`, `CLICOLOR=0`, `CARGO_TERM_COLOR=never`, `CARGO_TERM_PROGRESS_WHEN=never`, `PY_COLORS=0` | The agent's shell commands | Only with the `experimental-output-cleanup` feature on (the default), so output arrives without colours or progress bars. |
+| `CARGO_TARGET_DIR` | Background test runs in Rust projects | `<project>/target/agent-tests`, so they do not block your own builds. Feature `experimental-affected-tests`. |
+| `GOBIN` | Installing a Go language server | A staging folder inside the language server cache. |
+| `TERM=xterm-256color`, `COLORTERM=truecolor` | The terminal the trace console opens | Fixed values. |
+| `APP_NOTIFICATION_TITLE`, `APP_NOTIFICATION_MESSAGE` | Windows desktop notifications | The notification's title and text. |
+| Variables from `env` | MCP servers (stdio) and language servers | What you put in the server's `env` in `mcp.json` or `lspServers`. |
+
+On Windows with Git Bash, `BASH_ENV` and `ENV` are removed from the environment of the agent's commands, so no startup profile runs before them.
+
+Everything else in your environment is passed on unchanged to the commands, hooks and servers {{NAME}} starts.

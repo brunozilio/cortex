@@ -1,0 +1,337 @@
+---
+title: Configurações
+description: Todas as chaves que o {{NAME}} lê dos arquivos de configuração, onde esses arquivos ficam, como se combinam e como alterá-los.
+---
+
+O {{NAME}} é configurado com arquivos JSON chamados `settings.json`. Você pode ter um só seu, um por projeto que vai para o repositório e é compartilhado com o time, e um privado por projeto que fica só na sua máquina. Esta página explica onde eles ficam, como se combinam e lista todas as chaves que podem conter.
+
+## Início rápido
+
+Crie `~/{{DIR}}/settings.json` com o que você quer em todos os projetos:
+
+```json
+{
+  "outputStyle": "concise",
+  "permissions": {
+    "allow": ["Bash(cargo test:*)", "Bash(git diff:*)"],
+    "deny": ["Read(.env)"]
+  }
+}
+```
+
+Ou altere uma chave pelo terminal, sem abrir um editor:
+
+```bash
+{{COMMAND}} config set outputStyle concise
+{{COMMAND}} config set permissions.allow '["Bash(cargo test:*)"]'
+{{COMMAND}} config get permissions.allow
+```
+
+As próximas execuções já usam a mudança; não é preciso reiniciar nada.
+
+## Arquivos de configuração
+
+| Arquivo | Alcance | Tratado como seu | Uso típico |
+|---|---|---|---|
+| `~/{{DIR}}/settings.json` | Você, em todos os projetos | Sim | Suas preferências, modelos e permissões. `{{COMMAND}} config` e `/features` gravam aqui. |
+| `~/{{DIR}}/settings.local.json` | Você, em todos os projetos | Sim | O mesmo que o anterior, se preferir um segundo arquivo. |
+| `{{DIR}}/settings.json` no projeto (ou em qualquer pasta acima) | Todos que clonam o projeto | Não: vai para o repositório | Regras do time: regras de negação e de pergunta, hooks, estilo de resposta. |
+| `{{DIR}}/settings.local.json` no projeto (ou em qualquer pasta acima) | Você, neste projeto | Sim | Suas escolhas privadas no projeto. As respostas "não perguntar de novo", `/rules keep` e `{{COMMAND}} config --project` gravam aqui. |
+| `~/{{DIR}}/managed-settings.json` | Você, em todos os projetos | Sim | Lido por último, depois de todos os outros. |
+
+> [!IMPORTANT]
+> Deixe `{{DIR}}/settings.local.json` fora do controle de versão. Ele é tratado como seu, então o que estiver nele pode conceder permissões.
+
+### Quais pastas são lidas
+
+Para uma execução em uma pasta, o {{NAME}} lê, nesta ordem:
+
+1. `~/{{DIR}}/settings.json` e depois `~/{{DIR}}/settings.local.json`.
+2. Para cada pasta, da raiz do sistema de arquivos até a pasta atual: `{{DIR}}/settings.json` e depois `{{DIR}}/settings.local.json`. Uma pasta alcançada duas vezes (sua pasta pessoal costuma ser também uma pasta acima do projeto) é lida uma vez só.
+3. `~/{{DIR}}/managed-settings.json`.
+
+Arquivos que não existem são ignorados. Um arquivo que não é JSON válido, ou uma chave com formato errado, interrompe a execução com um erro que cita o arquivo e a chave, por exemplo `permissions.deny: rule "Bash(rm" misses its )`.
+
+### Como os valores se combinam
+
+- **Valores únicos** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `autoMemoryEnabled`): vale o último arquivo lido. Na prática a pasta mais próxima de onde você trabalha vence as pastas acima dela, e `managed-settings.json` vence todas. Definir `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` ou `jsonSchema` como `null` apaga um valor definido por um arquivo anterior.
+- **Listas e mapas se somam**: regras de permissão, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`.
+- **Chaves de liga/desliga** (`features`, `scripts`, `sandbox.network`): cada arquivo muda só os nomes que menciona.
+
+### O que um arquivo do repositório não pode fazer
+
+O `{{DIR}}/settings.json` de um projeto vem de quem escreveu o repositório, então ele pode restringir o {{NAME}}, mas não ampliar o que ele pode fazer:
+
+| Chave | Em um `settings.json` do repositório |
+|---|---|
+| `permissions.allow` | Ignorada. Só os seus arquivos liberam. |
+| `permissions.ask`, `permissions.deny` | Respeitadas. |
+| `permissions.additionalDirectories` | Ignorada. |
+| `verification.allow` | Ignorada. |
+| `escalationModel` | Ignorada. |
+| `enabledProviders` | Ignorada. |
+| `enableAllProjectMcpServers`, `enabledMcpServers`, `disabledMcpServers` | Ignoradas. |
+| `scripts.*` | Só pode desligar acessos. |
+| `features.*` | Pode desligar um recurso comum e ligar um recurso de segurança (`experimental-sandbox`, `redact-secrets`, `experimental-dependency-guard`), nunca o contrário. |
+| `sandbox.network` | Só pode desligar a rede. |
+| `sandbox.allowWrite` | Ignorada. |
+| `lspServers` | `command`, `args` e `env` são descartados; o projeto só pode mapear extensões, marcadores de raiz ou desativar um servidor. |
+| Todo o resto | Respeitado como nos seus próprios arquivos. |
+
+## Alterando as configurações
+
+### `{{COMMAND}} config`
+
+`{{COMMAND}} config` lê e edita um arquivo de configuração por chave com pontos.
+
+| Comando | O que faz |
+|---|---|
+| `{{COMMAND}} config list` | Mostra o arquivo inteiro. |
+| `{{COMMAND}} config get <chave>` | Mostra um valor, por exemplo `{{COMMAND}} config get sandbox.network`. Falha quando a chave não está definida. |
+| `{{COMMAND}} config set <chave> <valor>` | Define um valor. O valor é lido como JSON (`true`, `3`, `["Bash(ls:*)"]`, `{"network": false}`); o que não for JSON é guardado como texto. Objetos intermediários que faltam são criados. |
+| `{{COMMAND}} config unset <chave>` | Remove uma chave. |
+
+Sem opções, edita `~/{{DIR}}/settings.json`. Com `--project`, edita `{{DIR}}/settings.local.json` na pasta atual (ou na pasta indicada com `-C`).
+
+```bash
+{{COMMAND}} config set features.experimental-sandbox false
+{{COMMAND}} config --project set permissions.deny '["Bash(rm:*)"]'
+{{COMMAND}} config unset outputStyle
+```
+
+### No chat
+
+- `/config` (ou `/settings`) abre o seletor **Settings**: Model, Permission mode, Effort, Output style, Vim keys, Status line, além de Features, Verification e Budget. Escolher um item executa o comando correspondente (`/model`, `/mode`, `/effort`, `/output-style`, `/vim`, `/statusline`, `/features`, `/verification`, `/budget`). Essas escolhas ficam guardadas para você; veja Preferências guardadas do chat, mais abaixo.
+- `/features <nome> on|off` grava `features.<nome>` em `~/{{DIR}}/settings.json`. Veja [Recursos experimentais](./experimental-features).
+- Responder **Yes, and don't ask again for …** a um pedido de permissão, ou usar `/rules keep <n>`, adiciona uma regra em `{{DIR}}/settings.local.json`. Veja [Permissões](./permissions).
+- `/permissions` mostra as regras e pastas em vigor; `/hooks` mostra os hooks.
+
+## Referência
+
+### Chaves de primeiro nível
+
+| Chave | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `outputStyle` | texto | `"default"` | Como o agente fala. Um estilo embutido (`default`, `concise`, `proactive`, `explanatory`, `learning`, sem diferenciar maiúsculas) ou o nome de um estilo próprio em `{{DIR}}/output-styles/<nome>.md` (letras, dígitos, `-` e `_`). O estilo escolhido com `/output-style` vence esta chave. Veja [Estilos de resposta](./output-styles). |
+| `agent` | texto ou `null` | nenhum | Executa a conversa principal como este agente (um nome listado em `/agents`), com as instruções, ferramentas e modelo dele. Um nome desconhecido faz a execução falhar. Veja [Agentes](./agents). |
+| `autoMemoryEnabled` | booleano | `true` | `false` desliga a memória automática em todas as execuções. `{{ENV}}_DISABLE_AUTO_MEMORY` faz o mesmo. Veja [Memória](./memory). |
+| `advisorModel` | texto ou `null` | nenhum | Modelo do conselheiro que o agente consulta. Um id ou nome de modelo, sem espaços. Um papel definido com `/model advisor <modelo>` vence. |
+| `judgeModel` | texto ou `null` | nenhum | Modelo do juiz que confere o trabalho terminado contra os critérios de verificação. Um papel definido com `/model review <modelo>` vence. Veja [Verificação e revisão](./verification-and-review). |
+| `smallModel` | texto ou `null` | o modelo pequeno do provedor | Modelo para tarefas de fundo: títulos, escolha de esforço, leitura da web. Um papel definido com `/model small <modelo>` vence. |
+| `escalationModel` | texto ou `null` | nenhum | Para onde vai uma chamada em que o agente falha repetidamente quando o recurso `experimental-escalation` está ligado (senão, vai para o Advisor). Lido só dos seus próprios arquivos. |
+| `fallbackModel` | texto ou lista de textos | nenhum | Modelo, ou cadeia de modelos, tentado quando o escolhido está ocupado, desconectado ou inacessível. `--fallback-model` e `/model fallbacks` vencem esta chave. Veja [Modelos e provedores](./models-and-providers). |
+| `jsonSchema` | objeto JSON Schema ou `null` | nenhum | Dá ao agente uma ferramenta `StructuredOutput` cujo `result` precisa seguir este schema. Útil com `-p`; veja [Modo headless](./headless). Um schema inválido faz a execução falhar. |
+| `enabledProviders` | lista de textos | `[]` | Ids dos provedores declarados pelo projeto em `{{DIR}}/providers/` que você permite carregar. Lido só dos seus próprios arquivos. |
+| `enableAllProjectMcpServers` | booleano | `false` | Inicia sem perguntar todos os servidores MCP declarados no `{{DIR}}/mcp.json` do projeto. Lido só dos seus próprios arquivos. |
+| `enabledMcpServers` | lista de textos | `[]` | Servidores MCP do projeto que você aprovou. `{{COMMAND}} mcp approve` e `/mcp approve` gravam aqui. Lido só dos seus próprios arquivos. |
+| `disabledMcpServers` | lista de textos | `[]` | Servidores MCP do projeto que você desligou; vence as duas chaves acima. Lido só dos seus próprios arquivos. |
+| `hooks` | objeto | `{}` | Comandos, prompts ou chamadas HTTP executados em eventos. Os hooks de todos os arquivos se somam. Veja [Hooks](./hooks). |
+| `lspServers` | objeto | `{}` | Adiciona, altera ou desativa servidores de linguagem. Veja [`lspServers`](#lspservers) e [Inteligência de código](./code-intelligence). |
+| `permissions` | objeto | `{}` | Regras de liberar, perguntar e negar, e pastas extras. Veja [`permissions`](#permissions). |
+| `verification` | objeto | `{}` | Regras para o juiz de verificação. Veja [`verification`](#verification). |
+| `scripts` | objeto | tudo `true` | O que ferramentas, skills, hooks e provedores em JavaScript podem fazer. Veja [`scripts`](#scripts). |
+| `sandbox` | objeto | rede ligada | Onde comandos na sandbox podem gravar e se acessam a rede. Veja [`sandbox`](#sandbox). |
+| `features` | objeto | todos os recursos ligados | Liga ou desliga recursos pelo nome. Veja [`features`](#features). |
+
+> [!NOTE]
+> As definições de servidores MCP (`mcpServers`) não ficam no `settings.json`: ficam em `{{DIR}}/mcp.json` (do projeto) e `~/{{DIR}}/mcp.json` (seus). Veja [MCP](./mcp). O comando da linha de status é uma preferência do chat (veja Preferências guardadas do chat, abaixo, e [Linha de status](./statusline)).
+
+### `permissions`
+
+| Chave | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `permissions.allow` | lista de regras | `[]` | Chamadas de ferramenta que rodam sem perguntar. Lida só dos seus próprios arquivos. |
+| `permissions.ask` | lista de regras | `[]` | Chamadas que sempre perguntam, mesmo quando o modo deixaria passar. |
+| `permissions.deny` | lista de regras | `[]` | Chamadas recusadas, em qualquer modo. |
+| `permissions.additionalDirectories` | lista de pastas | `[]` | Pastas que o agente lê como se fossem o projeto. `~/` começa na sua pasta pessoal; um caminho relativo começa no projeto. Lida só dos seus próprios arquivos. |
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(npm run test:*)", "Edit(src/**)", "WebFetch(domain:docs.rs)", "mcp__jira"],
+    "ask": ["Bash(git push:*)"],
+    "deny": ["Bash(rm:*)", "Read(*.env)", "mcp__github__delete_repo"],
+    "additionalDirectories": ["~/notes", "../shared"]
+  }
+}
+```
+
+A sintaxe e a precedência das regras estão na página [Permissões](./permissions).
+
+### `verification`
+
+| Chave | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `verification.allow` | lista de regras | `[]` | Regras que o juiz de verificação pode executar sem perguntar (por exemplo o comando de testes que ele usa para conferir o trabalho). Lida só dos seus próprios arquivos. |
+
+```json
+{ "verification": { "allow": ["Bash(cargo test:*)", "Bash(npm test)"] } }
+```
+
+### `scripts`
+
+| Chave | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `scripts.files` | booleano | `true` | Scripts podem ler e gravar arquivos (`readFile`, `writeFile`). |
+| `scripts.processes` | booleano | `true` | Scripts podem iniciar processos (`exec`). |
+| `scripts.network` | booleano | `true` | Scripts podem acessar a rede (`fetch`). |
+
+Um script barrado recebe um erro que cita a configuração, por exemplo `scripts may not touch files here (settings: scripts.files)`.
+
+```json
+{ "scripts": { "network": false } }
+```
+
+### `sandbox`
+
+| Chave | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `sandbox.network` | booleano | `true` | `false` bloqueia a rede para comandos na sandbox. Um arquivo do repositório só pode desligá-la. |
+| `sandbox.allowWrite` | lista de pastas | `[]` | Pastas extras em que comandos na sandbox podem gravar. Caminhos absolutos ou `~/…`; caminhos relativos são ignorados. Lida só dos seus próprios arquivos. |
+
+```json
+{ "sandbox": { "allowWrite": ["~/.m2", "/opt/data"], "network": true } }
+```
+
+A sandbox é o recurso `experimental-sandbox` (macOS). Veja [Sandbox e segurança](./sandbox-and-safety).
+
+### `lspServers`
+
+Um mapa do nome do servidor para a sua configuração. Usar um nome embutido (`rust-analyzer`, `typescript`, `pyright`, `gopls`, `clangd`) altera esse servidor; um nome novo adiciona um (precisa de `command` e `extensionToLanguage`).
+
+| Chave | Tipo | Descrição |
+|---|---|---|
+| `lspServers.<nome>.command` | texto | Programa a iniciar. Ignorado em um arquivo do repositório. |
+| `lspServers.<nome>.args` | lista de textos | Argumentos. Ignorado em um arquivo do repositório. |
+| `lspServers.<nome>.extensionToLanguage` | objeto | Extensão de arquivo para id de linguagem, por exemplo `{".zig": "zig"}`. |
+| `lspServers.<nome>.rootMarkers` | lista de textos | Arquivos que marcam a raiz do projeto para o servidor. |
+| `lspServers.<nome>.env` | objeto | Variáveis de ambiente do servidor, somadas às embutidas. Ignorado em um arquivo do repositório. |
+| `lspServers.<nome>.disabled` | booleano | `true` remove o servidor. |
+
+```json
+{
+  "lspServers": {
+    "zls": { "command": "zls", "extensionToLanguage": { ".zig": "zig" }, "rootMarkers": ["build.zig"] },
+    "clangd": { "disabled": true }
+  }
+}
+```
+
+### `features`
+
+Todo recurso fica ligado até você desligá-lo. Cada chave é `features.<nome>` com `true` ou `false`; um valor que não é booleano interrompe a execução. `/features` lista todos com o estado atual, e [Recursos experimentais](./experimental-features) explica cada um.
+
+| Chave | Padrão | O que controla |
+|---|---|---|
+| `features.experimental-sandbox` | `true` | Confina os comandos de Bash e Monitor às pastas do projeto (macOS). Recurso de segurança. |
+| `features.redact-secrets` | `true` | Esconde tokens, chaves e os valores do `.env` do projeto na saída das ferramentas. Recurso de segurança. |
+| `features.experimental-dependency-guard` | `true` | Pergunta antes de instalar um pacote inexistente, recém-publicado ou com nome parecido com um popular. Recurso de segurança. |
+| `features.destructive-snapshot` | `true` | Guarda arquivos não versionados antes de `rm`, `git clean`, `git reset --hard` e similares, para o `/rewind`. |
+| `features.suggested-rules` | `true` | `/rules` sugere regras de permissão a partir das respostas que você repete. |
+| `features.budget` | `true` | `/budget` interrompe as chamadas de modelo de uma sessão ao atingir um limite de gasto. |
+| `features.cache-warning` | `true` | Contagem regressiva do cache de prompt na linha de status. |
+| `features.experimental-escalation` | `true` | Envia uma chamada que falha repetidamente ao Advisor ou ao `escalationModel`. |
+| `features.experimental-learning` | `true` | Oferece uma lição para guardar depois de uma execução em que você corrigiu o agente. |
+| `features.team-memory` | `true` | Recupera memórias versionadas em `{{DIR}}/memory`; `/memory share <id>`. |
+| `features.branches` | `true` | `/branch` começa uma conversa a partir de antes de um prompt anterior. |
+| `features.git-offer` | `true` | Oferece `git init` em uma pasta que não é repositório. |
+| `features.experimental-session-claims` | `true` | Avisa quando outra sessão na mesma pasta editou o mesmo arquivo. |
+| `features.experimental-pr-follow` | `true` | A skill `follow-pr` acompanha um pull request. |
+| `features.experimental-affected-tests` | `true` | Roda em segundo plano os testes que cobrem um arquivo editado. |
+| `features.experimental-output-cleanup` | `true` | O Bash roda sem cores e descarta códigos de escape e linhas repetidas. |
+| `features.experimental-output-filters` | `true` | O Bash esconde testes que passaram e progresso de ferramentas comuns, guardando a saída inteira em um arquivo. |
+| `features.experimental-output-savings` | `true` | `/gain` mostra quanto a saída dos comandos encolheu. |
+| `features.experimental-web-main-content` | `true` | O WebFetch coloca o conteúdo principal da página primeiro. |
+| `features.experimental-web-cleanup` | `true` | O WebFetch descarta partes ocultas e links de menu repetidos. |
+| `features.experimental-web-links` | `true` | O WebFetch numera os links e lista cada endereço uma vez. |
+| `features.experimental-web-small-pages-direct` | `true` | O WebFetch entrega direto ao agente páginas de até 6.000 caracteres. |
+| `features.experimental-web-formats` | `true` | O WebFetch pede Markdown e compacta JSON e feeds. |
+| `features.experimental-web-empty-page-error` | `true` | O WebFetch trata como erro uma página quase sem texto. |
+| `features.auto-review` | `true` | Um revisor somente leitura confere as mudanças antes do fim de uma execução que alterou arquivos. |
+| `features.experimental-follow-through` | `true` | Um modelo pequeno manda o agente de volta quando ele encerra um turno prometendo mais trabalho. |
+| `features.project-criteria` | `true` | Julga as execuções contra `{{DIR}}/verification.md` quando você não define critérios. |
+| `features.experimental-memory-anchors` | `true` | Memórias citam seus arquivos e aparecem quando esses arquivos são lidos ou editados. |
+| `features.experimental-structured-learnings` | `true` | Decisões são guardadas como o que foi decidido, o que foi descartado e cuidados. |
+| `features.experimental-learning-check` | `true` | `/check` compara o branch com as memórias sobre os arquivos que ele toca. |
+| `features.experimental-blast-radius` | `true` | Depois de uma edição, aponta os arquivos que chamam os símbolos alterados. |
+| `features.experimental-code-map` | `true` | Indexa símbolos com tree-sitter e aponta cada prompt para o código relacionado. |
+| `features.experimental-memory-seed` | `true` | `/memory seed` oferece pedidos repetidos como memórias. |
+| `features.experimental-memory-scorecard` | `true` | Uma requisição a cada 20 roda sem memória recuperada, para o `/memory score`. |
+
+```json
+{ "features": { "experimental-code-map": false, "git-offer": false } }
+```
+
+### Preferências guardadas do chat
+
+As escolhas que você faz no chat não vão para o `settings.json`. Elas ficam guardadas por usuário na pasta de dados (`users/local/settings.json`, veja [Arquivos e pastas](./files-and-directories)) e são lidas de volta quando o chat abre. Normalmente você as altera com comandos, não à mão.
+
+| Chave | Tipo | Definida por | Descrição |
+|---|---|---|---|
+| `model` | texto | `/model`, `--model` | O modelo inicial. Também usado pelo `-p` quando `--model` não é informado. |
+| `mode` | texto | `/mode`, Shift+Tab | `ask`, `edits`, `plan` ou `bypass`. `--mode` vence naquela abertura. |
+| `effort` | texto | `/effort` | `low`, `medium`, `high`, `xhigh`, `max` ou `auto`. |
+| `outputStyle` | texto | `/output-style` | Vence o `outputStyle` dos arquivos de configuração. |
+| `vim` | `"on"` ou `"off"` | `/vim` | Teclas do vim no prompt. |
+| `statusLine` | texto | `/statusline` | Comando que desenha a linha de status; vazio para a padrão. Veja [Linha de status](./statusline). |
+| `roles` | objeto | `/model <papel> <modelo>` | Modelo por papel: `plan`, `explore`, `small`, `review`, `advisor`. |
+| `fallbacks` | lista de textos | `/model fallbacks` | Cadeia de fallback deste usuário. |
+| `history` | objeto | envio de prompts | Os últimos 100 prompts por pasta, para o histórico do prompt. |
+| `sessions` | objeto | conversas | A última conversa por pasta, para o `-c`. |
+| `titles` | objeto | conversas | O título da última conversa por pasta. |
+| `conversations` | objeto | conversas | Conversas recentes por pasta, para o seletor de conversas (`/resume`, `-r`), o console de trace, `/rules` e `/memory seed`. |
+
+Um `mode` ou `effort` guardado com valor desconhecido é ignorado com um aviso. Se o arquivo deixar de ser JSON válido, ele é movido para `settings.json.broken` e um novo é criado.
+
+## Exemplo completo
+
+`~/{{DIR}}/settings.json`:
+
+```json
+{
+  "outputStyle": "explanatory",
+  "autoMemoryEnabled": true,
+  "advisorModel": "opus",
+  "judgeModel": "sonnet",
+  "smallModel": "haiku",
+  "escalationModel": "opus",
+  "fallbackModel": ["sonnet", "gpt-5"],
+  "enabledProviders": ["acme-llm"],
+  "enableAllProjectMcpServers": false,
+  "enabledMcpServers": ["jira"],
+  "disabledMcpServers": ["sonar"],
+  "permissions": {
+    "allow": ["Bash(cargo test:*)", "Bash(git diff:*)", "Edit(src/**)", "WebFetch(domain:docs.rs)"],
+    "ask": ["Bash(git push:*)"],
+    "deny": ["Bash(rm -rf:*)", "Read(*.env)"],
+    "additionalDirectories": ["~/notes"]
+  },
+  "verification": { "allow": ["Bash(cargo test:*)"] },
+  "scripts": { "files": true, "processes": true, "network": false },
+  "sandbox": { "network": true, "allowWrite": ["~/.m2"] },
+  "features": { "experimental-code-map": false, "git-offer": false },
+  "lspServers": {
+    "zls": { "command": "zls", "extensionToLanguage": { ".zig": "zig" } }
+  },
+  "hooks": {
+    "PostToolUse": [
+      { "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": "cargo fmt" }] }
+    ]
+  }
+}
+```
+
+O `{{DIR}}/settings.json` de um projeto, versionado no repositório:
+
+```json
+{
+  "outputStyle": "concise",
+  "agent": "reviewer",
+  "jsonSchema": null,
+  "permissions": {
+    "ask": ["Bash(npm publish:*)"],
+    "deny": ["Read(secrets/**)"]
+  },
+  "features": { "experimental-sandbox": true }
+}
+```

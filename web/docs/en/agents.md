@@ -1,0 +1,209 @@
+---
+title: Agents
+description: Define sub-agents with their own instructions, tools, model and permissions, and let {{NAME}} delegate focused tasks to them.
+---
+
+A **sub-agent** is a separate agent that {{NAME}} starts for one task. It works in its own conversation, with its own instructions and tools, and sends back a single report. Delegating keeps the main conversation focused: the sub-agent reads twenty files, and only its conclusion comes back.
+
+{{NAME}} has built-in sub-agents, and you can define your own as Markdown files.
+
+## Quick start
+
+Create `{{DIR}}/agents/reviewer.md` in your project:
+
+```markdown
+---
+name: reviewer
+description: Reviews a diff for bugs and missing tests. Use after making a change, before committing.
+tools: Read, Grep, Glob, Bash
+model: inherit
+---
+
+You are a strict code reviewer. Read the diff with `git diff`, then the
+changed files. Report each bug with its file and line, and each change that
+has no test. Do not edit anything.
+```
+
+From the next prompt, the agent can delegate to it ("have the reviewer check this"), and it picks it on its own when the description matches the task. `/agents` lists every agent available here.
+
+> [!TIP]
+> `/agents new <what it should do>` asks the agent to write the file for you in `{{DIR}}/agents/<name>.md`.
+
+## How delegation works
+
+The main agent delegates with the `Agent` tool:
+
+| Input | Meaning |
+|---|---|
+| `description` | A 3 to 5 word summary, shown in the chat. Required. |
+| `prompt` | The task. The sub-agent knows only what is written here. Required. |
+| `subagent_type` | The agent to start; `general-purpose` when left out |
+| `run_in_background` | `true` runs it while the main agent goes on; its report is collected with `TaskOutput` |
+| `isolation` | `worktree` runs it in a git worktree of its own |
+| `max_turns` | At most this many model turns, 1 to 200 |
+| `model` | A model for this one call; ignored if the current provider does not serve it |
+
+The tool's description lists every available agent with its description, so a clear `description` is what makes the agent pick yours.
+
+Rules of delegation:
+
+- A sub-agent cannot start other sub-agents.
+- Its report is returned to the main agent, which passes on what matters; it is not shown to you as is.
+- A sub-agent gets the same instruction files as the main agent, unless it is a read-only built-in agent or sets `omitClaudeMd: true`. It does not get the conversation's output style.
+- Hooks fire for it too: `SubagentStart` when it starts, `SubagentStop` when it wants to finish (see [Hooks](./hooks)).
+
+## Built-in agents
+
+| Agent | What it is for | Tools |
+|---|---|---|
+| `general-purpose` | Research and tasks of several steps (the default) | All of the main agent's |
+| `Explore` | Fast read-only search: files by pattern, symbols, "where is X defined" | No `Agent`, `Edit`, `Write` or `StructuredOutput`; starts without instruction files |
+| `Plan` | Designs an implementation plan: steps, critical files, trade-offs | Same as `Explore` |
+| `fork` | A copy of the main agent with its whole conversation and model, for one side task | All of the main agent's |
+
+`Explore` uses the small model when it names none (see [Models and providers](./models-and-providers)). A file of yours with the same name replaces a built-in agent.
+
+## Where agents live
+
+| Location | Scope |
+|---|---|
+| `{{DIR}}/agents/*.md` in the working folder or any folder above it | The project |
+| `~/{{DIR}}/agents/*.md` | You, every project |
+| `<plugin>/agents/*.md` | An installed plugin, named `<plugin>:<name>` |
+
+When two agents have the same name, the first one found wins: the working folder, each folder above it, yours, plugins, then the built-in agents. Agents are found again at the start of every prompt.
+
+> [!NOTE]
+> Agents in another tool's folders, such as `.claude/agents/`, are not read.
+
+## File format
+
+An agent is a Markdown file with YAML frontmatter. The body is its instructions, added to its system prompt under `# Your instructions (<name>)`.
+
+```markdown
+---
+name: migrations
+description: Writes and checks database migrations. Use for any schema change.
+tools: [Read, Edit, Write, Bash, Grep, Glob]
+disallowedTools: [WebFetch]
+model: inherit
+effort: high
+maxTurns: 60
+permissionMode: acceptEdits
+skills: [db-conventions]
+memory: project
+isolation: worktree
+---
+
+You write reversible migrations...
+```
+
+| Field | Value | Meaning |
+|---|---|---|
+| `name` | Text | The agent's name. Defaults to the file's name without `.md`. |
+| `description` | Text | When to use it. The main agent chooses from this. |
+| `tools` | List or comma-separated text | The only tools it gets. A name ending in `*` matches by prefix: `mcp__docs__*`. All tools when left out. |
+| `disallowedTools` | List or comma-separated text | Tools it never gets, with the same syntax |
+| `mcpServers` | List or comma-separated text | The only MCP servers whose tools it gets |
+| `model` | A model id, a short name, `provider:model`, or `inherit` | Its model. `inherit` (or nothing) uses the main agent's. |
+| `effort` | `low`, `medium`, `high`, `xhigh` or `max` | Its effort level |
+| `maxTurns` | 1 to 200 | At most this many model turns |
+| `permissionMode` | `default`, `acceptEdits`, `plan`, `bypassPermissions` or `dontAsk` | The most it may do without asking (see below) |
+| `skills` | List or comma-separated text | Skills loaded into its system prompt when it starts |
+| `memory` | `user`, `project` or `local` | Gives it a memory folder of its own (see below) |
+| `isolation` | `worktree` | Runs it in a git worktree of its own |
+| `background` | `true` or `false` | Runs it in the background unless the call says otherwise |
+| `omitClaudeMd` | `true` or `false` | `true` starts it without the instruction files |
+| `hooks` | Like `"hooks"` in settings | Hooks that apply only while it runs |
+| `initialPrompt` | Text | Used when it is the main agent (see below) |
+| `autoCompactWindow` | 100000 to 1000000 | Compacts its conversation once it reaches this many tokens |
+
+A tool selector may contain only letters, digits, `_`, `-` and `:`, plus a final `*`; `Bash(git:*)` is not a selector. A file with an invalid field still appears in the list, but starting it fails with `Agent <name>: <problem>`, for example `Agent migrations: maxTurns must be within 1..200`.
+
+### Model
+
+| `model` | Result |
+|---|---|
+| Left out or `inherit` | The main agent's model |
+| A short name the provider knows, such as `haiku` | That provider's model for it |
+| A model the current provider serves | That model |
+| `provider:model` for a connected provider | That provider's model |
+
+Anything else makes the call fail with *the agent model must be served by the current provider or name a connected one as provider:model*. A `ModelRequest` hook with matcher `sub-agent` can also route every sub-agent's calls (see [Hooks](./hooks#modelrequest)).
+
+### Permission mode
+
+`permissionMode` is a ceiling: it can lower what the sub-agent may do, never raise it above the main conversation's mode. `bypassPermissions` under an `ask` conversation still asks.
+
+| Value | Mode |
+|---|---|
+| `default` | `ask` |
+| `acceptEdits` | `edits` |
+| `plan` | `plan` (read only) |
+| `bypassPermissions` | `bypass`, if the conversation allows it |
+| `dontAsk` | `ask`, but never shows a prompt: what would be asked is refused |
+
+### Memory
+
+`memory` gives the agent a private folder that survives between runs, and the `Read`, `Write` and `Edit` tools to use it:
+
+| Value | Folder |
+|---|---|
+| `user` | `~/{{DIR}}/agent-memory/…` |
+| `project` | `<repository>/{{DIR}}/agent-memory/…` |
+| `local` | `<repository>/{{DIR}}/agent-memory-local/…` (keep it out of git) |
+
+Each agent gets its own subfolder. The first 200 lines (at most 25 KB) of its `MEMORY.md` are added to its system prompt, and it is told to keep that index short and to store details in other files. Memory is off when auto memory is turned off (see [Memory](./memory)).
+
+### Worktree isolation
+
+`isolation: worktree` (or `isolation` in the `Agent` call) runs the agent in a new git worktree, so its edits do not touch your working tree until you take them. When it changed something, the worktree is kept and its path is added to the report (*Changes retained in worktree: …*). Outside a git repository with at least one commit, the agent runs without isolation.
+
+### Hooks in an agent
+
+```markdown
+---
+name: careful-editor
+description: Makes risky edits with checks.
+hooks:
+  PostToolUse:
+    - matcher: "^(Edit|Write)$"
+      hooks:
+        - type: command
+          command: cargo check --quiet
+  Stop:
+    - hooks:
+        - type: command
+          command: ./scripts/verify.sh
+---
+```
+
+These hooks run only while this agent works. A `Stop` hook here runs as `SubagentStop` when the agent is a sub-agent.
+
+### Plugin agents
+
+Agents from a plugin are named `<plugin>:<name>`. For safety, their `hooks`, `mcpServers`, `permissionMode` and `initialPrompt` fields are ignored.
+
+## Running the conversation as an agent
+
+The `agent` setting makes the main conversation itself run as one of your agents:
+
+```json
+{ "agent": "migrations" }
+```
+
+The agent's instructions are added to the system prompt under `# Agent instructions (<name>)`, and its `tools`, `disallowedTools`, `mcpServers`, `model`, `effort`, `permissionMode`, `skills`, `memory`, `isolation` and `hooks` apply to the conversation. Its `initialPrompt` is put before your first message of a new conversation; an `initialPrompt` that starts with `/` runs that skill or command.
+
+## Listing agents
+
+`/agents` lists every agent available here (yours, the project's, the plugins' and the built-in ones) with its description. `/reload` re-reads them and shows how many were found.
+
+## Changing agents from a hook
+
+A `Brief` hook receives every agent found (name, description, instructions and configuration) and can return a new list, for example to add a team's reviewer or hide one. See [Hooks](./hooks#brief).
+
+## See also
+
+- [Skills](./skills) to preload knowledge into an agent.
+- [Permissions](./permissions) for modes and rules.
+- [Branches and git](./branches-and-git) for worktrees.

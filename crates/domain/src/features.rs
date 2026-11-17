@@ -176,7 +176,7 @@ pub fn known(name: &str) -> Option<Flag> {
     every().find(|flag| flag.name == name)
 }
 
-fn every() -> impl Iterator<Item = Flag> {
+pub fn every() -> impl Iterator<Item = Flag> {
     KNOWN.iter().chain(learnings::KNOWN).copied()
 }
 

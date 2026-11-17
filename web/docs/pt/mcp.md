@@ -1,0 +1,312 @@
+---
+title: Servidores MCP
+description: Conecte o {{NAME}} a ferramentas e dados externos por servidores do Model Context Protocol, via HTTP, SSE ou um processo local.
+---
+
+O [Model Context Protocol](https://modelcontextprotocol.io) (MCP) é um padrão aberto para dar ferramentas e dados a agentes de IA. Conecte um servidor MCP ao {{NAME}} e as ferramentas dele viram ferramentas que o agente pode chamar: buscar no seu gerenciador de issues, consultar um banco de dados, ler um arquivo de design, postar no chat.
+
+O {{NAME}} suporta:
+
+- servidores remotos via **Streamable HTTP** e o transporte mais antigo **HTTP + SSE**, com login OAuth;
+- servidores locais iniciados como um **processo** que conversa por stdin e stdout;
+- **servidores em JavaScript** executados pelo runtime de scripts embutido do {{NAME}};
+- servidores trazidos por [plugins](./plugins).
+
+## Começo rápido
+
+Adicione um servidor remoto:
+
+```bash
+{{COMMAND}} mcp add tracker https://mcp.example.com/mcp
+```
+
+Adicione um servidor local iniciado com `npx`, passando um token do seu ambiente:
+
+```bash
+{{COMMAND}} mcp add -e GITHUB_TOKEN='${GITHUB_TOKEN}' github npx -y @modelcontextprotocol/server-github
+```
+
+Veja o que uma sessão nesta pasta vai usar:
+
+```bash
+{{COMMAND}} mcp list
+```
+
+```text
+tracker  user           ready                 https://mcp.example.com/mcp
+github   user           ready                 npx -y @modelcontextprotocol/server-github
+```
+
+Servidores novos entram no próximo prompt. Peça ao agente para usá-los ("ache os bugs abertos atribuídos a mim no tracker") ou cite uma ferramenta diretamente.
+
+> [!TIP]
+> Você também pode pedir ao agente que configure um servidor, por exemplo "configure o MCP do Jira". A skill embutida `configure` edita o `mcp.json` do próprio {{NAME}} e diz o que escreveu.
+
+## Onde os servidores são configurados
+
+| Arquivo | Escopo | Inicia |
+|---|---|---|
+| `~/{{DIR}}/mcp.json` | Seus servidores, em todos os projetos | Na hora |
+| `{{DIR}}/mcp.json` no projeto (o mais próximo encontrado na pasta de trabalho ou numa pasta acima) | Os servidores do projeto, versionados para a equipe | Só depois que você aprovar cada um |
+| `~/{{DIR}}/mcp/*.js` | Seus servidores em JavaScript | Na hora |
+| `{{DIR}}/mcp/*.js` na pasta de trabalho | Os servidores em JavaScript do projeto | Só depois que você aprovar cada um |
+| O `.mcp.json` de um plugin instalado (ou `mcpServers` no manifesto) | Onde o plugin estiver instalado | Na hora |
+
+> [!NOTE]
+> O {{NAME}} lê apenas os próprios arquivos `mcp.json`. Um `.mcp.json` na raiz do projeto, ou a configuração de outro app, não é lido.
+
+### Formato do arquivo
+
+O `mcp.json` tem um objeto `mcpServers`. Um servidor com `url` é remoto; um servidor com `command` é um processo local:
+
+```json
+{
+  "mcpServers": {
+    "tracker": {
+      "type": "http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": { "Authorization": "Bearer ${TRACKER_TOKEN}" }
+    },
+    "legacy": {
+      "type": "sse",
+      "url": "https://old.example.com/sse"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "${GITHUB_TOKEN}" }
+    },
+    "sonar": {
+      "type": "stdio",
+      "command": "sonar-mcp",
+      "env": { "SONAR_HOST": "${SONAR_HOST:-https://sonar.local}" }
+    }
+  }
+}
+```
+
+| Campo | Significado |
+|---|---|
+| `type` | `http` (Streamable HTTP), `sse` (HTTP + SSE) ou `stdio` (processo local). Opcional: um servidor só com `url` é `http`; um com `command` é `stdio`. |
+| `url` | O endereço do servidor (`http` e `sse`) |
+| `headers` | Cabeçalhos das requisições (`http` e `sse`) |
+| `command` | O programa a iniciar (`stdio`) |
+| `args` | Os argumentos dele (`stdio`) |
+| `env` | Variáveis de ambiente acrescentadas ao processo (`stdio`) |
+
+Um servidor de outro tipo é deixado de fora, com um aviso no log.
+
+### Variáveis de ambiente no arquivo
+
+Em `~/{{DIR}}/mcp.json` e no `{{DIR}}/mcp.json` do projeto, qualquer string pode usar:
+
+| Sintaxe | Valor |
+|---|---|
+| `${NOME}` | A variável `NOME` do ambiente do {{NAME}} quando o servidor inicia |
+| `${NOME:-padrão}` | `NOME`, ou `padrão` quando ela não está definida |
+
+Uma variável não definida e sem padrão fica como foi escrita. Use isso para todo segredo: nunca escreva um token no arquivo.
+
+### Nomes de servidor
+
+Um nome de servidor pode usar letras, dígitos, `-` e `_`. Nomes que começam com `{{COMMAND}}_` ou `plugin_` são reservados: um servidor configurado com um desses nomes nunca inicia.
+
+Quando o seu arquivo e o do projeto declaram o mesmo nome, um servidor do projeto aprovado vence; enquanto o do projeto não for aprovado, o seu é usado.
+
+## O comando `{{COMMAND}} mcp`
+
+| Comando | O que faz |
+|---|---|
+| `{{COMMAND}} mcp` ou `{{COMMAND}} mcp list` | Lista os servidores, de onde vem cada um e se ele inicia |
+| `{{COMMAND}} mcp add <nome> <url-ou-comando> [args…]` | Acrescenta um servidor seu em `~/{{DIR}}/mcp.json` |
+| `{{COMMAND}} mcp remove <nome>` | Remove um servidor seu |
+| `{{COMMAND}} mcp approve <nome>` | Deixa um servidor do projeto iniciar |
+| `{{COMMAND}} mcp deny <nome>` | Desliga um servidor do projeto |
+| `{{COMMAND}} mcp login <nome>` | Faz login num servidor remoto pelo navegador (OAuth) |
+| `{{COMMAND}} mcp logout <nome>` | Esquece o login num servidor remoto |
+
+`add` aceita estas opções, escritas antes do nome:
+
+| Opção | Significado |
+|---|---|
+| `-e`, `--env CHAVE=VALOR` | Uma variável de ambiente para um servidor local (pode repetir). Use aspas simples em `'${VAR}'` para o shell deixá-la para o {{NAME}} ler ao iniciar. |
+| `-H`, `--header "Nome: valor"` | Um cabeçalho para um servidor remoto (pode repetir) |
+| `--transport sse` | Usa o transporte mais antigo HTTP + SSE para uma URL (`http` por padrão) |
+
+Um alvo que começa com `https://` ou `http://` cria um servidor remoto; qualquer outra coisa é o comando de um servidor local, e o que vem depois são os argumentos dele.
+
+```bash
+{{COMMAND}} mcp add -H "Authorization: Bearer ${API_TOKEN}" docs https://docs.example.com/mcp
+{{COMMAND}} mcp add --transport sse legacy https://old.example.com/sse
+{{COMMAND}} mcp add jira jira-mcp --stdio
+```
+
+`add` recusa um nome com outros caracteres, um nome reservado ou um servidor sem comando nem URL. `remove` só remove servidores do seu próprio `~/{{DIR}}/mcp.json`.
+
+### A lista
+
+Cada linha mostra o nome, a origem, o estado e o alvo (URL ou linha de comando). Cabeçalhos e valores de ambiente nunca aparecem.
+
+| Origem | Significado |
+|---|---|
+| `user` | `~/{{DIR}}/mcp.json` ou `~/{{DIR}}/mcp/` |
+| `project` | O `{{DIR}}/mcp.json` ou `{{DIR}}/mcp/` do projeto |
+| `plugin <nome>` | Um plugin instalado |
+| `host` | Fornecido por um app que embute o {{NAME}} |
+
+| Estado | Significado |
+|---|---|
+| `ready` | Inicia no próximo prompt |
+| `waiting for approval` | Um servidor do projeto que você ainda não aprovou |
+| `off` | Um servidor do projeto que você desligou |
+
+## No chat: `/mcp`
+
+| Comando | O que faz |
+|---|---|
+| `/mcp` | Lista os servidores, como `{{COMMAND}} mcp list` |
+| `/mcp approve <nome>` | Aprova um servidor do projeto |
+| `/mcp deny <nome>` | Desliga um servidor do projeto |
+| `/mcp login <nome>` | Faz login num servidor remoto pelo navegador |
+| `/mcp logout <nome>` | Esquece esse login |
+
+A mudança vale a partir da próxima mensagem. `/reload` relê `~/{{DIR}}` e o projeto e conta os servidores prontos, aguardando aprovação ou desligados.
+
+## Aprovar servidores do projeto
+
+Um servidor no `{{DIR}}/mcp.json` versionado de um projeto roda um programa ou chama uma URL em seu nome, então ele só inicia depois que você o aprova. As aprovações ficam nas suas próprias configurações, nunca no arquivo compartilhado do projeto:
+
+- `{{COMMAND}} mcp approve <nome>` (ou `/mcp approve <nome>`) acrescenta o nome a `enabledMcpServers` no `settings.local.json` ao lado do `mcp.json` do projeto, e o tira de `disabledMcpServers`.
+- `{{COMMAND}} mcp deny <nome>` faz o contrário.
+
+Você também pode editar as chaves à mão:
+
+```json
+{
+  "enabledMcpServers": ["jira"],
+  "disabledMcpServers": ["sonar"],
+  "enableAllProjectMcpServers": false
+}
+```
+
+| Chave | Significado |
+|---|---|
+| `enabledMcpServers` | Servidores do projeto que podem iniciar |
+| `disabledMcpServers` | Servidores do projeto desligados; vence as outras duas |
+| `enableAllProjectMcpServers` | `true` aprova todos os servidores do projeto |
+
+Essas chaves só contam nos seus próprios arquivos: `~/{{DIR}}/settings.json`, qualquer `settings.local.json` e `~/{{DIR}}/managed-settings.json`. No `{{DIR}}/settings.json` versionado de um projeto elas são ignoradas.
+
+## Login com OAuth
+
+Servidores remotos que usam OAuth precisam de login:
+
+```bash
+{{COMMAND}} mcp login tracker
+```
+
+O {{NAME}} abre a página de login do servidor no navegador e espera a resposta num endereço local. Ele:
+
+1. descobre o servidor de autorização pelos metadados OAuth do servidor;
+2. se registra como cliente (o servidor precisa permitir registro dinâmico de clientes);
+3. faz o login com PKCE;
+4. guarda os tokens lacrados no seu cofre de segredos e os renova quando expiram.
+
+A partir daí, toda requisição para a URL daquele servidor leva `Authorization: Bearer <token>`, a menos que a configuração do servidor já defina um cabeçalho `Authorization`. Só endereços `https`, ou `http` para este computador, são aceitos para login. Um servidor local (`stdio`) não faz login. `{{COMMAND}} mcp logout <nome>` esquece os tokens.
+
+## Ferramentas, prompts e recursos
+
+### Nomes das ferramentas
+
+Cada ferramenta que um servidor oferece vira uma ferramenta chamada:
+
+```text
+mcp__<servidor>__<ferramenta>
+```
+
+Por exemplo `mcp__github__create_issue`. O servidor de um plugin se chama `plugin_<plugin>_<servidor>`, então as ferramentas dele ficam como `mcp__plugin_acme_jira__search`.
+
+Quando há mais de 20 ferramentas MCP disponíveis, elas não são todas enviadas ao modelo de saída: o agente recebe uma ferramenta `ToolSearch` e carrega as ferramentas MCP de que precisa buscando por elas.
+
+### Prompts
+
+Um servidor que oferece prompts pode ser usado como comando no chat:
+
+```text
+/mcp__<servidor>__<prompt> arg1 arg2 o resto
+```
+
+As palavras preenchem os argumentos do prompt em ordem; o último argumento recebe o resto da linha. O texto do prompt é enviado como sua mensagem.
+
+### Recursos
+
+Quando um servidor oferece recursos, o agente ganha mais duas ferramentas: `ListMcpResources` para listá-los e `ReadMcpResource` para ler um deles.
+
+### Resultados
+
+Texto, imagens, recursos de texto embutidos e links para recursos no resultado de uma ferramenta chegam ao agente. Conteúdo estruturado é acrescentado como JSON quando o texto ainda não o contém.
+
+## Permissões para ferramentas MCP
+
+Ferramentas MCP contam como ações. Nos modos `ask` e `edits`, o agente pergunta antes de chamar uma, a menos que uma regra permita; no modo `bypass`, elas rodam. Uma regra pode citar um servidor inteiro ou uma ferramenta:
+
+```json
+{
+  "permissions": {
+    "allow": ["mcp__jira"],
+    "deny": ["mcp__github__delete_repo"]
+  }
+}
+```
+
+| Regra | Casa com |
+|---|---|
+| `mcp__jira` | Todas as ferramentas do servidor `jira` (não as de um servidor chamado `jiraffe`) |
+| `mcp__github__delete_repo` | Só essa ferramenta |
+
+Veja [Permissões](./permissions) para como as regras se combinam. Um agente próprio pode ser limitado a alguns servidores com `mcpServers` no frontmatter (veja [Agentes](./agents)), e um hook pode checar chamadas MCP com um matcher como `^mcp__github__` (veja [Hooks](./hooks)).
+
+## Servidores em JavaScript
+
+Um arquivo `.js` em `~/{{DIR}}/mcp/` (ou no `{{DIR}}/mcp/` da pasta de trabalho) é um servidor com o nome do arquivo. O export padrão lista as ferramentas:
+
+```javascript
+export default {
+  tools: {
+    add: {
+      description: "Soma a e b.",
+      input: { type: "object", properties: { a: { type: "number" }, b: { type: "number" } } },
+      run: (input) => String(input.a + input.b),
+    },
+    notes: {
+      description: "Lê as notas do projeto.",
+      run: (input, ctx) => ctx.readFile("NOTES.md"),
+    },
+  },
+};
+```
+
+Um `math.js` com esse conteúdo oferece `mcp__math__add` e `mcp__math__notes`. Uma ferramenta retorna texto (ou um valor, enviado como JSON); um erro lançado é uma chamada que falhou. O que o `ctx` pode fazer com arquivos, processos e rede segue a configuração `scripts` (veja [Configurações](./settings)).
+
+## Como os servidores iniciam
+
+No início de cada prompt, o {{NAME}} inicia todo servidor `ready` e pede as ferramentas dele (versão `2025-06-18` do protocolo MCP). Um servidor que não consegue iniciar, ou listar suas ferramentas, fica fora daquela execução, com um aviso no log; a execução segue sem ele.
+
+- Um servidor local roda como processo filho com o seu ambiente mais o `env` dele. O stderr é descartado. Uma chamada pode levar até 10 minutos.
+- Um servidor remoto mantém o id de sessão que recebe entre as chamadas de uma execução.
+
+## Solução de problemas
+
+| Sintoma | O que verificar |
+|---|---|
+| Um servidor do projeto nunca inicia | `{{COMMAND}} mcp list` mostra `waiting for approval`: rode `{{COMMAND}} mcp approve <nome>`. |
+| Um servidor aparece na lista mas as ferramentas não | Ele não conseguiu iniciar ou listar as ferramentas. Rode o comando à mão, confira a URL e veja o log (veja [Solução de problemas](./troubleshooting)). |
+| `${TOKEN}` chega ao servidor do jeito que foi escrito | A variável não está definida no ambiente em que você abriu o {{NAME}}. |
+| `{{COMMAND}} mcp login` diz que não há metadados OAuth, ou registro | O servidor não suporta login OAuth com registro dinâmico. Use um cabeçalho com token. |
+| Um servidor chamado `{{COMMAND}}_…` ou `plugin_…` é ignorado | Esses prefixos são reservados. Mude o nome. |
+
+## Veja também
+
+- [Canais](./channels) para deixar um servidor MCP enviar mensagens ao agente.
+- [Plugins](./plugins) para compartilhar servidores.
+- [Permissões](./permissions).

@@ -1,0 +1,181 @@
+---
+title: Permissões
+description: Decida o que o agente pode fazer sem perguntar, com modos de permissão, regras de liberar/perguntar/negar e pastas extras.
+---
+
+Toda chamada de ferramenta que o agente faz passa por uma verificação de permissão. Ler dentro do projeto é sempre livre; editar arquivos, rodar comandos, buscar páginas e ler fora do projeto dependem do **modo de permissão** e das suas **regras**. Quando nenhum dos dois resolve, o {{NAME}} pergunta a você.
+
+## Respondendo a um pedido de permissão
+
+Quando o agente precisa da sua aprovação, o painel mostra a ferramenta, o que ela quer fazer e até três opções:
+
+| Opção | Tecla | Efeito |
+|---|---|---|
+| Yes | `y`, `1` | Executa esta chamada uma vez. |
+| Yes, and don't ask again for `<regra>` in this project | `a`, `2` | Executa e salva a regra sugerida em `permissions.allow` no `{{DIR}}/settings.local.json`. |
+| Yes, and don't ask again this session | `a`, `2` | Aparece quando nenhuma regra serve (edições, por exemplo). Lembra a ferramenta, no caso de edições, ou a chamada exata, nos outros casos, até a sessão terminar. |
+| No, and tell the agent what to do instead | `n`, Esc ou o número dela | Recusa. Escolhê-la pelo número ou com Enter permite digitar uma observação que o agente recebe; Esc ou `n` recusam sem observação. |
+
+A opção "don't ask again" não aparece para ações que precisam ser aprovadas toda vez (veja Ações que sempre perguntam, abaixo).
+
+As regras sugeridas descrevem o tipo de ação, não os argumentos:
+
+| Pedido sobre | Regra sugerida |
+|---|---|
+| `cargo test --workspace` | `Bash(cargo test:*)` |
+| `gh issue create --title x` | `Bash(gh issue create:*)` |
+| `python3 scripts/gen.py --all` | `Bash(python3 scripts/gen.py:*)` |
+| `make` | `Bash(make)` |
+| Buscar `https://docs.rs/serde/latest` | `WebFetch(domain:docs.rs)` |
+| Ler `/home/ana/notes/todo.md` (fora do projeto) | `Read(//home/ana/notes/**)` |
+
+Comandos que não podem ser descritos com segurança (dois comandos juntos, `$(…)`, um script por caminho, `FOO=1 make`) não recebem regra sugerida.
+
+## Modos de permissão
+
+| Modo | Nome em `--mode` e `/mode` | Edições | Comandos e outras ações | Use quando |
+|---|---|---|---|---|
+| Ask | `ask` (ou `default`) | Pergunta | Pergunta | Você quer aprovar cada mudança. |
+| Edits | `edits` (ou `acceptedits`, `accept-edits`) | Liberadas | Pergunta | Padrão. Você confia nas edições no projeto, não nos comandos. |
+| Plan | `plan` | Recusadas | Recusados | O agente só lê, pesquisa e propõe um plano para você aprovar. |
+| Bypass | `bypass` (ou `yolo`) | Liberadas | Liberados, depois de uma verificação de segurança | Trabalho sem supervisão em um ambiente descartável. |
+
+Em qualquer modo, ler e pesquisar dentro do projeto, nas pastas adicionais e com comandos de shell somente leitura (`ls`, `git status`…) roda sem perguntar. Ler fora delas pergunta, exceto no modo bypass.
+
+Como trocar:
+
+- **Shift+Tab** no chat alterna ask → edits → plan → bypass → ask.
+- `/mode` abre um seletor; `/mode plan` (ou `/plan`) troca direto.
+- `--mode <nome>` abre o chat ou uma execução `-p` nesse modo.
+- O último modo escolhido fica guardado para o próximo chat; `--mode` vence naquela abertura.
+
+> [!WARNING]
+> No modo bypass, `permissions.allow` e `permissions.ask` deixam de importar: tudo o que não é negado roda. Antes de cada ação que não seja uma simples leitura, uma verificação de segurança a avalia contra a conversa e seus arquivos de instruções e segura tudo o que considerar arriscado demais. Regras de negação continuam recusando.
+
+Quando um plano fica pronto, o agente pede a sua aprovação; aprovar troca o modo para que ele execute o plano. Em execuções `-p` o plano é impresso e não é executado (rode de novo com `--mode edits`).
+
+## Regras de permissão
+
+As regras ficam na chave `permissions` dos seus [arquivos de configuração](./settings):
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(cargo test:*)", "Edit(src/**)", "WebFetch(domain:docs.rs)"],
+    "ask": ["Bash(git push:*)"],
+    "deny": ["Bash(rm:*)", "Read(*.env)", "mcp__github__delete_repo"]
+  }
+}
+```
+
+- `allow` roda sem perguntar. Só os seus próprios arquivos liberam: regras `allow` em um `{{DIR}}/settings.json` versionado no repositório são ignoradas.
+- `ask` sempre pergunta, mesmo quando o modo deixaria a chamada passar.
+- `deny` recusa, em qualquer modo, e avisa o agente para não tentar de novo.
+
+### Precedência
+
+1. Uma regra **deny** que casa recusa a chamada.
+2. No modo bypass, e para edições ou comandos no modo plan, quem decide é o modo.
+3. Uma regra **ask** que casa pergunta (até para leituras).
+4. Uma regra **allow** que casa executa a chamada.
+5. Caso contrário, quem decide é o modo.
+
+As regras de todos os arquivos, e as de `--allowedTools`/`--disallowedTools`, formam uma lista só; a ordem não importa. `/permissions` (ou `/allowed-tools`) lista as regras como deny, ask e allow, seguidas das pastas extras.
+
+### Sintaxe das regras
+
+Uma regra é o nome de uma ferramenta, opcionalmente seguido de um especificador entre parênteses: `Ferramenta` ou `Ferramenta(especificador)`.
+
+| Regra | Casa com |
+|---|---|
+| `Bash` | Qualquer comando. |
+| `Bash(git status)` | Exatamente `git status` (espaços extras são ignorados). `git status -s` não casa. |
+| `Bash(git diff:*)` | `git diff` e tudo que começa com `git diff ` (limite de palavra: não casa `git difftool`). |
+| `Bash(npm run * --silent)` | `*` casa qualquer coisa: `npm run build --silent`. |
+| `Edit` | Qualquer edição. Regras `Edit` também valem para `Write` e `NotebookEdit`. |
+| `Edit(src/**)` | Edições dentro de `src/` no projeto. |
+| `Read(*.env)` | Um nome de arquivo em qualquer nível do projeto. Regras `Read` também valem para `Glob`, `Grep` e `LSP`. |
+| `Read(//etc/hosts)` | Um caminho absoluto (duas barras no início). |
+| `Read(~/notes/*.md)` | Um caminho na sua pasta pessoal. |
+| `WebFetch(domain:docs.rs)` | Buscar páginas nesse host. |
+| `mcp__jira` | Todas as ferramentas do servidor MCP `jira`. |
+| `mcp__github__delete_repo` | Uma ferramenta de um servidor. |
+| `mcp__docs__resources(file:///a.md)` | Ler esse recurso do servidor `docs`. |
+| `Ferramenta(assunto)` | Qualquer outra ferramenta: o especificador precisa ser igual ao assunto da chamada. |
+
+#### Caminhos
+
+Especificadores de caminho funcionam como no `.gitignore`:
+
+- `//caminho` é absoluto, `~/caminho` começa na sua pasta pessoal, `./caminho` começa no projeto.
+- Um padrão com `/` começa no projeto (`src/**`, `config/prod.env`).
+- Um padrão sem `/` casa esse nome em qualquer nível do projeto (`*.env`, `secrets`).
+- `*` e `?` ficam dentro de uma pasta; `**` atravessa pastas.
+- Uma regra que casa uma pasta vale para tudo dentro dela.
+- Regras deny e ask ignoram maiúsculas e minúsculas (`Read(.env)` também recusa `.ENV`); regras allow não.
+- Um `Glob` ou `Grep` sobre uma pasta é recusado quando uma regra deny cobre algo dentro dela.
+
+#### Comandos
+
+As regras de shell leem o comando do jeito que o shell vai executá-lo:
+
+- **Comandos compostos** (`&&`, `;`, `|`): todas as partes precisam ser liberadas. Partes somente leitura (`ls`, `cat`, `git status`…) e `cd` para uma pasta dentro do projeto passam sem regra. Uma parte negada recusa o comando inteiro.
+- **Comandos escondidos** (`$(…)`, crases, `<(…)`, `bash -c '…'`, `eval`, `xargs`) e **redirecionamentos para arquivos** nunca são liberados por uma regra allow. Quando existem regras deny ou ask com especificador, um comando assim gera pergunta.
+- **Regras deny enxergam através de disfarces**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }` casam com `Bash(rm:*)`.
+- **Regras allow leem o comando como foi escrito**: `LD_PRELOAD=/tmp/x.so git status` não casa com `Bash(git status:*)`.
+
+#### Regras inválidas
+
+Uma regra sem o `)` de fechamento, com especificador vazio (`Bash()`) ou que não começa com o nome de uma ferramenta interrompe a execução com um erro que cita a lista, por exemplo `permissions.deny: rule "Bash(rm" misses its )`.
+
+## Ações que sempre perguntam
+
+Algumas ações são perguntadas toda vez, seja qual for o modo e as regras (exceto uma regra deny, que as recusa), e não podem ser lembradas:
+
+- Push para o branch padrão, ou push forçado, que apaga ou reescreve o histórico remoto.
+- `cargo publish`, `npm publish`, `pnpm publish`, `yarn publish`.
+- `gh pr merge`, `gh release create|delete|edit`, `gh api`.
+- `docker push`, `podman push`.
+- Buscar um endereço que nunca apareceu na conversa, depois que a sessão leu conteúdo de fora (páginas web, ferramentas MCP).
+- Rodar um comando fora da sandbox e instalar um pacote suspeito. Veja [Sandbox e segurança](./sandbox-and-safety).
+
+Comandos que imprimiriam segredos (`env`, `printenv`, `cat .env`, ler chaves SSH…) são recusados de imediato.
+
+## Opções de linha de comando
+
+| Opção | Efeito |
+|---|---|
+| `--mode <ask\|edits\|plan\|bypass>` | Começa neste modo. |
+| `--allowedTools <regras>` (ou `--allowed-tools`) | Adiciona regras allow nesta execução. Pode repetir; as regras podem ser separadas por espaços ou vírgulas fora dos parênteses: `--allowedTools "Bash(git diff:*) Edit"`. |
+| `--disallowedTools <regras>` (ou `--disallowed-tools`) | Adiciona regras deny nesta execução. |
+| `--add-dir <caminho>` | Adiciona uma pasta que o agente lê como o projeto. Pode repetir. |
+
+```bash
+{{COMMAND}} -p "corrija o teste que está falhando" --mode edits --allowedTools "Bash(cargo test:*)"
+{{COMMAND}} --disallowedTools "Bash(git push:*),WebFetch"
+```
+
+Em execuções `-p` ninguém pode responder, então toda chamada que perguntaria é recusada e anotada (`denied: the agent asked for permission (use --mode or --allowedTools)`). Veja [Modo headless](./headless).
+
+## Regras sugeridas
+
+Com o recurso `suggested-rules` (ligado por padrão), `/rules` olha suas respostas nas conversas recentes desta pasta e sugere regras para o que você responde sempre do mesmo jeito: uma regra allow depois de 5 ou mais aprovações sem nenhuma recusa, uma regra deny depois de 3 ou mais recusas sem nenhuma aprovação. Regras que você já tem não são sugeridas.
+
+```text
+/rules           lista as sugestões, numeradas
+/rules keep 2    salva a sugestão 2 em {{DIR}}/settings.local.json
+```
+
+## Pastas adicionais
+
+Por padrão o agente lê livremente só dentro do projeto. Para dar acesso a outra pasta (um repositório vizinho, notas compartilhadas):
+
+- `/add-dir <caminho>` para a conversa atual; `/add-dir` sozinho lista as pastas adicionadas.
+- `--add-dir <caminho>` ao abrir.
+- `permissions.additionalDirectories` nos seus próprios arquivos de configuração, de forma permanente. `~/` começa na sua pasta pessoal; um caminho relativo começa no projeto.
+
+Caminhos digitados em `/add-dir` e `--add-dir` precisam ser pastas existentes; `~/` é expandido e caminhos relativos começam no projeto. Uma pasta adicionada é lida como o projeto e, com a sandbox ligada, comandos na sandbox podem gravar nela.
+
+## Hooks e permissões
+
+Um hook `PreToolUse` pode responder `allow`, `ask` ou `deny` para uma chamada; `deny` recusa, `ask` pergunta a você e `allow` pula a pergunta, a menos que uma regra ask tenha casado. Um hook `PermissionRequest` roda sempre que o {{NAME}} está para perguntar a você e pode responder no seu lugar. Veja [Hooks](./hooks).

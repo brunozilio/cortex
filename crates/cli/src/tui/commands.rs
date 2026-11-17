@@ -2,7 +2,7 @@ use domain::command::Command;
 
 use super::app::App;
 
-const KEYS: &str = "Keys: Enter sends · Alt+Enter or Ctrl+J new line · Esc interrupts · Esc Esc rewinds · \
+pub const KEYS: &str = "Keys: Enter sends · Alt+Enter or Ctrl+J new line · Esc interrupts · Esc Esc rewinds · \
                     Shift+Tab mode · Ctrl+R searches past prompts · Ctrl+G edits in $EDITOR · \
                     Ctrl+V pastes an image (or drop a file) · Ctrl+O expands output · Ctrl+L redraws · \
                     PgUp/PgDn scroll · Ctrl+C quits";
@@ -30,6 +30,7 @@ pub fn run(app: &mut App, command: Command) {
         Command::AddDir(typed) => super::dirs::run(app, typed),
         Command::Context => super::context::measure(app),
         Command::Resume(query) => super::resume::open(app, query),
+        Command::Fleet => super::fleet::open(app),
         Command::Fork => super::resume::fork(app),
         Command::Config => super::config::open(app),
         Command::NewAgent(what) => super::config::create(app, true, &what),
