@@ -37,12 +37,19 @@ const ALL: [(FeatureName, Forget); 13] = [
     (FeatureName::Workspace, workspace::forget),
 ];
 
-const PREPARING: [(&str, Prepare); 3] =
-    [("channels", channels::run::prepare), ("code_map", code_map::run::prepare), ("memory", memory::run::prepare)];
+const PREPARING: [(FeatureName, Prepare); 3] = [
+    (FeatureName::Channels, channels::run::prepare),
+    (FeatureName::CodeMap, code_map::run::prepare),
+    (FeatureName::Memory, memory::run::prepare),
+];
+
+fn turned_off(context: &Context<'_>, feature: FeatureName) -> bool {
+    feature.switch().is_some_and(|flag| !context.on(flag))
+}
 
 pub fn handle(context: &Context<'_>, request: FeatureRequest) -> Result<FeatureReply, FeatureError> {
     let feature = request.feature();
-    if !context.on(feature.name()) {
+    if turned_off(context, feature) {
         return Err(FeatureError::FeatureOff { feature });
     }
     answer(context, request).map_err(|message| FeatureError::Failed { feature, message })
@@ -79,8 +86,8 @@ pub fn forget(client: u64) {
 pub fn prepare(context: &Context<'_>, run: RunId, request: PromptRequest) -> (PromptRequest, Vec<Finish>) {
     let mut request = request;
     let mut finishes = Vec::new();
-    for (name, prepare) in PREPARING {
-        if context.on(name) {
+    for (feature, prepare) in PREPARING {
+        if !turned_off(context, feature) {
             let (prepared, finish) = prepare(context, run, request);
             request = prepared;
             finishes.extend(finish);
@@ -91,6 +98,8 @@ pub fn prepare(context: &Context<'_>, run: RunId, request: PromptRequest) -> (Pr
 
 #[cfg(test)]
 mod requests_tests;
+#[cfg(test)]
+mod switch_tests;
 
 #[cfg(test)]
 mod tests {
@@ -123,7 +132,7 @@ mod tests {
 
     #[test]
     fn these_features_prepare_a_run_in_this_order() {
-        let names: Vec<&str> = PREPARING.iter().map(|(name, _)| *name).collect();
+        let names: Vec<&str> = PREPARING.iter().map(|(feature, _)| feature.name()).collect();
         assert_eq!(names, ["channels", "code_map", "memory"]);
     }
 }

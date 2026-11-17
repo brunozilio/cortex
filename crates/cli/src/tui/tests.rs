@@ -13,7 +13,7 @@ use super::app::App;
 use super::{keys, view};
 
 pub(super) fn sdk(engine: &FakeEngine, data: &std::path::Path) -> Sdk {
-    sdk_without(engine, data, &["memory_search", domain::features::GIT_OFFER])
+    sdk_without(engine, data, &[domain::features::MEMORY_SEARCH, domain::features::GIT_OFFER])
 }
 
 pub(super) fn sdk_without(engine: &FakeEngine, data: &std::path::Path, off: &[&str]) -> Sdk {

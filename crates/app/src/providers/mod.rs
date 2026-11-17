@@ -128,15 +128,12 @@ impl ModelProviders {
         self.answer(provider, result)
     }
 
-    pub fn unkept_notice(&self) -> Option<domain::inbox::Notice> {
+    pub fn unkept_notice(&self) -> Option<String> {
         let reason = self.secrets.unkept()?;
         let told = self.told_unkept.swap(true, Ordering::SeqCst);
         (!told).then(|| {
-            let text = format!(
-                "{}. Connecting a provider or signing in fails until this is fixed.",
-                crate::secrets::refusal(&reason)
-            );
-            domain::inbox::Notice::new("secrets", text)
+            let refusal = crate::secrets::refusal(&reason);
+            format!("{refusal}. Connecting a provider or signing in fails until this is fixed.")
         })
     }
 

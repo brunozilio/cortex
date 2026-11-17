@@ -24,8 +24,8 @@ impl TurnedOff {
     }
 
     pub fn follow(&self, features: &Features) {
-        let off = features.off().flat_map(|name| [name.to_owned(), name.replace('-', "_")]).collect();
-        *self.in_settings.locked() = off;
+        let declared = features.off().filter(|name| domain::features::known(name).is_some());
+        *self.in_settings.locked() = declared.map(str::to_owned).collect();
     }
 }
 
@@ -46,11 +46,21 @@ mod tests {
         let shared = off.clone();
 
         off.follow(&features(json!({ "suggested-rules": false, "budget": true })));
-        assert!(shared.contains("suggested-rules") && shared.contains("suggested_rules"), "every clone sees it");
+        assert!(shared.contains("suggested-rules"), "every clone sees it");
         assert!(!shared.contains("budget"));
 
         off.follow(&features(json!({ "suggested-rules": true })));
-        assert!(!shared.contains("suggested_rules"), "turned back on");
+        assert!(!shared.contains("suggested-rules"), "turned back on");
         assert!(shared.contains("memory_search"), "the settings never said anything about it");
+    }
+
+    #[test]
+    fn only_a_declared_flag_turns_anything_off_from_the_settings() {
+        let off = TurnedOff::default();
+        off.follow(&features(json!({ "sessions": false, "suggested_rules": false, "typo": false, "memory": false })));
+        assert!(off.contains("memory"));
+        for unknown in ["sessions", "suggested_rules", "suggested-rules", "typo"] {
+            assert!(!off.contains(unknown), "{unknown} is not a flag /features knows");
+        }
     }
 }

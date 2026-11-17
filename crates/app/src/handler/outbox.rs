@@ -29,6 +29,10 @@ impl Outbox {
         }
     }
 
+    pub fn wake(&self) -> Wake {
+        Arc::clone(&self.wake)
+    }
+
     pub fn answering(&self, id: RequestId) -> Replies {
         Replies { outbox: self.clone(), id, stop: Arc::default() }
     }

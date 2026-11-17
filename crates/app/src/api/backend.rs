@@ -8,6 +8,10 @@ pub trait Backend: Send {
     fn send(&self, command: Envelope<ClientCommand>) -> Result<(), BackendError>;
 
     fn try_recv(&self) -> Option<ServerEvent>;
+
+    fn alive(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

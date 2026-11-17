@@ -140,14 +140,18 @@ fn channels_open_none_for_an_empty_list_and_say_which_names_failed() {
 
 #[test]
 fn a_feature_turned_off_says_so_instead_of_answering() {
-    let off = testing::services(None).without("sessions").without("output_savings");
-    let listing = FeatureRequest::Sessions(SessionsRequest::List);
+    let off = testing::services(None).without(domain::features::TRACE).without(domain::features::OUTPUT_SAVINGS);
+    let listing = FeatureRequest::Trace(TraceRequest::EverySession);
 
     let refused = typed(&off, 1, listing.clone()).expect_err("off");
-    assert_eq!(refused, FeatureError::FeatureOff { feature: FeatureName::Sessions });
-    assert_eq!(refused.to_string(), "sessions is turned off (/features sessions on)");
-    let savings = typed(&off, 1, FeatureRequest::OutputSavings);
-    assert_eq!(savings, Err(FeatureError::FeatureOff { feature: FeatureName::OutputSavings }));
+    assert_eq!(refused, FeatureError::FeatureOff { feature: FeatureName::Trace });
+    assert_eq!(refused.to_string(), "trace is turned off (/features trace on)");
+    let savings = typed(&off, 1, FeatureRequest::OutputSavings).expect_err("off");
+    assert_eq!(savings, FeatureError::FeatureOff { feature: FeatureName::OutputSavings });
+    assert_eq!(savings.to_string(), "output_savings is turned off (/features experimental-output-savings on)");
     assert!(typed(&testing::services(None), 1, listing).is_ok());
     assert!(typed(&testing::services(None), 1, FeatureRequest::OutputSavings).is_ok());
+    let folder_names = testing::services(None).without("sessions").without("output_savings");
+    assert!(typed(&folder_names, 1, FeatureRequest::Sessions(SessionsRequest::List)).is_ok());
+    assert!(typed(&folder_names, 1, FeatureRequest::OutputSavings).is_ok(), "a folder's name switches nothing");
 }

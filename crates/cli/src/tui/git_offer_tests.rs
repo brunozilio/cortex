@@ -11,7 +11,7 @@ fn engine() -> FakeEngine {
 }
 
 fn outside_a_repository(folder: &std::path::Path, engine: &FakeEngine) -> App {
-    let sdk = sdk_without(engine, folder, &["memory_search"]);
+    let sdk = sdk_without(engine, folder, &[domain::features::MEMORY_SEARCH]);
     let mut app = App::new(sdk, folder.into(), None, Some(PermissionMode::Ask));
     until(&mut app, |app| app.session.is_some());
     app

@@ -23,7 +23,7 @@ pub struct Turn {
     pub queued: Vec<String>,
     pub(super) unresolved: VecDeque<String>,
     pub(super) held: Vec<String>,
-    preparing: Option<Ticket>,
+    preparing: Option<(Ticket, String)>,
     pub(super) retrying: bool,
     pub(super) transient: bool,
     pub(super) auto_retried: bool,
@@ -41,14 +41,20 @@ impl Turn {
         self.preparing.is_some()
     }
 
-    pub fn prepare(&mut self) -> Ticket {
+    pub fn prepare(&mut self, typed: &str) -> Ticket {
         let ticket = Ticket::next();
-        self.preparing = Some(ticket);
+        self.preparing = Some((ticket, typed.to_owned()));
         ticket
     }
 
     pub fn waits_for(&self, ticket: Ticket) -> bool {
-        self.preparing == Some(ticket)
+        self.preparing.as_ref().is_some_and(|(waited, _)| *waited == ticket)
+    }
+
+    pub fn take_back(&mut self) -> Option<String> {
+        let (_, typed) = self.preparing.take()?;
+        let typed_after = std::mem::take(&mut self.held);
+        Some(std::iter::once(typed).chain(typed_after).collect::<Vec<_>>().join("\n\n"))
     }
 
     pub fn prepared(&mut self, ticket: Ticket) -> bool {
@@ -82,13 +88,26 @@ mod tests {
     #[test]
     fn a_turn_is_busy_while_a_prompt_is_prepared_and_only_its_own_ticket_ends_that() {
         let mut turn = Turn::default();
-        let first = turn.prepare();
+        let first = turn.prepare("one");
         assert!(turn.busy() && turn.preparing());
-        let second = turn.prepare();
+        let second = turn.prepare("two");
         assert!(!turn.prepared(first), "an older ticket was replaced");
         assert!(turn.busy());
         assert!(turn.prepared(second));
         assert!(!turn.busy() && !turn.prepared(second), "a ticket is used once");
+    }
+
+    #[test]
+    fn taking_back_a_prompt_being_prepared_gives_what_was_typed_and_its_ticket_no_longer_counts() {
+        let mut turn = Turn::default();
+        assert_eq!(turn.take_back(), None, "nothing is being prepared");
+        let ticket = turn.prepare("read @notes.txt");
+        turn.held.push("and then this".into());
+
+        assert_eq!(turn.take_back().as_deref(), Some("read @notes.txt\n\nand then this"));
+
+        assert!(!turn.busy() && turn.held.is_empty());
+        assert!(!turn.waits_for(ticket) && !turn.prepared(ticket), "the worker's late result is nobody's");
     }
 
     #[test]

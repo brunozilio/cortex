@@ -35,7 +35,7 @@ fn backend(engine: FakeEngine) -> (LocalBackend, Receiver<()>) {
 fn backend_with(engine: FakeEngine, memory_tool: bool) -> (LocalBackend, Receiver<()>) {
     let mut services = LocalServices::with_engine(Arc::new(engine));
     if !memory_tool {
-        services = services.without("memory_search");
+        services = services.without(domain::features::MEMORY_SEARCH);
     }
     services.providers = services.providers.with_store(Arc::new(app::InMemoryProviderStore::default()));
     let (woke_tx, woke) = crossbeam_channel::unbounded();

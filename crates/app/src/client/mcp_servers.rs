@@ -57,8 +57,8 @@ impl Sdk {
 }
 
 impl Sdk {
-    pub fn notices(&self) -> Result<Vec<domain::inbox::Notice>, Error> {
-        self.client.call(ClientCommand::TakeNotices, |reply| match reply {
+    pub fn notices(&self, for_agent: bool) -> Result<crate::api::Notices, Error> {
+        self.client.call(ClientCommand::TakeNotices { for_agent }, |reply| match reply {
             Reply::Notices(notices) => Some(Ok(notices)),
             _ => None,
         })

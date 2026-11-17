@@ -20,6 +20,26 @@ impl Budget {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Spending {
+    pub limit_usd: Option<f64>,
+    pub spent_usd: f64,
+}
+
+impl Spending {
+    pub fn observe(&mut self, event: &crate::EngineEvent) {
+        self.spent_usd += spent(event);
+    }
+
+    pub fn budget(&self) -> Option<Budget> {
+        self.limit_usd.map(|limit_usd| Budget { limit_usd, spent_usd: self.spent_usd })
+    }
+
+    pub fn allows(&self, run_cost: f64) -> bool {
+        self.budget().is_none_or(|budget| budget.allows(run_cost))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BudgetCommand {
     Show,
@@ -60,6 +80,27 @@ mod tests {
             budget.refusal(1.25),
             "Stopped: this session spent $5.25 of its $5.00 budget. Raise it with /budget <dollars>, or turn it off with /budget off."
         );
+    }
+
+    #[test]
+    fn a_session_s_spending_adds_up_what_its_runs_cost_and_is_the_budget_of_the_next_one() {
+        let usage = |cost| {
+            crate::EngineEvent::Usage(crate::billing::ModelUsage {
+                estimated_cost_usd: Some(cost),
+                ..Default::default()
+            })
+        };
+        let mut spending = Spending::default();
+        spending.observe(&usage(1.5));
+        spending.observe(&crate::EngineEvent::AgentEvent { index: 1, event: Box::new(usage(0.5)) });
+        spending.observe(&crate::EngineEvent::TextDelta("hi".into()));
+        assert!((spending.spent_usd - 2.0).abs() < f64::EPSILON);
+        assert_eq!(spending.budget(), None, "no limit, no budget");
+        assert!(spending.allows(1_000.0), "and nothing is refused");
+
+        spending.limit_usd = Some(3.0);
+        assert_eq!(spending.budget(), Some(Budget { limit_usd: 3.0, spent_usd: 2.0 }));
+        assert!(spending.allows(0.5) && !spending.allows(1.0));
     }
 
     #[test]

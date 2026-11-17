@@ -4,11 +4,11 @@ use platform::sync::Locked;
 
 use crate::api::{ClientCommand, Reply};
 use crossbeam_channel::Receiver;
-use domain::{AskId, Decision, EngineEvent, PermissionMode, RunId, SessionId};
+use domain::session_run::{Carried, RunWatch};
+use domain::{AskId, Decision, EngineEvent, PermissionMode, RunId};
 
 use crate::Error;
 use crate::client::dispatch::{Client, Pending};
-use crate::client::plan_watch::PlanWatch;
 
 const BACKEND_GONE: &str = "the backend went away before the run ended";
 
@@ -19,11 +19,8 @@ pub struct Run {
     accepted: Option<Pending>,
     left_running: bool,
     client: Arc<Client>,
-    pub(crate) resume: Arc<Mutex<Option<SessionId>>>,
-    pub(crate) mode: Arc<Mutex<PermissionMode>>,
-    pub(crate) plan: Option<PlanWatch>,
-    pub(crate) spending: Arc<Mutex<crate::client::session::Spending>>,
-    pub(crate) signals: Arc<Mutex<domain::learning::Signals>>,
+    carried: Arc<Mutex<Carried>>,
+    watch: RunWatch,
     done: bool,
 }
 
@@ -44,13 +41,15 @@ impl Run {
             accepted: Some(accepted),
             left_running: false,
             client: Arc::clone(client),
-            resume: Arc::default(),
-            mode: Arc::default(),
-            plan: None,
-            spending: Arc::default(),
-            signals: Arc::default(),
+            carried: Arc::default(),
+            watch: RunWatch::default(),
             done: false,
         })
+    }
+
+    pub(crate) fn of_session(mut self, carried: Arc<Mutex<Carried>>, watch: RunWatch) -> Self {
+        (self.carried, self.watch) = (carried, watch);
+        self
     }
 
     pub fn id(&self) -> RunId {
@@ -114,17 +113,7 @@ impl Run {
     }
 
     fn observe(&mut self, event: &EngineEvent) {
-        if let EngineEvent::SessionStarted(id) = event {
-            *self.resume.locked() = Some(id.clone());
-        }
-        if let EngineEvent::ModeChanged(mode) = event {
-            *self.mode.locked() = *mode;
-        }
-        if let Some(plan) = &mut self.plan {
-            plan.observe(event);
-        }
-        self.spending.locked().spent_usd += domain::budget::spent(event);
-        self.signals.locked().observe(event);
+        self.carried.locked().observe(&mut self.watch, event);
         self.done = event.is_terminal();
     }
 

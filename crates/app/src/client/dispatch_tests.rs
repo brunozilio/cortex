@@ -235,3 +235,40 @@ fn a_call_waiting_on_a_backend_that_went_away_fails_instead_of_waiting_out_its_t
     let later = client.call(ClientCommand::LoadSettings, settings);
     assert!(matches!(&later, Err(Error::Backend(message)) if message == SHUT_DOWN), "{later:?}");
 }
+
+struct Dies(Arc<AtomicBool>);
+
+impl Backend for Dies {
+    fn send(&self, _command: Envelope<ClientCommand>) -> Result<(), BackendError> {
+        Ok(())
+    }
+
+    fn try_recv(&self) -> Option<ServerEvent> {
+        None
+    }
+
+    fn alive(&self) -> bool {
+        !self.0.load(Ordering::SeqCst)
+    }
+}
+
+#[test]
+fn a_backend_whose_worker_died_fails_every_waiting_call_and_run_though_its_wake_is_still_held() {
+    let dead = Arc::new(AtomicBool::new(false));
+    let (wake, woken) = crossbeam_channel::bounded::<()>(1);
+    let client = Arc::new(Client::new(Box::new(Dies(Arc::clone(&dead))), woken));
+    let asking = Arc::clone(&client);
+    let waiting = std::thread::spawn(move || asking.call(ClientCommand::LoadSettings, settings));
+    until(|| (!client.shared.waiters.locked().is_empty()).then_some(()));
+    let followed = client.follow(domain::RunId::new());
+
+    dead.store(true, Ordering::SeqCst);
+    wake.send(()).expect("woken");
+
+    let ended = within_five_seconds(move || waiting.join().expect("join"));
+    assert!(matches!(&ended, Err(Error::Backend(message)) if message == SHUT_DOWN), "{ended:?}");
+    let run = within_five_seconds(move || followed.recv());
+    assert!(run.is_err(), "the run's channel closed, which its reader turns into a failure: {run:?}");
+    let later = client.call(ClientCommand::LoadSettings, settings);
+    assert!(matches!(&later, Err(Error::Backend(message)) if message == SHUT_DOWN), "{later:?}");
+}

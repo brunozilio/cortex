@@ -19,7 +19,7 @@ fn sdk(data: &std::path::Path, off: &[&str]) -> Sdk {
 #[test]
 fn a_feature_that_is_turned_off_is_an_error_of_its_own_that_says_how_to_turn_it_on() {
     let data = tempfile::tempdir().expect("data");
-    let sdk = sdk(data.path(), &["memory_search", "suggested_rules"]);
+    let sdk = sdk(data.path(), &[domain::features::MEMORY_SEARCH, domain::features::SUGGESTED_RULES]);
 
     let refused = sdk.suggested_rules(data.path()).expect_err("off");
 
@@ -28,13 +28,13 @@ fn a_feature_that_is_turned_off_is_an_error_of_its_own_that_says_how_to_turn_it_
         "{refused:?}"
     );
     assert_eq!(refused.to_string(), "suggested_rules is turned off (/features suggested-rules on)");
-    assert!(sdk.notices().expect("notices").is_empty());
+    assert!(sdk.notices(true).expect("notices").is_empty());
 }
 
 #[test]
 fn a_feature_that_fails_says_why_and_names_itself() {
     let data = tempfile::tempdir().expect("data");
-    let sdk = sdk(data.path(), &["memory_search"]);
+    let sdk = sdk(data.path(), &[domain::features::MEMORY_SEARCH]);
 
     let failed = sdk.background_output("bash_none").expect_err("no such command");
 
@@ -48,7 +48,7 @@ fn a_feature_that_fails_says_why_and_names_itself() {
 #[test]
 fn each_feature_answers_its_typed_call() {
     let data = tempfile::tempdir().expect("data");
-    let sdk = sdk(data.path(), &["memory_search"]);
+    let sdk = sdk(data.path(), &[domain::features::MEMORY_SEARCH]);
     let cwd = data.path();
 
     assert!(sdk.sessions().expect("sessions").is_empty());

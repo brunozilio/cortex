@@ -20,9 +20,15 @@ pub(super) fn hold(app: &mut App, text: &str) -> bool {
     if std::mem::replace(&mut offer.settled, true) || !git_offer::due(first_prompt, false, turned_off) {
         return false;
     }
-    let (ticket, cwd, text) = (app.turn.prepare(), app.cwd.clone(), text.to_owned());
+    let (ticket, cwd, text) = (app.turn.prepare(text), app.cwd.clone(), text.to_owned());
     app.spawn(move |sdk| Msg::GitOffer { ticket, offered: sdk.git_offered(&cwd).unwrap_or(false), text });
     true
+}
+
+pub(super) fn taken_back(app: &mut App) {
+    if let Some(offer) = app.features.get::<Offer>(KEY) {
+        offer.settled = false;
+    }
 }
 
 pub(super) fn checked(app: &mut App, ticket: Ticket, offered: bool, text: String) {
@@ -61,7 +67,7 @@ pub(super) fn answered(app: &mut App, decision: &app::Decision) -> bool {
 }
 
 fn initialize(app: &mut App, text: String) {
-    let (ticket, cwd) = (app.turn.prepare(), app.cwd.clone());
+    let (ticket, cwd) = (app.turn.prepare(&text), app.cwd.clone());
     app.spawn(move |sdk| {
         let committed = sdk.init_git(&cwd).map_err(|error| error.to_string());
         Msg::GitInitialized { ticket, committed, text }

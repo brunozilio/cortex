@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::permission_rules::RuleKind;
 use crate::{Decision, EngineEvent};
 
 const ENOUGH: usize = 2;
@@ -44,6 +45,10 @@ impl Signals {
     pub fn take(&mut self) -> Vec<String> {
         std::mem::take(&mut self.0)
     }
+
+    pub fn lesson_due(&mut self) -> Option<String> {
+        self.worth_learning().then(|| brief(&self.take()))
+    }
 }
 
 pub fn brief(signals: &[String]) -> String {
@@ -71,7 +76,7 @@ pub struct Proposal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Keeping {
     Remember(String),
-    Rule { kind: &'static str, rule: String },
+    Rule { kind: RuleKind, rule: String },
     Instruction(String),
     Ask(String),
 }
@@ -104,7 +109,8 @@ pub fn keeping(proposal: &Proposal) -> Keeping {
     match proposal.kind {
         Lesson::Memory => Keeping::Remember(proposal.text.clone()),
         Lesson::Rule => {
-            Keeping::Rule { kind: if proposal.name == "deny" { "deny" } else { "allow" }, rule: proposal.text.clone() }
+            let kind = if proposal.name == "deny" { RuleKind::Deny } else { RuleKind::Allow };
+            Keeping::Rule { kind, rule: proposal.text.clone() }
         }
         Lesson::Instruction => Keeping::Instruction(proposal.text.clone()),
         Lesson::Skill => Keeping::Ask(format!(
@@ -147,6 +153,21 @@ mod tests {
     }
 
     #[test]
+    fn a_lesson_is_due_once_two_corrections_were_seen_and_asking_starts_over() {
+        let mut signals = Signals::default();
+        signals.observe(&EngineEvent::Steered("no, keep the old API".into()));
+        assert_eq!(signals.lesson_due(), None, "one correction is not enough");
+        assert!(!signals.take().is_empty(), "and what was seen stays until it is");
+
+        signals.observe(&EngineEvent::Steered("no, keep the old API".into()));
+        signals.observe(&EngineEvent::Repeated { tool: "Bash".into() });
+        let brief = signals.lesson_due().expect("due");
+        assert!(brief.starts_with("What happened in this conversation that the agent could learn from:"), "{brief}");
+        assert!(brief.contains("- The agent kept repeating the same Bash call"), "{brief}");
+        assert_eq!(signals.lesson_due(), None, "asked for once");
+    }
+
+    #[test]
     fn a_proposal_is_read_from_json_and_an_empty_one_is_none() {
         let reply = r#"Sure: {"kind": "memory", "name": "package manager", "text": "This project uses pnpm, never npm.", "why": "the user said so twice"}"#;
         let proposal = parse(reply).expect("proposal");
@@ -163,11 +184,11 @@ mod tests {
         assert_eq!(keeping(&lesson(Lesson::Memory, "pm", "Use pnpm.")), Keeping::Remember("Use pnpm.".into()));
         assert_eq!(
             keeping(&lesson(Lesson::Rule, "deny", "Bash(git push:*)")),
-            Keeping::Rule { kind: "deny", rule: "Bash(git push:*)".into() }
+            Keeping::Rule { kind: RuleKind::Deny, rule: "Bash(git push:*)".into() }
         );
         assert_eq!(
             keeping(&lesson(Lesson::Rule, "whatever", "Bash(ls)")),
-            Keeping::Rule { kind: "allow", rule: "Bash(ls)".into() }
+            Keeping::Rule { kind: RuleKind::Allow, rule: "Bash(ls)".into() }
         );
         let Keeping::Ask(prompt) = keeping(&lesson(Lesson::Skill, "release", "Tag then publish.")) else {
             panic!("a skill is asked for")

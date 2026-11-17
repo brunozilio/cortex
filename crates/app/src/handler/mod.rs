@@ -6,7 +6,7 @@ mod sent;
 
 use std::sync::Arc;
 
-use crate::api::{ClientCommand, Envelope, Reply, ServerEvent};
+use crate::api::{ClientCommand, Envelope, Notices, Reply, ServerEvent};
 use agent_engine::EventSink;
 use domain::{EngineEvent, PromptRequest, RunId};
 use platform::sync::Locked;
@@ -46,9 +46,16 @@ impl CommandHandler {
     pub fn handle(&self, envelope: Envelope<ClientCommand>) {
         let replies = self.outbox.answering(envelope.id);
         let command = envelope.payload;
-        tracing::debug!(command = command.name(), request = %envelope.id, "handling command");
-        if let Some(answer) = self.answer(command, &replies) {
-            replies.send(answer);
+        let name = command.name();
+        tracing::debug!(command = name, request = %envelope.id, "handling command");
+        let answered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.answer(command, &replies)));
+        match answered {
+            Ok(Some(answer)) => replies.send(answer),
+            Ok(None) => {}
+            Err(_) => {
+                tracing::error!(command = name, request = %envelope.id, "a command's handler panicked");
+                replies.send(Reply::error(format!("internal error while handling {name}")));
+            }
         }
     }
 
@@ -130,11 +137,7 @@ impl CommandHandler {
             ClientCommand::RemoveProviderAccount { provider, account } => providers.remove_account(provider, &account),
             ClientCommand::SetProviderBalance { provider, balance } => providers.set_balance(provider, balance),
             ClientCommand::ListMcpServers { path } => self.mcp_servers(&path, Ok(())),
-            ClientCommand::TakeNotices => {
-                let unkept = providers.unkept_notice();
-                let arrived = agent_engine::tools::inbox::take(self.client);
-                Reply::Notices(unkept.into_iter().chain(arrived).collect())
-            }
+            ClientCommand::TakeNotices { for_agent } => Reply::Notices(self.notices(for_agent)),
             ClientCommand::Feature(request) => {
                 match self.with_context(|context| crate::features::handle(context, request)) {
                     Ok(reply) => Reply::Feature(reply),
@@ -166,6 +169,13 @@ impl CommandHandler {
                 Reply::Done
             }
         })
+    }
+
+    fn notices(&self, for_agent: bool) -> Notices {
+        let unkept_keys = self.services.providers.unkept_notice();
+        let unkept_database = self.services.database.told_once(crate::degraded::database_notice);
+        let arrived = if for_agent { agent_engine::tools::inbox::take(self.client) } else { Vec::new() };
+        Notices { for_user: unkept_keys.into_iter().chain(unkept_database).collect(), for_agent: arrived }
     }
 
     fn mcp_servers(&self, path: &std::path::Path, changed: Result<(), String>) -> Reply {

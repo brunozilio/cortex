@@ -81,8 +81,20 @@ impl FeatureName {
         }
     }
 
-    pub fn flag(self) -> String {
-        self.name().replace('_', "-")
+    pub fn switch(self) -> Option<&'static str> {
+        use domain::features as flags;
+        match self {
+            Self::Channels => Some(flags::CHANNELS),
+            Self::CodeMap => Some(flags::CODE_MAP),
+            Self::DeclaredProviders => Some(flags::DECLARED_PROVIDERS),
+            Self::Memory => Some(flags::MEMORY),
+            Self::OutputSavings => Some(flags::OUTPUT_SAVINGS),
+            Self::Plugins => Some(flags::PLUGINS),
+            Self::Schedules => Some(flags::SCHEDULES),
+            Self::SuggestedRules => Some(flags::SUGGESTED_RULES),
+            Self::Trace => Some(flags::TRACE),
+            Self::Flags | Self::Sessions | Self::Shell | Self::Workspace => None,
+        }
     }
 }
 
@@ -171,10 +183,14 @@ impl FeatureReply {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum FeatureError {
-    #[error("{feature} is turned off (/features {} on)", .feature.flag())]
+    #[error("{feature} is turned off{}", back_on(*.feature))]
     FeatureOff { feature: FeatureName },
     #[error("{message}")]
     Failed { feature: FeatureName, message: String },
+}
+
+fn back_on(feature: FeatureName) -> String {
+    feature.switch().map(|flag| format!(" (/features {flag} on)")).unwrap_or_default()
 }
 
 impl FeatureError {

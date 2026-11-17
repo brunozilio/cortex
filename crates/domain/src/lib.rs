@@ -54,6 +54,7 @@ pub mod review;
 pub mod routing;
 pub mod sandbox;
 pub mod schedule;
+pub mod session_run;
 pub mod skill;
 pub mod small_model;
 pub mod stuck;

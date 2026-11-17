@@ -17,6 +17,16 @@ pub enum RuleKind {
     Deny,
 }
 
+impl RuleKind {
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Allow => "allow",
+            Self::Ask => "ask",
+            Self::Deny => "deny",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PermissionsInfo {
     pub rules: Vec<(RuleKind, String)>,

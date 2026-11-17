@@ -115,7 +115,7 @@ Na **pasta de dados locais**:
 
 | Caminho | O que é |
 |---|---|
-| `native-sessions/` | Conversas: um `<sessão>.jsonl` para cada uma, além de `checkpoints-<sessão>.json` (para o `/rewind`) e `worktree-<sessão>.json`. |
+| `native-sessions/` | Conversas. Para cada uma: `<sessão>.jsonl` (a conversa em si, salva a cada passo, então ela sobrevive a uma falha ou a um terminal fechado), `<sessão>.trace.jsonl` (o que o `/trace` mostra; ao passar de 64 MB é renomeado para `<sessão>.trace.1.jsonl` e um novo começa, então só a parte mais recente e a anterior são mantidas), `checkpoints-<sessão>.json` (para o `/rewind`: os arquivos dos 50 prompts mais recentes, até 64 MB) e `worktree-<sessão>.json`. Um arquivo `<sessão>.lock` existe só enquanto a conversa está respondendo. Apagar os arquivos de trace perde o trace, nunca a conversa. |
 | `secrets.json` | Chaves de API e tokens, cifrados. Legível só por você. |
 | `secrets.key` | A chave que abre o `secrets.json`. Legível só por você. |
 | `logs/{{COMMAND}}.log` | O log (nível definido por `{{ENV}}_LOG`). Passando de 5 MB, é renomeado para `{{COMMAND}}.log.1` e um novo começa. |
@@ -124,6 +124,8 @@ Na **pasta de dados locais**:
 `<usuário>` é `local` para você na sua própria máquina, e `<projeto>` é o caminho do projeto com todo caractere que não seja letra ou dígito trocado por `-`.
 
 Várias cópias do {{NAME}} abertas ao mesmo tempo compartilham o `app.db` com segurança: cada alteração é uma transação, então nenhuma perde o que a outra gravou. Para copiar ou fazer backup, feche o {{NAME}} antes, ou copie `app.db`, `app.db-wal` e `app.db-shm` juntos.
+
+Se o `app.db` não puder ser aberto (foi gravado por uma versão mais nova, outro programa o está segurando, ou o arquivo não pode ser lido), o {{NAME}} inicia mesmo assim e avisa uma vez: `The session list and memory could not be opened (<motivo>); they will not be kept after this session.` O chat mostra isso como um aviso; com `--print` vai para a saída de erro. Até a causa ser corrigida, a lista de conversas e o que for lembrado duram só até o {{NAME}} fechar. O arquivo fica como está. As conversas em si, em `native-sessions/`, continuam sendo salvas.
 
 ### Vindo de uma versão anterior
 
@@ -141,7 +143,7 @@ Na pasta temporária do sistema (`TMPDIR` no macOS e no Linux):
 
 | Caminho | O que é |
 |---|---|
-| `{{COMMAND}}-tool-results/<sessão>/` | Saídas de ferramentas longas demais para a conversa (mais de 30.000 caracteres) e saídas completas de comandos que foram filtradas, para que o agente as leia em partes. |
+| `{{COMMAND}}-tool-results/<sessão>/` | Saídas de ferramentas longas demais para a conversa (mais de 30.000 caracteres) e saídas completas de comandos que foram filtradas, para que o agente as leia em partes. A pasta de uma conversa é removida depois de 7 dias sem nada ser gravado nela. |
 | `{{COMMAND}}-prompt-<pid>.md` | O prompt enquanto você o edita no seu editor (Ctrl+G); removido depois. |
 
 ## Arquivos que o {{NAME}} só lê

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 
 use crate::api::{ClientCommand, Envelope, ServerEvent};
@@ -37,6 +38,10 @@ impl Backend for LocalBackend {
     fn try_recv(&self) -> Option<ServerEvent> {
         self.events.try_recv().ok()
     }
+
+    fn alive(&self) -> bool {
+        self.workers.vitals.alive()
+    }
 }
 
 pub struct Workers {
@@ -44,6 +49,7 @@ pub struct Workers {
     queries: Option<Sender<Command>>,
     handler: Arc<CommandHandler>,
     workers: Vec<JoinHandle<()>>,
+    vitals: Vitals,
 }
 
 impl std::fmt::Debug for Workers {
@@ -54,17 +60,21 @@ impl std::fmt::Debug for Workers {
 
 impl Workers {
     pub fn start(services: LocalServices, outbox: Outbox) -> Result<Self, BackendError> {
+        let (vitals, wake) = (Vitals::default(), outbox.wake());
         let handler = Arc::new(CommandHandler::new(services, outbox));
         let (control, control_rx) = crossbeam_channel::unbounded();
         let (queries, queries_rx) = crossbeam_channel::unbounded();
         let workers = vec![
-            spawn_worker("backend-control", control_rx, Arc::clone(&handler))?,
-            spawn_worker("backend-queries", queries_rx, Arc::clone(&handler))?,
+            spawn_worker("backend-control", control_rx, Arc::clone(&handler), vitals.watched(Arc::clone(&wake)))?,
+            spawn_worker("backend-queries", queries_rx, Arc::clone(&handler), vitals.watched(wake))?,
         ];
-        Ok(Self { control: Some(control), queries: Some(queries), handler, workers })
+        Ok(Self { control: Some(control), queries: Some(queries), handler, workers, vitals })
     }
 
     pub fn send(&self, command: Command) -> Result<(), BackendError> {
+        if !self.vitals.alive() {
+            return Err(BackendError::Disconnected);
+        }
         let queue = if is_query(&command.payload) { &self.queries } else { &self.control };
         queue.as_ref().ok_or(BackendError::Disconnected)?.send(command).map_err(|_| BackendError::Disconnected)
     }
@@ -91,7 +101,7 @@ fn is_query(command: &ClientCommand) -> bool {
             | ClientCommand::ListAgents { .. }
             | ClientCommand::ListMcpServers { .. }
             | ClientCommand::ListPermissions { .. }
-            | ClientCommand::TakeNotices
+            | ClientCommand::TakeNotices { .. }
             | ClientCommand::Feature(_)
             | ClientCommand::ApproveMcpServer { .. }
             | ClientCommand::AddMcpServer { .. }
@@ -102,14 +112,50 @@ fn is_query(command: &ClientCommand) -> bool {
     )
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct Vitals {
+    dead: Arc<AtomicBool>,
+}
+
+impl Vitals {
+    pub fn alive(&self) -> bool {
+        !self.dead.load(Ordering::SeqCst)
+    }
+
+    fn died(&self) {
+        self.dead.store(true, Ordering::SeqCst);
+    }
+
+    fn watched(&self, wake: Wake) -> Watched {
+        Watched { vitals: self.clone(), wake }
+    }
+}
+
+struct Watched {
+    vitals: Vitals,
+    wake: Wake,
+}
+
+impl Drop for Watched {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            tracing::error!("a backend worker died; every waiting call fails now");
+            self.vitals.died();
+            (self.wake)();
+        }
+    }
+}
+
 fn spawn_worker(
     name: &str,
     commands: Receiver<Command>,
     handler: Arc<CommandHandler>,
+    watched: Watched,
 ) -> Result<JoinHandle<()>, BackendError> {
     thread::Builder::new()
         .name(name.to_owned())
         .spawn(move || {
+            let _watched = watched;
             for command in commands {
                 handler.handle(command);
             }
@@ -118,13 +164,5 @@ fn spawn_worker(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn queries_are_routed_apart_from_run_control() {
-        assert!(is_query(&ClientCommand::ListSkills { path: "/".into() }));
-        assert!(is_query(&ClientCommand::ListAgents { path: "/".into() }));
-        assert!(!is_query(&ClientCommand::ListModels));
-    }
-}
+#[path = "local_tests.rs"]
+mod tests;

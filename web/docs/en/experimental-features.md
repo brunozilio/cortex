@@ -138,6 +138,13 @@ A flag whose name starts with `experimental-` is experimental: its behaviour may
 | `experimental-memory-scorecard` | Learning and memory | | One request in 20 runs without memory, for `/memory score` |
 | `experimental-code-map` | Code intelligence | | Points each prompt at the matching code from a tree-sitter index |
 | `experimental-blast-radius` | Code intelligence | | Tells the agent which other files call what an edit changed |
+| `memory` | Built-in features | | Project memory: recall with each prompt, saving, `/memory` |
+| `memory-search` | Built-in features | | The `memory_search` tool the agent uses to search memory |
+| `schedules` | Built-in features | | `/schedules`, `/loop` and scheduled prompts |
+| `plugins` | Built-in features | | Installing, updating, listing and removing plugins |
+| `trace` | Built-in features | | The data behind the `/trace` and `/console` pages |
+| `channels` | Built-in features | | MCP servers that stay open and send messages to the agent |
+| `declared-providers` | Built-in features | | Loads the model providers that settings files declare |
 
 The sections below describe each flag in detail.
 
@@ -483,22 +490,24 @@ After an edit, asks the language server which other files use the symbols the ed
 
 ## Turning off a whole built-in feature
 
-Besides the flags above, the `features` object also accepts the name of a built-in feature of {{NAME}}'s backend. Setting one to `false` turns that feature off: for example `"schedules": false` stops scheduled prompts and `"memory": false` stops project memory. Hyphens and underscores are interchangeable in these names.
+Some flags switch a whole built-in feature rather than one behaviour of it. They are ordinary flags: `/features` lists them, `/features <name> on|off` switches them at once, and they are on until you turn them off.
 
-| Name | What it backs |
+| Flag | What it turns off |
 |---|---|
-| `memory` | Project memory: recall, saving, `/memory` |
-| `memory-search` | The `memory_search` tool the agent uses to search memory |
+| `memory` | Project memory: recall with each prompt, saving, `/memory` |
+| `memory-search` | The `memory_search` tool the agent uses to search memory; recall with each prompt stays |
 | `schedules` | `/schedules`, `/loop` and scheduled prompts firing |
+| `plugins` | Installing, updating, listing and removing plugins |
+| `trace` | The data behind the `/trace` and `/console` pages |
+| `channels` | MCP servers that stay open for the session and send messages to the agent |
+| `declared-providers` | Loading the model providers that files in your settings folder and the project declare |
 | `suggested-rules` | `/rules`, and saving rules and instruction lines from `/learn keep` |
-| `trace` | The data behind the `/trace` page |
-| `code-map` | The code map |
-| `workspace` | The git offer, `@` file mentions and change listings |
-| `output-savings` | `/gain` |
-| `flags` | `/features` itself |
-| `channels`, `declared-providers`, `plugins`, `sessions`, `shell` | Other built-in features |
+| `experimental-code-map` | The code map |
+| `experimental-output-savings` | `/gain` |
 
-These names are read when {{NAME}} starts, from the folder it starts in. `/features` does not list them and refuses them, so set them in a settings file or with `{{COMMAND}} config set features.<name> false`.
+A request to a feature that is off answers with its name and the command that turns it back on, for example `memory is turned off (/features memory on)`.
 
-> [!WARNING]
-> Turning off `flags` also turns off `/features`; turn it back on by editing the settings file.
+Only these names switch a feature. A name `/features` does not list does nothing in the `features` object, whatever it resembles: `"code_map": false`, `"output-savings": false` or a misspelled flag turn nothing off. Four built-in features cannot be turned off at all, because {{NAME}} does not work without them: the feature flags themselves (`/features`), the session list, background commands, and the workspace (the git offer, `@` file mentions and change listings). To stop only the git offer, turn off [`git-offer`](#git-offer).
+
+> [!NOTE]
+> Earlier versions accepted any built-in feature's folder name here, with hyphens or underscores, including `workspace`, `sessions`, `shell` and `flags`. Those four are now ignored; `code-map` and `output-savings` are spelled `experimental-code-map` and `experimental-output-savings`.

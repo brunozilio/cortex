@@ -29,7 +29,7 @@ pub enum Msg {
     Earlier(Vec<super::conversations::Conversation>),
     Context(domain::usage::ContextUsage),
     Shell { id: String, command: String, result: Result<(String, bool), String> },
-    Notices(Vec<domain::inbox::Notice>),
+    Notices(app::api::Notices),
     Feature(super::features::Reply),
     Notice(String),
     Passing(String),

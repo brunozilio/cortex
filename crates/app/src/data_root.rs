@@ -5,6 +5,7 @@ use agent_engine::sessions::FileSessions;
 
 use crate::catalog::{InMemorySessionCatalog, SessionCatalog, SqliteSessionCatalog};
 use crate::db::Db;
+use crate::degraded::Degraded;
 use crate::features::memory::Memories;
 use crate::providers::{FileProviderStore, InMemoryProviderStore, ProviderStore};
 use crate::secrets::{InMemorySecretStore, SecretStore};
@@ -117,12 +118,13 @@ impl DataRoot {
         }
     }
 
-    fn db(&self) -> Option<Db> {
+    fn db(&self) -> (Option<Db>, Degraded) {
         let Some(file) = self.database() else {
-            if !self.keeps_nothing() {
-                tracing::error!("no app data folder; sessions and memory last only until the process ends");
+            if self.keeps_nothing() {
+                return (in_memory(), Degraded::default());
             }
-            return in_memory();
+            tracing::error!("no app data folder; sessions and memory last only until the process ends");
+            return (in_memory(), Degraded::because("this user has no data folder"));
         };
         match Db::open(&file) {
             Ok(db) => {
@@ -130,18 +132,19 @@ impl DataRoot {
                 if let Some(memory) = self.memory() {
                     crate::features::memory::store::legacy::import(&db, &memory);
                 }
-                Some(db)
+                (Some(db), Degraded::default())
             }
             Err(error) => {
                 tracing::error!(%error, "the database could not be opened; sessions and memory last only until the process ends");
-                in_memory()
+                (in_memory(), Degraded::because(error.to_string()))
             }
         }
     }
 
     pub(crate) fn stores(&self) -> Stores {
         let sessions = Arc::new(FileSessions::new(self.sessions()));
-        let (catalog, memories): (Arc<dyn SessionCatalog>, Memories) = match self.db() {
+        let (db, database) = self.db();
+        let (catalog, memories): (Arc<dyn SessionCatalog>, Memories) = match db {
             Some(db) => (Arc::new(SqliteSessionCatalog::new(db.clone())), Memories::kept_in(db)),
             None => (Arc::new(InMemorySessionCatalog::default()), Memories::only_in_the_process()),
         };
@@ -150,6 +153,7 @@ impl DataRoot {
                 settings: Arc::new(InMemorySettingsStore::default()),
                 catalog,
                 memories,
+                database,
                 providers: Arc::new(InMemoryProviderStore::default()),
                 secrets: Arc::new(InMemorySecretStore::default()),
                 sessions,
@@ -163,6 +167,7 @@ impl DataRoot {
             settings: Arc::new(FileSettingsStore::new(self.users())),
             catalog,
             memories,
+            database,
             providers: Arc::new(FileProviderStore::new(self.providers())),
             secrets,
             sessions,
@@ -178,6 +183,7 @@ pub(crate) struct Stores {
     pub settings: Arc<dyn SettingsStore>,
     pub catalog: Arc<dyn SessionCatalog>,
     pub memories: Memories,
+    pub database: Degraded,
     pub providers: Arc<dyn ProviderStore>,
     pub secrets: Arc<dyn SecretStore>,
     pub sessions: Arc<FileSessions>,
@@ -213,6 +219,27 @@ mod tests {
         assert!(root.folders().iter().all(|folder| folder.starts_with(std::env::temp_dir()) && !folder.exists()));
         let system = DataRoot::system();
         assert!(root.folders().iter().all(|folder| !system.folders().contains(folder)));
+    }
+
+    #[test]
+    fn a_database_that_cannot_be_opened_is_said_with_its_reason_and_one_that_opens_or_is_not_wanted_is_not() {
+        let data = tempfile::tempdir().expect("data");
+        assert_eq!(DataRoot::under(data.path()).stores().database.reason(), None);
+        assert_eq!(DataRoot::in_memory().stores().database.reason(), None, "nothing was meant to be kept");
+
+        let newer = rusqlite::Connection::open(data.path().join(crate::db::FILE)).expect("open");
+        newer.execute("INSERT INTO schema_version (version) VALUES (9999)", []).expect("a later schema");
+        drop(newer);
+        let stores = DataRoot::under(data.path()).stores();
+        let reason = stores.database.reason().expect("degraded").to_owned();
+        assert!(reason.contains("app.db") && reason.contains("newer version"), "{reason}");
+        stores.catalog.update(&mut |catalog| {
+            catalog.started(&domain::SessionId("s".into()), Path::new("/work"), 1);
+        });
+        assert_eq!(stores.catalog.read().listed().len(), 1, "the session list still works, in the process only");
+
+        let homeless = DataRoot(Kept::System { app: None, local: None });
+        assert_eq!(homeless.stores().database.reason(), Some("this user has no data folder"));
     }
 
     #[test]

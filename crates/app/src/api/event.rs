@@ -25,12 +25,24 @@ pub enum Reply {
     Agents(Vec<CustomAgent>),
     McpServers { path: PathBuf, servers: Vec<domain::mcp_config::McpServerInfo> },
     McpAuthorizeAt { name: String, url: String },
-    Notices(Vec<domain::inbox::Notice>),
+    Notices(Notices),
     Feature(FeatureReply),
     FeatureFailed(FeatureError),
     Permissions { path: PathBuf, permissions: domain::permission_rules::PermissionsInfo },
     Providers(ProviderEvent),
     Error { message: String },
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Notices {
+    pub for_user: Vec<String>,
+    pub for_agent: Vec<domain::inbox::Notice>,
+}
+
+impl Notices {
+    pub fn is_empty(&self) -> bool {
+        self.for_user.is_empty() && self.for_agent.is_empty()
+    }
 }
 
 impl Reply {
@@ -92,7 +104,10 @@ mod tests {
             Reply::Agents(Vec::new()),
             Reply::McpServers { path: "/repo".into(), servers: Vec::new() },
             Reply::McpAuthorizeAt { name: "linear".into(), url: "https://auth.test".into() },
-            Reply::Notices(vec![domain::inbox::Notice::new("secrets", "keys cannot be kept")]),
+            Reply::Notices(Notices {
+                for_user: vec!["keys cannot be kept".into()],
+                for_agent: vec![domain::inbox::Notice::new("monitor bash_1", "ready")],
+            }),
             Reply::Feature(FeatureReply::Sessions(crate::api::features::sessions::SessionsReply::Length(7))),
             Reply::Feature(FeatureReply::Trace(crate::api::features::trace::TraceReply::Report(
                 serde_json::json!({ "sessions": [] }),

@@ -53,6 +53,7 @@ pub fn print_all(
         ));
     }
     warn_of_skipped_hooks(sdk, &cwd, &mut std::io::stderr().lock());
+    warn_of_what_is_not_kept(sdk, &mut std::io::stderr().lock());
     let mut session = sdk.session(cwd, model);
     if let Some(id) = resume {
         session = session.resume(id);
@@ -103,6 +104,13 @@ fn warn_of_skipped_hooks(sdk: &Sdk, cwd: &std::path::Path, errors: &mut dyn std:
     }
 }
 
+fn warn_of_what_is_not_kept(sdk: &Sdk, errors: &mut dyn std::io::Write) {
+    let notices = sdk.notices(false).map(|notices| notices.for_user).unwrap_or_default();
+    for notice in notices {
+        let _ = writeln!(errors, "{}: {notice}", brand::COMMAND);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -120,7 +128,7 @@ mod tests {
             vec![EngineEvent::Verified(verdict), EngineEvent::Completed { duration_ms: 1, cost_usd: None }],
         );
         let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-        services.off.insert("memory_search".into());
+        services.off.insert(domain::features::MEMORY_SEARCH.into());
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
         let sdk = Sdk::builder().data_dir(data.path()).services(services).build().expect(brand::COMMAND);
         let wanted = Wanted { verification: Some("tests pass".into()), ..Wanted::default() };
@@ -131,7 +139,7 @@ mod tests {
         let done = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
         let engine = FakeEngine::new(vec![Model::new("scripted", "Scripted")], done);
         let mut services = LocalServices::with_engine(Arc::new(engine.clone()));
-        services.off.insert("memory_search".into());
+        services.off.insert(domain::features::MEMORY_SEARCH.into());
         services.providers = services.providers.with_secrets(Arc::new(InMemorySecretStore::default()));
         (Sdk::builder().data_dir(data).services(services).build().expect(brand::COMMAND), engine)
     }
@@ -169,6 +177,27 @@ mod tests {
         let mut quiet = Vec::new();
         warn_of_skipped_hooks(&sdk, data.path(), &mut quiet);
         assert!(quiet.is_empty(), "nothing to say where no hook was skipped");
+    }
+
+    #[test]
+    fn a_database_that_cannot_be_opened_is_said_once_on_the_error_stream() {
+        let data = tempfile::tempdir().expect("data");
+        std::fs::create_dir(data.path().join("app.db")).expect("a folder where the database should be");
+        let (sdk, _) = scripted(data.path());
+
+        let mut errors = Vec::new();
+        warn_of_what_is_not_kept(&sdk, &mut errors);
+        let said = String::from_utf8(errors).expect("text");
+        assert!(said.starts_with(&format!("{}: The session list and memory could not be opened (", brand::COMMAND)));
+        assert!(said.trim_end().ends_with("they will not be kept after this session."), "{said}");
+        assert_eq!(said.lines().count(), 1, "{said}");
+
+        let mut again = Vec::new();
+        warn_of_what_is_not_kept(&sdk, &mut again);
+        assert!(again.is_empty(), "said once");
+        let (kept, _) = scripted(tempfile::tempdir().expect("data").path());
+        warn_of_what_is_not_kept(&kept, &mut again);
+        assert!(again.is_empty(), "nothing to say when the database opens");
     }
 
     #[test]

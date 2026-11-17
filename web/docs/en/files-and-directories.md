@@ -115,7 +115,7 @@ In the **local data folder**:
 
 | Path | What it is |
 |---|---|
-| `native-sessions/` | Conversations: one `<session>.jsonl` each, plus `checkpoints-<session>.json` (for `/rewind`) and `worktree-<session>.json`. |
+| `native-sessions/` | Conversations. For each one: `<session>.jsonl` (the conversation itself, saved after every step, so it survives a crash or a closed terminal), `<session>.trace.jsonl` (what `/trace` shows; when it passes 64 MB it is renamed to `<session>.trace.1.jsonl` and a new one starts, so only the latest part and the one before it are kept), `checkpoints-<session>.json` (for `/rewind`: the files of the 50 most recent prompts, up to 64 MB) and `worktree-<session>.json`. A `<session>.lock` file exists only while the conversation is answering. Deleting the trace files loses the trace, never the conversation. |
 | `secrets.json` | API keys and tokens, encrypted. Readable only by you. |
 | `secrets.key` | The key that opens `secrets.json`. Readable only by you. |
 | `logs/{{COMMAND}}.log` | The log (level from `{{ENV}}_LOG`). Over 5 MB it is renamed to `{{COMMAND}}.log.1` and a new one starts. |
@@ -124,6 +124,8 @@ In the **local data folder**:
 `<user>` is `local` for you on your own machine, and `<project>` is the project's path with every character that is not a letter or digit replaced by `-`.
 
 Several running copies of {{NAME}} share `app.db` safely: each change is one transaction, so none of them loses what another wrote. To copy or back it up, quit {{NAME}} first, or copy `app.db`, `app.db-wal` and `app.db-shm` together.
+
+If `app.db` cannot be opened (it was written by a newer version, another program holds it, or the file cannot be read), {{NAME}} still starts and says so once: `The session list and memory could not be opened (<reason>); they will not be kept after this session.` The chat shows it as a notice; with `--print` it goes to the error stream. Until the cause is fixed, the conversation list and what is remembered last only until {{NAME}} quits. The file is left as it is. The conversations themselves, in `native-sessions/`, are still saved.
 
 ### Coming from an earlier version
 
@@ -141,7 +143,7 @@ In the system temporary folder (`TMPDIR` on macOS and Linux):
 
 | Path | What it is |
 |---|---|
-| `{{COMMAND}}-tool-results/<session>/` | Tool outputs too long for the conversation (over 30,000 characters), and whole command outputs that were filtered, so the agent can read them in parts. |
+| `{{COMMAND}}-tool-results/<session>/` | Tool outputs too long for the conversation (over 30,000 characters), and whole command outputs that were filtered, so the agent can read them in parts. A conversation's folder is removed once nothing has been written to it for 7 days. |
 | `{{COMMAND}}-prompt-<pid>.md` | The prompt while you edit it in your editor (Ctrl+G); removed afterwards. |
 
 ## Files {{NAME}} only reads

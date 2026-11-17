@@ -107,7 +107,7 @@ impl App {
         if !super::mentions::names_a_file(&outgoing.prompt) {
             return self.start(outgoing);
         }
-        let (ticket, cwd) = (self.turn.prepare(), self.cwd.clone());
+        let (ticket, cwd) = (self.turn.prepare(&text), self.cwd.clone());
         self.spawn(move |sdk| {
             let prompt = super::mentions::with_files(sdk, &cwd, &outgoing.prompt);
             Msg::Prepared { ticket, outgoing: Outgoing { prompt, ..outgoing } }
@@ -217,10 +217,13 @@ impl App {
     }
 
     pub fn cancel(&mut self) {
-        if let Some(run) = &self.turn.run
-            && let Err(error) = run.cancel()
-        {
-            self.transcript.error(error.to_string());
+        if let Some(run) = &self.turn.run {
+            if let Err(error) = run.cancel() {
+                self.transcript.error(error.to_string());
+            }
+        } else if let Some(typed) = self.turn.take_back() {
+            super::git_offer::taken_back(self);
+            self.prompt.put_back(typed);
         }
     }
 

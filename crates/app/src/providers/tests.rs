@@ -209,8 +209,7 @@ fn connecting_fails_clearly_when_keys_cannot_be_kept() {
 fn the_client_is_told_once_that_keys_cannot_be_kept() {
     let providers = unkept();
     let notice = providers.clone().unkept_notice().expect("told");
-    assert_eq!(notice.source, "secrets");
-    assert!(notice.text.starts_with("keys cannot be kept on this machine: the disk is read-only"), "{}", notice.text);
+    assert!(notice.starts_with("keys cannot be kept on this machine: the disk is read-only"), "{notice}");
     assert_eq!(providers.unkept_notice(), None, "once for the whole process");
     assert_eq!(rig().providers.unkept_notice(), None, "nothing to say when keys are kept");
 }

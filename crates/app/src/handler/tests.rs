@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use crate::api::{ClientCommand, Envelope, ProviderEvent, Reply, RequestId, ServerEvent};
+use crate::api::{ClientCommand, Envelope, Notices, ProviderEvent, Reply, RequestId, ServerEvent};
 use domain::inbox::Notice;
 use domain::provider::ModelProvider;
 
@@ -28,24 +28,51 @@ fn a_client_is_told_with_its_notices_once_that_keys_cannot_be_kept() {
     let unkept = Arc::new(crate::secrets::Unkept::because("this user has no data folder"));
     services.providers = services.providers.with_secrets(unkept);
     let (handler, sent) = handler(services);
-    let taken = || -> Vec<Notice> {
-        handler.handle(Envelope::local(RequestId(1), ClientCommand::TakeNotices));
-        match answer_to(&sent, 1) {
-            Reply::Notices(notices) => notices,
-            other => panic!("expected notices, got {other:?}"),
-        }
-    };
 
-    let first = taken();
+    let first = taken(&handler, &sent, true);
 
-    assert_eq!(first.len(), 1, "{first:?}");
-    assert_eq!(first[0].source, "secrets");
-    assert!(
-        first[0].text.contains("keys cannot be kept on this machine: this user has no data folder"),
-        "{}",
-        first[0].text
+    assert_eq!(first.for_agent, [], "what the harness says is never an event for the model");
+    let [told] = &first.for_user[..] else { panic!("one notice for the user: {first:?}") };
+    assert!(told.contains("keys cannot be kept on this machine: this user has no data folder"), "{told}");
+    assert!(taken(&handler, &sent, true).is_empty(), "said once, not at every poll");
+}
+
+fn taken(handler: &CommandHandler, sent: &Sent, for_agent: bool) -> Notices {
+    handler.handle(Envelope::local(RequestId(1), ClientCommand::TakeNotices { for_agent }));
+    match answer_to(sent, 1) {
+        Reply::Notices(notices) => notices,
+        other => panic!("expected notices, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_client_is_told_once_that_the_session_list_and_memory_are_not_kept_and_its_sibling_is_not_told_again() {
+    let mut services = crate::features::context::testing::services(None);
+    services.database = crate::Degraded::because("/data/app.db was written by a newer version");
+    let (first, sent) = handler(services.clone());
+    let (sibling, sent_to_sibling) = handler(services);
+
+    let told = taken(&first, &sent, false);
+
+    assert_eq!(
+        told.for_user,
+        ["The session list and memory could not be opened (/data/app.db was written by a newer version); \
+          they will not be kept after this session."]
     );
-    assert!(taken().is_empty(), "said once, not at every poll");
+    assert!(taken(&first, &sent, false).is_empty(), "said once");
+    assert!(taken(&sibling, &sent_to_sibling, true).is_empty(), "once per process, not per client");
+}
+
+#[test]
+fn what_waits_for_the_agent_stays_in_the_inbox_until_it_is_asked_for() {
+    let (handler, sent) = handler(crate::features::context::testing::services(None));
+    let arrived = Notice::new("monitor bash_4", "ERROR: disk full");
+    agent_engine::tools::inbox::push(handler.client, arrived.clone());
+
+    assert!(taken(&handler, &sent, false).is_empty(), "a look for the user's notices takes nothing from the agent");
+    let asked = taken(&handler, &sent, true);
+    assert_eq!((asked.for_user.len(), asked.for_agent), (0, vec![arrived]));
+    assert!(taken(&handler, &sent, true).is_empty());
 }
 
 #[test]

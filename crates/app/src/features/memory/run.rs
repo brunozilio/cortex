@@ -5,12 +5,10 @@ use domain::{PromptRequest, RunId};
 use super::mcp::MemoryEndpoint;
 use crate::features::context::{Context, Finish};
 
-pub const TOOL: &str = "memory_search";
-
 pub fn prepare(context: &Context<'_>, run: RunId, request: PromptRequest) -> (PromptRequest, Option<Finish>) {
     let Some(brief) = &request.memory else { return (request, None) };
     let memories = super::of(context.services);
-    let wanted = !brief.optimizing && context.on(TOOL);
+    let wanted = !brief.optimizing && context.on(domain::features::MEMORY_SEARCH);
     let mut request = memories.brief(run, &request, wanted);
     if let Some(brief) = request.memory.as_ref().filter(|brief| brief.tool) {
         let shown = if request.resume.is_none() { brief.recalled.iter().map(|m| m.id).collect() } else { Vec::new() };

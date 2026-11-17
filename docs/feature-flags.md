@@ -4,8 +4,13 @@ Written 2026-11-16 from a read of the code; no build or test was run for it.
 Paths are relative to the repository root. Where something could not be
 determined from the code, the text says so.
 
-There are 36 flags: 29 constants in `crates/domain/src/features.rs` and 7 in
-`crates/domain/src/features/learnings.rs`.
+The inventory below covers 36 flags: 29 constants in
+`crates/domain/src/features.rs` and 7 in
+`crates/domain/src/features/learnings.rs`. Since 2026-11-17 there are 7 more,
+in `crates/domain/src/features/backend.rs`: the declared switches of whole
+backend features (`memory`, `memory-search`, `schedules`, `plugins`, `trace`,
+`channels`, `declared-providers`). They are described in "Backend feature
+switches" below and are not part of the recommendations table.
 
 | Recommendation | Flags |
 | --- | --- |
@@ -33,32 +38,62 @@ each value is a boolean.
 refuses a name that `domain::features::known` does not find. Only hand-edited
 settings can carry an unknown name.
 
-### Unknown names are not always inert
+### Backend feature switches
 
-The backend treats the `features` object as a second, undeclared switchboard.
-`LocalServices::turned_off_in` (`crates/app/src/services.rs`) copies every
-name that is `false` into `LocalServices::off`, once with its hyphens and once
-with underscores. The backend's feature dispatcher skips a feature folder when
-its folder name is in that set, and `Context::on`
-(`crates/app/src/features/context.rs`) reads the same set. The dispatcher is the
-hand-written table in `crates/app/src/features/mod.rs`.
+Until 2026-11-17 unknown names were load-bearing: the backend copied every
+name that was `false` in the `features` object into `LocalServices::off`, once
+with hyphens and once with underscores, and the dispatcher skipped a feature
+folder whose folder name was in that set. `"workspace": false` or
+`"sessions": false` therefore turned off a folder that no flag named, and the
+typed `FeatureOff` error told the user to run `/features <folder> on`, a
+command that refuses every one of those names.
 
-Consequences:
+A backend feature is now turned off only through a declared, known flag:
 
-- `"features": { "memory": false }`, `"workspace": false`, `"trace": false`
-  and so on turn off a whole backend folder (`crates/app/src/features/*`),
-  although none of those names is a known flag. A test in `services.rs` relies
-  on this.
-- `suggested-rules` works only through this path: the constant
-  `SUGGESTED_RULES` has no reader anywhere. Turning it off puts
-  `suggested_rules` in the set, the dispatcher skips the folder, and `/rules`
-  answers "suggested_rules is turned off (/features suggested-rules on)".
-- `crates/cli/src/print.rs` inserts `memory_search` into the set directly, and
-  `crates/app/src/features/memory/run.rs` reads it. It is not a flag and
-  cannot be set through `/features`.
+- `FeatureName::switch` (`crates/app/src/api/features/mod.rs`) names the flag
+  of each feature folder, or `None` for a folder the program cannot work
+  without.
 
-Any plan to reject unknown names has to give these folder switches a declared
-home first (section 4).
+  | Feature folder | Switch |
+  | --- | --- |
+  | `channels` | `channels` |
+  | `code_map` | `experimental-code-map` |
+  | `declared_providers` | `declared-providers` |
+  | `memory` | `memory` |
+  | `output_savings` | `experimental-output-savings` |
+  | `plugins` | `plugins` |
+  | `schedules` | `schedules` |
+  | `suggested_rules` | `suggested-rules` |
+  | `trace` | `trace` |
+  | `flags`, `sessions`, `shell`, `workspace` | none: always on |
+
+- `TurnedOff::follow` (`crates/app/src/turned_off.rs`) keeps only the names
+  `domain::features::known` finds, as written. There is no
+  hyphen-to-underscore copy, so a folder name, a misspelling or any other
+  unknown name in a settings file is inert in the backend, as it already was
+  in the engine.
+- The dispatcher (`crates/app/src/features/mod.rs`) refuses a request, and
+  skips a folder's part in preparing a run, when the folder's switch is in
+  that set. `Context::on` (`crates/app/src/features/context.rs`) reads the
+  same set by flag name (`git-offer`, `memory-search`).
+- `FeatureError::FeatureOff` prints `<folder> is turned off (/features
+  <switch> on)`. Tests in `crates/app/src/features/switch_tests.rs` type the
+  command each refusal names and check the feature answers again, and that
+  the four always-on folders ignore every name.
+- `memory-search` used to be the program-only name `memory_search`, reachable
+  from a settings file through the underscore copy. It is a declared flag now;
+  tests turn it off by that name.
+- `declared-providers` off also skips loading declared providers at startup
+  (`LocalServices::in_project`).
+
+What stopped working: `"workspace"`, `"sessions"`, `"shell"` and `"flags"`
+set to `false` in a settings file (now ignored), and the folder spellings
+`code-map`, `code_map`, `output-savings`, `output_savings`,
+`suggested_rules`, `declared_providers`, `memory_search` (use the flag's
+name).
+
+`Features::on("typo")` is still `true` and `Features::layered` still stores an
+unknown name; rejecting them is the remaining step in section 4.
 
 ### Layering
 
@@ -96,13 +131,13 @@ There are four readers with three different lifetimes.
 | --- | --- | --- |
 | `crates/agent-engine/src/engine/job.rs` (`Job::run`) | Every run, from freshly loaded settings | Fills `workspace.policy` (sandbox, redact, snapshots, dependency guard, escalation, auto review, follow-through, affected tests, session claims, code mode, web reading, output shaping), drops the budget, filters project criteria, anchors and blast radius |
 | `crates/agent-engine/src/brief.rs` | Every run | Hides the `follow-pr` skill (`skill_flag`) |
-| `crates/app/src/services.rs` | Once, when the SDK client is built (`crates/app/src/client/mod.rs`) | The `off` set described above |
+| `crates/app/src/services.rs`, `crates/app/src/features/flags/mod.rs` | When the SDK client is built (`crates/app/src/client/mod.rs`), and again at every `/features` list or change | The `off` set described above |
 | `crates/app/src/features/memory/*`, `code_map/mod.rs` | Every request to those features; each call reloads the settings files | Memory and code-map flags |
 | `crates/cli/src/tui/features/flags/mod.rs` | Once on the first tick, and after each `/features` call | `App::turned_off`, read by `tui::features::on` |
 
-So a `/features` change reaches the engine on the next run and the terminal
-at once, but the backend's `off` set keeps its startup value until the app is
-restarted. That affects `git-offer` (backend half) and `suggested-rules`.
+So a `/features` change reaches the engine on the next run, and the terminal
+and the backend's `off` set at once. A settings file edited by hand reaches
+the backend's `off` set at the next `/features` call or restart.
 
 Chore runs (section 5) return from `Job::run` before settings are loaded and
 read no flag at all.
@@ -149,7 +184,7 @@ Remove the flag and the OFF path, keep the behaviour.
 | `experimental-web-small-pages-direct` | A fetched page of 6,000 characters or less goes to the agent fenced, without the separate reader | `web_reading.rs`; `agent/dispatch.rs` picks `guarded::digest` or `guarded::read_apart` | Every fetch makes one extra model call to the reader (small model, falling back to the session's model) | ON is the cheaper state: it saves a model call per small page | Partial (mapping tested; `guarded.rs` tests both functions; no test of the choice in `dispatch.rs`) | The flag only exists to turn a saving off |
 | `branches` | The `/branch` command | `crates/cli/src/tui/features/branches/mod.rs` | `/branch` prints "turned off" | None until used | No test of the OFF notice was found; the command's listing is tested | A flag on a command the user must type is noise. The engine side (`SessionCommand::Branch`) is not gated at all |
 | `budget` | Whether a `/budget` limit is passed to the meter | `job.rs` (sets `request.budget = None`) | `/budget 5` still answers "model calls stop once this session has spent it", and nothing stops: the terminal command (`crates/cli/src/tui/features/budget/mod.rs`) does not read the flag | None; acts only when the user set a limit | No test names the flag | The OFF state is a trap: a spending cap that silently does not apply. The user already opts in by setting a limit |
-| `suggested-rules` | The `/rules` command's backend | Not read by constant. Works through the folder name in `crates/app/src/services.rs` and the backend dispatcher (`crates/app/src/features/mod.rs`) | `/rules` fails with "suggested_rules is turned off (/features suggested-rules on)" | None until used; then it reads recent session logs | Partial (`services.rs` tests that the name lands in the `off` set) | Same as `branches`, and the gating is an accident of naming |
+| `suggested-rules` | The `/rules` command's backend | `FeatureName::SuggestedRules.switch()` in `crates/app/src/api/features/mod.rs`, checked by the backend dispatcher (`crates/app/src/features/mod.rs`) | `/rules` fails with "suggested_rules is turned off (/features suggested-rules on)" | None until used; then it reads recent session logs | Yes (`crates/app/src/features/switch_tests.rs`, `flags/mod.rs`) | Same as `branches` |
 | `team-memory` | Reading checked-in memories from `.<command>/memory/*.md` | `crates/app/src/features/memory/team.rs` (`load_if`), used by `memory/mod.rs` and `memory/check.rs` | Checked-in memories are ignored; `/memory share` still writes them | Reads the folder's Markdown files on every request that carries a memory brief, after reloading settings | No test names the flag | The folder's existence is the switch. A project that does not want it has no files there |
 | `project-criteria` | Using the project's checked-in `verification.md` as the run's criteria when the user set none | `job.rs` | Runs are not judged unless the user set criteria | When the file exists: a judge on the review-role model at the end of each run that is not in plan mode (`tools/builtin/verification/review.rs`; not read in detail) | No test names the flag; `crates/domain/src/verification/tests.rs` covers the criteria | The file is the opt-in. Note for the decision: a checked-in file can make the owner pay for a judge on every run, and today the owner's only defence is this flag. If that matters, make it an owner setting instead |
 | `experimental-escalation` | After three identical failed calls, nudges the agent to the Advisor, or switches the run to `escalationModel` (twice at most) | `job.rs`; `agent/stuck.rs`; rules in `crates/domain/src/stuck.rs` | Nothing happens when the agent loops | Nothing by itself. `domain::stuck::help` returns `None` when there is neither an Advisor model nor `escalationModel`, so with default settings ON does nothing. With `escalationModel` set, later turns run on that model | Partial (policy only: `tests/agent_loop/escalation.rs`) | It is already switched by two settings (`advisorModel`, `escalationModel`). The flag is a third switch for the same thing |
@@ -211,9 +246,9 @@ everything else is not a flag".
 the file and the key, as it already does for a non-boolean value. Two things
 must happen first:
 
-1. Give the backend folder switches (`memory`, `workspace`, `trace`,
-   `suggested_rules`, `memory_search`) a declared mechanism, or drop them. The
-   hyphen-to-underscore copy in `services.rs` should go either way.
+1. Give the backend folder switches a declared mechanism, or drop them, and
+   remove the hyphen-to-underscore copy. Done 2026-11-17: see "Backend feature
+   switches" in section 1.
 2. Decide what a removed flag's name does in an existing settings file. With
    no users, an error is acceptable; otherwise keep a short list of retired
    names that are ignored with a notice (`Settings.notices` exists).

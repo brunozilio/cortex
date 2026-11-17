@@ -2,8 +2,10 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
+mod backend;
 mod learnings;
 
+pub use backend::{CHANNELS, DECLARED_PROVIDERS, MEMORY, MEMORY_SEARCH, PLUGINS, SCHEDULES, TRACE};
 pub use learnings::{
     BLAST_RADIUS, CODE_MAP, LEARNING_CHECK, MEMORY_ANCHORS, MEMORY_SCORECARD, MEMORY_SEED, STRUCTURED_LEARNINGS,
 };
@@ -189,7 +191,7 @@ pub fn known(name: &str) -> Option<Flag> {
 }
 
 pub fn every() -> impl Iterator<Item = Flag> {
-    KNOWN.iter().chain(learnings::KNOWN).copied()
+    KNOWN.iter().chain(learnings::KNOWN).chain(backend::KNOWN).copied()
 }
 
 pub fn with_flag(mut settings: Value, name: &str, on: bool) -> Result<Value, String> {

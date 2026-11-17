@@ -5,7 +5,6 @@ mod dispatch;
 mod features;
 mod mcp_servers;
 mod memory;
-mod plan_watch;
 mod project;
 mod run;
 mod session;
@@ -23,8 +22,9 @@ use domain::ModelOption;
 pub use self::account::SignedIn;
 pub use self::memory::ProjectMemory;
 pub use self::run::{Run, RunControl};
-pub use self::session::{Headless, Session, Spending};
+pub use self::session::{Headless, Session};
 use dispatch::Client;
+pub use domain::budget::Spending;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

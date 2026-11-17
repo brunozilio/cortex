@@ -1,21 +1,22 @@
 use std::time::Instant;
 
-use domain::inbox::Notice;
+use app::api::Notices;
 
 use super::app::{App, Msg};
 
 pub(super) fn poll(app: &mut App) {
-    if app.busy() || app.session.is_none() || app.ask.is_some() {
-        return;
-    }
     if app.notices.due(Instant::now()) {
-        app.spawn(|sdk| Msg::Notices(sdk.notices().unwrap_or_default()));
+        let for_agent = !app.busy() && app.session.is_some() && app.ask.is_none();
+        app.spawn(move |sdk| Msg::Notices(sdk.notices(for_agent).unwrap_or_default()));
     }
 }
 
-pub(super) fn arrived(app: &mut App, notices: Vec<Notice>) {
+pub(super) fn arrived(app: &mut App, notices: Notices) {
     app.notices.landed();
-    let (notices, held) = domain::inbox::admitted(notices, app.mode());
+    for text in notices.for_user {
+        app.transcript.notice(text);
+    }
+    let (notices, held) = domain::inbox::admitted(notices.for_agent, app.mode());
     for notice in &held {
         app.transcript
             .notice(format!("[{}] {} (held: bypass mode does not send it to the agent)", notice.source, notice.text));

@@ -249,6 +249,7 @@ fn dispatch(backend: &Mutex<Box<dyn Backend>>, shared: &Shared, woken: &Receiver
             let Some(event) = event else { break };
             shared.route(event);
         }
+        reachable = reachable && backend.locked().alive();
     }
     shared.close();
 }

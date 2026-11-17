@@ -4,13 +4,13 @@ use std::sync::{Arc, Mutex};
 use platform::sync::Locked;
 
 use crate::api::ClientCommand;
-use domain::budget::Budget;
+use domain::budget::Spending;
 use domain::memory::MemoryBrief;
-use domain::{Criteria, Effort, ModelOption, PermissionMode, PromptRequest, SessionId, Verifications};
+use domain::session_run::{Carried, RunWatch};
+use domain::{Criteria, Effort, ModelOption, PermissionMode, PromptRequest, SessionId};
 
 use crate::Error;
 use crate::client::dispatch::Client;
-use crate::client::plan_watch::PlanWatch;
 use crate::client::run::Run;
 
 #[derive(Debug)]
@@ -20,24 +20,13 @@ pub struct Session {
     model: ModelOption,
     effort: Effort,
     auto_pick: bool,
-    permission: Arc<Mutex<PermissionMode>>,
     memory: bool,
-    resume: Arc<Mutex<Option<SessionId>>>,
-    verifications: Arc<Mutex<Verifications>>,
+    carried: Arc<Mutex<Carried>>,
     added_dirs: Vec<PathBuf>,
     output_style: Option<String>,
     roles: domain::model_roles::ModelRoles,
     fallbacks: Vec<String>,
     headless: Headless,
-    fork: std::sync::atomic::AtomicBool,
-    spending: Arc<Mutex<Spending>>,
-    signals: Arc<Mutex<domain::learning::Signals>>,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Spending {
-    pub limit_usd: Option<f64>,
-    pub spent_usd: f64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -57,30 +46,19 @@ impl Session {
             model,
             effort: Effort::Medium,
             auto_pick: false,
-            permission: Arc::default(),
             memory: true,
-            resume: Arc::default(),
-            verifications: Arc::default(),
+            carried: Arc::default(),
             added_dirs: Vec::new(),
             output_style: None,
             roles: Default::default(),
             fallbacks: Vec::new(),
             headless: Headless::default(),
-            fork: std::sync::atomic::AtomicBool::new(false),
-            spending: Arc::default(),
-            signals: Arc::default(),
         }
     }
 
     pub fn learn(&self) -> Option<Result<Run, Error>> {
-        let signals = {
-            let mut kept = self.signals.locked();
-            if !kept.worth_learning() {
-                return None;
-            }
-            kept.take()
-        };
-        let mut request = PromptRequest::plain(self.cwd.clone(), domain::learning::brief(&signals), self.model.clone());
+        let brief = self.carried.locked().lesson_due()?;
+        let mut request = PromptRequest::plain(self.cwd.clone(), brief, self.model.clone());
         request.resume = Some(match self.id() {
             Some(id) => id,
             None => return Some(Err(Error::NothingToAsk)),
@@ -90,15 +68,15 @@ impl Session {
     }
 
     pub fn set_budget(&self, limit_usd: Option<f64>) {
-        self.spending.locked().limit_usd = limit_usd;
+        self.carried.locked().spending.limit_usd = limit_usd;
     }
 
     pub fn spending(&self) -> Spending {
-        *self.spending.locked()
+        self.carried.locked().spending
     }
 
     pub fn fork_next(&self) {
-        self.fork.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.carried.locked().fork_next();
     }
 
     pub fn set_headless(&mut self, headless: Headless) {
@@ -125,7 +103,7 @@ impl Session {
     }
 
     pub fn permission(self, mode: PermissionMode) -> Self {
-        *self.permission.locked() = mode;
+        self.carried.locked().mode = mode;
         self
     }
 
@@ -135,7 +113,7 @@ impl Session {
     }
 
     pub fn resume(self, session: SessionId) -> Self {
-        *self.resume.locked() = Some(session);
+        self.carried.locked().id = Some(session);
         self
     }
 
@@ -152,7 +130,7 @@ impl Session {
     }
 
     pub fn set_permission(&mut self, mode: PermissionMode) {
-        *self.permission.locked() = mode;
+        self.carried.locked().mode = mode;
     }
 
     pub fn set_effort(&mut self, effort: Effort) {
@@ -173,19 +151,19 @@ impl Session {
     }
 
     pub fn permission_mode(&self) -> PermissionMode {
-        *self.permission.locked()
+        self.carried.locked().mode
     }
 
     pub fn set_verification(&mut self, criteria: Option<String>) {
-        self.verifications.locked().set_user(criteria);
+        self.carried.locked().verifications.set_user(criteria);
     }
 
     pub fn verification(&self) -> Option<Criteria> {
-        self.verifications.locked().current()
+        self.carried.locked().verifications.current()
     }
 
     pub fn id(&self) -> Option<SessionId> {
-        self.resume.locked().clone()
+        self.carried.locked().id.clone()
     }
 
     pub fn send(&self, prompt: &str) -> Result<Run, Error> {
@@ -207,12 +185,14 @@ impl Session {
         request.shown = shown;
         request.effort = self.effort;
         request.auto_pick = self.auto_pick;
-        let mode = self.permission_mode();
-        request.permission = mode;
-        request.resume = self.id();
-        request.fork = request.resume.is_some() && self.fork.swap(false, std::sync::atomic::Ordering::SeqCst);
         request.memory = self.memory.then(|| MemoryBrief::new(None));
-        request.verification = self.verifications.locked().for_run(mode);
+        {
+            let mut carried = self.carried.locked();
+            request.permission = carried.mode;
+            request.resume = carried.id.clone();
+            request.fork = carried.forks();
+            request.verification = carried.criteria_for_run();
+        }
         self.start(request)
     }
 
@@ -265,23 +245,9 @@ impl Session {
         if request.output_style.is_none() {
             request.output_style.clone_from(&self.output_style);
         }
-        let side_call = request.command.is_some_and(domain::SessionCommand::is_chore);
-        let resume = if side_call { Arc::default() } else { Arc::clone(&self.resume) };
-        let conversation = request.command.is_none();
-        let planning = request.permission == PermissionMode::Plan;
-        let plan = conversation.then(|| PlanWatch::new(Arc::clone(&self.verifications), planning));
-        let spending = self.spending();
-        request.budget = spending.limit_usd.map(|limit_usd| Budget { limit_usd, spent_usd: spending.spent_usd });
-        let mut run = Run::start(&self.client, |run| ClientCommand::SubmitPrompt { run, request })?;
-        run.spending = Arc::clone(&self.spending);
-        if conversation {
-            run.signals = Arc::clone(&self.signals);
-        }
-        run.resume = resume;
-        run.plan = plan;
-        if conversation {
-            run.mode = Arc::clone(&self.permission);
-        }
-        Ok(run)
+        request.budget = self.spending().budget();
+        let watch = RunWatch::of(request.command, request.permission);
+        let run = Run::start(&self.client, |run| ClientCommand::SubmitPrompt { run, request })?;
+        Ok(run.of_session(Arc::clone(&self.carried), watch))
     }
 }

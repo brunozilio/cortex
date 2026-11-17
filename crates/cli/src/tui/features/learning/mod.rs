@@ -1,6 +1,5 @@
 use domain::learning::{Keeping, Proposal, WAITING, keeping};
 use domain::memory::MemoryKind;
-use domain::permission_rules::RuleKind;
 
 use super::{Feature, Slash};
 use crate::tui::app::{App, Msg};
@@ -48,11 +47,8 @@ fn keep(app: &mut App, proposal: Proposal) {
             })
         }
         Keeping::Rule { kind, rule } => {
-            let Some(kept_as) = rule_kind(kind) else {
-                return app.transcript.error(format!("{kind} is not a kind of rule, so {rule} was not kept."));
-            };
-            app.spawn(move |sdk| match sdk.keep_rule(&cwd, kept_as, &rule) {
-                Ok(()) => Msg::Notice(format!("Kept the {kind} rule {rule} for this project.")),
+            app.spawn(move |sdk| match sdk.keep_rule(&cwd, kind, &rule) {
+                Ok(()) => Msg::Notice(format!("Kept the {} rule {rule} for this project.", kind.word())),
                 Err(error) => Msg::Error(error.to_string()),
             });
         }
@@ -63,27 +59,5 @@ fn keep(app: &mut App, proposal: Proposal) {
             });
         }
         Keeping::Ask(prompt) => app.send(prompt),
-    }
-}
-
-fn rule_kind(kind: &str) -> Option<RuleKind> {
-    match kind {
-        "allow" => Some(RuleKind::Allow),
-        "ask" => Some(RuleKind::Ask),
-        "deny" => Some(RuleKind::Deny),
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_lesson_s_rule_is_kept_as_the_kind_it_names_and_an_unknown_kind_is_none() {
-        assert_eq!(rule_kind("allow"), Some(RuleKind::Allow));
-        assert_eq!(rule_kind("ask"), Some(RuleKind::Ask));
-        assert_eq!(rule_kind("deny"), Some(RuleKind::Deny));
-        assert_eq!(rule_kind("dney"), None);
     }
 }

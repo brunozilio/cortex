@@ -89,6 +89,8 @@ mod tests_accounts;
 #[cfg(test)]
 mod tests_auto_retry;
 #[cfg(test)]
+mod tests_cancel_preparing;
+#[cfg(test)]
 mod tests_dirs;
 #[cfg(test)]
 mod tests_fleet;

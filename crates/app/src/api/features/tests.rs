@@ -95,6 +95,16 @@ fn every_request_round_trips() {
 fn a_feature_that_is_off_says_how_to_turn_it_on_and_a_failure_says_what_failed() {
     let off = FeatureError::FeatureOff { feature: FeatureName::SuggestedRules };
     assert_eq!(off.to_string(), "suggested_rules is turned off (/features suggested-rules on)");
+    for feature in FeatureName::ALL {
+        let said = FeatureError::FeatureOff { feature }.to_string();
+        match feature.switch() {
+            Some(flag) => {
+                assert!(domain::features::known(flag).is_some(), "/features refuses {flag}, the switch of {feature}");
+                assert_eq!(said, format!("{feature} is turned off (/features {flag} on)"));
+            }
+            None => assert_eq!(said, format!("{feature} is turned off"), "no command is named that would refuse"),
+        }
+    }
     let failed = FeatureError::Failed { feature: FeatureName::Memory, message: "nothing to undo".into() };
     assert_eq!((failed.to_string().as_str(), failed.feature()), ("nothing to undo", FeatureName::Memory));
     assert_ne!(off, FeatureError::Failed { feature: FeatureName::SuggestedRules, message: off.to_string() });

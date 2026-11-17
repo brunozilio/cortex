@@ -17,6 +17,7 @@ pub struct LocalServices {
     pub settings: Arc<dyn SettingsStore>,
     pub catalog: Arc<dyn crate::SessionCatalog>,
     pub memories: crate::features::memory::Memories,
+    pub database: crate::Degraded,
     pub sessions: Arc<FileSessions>,
     pub extensions: Extensions,
     pub providers: ModelProviders,
@@ -42,8 +43,11 @@ impl LocalServices {
 
     pub fn in_project(self, cwd: Option<&Path>) -> Self {
         let Some(cwd) = cwd.map(Path::to_path_buf).or_else(|| std::env::current_dir().ok()) else { return self };
-        let _ = crate::native::declare_providers(self.home().as_deref(), &cwd);
-        self.turned_off_in(&cwd)
+        let services = self.turned_off_in(&cwd);
+        if !services.off.contains(domain::features::DECLARED_PROVIDERS) {
+            let _ = crate::native::declare_providers(services.home().as_deref(), &cwd);
+        }
+        services
     }
 
     pub fn turned_off_in(self, cwd: &Path) -> Self {
@@ -71,6 +75,7 @@ impl LocalServices {
             settings: stores.settings,
             catalog: stores.catalog,
             memories: stores.memories,
+            database: stores.database,
             sessions: stores.sessions,
             extensions: Extensions::default(),
             providers: ModelProviders::new(stores.providers, Arc::clone(&stores.secrets)),
@@ -83,8 +88,8 @@ impl LocalServices {
         self.homes.home()
     }
 
-    pub fn without(mut self, feature: &str) -> Self {
-        self.off.insert(feature.to_owned());
+    pub fn without(mut self, flag: &str) -> Self {
+        self.off.insert(flag.to_owned());
         self
     }
 
@@ -96,6 +101,7 @@ impl LocalServices {
             settings: stores.settings,
             catalog: stores.catalog,
             memories: stores.memories,
+            database: stores.database,
             sessions: stores.sessions,
             providers: self.providers.with_store(stores.providers).with_secrets(Arc::clone(&stores.secrets)),
             mcp_auth: self.mcp_auth.with_secrets(stores.secrets),
@@ -169,21 +175,22 @@ mod tests {
     }
 
     #[test]
-    fn a_feature_the_owner_turned_off_is_off_for_the_backend_too() {
+    fn a_flag_the_owner_turned_off_is_off_for_the_backend_too_and_no_other_name_is() {
         let home = tempfile::tempdir().expect("home");
         let repo = tempfile::tempdir().expect("repo");
         std::fs::create_dir_all(home.path().join(brand::DIR)).expect("dir");
-        let settings =
-            serde_json::json!({ "features": { "workspace": false, "memory": true, "suggested-rules": false } });
+        let settings = serde_json::json!({ "features": { "workspace": false, "trace": false, "memory": true, "suggested-rules": false } });
         std::fs::write(home.path().join(brand::DIR).join("settings.json"), settings.to_string()).expect("write");
         let mut services = LocalServices::with_engine(engine());
         services.homes = Arc::new(crate::OwnerHome::at(home.path()));
 
         let services = services.turned_off_in(repo.path());
 
-        assert!(services.off.contains("workspace"));
-        assert!(!services.off.contains("memory"));
-        assert!(services.off.contains("suggested_rules"), "a flag names its feature folder with hyphens");
+        assert!(services.off.contains(domain::features::TRACE));
+        assert!(!services.off.contains(domain::features::MEMORY));
+        assert!(services.off.contains(domain::features::SUGGESTED_RULES));
+        assert!(!services.off.contains("workspace"), "not a flag: the program cannot work without it");
+        assert!(!services.off.contains("suggested_rules"), "a folder's name is not a switch, its flag is");
     }
 
     #[test]
@@ -191,17 +198,17 @@ mod tests {
         let home = tempfile::tempdir().expect("home");
         let repo = tempfile::tempdir().expect("repo");
         std::fs::create_dir_all(repo.path().join(brand::DIR)).expect("dir");
-        let settings = serde_json::json!({ "features": { "workspace": false } });
+        let settings = serde_json::json!({ "features": { "schedules": false } });
         std::fs::write(repo.path().join(brand::DIR).join("settings.local.json"), settings.to_string()).expect("write");
         let mut services = LocalServices::with_engine(engine());
         services.homes = Arc::new(crate::OwnerHome::at(home.path()));
         assert_ne!(std::env::current_dir().ok().as_deref(), Some(repo.path()));
 
         let elsewhere = services.clone().in_project(None);
-        assert!(!elsewhere.off.contains("workspace"), "the process's own folder says nothing about it");
+        assert!(!elsewhere.off.contains("schedules"), "the process's own folder says nothing about it");
 
         let asked = services.in_project(Some(repo.path()));
-        assert!(asked.off.contains("workspace"));
-        assert!(elsewhere.off.contains("workspace"), "services cloned from one another follow the same settings");
+        assert!(asked.off.contains("schedules"));
+        assert!(elsewhere.off.contains("schedules"), "services cloned from one another follow the same settings");
     }
 }
