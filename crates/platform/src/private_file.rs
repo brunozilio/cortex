@@ -14,12 +14,24 @@ pub fn write(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 pub fn replace(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    replace_through(path, bytes, open)
+}
+
+pub fn replace_keeping_mode(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    replace_through(path, bytes, |options, temporary| crate::system::open_with_mode_of(options, temporary, path))
+}
+
+fn replace_through(
+    path: &Path,
+    bytes: &[u8],
+    create: impl FnOnce(&mut OpenOptions, &Path) -> io::Result<File>,
+) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let temporary = temporary_beside(path);
     let written = (|| {
-        let mut file = open(OpenOptions::new().write(true).create_new(true), &temporary)?;
+        let mut file = create(OpenOptions::new().write(true).create_new(true), &temporary)?;
         io::Write::write_all(&mut file, bytes)?;
         crate::system::keep_owner(&file, path)?;
         file.sync_all()?;

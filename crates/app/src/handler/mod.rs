@@ -107,6 +107,12 @@ impl CommandHandler {
                     format!("Could not save the settings: {error}")
                 }))
             }
+            ClientCommand::ChangeSettings { changes } => {
+                Reply::done_or(self.services.settings.change(&changes).map_err(|error| {
+                    tracing::warn!(%error, "could not keep the changed settings");
+                    format!("Could not save the settings: {error}")
+                }))
+            }
             ClientCommand::ListProviders => providers.list(),
             ClientCommand::ConnectProvider { provider, key } => providers.connect(provider, &key),
             ClientCommand::SignInProvider { provider } => {

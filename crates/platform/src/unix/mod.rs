@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 pub use ports::{port_holder, terminate};
-pub use private::{keep_owner, restrict, restrict_open};
+pub use private::{LOCK_FILES_CAN_BE_REMOVED, is_file_at, keep_owner, open_with_mode_of, restrict, restrict_open};
 pub use tree::{Tree, alive};
 
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {

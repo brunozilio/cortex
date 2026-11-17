@@ -102,6 +102,26 @@ fn settings_that_were_kept_are_acknowledged() {
     assert_eq!(answer_to(&sent, 9), Reply::Done);
 }
 
+#[test]
+fn a_settings_change_is_applied_to_what_is_kept_and_its_failure_is_answered() {
+    let (handler, sent) = handler(crate::features::context::testing::services(None));
+    let change = |key: &str| ClientCommand::ChangeSettings {
+        changes: vec![crate::settings::SettingsChange::set([key], serde_json::json!("on"))],
+    };
+    handler.handle(Envelope::local(RequestId(1), change("vim")));
+    handler.handle(Envelope::local(RequestId(2), change("statusLine")));
+    handler.handle(Envelope::local(RequestId(3), ClientCommand::LoadSettings));
+    assert_eq!((answer_to(&sent, 1), answer_to(&sent, 2)), (Reply::Done, Reply::Done));
+    let both = serde_json::json!({"vim": "on", "statusLine": "on"});
+    assert_eq!(answer_to(&sent, 3), Reply::Settings { settings: Some(both) });
+
+    let mut services = crate::features::context::testing::services(None);
+    services.settings = Arc::new(ReadOnly);
+    let (handler, sent) = self::handler(services);
+    handler.handle(Envelope::local(RequestId(4), change("vim")));
+    assert_eq!(answer_to(&sent, 4), Reply::error("Could not save the settings: the disk is read-only"));
+}
+
 #[derive(Default)]
 struct HoldsThePort {
     held: AtomicBool,

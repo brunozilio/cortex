@@ -1,40 +1,30 @@
-use app::Sdk;
+use app::{Sdk, SettingsChange};
 
-pub type Change = Box<dyn FnOnce(&mut serde_json::Value) + Send>;
+const WAITING_AT_MOST: usize = 500;
 
 pub trait Store: Send + 'static {
-    fn load(&self) -> Result<serde_json::Value, String>;
-    fn save(&self, settings: serde_json::Value) -> Result<(), String>;
+    fn change(&self, changes: Vec<SettingsChange>) -> Result<(), String>;
 }
 
 impl Store for Sdk {
-    fn load(&self) -> Result<serde_json::Value, String> {
-        self.settings().map_err(|error| error.to_string())
-    }
-
-    fn save(&self, settings: serde_json::Value) -> Result<(), String> {
-        self.save_settings(settings).map_err(|error| error.to_string())
+    fn change(&self, changes: Vec<SettingsChange>) -> Result<(), String> {
+        self.change_settings(changes).map_err(|error| error.to_string())
     }
 }
 
-pub fn apply(store: &impl Store, waiting: &mut Vec<Change>) {
+pub fn apply(store: &impl Store, waiting: &mut Vec<SettingsChange>) {
     if waiting.is_empty() {
         return;
     }
-    let mut settings = match store.load() {
-        Ok(settings) => settings,
+    match store.change(waiting.clone()) {
+        Ok(()) => waiting.clear(),
         Err(error) => {
+            let forgotten = waiting.len().saturating_sub(WAITING_AT_MOST);
+            waiting.drain(..forgotten);
             let kept = waiting.len();
-            return tracing::warn!(%error, kept, "could not read the settings; the changes wait for the next save");
+            tracing::warn!(%error, kept, forgotten, "could not save the settings; the changes wait for the next save");
         }
-    };
-    if !settings.is_object() {
-        settings = serde_json::json!({});
     }
-    for change in waiting.drain(..) {
-        change(&mut settings);
-    }
-    let _ = store.save(settings);
 }
 
 #[cfg(test)]
@@ -50,50 +40,58 @@ mod tests {
 
     #[derive(Clone)]
     struct FailsOnce {
-        stored: Arc<Mutex<serde_json::Value>>,
+        stored: Arc<Mutex<Vec<SettingsChange>>>,
         failures_left: Arc<AtomicUsize>,
     }
 
     impl FailsOnce {
-        fn holding(stored: serde_json::Value) -> Self {
-            Self { stored: Arc::new(Mutex::new(stored)), failures_left: Arc::new(AtomicUsize::new(1)) }
+        fn failing(times: usize) -> Self {
+            Self { stored: Arc::default(), failures_left: Arc::new(AtomicUsize::new(times)) }
         }
 
-        fn stored(&self) -> serde_json::Value {
+        fn stored(&self) -> Vec<SettingsChange> {
             self.stored.lock().expect("stored").clone()
         }
     }
 
     impl Store for FailsOnce {
-        fn load(&self) -> Result<serde_json::Value, String> {
+        fn change(&self, changes: Vec<SettingsChange>) -> Result<(), String> {
             let failing =
                 self.failures_left.try_update(Ordering::SeqCst, Ordering::SeqCst, |left| left.checked_sub(1)).is_ok();
-            if failing { Err("the file is busy".to_owned()) } else { Ok(self.stored()) }
-        }
-
-        fn save(&self, settings: serde_json::Value) -> Result<(), String> {
-            *self.stored.lock().expect("stored") = settings;
+            if failing {
+                return Err("the file is busy".to_owned());
+            }
+            self.stored.lock().expect("stored").extend(changes);
             Ok(())
         }
     }
 
     #[test]
-    fn a_failed_read_keeps_what_is_stored_and_saves_the_changes_with_the_next_ones() {
-        let kept = json!({"mode": "plan", "history": {"/a": ["one"]}});
-        let store = FailsOnce::holding(kept.clone());
+    fn changes_that_could_not_be_saved_go_with_the_next_ones_in_the_order_they_were_made() {
+        let store = FailsOnce::failing(1);
         let saver = Saver::over(store.clone());
         saver.remember("model", "keyed:x");
         let deadline = Instant::now() + Duration::from_secs(120);
         while store.failures_left.load(Ordering::SeqCst) > 0 {
-            assert!(Instant::now() < deadline, "the read was never tried");
+            assert!(Instant::now() < deadline, "the save was never tried");
             std::thread::yield_now();
         }
-        assert_eq!(store.stored(), kept, "nothing is written over a document that could not be read");
+        assert!(store.stored().is_empty(), "nothing was stored by the save that failed");
         saver.remember("effort", "high");
         saver.flush();
         assert_eq!(
             store.stored(),
-            json!({"mode": "plan", "history": {"/a": ["one"]}, "model": "keyed:x", "effort": "high"})
+            [SettingsChange::set(["model"], json!("keyed:x")), SettingsChange::set(["effort"], json!("high"))]
         );
+    }
+
+    #[test]
+    fn changes_that_never_save_do_not_pile_up_without_end() {
+        let store = FailsOnce::failing(usize::MAX);
+        let mut waiting: Vec<SettingsChange> =
+            (0..WAITING_AT_MOST + 20).map(|at| SettingsChange::set(["last"], json!(at))).collect();
+        apply(&store, &mut waiting);
+        assert_eq!(waiting.len(), WAITING_AT_MOST);
+        assert_eq!(waiting.last(), Some(&SettingsChange::set(["last"], json!(WAITING_AT_MOST + 19))), "newest kept");
     }
 }

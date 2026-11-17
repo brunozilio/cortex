@@ -46,6 +46,10 @@ fn history(store: &FileSessions, cwd: &Path, id: &SessionId) -> Result<Vec<Recor
 #[cfg(test)]
 mod tests;
 
+pub(crate) fn recent(context: &Context<'_>, cwd: &Path) -> Vec<SessionId> {
+    crate::catalog::recent_sessions(&listed(context), cwd)
+}
+
 fn listed(context: &Context<'_>) -> Catalog {
     let catalog = context.services.catalog.read();
     if !catalog.listed().is_empty() {

@@ -14,8 +14,7 @@ pub fn handle(context: &Context<'_>, request: SuggestedRulesRequest) -> Result<S
     match request {
         SuggestedRulesRequest::List { cwd } => {
             let store = context.services.sessions.as_ref();
-            let owner_settings = context.services.settings.load().unwrap_or_default();
-            let sessions = crate::settings::recent_sessions(&owner_settings, &cwd);
+            let sessions = crate::features::sessions::recent(context, &cwd);
             let kept = settings::load(&cwd, context.services.home().as_deref(), &[])?.permissions.listed();
             Ok(SuggestedRulesReply::Suggested(suggested(store, &cwd, &sessions, &kept)))
         }
@@ -35,13 +34,11 @@ fn keep_instruction(cwd: &Path, line: &str) -> Result<std::path::PathBuf, String
     let root = cwd.join(brand::INSTRUCTIONS);
     let nested = cwd.join(brand::DIR).join(brand::INSTRUCTIONS);
     let file = if !root.exists() && nested.exists() { nested } else { root };
-    let current = match std::fs::read_to_string(&file) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => return Err(format!("{}: {error}", file.display())),
-    };
-    let updated = domain::learning::with_learned(&current, line)?;
-    std::fs::write(&file, updated).map_err(|error| format!("{}: {error}", file.display()))?;
+    let kept = platform::store::Document::hand_edited(&file).try_update_text(|text| {
+        *text = domain::learning::with_learned(text, line)?;
+        Ok::<(), String>(())
+    });
+    kept.map_err(|error| error.to_string())??;
     Ok(file)
 }
 
@@ -93,11 +90,11 @@ mod tests {
         for at in 3..5 {
             answered(&store, &request, &two, at, "Bash(cargo test:*)");
         }
-        let settings = serde_json::json!({
-            "conversations": { dir.path().to_string_lossy(): [{ "session": "one" }, { "session": "two" }] }
-        });
+        let mut catalog = domain::catalog::Catalog::default();
+        catalog.started(&one, dir.path(), 1);
+        catalog.started(&two, dir.path(), 2);
 
-        let sessions = crate::settings::recent_sessions(&settings, dir.path());
+        let sessions = crate::catalog::recent_sessions(&catalog, dir.path());
         let found = suggested(&store, dir.path(), &sessions, &[]);
 
         assert_eq!(found, [Suggestion { rule: "Bash(cargo test:*)".into(), kind: RuleKind::Allow, times: 5 }]);
@@ -150,5 +147,31 @@ mod tests {
         let kept = std::fs::read_to_string(dir.path().join(brand::INSTRUCTIONS)).expect("instructions");
         assert_eq!(kept, "# Project\n\n## Learned\n- Use pnpm.\n");
         assert!(refused.is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn instructions_kept_at_once_are_all_there_and_the_file_stays_as_shared_as_it_was() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().expect("dir");
+        let file = dir.path().join(brand::INSTRUCTIONS);
+        std::fs::write(&file, "# Project\n").expect("instructions");
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).expect("mode");
+
+        std::thread::scope(|scope| {
+            for writer in 0..4 {
+                let cwd = dir.path();
+                scope.spawn(move || {
+                    for line in 0..5 {
+                        keep_instruction(cwd, &format!("Lesson {writer} of {line}.")).expect("kept");
+                    }
+                });
+            }
+        });
+
+        let kept = std::fs::read_to_string(&file).expect("instructions");
+        assert_eq!(kept.lines().filter(|line| line.starts_with("- Lesson")).count(), 20, "{kept}");
+        assert_eq!(std::fs::metadata(&file).expect("metadata").permissions().mode() & 0o777, 0o644);
+        assert_eq!(std::fs::read_dir(dir.path()).expect("list").count(), 1, "no lock file in the project");
     }
 }

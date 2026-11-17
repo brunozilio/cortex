@@ -54,6 +54,16 @@ pub fn keep_owner(_file: &File, _path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+pub fn open_with_mode_of(options: &mut OpenOptions, path: &Path, _existing: &Path) -> std::io::Result<File> {
+    options.open(path)
+}
+
+pub fn is_file_at(_file: &File, _path: &Path) -> bool {
+    true
+}
+
+pub const LOCK_FILES_CAN_BE_REMOVED: bool = false;
+
 pub fn make_executable(_file: &File) -> std::io::Result<()> {
     Ok(())
 }

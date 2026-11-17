@@ -105,6 +105,13 @@ impl Sdk {
         })
     }
 
+    pub fn change_settings(&self, changes: Vec<crate::settings::SettingsChange>) -> Result<(), Error> {
+        self.client.call(ClientCommand::ChangeSettings { changes }, |reply| match reply {
+            Reply::Done => Some(Ok(())),
+            _ => None,
+        })
+    }
+
     pub fn save_settings(&self, settings: serde_json::Value) -> Result<(), Error> {
         self.client.call(ClientCommand::SaveSettings { settings }, |reply| match reply {
             Reply::Done => Some(Ok(())),

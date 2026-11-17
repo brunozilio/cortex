@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use platform::store::Document;
 use serde_json::Value;
 
 pub fn path(home: &Path) -> PathBuf {
@@ -11,16 +12,15 @@ pub fn keep_feature(home: &Path, name: &str, on: bool) -> Result<(), String> {
         return Err(format!("{name} is not a feature; /features lists them"));
     }
     let path = path(home);
-    let settings: Value = match std::fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Value::Object(Default::default()),
-        Err(e) => return Err(format!("{}: {e}", path.display())),
-    };
-    let settings = domain::features::with_flag(settings, name, on).map_err(|e| format!("{}: {e}", path.display()))?;
-    let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    let folder = path.parent().ok_or("no settings folder")?;
-    std::fs::create_dir_all(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    std::fs::write(&path, text + "\n").map_err(|e| format!("{}: {e}", path.display()))
+    let kept = Document::hand_edited(&path).try_update(|settings: &mut Value| {
+        let current = match std::mem::take(settings) {
+            Value::Null => Value::Object(Default::default()),
+            current => current,
+        };
+        *settings = domain::features::with_flag(current, name, on).map_err(|e| format!("{}: {e}", path.display()))?;
+        Ok::<(), String>(())
+    });
+    kept.map_err(|error| error.to_string())?
 }
 
 #[cfg(test)]
@@ -44,6 +44,24 @@ mod tests {
         keep_feature(home.path(), SANDBOX, true).expect("kept");
         let settings = super::super::settings::load(repo.path(), Some(home.path()), &[]).expect("load");
         assert!(settings.features.on(SANDBOX));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_owner_s_settings_keep_their_mode_and_gain_nothing_beside_them() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = tempfile::tempdir().expect("home");
+        let folder = home.path().join(brand::DIR);
+        std::fs::create_dir_all(&folder).expect("dir");
+        std::fs::write(path(home.path()), "{}").expect("settings");
+        std::fs::set_permissions(path(home.path()), std::fs::Permissions::from_mode(0o644)).expect("mode");
+
+        keep_feature(home.path(), SANDBOX, false).expect("kept");
+
+        let mode = std::fs::metadata(path(home.path())).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o644);
+        assert!(std::fs::read_to_string(path(home.path())).expect("read").ends_with("}\n"));
+        assert_eq!(std::fs::read_dir(&folder).expect("list").count(), 1, "no lock or temporary file stays");
     }
 
     #[test]

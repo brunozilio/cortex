@@ -1,4 +1,5 @@
 use domain::permission_rules::{PermissionRules, RuleKind};
+use platform::store::Document;
 use serde_json::Value;
 
 pub fn read(settings: &Value, owners: bool, rules: &mut PermissionRules, dirs: &mut Vec<String>) -> Result<(), String> {
@@ -47,27 +48,25 @@ pub fn keep_rule(project: &std::path::Path, kind: RuleKind, rule: &str) -> Resul
         RuleKind::Deny => "deny",
     };
     let path = project.join(brand::DIR).join("settings.local.json");
-    let mut settings: Value = match std::fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Value::Object(Default::default()),
-        Err(e) => return Err(format!("{}: {e}", path.display())),
-    };
-    let root = settings.as_object_mut().ok_or(format!("{} is not a JSON object", path.display()))?;
-    let permissions = root.entry("permissions").or_insert_with(|| Value::Object(Default::default()));
-    let rules = permissions
-        .as_object_mut()
-        .ok_or("permissions must be an object")?
-        .entry(list)
-        .or_insert_with(|| Value::Array(Vec::new()))
-        .as_array_mut()
-        .ok_or(format!("permissions.{list} must be a list of rules"))?;
-    if !rules.iter().any(|kept| kept.as_str() == Some(rule)) {
-        rules.push(Value::String(rule.to_owned()));
-    }
-    let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    let folder = path.parent().ok_or("no settings folder")?;
-    std::fs::create_dir_all(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    std::fs::write(&path, text + "\n").map_err(|e| format!("{}: {e}", path.display()))
+    let kept = Document::hand_edited(&path).try_update(|settings: &mut Value| {
+        if settings.is_null() {
+            *settings = Value::Object(Default::default());
+        }
+        let root = settings.as_object_mut().ok_or(format!("{} is not a JSON object", path.display()))?;
+        let permissions = root.entry("permissions").or_insert_with(|| Value::Object(Default::default()));
+        let rules = permissions
+            .as_object_mut()
+            .ok_or("permissions must be an object")?
+            .entry(list)
+            .or_insert_with(|| Value::Array(Vec::new()))
+            .as_array_mut()
+            .ok_or(format!("permissions.{list} must be a list of rules"))?;
+        if !rules.iter().any(|kept| kept.as_str() == Some(rule)) {
+            rules.push(Value::String(rule.to_owned()));
+        }
+        Ok::<(), String>(())
+    });
+    kept.map_err(|error| error.to_string())?
 }
 
 #[cfg(test)]
@@ -86,6 +85,47 @@ mod tests {
         assert_eq!(kept["permissions"]["allow"], serde_json::json!(["Bash(cargo test:*)"]));
         assert_eq!(kept["permissions"]["deny"], serde_json::json!(["Bash(rm:*)"]));
         assert_eq!(kept["enabledMcpServers"], serde_json::json!(["jira"]));
+    }
+
+    #[test]
+    fn rules_kept_at_once_are_all_kept_and_the_file_never_reads_half_written() {
+        let repo = tempfile::tempdir().expect("repo");
+        let local = repo.path().join(concat!(brand::dir!(), "/settings.local.json"));
+        std::thread::scope(|scope| {
+            for writer in 0..4 {
+                let repo = repo.path();
+                scope.spawn(move || {
+                    for rule in 0..10 {
+                        super::keep_allow(repo, &format!("Bash(tool-{writer}-{rule}:*)")).expect("kept");
+                    }
+                });
+            }
+            scope.spawn(|| {
+                for _ in 0..200 {
+                    if let Ok(text) = std::fs::read_to_string(&local) {
+                        serde_json::from_str::<serde_json::Value>(&text).expect("a reader sees a whole document");
+                    }
+                }
+            });
+        });
+        let kept: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&local).expect("read")).expect("json");
+        assert_eq!(kept["permissions"]["allow"].as_array().map(Vec::len), Some(40));
+    }
+
+    #[test]
+    fn settings_that_do_not_parse_are_reported_and_left_for_their_author() {
+        let repo = tempfile::tempdir().expect("repo");
+        let local = repo.path().join(concat!(brand::dir!(), "/settings.local.json"));
+        std::fs::create_dir_all(local.parent().expect("folder")).expect("dir");
+        std::fs::write(&local, "{\"permissions\": {\"deny\": [").expect("write");
+
+        let error = super::keep_allow(repo.path(), "Bash(ls:*)").expect_err("refused");
+
+        assert!(error.contains("settings.local.json"), "{error}");
+        assert_eq!(std::fs::read_to_string(&local).expect("read"), "{\"permissions\": {\"deny\": [");
+        let aside = std::fs::read_dir(local.parent().expect("folder")).expect("list").flatten();
+        assert_eq!(aside.filter(|entry| entry.file_name().to_string_lossy().contains("corrupt")).count(), 0);
     }
 
     #[test]

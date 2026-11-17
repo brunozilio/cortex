@@ -47,8 +47,7 @@ pub fn share(project: &Path, home: Option<&Path>, memory: &Memory) -> Result<Pat
     };
     let (name, text) = team::file(memory, &by);
     let path = folder(project).join(name);
-    std::fs::create_dir_all(folder(project)).map_err(|e| e.to_string())?;
-    std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+    platform::store::Document::hand_edited(&path).write_text(&text).map_err(|error| error.to_string())?;
     Ok(path)
 }
 

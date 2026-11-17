@@ -27,8 +27,7 @@ pub fn handle(context: &Context<'_>, request: TraceRequest) -> Result<TraceReply
             everything(store, &listed, now_ms())
         }
         TraceRequest::Session { session, cwd } => {
-            let owner_settings = context.services.settings.load().unwrap_or_default();
-            let others = crate::settings::recent_sessions(&owner_settings, &cwd);
+            let others = crate::features::sessions::recent(context, &cwd);
             reported(store, &cwd, &session, &others, now_ms())?
         }
         TraceRequest::Follow { session, cwd } => {

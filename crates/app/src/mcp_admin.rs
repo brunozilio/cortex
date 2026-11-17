@@ -1,8 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::api::Reply;
 use domain::mcp_config;
 use domain::{ModelOption, PromptRequest};
+use platform::store::Document;
 use serde_json::Value;
 
 use crate::extensions::Extensions;
@@ -33,7 +34,7 @@ pub(crate) fn approve(path: &Path, home: Option<&Path>, name: &str, approve: boo
     } else {
         folder.join(concat!(brand::dir!(), "/settings.local.json"))
     };
-    rewrite(&file, |settings| Ok(mcp_config::set_approval(settings, name, approve)))
+    rewrite(&Document::hand_edited(file), |settings| Ok(mcp_config::set_approval(settings, name, approve)))
 }
 
 pub(crate) fn add(home: Option<&Path>, name: &str, server: Value) -> Result<(), String> {
@@ -47,22 +48,17 @@ pub(crate) fn remove(home: Option<&Path>, name: &str) -> Result<(), String> {
     })
 }
 
-fn user_config(home: Option<&Path>) -> Result<PathBuf, String> {
-    home.map(|home| home.join(brand::DIR).join("mcp.json")).ok_or_else(|| "no home folder to keep it in".to_owned())
+fn user_config(home: Option<&Path>) -> Result<Document, String> {
+    let home = home.ok_or_else(|| "no home folder to keep it in".to_owned())?;
+    Ok(Document::at(home.join(brand::DIR).join("mcp.json")).authored())
 }
 
-fn rewrite(file: &Path, change: impl FnOnce(Value) -> Result<Value, String>) -> Result<(), String> {
-    let current = match std::fs::read_to_string(file) {
-        Ok(text) => serde_json::from_str(&text).map_err(|error| format!("{}: {error}", file.display()))?,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Value::Null,
-        Err(error) => return Err(format!("{}: {error}", file.display())),
-    };
-    let changed = change(current)?;
-    if let Some(dir) = file.parent() {
-        std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-    }
-    let text = serde_json::to_string_pretty(&changed).map_err(|error| error.to_string())?;
-    platform::private_file::write(file, text.as_bytes()).map_err(|error| format!("{}: {error}", file.display()))
+fn rewrite(file: &Document, change: impl FnOnce(Value) -> Result<Value, String>) -> Result<(), String> {
+    let rewritten = file.try_update(|current: &mut Value| {
+        *current = change(std::mem::take(current))?;
+        Ok::<(), String>(())
+    });
+    rewritten.map_err(|error| error.to_string())?
 }
 
 #[cfg(test)]
@@ -108,5 +104,40 @@ mod tests {
         remove(Some(home.path()), "atlassian").expect("remove");
         assert_eq!(list().len(), 1);
         assert!(remove(Some(home.path()), "atlassian").is_err(), "nothing left to remove");
+    }
+
+    #[test]
+    fn a_config_its_author_left_unparsable_is_reported_and_stays_theirs() {
+        let home = tempfile::tempdir().expect("home");
+        let config = home.path().join(brand::DIR).join("mcp.json");
+        std::fs::create_dir_all(config.parent().expect("folder")).expect("dir");
+        std::fs::write(&config, "{\"mcpServers\": {").expect("config");
+
+        let refused = add(Some(home.path()), "atlassian", json!({"command": "x"})).expect_err("refused");
+
+        assert!(refused.contains("mcp.json"), "{refused}");
+        assert_eq!(std::fs::read_to_string(&config).expect("read"), "{\"mcpServers\": {");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_owner_s_servers_are_theirs_alone_and_a_project_s_approvals_stay_as_shared_as_they_were() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |path: &Path| std::fs::metadata(path).expect("metadata").permissions().mode() & 0o777;
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        let local = repo.path().join(concat!(brand::dir!(), "/settings.local.json"));
+        std::fs::create_dir_all(local.parent().expect("folder")).expect("dir");
+        std::fs::write(&local, "{\"permissions\": {\"deny\": [\"Bash(rm:*)\"]}}").expect("local");
+        std::fs::set_permissions(&local, std::fs::Permissions::from_mode(0o644)).expect("mode");
+
+        add(Some(home.path()), "atlassian", json!({"command": "x"})).expect("add");
+        approve(repo.path(), Some(home.path()), "jira", true).expect("approve");
+
+        assert_eq!(mode(&home.path().join(brand::DIR).join("mcp.json")), 0o600);
+        assert_eq!(mode(&local), 0o644);
+        let kept: Value = serde_json::from_str(&std::fs::read_to_string(&local).expect("read")).expect("json");
+        assert_eq!(kept["permissions"]["deny"], json!(["Bash(rm:*)"]), "what was there stays");
+        assert_eq!(std::fs::read_dir(local.parent().expect("folder")).expect("list").count(), 1);
     }
 }

@@ -82,15 +82,10 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
     let script = vec![EngineEvent::Completed { duration_ms: 1, cost_usd: None }];
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
     let sdk = sdk(&engine, data.path());
-    let mut settings = serde_json::json!({});
-    let now = super::conversations::now();
-    super::conversations::touch(
-        &mut settings,
-        project.path(),
-        &SessionId("old".into()),
-        Some("Login page"),
-        now - 7_200,
-    );
+    let earlier = serde_json::json!({
+        "session": "old", "title": "Login page", "at": super::conversations::now() - 7_200,
+    });
+    let settings = serde_json::json!({"conversations": { project.path().to_string_lossy(): [earlier] }});
     sdk.save_settings(settings).expect("saved");
     let mut app = App::new(sdk, project.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());

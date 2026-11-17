@@ -3,6 +3,7 @@ pub mod file_lock;
 pub mod named;
 pub mod private_file;
 pub mod sandbox;
+pub mod store;
 pub mod sync;
 pub mod typed;
 

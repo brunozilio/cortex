@@ -25,6 +25,7 @@ pub enum ClientCommand {
     ListAgents { path: PathBuf },
     LoadSettings,
     SaveSettings { settings: serde_json::Value },
+    ChangeSettings { changes: Vec<crate::settings::SettingsChange> },
     ListProviders,
     ConnectProvider { provider: ModelProvider, key: String },
     SignInProvider { provider: ModelProvider },
@@ -61,6 +62,7 @@ impl ClientCommand {
             Self::ListAgents { .. } => "list_agents",
             Self::LoadSettings => "load_settings",
             Self::SaveSettings { .. } => "save_settings",
+            Self::ChangeSettings { .. } => "change_settings",
             Self::ListProviders => "list_providers",
             Self::ConnectProvider { .. } => "connect_provider",
             Self::SignInProvider { .. } => "sign_in_provider",
@@ -107,6 +109,12 @@ mod tests {
             ClientCommand::ListAgents { path: "/repo".into() },
             ClientCommand::LoadSettings,
             ClientCommand::SaveSettings { settings: serde_json::json!({"model": "m"}) },
+            ClientCommand::ChangeSettings {
+                changes: vec![
+                    crate::settings::SettingsChange::set(["model"], serde_json::json!("m")),
+                    crate::settings::SettingsChange::Remove { path: vec!["mode".into()] },
+                ],
+            },
             ClientCommand::ListProviders,
             ClientCommand::ConnectProvider { provider: ModelProvider::new("keyed"), key: "sk".into() },
             ClientCommand::SignInProvider { provider: ModelProvider::new("browser-sub") },

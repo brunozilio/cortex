@@ -36,8 +36,7 @@ impl Memories {
             return Err(format!("/memory seed is turned off ({}).", domain::features::MEMORY_SEED));
         }
         let store = context.services.sessions.as_ref();
-        let owner_settings = context.services.settings.load().unwrap_or_default();
-        let sessions = crate::settings::recent_sessions(&owner_settings, project);
+        let sessions = crate::features::sessions::recent(context, project);
         let known = {
             let mut books = self.lock();
             self.book(&mut books, project).memories.clone()

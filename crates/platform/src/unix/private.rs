@@ -24,6 +24,25 @@ pub fn keep_owner(file: &File, path: &Path) -> io::Result<()> {
     }
 }
 
+pub fn open_with_mode_of(options: &mut OpenOptions, path: &Path, existing: &Path) -> io::Result<File> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let Ok(kept) = std::fs::metadata(existing) else { return options.open(path) };
+    let mode = kept.permissions().mode() & 0o7777;
+    let file = options.mode(mode).open(path)?;
+    file.set_permissions(std::fs::Permissions::from_mode(mode))?;
+    Ok(file)
+}
+
+pub fn is_file_at(file: &File, path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (file.metadata(), std::fs::metadata(path)) {
+        (Ok(held), Ok(named)) => (held.dev(), held.ino()) == (named.dev(), named.ino()),
+        _ => false,
+    }
+}
+
+pub const LOCK_FILES_CAN_BE_REMOVED: bool = true;
+
 #[cfg(test)]
 mod tests {
     use crate::private_file::open;

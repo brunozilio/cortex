@@ -3,6 +3,7 @@ use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 use domain::{PromptRequest, SessionId};
+use platform::store::Document;
 
 use super::log::{self, Entry};
 use super::{Hold, Sessions, scoped_id};
@@ -65,23 +66,16 @@ impl FileSessions {
         Ok(())
     }
 
+    fn side_file(&self, name: String) -> Document {
+        Document::at(self.dir.join(name)).compact().leaving_no_lock_file()
+    }
+
     fn read_json<T: serde::de::DeserializeOwned>(&self, name: String) -> Result<Option<T>, String> {
-        read(&self.dir.join(name))?.map(|text| serde_json::from_str(&text).map_err(|e| e.to_string())).transpose()
+        self.side_file(name).read().map_err(|error| error.to_string())
     }
 
     fn write_json(&self, name: String, value: &impl serde::Serialize) -> Result<(), String> {
-        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
-        let path = self.dir.join(name);
-        let partial = path.with_extension(format!("{}.partial", uuid::Uuid::new_v4()));
-        let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
-        let result = (|| {
-            platform::private_file::write(&partial, &bytes)?;
-            std::fs::rename(&partial, &path)
-        })();
-        if result.is_err() {
-            let _ = std::fs::remove_file(partial);
-        }
-        result.map_err(|e: std::io::Error| e.to_string())
+        self.side_file(name).write(value).map_err(|error| error.to_string())
     }
 }
 

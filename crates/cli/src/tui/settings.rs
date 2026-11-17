@@ -1,9 +1,9 @@
 use domain::command::{level_named, mode_named};
 use std::path::Path;
 
-use app::{Effort, PermissionMode, Sdk, SessionId};
+use app::{Effort, PermissionMode, Sdk, SessionId, SettingsChange};
 
-use super::store::{Change, Store, apply};
+use super::store::{Store, apply};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Saved {
@@ -64,7 +64,7 @@ pub fn history(settings: &serde_json::Value, cwd: &Path) -> Vec<String> {
 }
 
 enum Job {
-    Change(Change),
+    Change(SettingsChange),
     Flush(crossbeam_channel::Sender<()>),
 }
 
@@ -81,7 +81,7 @@ impl Saver {
     pub fn over(store: impl Store) -> Self {
         let (tx, rx) = crossbeam_channel::unbounded::<Job>();
         std::thread::spawn(move || {
-            let mut waiting: Vec<Change> = Vec::new();
+            let mut waiting: Vec<SettingsChange> = Vec::new();
             while let Ok(job) = rx.recv() {
                 let mut flushes = Vec::new();
                 for job in std::iter::once(job).chain(rx.try_iter()) {
@@ -106,60 +106,32 @@ impl Saver {
         }
     }
 
-    fn change(&self, change: impl FnOnce(&mut serde_json::Value) + Send + 'static) {
-        let _ = self.0.send(Job::Change(Box::new(change)));
+    fn change(&self, change: SettingsChange) {
+        let _ = self.0.send(Job::Change(change));
     }
 
     pub fn remember_value(&self, key: &str, value: serde_json::Value) {
-        let key = key.to_owned();
-        self.change(move |settings| settings[key] = value);
+        self.change(SettingsChange::set([key], value));
     }
 
     pub fn remember(&self, key: &str, value: &str) {
-        let (key, value) = (key.to_owned(), value.to_owned());
-        self.change(move |settings| settings[key] = serde_json::Value::String(value));
+        self.remember_value(key, serde_json::Value::String(value.to_owned()));
     }
 
     pub fn remember_prompt(&self, cwd: &Path, prompt: &str) {
-        let (cwd, prompt) = (cwd.to_owned(), prompt.to_owned());
-        self.change(move |settings| add_prompt(settings, &cwd, prompt));
+        let sent = serde_json::Value::String(prompt.to_owned());
+        self.change(SettingsChange::latest(["history", cwd.to_string_lossy().as_ref()], sent, HISTORY));
     }
 
     pub fn remember_session(&self, cwd: &Path, session: &SessionId) {
-        let (cwd, session) = (cwd.to_string_lossy().into_owned(), session.0.clone());
-        self.change(move |settings| {
-            if !settings["sessions"].is_object() {
-                settings["sessions"] = serde_json::json!({});
-            }
-            settings["sessions"][cwd.as_str()] = serde_json::Value::String(session.clone());
-            let now = super::conversations::now();
-            super::conversations::touch(settings, Path::new(&cwd), &SessionId(session), None, now);
-        });
+        let last = serde_json::Value::String(session.0.clone());
+        self.change(SettingsChange::set(["sessions", cwd.to_string_lossy().as_ref()], last));
     }
 
     pub fn remember_title(&self, cwd: &Path, session: &SessionId, title: &str) {
-        let (cwd, session, title) = (cwd.to_string_lossy().into_owned(), session.0.clone(), title.to_owned());
-        self.change(move |settings| {
-            if !settings["titles"].is_object() {
-                settings["titles"] = serde_json::json!({});
-            }
-            settings["titles"][cwd.as_str()] = serde_json::json!({ "session": session, "title": title });
-            let now = super::conversations::now();
-            super::conversations::touch(settings, Path::new(&cwd), &SessionId(session), Some(&title), now);
-        });
+        let named = serde_json::json!({ "session": session.0, "title": title });
+        self.change(SettingsChange::set(["titles", cwd.to_string_lossy().as_ref()], named));
     }
-}
-
-fn add_prompt(settings: &mut serde_json::Value, cwd: &Path, prompt: String) {
-    let mut sent = history(settings, cwd);
-    sent.retain(|known| *known != prompt);
-    sent.push(prompt);
-    let drop = sent.len().saturating_sub(HISTORY);
-    sent.drain(..drop);
-    if !settings["history"].is_object() {
-        settings["history"] = serde_json::json!({});
-    }
-    settings["history"][cwd.to_string_lossy().as_ref()] = serde_json::json!(sent);
 }
 
 #[cfg(test)]
@@ -226,12 +198,48 @@ mod tests {
 
     #[test]
     fn prompts_are_kept_per_folder_newest_last_without_repeats() {
-        let mut settings = json!({"history": {"/a": ["one", "two"]}});
-        add_prompt(&mut settings, Path::new("/a"), "one".into());
-        assert_eq!(history(&settings, Path::new("/a")), ["two", "one"]);
-        add_prompt(&mut settings, Path::new("/a"), "two".into());
+        let data = tempfile::tempdir().expect("data");
+        let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
+        let sdk = super::super::tests::sdk(&engine, data.path());
+        sdk.save_settings(json!({"history": {"/a": ["one", "two"]}})).expect("saved");
+        let saver = Saver::start(&sdk);
+        saver.remember_prompt(Path::new("/a"), "one");
+        saver.flush();
+        assert_eq!(history(&sdk.settings().expect("settings"), Path::new("/a")), ["two", "one"]);
+        saver.remember_prompt(Path::new("/a"), "two");
+        saver.flush();
+        let settings = sdk.settings().expect("settings");
         assert_eq!(history(&settings, Path::new("/a")), ["one", "two"]);
         assert!(history(&settings, Path::new("/b")).is_empty());
+    }
+
+    #[test]
+    fn two_chats_open_at_once_keep_what_each_other_remembers() {
+        let data = tempfile::tempdir().expect("data");
+        let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
+        let chats = [super::super::tests::sdk(&engine, data.path()), super::super::tests::sdk(&engine, data.path())];
+        let savers = [Saver::start(&chats[0]), Saver::start(&chats[1])];
+        let (one, two) = (SessionId("s-1".into()), SessionId("s-2".into()));
+        for at in 0..20 {
+            savers[0].remember("model", "keyed:x");
+            savers[0].remember_session(Path::new("/a"), &one);
+            savers[0].remember_title(Path::new("/a"), &one, "Login page");
+            savers[0].remember_prompt(Path::new("/shared"), &format!("one-{at}"));
+            savers[1].remember("effort", "high");
+            savers[1].remember_session(Path::new("/b"), &two);
+            savers[1].remember_prompt(Path::new("/shared"), &format!("two-{at}"));
+        }
+        for saver in &savers {
+            saver.flush();
+        }
+
+        let settings = chats[0].settings().expect("settings");
+        assert_eq!((&settings["model"], &settings["effort"]), (&json!("keyed:x"), &json!("high")));
+        assert_eq!(last_session(&settings, Path::new("/a")), Some(one.clone()));
+        assert_eq!(last_session(&settings, Path::new("/b")), Some(two));
+        assert_eq!(title(&settings, Path::new("/a"), &one).as_deref(), Some("Login page"));
+        assert_eq!(history(&settings, Path::new("/shared")).len(), 40, "every prompt of both chats");
+        assert_eq!(settings["conversations"], json!(null), "the session list lives in the catalog alone");
     }
 
     #[test]

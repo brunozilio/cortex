@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use platform::store::Document;
 use platform::sync::Locked;
 
 use domain::MemoryBook;
@@ -41,39 +42,26 @@ impl FileMemoryStore {
         Self { root }
     }
 
-    fn path(&self, project: &Path) -> PathBuf {
-        self.root.join(OWNER_DIR).join(format!("{}.json", project_key(project)))
+    fn book(&self, project: &Path) -> Document {
+        Document::at(self.root.join(OWNER_DIR).join(format!("{}.json", project_key(project))))
     }
 }
 
 impl MemoryStore for FileMemoryStore {
     fn load(&self, project: &Path) -> MemoryBook {
-        let path = self.path(project);
-        let Ok(bytes) = std::fs::read(&path) else { return MemoryBook::default() };
-        match serde_json::from_slice(&bytes) {
-            Ok(book) => book,
-            Err(error) => {
-                let aside = path.with_extension(format!("json.corrupt-{}", super::now()));
-                match std::fs::rename(&path, &aside) {
-                    Ok(()) => tracing::warn!(%error, aside = %aside.display(), "unreadable memory kept aside"),
-                    Err(rename) => tracing::error!(%error, %rename, "unreadable memory could not be kept aside"),
-                }
-                MemoryBook::default()
-            }
-        }
+        self.book(project).read_or_default()
     }
 
     fn save(&self, project: &Path, book: &MemoryBook) -> std::io::Result<()> {
-        let json = serde_json::to_vec_pretty(book).map_err(std::io::Error::other)?;
-        platform::private_file::replace(&self.path(project), &json)
+        Ok(self.book(project).write(book)?)
     }
 
     fn update(&self, project: &Path, change: &mut dyn FnMut(&mut MemoryBook)) -> std::io::Result<MemoryBook> {
-        let _held = platform::file_lock::Exclusive::on(&self.path(project))?;
-        let mut book = self.load(project);
-        change(&mut book);
-        self.save(project, &book)?;
-        Ok(book)
+        let changed = self.book(project).update(|book: &mut MemoryBook| {
+            change(book);
+            book.clone()
+        });
+        Ok(changed?)
     }
 }
 
@@ -107,5 +95,26 @@ mod tests {
         store.save(Path::new("/work/project"), &MemoryBook::default()).expect("save");
 
         assert!(data.path().join("memory/local/-work-project.json").is_file());
+    }
+
+    #[test]
+    fn stores_updating_one_project_at_once_lose_none_of_each_other_s_changes() {
+        let data = tempfile::tempdir().expect("data");
+        let project = Path::new("/work/project");
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    let store = FileMemoryStore::new(data.path().to_path_buf());
+                    for _ in 0..10 {
+                        let changed = store.update(project, &mut |book| {
+                            book.scorecard.next_held_out();
+                        });
+                        changed.expect("update");
+                    }
+                });
+            }
+        });
+        let kept = FileMemoryStore::new(data.path().to_path_buf()).load(project);
+        assert_eq!(kept.scorecard.briefed, 40);
     }
 }

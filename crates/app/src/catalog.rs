@@ -3,6 +3,7 @@ use std::sync::Mutex;
 
 use domain::catalog::Catalog;
 use domain::legacy::OWNER_DIR;
+use platform::store::Document;
 use platform::sync::Locked;
 
 pub trait SessionCatalog: Send + Sync {
@@ -12,67 +13,23 @@ pub trait SessionCatalog: Send + Sync {
 
 #[derive(Debug)]
 pub struct FileSessionCatalog {
-    root: PathBuf,
-    writing: Mutex<()>,
+    kept: Document,
 }
 
 impl FileSessionCatalog {
     pub fn new(root: PathBuf) -> Self {
-        Self { root, writing: Mutex::new(()) }
-    }
-
-    fn path(&self) -> PathBuf {
-        self.root.join(OWNER_DIR).join("sessions.json")
-    }
-
-    fn load(&self) -> Catalog {
-        std::fs::read(self.path()).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
-    }
-
-    fn load_to_change(&self) -> Catalog {
-        let path = self.path();
-        let Ok(bytes) = std::fs::read(&path) else { return Catalog::default() };
-        serde_json::from_slice(&bytes).unwrap_or_else(|error| {
-            let aside = path.with_extension(format!("json.corrupt-{}", now()));
-            match std::fs::rename(&path, &aside) {
-                Ok(()) => {
-                    tracing::warn!(%error, aside = %aside.display(), "an unreadable session catalog was kept aside")
-                }
-                Err(rename) => {
-                    tracing::error!(%error, %rename, "an unreadable session catalog could not be kept aside")
-                }
-            }
-            Catalog::default()
-        })
+        Self { kept: Document::at(root.join(OWNER_DIR).join("sessions.json")).compact() }
     }
 }
 
 impl SessionCatalog for FileSessionCatalog {
     fn read(&self) -> Catalog {
-        let _writing = self.writing.locked();
-        self.load()
+        self.kept.read_or_default()
     }
 
     fn update(&self, change: &mut dyn FnMut(&mut Catalog)) {
-        let _writing = self.writing.locked();
-        let _held = match platform::file_lock::Exclusive::on(&self.path()) {
-            Ok(held) => held,
-            Err(error) => {
-                tracing::warn!(%error, "could not lock the session catalog; it was left as it was");
-                return;
-            }
-        };
-        let before = self.load_to_change();
-        let mut catalog = before.clone();
-        change(&mut catalog);
-        if catalog == before {
-            return;
-        }
-        let kept = serde_json::to_vec(&catalog)
-            .map_err(|error| error.to_string())
-            .and_then(|json| platform::private_file::replace(&self.path(), &json).map_err(|e| e.to_string()));
-        if let Err(error) = kept {
-            tracing::warn!(%error, "could not keep the session catalog");
+        if let Err(error) = self.kept.update(|catalog: &mut Catalog| change(catalog)) {
+            tracing::warn!(%error, "could not keep the session catalog; it was left as it was");
         }
     }
 }
@@ -90,6 +47,12 @@ impl SessionCatalog for InMemorySessionCatalog {
     fn update(&self, change: &mut dyn FnMut(&mut Catalog)) {
         change(&mut self.kept.locked());
     }
+}
+
+const RECENT: usize = 30;
+
+pub(crate) fn recent_sessions(catalog: &Catalog, cwd: &std::path::Path) -> Vec<domain::SessionId> {
+    catalog.listed().iter().filter(|row| row.cwd == cwd).take(RECENT).map(|row| row.session.clone()).collect()
 }
 
 pub(crate) struct Listing {
@@ -151,6 +114,16 @@ mod tests {
 
         let reopened = FileSessionCatalog::new(root.path().to_path_buf());
         assert_eq!(reopened.read().listed().len(), 1);
+    }
+
+    #[test]
+    fn a_folder_s_recent_sessions_are_its_own_newest_first() {
+        let mut catalog = Catalog::default();
+        catalog.started(&SessionId("old".into()), Path::new("/w"), 1);
+        catalog.started(&SessionId("elsewhere".into()), Path::new("/other"), 2);
+        catalog.started(&SessionId("new".into()), Path::new("/w"), 3);
+        assert_eq!(recent_sessions(&catalog, Path::new("/w")), [SessionId("new".into()), SessionId("old".into())]);
+        assert!(recent_sessions(&catalog, Path::new("/nowhere")).is_empty());
     }
 
     #[test]

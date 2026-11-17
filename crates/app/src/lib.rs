@@ -47,5 +47,5 @@ pub use mcp_auth::McpAuth;
 pub use providers::{InMemoryProviderStore, ModelCatalog, ModelProviders, ProviderStore};
 pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 pub use services::LocalServices;
-pub use settings::SettingsStore;
+pub use settings::{SettingsChange, SettingsStore};
 pub use turned_off::TurnedOff;

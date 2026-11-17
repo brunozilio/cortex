@@ -93,7 +93,7 @@ you).
 | `brand` | The product's name and command, from `brand.toml`. |
 | `language-servers` | Runs language servers for the `LSP` tool and edit diagnostics: client, pool, first-use installs. |
 | `code-map` | Experimental tree-sitter index of a repository's functions, types and callers, ranked against a prompt. |
-| `platform` | Per-OS IO: child processes and their trees, private files, data folders. |
+| `platform` | Per-OS IO: child processes and their trees, private files, stored documents (lock, atomic replace, corrupt set aside), data folders. |
 | `content` | Prompts, built-in skills and agents, embedded at build time. |
 | `script` | The QuickJS runtime for JavaScript tools, skills and providers. |
 | `console` | The live trace page behind `/trace` and `/console`: serves the browser app on localhost (built from `web/` into the binary when Bun is present, else `web/dist`) with the report, the sessions and their updates as server-sent events. |

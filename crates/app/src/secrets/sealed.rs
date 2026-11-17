@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::path::Path;
 
-use platform::sync::Locked;
+use platform::store::{Document, Error};
 
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
@@ -18,30 +17,28 @@ struct Sealed {
     sealed: String,
 }
 
+type Entries = BTreeMap<String, Sealed>;
+
 pub struct SealedSecretStore {
-    path: PathBuf,
+    vault: Document,
     cipher: XChaCha20Poly1305,
-    entries: Mutex<BTreeMap<String, Sealed>>,
 }
 
 impl std::fmt::Debug for SealedSecretStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SealedSecretStore").field("path", &self.path).finish_non_exhaustive()
+        f.debug_struct("SealedSecretStore").field("path", &self.vault.path()).finish_non_exhaustive()
     }
 }
 
 impl SealedSecretStore {
     pub fn open(path: &Path, key: [u8; 32]) -> Result<Self, String> {
-        let entries = match read(path)? {
-            Some(Ok(entries)) => entries,
-            Some(Err(error)) => {
-                set_aside(path, &error)?;
-                BTreeMap::new()
-            }
-            None => BTreeMap::new(),
-        };
-        let cipher = XChaCha20Poly1305::new(&key.into());
-        Ok(Self { path: path.to_path_buf(), cipher, entries: Mutex::new(entries) })
+        let vault = Document::at(path);
+        match vault.read::<Entries>() {
+            Ok(_) => {}
+            Err(error @ Error::Corrupt { .. }) => tracing::warn!(%error, "the secrets file did not parse; kept aside"),
+            Err(error) => return Err(format!("the secrets file cannot be used: {error}")),
+        }
+        Ok(Self { vault, cipher: XChaCha20Poly1305::new(&key.into()) })
     }
 
     fn sealed(&self, name: &str, secrets: &Secrets) -> Result<Sealed, String> {
@@ -64,27 +61,8 @@ impl SealedSecretStore {
         serde_json::from_slice(&opened).ok()
     }
 
-    fn held(&self) -> Result<platform::file_lock::Exclusive, String> {
-        platform::file_lock::Exclusive::on(&self.path).map_err(|error| error.to_string())
-    }
-
     pub fn key_at(path: &Path) -> Result<[u8; 32], String> {
         super::key::at(path)
-    }
-
-    fn entries(&self) -> MutexGuard<'_, BTreeMap<String, Sealed>> {
-        let mut entries = self.entries.locked();
-        if let Ok(json) = std::fs::read_to_string(&self.path)
-            && let Ok(fresh) = serde_json::from_str(&json)
-        {
-            *entries = fresh;
-        }
-        entries
-    }
-
-    fn save(&self, entries: &BTreeMap<String, Sealed>) -> Result<(), String> {
-        let json = serde_json::to_string_pretty(entries).map_err(|error| error.to_string())?;
-        write_private(&self.path, &json).map_err(|error| error.to_string())
     }
 }
 
@@ -95,68 +73,34 @@ fn name(connection: SecretId) -> String {
 impl SecretStore for SealedSecretStore {
     fn get(&self, connection: SecretId) -> Option<Secrets> {
         let name = name(connection);
-        let entry = self.entries().get(&name)?.clone();
+        let entry = self.vault.read_or_default::<Entries>().remove(&name)?;
         self.opened(&name, &entry)
     }
 
     fn set(&self, connection: SecretId, secrets: &Secrets) -> Result<(), String> {
         let name = name(connection);
         let sealed = self.sealed(&name, secrets)?;
-        let _held = self.held()?;
-        let mut entries = self.entries();
-        entries.insert(name, sealed);
-        self.save(&entries)
+        let kept = self.vault.update(|entries: &mut Entries| entries.insert(name, sealed));
+        kept.map(drop).map_err(|error| error.to_string())
     }
 
     fn update(&self, connection: SecretId, change: &mut dyn FnMut(&mut Secrets)) -> Result<(), String> {
         let name = name(connection);
-        let _held = self.held()?;
-        let mut entries = self.entries();
-        let mut secrets = entries.get(&name).and_then(|entry| self.opened(&name, entry)).unwrap_or_default();
-        change(&mut secrets);
-        entries.insert(name.clone(), self.sealed(&name, &secrets)?);
-        self.save(&entries)
+        let kept = self.vault.try_update(|entries: &mut Entries| {
+            let mut secrets = entries.get(&name).and_then(|entry| self.opened(&name, entry)).unwrap_or_default();
+            change(&mut secrets);
+            entries.insert(name.clone(), self.sealed(&name, &secrets)?);
+            Ok::<(), String>(())
+        });
+        kept.map_err(|error| error.to_string())?
     }
 
     fn delete(&self, connection: SecretId) {
-        let _held = match platform::file_lock::Exclusive::on(&self.path) {
-            Ok(held) => held,
-            Err(error) => {
-                tracing::error!(%error, "could not lock the secrets to forget one");
-                return;
-            }
-        };
-        let mut entries = self.entries();
-        if entries.remove(&name(connection)).is_some()
-            && let Err(error) = self.save(&entries)
-        {
+        let forgotten = self.vault.update(|entries: &mut Entries| entries.remove(&name(connection)));
+        if let Err(error) = forgotten {
             tracing::error!(%error, "could not forget the secrets");
         }
     }
-}
-
-type Entries = BTreeMap<String, Sealed>;
-
-fn read(path: &Path) -> Result<Option<Result<Entries, serde_json::Error>>, String> {
-    match std::fs::read(path) {
-        Ok(json) => Ok(Some(serde_json::from_slice(&json))),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(format!("the secrets file {} cannot be read: {error}", path.display())),
-    }
-}
-
-fn set_aside(path: &Path, error: &serde_json::Error) -> Result<(), String> {
-    let _held = platform::file_lock::Exclusive::on(path).map_err(|error| error.to_string())?;
-    if !matches!(read(path)?, Some(Err(_))) {
-        return Ok(());
-    }
-    let epoch = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |since| since.as_secs());
-    let aside = path.with_extension(format!("json.corrupt-{epoch}"));
-    std::fs::rename(path, &aside).map_err(|rename| {
-        format!("the secrets file {} does not parse and could not be kept aside: {rename}", path.display())
-    })?;
-    tracing::warn!(%error, aside = %aside.display(), "the secrets file did not parse; kept aside");
-    Ok(())
 }
 
 pub(super) fn hex(bytes: &[u8]) -> String {
@@ -168,10 +112,6 @@ pub(super) fn unhex(text: &str) -> Option<Vec<u8>> {
         .step_by(2)
         .map(|at| text.get(at..at + 2).and_then(|pair| u8::from_str_radix(pair, 16).ok()))
         .collect()
-}
-
-fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
-    platform::private_file::replace(path, text.as_bytes())
 }
 
 #[cfg(test)]
@@ -255,8 +195,13 @@ mod tests {
         let store = SealedSecretStore::open(&dir.path().join("secrets.json"), [3; 32]).expect("open");
         let (a, b) = (SecretId::new(), SecretId::new());
         store.set(a, &secrets()).expect("set");
-        let moved = store.entries().get(&name(a)).cloned().expect("sealed");
-        store.entries().insert(name(b), moved);
+        let moved = store.vault.update(|entries: &mut Entries| {
+            let sealed = entries.get(&name(a)).cloned();
+            entries.extend(sealed.clone().map(|sealed| (name(b), sealed)));
+            sealed.is_some()
+        });
+        assert!(moved.expect("moved"), "the sealed entry now also sits under the other connection");
+        assert_eq!(store.get(a), Some(secrets()));
         assert_eq!(store.get(b), None);
     }
 

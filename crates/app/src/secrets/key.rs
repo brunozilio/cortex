@@ -6,29 +6,34 @@ pub fn at(path: &Path) -> Result<[u8; 32], String> {
     if let Some(key) = kept(path)? {
         return Ok(key);
     }
-    let _held = platform::file_lock::Exclusive::on(path).map_err(|error| unusable(path, &error))?;
-    if let Some(key) = kept(path)? {
-        return Ok(key);
-    }
-    let mut key = [0u8; 32];
-    getrandom::fill(&mut key).map_err(|error| error.to_string())?;
-    platform::private_file::replace(path, hex(&key).as_bytes()).map_err(|error| unusable(path, &error))?;
-    Ok(key)
+    let made = platform::store::Document::at(path).try_update_text(|text| {
+        if !text.is_empty() {
+            return read(path, text);
+        }
+        let mut key = [0u8; 32];
+        getrandom::fill(&mut key).map_err(|error| error.to_string())?;
+        *text = hex(&key);
+        Ok(key)
+    });
+    made.map_err(|error| unusable(&error))?
 }
 
 fn kept(path: &Path) -> Result<Option<[u8; 32]>, String> {
     match std::fs::read_to_string(path) {
-        Ok(text) => unhex(text.trim())
-            .and_then(|bytes| bytes.try_into().ok())
-            .map(Some)
-            .ok_or_else(|| format!("the secrets key {} is not 64 hex digits", path.display())),
+        Ok(text) => read(path, &text).map(Some),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(unusable(path, &error)),
+        Err(error) => Err(unusable(&format!("{}: {error}", path.display()))),
     }
 }
 
-fn unusable(path: &Path, error: &std::io::Error) -> String {
-    format!("the secrets key {} cannot be used: {error}", path.display())
+fn read(path: &Path, text: &str) -> Result<[u8; 32], String> {
+    unhex(text.trim())
+        .and_then(|bytes| bytes.try_into().ok())
+        .ok_or_else(|| format!("the secrets key {} is not 64 hex digits", path.display()))
+}
+
+fn unusable(error: &dyn std::fmt::Display) -> String {
+    format!("the secrets key cannot be used: {error}")
 }
 
 #[cfg(test)]
