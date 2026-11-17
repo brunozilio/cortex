@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::{Value, json};
 
+use crate::added_tools::{TOOL_SEARCH, loaded_names};
 use crate::model::{ToolSpec, TurnRequest};
-use crate::tools::tool_search::{TOOL_SEARCH, loaded_names};
 use crate::transcript::Block;
 
 #[derive(Debug, Default)]

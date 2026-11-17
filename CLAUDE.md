@@ -17,7 +17,7 @@ These are all the non-dev edges between workspace crates:
 cli              ──► app, console, content, platform, domain, brand
 app              ──► agent-engine, llm-providers, code-map, platform, domain, brand
 agent-engine     ──► llm-providers, language-servers, script, content, platform, domain, brand
-llm-providers    ──► domain, brand
+llm-providers    ──► platform, domain, brand
 domain           ──► brand
 language-servers ──► platform, domain, brand
 content          ──► script, brand

@@ -1,21 +1,31 @@
+use crate::{Provider, ProviderError, declared};
 use domain::ModelProvider;
 use domain::provider::ProviderInfo;
-use llm_providers::{Provider, ProviderError, declared};
 
 pub mod anthropic;
+#[cfg(feature = "subscription-providers")]
 pub mod chatgpt;
+#[cfg(feature = "subscription-providers")]
 pub mod claude;
+#[cfg(feature = "subscription-providers")]
 pub mod copilot;
+#[cfg(feature = "subscription-providers")]
 pub mod grok;
+#[cfg(feature = "subscription-providers")]
 pub mod kiro;
 pub mod openai;
 
 pub static ALL: &[&dyn Provider] = &[
     &anthropic::Provider,
+    #[cfg(feature = "subscription-providers")]
     &chatgpt::Provider,
+    #[cfg(feature = "subscription-providers")]
     &claude::Provider,
+    #[cfg(feature = "subscription-providers")]
     &copilot::Provider,
+    #[cfg(feature = "subscription-providers")]
     &grok::Provider,
+    #[cfg(feature = "subscription-providers")]
     &kiro::Provider,
     &openai::Provider,
 ];
@@ -25,7 +35,7 @@ mod testing;
 
 #[cfg(any(test, feature = "test-support"))]
 pub fn install_testing() {
-    llm_providers::testing::install();
+    crate::testing::install();
 }
 
 pub fn all() -> Vec<&'static dyn Provider> {
@@ -77,6 +87,7 @@ pub(crate) fn output_limit(model: Option<&domain::ModelOption>, body: &serde_jso
 mod tests {
     use super::*;
 
+    #[cfg(feature = "subscription-providers")]
     #[test]
     fn the_built_in_providers_are_these_in_this_order() {
         let ids: Vec<&str> = ALL.iter().map(|provider| provider.id()).collect();
@@ -92,6 +103,13 @@ mod tests {
                 "openai",
             ]
         );
+    }
+
+    #[cfg(not(feature = "subscription-providers"))]
+    #[test]
+    fn the_built_in_providers_are_these_in_this_order() {
+        let ids: Vec<&str> = ALL.iter().map(|provider| provider.id()).collect();
+        assert_eq!(ids, ["anthropic", "openai"]);
     }
 
     #[test]

@@ -10,7 +10,7 @@ Twelve crates. Dependencies are one-way. These are the real non-dev edges; `xtas
 cli              -> app, console, content, platform, domain, brand
 app              -> agent-engine, llm-providers, code-map, platform, domain, brand
 agent-engine     -> llm-providers, language-servers, script, content, platform, domain, brand
-llm-providers    -> domain, brand
+llm-providers    -> platform, domain, brand
 domain           -> brand
 language-servers -> platform, domain, brand
 content          -> script, brand
@@ -24,8 +24,8 @@ The main line is `cli -> app -> agent-engine -> llm-providers -> domain`.
 |---|---|
 | `cli` | The binary: argument parsing, the terminal chat (TUI), print mode, subcommands |
 | `app` | The application API, in process. `client/`: the terminal's client (sessions, runs, calls to the handler). `api/`: `ClientCommand`, `ServerEvent`, `Envelope`, the typed feature requests and replies. `handler/`: command handler, run table, outbox. `features/`: the feature folders. Beside them: provider accounts, secrets, MCP sign-in, session catalog, settings |
-| `agent-engine` | The agent loop, tools, permissions, hooks, sub-agents, MCP, sessions, compaction, model client, wires, one folder per provider |
-| `llm-providers` | The `Provider` trait, credentials, OAuth, catalogs, declared providers, vendors |
+| `agent-engine` | The agent loop, tools, permissions, hooks, sub-agents, MCP, sessions, compaction, usage metering, loading declared providers. It re-exports `llm-providers`' `model`, `providers` and `transcript` under its own name |
+| `llm-providers` | Talking to a model: the `Provider` trait, one folder per provider, the model client (HTTP, streaming, retries), wires, the transcript types, credentials, OAuth, catalogs, declared providers, vendors. The five subscription providers are behind the Cargo feature `subscription-providers`, on by default |
 | `domain` | Types and rules with no IO: requests, events, permission rules, command classification, transcript, memory, trace |
 | `language-servers` | Language-server client, pool and first-use installs |
 | `content` | Embeds `content/` (prompts, tool descriptions, hooks, skills) and renders it |
@@ -50,7 +50,7 @@ Everything below is one process. The seam between terminal and engine is channel
 5. The engine (`crates/agent-engine/src/engine/mod.rs`) creates a `Workspace`, a `Control` and a `Job`, and runs the job on a new thread, `agent-engine-run`, inside a panic guard. It returns a handle for cancel, answer, mode change and steer.
 6. `Job::run` (`engine/job.rs`) loads or creates the session, loads the Brief, assembles the tools (built-in, LSP, skills, sub-agents, MCP, script tools), applies policy and model roles. `converse` (`engine/converse.rs`) builds the system prompt, runs the `SessionStart` and `UserPromptSubmit` hooks, opens a checkpoint and starts the loop.
 7. `Agent::run_loop` (`agent/mod.rs`), per turn: measure context and compact if needed, run the `ModelRequest` hook, call `ModelApi::turn`.
-8. The model client (`model/`) asks the provider for base URL, headers and body shape, encodes the request with the model's wire, and sends it over HTTP. The stream is read line by line as server-sent events; each delta is passed back through a callback.
+8. The model client (`crates/llm-providers/src/model/`) asks the provider for base URL, headers and body shape, encodes the request with the model's wire, and sends it over HTTP. The stream is read line by line as server-sent events; each delta is passed back through a callback.
 9. Tool calls in the reply go through `Agent::call` (`agent/dispatch.rs`): `PreToolUse` hook, permission decision (`agent/permission.rs`), the tool itself, `PostToolUse` hook, redaction, persistence of large output. A permission question is emitted as an `Asked` event and the run thread blocks until the handle's `answer` is called.
 10. Every event leaves through the `RunGate` (`boundary/gate.rs`), which feeds the trace recorder and the backend's sink. The sink updates the session catalog and pushes a `ServerEvent::Run` into the outbox (`crates/app/src/handler/outbox.rs`).
 11. The `sdk-dispatch` thread drains the outbox and routes each run event to that run's channel. A thread in the TUI iterates the run and forwards each event as a message to the UI thread.
@@ -116,4 +116,4 @@ The plan runs in eleven phases on `main`. The decisions that change this documen
 | Function-size lint instead of a file-length limit; `impl` blocks regrouped | `decisions/0009-function-size-lint.md` |
 | Rationale lives in `docs/` | `decisions/0010-comments-stay-out-of-code.md` |
 
-Also planned, without a record of their own: provider folders and wires move from `agent-engine` to `llm-providers`; `domain`'s 67 top-level modules are grouped into eight areas.
+Provider folders, the model client, wires and the transcript types have moved from `agent-engine` to `llm-providers` (done). Also planned, without a record of their own: `domain`'s 67 top-level modules are grouped into eight areas.

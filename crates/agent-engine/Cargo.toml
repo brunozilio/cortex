@@ -1,11 +1,13 @@
 [package]
 name = "agent-engine"
-description = "The native agent engine: the agent loop, its tools and the model providers' APIs, in process."
+description = "The native agent engine: the agent loop and its tools, in process; models are reached through llm-providers."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [features]
+default = ["subscription-providers"]
+subscription-providers = ["llm-providers/subscription-providers"]
 test-support = ["llm-providers/test-support", "language-servers/test-support"]
 
 [dependencies]
@@ -21,8 +23,6 @@ serde_json.workspace = true
 serde-saphyr = { version = "2.1", default-features = false, features = ["deserialize"] }
 thiserror.workspace = true
 tracing.workspace = true
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots"] }
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "time", "macros"] }
 ignore = "0.4"
 globset = "0.4"
 regex = "1"
@@ -36,7 +36,7 @@ flate2 = "1"
 zip = { version = "9.5.1", default-features = false, features = ["deflate-flate2"] }
 
 [dev-dependencies]
-agent-engine = { path = ".", features = ["test-support"] }
+agent-engine = { path = ".", default-features = false, features = ["test-support"] }
 tempfile.workspace = true
 
 [lints]

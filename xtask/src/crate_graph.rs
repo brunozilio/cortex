@@ -5,7 +5,7 @@ const ALLOWED: [(&str, &[&str]); 12] = [
     ("cli", &["platform", "content", "brand", "app", "console", "domain"]),
     ("app", &["platform", "brand", "domain", "llm-providers", "agent-engine", "code-map"]),
     ("agent-engine", &["script", "content", "brand", "domain", "platform", "language-servers", "llm-providers"]),
-    ("llm-providers", &["brand", "domain"]),
+    ("llm-providers", &["brand", "domain", "platform"]),
     ("domain", &["brand"]),
     ("language-servers", &["brand", "domain", "platform"]),
     ("content", &["brand", "script"]),

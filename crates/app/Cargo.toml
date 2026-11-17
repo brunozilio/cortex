@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+default = ["subscription-providers"]
+subscription-providers = ["agent-engine/subscription-providers", "llm-providers/subscription-providers"]
+
 [dependencies]
 platform.workspace = true
 brand.workspace = true

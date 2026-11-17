@@ -6,7 +6,6 @@ use agent_engine::sessions::InMemorySessions;
 use agent_engine::transcript::Block;
 use domain::model_roles::ModelRole;
 use domain::{EngineEvent, PermissionMode, PromptRequest};
-use serde_json::json;
 
 use crate::{Source, finish, model, start};
 
@@ -23,11 +22,12 @@ fn request(dir: &tempfile::TempDir, role: ModelRole, chosen: &str) -> PromptRequ
     request
 }
 
+#[cfg(feature = "subscription-providers")]
 fn agent_call(kind: &str) -> Block {
     Block::ToolUse {
         id: "agent".into(),
         name: "Agent".into(),
-        input: json!({"subagent_type": kind, "description": "look", "prompt": "Find the entry point."}),
+        input: serde_json::json!({"subagent_type": kind, "description": "look", "prompt": "Find the entry point."}),
     }
 }
 
@@ -50,6 +50,7 @@ fn outside_plan_mode_the_session_model_does_the_work() {
     assert_eq!(scripted.asked()[0].model, model().id);
 }
 
+#[cfg(feature = "subscription-providers")]
 #[test]
 fn the_explore_agent_runs_on_the_explore_model() {
     let dir = tempfile::tempdir().expect("dir");
@@ -63,6 +64,7 @@ fn the_explore_agent_runs_on_the_explore_model() {
     assert_eq!(models, [model().id.as_str(), GROK, model().id.as_str()]);
 }
 
+#[cfg(feature = "subscription-providers")]
 #[test]
 fn the_plan_agent_runs_on_the_plan_model() {
     let dir = tempfile::tempdir().expect("dir");

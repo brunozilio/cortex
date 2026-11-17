@@ -6,7 +6,7 @@ Status: Accepted, 2026-11-16
 
 The engine is synchronous code on operating-system threads: one thread per run, scoped threads for background agents, batches of reading tools, scripts and hooks. Async exists only at the edges and is consumed by blocking code:
 
-- Model HTTP runs on a global two-worker Tokio runtime; the synchronous side blocks on it and wakes every 25 ms to check a stop flag (`crates/agent-engine/src/model/cancellable_http.rs`).
+- Model HTTP runs on a global two-worker Tokio runtime; the synchronous side blocks on it and wakes every 25 ms to check a stop flag (`crates/llm-providers/src/model/cancellable_http.rs`).
 - The console has a second, independent Tokio runtime (`crates/console/src/server.rs`).
 - Script calls are served by a loop with the same 25 ms timeout.
 

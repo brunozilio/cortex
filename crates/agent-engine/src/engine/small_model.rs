@@ -42,6 +42,7 @@ mod tests {
         ModelOption::new(id, id).served_by(provider)
     }
 
+    #[cfg(feature = "subscription-providers")]
     #[test]
     fn each_provider_brings_its_own_small_model() {
         let claude = ModelProvider::new("claude-subscription");
@@ -57,6 +58,7 @@ mod tests {
         assert_eq!(pick(chatgpt, "gpt-6.1-sol", None, &catalog).model.as_deref(), Some("gpt-6.1-terra"));
     }
 
+    #[cfg(feature = "subscription-providers")]
     #[test]
     fn a_small_model_on_another_connected_provider_is_kept_as_named() {
         let chatgpt = ModelProvider::new("openai-subscription");
@@ -66,6 +68,7 @@ mod tests {
         assert_eq!((choice.model.as_deref(), choice.ignored), (Some(grok), None));
     }
 
+    #[cfg(feature = "subscription-providers")]
     #[test]
     fn kiro_declares_haiku_under_its_own_name() {
         let kiro = ModelProvider::new("kiro-subscription");
@@ -85,6 +88,7 @@ mod tests {
         assert_eq!(chosen.model.as_deref(), Some("copilot-subscription:claude-haiku-4.5"));
     }
 
+    #[cfg(feature = "subscription-providers")]
     #[test]
     fn an_alias_is_resolved_before_it_is_checked() {
         let claude = ModelProvider::new("claude-subscription");

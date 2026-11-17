@@ -1,19 +1,26 @@
 [package]
 name = "llm-providers"
-description = "What every model provider shares: the Provider trait, credentials, OAuth, sign-in, catalogs, and the model families' prices and reasoning rules."
+description = "Talking to a model: the Provider trait, one folder per provider, the model client and its wires, the transcript, credentials, OAuth, sign-in, catalogs, and the model families' prices and reasoning rules."
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [features]
+default = ["subscription-providers"]
+subscription-providers = []
 test-support = []
 
 [dependencies]
 brand.workspace = true
 domain.workspace = true
+platform.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 serde_json.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "time", "macros"] }
 base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
 url = "2"

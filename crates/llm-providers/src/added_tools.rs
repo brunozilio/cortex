@@ -31,6 +31,17 @@ pub fn into_tools(body: &mut Value) {
     }
 }
 
+pub const TOOL_SEARCH: &str = "ToolSearch";
+pub const LOADED: &str = "Loaded; call them from now on:\n";
+pub const WAITING: &str = "\n\nNot loaded yet: ";
+
+pub fn loaded_names(result: &str) -> Vec<String> {
+    let Some(shown) = result.strip_prefix(LOADED) else { return Vec::new() };
+    let shown = shown.split_once(WAITING).map_or(shown, |(shown, _)| shown);
+    let shown: Vec<Value> = serde_json::from_str(shown).unwrap_or_default();
+    shown.iter().filter_map(|tool| tool["name"].as_str().map(str::to_owned)).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

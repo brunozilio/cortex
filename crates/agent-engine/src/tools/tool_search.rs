@@ -5,7 +5,9 @@ use serde_json::{Value, json};
 use super::{Access, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
 
-pub const TOOL_SEARCH: &str = "ToolSearch";
+use llm_providers::added_tools::{LOADED, WAITING};
+pub use llm_providers::added_tools::{TOOL_SEARCH, loaded_names};
+
 const DEFER_OVER: usize = 20;
 const FOUND: usize = 5;
 const MIN_WORD: usize = 3;
@@ -140,9 +142,6 @@ impl Tool for ToolSearch {
     }
 }
 
-const LOADED: &str = "Loaded; call them from now on:\n";
-const WAITING: &str = "\n\nNot loaded yet: ";
-
 fn report(found: &[ToolSpec], waiting: &[&str]) -> String {
     let shown: Vec<Value> = found
         .iter()
@@ -158,13 +157,6 @@ fn report(found: &[ToolSpec], waiting: &[&str]) -> String {
         )
     };
     format!("{LOADED}{}{rest}", serde_json::to_string_pretty(&shown).unwrap_or_default())
-}
-
-pub fn loaded_names(result: &str) -> Vec<String> {
-    let Some(shown) = result.strip_prefix(LOADED) else { return Vec::new() };
-    let shown = shown.split_once(WAITING).map_or(shown, |(shown, _)| shown);
-    let shown: Vec<Value> = serde_json::from_str(shown).unwrap_or_default();
-    shown.iter().filter_map(|tool| tool["name"].as_str().map(str::to_owned)).collect()
 }
 
 #[cfg(test)]

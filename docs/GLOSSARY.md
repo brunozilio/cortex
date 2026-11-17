@@ -46,9 +46,9 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 ## Models
 
-**Provider vs vendor.** A provider is a way to reach models: an endpoint plus an authentication method (an API key, a sign-in). A vendor is a model family: its prices, aliases and reasoning rules. The same vendor's models can be reached through more than one provider. The `Provider` trait is in `crates/llm-providers/src/lib.rs`, one folder per provider is in `crates/agent-engine/src/providers/`, and `Vendor` is in `crates/llm-providers/src/vendor.rs`.
+**Provider vs vendor.** A provider is a way to reach models: an endpoint plus an authentication method (an API key, a sign-in). A vendor is a model family: its prices, aliases and reasoning rules. The same vendor's models can be reached through more than one provider. The `Provider` trait is in `crates/llm-providers/src/lib.rs`, one folder per provider is in `crates/llm-providers/src/providers/`, and `Vendor` is in `crates/llm-providers/src/vendor.rs`.
 
-**Wire.** The request and streaming format of a model API: `chat`, `messages`, `responses`. A provider names the wire each of its models speaks. It is not the protocol between the terminal and the backend. Lives in `crates/agent-engine/src/model/wires/`.
+**Wire.** The request and streaming format of a model API: `chat`, `messages`, `responses`. A provider names the wire each of its models speaks. It is not the protocol between the terminal and the backend. Lives in `crates/llm-providers/src/model/wires/`.
 
 **Model roles: small model, advisor, judge.** A session can assign different models to different jobs. The small model does cheap auxiliary work, such as reading a fetched web page before the main model sees it. The advisor is a second model the agent can consult through the `Advisor` tool. The judge is the model that decides whether a run met its verification criteria. Other roles are plan, explore and review. Roles are in `crates/domain/src/model_roles/mod.rs` and resolved in `crates/agent-engine/src/engine/roles.rs`.
 

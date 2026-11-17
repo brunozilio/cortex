@@ -17,15 +17,14 @@ mod lsp_fetch;
 pub use lsp_fetch::NetFetch;
 pub mod mcp;
 pub mod meter;
-pub mod model;
 pub mod permission;
 pub mod plugins;
 pub mod prompt;
-pub mod providers;
 pub mod sessions;
 pub mod tools;
-pub mod transcript;
 pub mod upkeep;
+
+pub use llm_providers::{model, providers, transcript};
 
 pub use boundary::{AgentEngine, EngineError, EventSink, RunGate, RunHandle};
 pub use engine::date::today;
