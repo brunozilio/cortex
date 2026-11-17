@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec<{ agents: { name: string, description: string }[] }>} */
 export const spec = {
   name: "Agent",
-  access: "read",
   input: {
     "properties": {
       "description": {

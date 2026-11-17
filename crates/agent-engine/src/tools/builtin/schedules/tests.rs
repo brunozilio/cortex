@@ -51,8 +51,11 @@ fn prompts_belong_to_their_client_until_it_leaves() {
 
 #[test]
 fn scheduling_asks_first_and_listing_does_not() {
-    use crate::tools::Tool;
-    assert_eq!(CronCreate.access(), crate::tools::Access::Executes, "a planted prompt would run unasked");
-    assert_eq!(ScheduleWakeup.access(), crate::tools::Access::Executes);
-    assert_eq!(CronList.access(), crate::tools::Access::Reads);
+    use crate::tools::{Effect, Tool};
+    let workspace = Workspace::new("/work/api");
+    let acts = |tool: &dyn Tool| tool.effects(&Value::Null, &workspace).iter().any(Effect::acts);
+    assert!(acts(&CronCreate), "a planted prompt would run unasked");
+    assert!(acts(&ScheduleWakeup));
+    assert!(!acts(&CronList));
+    assert!(!acts(&CronDelete), "only this client's schedules can be removed");
 }

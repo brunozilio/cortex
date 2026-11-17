@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec} */
 export const spec = {
   name: "ReadMcpResource",
-  access: "execute",
   input: {
     type: "object",
     properties: { server: { type: "string" }, uri: { type: "string" } },

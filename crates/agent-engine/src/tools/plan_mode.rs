@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::{Access, Outcome, Tool, Workspace};
+use super::{Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
 pub const EXIT_PLAN_TOOL: &str = "ExitPlanMode";
@@ -14,8 +14,8 @@ impl Tool for ExitPlanMode {
         crate::tools::declared(EXIT_PLAN_TOOL, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(EXIT_PLAN_TOOL)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        Vec::new()
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -35,8 +35,8 @@ impl Tool for EnterPlanMode {
         crate::tools::declared(ENTER_PLAN_TOOL, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(ENTER_PLAN_TOOL)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        Vec::new()
     }
 
     fn summary(&self, _input: &Value) -> String {

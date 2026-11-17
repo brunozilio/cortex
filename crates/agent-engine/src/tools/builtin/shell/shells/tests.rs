@@ -25,6 +25,18 @@ fn a_started_command_is_remembered_by_the_agent_that_started_it() {
     assert!(kill(906, &id));
 }
 
+#[test]
+fn stopping_a_command_this_agent_started_needs_no_permission_and_any_other_asks() {
+    use crate::tools::Effect;
+    let id = start(&of_client(908), "server", &mut sh("sleep 30")).expect("start");
+    let acts =
+        |id: &str, client| KillShell.effects(&json!({ "shell_id": id }), &workspace(client)).iter().any(Effect::acts);
+    assert!(!acts(&id, 908), "its own command");
+    assert!(acts(&id, 909), "another agent's command");
+    assert!(acts("bash_nope", 908), "a command it never started");
+    assert!(kill(908, &id));
+}
+
 fn sh(script: &str) -> std::process::Command {
     let mut command = std::process::Command::new("/bin/sh");
     command.arg("-c").arg(script).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());

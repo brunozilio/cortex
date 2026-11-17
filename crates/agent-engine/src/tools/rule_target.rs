@@ -1,67 +1,28 @@
 use std::path::{Component, Path, PathBuf};
 
-use domain::permission_rules::{PermissionRules, RuleKind, Target};
+use domain::permission::{Call, Ruling, ruling_in};
+use domain::permission_rules::PermissionRules;
 use serde_json::Value;
 
-use super::Workspace;
-
-type Ruling = Option<(RuleKind, String)>;
+use super::{Tool, Workspace};
 
 impl Workspace {
-    pub fn ruling(&self, name: &str, subject: &str, input: &Value) -> Ruling {
-        self.ruling_with(&self.policy.permissions, name, subject, input)
+    pub fn ruling(&self, tool: &dyn Tool, input: &Value) -> Ruling {
+        self.ruling_with(&self.policy.permissions, tool, input)
     }
 
-    pub fn ruling_with(&self, rules: &PermissionRules, name: &str, subject: &str, input: &Value) -> Ruling {
+    pub fn ruling_with(&self, rules: &PermissionRules, tool: &dyn Tool, input: &Value) -> Ruling {
         if rules.is_empty() {
             return None;
         }
+        let (name, subject, effects) = (tool.spec().name, tool.summary(input), tool.effects(input, self));
         let cwd = self.cwd.to_string_lossy();
         let home = self.home.as_ref().map(|home| home.to_string_lossy().into_owned());
-        let rule = |target: &Target<'_>| rules.ruling(name, target, &cwd, home.as_deref());
-        let path = ["file_path", "notebook_path", "path"].iter().find_map(|key| input.get(key).and_then(Value::as_str));
-        let searches = matches!(name, "Glob" | "Grep");
-        if let ("Bash", Some(command)) = (name, input.get("command").and_then(Value::as_str)) {
-            return rule(&Target::Command(command));
-        }
-        if matches!(name, "ListMcpResources" | "ReadMcpResource") {
-            let server = input.get("server").and_then(Value::as_str).unwrap_or_default();
-            let uri = input.get("uri").and_then(Value::as_str).unwrap_or_default();
-            return rules.ruling(&format!("mcp__{server}__resources"), &Target::Other(uri), &cwd, home.as_deref());
-        }
-        if name == "WebFetch" {
-            let url = input.get("url").and_then(Value::as_str).unwrap_or(subject);
-            let site = domain::permission_rules::site(url).map(|host| format!("domain:{host}")).unwrap_or_default();
-            return rule(&Target::Other(&site));
-        }
-        if !searches && path.is_none() {
-            return rule(&Target::Other(subject));
-        }
-        let written = folded(&path.map_or_else(|| self.cwd.clone(), |path| self.resolve(path)));
-        let real = resolved(&written);
-        let judge = |path: &Path| {
-            let path = path.to_string_lossy();
-            rule(&if searches { Target::Tree(&path) } else { Target::Path(&path) })
-        };
-        let as_written = judge(&written);
-        if real == written { as_written } else { strictest(as_written, judge(&real)) }
+        ruling_in(rules, &Call { tool: &name, subject: &subject, effects: &effects }, &cwd, home.as_deref())
     }
 }
 
-fn strictest(a: Ruling, b: Ruling) -> Ruling {
-    let kind = |r: &Ruling| r.as_ref().map(|(kind, _)| *kind);
-    for wanted in [RuleKind::Deny, RuleKind::Ask] {
-        if kind(&a) == Some(wanted) {
-            return a;
-        }
-        if kind(&b) == Some(wanted) {
-            return b;
-        }
-    }
-    if kind(&a) == Some(RuleKind::Allow) && kind(&b) == Some(RuleKind::Allow) { a } else { None }
-}
-
-fn folded(path: &Path) -> PathBuf {
+pub(super) fn folded(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for component in path.components() {
         match component {
@@ -75,23 +36,6 @@ fn folded(path: &Path) -> PathBuf {
     out
 }
 
-fn resolved(path: &Path) -> PathBuf {
-    let mut existing = path;
-    let mut rest = Vec::new();
-    loop {
-        if let Ok(real) = existing.canonicalize() {
-            return rest.iter().rev().fold(real, |path, name| path.join(name));
-        }
-        match (existing.parent(), existing.file_name()) {
-            (Some(parent), Some(name)) => {
-                rest.push(name.to_owned());
-                existing = parent;
-            }
-            _ => return path.to_path_buf(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use domain::permission_rules::{PermissionRules, RuleKind};
@@ -103,11 +47,16 @@ mod tests {
         ruling.map(|(kind, _)| kind)
     }
 
+    fn ruled(workspace: &Workspace, tool: &str, input: &Value) -> Option<RuleKind> {
+        let tool = crate::tools::named(tool).expect("a standard tool");
+        kind(workspace.ruling(&*tool, input))
+    }
+
     #[test]
     fn a_path_cannot_climb_around_a_rule() {
         let mut workspace = Workspace::new("/work/rocket");
         workspace.policy.permissions = PermissionRules::default().with(RuleKind::Deny, "Read(secrets/**)");
-        let read = |path: &str| kind(workspace.ruling("Read", path, &json!({ "file_path": path })));
+        let read = |path: &str| ruled(&workspace, "Read", &json!({ "file_path": path }));
         assert_eq!(read("src/../secrets/key"), Some(RuleKind::Deny));
         assert_eq!(read("/work/rocket/./secrets/key"), Some(RuleKind::Deny));
         assert_eq!(read("src/main.rs"), None);
@@ -124,7 +73,7 @@ mod tests {
         let mut workspace = Workspace::new(&project);
         workspace.policy.permissions =
             PermissionRules::default().with(RuleKind::Deny, "Read(secrets/**)").with(RuleKind::Allow, "Edit(src/**)");
-        let call = |tool: &str| kind(workspace.ruling(tool, "", &json!({ "file_path": "src/link/key" })));
+        let call = |tool: &str| ruled(&workspace, tool, &json!({ "file_path": "src/link/key" }));
         assert_eq!(call("Read"), Some(RuleKind::Deny), "the link leads into the denied folder");
         assert_eq!(call("Edit"), None, "allowed as written, not where it leads");
     }
@@ -133,7 +82,7 @@ mod tests {
     fn a_search_is_judged_by_the_folder_it_searches() {
         let mut workspace = Workspace::new("/work/rocket");
         workspace.policy.permissions = PermissionRules::default().with(RuleKind::Deny, "Read(secrets/**)");
-        let grep = |input| kind(workspace.ruling("Grep", "key", &input));
+        let grep = |input| ruled(&workspace, "Grep", &input);
         assert_eq!(grep(json!({ "pattern": "key" })), Some(RuleKind::Deny), "the project holds the denied folder");
         assert_eq!(grep(json!({ "pattern": "key", "path": "src" })), None);
     }

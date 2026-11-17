@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec} */
 export const spec = {
   name: "Edit",
-  access: "edit",
   input: {
     "additionalProperties": false,
     "properties": {

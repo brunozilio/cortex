@@ -1,44 +1,39 @@
 mod ask;
-mod command_class;
 pub(in crate::agent) mod egress;
 mod plan_mode;
+mod policy;
 
 use domain::EngineEvent;
-use domain::command_policy::CommandClass;
+use domain::permission::{Effect, Judgement, Reason, Standing, Verdict};
 use domain::permission_rules::RuleKind;
 use serde_json::{Value, json};
 
 use super::Agent;
-use crate::permission::{Verdict, ruled, verdict};
-use crate::tools::{Access, Outcome, Tool, names};
+use crate::tools::{Outcome, Tool};
 
-type Ruling = Option<(RuleKind, String)>;
+pub(in crate::agent) use policy::Called;
 
 pub(in crate::agent) struct Asking<'r> {
     pub(in crate::agent) id: &'r str,
     pub(in crate::agent) tool: &'r dyn Tool,
-    pub(in crate::agent) name: &'r str,
-    pub(in crate::agent) input: &'r Value,
-    pub(in crate::agent) access: Access,
-    pub(in crate::agent) subject: &'r str,
+    pub(in crate::agent) called: &'r Called<'r>,
+    pub(in crate::agent) judgement: &'r Judgement,
     shown: Option<&'r str>,
-    guarded: bool,
 }
 
 impl Asking<'_> {
-    fn shown(&self) -> &str {
-        self.shown.unwrap_or(self.subject)
+    fn shown(&self, reason: &Reason) -> String {
+        let about = match &self.judgement.guarded {
+            Some((path, guard)) => format!("{}\n{}", guard.why(), path.display()),
+            None => self.shown.unwrap_or(&self.judgement.subject).to_owned(),
+        };
+        reason.heading().map_or(about.clone(), |heading| format!("{heading}\n{about}"))
     }
 }
 
-struct Concern {
-    refusal: String,
-    shown: String,
-}
-
 impl Agent<'_> {
-    fn unattended(&self, access: Access) -> bool {
-        self.control.mode() == domain::PermissionMode::Bypass && access != Access::Reads
+    fn unattended(&self, standing: Standing) -> bool {
+        self.control.mode() == domain::PermissionMode::Bypass && standing != Standing::Reads
     }
 
     pub(in crate::agent) fn permitted(
@@ -62,76 +57,28 @@ impl Agent<'_> {
         hook_permission: Option<&str>,
     ) -> Outcome {
         let name = tool.spec().name;
-        let outside = (tool.access() == Access::Reads)
-            .then(|| tool.reaches_outside(input, self.workspace))
-            .flatten()
-            .map(|path| path.display().to_string());
-        let class = self.command_class(&name, input);
-        if let CommandClass::Forbidden(reason) = class {
-            return self.refused(&name, reason);
-        }
-        let guarded = self.guarded_write(tool, input);
-        let (access, subject) = match (&outside, &guarded) {
-            (Some(path), _) => (Access::ReadsOutside, path.as_str()),
-            (None, Some((path, _))) => (Access::EditsGuarded, path.as_str()),
-            (None, None) if class == CommandClass::ReadOnly => (Access::Reads, subject),
-            (None, None) => (tool.access(), subject),
-        };
-        let shown = guarded.as_ref().map(|(_, shown)| shown.as_str()).or(shown);
-        let asking = Asking { id, tool, name: &name, input, access, subject, shown, guarded: guarded.is_some() };
+        let effects = tool.effects(input, self.workspace);
+        let called = Called { name: &name, subject, input, effects: &effects };
+        let judgement = self.judged(&called);
+        let asking = Asking { id, tool, called: &called, judgement: &judgement, shown };
         self.decided(&asking, hook_permission)
     }
 
     fn decided(&self, asking: &Asking<'_>, hook_permission: Option<&str>) -> Outcome {
-        let Asking { name, input, access, subject, guarded, .. } = *asking;
-        let mode = self.control.mode();
-        let by_mode = verdict(mode, access, name, subject, &self.control.remembered());
-        let rule = self.rule_for(name, subject, input, guarded);
-        let rule_asks = matches!(rule, Some((RuleKind::Ask, _)));
-        let original = ruled(mode, access, rule, by_mode);
-        if !matches!(original, Verdict::Deny(_))
-            && let Some(concern) = self.concern(asking)
-        {
-            return self.asked_about(asking, concern);
+        let original = asking.judgement.verdict.clone();
+        if original.asked_every_time() {
+            return self.carried_out(asking, original);
         }
-        let rule_asks = rule_asks && original == Verdict::Ask;
-        let verdict = after_the_tool_hook(original, hook_permission, rule_asks);
-        let pre_approved = self.pre_approved(name, subject, input, guarded);
-        if pre_approved && !rule_asks && !matches!(verdict, Verdict::Deny(_)) && hook_permission != Some("ask") {
-            return self.went_ahead(asking.id, asking.tool, input);
+        let rule_asks = original.asked_by_a_rule();
+        let verdict = after_the_tool_hook(original, hook_permission, rule_asks, asking.judgement);
+        let pre_approved = self.pre_approved(asking);
+        if pre_approved && !rule_asks && !verdict.denies() && hook_permission != Some("ask") {
+            return self.went_ahead(asking.id, asking.tool, asking.called.input);
         }
         match self.after_the_permission_hook(asking, verdict, rule_asks) {
             Ok(verdict) => self.carried_out(asking, verdict),
             Err(settled) => settled,
         }
-    }
-
-    fn concern(&self, asking: &Asking<'_>) -> Option<Concern> {
-        let (name, input, shown) = (asking.name, asking.input, asking.shown());
-        if let Some(why) = self.always_asks(name, input) {
-            return Some(Concern {
-                refusal: format!("Not run: {why} The user cannot be asked here."),
-                shown: format!("{why}\n{shown}"),
-            });
-        }
-        if name == names::BASH && self.leaves_the_sandbox(input) {
-            return Some(Concern {
-                refusal: "Not run: leaving the sandbox needs the user, who cannot be asked here.".into(),
-                shown: format!("Run OUTSIDE the sandbox (it may write anywhere):\n{shown}"),
-            });
-        }
-        let concern = self.package_concerns(name, input)?;
-        Some(Concern {
-            refusal: format!("Not run: {concern}. Ask the user before installing it."),
-            shown: format!("Check the package first: {concern}\n{shown}"),
-        })
-    }
-
-    fn asked_about(&self, asking: &Asking<'_>, concern: Concern) -> Outcome {
-        if self.control.no_prompts() {
-            return self.refused(asking.name, concern.refusal);
-        }
-        self.ask_permission(asking, &concern.shown)
     }
 
     fn after_the_permission_hook(
@@ -140,10 +87,10 @@ impl Agent<'_> {
         verdict: Verdict,
         rule_asks: bool,
     ) -> Result<Verdict, Outcome> {
-        if !matches!(verdict, Verdict::Ask) {
+        if !verdict.asks() {
             return Ok(verdict);
         }
-        let (name, input) = (asking.name, asking.input);
+        let Called { name, input, .. } = *asking.called;
         let hook = self
             .workspace
             .hooks
@@ -172,9 +119,11 @@ impl Agent<'_> {
     }
 
     fn carried_out(&self, asking: &Asking<'_>, verdict: Verdict) -> Outcome {
-        let Asking { id, tool, name, input, access, .. } = *asking;
+        let Asking { id, tool, called, judgement, .. } = *asking;
+        let Called { name, input, .. } = *called;
+        let verdict = if self.control.no_prompts() { verdict.without_the_user(name) } else { verdict };
         match verdict {
-            Verdict::Allow if self.unattended(access) => {
+            Verdict::Allow if self.unattended(judgement.standing) => {
                 let instructions = self.workspace.instructions_text();
                 let checked = self.workspace.policy.safety.as_deref().map_or(Ok(()), |safety| {
                     safety.check(self.api, &self.request, &instructions, name, input, self.control.stop_flag())
@@ -186,58 +135,25 @@ impl Agent<'_> {
             }
             Verdict::Allow => self.went_ahead(id, tool, input),
             Verdict::Deny(reason) => self.refused(name, reason),
-            Verdict::Ask if self.control.no_prompts() => {
-                self.refused(name, format!("{name} requires permission; dontAsk denies unapproved actions."))
+            Verdict::Ask { reason, rememberable, rule } => {
+                self.ask_permission(asking, &asking.shown(&reason), rememberable, rule)
             }
-            Verdict::Ask => self.ask_permission(asking, asking.shown()),
         }
     }
 
-    fn leaves_the_sandbox(&self, input: &Value) -> bool {
-        self.workspace.sandboxed() && input["unsandboxed"].as_bool() == Some(true)
-    }
-
-    fn package_concerns(&self, name: &str, input: &Value) -> Option<String> {
-        let network = self.workspace.services.network.as_ref().filter(|_| self.workspace.policy.dependency_guard)?;
-        let command = input["command"].as_str().filter(|_| name == names::BASH)?;
-        let found = crate::guard::packages::concerns(&*network.0, command, crate::guard::packages::today());
-        (!found.is_empty()).then(|| found.join("; "))
-    }
-
-    fn guarded_write(&self, tool: &dyn Tool, input: &Value) -> Option<(String, String)> {
-        let target = tool.writes_to(input, self.workspace)?;
-        let guarded = self.workspace.guarded_write(&target)?;
-        let path = guarded.path.display().to_string();
-        let shown = format!("{}\n{path}", guarded.why);
-        Some((path, shown))
-    }
-
-    pub(in crate::agent) fn rule_for(&self, name: &str, subject: &str, input: &Value, guarded: bool) -> Ruling {
-        let remembered = self.control.remembered();
-        if guarded {
-            let named = self.workspace.policy.permissions.naming_their_target();
-            let ruling = self.workspace.ruling_with(&named, name, subject, input);
-            let recalled = remembered.rules().naming_their_target();
-            return ruling.or_else(|| self.workspace.ruling_with(&recalled, name, subject, input));
-        }
-        self.workspace
-            .ruling(name, subject, input)
-            .or_else(|| self.workspace.ruling_with(remembered.rules(), name, subject, input))
-    }
-
-    fn pre_approved(&self, name: &str, subject: &str, input: &Value, guarded: bool) -> bool {
+    fn pre_approved(&self, asking: &Asking<'_>) -> bool {
         let rules = &self.workspace.policy.pre_approved;
-        let ruling = if guarded {
-            self.workspace.ruling_with(&rules.naming_their_target(), name, subject, input)
+        let ruling = if asking.judgement.guarded.is_some() {
+            self.ruling_in(&rules.naming_their_target(), asking.called)
         } else {
-            self.workspace.ruling_with(rules, name, subject, input)
+            self.ruling_in(rules, asking.called)
         };
         matches!(ruling, Some((RuleKind::Allow, _)))
     }
 
     pub(in crate::agent) fn went_ahead(&self, id: &str, tool: &dyn Tool, input: &Value) -> Outcome {
         self.workspace.tracking.count_refusal(false);
-        if tool.access() != crate::tools::Access::Executes {
+        if !tool.effects(input, self.workspace).iter().any(Effect::acts) {
             return tool.run(input, self.workspace);
         }
         let show = |line: String| {
@@ -255,10 +171,16 @@ impl Agent<'_> {
     }
 }
 
-fn after_the_tool_hook(original: Verdict, hook_permission: Option<&str>, rule_asks: bool) -> Verdict {
+fn after_the_tool_hook(
+    original: Verdict,
+    hook_permission: Option<&str>,
+    rule_asks: bool,
+    judgement: &Judgement,
+) -> Verdict {
     match (original, hook_permission) {
         (Verdict::Deny(reason), _) => Verdict::Deny(reason),
-        (_, Some("ask")) => Verdict::Ask,
+        (Verdict::Allow, Some("ask")) => judgement.asking(Reason::Hook),
+        (asking, Some("ask")) => asking,
         (_, Some("deny")) => Verdict::Deny("Hook denied the tool call".into()),
         (verdict, Some("allow")) if rule_asks => verdict,
         (_, Some("allow")) => Verdict::Allow,
@@ -270,17 +192,31 @@ fn after_the_tool_hook(original: Verdict, hook_permission: Option<&str>, rule_as
 mod tests {
     use super::*;
 
+    fn judgement() -> Judgement {
+        Judgement {
+            verdict: Verdict::Allow,
+            standing: Standing::Acts,
+            subject: "make".into(),
+            guarded: None,
+            rule: Some("Bash(make)".into()),
+        }
+    }
+
     #[test]
     fn a_tool_hook_s_answer_never_lifts_a_denial_nor_a_rule_that_asks() {
+        let judgement = judgement();
+        let after = |original, hook, rule_asks| after_the_tool_hook(original, hook, rule_asks, &judgement);
         let denied = || Verdict::Deny("no".into());
+        let asked = || judgement.asking(Reason::Mode);
+        let by_rule = || judgement.asking(Reason::Rule("Bash(make)".into()));
         for hook in [None, Some("allow"), Some("ask"), Some("deny")] {
-            assert_eq!(after_the_tool_hook(denied(), hook, false), denied(), "{hook:?}");
+            assert_eq!(after(denied(), hook, false), denied(), "{hook:?}");
         }
-        assert_eq!(after_the_tool_hook(Verdict::Ask, Some("allow"), false), Verdict::Allow);
-        assert_eq!(after_the_tool_hook(Verdict::Ask, Some("allow"), true), Verdict::Ask, "the rule still asks");
-        assert_eq!(after_the_tool_hook(Verdict::Allow, Some("ask"), false), Verdict::Ask);
-        assert!(matches!(after_the_tool_hook(Verdict::Allow, Some("deny"), false), Verdict::Deny(_)));
-        assert_eq!(after_the_tool_hook(Verdict::Allow, Some("unknown"), false), Verdict::Allow);
-        assert_eq!(after_the_tool_hook(Verdict::Ask, None, true), Verdict::Ask);
+        assert_eq!(after(asked(), Some("allow"), false), Verdict::Allow);
+        assert_eq!(after(by_rule(), Some("allow"), true), by_rule(), "the rule still asks");
+        assert_eq!(after(Verdict::Allow, Some("ask"), false), judgement.asking(Reason::Hook));
+        assert!(after(Verdict::Allow, Some("deny"), false).denies());
+        assert_eq!(after(Verdict::Allow, Some("unknown"), false), Verdict::Allow);
+        assert_eq!(after(by_rule(), None, true), by_rule());
     }
 }

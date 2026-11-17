@@ -186,6 +186,12 @@ Some shell commands are refused outright, in every mode, because they would prin
 
 The agent is told to let you run such a command yourself with `! <command>` if you need it.
 
+A wildcard or a brace expansion that could name one of these files (`cat .env*`, `cat .{env,x}`) is refused like the file itself. Every command of the line is checked, wherever it sits: behind `sudo`, `env`, `xargs` or another wrapper, inside `if`, `for`, a function or `$(…)`, or run by `find -exec`. This and [deny rules](./permissions#commands) are best-effort lists: a program outside the list, an interpreter or a script can still read a secret. The sandbox is the barrier.
+
+## Read-only commands
+
+A shell command runs without asking only when the parser can follow the whole line, the line is a plain list or pipeline, and every command in it is a listed reading program with listed flags, no `VAR=value` prefix, no wrapper, no redirection to a file, no word the shell would expand, and no path outside the project. See [Permissions](./permissions#read-only-commands).
+
 ## Actions that always ask
 
 These are asked about every time, even in bypass mode and even with an allow rule, and cannot be remembered:

@@ -119,12 +119,45 @@ Path specifiers match like `.gitignore`:
 
 #### Commands
 
-Shell rules read the command the way the shell will run it:
+Shell rules read the command the way the shell will run it. The line is parsed into every simple command it runs, including those inside `if`, `for`, `while`, `case`, functions, subshells, `{ …; }`, `$(…)`, backticks, `<(…)` and the command `find -exec` runs:
 
-- **Compound commands** (`&&`, `;`, `|`): every part must be allowed. Read-only parts (`ls`, `cat`, `git status`…) and `cd` into a folder inside the project go along without a rule. One denied part refuses the whole command.
-- **Hidden commands** (`$(…)`, backticks, `<(…)`, `bash -c '…'`, `eval`, `xargs`) and **redirections to files** are never allowed by an allow rule. When deny or ask rules with a specifier exist, such a command is asked about.
-- **Deny rules see through disguises**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }` all match `Bash(rm:*)`.
+- **Compound commands** (`&&`, `;`, `|`, newlines, control structures): every part must be allowed. Read-only parts (`ls`, `cat`, `git status`…) and `cd` into a folder inside the project go along without a rule. One denied part refuses the whole command.
+- **Hidden commands** (`$(…)`, backticks, `<(…)`, `bash -c '…'`, `eval`, a program named by a variable) and **redirections to files** are never allowed by an allow rule. The commands inside a substitution are parts of their own, so a deny rule naming one refuses the whole line; what cannot be seen (`bash -c '…'`, `eval`, `$X`) is asked about when deny or ask rules with a specifier exist.
+- **Deny rules see through disguises**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` all match `Bash(rm:*)`. The wrappers taken apart are `sudo`, `doas`, `env`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs` and `busybox`.
 - **Allow rules read the command as written**: `LD_PRELOAD=/tmp/x.so git status` does not match `Bash(git status:*)`.
+- **A line that cannot be parsed with confidence** (an unclosed quote, arithmetic such as `$((…))` holding a command, `coproc`, a heredoc whose body runs a substitution) is never allowed by a rule with a specifier and is asked about when deny or ask rules with a specifier exist.
+
+Deny rules are a best-effort list: a command built while it runs (a script file, an interpreter's inline code, the value of a variable) is invisible to them. The [sandbox](./sandbox-and-safety) is what stops a command from writing where it should not.
+
+#### Read-only commands
+
+A shell command runs without asking, in every mode, only when the whole line is a plain list or pipeline (no control structure, function, subshell, group, `!` or substitution) and every command in it:
+
+- is a listed reading program (`ls`, `cat`, `head`, `grep`, `rg`, `find`, `git status`, `git diff`, `git log`…) used only with flags listed for it;
+- has no `VAR=value` prefix and no wrapper (`sudo ls` asks);
+- redirects only to `/dev/null` or between its own outputs (`2>&1`), never to a file;
+- has no word the shell would change: no `$`, backtick or backslash outside single quotes, no unquoted `*`, `?`, `[`, `{` or `<`, and no `~` that names a home folder. Quoted patterns are plain words: `find . -name '*.rs'` and `grep 'a.*b' notes.txt` are read-only, `find . -name *.rs` is not. `git diff HEAD~1` is read-only;
+- names no path outside the project (`/…`, `..`).
+
+#### Tools and their effects
+
+Each built-in tool says, from its input, what the call will do, and the decision is made from that:
+
+| Tool | Treated as |
+|---|---|
+| `Read`, `LSP` | reading that file (asks outside the project) |
+| `Glob`, `Grep` | reading the folder they search |
+| `Write`, `Edit`, `NotebookEdit` | writing that file (asks outside the project, in `.git/` or in `{{DIR}}/`) |
+| `Bash`, `Monitor` | running the command (read-only commands run freely) |
+| `WebFetch`, `WebSearch` | reaching the network (`WebFetch(domain:…)` rules) |
+| `CronCreate`, `ScheduleWakeup` | starting work later: asks |
+| `Agent`, `Watch`, `PushNotification`, task and plan tools | no permission needed; a sub-agent is held to its own mode |
+| `KillShell`, `CronDelete`, `TaskStop` | no permission needed for the agent's own work; `KillShell` on anything else asks |
+| `SendMessage` to another session | asks unless a rule allows `SendMessage` |
+| `ListMcpResources`, `ReadMcpResource` | follow that server's rules (`mcp__docs`, `mcp__docs__resources(…)`) |
+| MCP tools | asks unless a rule allows the server or the tool |
+
+Your own script tools in `~/{{DIR}}/tools/*.js` say what they do with `access` in their `spec`: `"read"` runs freely, `"edit"` is treated like an edit, `"execute"` (or no `access`) asks. A project's script tools always ask.
 
 #### Invalid rules
 

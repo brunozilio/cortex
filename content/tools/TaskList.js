@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec} */
 export const spec = {
   name: "TaskList",
-  access: "read",
   input: {
     "additionalProperties": false,
     "properties": {},

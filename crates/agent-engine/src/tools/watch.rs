@@ -9,7 +9,7 @@ use domain::inbox::Notice;
 use domain::watch::{LASTS, Step, Watching};
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace, field, inbox};
+use super::{Outcome, Tool, Workspace, field, inbox};
 use crate::model::ToolSpec;
 
 pub const WATCH_TOOL: &str = "Watch";
@@ -23,8 +23,8 @@ impl Tool for Watch {
         crate::tools::declared(WATCH_TOOL, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(WATCH_TOOL)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<super::Effect> {
+        vec![super::Effect::Spawn(super::SpawnKind::Watch)]
     }
 
     fn summary(&self, input: &Value) -> String {

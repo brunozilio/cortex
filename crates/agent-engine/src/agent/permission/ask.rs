@@ -1,11 +1,11 @@
-use domain::permission_rules;
+use domain::permission::Judgement;
 use domain::{AgentAsk, AskId, AskKind, Decision, EngineEvent};
 use serde_json::Value;
 use std::sync::mpsc::RecvError;
 
-use super::Asking;
+use super::{Asking, Called};
 use crate::agent::Agent;
-use crate::tools::{Access, Outcome, ask};
+use crate::tools::{Outcome, ask};
 
 impl Agent<'_> {
     pub(in crate::agent) fn ask_user(&self, id: &str, input: &Value) -> Outcome {
@@ -32,19 +32,21 @@ impl Agent<'_> {
         }
     }
 
-    pub(super) fn ask_permission(&self, asking: &Asking<'_>, shown: &str) -> Outcome {
-        let Asking { id, tool, name, input, access, subject, .. } = *asking;
-        let rule = permission_rules::suggest(name, subject, access == Access::ReadsOutside);
+    pub(super) fn ask_permission(
+        &self,
+        asking: &Asking<'_>,
+        shown: &str,
+        rememberable: bool,
+        rule: Option<String>,
+    ) -> Outcome {
+        let Asking { id, tool, called, .. } = *asking;
+        let Called { name, input, .. } = *called;
         self.notify(
             "permission_prompt",
             &format!("{brand_name} needs your permission to use {name}", brand_name = brand::NAME),
         );
-        let kind = AskKind::Permission {
-            tool: name.to_owned(),
-            subject: shown.to_owned(),
-            rememberable: self.always_asks(name, input).is_none(),
-            rule: rule.clone(),
-        };
+        let kind =
+            AskKind::Permission { tool: name.to_owned(), subject: shown.to_owned(), rememberable, rule: rule.clone() };
         match self.asked(id, kind) {
             Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => self.went_ahead(id, tool, input),
             Ok(Decision::AllowAlways) => {
@@ -71,7 +73,10 @@ impl Agent<'_> {
                 }
                 self.control.remember(|remembered| remembered.allow_rule(&rule));
             }
-            None => self.control.remember(|remembered| remembered.remember(asking.name, asking.access, asking.subject)),
+            None => {
+                let Judgement { standing, subject, .. } = asking.judgement;
+                self.control.remember(|remembered| remembered.remember(asking.called.name, *standing, subject));
+            }
         }
     }
 

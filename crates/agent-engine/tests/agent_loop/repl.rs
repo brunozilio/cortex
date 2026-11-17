@@ -121,8 +121,12 @@ impl agent_engine::tools::Tool for Slow {
         }
     }
 
-    fn access(&self) -> agent_engine::tools::Access {
-        agent_engine::tools::Access::Reads
+    fn effects(
+        &self,
+        _input: &serde_json::Value,
+        _workspace: &agent_engine::tools::Workspace,
+    ) -> Vec<agent_engine::tools::Effect> {
+        Vec::new()
     }
 
     fn summary(&self, _input: &serde_json::Value) -> String {
@@ -211,8 +215,12 @@ impl agent_engine::tools::Tool for Broken {
         }
     }
 
-    fn access(&self) -> agent_engine::tools::Access {
-        agent_engine::tools::Access::Reads
+    fn effects(
+        &self,
+        _input: &serde_json::Value,
+        _workspace: &agent_engine::tools::Workspace,
+    ) -> Vec<agent_engine::tools::Effect> {
+        Vec::new()
     }
 
     fn summary(&self, _input: &serde_json::Value) -> String {

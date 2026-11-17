@@ -1,4 +1,4 @@
-use super::{Access, Outcome, Tool, Workspace};
+use super::{Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 use serde_json::{Value, json};
 #[derive(Debug)]
@@ -16,8 +16,8 @@ impl Tool for Structured {
     fn spec(&self) -> ToolSpec {
         crate::tools::declared(super::names::STRUCTURED_OUTPUT, &json!({ "schema": self.schema }))
     }
-    fn access(&self) -> Access {
-        crate::tools::declared_access(super::names::STRUCTURED_OUTPUT)
+    fn effects(&self, _input: &serde_json::Value, _workspace: &Workspace) -> Vec<Effect> {
+        Vec::new()
     }
     fn summary(&self, _: &Value) -> String {
         "Structured result".into()

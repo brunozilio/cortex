@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use super::shells::Watch;
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
+use crate::tools::{Outcome, Tool, Workspace, field, required};
 
 #[derive(Debug)]
 pub struct Monitor;
@@ -12,8 +12,12 @@ impl Tool for Monitor {
         crate::tools::declared("Monitor", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("Monitor")
+    fn effects(&self, input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        use crate::tools::{Effect, SpawnKind};
+        vec![
+            Effect::exec(field(input, "command").unwrap_or_default(), false),
+            Effect::Spawn(SpawnKind::BackgroundShell),
+        ]
     }
 
     fn summary(&self, input: &Value) -> String {

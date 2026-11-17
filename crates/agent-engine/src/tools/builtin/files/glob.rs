@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use serde_json::{Value, json};
 
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
+use crate::tools::{Outcome, Tool, Workspace, field, required, shown};
 
 const LIMIT: usize = 100;
 
@@ -16,12 +16,8 @@ impl Tool for Glob {
         crate::tools::declared("Glob", &json!({ "LIMIT": LIMIT }))
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("Glob")
-    }
-
-    fn reaches_outside(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
-        workspace.outside(field(input, "path"))
+    fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        vec![crate::tools::Effect::ReadTree(workspace.place(field(input, "path").unwrap_or(".")))]
     }
 
     fn summary(&self, input: &Value) -> String {

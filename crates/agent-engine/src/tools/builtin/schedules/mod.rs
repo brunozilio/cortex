@@ -9,7 +9,7 @@ use domain::schedule::{MOST, Moment, Scheduled, When};
 use serde_json::Value;
 
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
+use crate::tools::{Outcome, Tool, Workspace, field, required};
 
 struct Entry {
     scheduled: Scheduled,

@@ -100,15 +100,16 @@ impl Agent<'_> {
             names::EXIT_WORKTREE,
         ];
         let Some(tool) = self.tool(run, name) else { return false };
-        tool.access() == crate::tools::Access::Reads
+        let effects = tool.effects(input, self.workspace);
+        domain::permission::change_nothing(&effects)
             && !SERIAL.contains(&name)
             && !Handler::of(name).starts_background_work()
             && !name.starts_with(names::TASK_FAMILY)
             && !tool.serial()
-            && tool.reaches_outside(input, self.workspace).is_none()
+            && self.workspace.stays_inside(&effects)
             && self
                 .workspace
-                .ruling(name, &tool.summary(input), input)
+                .ruling(tool, input)
                 .is_none_or(|(kind, _)| kind == domain::permission_rules::RuleKind::Allow)
     }
 }

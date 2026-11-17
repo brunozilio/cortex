@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec} */
 export const spec = {
   name: "Monitor",
-  access: "execute",
   input: {
     "additionalProperties": false,
     "properties": {

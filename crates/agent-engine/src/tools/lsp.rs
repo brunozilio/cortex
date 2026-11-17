@@ -6,7 +6,7 @@ use domain::lsp::answer::{describe, explain};
 use domain::lsp::uri::uri_of;
 use serde_json::Value;
 
-use super::{Access, Outcome, Tool, Workspace, clip, field, shown};
+use super::{Outcome, Tool, Workspace, clip, field, shown};
 use crate::model::ToolSpec;
 
 #[derive(Debug)]
@@ -17,12 +17,11 @@ impl Tool for Lsp {
         crate::tools::declared("LSP", &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("LSP")
-    }
-
-    fn reaches_outside(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
-        workspace.outside(field(input, "file_path"))
+    fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        field(input, "file_path")
+            .map(|path| crate::tools::Effect::ReadPath(workspace.place(path)))
+            .into_iter()
+            .collect()
     }
 
     fn summary(&self, input: &Value) -> String {

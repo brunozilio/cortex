@@ -1,0 +1,165 @@
+use std::path::Path;
+
+use super::rules::{rule_for, suggested};
+use super::{Call, Effect, Exec, Guard, Judgement, PolicyContext, Reason, Remembered, Standing, Verdict};
+use crate::PermissionMode;
+use crate::command_policy::{CommandClass, GitFacts, classify_command, sign_in_refused};
+use crate::permission_rules::RuleKind;
+
+#[derive(Debug, Clone, Copy)]
+pub struct PolicyEngine;
+
+struct Stood {
+    standing: Standing,
+    subject: String,
+    guarded: Option<(std::path::PathBuf, Guard)>,
+}
+
+impl PolicyEngine {
+    pub fn decide(call: &Call<'_>, cx: &PolicyContext<'_>) -> Verdict {
+        Self::judge(call, cx).verdict
+    }
+
+    pub fn judge(call: &Call<'_>, cx: &PolicyContext<'_>) -> Judgement {
+        let classes = classes(call, cx);
+        let stood = standing(call, cx, &classes);
+        let rule = suggested(call, &stood.subject, stood.standing == Standing::ReadsOutside);
+        let judged = |verdict| Judgement {
+            verdict,
+            standing: stood.standing,
+            subject: stood.subject.clone(),
+            guarded: stood.guarded.clone(),
+            rule: rule.clone(),
+        };
+        if let Some(refusal) = forbidden(call, cx, &classes) {
+            return judged(Verdict::Deny(refusal));
+        }
+        let mode = cx.mode();
+        let by_mode = by_mode(mode, stood.standing, call.tool, &stood.subject, cx.remembered);
+        let ruling = rule_for(call, cx, stood.guarded.is_some());
+        let asked_by = match &ruling {
+            Some((RuleKind::Ask, text)) => Some(text.clone()),
+            _ => None,
+        };
+        let verdict = match ruled(mode, stood.standing, ruling, by_mode) {
+            Verdict::Deny(reason) => Verdict::Deny(reason),
+            settled => {
+                let asks = settled.asks();
+                let reason = cx.concern(call, risk(&classes), leaves_the_sandbox(call, cx)).or_else(|| {
+                    asks.then(|| match (asked_by, &stood.guarded, stood.standing) {
+                        (Some(rule), ..) => Reason::Rule(rule),
+                        (None, Some((path, guard)), _) => Reason::Guarded { path: path.clone(), guard: *guard },
+                        (None, None, Standing::ReadsOutside) => Reason::Outside(stood.subject.clone().into()),
+                        (None, None, _) => Reason::Mode,
+                    })
+                });
+                match reason {
+                    Some(reason) => Verdict::Ask { rememberable: reason.rememberable(), reason, rule: rule.clone() },
+                    None => Verdict::Allow,
+                }
+            }
+        };
+        judged(verdict)
+    }
+}
+
+fn execs<'a>(call: &Call<'a>) -> impl Iterator<Item = &'a Exec> {
+    call.effects.iter().filter_map(|effect| match effect {
+        Effect::Exec(exec) => Some(exec),
+        _ => None,
+    })
+}
+
+fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Vec<CommandClass> {
+    execs(call)
+        .map(|exec| {
+            let branches =
+                if exec.command.text().contains("push") { cx.surroundings.branches() } else { Default::default() };
+            let git =
+                GitFacts { current_branch: branches.current.as_deref(), default_branch: branches.default.as_deref() };
+            classify_command(&exec.command, &git)
+        })
+        .collect()
+}
+
+fn forbidden(call: &Call<'_>, cx: &PolicyContext<'_>, classes: &[CommandClass]) -> Option<String> {
+    let signing_in =
+        execs(call).find_map(|exec| sign_in_refused(exec.command.text(), cx.sandboxed && !exec.unsandboxed));
+    signing_in.or_else(|| {
+        classes.iter().find_map(|class| match class {
+            CommandClass::Forbidden(reason) => Some(reason.clone()),
+            _ => None,
+        })
+    })
+}
+
+fn risk(classes: &[CommandClass]) -> Option<String> {
+    classes.iter().find_map(|class| match class {
+        CommandClass::Risky(why) => Some(why.clone()),
+        _ => None,
+    })
+}
+
+fn leaves_the_sandbox(call: &Call<'_>, cx: &PolicyContext<'_>) -> bool {
+    cx.sandboxed && execs(call).any(|exec| exec.unsandboxed)
+}
+
+fn shown(path: &Path) -> String {
+    path.display().to_string()
+}
+
+fn standing(call: &Call<'_>, cx: &PolicyContext<'_>, classes: &[CommandClass]) -> Stood {
+    let outside = call.effects.iter().find_map(|effect| match effect {
+        Effect::ReadPath(place) | Effect::ReadTree(place) if !cx.bounds.may_read(&place.real) => Some(place),
+        _ => None,
+    });
+    let guarded = call.effects.iter().find_map(|effect| match effect {
+        Effect::WritePath(place) => cx.bounds.guard(&place.real).map(|guard| (place.real.clone(), guard)),
+        _ => None,
+    });
+    let plain = |standing| Stood { standing, subject: call.subject.to_owned(), guarded: None };
+    let mut read_only = classes.iter().map(|class| *class == CommandClass::ReadOnly);
+    let acts = call.effects.iter().any(|effect| match effect {
+        Effect::Exec(_) => !read_only.next().unwrap_or(false),
+        other => other.acts(),
+    });
+    if acts {
+        return plain(Standing::Acts);
+    }
+    match (outside, guarded) {
+        (Some(place), _) => Stood { standing: Standing::ReadsOutside, subject: shown(&place.written), guarded: None },
+        (None, Some((path, guard))) => {
+            Stood { standing: Standing::EditsGuarded, subject: shown(&path), guarded: Some((path, guard)) }
+        }
+        (None, None) if call.effects.iter().any(Effect::changes_files) => plain(Standing::Edits),
+        (None, None) => plain(Standing::Reads),
+    }
+}
+
+fn by_mode(mode: PermissionMode, standing: Standing, tool: &str, subject: &str, remembered: &Remembered) -> Verdict {
+    let ask = || Verdict::Ask { reason: Reason::Mode, rememberable: true, rule: None };
+    match (mode, standing) {
+        (_, Standing::Reads) | (PermissionMode::Bypass, _) => Verdict::Allow,
+        (_, Standing::ReadsOutside) if remembered.allows(tool, standing, subject) => Verdict::Allow,
+        (_, Standing::ReadsOutside) => ask(),
+        (PermissionMode::Plan, _) => Verdict::Deny(format!(
+            "{tool} is not available while planning: only read and search now, then present the plan."
+        )),
+        (PermissionMode::AcceptEdits, Standing::Edits) => Verdict::Allow,
+        _ if remembered.allows(tool, standing, subject) => Verdict::Allow,
+        _ => ask(),
+    }
+}
+
+fn ruled(mode: PermissionMode, standing: Standing, rule: Option<(RuleKind, String)>, by_mode: Verdict) -> Verdict {
+    let planning = mode == PermissionMode::Plan && standing.refused_while_planning();
+    match rule {
+        Some((RuleKind::Deny, rule)) => Verdict::Deny(format!(
+            "The permission rule {rule} in settings refuses this. Do not retry it; take another approach or ask the user."
+        )),
+        _ if mode == PermissionMode::Bypass || planning => by_mode,
+        Some((RuleKind::Ask, _)) => Verdict::Ask { reason: Reason::Mode, rememberable: true, rule: None },
+        Some((RuleKind::Allow, _)) => Verdict::Allow,
+        None => by_mode,
+    }
+}

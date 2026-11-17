@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use super::McpServer;
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, field};
+use crate::tools::{Effect, Outcome, Tool, Workspace, field};
 
 pub(super) fn outcome(result: &Value) -> Outcome {
     let mut text = Vec::new();
@@ -103,8 +103,8 @@ impl Tool for McpTool {
         self.spec.clone()
     }
 
-    fn access(&self) -> Access {
-        builtin_access(&self.server.name, &self.name)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        remote_effects(&self.server.name, &self.name)
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -126,10 +126,10 @@ impl Tool for McpTool {
     }
 }
 
-pub fn builtin_access(server: &str, name: &str) -> Access {
+pub fn remote_effects(server: &str, name: &str) -> Vec<Effect> {
     use domain::memory;
     match server {
-        memory::MEMORY_SERVER if name == memory::MEMORY_SEARCH_TOOL => Access::Reads,
-        _ => Access::Executes,
+        memory::MEMORY_SERVER if name == memory::MEMORY_SEARCH_TOOL => Vec::new(),
+        _ => vec![Effect::Remote { server: server.to_owned() }],
     }
 }

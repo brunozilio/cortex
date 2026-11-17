@@ -48,28 +48,29 @@ done"#,
 }
 #[test]
 fn planning_mode_rejects_builtin_mutations() {
-    use agent_engine::{
-        mcp::builtin_access,
-        permission::{Remembered, Verdict, verdict},
-    };
+    use agent_engine::mcp::remote_effects;
+    use domain::permission::{Bounds, Call, NothingAround, PolicyContext, PolicyEngine, Remembered, Verdict};
+    use domain::permission_rules::PermissionRules;
     use domain::{PermissionMode, memory};
+    let (rules, remembered, bounds) = (PermissionRules::default(), Remembered::default(), Bounds::default());
+    let planning = PolicyContext {
+        mode: PermissionMode::Plan,
+        ceiling: None,
+        rules: &rules,
+        remembered: &remembered,
+        bounds: &bounds,
+        cwd: "/repo",
+        home: None,
+        sandboxed: false,
+        no_prompts: false,
+        surroundings: &NothingAround,
+    };
+    let decide = |server: &str, tool: &str| {
+        let effects = remote_effects(server, tool);
+        PolicyEngine::decide(&Call { tool, subject: "", effects: &effects }, &planning)
+    };
     for (server, tool) in [("linear", "create_issue"), (memory::MEMORY_SERVER, "memory_forget")] {
-        assert!(
-            matches!(
-                verdict(PermissionMode::Plan, builtin_access(server, tool), tool, "", &Remembered::default()),
-                Verdict::Deny(_)
-            ),
-            "{tool}"
-        );
+        assert!(decide(server, tool).denies(), "{tool}");
     }
-    assert_eq!(
-        verdict(
-            PermissionMode::Plan,
-            builtin_access(memory::MEMORY_SERVER, memory::MEMORY_SEARCH_TOOL),
-            "memory_search",
-            "",
-            &Remembered::default()
-        ),
-        Verdict::Allow
-    );
+    assert_eq!(decide(memory::MEMORY_SERVER, memory::MEMORY_SEARCH_TOOL), Verdict::Allow);
 }

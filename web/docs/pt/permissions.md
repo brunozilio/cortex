@@ -119,12 +119,45 @@ Especificadores de caminho funcionam como no `.gitignore`:
 
 #### Comandos
 
-As regras de shell leem o comando do jeito que o shell vai executá-lo:
+As regras de shell leem o comando do jeito que o shell vai executá-lo. A linha é analisada em cada comando simples que ela executa, inclusive os que estão dentro de `if`, `for`, `while`, `case`, funções, subshells, `{ …; }`, `$(…)`, crases, `<(…)` e o comando que `find -exec` executa:
 
-- **Comandos compostos** (`&&`, `;`, `|`): todas as partes precisam ser liberadas. Partes somente leitura (`ls`, `cat`, `git status`…) e `cd` para uma pasta dentro do projeto passam sem regra. Uma parte negada recusa o comando inteiro.
-- **Comandos escondidos** (`$(…)`, crases, `<(…)`, `bash -c '…'`, `eval`, `xargs`) e **redirecionamentos para arquivos** nunca são liberados por uma regra allow. Quando existem regras deny ou ask com especificador, um comando assim gera pergunta.
-- **Regras deny enxergam através de disfarces**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }` casam com `Bash(rm:*)`.
+- **Comandos compostos** (`&&`, `;`, `|`, quebras de linha, estruturas de controle): todas as partes precisam ser liberadas. Partes somente leitura (`ls`, `cat`, `git status`…) e `cd` para uma pasta dentro do projeto passam sem regra. Uma parte negada recusa o comando inteiro.
+- **Comandos escondidos** (`$(…)`, crases, `<(…)`, `bash -c '…'`, `eval`, um programa dado por uma variável) e **redirecionamentos para arquivos** nunca são liberados por uma regra allow. Os comandos dentro de uma substituição são partes próprias, então uma regra deny que cite um deles recusa a linha inteira; o que não dá para ver (`bash -c '…'`, `eval`, `$X`) gera pergunta quando existem regras deny ou ask com especificador.
+- **Regras deny enxergam através de disfarces**: `sudo rm`, `env rm`, `VAR=1 rm`, `\rm`, `"rm"`, `/bin/rm`, `(rm x)`, `{ rm x; }`, `if true; then rm x; fi`, `f() { rm x; }`, `ls | xargs rm`, `busybox rm`, `find . -exec rm {} \;` casam com `Bash(rm:*)`. Os invólucros desmontados são `sudo`, `doas`, `env`, `nice`, `timeout`, `nohup`, `time`, `command`, `builtin`, `stdbuf`, `ionice`, `chrt`, `xargs` e `busybox`.
 - **Regras allow leem o comando como foi escrito**: `LD_PRELOAD=/tmp/x.so git status` não casa com `Bash(git status:*)`.
+- **Uma linha que não dá para analisar com segurança** (aspas não fechadas, aritmética como `$((…))` com um comando dentro, `coproc`, um heredoc cujo corpo executa uma substituição) nunca é liberada por uma regra com especificador e gera pergunta quando existem regras deny ou ask com especificador.
+
+Regras deny são uma lista de melhor esforço: um comando montado durante a execução (um arquivo de script, o código inline de um interpretador, o valor de uma variável) fica invisível para elas. Quem impede um comando de escrever onde não deve é o [sandbox](./sandbox-and-safety).
+
+#### Comandos somente leitura
+
+Um comando de shell roda sem perguntar, em qualquer modo, só quando a linha inteira é uma lista ou pipeline simples (sem estrutura de controle, função, subshell, grupo, `!` ou substituição) e cada comando nela:
+
+- é um programa de leitura da lista (`ls`, `cat`, `head`, `grep`, `rg`, `find`, `git status`, `git diff`, `git log`…) usado só com flags listadas para ele;
+- não tem prefixo `VAR=valor` nem invólucro (`sudo ls` pergunta);
+- redireciona só para `/dev/null` ou entre as próprias saídas (`2>&1`), nunca para um arquivo;
+- não tem palavra que o shell mudaria: nada de `$`, crase ou barra invertida fora de aspas simples, nada de `*`, `?`, `[`, `{` ou `<` sem aspas, nem `~` que indique uma pasta pessoal. Padrões entre aspas são palavras comuns: `find . -name '*.rs'` e `grep 'a.*b' notes.txt` são somente leitura, `find . -name *.rs` não é. `git diff HEAD~1` é somente leitura;
+- não cita caminho fora do projeto (`/…`, `..`).
+
+#### Ferramentas e seus efeitos
+
+Cada ferramenta embutida diz, a partir da entrada, o que a chamada vai fazer, e a decisão é tomada a partir disso:
+
+| Ferramenta | Tratada como |
+|---|---|
+| `Read`, `LSP` | leitura daquele arquivo (pergunta fora do projeto) |
+| `Glob`, `Grep` | leitura da pasta pesquisada |
+| `Write`, `Edit`, `NotebookEdit` | escrita naquele arquivo (pergunta fora do projeto, em `.git/` ou em `{{DIR}}/`) |
+| `Bash`, `Monitor` | execução do comando (comandos somente leitura rodam livres) |
+| `WebFetch`, `WebSearch` | acesso à rede (regras `WebFetch(domain:…)`) |
+| `CronCreate`, `ScheduleWakeup` | trabalho agendado: pergunta |
+| `Agent`, `Watch`, `PushNotification`, ferramentas de tarefas e de plano | não precisam de permissão; um subagente segue o próprio modo |
+| `KillShell`, `CronDelete`, `TaskStop` | não precisam de permissão para o trabalho do próprio agente; `KillShell` sobre qualquer outra coisa pergunta |
+| `SendMessage` para outra sessão | pergunta, a menos que uma regra libere `SendMessage` |
+| `ListMcpResources`, `ReadMcpResource` | seguem as regras daquele servidor (`mcp__docs`, `mcp__docs__resources(…)`) |
+| Ferramentas MCP | perguntam, a menos que uma regra libere o servidor ou a ferramenta |
+
+Suas próprias ferramentas de script em `~/{{DIR}}/tools/*.js` dizem o que fazem com `access` no `spec`: `"read"` roda livre, `"edit"` é tratada como uma edição, `"execute"` (ou sem `access`) pergunta. As ferramentas de script de um projeto sempre perguntam.
 
 #### Regras inválidas
 

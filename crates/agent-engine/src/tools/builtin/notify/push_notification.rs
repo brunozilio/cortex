@@ -4,7 +4,7 @@ use platform::bounded::{Bounds, Ended};
 use serde_json::Value;
 
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
+use crate::tools::{Outcome, Tool, Workspace, field, required};
 
 #[derive(Debug)]
 pub struct PushNotification;
@@ -18,8 +18,8 @@ impl Tool for PushNotification {
         crate::tools::declared("PushNotification", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("PushNotification")
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        vec![crate::tools::Effect::Notify]
     }
 
     fn summary(&self, input: &Value) -> String {

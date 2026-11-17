@@ -2,7 +2,11 @@ use domain::{Extensions, ModelOption};
 
 use super::*;
 use crate::model::http::ScriptedHttp;
-use crate::tools::{Access, Workspace};
+use crate::tools::{Effect, Workspace};
+
+fn acts(tool: &dyn Tool) -> bool {
+    tool.effects(&serde_json::Value::Null, &Workspace::new("/repo")).iter().any(Effect::acts)
+}
 
 fn tools(request: &PromptRequest, http: &Arc<dyn Http>) -> Vec<Box<dyn Tool>> {
     tools_stopped(request, &McpSources::default(), http, &std::sync::atomic::AtomicBool::new(false))
@@ -46,7 +50,7 @@ fn an_http_server_s_tools_are_named_for_it_and_called_with_its_headers() {
     let tools = tools(&request, &shared);
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].spec().name, "mcp__docs__search");
-    assert_eq!(tools[0].access(), Access::Executes, "another's tools ask first");
+    assert!(acts(&*tools[0]), "another's tools ask first");
     assert_eq!(tools[0].spec().schema["properties"]["query"]["type"], "string");
     let input = json!({ "query": "renderer" });
     assert_eq!(tools[0].summary(&input), "renderer");
@@ -103,7 +107,7 @@ done
     let server = Arc::new(McpServer::open(&spec, &http).expect("spawn"));
     let tools = server.tools().expect("tools");
     assert_eq!(tools[0].spec().name, "mcp__echo-me__echo");
-    assert_eq!(tools[0].access(), Access::Executes, "a host's tool is asked for");
+    assert!(acts(&tools[0]), "a host's tool is asked for");
     assert_eq!(tools[0].run(&json!({}), &Workspace::new("/")), Outcome::ok("hi there"));
 }
 
@@ -206,7 +210,7 @@ fn brand_s_own_memory_search_runs_without_asking() {
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
     let tools = tools(&request, &http);
     assert_eq!(tools[0].spec().name, concat!("mcp__", brand::command!(), "_memory__memory_search"));
-    assert_eq!(tools[0].access(), Access::Reads);
+    assert!(!acts(&*tools[0]));
     let input = json!({ "query": "renderer" });
     assert_eq!(tools[0].summary(&input), "renderer");
     assert_eq!(tools[0].run(&input, &Workspace::new("/repo")), Outcome::ok("[4] Uses wgpu"));

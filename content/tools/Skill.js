@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec} */
 export const spec = {
   name: "Skill",
-  access: "read",
   input: {
     "properties": {
       "args": {

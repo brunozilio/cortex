@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::{Access, Outcome, Tool, Workspace};
+use super::{Declared, Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -95,17 +95,17 @@ impl ScriptGrants {
 #[derive(Debug, Clone)]
 pub struct ScriptTool {
     pub spec: ToolSpec,
-    pub access: Access,
+    pub declared: Option<Declared>,
     pub source: String,
     pub path: PathBuf,
     pub trusted: bool,
 }
 
-fn access_named(name: Option<&str>) -> Access {
-    match name {
-        Some("read") => Access::Reads,
-        Some("edit") => Access::Edits,
-        _ => Access::Executes,
+fn declared_by(access: Option<&str>) -> Option<Declared> {
+    match access {
+        Some("read") => None,
+        Some("edit") => Some(Declared::Edits),
+        _ => Some(Declared::Executes),
     }
 }
 
@@ -117,14 +117,14 @@ fn parse(path: &Path, trusted: bool) -> Result<ScriptTool, String> {
         .as_str()
         .filter(|name| !name.is_empty())
         .ok_or_else(|| format!("{shown}: spec.name is missing"))?;
-    let access = if trusted { access_named(spec["access"].as_str()) } else { Access::Executes };
+    let declared = if trusted { declared_by(spec["access"].as_str()) } else { Some(Declared::Executes) };
     Ok(ScriptTool {
         spec: ToolSpec {
             name: name.to_owned(),
             description: spec["description"].as_str().unwrap_or_default().to_owned(),
             schema: spec.get("input").cloned().unwrap_or_else(|| serde_json::json!({ "type": "object" })),
         },
-        access,
+        declared,
         source,
         path: path.to_path_buf(),
         trusted,
@@ -193,8 +193,8 @@ impl Tool for ScriptTool {
         self.spec.clone()
     }
 
-    fn access(&self) -> Access {
-        self.access
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        self.declared.map(Effect::Declared).into_iter().collect()
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -231,8 +231,9 @@ mod tests {
             .expect("write");
         std::fs::write(user_tools.join("broken.js"), "export const spec = ").expect("write");
         let tools = load(&crate::trust::trusted(project.path(), home.path()));
-        let named: Vec<(&str, Access)> = tools.iter().map(|tool| (tool.spec.name.as_str(), tool.access)).collect();
-        assert_eq!(named, [("Echo", Access::Reads), ("Deploy", Access::Executes)]);
+        let named: Vec<(&str, Option<Declared>)> =
+            tools.iter().map(|tool| (tool.spec.name.as_str(), tool.declared)).collect();
+        assert_eq!(named, [("Echo", None), ("Deploy", Some(Declared::Executes))]);
         assert_eq!(tools[0].spec.description, "Says it back.");
         let untrusted = load(&crate::trust::untrusted(project.path(), home.path()));
         let named: Vec<&str> = untrusted.iter().map(|tool| tool.spec.name.as_str()).collect();

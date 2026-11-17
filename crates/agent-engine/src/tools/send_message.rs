@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::{Access, Outcome, Tool, Workspace};
+use super::{Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
 pub const SEND_MESSAGE_TOOL: &str = "SendMessage";
@@ -13,8 +13,8 @@ impl Tool for SendMessageTool {
         crate::tools::declared(SEND_MESSAGE_TOOL, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(SEND_MESSAGE_TOOL)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        vec![Effect::Spawn(super::SpawnKind::Agent)]
     }
 
     fn summary(&self, input: &Value) -> String {

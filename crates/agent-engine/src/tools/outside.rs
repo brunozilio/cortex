@@ -28,63 +28,35 @@ pub(crate) fn settled(path: &Path) -> PathBuf {
     out
 }
 
-const OUTSIDE_THE_PROJECT: &str = "This writes outside the project and the folders you added:";
-const GIT_FOLDER: &str =
-    "This writes inside the repository's .git folder, where hooks and configuration can run commands:";
-const OWN_CONFIGURATION: &str =
-    concat!("This changes ", brand::name!(), "'s own configuration, which can grant permissions and run code:");
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GuardedWrite {
-    pub path: PathBuf,
-    pub why: &'static str,
-}
-
-fn protected(inside: &Path) -> Option<&'static str> {
-    inside.components().find_map(|part| {
-        let name = part.as_os_str().to_string_lossy();
-        if name.eq_ignore_ascii_case(".git") {
-            Some(GIT_FOLDER)
-        } else if name.eq_ignore_ascii_case(brand::DIR) {
-            Some(OWN_CONFIGURATION)
-        } else {
-            None
-        }
-    })
-}
-
 impl Workspace {
     fn project_root(&self) -> PathBuf {
         domain::trust::project_root(&settled(&self.cwd), &|dir| dir.join(".git").exists())
     }
 
-    fn settled_here(&self, path: &Path) -> PathBuf {
-        settled(&if path.is_absolute() { path.to_path_buf() } else { self.cwd.join(path) })
-    }
-
-    fn root_holding(&self, settled_path: &Path) -> Option<PathBuf> {
-        std::iter::once(self.project_root())
-            .chain(self.added_dirs.iter().map(|dir| settled(dir)))
-            .find(|root| settled_path.starts_with(root))
-    }
-
     pub fn may_read(&self, path: &Path) -> bool {
-        let path = self.settled_here(path);
-        self.root_holding(&path).is_some()
-            || path.starts_with(settled(&super::persisted::results_dir(&self.session_id)))
+        let path = settled(&if path.is_absolute() { path.to_path_buf() } else { self.cwd.join(path) });
+        self.bounds().may_read(&path)
     }
 
-    pub fn guarded_write(&self, path: &Path) -> Option<GuardedWrite> {
-        let path = self.settled_here(path);
-        let why = match self.root_holding(&path) {
-            None => OUTSIDE_THE_PROJECT,
-            Some(root) => path.strip_prefix(&root).ok().and_then(protected)?,
-        };
-        Some(GuardedWrite { path, why })
+    pub fn stays_inside(&self, effects: &[domain::permission::Effect]) -> bool {
+        let bounds = self.bounds();
+        effects.iter().all(|effect| match effect {
+            domain::permission::Effect::ReadPath(place) | domain::permission::Effect::ReadTree(place) => {
+                bounds.may_read(&place.real)
+            }
+            _ => true,
+        })
     }
 
-    pub fn outside<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Option<PathBuf> {
-        paths.into_iter().map(|path| self.resolve(path)).find(|path| !self.may_read(path))
+    pub fn bounds(&self) -> domain::permission::Bounds {
+        let roots = std::iter::once(self.project_root()).chain(self.added_dirs.iter().map(|dir| settled(dir)));
+        let saved = settled(&super::persisted::results_dir(&self.session_id));
+        domain::permission::Bounds::of(roots.collect(), vec![saved])
+    }
+
+    pub fn place(&self, path: &str) -> domain::permission::Place {
+        let resolved = self.resolve(path);
+        domain::permission::Place { written: super::rule_target::folded(&resolved), real: settled(&resolved) }
     }
 }
 
@@ -106,11 +78,23 @@ mod tests {
         assert!(!workspace.may_read(&home.path().join(".ssh/id_ed25519")));
         assert!(!workspace.may_read(Path::new("../../.ssh/id_ed25519")), "no climbing out");
         assert!(!workspace.may_read(&home.path().join("notes.md")));
-        let outside = workspace.outside(["main.rs", "/etc/hosts"]);
-        #[cfg(unix)]
-        assert_eq!(outside, Some(PathBuf::from("/etc/hosts")));
-        #[cfg(windows)]
-        assert!(outside.is_some_and(|path| path.ends_with("etc/hosts")));
+        let read = |path: &str| [domain::permission::Effect::ReadPath(workspace.place(path))];
+        assert!(workspace.stays_inside(&read("main.rs")));
+        assert!(!workspace.stays_inside(&read("/etc/hosts")));
+    }
+
+    #[test]
+    fn a_write_outside_or_into_a_protected_folder_is_guarded() {
+        use domain::permission::Guard;
+        let home = tempfile::tempdir().expect("dir");
+        let project = home.path().join("rocket");
+        std::fs::create_dir_all(project.join(".git")).expect("repo");
+        let workspace = Workspace::new(&project);
+        let guard = |path: &str| workspace.bounds().guard(&workspace.place(path).real);
+        assert_eq!(guard("src/main.rs"), None);
+        assert_eq!(guard("../notes.md"), Some(Guard::OutsideTheProject));
+        assert_eq!(guard(".git/hooks/pre-commit"), Some(Guard::GitFolder));
+        assert_eq!(guard(&format!("{}/settings.json", brand::DIR)), Some(Guard::OwnConfiguration));
     }
 
     #[test]

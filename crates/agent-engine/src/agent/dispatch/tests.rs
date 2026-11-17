@@ -11,7 +11,7 @@ use crate::control::Control;
 use crate::hooks::Hooks;
 use crate::model::scripted::ScriptedModel;
 use crate::model::{ToolSpec, TurnRequest};
-use crate::tools::{Access, Outcome, Tool, Workspace, names};
+use crate::tools::{Effect, Outcome, Tool, Workspace, names};
 use crate::transcript::{Block, Message};
 
 struct Echo;
@@ -21,8 +21,8 @@ impl Tool for Echo {
         ToolSpec { name: "Echo".into(), description: "Says its text back.".into(), schema: json!({"type": "object"}) }
     }
 
-    fn access(&self) -> Access {
-        Access::Reads
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        Vec::new()
     }
 
     fn summary(&self, input: &Value) -> String {

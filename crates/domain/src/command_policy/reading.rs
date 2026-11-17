@@ -1,9 +1,25 @@
 use super::readers::{READERS, Reader};
 
-const EXPANDED_BY_THE_SHELL: [char; 9] = ['$', '\\', '*', '?', '[', '{', '~', '<', '`'];
+pub fn expanded_by_the_shell(part: &str) -> bool {
+    let bytes = part.as_bytes();
+    let (mut single, mut double, mut word_starts) = (false, false, true);
+    for (at, &byte) in bytes.iter().enumerate() {
+        let quoted = single || double;
+        match byte {
+            b'\'' if !double => single = !single,
+            b'"' if !single => double = !double,
+            b'$' | b'`' | b'\\' if !single => return true,
+            b'*' | b'?' | b'[' | b'{' | b'<' if !quoted => return true,
+            b'~' if !quoted && (word_starts || !bytes.get(at + 1).is_some_and(u8::is_ascii_digit)) => return true,
+            _ => {}
+        }
+        word_starts = !quoted && matches!(byte, b' ' | b'\t' | b'=' | b':');
+    }
+    false
+}
 
 pub fn only_reads(part: &str, words: &[&str]) -> bool {
-    if part.contains(EXPANDED_BY_THE_SHELL) || !words.iter().all(|word| stays_inside(word)) {
+    if expanded_by_the_shell(part) || !words.iter().all(|word| stays_inside(word)) {
         return false;
     }
     let Some(reader) = reader_of(words) else { return false };

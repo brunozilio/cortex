@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec<{ default_timeout: number, max_timeout: number, OUTPUT: number, shell: string }>} */
 export const spec = {
   name: "Bash",
-  access: "execute",
   input: {
     "additionalProperties": false,
     "properties": {

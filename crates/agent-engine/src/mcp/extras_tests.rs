@@ -61,12 +61,14 @@ fn a_server_s_rules_cover_its_resources() {
     use domain::permission_rules::{PermissionRules, RuleKind};
     let mut workspace = Workspace::new("/repo");
     workspace.policy.permissions = PermissionRules::default().with(RuleKind::Deny, "mcp__docs");
+    let tools = resource_tools(&servers());
+    let (list_tool, read_tool) = (&*tools[0], &*tools[1]);
     let read = json!({ "server": "docs", "uri": "docs://intro" });
-    assert_eq!(workspace.ruling("ReadMcpResource", "docs://intro", &read).map(|(kind, _)| kind), Some(RuleKind::Deny));
+    assert_eq!(workspace.ruling(read_tool, &read).map(|(kind, _)| kind), Some(RuleKind::Deny));
     let list = json!({ "server": "docs" });
-    assert_eq!(workspace.ruling("ListMcpResources", "docs", &list).map(|(kind, _)| kind), Some(RuleKind::Deny));
+    assert_eq!(workspace.ruling(list_tool, &list).map(|(kind, _)| kind), Some(RuleKind::Deny));
     let other = json!({ "server": "wiki", "uri": "x" });
-    assert_eq!(workspace.ruling("ReadMcpResource", "x", &other), None);
+    assert_eq!(workspace.ruling(read_tool, &other), None);
 }
 
 #[test]

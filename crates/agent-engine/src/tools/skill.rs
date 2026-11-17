@@ -4,7 +4,7 @@ use crate::frontmatter::parse as parse_frontmatter;
 use domain::PromptRequest;
 use serde_json::Value;
 
-use super::{Access, Outcome, Tool, Workspace, required};
+use super::{Effect, Outcome, Tool, Workspace, required};
 use crate::model::ToolSpec;
 
 pub const SKILL_TOOL: &str = "Skill";
@@ -141,8 +141,8 @@ impl Tool for SkillTool {
         crate::tools::declared(SKILL_TOOL, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(SKILL_TOOL)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        Vec::new()
     }
 
     fn summary(&self, input: &Value) -> String {

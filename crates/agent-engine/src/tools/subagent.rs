@@ -4,7 +4,7 @@ use super::subagent_config::AgentConfig;
 use domain::PromptRequest;
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace};
+use super::{Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
 pub const AGENT_TOOL: &str = "Agent";
@@ -123,8 +123,8 @@ impl Tool for AgentTool {
         crate::tools::declared(AGENT_TOOL, &json!({ "agents": agents }))
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(AGENT_TOOL)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<super::Effect> {
+        vec![super::Effect::Spawn(super::SpawnKind::Agent)]
     }
 
     fn summary(&self, input: &Value) -> String {

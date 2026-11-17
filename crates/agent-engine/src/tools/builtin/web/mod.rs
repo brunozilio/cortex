@@ -14,7 +14,7 @@ mod tree;
 use serde_json::Value;
 
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
+use crate::tools::{Outcome, Tool, Workspace, field, required};
 
 const SHOWN: usize = 60_000;
 const READ: u64 = 5 << 20;
@@ -48,8 +48,9 @@ impl Tool for WebFetch {
         crate::tools::declared(crate::tools::names::WEB_FETCH, &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(crate::tools::names::WEB_FETCH)
+    fn effects(&self, input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        let host = field(input, "url").and_then(domain::permission_rules::site);
+        vec![crate::tools::Effect::Net { host }]
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -104,8 +105,8 @@ impl Tool for WebSearch {
         crate::providers::find(model.provider).is_some_and(|provider| provider.web_search(&model.id).is_some())
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(crate::tools::WEB_SEARCH)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        vec![crate::tools::Effect::Net { host: None }]
     }
 
     fn summary(&self, input: &Value) -> String {

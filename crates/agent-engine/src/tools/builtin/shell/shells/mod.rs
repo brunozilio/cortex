@@ -157,6 +157,11 @@ pub fn kill_client(client: u64) {
     leaving.into_iter().for_each(Shell::stop);
 }
 
+pub(crate) fn started_by(client: u64, id: &str) -> bool {
+    let shell = lock().get(id).is_some_and(|shell| shell.client == client);
+    shell || crate::tools::watch::list(client).iter().any(|(watched, _)| watched == id)
+}
+
 pub fn kill(client: u64, id: &str) -> bool {
     stopped(client, id).is_some()
 }

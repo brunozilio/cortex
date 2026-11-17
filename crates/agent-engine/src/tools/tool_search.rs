@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use serde_json::{Value, json};
 
-use super::{Access, Outcome, Tool, Workspace, field, required};
+use super::{Effect, Outcome, Tool, Workspace, field, required};
 use crate::model::ToolSpec;
 
 use llm_providers::added_tools::{LOADED, WAITING};
@@ -118,8 +118,8 @@ impl Tool for ToolSearch {
         crate::tools::declared(TOOL_SEARCH, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(TOOL_SEARCH)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        Vec::new()
     }
 
     fn summary(&self, input: &Value) -> String {

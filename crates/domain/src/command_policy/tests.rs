@@ -114,11 +114,61 @@ fn a_word_the_shell_would_expand_or_that_leaves_the_project_is_never_read_only()
         "cat src/../../x",
         "grep -r key --include=/etc/x",
         "head -n5 \"../x\"",
-        "git diff HEAD~1",
-        "find . -name '*.rs'",
+        "git diff HEAD~",
+        "find . -name *.rs",
+        "grep \"$HOME\" notes.txt",
+        "grep a\\*b notes.txt",
+        "cat <<EOF\nx\nEOF",
         "ls 'unclosed",
     ]);
     assert!(slipped.is_empty(), "read-only by mistake: {slipped:?}");
+}
+
+#[test]
+fn a_quoted_pattern_or_a_revision_s_tilde_is_an_argument_the_shell_leaves_alone() {
+    for command in ["find . -name '*.rs'", "grep 'a.*b' notes.txt", "git diff HEAD~1", "rg -n \"todo|fixme\" src"] {
+        assert_eq!(plain(command), CommandClass::ReadOnly, "{command}");
+    }
+}
+
+#[test]
+fn a_control_structure_a_function_or_a_substitution_is_never_read_only() {
+    let slipped = read_only(&[
+        "if true; then ls; fi",
+        "for f in a b; do cat $f; done",
+        "while true; do ls; done",
+        "case x in x) ls;; esac",
+        "f() { ls; }; f",
+        "{ ls; }",
+        "ls $(pwd)",
+        "echo `ls`",
+        "[[ -f a ]]",
+        "ls | xargs cat",
+        "busybox cat notes.txt",
+    ]);
+    assert!(slipped.is_empty(), "read-only by mistake: {slipped:?}");
+}
+
+#[test]
+fn a_secret_is_found_inside_any_command_of_the_line() {
+    for command in [
+        "echo $(cat .env)",
+        "if true; then cat .env; fi",
+        "ls | xargs cat .env",
+        "find . -name x -exec cat .env \\;",
+        "f() { cat ~/.ssh/id_rsa; }",
+        "sudo cat .env",
+        "env X=1 cat .env",
+    ] {
+        assert!(matches!(plain(command), CommandClass::Forbidden(_)), "{command}: {:?}", plain(command));
+    }
+}
+
+#[test]
+fn a_risky_command_is_found_inside_any_command_of_the_line() {
+    for command in ["if true; then git push --force; fi", "echo $(cargo publish)", "sudo gh pr merge 1"] {
+        assert!(risky(command, &on("feature")), "{command}");
+    }
 }
 
 #[test]

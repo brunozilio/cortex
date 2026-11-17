@@ -10,7 +10,28 @@ const fn wrapper(name: &'static str, valued: &'static [&'static str]) -> Wrapper
     Wrapper { name, valued, positionals: 0 }
 }
 
-const WRAPPERS: [Wrapper; 12] = [
+const WRAPPERS: [Wrapper; 14] = [
+    wrapper(
+        "xargs",
+        &[
+            "-I",
+            "-n",
+            "-P",
+            "-d",
+            "-E",
+            "-L",
+            "-s",
+            "-a",
+            "--max-args",
+            "--max-procs",
+            "--delimiter",
+            "--eof",
+            "--max-lines",
+            "--max-chars",
+            "--arg-file",
+        ],
+    ),
+    wrapper("busybox", &[]),
     wrapper(
         "sudo",
         &[

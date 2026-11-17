@@ -34,10 +34,11 @@ pub mod watch;
 mod workspace;
 pub mod worktree;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::Value;
 
+pub use domain::permission::{Declared, Effect, SpawnKind};
 pub use llm_providers::web_search::WEB_SEARCH;
 pub use lsp::Lsp;
 pub(crate) use outside::settled;
@@ -46,15 +47,6 @@ pub use workspace::{
 };
 
 use crate::model::ToolSpec;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Access {
-    Reads,
-    Edits,
-    Executes,
-    ReadsOutside,
-    EditsGuarded,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Outcome {
@@ -108,15 +100,7 @@ impl std::fmt::Debug for Consult<'_> {
 pub trait Tool: Send + Sync {
     fn spec(&self) -> ToolSpec;
 
-    fn access(&self) -> Access;
-
-    fn reaches_outside(&self, _input: &Value, _workspace: &Workspace) -> Option<PathBuf> {
-        None
-    }
-
-    fn writes_to(&self, _input: &Value, _workspace: &Workspace) -> Option<PathBuf> {
-        None
-    }
+    fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<Effect>;
 
     fn summary(&self, input: &Value) -> String;
 
@@ -183,17 +167,16 @@ pub fn declared(name: &str, data: &Value) -> crate::model::ToolSpec {
     }
 }
 
-pub fn declared_access(name: &str) -> Access {
-    let spec = content::value(&declared_path(name), "spec").unwrap_or_default();
-    match spec["access"].as_str() {
-        Some("read") => Access::Reads,
-        Some("edit") => Access::Edits,
-        _ => Access::Executes,
-    }
-}
-
 pub fn declares_execute(name: &str) -> bool {
     content::exports(&declared_path(name), "execute")
+}
+
+pub fn changes_nothing(tool: &dyn Tool, input: &Value, workspace: &Workspace) -> bool {
+    domain::permission::change_nothing(&tool.effects(input, workspace))
+}
+
+pub(crate) fn writes(path: Option<&str>, workspace: &Workspace) -> Vec<Effect> {
+    vec![path.map_or(Effect::Declared(Declared::Edits), |path| Effect::WritePath(workspace.place(path)))]
 }
 
 pub(crate) fn field<'a>(input: &'a Value, name: &str) -> Option<&'a str> {
@@ -217,6 +200,8 @@ pub(crate) fn shown(path: &Path, workspace: &Workspace) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     #[test]
@@ -270,6 +255,14 @@ mod declared_tests {
             assert!(super::declares_execute(name), "{name} has no execute");
             assert!(!spec.description.contains("{{"), "{name} keeps a placeholder");
         }
+        let declaring: Vec<&str> = content::builtin_files("tools/")
+            .into_iter()
+            .filter(|(_, source)| {
+                String::from_utf8_lossy(source).lines().any(|line| line.trim_start().starts_with("access:"))
+            })
+            .map(|(path, _)| path)
+            .collect();
+        assert!(declaring.is_empty(), "a tool's effects are declared in Rust, not as `access` in {declaring:?}");
         let structured = tools.iter().find(|tool| tool.spec().name == "StructuredOutput").expect("structured");
         assert_eq!(structured.spec().schema["properties"]["result"], schema, "input is a function of the data");
     }

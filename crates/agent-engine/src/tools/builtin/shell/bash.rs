@@ -5,7 +5,7 @@ use super::clip_middle;
 use super::shaped::shaped;
 use super::shells::Waited;
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required};
+use crate::tools::{Outcome, Tool, Workspace, field, required};
 use serde_json::{Value, json};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
@@ -24,8 +24,9 @@ impl Tool for Bash {
         )
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(crate::tools::names::BASH)
+    fn effects(&self, input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        let unsandboxed = input["unsandboxed"].as_bool() == Some(true);
+        vec![crate::tools::Effect::exec(field(input, "command").unwrap_or_default(), unsandboxed)]
     }
 
     fn summary(&self, input: &Value) -> String {

@@ -1,7 +1,7 @@
 use domain::{Choice, Question};
 use serde_json::Value;
 
-use super::{Access, Outcome, Tool, Workspace};
+use super::{Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
 pub const ASK_TOOL: &str = "AskUserQuestion";
@@ -17,8 +17,8 @@ impl Tool for AskUserQuestion {
         crate::tools::declared(ASK_TOOL, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(ASK_TOOL)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        Vec::new()
     }
 
     fn summary(&self, input: &Value) -> String {

@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 use crate::model::ToolSpec;
 use crate::tools::read_files::Freshness;
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
+use crate::tools::{Outcome, Tool, Workspace, clip, field, required};
 
 const OUTPUT: usize = 4_000;
 
@@ -49,12 +49,8 @@ impl Tool for NotebookEdit {
         crate::tools::declared("NotebookEdit", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("NotebookEdit")
-    }
-
-    fn writes_to(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
-        field(input, "notebook_path").map(|path| workspace.resolve(path))
+    fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        crate::tools::writes(field(input, "notebook_path"), workspace)
     }
 
     fn summary(&self, input: &Value) -> String {

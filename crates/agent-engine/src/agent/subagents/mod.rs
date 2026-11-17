@@ -302,7 +302,8 @@ impl Agent<'_> {
     }
 
     fn refused_while_planning(&self, name: &str, run: &ThisRun) -> bool {
-        self.tool(run, name).is_some_and(|tool| crate::permission::refused_while_planning(tool.access()))
+        self.tool(run, name)
+            .is_some_and(|tool| !crate::tools::changes_nothing(tool, &serde_json::Value::Null, self.workspace))
     }
 
     fn reported(&self, ran: Ran, lane: Lane, planned: &Planned, spawning: &Spawning<'_>) -> Outcome {

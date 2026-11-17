@@ -8,8 +8,8 @@ impl Tool for CronCreate {
         crate::tools::declared("CronCreate", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("CronCreate")
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        vec![crate::tools::Effect::Spawn(crate::tools::SpawnKind::Schedule)]
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -40,8 +40,8 @@ impl Tool for ScheduleWakeup {
         crate::tools::declared("ScheduleWakeup", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("ScheduleWakeup")
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        vec![crate::tools::Effect::Spawn(crate::tools::SpawnKind::Schedule)]
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -72,8 +72,8 @@ impl Tool for CronList {
         crate::tools::declared("CronList", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("CronList")
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        Vec::new()
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -94,8 +94,8 @@ impl Tool for CronDelete {
         crate::tools::declared("CronDelete", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("CronDelete")
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        vec![crate::tools::Effect::Cancel { own: true }]
     }
 
     fn summary(&self, input: &Value) -> String {

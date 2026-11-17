@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec} */
 export const spec = {
   name: "AskUserQuestion",
-  access: "read",
   input: {
     "properties": {
       "questions": {

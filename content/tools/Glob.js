@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec<{ LIMIT: number }>} */
 export const spec = {
   name: "Glob",
-  access: "read",
   input: {
     "additionalProperties": false,
     "properties": {

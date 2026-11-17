@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::agent::Agent;
 use crate::agent::run::ThisRun;
-use crate::tools::{Access, Outcome, Tool, names};
+use crate::tools::{Outcome, Tool, names};
 
 const RUN_BY_THE_LOOP: [&str; 11] = [
     names::WATCH,
@@ -38,7 +38,8 @@ impl Agent<'_> {
         if !self.offers(name) {
             return Outcome::error(format!("Load {name} with ToolSearch before watching it."));
         }
-        let Some(kept) = keepable(name, target) else {
+        let Some(kept) = keepable(name, target, crate::tools::changes_nothing(target, &plan.input, self.workspace))
+        else {
             return Outcome::error(format!(
                 "{name} cannot be watched: Watch calls read-only tools and MCP tools. Use Monitor for a shell command."
             ));
@@ -75,12 +76,12 @@ impl Agent<'_> {
     }
 }
 
-fn keepable(name: &str, tool: &dyn Tool) -> Option<Arc<dyn Tool>> {
+fn keepable(name: &str, tool: &dyn Tool, reads: bool) -> Option<Arc<dyn Tool>> {
     if RUN_BY_THE_LOOP.contains(&name) {
         return None;
     }
     tool.kept().or_else(|| {
-        let standard = (tool.access() == Access::Reads).then(|| crate::tools::named(name)).flatten()?;
+        let standard = reads.then(|| crate::tools::named(name)).flatten()?;
         Some(Arc::from(standard))
     })
 }

@@ -1,6 +1,6 @@
 use platform::sync::Locked;
 
-use super::{Access, Outcome, Tool, Workspace, names};
+use super::{Effect, Outcome, Tool, Workspace, names};
 use crate::model::ToolSpec;
 use serde_json::{Value, json};
 #[derive(Debug)]
@@ -9,8 +9,9 @@ impl Tool for TaskTool {
     fn spec(&self) -> ToolSpec {
         crate::tools::declared(self.0, &Value::Null)
     }
-    fn access(&self) -> Access {
-        crate::tools::declared_access(self.0)
+    fn effects(&self, _: &Value, _: &Workspace) -> Vec<Effect> {
+        let stops = self.0 == names::TASK_STOP;
+        stops.then_some(Effect::Cancel { own: true }).into_iter().collect()
     }
     fn summary(&self, input: &Value) -> String {
         input["task_id"].as_str().unwrap_or_default().into()
@@ -43,8 +44,8 @@ impl Tool for PlanTool {
     fn spec(&self) -> ToolSpec {
         crate::tools::declared(self.name, &Value::Null)
     }
-    fn access(&self) -> Access {
-        crate::tools::declared_access(self.name)
+    fn effects(&self, _: &Value, _: &Workspace) -> Vec<Effect> {
+        Vec::new()
     }
     fn summary(&self, input: &Value) -> String {
         input["subject"].as_str().or_else(|| input["task_id"].as_str()).unwrap_or_default().into()

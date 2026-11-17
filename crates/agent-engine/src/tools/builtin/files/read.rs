@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
+use crate::tools::{Outcome, Tool, Workspace, field, required, shown};
 
 const DEFAULT_LINES: usize = 2000;
 const LINE_CHARS: usize = 2000;
@@ -18,12 +18,11 @@ impl Tool for Read {
         )
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(crate::tools::names::READ)
-    }
-
-    fn reaches_outside(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
-        workspace.outside(field(input, "file_path"))
+    fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        field(input, "file_path")
+            .map(|path| crate::tools::Effect::ReadPath(workspace.place(path)))
+            .into_iter()
+            .collect()
     }
 
     fn summary(&self, input: &Value) -> String {

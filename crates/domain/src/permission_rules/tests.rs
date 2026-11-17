@@ -163,8 +163,22 @@ fn a_program_named_by_a_variable_or_run_inside_a_construct_is_asked_about_when_r
 #[test]
 fn a_command_hidden_inside_another_is_asked_about_when_rules_restrict() {
     let rules = rules(&["Bash"], &[], &["Bash(rm:*)"]);
-    for line in ["echo $(rm -rf x)", "echo `rm x`", "bash -c 'rm x'", "eval 'rm x'", "ls | xargs rm"] {
+    for line in ["bash -c 'rm x'", "eval 'rm x'", "sh -c \"$(cat script)\"", "echo 'unclosed; rm x"] {
         assert_eq!(command(&rules, line), Some(RuleKind::Ask), "{line}");
+    }
+    for line in [
+        "echo $(rm -rf x)",
+        "echo `rm x`",
+        "echo \"$(rm x)\"",
+        "diff <(rm x) a",
+        "ls | xargs rm",
+        "ls | xargs -I {} rm {}",
+        "find . -exec rm {} \\;",
+        "busybox rm x",
+        "f() { rm x; }",
+        "case a in a) rm x ;; esac",
+    ] {
+        assert_eq!(command(&rules, line), Some(RuleKind::Deny), "the command inside is parsed: {line}");
     }
     let open = super::PermissionRules::default().with(RuleKind::Allow, "Bash");
     assert_eq!(command(&open, "echo $(date)"), Some(RuleKind::Allow), "nothing restricts");

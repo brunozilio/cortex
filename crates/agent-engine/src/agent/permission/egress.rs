@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use domain::egress::{Heard, Said};
-use serde_json::Value;
 
-use crate::agent::Agent;
-use crate::tools::names::WEB_FETCH;
 use crate::transcript::{Block, Message, Role};
 
 pub(in crate::agent) fn heard(history: &[Message]) -> Heard {
@@ -29,14 +26,4 @@ pub(in crate::agent) fn heard(history: &[Message]) -> Heard {
         })
         .collect();
     Heard::of(&said)
-}
-
-impl Agent<'_> {
-    pub(super) fn always_asks(&self, tool: &str, input: &Value) -> Option<String> {
-        if let domain::command_policy::CommandClass::Risky(why) = self.command_class(tool, input) {
-            return Some(why);
-        }
-        let url = input["url"].as_str().filter(|_| tool == WEB_FETCH)?;
-        self.workspace.tracking.heard().concern(url).map(|why| format!("Check this address first: {why}."))
-    }
 }

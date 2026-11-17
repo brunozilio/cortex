@@ -23,7 +23,7 @@ pub use self::local::LocalTransport;
 pub use self::servers::{ServerSpec, parse_config, servers};
 pub use self::stdio::StdioTransport;
 use self::tool::outcome;
-pub use self::tool::{McpTool, builtin_access};
+pub use self::tool::{McpTool, remote_effects};
 use crate::model::ToolSpec;
 use crate::model::http::Http;
 use crate::tools::{Outcome, Tool};

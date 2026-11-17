@@ -15,8 +15,8 @@ impl Tool for Status {
         ToolSpec { name: "mcp__jira__get".into(), description: String::new(), schema: json!({"type":"object"}) }
     }
 
-    fn access(&self) -> Access {
-        Access::Reads
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        Vec::new()
     }
 
     fn summary(&self, _input: &Value) -> String {

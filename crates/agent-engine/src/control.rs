@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex, Weak};
 use domain::{AskId, Decision, PermissionMode};
 use platform::sync::Locked;
 
-use crate::permission::Remembered;
+use domain::permission::Remembered;
 
 #[derive(Debug)]
 pub struct Control {
@@ -68,6 +68,10 @@ impl Control {
             child.cancel();
         }
         child
+    }
+
+    pub fn ceiling(&self) -> Option<PermissionMode> {
+        self.ceiling
     }
 
     pub fn no_prompts(&self) -> bool {

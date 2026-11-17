@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec} */
 export const spec = {
   name: "Write",
-  access: "edit",
   input: {
     "additionalProperties": false,
     "properties": {

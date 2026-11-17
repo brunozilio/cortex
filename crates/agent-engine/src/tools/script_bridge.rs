@@ -4,7 +4,7 @@ use std::sync::{Mutex, mpsc};
 use serde_json::Value;
 
 use crate::model::{ModelApi, TurnRequest};
-use crate::tools::{Access, Workspace};
+use crate::tools::{Effect, Workspace, changes_nothing};
 use crate::transcript::Message;
 
 pub(crate) struct Request {
@@ -49,10 +49,14 @@ pub(crate) fn read_only_tool(arguments: &Value, workspace: &Workspace) -> Result
     let tools = crate::tools::standard();
     let tool = tools
         .iter()
-        .find(|tool| tool.spec().name == name && tool.access() == Access::Reads)
+        .find(|tool| tool.spec().name == name && changes_nothing(&***tool, input, workspace))
         .ok_or_else(|| format!("a hook may run only read-only tools such as Read, Grep and Glob, not {name}"))?;
-    if let Some(outside) = tool.reaches_outside(input, workspace) {
-        return Err(format!("a hook's {name} stays inside the project; {} is outside", outside.display()));
+    let outside = tool.effects(input, workspace).into_iter().find_map(|effect| match effect {
+        Effect::ReadPath(place) | Effect::ReadTree(place) if !workspace.bounds().may_read(&place.real) => Some(place),
+        _ => None,
+    });
+    if let Some(outside) = outside {
+        return Err(format!("a hook's {name} stays inside the project; {} is outside", outside.written.display()));
     }
     let outcome = tool.run(input, workspace);
     if outcome.is_error { Err(outcome.content) } else { Ok(Value::String(outcome.content)) }

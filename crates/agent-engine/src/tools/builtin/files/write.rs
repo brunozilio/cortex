@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use crate::model::ToolSpec;
 use crate::tools::read_files::Freshness;
-use crate::tools::{Access, Outcome, Tool, Workspace, field, required, shown};
+use crate::tools::{Outcome, Tool, Workspace, field, required, shown};
 
 #[derive(Debug)]
 pub struct Write;
@@ -12,12 +12,8 @@ impl Tool for Write {
         crate::tools::declared("Write", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("Write")
-    }
-
-    fn writes_to(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
-        field(input, "file_path").map(|path| workspace.resolve(path))
+    fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        crate::tools::writes(field(input, "file_path"), workspace)
     }
 
     fn summary(&self, input: &Value) -> String {

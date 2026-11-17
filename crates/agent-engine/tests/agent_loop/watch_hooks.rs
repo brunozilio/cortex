@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use agent_engine::hooks::Hooks;
 use agent_engine::model::ToolSpec;
 use agent_engine::model::scripted::ScriptedModel;
-use agent_engine::tools::{Access, Outcome, Tool, Workspace};
+use agent_engine::tools::{Declared, Effect, Outcome, Tool, Workspace};
 use agent_engine::transcript::{Block, Message};
 use domain::{EngineEvent, PermissionMode};
 use serde_json::{Value, json};
@@ -25,8 +25,8 @@ impl Tool for Issue {
         }
     }
 
-    fn access(&self) -> Access {
-        Access::Executes
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        vec![Effect::Declared(Declared::Executes)]
     }
 
     fn summary(&self, input: &Value) -> String {

@@ -189,7 +189,7 @@ mod tests {
 fn allowed(path: &str, brand: &Brand) -> bool {
     let own = format!(".{}/", brand.command);
     ["brand.toml", "Cargo.lock", "Cargo.toml", "crates/cli/Cargo.toml"].contains(&path)
-        || ["README.md", "CLAUDE.md", "AGENTS.md"].contains(&path)
+        || ["README.md", "CLAUDE.md", "AGENTS.md", "LICENSE"].contains(&path)
         || path.starts_with(&own)
         || path.starts_with(".claude/")
 }
@@ -228,6 +228,7 @@ mod name_tests {
     fn the_repository_s_own_folder_may_spell_the_name_out() {
         let brand = Brand { name: "Nova".into(), command: "nova".into(), company: "Acme".into(), author: "Ana".into() };
         assert!(allowed(".nova/settings.json", &brand));
+        assert!(allowed("LICENSE", &brand));
         assert!(!allowed("plugins/dev-flow/hooks/hooks.json", &brand));
         assert!(!allowed("content/skills/run/SKILL.md", &brand));
         assert!(!allowed("crates/plugins/src/lib.rs", &brand));

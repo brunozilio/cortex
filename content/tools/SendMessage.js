@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec} */
 export const spec = {
   name: "SendMessage",
-  access: "read",
   input: {
     "properties": {
       "message": {

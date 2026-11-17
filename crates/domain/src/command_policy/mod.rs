@@ -10,6 +10,7 @@ pub use sign_in::sign_in_refused;
 
 use crate::destructive::words;
 use crate::permission_rules::{hides_more, normalized, split_command, without_harmless_redirects};
+use crate::shell::ShellCommand;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandClass {
@@ -26,7 +27,11 @@ pub struct GitFacts<'a> {
 }
 
 pub fn classify(command: &str, git: &GitFacts<'_>) -> CommandClass {
-    let (parts, balanced) = split_command(command);
+    classify_command(&ShellCommand::parse(command), git)
+}
+
+pub fn classify_command(command: &ShellCommand, git: &GitFacts<'_>) -> CommandClass {
+    let parts = command.commands();
     if let Some(why) = parts.iter().find_map(|part| secrets::exposes(part)) {
         return CommandClass::Forbidden(format!(
             "Refused: {why}. Never print secrets into the conversation; if the user needs it, they can run it themselves with `! <command>`."
@@ -40,7 +45,7 @@ pub fn classify(command: &str, git: &GitFacts<'_>) -> CommandClass {
     if let Some(why) = risk {
         return CommandClass::Risky(format!("This needs the user's approval every time: {why}."));
     }
-    if !balanced || parts.is_empty() {
+    if !command.flat() || parts.is_empty() {
         return CommandClass::Unknown;
     }
     if parts.iter().all(|part| only_reads(part)) { CommandClass::ReadOnly } else { CommandClass::Unknown }
@@ -54,5 +59,7 @@ pub fn only_reads(part: &str) -> bool {
     balanced && !hides_more(part) && (reading::only_reads(&written, &words) || describing::only_describes(part))
 }
 
+#[cfg(test)]
+mod properties;
 #[cfg(test)]
 mod tests;

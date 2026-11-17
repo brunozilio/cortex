@@ -12,7 +12,7 @@ use crate::model::ToolSpec;
 use crate::tools::script_bridge::{Bridge, Request};
 use crate::tools::script_tool::{Origin, ScriptTool};
 use crate::tools::skill::FoundSkill;
-use crate::tools::{Access, Outcome, Tool, Workspace};
+use crate::tools::{Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message};
 
 const DEEPEST: usize = 8;
@@ -52,8 +52,8 @@ impl Tool for ScriptCall<'_, '_> {
         self.tool.spec.clone()
     }
 
-    fn access(&self) -> Access {
-        self.tool.access
+    fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        self.tool.effects(input, workspace)
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -95,13 +95,15 @@ impl Agent<'_> {
         input: &Value,
     ) -> Outcome {
         let call = ScriptCall { agent: self, tool, within: Within::the_call(calling) };
-        let approved = tool.trusted || self.approved(&tool.spec.name, summary, input);
+        let approved = tool.trusted || self.approved(tool, summary, input);
         let permission = if approved { calling.permission } else { Some("ask") };
         self.permitted(calling.id, &call, summary, input, permission)
     }
 
-    fn approved(&self, name: &str, summary: &str, input: &Value) -> bool {
-        matches!(self.rule_for(name, summary, input, false), Some((domain::permission_rules::RuleKind::Allow, _)))
+    fn approved(&self, tool: &dyn Tool, summary: &str, input: &Value) -> bool {
+        let (name, effects) = (tool.spec().name, tool.effects(input, self.workspace));
+        let called = crate::agent::permission::Called { name: &name, subject: summary, input, effects: &effects };
+        matches!(self.rule_for(&called), Some((domain::permission_rules::RuleKind::Allow, _)))
     }
 
     pub(in crate::agent) fn project_skill<'t>(&self, tool: &'t dyn Tool, input: &Value) -> Option<&'t FoundSkill> {
@@ -117,7 +119,7 @@ impl Agent<'_> {
         summary: &str,
         input: &Value,
     ) -> Outcome {
-        let approved = self.approved(&tool.spec().name, summary, input);
+        let approved = self.approved(tool, summary, input);
         let shown = format!("{summary}, the project's script {}", skill.file.display());
         let permission = if approved { calling.permission } else { Some("ask") };
         self.permitted_as(calling.id, tool, summary, Some(&shown), input, permission)

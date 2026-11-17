@@ -3,7 +3,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required, shown};
+use crate::tools::{Outcome, Tool, Workspace, clip, field, required, shown};
 
 const OUTPUT: usize = 2_000_000;
 const RESULTS: usize = 200;
@@ -25,12 +25,8 @@ impl Tool for Grep {
         crate::tools::declared("Grep", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("Grep")
-    }
-
-    fn reaches_outside(&self, input: &Value, workspace: &Workspace) -> Option<std::path::PathBuf> {
-        workspace.outside(field(input, "path"))
+    fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        vec![crate::tools::Effect::ReadTree(workspace.place(field(input, "path").unwrap_or(".")))]
     }
 
     fn summary(&self, input: &Value) -> String {

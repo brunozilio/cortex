@@ -186,6 +186,12 @@ Alguns comandos de shell são recusados de imediato, em qualquer modo, porque im
 
 O agente é orientado a deixar você rodar esse comando por conta própria com `! <comando>`, se precisar.
 
+Um curinga ou uma expansão de chaves que possa nomear um desses arquivos (`cat .env*`, `cat .{env,x}`) é recusado como o próprio arquivo. Cada comando da linha é verificado, esteja onde estiver: atrás de `sudo`, `env`, `xargs` ou outro invólucro, dentro de `if`, `for`, uma função ou `$(…)`, ou executado por `find -exec`. Isto e as [regras deny](./permissions#comandos) são listas de melhor esforço: um programa fora da lista, um interpretador ou um script ainda podem ler um segredo. A barreira é o sandbox.
+
+## Comandos somente leitura
+
+Um comando de shell roda sem perguntar só quando o analisador consegue seguir a linha inteira, a linha é uma lista ou pipeline simples, e cada comando nela é um programa de leitura da lista com flags listadas, sem prefixo `VAR=valor`, sem invólucro, sem redirecionamento para arquivo, sem palavra que o shell expandiria e sem caminho fora do projeto. Veja [Permissões](./permissions#comandos-somente-leitura).
+
 ## Ações que sempre perguntam
 
 Estas são perguntadas toda vez, mesmo no modo bypass e mesmo com uma regra allow, e não podem ser lembradas:

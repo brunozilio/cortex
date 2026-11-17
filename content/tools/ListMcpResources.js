@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec<{ servers: string[] }>} */
 export const spec = {
   name: "ListMcpResources",
-  access: "execute",
   input: {
     type: "object",
     properties: { server: { type: "string", description: "The server whose resources to list." } },

@@ -7,7 +7,7 @@ use platform::sync::Locked;
 use domain::inbox::Notice;
 use serde_json::Value;
 
-use super::{Access, Outcome, Tool, Workspace};
+use super::{Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,8 +65,8 @@ impl Tool for SessionMessage {
         crate::tools::send_message::SendMessageTool.spec()
     }
 
-    fn access(&self) -> Access {
-        Access::Executes
+    fn effects(&self, input: &Value, _workspace: &Workspace) -> Vec<super::Effect> {
+        vec![super::Effect::Session { to: input["to"].as_str().unwrap_or_default().trim().to_owned() }]
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -93,8 +93,8 @@ impl Tool for ListSessions {
         crate::tools::declared("ListSessions", &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("ListSessions")
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<super::Effect> {
+        Vec::new()
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -134,9 +134,15 @@ mod tests {
         assert!(send(9401, "gone-9403", "hi").is_err(), "a session that is not open is out of reach");
         assert!(send(9401, "api-9401", "me").is_err());
         assert!(open().iter().any(|peer| peer.client == 9402));
-        assert_eq!(SessionMessage.access(), Access::Executes, "another session may run unasked; this asks");
         let mut workspace = Workspace::new("/work/api");
         workspace.credentials.client = 9401;
+        let effects = SessionMessage.effects(&json!({"to": "web-9402", "message": "deploy?"}), &workspace);
+        assert_eq!(
+            effects,
+            [super::super::Effect::Session { to: "web-9402".into() }],
+            "another session may run unasked"
+        );
+        assert!(effects[0].acts(), "so this asks");
         let sent = SessionMessage.run(&json!({"to": "web-9402", "message": "deploy?"}), &workspace);
         assert!(!sent.is_error, "{sent:?}");
         assert_eq!(super::super::inbox::take(9402)[0].text, "deploy?");

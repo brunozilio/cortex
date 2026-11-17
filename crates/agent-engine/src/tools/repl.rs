@@ -5,7 +5,7 @@ use domain::code_mode::{Declared, Mode};
 use platform::sync::Locked;
 use serde_json::Value;
 
-use super::{Access, Outcome, Tool, Workspace};
+use super::{Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
 pub use domain::code_mode::{READ_TEXT, SEARCH as SEARCH_TOOLS, TOOL as REPL_TOOL};
@@ -27,8 +27,8 @@ impl Tool for Repl {
         crate::tools::declared(REPL_TOOL, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        Access::Reads
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<super::Effect> {
+        Vec::new()
     }
 
     fn summary(&self, input: &Value) -> String {

@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use super::{lock, refresh, stopped};
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
+use crate::tools::{Outcome, Tool, Workspace, clip, field, required};
 
 const SHOWN: usize = 30_000;
 
@@ -14,8 +14,8 @@ impl Tool for BashOutput {
         crate::tools::declared("BashOutput", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("BashOutput")
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        Vec::new()
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -58,8 +58,9 @@ impl Tool for KillShell {
         crate::tools::declared("KillShell", &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("KillShell")
+    fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        let id = field(input, "shell_id").unwrap_or_default();
+        vec![crate::tools::Effect::Cancel { own: super::started_by(workspace.credentials.client, id) }]
     }
 
     fn summary(&self, input: &Value) -> String {

@@ -209,13 +209,16 @@ type Returned<T> = T | void | Promise<T | void>;
 
 export type Hook<E extends HookEvent> = (input: HookInput<E>, ctx: HookContext) => Returned<HookResult | string>;
 
-export type Access = "read" | "edit" | "execute";
-
 export interface ToolSpec<Data = Record<string, Json>> {
   name: string;
-  access: Access;
   input: Json | ((ctx: Data & { brand: Brand }) => Json);
   description: string | ((ctx: Data & { brand: Brand }) => string);
+}
+
+export type ScriptToolAccess = "read" | "edit" | "execute";
+
+export interface ScriptToolSpec extends ToolSpec {
+  access?: ScriptToolAccess;
 }
 
 export type ToolInput = Record<string, Json>;

@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec<{ DEFAULT_LINES: number, LINE_CHARS: number, MAX_CHARS: number }>} */
 export const spec = {
   name: "Read",
-  access: "read",
   input: {
     "additionalProperties": false,
     "properties": {

@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use serde_json::Value;
 
 use crate::model::{ModelApi, ToolSpec, TurnRequest};
-use crate::tools::{Access, Consult, Outcome, Tool, Workspace};
+use crate::tools::{Consult, Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message, Role};
 
 pub const ADVISOR_TOOL: &str = "Advisor";
@@ -18,8 +18,8 @@ impl Tool for Advisor {
         crate::tools::declared(ADVISOR_TOOL, &serde_json::Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(ADVISOR_TOOL)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        Vec::new()
     }
 
     fn summary(&self, _input: &Value) -> String {

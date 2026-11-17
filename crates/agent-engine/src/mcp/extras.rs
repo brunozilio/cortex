@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use super::McpServer;
 use crate::model::ToolSpec;
-use crate::tools::{Access, Outcome, Tool, Workspace, clip, field, required};
+use crate::tools::{Outcome, Tool, Workspace, clip, field, required};
 
 const SHOWN: usize = 60_000;
 
@@ -32,14 +32,19 @@ impl std::fmt::Debug for ListResources {
     }
 }
 
+fn resource(input: &Value) -> Vec<crate::tools::Effect> {
+    let named = |key| field(input, key).unwrap_or_default().to_owned();
+    vec![crate::tools::Effect::Resource { server: named("server"), uri: named("uri") }]
+}
+
 impl Tool for ListResources {
     fn spec(&self) -> ToolSpec {
         let names: Vec<&str> = self.0.iter().map(|server| server.name()).collect();
         crate::tools::declared("ListMcpResources", &json!({ "servers": names }))
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("ListMcpResources")
+    fn effects(&self, input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        resource(input)
     }
 
     fn summary(&self, input: &Value) -> String {
@@ -85,8 +90,8 @@ impl Tool for ReadResource {
         crate::tools::declared("ReadMcpResource", &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access("ReadMcpResource")
+    fn effects(&self, input: &Value, _workspace: &Workspace) -> Vec<crate::tools::Effect> {
+        resource(input)
     }
 
     fn summary(&self, input: &Value) -> String {

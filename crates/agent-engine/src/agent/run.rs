@@ -104,7 +104,7 @@ mod tests {
 
     use super::*;
     use crate::model::ToolSpec;
-    use crate::tools::{Access, Outcome, Workspace};
+    use crate::tools::{Effect, Outcome, Workspace};
 
     struct Counting {
         name: &'static str,
@@ -117,8 +117,8 @@ mod tests {
             ToolSpec { name: self.name.into(), description: String::new(), schema: Value::Null }
         }
 
-        fn access(&self) -> Access {
-            Access::Reads
+        fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+            Vec::new()
         }
 
         fn summary(&self, _input: &Value) -> String {

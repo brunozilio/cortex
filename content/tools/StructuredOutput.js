@@ -1,7 +1,6 @@
 /** @type {import("../types").ToolSpec<{ schema: import("../types").Json }>} */
 export const spec = {
   name: "StructuredOutput",
-  access: "read",
   input: (ctx) => ({
     type: "object",
     properties: { result: ctx.schema },

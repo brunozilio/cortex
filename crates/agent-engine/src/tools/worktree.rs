@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::{Access, Outcome, Tool, Workspace, field};
+use super::{Effect, Outcome, Tool, Workspace, field};
 use crate::model::ToolSpec;
 
 pub const ENTER_WORKTREE: &str = "EnterWorktree";
@@ -14,8 +14,8 @@ impl Tool for EnterWorktree {
         crate::tools::declared(ENTER_WORKTREE, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(ENTER_WORKTREE)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        vec![Effect::Declared(super::Declared::Executes)]
     }
 
     fn summary(&self, _input: &Value) -> String {
@@ -35,8 +35,8 @@ impl Tool for ExitWorktree {
         crate::tools::declared(EXIT_WORKTREE, &Value::Null)
     }
 
-    fn access(&self) -> Access {
-        crate::tools::declared_access(EXIT_WORKTREE)
+    fn effects(&self, _input: &Value, _workspace: &Workspace) -> Vec<Effect> {
+        vec![Effect::Declared(super::Declared::Executes)]
     }
 
     fn summary(&self, input: &Value) -> String {

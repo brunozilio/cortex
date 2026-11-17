@@ -227,7 +227,7 @@ fn output_token_limit_continues_without_reporting_a_truncated_success() {
 fn independent_reads_overlap_and_results_keep_the_model_call_order() {
     use agent_engine::{
         model::ToolSpec,
-        tools::{Access, Outcome, Tool},
+        tools::{Effect, Outcome, Tool},
     };
     use std::sync::atomic::{AtomicUsize, Ordering};
     struct ConcurrentRead(AtomicUsize);
@@ -235,8 +235,8 @@ fn independent_reads_overlap_and_results_keep_the_model_call_order() {
         fn spec(&self) -> ToolSpec {
             ToolSpec { name: "Read".into(), description: "Fixture read".into(), schema: json!({"type":"object"}) }
         }
-        fn access(&self) -> Access {
-            Access::Reads
+        fn effects(&self, _: &serde_json::Value, _: &Workspace) -> Vec<Effect> {
+            Vec::new()
         }
         fn summary(&self, _: &serde_json::Value) -> String {
             String::new()

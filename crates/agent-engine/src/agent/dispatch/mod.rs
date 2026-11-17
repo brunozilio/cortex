@@ -13,7 +13,7 @@ use super::Agent;
 use super::run::ThisRun;
 use super::subagents::background::Spawn;
 use crate::hooks::Decision;
-use crate::tools::{Access, Outcome, Tool};
+use crate::tools::{Outcome, Tool};
 use crate::transcript::{Block, Message};
 
 pub(in crate::agent) struct Calling<'c, 'env> {
@@ -137,7 +137,7 @@ impl Agent<'_> {
             return Some(Outcome::error(crate::tools::stopped::before_start()));
         }
         if let Some(tool) = tool
-            && !run.admit(name, input, tool.access() != Access::Reads)
+            && !run.admit(name, input, !crate::tools::changes_nothing(tool, input, self.workspace))
         {
             (self.emit)(EngineEvent::Repeated { tool: name.to_owned() });
             run.stuck.held_back();
