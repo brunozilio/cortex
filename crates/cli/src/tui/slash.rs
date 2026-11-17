@@ -1,4 +1,4 @@
-use domain::command::{Command, closest, slash_name};
+use domain::command::{Command, closest, mistyped_slash, slash_name};
 
 use super::app::App;
 
@@ -33,7 +33,16 @@ pub fn help(app: &mut App, name: Option<String>, keys: &str) {
 }
 
 pub fn refused(app: &mut App, text: &str) -> bool {
-    let Some(name) = slash_name(text) else { return false };
+    let Some(name) = slash_name(text) else {
+        let Some(typed) = mistyped_slash(text) else { return false };
+        let notice = match typed {
+            "" => "Type a command after the /. /help lists them.".to_owned(),
+            typed => unknown(app, typed),
+        };
+        app.input.set(text);
+        app.transcript.notice(notice);
+        return true;
+    };
     let skills_known = !app.catalog.skills.is_empty();
     let is_skill = app.catalog.skills.iter().any(|(skill, _)| skill.eq_ignore_ascii_case(name));
     let notice = if Command::parse(&format!("/{name}")).is_some() {

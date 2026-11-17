@@ -5,6 +5,15 @@ pub fn slash_name(text: &str) -> Option<&str> {
     command_like.then_some(name)
 }
 
+pub fn mistyped_slash(text: &str) -> Option<&str> {
+    if slash_name(text).is_some() {
+        return None;
+    }
+    let text = text.trim().strip_prefix('/')?;
+    let word = text.split_whitespace().next().unwrap_or_default();
+    (!word.contains('/')).then_some(word)
+}
+
 pub fn closest<'a>(name: &str, known: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
     let name = name.to_ascii_lowercase();
     let allowed = (name.chars().count() / 3).clamp(1, 3);
@@ -51,6 +60,16 @@ mod tests {
         assert_eq!(slash_name("/Users/me/notes.txt what is this?"), None, "a path is a prompt");
         assert_eq!(slash_name("/"), None);
         assert_eq!(slash_name("fix /tmp"), None);
+    }
+
+    #[test]
+    fn a_slash_that_is_neither_a_command_nor_a_path_is_a_mistyped_command() {
+        assert_eq!(mistyped_slash("/mode'l"), Some("mode'l"));
+        assert_eq!(mistyped_slash("/"), Some(""));
+        assert_eq!(mistyped_slash("  / "), Some(""));
+        assert_eq!(mistyped_slash("/model"), None, "a command-shaped name is handled as a command");
+        assert_eq!(mistyped_slash("/Users/me/notes.txt what is this?"), None, "a path is a prompt");
+        assert_eq!(mistyped_slash("fix /tmp"), None);
     }
 
     #[test]

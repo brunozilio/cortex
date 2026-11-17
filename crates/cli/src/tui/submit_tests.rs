@@ -93,3 +93,15 @@ fn help_on_one_command_shows_just_that_command() {
     assert!(notice.contains("/effort") && notice.contains("xhigh"), "{notice}");
     assert!(!notice.contains("/diff"), "{notice}");
 }
+
+#[test]
+fn a_mistyped_command_is_refused_instead_of_starting_a_session() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = engine();
+    let mut app = ready(data.path(), &engine);
+    assert!(submit(&mut app, "/mode'l").contains("Did you mean /model?"));
+    assert_eq!(app.input.text(), "/mode'l", "the typo stays to fix");
+    app.input.set("");
+    assert!(submit(&mut app, "/").contains("/help"));
+    assert!(engine.requests().is_empty(), "nothing reached the agent");
+}
