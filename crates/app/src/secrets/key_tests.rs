@@ -196,17 +196,33 @@ fn choosing_the_file_takes_the_key_back_from_a_keychain_that_answers() {
 }
 
 #[test]
-fn choosing_the_file_while_the_keychain_is_gone_starts_a_new_key_in_a_file() {
+fn the_file_default_never_replaces_a_key_the_keychain_holds_when_it_cannot_take_it_back() {
     let dir = tempfile::tempdir().expect("dir");
     let path = dir.path().join("secrets.key");
     let keychain = FakeKeychain::default();
     let old = at(&path, Keeper::Keychain(&keychain)).expect("made");
     keychain.goes_away();
 
-    let new = at(&path, Keeper::chosen(Some("file"), &keychain)).expect("the fallback the error offered");
+    let refused = at(&path, Keeper::chosen(None, &keychain)).expect_err("no new key over sealed entries");
 
-    assert_ne!(new, old);
-    assert_eq!(on_disk(&path), hex(&new));
+    assert!(refused.contains("nothing was replaced"), "{refused}");
+    assert_eq!(on_disk(&path), IN_KEYCHAIN);
+    keychain.gone.store(false, Ordering::SeqCst);
+    assert_eq!(at(&path, Keeper::chosen(None, &keychain)).expect("taken back once it answers"), old);
+    assert_eq!(on_disk(&path), hex(&old));
+}
+
+#[test]
+fn the_file_default_never_replaces_a_key_the_keychain_has_lost() {
+    let dir = tempfile::tempdir().expect("dir");
+    let path = dir.path().join("secrets.key");
+    std::fs::write(&path, IN_KEYCHAIN).expect("pointer");
+    let keychain = FakeKeychain::default();
+
+    let refused = at(&path, Keeper::chosen(None, &keychain)).expect_err("no new key over sealed entries");
+
+    assert!(refused.contains("no longer holds it"), "{refused}");
+    assert_eq!(on_disk(&path), IN_KEYCHAIN);
 }
 
 #[test]

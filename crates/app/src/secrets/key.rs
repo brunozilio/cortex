@@ -59,7 +59,8 @@ fn settled(path: &Path, keeper: Keeper<'_>, text: &mut String) -> Result<[u8; 32
         (Keeper::FileInsteadOf(keychain), IN_KEYCHAIN) => {
             let key = match keychain.get(&account(path)) {
                 Ok(Some(kept)) => read(path, &kept)?,
-                _ => fresh()?,
+                Ok(None) => return Err(not_taken_back(path, &"the keychain no longer holds it")),
+                Err(error) => return Err(not_taken_back(path, &error)),
             };
             *text = hex(&key);
             Ok(key)
@@ -140,6 +141,15 @@ fn read(path: &Path, text: &str) -> Result<[u8; 32], String> {
     unhex(text.trim())
         .and_then(|bytes| bytes.try_into().ok())
         .ok_or_else(|| format!("the secrets key {} is not 64 hex digits", path.display()))
+}
+
+fn not_taken_back(path: &Path, why: &dyn std::fmt::Display) -> String {
+    format!(
+        "the secrets key is in the system keychain, as {} says, and could not be taken back ({why}); \
+         saved keys stay sealed and nothing was replaced; allow the keychain and start again, \
+         or set {CHOICE}={IN_KEYCHAIN}; to start over without the saved keys, remove that file and secrets.json",
+        path.display()
+    )
 }
 
 fn unusable(error: &dyn std::fmt::Display) -> String {
