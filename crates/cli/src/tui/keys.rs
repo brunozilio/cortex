@@ -3,30 +3,15 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::app::App;
 use super::ask;
-use super::choices::PickerKind;
-use super::hints::REWIND_WINDOW;
-use super::login::SecretKey;
+use super::picker::PickerKind;
+use super::sign_in::SecretKey;
 
 pub fn key(app: &mut App, event: KeyEvent) {
     if event.kind == KeyEventKind::Release {
         return;
     }
     let ctrl = event.modifiers.contains(KeyModifiers::CONTROL);
-    if ctrl && event.code == KeyCode::Char('c') {
-        return app.interrupt();
-    }
-    if ctrl && event.code == KeyCode::Char('o') {
-        app.expanded = !app.expanded;
-        return;
-    }
-    if ctrl && event.code == KeyCode::Char('t') {
-        app.show_tasks = !app.show_tasks;
-        return;
-    }
-    if ctrl && event.code == KeyCode::Char('b') {
-        if let Some(run) = &app.turn.run {
-            let _ = run.background();
-        }
+    if ctrl && everywhere(app, event.code) {
         return;
     }
     if app.overlays.secret.is_some() {
@@ -51,20 +36,35 @@ pub fn key(app: &mut App, event: KeyEvent) {
         app.overlays.side = None;
         return;
     }
-    edit(app, event, ctrl);
+    super::prompt_keys::edit(app, event);
+}
+
+fn everywhere(app: &mut App, code: KeyCode) -> bool {
+    match code {
+        KeyCode::Char('c') => app.interrupt(),
+        KeyCode::Char('o') => app.ui.expanded = !app.ui.expanded,
+        KeyCode::Char('t') => app.ui.show_tasks = !app.ui.show_tasks,
+        KeyCode::Char('b') => {
+            if let Some(run) = &app.turn.run {
+                let _ = run.background();
+            }
+        }
+        _ => return false,
+    }
+    true
 }
 
 pub fn paste(app: &mut App, text: &str) {
     if app.overlays.secret.is_some() {
-        return app.paste_secret(text);
+        return super::sign_in::paste_secret(app, text);
     }
     if app.ask.is_none() && app.overlays.picker.is_none() && app.overlays.diffs.is_none() {
-        match text.strip_prefix('!').filter(|_| !app.shell && app.input.is_empty()) {
+        match text.strip_prefix('!').filter(|_| !app.prompt.shell && app.prompt.input.is_empty()) {
             Some(command) => {
-                app.shell = true;
-                app.paste(command);
+                app.prompt.shell = true;
+                super::attach::paste(app, command);
             }
-            None => app.paste(text),
+            None => super::attach::paste(app, text),
         }
     }
 }
@@ -87,7 +87,7 @@ fn diffs(app: &mut App, event: KeyEvent) {
     };
     match app.overlays.diffs.as_mut().map(|view| view.key(key)) {
         Some(Action::Close) => app.overlays.diffs = None,
-        Some(Action::Load(scope)) => app.load_diffs(scope),
+        Some(Action::Load(scope)) => super::git::load_diffs(app, scope),
         Some(Action::Stay) | None => {}
     }
 }
@@ -100,7 +100,7 @@ fn secret(app: &mut App, event: KeyEvent) {
         KeyCode::Esc => SecretKey::Esc,
         _ => return,
     };
-    app.secret_key(key);
+    super::sign_in::secret_key(app, key);
 }
 
 fn answer(app: &mut App, event: KeyEvent) {
@@ -111,8 +111,8 @@ fn answer(app: &mut App, event: KeyEvent) {
         KeyCode::Enter => ask::Key::Enter,
         KeyCode::Esc => ask::Key::Esc,
         KeyCode::Backspace => ask::Key::Backspace,
-        KeyCode::PageUp => return app.scroll = app.scroll.saturating_add(10),
-        KeyCode::PageDown => return app.scroll = app.scroll.saturating_sub(10),
+        KeyCode::PageUp => return app.ui.page_up(),
+        KeyCode::PageDown => return app.ui.page_down(),
         _ => return,
     };
     let decided = app.ask.as_mut().and_then(|pending| pending.key(key));
@@ -123,145 +123,51 @@ fn answer(app: &mut App, event: KeyEvent) {
 
 fn pick(app: &mut App, event: KeyEvent) {
     let Some(picker) = &mut app.overlays.picker else { return };
-    let count = picker.items.len();
     match event.code {
-        KeyCode::Up => picker.cursor = picker.cursor.checked_sub(1).unwrap_or(count.saturating_sub(1)),
-        KeyCode::Down => picker.cursor = if picker.cursor + 1 >= count { 0 } else { picker.cursor + 1 },
+        KeyCode::Up => picker.up(),
+        KeyCode::Down => picker.down(),
         KeyCode::Esc => app.overlays.picker = None,
         KeyCode::Enter => {
             let (kind, cursor) = (picker.kind, picker.cursor);
             app.overlays.picker = None;
-            match kind {
-                PickerKind::Model => {
-                    if let Some(model) = app.catalog.models.get(cursor).cloned() {
-                        app.set_model(model);
-                    }
-                }
-                PickerKind::Role(role) => app.role_picked(role, cursor),
-                PickerKind::Account { removing } => app.account_picked(cursor, removing),
-                PickerKind::Effort => app.set_effort_from(Effort::ALL.get(cursor).copied()),
-                PickerKind::Mode => {
-                    if let Some(mode) = PermissionMode::ALL.get(cursor) {
-                        app.set_mode(*mode);
-                    }
-                }
-                PickerKind::Login => app.login_picked(cursor),
-                PickerKind::PortBusy => app.port_busy_picked(cursor),
-                PickerKind::Rewind => app.rewind_picked(cursor),
-                PickerKind::Resume => app.resume_picked(cursor),
-                PickerKind::Logout => app.logout_picked(cursor),
-                PickerKind::Config => super::config::picked(app, cursor),
-                PickerKind::OutputStyle => {
-                    if let Some((id, _)) = super::info::styles().get(cursor) {
-                        app.set_output_style((*id).to_owned());
-                    }
-                }
-            }
+            picked(app, kind, cursor);
         }
         _ => {}
     }
 }
 
-#[allow(
-    clippy::cognitive_complexity,
-    reason = "split planned: one match over every editing key, to become a key table"
-)]
-fn edit(app: &mut App, event: KeyEvent, ctrl: bool) {
-    let alt = event.modifiers.contains(KeyModifiers::ALT);
-    let shift = event.modifiers.contains(KeyModifiers::SHIFT);
-    let cmd = event.modifiers.intersects(KeyModifiers::SUPER | KeyModifiers::META);
-    let mentioned = super::mentions::offered(app).len();
-    let offered = if mentioned > 0 {
-        mentioned
-    } else {
-        app.input.slash_word().map_or(0, |typed| super::commands::suggestions(typed, &app.catalog.skills).len())
-    };
-    let completing = offered > 0;
-    if event.code != KeyCode::Esc {
-        app.clear_armed = None;
-    }
-    if let Some(vim) = &mut app.vim {
-        match event.code {
-            KeyCode::Esc if !vim.normal => return vim.escape(&mut app.input),
-            code if vim.normal && !ctrl && vim.key(code, &mut app.input) => return,
-            _ => {}
-        }
-    }
-    match event.code {
-        KeyCode::Char('!') if !ctrl && !app.shell && app.input.is_empty() => app.shell = true,
-        KeyCode::Backspace | KeyCode::Esc if app.shell && app.input.is_empty() => app.shell = false,
-        KeyCode::Left if !cmd && !alt && !ctrl && !app.shell && app.input.is_empty() => super::fleet::open(app),
-        KeyCode::Left if cmd => app.input.home(),
-        KeyCode::Right if cmd => app.input.end(),
-        KeyCode::Backspace if cmd => app.input.delete_to_line_start(),
-        KeyCode::Left if alt || ctrl => app.input.word_left(),
-        KeyCode::Right if alt || ctrl => app.input.word_right(),
-        KeyCode::Char('b') if alt => app.input.word_left(),
-        KeyCode::Char('f') if alt => app.input.word_right(),
-        KeyCode::Char('d') if alt => app.input.delete_word_forward(),
-        KeyCode::Delete if alt || ctrl => app.input.delete_word_forward(),
-        KeyCode::Up if completing => app.suggestion = super::commands::step(app.suggestion, offered, false),
-        KeyCode::Down if completing => app.suggestion = super::commands::step(app.suggestion, offered, true),
-        KeyCode::Up if app.busy() && app.input.is_empty() && !app.turn.queued.is_empty() => app.take_back_queued(),
-        KeyCode::Up if app.input.on_first_line() => app.input.older(),
-        KeyCode::Down if app.input.on_last_line() => app.input.newer(),
-        KeyCode::Up => app.input.line(true),
-        KeyCode::Down => app.input.line(false),
-        KeyCode::Enter if alt || shift => app.input.insert('\n'),
-        KeyCode::Char('j') if ctrl => app.input.insert('\n'),
-        KeyCode::Enter => app.submit(),
-        KeyCode::Tab => {
-            if !app.take_ghost() {
-                complete(app);
+fn picked(app: &mut App, kind: PickerKind, cursor: usize) {
+    match kind {
+        PickerKind::Model => {
+            if let Some(model) = app.catalog.models.get(cursor).cloned() {
+                app.set_model(model);
             }
         }
-        KeyCode::BackTab => app.set_mode(app.mode().next()),
-        KeyCode::Esc if app.busy() => app.cancel(),
-        KeyCode::Esc if app.input.is_empty() && super::auto_retry::cancel(app) => {}
-        KeyCode::Esc if app.input.is_empty() && app.clear_armed.is_some_and(|at| at.elapsed() < REWIND_WINDOW) => {
-            app.clear_armed = None;
-            app.open_rewind();
+        PickerKind::Role(role) => app.role_picked(role, cursor),
+        PickerKind::Account { removing } => super::accounts::picked(app, cursor, removing),
+        PickerKind::Effort => app.set_effort_from(Effort::ALL.get(cursor).copied()),
+        PickerKind::Mode => {
+            if let Some(mode) = PermissionMode::ALL.get(cursor) {
+                app.set_mode(*mode);
+            }
         }
-        KeyCode::Esc if app.input.is_empty() => app.clear_armed = Some(std::time::Instant::now()),
-        KeyCode::Char('r') if ctrl => {
-            let mut found = super::search::Search::default();
-            found.find(app.input.history(), false);
-            app.overlays.search = Some(found);
+        PickerKind::Login => super::sign_in::picked(app, cursor),
+        PickerKind::PortBusy => super::sign_in::port_busy_picked(app, cursor),
+        PickerKind::Rewind => app.rewind_picked(cursor),
+        PickerKind::Resume => app.resume_picked(cursor),
+        PickerKind::Logout => super::accounts::logout_picked(app, cursor),
+        PickerKind::Config => super::settings_picker::picked(app, cursor),
+        PickerKind::OutputStyle => {
+            if let Some((id, _)) = super::session_choices::output_styles().get(cursor) {
+                app.set_output_style((*id).to_owned());
+            }
         }
-        KeyCode::Char('g') if ctrl => app.external_edit = true,
-        KeyCode::Char('l') if ctrl => app.redraw = true,
-        KeyCode::Esc if app.clear_armed.is_some() => {
-            app.input.clear();
-            app.clear_armed = None;
-        }
-        KeyCode::Esc => app.clear_armed = Some(std::time::Instant::now()),
-        KeyCode::Char('d') if ctrl && app.input.is_empty() => app.quit = true,
-        KeyCode::Char('a') if ctrl => app.input.home(),
-        KeyCode::Char('e') if ctrl => app.input.end(),
-        KeyCode::Char('u') if ctrl => app.input.clear(),
-        KeyCode::Char('v') if ctrl => app.paste_image(),
-        KeyCode::Char('w') if ctrl => app.input.delete_word(),
-        KeyCode::Char(c) if !ctrl => {
-            app.input.insert(c);
-            app.suggestion = 0;
-            super::mentions::load(app);
-        }
-        KeyCode::Backspace if alt => app.input.delete_word(),
-        KeyCode::Backspace => app.input.backspace(),
-        KeyCode::Delete => app.input.delete(),
-        KeyCode::Left => app.input.left(),
-        KeyCode::Right => app.input.right(),
-        KeyCode::Home => app.input.home(),
-        KeyCode::End => app.input.end(),
-        KeyCode::PageUp => app.scroll = app.scroll.saturating_add(10),
-        KeyCode::PageDown => app.scroll = app.scroll.saturating_sub(10),
-        _ => {}
     }
 }
 
 fn search(app: &mut App, event: KeyEvent, ctrl: bool) {
     let Some(search) = &mut app.overlays.search else { return };
-    let history = app.input.history();
+    let history = app.prompt.input.history();
     match event.code {
         KeyCode::Char('r') if ctrl => search.find(history, true),
         KeyCode::Char(c) if !ctrl => {
@@ -276,7 +182,7 @@ fn search(app: &mut App, event: KeyEvent, ctrl: bool) {
             let found = search.shown(history).map(str::to_owned);
             app.overlays.search = None;
             if let Some(found) = found {
-                app.input.set(&found);
+                app.prompt.input.set(&found);
             }
         }
         KeyCode::Esc => app.overlays.search = None,
@@ -285,15 +191,6 @@ fn search(app: &mut App, event: KeyEvent, ctrl: bool) {
     }
 }
 
-fn complete(app: &mut App) {
-    let files = super::mentions::offered(app);
-    if let Some(file) = files.get(app.suggestion % files.len().max(1)) {
-        app.suggestion = 0;
-        return super::mentions::complete(app, file);
-    }
-    let Some(typed) = app.input.slash_word() else { return };
-    let found = super::commands::suggestions(typed, &app.catalog.skills);
-    if let Some((name, _)) = found.get(app.suggestion % found.len().max(1)) {
-        app.input.set(&format!("/{name} "));
-    }
-}
+#[cfg(test)]
+#[path = "keys_tests.rs"]
+mod tests;

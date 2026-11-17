@@ -22,6 +22,11 @@ fn send(app: &mut App, text: &str) {
     press(app, KeyCode::Enter);
 }
 
+fn offered(app: &mut App, text: &str) {
+    send(app, text);
+    until(app, |app| app.ask.is_some());
+}
+
 fn reached(app: &mut App, engine: &FakeEngine, prompts: usize) -> Vec<String> {
     until(app, |_| sent(engine).len() >= prompts);
     sent(engine)
@@ -37,13 +42,13 @@ fn the_first_prompt_outside_a_repository_waits_for_the_offer_and_yes_initializes
     let engine = engine();
     let mut app = outside_a_repository(folder.path(), &engine);
 
-    send(&mut app, "build a gateway");
+    offered(&mut app, "build a gateway");
     assert!(sent(&engine).is_empty(), "held until answered");
     assert!(screen(&app).contains("Initialize one here?"), "{}", screen(&app));
 
     press(&mut app, KeyCode::Enter);
-    assert!(folder.path().join(".git").is_dir());
     assert_eq!(reached(&mut app, &engine, 1), ["build a gateway"]);
+    assert!(folder.path().join(".git").is_dir());
     until(&mut app, |app| !app.busy());
 
     send(&mut app, "and tests");
@@ -57,7 +62,7 @@ fn declining_the_offer_sends_the_prompt_without_a_repository_and_does_not_offer_
     let engine = engine();
     let mut app = outside_a_repository(folder.path(), &engine);
 
-    send(&mut app, "build a gateway");
+    offered(&mut app, "build a gateway");
     press(&mut app, KeyCode::Esc);
     assert!(!folder.path().join(".git").exists());
     assert_eq!(reached(&mut app, &engine, 1), ["build a gateway"]);
@@ -73,9 +78,9 @@ fn never_offering_again_turns_the_feature_off() {
     let engine = engine();
     let mut app = outside_a_repository(folder.path(), &engine);
 
-    send(&mut app, "build a gateway");
+    offered(&mut app, "build a gateway");
     press(&mut app, KeyCode::Char('3'));
-    assert!(app.turned_off.contains(domain::features::GIT_OFFER));
+    assert!(app.session.turned_off.contains(domain::features::GIT_OFFER));
     assert!(!folder.path().join(".git").exists());
     assert_eq!(reached(&mut app, &engine, 1), ["build a gateway"]);
 }
@@ -110,11 +115,11 @@ fn an_agent_question_over_the_offer_is_answered_to_the_agent_and_the_held_prompt
         .with_delay(std::time::Duration::from_millis(60));
     let mut app = outside_a_repository(folder.path(), &engine);
 
-    send(&mut app, "build a gateway");
+    offered(&mut app, "build a gateway");
     assert!(app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == domain::git_offer::ASK));
     app.send_as("a notice arrived".into(), "notice".into());
     until(&mut app, |app| app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == "a-1"));
-    assert_eq!(app.input.text(), "build a gateway", "the held prompt is not lost");
+    assert_eq!(app.prompt.input.text(), "build a gateway", "the held prompt is not lost");
 
     press(&mut app, KeyCode::Enter);
     until(&mut app, |_| !engine.answers().is_empty());

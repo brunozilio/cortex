@@ -26,7 +26,7 @@ pub fn finished(app: &mut App, id: &str, command: String, result: Result<(String
             *out = Some(output.clone());
         }
     }
-    app.shell_context.push(domain::conversation::shell_note(&command, &output));
+    app.prompt.shell_context.push(domain::conversation::shell_note(&command, &output));
 }
 
 pub use domain::conversation::with_shell as with_context;

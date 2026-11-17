@@ -1,17 +1,18 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use domain::schedule::{Scheduled, When};
 
 use super::{Feature, Slash};
 use crate::tui::app::{App, Msg};
+use crate::tui::every::Every;
 
 const NAME: &str = "schedules";
-const EVERY: Duration = Duration::from_secs(1);
+struct Poll(Every);
 
-#[derive(Debug, Default)]
-struct Poll {
-    last: Option<Instant>,
-    asking: bool,
+impl Default for Poll {
+    fn default() -> Self {
+        Self(Every::second())
+    }
 }
 
 pub fn feature() -> Feature {
@@ -36,19 +37,18 @@ pub fn feature() -> Feature {
 fn poll(app: &mut App) {
     let idle = !app.busy() && app.session.is_some() && app.ask.is_none();
     let Some(poll) = app.features.get::<Poll>(NAME) else { return };
-    if !idle || poll.asking || poll.last.is_some_and(|at| at.elapsed() < EVERY) {
+    if !idle || !poll.0.due(Instant::now()) {
         return;
     }
-    *poll = Poll { last: Some(Instant::now()), asking: true };
     app.spawn(|sdk| {
         let due = sdk.take_due_schedules().unwrap_or_default();
-        Msg::Feature(Box::new(move |app: &mut App| arrived(app, due)))
+        super::reply(move |app: &mut App| arrived(app, due))
     });
 }
 
 fn arrived(app: &mut App, due: Vec<Scheduled>) {
     if let Some(poll) = app.features.get::<Poll>(NAME) {
-        poll.asking = false;
+        poll.0.landed();
     }
     for scheduled in due {
         app.transcript.notice(format!("Scheduled ({}): {}", scheduled.id, scheduled.prompt));

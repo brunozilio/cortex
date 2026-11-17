@@ -2,6 +2,8 @@ use std::path::Path;
 
 pub use domain::changes::{Changes, DiffScope as Scope};
 
+use super::app::{App, Msg};
+
 pub fn changes(sdk: &app::Sdk, cwd: &Path) -> Result<Changes, String> {
     changes_in(sdk, cwd, Scope::Uncommitted)
 }
@@ -10,29 +12,27 @@ pub fn changes_in(sdk: &app::Sdk, cwd: &Path, scope: Scope) -> Result<Changes, S
     sdk.changes(cwd, scope).map_err(|error| error.to_string())
 }
 
-impl super::app::App {
-    pub(super) fn open_diffs(&mut self) {
-        self.overlays.diffs = Some(super::diff_view::DiffView::new(Scope::Uncommitted));
-        self.load_diffs(Scope::Uncommitted);
-    }
+pub(super) fn open_diffs(app: &mut App) {
+    app.overlays.diffs = Some(super::diff_view::DiffView::new(Scope::Uncommitted));
+    load_diffs(app, Scope::Uncommitted);
+}
 
-    pub(super) fn show_changes(&self) {
-        let cwd = self.cwd.clone();
-        self.spawn(move |sdk| super::app::Msg::Changes(changes(sdk, &cwd)));
-    }
+pub(super) fn show_changes(app: &App) {
+    let cwd = app.cwd.clone();
+    app.spawn(move |sdk| Msg::Changes(changes(sdk, &cwd)));
+}
 
-    pub(super) fn load_diffs(&self, scope: Scope) {
-        let cwd = self.cwd.clone();
-        self.spawn(move |sdk| super::app::Msg::Diffs(scope, changes_in(sdk, &cwd, scope)));
-    }
+pub(super) fn load_diffs(app: &App, scope: Scope) {
+    let cwd = app.cwd.clone();
+    app.spawn(move |sdk| Msg::Diffs(scope, changes_in(sdk, &cwd, scope)));
+}
 
-    pub(super) fn changes(&mut self, changes: Result<Changes, String>) {
-        match changes {
-            Ok(Changes { diff, untracked }) if diff.trim().is_empty() && untracked.is_empty() => {
-                self.transcript.notice("No uncommitted changes.");
-            }
-            Ok(Changes { diff, untracked }) => self.transcript.push(super::transcript::Entry::Diff { diff, untracked }),
-            Err(error) => self.transcript.error(format!("/diff needs a git repository: {error}")),
+pub(super) fn shown(app: &mut App, changes: Result<Changes, String>) {
+    match changes {
+        Ok(Changes { diff, untracked }) if diff.trim().is_empty() && untracked.is_empty() => {
+            app.transcript.notice("No uncommitted changes.");
         }
+        Ok(Changes { diff, untracked }) => app.transcript.push(super::transcript::Entry::Diff { diff, untracked }),
+        Err(error) => app.transcript.error(format!("/diff needs a git repository: {error}")),
     }
 }

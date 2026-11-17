@@ -27,16 +27,16 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
     } else if let Some(side) = &app.overlays.side {
         super::side::lines(side, app.busy(), width, &mut lines);
     } else if !files.is_empty() {
-        let chosen = app.suggestion % files.len();
+        let chosen = app.prompt.suggestion % files.len();
         for (i, file) in files.iter().enumerate() {
             let style = if i == chosen { Style::new().fg(Color::Cyan) } else { Style::new() };
             lines.push(Line::styled(format!("  @{file}"), style));
         }
         lines.push(Line::from("  ↑↓ picks · tab completes").dim());
-    } else if let Some(typed) = app.input.slash_word() {
+    } else if let Some(typed) = app.prompt.input.slash_word() {
         let found = super::commands::suggestions(typed, &app.catalog.skills);
         let total = found.len();
-        let chosen = app.suggestion % total.max(1);
+        let chosen = app.prompt.suggestion % total.max(1);
         let window = super::commands::shown(total, chosen);
         let more = window.len() < total;
         let shown: Vec<(usize, (String, String))> =
@@ -62,9 +62,10 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
         if more {
             lines.push(Line::from(format!("  {} of {total} · ↑↓ more · tab completes", chosen + 1)).dark_gray());
         }
-    } else if app.show_tasks && !app.transcript.tasks.is_empty() {
+    } else if app.ui.show_tasks && !app.transcript.tasks.is_empty() {
         tasks(&app.transcript.tasks, width, &mut lines);
-    } else if app.transcript.entries.is_empty() && app.inline.is_none() && app.input.is_empty() && !app.busy() {
+    } else if app.transcript.entries.is_empty() && app.ui.inline.is_none() && app.prompt.input.is_empty() && !app.busy()
+    {
         for (key, what) in START {
             lines.push(Line::from(vec![format!(" {key:<10}").cyan(), what.dark_gray()]));
         }

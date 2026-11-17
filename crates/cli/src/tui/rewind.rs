@@ -1,7 +1,7 @@
 use domain::Rewound;
 
 use super::app::App;
-use super::choices::{Picker, PickerKind};
+use super::picker::{Picker, PickerKind};
 use super::transcript::Entry;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,7 +64,7 @@ impl App {
     }
 
     fn rewind_to(&mut self, index: u32, again: bool) {
-        let Some(session) = &self.session else { return };
+        let Some(session) = self.session.live() else { return };
         let started = session.rewind(index);
         self.turn.retrying = again;
         self.follow(started);
@@ -81,7 +81,7 @@ impl App {
             "Branched: this is a new conversation from before that prompt; the files are as they were. The \
              original stays in /resume.",
         );
-        self.input.set(prompt);
+        self.prompt.input.set(prompt);
     }
 
     pub(super) fn rewound(&mut self, rewound: Rewound) {
@@ -101,7 +101,7 @@ impl App {
         if std::mem::take(&mut self.turn.retrying) {
             self.send(rewound.prompt);
         } else {
-            self.input.set(&rewound.prompt);
+            self.prompt.input.set(&rewound.prompt);
         }
     }
 }

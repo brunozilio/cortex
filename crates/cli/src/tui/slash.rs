@@ -39,7 +39,7 @@ pub fn refused(app: &mut App, text: &str) -> bool {
             "" => "Type a command after the /. /help lists them.".to_owned(),
             typed => unknown(app, typed),
         };
-        app.input.set(text);
+        app.prompt.input.set(text);
         app.transcript.notice(notice);
         return true;
     };
@@ -55,7 +55,7 @@ pub fn refused(app: &mut App, text: &str) -> bool {
     } else {
         return false;
     };
-    app.input.set(text);
+    app.prompt.input.set(text);
     app.transcript.notice(notice);
     true
 }

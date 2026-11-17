@@ -11,7 +11,7 @@ pub fn feature() -> Feature {
             about: "Judge runs: /verification <criteria>, or off",
             run: |app, argument| run(app, VerificationCommand::parse(argument)),
         }],
-        status: Some(|app| app.session.as_ref().and_then(app::Session::verification).map(|c| marker(&c))),
+        status: Some(|app| app.session.live().and_then(app::Session::verification).map(|c| marker(&c))),
         setting: Some(Setting {
             name: "Verification",
             value: |_| String::new(),
@@ -22,7 +22,7 @@ pub fn feature() -> Feature {
 }
 
 fn run(app: &mut App, command: VerificationCommand) {
-    let Some(session) = app.session.as_mut() else {
+    let Some(session) = app.session.live_mut() else {
         return app.transcript.notice("Pick a model first: verification belongs to a conversation.");
     };
     let notice = match command {

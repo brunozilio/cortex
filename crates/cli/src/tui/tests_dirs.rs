@@ -21,7 +21,7 @@ fn an_added_folder_goes_with_every_prompt_even_after_new() {
 
     type_text(&mut app, &format!("/add-dir {}", shared.path().display()));
     press(&mut app, KeyCode::Enter);
-    assert_eq!(app.added_dirs, std::slice::from_ref(&real));
+    assert_eq!(app.session.added_dirs(), std::slice::from_ref(&real));
     type_text(&mut app, "/new");
     press(&mut app, KeyCode::Enter);
     type_text(&mut app, "look at the shared code");
@@ -68,7 +68,7 @@ fn an_at_mention_completes_a_project_file_and_sends_its_text() {
     until(&mut app, |app| app.catalog.files.as_ref().is_some_and(|files| !files.is_empty()));
     assert!(screen(&app).contains("@src/main.rs"), "{}", screen(&app));
     press(&mut app, KeyCode::Tab);
-    assert_eq!(app.input.text(), "explain @src/main.rs ");
+    assert_eq!(app.prompt.input.text(), "explain @src/main.rs ");
     press(&mut app, KeyCode::Enter);
     until(&mut app, |_| engine.requests().iter().any(|r| r.command.is_none()));
     let sent = engine.requests().into_iter().find(|r| r.command.is_none()).expect("sent").prompt;
@@ -100,7 +100,7 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
     until(&mut app, |app| app.overlays.picker.is_some());
     assert!(screen(&app).contains("Login page") && screen(&app).contains("2h ago"), "{}", screen(&app));
     press(&mut app, KeyCode::Enter);
-    assert_eq!(app.title.as_deref(), Some("Login page"));
+    assert_eq!(app.session.title.as_deref(), Some("Login page"));
     type_text(&mut app, "go on");
     press(&mut app, KeyCode::Enter);
     until(&mut app, |_| engine.requests().iter().any(|r| r.command.is_none()));
@@ -154,7 +154,7 @@ fn the_name_a_conversation_gets_is_kept_where_every_client_lists_it() {
 
     type_text(&mut app, "say hi");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |app| app.title.as_deref() == Some("Greeting"));
+    until(&mut app, |app| app.session.title.as_deref() == Some("Greeting"));
 
     until(&mut app, |_| sdk.sessions().expect("listed").iter().any(|row| row.title.as_deref() == Some("Greeting")));
 }
@@ -187,5 +187,5 @@ fn a_missing_folder_is_refused() {
     type_text(&mut app, "/add-dir nowhere/at/all");
     press(&mut app, KeyCode::Enter);
     assert!(screen(&app).contains("No folder at"), "{}", screen(&app));
-    assert!(app.added_dirs.is_empty());
+    assert!(app.session.added_dirs().is_empty());
 }

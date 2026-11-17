@@ -1,6 +1,6 @@
 use domain::command::Command;
 
-use super::app::App;
+use super::app::{App, Msg};
 
 pub const KEYS: &str = "Keys: Enter sends · Alt+Enter or Ctrl+J new line · Esc interrupts · Esc Esc rewinds · \
                     Shift+Tab mode · Ctrl+R searches past prompts · Ctrl+G edits in $EDITOR · \
@@ -16,8 +16,8 @@ pub fn run(app: &mut App, command: Command) {
         Command::ModelRoles => app.list_roles(),
         Command::ModelRole(role, change) => app.change_role(role, change),
         Command::ModelFallbacks(change) => app.change_fallbacks(change),
-        Command::Accounts { removing } => app.accounts(removing),
-        Command::AccountsBalance(balance) => app.balance(balance),
+        Command::Accounts { removing } => super::accounts::open(app, removing),
+        Command::AccountsBalance(balance) => super::accounts::balance(app, balance),
         Command::Mode(None) => app.mode_picker(),
         Command::Mode(Some(mode)) => app.switch_mode(mode),
         Command::Effort(None) => app.effort_picker(),
@@ -27,36 +27,41 @@ pub fn run(app: &mut App, command: Command) {
         Command::Rewind => app.open_rewind(),
         Command::Retry => app.retry(),
         Command::Btw(question) => super::side::ask(app, question),
-        Command::AddDir(typed) => super::dirs::run(app, typed),
+        Command::AddDir(typed) => super::add_dir::run(app, typed),
         Command::Context => super::context::measure(app),
         Command::Resume(query) => super::resume::open(app, query),
         Command::Fleet => super::fleet::open(app),
         Command::Fork => super::resume::fork(app),
-        Command::Config => super::config::open(app),
-        Command::NewAgent(what) => super::config::create(app, true, &what),
-        Command::NewSkill(what) => super::config::create(app, false, &what),
+        Command::Config => super::settings_picker::open(app),
+        Command::NewAgent(what) => super::create_prompts::agent(app, &what),
+        Command::NewSkill(what) => super::create_prompts::skill(app, &what),
         Command::StatusLine(command) => super::statusline::set(app, command),
-        Command::Doctor => super::info::doctor(app),
-        other @ (Command::Status
-        | Command::Export(_)
-        | Command::Copy
-        | Command::Logout
-        | Command::TerminalSetup
-        | Command::OutputStyle(_)) => super::info::run(app, other),
+        Command::Doctor => doctor(app),
+        Command::Status => super::status_report::show(app),
+        Command::Export(path) => super::export::write(app, path),
+        Command::Copy => super::export::copy_last_answer(app),
+        Command::Logout => super::accounts::logout(app),
+        Command::TerminalSetup => super::terminal_setup::show(app),
+        Command::OutputStyle(named) => app.output_style(named),
         Command::Vim => super::toggles::vim(app),
         Command::Todos => super::listings::todos(app),
-        Command::Permissions => super::dirs::show_rules(app, false),
-        Command::Hooks => super::dirs::show_rules(app, true),
-        Command::Diffs => app.open_diffs(),
-        Command::Diff => app.show_changes(),
+        Command::Permissions => super::rules::show(app, false),
+        Command::Hooks => super::rules::show(app, true),
+        Command::Diffs => super::git::open_diffs(app),
+        Command::Diff => super::git::show_changes(app),
         Command::Skills => super::listings::skills(app),
         Command::Agents => super::listings::agents(app),
         Command::Reload => super::reload::run(app),
         Command::Mcp(change) => super::mcp_servers::run(app, change),
         Command::Cost => super::cost::show(app),
-        Command::Login => app.login(),
-        Command::Exit => app.quit = true,
+        Command::Login => super::sign_in::open(app),
+        Command::Exit => app.ui.quit = true,
     }
+}
+
+fn doctor(app: &App) {
+    let cwd = app.cwd.clone();
+    app.spawn(move |sdk| Msg::Notice(crate::doctor::render(&crate::doctor::checks(sdk, &cwd))));
 }
 
 pub fn suggestions(typed: &str, skills: &[(String, String)]) -> Vec<(String, String)> {

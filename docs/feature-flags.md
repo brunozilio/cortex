@@ -112,7 +112,7 @@ read no flag at all.
 - `/features` lists every known flag with its state; `/features <name> on|off`
   writes `features.<name>` into the home `.<command>/settings.json`. The same
   screen is the "Features" entry in the settings list
-  (`crates/cli/src/tui/config.rs`).
+  (`crates/cli/src/tui/settings_picker.rs`).
 - By hand: a `features` object of booleans in any of the settings files above.
 - Picking "never" on the git offer writes `git-offer: false` the same way.
 - `doctor` (`crates/cli/src/doctor.rs`) reports the sandbox flag.

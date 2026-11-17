@@ -1,6 +1,6 @@
 use super::app::{App, Msg};
-use super::choices::{Picker, PickerKind};
 use super::conversations::{self, Conversation};
+use super::picker::{Picker, PickerKind};
 
 pub fn open(app: &mut App, query: Option<String>) {
     if app.busy() {
@@ -25,7 +25,7 @@ pub fn here(sdk: &app::Sdk, cwd: &std::path::Path) -> Result<Vec<Conversation>, 
 }
 
 pub fn fork(app: &mut App) {
-    match app.session.as_ref().filter(|session| session.id().is_some()) {
+    match app.session.live().filter(|session| session.id().is_some()) {
         Some(session) => {
             session.fork_next();
             app.transcript.notice("The next message goes on in a copy of this conversation; this one stays as it is.");
@@ -40,7 +40,7 @@ fn titled(conversation: &Conversation, query: &str) -> bool {
 }
 
 pub fn listed(app: &mut App, found: Vec<Conversation>) {
-    let current = app.session.as_ref().and_then(app::Session::id);
+    let current = app.session.id();
     let found: Vec<Conversation> = found.into_iter().filter(|c| Some(&c.session) != current.as_ref()).collect();
     if found.is_empty() {
         return app.transcript.notice("No earlier conversation in this folder matches.");
@@ -50,19 +50,9 @@ pub fn listed(app: &mut App, found: Vec<Conversation>) {
         .iter()
         .map(|c| (c.title.clone().unwrap_or_else(|| "Untitled".to_owned()), conversations::ago(c.at, now)))
         .collect();
-    app.conversations = found;
+    app.catalog.conversations = found;
     app.overlays.picker =
         Some(Picker { kind: PickerKind::Resume, title: "Resume a conversation".into(), items, cursor: 0 });
-}
-
-impl App {
-    pub(super) fn resume_picked(&mut self, cursor: usize) {
-        let Some(picked) = self.conversations.get(cursor).cloned() else { return };
-        self.resume = Some(picked.session);
-        self.new_session();
-        self.title = picked.title;
-        self.transcript.notice("Continuing an earlier conversation.");
-    }
 }
 
 #[cfg(test)]

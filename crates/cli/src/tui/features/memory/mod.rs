@@ -26,7 +26,7 @@ fn memory(app: &mut App, argument: Option<String>) {
 
 fn run(app: &mut App, command: MemoryCommand) {
     if command == MemoryCommand::Edit {
-        app.edit_file = Some(instructions_file(&app.cwd));
+        app.ui.edit_file = Some(instructions_file(&app.cwd));
         return;
     }
     let seeding = matches!(command, MemoryCommand::Seed | MemoryCommand::SeedKeep(_));
@@ -201,7 +201,7 @@ mod tests {
         assert!(memories.iter().any(|m| m.text == "tests run with cargo nextest"), "{memories:?}");
 
         command(&mut app, "!echo from the shell", "from the shell");
-        until(&mut app, |app| !app.shell_context.is_empty());
+        until(&mut app, |app| !app.prompt.shell_context.is_empty());
         type_text(&mut app, "what did it say?");
         press(&mut app, KeyCode::Enter);
         until(&mut app, |_| engine.requests().iter().any(|r| r.command.is_none()));

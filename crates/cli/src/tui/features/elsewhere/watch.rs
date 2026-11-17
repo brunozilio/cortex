@@ -4,6 +4,8 @@ use domain::SessionId;
 use domain::conversation::Transcript;
 use domain::trace::Record;
 
+use crate::tui::every::Every;
+
 pub(super) const EVERY: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,14 +15,19 @@ pub(super) enum Look {
     Check(SessionId, u64),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct Watch {
     session: Option<SessionId>,
     settled: bool,
     length: u64,
     seen: usize,
-    asking: bool,
-    last: Option<Instant>,
+    every: Every,
+}
+
+impl Default for Watch {
+    fn default() -> Self {
+        Self { session: None, settled: false, length: 0, seen: 0, every: Every::new(EVERY) }
+    }
 }
 
 impl Watch {
@@ -32,16 +39,14 @@ impl Watch {
         if busy || self.session.as_ref() != Some(session) {
             (self.session, self.settled) = (Some(session.clone()), false);
         }
-        let early = self.last.is_some_and(|at| now.saturating_duration_since(at) < EVERY);
-        if busy || self.asking || early {
+        if busy || !self.every.due(now) {
             return Look::Nothing;
         }
-        (self.asking, self.last) = (true, Some(now));
         if self.settled { Look::Check(session.clone(), self.length) } else { Look::Settle(session.clone()) }
     }
 
     pub(super) fn settled(&mut self, session: &SessionId, length: u64, records: usize) {
-        self.asking = false;
+        self.every.landed();
         if self.session.as_ref() == Some(session) {
             (self.settled, self.length, self.seen) = (true, length, records);
         }
@@ -55,7 +60,7 @@ impl Watch {
         records: &[Record],
         busy: bool,
     ) {
-        self.asking = false;
+        self.every.landed();
         if busy || !self.settled || self.session.as_ref() != Some(session) || records.len() < self.seen {
             self.settled = false;
             return;
@@ -65,7 +70,7 @@ impl Watch {
     }
 
     pub(super) fn unchanged(&mut self) {
-        self.asking = false;
+        self.every.landed();
     }
 }
 

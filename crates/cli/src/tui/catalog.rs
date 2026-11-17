@@ -9,5 +9,6 @@ pub struct Catalog {
     pub menu: Vec<ProviderSummary>,
     pub accounts: Vec<super::accounts::Listed>,
     pub files: Option<Vec<String>>,
+    pub conversations: Vec<super::conversations::Conversation>,
     pub loading: bool,
 }

@@ -82,40 +82,39 @@ pub fn clipboard() -> Result<Option<Image>, String> {
     }
 }
 
-impl App {
-    pub fn paste_image(&self) {
-        self.spawn(|_| Msg::Clipboard(clipboard()));
-    }
+pub fn paste_image(app: &App) {
+    app.spawn(|_| Msg::Clipboard(clipboard()));
+}
 
-    pub(super) fn clipboard(&mut self, found: Result<Option<Image>, String>) {
-        match found {
-            Ok(Some(image)) => self.attach(image),
-            Ok(None) => self.transcript.notice("No image on the clipboard."),
-            Err(error) => self.transcript.error(error),
+pub(super) fn clipboard_read(app: &mut App, found: Result<Option<Image>, String>) {
+    match found {
+        Ok(Some(image)) => attach(app, image),
+        Ok(None) => app.transcript.notice("No image on the clipboard."),
+        Err(error) => app.transcript.error(error),
+    }
+}
+
+pub fn paste(app: &mut App, text: &str) {
+    let home = std::env::home_dir();
+    if let Some(path) = pasted_path(text, &app.cwd, home.as_deref()) {
+        match image_file(&path) {
+            Ok(Some(image)) => return attach(app, image),
+            Ok(None) => {}
+            Err(error) => return app.transcript.error(error),
         }
     }
-
-    pub fn paste(&mut self, text: &str) {
-        let home = std::env::home_dir();
-        if let Some(path) = pasted_path(text, &self.cwd, home.as_deref()) {
-            match image_file(&path) {
-                Ok(Some(image)) => return self.attach(image),
-                Ok(None) => {}
-                Err(error) => return self.transcript.error(error),
-            }
-        }
-        let text = text.replace("\r\n", "\n").replace('\r', "\n");
-        match self.pastes.fold(&text) {
-            Some(placeholder) => self.input.insert_str(&placeholder),
-            None => self.input.insert_str(&text),
-        }
+    let text = text.replace("\r\n", "\n").replace('\r', "\n");
+    match app.prompt.pastes.fold(&text) {
+        Some(placeholder) => app.prompt.input.insert_str(&placeholder),
+        None => app.prompt.input.insert_str(&text),
     }
+}
 
-    fn attach(&mut self, image: Image) {
-        let named = self.attachments.add(image);
-        let spaced = self.input.text()[..self.input.cursor()].ends_with(|c: char| !c.is_whitespace());
-        self.input.insert_str(&format!("{}{named} ", if spaced { " " } else { "" }));
-    }
+fn attach(app: &mut App, image: Image) {
+    let named = app.prompt.attachments.add(image);
+    let input = &mut app.prompt.input;
+    let spaced = input.text()[..input.cursor()].ends_with(|c: char| !c.is_whitespace());
+    input.insert_str(&format!("{}{named} ", if spaced { " " } else { "" }));
 }
 
 #[cfg(test)]

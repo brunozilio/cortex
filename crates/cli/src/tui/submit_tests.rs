@@ -64,7 +64,7 @@ fn a_known_command_used_wrongly_shows_how_to_use_it() {
     let mut app = ready(data.path(), &engine);
     let notice = submit(&mut app, "/mode sideways");
     assert!(notice.contains("/mode") && notice.contains("ask, edits, plan or bypass"), "{notice}");
-    assert_eq!(app.input.text(), "/mode sideways", "kept to fix");
+    assert_eq!(app.prompt.input.text(), "/mode sideways", "kept to fix");
     assert!(engine.requests().is_empty(), "nothing reached the agent");
 }
 
@@ -100,8 +100,8 @@ fn a_mistyped_command_is_refused_instead_of_starting_a_session() {
     let engine = engine();
     let mut app = ready(data.path(), &engine);
     assert!(submit(&mut app, "/mode'l").contains("Did you mean /model?"));
-    assert_eq!(app.input.text(), "/mode'l", "the typo stays to fix");
-    app.input.set("");
+    assert_eq!(app.prompt.input.text(), "/mode'l", "the typo stays to fix");
+    app.prompt.input.set("");
     assert!(submit(&mut app, "/").contains("/help"));
     assert!(engine.requests().is_empty(), "nothing reached the agent");
 }

@@ -12,7 +12,34 @@ const FENCE: &str = "─── ";
 const KEPT: usize = 256;
 
 thread_local! {
-    static RENDERED: RefCell<HashMap<(u64, usize), Vec<Line<'static>>>> = RefCell::new(HashMap::new());
+    static RENDERED: RefCell<HashMap<Key, Kept>> = RefCell::new(HashMap::new());
+}
+
+type Key = (u64, usize, bool);
+
+struct Kept {
+    text: String,
+    lines: Vec<Line<'static>>,
+}
+
+fn key(text: &str, width: usize, light: bool) -> Key {
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    (hasher.finish(), width, light)
+}
+
+fn kept(key: Key, text: &str) -> Option<Vec<Line<'static>>> {
+    RENDERED.with(|kept| kept.borrow().get(&key).filter(|kept| kept.text == text).map(|kept| kept.lines.clone()))
+}
+
+fn keep(key: Key, text: &str, lines: &[Line<'static>]) {
+    RENDERED.with(|kept| {
+        let mut kept = kept.borrow_mut();
+        if kept.len() >= KEPT {
+            kept.clear();
+        }
+        kept.insert(key, Kept { text: text.to_owned(), lines: lines.to_vec() });
+    });
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -58,12 +85,9 @@ impl StyleSheet for Look {
 }
 
 pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
-    let mut hasher = DefaultHasher::new();
-    text.hash(&mut hasher);
     let theme = super::theme::current();
-    theme.light().hash(&mut hasher);
-    let key = (hasher.finish(), width);
-    if let Some(kept) = RENDERED.with(|kept| kept.borrow().get(&key).cloned()) {
+    let key = key(text, width, theme.light());
+    if let Some(kept) = kept(key, text) {
         return kept;
     }
     let code = if theme.light() { BuiltinCodeTheme::InspiredGitHub } else { BuiltinCodeTheme::Base16OceanDark };
@@ -80,13 +104,7 @@ pub fn render(text: &str, width: usize) -> Vec<Line<'static>> {
             line
         })
         .collect();
-    RENDERED.with(|kept| {
-        let mut kept = kept.borrow_mut();
-        if kept.len() >= KEPT {
-            kept.clear();
-        }
-        kept.insert(key, lines.clone());
-    });
+    keep(key, text, &lines);
     lines
 }
 
@@ -154,11 +172,16 @@ mod tests {
     fn a_render_is_kept_for_the_same_text_and_width() {
         let first = render("kept **once**", 40);
         assert_eq!(render("kept **once**", 40), first);
-        assert!(RENDERED.with(|kept| kept.borrow().contains_key(&{
-            let mut h = DefaultHasher::new();
-            "kept **once**".hash(&mut h);
-            super::super::theme::current().light().hash(&mut h);
-            (h.finish(), 40)
-        })));
+        let light = super::super::theme::current().light();
+        assert!(kept(key("kept **once**", 40, light), "kept **once**").is_some());
+    }
+
+    #[test]
+    fn a_text_that_only_shares_the_hash_of_a_kept_one_is_rendered_itself() {
+        let light = super::super::theme::current().light();
+        let taken = key("the other text", 40, light);
+        keep(taken, "some text with the same hash", &[Line::from("stale")]);
+        assert!(kept(taken, "the other text").is_none(), "the kept text is compared, not just its hash");
+        assert_eq!(plain(&render("the other text", 40)), ["the other text"]);
     }
 }

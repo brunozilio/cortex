@@ -34,26 +34,26 @@ pub fn mouse(app: &mut App, event: MouseEvent) {
     let cell = Cell { row: event.row, column: event.column };
     match event.kind {
         MouseEventKind::ScrollUp => {
-            app.scroll = app.scroll.saturating_add(WHEEL_ROWS);
-            app.selection.clear();
+            app.ui.scroll = app.ui.scroll.saturating_add(WHEEL_ROWS);
+            app.ui.selection.clear();
         }
         MouseEventKind::ScrollDown => {
-            app.scroll = app.scroll.saturating_sub(WHEEL_ROWS);
-            app.selection.clear();
+            app.ui.scroll = app.ui.scroll.saturating_sub(WHEEL_ROWS);
+            app.ui.selection.clear();
         }
         MouseEventKind::Down(MouseButton::Left) => {
-            app.selection = Selection { dragged: Some((cell, cell)), released: false };
+            app.ui.selection = Selection { dragged: Some((cell, cell)), released: false };
         }
         MouseEventKind::Drag(MouseButton::Left) => {
-            if let Some((_, head)) = &mut app.selection.dragged {
+            if let Some((_, head)) = &mut app.ui.selection.dragged {
                 *head = cell;
             }
         }
         MouseEventKind::Up(MouseButton::Left) => {
-            if app.selection.span().is_some() {
-                app.selection.released = true;
+            if app.ui.selection.span().is_some() {
+                app.ui.selection.released = true;
             } else {
-                app.selection.clear();
+                app.ui.selection.clear();
             }
         }
         _ => {}
@@ -73,10 +73,8 @@ pub fn show(buffer: &mut Buffer, selection: &Selection) -> Option<String> {
 
 pub fn copied(app: &mut App, text: Option<String>) {
     let Some(text) = text else { return };
-    app.selection.released = false;
-    if let Err(error) = super::export::copy(&text) {
-        app.transcript.error(error);
-    }
+    app.ui.selection.released = false;
+    super::export::copy_selection(app, text);
 }
 
 fn rows(buffer: &Buffer, (start, end): (Cell, Cell)) -> Vec<(u16, std::ops::Range<u16>)> {
@@ -145,10 +143,10 @@ mod tests {
         type_text(&mut app, "half written");
         mouse(&mut app, at(MouseEventKind::ScrollUp, 4, 4));
         mouse(&mut app, at(MouseEventKind::ScrollUp, 4, 4));
-        assert_eq!(app.scroll, 6);
+        assert_eq!(app.ui.scroll, 6);
         mouse(&mut app, at(MouseEventKind::ScrollDown, 4, 4));
-        assert_eq!(app.scroll, 3);
-        assert_eq!(app.input.text(), "half written");
+        assert_eq!(app.ui.scroll, 3);
+        assert_eq!(app.prompt.input.text(), "half written");
     }
 
     #[test]
@@ -157,16 +155,16 @@ mod tests {
         let mut app = app(data.path());
         drag(&mut app, (8, 0), (9, 1));
         let mut buffer = page();
-        assert_eq!(show(&mut buffer, &app.selection), None, "nothing is copied while the button is held");
+        assert_eq!(show(&mut buffer, &app.ui.selection), None, "nothing is copied while the button is held");
         assert!(buffer[(8, 0)].modifier.contains(Modifier::REVERSED));
         assert!(buffer[(0, 1)].modifier.contains(Modifier::REVERSED));
         assert!(!buffer[(7, 0)].modifier.contains(Modifier::REVERSED));
         assert!(!buffer[(11, 1)].modifier.contains(Modifier::REVERSED));
 
         mouse(&mut app, at(MouseEventKind::Up(MouseButton::Left), 9, 1));
-        assert_eq!(show(&mut page(), &app.selection).as_deref(), Some("line\n  second 日"));
-        app.selection.released = false;
-        assert_eq!(show(&mut page(), &app.selection), None, "the highlight stays, the copy happens once");
+        assert_eq!(show(&mut page(), &app.ui.selection).as_deref(), Some("line\n  second 日"));
+        app.ui.selection.released = false;
+        assert_eq!(show(&mut page(), &app.ui.selection), None, "the highlight stays, the copy happens once");
     }
 
     #[test]
@@ -175,7 +173,7 @@ mod tests {
         let mut app = app(data.path());
         drag(&mut app, (6, 2), (2, 0));
         mouse(&mut app, at(MouseEventKind::Up(MouseButton::Left), 2, 0));
-        assert_eq!(show(&mut page(), &app.selection).as_deref(), Some("first line\n  second 日本 x\n  third"));
+        assert_eq!(show(&mut page(), &app.ui.selection).as_deref(), Some("first line\n  second 日本 x\n  third"));
     }
 
     #[test]
@@ -185,7 +183,7 @@ mod tests {
         drag(&mut app, (2, 0), (6, 0));
         mouse(&mut app, at(MouseEventKind::Down(MouseButton::Left), 3, 1));
         mouse(&mut app, at(MouseEventKind::Up(MouseButton::Left), 3, 1));
-        assert_eq!(show(&mut page(), &app.selection), None);
+        assert_eq!(show(&mut page(), &app.ui.selection), None);
         assert!(!page_after(&app)[(3, 1)].modifier.contains(Modifier::REVERSED));
 
         drag(&mut app, (2, 0), (6, 0));
@@ -200,12 +198,12 @@ mod tests {
         drag(&mut app, (2, 0), (40, 9));
         mouse(&mut app, at(MouseEventKind::Up(MouseButton::Left), 40, 9));
         let mut small = Buffer::empty(Rect::new(0, 0, 4, 2));
-        assert_eq!(show(&mut small, &app.selection).as_deref(), Some("\n"));
+        assert_eq!(show(&mut small, &app.ui.selection).as_deref(), Some("\n"));
     }
 
     fn page_after(app: &App) -> Buffer {
         let mut buffer = page();
-        show(&mut buffer, &app.selection);
+        show(&mut buffer, &app.ui.selection);
         buffer
     }
 }

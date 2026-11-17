@@ -79,7 +79,7 @@ fn the_esc_hint_on_an_empty_prompt_promises_the_rewind_the_second_esc_opens() {
     press(&mut app, KeyCode::Esc);
     assert!(super::tests::screen(&app).contains("Press Esc again to clear the prompt"));
     press(&mut app, KeyCode::Esc);
-    assert!(app.input.is_empty());
+    assert!(app.prompt.input.is_empty());
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn clear_forgets_the_images_and_pastes_of_the_conversation_before() {
     let long = "a\nb\nc\nd\ne\nf";
     super::keys::paste(&mut app, "shot.png");
     super::keys::paste(&mut app, long);
-    assert_eq!(app.input.text(), "[Image #1] [Pasted text #1 +6 lines]");
+    assert_eq!(app.prompt.input.text(), "[Image #1] [Pasted text #1 +6 lines]");
     press(&mut app, KeyCode::Enter);
     let prompts = || engine.requests().into_iter().filter(|request| request.command.is_none()).collect::<Vec<_>>();
     until(&mut app, |app| !app.busy() && prompts().len() == 1);

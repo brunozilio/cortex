@@ -15,7 +15,7 @@ pub fn feature() -> Feature {
 }
 
 fn tick(app: &mut App) {
-    let session = app.session.as_ref().and_then(app::Session::id);
+    let session = app.session.id();
     let busy = app.busy();
     let cwd = app.cwd.clone();
     let Some(watch) = app.features.get::<Watch>(NAME) else { return };
@@ -41,11 +41,11 @@ fn tick(app: &mut App) {
 }
 
 fn done(then: impl FnOnce(&mut Watch, &mut App) + Send + 'static) -> Msg {
-    Msg::Feature(Box::new(move |app: &mut App| {
+    super::reply(move |app: &mut App| {
         let mut watch = app.features.get::<Watch>(NAME).map(std::mem::take).unwrap_or_default();
         then(&mut watch, app);
         if let Some(slot) = app.features.get::<Watch>(NAME) {
             *slot = watch;
         }
-    }))
+    })
 }

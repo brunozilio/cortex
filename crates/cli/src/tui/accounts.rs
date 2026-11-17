@@ -2,7 +2,7 @@ use domain::account_pool::Balance;
 use domain::provider::{ModelProvider, ProviderSummary};
 
 use super::app::{App, Msg};
-use super::choices::{Picker, PickerKind};
+use super::picker::{Picker, PickerKind};
 
 #[derive(Debug, Clone)]
 pub struct Listed {
@@ -11,61 +11,83 @@ pub struct Listed {
     pub label: String,
 }
 
-impl App {
-    pub(super) fn accounts(&mut self, removing: bool) {
-        self.spawn(move |sdk| match sdk.providers() {
-            Ok(providers) => Msg::Accounts { providers, removing },
-            Err(error) => Msg::Error(error.to_string()),
-        });
-    }
+pub(super) fn open(app: &mut App, removing: bool) {
+    app.spawn(move |sdk| match sdk.providers() {
+        Ok(providers) => Msg::Accounts { providers, removing },
+        Err(error) => Msg::Error(error.to_string()),
+    });
+}
 
-    pub(super) fn accounts_listed(&mut self, providers: Vec<ProviderSummary>, removing: bool) {
-        let mut listed = Vec::new();
-        let mut items = Vec::new();
-        for summary in &providers {
-            let active = summary.account.as_ref().map(|account| account.id.as_str());
-            for (at, account) in summary.accounts.iter().enumerate() {
-                let state = if Some(account.id.as_str()) == active { "in use" } else { "" };
-                items.push((format!("{} · {}", summary.name, account.label), state.to_owned()));
-                listed.push(Listed { provider: summary.provider, number: at + 1, label: account.label.clone() });
-            }
+pub(super) fn listed(app: &mut App, providers: Vec<ProviderSummary>, removing: bool) {
+    let mut listed = Vec::new();
+    let mut items = Vec::new();
+    for summary in &providers {
+        let active = summary.account.as_ref().map(|account| account.id.as_str());
+        for (at, account) in summary.accounts.iter().enumerate() {
+            let state = if Some(account.id.as_str()) == active { "in use" } else { "" };
+            items.push((format!("{} · {}", summary.name, account.label), state.to_owned()));
+            listed.push(Listed { provider: summary.provider, number: at + 1, label: account.label.clone() });
         }
-        if listed.is_empty() {
-            return self.transcript.notice("No account is connected: /login connects one.");
-        }
-        let cursor = if removing { 0 } else { items.iter().position(|(_, state)| state.is_empty()).unwrap_or(0) };
-        let title = if removing { "Forget which account?" } else { "Use which account?" };
-        self.catalog.accounts = listed;
-        self.overlays.picker =
-            Some(Picker { kind: PickerKind::Account { removing }, title: title.into(), items, cursor });
     }
+    if listed.is_empty() {
+        return app.transcript.notice("No account is connected: /login connects one.");
+    }
+    let cursor = if removing { 0 } else { items.iter().position(|(_, state)| state.is_empty()).unwrap_or(0) };
+    let title = if removing { "Forget which account?" } else { "Use which account?" };
+    app.catalog.accounts = listed;
+    app.overlays.picker = Some(Picker { kind: PickerKind::Account { removing }, title: title.into(), items, cursor });
+}
 
-    pub(super) fn balance(&mut self, chosen: Option<Balance>) {
-        let Some(provider) = self.model().map(|model| model.provider) else {
-            return self.transcript.notice("No model yet: /login connects a provider.");
-        };
-        let Some(balance) = chosen else {
-            let ways: Vec<String> = Balance::ALL.iter().map(|b| format!("{}: {}", b.name(), b.about())).collect();
-            return self.transcript.notice(format!(
-                "/accounts balance <way> sets how this provider's accounts share the work:\n{}",
-                ways.join("\n")
-            ));
-        };
-        self.spawn(move |sdk| match sdk.set_balance(provider, balance) {
-            Ok(_) => Msg::Notice(format!("Accounts balance: {} ({}).", balance.name(), balance.about())),
-            Err(error) => Msg::Error(error.to_string()),
-        });
-    }
+pub(super) fn balance(app: &mut App, chosen: Option<Balance>) {
+    let Some(provider) = app.model().map(|model| model.provider) else {
+        return app.transcript.notice("No model yet: /login connects a provider.");
+    };
+    let Some(balance) = chosen else {
+        let ways: Vec<String> = Balance::ALL.iter().map(|b| format!("{}: {}", b.name(), b.about())).collect();
+        return app.transcript.notice(format!(
+            "/accounts balance <way> sets how this provider's accounts share the work:\n{}",
+            ways.join("\n")
+        ));
+    };
+    app.spawn(move |sdk| match sdk.set_balance(provider, balance) {
+        Ok(_) => Msg::Notice(format!("Accounts balance: {} ({}).", balance.name(), balance.about())),
+        Err(error) => Msg::Error(error.to_string()),
+    });
+}
 
-    pub(super) fn account_picked(&mut self, cursor: usize, removing: bool) {
-        let Some(Listed { provider, number, label }) = self.catalog.accounts.get(cursor).cloned() else { return };
-        self.spawn(move |sdk| {
-            let done = if removing {
-                sdk.remove_account(provider, &number.to_string()).map(|_| format!("Forgot {label}."))
-            } else {
-                sdk.use_account(provider, &number.to_string()).map(|_| format!("Using {label} from the next message."))
-            };
-            done.map_or_else(|error| Msg::Error(error.to_string()), Msg::Notice)
-        });
+pub(super) fn picked(app: &mut App, cursor: usize, removing: bool) {
+    let Some(Listed { provider, number, label }) = app.catalog.accounts.get(cursor).cloned() else { return };
+    app.spawn(move |sdk| {
+        let done = if removing {
+            sdk.remove_account(provider, &number.to_string()).map(|_| format!("Forgot {label}."))
+        } else {
+            sdk.use_account(provider, &number.to_string()).map(|_| format!("Using {label} from the next message."))
+        };
+        done.map_or_else(|error| Msg::Error(error.to_string()), Msg::Notice)
+    });
+}
+
+pub(super) fn logout(app: &mut App) {
+    app.spawn(|sdk| match sdk.providers() {
+        Ok(providers) => Msg::Providers(providers.into_iter().filter(|p| p.account.is_some()).collect()),
+        Err(error) => Msg::Error(error.to_string()),
+    });
+}
+
+pub(super) fn connected(app: &mut App, providers: Vec<ProviderSummary>) {
+    if providers.is_empty() {
+        return app.transcript.notice("No provider is connected.");
     }
+    let items = providers.iter().map(|p| (p.name.clone(), String::new())).collect();
+    app.catalog.connected = providers;
+    app.overlays.picker =
+        Some(Picker { kind: PickerKind::Logout, title: "Forget which provider?".into(), items, cursor: 0 });
+}
+
+pub(super) fn logout_picked(app: &mut App, cursor: usize) {
+    let Some(summary) = app.catalog.connected.get(cursor).cloned() else { return };
+    app.spawn(move |sdk| match sdk.disconnect_provider(summary.provider) {
+        Ok(_) => Msg::Notice(format!("Forgot {}.", summary.name)),
+        Err(error) => Msg::Error(error.to_string()),
+    });
 }

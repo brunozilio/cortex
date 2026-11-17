@@ -1,8 +1,8 @@
-use super::choices::Picker;
 use super::diff_view::DiffView;
-use super::login::{PortBusy, SecretPrompt};
+use super::picker::Picker;
 use super::search::Search;
 use super::side::Side;
+use super::sign_in::{PortBusy, SecretPrompt};
 
 #[derive(Default)]
 pub struct Overlays {

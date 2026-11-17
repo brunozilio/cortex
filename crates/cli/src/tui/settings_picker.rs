@@ -1,7 +1,7 @@
 use domain::Command;
 
 use super::app::App;
-use super::choices::{Picker, PickerKind};
+use super::picker::{Picker, PickerKind};
 
 fn entries(app: &App) -> Vec<(String, String, Command)> {
     let on = |yes: bool| if yes { "on" } else { "off" }.to_owned();
@@ -11,11 +11,15 @@ fn entries(app: &App) -> Vec<(String, String, Command)> {
         ("Effort".into(), app.effort_label().into(), Command::Effort(None)),
         (
             "Output style".into(),
-            app.output_style.clone().unwrap_or_else(|| "default".into()),
+            app.session.output_style.clone().unwrap_or_else(|| "default".into()),
             Command::OutputStyle(None),
         ),
-        ("Vim keys".into(), on(app.vim.is_some()), Command::Vim),
-        ("Status line".into(), app.status.command.clone().unwrap_or_else(|| "usual".into()), Command::StatusLine(None)),
+        ("Vim keys".into(), on(app.prompt.vim.is_some()), Command::Vim),
+        (
+            "Status line".into(),
+            app.ui.status.command.clone().unwrap_or_else(|| "usual".into()),
+            Command::StatusLine(None),
+        ),
     ]
 }
 
@@ -34,28 +38,4 @@ pub fn picked(app: &mut App, cursor: usize) {
     if let Some(setting) = super::features::settings().into_iter().nth(cursor - count) {
         (setting.run)(app, None);
     }
-}
-
-pub fn create(app: &mut App, agent: bool, what: &str) {
-    if app.busy() {
-        return app.transcript.notice("Wait for the agent to finish first.");
-    }
-    let prompt = if agent {
-        format!(
-            "Create a {brand_name} sub-agent for this: {what}\n\nWrite it to {brand_dir}/agents/<name>.md: YAML \
-             frontmatter with `name` (lowercase, hyphens), `description` (when to use it, one or two sentences), \
-             and `tools` only if it should have fewer than all; then its instructions as the body. Ask me first \
-             if what it should do is unclear.",
-            brand_name = brand::NAME,
-            brand_dir = brand::DIR
-        )
-    } else {
-        format!(
-            "Create a {brand_name} skill for this: {what}\n\nLoad the skill-creator skill and follow it. Write the \
-             skill under {brand_dir}/skills/<name>/SKILL.md.",
-            brand_name = brand::NAME,
-            brand_dir = brand::DIR
-        )
-    };
-    app.send(prompt);
 }

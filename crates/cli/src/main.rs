@@ -143,12 +143,16 @@ fn main() -> ExitCode {
     }
 }
 
-#[allow(
-    clippy::too_many_lines,
-    reason = "split planned: startup wiring and subcommand dispatch separate in a later phase"
-)]
-fn run(cli: Cli) -> Result<ExitCode, String> {
-    let cwd = match cli.cwd {
+struct Launch {
+    sdk: Sdk,
+    cwd: PathBuf,
+    prompt: Option<String>,
+    add_dirs: Vec<PathBuf>,
+    headless: app::Headless,
+}
+
+fn run(mut cli: Cli) -> Result<ExitCode, String> {
+    let cwd = match cli.cwd.take() {
         Some(dir) => dir,
         None => std::env::current_dir().map_err(|e| e.to_string())?,
     };
@@ -158,8 +162,17 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         return Ok(ExitCode::SUCCESS);
     }
     let sdk = Sdk::builder().cwd(&cwd).build().map_err(|e| e.to_string())?;
+    let launch = launch(&cli, sdk, cwd)?;
+    match cli.command.take() {
+        Some(action) => subcommand(action, &launch.sdk, &launch.cwd, cli.model),
+        None if cli.print => print_the_answers(cli, launch),
+        None => chat(cli, launch),
+    }
+}
+
+fn launch(cli: &Cli, sdk: Sdk, cwd: PathBuf) -> Result<Launch, String> {
     let prompt = (!cli.prompt.is_empty()).then(|| cli.prompt.join(" "));
-    let add_dirs = cli.add_dir.iter().map(|typed| tui::dirs::folder(&cwd, typed)).collect::<Result<Vec<_>, _>>()?;
+    let add_dirs = cli.add_dir.iter().map(|typed| tui::add_dir::folder(&cwd, typed)).collect::<Result<Vec<_>, _>>()?;
     let headless = app::Headless {
         max_turns: cli.max_turns,
         allowed_tools: cli.allowed_tools.iter().flat_map(|rules| rule_list(rules)).collect(),
@@ -167,95 +180,105 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
         append_system: cli.append_system_prompt.clone(),
         fallback_model: cli.fallback_model.clone(),
     };
-    match cli.command {
-        Some(Action::Login) => login::login(&sdk).map(|()| ExitCode::SUCCESS),
-        Some(Action::Logout) => login::logout(&sdk).map(|()| ExitCode::SUCCESS),
-        Some(Action::Doctor) => {
-            let checks = doctor::checks(&sdk, &cwd);
+    Ok(Launch { sdk, cwd, prompt, add_dirs, headless })
+}
+
+fn subcommand(action: Action, sdk: &Sdk, cwd: &std::path::Path, model: Option<String>) -> Result<ExitCode, String> {
+    match action {
+        Action::Login => login::login(sdk).map(|()| ExitCode::SUCCESS),
+        Action::Logout => login::logout(sdk).map(|()| ExitCode::SUCCESS),
+        Action::Doctor => {
+            let checks = doctor::checks(sdk, cwd);
             println!("{}", doctor::render(&checks));
             Ok(if checks.iter().all(|c| c.ok) { ExitCode::SUCCESS } else { ExitCode::FAILURE })
         }
-        Some(Action::Eval { names, json }) => {
-            let program = std::env::current_exe().map_err(|e| e.to_string())?;
-            let asker = eval::Process { program, model: cli.model.clone() };
-            let outcomes: Vec<_> = eval::cases(&cwd, &names)?
-                .iter()
-                .map(|(name, dir)| {
-                    eprintln!("Running {name}…");
-                    eval::run_case(&asker, name, dir)
-                })
-                .collect();
-            if json {
-                println!("{}", serde_json::to_string_pretty(&outcomes).map_err(|e| e.to_string())?);
-            } else {
-                println!("{}", domain::evals::table(&outcomes));
-            }
-            Ok(if outcomes.iter().all(domain::evals::Outcome::ok) { ExitCode::SUCCESS } else { ExitCode::FAILURE })
-        }
-        Some(Action::Models) => {
+        Action::Eval { names, json } => evals(cwd, &names, json, model),
+        Action::Models => {
             for model in sdk.models().map_err(|e| e.to_string())? {
                 println!("{:<40} {}", model.id, model.label);
             }
             Ok(ExitCode::SUCCESS)
         }
-        Some(Action::Mcp { action }) => {
-            mcp::run(&sdk, &cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
+        Action::Mcp { action } => {
+            mcp::run(sdk, cwd, action.unwrap_or(mcp::McpAction::List)).map(|()| ExitCode::SUCCESS)
         }
-        Some(Action::Plugin { action }) => {
-            plugin::run(&sdk, action.unwrap_or(plugin::PluginAction::List)).map(|()| ExitCode::SUCCESS)
+        Action::Plugin { action } => {
+            plugin::run(sdk, action.unwrap_or(plugin::PluginAction::List)).map(|()| ExitCode::SUCCESS)
         }
-        Some(Action::Config { .. }) => Ok(ExitCode::SUCCESS),
-        None if cli.print => {
-            let prompts: Box<dyn Iterator<Item = Result<String, String>>> = match cli.input_format.as_str() {
-                "stream-json" => Box::new(print_output::prompts(std::io::stdin().lines())),
-                "text" => Box::new(std::iter::once(Ok(prompt.ok_or("--print needs a prompt")?))),
-                other => return Err(format!("unknown input format {other}: text or stream-json")),
-            };
-            let resume = print::resumed(cli.pick.as_deref(), cli.resume, || {
-                Ok(tui::last_session(&sdk.settings().map_err(|e| e.to_string())?, &cwd))
-            })?;
-            let wanted = print::Wanted {
-                model: cli.model.as_deref(),
-                mode: cli.mode,
-                verification: cli.verification,
-                add_dirs,
-                headless,
-                format: cli.output_format,
-                resume,
-                fork: cli.fork_session,
-            };
-            print::print_all(&sdk, cwd, wanted, prompts)
-        }
-        None => {
-            let resume = if cli.resume {
-                let settings = sdk.settings().map_err(|e| e.to_string())?;
-                let last = tui::last_session(&settings, &cwd);
-                if last.is_none() {
-                    eprintln!(
-                        "{brand_command}: no earlier conversation in this folder; starting a new one",
-                        brand_command = brand::COMMAND
-                    );
-                }
-                last
-            } else {
-                None
-            };
-            let (resume, pick) = match cli.pick {
-                Some(id) if !id.is_empty() => (Some(app::SessionId(id)), false),
-                Some(_) => (resume, true),
-                None => (resume, false),
-            };
-            let start = tui::Start {
-                resume,
-                add_dirs,
-                pick,
-                headless,
-                fork: cli.fork_session,
-                inline: cli.inline,
-                channels: cli.channels,
-            };
-            tui::run(sdk, cwd, cli.model, cli.mode, prompt, None, start).map_err(|e| e.to_string())?;
-            Ok(ExitCode::SUCCESS)
-        }
+        Action::Config { .. } => Ok(ExitCode::SUCCESS),
     }
+}
+
+fn evals(cwd: &std::path::Path, names: &[String], json: bool, model: Option<String>) -> Result<ExitCode, String> {
+    let program = std::env::current_exe().map_err(|e| e.to_string())?;
+    let asker = eval::Process { program, model };
+    let outcomes: Vec<_> = eval::cases(cwd, names)?
+        .iter()
+        .map(|(name, dir)| {
+            eprintln!("Running {name}…");
+            eval::run_case(&asker, name, dir)
+        })
+        .collect();
+    if json {
+        println!("{}", serde_json::to_string_pretty(&outcomes).map_err(|e| e.to_string())?);
+    } else {
+        println!("{}", domain::evals::table(&outcomes));
+    }
+    Ok(if outcomes.iter().all(domain::evals::Outcome::ok) { ExitCode::SUCCESS } else { ExitCode::FAILURE })
+}
+
+fn print_the_answers(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
+    let Launch { sdk, cwd, prompt, add_dirs, headless } = launch;
+    let prompts: Box<dyn Iterator<Item = Result<String, String>>> = match cli.input_format.as_str() {
+        "stream-json" => Box::new(print_output::prompts(std::io::stdin().lines())),
+        "text" => Box::new(std::iter::once(Ok(prompt.ok_or("--print needs a prompt")?))),
+        other => return Err(format!("unknown input format {other}: text or stream-json")),
+    };
+    let resume = print::resumed(cli.pick.as_deref(), cli.resume, || {
+        Ok(tui::last_session(&sdk.settings().map_err(|e| e.to_string())?, &cwd))
+    })?;
+    let wanted = print::Wanted {
+        model: cli.model.as_deref(),
+        mode: cli.mode,
+        verification: cli.verification,
+        add_dirs,
+        headless,
+        format: cli.output_format,
+        resume,
+        fork: cli.fork_session,
+    };
+    print::print_all(&sdk, cwd, wanted, prompts)
+}
+
+fn chat(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
+    let Launch { sdk, cwd, prompt, add_dirs, headless } = launch;
+    let last = if cli.resume { last_conversation(&sdk, &cwd)? } else { None };
+    let (resume, pick) = match cli.pick {
+        Some(id) if !id.is_empty() => (Some(app::SessionId(id)), false),
+        Some(_) => (last, true),
+        None => (last, false),
+    };
+    let start = tui::Start {
+        resume,
+        add_dirs,
+        pick,
+        headless,
+        fork: cli.fork_session,
+        inline: cli.inline,
+        channels: cli.channels,
+    };
+    tui::run(sdk, cwd, cli.model, cli.mode, prompt, None, start).map_err(|e| e.to_string())?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn last_conversation(sdk: &Sdk, cwd: &std::path::Path) -> Result<Option<app::SessionId>, String> {
+    let settings = sdk.settings().map_err(|e| e.to_string())?;
+    let last = tui::last_session(&settings, cwd);
+    if last.is_none() {
+        eprintln!(
+            "{brand_command}: no earlier conversation in this folder; starting a new one",
+            brand_command = brand::COMMAND
+        );
+    }
+    Ok(last)
 }

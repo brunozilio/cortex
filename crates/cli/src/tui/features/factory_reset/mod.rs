@@ -54,8 +54,8 @@ fn answered(app: &mut App, decision: &app::Decision) -> bool {
     let (true, Some(found)) = (mine, found) else { return false };
     app.ask = None;
     if domain::factory_reset::confirmed(decision) {
-        app.exit_chore = Some(Box::new(move || report(&wipe(&found))));
-        app.quit = true;
+        app.ui.exit_chore = Some(Box::new(move || report(&wipe(&found))));
+        app.ui.quit = true;
     } else {
         app.transcript.notice(format!("Nothing was erased; {} keeps everything.", brand::NAME));
     }
@@ -158,13 +158,13 @@ mod tests {
         offer(&mut app, vec![kept.clone()]);
         assert!(app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == domain::factory_reset::ASK));
         app.answer(app::Decision::Deny);
-        assert!(app.ask.is_none() && !app.quit && app.exit_chore.is_none());
+        assert!(app.ask.is_none() && !app.ui.quit && app.ui.exit_chore.is_none());
         assert!(kept.exists(), "closing the question erases nothing");
 
         offer(&mut app, vec![kept.clone()]);
         app.answer(app::Decision::Answer(vec![vec![1]]));
-        assert!(app.quit, "erasing quits first");
-        let chore = app.exit_chore.take().expect("the erase waits for the exit");
+        assert!(app.ui.quit, "erasing quits first");
+        let chore = app.ui.exit_chore.take().expect("the erase waits for the exit");
         assert!(chore().contains("is reset"));
         assert!(!kept.exists());
     }
@@ -205,7 +205,7 @@ mod tests {
         crate::tui::tests::until(&mut app, |app| app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == "a-1"));
 
         app.answer(second_option());
-        assert!(!app.quit && app.exit_chore.is_none(), "the answer was for the agent, not the reset");
+        assert!(!app.ui.quit && app.ui.exit_chore.is_none(), "the answer was for the agent, not the reset");
         crate::tui::tests::until(&mut app, |_| !engine.answers().is_empty());
         assert_eq!(engine.answers(), [(domain::AskId("a-1".into()), second_option())]);
         assert!(kept.exists());
@@ -228,7 +228,7 @@ mod tests {
 
         app.ask = Some(Pending::new(agent_question()));
         app.answer(second_option());
-        assert!(!app.quit && app.exit_chore.is_none());
+        assert!(!app.ui.quit && app.ui.exit_chore.is_none());
         assert!(kept.exists());
     }
 
@@ -244,7 +244,7 @@ mod tests {
         let last = format!("{:?}", app.transcript.entries.last());
         assert!(last.contains("Wait for the agent to finish"), "{last}");
         app.answer(second_option());
-        assert!(!app.quit && app.exit_chore.is_none());
+        assert!(!app.ui.quit && app.ui.exit_chore.is_none());
         crate::tui::tests::until(&mut app, |_| !engine.answers().is_empty());
     }
 

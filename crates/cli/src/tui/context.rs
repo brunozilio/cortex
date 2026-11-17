@@ -5,7 +5,7 @@ use super::app::{App, Msg};
 use super::entries::tokens;
 
 pub fn measure(app: &mut App) {
-    let Some(session) = &app.session else { return app.transcript.notice("No model yet: /login connects one.") };
+    let Some(session) = app.session.live() else { return app.transcript.notice("No model yet: /login connects one.") };
     match session.measure_context() {
         Ok(run) => {
             let tx = app.tx.clone();

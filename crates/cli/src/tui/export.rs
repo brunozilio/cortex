@@ -2,7 +2,38 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use super::app::{App, Msg};
 use super::transcript::{Entry, ToolState};
+
+pub fn write(app: &mut App, path: Option<String>) {
+    let title = app.session.title.clone();
+    let target = match path {
+        Some(path) => app.cwd.join(path),
+        None => default_path(&app.cwd, title.as_deref()),
+    };
+    let text = markdown(title.as_deref(), &app.transcript.entries);
+    app.spawn(move |_| match std::fs::write(&target, text) {
+        Ok(()) => Msg::Notice(format!("Wrote the conversation to {}.", target.display())),
+        Err(error) => Msg::Error(format!("{}: {error}", target.display())),
+    });
+}
+
+pub fn copy_last_answer(app: &mut App) {
+    let Some(answer) = last_answer(&app.transcript.entries).map(str::to_owned) else {
+        return app.transcript.notice("No answer to copy yet.");
+    };
+    app.spawn(move |_| match copy(&answer) {
+        Ok(()) => Msg::Notice("Copied the last answer.".into()),
+        Err(error) => Msg::Error(error),
+    });
+}
+
+pub fn copy_selection(app: &App, text: String) {
+    app.spawn(move |_| match copy(&text) {
+        Ok(()) => Msg::Nothing,
+        Err(error) => Msg::Error(error),
+    });
+}
 
 pub fn markdown(title: Option<&str>, entries: &[Entry]) -> String {
     let mut out = format!("# {}\n", title.unwrap_or(concat!(brand::name!(), " conversation")));

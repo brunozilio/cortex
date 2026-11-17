@@ -26,17 +26,17 @@ pub struct Parked {
 
 impl Parked {
     pub fn trade(&mut self, app: &mut App) {
-        swap(&mut self.session, &mut app.session);
+        app.session.trade_live(&mut self.session);
         swap(&mut self.transcript, &mut app.transcript);
         swap(&mut self.turn, &mut app.turn);
         swap(&mut self.ask, &mut app.ask);
-        swap(&mut self.title, &mut app.title);
-        swap(&mut self.ghost, &mut app.ghost);
-        swap(&mut self.input, &mut app.input);
-        swap(&mut self.scroll, &mut app.scroll);
-        swap(&mut self.attachments, &mut app.attachments);
-        swap(&mut self.pastes, &mut app.pastes);
-        swap(&mut self.shell_context, &mut app.shell_context);
+        swap(&mut self.title, &mut app.session.title);
+        swap(&mut self.ghost, &mut app.prompt.ghost);
+        swap(&mut self.input, &mut app.prompt.input);
+        swap(&mut self.scroll, &mut app.ui.scroll);
+        swap(&mut self.attachments, &mut app.prompt.attachments);
+        swap(&mut self.pastes, &mut app.prompt.pastes);
+        swap(&mut self.shell_context, &mut app.prompt.shell_context);
     }
 
     pub fn touched(&self) -> bool {
@@ -44,7 +44,7 @@ impl Parked {
     }
 
     pub fn runs(&self, run: domain::RunId) -> bool {
-        self.turn.run.as_ref().is_some_and(|control| control.id() == run)
+        self.turn.runs(run)
     }
 
     pub fn is(&self, id: &app::SessionId) -> bool {

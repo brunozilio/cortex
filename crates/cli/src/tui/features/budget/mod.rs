@@ -11,7 +11,7 @@ pub fn feature() -> Feature {
             about: "Cap what this session spends: /budget <dollars>, or off",
             run,
         }],
-        status: Some(|app| app.session.as_ref().map(app::Session::spending).and_then(|spending| marker(&spending))),
+        status: Some(|app| app.session.live().map(app::Session::spending).and_then(|spending| marker(&spending))),
         setting: Some(Setting { name: "Budget", value: |_| String::new(), run: |app, _| run(app, None) }),
         ..Feature::default()
     }
@@ -22,7 +22,7 @@ fn run(app: &mut App, argument: Option<String>) {
         Ok(command) => command,
         Err(error) => return app.transcript.notice(error),
     };
-    let Some(session) = app.session.as_ref() else {
+    let Some(session) = app.session.live() else {
         return app.transcript.notice("Pick a model first: a budget belongs to a conversation.");
     };
     let notice = match command {

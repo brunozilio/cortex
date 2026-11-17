@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use console::{Live, Running as Served};
 use domain::SessionId;
@@ -8,18 +8,28 @@ use domain::catalog::Listed;
 
 use super::refresh::Refresh;
 use super::{NAME, board};
-use crate::tui::app::{App, Msg};
+use crate::tui::app::App;
+use crate::tui::every::Every;
+use crate::tui::features::reply;
 
-const EVERY: Duration = Duration::from_secs(1);
-
-#[derive(Default)]
 struct Follow {
     served: Option<Served>,
-    last: Option<Instant>,
-    asking: bool,
+    every: Every,
     busy_before: bool,
     sent: BTreeMap<String, String>,
     refresh: Refresh,
+}
+
+impl Default for Follow {
+    fn default() -> Self {
+        Self {
+            served: None,
+            every: Every::second(),
+            busy_before: false,
+            sent: BTreeMap::new(),
+            refresh: Refresh::default(),
+        }
+    }
 }
 
 struct Wanted {
@@ -60,11 +70,11 @@ fn report_all(app: &mut App, live: Live) {
         if let Ok(report) = sdk.trace_of_every_session() {
             live.show(report.to_string());
         }
-        Msg::Feature(Box::new(|app: &mut App| {
+        reply(|app: &mut App| {
             if let Some(follow) = app.features.get::<Follow>(NAME) {
                 follow.refresh.done();
             }
-        }))
+        })
     });
 }
 
@@ -80,11 +90,11 @@ fn report_when_changed(app: &mut App) {
 pub(super) fn tick(app: &mut App) {
     report_when_changed(app);
     let busy = app.busy();
-    let current = app.session.as_ref().and_then(app::Session::id);
+    let current = app.session.id();
     let cwd = app.cwd.clone();
     let Some(follow) = app.features.get::<Follow>(NAME) else { return };
     let Some(served) = &follow.served else { return };
-    if follow.asking || follow.last.is_some_and(|at| at.elapsed() < EVERY) {
+    if !follow.every.due(Instant::now()) {
         return;
     }
     let live = served.live();
@@ -93,11 +103,11 @@ pub(super) fn tick(app: &mut App) {
         sessions.push(id.0.clone());
     }
     let watched = live.watched().filter(|id| !follow.sent.contains_key(id));
-    (follow.busy_before, follow.asking, follow.last) = (busy, true, Some(Instant::now()));
+    follow.busy_before = busy;
     let wanted = Wanted { cwd, current, sessions, watched };
     app.spawn(move |sdk| {
         let traces = gathered(sdk, &live, wanted);
-        Msg::Feature(Box::new(move |app: &mut App| arrived(app, traces)))
+        reply(move |app: &mut App| arrived(app, traces))
     });
 }
 
@@ -122,7 +132,7 @@ fn folder_of(listed: &[Listed], id: &str) -> Option<PathBuf> {
 
 fn arrived(app: &mut App, traces: Vec<(String, String)>) {
     let Some(follow) = app.features.get::<Follow>(NAME) else { return };
-    follow.asking = false;
+    follow.every.landed();
     let Some(served) = &follow.served else { return };
     let live = served.live();
     for (session, text) in traces {

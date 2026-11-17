@@ -140,7 +140,7 @@ fn build(scene: &Scene, data: &Path) -> App {
     let model = Model::new("keyed:opus", "Opus 5.5");
     let engine = FakeEngine::new(vec![model], scene.events.clone()).with_delay(Duration::from_millis(2));
     let mut app = App::new(sdk(&engine, data), data.into(), None, None);
-    app.motion = std::cell::RefCell::new(Motion::new(false));
+    app.ui.motion = std::cell::RefCell::new(Motion::new(false));
     until(&mut app, |app| app.session.is_some());
     app.cwd = PathBuf::from("~/code/shop-api");
     if let Some(prompt) = scene.prompt {

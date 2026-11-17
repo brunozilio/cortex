@@ -1,26 +1,8 @@
-use std::path::{Path, PathBuf};
+use domain::permission_rules::{HookInfo, PermissionsInfo, RuleKind};
 
 use super::app::{App, Msg};
 
-pub fn run(app: &mut App, typed: Option<String>) {
-    let Some(typed) = typed else {
-        return app.transcript.notice(if app.added_dirs.is_empty() {
-            "No folders added. /add-dir <path> lets the agent read one like the project.".to_owned()
-        } else {
-            let dirs: Vec<String> = app.added_dirs.iter().map(|dir| format!("  {}", dir.display())).collect();
-            format!("Added folders:\n{}", dirs.join("\n"))
-        });
-    };
-    match folder(&app.cwd, &typed) {
-        Ok(dir) => {
-            app.transcript.notice(format!("Added {}: the agent reads it like the project.", dir.display()));
-            app.add_dir(dir);
-        }
-        Err(error) => app.transcript.error(error),
-    }
-}
-
-pub fn show_rules(app: &App, hooks_only: bool) {
+pub fn show(app: &App, hooks_only: bool) {
     let cwd = app.cwd.clone();
     app.spawn(move |sdk| match sdk.permissions(&cwd) {
         Ok(info) if hooks_only => Msg::Notice(hooks(&info)),
@@ -29,11 +11,11 @@ pub fn show_rules(app: &App, hooks_only: bool) {
     });
 }
 
-pub fn permissions(info: &domain::permission_rules::PermissionsInfo) -> String {
+pub fn permissions(info: &PermissionsInfo) -> String {
     noted(rules(info), &info.notices)
 }
 
-pub fn hooks(info: &domain::permission_rules::PermissionsInfo) -> String {
+pub fn hooks(info: &PermissionsInfo) -> String {
     noted(hook_list(&info.hooks), &info.notices)
 }
 
@@ -45,8 +27,7 @@ fn noted(mut text: String, notices: &[String]) -> String {
     text
 }
 
-fn rules(info: &domain::permission_rules::PermissionsInfo) -> String {
-    use domain::permission_rules::RuleKind;
+fn rules(info: &PermissionsInfo) -> String {
     if info.rules.is_empty() && info.added_dirs.is_empty() {
         return concat!(
             "No permission rules. Add permissions.allow/ask/deny to ",
@@ -71,7 +52,7 @@ fn rules(info: &domain::permission_rules::PermissionsInfo) -> String {
     text
 }
 
-fn hook_list(hooks: &[domain::permission_rules::HookInfo]) -> String {
+fn hook_list(hooks: &[HookInfo]) -> String {
     if hooks.is_empty() {
         return concat!("No hooks. Add them under \"hooks\" in ", brand::dir!(), "/settings.json.").to_owned();
     }
@@ -83,19 +64,8 @@ fn hook_list(hooks: &[domain::permission_rules::HookInfo]) -> String {
     text
 }
 
-pub fn folder(cwd: &Path, typed: &str) -> Result<PathBuf, String> {
-    let path = match typed.strip_prefix("~/") {
-        Some(rest) => std::env::home_dir().ok_or("no home folder to start ~/ from")?.join(rest),
-        None => cwd.join(typed),
-    };
-    let real = path.canonicalize().map_err(|_| format!("No folder at {}.", path.display()))?;
-    if real.is_dir() { Ok(real) } else { Err(format!("{} is a file, not a folder.", real.display())) }
-}
-
 #[cfg(test)]
 mod tests {
-    use domain::permission_rules::{PermissionsInfo, RuleKind};
-
     use super::*;
 
     const SKIPPED: &str = "This project's hooks were skipped: /repo/hooks/guard.js is versioned in git.";

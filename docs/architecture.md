@@ -54,7 +54,7 @@ Everything below is one process. The seam between terminal and engine is channel
 9. Tool calls in the reply go through `Agent::call` (`agent/dispatch.rs`): `PreToolUse` hook, permission decision (`agent/permission.rs`), the tool itself, `PostToolUse` hook, redaction, persistence of large output. A permission question is emitted as an `Asked` event and the run thread blocks until the handle's `answer` is called.
 10. Every event leaves through the `RunGate` (`boundary/gate.rs`), which feeds the trace recorder and the backend's sink. The sink updates the session catalog and pushes a `ServerEvent::Run` into the outbox (`crates/app/src/handler/outbox.rs`).
 11. The `sdk-dispatch` thread drains the outbox and routes each run event to that run's channel. A thread in the TUI iterates the run and forwards each event as a message to the UI thread.
-12. `App::event` (`crates/cli/src/tui/runs.rs`) handles the events that change UI state and hands the rest to `Transcript::apply` in `domain`. The next frame redraws.
+12. `App::event` (`crates/cli/src/tui/turn_flow.rs`) handles the events that change UI state and hands the rest to `Transcript::apply` in `domain`. The next frame redraws.
 
 Calls that are not runs (list models, settings, a feature) use the same path and come back as a `ServerEvent::Reply` carrying the id of the request it answers.
 

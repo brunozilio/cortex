@@ -1,73 +1,37 @@
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
 
-use app::{Effort, Model, PermissionMode, Sdk, Session, SessionId};
+use app::{Model, PermissionMode, Sdk, SessionId};
 use crossbeam_channel::{Receiver, Sender};
 
 use super::ask::Pending;
 use super::catalog::Catalog;
-use super::input::Input;
+use super::every::Every;
 use super::overlays::Overlays;
+use super::prompt_state::PromptState;
+use super::session_state::SessionState;
 use super::transcript::Transcript;
 use super::turn::Turn;
+use super::ui_state::Ui;
+use super::workers::Workers;
 
 pub use super::msg::Msg;
-
-const QUIT_WINDOW: Duration = Duration::from_secs(2);
 
 pub struct App {
     pub sdk: Sdk,
     pub cwd: PathBuf,
-    pub session: Option<Session>,
+    pub session: SessionState,
     pub transcript: Transcript,
-    pub input: Input,
-    pub motion: std::cell::RefCell<super::motion::Motion>,
-    pub attachments: super::attach::Attachments,
-    pub pastes: super::pastes::Pastes,
-    pub shell_context: Vec<String>,
-    pub catalog: Catalog,
-    pub overlays: Overlays,
-    pub fleet: super::fleet::Fleet,
+    pub prompt: PromptState,
     pub turn: Turn,
-    pub show_tasks: bool,
-    pub inline: Option<usize>,
-    pub window: Option<u64>,
-    pub conversations: Vec<super::conversations::Conversation>,
-    pub status: super::statusline::Status,
-    pub headless: app::Headless,
-    pub fork_resumed: bool,
-    pub output_style: Option<String>,
-    pub roles: domain::model_roles::ModelRoles,
-    pub fallbacks: Vec<String>,
-    pub vim: Option<super::vim::Vim>,
-    pub external_edit: bool,
-    pub edit_file: Option<PathBuf>,
-    pub redraw: bool,
-    pub expanded: bool,
     pub ask: Option<Pending>,
-    pub notices: super::notices::Poll,
+    pub ui: Ui,
+    pub overlays: Overlays,
+    pub catalog: Catalog,
+    pub fleet: super::fleet::Fleet,
     pub features: super::features::States,
-    pub turned_off: std::collections::BTreeSet<String>,
-    pub added_dirs: Vec<PathBuf>,
-    pub focused: bool,
-    pub bell: bool,
-    pub title: Option<String>,
-    pub ghost: Option<String>,
-    pub scroll: u16,
-    pub selection: super::selection::Selection,
-    pub quit: bool,
-    pub exit_chore: Option<Box<dyn FnOnce() -> String>>,
-    pub quit_armed: Option<Instant>,
-    pub clear_armed: Option<Instant>,
-    pub shell: bool,
-    pub suggestion: usize,
-    pub(super) wanted: Option<String>,
-    pub(super) resume: Option<SessionId>,
-    pub(super) mode_given: bool,
-    pub(super) mode: PermissionMode,
-    pub(super) effort: Effort,
-    pub(super) auto_effort: bool,
+    pub notices: Every,
     pub(super) tx: Sender<Msg>,
+    workers: Workers,
     pub(super) saver: super::settings::Saver,
     pub rx: Receiver<Msg>,
 }
@@ -79,55 +43,18 @@ impl App {
         let mut app = Self {
             sdk,
             cwd,
-            session: None,
+            session: SessionState::new(wanted, mode),
             transcript: Transcript::default(),
-            input: Input::default(),
-            motion: std::cell::RefCell::new(super::motion::Motion::from_env()),
-            attachments: Default::default(),
-            pastes: Default::default(),
-            shell_context: Vec::new(),
-            catalog: Catalog { loading: true, ..Default::default() },
-            overlays: Overlays::default(),
-            fleet: Default::default(),
+            prompt: PromptState::default(),
             turn: Turn::default(),
-            show_tasks: true,
-            inline: None,
-            window: None,
-            conversations: Vec::new(),
-            output_style: None,
-            roles: Default::default(),
-            fallbacks: Vec::new(),
-            headless: Default::default(),
-            fork_resumed: false,
-            status: Default::default(),
-            vim: None,
-            external_edit: false,
-            edit_file: None,
-            redraw: false,
-            expanded: false,
             ask: None,
-            notices: Default::default(),
+            ui: Ui::default(),
+            overlays: Overlays::default(),
+            catalog: Catalog { loading: true, ..Default::default() },
+            fleet: Default::default(),
             features: Default::default(),
-            turned_off: Default::default(),
-            added_dirs: Vec::new(),
-            focused: true,
-            bell: false,
-            title: None,
-            ghost: None,
-            scroll: 0,
-            selection: Default::default(),
-            quit: false,
-            exit_chore: None,
-            quit_armed: None,
-            clear_armed: None,
-            shell: false,
-            suggestion: 0,
-            wanted,
-            resume: None,
-            mode_given: mode.is_some(),
-            mode: mode.unwrap_or_default(),
-            effort: Effort::Medium,
-            auto_effort: false,
+            notices: Every::second(),
+            workers: Workers::default(),
             saver,
             tx,
             rx,
@@ -140,17 +67,8 @@ impl App {
         if session.is_some() {
             self.transcript.notice("Continuing the last conversation in this folder.");
         }
-        self.resume = session;
+        self.session.resume = session;
         self
-    }
-
-    pub fn add_dir(&mut self, dir: PathBuf) {
-        if let Some(session) = &mut self.session {
-            session.add_dir(dir.clone());
-        }
-        if !self.added_dirs.contains(&dir) {
-            self.added_dirs.push(dir);
-        }
     }
 
     pub(super) fn load(&mut self, skills: bool) {
@@ -178,36 +96,34 @@ impl App {
     }
 
     pub fn mode(&self) -> PermissionMode {
-        self.mode
+        self.session.mode()
     }
 
     pub fn effort_label(&self) -> &'static str {
-        if self.auto_effort { super::settings::AUTO_EFFORT } else { self.effort.cli_value() }
+        self.session.effort_label()
     }
 
     pub fn model(&self) -> Option<&Model> {
-        self.session.as_ref().map(Session::model)
+        self.session.model()
     }
 
     pub fn interrupt(&mut self) {
         if self.busy() {
             self.cancel();
-        } else if !self.input.is_empty() {
-            self.input.clear();
-        } else if self.quit_armed.is_some_and(|at| at.elapsed() < QUIT_WINDOW) {
-            self.quit = true;
+        } else if !self.prompt.input.is_empty() {
+            self.prompt.input.clear();
         } else {
-            self.quit_armed = Some(Instant::now());
+            self.ui.quit_or_arm();
         }
     }
 
     pub fn quitting(&self) -> bool {
-        self.quit_armed.is_some_and(|at| at.elapsed() < QUIT_WINDOW)
+        self.ui.quitting()
     }
 
     pub(super) fn spawn(&self, work: impl FnOnce(&Sdk) -> Msg + Send + 'static) {
         let (sdk, tx) = (self.sdk.clone(), self.tx.clone());
-        std::thread::spawn(move || {
+        self.workers.run(move || {
             let _ = tx.send(work(&sdk));
         });
     }

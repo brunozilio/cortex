@@ -30,7 +30,7 @@ fn run(app: &mut App, argument: Option<String>) {
     let Some(index) = chosen else {
         return app.transcript.notice("There is no such prompt; /branch lists them.");
     };
-    let Some(session) = &app.session else { return };
+    let Some(session) = app.session.live() else { return };
     let started = session.branch(index);
     app.follow(started);
 }

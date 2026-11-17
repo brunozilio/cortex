@@ -9,6 +9,12 @@ use super::app::App;
 use super::tests::{SETTLES_WITHIN, press, screen, sdk, type_text, until};
 use super::transcript::Entry;
 
+fn port_busy(app: &mut App, holder: Option<app::PortHolder>) {
+    let provider = app::ModelProvider::new("browser-sub");
+    let busy = super::sign_in::PortBusy { provider, name: "Kiro".into(), port: 49153, holder };
+    super::sign_in::port_busy(app, busy);
+}
+
 #[test]
 fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
     let data = tempfile::tempdir().expect("data");
@@ -23,11 +29,11 @@ fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
 
     type_text(&mut app, "fix the login page");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |app| app.ghost.is_some());
+    until(&mut app, |app| app.prompt.ghost.is_some());
     assert!(screen(&app).contains("run the tests  (tab)"), "{}", screen(&app));
     press(&mut app, KeyCode::Tab);
-    assert_eq!(app.input.text(), "run the tests");
-    assert!(app.ghost.is_none());
+    assert_eq!(app.prompt.input.text(), "run the tests");
+    assert!(app.prompt.ghost.is_none());
 
     let deadline = Instant::now() + SETTLES_WITHIN;
     let asked = || engine.requests().iter().filter_map(|r| r.command).collect::<Vec<_>>();
@@ -64,7 +70,7 @@ fn a_rewind_cuts_the_chat_before_its_prompt_and_gives_the_prompt_back() {
     let shown = screen(&app);
     assert!(shown.contains("Written.") && !shown.contains("Added."), "{shown}");
     assert!(shown.contains("Rewound: 1 file restored"), "{shown}");
-    assert_eq!(app.input.text(), "add more", "the prompt is back to edit");
+    assert_eq!(app.prompt.input.text(), "add more", "the prompt is back to edit");
     assert_eq!(app.turn.checkpoints.iter().map(|c| c.index).collect::<Vec<_>>(), [0]);
 }
 
@@ -83,6 +89,7 @@ fn the_sign_in_notices_go_once_connected_and_connected_goes_with_the_first_promp
 
     type_text(&mut app, "hello");
     press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.transcript.entries.iter().any(|entry| matches!(entry, Entry::User(_))));
     assert_eq!(passing(&app), 0);
     assert!(!screen(&app).contains("Connected Scripted."), "{}", screen(&app));
 }
@@ -96,12 +103,12 @@ fn effort_without_a_level_opens_a_picker_at_the_current_one() {
     type_text(&mut app, "/effort");
     press(&mut app, KeyCode::Enter);
     let picker = app.overlays.picker.as_ref().expect("a picker");
-    assert_eq!(picker.items[picker.cursor].0, app.effort.cli_value());
+    assert_eq!(picker.items[picker.cursor].0, app.session.effort().cli_value());
     assert!(screen(&app).contains("xhigh"), "{}", screen(&app));
     press(&mut app, KeyCode::Down);
     press(&mut app, KeyCode::Enter);
     assert!(app.overlays.picker.is_none());
-    assert_eq!(app.effort, app::Effort::High, "the level after medium");
+    assert_eq!(app.session.effort(), app::Effort::High, "the level after medium");
 }
 
 fn asking_script(then: EngineEvent) -> Vec<EngineEvent> {
@@ -159,7 +166,7 @@ fn a_taken_sign_in_port_asks_to_close_the_app_holding_it() {
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let holder = app::PortHolder { pid: 998, app: "Visual Studio Code".into() };
-    app.port_busy(app::ModelProvider::new("browser-sub"), "Kiro".into(), 49153, Some(holder));
+    port_busy(&mut app, Some(holder));
     let picker = app.overlays.picker.as_ref().expect("a picker");
     assert_eq!(picker.title, "Port 49153 is in use by Visual Studio Code (PID 998)");
     let choices: Vec<_> = picker.items.iter().map(|(label, _)| label.as_str()).collect();
@@ -177,7 +184,7 @@ fn a_taken_sign_in_port_with_no_known_holder_offers_to_try_again() {
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], Vec::new());
     let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
-    app.port_busy(app::ModelProvider::new("browser-sub"), "Kiro".into(), 49153, None);
+    port_busy(&mut app, None);
     let picker = app.overlays.picker.as_ref().expect("a picker");
     assert_eq!(picker.title, "Port 49153 is in use by another app");
     let choices: Vec<_> = picker.items.iter().map(|(label, _)| label.as_str()).collect();

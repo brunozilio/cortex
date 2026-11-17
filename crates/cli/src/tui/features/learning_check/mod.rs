@@ -20,7 +20,7 @@ fn run(app: &mut App, _argument: Option<String>) {
     }
     let cwd = app.cwd.clone();
     app.spawn(move |sdk| match sdk.memory(cwd).check() {
-        Ok(Some(prompt)) => Msg::Feature(Box::new(move |app: &mut App| app.send(prompt))),
+        Ok(Some(prompt)) => super::reply(move |app: &mut App| app.send(prompt)),
         Ok(None) => Msg::Notice("Nothing to check: no change, or no memory is about the changed files.".into()),
         Err(error) => Msg::Error(error.to_string()),
     });

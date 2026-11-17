@@ -107,7 +107,7 @@ fn shift_tab_and_commands_change_the_chat_without_the_agent() {
     type_text(&mut app, "/mo");
     assert!(screen(&app).contains("/model"), "completions show");
     press(&mut app, KeyCode::Tab);
-    assert_eq!(app.input.text(), "/model ");
+    assert_eq!(app.prompt.input.text(), "/model ");
     press(&mut app, KeyCode::Enter);
     assert!(screen(&app).contains("❯ Scripted"), "the model picker opens");
     press(&mut app, KeyCode::Esc);
@@ -179,7 +179,7 @@ fn a_dropped_image_is_attached_to_the_prompt_that_names_it() {
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "what is");
     keys::paste(&mut app, "'shot one.png'");
-    assert_eq!(app.input.text(), "what is [Image #1] ");
+    assert_eq!(app.prompt.input.text(), "what is [Image #1] ");
     keys::paste(&mut app, "not a file");
     press(&mut app, KeyCode::Enter);
     until(&mut app, |app| !app.busy() && !engine.requests().is_empty());
@@ -209,7 +209,7 @@ fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() 
 
     type_text(&mut app, "fix the bug");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |app| app.session.as_ref().is_some_and(|s| s.id().is_some()));
+    until(&mut app, |app| app.session.id().is_some());
     type_text(&mut app, "/btw which file?");
     press(&mut app, KeyCode::Enter);
     assert!(screen(&app).contains("which file?") && screen(&app).contains("answering…"), "{}", screen(&app));

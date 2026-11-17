@@ -6,9 +6,12 @@ use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph};
 
+use std::rc::Rc;
+
 use super::app::App;
 use super::entries;
 use super::motion::Scene;
+use super::rendered::{Lines, Shape};
 use super::transcript::Entry;
 use super::wrap::{layout, wrap};
 
@@ -27,7 +30,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
     let panel = panel(app, area.width);
     let input_width = usize::from(area.width.saturating_sub(2)).saturating_sub(PROMPT_MARK).max(1);
-    let (rows, _) = layout(app.input.text(), app.input.cursor(), input_width);
+    let (rows, _) = layout(app.prompt.input.text(), app.prompt.input.cursor(), input_width);
     let input_lines = u16::try_from(rows.len()).unwrap_or(u16::MAX).clamp(1, 10);
     let boxed = app.ask.is_some()
         || app.overlays.secret.is_some()
@@ -66,7 +69,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     }
     prompt(frame, app, input_area);
     status_bar(frame, app, status_area);
-    let mut motion = app.motion.borrow_mut();
+    let mut motion = app.ui.motion.borrow_mut();
     motion.frame(Scene {
         conversation: body,
         entries: app.transcript.entries.len(),
@@ -84,40 +87,20 @@ struct Shown {
 
 fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
     let width = usize::from(area.width.saturating_sub(2)).max(10);
-    let seen = app.motion.borrow().seen();
-    let mut lines: Vec<Line> = Vec::new();
-    if app.inline.is_none() {
-        lines.extend(welcome(app, width));
+    let mut pieces: Vec<Lines> = Vec::new();
+    if app.ui.inline.is_none() {
+        pieces.push(Rc::new(welcome(app, width)));
     }
-    let mut added = None;
-    for (i, entry) in app.transcript.entries.iter().enumerate().skip(app.inline.unwrap_or(0)) {
-        if i == seen {
-            added = Some(lines.len());
-        }
-        entries::lines(entry, width, app.expanded, &mut lines);
-    }
-    let added = added.map(|first| first..lines.len());
-    let mut working = None;
-    if let Some(started) = app.turn.started
-        && app.ask.is_none()
-    {
-        lines.push(Line::from(""));
-        working = Some(lines.len()..lines.len() + 1);
-        lines.push(entries::working(started, &app.transcript, width));
-    }
-    if let Some(at) = app.turn.auto_retry {
-        lines.push(Line::from(""));
-        lines.push(super::auto_retry::line(at, std::time::Instant::now()));
-    }
-    for queued in &app.turn.queued {
-        let text = wrap(queued, width.saturating_sub(4)).into_iter().next().unwrap_or_default();
-        lines.push(Line::from(format!("  › {text}  (queued)")).dim());
-    }
+    let before: usize = pieces.iter().map(|piece| piece.len()).sum();
+    let (said, added) = transcript(app, width, before, &mut pieces);
+    let (after, working) = below_the_transcript(app, width, said);
+    pieces.push(Rc::new(after));
+    let total: usize = pieces.iter().map(|piece| piece.len()).sum();
     let height = usize::from(area.height);
-    let scroll = usize::from(app.scroll).min(lines.len().saturating_sub(height));
-    let end = lines.len().saturating_sub(scroll);
+    let scroll = usize::from(app.ui.scroll).min(total.saturating_sub(height));
+    let end = total.saturating_sub(scroll);
     let start = end.saturating_sub(height);
-    let shown: Vec<Line> = lines.drain(start..end).collect();
+    let shown = window(&pieces, start, end);
     let mut inner = area.inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 });
     let empty = u16::try_from(height.saturating_sub(shown.len())).unwrap_or(0);
     inner.y += empty;
@@ -131,6 +114,62 @@ fn conversation(frame: &mut Frame, app: &App, area: Rect) -> Shown {
         })
     };
     Shown { added: added.and_then(on_screen), working: working.and_then(on_screen) }
+}
+
+type Rows = std::ops::Range<usize>;
+
+fn transcript(app: &App, width: usize, before: usize, pieces: &mut Vec<Lines>) -> (usize, Option<Rows>) {
+    let seen = app.ui.motion.borrow().seen();
+    let shape = Shape { width, expanded: app.ui.expanded, light: super::theme::current().light() };
+    let mut rendered = app.ui.rendered.borrow_mut();
+    rendered.forget_after(app.transcript.entries.len());
+    let (mut rows, mut added) = (before, None);
+    for (i, entry) in app.transcript.entries.iter().enumerate().skip(app.ui.inline.unwrap_or(0)) {
+        if i == seen {
+            added = Some(rows);
+        }
+        let lines = rendered.lines(i, entry, shape);
+        rows += lines.len();
+        pieces.push(lines);
+    }
+    (rows, added.map(|first| first..rows))
+}
+
+fn below_the_transcript(app: &App, width: usize, above: usize) -> (Vec<Line<'static>>, Option<Rows>) {
+    let mut lines = Vec::new();
+    let mut working = None;
+    if let Some(started) = app.turn.started
+        && app.ask.is_none()
+    {
+        lines.push(Line::from(""));
+        working = Some(above + 1..above + 2);
+        lines.push(entries::working(started, &app.transcript, width));
+    }
+    if let Some(at) = app.turn.auto_retry {
+        lines.push(Line::from(""));
+        lines.push(super::auto_retry::line(at, std::time::Instant::now()));
+    }
+    for queued in app.turn.waiting() {
+        let text = wrap(queued, width.saturating_sub(4)).into_iter().next().unwrap_or_default();
+        lines.push(Line::from(format!("  › {text}  (queued)")).dim());
+    }
+    (lines, working)
+}
+
+fn window(pieces: &[Lines], start: usize, end: usize) -> Vec<Line<'static>> {
+    let mut shown = Vec::with_capacity(end.saturating_sub(start));
+    let mut at = 0;
+    for piece in pieces {
+        let (from, to) = (start.max(at), end.min(at + piece.len()));
+        if from < to {
+            shown.extend_from_slice(&piece[from - at..to - at]);
+        }
+        at += piece.len();
+        if at >= end {
+            break;
+        }
+    }
+    shown
 }
 
 use super::panel::panel;
@@ -154,12 +193,12 @@ pub(super) fn welcome(app: &App, width: usize) -> Vec<Line<'static>> {
 
 fn prompt(frame: &mut Frame, app: &App, area: Rect) {
     let shell = Color::Rgb(255, 105, 180);
-    let border = if app.shell { shell } else { Color::DarkGray };
-    let (mark, color) = if app.shell { ("! ", shell) } else { ("> ", Color::Magenta) };
+    let border = if app.prompt.shell { shell } else { Color::DarkGray };
+    let (mark, color) = if app.prompt.shell { ("! ", shell) } else { ("> ", Color::Magenta) };
     let block = Block::bordered().border_type(BorderType::Rounded).border_style(Style::new().fg(border));
     let inner = block.inner(area);
     let width = usize::from(inner.width).saturating_sub(PROMPT_MARK).max(1);
-    let (rows, (row, column)) = layout(app.input.text(), app.input.cursor(), width);
+    let (rows, (row, column)) = layout(app.prompt.input.text(), app.prompt.input.cursor(), width);
     let visible = usize::from(inner.height.max(1));
     let first = (row + 1).saturating_sub(visible);
     let shown: Vec<Line> = rows
@@ -169,19 +208,21 @@ fn prompt(frame: &mut Frame, app: &App, area: Rect) {
         .map(|(i, text)| Line::from(vec![if i == 0 { mark } else { "  " }.fg(color), text.into()]))
         .collect();
     if let Some(search) = &app.overlays.search {
-        let found = search.shown(app.input.history()).unwrap_or("no match").replace('\n', " ");
+        let found = search.shown(app.prompt.input.history()).unwrap_or("no match").replace('\n', " ");
         let line = Line::from(vec![
             format!("search '{}': ", search.query).fg(Color::Magenta),
             found.into(),
             "  ctrl+r older · enter takes · esc leaves".dim(),
         ]);
         frame.render_widget(Paragraph::new(line).block(block), area);
-    } else if app.input.is_empty() && app.ask.is_some() {
+    } else if app.prompt.input.is_empty() && app.ask.is_some() {
         let waiting = Line::from(vec![mark.dark_gray(), "Answer the question above first".dark_gray()]);
         frame.render_widget(Paragraph::new(waiting).block(block), area);
-    } else if app.input.is_empty() && app.ask.is_none() && app.overlays.secret.is_none() {
-        let hint = match &app.ghost {
-            _ if app.shell => "Run a shell command · its output goes with your next message · esc leaves".to_owned(),
+    } else if app.prompt.input.is_empty() && app.ask.is_none() && app.overlays.secret.is_none() {
+        let hint = match &app.prompt.ghost {
+            _ if app.prompt.shell => {
+                "Run a shell command · its output goes with your next message · esc leaves".to_owned()
+            }
             _ if app.busy() && !app.turn.queued.is_empty() => "↑ edits what is queued · esc interrupts".to_owned(),
             _ if app.busy() => "Type to message the agent as it works".to_owned(),
             Some(ghost) => format!("{ghost}  (tab)"),
@@ -216,15 +257,15 @@ fn status(app: &App) -> Line<'static> {
     if app.quitting() {
         return Line::from(" Press Ctrl+C again to quit").fg(Color::Yellow);
     }
-    let armed = app.clear_armed.map(|at| at.elapsed());
-    if let Some(hint) = armed.and_then(|armed_for| super::hints::second_esc(app.input.is_empty(), armed_for)) {
+    let armed = app.prompt.clear_armed.map(|at| at.elapsed());
+    if let Some(hint) = armed.and_then(|armed_for| super::hints::second_esc(app.prompt.input.is_empty(), armed_for)) {
         return Line::from(format!(" {hint}")).fg(Color::Yellow);
     }
-    if let Some(line) = &app.status.text {
+    if let Some(line) = &app.ui.status.text {
         return Line::from(format!(" {line}")).dim();
     }
     let mut spans = Vec::new();
-    if let Some(title) = &app.title {
+    if let Some(title) = &app.session.title {
         spans.extend([format!(" {title}").bold(), " ·".dim()]);
     }
     spans.extend([
@@ -242,7 +283,7 @@ fn status(app: &App) -> Line<'static> {
         spans.push(marker.fg(Color::Green));
     }
     if app.transcript.context > 0 {
-        let window = app.window.or_else(|| app.model().and_then(|model| model.window));
+        let window = app.session.window.or_else(|| app.model().and_then(|model| model.window));
         let shown = super::context::left(app.transcript.context, window)
             .unwrap_or_else(|| format!("{} context", entries::tokens(app.transcript.context)));
         spans.push(format!(" · {shown}").dim());
@@ -267,7 +308,7 @@ fn status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let line = status(app);
     let room = usize::from(area.width).saturating_sub(line.width());
     frame.render_widget(Paragraph::new(line), area);
-    if room >= HINT.len() + 2 && app.status.text.is_none() {
+    if room >= HINT.len() + 2 && app.ui.status.text.is_none() {
         frame.render_widget(Paragraph::new(Line::from(HINT).dim().right_aligned()), area);
     }
 }

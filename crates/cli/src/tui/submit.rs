@@ -4,15 +4,15 @@ use super::app::App;
 
 impl App {
     pub fn submit(&mut self) {
-        let typed = self.input.text().trim().to_owned();
+        let typed = self.prompt.input.text().trim().to_owned();
         if typed.is_empty() {
             return;
         }
         super::auto_retry::fresh_prompt(self);
-        let text = if std::mem::take(&mut self.shell) { format!("!{typed}") } else { typed };
-        self.input.set(&text);
-        self.input.take();
-        self.suggestion = 0;
+        let text = if std::mem::take(&mut self.prompt.shell) { format!("!{typed}") } else { typed };
+        self.prompt.input.set(&text);
+        self.prompt.input.take();
+        self.prompt.suggestion = 0;
         self.saver.remember_prompt(&self.cwd, &text);
         if let Some((run, argument)) = feature_over_alias(&text) {
             return run(self, argument);
@@ -27,16 +27,16 @@ impl App {
             return;
         }
         if let Some(command) = text.strip_prefix('!').map(str::trim).filter(|c| !c.is_empty()) {
-            return super::shell::start(self, command.to_owned());
+            return super::typed_shell::start(self, command.to_owned());
         }
         if let Some((run, argument)) = super::features::prefixed(&text) {
             return run(self, argument);
         }
-        if let Some(run) = &self.turn.run {
-            let text = super::mentions::with_files(&self.sdk, &self.cwd, &self.pastes.unfold(&text));
-            let _ = run.steer(&text);
-            self.turn.queued.push(text);
-            return;
+        if self.turn.run.is_some() {
+            return self.steer(&text);
+        }
+        if self.turn.preparing() {
+            return self.turn.held.push(text);
         }
         if super::git_offer::hold(self, &text) {
             return;

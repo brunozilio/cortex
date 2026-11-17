@@ -1,4 +1,4 @@
-use app::{Session, SessionId};
+use app::SessionId;
 
 use super::super::app::App;
 use super::super::conversations::{self, Conversation};
@@ -21,7 +21,8 @@ pub struct Row {
 }
 
 pub fn rows(app: &App) -> Vec<Row> {
-    let here = live(app.title.as_ref(), &app.transcript, state(app.turn.busy(), app.ask.is_some(), false), true);
+    let here =
+        live(app.session.title.as_ref(), &app.transcript, state(app.turn.busy(), app.ask.is_some(), false), true);
     let parked = app
         .fleet
         .parked
@@ -39,7 +40,7 @@ pub fn rows(app: &App) -> Vec<Row> {
 
 pub fn earlier(app: &App) -> Vec<&Conversation> {
     let mut live: Vec<SessionId> = app.fleet.parked.iter().filter_map(|p| p.session.as_ref()?.id()).collect();
-    live.extend(app.session.as_ref().and_then(Session::id));
+    live.extend(app.session.id());
     app.fleet.earlier.iter().filter(|c| !live.contains(&c.session)).collect()
 }
 

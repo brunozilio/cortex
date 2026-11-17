@@ -26,10 +26,10 @@ pub fn print<B: Backend>(terminal: &mut Terminal<B>, lines: Vec<Line<'static>>) 
 }
 
 pub fn flush<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<(), B::Error> {
-    let Some(printed) = app.inline else { return Ok(()) };
+    let Some(printed) = app.ui.inline else { return Ok(()) };
     let entries = &app.transcript.entries;
     if entries.len() < printed {
-        app.inline = Some(entries.len());
+        app.ui.inline = Some(entries.len());
         return Ok(());
     }
     if app.busy() || entries.len() == printed {
@@ -38,9 +38,9 @@ pub fn flush<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()
     let width = usize::from(terminal.size()?.width.saturating_sub(2)).max(10);
     let mut lines = Vec::new();
     for entry in &entries[printed..] {
-        entries::lines(entry, width, app.expanded, &mut lines);
+        entries::lines(entry, width, app.ui.expanded, &mut lines);
     }
-    app.inline = Some(entries.len());
+    app.ui.inline = Some(entries.len());
     print(terminal, lines)
 }
 
@@ -71,7 +71,7 @@ mod tests {
         ];
         let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script);
         let mut app = App::new(sdk(&engine, data.path()), data.path().into(), None, None);
-        app.inline = Some(0);
+        app.ui.inline = Some(0);
         until(&mut app, |app| app.session.is_some());
         let options = TerminalOptions { viewport: Viewport::Inline(8) };
         let mut terminal = Terminal::with_options(TestBackend::new(60, 20), options).expect("terminal");
@@ -86,7 +86,7 @@ mod tests {
         let asked = printed.find("a question").expect("the question above");
         let answered = printed.find("Answered.").expect("the answer above");
         assert!(asked < answered, "{printed}");
-        assert_eq!(app.inline, Some(app.transcript.entries.len()));
+        assert_eq!(app.ui.inline, Some(app.transcript.entries.len()));
         flush(&mut terminal, &mut app).expect("again");
         let again = format!("{}\n{}", text(terminal.backend().scrollback()), text(terminal.backend().buffer()));
         assert_eq!(again.matches("Answered.").count(), 1, "printed once: {again}");

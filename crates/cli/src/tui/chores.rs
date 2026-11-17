@@ -4,14 +4,14 @@ use super::app::{App, Msg};
 
 impl App {
     pub(super) fn after_run(&mut self) {
-        if self.title.is_none()
+        if self.session.title.is_none()
             && let Some(prompt) = self.transcript.first_prompt()
-            && let Some(session) = &self.session
+            && let Some(session) = self.session.live()
         {
             let started = session.title(&prompt);
             self.chore(started);
         }
-        if let Some(session) = &self.session {
+        if let Some(session) = self.session.live() {
             let (suggest, heads_up) = (session.suggest(), session.heads_up());
             let learn = super::features::on(self, domain::features::LEARNING).then(|| session.learn()).flatten();
             self.chore(suggest);
@@ -23,7 +23,7 @@ impl App {
     }
 
     pub(super) fn recap(&mut self) {
-        if let Some(session) = &self.session {
+        if let Some(session) = self.session.live() {
             let started = session.recap();
             self.chore(started);
         }
@@ -31,7 +31,7 @@ impl App {
 
     fn chore(&self, started: Result<Run, Error>) {
         let tx = self.tx.clone();
-        let session = self.session.as_ref().and_then(app::Session::id);
+        let session = self.session.id();
         std::thread::spawn(move || {
             let answer = started.and_then(Run::chore_answer).map_err(|error| error.to_string());
             let _ = tx.send(Msg::Chore(session, answer));
@@ -41,7 +41,7 @@ impl App {
     pub(super) fn chore_answered(&mut self, answer: Result<Option<ChoreAnswer>, String>) {
         match answer {
             Ok(Some(ChoreAnswer::Title(title))) => {
-                if let Some(id) = self.session.as_ref().and_then(app::Session::id) {
+                if let Some(id) = self.session.id() {
                     self.saver.remember_title(&self.cwd, &id, &title);
                     let (sdk, named) = (self.sdk.clone(), title.clone());
                     std::thread::spawn(move || {
@@ -50,10 +50,10 @@ impl App {
                         }
                     });
                 }
-                self.title = Some(title);
+                self.session.title = Some(title);
             }
-            Ok(Some(ChoreAnswer::Suggestion(text))) if !self.busy() && self.input.is_empty() => {
-                self.ghost = Some(text);
+            Ok(Some(ChoreAnswer::Suggestion(text))) if !self.busy() && self.prompt.input.is_empty() => {
+                self.prompt.ghost = Some(text);
             }
             Ok(Some(ChoreAnswer::Recap(text))) => self.transcript.notice(format!("Where you left off: {text}")),
             Ok(Some(ChoreAnswer::HeadsUp(heads_up))) => self.transcript.notice(heads_up_text(&heads_up)),
@@ -66,16 +66,6 @@ impl App {
                 }
             }
             Ok(_) | Err(_) => {}
-        }
-    }
-
-    pub(super) fn take_ghost(&mut self) -> bool {
-        match self.ghost.take() {
-            Some(text) if self.input.is_empty() => {
-                self.input.set(&text);
-                true
-            }
-            _ => false,
         }
     }
 }

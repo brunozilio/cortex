@@ -18,10 +18,25 @@ mod verification;
 use std::any::Any;
 use std::collections::HashMap;
 
-use super::app::App;
+use std::sync::OnceLock;
+
+use super::app::{App, Msg};
 
 pub type Run = fn(&mut App, Option<String>);
 
+pub struct Reply(Box<dyn FnOnce(&mut App) + Send>);
+
+impl Reply {
+    pub fn apply(self, app: &mut App) {
+        (self.0)(app);
+    }
+}
+
+fn reply(apply: impl FnOnce(&mut App) + Send + 'static) -> Msg {
+    Msg::Feature(Reply(Box::new(apply)))
+}
+
+#[derive(Clone, Copy)]
 pub struct Slash {
     pub names: &'static [&'static str],
     pub about: &'static str,
@@ -39,9 +54,10 @@ pub struct Feature {
 }
 
 pub fn answered(app: &mut App, decision: &app::Decision) -> bool {
-    all().into_iter().filter_map(|feature| feature.answer).any(|answer| answer(app, decision))
+    all().iter().filter_map(|feature| feature.answer).any(|answer| answer(app, decision))
 }
 
+#[derive(Clone, Copy)]
 pub struct Setting {
     pub name: &'static str,
     pub value: fn(&App) -> String,
@@ -49,18 +65,23 @@ pub struct Setting {
 }
 
 pub fn status(app: &App) -> Vec<String> {
-    all().into_iter().filter_map(|feature| feature.status).filter_map(|status| status(app)).collect()
+    all().iter().filter_map(|feature| feature.status).filter_map(|status| status(app)).collect()
 }
 
 pub fn on(app: &App, flag: &str) -> bool {
-    !app.turned_off.contains(flag)
+    !app.session.turned_off.contains(flag)
 }
 
 pub fn settings() -> Vec<Setting> {
-    all().into_iter().filter_map(|feature| feature.setting).collect()
+    all().iter().filter_map(|feature| feature.setting).collect()
 }
 
-pub fn all() -> Vec<Feature> {
+pub fn all() -> &'static [Feature] {
+    static ALL: OnceLock<Vec<Feature>> = OnceLock::new();
+    ALL.get_or_init(registered)
+}
+
+fn registered() -> Vec<Feature> {
     vec![
         branches::feature(),
         budget::feature(),
@@ -87,8 +108,8 @@ pub fn command(text: &str) -> Option<(Run, Option<String>)> {
     let rest = rest.trim();
     let argument = (!rest.is_empty()).then(|| rest.to_owned());
     all()
-        .into_iter()
-        .flat_map(|feature| feature.commands)
+        .iter()
+        .flat_map(|feature| &feature.commands)
         .find(|slash| slash.names.iter().any(|known| known.eq_ignore_ascii_case(name)))
         .map(|slash| (slash.run, argument))
 }
@@ -96,7 +117,7 @@ pub fn command(text: &str) -> Option<(Run, Option<String>)> {
 pub fn prefixed(text: &str) -> Option<(Run, Option<String>)> {
     let first = text.chars().next()?;
     let rest = text[first.len_utf8()..].trim();
-    let (_, run) = all().into_iter().filter_map(|feature| feature.prefix).find(|(sign, _)| *sign == first)?;
+    let (_, run) = all().iter().filter_map(|feature| feature.prefix).find(|(sign, _)| *sign == first)?;
     (!rest.is_empty()).then(|| (run, Some(rest.to_owned())))
 }
 
@@ -105,11 +126,11 @@ pub fn help() -> Vec<(&'static str, &'static str)> {
 }
 
 pub fn commands() -> Vec<(&'static [&'static str], &'static str)> {
-    all().into_iter().flat_map(|feature| feature.commands).map(|slash| (slash.names, slash.about)).collect()
+    all().iter().flat_map(|feature| &feature.commands).map(|slash| (slash.names, slash.about)).collect()
 }
 
 pub fn tick(app: &mut App) {
-    for tick in all().into_iter().filter_map(|feature| feature.tick) {
+    for tick in all().iter().filter_map(|feature| feature.tick) {
         tick(app);
     }
 }
@@ -151,7 +172,7 @@ mod tests {
     #[test]
     fn the_registered_features_bring_these_commands_in_this_order() {
         let listed: Vec<String> = all()
-            .into_iter()
+            .iter()
             .map(|feature| feature.commands.iter().map(|slash| slash.names.join("|")).collect::<Vec<_>>().join(" "))
             .collect();
         assert_eq!(

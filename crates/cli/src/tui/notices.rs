@@ -1,31 +1,20 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use domain::inbox::Notice;
 
 use super::app::{App, Msg};
 
-const EVERY: Duration = Duration::from_secs(1);
-
-#[derive(Debug, Default)]
-pub struct Poll {
-    last: Option<Instant>,
-    asking: bool,
-}
-
 pub(super) fn poll(app: &mut App) {
-    let poll = &app.notices;
-    if app.busy() || app.session.is_none() || app.ask.is_some() || poll.asking {
+    if app.busy() || app.session.is_none() || app.ask.is_some() {
         return;
     }
-    if poll.last.is_some_and(|at| at.elapsed() < EVERY) {
-        return;
+    if app.notices.due(Instant::now()) {
+        app.spawn(|sdk| Msg::Notices(sdk.notices().unwrap_or_default()));
     }
-    app.notices = Poll { last: Some(Instant::now()), asking: true };
-    app.spawn(|sdk| Msg::Notices(sdk.notices().unwrap_or_default()));
 }
 
 pub(super) fn arrived(app: &mut App, notices: Vec<Notice>) {
-    app.notices.asking = false;
+    app.notices.landed();
     let (notices, held) = domain::inbox::admitted(notices, app.mode());
     for notice in &held {
         app.transcript

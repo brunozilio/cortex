@@ -14,7 +14,7 @@ pub fn ask(app: &mut App, question: Option<String>) {
     let Some(question) = question else {
         return app.transcript.notice("Ask a side question without interrupting: /btw <question>");
     };
-    let Some(session) = &app.session else {
+    let Some(session) = app.session.live() else {
         return app.transcript.error("No model yet: /login connects a provider.");
     };
     let started = match session.side(&question) {

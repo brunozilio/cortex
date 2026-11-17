@@ -31,13 +31,13 @@ fn load_once(app: &mut App) {
     let cwd = app.cwd.clone();
     app.spawn(move |sdk| match sdk.flags(&cwd) {
         Ok(listed) => remember(&listed),
-        Err(_) => Msg::Feature(Box::new(|_| {})),
+        Err(_) => Msg::Nothing,
     });
 }
 
 fn remember(listed: &[ListedFlag]) -> Msg {
     let off = turned_off(listed);
-    Msg::Feature(Box::new(move |app| app.turned_off = off))
+    super::reply(move |app| app.session.turned_off = off)
 }
 
 fn turned_off(listed: &[ListedFlag]) -> BTreeSet<String> {
@@ -58,10 +58,10 @@ fn run(app: &mut App, argument: Option<String>) {
         match listed {
             Ok(listed) => {
                 let (off, text) = (turned_off(&listed), shown(&listed, toggle.is_some()));
-                Msg::Feature(Box::new(move |app| {
-                    app.turned_off = off;
+                super::reply(move |app| {
+                    app.session.turned_off = off;
                     app.transcript.notice(text);
-                }))
+                })
             }
             Err(error) => Msg::Error(error.to_string()),
         }

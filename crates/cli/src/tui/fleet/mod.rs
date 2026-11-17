@@ -61,12 +61,12 @@ fn start(app: &mut App, resumed: Option<Conversation>) {
         app.fleet.parked.push(left);
     }
     app.fleet.open = false;
-    app.resume = resumed.as_ref().map(|c| c.session.clone());
+    app.session.resume = resumed.as_ref().map(|c| c.session.clone());
     if let Some(model) = model {
         app.start_session(model);
     }
     if let Some(picked) = resumed {
-        app.title = picked.title;
+        app.session.title = picked.title;
         app.transcript.notice("Continuing an earlier conversation.");
     }
 }
@@ -89,6 +89,15 @@ pub fn chore(app: &mut App, session: Option<app::SessionId>, answer: Result<Opti
     match at {
         Some(at) => within(app, at, |app| app.chore_answered(answer), false),
         None => app.chore_answered(answer),
+    }
+}
+
+pub fn for_turn(app: &mut App, owns: impl Fn(&super::turn::Turn) -> bool, work: impl FnOnce(&mut App)) {
+    if owns(&app.turn) {
+        return work(app);
+    }
+    if let Some(at) = app.fleet.parked.iter().position(|parked| owns(&parked.turn)) {
+        within(app, at, work, false);
     }
 }
 

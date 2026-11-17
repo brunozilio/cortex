@@ -3,10 +3,10 @@ use std::path::Path;
 const OFFERED: usize = 8;
 
 pub(super) fn offered(app: &super::app::App) -> Vec<String> {
-    if app.input.browsing_history() {
+    if app.prompt.input.browsing_history() {
         return Vec::new();
     }
-    let Some((_, query)) = typing(app.input.text(), app.input.cursor()) else { return Vec::new() };
+    let Some((_, query)) = typing(app.prompt.input.text(), app.prompt.input.cursor()) else { return Vec::new() };
     app.catalog
         .files
         .as_deref()
@@ -15,7 +15,7 @@ pub(super) fn offered(app: &super::app::App) -> Vec<String> {
 }
 
 pub(super) fn load(app: &mut super::app::App) {
-    if app.catalog.files.is_none() && typing(app.input.text(), app.input.cursor()).is_some() {
+    if app.catalog.files.is_none() && typing(app.prompt.input.text(), app.prompt.input.cursor()).is_some() {
         app.catalog.files = Some(Vec::new());
         let cwd = app.cwd.clone();
         app.spawn(move |sdk| super::app::Msg::Files(list(sdk, &cwd)));
@@ -23,11 +23,11 @@ pub(super) fn load(app: &mut super::app::App) {
 }
 
 pub(super) fn complete(app: &mut super::app::App, file: &str) {
-    let (text, cursor) = (app.input.text().to_owned(), app.input.cursor());
+    let (text, cursor) = (app.prompt.input.text().to_owned(), app.prompt.input.cursor());
     let Some((start, _)) = typing(&text, cursor) else { return };
     let rest = text[cursor..].trim_start();
     let joined = if rest.is_empty() { String::new() } else { format!(" {rest}") };
-    app.input.set(&format!("{}@{file} {}", &text[..start], joined.trim_start()).replace("  ", " "));
+    app.prompt.input.set(&format!("{}@{file} {}", &text[..start], joined.trim_start()).replace("  ", " "));
 }
 
 pub fn typing(text: &str, cursor: usize) -> Option<(usize, &str)> {
@@ -67,8 +67,12 @@ pub fn list(sdk: &app::Sdk, cwd: &Path) -> Vec<String> {
     sdk.project_files(cwd).unwrap_or_default()
 }
 
+pub fn names_a_file(prompt: &str) -> bool {
+    prompt.contains('@')
+}
+
 pub fn with_files(sdk: &app::Sdk, cwd: &Path, prompt: &str) -> String {
-    if !prompt.contains('@') {
+    if !names_a_file(prompt) {
         return prompt.to_owned();
     }
     sdk.with_mentioned_files(cwd, prompt).unwrap_or_else(|_| prompt.to_owned())

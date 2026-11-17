@@ -27,8 +27,8 @@ fn left_on_an_empty_prompt_opens_the_sessions_and_esc_goes_back() {
     type_text(&mut app, "ab");
     press(&mut app, KeyCode::Left);
     assert!(!screen(&app).contains("Sessions"), "with text typed, left moves the cursor");
-    assert_eq!(app.input.cursor(), 1);
-    app.input.clear();
+    assert_eq!(app.prompt.input.cursor(), 1);
+    app.prompt.input.clear();
     type_text(&mut app, "/fleet");
     press(&mut app, KeyCode::Enter);
     assert!(screen(&app).contains("Sessions"), "{}", screen(&app));
@@ -51,6 +51,7 @@ fn a_new_session_starts_while_the_one_left_keeps_working_on_its_own() {
     until(&mut app, |app| app.session.is_some());
     type_text(&mut app, "first task");
     press(&mut app, KeyCode::Enter);
+    until(&mut app, |app| app.turn.run.is_some());
     press(&mut app, KeyCode::Left);
     type_text(&mut app, "n");
     assert!(!app.busy() && !app.fleet.open, "a fresh session takes the screen");
@@ -103,8 +104,8 @@ fn an_earlier_session_of_this_folder_is_listed_and_enter_takes_it_up_again() {
     press(&mut app, KeyCode::Down);
     press(&mut app, KeyCode::Enter);
     assert!(!app.fleet.open);
-    assert_eq!(app.title.as_deref(), Some("Earlier work"));
-    assert_eq!(app.session.as_ref().and_then(app::Session::id), Some(SessionId("first".into())));
+    assert_eq!(app.session.title.as_deref(), Some("Earlier work"));
+    assert_eq!(app.session.id(), Some(SessionId("first".into())));
     press(&mut app, KeyCode::Left);
     let fleet = screen(&app);
     assert_eq!(fleet.matches("Earlier work").count(), 1, "listed once, as the one here: {fleet}");

@@ -59,9 +59,9 @@ fn the_role_picker_offers_the_session_model_first_and_sets_the_chosen_one() {
     press(&mut app, KeyCode::Down);
     press(&mut app, KeyCode::Down);
     press(&mut app, KeyCode::Enter);
-    assert_eq!(app.roles.get(ModelRole::Plan), Some(FAST));
+    assert_eq!(app.session.roles().get(ModelRole::Plan), Some(FAST));
     send(&mut app, "/model plan default");
-    assert_eq!(app.roles.get(ModelRole::Plan), None);
+    assert_eq!(app.session.roles().get(ModelRole::Plan), None);
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn an_unknown_model_for_a_role_is_refused() {
     let mut app = started(&engine, data.path());
     send(&mut app, "/model small nope");
     assert!(screen(&app).contains("No model named nope"), "{}", screen(&app));
-    assert_eq!(app.roles.get(ModelRole::Small), None);
+    assert_eq!(app.session.roles().get(ModelRole::Small), None);
 }
 
 #[test]
