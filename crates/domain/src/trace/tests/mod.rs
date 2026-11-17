@@ -226,7 +226,10 @@ fn compaction_rewind_and_interruptions_stay_in_the_timeline() {
     let node = only(&trace.lane.steps[2]);
     assert_eq!(node.kind, Kind::Compacted(compaction));
     let notice = only(&trace.lane.steps[5]);
-    assert_eq!(notice.kind, Kind::Note { title: "notice".into(), text: "Changes retained in worktree: /tmp/w".into() });
+    assert_eq!(
+        notice.kind,
+        Kind::Note { title: crate::trace::Title::Notice, text: "Changes retained in worktree: /tmp/w".into() }
+    );
     let failed = only(&trace.lane.steps[6]);
     assert!(failed.failed);
 }

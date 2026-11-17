@@ -83,8 +83,12 @@ mod tests {
         type_text(&mut app, "/check");
         press(&mut app, KeyCode::Enter);
 
-        until(&mut app, |_| engine.requests().iter().any(|r| r.prompt.contains("Keep retries at 4")));
-        let sent = engine.requests().into_iter().find(|r| r.prompt.contains("Keep retries at 4")).expect("sent");
-        assert!(sent.prompt.contains("git diff HEAD") && sent.prompt.contains("- client.go"), "{}", sent.prompt);
+        until(&mut app, |_| engine.requests().iter().any(|r| r.prompt.text.contains("Keep retries at 4")));
+        let sent = engine.requests().into_iter().find(|r| r.prompt.text.contains("Keep retries at 4")).expect("sent");
+        assert!(
+            sent.prompt.text.contains("git diff HEAD") && sent.prompt.text.contains("- client.go"),
+            "{}",
+            sent.prompt.text
+        );
     }
 }

@@ -7,7 +7,7 @@ use crate::api::features::sessions::{SessionsReply, SessionsRequest};
 use crate::api::features::trace::{TraceReply, TraceRequest};
 use crate::api::{FeatureError, FeatureName, FeatureReply, FeatureRequest};
 use agent_engine::sessions::{Entry, Sessions};
-use domain::{ModelOption, PromptRequest, SessionId};
+use domain::SessionId;
 use serde_json::json;
 
 use crate::features::context::testing;
@@ -20,8 +20,7 @@ fn typed(services: &LocalServices, client: u64, request: FeatureRequest) -> Resu
 fn prompted(services: &LocalServices, cwd: &Path, id: &str) -> SessionId {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64);
     let id = SessionId(id.into());
-    let request = PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""));
-    services.sessions.record(&request, &id, &Entry::Prompted { at_ms: now, prompt: "hi".into() }).expect("record");
+    services.sessions.record(cwd, &id, &Entry::Prompted { at_ms: now, prompt: "hi".into() }).expect("record");
     services.catalog.update(&mut |catalog| catalog.started(&id, cwd, now));
     id
 }

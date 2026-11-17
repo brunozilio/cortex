@@ -14,7 +14,7 @@ fn an_edit_always_allowed_is_remembered_for_the_run_only_and_writes_no_rule() {
         no_findings(),
     ]);
     let mut request = stage.request("Write the file twice");
-    request.permission = PermissionMode::Ask;
+    request.policy.permission = PermissionMode::Ask;
 
     let mut run = stage.start(&request);
     let ask = run.asked();
@@ -115,7 +115,7 @@ fn a_command_always_allowed_runs_and_keeps_its_rule_in_the_project_s_local_setti
         says("Done."),
     ]);
     let mut request = stage.trusted("Echo twice");
-    request.permission = PermissionMode::Ask;
+    request.policy.permission = PermissionMode::Ask;
 
     let mut run = stage.start(&request);
     let ask = run.asked();

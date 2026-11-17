@@ -1,6 +1,9 @@
 use serde_json::Value;
 
-use super::{Consult, Workspace, names};
+#[cfg(test)]
+use super::names;
+use super::names::ToolName;
+use super::{Consult, Workspace};
 
 pub struct Ran<'a> {
     pub input: &'a Value,
@@ -17,14 +20,14 @@ impl std::fmt::Debug for Ran<'_> {
 pub type After = fn(&Ran<'_>, &str) -> String;
 
 pub fn after(name: &str) -> Option<After> {
-    match name {
-        names::WEB_FETCH => Some(super::builtin::web::read_by_a_reader),
+    match ToolName::of(name) {
+        ToolName::WebFetch => Some(super::builtin::web::read_by_a_reader),
         _ => None,
     }
 }
 
 pub fn kept_whole(name: &str) -> bool {
-    name == names::READ
+    ToolName::of(name) == ToolName::Read
 }
 
 #[cfg(test)]

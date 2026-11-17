@@ -58,7 +58,7 @@ impl Agent<'_> {
     }
 
     fn stop_hook(&self, turn: &mut TurnState<'_>, said: bool) -> Result<Option<Message>, Ending> {
-        let event = if self.depth > 0 { "SubagentStop" } else { "Stop" };
+        let event = crate::hooks::HookEvent::at_the_end(self.depth > 0);
         let last = turn.history.last().filter(|_| said).map(Message::text);
         let hook = self
             .workspace
@@ -71,7 +71,7 @@ impl Agent<'_> {
                 Some((self.api, &self.request)),
             )
             .map_err(|error| Ending::Failed(ModelError::Provider(error)))?;
-        match hook.blocked.map(|reason| turn.cutoffs.stop_blocked(event, &reason, &hook.context)) {
+        match hook.blocked.map(|reason| turn.cutoffs.stop_blocked(event.as_str(), &reason, &hook.context)) {
             Some(Ok(blocked)) => {
                 turn.stop_hook_active = true;
                 Ok(Some(blocked))

@@ -4,7 +4,8 @@ use serde_json::{Value, json};
 use super::Calling;
 use crate::agent::{Agent, SHOWN_OUTPUT};
 use crate::tools::after::{Ran, after, kept_whole};
-use crate::tools::{Consult, Outcome, clip, names};
+use crate::tools::names::ToolName;
+use crate::tools::{Consult, Outcome, clip};
 use crate::transcript::Block;
 
 const SCRIPT_CALLS: [&str; 2] = ["repl-", "script-"];
@@ -32,14 +33,14 @@ impl Agent<'_> {
                 outcome.content = short;
             }
         }
-        if names::changes_the_task_list(calling.name) && !outcome.is_error {
+        if ToolName::of(calling.name).changes_the_task_list() && !outcome.is_error {
             self.emit_tasks(calling.run);
         }
     }
 
     fn after_hook(&self, calling: &Calling<'_, '_>, input: &Value, raw: bool, outcome: &mut Outcome) {
         let (id, name) = (calling.id, calling.name);
-        let event = if outcome.is_error { "PostToolUseFailure" } else { "PostToolUse" };
+        let event = crate::hooks::HookEvent::after_a_tool(outcome.is_error);
         match self.workspace.hooks.run_with_model(
             event,
             name,
@@ -91,6 +92,9 @@ impl Agent<'_> {
     pub(super) fn finished(&self, id: &str, mut outcome: Outcome) -> Block {
         if let Some(edited) = outcome.edited.take() {
             (self.emit)(EngineEvent::Edited(*edited));
+        }
+        if let Some(change) = outcome.background.take() {
+            (self.emit)(change.event());
         }
         (self.emit)(EngineEvent::ToolFinished { id: id.to_owned() });
         (self.emit)(EngineEvent::ToolResult {

@@ -43,8 +43,8 @@ impl Job {
 
     pub(super) fn open_session(&mut self, session: &SessionId) {
         self.live.enter(session);
-        let created_by_this_run = self.request.resume.is_none() || self.request.fork;
-        if created_by_this_run && self.request.command.is_none() {
+        let created_by_this_run = self.request.session.resume.is_none() || self.request.session.fork;
+        if created_by_this_run && self.request.session.command.is_none() {
             self.record(session, Session::NotYetCreated).starts_unannounced();
         } else {
             self.record(session, Session::Kept);
@@ -64,18 +64,18 @@ impl Job {
         Metered {
             api,
             ledger: Arc::clone(ledger),
-            provider: self.request.model.provider,
+            provider: self.request.session.model.provider,
             gate: self.gate.clone(),
             model,
             calls: self.recorder.as_ref().map(|recorder| recorder.calls()),
-            budget: self.request.budget,
+            budget: self.request.policy.budget,
         }
     }
 
     pub(super) fn save(&self, session: &SessionId, history: &[Message]) -> Result<(), String> {
         match &self.recorder {
             Some(recorder) => recorder.kept(history),
-            None => self.sessions.save_for(&self.request, session, history),
+            None => self.sessions.save_for(&self.request.session.cwd, session, history),
         }
     }
 
@@ -90,10 +90,10 @@ impl Job {
 
     pub(super) fn run_info(&self, cwd: &std::path::Path, git: Option<&GitSnapshot>) -> RunInfo {
         RunInfo {
-            model: self.request.model.id.clone(),
-            provider: format!("{:?}", self.request.model.provider),
-            permission: format!("{:?}", self.request.permission),
-            effort: format!("{:?}", self.request.effort),
+            model: self.request.session.model.id.clone(),
+            provider: format!("{:?}", self.request.session.model.provider),
+            permission: format!("{:?}", self.request.policy.permission),
+            effort: format!("{:?}", self.request.session.effort),
             cwd: cwd.display().to_string(),
             branch: git.map(|git| git.branch.clone()),
             recent: git.map(|git| git.recent.clone()),

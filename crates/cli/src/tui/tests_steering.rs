@@ -130,7 +130,12 @@ fn ctrl_r_finds_an_earlier_prompt_and_esc_twice_opens_rewind() {
 }
 
 fn prompts(engine: &FakeEngine) -> Vec<String> {
-    engine.requests().into_iter().filter(|request| request.command.is_none()).map(|request| request.prompt).collect()
+    engine
+        .requests()
+        .into_iter()
+        .filter(|request| request.session.command.is_none())
+        .map(|request| request.prompt.text)
+        .collect()
 }
 
 #[test]

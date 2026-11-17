@@ -1,4 +1,4 @@
-use domain::permission_rules::{HookInfo, PermissionsInfo, RuleKind};
+use domain::permission_rules::{HookInfo, PermissionsInfo};
 
 use super::app::{App, Msg};
 
@@ -39,12 +39,7 @@ fn rules(info: &PermissionsInfo) -> String {
     }
     let mut text = String::from("Permission rules (deny wins over ask, ask over allow):");
     for (kind, rule) in &info.rules {
-        let label = match kind {
-            RuleKind::Deny => "deny ",
-            RuleKind::Ask => "ask  ",
-            RuleKind::Allow => "allow",
-        };
-        text.push_str(&format!("\n  {label}  {rule}"));
+        text.push_str(&format!("\n  {:<5}  {rule}", kind.word()));
     }
     for dir in &info.added_dirs {
         text.push_str(&format!("\n  folder {dir}"));
@@ -74,7 +69,7 @@ mod tests {
     fn the_permissions_listing_says_what_was_skipped_because_the_folder_is_not_trusted() {
         let mut info = PermissionsInfo { notices: vec![SKIPPED.to_owned()], ..PermissionsInfo::default() };
         assert!(permissions(&info).ends_with(SKIPPED), "even with no rules: {}", permissions(&info));
-        info.rules.push((RuleKind::Allow, "Bash(ls:*)".to_owned()));
+        info.rules.push((domain::permission_rules::RuleKind::Allow, "Bash(ls:*)".to_owned()));
         let listed = permissions(&info);
         assert!(listed.contains("allow  Bash(ls:*)") && listed.ends_with(SKIPPED), "{listed}");
         info.notices.clear();

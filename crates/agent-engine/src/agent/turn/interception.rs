@@ -6,8 +6,8 @@ use crate::agent::{Agent, Ending};
 use crate::model::{ModelError, Reply, TurnRequest};
 use crate::transcript::{Block, StopReason};
 
-pub(super) const REQUEST: &str = "ModelRequest";
-pub(super) const RESPONSE: &str = "ModelResponse";
+pub(super) const REQUEST: crate::hooks::HookEvent = crate::hooks::HookEvent::ModelRequest;
+pub(super) const RESPONSE: crate::hooks::HookEvent = crate::hooks::HookEvent::ModelResponse;
 
 pub(super) enum Intercepted {
     Accepted(Reply),
@@ -16,7 +16,7 @@ pub(super) enum Intercepted {
 
 impl Agent<'_> {
     pub(super) fn holds_text(&self) -> bool {
-        self.workspace.hooks.0.contains_key(RESPONSE)
+        self.workspace.hooks.listens_to(RESPONSE)
     }
 
     pub(super) fn intercept_request(&self, request: &mut TurnRequest, rejections: &Rejections) -> Result<(), Ending> {

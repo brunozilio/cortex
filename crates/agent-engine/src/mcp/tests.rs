@@ -30,7 +30,7 @@ fn docs_request() -> (tempfile::TempDir, PromptRequest) {
     let server = r#"{"mcpServers": {"docs": {"type": "http", "url": "http://127.0.0.1:7/mcp", "headers": {"authorization": "Bearer t-1"}}}}"#;
     std::fs::write(&config, server).expect("config");
     let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
-    request.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
+    request.host.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
     (dir, request)
 }
 
@@ -67,7 +67,7 @@ fn a_failed_call_and_an_unreachable_server_say_so() {
     let failed = json!({ "jsonrpc": "2.0", "id": 1, "result": { "content": [{ "type": "text", "text": "no" }], "isError": true } });
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([(200, failed.to_string()), (401, String::new())]));
     let (_dir, request) = docs_request();
-    let spec = servers(&request, &super::McpSources::default()).remove(0);
+    let spec = servers(request.folder(), &super::McpSources::default()).remove(0);
     let server = McpServer::open(&spec, &http).expect("open");
     let stop = platform::Stop::new();
     assert_eq!(server.call("search", &Value::Null, &stop), Outcome::error("no"));
@@ -162,7 +162,7 @@ fn a_stdio_server_the_required_sandbox_cannot_hold_does_not_start() {
         sandbox: StdioSandbox::Refused(domain::sandbox::refusal("this kernel has no Landlock")),
     };
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
-    let error = McpServer::open(&spec, &http).expect_err("refused");
+    let error = McpServer::open(&spec, &http).expect_err("refused").to_string();
     assert!(error.contains("jira could not start") && error.contains("sandbox.required"), "{error}");
 }
 
@@ -176,7 +176,7 @@ fn a_command_that_does_not_exist_is_left_out() {
         sandbox: Default::default(),
     };
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
-    let error = McpServer::open(&spec, &http).expect_err("missing");
+    let error = McpServer::open(&spec, &http).expect_err("missing").to_string();
     assert!(error.contains("gone could not start"), "{error}");
 }
 
@@ -198,7 +198,7 @@ fn lists_every_page_and_rejects_a_repeated_mcp_cursor() {
     let http: Arc<dyn Http> =
         Arc::new(ScriptedHttp::new([(200, initialized), (202, String::new()), (200, first), (200, repeated)]));
     let error = Arc::new(McpServer::open(&spec, &http).expect("server")).tools().expect_err("repeated cursor");
-    assert!(error.contains("repeated"));
+    assert!(error.to_string().contains("repeated"));
 }
 
 #[test]
@@ -238,7 +238,7 @@ impl domain::mcp::McpEndpoint for Echo {
 #[test]
 fn an_in_process_server_s_tools_are_called_without_http() {
     let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
-    request.credentials.mcp = vec![domain::mcp::LocalMcp::new("host", Arc::new(Echo))];
+    request.host.credentials.mcp = vec![domain::mcp::LocalMcp::new("host", Arc::new(Echo))];
     let http = Arc::new(ScriptedHttp::new([]));
     let shared: Arc<dyn Http> = http.clone();
     let tools = tools(&request, &shared);
@@ -262,7 +262,7 @@ impl domain::mcp::McpEndpoint for Memory {
 fn brand_s_own_memory_search_runs_without_asking() {
     let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
     let memory = domain::mcp::LocalMcp::new(domain::memory::MEMORY_SERVER, Arc::new(Memory));
-    request.credentials.mcp = vec![memory];
+    request.host.credentials.mcp = vec![memory];
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
     let tools = tools(&request, &http);
     assert_eq!(tools[0].spec().name, concat!("mcp__", brand::command!(), "_memory__memory_search"));
@@ -292,7 +292,7 @@ impl domain::mcp::McpEndpoint for Jira {
 #[test]
 fn a_tool_its_server_marks_read_only_runs_without_asking_and_every_other_asks() {
     let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
-    request.credentials.mcp = vec![domain::mcp::LocalMcp::new("jira", Arc::new(Jira))];
+    request.host.credentials.mcp = vec![domain::mcp::LocalMcp::new("jira", Arc::new(Jira))];
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
     let asking: Vec<(String, bool)> = tools(&request, &http).iter().map(|t| (t.spec().name, acts(&**t))).collect();
     assert_eq!(
@@ -321,17 +321,18 @@ fn a_server_the_owner_signed_in_to_gets_their_token_and_one_refusing_says_how_to
     let servers = r#"{"mcpServers": {"linear": {"type": "http", "url": "https://mcp.test/mcp"}}}"#;
     std::fs::write(&config, servers).expect("config");
     let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
-    request.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
-    request.credentials.mcp_tokens = Some(domain::credentials::McpSignIns(Arc::new(SignedIn)));
+    request.host.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
+    request.host.credentials.mcp_tokens = Some(domain::credentials::McpSignIns(Arc::new(SignedIn)));
     let initialized = json!({ "jsonrpc": "2.0", "id": 1, "result": { "capabilities": { "tools": {} } } });
     let http = Arc::new(ScriptedHttp::new([(200, initialized.to_string()), (202, String::new()), (200, listed(2))]));
     let shared: Arc<dyn Http> = http.clone();
     assert_eq!(tools(&request, &shared).len(), 1);
     assert!(http.sent().iter().all(|s| s.headers.contains(&("Authorization".to_owned(), "Bearer oauth-1".to_owned()))));
 
-    request.credentials.mcp_tokens = None;
-    let spec = super::servers(&request, &super::McpSources::default()).remove(0);
+    request.host.credentials.mcp_tokens = None;
+    let spec = super::servers(request.folder(), &super::McpSources::default()).remove(0);
     let refusing: Arc<dyn Http> = Arc::new(ScriptedHttp::new([(401, String::new())]));
     let error = McpServer::open(&spec, &refusing).expect("open").initialize_stopped(&platform::Stop::new());
-    assert!(error.expect_err("refused").contains("/mcp login linear"));
+    let error = error.expect_err("refused");
+    assert!(error.needs_sign_in() && error.to_string().contains("/mcp login linear"), "{error}");
 }

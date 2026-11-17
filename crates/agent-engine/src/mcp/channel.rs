@@ -37,7 +37,7 @@ pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>, client: u64) -> Result<Arc<
         if given_up.load(Ordering::Relaxed) {
             format!("{} did not answer within {} s", spec.name(), OPEN_WAIT.as_secs())
         } else {
-            error
+            error.to_string()
         }
     })?;
     let declared = server.capabilities()["experimental"][CHANNEL_CAPABILITY].is_object();
@@ -65,7 +65,9 @@ impl Bridge {
         };
         Some(match answer {
             Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
-            Err(error) => json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32000, "message": error } }),
+            Err(error) => {
+                json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32000, "message": error.to_string() } })
+            }
         })
     }
 }

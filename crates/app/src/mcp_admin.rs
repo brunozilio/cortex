@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use crate::api::Reply;
-use domain::PromptRequest;
 use domain::mcp_config;
 use domain::mcp_config::{McpEntry, McpListing, McpOrigin};
 use platform::store::Document;
@@ -9,12 +8,9 @@ use serde_json::Value;
 
 use crate::extensions::Extensions;
 
-pub(crate) fn request_in(path: &Path, extensions: &Extensions, home: Option<&Path>) -> PromptRequest {
-    extensions.request_in(path, home)
-}
-
 fn listing(path: &Path, extensions: &Extensions, home: Option<&Path>) -> Result<McpListing, String> {
-    agent_engine::mcp::listing(&request_in(path, extensions, home))
+    let host = extensions.host(path, home);
+    agent_engine::mcp::listing(domain::Folder::at(path, &host))
         .map_err(|error| format!("Could not read the MCP servers: {error}"))
 }
 

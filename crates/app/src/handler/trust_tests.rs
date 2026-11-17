@@ -58,11 +58,11 @@ impl Stage {
 
     fn trust_a_run_gets(&self, claimed: Trust) -> Trust {
         let mut request = PromptRequest::plain(self.repo.path().into(), "hi", ModelOption::new("m", "M"));
-        request.extensions = Some(domain::Extensions { trust: claimed, ..Default::default() });
+        request.host.extensions = Some(domain::Extensions { trust: claimed, ..Default::default() });
         let before = self.engine.requests().len();
         assert_eq!(self.answer(ClientCommand::SubmitPrompt { run: RunId::new(), request }), Reply::Done);
         let started = self.engine.requests().get(before).cloned().expect("the run started");
-        started.extensions.map(|extensions| extensions.trust).unwrap_or_default()
+        started.host.extensions.map(|extensions| extensions.trust).unwrap_or_default()
     }
 }
 

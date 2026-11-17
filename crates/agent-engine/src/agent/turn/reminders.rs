@@ -10,7 +10,7 @@ pub struct Reminders {
 
 impl Reminders {
     pub fn observe(&mut self, calls: &[(String, String, serde_json::Value)]) {
-        if calls.iter().any(|(_, name, _)| crate::tools::names::plans_tasks(name)) {
+        if calls.iter().any(|(_, name, _)| crate::tools::names::ToolName::of(name).plans_tasks()) {
             self.quiet_tasks = 0;
         } else if !calls.is_empty() {
             self.quiet_tasks += 1;

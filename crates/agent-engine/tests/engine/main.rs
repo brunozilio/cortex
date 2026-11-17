@@ -59,7 +59,7 @@ fn start_with_handle(
     static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
     let home = HOME.get_or_init(|| tempfile::tempdir().expect("home")).path().to_path_buf();
     let mut request = request.clone();
-    let extensions = request.extensions.get_or_insert_with(Default::default);
+    let extensions = request.host.extensions.get_or_insert_with(Default::default);
     extensions.home.get_or_insert(home);
     let request = &request;
     let (send, receive) = channel();
@@ -89,6 +89,6 @@ fn model() -> ModelOption {
 
 fn trusted(dir: &std::path::Path, prompt: &str) -> PromptRequest {
     let mut request = PromptRequest::plain(dir.into(), prompt, model());
-    request.extensions = Some(domain::Extensions { trust: domain::trust::Trust::Trusted, ..Default::default() });
+    request.host.extensions = Some(domain::Extensions { trust: domain::trust::Trust::Trusted, ..Default::default() });
     request
 }

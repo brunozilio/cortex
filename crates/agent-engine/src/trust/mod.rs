@@ -2,7 +2,7 @@ mod scan;
 
 use std::path::{Path, PathBuf};
 
-use domain::PromptRequest;
+use domain::Folder;
 use domain::trust::{Trust, TrustReport};
 
 use crate::tools::settled;
@@ -50,13 +50,13 @@ impl Gate {
         }
     }
 
-    pub fn of(request: &PromptRequest) -> Self {
-        Self::within(request, crate::brief::home(request).as_deref())
+    pub fn of(folder: Folder<'_>) -> Self {
+        Self::within(folder, folder.home())
     }
 
-    pub fn within(request: &PromptRequest, home: Option<&Path>) -> Self {
-        let trust = request.extensions.as_ref().map(|extensions| extensions.trust).unwrap_or_default();
-        Self::at(&request.cwd, home, trust)
+    pub fn within(folder: Folder<'_>, home: Option<&Path>) -> Self {
+        let trust = folder.extensions.map(|extensions| extensions.trust).unwrap_or_default();
+        Self::at(folder.cwd, home, trust)
     }
 
     pub fn cwd(&self) -> &Path {

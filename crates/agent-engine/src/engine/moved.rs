@@ -39,14 +39,15 @@ impl Move<'_> {
     }
 
     fn switch(&self, setup: Setup, workspace: &mut Workspace, guard: &mut Guard) -> Result<(String, PathBuf), String> {
-        let brief = crate::brief::Brief::load(&PromptRequest { cwd: setup.cwd.clone(), ..self.request.clone() })?;
+        let folder = domain::Folder { cwd: &setup.cwd, extensions: self.request.host.extensions.as_ref() };
+        let brief = crate::brief::Brief::load(folder)?;
         let Some(mut context) = workspace.prompt_context.clone() else {
             return Err("the run has no environment to move".into());
         };
         let state = setup.worktree_state();
         match &state {
-            Some(state) => self.sessions.save_worktree(self.request, self.session, state)?,
-            None => self.sessions.forget_worktree(self.request, self.session)?,
+            Some(state) => self.sessions.save_worktree(&self.request.session.cwd, self.session, state)?,
+            None => self.sessions.forget_worktree(&self.request.session.cwd, self.session)?,
         }
         let cwd = setup.cwd.clone();
         context.cwd = cwd.clone();

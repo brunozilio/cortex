@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 
-use super::{Listener, MESSAGE_AT_MOST, PROTOCOL_VERSION, Transport};
+use super::{Listener, MESSAGE_AT_MOST, McpError, PROTOCOL_VERSION, Transport};
 use crate::model::CancellationToken;
 use crate::model::http::{Http, Response};
 
@@ -46,7 +46,7 @@ impl Shared {
         headers
     }
 
-    pub(super) async fn post(&self, message: &Value, cancel: &CancellationToken) -> Result<Response, String> {
+    pub(super) async fn post(&self, message: &Value, cancel: &CancellationToken) -> Result<Response, McpError> {
         let headers = self.headers("application/json, text/event-stream");
         let body = message.to_string();
         let response =
@@ -58,21 +58,21 @@ impl Shared {
             *kept = Some(session);
         }
         if status == 401 {
-            return Err(format!("{} answered HTTP 401: sign in with /mcp login {}", self.name, self.name));
+            return Err(McpError::SignInNeeded { server: self.name.clone() });
         }
         if !(200..300).contains(&status) {
-            return Err(format!("{} answered HTTP {status}", self.name));
+            return Err(format!("{} answered HTTP {status}", self.name).into());
         }
         Ok(response)
     }
 
-    pub(super) async fn stream(&self, cancel: &CancellationToken) -> Result<Option<Response>, String> {
+    pub(super) async fn stream(&self, cancel: &CancellationToken) -> Result<Option<Response>, McpError> {
         let headers = self.headers("text/event-stream");
         let response = self.http.get_stream(&self.url, &headers, cancel).await.map_err(|e| e.to_string())?;
         match response.status {
             405 => Ok(None),
             status if (200..300).contains(&status) => Ok(Some(response)),
-            status => Err(format!("{} answered HTTP {status} to its stream", self.name)),
+            status => Err(format!("{} answered HTTP {status} to its stream", self.name).into()),
         }
     }
 }
@@ -99,7 +99,7 @@ impl HttpTransport {
         Self { shared: Arc::new(shared), listener, closed: CancellationToken::new(), listening: AtomicBool::new(false) }
     }
 
-    async fn requested(&self, message: &Value, cancel: &CancellationToken) -> Result<Value, String> {
+    async fn requested(&self, message: &Value, cancel: &CancellationToken) -> Result<Value, McpError> {
         let mut response = self.shared.post(message, cancel).await?;
         let mut text = String::new();
         let mut decoder = crate::model::sse::SseDecoder::new();
@@ -132,29 +132,29 @@ impl HttpTransport {
             }
             if read == 0 {
                 let unreadable = || format!("{} sent an unreadable answer", self.shared.name);
-                return parse(&text).filter(answers).ok_or_else(unreadable);
+                return parse(&text).filter(answers).ok_or_else(|| unreadable().into());
             }
         }
     }
 }
 
 impl Transport for HttpTransport {
-    fn request(&self, message: &Value) -> Result<Value, String> {
+    fn request(&self, message: &Value) -> Result<Value, McpError> {
         self.request_stopped(message, &platform::Stop::new())
     }
 
-    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, String> {
+    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, McpError> {
         platform::runtime::block_on(self.requested(message, stop.token()))
-            .unwrap_or_else(|error| Err(error.to_string()))
+            .unwrap_or_else(|error| Err(error.to_string().into()))
     }
 
-    fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), String> {
+    fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), McpError> {
         platform::runtime::block_on(self.shared.post(message, stop.token()))
-            .unwrap_or_else(|error| Err(error.to_string()))
+            .unwrap_or_else(|error| Err(error.to_string().into()))
             .map(|_| ())
     }
 
-    fn notify(&self, message: &Value) -> Result<(), String> {
+    fn notify(&self, message: &Value) -> Result<(), McpError> {
         self.notify_stopped(message, &platform::Stop::new())
     }
 

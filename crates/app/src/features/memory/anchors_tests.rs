@@ -25,14 +25,12 @@ fn a_run_is_handed_the_memories_about_files_that_its_prompt_did_not_recall() {
     ];
     let by = Provenance { author: Author::User, now: 1, origin: None };
     memories.edit(project.path(), &edits, by).expect("edit");
-    let request = PromptRequest {
-        memory: Some(MemoryBrief::new(None)),
-        ..PromptRequest::plain(project.path().into(), "Tune the renderer", ModelOption::new("m", "M"))
-    };
+    let request = PromptRequest::plain(project.path().into(), "Tune the renderer", ModelOption::new("m", "M"))
+        .remembering(MemoryBrief::new(None));
 
     let briefed = memories.brief(RunId::new(), &request, false);
 
-    let brief = briefed.memory.expect("brief");
+    let brief = briefed.host.memory.expect("brief");
     assert!(brief.anchors && brief.structured);
     let anchored: Vec<&str> = brief.anchored.iter().map(|memory| memory.text.as_str()).collect();
     let recalled: Vec<&str> = brief.recalled.iter().map(|memory| memory.text.as_str()).collect();
@@ -58,12 +56,10 @@ fn a_project_that_turns_the_context_features_off_gets_none_of_them() {
     let memories = Memories::new(Arc::new(InMemoryStore::default()));
     let by = Provenance { author: Author::User, now: 1, origin: None };
     memories.edit(project.path(), &[remember("Keep retries at 4", &["client.go"])], by).expect("edit");
-    let request = PromptRequest {
-        memory: Some(MemoryBrief::new(None)),
-        ..PromptRequest::plain(project.path().into(), "Tune the renderer", ModelOption::new("m", "M"))
-    };
+    let request = PromptRequest::plain(project.path().into(), "Tune the renderer", ModelOption::new("m", "M"))
+        .remembering(MemoryBrief::new(None));
 
-    let brief = memories.brief(RunId::new(), &request, false).memory.expect("brief");
+    let brief = memories.brief(RunId::new(), &request, false).host.memory.expect("brief");
 
     assert!(!brief.anchors && !brief.structured && brief.anchored.is_empty());
     let told = brief.edits_format().expect("format");

@@ -48,7 +48,7 @@ fn cancelling_while_an_edit_waits_for_permission_ends_in_cancelled_and_saves_the
     let stage = Stage::new();
     stage.script([call("w1", "Write", json!({"file_path": "out.txt", "content": "written\n"})), says("never asked")]);
     let mut request = stage.request("Write the file");
-    request.permission = domain::PermissionMode::Ask;
+    request.policy.permission = domain::PermissionMode::Ask;
 
     let mut run = stage.start(&request);
     run.asked();
@@ -102,7 +102,7 @@ fn cancelling_while_a_shell_command_runs_ends_in_cancelled_and_saves_the_stopped
     let stage = Stage::new();
     stage.script([call("b1", "Bash", json!({"command": "echo started; sleep 600"})), says("never asked")]);
     let mut request = stage.request("Wait a while");
-    request.allowed_tools = vec!["Bash".into()];
+    request.policy.allowed_tools = vec!["Bash".into()];
 
     let mut run = stage.start(&request);
     run.until(|event| matches!(event, EngineEvent::ToolProgress { line, .. } if line.contains("started")));

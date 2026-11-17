@@ -1,13 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use crate::frontmatter::parse as parse_frontmatter;
-use domain::PromptRequest;
+use domain::Folder;
 use serde_json::Value;
 
 use super::{Effect, Outcome, Tool, Workspace, required};
 use crate::model::ToolSpec;
 
-pub const SKILL_TOOL: &str = "Skill";
+pub const SKILL_TOOL: &str = super::names::SKILL;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FoundSkill {
@@ -31,9 +31,9 @@ impl FoundSkill {
 fn invocation_enabled() -> bool {
     true
 }
-pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill> {
-    let cwd = &request.cwd;
-    let gate = crate::trust::Gate::within(request, home);
+pub fn discover(folder: Folder<'_>, home: Option<&Path>) -> Vec<FoundSkill> {
+    let cwd = folder.cwd;
+    let gate = crate::trust::Gate::within(folder, home);
     let project_folders = cwd.ancestors().count();
     let mut sources: Vec<(PathBuf, Option<String>, bool)> = Vec::new();
     for directory in cwd.ancestors() {
@@ -43,10 +43,10 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundSkill>
     if let Some(home) = home {
         sources.push((home.join(concat!(brand::dir!(), "/skills")), None, true));
     }
-    for plugin in crate::plugins::found(request, home) {
+    for plugin in crate::plugins::found(folder, home) {
         sources.push((plugin.root.join("skills"), Some(plugin.name), true));
     }
-    for dir in request.extensions.iter().flat_map(|extensions| &extensions.dirs) {
+    for dir in folder.extensions.iter().flat_map(|extensions| &extensions.dirs) {
         sources.push((dir.join("skills"), None, true));
     }
     content::install_once();

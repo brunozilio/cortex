@@ -2,8 +2,9 @@ use serde_json::{Value, json};
 
 use super::Calling;
 use crate::agent::Agent;
+use crate::tools::names::ToolName;
 use crate::tools::subagent::AgentTool;
-use crate::tools::{Consult, Outcome, Tool, names};
+use crate::tools::{Consult, Outcome, Tool};
 use crate::transcript::Message;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,21 +26,25 @@ pub(super) enum Handler {
 
 impl Handler {
     pub(super) fn of(name: &str) -> Self {
-        match name {
-            names::TASK_OUTPUT => Self::TaskOutput,
-            names::TASK_STOP => Self::TaskStop,
-            names::TASK_LIST => Self::TaskList,
-            names::ASK => Self::Ask,
-            names::EXIT_PLAN => Self::ExitPlan,
-            names::ENTER_PLAN => Self::EnterPlan,
-            names::ENTER_WORKTREE => Self::EnterWorktree,
-            names::EXIT_WORKTREE => Self::ExitWorktree,
-            names::AGENT => Self::Agent,
-            names::SEND_MESSAGE => Self::SendMessage,
-            names::WATCH => Self::Watch,
-            names::REPL => Self::Repl,
+        match ToolName::of(name) {
+            ToolName::TaskOutput => Self::TaskOutput,
+            ToolName::TaskStop => Self::TaskStop,
+            ToolName::TaskList => Self::TaskList,
+            ToolName::AskUserQuestion => Self::Ask,
+            ToolName::ExitPlanMode => Self::ExitPlan,
+            ToolName::EnterPlanMode => Self::EnterPlan,
+            ToolName::EnterWorktree => Self::EnterWorktree,
+            ToolName::ExitWorktree => Self::ExitWorktree,
+            ToolName::Agent => Self::Agent,
+            ToolName::SendMessage => Self::SendMessage,
+            ToolName::Watch => Self::Watch,
+            ToolName::Repl => Self::Repl,
             _ => Self::Tool,
         }
+    }
+
+    pub(super) fn run_by_the_loop(self) -> bool {
+        !matches!(self, Self::Tool | Self::Repl)
     }
 
     pub(super) fn starts_background_work(self) -> bool {
@@ -134,6 +139,7 @@ impl Agent<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::names;
 
     #[test]
     fn each_tool_the_loop_runs_itself_has_its_handler_and_every_other_runs_as_a_tool() {

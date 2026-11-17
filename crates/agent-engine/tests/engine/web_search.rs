@@ -45,7 +45,7 @@ fn a_run_searches_the_web_through_its_account() {
     ]));
     let engine = NativeEngine::new(Arc::new(Searching(agent.clone())), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(dir.path().into(), "search the web for kiro mcp", model());
-    request.allowed_tools = vec!["WebSearch".into()];
+    request.policy.allowed_tools = vec!["WebSearch".into()];
 
     let events = finish(&start(&engine, &request));
 

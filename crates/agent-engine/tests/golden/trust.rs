@@ -22,7 +22,7 @@ fn a_rule_kept_in_an_untrusted_folder_says_that_it_waits_for_trust() {
     let stage = Stage::new();
     stage.script([call("b1", "Bash", json!({"command": "echo one"})), says("Done.")]);
     let mut request = stage.request("Echo");
-    request.permission = PermissionMode::Ask;
+    request.policy.permission = PermissionMode::Ask;
 
     let mut run = stage.start(&request);
     let ask = run.asked();

@@ -12,10 +12,9 @@ impl Memories {
             self.book(&mut books, project).memories.clone()
         };
         let prompt = domain::memory::optimize_prompt(&memories);
-        PromptRequest {
-            memory: Some(MemoryBrief { optimizing: true, ..MemoryBrief::default() }),
-            ..PromptRequest::plain(project.to_path_buf(), prompt, model)
-        }
+        let mut request = PromptRequest::plain(project.to_path_buf(), prompt, model);
+        request.host.memory = Some(MemoryBrief { optimizing: true, ..MemoryBrief::default() });
+        request
     }
 
     pub fn undo(&self, project: &Path) -> Result<MemoryListing, String> {
@@ -32,11 +31,12 @@ impl Memories {
     pub(super) fn brief_optimization(&self, run: RunId, request: &PromptRequest) -> PromptRequest {
         let book = {
             let mut books = self.lock();
-            self.book(&mut books, &request.cwd).clone()
+            self.book(&mut books, &request.session.cwd).clone()
         };
-        self.set_undo_point(&request.cwd, Some(book));
-        let brief = MemoryBrief { output: edits_file(run), optimizing: true, ..MemoryBrief::default() };
-        PromptRequest { memory: Some(brief), ..request.clone() }
+        self.set_undo_point(&request.session.cwd, Some(book));
+        let mut briefed = request.clone();
+        briefed.host.memory = Some(MemoryBrief { output: edits_file(run), optimizing: true, ..MemoryBrief::default() });
+        briefed
     }
 
     pub(super) fn set_undo_point(&self, project: &Path, book: Option<MemoryBook>) {

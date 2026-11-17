@@ -36,16 +36,14 @@ fn an_agent_searches_and_writes_project_memory() {
     let wake: Wake = Arc::new(|| {});
     let backend = LocalBackend::new(services, wake).expect("backend");
     seed(&backend, project.path());
-    let request = PromptRequest {
-        effort: Effort::Low,
-        memory: Some(MemoryBrief::new(Some("Live memory".into()))),
-        ..PromptRequest::plain(
-            project.path().to_path_buf(),
-            "Find the release codename in the project's memory with your memory search tool, then remember \
-             (semantic) that the user prefers tabs over spaces. Reply with the codename only.",
-            native_live::model(),
-        )
-    };
+    let mut request = PromptRequest::plain(
+        project.path().to_path_buf(),
+        "Find the release codename in the project's memory with your memory search tool, then remember \
+         (semantic) that the user prefers tabs over spaces. Reply with the codename only.",
+        native_live::model(),
+    )
+    .remembering(MemoryBrief::new(Some("Live memory".into())));
+    request.session.effort = Effort::Low;
     let run = RunId::new();
     backend.send(Envelope::local(RequestId(2), ClientCommand::SubmitPrompt { run, request })).expect("send");
 

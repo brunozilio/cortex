@@ -1,6 +1,11 @@
 use super::{Builder, asked_tool, lane, node};
+use crate::tool_name::ToolName;
 use crate::trace::{Agent, Kind, ModelCall, Node, RunInfo, Wait};
-use crate::{AgentAsk, AgentStatus, Rewound};
+use crate::{AgentAsk, AgentStatus, Rewound, ToolCall};
+
+fn spawns_an_agent(call: &ToolCall) -> bool {
+    ToolName::of(&call.name) == ToolName::Agent
+}
 
 impl Builder<'_> {
     pub(super) fn opened(&mut self, info: RunInfo) {
@@ -27,7 +32,7 @@ impl Builder<'_> {
 
     pub(super) fn ask(&mut self, at: u64, ask: AgentAsk) {
         let Some(name) = asked_tool(&ask).map(str::to_owned) else {
-            return self.note(at, "asked", format!("{:?}", ask.kind));
+            return self.note(at, crate::trace::Title::Asked, format!("{:?}", ask.kind));
         };
         let running =
             self.group.iter_mut().rev().find(|tool| {
@@ -62,7 +67,7 @@ impl Builder<'_> {
         let named = self
             .group
             .iter()
-            .position(|tool| free(tool) && matches!(&tool.kind, Kind::Tool { call, .. } if call.name == "Agent"));
+            .position(|tool| free(tool) && matches!(&tool.kind, Kind::Tool { call, .. } if spawns_an_agent(call)));
         let at = named.or_else(|| self.group.iter().position(free))?;
         self.group.get_mut(at)
     }
@@ -70,7 +75,7 @@ impl Builder<'_> {
     fn returned_agent_call(&mut self) -> Option<&mut Option<Box<Agent>>> {
         let earlier = self.steps.iter_mut().rev().flat_map(|step| step.nodes.iter_mut().rev());
         self.group.iter_mut().rev().chain(earlier).find_map(|node| match &mut node.kind {
-            Kind::Tool { call, agent, .. } if call.name == "Agent" && agent.is_none() => Some(agent),
+            Kind::Tool { call, agent, .. } if spawns_an_agent(call) && agent.is_none() => Some(agent),
             _ => None,
         })
     }

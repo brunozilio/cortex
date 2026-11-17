@@ -36,7 +36,7 @@ fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
     assert!(app.prompt.ghost.is_none());
 
     let deadline = Instant::now() + SETTLES_WITHIN;
-    let asked = || engine.requests().iter().filter_map(|r| r.command).collect::<Vec<_>>();
+    let asked = || engine.requests().iter().filter_map(|r| r.session.command).collect::<Vec<_>>();
     while asked().len() < 3 {
         assert!(Instant::now() < deadline, "{:?}", asked());
         std::thread::sleep(Duration::from_millis(10));
@@ -44,8 +44,9 @@ fn a_finished_run_is_named_and_suggests_the_next_prompt_which_tab_takes() {
     let mut asked = asked();
     asked.sort_by_key(|c| format!("{c:?}"));
     assert_eq!(asked, [SessionCommand::HeadsUp, SessionCommand::Suggest, SessionCommand::Title]);
-    let title = engine.requests().into_iter().find(|r| r.command == Some(SessionCommand::Title)).expect("title");
-    assert_eq!(title.prompt, "fix the login page", "named for what was first asked");
+    let title =
+        engine.requests().into_iter().find(|r| r.session.command == Some(SessionCommand::Title)).expect("title");
+    assert_eq!(title.prompt.text, "fix the login page", "named for what was first asked");
 }
 
 #[test]

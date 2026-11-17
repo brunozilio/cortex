@@ -13,7 +13,9 @@ fn answering(body: String) -> HttpTransport {
 }
 
 fn asked(transport: &HttpTransport) -> Result<Value, String> {
-    transport.request_stopped(&json!({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}), &platform::Stop::new())
+    transport
+        .request_stopped(&json!({"jsonrpc": "2.0", "id": 7, "method": "tools/list"}), &platform::Stop::new())
+        .map_err(String::from)
 }
 
 #[test]

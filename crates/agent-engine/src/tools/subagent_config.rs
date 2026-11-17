@@ -124,10 +124,11 @@ impl AgentConfig {
     pub fn allows(&self, name: &str) -> bool {
         let matches =
             |pattern: &String| pattern.strip_suffix('*').map_or(name == pattern, |prefix| name.starts_with(prefix));
-        (self.tools.as_ref().is_none_or(|tools| tools.iter().any(matches))
-            || (self.memory.is_some() && matches!(name, "Read" | "Write" | "Edit")))
+        let named = domain::ToolName::of(name);
+        let keeps_memory = matches!(named, domain::ToolName::Read | domain::ToolName::Write | domain::ToolName::Edit);
+        (self.tools.as_ref().is_none_or(|tools| tools.iter().any(matches)) || (self.memory.is_some() && keeps_memory))
             && !self.disallowed_tools.iter().any(matches)
-            && (!name.starts_with("mcp__")
+            && (!matches!(named, domain::ToolName::Mcp(_))
                 || self
                     .mcp_servers
                     .as_ref()

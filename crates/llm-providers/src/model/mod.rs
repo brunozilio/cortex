@@ -92,6 +92,21 @@ impl From<llm_providers::ProviderError> for ModelError {
     }
 }
 
+impl From<&ModelError> for domain::FailureKind {
+    fn from(error: &ModelError) -> Self {
+        match error {
+            ModelError::Overloaded(_) => Self::Unavailable,
+            _ => Self::Other,
+        }
+    }
+}
+
+impl From<ModelError> for domain::failure::RunFailure {
+    fn from(error: ModelError) -> Self {
+        Self { kind: domain::FailureKind::from(&error), message: error.to_string() }
+    }
+}
+
 impl ModelError {
     pub const fn is_transient(&self) -> bool {
         matches!(self, Self::Overloaded(_) | Self::Network(_) | Self::Stalled(_))

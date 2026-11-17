@@ -6,6 +6,8 @@ mod unwrapped;
 pub use pattern::{hides_more, normalized, split_command, without_harmless_redirects};
 pub use site::{is_private, is_private_address, site};
 
+use crate::tool_name::ToolName;
+
 #[cfg(test)]
 mod tests;
 
@@ -17,13 +19,21 @@ pub enum RuleKind {
     Deny,
 }
 
+pub type PermissionDecision = RuleKind;
+
 impl RuleKind {
+    pub const ALL: [Self; 3] = [Self::Allow, Self::Ask, Self::Deny];
+
     pub fn word(self) -> &'static str {
         match self {
             Self::Allow => "allow",
             Self::Ask => "ask",
             Self::Deny => "deny",
         }
+    }
+
+    pub fn named(word: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.word() == word)
     }
 }
 
@@ -39,7 +49,7 @@ pub struct PermissionsInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HookInfo {
-    pub event: String,
+    pub event: crate::hooks::HookEvent,
     pub matcher: String,
     pub runs: String,
 }
@@ -82,11 +92,11 @@ impl Rule {
         if self.tool == tool {
             return true;
         }
-        match self.tool.as_str() {
-            "Edit" => matches!(tool, "Write" | "NotebookEdit"),
-            "Read" => matches!(tool, "Glob" | "Grep" | "LSP"),
-            server if server.starts_with("mcp__") && server.matches("__").count() == 1 => tool
-                .strip_prefix(server)
+        match (ToolName::of(&self.tool), ToolName::of(tool)) {
+            (ToolName::Edit, ToolName::Write | ToolName::NotebookEdit) => true,
+            (ToolName::Read, ToolName::Glob | ToolName::Grep | ToolName::Lsp) => true,
+            (ToolName::Mcp(server), _) if server.matches("__").count() == 1 => tool
+                .strip_prefix(&server)
                 .and_then(|rest| rest.strip_prefix("__"))
                 .is_some_and(|name| !name.is_empty() && !name.contains("__")),
             _ => false,
@@ -95,18 +105,20 @@ impl Rule {
 }
 
 pub fn suggest(tool: &str, subject: &str, outside: bool) -> Option<String> {
-    if tool == "WebFetch" {
-        return site(subject).map(|host| format!("WebFetch(domain:{host})"));
+    let named = ToolName::of(tool);
+    match named {
+        ToolName::WebFetch => site(subject).map(|host| format!("{named}(domain:{host})")),
+        ToolName::Bash => kind::command_kind(subject),
+        ToolName::Read | ToolName::Glob | ToolName::Grep | ToolName::Lsp if outside => {
+            let path = subject.trim_end_matches('/');
+            let folder = match named {
+                ToolName::Read | ToolName::Lsp => path.rsplit_once('/').map(|(dir, _)| dir)?,
+                _ => path,
+            };
+            Some(format!("{}(//{}/**)", ToolName::Read, folder.trim_start_matches('/')))
+        }
+        _ => None,
     }
-    if tool == "Bash" {
-        return kind::command_kind(subject);
-    }
-    if outside && matches!(tool, "Read" | "Glob" | "Grep" | "LSP") {
-        let path = subject.trim_end_matches('/');
-        let folder = if tool == "Read" || tool == "LSP" { path.rsplit_once('/').map(|(dir, _)| dir)? } else { path };
-        return Some(format!("Read(//{}/**)", folder.trim_start_matches('/')));
-    }
-    None
 }
 
 pub fn split_list(text: &str) -> Vec<String> {

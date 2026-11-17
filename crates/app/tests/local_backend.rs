@@ -203,19 +203,19 @@ fn an_optimization_is_a_run_over_the_memory_without_the_search_tool() {
     send(&backend, memory(&path, MemoryOp::Optimize { run, model: model() }));
     collect(&backend, &woke, run_ended);
     let mut remembering = PromptRequest::plain(path.clone(), "hi", model());
-    remembering.memory = Some(domain::MemoryBrief::default());
+    remembering.host.memory = Some(domain::MemoryBrief::default());
     send(&backend, ClientCommand::SubmitPrompt { run: RunId::new(), request: remembering });
     collect(&backend, &woke, run_ended);
 
     let [optimizing, plain] = &engine.requests()[..] else { panic!("two runs: {:?}", engine.requests()) };
     assert!(
-        optimizing.prompt.contains("long-term memory")
-            && optimizing.prompt.contains("[0] semantic, from the user: Uses wgpu")
+        optimizing.prompt.text.contains("long-term memory")
+            && optimizing.prompt.text.contains("[0] semantic, from the user: Uses wgpu")
     );
-    assert!(optimizing.memory.as_ref().is_some_and(|brief| brief.optimizing && brief.recalled.is_empty()));
-    assert!(optimizing.credentials.mcp.is_empty(), "no memory_search while tidying");
-    assert!(!plain.memory.as_ref().is_some_and(|brief| brief.optimizing), "a client cannot ask for it");
-    assert!(plain.credentials.mcp.is_empty(), "memory that fits in the prompt is not searched");
+    assert!(optimizing.host.memory.as_ref().is_some_and(|brief| brief.optimizing && brief.recalled.is_empty()));
+    assert!(optimizing.host.credentials.mcp.is_empty(), "no memory_search while tidying");
+    assert!(!plain.host.memory.as_ref().is_some_and(|brief| brief.optimizing), "a client cannot ask for it");
+    assert!(plain.host.credentials.mcp.is_empty(), "memory that fits in the prompt is not searched");
 
     let undo = answer(&backend, &woke, memory(&path, MemoryOp::Undo));
     assert!(

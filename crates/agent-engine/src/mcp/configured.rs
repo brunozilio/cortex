@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use domain::PromptRequest;
+use domain::Folder;
 use domain::mcp_config::{
     McpApproval, McpListing, McpOrigin, McpServerInfo, McpState, McpUnreadable, expand, is_free_name,
 };
@@ -70,17 +70,17 @@ fn configured_on(cwd: &Path, sources: &McpSources, support: &platform::sandbox::
         .collect()
 }
 
-pub fn sources(request: &PromptRequest) -> Result<McpSources, String> {
-    crate::brief::mcp_sources(request)
+pub fn sources(folder: Folder<'_>) -> Result<McpSources, String> {
+    crate::brief::mcp_sources(folder)
 }
 
-pub fn list(request: &PromptRequest) -> Result<Vec<McpServerInfo>, String> {
-    listing(request).map(|listing| listing.servers)
+pub fn list(folder: Folder<'_>) -> Result<Vec<McpServerInfo>, String> {
+    listing(folder).map(|listing| listing.servers)
 }
 
-pub fn listing(request: &PromptRequest) -> Result<McpListing, String> {
-    let sources = crate::brief::mcp_sources(request)?;
-    let cwd = &request.cwd;
+pub fn listing(folder: Folder<'_>) -> Result<McpListing, String> {
+    let sources = crate::brief::mcp_sources(folder)?;
+    let cwd = folder.cwd;
     let home = sources.home.as_deref();
     let mut listing = McpListing::default();
     if let Some(path) = project_config(cwd, home) {
@@ -269,7 +269,7 @@ mod tests {
         write(plugin.path().join(concat!(brand::plugin_dir!(), "/plugin.json")), r#"{"name": "acme"}"#);
         write(plugin.path().join(".mcp.json"), r#"{"mcpServers": {"datadog": {"command": "dd-mcp"}}}"#);
         let mut request = PromptRequest::plain(repo.path().to_path_buf(), "", ModelOption::new("", ""));
-        request.extensions = Some(Extensions {
+        request.host.extensions = Some(Extensions {
             home: Some(home.path().to_path_buf()),
             plugins: vec![plugin.path().to_path_buf()],
             trust: domain::trust::Trust::Trusted,
@@ -281,7 +281,7 @@ mod tests {
             target: target.into(),
             state,
         };
-        let listed = crate::mcp::list(&request).expect("listed");
+        let listed = crate::mcp::list(request.folder()).expect("listed");
         assert_eq!(
             listed,
             [
@@ -303,12 +303,12 @@ mod tests {
         write(user.clone(), "{broken");
         write(repo.path().join(concat!(brand::dir!(), "/mcp.json")), r#"{"mcpServers": {"jira": {"command": "j"}}}"#);
         let mut request = PromptRequest::plain(repo.path().to_path_buf(), "", ModelOption::new("", ""));
-        request.extensions = Some(Extensions {
+        request.host.extensions = Some(Extensions {
             home: Some(home.path().to_path_buf()),
             trust: domain::trust::Trust::Untrusted,
             ..Extensions::default()
         });
-        let listing = crate::mcp::listing(&request).expect("listed");
+        let listing = crate::mcp::listing(request.folder()).expect("listed");
         assert_eq!(
             listing.servers,
             [McpServerInfo {
@@ -340,13 +340,13 @@ mod tests {
         let project = repo.path().join(concat!(brand::dir!(), "/mcp.json"));
         write(project.clone(), r#"{"servers": {}, "mcpServers": {"jira": {"command": "j", "env": {"N": "1"}}}}"#);
         let mut request = PromptRequest::plain(repo.path().to_path_buf(), "", ModelOption::new("", ""));
-        request.extensions = Some(Extensions {
+        request.host.extensions = Some(Extensions {
             home: Some(home.path().to_path_buf()),
             trust: domain::trust::Trust::Trusted,
             ..Extensions::default()
         });
 
-        let listing = crate::mcp::listing(&request).expect("listed");
+        let listing = crate::mcp::listing(request.folder()).expect("listed");
 
         assert!(!listing.owner_s_file_is_broken(), "{listing:?}");
         let warned: Vec<String> = listing.warnings().map(McpUnreadable::line).collect();
@@ -403,19 +403,19 @@ mod tests {
         };
 
         assert_eq!(
-            servers(&request, &sources),
+            servers(request.folder(), &sources),
             [stdio("jira", "user-jira", &[]), stdio("notes", "notes-mcp", &[("KEY", "dflt")])],
             "an unapproved project brings nothing; the user's own run"
         );
         sources.approval.enabled = vec!["jira".into(), concat!(brand::command!(), "_memory").into()];
         assert_eq!(
-            servers(&request, &sources),
+            servers(request.folder(), &sources),
             [stdio("jira", "jira-mcp", &[]), stdio("notes", "notes-mcp", &[("KEY", "dflt")])],
             "the approved project server wins its name; reserved names never start"
         );
         sources.trust = domain::trust::Trust::Untrusted;
         assert_eq!(
-            servers(&request, &sources),
+            servers(request.folder(), &sources),
             [stdio("jira", "user-jira", &[]), stdio("notes", "notes-mcp", &[("KEY", "dflt")])],
             "approval alone starts nothing from a folder that is not trusted"
         );

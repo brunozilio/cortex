@@ -1,16 +1,17 @@
 use platform::sync::Locked;
 
-use super::{Effect, Outcome, Tool, Workspace, names};
+use super::names::ToolName;
+use super::{Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 use serde_json::{Value, json};
 #[derive(Debug)]
-struct TaskTool(&'static str);
+struct TaskTool(ToolName);
 impl Tool for TaskTool {
     fn spec(&self) -> ToolSpec {
-        crate::tools::declared(self.0, &Value::Null)
+        crate::tools::declared(self.0.as_str(), &Value::Null)
     }
     fn effects(&self, _: &Value, _: &Workspace) -> Vec<Effect> {
-        let stops = self.0 == names::TASK_STOP;
+        let stops = self.0 == ToolName::TaskStop;
         stops.then_some(Effect::Cancel { own: true }).into_iter().collect()
     }
     fn summary(&self, input: &Value) -> String {
@@ -23,8 +24,8 @@ impl Tool for TaskTool {
 pub fn tools() -> Vec<Box<dyn Tool>> {
     let board = std::sync::Arc::new(std::sync::Mutex::new(Board::default()));
     let mut tools: Vec<Box<dyn Tool>> =
-        vec![Box::new(TaskTool(names::TASK_OUTPUT)), Box::new(TaskTool(names::TASK_STOP))];
-    for name in [names::TASK_CREATE, names::TASK_UPDATE, "TaskGet", names::TASK_LIST] {
+        vec![Box::new(TaskTool(ToolName::TaskOutput)), Box::new(TaskTool(ToolName::TaskStop))];
+    for name in [ToolName::TaskCreate, ToolName::TaskUpdate, ToolName::TaskGet, ToolName::TaskList] {
         tools.push(Box::new(PlanTool { name, board: board.clone() }));
     }
     tools
@@ -37,12 +38,12 @@ struct Board {
 }
 #[derive(Debug)]
 struct PlanTool {
-    name: &'static str,
+    name: ToolName,
     board: std::sync::Arc<std::sync::Mutex<Board>>,
 }
 impl Tool for PlanTool {
     fn spec(&self) -> ToolSpec {
-        crate::tools::declared(self.name, &Value::Null)
+        crate::tools::declared(self.name.as_str(), &Value::Null)
     }
     fn effects(&self, _: &Value, _: &Workspace) -> Vec<Effect> {
         Vec::new()
@@ -52,10 +53,10 @@ impl Tool for PlanTool {
     }
     fn run(&self, input: &Value, _: &Workspace) -> Outcome {
         let mut board = self.board.locked();
-        if self.name == names::TASK_LIST {
+        if self.name == ToolName::TaskList {
             return Outcome::ok(json!(board.tasks.values().collect::<Vec<_>>()).to_string());
         }
-        if self.name == names::TASK_CREATE {
+        if self.name == ToolName::TaskCreate {
             let Some(subject) = input["subject"].as_str().filter(|s| !s.trim().is_empty()) else {
                 return Outcome::error("subject is required");
             };
@@ -72,7 +73,7 @@ impl Tool for PlanTool {
         let Some(task) = board.tasks.get(id) else {
             return Outcome::error("Unknown planning task_id.");
         };
-        if self.name == "TaskGet" {
+        if self.name == ToolName::TaskGet {
             return Outcome::ok(task.to_string());
         }
         let mut updated = task.clone();

@@ -106,7 +106,8 @@ impl Agent<'_> {
 
     pub(in crate::agent) fn notify(&self, kind: &str, message: &str) {
         let input = serde_json::json!({ "message": message, "notification_type": kind });
-        if let Err(error) = self.workspace.hooks.run("Notification", kind, input, self.workspace) {
+        if let Err(error) = self.workspace.hooks.run(crate::hooks::HookEvent::Notification, kind, input, self.workspace)
+        {
             tracing::warn!(%error, "a Notification hook failed");
         }
     }

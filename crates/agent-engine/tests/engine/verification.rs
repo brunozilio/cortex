@@ -25,11 +25,9 @@ fn a_request_with_criteria_is_judged_before_it_completes() {
         said("Done"),
         said(r#"{"passed":true,"checks":[]}"#),
     ]));
-    let request = PromptRequest {
-        verification: Some(Criteria::user("it is done")),
-        permission: PermissionMode::Bypass,
-        ..PromptRequest::plain(dir.path().into(), "do it", model())
-    };
+    let mut request = PromptRequest::plain(dir.path().into(), "do it", model());
+    request.policy.verification = Some(Criteria::user("it is done"));
+    request.policy.permission = PermissionMode::Bypass;
     let events = finish(&start(&engine(&scripted), &request));
     assert!(events.iter().any(|e| matches!(e, EngineEvent::Verified(v) if v.passed)), "{events:?}");
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })));
@@ -40,11 +38,9 @@ fn a_request_with_criteria_is_judged_before_it_completes() {
 fn a_planning_run_is_never_judged() {
     let dir = tempfile::tempdir().expect("dir");
     let scripted = Arc::new(ScriptedModel::new([said("The plan")]));
-    let request = PromptRequest {
-        verification: Some(Criteria::plan("cargo test")),
-        permission: PermissionMode::Plan,
-        ..PromptRequest::plain(dir.path().into(), "plan it", model())
-    };
+    let mut request = PromptRequest::plain(dir.path().into(), "plan it", model());
+    request.policy.verification = Some(Criteria::plan("cargo test"));
+    request.policy.permission = PermissionMode::Plan;
     let events = finish(&start(&engine(&scripted), &request));
     assert!(!events.iter().any(|e| matches!(e, EngineEvent::Verified(_))));
     assert_eq!(scripted.asked().len(), 1);

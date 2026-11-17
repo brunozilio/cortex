@@ -24,14 +24,14 @@ impl Memories {
     }
 
     pub(super) fn keep_score(&self, request: &PromptRequest, held: bool, outcome: &RunOutcome) {
-        let features = team::features(&self.gate(&request.cwd));
+        let features = team::features(&self.gate(&request.session.cwd));
         if !features.on(domain::features::MEMORY_SCORECARD) {
             return;
         }
         let mut books = self.lock();
-        match self.store.update(&request.cwd, &mut |book| book.scorecard.record(held, outcome)) {
+        match self.store.update(&request.session.cwd, &mut |book| book.scorecard.record(held, outcome)) {
             Ok(changed) => {
-                keep(&mut books, &request.cwd, changed);
+                keep(&mut books, &request.session.cwd, changed);
             }
             Err(error) => tracing::warn!(%error, "could not save the memory scorecard"),
         }

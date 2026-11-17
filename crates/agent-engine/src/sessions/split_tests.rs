@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use domain::{EngineEvent, ModelOption, PromptRequest, SessionId};
+use domain::{EngineEvent, SessionId};
 
 use super::*;
 use crate::sessions::{Entry, Sessions};
@@ -10,7 +10,7 @@ struct Kept {
     _dir: tempfile::TempDir,
     native: PathBuf,
     store: FileSessions,
-    request: PromptRequest,
+    request: PathBuf,
     id: SessionId,
 }
 
@@ -18,7 +18,7 @@ impl Kept {
     fn new() -> Self {
         let dir = tempfile::tempdir().expect("dir");
         let native = dir.path().join("native");
-        let request = PromptRequest::plain(dir.path().into(), "", ModelOption::new("m", "M"));
+        let request = dir.path().to_path_buf();
         Self { store: FileSessions::new(&native), native, request, id: SessionId("s1".into()), _dir: dir }
     }
 

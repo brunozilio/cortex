@@ -1,13 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use super::subagent_config::AgentConfig;
-use domain::PromptRequest;
+use domain::Folder;
 use serde_json::{Value, json};
 
 use super::{Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
-pub const AGENT_TOOL: &str = "Agent";
+pub const AGENT_TOOL: &str = super::names::AGENT;
 
 pub const GENERAL: &str = "general-purpose";
 
@@ -20,9 +20,9 @@ pub struct FoundAgent {
     pub config: AgentConfig,
 }
 
-pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent> {
-    let cwd = &request.cwd;
-    let gate = crate::trust::Gate::within(request, home);
+pub fn discover(folder: Folder<'_>, home: Option<&Path>) -> Vec<FoundAgent> {
+    let cwd = folder.cwd;
+    let gate = crate::trust::Gate::within(folder, home);
     let project_folders = cwd.ancestors().count();
     let mut sources: Vec<(PathBuf, Option<String>)> = Vec::new();
     for directory in cwd.ancestors() {
@@ -31,10 +31,10 @@ pub fn discover(request: &PromptRequest, home: Option<&Path>) -> Vec<FoundAgent>
     if let Some(home) = home {
         sources.push((home.join(concat!(brand::dir!(), "/agents")), None));
     }
-    for plugin in crate::plugins::found(request, home) {
+    for plugin in crate::plugins::found(folder, home) {
         sources.push((plugin.root.join("agents"), Some(plugin.name)));
     }
-    for dir in request.extensions.iter().flat_map(|extensions| &extensions.dirs) {
+    for dir in folder.extensions.iter().flat_map(|extensions| &extensions.dirs) {
         sources.push((dir.join("agents"), None));
     }
     let mut found: Vec<FoundAgent> = Vec::new();
@@ -144,8 +144,6 @@ pub fn system(parent: &str, agent: Option<&FoundAgent>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use domain::ModelOption;
-
     use super::*;
 
     #[test]
@@ -158,9 +156,8 @@ mod tests {
             "---\nname: reviewer\ndescription: Reviews diffs.\n---\n\nBe strict.\n",
         )
         .expect("write");
-        let model = ModelOption::new("m", "M");
-        let request = PromptRequest::plain(repo.path().to_path_buf(), "hi", model);
-        let tool = AgentTool { agents: discover(&request, None) };
+        let folder = Folder { cwd: repo.path(), extensions: None };
+        let tool = AgentTool { agents: discover(folder, None) };
         let description = tool.spec().description;
         assert!(description.contains("- reviewer: Reviews diffs.\n- Explore: "), "project agents first: {description}");
         assert!(description.contains("- fork: "));

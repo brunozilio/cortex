@@ -8,7 +8,11 @@ use serde_json::Value;
 
 use self::spans::Spans;
 pub use self::spans::{JUDGE, REVIEW};
-use super::{Kind, Node, RunInfo, Trace};
+use super::{Kind, Mark, Node, RunInfo, Title, Trace};
+
+pub fn marked(flag: &str, title: Title) -> bool {
+    Mark::of(flag).is_some_and(|mark| mark.title() == title)
+}
 
 const WASTEFUL: f64 = 0.2;
 
@@ -248,7 +252,7 @@ fn with_served(model: &str, spans: &[Span]) -> String {
 
 fn signals(run: &Run) -> Vec<Signal> {
     let any = |test: &dyn Fn(&Span) -> bool| run.spans.iter().any(test);
-    let flagged = |prefix: &str| any(&|span| span.flags.iter().any(|flag| flag.starts_with(prefix)));
+    let flagged = |title: Title| any(&|span| span.flags.iter().any(|flag| marked(flag, title)));
     let event = |name: &str| any(&|span| span.kind == SpanKind::Event && span.name.starts_with(name));
     [
         (Signal::ToolError, any(&|span| span.kind == SpanKind::Tool && span.failed)),
@@ -256,10 +260,10 @@ fn signals(run: &Run) -> Vec<Signal> {
         (Signal::Review, any(&|span| span.name == spans::REVIEW && !span.output.is_empty())),
         (Signal::Subagent, any(&|span| span.kind == SpanKind::Agent)),
         (Signal::Waste, run.waste > WASTEFUL),
-        (Signal::Repeated, flagged("repeated")),
+        (Signal::Repeated, flagged(Title::Repeated)),
         (Signal::FellBack, event("fell back")),
         (Signal::Compacted, event("compacted")),
-        (Signal::Refused, flagged("refused")),
+        (Signal::Refused, flagged(Title::Refused)),
     ]
     .into_iter()
     .filter_map(|(signal, present)| present.then_some(signal))

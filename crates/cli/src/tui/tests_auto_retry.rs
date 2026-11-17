@@ -37,7 +37,7 @@ fn an_unavailable_provider_is_tried_once_more_after_a_visible_countdown() {
     app.turn.auto_retry = Some(Instant::now() - Duration::from_secs(1));
     super::auto_retry::tick(&mut app);
     until(&mut app, |app| !app.busy() && engine.requests().len() == 2);
-    assert_eq!(engine.requests()[1].prompt, "build it");
+    assert_eq!(engine.requests()[1].prompt.text, "build it");
     assert!(app.turn.auto_retry.is_none(), "a second failure is not retried on its own");
 }
 

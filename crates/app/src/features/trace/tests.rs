@@ -9,7 +9,7 @@ const NOW: u64 = 400 * DAY_MS;
 
 fn record(store: &FileSessions, dir: &Path, id: &str, at_ms: u64) -> SessionId {
     let id = SessionId(id.into());
-    let request = PromptRequest::plain(dir.into(), "", ModelOption::new("", ""));
+    let request = dir.to_path_buf();
     for entry in [
         Entry::Prompted { at_ms, prompt: format!("read it in {}", id.0) },
         Entry::Event { at_ms: at_ms + 1, event: EngineEvent::ToolStarted(ToolCall::new("r", "Read", "a.txt")) },
@@ -95,7 +95,7 @@ fn a_followed_session_keeps_every_text_whole_while_the_report_stays_light() {
     let root = tempfile::tempdir().expect("dir");
     let store = FileSessions::new(root.path().join("sessions"));
     let id = SessionId("long".into());
-    let request = PromptRequest::plain(root.path().into(), "", ModelOption::new("", ""));
+    let request = root.path().to_path_buf();
     let long = "x".repeat(30_000);
     for entry in [
         Entry::Prompted { at_ms: NOW, prompt: long.clone() },

@@ -37,7 +37,7 @@ fn later_prompts_of_a_session_send_the_system_prompt_of_its_first() {
 
     std::fs::write(dir.path().join("edited.rs"), "fn main() {}").expect("edit");
     let mut again = PromptRequest::plain(dir.path().into(), "two", model());
-    again.resume = Some(session);
+    again.session.resume = Some(session);
     finish(&start(&engine, &again));
     assert_eq!(second.asked()[0].system, first.asked()[0].system, "the cached prefix survives the edit");
 

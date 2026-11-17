@@ -33,7 +33,12 @@ fn reached(app: &mut App, engine: &FakeEngine, prompts: usize) -> Vec<String> {
 }
 
 fn sent(engine: &FakeEngine) -> Vec<String> {
-    engine.requests().into_iter().filter(|request| request.command.is_none()).map(|request| request.prompt).collect()
+    engine
+        .requests()
+        .into_iter()
+        .filter(|request| request.session.command.is_none())
+        .map(|request| request.prompt.text)
+        .collect()
 }
 
 #[test]

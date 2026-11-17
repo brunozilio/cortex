@@ -18,8 +18,8 @@ fn asked_in(dir: &tempfile::TempDir, output: &str) -> agent_engine::model::TurnR
     let engine =
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![agent.clone()]))), Arc::new(InMemorySessions::default()));
     let brief = MemoryBrief { output: output.into(), ..MemoryBrief::default() };
-    let request =
-        PromptRequest { memory: Some(brief), ..PromptRequest::plain(dir.path().into(), "list the issues", model()) };
+    let mut request = PromptRequest::plain(dir.path().into(), "list the issues", model());
+    request.host.memory = Some(brief);
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     agent.asked().first().cloned().expect("asked")

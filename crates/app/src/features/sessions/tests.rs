@@ -2,14 +2,13 @@ use std::path::Path;
 
 use agent_engine::sessions::{Entry, FileSessions, Sessions};
 use domain::trace::Record;
-use domain::{EngineEvent, ModelOption, PromptRequest, SessionId};
+use domain::{EngineEvent, SessionId};
 
 use super::*;
 
 fn kept(store: &FileSessions, dir: &Path, id: &SessionId, entries: Vec<Entry>) {
-    let request = PromptRequest::plain(dir.into(), "", ModelOption::new("", ""));
     for entry in entries {
-        store.record(&request, id, &entry).expect("record");
+        store.record(dir, id, &entry).expect("record");
     }
 }
 

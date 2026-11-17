@@ -15,7 +15,7 @@ fn id(name: &str) -> SessionId {
 
 fn request(cwd: &Path, home: &Path) -> PromptRequest {
     let mut request = PromptRequest::plain(cwd.into(), "hi", ModelOption::new("m", "M"));
-    request.extensions = Some(domain::Extensions { home: Some(home.into()), ..Default::default() });
+    request.host.extensions = Some(domain::Extensions { home: Some(home.into()), ..Default::default() });
     request
 }
 
@@ -94,7 +94,7 @@ fn the_cache_loads_again_only_when_the_sources_changed() {
 fn the_fingerprint_follows_what_the_brief_reads_and_nothing_else() {
     let (repo, home) = (tempfile::tempdir().expect("repo"), tempfile::tempdir().expect("home"));
     let request = request(repo.path(), home.path());
-    let print = || sources::fingerprint(&request).expect("watched");
+    let print = || sources::fingerprint(request.folder()).expect("watched");
     std::fs::write(repo.path().join(brand::INSTRUCTIONS), "Use tabs.").expect("instructions");
     std::fs::write(repo.path().join("main.rs"), "fn main() {}").expect("code");
     let before = print();

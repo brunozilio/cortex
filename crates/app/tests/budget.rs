@@ -42,7 +42,7 @@ fn each_run_carries_the_budget_and_what_the_session_has_spent() {
     session.set_budget(None);
     session.send("four").expect("run").text().expect("text");
 
-    let budgets: Vec<Option<Budget>> = engine.requests().into_iter().map(|request| request.budget).collect();
+    let budgets: Vec<Option<Budget>> = engine.requests().into_iter().map(|request| request.policy.budget).collect();
     assert_eq!(
         budgets,
         [None, Some(Budget { limit_usd: 5.0, spent_usd: 0.75 }), Some(Budget { limit_usd: 5.0, spent_usd: 1.5 }), None]

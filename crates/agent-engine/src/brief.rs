@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::trust::Gate;
 use crate::{prompt, tools};
-use domain::PromptRequest;
+use domain::Folder;
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Brief {
@@ -20,26 +20,26 @@ pub struct Brief {
     pub trust: domain::trust::Trust,
 }
 impl Brief {
-    pub fn load(request: &PromptRequest) -> Result<Self, String> {
-        let gate = Gate::of(request);
+    pub fn load(folder: Folder<'_>) -> Result<Self, String> {
+        let gate = Gate::of(folder);
         let home = gate.home();
-        let plugins = crate::plugins::found(request, home);
+        let plugins = crate::plugins::found(folder, home);
         let settings = prompt::settings::load(&gate, &plugins)?;
-        let mut skills = tools::skill::discover(request, home);
+        let mut skills = tools::skill::discover(folder, home);
         skills.retain(|skill| domain::features::skill_flag(&skill.name).is_none_or(|flag| settings.features.on(flag)));
         let found = crate::hooks::Briefed {
             skills,
-            agents: tools::subagent::discover(request, home),
-            rules: prompt::rules::discover(&request.cwd, home),
-            instructions: prompt::instructions(&request.cwd, home),
+            agents: tools::subagent::discover(folder, home),
+            rules: prompt::rules::discover(folder.cwd, home),
+            instructions: prompt::instructions(folder.cwd, home),
         };
-        let edited = settings.hooks.edit_brief(found, &hook_workspace(request, home, &settings))?;
+        let edited = settings.hooks.edit_brief(found, &hook_workspace(folder.cwd, home, &settings))?;
         Ok(Self {
             skills: edited.skills,
             agents: edited.agents,
             settings,
             rules: edited.rules,
-            git: prompt::snapshot(&request.cwd),
+            git: prompt::snapshot(folder.cwd),
             instructions: edited.instructions,
             plugins,
             home: home.map(PathBuf::from),
@@ -64,19 +64,19 @@ impl Brief {
 }
 
 fn hook_workspace(
-    request: &PromptRequest,
+    cwd: &std::path::Path,
     home: Option<&std::path::Path>,
     settings: &prompt::settings::Settings,
 ) -> tools::Workspace {
-    let mut workspace = tools::Workspace::new(&request.cwd);
+    let mut workspace = tools::Workspace::new(cwd);
     workspace.home = home.map(PathBuf::from);
     workspace.policy.scripts = settings.scripts;
     workspace
 }
 
-pub fn mcp_sources(request: &PromptRequest) -> Result<crate::mcp::McpSources, String> {
-    let gate = Gate::of(request);
-    let plugins = crate::plugins::found(request, gate.home());
+pub fn mcp_sources(folder: Folder<'_>) -> Result<crate::mcp::McpSources, String> {
+    let gate = Gate::of(folder);
+    let plugins = crate::plugins::found(folder, gate.home());
     let settings = prompt::settings::load(&gate, &plugins)?;
     let sandbox = sandbox_of(&settings);
     Ok(crate::mcp::McpSources {
@@ -93,9 +93,9 @@ fn sandbox_of(settings: &prompt::settings::Settings) -> Option<domain::sandbox::
     settings.features.on(domain::features::SANDBOX).then(|| settings.sandbox.clone())
 }
 
-pub fn permissions(request: &PromptRequest) -> Result<domain::permission_rules::PermissionsInfo, String> {
-    let gate = Gate::of(request);
-    let plugins = crate::plugins::found(request, gate.home());
+pub fn permissions(folder: Folder<'_>) -> Result<domain::permission_rules::PermissionsInfo, String> {
+    let gate = Gate::of(folder);
+    let plugins = crate::plugins::found(folder, gate.home());
     let settings = prompt::settings::load(&gate, &plugins)?;
     Ok(domain::permission_rules::PermissionsInfo {
         rules: settings.permissions.listed(),
@@ -105,16 +105,20 @@ pub fn permissions(request: &PromptRequest) -> Result<domain::permission_rules::
     })
 }
 
-pub fn home(request: &PromptRequest) -> Option<PathBuf> {
-    request.extensions.as_ref().and_then(|extensions| extensions.home.clone())
+pub fn home(folder: Folder<'_>) -> Option<PathBuf> {
+    folder.home().map(PathBuf::from)
 }
 
-pub fn added_dirs(request: &PromptRequest, settings: &[String], home: Option<&std::path::Path>) -> Vec<PathBuf> {
+pub fn added_dirs(
+    session: &domain::SessionConfig,
+    settings: &[String],
+    home: Option<&std::path::Path>,
+) -> Vec<PathBuf> {
     let from_settings = settings.iter().filter_map(|dir| match dir.strip_prefix("~/") {
         Some(rest) => home.map(|home| home.join(rest)),
-        None => Some(request.cwd.join(dir)),
+        None => Some(session.cwd.join(dir)),
     });
-    request.add_dirs.iter().map(|dir| request.cwd.join(dir)).chain(from_settings).collect()
+    session.add_dirs.iter().map(|dir| session.cwd.join(dir)).chain(from_settings).collect()
 }
 
 #[cfg(test)]
@@ -126,9 +130,9 @@ mod tests {
     #[test]
     fn added_folders_come_from_the_session_and_settings() {
         let mut request = PromptRequest::plain("/work/rocket".into(), "hi", ModelOption::new("m", "M"));
-        request.add_dirs = vec!["/shared".into()];
+        request.session.add_dirs = vec!["/shared".into()];
         let settings = ["~/notes".to_owned(), "../lib".to_owned(), "/opt/x".to_owned()];
-        let dirs = super::added_dirs(&request, &settings, Some(Path::new("/home/ana")));
+        let dirs = super::added_dirs(&request.session, &settings, Some(Path::new("/home/ana")));
         let expected: Vec<PathBuf> =
             ["/shared", "/home/ana/notes", "/work/rocket/../lib", "/opt/x"].iter().map(PathBuf::from).collect();
         assert_eq!(dirs, expected);
@@ -137,9 +141,9 @@ mod tests {
     #[test]
     fn a_run_reads_only_the_home_its_backend_gave_it() {
         let mut request = PromptRequest::plain("/work/rocket".into(), "hi", ModelOption::new("m", "M"));
-        assert_eq!(super::home(&request), None, "never the machine's own home");
-        request.extensions = Some(domain::Extensions { home: Some("/users/ana".into()), ..Default::default() });
-        assert_eq!(super::home(&request), Some(PathBuf::from("/users/ana")));
+        assert_eq!(super::home(request.folder()), None, "never the machine's own home");
+        request.host.extensions = Some(domain::Extensions { home: Some("/users/ana".into()), ..Default::default() });
+        assert_eq!(super::home(request.folder()), Some(PathBuf::from("/users/ana")));
     }
 
     #[test]
@@ -154,16 +158,16 @@ mod tests {
         )
         .expect("write");
         let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
-        request.extensions = Some(domain::Extensions {
+        request.host.extensions = Some(domain::Extensions {
             home: Some(home.path().into()),
             trust: domain::trust::Trust::Trusted,
             ..Default::default()
         });
-        let info = super::permissions(&request).expect("permissions");
+        let info = super::permissions(request.folder()).expect("permissions");
         assert_eq!(info.rules, [(domain::permission_rules::RuleKind::Allow, "Bash(ls:*)".to_owned())]);
         assert_eq!(info.added_dirs, ["../lib"]);
         let hook = domain::permission_rules::HookInfo {
-            event: "PreToolUse".into(),
+            event: crate::hooks::HookEvent::PreToolUse,
             matcher: "Bash".into(),
             runs: "./check.sh".into(),
         };
@@ -175,9 +179,9 @@ mod tests {
         let home = tempfile::tempdir().expect("home");
         let repo = tempfile::tempdir().expect("repo");
         let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
-        request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+        request.host.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
         let offered = |request: &PromptRequest| {
-            super::Brief::load(request).expect("brief").skills.iter().any(|skill| skill.name == "follow-pr")
+            super::Brief::load(request.folder()).expect("brief").skills.iter().any(|skill| skill.name == "follow-pr")
         };
         assert!(offered(&request));
 
@@ -211,9 +215,9 @@ export default (input) => {
         )
         .expect("hook");
         let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
-        request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+        request.host.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
 
-        let skills = super::Brief::load(&request).expect("brief").skills;
+        let skills = super::Brief::load(request.folder()).expect("brief").skills;
 
         let named = |name: &str| skills.iter().find(|skill| skill.name == name);
         assert!(named("follow-pr").is_none(), "removed");
@@ -254,9 +258,9 @@ export default (input) => ({
         )
         .expect("hook");
         let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
-        request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+        request.host.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
 
-        let brief = super::Brief::load(&request).expect("brief");
+        let brief = super::Brief::load(request.folder()).expect("brief");
 
         let agents: Vec<(&str, &str)> =
             brief.agents.iter().map(|agent| (agent.name.as_str(), agent.description.as_str())).collect();
@@ -284,9 +288,9 @@ export default () => ({ agents: [
         )
         .expect("hook");
         let mut request = PromptRequest::plain(repo.path().into(), "", ModelOption::new("m", "M"));
-        request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+        request.host.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
 
-        let error = super::Brief::load(&request).map(|_| ()).expect_err("twice");
+        let error = super::Brief::load(request.folder()).map(|_| ()).expect_err("twice");
 
         assert_eq!(error, "a Brief hook: the hook listed the agent \"a\" twice");
     }

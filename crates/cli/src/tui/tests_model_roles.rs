@@ -41,11 +41,11 @@ fn a_role_set_by_name_reaches_the_next_run_and_is_remembered() {
     send(&mut app, "/model explore fast");
     assert!(screen(&app).contains("explore: Fast"), "{}", screen(&app));
     send(&mut app, "look around");
-    assert_eq!(engine.requests().last().expect("run").roles.get(ModelRole::Explore), Some(FAST));
+    assert_eq!(engine.requests().last().expect("run").session.roles.get(ModelRole::Explore), Some(FAST));
     until(&mut app, |app| app.sdk.settings().is_ok_and(|saved| saved["roles"]["explore"] == FAST));
     let mut again = started(&engine, data.path());
     send(&mut again, "again");
-    assert_eq!(engine.requests().last().expect("run").roles.get(ModelRole::Explore), Some(FAST));
+    assert_eq!(engine.requests().last().expect("run").session.roles.get(ModelRole::Explore), Some(FAST));
 }
 
 #[test]
@@ -95,11 +95,11 @@ fn fallbacks_set_by_name_reach_the_next_run_and_are_remembered() {
     send(&mut app, "/model fallbacks fast main");
     assert!(screen(&app).contains("Fallbacks: Fast → Main"), "{}", screen(&app));
     send(&mut app, "go");
-    assert_eq!(engine.requests().last().expect("run").fallbacks, [FAST, MAIN]);
+    assert_eq!(engine.requests().last().expect("run").session.fallbacks, [FAST, MAIN]);
     until(&mut app, |app| app.sdk.settings().is_ok_and(|saved| saved["fallbacks"][0] == FAST));
     send(&mut app, "/model fallbacks off");
     send(&mut app, "again");
-    assert!(engine.requests().last().expect("run").fallbacks.is_empty());
+    assert!(engine.requests().last().expect("run").session.fallbacks.is_empty());
     send(&mut app, "/model fallbacks nope");
     assert!(screen(&app).contains("No model named nope"), "{}", screen(&app));
 }

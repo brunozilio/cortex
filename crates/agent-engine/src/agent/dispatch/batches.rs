@@ -6,7 +6,7 @@ use super::native::Handler;
 use crate::agent::Agent;
 use crate::agent::run::ThisRun;
 use crate::agent::subagents::background::Spawn;
-use crate::tools::names;
+use crate::tools::names::ToolName;
 use crate::transcript::{Block, Message};
 
 const SIDE_BY_SIDE: usize = 8;
@@ -89,25 +89,27 @@ impl Agent<'_> {
     }
 
     pub(in crate::agent) fn concurrent(&self, run: &ThisRun, name: &str, input: &Value) -> bool {
-        const SERIAL: [&str; 8] = [
-            names::ASK,
-            names::EXIT_PLAN,
-            names::ENTER_PLAN,
-            names::AGENT,
-            names::SEND_MESSAGE,
-            names::SKILL,
-            names::ENTER_WORKTREE,
-            names::EXIT_WORKTREE,
-        ];
+        let named = ToolName::of(name);
+        let serial = named.is_a_task_tool()
+            || matches!(
+                named,
+                ToolName::AskUserQuestion
+                    | ToolName::ExitPlanMode
+                    | ToolName::EnterPlanMode
+                    | ToolName::Agent
+                    | ToolName::SendMessage
+                    | ToolName::Skill
+                    | ToolName::EnterWorktree
+                    | ToolName::ExitWorktree
+            );
         let Some(tool) = self.tool(run, name) else { return false };
         if self.invalid_input(name, tool, input).is_some() {
             return false;
         }
         let effects = tool.effects(input, self.workspace);
         domain::permission::change_nothing(&effects)
-            && !SERIAL.contains(&name)
+            && !serial
             && !Handler::of(name).starts_background_work()
-            && !name.starts_with(names::TASK_FAMILY)
             && !tool.serial()
             && self.workspace.stays_inside(&effects)
             && self

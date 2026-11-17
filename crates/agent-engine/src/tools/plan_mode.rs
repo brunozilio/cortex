@@ -3,8 +3,8 @@ use serde_json::Value;
 use super::{Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
-pub const EXIT_PLAN_TOOL: &str = "ExitPlanMode";
-pub const ENTER_PLAN_TOOL: &str = "EnterPlanMode";
+pub const EXIT_PLAN_TOOL: &str = super::names::EXIT_PLAN;
+pub const ENTER_PLAN_TOOL: &str = super::names::ENTER_PLAN;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ExitPlanMode;

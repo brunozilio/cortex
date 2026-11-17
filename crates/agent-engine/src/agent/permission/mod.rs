@@ -42,7 +42,7 @@ impl Agent<'_> {
         tool: &dyn Tool,
         subject: &str,
         input: &Value,
-        hook_permission: Option<&str>,
+        hook_permission: Option<RuleKind>,
     ) -> Outcome {
         self.permitted_as(id, tool, subject, None, input, hook_permission)
     }
@@ -54,7 +54,7 @@ impl Agent<'_> {
         subject: &str,
         shown: Option<&str>,
         input: &Value,
-        hook_permission: Option<&str>,
+        hook_permission: Option<RuleKind>,
     ) -> Outcome {
         let name = tool.spec().name;
         let effects = tool.effects(input, self.workspace);
@@ -64,7 +64,7 @@ impl Agent<'_> {
         self.decided(&asking, hook_permission)
     }
 
-    fn decided(&self, asking: &Asking<'_>, hook_permission: Option<&str>) -> Outcome {
+    fn decided(&self, asking: &Asking<'_>, hook_permission: Option<RuleKind>) -> Outcome {
         let original = asking.judgement.verdict.clone();
         if original.asked_every_time() {
             return self.carried_out(asking, original);
@@ -72,7 +72,7 @@ impl Agent<'_> {
         let rule_asks = original.asked_by_a_rule();
         let verdict = after_the_tool_hook(original, hook_permission, rule_asks, asking.judgement);
         let pre_approved = self.pre_approved(asking);
-        if pre_approved && !rule_asks && !verdict.denies() && hook_permission != Some("ask") {
+        if pre_approved && !rule_asks && !verdict.denies() && hook_permission != Some(RuleKind::Ask) {
             return self.went_ahead(asking.id, asking.tool, asking.called.input);
         }
         match self.after_the_permission_hook(asking, verdict, rule_asks) {
@@ -95,7 +95,7 @@ impl Agent<'_> {
             .workspace
             .hooks
             .run_with_model(
-                "PermissionRequest",
+                crate::hooks::HookEvent::PermissionRequest,
                 name,
                 json!({"tool_name":name,"tool_input":input,"tool_use_id":asking.id}),
                 self.workspace,
@@ -112,8 +112,8 @@ impl Agent<'_> {
                 "Permission hook updated input. Reissue the tool call with these arguments so path rules are checked: {updated}"
             )));
         }
-        Ok(match hook.permission.as_deref() {
-            Some("allow") if !rule_asks => Verdict::Allow,
+        Ok(match hook.permission {
+            Some(RuleKind::Allow) if !rule_asks => Verdict::Allow,
             _ => verdict,
         })
     }
@@ -173,18 +173,18 @@ impl Agent<'_> {
 
 fn after_the_tool_hook(
     original: Verdict,
-    hook_permission: Option<&str>,
+    hook_permission: Option<RuleKind>,
     rule_asks: bool,
     judgement: &Judgement,
 ) -> Verdict {
     match (original, hook_permission) {
         (Verdict::Deny(reason), _) => Verdict::Deny(reason),
-        (Verdict::Allow, Some("ask")) => judgement.asking(Reason::Hook),
-        (asking, Some("ask")) => asking,
-        (_, Some("deny")) => Verdict::Deny("Hook denied the tool call".into()),
-        (verdict, Some("allow")) if rule_asks => verdict,
-        (_, Some("allow")) => Verdict::Allow,
-        (verdict, _) => verdict,
+        (Verdict::Allow, Some(RuleKind::Ask)) => judgement.asking(Reason::Hook),
+        (asking, Some(RuleKind::Ask)) => asking,
+        (_, Some(RuleKind::Deny)) => Verdict::Deny("Hook denied the tool call".into()),
+        (verdict, Some(RuleKind::Allow)) if rule_asks => verdict,
+        (_, Some(RuleKind::Allow)) => Verdict::Allow,
+        (verdict, None) => verdict,
     }
 }
 
@@ -209,14 +209,14 @@ mod tests {
         let denied = || Verdict::Deny("no".into());
         let asked = || judgement.asking(Reason::Mode);
         let by_rule = || judgement.asking(Reason::Rule("Bash(make)".into()));
-        for hook in [None, Some("allow"), Some("ask"), Some("deny")] {
+        for hook in [None, Some(RuleKind::Allow), Some(RuleKind::Ask), Some(RuleKind::Deny)] {
             assert_eq!(after(denied(), hook, false), denied(), "{hook:?}");
         }
-        assert_eq!(after(asked(), Some("allow"), false), Verdict::Allow);
-        assert_eq!(after(by_rule(), Some("allow"), true), by_rule(), "the rule still asks");
-        assert_eq!(after(Verdict::Allow, Some("ask"), false), judgement.asking(Reason::Hook));
-        assert!(after(Verdict::Allow, Some("deny"), false).denies());
-        assert_eq!(after(Verdict::Allow, Some("unknown"), false), Verdict::Allow);
+        assert_eq!(after(asked(), Some(RuleKind::Allow), false), Verdict::Allow);
+        assert_eq!(after(by_rule(), Some(RuleKind::Allow), true), by_rule(), "the rule still asks");
+        assert_eq!(after(Verdict::Allow, Some(RuleKind::Ask), false), judgement.asking(Reason::Hook));
+        assert!(after(Verdict::Allow, Some(RuleKind::Deny), false).denies());
+        assert_eq!(after(Verdict::Allow, None, false), Verdict::Allow);
         assert_eq!(after(by_rule(), None, true), by_rule());
     }
 }

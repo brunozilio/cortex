@@ -1,15 +1,15 @@
 use std::path::PathBuf;
 
-use domain::{ModelOption, PromptRequest, SessionId};
+use domain::SessionId;
 
 use super::*;
 use crate::sessions::{Entry, Sessions};
 use crate::transcript::{Block, Message, Role};
 
-fn staged() -> (tempfile::TempDir, PathBuf, PromptRequest, SessionId) {
+fn staged() -> (tempfile::TempDir, PathBuf, PathBuf, SessionId) {
     let dir = tempfile::tempdir().expect("dir");
     let native = dir.path().join("native");
-    let request = PromptRequest::plain(dir.path().into(), "", ModelOption::new("m", "M"));
+    let request = dir.path().to_path_buf();
     (dir, native, request, SessionId("s1".into()))
 }
 
@@ -21,7 +21,7 @@ fn turn(history: &mut Vec<Message>, at: usize) {
     history.push(Message { role: Role::User, blocks: vec![result] });
 }
 
-fn conversation_file(native: &std::path::Path, request: &PromptRequest, id: &SessionId) -> PathBuf {
+fn conversation_file(native: &std::path::Path, request: &std::path::Path, id: &SessionId) -> PathBuf {
     native.join(format!("{}.jsonl", scoped_id(request, id).0))
 }
 

@@ -4,7 +4,7 @@ mod signals;
 use std::collections::HashMap;
 
 use super::route::{Item, Spawn};
-use super::{Kind, Lane, ModelCall, Node, Step, Wait};
+use super::{Kind, Lane, Mark, ModelCall, Node, Step, Title, Wait};
 use crate::billing::ModelUsage;
 use crate::{AgentAsk, AskKind, EngineEvent};
 
@@ -73,7 +73,7 @@ impl Builder<'_> {
             Item::Event(event) => self.event(at, event),
             Item::Called(call) => self.called(call),
             Item::Opened(info) => self.opened(info),
-            Item::Partial => self.note(at, "partial", PARTIAL.into()),
+            Item::Partial => self.note(at, Title::Partial, PARTIAL.into()),
         }
     }
 
@@ -110,20 +110,20 @@ impl Builder<'_> {
             EngineEvent::Completed { duration_ms, cost_usd } => {
                 self.single(node(at, false, Kind::Completed { duration_ms, cost_usd }))
             }
-            EngineEvent::Diagnosed(problem) => self.note(at, "diagnosed", format!("{problem:?}")),
-            EngineEvent::ModeChanged(mode) => self.note(at, "mode", format!("{mode:?}")),
-            EngineEvent::Moved(path) => self.note(at, "moved", path.display().to_string()),
+            EngineEvent::Diagnosed(problem) => self.note(at, Title::Diagnosed, format!("{problem:?}")),
+            EngineEvent::ModeChanged(mode) => self.note(at, Title::Mode, format!("{mode:?}")),
+            EngineEvent::Moved(path) => self.note(at, Title::Moved, path.display().to_string()),
             EngineEvent::Verified(verdict) => self.verified(at, &verdict),
             EngineEvent::Reviewed(findings) => self.reviewed(at, &findings),
             EngineEvent::Answered { ask, decision } => self.answered(at, &ask, &decision),
-            EngineEvent::Repeated { tool } => self.mark(at, &tool, "repeated".into()),
-            EngineEvent::Refused { tool, reason } => self.mark(at, &tool, format!("refused: {reason}")),
-            EngineEvent::Edited(edited) => self.mark(at, "", format!("edited {}", edited.path.display())),
+            EngineEvent::Repeated { tool } => self.mark(at, &tool, Mark::Repeated),
+            EngineEvent::Refused { tool, reason } => self.mark(at, &tool, Mark::Refused(reason)),
+            EngineEvent::Edited(edited) => self.mark(at, "", Mark::Edited(edited.path.display().to_string())),
             EngineEvent::Notified(notices) => {
                 let text = notices.iter().map(|n| format!("{}: {}", n.source, n.text)).collect::<Vec<_>>().join("\n");
-                self.note(at, "notified", text)
+                self.note(at, Title::Notified, text)
             }
-            EngineEvent::Notice(text) => self.note(at, "notice", text),
+            EngineEvent::Notice(text) => self.note(at, Title::Notice, text),
             _ => {}
         }
     }
@@ -151,8 +151,8 @@ impl Builder<'_> {
         self.group.push(node(at, false, tool));
     }
 
-    fn note(&mut self, at: u64, title: &str, text: String) {
-        self.single(node(at, false, Kind::Note { title: title.into(), text }));
+    fn note(&mut self, at: u64, title: Title, text: String) {
+        self.single(node(at, false, Kind::Note { title, text }));
     }
 
     fn running(&self) -> bool {

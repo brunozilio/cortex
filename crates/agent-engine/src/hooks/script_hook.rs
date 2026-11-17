@@ -156,7 +156,7 @@ export default function (input, ctx) {
         let input = json!({"tool_name": "Bash", "tool_input": {"command": "rm -rf /"}});
         let decision = workspace
             .hooks
-            .run_with_model("PreToolUse", "Bash", input, &workspace, Some((&model, &template())))
+            .run_with_model(super::super::HookEvent::PreToolUse, "Bash", input, &workspace, Some((&model, &template())))
             .expect("ran");
         let asked = model.asked()[0].messages[0].text();
         assert!(asked.contains("Policy: ") && asked.contains("never rm") && asked.contains("rm -rf /"), "{asked}");
@@ -194,7 +194,13 @@ export default function (input, ctx) {
         let input = json!({"tool_name": "Bash", "tool_input": {"command": "ls"}});
         let model = ScriptedModel::new([]);
         for model in [None, Some((&model as &dyn ModelApi, &template()))] {
-            let decision = workspace.hooks.run_with_model("PreToolUse", "Bash", input.clone(), &workspace, model);
+            let decision = workspace.hooks.run_with_model(
+                super::super::HookEvent::PreToolUse,
+                "Bash",
+                input.clone(),
+                &workspace,
+                model,
+            );
             assert_eq!(decision.expect("ran").blocked, None, "a failing hook does not block");
             assert!(!workspace.stop.load(std::sync::atomic::Ordering::Relaxed), "the run was not cancelled");
         }

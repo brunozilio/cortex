@@ -5,6 +5,7 @@ use super::{Call, Effect, Exec, Guard, Judgement, Place, PolicyContext, Reason, 
 use crate::PermissionMode;
 use crate::command_policy::{CommandClass, GitFacts, classify_command, paths_read_anywhere, sign_in_refused};
 use crate::permission_rules::RuleKind;
+use crate::tool_name::ToolName;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PolicyEngine;
@@ -109,7 +110,11 @@ fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Classes {
 }
 
 fn read_by_commands(call: &Call<'_>, read_outside: &[Place]) -> Vec<Effect> {
-    if call.tool == "Bash" { read_outside.iter().cloned().map(Effect::ReadPath).collect() } else { Vec::new() }
+    if ToolName::of(call.tool) == ToolName::Bash {
+        read_outside.iter().cloned().map(Effect::ReadPath).collect()
+    } else {
+        Vec::new()
+    }
 }
 
 fn stricter(first: Ruling, then: Ruling) -> Ruling {

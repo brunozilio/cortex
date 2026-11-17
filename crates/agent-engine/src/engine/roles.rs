@@ -13,10 +13,10 @@ pub fn merged(asked: &ModelRoles, settings: &Settings) -> ModelRoles {
     roles
 }
 
-pub fn fallbacks(request: &domain::PromptRequest, settings: &[String]) -> Vec<String> {
-    match (&request.fallback_model, request.fallbacks.is_empty()) {
+pub fn fallbacks(session: &domain::SessionConfig, settings: &[String]) -> Vec<String> {
+    match (&session.fallback_model, session.fallbacks.is_empty()) {
         (Some(model), _) => vec![model.clone()],
-        (None, false) => request.fallbacks.clone(),
+        (None, false) => session.fallbacks.clone(),
         (None, true) => settings.to_vec(),
     }
 }

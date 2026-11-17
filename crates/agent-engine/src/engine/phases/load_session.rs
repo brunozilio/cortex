@@ -16,13 +16,13 @@ pub(in crate::engine) struct LoadedSession {
 
 impl Job {
     pub(in crate::engine) fn load_session(&mut self) -> Result<LoadedSession, Stop> {
-        let command = self.request.command;
-        if command.is_some_and(|c| c != SessionCommand::Title) && self.request.resume.is_none() {
+        let command = self.request.session.command;
+        if command.is_some_and(|c| c != SessionCommand::Title) && self.request.session.resume.is_none() {
             return Err(Stop::failed("There is no conversation to work on yet."));
         }
         self.hold_the_answered_session()?;
         let stored = self.stored_or_new()?;
-        let forked = self.request.fork && command.is_none();
+        let forked = self.request.session.fork && command.is_none();
         let session = if forked { LoadedSession { id: new_id(), ..stored } } else { stored };
         match command {
             Some(chore) if chore.is_chore() => Err(self.chore(chore, &session.history)),
@@ -36,24 +36,30 @@ impl Job {
     }
 
     fn hold_the_answered_session(&mut self) -> Result<(), Stop> {
-        let answering = self.request.resume.as_ref().filter(|_| !self.request.command.is_some_and(|c| c.is_chore()));
-        let held = answering.map(|id| self.sessions.hold(&self.request, id)).transpose().map_err(Stop::failed)?;
+        let answering = self
+            .request
+            .session
+            .resume
+            .as_ref()
+            .filter(|_| !self.request.session.command.is_some_and(|c| c.is_chore()));
+        let held =
+            answering.map(|id| self.sessions.hold(&self.request.session.cwd, id)).transpose().map_err(Stop::failed)?;
         self.hold(held);
         Ok(())
     }
 
     fn stored_or_new(&self) -> Result<LoadedSession, Stop> {
-        let Some(id) = &self.request.resume else {
+        let Some(id) = &self.request.session.resume else {
             return Ok(LoadedSession { id: new_id(), history: Vec::new() });
         };
-        let history = match self.sessions.load_for_checked(&self.request, id) {
+        let history = match self.sessions.load_for_checked(&self.request.session.cwd, id) {
             Ok(Some(history)) => {
                 let mut history = crate::sessions::repaired(history);
                 crate::upkeep::forget_lost_transcripts(&mut history);
                 history
             }
             Err(error) => return Err(Stop::failed(format!("Could not restore the conversation: {error}"))),
-            Ok(None) if self.request.command.is_some_and(SessionCommand::is_chore) => Vec::new(),
+            Ok(None) if self.request.session.command.is_some_and(SessionCommand::is_chore) => Vec::new(),
             Ok(None) => {
                 return Err(Stop::Diagnosed {
                     problem: EngineProblem::SessionNotFound,
@@ -70,9 +76,10 @@ impl Job {
             Err(error) => return Stop::Model(error),
         };
         let ledger = Arc::new(Ledger::default());
-        let api = Metered { calls: None, budget: None, ..self.metered(api, &ledger, self.request.model.clone()) };
+        let api =
+            Metered { calls: None, budget: None, ..self.metered(api, &ledger, self.request.session.model.clone()) };
         let template = TurnRequest {
-            model: self.request.model.id.clone(),
+            model: self.request.session.model.id.clone(),
             system: crate::prompt::text("chores"),
             messages: Vec::new(),
             tools: Vec::new(),
@@ -80,7 +87,7 @@ impl Job {
             max_tokens: MAX_OUTPUT,
         };
         let stop = self.control.stop_flag();
-        match crate::chores::answer(command, &api, &template, &self.request.prompt, history, stop) {
+        match crate::chores::answer(command, &api, &template, &self.request.prompt.text, history, stop) {
             Ok(Some(answer)) => {
                 self.gate.emit(EngineEvent::Chore(answer));
             }

@@ -4,7 +4,7 @@ use crate::api::features::memory::MemoryListing;
 use agent_engine::sessions::{FileSessions, records};
 use domain::memory::seed::{Candidate, candidates};
 use domain::trace::Record;
-use domain::{Author, MemoryEdit, MemoryKind, ModelOption, PromptRequest, Provenance, SessionId};
+use domain::{Author, MemoryEdit, MemoryKind, Provenance, SessionId};
 
 use super::{Memories, now, team};
 use crate::features::context::Context;
@@ -46,10 +46,9 @@ impl Memories {
 }
 
 pub fn prompts(store: &FileSessions, project: &Path, sessions: &[SessionId]) -> Vec<Vec<String>> {
-    let request = PromptRequest::plain(project.into(), "", ModelOption::new("", ""));
     sessions
         .iter()
-        .filter_map(|id| store.entries(&request, id).ok())
+        .filter_map(|id| store.entries(project, id).ok())
         .map(|entries| {
             records(entries)
                 .into_iter()
@@ -73,7 +72,7 @@ mod tests {
     fn each_session_gives_the_prompts_typed_in_it() {
         let dir = tempfile::tempdir().expect("dir");
         let store = FileSessions::new(dir.path().join("sessions"));
-        let request = PromptRequest::plain(dir.path().into(), "", ModelOption::new("", ""));
+        let request = dir.path().to_path_buf();
         let (one, two) = (SessionId("one".into()), SessionId("two".into()));
         for (session, prompt) in [(&one, "Always run cargo nextest"), (&two, "always run cargo nextest please")] {
             store.record(&request, session, &Entry::Prompted { at_ms: 1, prompt: prompt.into() }).expect("record");

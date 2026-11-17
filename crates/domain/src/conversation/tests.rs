@@ -114,12 +114,14 @@ fn a_messaged_sub_agent_runs_again_on_its_own_card() {
 #[test]
 fn background_commands_are_counted_until_stopped_or_finished() {
     let mut transcript = Transcript::default();
+    let started = |id: &str| EngineEvent::BackgroundStarted { id: id.into() };
     let result = |output: &str| EngineEvent::ToolResult { id: "t".into(), output: output.into(), failed: false };
-    transcript.apply(&result("Started in the background as bash_1. Read its output with BashOutput"));
-    transcript.apply(&result("Started in the background as bash_2. Read its output with BashOutput"));
-    assert_eq!(transcript.background, ["bash_1", "bash_2"]);
-    transcript.apply(&result("Stopped bash_1 (npm run dev)."));
-    transcript.apply(&result("[bash_2: finished (exit code 0)]\nbuilt"));
+    transcript.apply(&started("bash_1"));
+    transcript.apply(&started("bash_2"));
+    transcript.apply(&result("Started in the background as bash_3."));
+    assert_eq!(transcript.background, ["bash_1", "bash_2"], "a tool's output text starts nothing");
+    transcript.apply(&EngineEvent::BackgroundEnded { id: "bash_1".into() });
+    transcript.apply(&EngineEvent::BackgroundEnded { id: "bash_2".into() });
     assert!(transcript.background.is_empty());
 }
 

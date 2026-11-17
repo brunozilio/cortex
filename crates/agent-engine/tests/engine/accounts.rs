@@ -26,7 +26,7 @@ fn a_run_tells_when_another_account_takes_over() {
     let engine = NativeEngine::new(Arc::new(TwoAccounts(Arc::new(pooled))), Arc::new(InMemorySessions::default()));
     let dir = tempfile::tempdir().expect("dir");
     let mut request = PromptRequest::plain(dir.path().into(), "go", model());
-    request.permission = PermissionMode::Bypass;
+    request.policy.permission = PermissionMode::Bypass;
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let switched = EngineEvent::AccountSwitched { from: "a@x.io".into(), to: "b@x.io".into() };

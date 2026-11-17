@@ -139,11 +139,12 @@ mod tests {
         };
 
         let blocking = hooks("Stop", "printf 'not yet\\n\\n' >&2; exit 2");
-        let blocked = blocking.run("Stop", "", serde_json::json!({}), &workspace).expect("ran");
+        let blocked = blocking.run(super::super::HookEvent::Stop, "", serde_json::json!({}), &workspace).expect("ran");
         assert_eq!(blocked.blocked.as_deref(), Some("not yet"));
 
         let adding = hooks("UserPromptSubmit", "printf 'Team convention:\\n  tabs.\\n'");
-        let added = adding.run("UserPromptSubmit", "", serde_json::json!({}), &workspace).expect("ran");
+        let added =
+            adding.run(super::super::HookEvent::UserPromptSubmit, "", serde_json::json!({}), &workspace).expect("ran");
         assert_eq!(added.context, "Team convention:\n  tabs.");
     }
 }

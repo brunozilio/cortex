@@ -118,7 +118,7 @@ fn an_sse_server_is_posted_to_where_its_stream_says_and_answers_on_the_stream() 
 #[test]
 fn an_endpoint_on_another_site_is_refused() {
     let http: Arc<dyn Http> = Legacy::new("https://elsewhere.test/steal");
-    let error = McpServer::open(&spec(), &http).expect_err("refused");
+    let error = McpServer::open(&spec(), &http).expect_err("refused").to_string();
     assert!(error.contains("another site"), "{error}");
 }
 
@@ -129,7 +129,7 @@ fn a_request_after_the_stream_ended_fails_instead_of_waiting() {
     let server = McpServer::open(&spec(), &http).expect("connected");
     legacy.drop_the_stream();
     let started = std::time::Instant::now();
-    let error = server.initialize_stopped(&platform::Stop::new()).expect_err("closed");
+    let error = server.initialize_stopped(&platform::Stop::new()).expect_err("closed").to_string();
     assert!(error.contains("closed its stream"), "{error}");
     assert!(started.elapsed() < std::time::Duration::from_secs(60), "{:?}", started.elapsed());
 }
@@ -193,7 +193,8 @@ fn a_request_nobody_answers_gives_up_at_its_deadline() {
     let started = std::time::Instant::now();
     let error = transport
         .request_stopped(&json!({ "jsonrpc": "2.0", "id": 9, "method": "tools/list" }), &never)
-        .expect_err("nobody answered");
+        .expect_err("nobody answered")
+        .to_string();
     assert!(error.contains("legacy did not answer in"), "{error}");
     assert!(started.elapsed() < std::time::Duration::from_secs(30), "{:?}", started.elapsed());
 }
@@ -237,7 +238,7 @@ fn a_cancelled_run_stops_waiting_for_the_endpoint_at_once() {
     let http: Arc<dyn Http> = silent.clone();
     let stop = Arc::new(platform::Stop::new());
     let cancelled_at = cancelled_soon(&stop);
-    let error = McpServer::open_stopped(&spec(), &http, &stop).expect_err("gave up");
+    let error = McpServer::open_stopped(&spec(), &http, &stop).expect_err("gave up").to_string();
     let took = since_cancel(&cancelled_at);
     eprintln!("cancel latency, SSE server naming its endpoint: {took:?}");
     assert!(error.contains("in time"), "{error}");
@@ -261,7 +262,7 @@ fn a_cancelled_run_stops_waiting_for_an_answer_on_the_stream_at_once() {
         .expect_err("cancelled");
     let took = since_cancel(&cancelled_at);
     eprintln!("cancel latency, SSE request waiting for its answer: {took:?}");
-    assert_eq!(error, "cancelled");
+    assert_eq!(error, crate::mcp::McpError::Cancelled);
     assert!(took < std::time::Duration::from_secs(1), "{took:?}");
     assert!(transport.waiting.lock().expect("waiting").is_empty(), "the cancelled request is forgotten");
 }

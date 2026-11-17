@@ -10,7 +10,7 @@ impl Job {
     pub(in crate::engine) fn close(&self, opened: Opened, outcome: Result<Usage, Ending>) -> Stop {
         let Opened { workspace, mut worktree, api, session, history, checkpoint, .. } = opened;
         let ended = serde_json::json!({"session_id":session});
-        let _ = workspace.hooks.run("RunEnd", "", ended, &worktree.cleanup);
+        let _ = workspace.hooks.run(crate::hooks::HookEvent::RunEnd, "", ended, &worktree.cleanup);
         match worktree.guard.finish() {
             Ok(Some(path)) => {
                 self.gate.emit(EngineEvent::Notice(format!("Changes retained in worktree: {}", path.display())));

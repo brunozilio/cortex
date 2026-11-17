@@ -27,9 +27,9 @@ fn a_notice_reaches_the_model_with_the_next_tool_results() {
         Arc::new(InMemorySessions::default()),
     );
     let mut request = PromptRequest::plain(dir.path().into(), "read it", model());
-    request.permission = PermissionMode::Bypass;
-    request.safety_check = false;
-    request.credentials.client = 93_001;
+    request.policy.permission = PermissionMode::Bypass;
+    request.policy.safety_check = false;
+    request.host.credentials.client = 93_001;
     agent_engine::tools::inbox::push(93_001, Notice::new("monitor bash_9", "ERROR: build failed"));
     let events = finish(&start(&engine, &request));
     assert!(events.contains(&EngineEvent::Notified(vec![Notice::new("monitor bash_9", "ERROR: build failed")])));

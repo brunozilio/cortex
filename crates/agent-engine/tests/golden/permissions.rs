@@ -11,7 +11,7 @@ fn writing(stage: &Stage) -> domain::PromptRequest {
         no_findings(),
     ]);
     let mut request = stage.request("Write the file");
-    request.permission = PermissionMode::Ask;
+    request.policy.permission = PermissionMode::Ask;
     request
 }
 

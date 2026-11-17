@@ -21,6 +21,28 @@ impl FailureKind {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunFailure {
+    pub kind: FailureKind,
+    pub message: String,
+}
+
+impl RunFailure {
+    pub fn other(message: impl Into<String>) -> Self {
+        Self { kind: FailureKind::Other, message: message.into() }
+    }
+
+    pub fn events(self) -> [crate::EngineEvent; 2] {
+        [crate::EngineEvent::Failure(self.kind), crate::EngineEvent::Failed(self.message)]
+    }
+}
+
+impl std::fmt::Display for RunFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
 fn reset_at(message: &str) -> Option<i64> {
     let (_, tail) = message.rsplit_once('|')?;
     tail.trim().parse().ok()
@@ -50,6 +72,17 @@ mod tests {
         assert_eq!(FailureKind::classify("API Error: 529 overloaded", Some(529)), FailureKind::Unavailable);
         assert_eq!(FailureKind::classify("Unable to connect to API", None), FailureKind::Unavailable);
         assert_eq!(FailureKind::classify("boom", Some(503)), FailureKind::Unavailable);
+    }
+
+    #[test]
+    fn a_run_failure_leaves_a_run_as_its_kind_then_its_message() {
+        let failure = RunFailure { kind: FailureKind::Unavailable, message: "overloaded".into() };
+        assert_eq!(failure.to_string(), "overloaded");
+        assert_eq!(
+            failure.events(),
+            [crate::EngineEvent::Failure(FailureKind::Unavailable), crate::EngineEvent::Failed("overloaded".into())]
+        );
+        assert_eq!(RunFailure::other("boom").kind, FailureKind::Other);
     }
 
     #[test]

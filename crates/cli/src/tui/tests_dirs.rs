@@ -26,9 +26,9 @@ fn an_added_folder_goes_with_every_prompt_even_after_new() {
     press(&mut app, KeyCode::Enter);
     type_text(&mut app, "look at the shared code");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |_| engine.requests().iter().any(|request| request.command.is_none()));
-    let sent = engine.requests().into_iter().find(|request| request.command.is_none()).expect("the prompt");
-    assert_eq!(sent.add_dirs, [real]);
+    until(&mut app, |_| engine.requests().iter().any(|request| request.session.command.is_none()));
+    let sent = engine.requests().into_iter().find(|request| request.session.command.is_none()).expect("the prompt");
+    assert_eq!(sent.session.add_dirs, [real]);
 }
 
 #[test]
@@ -70,8 +70,8 @@ fn an_at_mention_completes_a_project_file_and_sends_its_text() {
     press(&mut app, KeyCode::Tab);
     assert_eq!(app.prompt.input.text(), "explain @src/main.rs ");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |_| engine.requests().iter().any(|r| r.command.is_none()));
-    let sent = engine.requests().into_iter().find(|r| r.command.is_none()).expect("sent").prompt;
+    until(&mut app, |_| engine.requests().iter().any(|r| r.session.command.is_none()));
+    let sent = engine.requests().into_iter().find(|r| r.session.command.is_none()).expect("sent").prompt.text;
     assert!(sent.contains("<file path=\"src/main.rs\">\nfn main() {}\n</file>"), "{sent}");
 }
 
@@ -98,9 +98,9 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
     assert_eq!(app.session.title.as_deref(), Some("Login page"));
     type_text(&mut app, "go on");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |_| engine.requests().iter().any(|r| r.command.is_none()));
-    let sent = engine.requests().into_iter().find(|r| r.command.is_none()).expect("sent");
-    assert_eq!(sent.resume, Some(SessionId("old".into())));
+    until(&mut app, |_| engine.requests().iter().any(|r| r.session.command.is_none()));
+    let sent = engine.requests().into_iter().find(|r| r.session.command.is_none()).expect("sent");
+    assert_eq!(sent.session.resume, Some(SessionId("old".into())));
 }
 
 #[test]
@@ -168,9 +168,9 @@ fn the_output_style_picked_goes_with_the_next_prompt() {
     press(&mut app, KeyCode::Enter);
     type_text(&mut app, "hi");
     press(&mut app, KeyCode::Enter);
-    until(&mut app, |_| engine.requests().iter().any(|r| r.command.is_none()));
-    let sent = engine.requests().into_iter().find(|r| r.command.is_none()).expect("sent");
-    assert_eq!(sent.output_style.as_deref(), Some("concise"));
+    until(&mut app, |_| engine.requests().iter().any(|r| r.session.command.is_none()));
+    let sent = engine.requests().into_iter().find(|r| r.session.command.is_none()).expect("sent");
+    assert_eq!(sent.session.output_style.as_deref(), Some("concise"));
 }
 
 #[test]

@@ -36,7 +36,7 @@ export default () => "Team: ACME";"#,
     let engine =
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(repo.path().into(), "my password 1234 leaks", model());
-    request.extensions = Some(Extensions { home: Some(home.path().into()), ..Extensions::default() });
+    request.host.extensions = Some(Extensions { home: Some(home.path().into()), ..Extensions::default() });
 
     let events = finish(&start(&engine, &request));
 

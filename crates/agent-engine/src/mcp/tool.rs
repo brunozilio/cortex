@@ -82,7 +82,8 @@ pub(super) fn outcome(result: &Value) -> Outcome {
             format!("{} image(s) returned", images.len())
         });
     }
-    Outcome { content: text.join("\n\n"), is_error: failed, images, shown: None, edited: None }
+    let outcome = if failed { Outcome::error(text.join("\n\n")) } else { Outcome::ok(text.join("\n\n")) };
+    Outcome { images, ..outcome }
 }
 
 #[derive(Clone)]

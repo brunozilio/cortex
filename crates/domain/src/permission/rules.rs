@@ -2,6 +2,7 @@ use std::path::Path;
 
 use super::{Call, Effect, PolicyContext};
 use crate::permission_rules::{PermissionRules, RuleKind, Target, suggest};
+use crate::tool_name::ToolName;
 
 pub type Ruling = Option<(RuleKind, String)>;
 
@@ -40,8 +41,8 @@ pub fn ruling_in(rules: &PermissionRules, call: &Call<'_>, cwd: &str, home: Opti
                 }
             }
             Effect::Exec(exec) => judged.push(Judged {
-                ruling: rule("Bash", &Target::Command(exec.command.text())),
-                restricts_only: call.tool != "Bash",
+                ruling: rule(ToolName::Bash.as_str(), &Target::Command(exec.command.text())),
+                restricts_only: ToolName::of(call.tool) != ToolName::Bash,
             }),
             Effect::Net { host: Some(host) } => {
                 judged.push(own(rule(call.tool, &Target::Other(&format!("domain:{host}")))));
@@ -79,7 +80,9 @@ fn strictest(judged: Vec<Judged>) -> Ruling {
 
 pub fn suggested(call: &Call<'_>, subject: &str, outside: bool) -> Option<String> {
     let from_effect = call.effects.iter().find_map(|effect| match effect {
-        Effect::Exec(exec) if call.tool == "Bash" => Some(suggest("Bash", exec.command.text(), false)),
+        Effect::Exec(exec) if ToolName::of(call.tool) == ToolName::Bash => {
+            Some(suggest(call.tool, exec.command.text(), false))
+        }
         Effect::Net { host: Some(host) } => Some(Some(format!("{}(domain:{host})", call.tool))),
         Effect::Install { server, .. } => Some(Some(install_rule(call.tool, server))),
         _ => None,

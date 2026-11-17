@@ -16,7 +16,7 @@ fn plan_mode_refuses_an_edit_then_an_approved_plan_changes_mode_and_the_edit_run
         no_findings(),
     ]);
     let mut request = stage.request("Plan, then write the file");
-    request.permission = PermissionMode::Plan;
+    request.policy.permission = PermissionMode::Plan;
 
     let mut run = stage.start(&request);
     let ask = run.asked();
@@ -129,7 +129,7 @@ fn a_plan_sent_back_with_a_note_keeps_plan_mode_and_tells_the_model_why() {
     let stage = Stage::new();
     stage.script([call("p1", "ExitPlanMode", json!({"plan": "1. Delete everything"})), says("I will rethink.")]);
     let mut request = stage.request("Plan the cleanup");
-    request.permission = PermissionMode::Plan;
+    request.policy.permission = PermissionMode::Plan;
 
     let mut run = stage.start(&request);
     let ask = run.asked();

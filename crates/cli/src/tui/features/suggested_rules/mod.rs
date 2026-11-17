@@ -31,7 +31,7 @@ fn run(app: &mut App, argument: Option<String>) {
                     Ok(()) => Msg::Notice(format!(
                         "Kept {} as a {} rule in {}/settings.local.json.",
                         suggestion.rule,
-                        named(suggestion.kind),
+                        suggestion.kind.word(),
                         brand::DIR
                     )),
                     Err(error) => Msg::Error(error.to_string()),
@@ -40,14 +40,6 @@ fn run(app: &mut App, argument: Option<String>) {
             },
         }
     });
-}
-
-fn named(kind: RuleKind) -> &'static str {
-    match kind {
-        RuleKind::Allow => "allow",
-        RuleKind::Ask => "ask",
-        RuleKind::Deny => "deny",
-    }
 }
 
 fn listed(found: &[Suggestion]) -> String {
@@ -59,7 +51,7 @@ fn listed(found: &[Suggestion]) -> String {
             format!(
                 "  {}. {} {}  (you {verb} it {} times)",
                 at + 1,
-                named(suggestion.kind),
+                suggestion.kind.word(),
                 suggestion.rule,
                 suggestion.times
             )

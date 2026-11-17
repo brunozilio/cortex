@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+use super::names::ToolName;
 use super::{Declared, Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
@@ -118,10 +119,10 @@ impl Capability {
 
     pub fn tool(self) -> &'static str {
         match self {
-            Self::ReadFile => super::names::READ,
-            Self::WriteFile => super::names::WRITE,
-            Self::Exec => super::names::BASH,
-            Self::Fetch => super::names::WEB_FETCH,
+            Self::ReadFile => ToolName::Read.as_str(),
+            Self::WriteFile => ToolName::Write.as_str(),
+            Self::Exec => ToolName::Bash.as_str(),
+            Self::Fetch => ToolName::WebFetch.as_str(),
         }
     }
 

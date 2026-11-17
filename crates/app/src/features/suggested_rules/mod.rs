@@ -3,10 +3,10 @@ use std::path::Path;
 use crate::api::features::suggested_rules::{SuggestedRulesReply, SuggestedRulesRequest};
 use agent_engine::prompt::permissions;
 use agent_engine::sessions::{FileSessions, records};
+use domain::SessionId;
 use domain::permission_rules::RuleKind;
 use domain::suggested_rules::{Suggestion, suggestions};
 use domain::trace::Record;
-use domain::{ModelOption, PromptRequest, SessionId};
 
 use crate::features::context::Context;
 
@@ -43,10 +43,9 @@ fn keep_instruction(cwd: &Path, line: &str) -> Result<std::path::PathBuf, String
 }
 
 fn suggested(store: &FileSessions, cwd: &Path, sessions: &[SessionId], kept: &[(RuleKind, String)]) -> Vec<Suggestion> {
-    let request = PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""));
     let events: Vec<_> = sessions
         .iter()
-        .filter_map(|id| store.entries(&request, id).ok())
+        .filter_map(|id| store.entries(cwd, id).ok())
         .flat_map(records)
         .filter_map(|record| match record {
             Record::Event { event, .. } => Some(event),
@@ -63,7 +62,7 @@ mod tests {
 
     use super::*;
 
-    fn answered(store: &FileSessions, request: &PromptRequest, session: &SessionId, at: u64, rule: &str) {
+    fn answered(store: &FileSessions, request: &std::path::Path, session: &SessionId, at: u64, rule: &str) {
         let id = AskId(format!("ask-{at}"));
         let kind = AskKind::Permission {
             tool: "Bash".into(),
@@ -82,7 +81,7 @@ mod tests {
     fn approvals_across_the_project_s_sessions_become_a_suggestion() {
         let dir = tempfile::tempdir().expect("dir");
         let store = FileSessions::new(dir.path().join("sessions"));
-        let request = PromptRequest::plain(dir.path().into(), "", ModelOption::new("", ""));
+        let request = dir.path().to_path_buf();
         let (one, two) = (SessionId("one".into()), SessionId("two".into()));
         for at in 0..3 {
             answered(&store, &request, &one, at, "Bash(cargo test:*)");

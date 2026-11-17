@@ -28,8 +28,8 @@ impl NativeApis {
 
 impl ApiSource for NativeApis {
     fn api(&self, request: &PromptRequest) -> Result<Arc<dyn ModelApi>, ModelError> {
-        let provider = request.model.provider;
-        let key = request.credentials.model.clone().ok_or_else(|| {
+        let provider = request.session.model.provider;
+        let key = request.host.credentials.model.clone().ok_or_else(|| {
             ModelError::Unauthorized(format!(
                 "{} is not connected: run `{brand_command} login`",
                 agent_engine::providers::name(provider),
@@ -37,13 +37,13 @@ impl ApiSource for NativeApis {
             ))
         })?;
         let client = |key: ProviderKey| -> Arc<dyn ModelApi> {
-            Arc::new(ProviderClient::for_model(request.model.clone(), Arc::clone(&self.http), Arc::new(key)))
+            Arc::new(ProviderClient::for_model(request.session.model.clone(), Arc::clone(&self.http), Arc::new(key)))
         };
-        let pool = &request.credentials.model_pool;
+        let pool = &request.host.credentials.model_pool;
         let main = if pool.is_empty() {
             client(key)
         } else {
-            let named = &request.credentials.model_accounts;
+            let named = &request.host.credentials.model_accounts;
             let accounts = std::iter::once(key)
                 .chain(pool.iter().cloned())
                 .enumerate()
@@ -55,17 +55,17 @@ impl ApiSource for NativeApis {
             main,
             provider,
             Arc::clone(&self.http),
-            request.credentials.other_models.clone(),
+            request.host.credentials.other_models.clone(),
         )))
     }
 
     fn catalog(&self, request: &PromptRequest) -> Vec<ModelOption> {
-        let provider = request.model.provider;
+        let provider = request.session.model.provider;
         let mut catalogs = self.catalogs.locked();
         if let Some(known) = catalogs.get(&provider) {
             return known.clone();
         }
-        let Some(key) = request.credentials.model.clone() else { return Vec::new() };
+        let Some(key) = request.host.credentials.model.clone() else { return Vec::new() };
         let listed =
             ProviderClient::new(provider, Arc::clone(&self.http), Arc::new(key)).models().unwrap_or_else(|error| {
                 tracing::warn!(%error, "could not list the provider's models to pick a small one");
@@ -76,8 +76,8 @@ impl ApiSource for NativeApis {
     }
 
     fn searcher(&self, request: &PromptRequest) -> Option<Arc<dyn agent_engine::model::Searcher>> {
-        let key = request.credentials.model.clone()?;
-        Some(Arc::new(ProviderClient::for_model(request.model.clone(), Arc::clone(&self.http), Arc::new(key))))
+        let key = request.host.credentials.model.clone()?;
+        Some(Arc::new(ProviderClient::for_model(request.session.model.clone(), Arc::clone(&self.http), Arc::new(key))))
     }
 }
 
@@ -148,7 +148,7 @@ mod tests {
         llm_providers::testing::install();
         let model = ModelOption::new("m", "M").served_by(provider);
         let mut request = PromptRequest::plain("/repo".into(), "hi", model);
-        request.credentials.model = key.map(ProviderKey::new);
+        request.host.credentials.model = key.map(ProviderKey::new);
         request
     }
 
@@ -196,7 +196,7 @@ mod tests {
         let http = Arc::new(ScriptedHttp::new((0..3).map(|_| (400, "{}".to_owned()))));
         let apis = NativeApis::new(http.clone());
         let mut run = request(KEYED, Some("sk-one"));
-        run.credentials.other_models = vec![(KEYED_TOO, ProviderKey::new("sk-two"))];
+        run.host.credentials.other_models = vec![(KEYED_TOO, ProviderKey::new("sk-two"))];
         let api = apis.api(&run).expect("api");
         let ask = |model: &str| {
             let turn = TurnRequest {
@@ -248,7 +248,7 @@ mod tests {
         let http = Arc::new(ScriptedHttp::new([(401, "{}".to_owned()), (400, "{}".to_owned())]));
         let apis = NativeApis::new(http.clone());
         let mut run = request(KEYED, Some("sk-one"));
-        run.credentials.model_pool = vec![ProviderKey::new("sk-two")];
+        run.host.credentials.model_pool = vec![ProviderKey::new("sk-two")];
         let api = apis.api(&run).expect("api");
         let turn = TurnRequest {
             model: "model-a".into(),

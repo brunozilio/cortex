@@ -41,8 +41,8 @@ fn skill(root: &Path, text: &str) {
 
 fn found(project: &Path, home: &Path) -> Vec<FoundSkill> {
     let mut request = PromptRequest::plain(project.to_path_buf(), "hi", ModelOption::new("m", "M"));
-    request.extensions = Some(domain::Extensions { trust: domain::trust::Trust::Trusted, ..Default::default() });
-    discover(&request, Some(home))
+    request.host.extensions = Some(domain::Extensions { trust: domain::trust::Trust::Trusted, ..Default::default() });
+    discover(request.folder(), Some(home))
 }
 
 fn asks(rig: &Rig) -> Vec<String> {

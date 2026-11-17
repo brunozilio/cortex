@@ -40,11 +40,11 @@ impl Job {
         }
         system.push_str(&extra);
         let template = TurnRequest {
-            model: self.request.model.id.clone(),
+            model: self.request.session.model.id.clone(),
             system,
             messages: Vec::new(),
             tools: offered,
-            effort: self.request.effort,
+            effort: self.request.session.effort,
             max_tokens: MAX_OUTPUT,
         };
         Ok(Framed { workspace, toolbox, main, worktree, template, extra })
@@ -75,7 +75,7 @@ impl Job {
             platform: prompt::platform(),
             date: snapshot.date,
             top_level: snapshot.top_level,
-            model: self.request.model.label.clone(),
+            model: self.request.session.model.label.clone(),
             language_servers: language_servers
                 .map(|lsp| lsp.available().iter().map(prompt::LanguageServer::of).collect())
                 .unwrap_or_default(),
@@ -83,7 +83,10 @@ impl Job {
             instructions: moved_to.map_or_else(|| brief.instructions.clone(), |context| context.instructions.clone()),
             tools: toolbox.tools.iter().map(|tool| tool.spec().name).collect(),
             skills: tools::skill::listing(&brief.skills),
-            output_style: prompt::styles::picked(self.request.output_style.as_deref(), brief.settings.style.clone()),
+            output_style: prompt::styles::picked(
+                self.request.session.output_style.as_deref(),
+                brief.settings.style.clone(),
+            ),
         }
     }
 
@@ -98,10 +101,10 @@ impl Job {
         if let Some(agent) = &main.found {
             extra.push_str(&format!("\n\n# Agent instructions ({})\n{}", agent.name, agent.instructions));
         }
-        if let Some(appended) = self.request.append_system.as_deref().filter(|text| !text.trim().is_empty()) {
+        if let Some(appended) = self.request.session.append_system.as_deref().filter(|text| !text.trim().is_empty()) {
             extra.push_str(&format!("\n\n{}", appended.trim()));
         }
-        if let Some(format) = self.request.memory.as_ref().and_then(domain::MemoryBrief::edits_format) {
+        if let Some(format) = self.request.host.memory.as_ref().and_then(domain::MemoryBrief::edits_format) {
             extra.push_str(&format!("\n\n{format}"));
         }
         if let Some(dir) = &setup.memory_dir {
@@ -112,7 +115,7 @@ impl Job {
             ));
         }
         for skill in &main.config.skills {
-            let Some(tool) = toolbox.tools.iter().find(|tool| tool.spec().name == "Skill") else {
+            let Some(tool) = toolbox.tools.iter().find(|tool| tool.spec().name == crate::tools::names::SKILL) else {
                 return Err(Stop::failed("Configured agent requires the Skill tool"));
             };
             let loaded = tool.run(&serde_json::json!({"skill":skill}), workspace);

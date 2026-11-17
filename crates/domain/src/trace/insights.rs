@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 pub use self::report::{
     CheckKind, Checks, Day, DayModel, Finding, Insights, ModelStat, Report, SessionRuns, TimeShare, ToolStat, Totals,
 };
-use super::runs::{JUDGE, REVIEW, Run, Span, SpanKind, dollars};
+use super::runs::{JUDGE, REVIEW, Run, Span, SpanKind, dollars, marked};
+use super::{Mark, Title};
 
 pub const DAY_MS: u64 = 86_400_000;
 pub const WINDOW_DAYS: u64 = 30;
@@ -146,7 +147,7 @@ fn time(runs: &[&Run]) -> Vec<TimeShare> {
 
 fn checks(runs: &[&Run]) -> Checks {
     let spans = || runs.iter().flat_map(|run| &run.spans);
-    let flagged = |prefix: &str| spans().flat_map(|span| &span.flags).filter(|flag| flag.starts_with(prefix)).count();
+    let flagged = |title: Title| spans().flat_map(|span| &span.flags).filter(|flag| marked(flag, title)).count();
     let judged = |failed: bool| spans().filter(|span| span.name == JUDGE && span.failed == failed).count();
     Checks {
         verified_passed: judged(false) as u64,
@@ -155,8 +156,8 @@ fn checks(runs: &[&Run]) -> Checks {
             .filter(|span| span.name == REVIEW)
             .map(|span| span.output.lines().count())
             .sum::<usize>() as u64,
-        repeated: flagged("repeated") as u64,
-        refused: flagged("refused") as u64,
+        repeated: flagged(Title::Repeated) as u64,
+        refused: flagged(Title::Refused) as u64,
         asked: spans().filter(|span| span.kind == SpanKind::Wait).count() as u64,
     }
 }
@@ -184,15 +185,15 @@ fn findings(runs: &[&Run]) -> Vec<Finding> {
                     found.push(finding(CheckKind::Review, issue, severity == "high"));
                 }
             }
-            for flag in &span.flags {
-                if flag == "repeated" {
-                    found.push(finding(
+            for mark in span.flags.iter().filter_map(|flag| Mark::of(flag)) {
+                match mark {
+                    Mark::Repeated => found.push(finding(
                         CheckKind::Repeated,
                         &format!("{} was repeated with the same failure", span.name),
                         false,
-                    ));
-                } else if let Some(reason) = flag.strip_prefix("refused: ") {
-                    found.push(finding(CheckKind::Refused, reason, false));
+                    )),
+                    Mark::Refused(reason) => found.push(finding(CheckKind::Refused, &reason, false)),
+                    Mark::Edited(_) => {}
                 }
             }
         }

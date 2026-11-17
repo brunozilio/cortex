@@ -11,7 +11,8 @@ pub fn read(settings: &Value, owners: bool, rules: &mut PermissionRules, dirs: &
             dirs.push(dir.to_owned());
         }
     }
-    for (key, kind) in [("allow", RuleKind::Allow), ("ask", RuleKind::Ask), ("deny", RuleKind::Deny)] {
+    for kind in RuleKind::ALL {
+        let key = kind.word();
         if kind == RuleKind::Allow && !owners {
             continue;
         }
@@ -42,11 +43,7 @@ pub fn keep_allow(project: &std::path::Path, rule: &str) -> Result<(), String> {
 }
 
 pub fn keep_rule(project: &std::path::Path, kind: RuleKind, rule: &str) -> Result<(), String> {
-    let list = match kind {
-        RuleKind::Allow => "allow",
-        RuleKind::Ask => "ask",
-        RuleKind::Deny => "deny",
-    };
+    let list = kind.word();
     let path = project.join(brand::DIR).join("settings.local.json");
     let kept = Document::hand_edited(&path).try_update(|settings: &mut Value| {
         if settings.is_null() {

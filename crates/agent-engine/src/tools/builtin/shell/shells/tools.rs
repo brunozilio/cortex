@@ -1,3 +1,4 @@
+use domain::events::BackgroundChange;
 use serde_json::Value;
 
 use super::{lock, refresh, stopped};
@@ -37,6 +38,7 @@ impl Tool for BashOutput {
             Some(filter) => unread.text.lines().filter(|line| line.contains(filter)).collect::<Vec<_>>().join("\n"),
             None => unread.text,
         };
+        let finished = exit.is_some();
         let state = match exit {
             Some(exit) => format!("finished ({exit})"),
             None => format!("running for {}s", shell.started.elapsed().as_secs()),
@@ -46,7 +48,8 @@ impl Tool for BashOutput {
         if shell.collected() {
             shells.remove(id);
         }
-        Outcome::ok(format!("[{id}: {state}]\n{dropped}{text}"))
+        let outcome = Outcome::ok(format!("[{id}: {state}]\n{dropped}{text}"));
+        if finished { outcome.in_the_background(BackgroundChange::Ended(id.to_owned())) } else { outcome }
     }
 }
 
@@ -72,11 +75,12 @@ impl Tool for KillShell {
             Ok(id) => id,
             Err(error) => return error,
         };
+        let ended = BackgroundChange::Ended(id.to_owned());
         if let Some(explained) = crate::tools::watch::stop(workspace.credentials.client, id) {
-            return Outcome::ok(format!("Stopped {id} ({explained})."));
+            return Outcome::ok(format!("Stopped {id} ({explained}).")).in_the_background(ended);
         }
         match stopped(workspace.credentials.client, id) {
-            Some(command) => Outcome::ok(format!("Stopped {id} ({command}).")),
+            Some(command) => Outcome::ok(format!("Stopped {id} ({command}).")).in_the_background(ended),
             None => Outcome::error(format!("No background command `{id}`.")),
         }
     }

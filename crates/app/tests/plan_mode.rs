@@ -46,8 +46,8 @@ fn an_approved_plan_leaves_the_session_in_the_mode_chosen_with_the_plans_criteri
     assert_eq!(session.verification(), Some(Criteria::plan("cargo test passes")));
     session.send("more").expect("run").text().expect("text");
     let requests = engine.requests();
-    assert_eq!(requests[1].permission, PermissionMode::AcceptEdits);
-    assert_eq!(requests[1].verification, Some(Criteria::plan("cargo test passes")));
+    assert_eq!(requests[1].policy.permission, PermissionMode::AcceptEdits);
+    assert_eq!(requests[1].policy.verification, Some(Criteria::plan("cargo test passes")));
 }
 
 #[test]

@@ -42,7 +42,7 @@ fn configured_main_agent_applies_initial_prompt_once_and_blocks_unadvertised_too
         .find_map(|event| if let EngineEvent::SessionStarted(id) = event { Some(id.clone()) } else { None })
         .expect("session");
     let mut follow = crate::trusted(dir.path(), "Continue");
-    follow.resume = Some(session);
+    follow.session.resume = Some(session);
     assert!(matches!(finish(&start(&engine, &follow)).last(), Some(EngineEvent::Completed { .. })));
     assert_eq!(second.asked()[0].messages.last().expect("follow-up").text(), "Continue");
 }

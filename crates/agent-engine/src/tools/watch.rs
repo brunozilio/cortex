@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use super::{Outcome, Tool, Workspace, field, inbox};
 use crate::model::ToolSpec;
 
-pub const WATCH_TOOL: &str = "Watch";
+pub const WATCH_TOOL: &str = super::names::WATCH;
 const NAP: Duration = Duration::from_millis(200);
 
 #[derive(Debug)]
@@ -114,7 +114,10 @@ pub fn before(
 ) -> Result<crate::hooks::Decision, String> {
     let payload = json!({ "tool_name": name, "tool_input": input });
     let blocked = |reason: String| format!("Hook blocked {name}: {reason}");
-    let hook = workspace.hooks.run_with_model("PreToolUse", name, payload, workspace, model).map_err(blocked)?;
+    let hook = workspace
+        .hooks
+        .run_with_model(crate::hooks::HookEvent::PreToolUse, name, payload, workspace, model)
+        .map_err(blocked)?;
     match hook.blocked {
         Some(reason) => Err(blocked(reason)),
         None => Ok(hook),
@@ -122,7 +125,7 @@ pub fn before(
 }
 
 pub fn after(name: &str, input: &Value, mut outcome: Outcome, workspace: &Workspace, model: Model<'_>) -> Outcome {
-    let event = if outcome.is_error { "PostToolUseFailure" } else { "PostToolUse" };
+    let event = crate::hooks::HookEvent::after_a_tool(outcome.is_error);
     let payload = json!({ "tool_name": name, "tool_input": input, "tool_response": outcome.content });
     match workspace.hooks.run_with_model(event, name, payload, workspace, model) {
         Ok(hook) => {

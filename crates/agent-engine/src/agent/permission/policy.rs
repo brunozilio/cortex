@@ -7,7 +7,7 @@ use domain::permission_rules::PermissionRules;
 use serde_json::Value;
 
 use crate::agent::Agent;
-use crate::tools::names::{BASH, WEB_FETCH};
+use crate::tools::names::ToolName;
 
 struct Around<'a, 'b> {
     agent: &'a Agent<'b>,
@@ -21,7 +21,7 @@ impl Surroundings for Around<'_, '_> {
     }
 
     fn address_concern(&self, _call: &Call<'_>) -> Option<String> {
-        let url = self.input["url"].as_str().filter(|_| self.tool == WEB_FETCH)?;
+        let url = self.input["url"].as_str().filter(|_| ToolName::of(self.tool) == ToolName::WebFetch)?;
         self.agent.workspace.tracking.heard().concern(url).map(|why| format!("Check this address first: {why}."))
     }
 
@@ -57,7 +57,7 @@ impl Called<'_> {
 impl Agent<'_> {
     pub(super) fn package_concerns(&self, name: &str, input: &Value) -> Option<String> {
         let network = self.workspace.services.network.as_ref().filter(|_| self.workspace.policy.dependency_guard)?;
-        let command = input["command"].as_str().filter(|_| name == BASH)?;
+        let command = input["command"].as_str().filter(|_| ToolName::of(name) == ToolName::Bash)?;
         let found = crate::guard::packages::concerns(&*network.0, command, crate::guard::packages::today());
         (!found.is_empty()).then(|| found.join("; "))
     }

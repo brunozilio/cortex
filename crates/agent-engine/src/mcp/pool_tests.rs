@@ -47,7 +47,7 @@ impl Fixture {
         let config = self.dir.path().join("mcp.json");
         std::fs::write(&config, serde_json::json!({ "mcpServers": entries }).to_string()).expect("config");
         let mut request = PromptRequest::plain(self.dir.path().into(), "hi", ModelOption::new("m", "M"));
-        request.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
+        request.host.extensions = Some(Extensions { mcp_config: Some(config), ..Extensions::default() });
         request
     }
 

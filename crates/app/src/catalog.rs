@@ -59,10 +59,10 @@ pub(crate) struct Listing {
 
 impl Listing {
     pub(crate) fn of(services: &crate::LocalServices, request: &domain::PromptRequest) -> Option<Self> {
-        let chore = request.command.is_some_and(domain::SessionCommand::is_chore);
+        let chore = request.session.command.is_some_and(domain::SessionCommand::is_chore);
         (!chore).then(|| Self {
             catalog: std::sync::Arc::clone(&services.catalog),
-            cwd: request.cwd.clone(),
+            cwd: request.session.cwd.clone(),
             session: Mutex::new(None),
         })
     }

@@ -33,7 +33,7 @@ fn run_to_its_end(
     let (store, asked, held) = (Arc::clone(sessions), request.clone(), session.clone());
     let sink = Arc::new(move |_run: RunId, event: EngineEvent| {
         if event.is_terminal() {
-            let free_at_the_terminal_event = store.hold(&asked, &held).map(drop);
+            let free_at_the_terminal_event = store.hold(&asked.session.cwd, &held).map(drop);
             let _ = send.lock().expect("send").send(Ended { terminal: event, free_at_the_terminal_event });
         }
     });
@@ -56,7 +56,7 @@ fn kept_session(dir: &std::path::Path, later: Vec<Arc<ScriptedModel>>) -> (Nativ
 
 fn resuming(dir: &std::path::Path, session: &SessionId) -> PromptRequest {
     let mut again = PromptRequest::plain(dir.into(), "again", model());
-    again.resume = Some(session.clone());
+    again.session.resume = Some(session.clone());
     again
 }
 
@@ -70,7 +70,7 @@ fn a_session_can_be_resumed_the_moment_its_run_completes() {
         assert!(matches!(ended.terminal, EngineEvent::Completed { .. }), "round {round}: {:?}", ended.terminal);
         assert_eq!(ended.free_at_the_terminal_event, Ok(()), "round {round}");
     }
-    let kept = sessions.load_for(&again, &session).map(|history| history.len());
+    let kept = sessions.load_for(&again.session.cwd, &session).map(|history| history.len());
     assert_eq!(kept, Some(2 + 2 * ROUNDS), "every run saved its turn before it ended");
 }
 

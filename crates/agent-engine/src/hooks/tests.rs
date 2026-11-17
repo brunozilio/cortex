@@ -12,6 +12,7 @@ fn exited(code: i32, stderr: &str) -> CommandOutput {
 
 fn absorb(event: &str, result: CommandOutput) -> (Result<Handled, String>, Decision, Value) {
     let (mut decision, mut input) = (Decision::default(), json!({"tool_input": {"command": "ls"}}));
+    let event = super::HookEvent::named(event).expect("a hook event");
     let handled = absorbed(event, result, &mut decision, &mut input);
     (handled, decision, input)
 }
@@ -58,7 +59,8 @@ fn a_printed_decision_blocks_with_the_first_reason_it_gives() {
 fn a_permission_answer_is_kept_and_a_denial_blocks() {
     let allow = json!({"hookSpecificOutput": {"permissionDecision": "allow"}});
     let (handled, decision, _) = absorb("PreToolUse", printed(allow));
-    assert_eq!((handled, decision.permission.as_deref()), (Ok(Handled::GoOn), Some("allow")));
+    let allowed = Some(domain::permission_rules::PermissionDecision::Allow);
+    assert_eq!((handled, decision.permission), (Ok(Handled::GoOn), allowed));
     let deny = json!({"hookSpecificOutput": {"decision": {"behavior": "deny"}}});
     let (handled, decision, _) = absorb("PermissionRequest", printed(deny));
     assert_eq!(handled, Ok(Handled::Blocked));

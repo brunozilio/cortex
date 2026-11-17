@@ -149,6 +149,8 @@ done
         let spec = spec(failing, &dir.path().join("unused"));
         let error = LspClient::spawn(&spec, Path::new("/bin/sh"), dir.path(), &AtomicBool::new(false))
             .expect_err("it never answers");
+        assert!(matches!(error, crate::client::StartError::Handshake(_)), "{error:?}");
+        let error = error.to_string();
         assert!(error.contains("scripted stopped"), "{error}");
         assert!(error.contains("toolchain 1.99 is not installed"), "{error}");
     }

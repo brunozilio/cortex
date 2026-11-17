@@ -29,8 +29,9 @@ impl Transcript {
                 self.activity = Some("Writing".into());
             }
             EngineEvent::ToolStarted(started) => self.started(started),
+            EngineEvent::BackgroundStarted { id } => self.background.push(id.clone()),
+            EngineEvent::BackgroundEnded { id } => self.background.retain(|known| known != id),
             EngineEvent::ToolResult { id, output, failed } => {
-                self.track_background(output);
                 self.tool(id, |state, kept| {
                     *kept = Some(output.clone());
                     if *failed {
@@ -133,19 +134,6 @@ impl Transcript {
             state: ToolState::Running,
             output: None,
         });
-    }
-
-    fn track_background(&mut self, output: &str) {
-        let first = |text: &str| text.split(|c: char| !(c.is_alphanumeric() || c == '_')).next().map(str::to_owned);
-        if let Some(id) = output.strip_prefix("Started in the background as ").and_then(first) {
-            self.background.push(id);
-        } else if let Some(id) = output.strip_prefix("Stopped ").and_then(first) {
-            self.background.retain(|known| *known != id);
-        } else if let Some((id, state)) = output.strip_prefix('[').and_then(|rest| rest.split_once(": "))
-            && state.starts_with("finished")
-        {
-            self.background.retain(|known| known != id);
-        }
     }
 
     fn close_thinking(&mut self) {

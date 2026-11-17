@@ -119,7 +119,8 @@ fn a_side_chore_is_not_a_session_of_its_own() {
         EngineEvent::SessionStarted(SessionId("chore".into())),
         EngineEvent::Completed { duration_ms: 1, cost_usd: None },
     ]);
-    let titling = PromptRequest { command: Some(SessionCommand::Title), ..request() };
+    let mut titling = request();
+    titling.session.command = Some(SessionCommand::Title);
     run(&backend, &woke, titling, EngineEvent::is_terminal);
     assert!(listed(&backend, &woke).is_empty());
 }

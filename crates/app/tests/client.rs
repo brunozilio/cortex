@@ -47,9 +47,9 @@ fn a_session_streams_a_run_and_the_next_prompt_resumes_it() {
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })));
 
     let requests = engine.requests();
-    assert_eq!(requests[0].resume, None);
-    assert_eq!(requests[1].resume, Some(SessionId("s-1".into())), "the session continues");
-    assert!(requests[0].memory.is_some(), "memory is on by default");
+    assert_eq!(requests[0].session.resume, None);
+    assert_eq!(requests[1].session.resume, Some(SessionId("s-1".into())), "the session continues");
+    assert!(requests[0].host.memory.is_some(), "memory is on by default");
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn images_sent_with_a_prompt_reach_the_run() {
     let image = Image::from_bytes(b"\x89PNG\r\n\x1a\n pixels").expect("ok").expect("png");
     let session = sdk.session(data.path(), model());
     session.send_with_images("what is this?", vec![image.clone()]).expect("run").text().expect("text");
-    assert_eq!(engine.requests()[0].images, [image]);
+    assert_eq!(engine.requests()[0].prompt.images, [image]);
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn memory_is_optimized_by_a_run() {
     let mut run = memory.optimize(model()).expect("optimize");
     while run.next_event().is_some() {}
     let request = engine.requests().pop().expect("a run");
-    assert!(request.prompt.contains("[0] semantic, from the user: The renderer uses wgpu."));
+    assert!(request.prompt.text.contains("[0] semantic, from the user: The renderer uses wgpu."));
     assert!(matches!(memory.undo(), Err(Error::Feature(failed)) if failed.to_string().contains("nothing to undo")));
 }
 
@@ -178,8 +178,8 @@ fn a_session_s_effort_and_mode_reach_the_run_and_a_control_cancels_it_from_elsew
     let events: Vec<EngineEvent> = run.collect();
     assert_eq!(events.last(), Some(&EngineEvent::Cancelled));
     let request = engine.requests().remove(0);
-    assert_eq!((request.effort, request.permission), (app::Effort::Max, app::PermissionMode::Plan));
-    assert!(request.memory.is_none(), "memory was turned off");
+    assert_eq!((request.session.effort, request.policy.permission), (app::Effort::Max, app::PermissionMode::Plan));
+    assert!(request.host.memory.is_none(), "memory was turned off");
 }
 
 #[test]
@@ -244,10 +244,10 @@ fn a_side_question_is_answered_from_the_conversation_without_continuing_it() {
     assert_eq!(session.side("which file?").expect("run").side_answer().expect("answer"), "It edits main.rs.");
 
     let side = engine.requests().remove(1);
-    assert_eq!(side.command, Some(SessionCommand::Side));
-    assert_eq!(side.prompt, "which file?");
-    assert_eq!(side.resume, Some(SessionId("s-1".into())), "asked about this conversation");
-    assert!(side.memory.is_none(), "a side question recalls no memory");
+    assert_eq!(side.session.command, Some(SessionCommand::Side));
+    assert_eq!(side.prompt.text, "which file?");
+    assert_eq!(side.session.resume, Some(SessionId("s-1".into())), "asked about this conversation");
+    assert!(side.host.memory.is_none(), "a side question recalls no memory");
 }
 
 #[test]
@@ -266,7 +266,7 @@ fn side_calls_name_suggest_recap_and_warn_about_a_conversation() {
         run.expect("run").chore_answer().expect("answer");
     }
     let requests = engine.requests();
-    let asked: Vec<_> = requests.iter().map(|r| (r.command, r.resume.is_some())).collect();
+    let asked: Vec<_> = requests.iter().map(|r| (r.session.command, r.session.resume.is_some())).collect();
     assert_eq!(
         asked,
         [
@@ -277,7 +277,7 @@ fn side_calls_name_suggest_recap_and_warn_about_a_conversation() {
             (Some(SessionCommand::HeadsUp), true),
         ]
     );
-    assert_eq!(requests[0].prompt, "fix the login page");
+    assert_eq!(requests[0].prompt.text, "fix the login page");
 }
 
 #[test]
@@ -291,5 +291,5 @@ fn a_session_s_model_roles_reach_every_run() {
     roles.set(ModelRole::Explore, Some("grok-subscription:grok-4.6-fast".into()));
     session.set_roles(roles.clone());
     let _: Vec<EngineEvent> = session.send("look around").expect("run").collect();
-    assert_eq!(engine.requests().remove(0).roles, roles);
+    assert_eq!(engine.requests().remove(0).session.roles, roles);
 }

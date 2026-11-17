@@ -11,7 +11,7 @@ use platform::{Child, Stop};
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
-use super::{ANSWER_WAIT, Listener, MESSAGE_AT_MOST, Transport};
+use super::{ANSWER_WAIT, Listener, MESSAGE_AT_MOST, McpError, Transport};
 
 const SILENT_AFTER_CANCEL: Duration = if cfg!(test) { Duration::from_secs(1) } else { Duration::from_secs(3) };
 const STDERR_LINES: usize = 5;
@@ -199,11 +199,11 @@ impl Reading {
 }
 
 impl Transport for StdioTransport {
-    fn request(&self, message: &Value) -> Result<Value, String> {
+    fn request(&self, message: &Value) -> Result<Value, McpError> {
         self.request_stopped(message, &Stop::new())
     }
 
-    fn request_stopped(&self, message: &Value, stop: &Stop) -> Result<Value, String> {
+    fn request_stopped(&self, message: &Value, stop: &Stop) -> Result<Value, McpError> {
         let id = message.get("id").map(Value::to_string).unwrap_or_default();
         let (send, receive) = oneshot::channel();
         self.heard.waiting.locked().insert(id.clone(), send);
@@ -212,11 +212,11 @@ impl Transport for StdioTransport {
         };
         if self.heard.ended.load(Ordering::Relaxed) {
             forget();
-            return Err(self.stopped());
+            return Err(self.stopped().into());
         }
         if let Err(error) = write(&self.input, &self.name, message) {
             forget();
-            return Err(if self.child.is_alive() { error } else { self.stopped() });
+            return Err(if self.child.is_alive() { error } else { self.stopped() }.into());
         }
         let waited = platform::runtime::block_on(async {
             tokio::select! {
@@ -229,7 +229,7 @@ impl Transport for StdioTransport {
         .map_err(|error| error.to_string())?;
         match waited {
             Answer::Replied(Some(reply)) => Ok(reply),
-            Answer::Replied(None) => Err(self.stopped()),
+            Answer::Replied(None) => Err(self.stopped().into()),
             Answer::Ended(reason) => {
                 forget();
                 self.cancel(message, reason);
@@ -238,8 +238,8 @@ impl Transport for StdioTransport {
         }
     }
 
-    fn notify(&self, message: &Value) -> Result<(), String> {
-        write(&self.input, &self.name, message)
+    fn notify(&self, message: &Value) -> Result<(), McpError> {
+        write(&self.input, &self.name, message).map_err(McpError::from)
     }
 
     fn alive(&self) -> bool {

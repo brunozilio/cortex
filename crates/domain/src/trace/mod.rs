@@ -1,7 +1,10 @@
 pub mod insights;
 mod lane;
+pub mod marks;
 mod route;
 pub mod runs;
+
+pub use self::marks::{Mark, Title};
 
 use serde::{Deserialize, Serialize};
 
@@ -143,7 +146,7 @@ pub enum Kind {
         calls: Vec<ModelCall>,
         asks: Vec<AgentAsk>,
         waits: Vec<Wait>,
-        notes: Vec<String>,
+        notes: Vec<Mark>,
         agent: Option<Box<Agent>>,
     },
     Agent(Box<Agent>),
@@ -170,7 +173,7 @@ pub enum Kind {
         cost_usd: Option<f64>,
     },
     Note {
-        title: String,
+        title: Title,
         text: String,
     },
 }
@@ -189,7 +192,7 @@ impl Node {
             Kind::Failed { .. } => "failed".into(),
             Kind::Cancelled => "cancelled".into(),
             Kind::Completed { .. } => "completed".into(),
-            Kind::Note { title, .. } => title.clone(),
+            Kind::Note { title, .. } => title.as_str().into(),
         }
     }
 }

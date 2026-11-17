@@ -46,16 +46,37 @@ impl std::fmt::Debug for LspClient {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum StartError {
+    #[error("{server} could not start: {source}")]
+    Spawn {
+        server: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("{server} has no {pipe}")]
+    NoPipe { server: String, pipe: &'static str },
+    #[error("{0}")]
+    Handshake(String),
+}
+
+impl From<StartError> for String {
+    fn from(error: StartError) -> Self {
+        error.to_string()
+    }
+}
+
 impl LspClient {
-    pub fn spawn(spec: &ServerSpec, program: &Path, root: &Path, stop: &AtomicBool) -> Result<Self, String> {
+    pub fn spawn(spec: &ServerSpec, program: &Path, root: &Path, stop: &AtomicBool) -> Result<Self, StartError> {
         let mut command = platform::command(program);
         command.args(&spec.args).envs(&spec.env).current_dir(root);
         command.stdin(Stdio::piped()).stdout(Stdio::piped());
+        let server = || spec.name.clone();
         let child = Child::spawn_with(&mut command, Spawn { stderr: Stderr::Tail, ..Spawn::default() })
-            .map_err(|error| format!("{} could not start: {error}", spec.name))?;
-        let input = child.take_stdin().ok_or_else(|| format!("{} has no input", spec.name))?;
-        let output = child.take_stdout().ok_or_else(|| format!("{} has no output", spec.name))?;
-        Self::connect(&spec.name, output, input, root, Some(child), stop)
+            .map_err(|source| StartError::Spawn { server: server(), source })?;
+        let input = child.take_stdin().ok_or_else(|| StartError::NoPipe { server: server(), pipe: "input" })?;
+        let output = child.take_stdout().ok_or_else(|| StartError::NoPipe { server: server(), pipe: "output" })?;
+        Self::connect(&spec.name, output, input, root, Some(child), stop).map_err(StartError::Handshake)
     }
 
     pub fn connect(

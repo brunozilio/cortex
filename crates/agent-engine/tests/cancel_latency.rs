@@ -59,8 +59,8 @@ impl Project {
 
     fn request(&self) -> PromptRequest {
         let mut request = PromptRequest::plain(self.repo.path().into(), "go", ModelOption::new("m", "M"));
-        request.permission = PermissionMode::Bypass;
-        request.extensions = Some(domain::Extensions {
+        request.policy.permission = PermissionMode::Bypass;
+        request.host.extensions = Some(domain::Extensions {
             home: Some(self.home.path().into()),
             trust: domain::trust::Trust::Trusted,
             ..Default::default()
@@ -421,7 +421,7 @@ fn threads_during_a_run_with_three_mcp_servers_and_a_background_agent() {
 fn cancelling_a_run_waiting_for_the_user_s_answer_ends_it_at_once() {
     let project = Project::new();
     let mut request = project.request();
-    request.permission = PermissionMode::Ask;
+    request.policy.permission = PermissionMode::Ask;
     let input = json!({"file_path": project.repo.path().join("asked.txt"), "content": "x"});
     let model: Arc<dyn ModelApi> = Arc::new(ScriptedModel::new([
         ScriptedModel::reply(vec![Block::ToolUse { id: "w1".into(), name: "Write".into(), input }]),

@@ -58,11 +58,14 @@ fn a_background_command_is_read_incrementally_and_stopped() {
         first = read(&id, 901);
     }
     assert!(first.contains("running for"), "{first}");
-    assert!(read(&id, 901).contains("(no new output)"), "output is read once");
+    let unread = BashOutput.run(&json!({ "bash_id": id }), &workspace(901));
+    assert!(unread.content.contains("(no new output)"), "output is read once");
+    assert_eq!(unread.background, None, "a running command has not ended");
     assert!(read(&id, 902).contains("No background command"), "another client cannot see it");
     assert_eq!(list(901), [(id.clone(), "server".to_owned(), true)]);
     let stopped = KillShell.run(&json!({ "shell_id": id }), &workspace(901));
     assert!(stopped.content.starts_with("Stopped"), "{stopped:?}");
+    assert_eq!(stopped.background, Some(domain::events::BackgroundChange::Ended(id.clone())));
     assert!(list(901).is_empty());
 }
 

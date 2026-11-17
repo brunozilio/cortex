@@ -1,56 +1,47 @@
-pub use super::ask::ASK_TOOL as ASK;
-pub use super::builtin::advisor::ADVISOR_TOOL as ADVISOR;
-pub use super::plan_mode::{ENTER_PLAN_TOOL as ENTER_PLAN, EXIT_PLAN_TOOL as EXIT_PLAN};
-pub use super::repl::REPL_TOOL as REPL;
-pub use super::send_message::SEND_MESSAGE_TOOL as SEND_MESSAGE;
-pub use super::skill::SKILL_TOOL as SKILL;
-pub use super::subagent::AGENT_TOOL as AGENT;
-pub use super::watch::WATCH_TOOL as WATCH;
-pub use super::worktree::{ENTER_WORKTREE, EXIT_WORKTREE};
+pub use domain::ToolName;
 
-pub const BASH: &str = "Bash";
-pub const READ: &str = "Read";
-pub const WRITE: &str = "Write";
-pub const WEB_FETCH: &str = "WebFetch";
-pub const STRUCTURED_OUTPUT: &str = "StructuredOutput";
-pub const TASK_OUTPUT: &str = "TaskOutput";
-pub const TASK_STOP: &str = "TaskStop";
-pub const TASK_LIST: &str = "TaskList";
-pub const TASK_CREATE: &str = "TaskCreate";
-pub const TASK_UPDATE: &str = "TaskUpdate";
-pub const TASK_FAMILY: &str = "Task";
-
-pub fn plans_tasks(name: &str) -> bool {
-    name.starts_with(TASK_FAMILY) && name != TASK_OUTPUT && name != TASK_STOP
-}
-
-pub fn changes_the_task_list(name: &str) -> bool {
-    matches!(name, TASK_CREATE | TASK_UPDATE)
-}
+pub const ASK: &str = ToolName::AskUserQuestion.as_str();
+pub const ADVISOR: &str = ToolName::Advisor.as_str();
+pub const ENTER_PLAN: &str = ToolName::EnterPlanMode.as_str();
+pub const EXIT_PLAN: &str = ToolName::ExitPlanMode.as_str();
+pub const REPL: &str = ToolName::Repl.as_str();
+pub const SEND_MESSAGE: &str = ToolName::SendMessage.as_str();
+pub const SKILL: &str = ToolName::Skill.as_str();
+pub const AGENT: &str = ToolName::Agent.as_str();
+pub const WATCH: &str = ToolName::Watch.as_str();
+pub const ENTER_WORKTREE: &str = ToolName::EnterWorktree.as_str();
+pub const EXIT_WORKTREE: &str = ToolName::ExitWorktree.as_str();
+pub const BASH: &str = ToolName::Bash.as_str();
+pub const READ: &str = ToolName::Read.as_str();
+pub const WRITE: &str = ToolName::Write.as_str();
+pub const WEB_FETCH: &str = ToolName::WebFetch.as_str();
+pub const STRUCTURED_OUTPUT: &str = ToolName::StructuredOutput.as_str();
+pub const TASK_OUTPUT: &str = ToolName::TaskOutput.as_str();
+pub const TASK_STOP: &str = ToolName::TaskStop.as_str();
+pub const TASK_LIST: &str = ToolName::TaskList.as_str();
+pub const TASK_GET: &str = ToolName::TaskGet.as_str();
+pub const TASK_CREATE: &str = ToolName::TaskCreate.as_str();
+pub const TASK_UPDATE: &str = ToolName::TaskUpdate.as_str();
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn every_name_the_loop_dispatches_on_belongs_to_a_standard_tool_or_one_the_run_adds() {
-        let standard: Vec<String> = crate::tools::standard().iter().map(|tool| tool.spec().name).collect();
+    fn every_builtin_name_the_loop_dispatches_on_belongs_to_a_standard_tool_or_one_the_run_adds() {
+        let mut offered: Vec<String> = crate::tools::standard().iter().map(|tool| tool.spec().name).collect();
+        offered.extend(crate::tools::task::tools().iter().map(|tool| tool.spec().name));
         for name in
             [ASK, ENTER_PLAN, EXIT_PLAN, ENTER_WORKTREE, EXIT_WORKTREE, WATCH, BASH, READ, WRITE, WEB_FETCH, ADVISOR]
         {
-            assert!(standard.iter().any(|known| known == name), "{name} is not a standard tool");
+            assert!(offered.iter().any(|known| known == name), "{name} is not a standard tool");
         }
-        let tasks: Vec<String> = crate::tools::task::tools().iter().map(|tool| tool.spec().name).collect();
-        for name in [TASK_OUTPUT, TASK_STOP, TASK_LIST, TASK_CREATE, TASK_UPDATE] {
-            assert!(tasks.iter().any(|known| known == name), "{name} is not a task tool");
-            assert!(name.starts_with(TASK_FAMILY));
+        for name in [TASK_OUTPUT, TASK_STOP, TASK_LIST, TASK_GET, TASK_CREATE, TASK_UPDATE] {
+            assert!(offered.iter().any(|known| known == name), "{name} is not a task tool");
+            assert!(ToolName::of(name).is_a_task_tool());
         }
-    }
-
-    #[test]
-    fn the_task_tools_that_plan_are_told_from_the_ones_that_collect_background_work() {
-        assert!(plans_tasks(TASK_CREATE) && plans_tasks(TASK_UPDATE) && plans_tasks(TASK_LIST));
-        assert!(!plans_tasks(TASK_OUTPUT) && !plans_tasks(TASK_STOP) && !plans_tasks(READ));
-        assert!(changes_the_task_list(TASK_CREATE) && !changes_the_task_list(TASK_LIST));
+        for name in &offered {
+            assert!(ToolName::of(name).is_builtin(), "{name} has no ToolName");
+        }
     }
 }

@@ -49,7 +49,7 @@ fn nothing_of_claude_code_s_folders_reaches_a_run() {
     let engine =
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(r.into(), "/sentinel go", model());
-    request.extensions = Some(Extensions { home: Some(h.to_path_buf()), ..Extensions::default() });
+    request.host.extensions = Some(Extensions { home: Some(h.to_path_buf()), ..Extensions::default() });
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
 

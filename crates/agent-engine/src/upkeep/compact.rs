@@ -180,7 +180,7 @@ pub fn compact_hooked_on(
     });
     let before = workspace
         .hooks
-        .run_with_model("PreCompact", trigger, input.clone(), workspace, Some((api, template)))
+        .run_with_model(crate::hooks::HookEvent::PreCompact, trigger, input.clone(), workspace, Some((api, template)))
         .map_err(ModelError::Provider)?;
     if let Some(reason) = before.blocked {
         return Err(ModelError::Provider(format!("Compaction blocked by hook: {reason}")));
@@ -201,7 +201,7 @@ pub fn compact_hooked_on(
     }
     let after = workspace
         .hooks
-        .run_with_model("PostCompact", trigger, input, workspace, Some((api, template)))
+        .run_with_model(crate::hooks::HookEvent::PostCompact, trigger, input, workspace, Some((api, template)))
         .map_err(ModelError::Provider)?;
     if !after.context.is_empty() {
         history.push(Message::user(after.context));

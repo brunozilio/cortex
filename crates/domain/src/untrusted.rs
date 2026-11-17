@@ -1,3 +1,5 @@
+use crate::tool_name::ToolName;
+
 pub const HARNESS_TAGS: [&str; 3] = ["system-reminder", "persisted-output", "untrusted-content"];
 
 fn invisible(c: char) -> bool {
@@ -51,15 +53,17 @@ pub fn fenced(text: &str, from: &str) -> String {
 }
 
 pub fn mcp_source(tool: &str) -> Option<String> {
-    if matches!(tool, "ReadMcpResource" | "ListMcpResources") {
+    let tool = ToolName::of(tool);
+    if tool.reads_mcp_resources() {
         return Some("an MCP server".to_owned());
     }
-    let server = tool.strip_prefix("mcp__")?.split("__").next()?;
+    let server = tool.mcp_server()?;
     (server != crate::memory::MEMORY_SERVER).then(|| format!("the MCP server {server}"))
 }
 
 pub fn reads_outside(tool: &str) -> bool {
-    matches!(tool, "WebFetch" | "WebSearch") || tool.starts_with("mcp__")
+    let tool = ToolName::of(tool);
+    tool.reads_the_web() || matches!(tool, ToolName::Mcp(_))
 }
 
 pub fn relayed(report: &str) -> String {

@@ -39,7 +39,7 @@ fn an_overloaded_model_falls_back_to_the_next_model_and_answers_once() {
     let stage = Stage::new();
     let model = stage.script([Err(ModelError::Overloaded("busy".into())), says("From the fallback.")]);
     let mut request = stage.request("hi");
-    request.fallbacks = vec!["claude-sonnet-5".into()];
+    request.session.fallbacks = vec!["claude-sonnet-5".into()];
 
     stage.play("prompt", &request);
 

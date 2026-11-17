@@ -17,8 +17,8 @@ fn engine(model: &Arc<ScriptedModel>) -> NativeEngine {
 
 fn request(dir: &tempfile::TempDir, role: ModelRole, chosen: &str) -> PromptRequest {
     let mut request = PromptRequest::plain(dir.path().into(), "Look around", model());
-    request.permission = PermissionMode::Bypass;
-    request.roles.set(role, Some(chosen.into()));
+    request.policy.permission = PermissionMode::Bypass;
+    request.session.roles.set(role, Some(chosen.into()));
     request
 }
 
@@ -36,7 +36,7 @@ fn plan_mode_turns_go_to_the_plan_model_even_on_another_provider() {
     let dir = tempfile::tempdir().expect("dir");
     let scripted = Arc::new(ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("A plan.".into())])]));
     let mut request = request(&dir, ModelRole::Plan, GROK);
-    request.permission = PermissionMode::Plan;
+    request.policy.permission = PermissionMode::Plan;
     let events = finish(&start(&engine(&scripted), &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     assert_eq!(scripted.asked()[0].model, GROK);
@@ -88,8 +88,8 @@ fn the_small_role_wins_over_the_small_model_setting() {
         ScriptedModel::reply(vec![Block::Text("Renamed.".into())]),
     ]));
     let mut request = request(&dir, ModelRole::Small, GROK);
-    request.prompt = "rename the variable x to y".into();
-    request.auto_pick = true;
+    request.prompt.text = "rename the variable x to y".into();
+    request.session.auto_pick = true;
     finish(&start(&engine(&scripted), &request));
     assert_eq!(scripted.asked()[1].model, GROK);
 }
@@ -105,8 +105,8 @@ fn the_session_s_fallbacks_take_over_when_the_model_is_busy() {
         ScriptedModel::reply(vec![Block::Text("Done.".into())]),
     ]));
     let mut request = PromptRequest::plain(dir.path().into(), "go", model());
-    request.permission = PermissionMode::Bypass;
-    request.fallbacks = vec![GROK.into()];
+    request.policy.permission = PermissionMode::Bypass;
+    request.session.fallbacks = vec![GROK.into()];
     finish(&start(&engine(&scripted), &request));
     assert_eq!(scripted.asked()[1].model, GROK, "the session's chain wins over the settings file");
 }

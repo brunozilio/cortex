@@ -32,13 +32,14 @@ impl Job {
         session: &LoadedSession,
     ) -> Result<Runtime, Stop> {
         let Governed { mut workspace, mut toolbox, main, roles } = governed;
-        workspace.home = crate::brief::home(&self.request);
-        workspace.models.fallbacks = roles::fallbacks(&self.request, &settings.fallbacks);
+        workspace.home = crate::brief::home(self.request.folder());
+        workspace.models.fallbacks = roles::fallbacks(&self.request.session, &settings.fallbacks);
         workspace.models.small_model = self.small_model(&roles);
         workspace.models.roles = roles;
         workspace.services.network = Some(tools::Network(Arc::clone(&self.mcp)));
         workspace.services.search = self.source.searcher(&self.request).map(tools::WebSearcher);
-        workspace.added_dirs = crate::brief::added_dirs(&self.request, &settings.added_dirs, workspace.home.as_deref());
+        workspace.added_dirs =
+            crate::brief::added_dirs(&self.request.session, &settings.added_dirs, workspace.home.as_deref());
         workspace.hooks.extend(&main.config.hooks);
         let worktree = self.session_worktree(&main, &mut workspace, session)?;
         self.settle_model(&main, &mut workspace)?;
@@ -54,8 +55,8 @@ impl Job {
 
     fn small_model(&self, roles: &ModelRoles) -> Option<String> {
         let small = small_model::pick(
-            self.request.model.provider,
-            &self.request.model.id,
+            self.request.session.model.provider,
+            &self.request.session.model.id,
             roles.get(ModelRole::Small),
             &self.source.catalog(&self.request),
         );
@@ -71,7 +72,7 @@ impl Job {
         workspace: &mut Workspace,
         session: &LoadedSession,
     ) -> Result<SessionWorktree, Stop> {
-        let previous = self.sessions.load_worktree(&self.request, &session.id).map_err(Stop::failed)?;
+        let previous = self.sessions.load_worktree(&self.request.session.cwd, &session.id).map_err(Stop::failed)?;
         let resumed = previous.is_some();
         let setup = match previous {
             Some(state) => agent_runtime::resume(&main.config, main.name(), &state, workspace),
@@ -97,8 +98,8 @@ impl Job {
         self.recorder.iter().for_each(|recorder| recorder.announce(&self.gate));
         let stored = self
             .sessions
-            .save_for(&self.request, &session.id, &session.history)
-            .and_then(|()| self.sessions.save_worktree(&self.request, &session.id, &state));
+            .save_for(&self.request.session.cwd, &session.id, &session.history)
+            .and_then(|()| self.sessions.save_worktree(&self.request.session.cwd, &session.id, &state));
         if let Err(error) = stored {
             return Err(Stop::failed(match guard.finish() {
                 Ok(Some(path)) => format!("{error}; worktree retained at {}", path.display()),
@@ -111,14 +112,14 @@ impl Job {
     }
 
     fn settle_model(&mut self, main: &MainAgent, workspace: &mut Workspace) -> Result<(), Stop> {
-        self.request.effort = main.config.effort.unwrap_or(self.request.effort);
-        let asked = &self.request.model;
+        self.request.session.effort = main.config.effort.unwrap_or(self.request.session.effort);
+        let asked = &self.request.session.model;
         let chosen = match &main.config.model {
             Some(_) => main.config.model(&asked.id, asked.provider).map_err(Stop::failed)?,
-            None => workspace.models.roles.for_turn(&asked.id, self.request.permission).to_owned(),
+            None => workspace.models.roles.for_turn(&asked.id, self.request.policy.permission).to_owned(),
         };
-        if chosen != self.request.model.id {
-            self.request.model.id.clone_from(&chosen);
+        if chosen != self.request.session.model.id {
+            self.request.session.model.id.clone_from(&chosen);
             workspace.models.switch_to(chosen);
         }
         Ok(())

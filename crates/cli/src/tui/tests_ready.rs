@@ -34,7 +34,7 @@ fn a_reload_keeps_the_mode_and_effort_of_the_live_session() {
     press(&mut app, KeyCode::Enter);
     until(&mut app, |_| !engine.requests().is_empty());
     let sent = engine.requests().remove(0);
-    assert_eq!((sent.permission, sent.effort), (PermissionMode::Plan, app::Effort::High));
+    assert_eq!((sent.policy.permission, sent.session.effort), (PermissionMode::Plan, app::Effort::High));
 }
 
 #[test]
@@ -94,9 +94,10 @@ fn clear_forgets_the_images_and_pastes_of_the_conversation_before() {
     super::keys::paste(&mut app, long);
     assert_eq!(app.prompt.input.text(), "[Image #1] [Pasted text #1 +6 lines]");
     press(&mut app, KeyCode::Enter);
-    let prompts = || engine.requests().into_iter().filter(|request| request.command.is_none()).collect::<Vec<_>>();
+    let prompts =
+        || engine.requests().into_iter().filter(|request| request.session.command.is_none()).collect::<Vec<_>>();
     until(&mut app, |app| !app.busy() && prompts().len() == 1);
-    assert_eq!(prompts()[0].images.len(), 1);
+    assert_eq!(prompts()[0].prompt.images.len(), 1);
 
     type_text(&mut app, "/clear");
     press(&mut app, KeyCode::Enter);
@@ -104,6 +105,6 @@ fn clear_forgets_the_images_and_pastes_of_the_conversation_before() {
     press(&mut app, KeyCode::Enter);
     until(&mut app, |app| !app.busy() && prompts().len() == 2);
     let sent = prompts().remove(1);
-    assert!(sent.images.is_empty(), "the earlier conversation's image is not sent again");
-    assert_eq!(sent.prompt, "about [Image #1] and [Pasted text #1 +6 lines]");
+    assert!(sent.prompt.images.is_empty(), "the earlier conversation's image is not sent again");
+    assert_eq!(sent.prompt.text, "about [Image #1] and [Pasted text #1 +6 lines]");
 }

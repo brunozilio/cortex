@@ -37,3 +37,5 @@ What gets worse:
 - `app` will be a large crate holding the handler, provider accounts, secrets, memory and the client; the compile-time isolation between those is lost unless modules are kept disciplined.
 - Typing thirteen features is thirteen behaviour-sensitive changes; any default that was accidental becomes explicit and may differ.
 - The crate table, the dependency rules and every import path change in one move commit, which conflicts with any work in flight on those crates.
+
+Follow-up (phase 4): the request a run is started with is typed in four parts by who sets them (`Prompt`, `SessionConfig`, `Policy`, `HostContext`), flattened so its JSON is unchanged, and calls that needed only a folder take a `Folder` or a path instead of a request filled with dummy values. A run's failure crosses each boundary through an explicit conversion (`ModelError` → `RunFailure` → the engine's `Stop` → the run's events → the client's `Error`); see "Failure taxonomy" in `GLOSSARY.md`.

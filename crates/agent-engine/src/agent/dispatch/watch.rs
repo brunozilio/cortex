@@ -3,23 +3,10 @@ use std::sync::Arc;
 use domain::watch::{Plan, Step, Watching};
 use serde_json::Value;
 
+use super::native::Handler;
 use crate::agent::Agent;
 use crate::agent::run::ThisRun;
-use crate::tools::{Outcome, Tool, names};
-
-const RUN_BY_THE_LOOP: [&str; 11] = [
-    names::WATCH,
-    names::ASK,
-    names::ENTER_PLAN,
-    names::EXIT_PLAN,
-    names::ENTER_WORKTREE,
-    names::EXIT_WORKTREE,
-    names::AGENT,
-    names::SEND_MESSAGE,
-    names::TASK_OUTPUT,
-    names::TASK_STOP,
-    names::TASK_LIST,
-];
+use crate::tools::{Outcome, Tool};
 
 impl Agent<'_> {
     pub(super) fn watch(&self, id: &str, input: &Value, run: &ThisRun) -> Outcome {
@@ -54,7 +41,7 @@ impl Agent<'_> {
         }
         let summary = target.summary(&plan.input);
         let shown = format!("{}: {summary}", plan.explained());
-        let first = self.permitted_as(id, target, &summary, Some(&shown), &plan.input, hook.permission.as_deref());
+        let first = self.permitted_as(id, target, &summary, Some(&shown), &plan.input, hook.permission);
         let first = crate::tools::watch::after(name, &plan.input, first, self.workspace, model);
         if first.is_error {
             return Outcome::error(format!("The first check failed, so nothing is watched: {}", first.content));
@@ -77,7 +64,7 @@ impl Agent<'_> {
 }
 
 fn keepable(name: &str, tool: &dyn Tool, reads: bool) -> Option<Arc<dyn Tool>> {
-    if RUN_BY_THE_LOOP.contains(&name) {
+    if Handler::of(name).run_by_the_loop() {
         return None;
     }
     tool.kept().or_else(|| {

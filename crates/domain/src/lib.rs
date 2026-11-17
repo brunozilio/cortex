@@ -29,6 +29,7 @@ pub mod fallback;
 pub mod features;
 pub mod follow_through;
 pub mod git_offer;
+pub mod hooks;
 pub mod ids;
 pub mod image;
 pub mod inbox;
@@ -61,6 +62,7 @@ pub mod skill;
 pub mod small_model;
 pub mod stuck;
 pub mod suggested_rules;
+pub mod tool_name;
 pub mod trace;
 pub mod trust;
 pub mod untrusted;
@@ -84,8 +86,9 @@ pub use memory::{
     Revision,
 };
 pub use model::{Access, Effort, ModelOption, ModelProvider};
-pub use request::PromptRequest;
+pub use request::{Folder, HostContext, Policy, Prompt, PromptRequest, SessionConfig};
 pub use skill::Skill;
+pub use tool_name::ToolName;
 pub use usage::{
     ChoreAnswer, Compaction, ContextShare, ContextSlice, ContextUsage, HeadsUp, SessionCommand, compact_tokens,
 };

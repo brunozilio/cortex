@@ -18,10 +18,8 @@ fn forgotten(answer: &MemoryListing) -> Vec<Forgotten> {
 }
 
 fn request(cwd: &Path) -> PromptRequest {
-    PromptRequest {
-        memory: Some(MemoryBrief::new(Some("Night sky".into()))),
-        ..PromptRequest::plain(cwd.to_path_buf(), "Tune the renderer", ModelOption::new("opus", "Opus"))
-    }
+    PromptRequest::plain(cwd.to_path_buf(), "Tune the renderer", ModelOption::new("opus", "Opus"))
+        .remembering(MemoryBrief::new(Some("Night sky".into())))
 }
 
 fn remember(text: &str) -> MemoryEdit {
@@ -44,7 +42,7 @@ fn every_twentieth_request_goes_without_memory_and_the_score_compares_both() {
     let mut held = Vec::new();
     for n in 1..=20 {
         let briefed = memories.brief(RunId::new(), &request(dir.path()), false);
-        let brief = briefed.memory.clone().expect("brief");
+        let brief = briefed.host.memory.clone().expect("brief");
         if brief.held_out {
             held.push(n);
             assert!(brief.recalled.is_empty(), "nothing recalled when held out");
@@ -105,7 +103,7 @@ fn a_run_is_briefed_and_its_edits_applied_on_completion() {
     memories.edit(dir.path(), &[remember("The renderer uses signed distance fields")], by_user()).expect("edit");
 
     let briefed = memories.brief(RunId::new(), &request(dir.path()), false);
-    let brief = briefed.memory.clone().expect("brief");
+    let brief = briefed.host.memory.clone().expect("brief");
     assert_eq!(brief.recalled.len(), 1);
     assert_eq!(brief.origin.as_deref(), Some("Night sky"));
     assert!(!brief.output.as_os_str().is_empty());
@@ -147,12 +145,12 @@ fn a_failed_run_changes_nothing() {
     let dir = tempfile::tempdir().expect("tempdir");
     let memories = plain();
     let briefed = memories.brief(RunId::new(), &request(dir.path()), false);
-    let output = briefed.memory.clone().expect("brief").output;
+    let output = briefed.host.memory.clone().expect("brief").output;
     std::fs::write(&output, r#"{"remember":[{"kind":"semantic","text":"Half done"}]}"#).expect("write");
     assert_eq!(memories.finish(&briefed, &ended(false)), None);
     assert!(!output.exists());
     let mut no_memory = request(dir.path());
-    no_memory.memory = None;
+    no_memory.host.memory = None;
     assert_eq!(memories.brief(RunId::new(), &no_memory, false), no_memory);
 }
 
@@ -163,9 +161,9 @@ fn an_optimisation_can_be_undone_until_the_next_edit() {
     let both = [remember("Uses wgpu"), remember("The renderer uses wgpu")];
     memories.edit(dir.path(), &both, by_user()).expect("edit");
     let request = memories.optimization(dir.path(), ModelOption::new("opus", "Opus"));
-    assert!(request.prompt.contains("[0] semantic (render), from the user: Uses wgpu"));
+    assert!(request.prompt.text.contains("[0] semantic (render), from the user: Uses wgpu"));
     let briefed = memories.brief(RunId::new(), &request, false);
-    let brief = briefed.memory.clone().expect("brief");
+    let brief = briefed.host.memory.clone().expect("brief");
     assert!(brief.optimizing && brief.recalled.is_empty() && !brief.tool);
 
     std::fs::write(&brief.output, r#"{"forget":[0]}"#).expect("write");
@@ -180,7 +178,7 @@ fn an_optimisation_can_be_undone_until_the_next_edit() {
     assert!(memories.undo(dir.path()).is_err(), "undone only once");
 
     let briefed = memories.brief(RunId::new(), &request, false);
-    std::fs::write(&briefed.memory.clone().expect("brief").output, r#"{"forget":[1]}"#).expect("write");
+    std::fs::write(&briefed.host.memory.clone().expect("brief").output, r#"{"forget":[1]}"#).expect("write");
     let _ = memories.finish(&briefed, &ended(true));
     memories.edit(dir.path(), &[remember("Inter is the font")], by_user()).expect("edit");
     assert!(memories.undo(dir.path()).is_err(), "an edit ends the undo");
@@ -192,8 +190,8 @@ fn a_tool_shortens_what_is_recalled() {
     let dir = tempfile::tempdir().expect("tempdir");
     let edits: Vec<MemoryEdit> = (0..30).map(|n| remember(&format!("Fact number {n}"))).collect();
     memories.edit(dir.path(), &edits, by_user()).expect("edit");
-    let with = memories.brief(RunId::new(), &request(dir.path()), true).memory.expect("brief");
-    let without = memories.brief(RunId::new(), &request(dir.path()), false).memory.expect("brief");
+    let with = memories.brief(RunId::new(), &request(dir.path()), true).host.memory.expect("brief");
+    let without = memories.brief(RunId::new(), &request(dir.path()), false).host.memory.expect("brief");
     assert_eq!((with.recalled.len(), without.recalled.len()), (RecallBudget::WITH_TOOL.facts, 30));
     assert!(with.tool);
 }
@@ -202,10 +200,10 @@ fn a_tool_shortens_what_is_recalled() {
 fn memory_that_fits_in_the_prompt_offers_no_search() {
     let memories = plain();
     let dir = tempfile::tempdir().expect("tempdir");
-    let empty = memories.brief(RunId::new(), &request(dir.path()), true).memory.expect("brief");
+    let empty = memories.brief(RunId::new(), &request(dir.path()), true).host.memory.expect("brief");
     assert!(!empty.tool, "an empty memory has nothing to search");
     memories.edit(dir.path(), &[remember("Uses wgpu")], by_user()).expect("edit");
-    let small = memories.brief(RunId::new(), &request(dir.path()), true).memory.expect("brief");
+    let small = memories.brief(RunId::new(), &request(dir.path()), true).host.memory.expect("brief");
     assert_eq!((small.recalled.len(), small.tool), (1, false), "everything is already recalled");
 }
 
@@ -235,7 +233,7 @@ fn the_feature_keeps_memory_in_the_data_folder_and_starts_optimisations() {
     assert_eq!(handle(&context, optimize).expect("started"), MemoryReply::Optimizing { run });
     let started = started.into_inner().expect("lock");
     assert_eq!(started[0].0, run);
-    assert!(started[0].1.memory.as_ref().is_some_and(|brief| brief.optimizing));
+    assert!(started[0].1.host.memory.as_ref().is_some_and(|brief| brief.optimizing));
 }
 
 #[test]
@@ -264,7 +262,7 @@ fn what_another_process_changed_is_read_not_what_this_one_remembers_reading() {
     assert_eq!(here.search(project, "linux").first().map(|hit| hit.0), Some(MemoryId(1)), "the search");
     let found = here.find(project, "linux", 5, &mut MemorySearches::default());
     assert!(matches!(&found, SearchAnswer::Found(found) if found[0].text == "Ships on Linux"), "{found:?}");
-    let recalled = here.brief(RunId::new(), &request(project), false).memory.expect("brief").recalled;
+    let recalled = here.brief(RunId::new(), &request(project), false).host.memory.expect("brief").recalled;
     assert_eq!(recalled.len(), 2, "what a run is briefed with");
     let used =
         |memories: &Memories| listed(&memories.load(project)).iter().map(|memory| memory.uses).collect::<Vec<_>>();
@@ -284,7 +282,7 @@ fn an_optimisation_can_still_be_undone_after_the_program_restarts() {
     before.edit(project.path(), &[remember("Uses wgpu"), remember("The renderer uses wgpu")], by_user()).expect("edit");
     let request = before.optimization(project.path(), ModelOption::new("opus", "Opus"));
     let briefed = before.brief(RunId::new(), &request, false);
-    std::fs::write(&briefed.memory.clone().expect("brief").output, r#"{"forget":[0]}"#).expect("write");
+    std::fs::write(&briefed.host.memory.clone().expect("brief").output, r#"{"forget":[0]}"#).expect("write");
     before.finish(&briefed, &ended(true)).expect("changed").expect("saved");
     drop(before);
 

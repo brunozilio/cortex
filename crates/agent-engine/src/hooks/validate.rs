@@ -1,50 +1,31 @@
+use domain::hooks::{HandlerKind, HookEvent};
+use serde_json::Value;
+
 use super::Handler;
 
-pub(crate) const KINDS: [&str; 5] = ["command", "script", "http", "prompt", "agent"];
 pub(crate) const TIMEOUT_SECONDS: std::ops::RangeInclusive<u64> = 1..=600;
-pub(crate) const EVENTS: [&str; 19] = [
-    "Brief",
-    "ModelRequest",
-    "ModelResponse",
-    "ModelError",
-    "PreToolUse",
-    "PostToolUse",
-    "PostToolUseFailure",
-    "Stop",
-    "SubagentStart",
-    "SubagentStop",
-    "PreCompact",
-    "PostCompact",
-    "UserPromptSubmit",
-    "SessionStart",
-    "SessionEnd",
-    "RunStart",
-    "RunEnd",
-    "PermissionRequest",
-    "Notification",
-];
-const NO_MODEL_HOOKS: [&str; 11] = [
-    "Brief",
-    "SessionStart",
-    "SessionEnd",
-    "RunStart",
-    "RunEnd",
-    "SubagentStart",
-    "PreCompact",
-    "PostCompact",
-    "ModelRequest",
-    "ModelResponse",
-    "ModelError",
-];
 
-pub fn event(event: &str) -> Result<(), String> {
-    match EVENTS.contains(&event) {
-        true => Ok(()),
-        false => Err(format!("unknown hook event {event:?}; the events are {}", EVENTS.join(", "))),
+pub fn named(written: &Value) -> Result<(), String> {
+    let Some(events) = written.as_object() else { return Ok(()) };
+    for (event, groups) in events {
+        if HookEvent::named(event).is_none() {
+            let known = HookEvent::ALL.map(HookEvent::as_str).join(", ");
+            return Err(format!("unknown hook event {event:?}; the events are {known}"));
+        }
+        let handlers = groups.as_array().into_iter().flatten().flat_map(|group| group["hooks"].as_array()).flatten();
+        for (at, handler) in handlers.enumerate() {
+            if let Some(kind) = handler["type"].as_str().filter(|kind| HandlerKind::named(kind).is_none()) {
+                return Err(format!(
+                    "{event} hook #{}: unknown hook type {kind:?}; use command, script, http, prompt or agent",
+                    at + 1
+                ));
+            }
+        }
     }
+    Ok(())
 }
 
-pub fn matcher(event: &str, matcher: &str) -> Result<(), String> {
+pub fn matcher(event: HookEvent, matcher: &str) -> Result<(), String> {
     if matcher.is_empty() || matcher == "*" {
         return Ok(());
     }
@@ -53,21 +34,23 @@ pub fn matcher(event: &str, matcher: &str) -> Result<(), String> {
         .map_err(|error| format!("{event}: matcher {matcher:?} is not a regex: {error}"))
 }
 
-pub fn hook(event: &str, at: usize, hook: &Handler) -> Result<(), String> {
-    let why = match hook.kind.as_str() {
-        "command" if hook.command.trim().is_empty() => Some("a command hook needs a `command`".to_owned()),
-        "script" if !hook.command.ends_with(".js") => Some("a script hook's `command` must be a .js file".to_owned()),
-        "http" if !web_address(hook.url.as_deref()) => {
+pub fn hook(event: HookEvent, at: usize, hook: &Handler) -> Result<(), String> {
+    let kind = hook.kind;
+    let why = match kind {
+        HandlerKind::Command if hook.command.trim().is_empty() => Some("a command hook needs a `command`".to_owned()),
+        HandlerKind::Script if !hook.command.ends_with(".js") => {
+            Some("a script hook's `command` must be a .js file".to_owned())
+        }
+        HandlerKind::Http if !web_address(hook.url.as_deref()) => {
             Some("an http hook needs a `url` with http or https and no user or password".to_owned())
         }
-        "prompt" | "agent" if hook.prompt.as_deref().is_none_or(|p| p.trim().is_empty()) => {
-            Some(format!("a {} hook needs a `prompt`", hook.kind))
+        HandlerKind::Prompt | HandlerKind::Agent if hook.prompt.as_deref().is_none_or(|p| p.trim().is_empty()) => {
+            Some(format!("a {kind} hook needs a `prompt`"))
         }
-        "prompt" | "agent" if NO_MODEL_HOOKS.contains(&event) => {
-            Some(format!("a {} hook cannot run on {event}; use a command hook", hook.kind))
+        HandlerKind::Prompt | HandlerKind::Agent if !event.may_ask_a_model() => {
+            Some(format!("a {kind} hook cannot run on {event}; use a command hook"))
         }
-        known if KINDS.contains(&known) => None,
-        other => Some(format!("unknown hook type {other:?}; use command, script, http, prompt or agent")),
+        _ => None,
     };
     let why = why.or_else(|| {
         (!TIMEOUT_SECONDS.contains(&hook.timeout))
@@ -107,7 +90,10 @@ mod tests {
         assert!(refused(json!({"Stop": [{"hooks": [slow]}]})).contains("timeout 0 is outside 1..600"));
         assert!(refused(json!({"Stopp": []})).starts_with("unknown hook event \"Stopp\""));
         let odd = json!({"type": "shell", "command": "x"});
-        assert!(refused(json!({"Stop": [{"hooks": [odd]}]})).contains("unknown hook type \"shell\""));
+        assert_eq!(
+            refused(json!({"Stop": [{"hooks": [odd]}]})),
+            "Stop hook #1: unknown hook type \"shell\"; use command, script, http, prompt or agent"
+        );
         let regex = json!({"PreToolUse": [{"matcher": "(", "hooks": []}]});
         assert!(refused(regex).starts_with("PreToolUse: matcher \"(\" is not a regex"));
     }

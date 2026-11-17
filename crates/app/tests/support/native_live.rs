@@ -20,10 +20,11 @@ struct Source;
 impl ApiSource for Source {
     fn api(&self, request: &PromptRequest) -> Result<Arc<dyn ModelApi>, ModelError> {
         let key = match request
+            .host
             .credentials
             .model
             .clone()
-            .or_else(|| app::ModelProviders::system().key(request.model.provider).ok())
+            .or_else(|| app::ModelProviders::system().key(request.session.model.provider).ok())
         {
             Some(key) => key,
             None => {
@@ -45,7 +46,7 @@ impl ApiSource for Source {
                 domain::provider::ProviderKey::new(value.trim())
             }
         };
-        Ok(Arc::new(ProviderClient::for_model(request.model.clone(), Arc::new(NetHttp), Arc::new(key))))
+        Ok(Arc::new(ProviderClient::for_model(request.session.model.clone(), Arc::new(NetHttp), Arc::new(key))))
     }
 }
 pub fn engine() -> NativeEngine {

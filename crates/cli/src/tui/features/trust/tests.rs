@@ -70,8 +70,8 @@ fn a_folder_that_brings_something_asks_before_the_first_prompt_and_continuing_is
     assert!(last_notice(&app).contains("Continuing without trusting"), "{}", last_notice(&app));
     opening.step(&mut app);
     until(&mut app, |_| !engine.requests().is_empty());
-    assert_eq!(engine.requests()[0].prompt, "fix the build");
-    let carried = engine.requests()[0].extensions.as_ref().map(|extensions| extensions.trust);
+    assert_eq!(engine.requests()[0].prompt.text, "fix the build");
+    let carried = engine.requests()[0].host.extensions.as_ref().map(|extensions| extensions.trust);
     assert_eq!(carried, Some(Trust::Untrusted));
 }
 
@@ -86,7 +86,7 @@ fn trusting_in_the_dialog_is_stored_and_the_first_prompt_runs_trusted() {
     assert!(last_notice(&app).contains("is now trusted"), "{}", last_notice(&app));
     opening.step(&mut app);
     until(&mut app, |_| !engine.requests().is_empty());
-    let carried = engine.requests()[0].extensions.as_ref().map(|extensions| extensions.trust);
+    let carried = engine.requests()[0].host.extensions.as_ref().map(|extensions| extensions.trust);
     assert_eq!(carried, Some(Trust::Trusted));
 
     let mut again = App::new(app.sdk.clone(), repo, None, None);

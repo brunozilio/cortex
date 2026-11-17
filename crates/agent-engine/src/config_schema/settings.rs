@@ -138,7 +138,7 @@ fn language_server() -> Value {
 fn hooks() -> Value {
     let groups = list_of(reference_to("hookGroup"));
     let events: Map<String, Value> =
-        crate::hooks::EVENTS.iter().map(|event| ((*event).to_owned(), groups.clone())).collect();
+        crate::hooks::HookEvent::ALL.iter().map(|event| (event.as_str().to_owned(), groups.clone())).collect();
     json!({
         "type": "object",
         "description": "Commands, prompts or HTTP calls that run on events.",
@@ -165,7 +165,7 @@ fn hook() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "type": { "enum": crate::hooks::KINDS },
+            "type": { "enum": crate::hooks::HandlerKind::ALL.map(crate::hooks::HandlerKind::as_str) },
             "command": text,
             "prompt": { "type": ["string", "null"] },
             "model": { "type": ["string", "null"] },

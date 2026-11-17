@@ -1,11 +1,11 @@
-use domain::{EngineEvent, ModelOption, PromptRequest, SessionId};
+use domain::{EngineEvent, SessionId};
 
 use super::*;
 use crate::sessions::{Entry, Sessions};
 use crate::transcript::{Block, Message};
 
-fn request(dir: &std::path::Path) -> PromptRequest {
-    PromptRequest::plain(dir.into(), "", ModelOption::new("m", "M"))
+fn request(dir: &std::path::Path) -> PathBuf {
+    dir.to_path_buf()
 }
 
 fn reply(text: &str) -> Message {

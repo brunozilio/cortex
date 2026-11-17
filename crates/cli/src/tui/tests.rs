@@ -184,8 +184,8 @@ fn a_dropped_image_is_attached_to_the_prompt_that_names_it() {
     press(&mut app, KeyCode::Enter);
     until(&mut app, |app| !app.busy() && !engine.requests().is_empty());
     let sent = engine.requests().remove(0);
-    assert_eq!(sent.prompt, "what is [Image #1] not a file");
-    assert_eq!(sent.images, [app::Image::from_bytes(png).expect("ok").expect("png")]);
+    assert_eq!(sent.prompt.text, "what is [Image #1] not a file");
+    assert_eq!(sent.prompt.images, [app::Image::from_bytes(png).expect("ok").expect("png")]);
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn btw_answers_beside_the_conversation_and_esc_closes_it_without_interrupting() 
     assert!(shown.contains("It edits main.rs."), "{shown}");
     press(&mut app, KeyCode::Esc);
     assert!(!screen(&app).contains("It edits main.rs."), "the answer is not kept in the conversation");
-    assert_eq!(engine.requests().last().map(|r| r.command), Some(Some(SessionCommand::Side)));
+    assert_eq!(engine.requests().last().map(|r| r.session.command), Some(Some(SessionCommand::Side)));
 }
 
 #[test]

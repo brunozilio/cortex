@@ -1,5 +1,6 @@
 pub mod channel;
 mod configured;
+mod error;
 pub mod extras;
 mod http;
 mod http_listen;
@@ -20,6 +21,7 @@ use domain::PromptRequest;
 use serde_json::{Value, json};
 
 pub use self::configured::{McpSources, list, listing, project_config, sources};
+pub use self::error::McpError;
 pub use self::http::{HttpTransport, parse};
 pub use self::local::LocalTransport;
 pub use self::pool::McpPool;
@@ -38,17 +40,17 @@ pub(crate) const MESSAGE_AT_MOST: usize = 16 * 1024 * 1024;
 pub type Listener = Arc<dyn Fn(&str, &Value) + Send + Sync>;
 
 pub trait Transport: Send + Sync {
-    fn request(&self, message: &Value) -> Result<Value, String>;
-    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, String> {
+    fn request(&self, message: &Value) -> Result<Value, McpError>;
+    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, McpError> {
         if stop.is_stopped() {
-            return Err("cancelled".into());
+            return Err(McpError::Cancelled);
         }
         self.request(message)
     }
-    fn notify(&self, message: &Value) -> Result<(), String>;
-    fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), String> {
+    fn notify(&self, message: &Value) -> Result<(), McpError>;
+    fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), McpError> {
         if stop.is_stopped() {
-            return Err("cancelled".into());
+            return Err(McpError::Cancelled);
         }
         self.notify(message)
     }
@@ -77,11 +79,11 @@ impl McpServer {
         Self { name: name.into(), transport, next: AtomicU64::new(1), capabilities: std::sync::Mutex::default() }
     }
 
-    pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>) -> Result<Self, String> {
+    pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>) -> Result<Self, McpError> {
         Self::open_stopped(spec, http, &platform::Stop::new())
     }
 
-    pub fn open_stopped(spec: &ServerSpec, http: &Arc<dyn Http>, stop: &platform::Stop) -> Result<Self, String> {
+    pub fn open_stopped(spec: &ServerSpec, http: &Arc<dyn Http>, stop: &platform::Stop) -> Result<Self, McpError> {
         Self::open_listening(spec, http, stop, None)
     }
 
@@ -90,9 +92,9 @@ impl McpServer {
         http: &Arc<dyn Http>,
         stop: &platform::Stop,
         listener: Option<Listener>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, McpError> {
         if stop.load(Ordering::Relaxed) {
-            return Err("cancelled".into());
+            return Err(McpError::Cancelled);
         }
         let transport: Box<dyn Transport> = match spec {
             ServerSpec::Http { name, url, headers } => {
@@ -115,27 +117,27 @@ impl McpServer {
         Ok(Self::new(spec.name(), transport))
     }
 
-    fn rpc_stopped(&self, method: &str, params: Value, stop: &platform::Stop) -> Result<Value, String> {
+    fn rpc_stopped(&self, method: &str, params: Value, stop: &platform::Stop) -> Result<Value, McpError> {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let reply = self
             .transport
             .request_stopped(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }), stop)?;
         if let Some(error) = reply.get("error") {
-            let message = error["message"].as_str().unwrap_or("the call failed");
-            return Err(format!("{}: {message}", self.name));
+            let message = error["message"].as_str().unwrap_or("the call failed").to_owned();
+            return Err(McpError::Answered { server: self.name.clone(), message });
         }
         Ok(reply["result"].clone())
     }
 
-    pub fn tools(self: &Arc<Self>) -> Result<Vec<McpTool>, String> {
+    pub fn tools(self: &Arc<Self>) -> Result<Vec<McpTool>, McpError> {
         self.tools_stopped(&platform::Stop::new())
     }
-    pub fn tools_stopped(self: &Arc<Self>, stop: &platform::Stop) -> Result<Vec<McpTool>, String> {
+    pub fn tools_stopped(self: &Arc<Self>, stop: &platform::Stop) -> Result<Vec<McpTool>, McpError> {
         self.initialize_stopped(stop)?;
         self.listed_tools_stopped(stop)
     }
 
-    pub fn initialize_stopped(&self, stop: &platform::Stop) -> Result<(), String> {
+    pub fn initialize_stopped(&self, stop: &platform::Stop) -> Result<(), McpError> {
         let client = json!({ "name": brand::COMMAND, "version": env!("CARGO_PKG_VERSION") });
         let answer = self.rpc_stopped(
             "initialize",
@@ -170,11 +172,11 @@ impl McpServer {
         self.capabilities.lock().is_ok_and(|capabilities| capabilities.get(capability).is_some_and(Value::is_object))
     }
 
-    pub fn ask(&self, method: &str, params: Value, stop: &platform::Stop) -> Result<Value, String> {
+    pub fn ask(&self, method: &str, params: Value, stop: &platform::Stop) -> Result<Value, McpError> {
         self.rpc_stopped(method, params, stop)
     }
 
-    pub fn listed_tools_stopped(self: &Arc<Self>, stop: &platform::Stop) -> Result<Vec<McpTool>, String> {
+    pub fn listed_tools_stopped(self: &Arc<Self>, stop: &platform::Stop) -> Result<Vec<McpTool>, McpError> {
         let mut tools = Vec::new();
         let mut params = json!({});
         let mut cursors = std::collections::HashSet::new();
@@ -216,10 +218,10 @@ impl McpServer {
     fn call(&self, name: &str, arguments: &Value, stop: &platform::Stop) -> Outcome {
         let arguments = if arguments.is_null() { json!({}) } else { arguments.clone() };
         match self.transport.request_stopped(&json!({"jsonrpc":"2.0","id":self.next.fetch_add(1,Ordering::Relaxed),"method":"tools/call","params":{"name":name,"arguments":arguments}}),stop).and_then(|reply| {
-            if let Some(error)=reply.get("error") {Err(error["message"].as_str().unwrap_or("MCP call failed").to_owned())} else {Ok(reply["result"].clone())}
+            if let Some(error)=reply.get("error") {Err(McpError::Failed(error["message"].as_str().unwrap_or("MCP call failed").to_owned()))} else {Ok(reply["result"].clone())}
         }) {
             Ok(result) => outcome(&result),
-            Err(error) => Outcome::error(error),
+            Err(error) => Outcome::error(error.to_string()),
         }
     }
 }
@@ -258,7 +260,7 @@ pub fn connect_judged(
     connected
 }
 
-fn ready(name: &str, server: Result<McpServer, String>, stop: &platform::Stop) -> Option<Arc<McpServer>> {
+fn ready(name: &str, server: Result<McpServer, McpError>, stop: &platform::Stop) -> Option<Arc<McpServer>> {
     server
         .and_then(|server| server.initialize_stopped(stop).map(|()| Arc::new(server)))
         .inspect_err(|error| tracing::warn!(%error, server = name, "an MCP server is not available to this run"))
@@ -267,6 +269,7 @@ fn ready(name: &str, server: Result<McpServer, String>, stop: &platform::Stop) -
 
 fn in_process(request: &PromptRequest, stop: &platform::Stop) -> Vec<Arc<McpServer>> {
     request
+        .host
         .credentials
         .mcp
         .iter()
@@ -283,10 +286,11 @@ fn wanted(
     sources: &McpSources,
     judge: &Arc<crate::tools::host_judge::HostJudge>,
 ) -> Vec<ServerSpec> {
-    servers(request, sources)
+    let credentials = &request.host.credentials;
+    servers(request.folder(), sources)
         .into_iter()
-        .filter(|spec| !request.credentials.mcp.iter().any(|local| local.name == spec.name()))
-        .map(|spec| spec.signed_in(request.credentials.mcp_tokens.as_ref()).judged_by(judge))
+        .filter(|spec| !credentials.mcp.iter().any(|local| local.name == spec.name()))
+        .map(|spec| spec.signed_in(credentials.mcp_tokens.as_ref()).judged_by(judge))
         .collect()
 }
 

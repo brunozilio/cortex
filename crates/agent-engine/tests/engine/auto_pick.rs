@@ -18,7 +18,7 @@ fn auto(prompt: &str) -> (tempfile::TempDir, PromptRequest) {
     std::fs::create_dir_all(&root).expect("settings dir");
     std::fs::write(root.join("settings.json"), r#"{"smallModel":"claude-haiku-5-5"}"#).expect("settings");
     let mut request = PromptRequest::plain(dir.path().into(), prompt, model());
-    request.auto_pick = true;
+    request.session.auto_pick = true;
     (dir, request)
 }
 
@@ -49,7 +49,7 @@ fn a_bare_go_ahead_costs_no_pick() {
 
     let asked = scripted.asked();
     assert_eq!(asked.len(), 1);
-    assert_eq!((asked[0].model.as_str(), asked[0].effort), (request.model.id.as_str(), Effort::Low));
+    assert_eq!((asked[0].model.as_str(), asked[0].effort), (request.session.model.id.as_str(), Effort::Low));
 }
 
 #[test]
@@ -62,5 +62,5 @@ fn an_unreadable_pick_leaves_the_session_s_model_at_medium() {
     finish(&start(&engine(&scripted), &request));
 
     let asked = scripted.asked();
-    assert_eq!((asked[1].model.as_str(), asked[1].effort), (request.model.id.as_str(), Effort::Medium));
+    assert_eq!((asked[1].model.as_str(), asked[1].effort), (request.session.model.id.as_str(), Effort::Medium));
 }

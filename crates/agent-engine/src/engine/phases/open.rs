@@ -39,7 +39,7 @@ impl Job {
         session: LoadedSession,
     ) -> Result<Opened, Stop> {
         let LoadedSession { id: session, mut history } = session;
-        if self.request.command == Some(SessionCommand::MeasureContext) {
+        if self.request.session.command == Some(SessionCommand::MeasureContext) {
             let framed = self.frame(runtime, brief, &session)?;
             return Err(self.measured(&framed.template, &history));
         }
@@ -47,7 +47,7 @@ impl Job {
         let framed = self.frame(runtime, brief, &session)?;
         let Framed { mut workspace, toolbox, main, worktree, mut template, extra } = framed;
         let api = self.metered_for_the_run(api, &mut template, &mut workspace);
-        if self.request.command == Some(SessionCommand::Compact) {
+        if self.request.session.command == Some(SessionCommand::Compact) {
             return Err(self.compacted(&api, &template, &workspace, &session, &mut history));
         }
         let turn_limit = self.turn_limit(&main.config);
@@ -60,7 +60,7 @@ impl Job {
     }
 
     fn measured(&self, template: &TurnRequest, history: &[Message]) -> Stop {
-        let usage = upkeep::measure(&self.request.model, &template.system, &template.tools, history);
+        let usage = upkeep::measure(&self.request.session.model, &template.system, &template.tools, history);
         self.gate.emit(EngineEvent::ContextMeasured(usage));
         Stop::completed(Some(0.0))
     }
@@ -72,10 +72,10 @@ impl Job {
         workspace: &mut Workspace,
     ) -> Metered {
         let ledger = Arc::new(Ledger::default());
-        if self.request.auto_pick && self.request.command.is_none() {
+        if self.request.session.auto_pick && self.request.session.command.is_none() {
             self.auto_pick(&api, &ledger, template, &mut workspace.models);
         }
-        self.metered(api, &ledger, self.request.model.clone())
+        self.metered(api, &ledger, self.request.session.model.clone())
     }
 
     fn compacted(
@@ -86,7 +86,7 @@ impl Job {
         session: &SessionId,
         history: &mut Vec<Message>,
     ) -> Stop {
-        let focus = Some(self.request.prompt.as_str()).filter(|focus| !focus.trim().is_empty());
+        let focus = Some(self.request.prompt.text.as_str()).filter(|focus| !focus.trim().is_empty());
         match upkeep::compact_hooked_on(api, template, history, workspace, "manual", focus) {
             Ok(compaction) => {
                 if let Err(error) = self.save(session, history) {
@@ -100,6 +100,11 @@ impl Job {
     }
 
     fn turn_limit(&self, config: &AgentConfig) -> usize {
-        self.request.max_turns.map(|turns| turns as usize).or(config.max_turns).unwrap_or(crate::agent::MAX_TURNS)
+        self.request
+            .policy
+            .max_turns
+            .map(|turns| turns as usize)
+            .or(config.max_turns)
+            .unwrap_or(crate::agent::MAX_TURNS)
     }
 }

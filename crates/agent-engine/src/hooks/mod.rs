@@ -10,13 +10,15 @@ pub use self::brief::Briefed;
 pub use self::handlers::{command, http};
 pub use self::script_hook::script;
 pub use self::scripts::BUILTIN as BUILTIN_SCRIPT;
-pub(crate) use self::validate::{EVENTS, KINDS, TIMEOUT_SECONDS};
+pub(crate) use self::validate::TIMEOUT_SECONDS;
 use crate::tools::Workspace;
+pub use domain::hooks::{HandlerKind, HookEvent};
+use domain::permission_rules::PermissionDecision;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Hooks(pub BTreeMap<String, Vec<Group>>);
+pub struct Hooks(pub BTreeMap<HookEvent, Vec<Group>>);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Group {
@@ -28,7 +30,7 @@ pub struct Group {
 #[serde(deny_unknown_fields)]
 pub struct Handler {
     #[serde(rename = "type")]
-    pub kind: String,
+    pub kind: HandlerKind,
     #[serde(default)]
     pub command: String,
     #[serde(default)]
@@ -57,7 +59,7 @@ pub struct Decision {
     pub blocked: Option<String>,
     pub context: String,
     pub updated_input: Option<Value>,
-    pub permission: Option<String>,
+    pub permission: Option<PermissionDecision>,
     pub updated_output: Option<Value>,
     pub model: Option<String>,
     #[serde(default)]
@@ -105,11 +107,11 @@ impl Group {
 
 impl Handler {
     fn runs(&self, input: &Value, workspace: &Workspace, model: Model<'_>) -> Result<CommandOutput, String> {
-        match self.kind.as_str() {
-            "http" => http(self, input, workspace),
-            "script" => script(self, input, workspace, model),
-            "command" => command(self, input, workspace),
-            _ => self.judged(input, workspace, model),
+        match self.kind {
+            HandlerKind::Http => http(self, input, workspace),
+            HandlerKind::Script => script(self, input, workspace, model),
+            HandlerKind::Command => command(self, input, workspace),
+            HandlerKind::Prompt | HandlerKind::Agent => self.judged(input, workspace, model),
         }
     }
 
@@ -132,17 +134,17 @@ impl Hooks {
         for (event, groups) in &self.0 {
             for group in groups {
                 for handler in &group.hooks {
-                    let runs = match handler.kind.as_str() {
-                        "http" => handler.url.clone().unwrap_or_default(),
-                        "prompt" | "agent" => {
+                    let runs = match handler.kind {
+                        HandlerKind::Http => handler.url.clone().unwrap_or_default(),
+                        HandlerKind::Prompt | HandlerKind::Agent => {
                             let prompt: String =
                                 handler.prompt.as_deref().unwrap_or_default().chars().take(60).collect();
                             format!("{}: {prompt}", handler.kind)
                         }
-                        _ => handler.command.clone(),
+                        HandlerKind::Command | HandlerKind::Script => handler.command.clone(),
                     };
                     listed.push(domain::permission_rules::HookInfo {
-                        event: event.clone(),
+                        event: *event,
                         matcher: group.matcher.clone(),
                         runs,
                     });
@@ -153,29 +155,39 @@ impl Hooks {
     }
 
     pub fn parse(value: &Value) -> Result<Self, String> {
-        let events: BTreeMap<String, Vec<Group>> = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        validate::named(value)?;
+        let events: BTreeMap<HookEvent, Vec<Group>> =
+            serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         for (event, groups) in &events {
-            validate::event(event)?;
             for group in groups {
-                validate::matcher(event, &group.matcher)?;
+                validate::matcher(*event, &group.matcher)?;
             }
             for (at, hook) in groups.iter().flat_map(|group| &group.hooks).enumerate() {
-                validate::hook(event, at, hook)?;
+                validate::hook(*event, at, hook)?;
             }
         }
         Ok(Self(events))
     }
     pub fn extend(&mut self, other: &Self) {
         for (event, groups) in &other.0 {
-            self.0.entry(event.clone()).or_default().extend(groups.clone());
+            self.0.entry(*event).or_default().extend(groups.clone());
         }
     }
-    pub fn run(&self, event: &str, subject: &str, input: Value, workspace: &Workspace) -> Result<Decision, String> {
+    pub fn listens_to(&self, event: HookEvent) -> bool {
+        self.0.contains_key(&event)
+    }
+    pub fn run(
+        &self,
+        event: HookEvent,
+        subject: &str,
+        input: Value,
+        workspace: &Workspace,
+    ) -> Result<Decision, String> {
         self.run_with_model(event, subject, input, workspace, None)
     }
     pub fn run_with_model(
         &self,
-        event: &str,
+        event: HookEvent,
         subject: &str,
         input: Value,
         workspace: &Workspace,
@@ -185,7 +197,7 @@ impl Hooks {
     }
     fn decided(
         &self,
-        event: &str,
+        event: HookEvent,
         subject: &str,
         mut input: Value,
         workspace: &Workspace,
@@ -196,7 +208,7 @@ impl Hooks {
         input["session_id"] = json!(workspace.session_id);
         input["agent_type"] = json!(workspace.agent_name);
         input["cwd"] = json!(workspace.cwd);
-        for group in self.0.get(event).into_iter().flatten() {
+        for group in self.0.get(&event).into_iter().flatten() {
             if !group.applies_to(subject)? {
                 continue;
             }
@@ -211,7 +223,12 @@ impl Hooks {
     }
 }
 
-fn absorbed(event: &str, result: CommandOutput, decision: &mut Decision, input: &mut Value) -> Result<Handled, String> {
+fn absorbed(
+    event: HookEvent,
+    result: CommandOutput,
+    decision: &mut Decision,
+    input: &mut Value,
+) -> Result<Handled, String> {
     if result.code == Some(2) {
         decision.blocked = Some(result.stderr);
         return Ok(Handled::Blocked);
@@ -222,7 +239,7 @@ fn absorbed(event: &str, result: CommandOutput, decision: &mut Decision, input: 
     }
     match serde_json::from_str::<Value>(&result.stdout) {
         Ok(value) => answered(event, &value, decision, input)?,
-        Err(_) if matches!(event, "SessionStart" | "RunStart" | "UserPromptSubmit") => {
+        Err(_) if event.takes_plain_text_as_context() => {
             decision.context.push_str(&result.stdout);
         }
         Err(_) => {}
@@ -230,23 +247,23 @@ fn absorbed(event: &str, result: CommandOutput, decision: &mut Decision, input: 
     Ok(if decision.blocked.is_some() { Handled::Blocked } else { Handled::GoOn })
 }
 
-fn answered(event: &str, value: &Value, decision: &mut Decision, input: &mut Value) -> Result<(), String> {
+fn answered(event: HookEvent, value: &Value, decision: &mut Decision, input: &mut Value) -> Result<(), String> {
     let specific = &value["hookSpecificOutput"];
     if let Some(reason) = blocking(value) {
         decision.blocked = Some(reason);
     }
     permission_answered(event, specific, decision)?;
-    if event == "PostToolUse" {
+    if event == HookEvent::PostToolUse {
         decision.updated_output = specific.get("updatedToolOutput").cloned();
     }
-    if decision.model.is_none() && matches!(event, "ModelRequest" | "ModelError") {
+    if decision.model.is_none() && matches!(event, HookEvent::ModelRequest | HookEvent::ModelError) {
         decision.model = specific["model"].as_str().filter(|m| !m.trim().is_empty()).map(Into::into);
     }
-    if decision.effort.is_none() && event == "ModelRequest" {
+    if decision.effort.is_none() && event == HookEvent::ModelRequest {
         decision.effort = specific["effort"].as_str().and_then(domain::interception::effort);
     }
     rewrites::absorb(event, value, decision, input);
-    if decision.text.is_none() && event == "ModelResponse" {
+    if decision.text.is_none() && event == HookEvent::ModelResponse {
         decision.text = specific["text"].as_str().map(Into::into);
     }
     for text in [value["systemMessage"].as_str(), specific["additionalContext"].as_str()].into_iter().flatten() {
@@ -269,28 +286,26 @@ fn blocking(value: &Value) -> Option<String> {
     })
 }
 
-fn permission_answered(event: &str, specific: &Value, decision: &mut Decision) -> Result<(), String> {
-    let permission = if event == "PermissionRequest" {
+fn permission_answered(event: HookEvent, specific: &Value, decision: &mut Decision) -> Result<(), String> {
+    let permission = if event == HookEvent::PermissionRequest {
         specific["decision"]["behavior"].as_str()
     } else {
         specific["permissionDecision"].as_str()
     };
     let Some(permission) = permission else { return Ok(()) };
-    if !matches!(permission, "allow" | "deny" | "ask") {
-        return Err("invalid permission decision from hook".into());
-    }
-    decision.permission = Some(permission.into());
-    if permission == "deny" {
+    let permission = PermissionDecision::named(permission).ok_or("invalid permission decision from hook")?;
+    decision.permission = Some(permission);
+    if permission == PermissionDecision::Deny {
         let reason = specific["permissionDecisionReason"].as_str().unwrap_or("Permission hook denied the action");
         decision.blocked = Some(reason.into());
     }
     Ok(())
 }
 
-fn input_updated(event: &str, specific: &Value, decision: &mut Decision, input: &mut Value) -> Result<(), String> {
+fn input_updated(event: HookEvent, specific: &Value, decision: &mut Decision, input: &mut Value) -> Result<(), String> {
     let updated = match event {
-        "PermissionRequest" => specific["decision"].get("updatedInput"),
-        "PreToolUse" => specific.get("updatedInput"),
+        HookEvent::PermissionRequest => specific["decision"].get("updatedInput"),
+        HookEvent::PreToolUse => specific.get("updatedInput"),
         _ => None,
     };
     let Some(updated) = updated else { return Ok(()) };

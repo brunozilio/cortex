@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::messages::{Kept, Messages};
 use super::{ContextSplit, Span, SpanKind, Usage};
 use crate::billing::ModelUsage;
-use crate::trace::{Agent, Kind, Lane, ModelCall, Node, RunInfo, Wait};
+use crate::trace::{Agent, Kind, Lane, ModelCall, Node, RunInfo, Title, Wait};
 
 pub const JUDGE: &str = "verification judge";
 pub const REVIEW: &str = "auto-review";
@@ -141,7 +141,7 @@ impl Spans {
                     serde_json::to_string_pretty(input).unwrap_or_else(|_| call.summary.clone())
                 });
                 span.output = output.clone().unwrap_or_default();
-                (span.failed, span.flags) = (node.failed, notes.clone());
+                (span.failed, span.flags) = (node.failed, notes.iter().map(ToString::to_string).collect());
                 span.attrs = vec![("tool".into(), call.name.clone()), ("call".into(), call.id.clone())];
                 self.waits(id, &call.name, waits, until);
                 match agent {
@@ -174,10 +174,10 @@ impl Spans {
             }
             Kind::Failed { error } => marker(self, SpanKind::Event, "failed".into(), error.clone()),
             Kind::Cancelled => marker(self, SpanKind::Event, "cancelled".into(), String::new()),
-            Kind::Note { title, text } => match title.as_str() {
-                "verified" => marker(self, SpanKind::Eval, JUDGE.into(), text.clone()),
-                "reviewed" => marker(self, SpanKind::Eval, REVIEW.into(), text.clone()),
-                _ => marker(self, SpanKind::Event, title.clone(), text.clone()),
+            Kind::Note { title, text } => match title {
+                Title::Verified => marker(self, SpanKind::Eval, JUDGE.into(), text.clone()),
+                Title::Reviewed => marker(self, SpanKind::Eval, REVIEW.into(), text.clone()),
+                _ => marker(self, SpanKind::Event, title.as_str().into(), text.clone()),
             },
         }
     }

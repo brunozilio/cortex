@@ -1,6 +1,6 @@
 use super::{Builder, node};
 use crate::review::{Finding, Severity};
-use crate::trace::{Kind, Node};
+use crate::trace::{Kind, Mark, Node, Title};
 use crate::verification::Verdict;
 use crate::{AskId, Decision};
 
@@ -21,11 +21,11 @@ impl Builder<'_> {
         self.group.iter_mut().rev().chain(earlier).find(|node| matches!(node.kind, Kind::Tool { .. }) && matches(node))
     }
 
-    pub(super) fn mark(&mut self, at: u64, tool: &str, note: String) {
+    pub(super) fn mark(&mut self, at: u64, tool: &str, mark: Mark) {
         let named = |node: &Node| tool.is_empty() || matches!(&node.kind, Kind::Tool { call, .. } if call.name == tool);
         match self.latest_tool(named).map(|node| &mut node.kind) {
-            Some(Kind::Tool { notes, .. }) => notes.push(note),
-            _ => self.note(at, note.split([' ', ':']).next().unwrap_or_default(), note.clone()),
+            Some(Kind::Tool { notes, .. }) => notes.push(mark),
+            _ => self.note(at, mark.title(), mark.to_string()),
         }
     }
 
@@ -52,7 +52,7 @@ impl Builder<'_> {
                 }
             })
             .collect();
-        let kind = Kind::Note { title: "verified".into(), text: lines.join("\n") };
+        let kind = Kind::Note { title: Title::Verified, text: lines.join("\n") };
         self.single(node(at, !verdict.passed, kind));
     }
 
@@ -66,6 +66,6 @@ impl Builder<'_> {
             })
             .collect();
         let severe = findings.iter().any(|finding| finding.severity == Severity::High);
-        self.single(node(at, severe, Kind::Note { title: "reviewed".into(), text: lines.join("\n") }));
+        self.single(node(at, severe, Kind::Note { title: Title::Reviewed, text: lines.join("\n") }));
     }
 }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use domain::{EngineEvent, FailureKind};
+use domain::failure::RunFailure;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
@@ -26,8 +26,9 @@ pub(super) fn spawn(
     runtime.spawn(async move {
         if tokio::task::spawn_blocking(move || job.run(workspace)).await.is_err() {
             control.cancel();
-            gate.emit(EngineEvent::Failure(FailureKind::Other));
-            gate.emit(EngineEvent::Failed("The native engine stopped unexpectedly.".into()));
+            for event in RunFailure::other("The native engine stopped unexpectedly.").events() {
+                gate.emit(event);
+            }
         }
     })
 }

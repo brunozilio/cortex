@@ -94,7 +94,7 @@ fn dropping_a_run_that_has_not_ended_cancels_it() {
 fn a_run_left_running_or_already_ended_is_not_cancelled_when_dropped() {
     let (client, _, asked) = scripted(|command, outlet| {
         if let ClientCommand::SubmitPrompt { run, request } = &command.payload
-            && request.prompt == "hi"
+            && request.prompt.text == "hi"
         {
             outlet.emit(ServerEvent::Run { run: *run, event: EngineEvent::Cancelled });
         }

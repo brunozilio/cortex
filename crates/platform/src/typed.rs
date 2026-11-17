@@ -7,13 +7,24 @@ use crate::{Bounds, Ended};
 
 pub const MOST_OUTPUT: usize = 1 << 20;
 
-pub fn run(cwd: &Path, command: &str, limit: Duration) -> Result<(String, bool), String> {
+#[derive(Debug, thiserror::Error)]
+pub enum TypedError {
+    #[error("could not start the shell: {0}")]
+    NoShell(#[source] std::io::Error),
+}
+
+impl From<TypedError> for String {
+    fn from(error: TypedError) -> Self {
+        error.to_string()
+    }
+}
+
+pub fn run(cwd: &Path, command: &str, limit: Duration) -> Result<(String, bool), TypedError> {
     let mut shell = crate::command("sh");
     shell.arg("-c").arg(format!("exec 2>&1\n{command}")).current_dir(cwd);
     let never = AtomicBool::new(false);
     let bounds = Bounds { timeout: limit, max_output: MOST_OUTPUT + 1, stop: &never, input: None };
-    let finished = crate::bounded::run_keeping(&mut shell, bounds, Keep::End)
-        .map_err(|error| format!("could not start the shell: {error}"))?;
+    let finished = crate::bounded::run_keeping(&mut shell, bounds, Keep::End).map_err(TypedError::NoShell)?;
     let mut out = ending(finished.stdout);
     match finished.ended {
         Ended::Exited(status) => Ok((out.trim_end().to_owned(), !status.success())),
@@ -41,8 +52,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("dir");
         std::fs::write(dir.path().join("a.txt"), "x").expect("write");
         let limit = Duration::from_secs(20);
-        assert_eq!(run(dir.path(), "ls", limit), Ok(("a.txt".to_owned(), false)));
-        assert_eq!(run(dir.path(), "echo oops >&2; exit 3", limit), Ok(("oops".to_owned(), true)));
+        assert_eq!(run(dir.path(), "ls", limit).expect("ran"), ("a.txt".to_owned(), false));
+        assert_eq!(run(dir.path(), "echo oops >&2; exit 3", limit).expect("ran"), ("oops".to_owned(), true));
     }
 
     #[test]

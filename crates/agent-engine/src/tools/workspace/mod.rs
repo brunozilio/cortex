@@ -89,9 +89,9 @@ impl Workspace {
 
     pub fn for_request(request: &domain::PromptRequest) -> Self {
         Self {
-            credentials: request.credentials.clone(),
-            models: Models::new(request.model.clone()),
-            ..Self::new(&request.cwd)
+            credentials: request.host.credentials.clone(),
+            models: Models::new(request.session.model.clone()),
+            ..Self::new(&request.session.cwd)
         }
     }
 

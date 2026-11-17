@@ -33,15 +33,15 @@ impl Job {
         let settings = &brief.settings;
         let Equipped { mut workspace, mut toolbox, main } = equipped;
         workspace.auto_memory = settings.auto_memory;
-        workspace.policy = flagged(settings, &workspace.cwd, self.request.safety_check);
+        workspace.policy = flagged(settings, &workspace.cwd, self.request.policy.safety_check);
         workspace.policy.trust = brief.trust;
         if let Some(notice) = sandbox_notice(&workspace, &SANDBOX_SAID) {
             self.gate.emit(domain::EngineEvent::Notice(notice));
         }
         workspace.models.escalation.clone_from(&settings.escalation);
-        self.request.budget = budget(&self.request, &settings.features);
+        self.request.policy.budget = budget(&self.request, &settings.features);
         workspace.services.files = Some(Arc::default());
-        let roles = roles::merged(&self.request.roles, settings);
+        let roles = roles::merged(&self.request.session.roles, settings);
         if let Some(advisor) = roles.get(ModelRole::Advisor) {
             let model = role_model(&self.request, advisor).map_err(|error| format!("advisorModel: {error}"));
             workspace.models.advisor = Some(model.map_err(Stop::failed)?);
@@ -88,12 +88,12 @@ pub(in crate::engine) fn flagged(settings: &Settings, cwd: &Path, safety_check: 
 }
 
 pub(in crate::engine) fn budget(request: &PromptRequest, features: &Features) -> Option<domain::budget::Budget> {
-    request.budget.filter(|_| features.on(features::BUDGET))
+    request.policy.budget.filter(|_| features.on(features::BUDGET))
 }
 
 fn role_model(request: &PromptRequest, name: &str) -> Result<String, String> {
     let config = AgentConfig { model: Some(name.to_owned()), ..Default::default() };
-    config.model(&request.model.id, request.model.provider)
+    config.model(&request.session.model.id, request.session.model.provider)
 }
 
 pub(in crate::engine) fn verification(
@@ -106,19 +106,21 @@ pub(in crate::engine) fn verification(
         .clone()
         .filter(|_| settings.features.on(features::PROJECT_CRITERIA))
         .map(domain::Criteria::project);
-    let asked = request.verification.clone().or(project);
-    let Some(criteria) = asked.filter(|_| request.permission != domain::PermissionMode::Plan) else {
+    let asked = request.policy.verification.clone().or(project);
+    let Some(criteria) = asked.filter(|_| request.policy.permission != domain::PermissionMode::Plan) else {
         return Ok(None);
     };
     let config = AgentConfig { model: roles.get(ModelRole::Review).map(str::to_owned), ..Default::default() };
-    let model =
-        config.model(&request.model.id, request.model.provider).map_err(|error| format!("judgeModel: {error}"))?;
+    let model = config
+        .model(&request.session.model.id, request.session.model.provider)
+        .map_err(|error| format!("judgeModel: {error}"))?;
     let allow = criteria.judge_allow(&settings.judge_allow);
     Ok(Some(Verification { criteria, model, allow }))
 }
 
 pub(in crate::engine) fn anchored(request: &PromptRequest, features: &Features) -> Vec<domain::Memory> {
     request
+        .host
         .memory
         .as_ref()
         .filter(|brief| brief.anchors && features.on(features::MEMORY_ANCHORS))
@@ -129,9 +131,9 @@ pub(in crate::engine) fn anchored(request: &PromptRequest, features: &Features) 
 pub(in crate::engine) fn permissions(request: &PromptRequest, settings: &Settings) -> Result<PermissionRules, String> {
     let mut permissions = settings.permissions.clone();
     let asked = [
-        (RuleKind::Allow, &request.allowed_tools),
-        (RuleKind::Ask, &request.ask_tools),
-        (RuleKind::Deny, &request.disallowed_tools),
+        (RuleKind::Allow, &request.policy.allowed_tools),
+        (RuleKind::Ask, &request.policy.ask_tools),
+        (RuleKind::Deny, &request.policy.disallowed_tools),
     ];
     for (kind, rules) in asked {
         for rule in rules {

@@ -4,7 +4,7 @@ use serde_json::Value;
 use super::{Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
-pub const ASK_TOOL: &str = "AskUserQuestion";
+pub const ASK_TOOL: &str = super::names::ASK;
 
 const MAX_QUESTIONS: usize = 4;
 const MAX_OPTIONS: usize = 4;

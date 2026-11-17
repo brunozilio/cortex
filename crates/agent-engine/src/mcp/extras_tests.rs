@@ -37,7 +37,7 @@ impl domain::mcp::McpEndpoint for Docs {
 
 fn servers() -> Vec<Arc<crate::mcp::McpServer>> {
     let mut request = PromptRequest::plain("/repo".into(), "hi", ModelOption::new("m", "M"));
-    request.credentials.mcp = vec![domain::mcp::LocalMcp::new("docs", Arc::new(Docs))];
+    request.host.credentials.mcp = vec![domain::mcp::LocalMcp::new("docs", Arc::new(Docs))];
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
     let sources = crate::mcp::McpSources::default();
     connect_stopped(&request, &sources, &http, &platform::Stop::new())

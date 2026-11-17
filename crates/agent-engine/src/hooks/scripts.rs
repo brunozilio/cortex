@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::{Group, Handler, Hooks};
+use super::{Group, Handler, HandlerKind, HookEvent, Hooks};
 
 pub const BUILTIN: &str = "builtin:";
 
@@ -80,9 +80,13 @@ impl Hooks {
                 .and_then(|value| value.as_u64())
                 .filter(|seconds| (1..=600).contains(seconds))
                 .unwrap_or(60);
-            for event in events {
+            for named in events {
+                let Some(event) = HookEvent::named(&named) else {
+                    tracing::warn!(file = shown, event = named, "a hook script names an unknown event");
+                    continue;
+                };
                 let handler = Handler {
-                    kind: "script".into(),
+                    kind: HandlerKind::Script,
                     command: shown.clone(),
                     prompt: None,
                     model: None,
@@ -120,14 +124,14 @@ export default function (input) {
         .expect("hook");
         std::fs::write(folder.join("nameless.js"), "export default () => null;").expect("hook");
         let hooks = Hooks::from_scripts(&folder);
-        assert_eq!(hooks.0.keys().collect::<Vec<_>>(), ["PreToolUse"]);
+        assert_eq!(hooks.0.keys().copied().collect::<Vec<_>>(), [HookEvent::PreToolUse]);
         let workspace = Workspace::new(dir.path());
         let input = |command: &str| serde_json::json!({ "tool_name": "Bash", "tool_input": { "command": command } });
-        let blocked = hooks.run("PreToolUse", "Bash", input("rm -rf /"), &workspace).expect("run");
+        let blocked = hooks.run(HookEvent::PreToolUse, "Bash", input("rm -rf /"), &workspace).expect("run");
         assert_eq!(blocked.blocked.as_deref(), Some("no rm -rf"));
-        let allowed = hooks.run("PreToolUse", "Bash", input("ls"), &workspace).expect("run");
+        let allowed = hooks.run(HookEvent::PreToolUse, "Bash", input("ls"), &workspace).expect("run");
         assert!(allowed.blocked.is_none());
-        let other = hooks.run("PreToolUse", "Read", input("rm -rf /"), &workspace).expect("run");
+        let other = hooks.run(HookEvent::PreToolUse, "Read", input("rm -rf /"), &workspace).expect("run");
         assert!(other.blocked.is_none(), "the matcher picks the tools");
     }
 
@@ -138,7 +142,8 @@ export const matcher = "Bash";
 export default () => ({ decision: "block", reason: "built in" });"#;
         let files: [(&str, &[u8]); 2] = [("hooks/guard.js", hook), ("hooks/notes.txt", b"not a hook")];
         let hooks = Hooks::from_builtin(&files, None);
-        let handlers: Vec<&str> = hooks.0["PreToolUse"].iter().map(|group| group.hooks[0].command.as_str()).collect();
+        let handlers: Vec<&str> =
+            hooks.0[&HookEvent::PreToolUse].iter().map(|group| group.hooks[0].command.as_str()).collect();
         assert_eq!(handlers, ["builtin:hooks/guard.js"]);
 
         let user = tempfile::tempdir().expect("user");
@@ -153,7 +158,7 @@ export default () => ({ decision: "block", reason: "built in" });"#;
             .collect();
         assert_eq!(events.len(), 19, "one file per event: {events:?}");
         for event in &events {
-            assert!(super::super::validate::event(event).is_ok(), "{event}");
+            assert!(HookEvent::named(event).is_some(), "{event}");
         }
         assert!(Hooks::from_builtin(&shipped, None).0.is_empty(), "an empty default registers nothing");
 

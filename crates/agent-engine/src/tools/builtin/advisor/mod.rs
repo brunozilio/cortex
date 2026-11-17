@@ -5,7 +5,7 @@ use crate::model::{BlockingTurn, ModelApi, ToolSpec, TurnRequest};
 use crate::tools::{Consult, Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message, Role};
 
-pub const ADVISOR_TOOL: &str = "Advisor";
+pub const ADVISOR_TOOL: &str = crate::tools::names::ADVISOR;
 
 const RESULT_CHARS: usize = 4000;
 

@@ -3,9 +3,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::api::features::trace::{TraceReply, TraceRequest};
 use agent_engine::sessions::{FileSessions, records};
+use domain::SessionId;
 use domain::trace::insights::{Report, SessionRuns, insights, recent};
 use domain::trace::runs::{Run, runs, trim, without_messages};
-use domain::{ModelOption, PromptRequest, SessionId};
 use serde_json::Value;
 
 use crate::features::context::Context;
@@ -72,8 +72,7 @@ fn everything(store: &FileSessions, listed: &[(SessionId, PathBuf)], now_ms: u64
 }
 
 fn traced(store: &FileSessions, cwd: &Path, id: &SessionId) -> Result<Vec<Run>, String> {
-    let request = PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""));
-    let records = records(store.entries(&request, id)?);
+    let records = records(store.entries(cwd, id)?);
     if records.is_empty() {
         return Err("this session has nothing to trace yet".into());
     }

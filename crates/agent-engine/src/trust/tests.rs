@@ -19,7 +19,7 @@ fn repository(inside: &Path, name: &str) -> PathBuf {
 
 fn request(cwd: &Path, home: &Path, trust: Trust) -> PromptRequest {
     let mut request = PromptRequest::plain(cwd.to_path_buf(), "", ModelOption::new("m", "M"));
-    request.extensions = Some(Extensions { home: Some(home.to_path_buf()), trust, ..Extensions::default() });
+    request.host.extensions = Some(Extensions { home: Some(home.to_path_buf()), trust, ..Extensions::default() });
     request
 }
 
@@ -137,7 +137,7 @@ fn an_untrusted_folder_s_scripts_agents_and_servers_are_left_out_and_its_text_is
     write(&repo, "settings.local.json", r#"{"enableAllProjectMcpServers": true}"#);
 
     let untrusted = request(&repo, home.path(), Trust::Untrusted);
-    let brief = crate::brief::Brief::load(&untrusted).expect("brief");
+    let brief = crate::brief::Brief::load(untrusted.folder()).expect("brief");
     let skills: Vec<&str> = brief.skills.iter().map(|skill| skill.name.as_str()).collect();
     assert!(skills.contains(&"notes"), "a Markdown skill still loads: {skills:?}");
     assert!(!skills.contains(&"ship") && !skills.contains(&"release"), "a script skill does not: {skills:?}");
@@ -146,24 +146,25 @@ fn an_untrusted_folder_s_scripts_agents_and_servers_are_left_out_and_its_text_is
     assert_eq!(reviewer.instructions, "Review.");
     assert!(brief.instructions.iter().any(|file| file.text.contains("Use tabs.")), "the instruction file is read");
     assert!(brief.rules.iter().any(|rule| rule.text.contains("Use tabs.")), "and so are its rules");
-    let skipped = crate::mcp::list(&untrusted).expect("list");
+    let skipped = crate::mcp::list(untrusted.folder()).expect("list");
     assert!(
         skipped.iter().all(|server| server.state == domain::mcp_config::McpState::Untrusted),
         "its servers are only shown as skipped: {skipped:?}"
     );
-    assert!(crate::mcp::servers(&untrusted, &brief.mcp()).is_empty(), "nor started");
+    assert!(crate::mcp::servers(untrusted.folder(), &brief.mcp()).is_empty(), "nor started");
     assert!(crate::tools::script_tool::load(&brief.gate(&repo)).is_empty());
 
     let trusted = request(&repo, home.path(), Trust::Trusted);
-    let brief = crate::brief::Brief::load(&trusted).expect("brief");
+    let brief = crate::brief::Brief::load(trusted.folder()).expect("brief");
     let skills: Vec<&str> = brief.skills.iter().map(|skill| skill.name.as_str()).collect();
     assert!(skills.contains(&"ship") && skills.contains(&"release"), "{skills:?}");
     let reviewer = brief.agents.iter().find(|agent| agent.name == "reviewer").expect("offered");
     assert_eq!(reviewer.config.permission, Some(domain::PermissionMode::Bypass));
-    let listed: Vec<String> = crate::mcp::list(&trusted).expect("list").into_iter().map(|server| server.name).collect();
+    let listed: Vec<String> =
+        crate::mcp::list(trusted.folder()).expect("list").into_iter().map(|server| server.name).collect();
     assert_eq!(listed, ["jira", "theirs"]);
     let started: Vec<String> =
-        crate::mcp::servers(&trusted, &brief.mcp()).iter().map(|server| server.name().to_owned()).collect();
+        crate::mcp::servers(trusted.folder(), &brief.mcp()).iter().map(|server| server.name().to_owned()).collect();
     assert_eq!(started, ["jira", "theirs"], "approved in its local settings, which trust made the owner's");
 }
 
@@ -174,7 +175,7 @@ fn a_skill_with_a_script_and_a_markdown_file_is_offered_as_markdown_while_untrus
     write(&repo, "skills/ship/skill.js", "throw new Error('never run while untrusted');");
     write(&repo, "skills/ship/SKILL.md", "---\ndescription: Ships by hand\n---\nShip it.");
 
-    let brief = crate::brief::Brief::load(&request(&repo, home.path(), Trust::Untrusted)).expect("brief");
+    let brief = crate::brief::Brief::load(request(&repo, home.path(), Trust::Untrusted).folder()).expect("brief");
 
     let ship = brief.skills.iter().find(|skill| skill.name == "ship").expect("the Markdown skill is offered");
     assert_eq!(ship.description, "Ships by hand");
@@ -188,9 +189,9 @@ fn a_trusted_folder_s_server_still_waits_for_its_own_approval() {
     write(&repo, "mcp.json", r#"{"mcpServers": {"jira": {"command": "jira-mcp"}}}"#);
 
     let trusted = request(&repo, home.path(), Trust::Trusted);
-    let listed = crate::mcp::list(&trusted).expect("list");
+    let listed = crate::mcp::list(trusted.folder()).expect("list");
 
     assert_eq!(listed[0].state, domain::mcp_config::McpState::Pending, "trust is not the server's approval");
-    let brief = crate::brief::Brief::load(&trusted).expect("brief");
-    assert!(crate::mcp::servers(&trusted, &brief.mcp()).is_empty());
+    let brief = crate::brief::Brief::load(trusted.folder()).expect("brief");
+    assert!(crate::mcp::servers(trusted.folder(), &brief.mcp()).is_empty());
 }

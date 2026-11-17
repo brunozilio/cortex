@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use domain::failure::RunFailure;
 use domain::{EngineEvent, EngineProblem, FailureKind};
 
 use super::job::Job;
@@ -16,7 +17,7 @@ pub(super) enum Stop {
 
 impl Stop {
     pub(super) fn failed(message: impl Into<String>) -> Self {
-        Self::Failed { kind: FailureKind::Other, message: message.into() }
+        RunFailure::other(message).into()
     }
 
     pub(super) fn completed(cost_usd: Option<f64>) -> Self {
@@ -31,10 +32,10 @@ impl Job {
             Stop::Cancelled => {
                 self.gate.emit(EngineEvent::Cancelled);
             }
-            Stop::Failed { kind, message } => self.failed(&message, kind),
+            Stop::Failed { kind, message } => self.failed(RunFailure { kind, message }),
             Stop::Diagnosed { problem, message } => {
                 self.gate.emit(EngineEvent::Diagnosed(problem));
-                self.failed(&message, FailureKind::Other);
+                self.failed(RunFailure::other(message));
             }
             Stop::Model(error) => self.model_failed(error),
         }
@@ -54,27 +55,38 @@ impl Job {
             self.gate.emit(EngineEvent::Cancelled);
             return;
         }
-        let kind = match &error {
+        match &error {
             ModelError::Unauthorized(_) => {
                 self.gate.emit(EngineEvent::Diagnosed(EngineProblem::NotLoggedIn));
-                FailureKind::Other
             }
-            ModelError::Overloaded(_) => FailureKind::Unavailable,
             ModelError::Cancelled => {
                 self.gate.emit(EngineEvent::Cancelled);
                 return;
             }
-            _ => FailureKind::Other,
-        };
-        self.failed(&error.to_string(), kind);
+            _ => {}
+        }
+        self.failed(RunFailure::from(error));
     }
 
-    fn failed(&self, message: &str, kind: FailureKind) {
+    fn failed(&self, failure: RunFailure) {
         if self.control.is_stopped() {
             self.gate.emit(EngineEvent::Cancelled);
             return;
         }
-        self.gate.emit(EngineEvent::Failure(kind));
-        self.gate.emit(EngineEvent::Failed(message.to_owned()));
+        for event in failure.events() {
+            self.gate.emit(event);
+        }
+    }
+}
+
+impl From<RunFailure> for Stop {
+    fn from(failure: RunFailure) -> Self {
+        Self::Failed { kind: failure.kind, message: failure.message }
+    }
+}
+
+impl From<ModelError> for Stop {
+    fn from(error: ModelError) -> Self {
+        Self::Model(error)
     }
 }

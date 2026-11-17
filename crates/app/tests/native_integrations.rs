@@ -27,7 +27,7 @@ impl ApiSource for Source {
     fn api(&self, request: &PromptRequest) -> Result<Arc<dyn ModelApi>, ModelError> {
         Ok(Arc::new(Model {
             turn: AtomicUsize::new(0),
-            edits: request.memory.as_ref().expect("valid test fixture").output.clone(),
+            edits: request.host.memory.as_ref().expect("valid test fixture").output.clone(),
         }))
     }
 }
@@ -114,8 +114,8 @@ fn native_backend_searches_memory_and_learns() {
         .expect("valid test fixture");
     let model = ModelOption::new("fixture", "Fixture inference").served_by(ModelProvider::new("keyed"));
     let mut request = PromptRequest::plain(dir.path().into(), "Look it up and remember the tabs preference.", model);
-    request.permission = PermissionMode::Bypass;
-    request.memory = Some(MemoryBrief::new(Some("Native integration".into())));
+    request.policy.permission = PermissionMode::Bypass;
+    request.host.memory = Some(MemoryBrief::new(Some("Native integration".into())));
     let run = RunId::new();
     backend
         .send(Envelope::local(RequestId(2), ClientCommand::SubmitPrompt { run, request }))

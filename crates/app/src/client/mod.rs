@@ -42,6 +42,12 @@ pub enum Error {
     NothingToAsk,
 }
 
+impl From<domain::failure::RunFailure> for Error {
+    fn from(failure: domain::failure::RunFailure) -> Self {
+        Self::Run(failure.message)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Sdk {
     client: Arc<Client>,

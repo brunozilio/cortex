@@ -238,7 +238,7 @@ mod tests {
     fn a_failed_verification_fails_the_command() {
         let (code, engine) = printed(Verdict::parse(r#"{"passed":false}"#, 3).expect("verdict"));
         assert_eq!(code, ExitCode::FAILURE);
-        assert_eq!(engine.requests()[0].verification, Some(Criteria::user("tests pass")));
+        assert_eq!(engine.requests()[0].policy.verification, Some(Criteria::user("tests pass")));
     }
 
     #[test]

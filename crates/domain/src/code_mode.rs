@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::features::{CODE_MODE, CODE_MODE_ONLY, Features};
 
-pub const TOOL: &str = "REPL";
+pub const TOOL: &str = crate::tool_name::ToolName::Repl.as_str();
 pub const SEARCH: &str = "searchTools";
 pub const READ_TEXT: &str = "readText";
 pub const DETACH: Duration = Duration::from_secs(30);
@@ -19,7 +19,7 @@ pub fn dispatched(number: u64, task: &str, after: Duration) -> String {
 }
 
 pub fn throws_on_failure(tool: &str) -> bool {
-    tool.starts_with("mcp__")
+    matches!(crate::tool_name::ToolName::of(tool), crate::tool_name::ToolName::Mcp(_))
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

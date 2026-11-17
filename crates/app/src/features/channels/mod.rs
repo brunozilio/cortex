@@ -39,12 +39,13 @@ fn open(
     home: Option<&Path>,
     http: &Arc<dyn Http>,
 ) -> Result<ChannelsReply, String> {
-    let request = crate::mcp_admin::request_in(path, extensions, home);
-    let sources = match agent_engine::mcp::sources(&request) {
+    let host = extensions.host(path, home);
+    let folder = domain::Folder::at(path, &host);
+    let sources = match agent_engine::mcp::sources(folder) {
         Ok(sources) => sources,
         Err(error) => return Err(format!("Could not read the MCP servers: {error}")),
     };
-    let specs = agent_engine::mcp::servers(&request, &sources);
+    let specs = agent_engine::mcp::servers(folder, &sources);
     let mut failed = Vec::new();
     for name in names {
         if lock().get(&client).is_some_and(|open| open.iter().any(|server| server.name() == name)) {

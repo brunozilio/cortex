@@ -47,8 +47,8 @@ fn run_in(dir: tempfile::TempDir, anchors: bool) -> String {
     let engine =
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![agent.clone()]))), Arc::new(InMemorySessions::default()));
     let brief = MemoryBrief { anchored: vec![retries()], anchors, ..MemoryBrief::default() };
-    let request =
-        PromptRequest { memory: Some(brief), ..PromptRequest::plain(dir.path().into(), "look at client.go", model()) };
+    let mut request = PromptRequest::plain(dir.path().into(), "look at client.go", model());
+    request.host.memory = Some(brief);
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     format!("{:?}", agent.asked().last().expect("asked").messages)

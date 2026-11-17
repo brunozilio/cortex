@@ -43,7 +43,7 @@ fn a_run_keeps_its_prompt_and_every_event_in_the_session_file() {
     let seen = finish(&start(&engine, &request));
     let session = session_of(&seen);
 
-    let entries = store.entries(&request, &session).expect("entries");
+    let entries = store.entries(&request.session.cwd, &session).expect("entries");
     assert!(
         matches!(entries.first(), Some(Entry::Prompted { prompt, .. }) if prompt == "what is in a.txt?"),
         "{entries:?}"
@@ -83,7 +83,7 @@ fn a_call_keeps_the_model_that_answered_it() {
     let request = PromptRequest::plain(dir.path().into(), "hi", model());
     let session = session_of(&finish(&start(&engine, &request)));
 
-    let entries = store.entries(&request, &session).expect("entries");
+    let entries = store.entries(&request.session.cwd, &session).expect("entries");
     let served: Vec<Option<&str>> = entries
         .iter()
         .filter_map(|e| if let Entry::Called { call, .. } = e { Some(call.served.as_deref()) } else { None })
@@ -101,21 +101,19 @@ fn a_compaction_keeps_what_came_before_and_the_resume_starts_at_the_summary() {
     let request = PromptRequest::plain(dir.path().into(), "hi", model());
     let session = session_of(&finish(&start(&engine, &request)));
 
-    let compact = PromptRequest {
-        resume: Some(session.clone()),
-        command: Some(SessionCommand::Compact),
-        ..PromptRequest::plain(dir.path().into(), "", model())
-    };
+    let mut compact = PromptRequest::plain(dir.path().into(), "", model());
+    compact.session.resume = Some(session.clone());
+    compact.session.command = Some(SessionCommand::Compact);
     finish(&start(&engine, &compact));
 
-    let entries = store.entries(&request, &session).expect("entries");
+    let entries = store.entries(&request.session.cwd, &session).expect("entries");
     assert!(
         entries.iter().any(|e| matches!(e, Entry::Message(m) if m.text() == "hi")),
         "the conversation before the compaction stays: {entries:?}"
     );
     assert!(entries.contains(&Entry::Restarted));
     assert!(events(&entries).iter().any(|e| matches!(e, EngineEvent::Compacted(_))));
-    let resumed = store.load_for(&request, &session).expect("resumed");
+    let resumed = store.load_for(&request.session.cwd, &session).expect("resumed");
     assert_eq!(resumed.len(), 1);
     assert!(resumed[0].text().contains("They said hi."), "{resumed:?}");
 }
@@ -136,14 +134,12 @@ fn a_run_notes_how_it_was_set_up_and_a_rewind_names_what_it_restored() {
     let request = PromptRequest::plain(dir.path().into(), "write it", model());
     let session = session_of(&finish(&start(&engine, &request)));
 
-    let rewind = PromptRequest {
-        resume: Some(session.clone()),
-        command: Some(SessionCommand::Rewind(0)),
-        ..PromptRequest::plain(dir.path().into(), "", model())
-    };
+    let mut rewind = PromptRequest::plain(dir.path().into(), "", model());
+    rewind.session.resume = Some(session.clone());
+    rewind.session.command = Some(SessionCommand::Rewind(0));
     finish(&start(&engine, &rewind));
 
-    let entries = store.entries(&request, &session).expect("entries");
+    let entries = store.entries(&request.session.cwd, &session).expect("entries");
     let run = entries.iter().find_map(|e| if let Entry::Opened { run, .. } = e { Some(run) } else { None });
     assert!(run.is_some_and(|run| run.model == model().id && !run.cwd.is_empty()), "{entries:?}");
     assert!(
@@ -171,7 +167,7 @@ fn a_sub_agents_model_calls_and_tokens_are_kept_as_its_own() {
     let request = PromptRequest::plain(dir.path().into(), "where is main?", model());
     let session = session_of(&finish(&start(&engine, &request)));
 
-    let entries = store.entries(&request, &session).expect("entries");
+    let entries = store.entries(&request.session.cwd, &session).expect("entries");
     let agents: Vec<Option<usize>> =
         entries.iter().filter_map(|e| if let Entry::Called { agent, .. } = e { Some(*agent) } else { None }).collect();
     assert_eq!(agents.iter().filter(|agent| agent.is_some()).count(), 1, "{agents:?}");
@@ -188,11 +184,9 @@ fn a_command_that_finds_no_session_leaves_no_file_behind() {
     let dir = tempfile::tempdir().expect("dir");
     let store = Arc::new(FileSessions::new(dir.path().join("native")));
     let engine = NativeEngine::new(Arc::new(Source(Mutex::new(Vec::new()))), store.clone());
-    let request = PromptRequest {
-        resume: Some(SessionId("missing".into())),
-        command: Some(SessionCommand::Title),
-        ..PromptRequest::plain(dir.path().into(), "", model())
-    };
+    let mut request = PromptRequest::plain(dir.path().into(), "", model());
+    request.session.resume = Some(SessionId("missing".into()));
+    request.session.command = Some(SessionCommand::Title);
     finish(&start(&engine, &request));
-    assert!(store.load_for(&request, &SessionId("missing".into())).is_none());
+    assert!(store.load_for(&request.session.cwd, &SessionId("missing".into())).is_none());
 }

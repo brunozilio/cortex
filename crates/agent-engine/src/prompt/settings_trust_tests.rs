@@ -39,7 +39,7 @@ fn decided(settings: &Settings, repo: &Path, command: &str) -> Option<RuleKind> 
 
 fn blocked(settings: &Settings, repo: &Path) -> Option<String> {
     let input = json!({ "tool_name": "Bash", "tool_input": { "command": "ls" } });
-    settings.hooks.run("PreToolUse", "Bash", input, &Workspace::new(repo)).expect("run").blocked
+    settings.hooks.run(crate::hooks::HookEvent::PreToolUse, "Bash", input, &Workspace::new(repo)).expect("run").blocked
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn an_untrusted_folder_s_hooks_do_not_run_and_are_listed_as_skipped_once() {
 
     let settings = load(&trusted(&nested, home.path()), &[]).expect("load");
     assert_eq!(blocked(&settings, &repo).as_deref(), Some("the repository's hook ran"));
-    assert_eq!(settings.hooks.0["PreToolUse"].len(), 3, "both scripts and the settings hook");
+    assert_eq!(settings.hooks.0[&crate::hooks::HookEvent::PreToolUse].len(), 3, "both scripts and the settings hook");
     assert!(settings.notices.is_empty());
 }
 
@@ -166,17 +166,15 @@ fn the_folder_s_permissions_listing_carries_the_one_notice_and_no_skipped_hook()
     let (home, work) = (tempfile::tempdir().expect("home"), tempfile::tempdir().expect("work"));
     let repo = repository(work.path(), "rocket");
     write(&repo, "hooks/guard.js", BLOCKING);
-    let mut request = domain::PromptRequest::plain(repo.clone(), "", domain::ModelOption::new("m", "M"));
-    request.extensions = Some(domain::Extensions { home: Some(home.path().into()), ..Default::default() });
+    let untrusted = domain::Extensions { home: Some(home.path().into()), ..Default::default() };
 
-    let info = crate::brief::permissions(&request).expect("permissions");
+    let info = crate::brief::permissions(domain::Folder::at(&repo, &untrusted)).expect("permissions");
     assert!(info.hooks.is_empty(), "{:?}", info.hooks);
     assert_eq!(info.notices.len(), 1, "{:?}", info.notices);
     assert!(info.notices[0].contains("folder not trusted (/trust)") && info.notices[0].contains("guard.js"));
 
-    request.extensions =
-        Some(domain::Extensions { home: Some(home.path().into()), trust: Trust::Trusted, ..Default::default() });
-    let info = crate::brief::permissions(&request).expect("permissions");
+    let trusted = domain::Extensions { home: Some(home.path().into()), trust: Trust::Trusted, ..Default::default() };
+    let info = crate::brief::permissions(domain::Folder::at(&repo, &trusted)).expect("permissions");
     assert_eq!(info.hooks.len(), 1, "{:?}", info.hooks);
     assert!(info.notices.is_empty(), "{:?}", info.notices);
 }

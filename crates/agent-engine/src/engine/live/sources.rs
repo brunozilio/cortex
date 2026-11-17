@@ -3,7 +3,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-use domain::PromptRequest;
+use domain::Folder;
 
 const MOST_RECORDS: usize = 50_000;
 const DEEPEST: usize = 8;
@@ -20,13 +20,13 @@ struct Seen {
     records: Vec<(PathBuf, u128, u64, u64)>,
 }
 
-pub(in crate::engine) fn fingerprint(request: &PromptRequest) -> Option<u64> {
-    let gate = crate::trust::Gate::of(request);
+pub(in crate::engine) fn fingerprint(folder: Folder<'_>) -> Option<u64> {
+    let gate = crate::trust::Gate::of(folder);
     let mut seen = Seen::default();
-    seen.everything(request, gate.home()).ok()?;
+    seen.everything(folder, gate.home()).ok()?;
     let mut hasher = DefaultHasher::new();
-    request.cwd.hash(&mut hasher);
-    serde_json::to_string(&request.extensions).unwrap_or_default().hash(&mut hasher);
+    folder.cwd.hash(&mut hasher);
+    serde_json::to_string(&folder.extensions).unwrap_or_default().hash(&mut hasher);
     format!("{:?}", gate.trust()).hash(&mut hasher);
     seen.records.sort();
     seen.records.hash(&mut hasher);
@@ -34,19 +34,19 @@ pub(in crate::engine) fn fingerprint(request: &PromptRequest) -> Option<u64> {
 }
 
 impl Seen {
-    fn everything(&mut self, request: &PromptRequest, home: Option<&Path>) -> Result<(), TooMany> {
+    fn everything(&mut self, folder: Folder<'_>, home: Option<&Path>) -> Result<(), TooMany> {
         let homes = home.map(|home| home.join(brand::DIR)).into_iter();
         let installed = content::folder().into_iter();
-        for root in homes.chain(installed).chain(request.cwd.ancestors().map(|dir| dir.join(brand::DIR))) {
+        for root in homes.chain(installed).chain(folder.cwd.ancestors().map(|dir| dir.join(brand::DIR))) {
             self.brand_folder(&root)?;
         }
-        for directory in request.cwd.ancestors() {
+        for directory in folder.cwd.ancestors() {
             for name in INSTRUCTION_NAMES {
                 self.file(&directory.join(name))?;
             }
         }
-        self.nested_instructions(&request.cwd)?;
-        let extensions = request.extensions.iter();
+        self.nested_instructions(folder.cwd)?;
+        let extensions = folder.extensions.into_iter();
         for root in extensions.flat_map(|extensions| extensions.plugins.iter().chain(&extensions.dirs)) {
             self.tree(root, 0)?;
         }

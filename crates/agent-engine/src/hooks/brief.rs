@@ -5,14 +5,12 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use super::Hooks;
+use super::{HookEvent, Hooks};
 use crate::prompt::Instructions;
 use crate::prompt::rules::Rule;
 use crate::tools::Workspace;
 use crate::tools::skill::FoundSkill;
 use crate::tools::subagent::FoundAgent;
-
-pub const BRIEF: &str = "Brief";
 
 #[derive(Debug, Clone, Default)]
 pub struct Briefed {
@@ -24,9 +22,9 @@ pub struct Briefed {
 
 impl Hooks {
     pub fn edit_brief(&self, mut briefed: Briefed, workspace: &Workspace) -> Result<Briefed, String> {
-        for group in self.0.get(BRIEF).into_iter().flatten() {
-            let one = Hooks([(BRIEF.to_owned(), vec![group.clone()])].into());
-            let decision = one.run(BRIEF, "", briefed.shown()?, workspace)?;
+        for group in self.0.get(&HookEvent::Brief).into_iter().flatten() {
+            let one = Hooks([(HookEvent::Brief, vec![group.clone()])].into());
+            let decision = one.run(HookEvent::Brief, "", briefed.shown()?, workspace)?;
             if let Some(reason) = decision.blocked {
                 return Err(format!("a Brief hook stopped the session: {reason}"));
             }

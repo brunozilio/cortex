@@ -173,7 +173,9 @@ mod tests {
         command(&mut app, "/memory forgotten", "[0] Uses wgpu");
         command(&mut app, "/memory restore 0", "Restored [0] Uses wgpu");
         command(&mut app, "/memory optimize", "Memory optimized: 2 → 2 memories");
-        assert!(engine.requests().iter().any(|r| r.prompt.contains("[1] semantic, from the user: Inter is the font")));
+        assert!(
+            engine.requests().iter().any(|r| r.prompt.text.contains("[1] semantic, from the user: Inter is the font"))
+        );
     }
 
     #[test]
@@ -204,8 +206,8 @@ mod tests {
         until(&mut app, |app| !app.prompt.shell_context.is_empty());
         type_text(&mut app, "what did it say?");
         press(&mut app, KeyCode::Enter);
-        until(&mut app, |_| engine.requests().iter().any(|r| r.command.is_none()));
-        let sent = engine.requests().into_iter().find(|r| r.command.is_none()).expect("sent").prompt;
+        until(&mut app, |_| engine.requests().iter().any(|r| r.session.command.is_none()));
+        let sent = engine.requests().into_iter().find(|r| r.session.command.is_none()).expect("sent").prompt.text;
         assert!(sent.contains("$ echo from the shell\nfrom the shell") && sent.ends_with("what did it say?"), "{sent}");
     }
 }

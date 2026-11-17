@@ -65,19 +65,19 @@ impl Sessions for Store {
         self.kept.save(id, history)
     }
 
-    fn record(&self, _request: &PromptRequest, _id: &SessionId, _entry: &Entry) -> Result<(), String> {
+    fn record(&self, _cwd: &std::path::Path, _id: &SessionId, _entry: &Entry) -> Result<(), String> {
         self.wrote();
         Ok(())
     }
 
-    fn save_checkpoints(&self, _request: &PromptRequest, _id: &SessionId, _all: &[Checkpoint]) -> Result<(), String> {
+    fn save_checkpoints(&self, _cwd: &std::path::Path, _id: &SessionId, _all: &[Checkpoint]) -> Result<(), String> {
         self.wrote();
         Ok(())
     }
 
     fn save_snapshot(
         &self,
-        _request: &PromptRequest,
+        _cwd: &std::path::Path,
         _id: &SessionId,
         _snapshot: &crate::prompt::Snapshot,
     ) -> Result<(), String> {
@@ -97,7 +97,7 @@ fn staged(model: Option<Arc<ScriptedModel>>, edit: impl FnOnce(&mut PromptReques
     let dir = tempfile::tempdir().expect("dir");
     let mut request = PromptRequest::plain(dir.path().into(), "go", ModelOption::new("m", "M"));
     let home = dir.path().join("home");
-    request.extensions = Some(domain::Extensions { home: Some(home), ..Default::default() });
+    request.host.extensions = Some(domain::Extensions { home: Some(home), ..Default::default() });
     edit(&mut request);
     let (heard, store) = (Arc::new(Heard::default()), Arc::new(Store::default()));
     let workspace = Workspace::for_request(&request);
@@ -106,7 +106,7 @@ fn staged(model: Option<Arc<ScriptedModel>>, edit: impl FnOnce(&mut PromptReques
         sessions: Arc::clone(&store) as Arc<dyn Sessions>,
         mcp: Arc::new(NetHttp),
         lsp: Arc::new(LspPool::default()),
-        control: Arc::new(Control::new(request.permission, workspace.stop.clone())),
+        control: Arc::new(Control::new(request.policy.permission, workspace.stop.clone())),
         gate: RunGate::new(RunId::new(), Arc::clone(&heard) as Arc<dyn EventSink>),
         request,
         recorder: None,
@@ -130,7 +130,7 @@ fn failure(stop: Result<impl Sized, Stop>) -> String {
 
 #[test]
 fn a_session_command_with_no_conversation_stops_before_anything_is_loaded() {
-    let mut staged = staged(None, |request| request.command = Some(SessionCommand::Compact));
+    let mut staged = staged(None, |request| request.session.command = Some(SessionCommand::Compact));
     assert_eq!(failure(staged.job.load_session()), "There is no conversation to work on yet.");
     assert!(staged.job.recorder.is_none());
     assert_eq!(staged.store.written(), 0);
@@ -138,7 +138,7 @@ fn a_session_command_with_no_conversation_stops_before_anything_is_loaded() {
 
 #[test]
 fn a_conversation_that_is_not_there_is_diagnosed() {
-    let mut staged = staged(None, |request| request.resume = Some(SessionId("gone".into())));
+    let mut staged = staged(None, |request| request.session.resume = Some(SessionId("gone".into())));
     let stop = staged.job.load_session().err().expect("stopped");
     assert!(
         matches!(&stop, Stop::Diagnosed { problem: EngineProblem::SessionNotFound, message } if message == "The conversation to continue was not found."),
@@ -158,13 +158,13 @@ fn a_first_prompt_gets_a_new_conversation_that_is_not_announced_yet() {
 
 fn kept(staged: &Staged, id: &str, history: &[Message]) -> SessionId {
     let id = SessionId(id.into());
-    staged.store.kept.save_for(&staged.job.request, &id, history).expect("saved");
+    staged.store.kept.save_for(&staged.job.request.session.cwd, &id, history).expect("saved");
     id
 }
 
 #[test]
 fn a_resumed_conversation_keeps_its_id_and_is_announced_at_once() {
-    let mut staged = staged(None, |request| request.resume = Some(SessionId("kept".into())));
+    let mut staged = staged(None, |request| request.session.resume = Some(SessionId("kept".into())));
     let id = kept(&staged, "kept", &[Message::user("before")]);
     let session = staged.job.load_session().expect("loaded");
     assert_eq!((&session.id, session.history.len()), (&id, 1));
@@ -174,8 +174,8 @@ fn a_resumed_conversation_keeps_its_id_and_is_announced_at_once() {
 #[test]
 fn a_fork_carries_the_history_into_a_new_conversation() {
     let mut staged = staged(None, |request| {
-        request.resume = Some(SessionId("kept".into()));
-        request.fork = true;
+        request.session.resume = Some(SessionId("kept".into()));
+        request.session.fork = true;
     });
     let id = kept(&staged, "kept", &[Message::user("before")]);
     let session = staged.job.load_session().expect("loaded");
@@ -187,8 +187,8 @@ fn a_fork_carries_the_history_into_a_new_conversation() {
 #[test]
 fn a_chore_ends_the_run_from_load_session_and_opens_no_conversation() {
     let mut staged = staged(Some(said("A title")), |request| {
-        request.command = Some(SessionCommand::Title);
-        request.resume = Some(SessionId("gone".into()));
+        request.session.command = Some(SessionCommand::Title);
+        request.session.resume = Some(SessionId("gone".into()));
     });
     let stop = staged.job.load_session().err().expect("stopped");
     assert!(matches!(stop, Stop::Completed { .. }), "{stop:?}");
@@ -198,7 +198,7 @@ fn a_chore_ends_the_run_from_load_session_and_opens_no_conversation() {
 
 #[test]
 fn a_chore_without_an_account_stops_on_the_model_s_error() {
-    let mut staged = staged(None, |request| request.command = Some(SessionCommand::Title));
+    let mut staged = staged(None, |request| request.session.command = Some(SessionCommand::Title));
     let stop = staged.job.load_session().err().expect("stopped");
     assert!(matches!(stop, Stop::Model(ModelError::Unauthorized(_))), "{stop:?}");
 }
@@ -206,8 +206,8 @@ fn a_chore_without_an_account_stops_on_the_model_s_error() {
 #[test]
 fn a_rewind_to_a_checkpoint_that_was_never_taken_stops_from_load_session() {
     let mut staged = staged(None, |request| {
-        request.command = Some(SessionCommand::Rewind(3));
-        request.resume = Some(SessionId("kept".into()));
+        request.session.command = Some(SessionCommand::Rewind(3));
+        request.session.resume = Some(SessionId("kept".into()));
     });
     kept(&staged, "kept", &[Message::user("before")]);
     assert!(failure(staged.job.load_session()).starts_with("Could not rewind: "));
@@ -216,8 +216,8 @@ fn a_rewind_to_a_checkpoint_that_was_never_taken_stops_from_load_session() {
 #[test]
 fn a_branch_from_a_checkpoint_that_was_never_taken_stops_from_load_session() {
     let mut staged = staged(None, |request| {
-        request.command = Some(SessionCommand::Branch(3));
-        request.resume = Some(SessionId("kept".into()));
+        request.session.command = Some(SessionCommand::Branch(3));
+        request.session.resume = Some(SessionId("kept".into()));
     });
     kept(&staged, "kept", &[Message::user("before")]);
     assert!(failure(staged.job.load_session()).starts_with("Could not branch: "));
@@ -237,8 +237,8 @@ fn a_run_without_an_account_stops_in_open_and_creates_no_session() {
 #[test]
 fn measuring_the_context_needs_no_account() {
     let mut staged = staged(None, |request| {
-        request.command = Some(SessionCommand::MeasureContext);
-        request.resume = Some(SessionId("kept".into()));
+        request.session.command = Some(SessionCommand::MeasureContext);
+        request.session.resume = Some(SessionId("kept".into()));
     });
     kept(&staged, "kept", &[Message::user("before")]);
     let workspace = Workspace::for_request(&staged.job.request);
@@ -289,12 +289,12 @@ fn a_cancelled_run_ends_as_cancelled_however_it_stopped() {
 #[test]
 fn a_pick_of_the_small_model_switches_the_run_to_it_and_forgets_the_old_model_s_limits() {
     let judge = said(r#"{"tier":"small","effort":"low"}"#);
-    let mut staged = staged(None, |request| request.prompt = "rename x to y".into());
-    let mut models = crate::tools::Models::new(staged.job.request.model.clone());
+    let mut staged = staged(None, |request| request.prompt.text = "rename x to y".into());
+    let mut models = crate::tools::Models::new(staged.job.request.session.model.clone());
     models.small_model = Some("m".into());
     models.model.id = "large".into();
     models.model.window = Some(200_000);
-    staged.job.request.model.id = "large".into();
+    staged.job.request.session.model.id = "large".into();
     let mut template = TurnRequest {
         model: "large".into(),
         system: String::new(),
@@ -307,7 +307,7 @@ fn a_pick_of_the_small_model_switches_the_run_to_it_and_forgets_the_old_model_s_
     staged.job.auto_pick(&api, &Arc::default(), &mut template, &mut models);
     assert_eq!((models.model.id.as_str(), models.model.window), ("m", None));
     assert_eq!((template.model.as_str(), template.effort), ("m", domain::Effort::Low));
-    assert_eq!(staged.job.request.model.id, "m");
+    assert_eq!(staged.job.request.session.model.id, "m");
     assert_eq!(
         staged.heard.events().last(),
         Some(&EngineEvent::Picked { model: "m".into(), effort: domain::Effort::Low })

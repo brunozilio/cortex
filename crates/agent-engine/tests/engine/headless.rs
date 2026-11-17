@@ -25,10 +25,10 @@ fn the_run_s_own_rules_turn_limit_and_appended_prompt_apply() {
         ScriptedModel::reply(vec![Block::Text("never asked".into())]),
     ]));
     let mut request = PromptRequest::plain(dir.path().into(), "make it", model());
-    request.permission = PermissionMode::Bypass;
-    request.disallowed_tools = vec!["Bash(touch:*)".into()];
-    request.append_system = Some("Answer in French.".into());
-    request.max_turns = Some(1);
+    request.policy.permission = PermissionMode::Bypass;
+    request.policy.disallowed_tools = vec!["Bash(touch:*)".into()];
+    request.session.append_system = Some("Answer in French.".into());
+    request.policy.max_turns = Some(1);
     let events = finish(&start(&engine(&scripted), &request));
 
     assert!(!dir.path().join("made.txt").exists(), "--disallowedTools refused it even in bypass");
@@ -49,8 +49,8 @@ fn the_run_s_ask_rule_asks_even_for_a_call_its_allow_rule_covers() {
         ScriptedModel::reply(vec![Block::Text("done".into())]),
     ]));
     let mut request = PromptRequest::plain(dir.path().into(), "make it", model());
-    request.allowed_tools = vec!["Bash(touch:*)".into()];
-    request.ask_tools = vec!["Bash(touch:*)".into()];
+    request.policy.allowed_tools = vec!["Bash(touch:*)".into()];
+    request.policy.ask_tools = vec!["Bash(touch:*)".into()];
     let (events, mut handle) = crate::start_with_handle(&engine(&scripted), &request);
 
     let asked = std::iter::from_fn(|| events.recv_timeout(std::time::Duration::from_secs(10)).ok())
@@ -66,7 +66,7 @@ fn a_malformed_rule_from_the_command_line_fails_the_run() {
     let dir = tempfile::tempdir().expect("dir");
     let scripted = Arc::new(ScriptedModel::new([]));
     let mut request = PromptRequest::plain(dir.path().into(), "go", model());
-    request.allowed_tools = vec!["Bash(git".into()];
+    request.policy.allowed_tools = vec!["Bash(git".into()];
     let events = finish(&start(&engine(&scripted), &request));
     assert!(
         matches!(events.last(), Some(EngineEvent::Failed(message)) if message.contains("--allowedTools")),

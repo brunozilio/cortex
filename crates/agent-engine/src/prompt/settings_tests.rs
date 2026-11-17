@@ -142,11 +142,11 @@ fn an_installed_plugin_adds_its_hooks_and_a_broken_one_is_left_out() {
     std::fs::write(broken.path().join("hooks/hooks.json"), r#"{"hooks": {"NoSuchEvent": []}}"#).expect("hooks");
     let plugins = [crate::plugins::Plugin::at(good.path()), crate::plugins::Plugin::at(broken.path())];
     let settings = load(repo.path(), None, &plugins).expect("a broken plugin does not stop the run");
-    let groups = &settings.hooks.0["PreToolUse"];
+    let groups = &settings.hooks.0[&crate::hooks::HookEvent::PreToolUse];
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].matcher, "Bash");
     assert_eq!(groups[0].hooks[0].command, format!("{}/check.sh", good.path().display()));
-    assert!(!settings.hooks.0.contains_key("NoSuchEvent"));
+    assert_eq!(settings.hooks.0.len(), 1, "nothing of the broken plugin is kept");
 }
 
 #[test]

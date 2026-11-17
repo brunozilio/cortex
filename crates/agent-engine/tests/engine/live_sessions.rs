@@ -66,12 +66,12 @@ impl Project {
 
     fn request(&self, prompt: &str, resume: Option<&SessionId>) -> PromptRequest {
         let mut request = PromptRequest::plain(self.repo.path().into(), prompt, model());
-        request.extensions = Some(domain::Extensions {
+        request.host.extensions = Some(domain::Extensions {
             home: Some(self.home.path().into()),
             trust: domain::trust::Trust::Trusted,
             ..Default::default()
         });
-        request.resume = resume.cloned();
+        request.session.resume = resume.cloned();
         request
     }
 }

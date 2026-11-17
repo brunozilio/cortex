@@ -50,11 +50,11 @@ impl Recorder {
             started: AtomicBool::new(false),
             compacted: AtomicBool::new(false),
         };
-        if request.command.is_none() {
-            if let Some(shown) = &request.shown {
+        if request.session.command.is_none() {
+            if let Some(shown) = &request.prompt.shown {
                 recorder.write(Entry::Shown(shown.clone()));
             }
-            recorder.write(Entry::Prompted { at_ms: now(), prompt: request.prompt.clone() });
+            recorder.write(Entry::Prompted { at_ms: now(), prompt: request.prompt.text.clone() });
         }
         Arc::new(recorder)
     }
@@ -141,18 +141,18 @@ impl Recorder {
         }
         drop(held);
         if event.is_terminal() {
-            self.sessions.end_trace(&self.request, &self.session);
+            self.sessions.end_trace(&self.request.session.cwd, &self.session);
         }
     }
 
     pub(super) fn kept(&self, history: &[Message]) -> Result<(), String> {
         self.flush();
         let saved = if self.compacted() {
-            self.sessions.save_compacted(&self.request, &self.session, history)
+            self.sessions.save_compacted(&self.request.session.cwd, &self.session, history)
         } else {
-            self.sessions.save_for(&self.request, &self.session, history)
+            self.sessions.save_for(&self.request.session.cwd, &self.session, history)
         };
-        self.sessions.flush_trace(&self.request, &self.session);
+        self.sessions.flush_trace(&self.request.session.cwd, &self.session);
         saved
     }
 
@@ -184,7 +184,7 @@ impl Recorder {
     }
 
     fn keep(&self, entry: &Entry) {
-        if let Err(error) = self.sessions.record(&self.request, &self.session, entry) {
+        if let Err(error) = self.sessions.record(&self.request.session.cwd, &self.session, entry) {
             tracing::warn!(%error, "an event of this run was not kept in its session");
         }
     }

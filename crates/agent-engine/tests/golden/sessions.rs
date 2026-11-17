@@ -12,7 +12,7 @@ fn a_session_cut_between_a_call_and_its_result_resumes_with_the_call_closed_as_i
     let session = SessionId("crashed".into());
     let dangling = Block::ToolUse { id: "t1".into(), name: "Read".into(), input: json!({"file_path": "notes.txt"}) };
     let crashed = [Message::user("Read the notes"), Message::assistant(vec![dangling])];
-    stage.sessions.save_for(&stage.request(""), &session, &crashed).expect("the crash-shaped session");
+    stage.sessions.save_for(&stage.request("").session.cwd, &session, &crashed).expect("the crash-shaped session");
     stage.saved("as the crash left it", &stage.request(""), &session);
     let model = stage.script([says("Picking up where we stopped.")]);
 
@@ -87,7 +87,7 @@ fn a_rewind_restores_the_files_cuts_the_conversation_and_drops_later_checkpoints
     stage.checkpoints("before the rewind", &stage.request(""), &session);
 
     let mut rewind = stage.resuming(&session, "");
-    rewind.command = Some(SessionCommand::Rewind(1));
+    rewind.session.command = Some(SessionCommand::Rewind(1));
     stage.play("rewind to the second prompt", &rewind);
     stage.checkpoints("after the rewind", &stage.request(""), &session);
     stage.note("files after the rewind", files(&stage));
@@ -130,7 +130,7 @@ fn a_branch_starts_a_new_session_cut_before_the_prompt_and_leaves_the_original_a
     let session = two_prompts_that_write(&stage);
 
     let mut branch = stage.resuming(&session, "");
-    branch.command = Some(SessionCommand::Branch(1));
+    branch.session.command = Some(SessionCommand::Branch(1));
     let branched = stage.play("branch at the second prompt", &branch);
     assert_ne!(branched, session);
     stage.checkpoints("the branch", &stage.request(""), &branched);
@@ -204,8 +204,8 @@ fn a_title_chore_runs_while_the_session_is_held_and_leaves_the_conversation_as_i
     let session = stage.prepare(&stage.request("Say hello"));
 
     let mut title = stage.resuming(&session, "Say hello");
-    title.command = Some(SessionCommand::Title);
-    let answering = stage.sessions.hold(&title, &session).expect("another run holds the session");
+    title.session.command = Some(SessionCommand::Title);
+    let answering = stage.sessions.hold(&title.session.cwd, &session).expect("another run holds the session");
     assert!(answering.held());
     stage.play("title chore", &title);
     drop(answering);
@@ -236,7 +236,7 @@ fn a_prompt_for_a_session_that_is_answering_elsewhere_is_turned_away_and_writes_
     let session = stage.prepare(&stage.request("Say hello"));
 
     let again = stage.resuming(&session, "Again");
-    let answering = stage.sessions.hold(&again, &session).expect("another run holds the session");
+    let answering = stage.sessions.hold(&again.session.cwd, &session).expect("another run holds the session");
     stage.play("second prompt", &again);
     drop(answering);
 

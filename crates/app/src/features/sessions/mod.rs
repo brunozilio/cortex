@@ -2,9 +2,9 @@ use std::path::Path;
 
 use crate::api::features::sessions::{SessionsReply, SessionsRequest};
 use agent_engine::sessions::{FileSessions, Sessions, records};
+use domain::SessionId;
 use domain::catalog::Catalog;
 use domain::trace::Record;
-use domain::{ModelOption, PromptRequest, SessionId};
 
 use crate::features::context::Context;
 
@@ -27,16 +27,12 @@ pub fn handle(context: &Context<'_>, request: SessionsRequest) -> Result<Session
 
 pub fn forget(_client: u64) {}
 
-fn kept_in(cwd: &Path) -> PromptRequest {
-    PromptRequest::plain(cwd.into(), "", ModelOption::new("", ""))
-}
-
 fn length(store: &FileSessions, cwd: &Path, id: &SessionId) -> Result<u64, String> {
-    store.length(&kept_in(cwd), id)
+    store.length(cwd, id)
 }
 
 fn history(store: &FileSessions, cwd: &Path, id: &SessionId) -> Result<Vec<Record>, String> {
-    let told = records(store.entries(&kept_in(cwd), id)?);
+    let told = records(store.entries(cwd, id)?);
     Ok(told
         .into_iter()
         .filter(|record| matches!(record, Record::Prompted { .. } | Record::Shown { .. } | Record::Event { .. }))

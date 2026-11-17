@@ -1,4 +1,4 @@
-use domain::{Extensions, ModelOption};
+use domain::Extensions;
 use serde_json::json;
 
 use super::*;
@@ -18,10 +18,8 @@ fn finds_the_project_s_the_user_s_and_the_host_s_skills() {
     skill(&home.path().join(concat!(brand::dir!(), "/skills")), "release", "The user's copy.");
     skill(&home.path().join(concat!(brand::dir!(), "/skills")), "morning", "The morning briefing.");
     skill(&plugin.path().join("skills"), "dataviz", "Charts.");
-    let model = ModelOption::new("m", "M");
-    let mut request = PromptRequest::plain(repo.path().to_path_buf(), "hi", model);
-    request.extensions = Some(Extensions { dirs: vec![plugin.path().to_path_buf()], ..Extensions::default() });
-    let found = discover(&request, Some(home.path()));
+    let extensions = Extensions { dirs: vec![plugin.path().to_path_buf()], ..Extensions::default() };
+    let found = discover(Folder::at(repo.path(), &extensions), Some(home.path()));
     let names: Vec<(&str, &str)> = found.iter().map(|s| (s.name.as_str(), s.description.as_str())).collect();
     assert_eq!(
         &names[..3],

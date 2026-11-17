@@ -2,13 +2,13 @@ use domain::{PromptRequest, RunId};
 
 use crate::features::context::{Context, Finish};
 
-pub fn prepare(context: &Context<'_>, _run: RunId, request: PromptRequest) -> (PromptRequest, Option<Finish>) {
-    let optimizing = request.memory.as_ref().is_some_and(|brief| brief.optimizing);
-    if optimizing || request.command.is_some() || request.prompt.trim().is_empty() {
+pub fn prepare(context: &Context<'_>, _run: RunId, mut request: PromptRequest) -> (PromptRequest, Option<Finish>) {
+    let optimizing = request.host.memory.as_ref().is_some_and(|brief| brief.optimizing);
+    if optimizing || request.session.command.is_some() || request.prompt.text.trim().is_empty() {
         return (request, None);
     }
-    let code_map = super::pointers(context, &request.cwd, &request.prompt);
-    (PromptRequest { code_map, ..request }, None)
+    request.host.code_map = super::pointers(context, &request.session.cwd, &request.prompt.text);
+    (request, None)
 }
 
 #[cfg(test)]
@@ -30,7 +30,7 @@ mod tests {
         let (prepared, finish) = testing::with(1, &services, |context| prepare(context, RunId::new(), request));
 
         assert!(finish.is_none());
-        let map = prepared.code_map.expect("map");
+        let map = prepared.host.code_map.expect("map");
         assert!(map.contains("lib.rs") && map.contains("compact_history"), "{map}");
     }
 }

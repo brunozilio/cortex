@@ -59,11 +59,11 @@ impl Session {
     pub fn learn(&self) -> Option<Result<Run, Error>> {
         let brief = self.carried.locked().lesson_due()?;
         let mut request = PromptRequest::plain(self.cwd.clone(), brief, self.model.clone());
-        request.resume = Some(match self.id() {
+        request.session.resume = Some(match self.id() {
             Some(id) => id,
             None => return Some(Err(Error::NothingToAsk)),
         });
-        request.command = Some(domain::SessionCommand::Learn);
+        request.session.command = Some(domain::SessionCommand::Learn);
         Some(self.start(request))
     }
 
@@ -181,26 +181,26 @@ impl Session {
         shown: Option<domain::request::Shown>,
     ) -> Result<Run, Error> {
         let mut request = PromptRequest::plain(self.cwd.clone(), prompt, self.model.clone());
-        request.images = images;
-        request.shown = shown;
-        request.effort = self.effort;
-        request.auto_pick = self.auto_pick;
-        request.memory = self.memory.then(|| MemoryBrief::new(None));
+        request.prompt.images = images;
+        request.prompt.shown = shown;
+        request.session.effort = self.effort;
+        request.session.auto_pick = self.auto_pick;
+        request.host.memory = self.memory.then(|| MemoryBrief::new(None));
         {
             let mut carried = self.carried.locked();
-            request.permission = carried.mode;
-            request.resume = carried.id.clone();
-            request.fork = carried.forks();
-            request.verification = carried.criteria_for_run();
+            request.policy.permission = carried.mode;
+            request.session.resume = carried.id.clone();
+            request.session.fork = carried.forks();
+            request.policy.verification = carried.criteria_for_run();
         }
         self.start(request)
     }
 
     pub fn measure_context(&self) -> Result<Run, Error> {
         let mut request = PromptRequest::plain(self.cwd.clone(), "", self.model.clone());
-        request.resume = self.id();
-        request.permission = self.permission_mode();
-        request.command = Some(domain::SessionCommand::MeasureContext);
+        request.session.resume = self.id();
+        request.policy.permission = self.permission_mode();
+        request.session.command = Some(domain::SessionCommand::MeasureContext);
         self.start(request)
     }
 
@@ -210,22 +210,22 @@ impl Session {
 
     pub fn compact_on(&self, focus: &str) -> Result<Run, Error> {
         let mut request = PromptRequest::plain(self.cwd.clone(), focus, self.model.clone());
-        request.resume = Some(self.id().ok_or(Error::NothingToCompact)?);
-        request.command = Some(domain::SessionCommand::Compact);
+        request.session.resume = Some(self.id().ok_or(Error::NothingToCompact)?);
+        request.session.command = Some(domain::SessionCommand::Compact);
         self.start(request)
     }
 
     pub fn rewind(&self, index: u32) -> Result<Run, Error> {
         let mut request = PromptRequest::plain(self.cwd.clone(), "", self.model.clone());
-        request.resume = Some(self.id().ok_or(Error::NothingToAsk)?);
-        request.command = Some(domain::SessionCommand::Rewind(index));
+        request.session.resume = Some(self.id().ok_or(Error::NothingToAsk)?);
+        request.session.command = Some(domain::SessionCommand::Rewind(index));
         self.start(request)
     }
 
     pub fn branch(&self, index: u32) -> Result<Run, Error> {
         let mut request = PromptRequest::plain(self.cwd.clone(), "", self.model.clone());
-        request.resume = Some(self.id().ok_or(Error::NothingToAsk)?);
-        request.command = Some(domain::SessionCommand::Branch(index));
+        request.session.resume = Some(self.id().ok_or(Error::NothingToAsk)?);
+        request.session.command = Some(domain::SessionCommand::Branch(index));
         self.start(request)
     }
 
@@ -234,19 +234,19 @@ impl Session {
     }
 
     pub(crate) fn start(&self, mut request: PromptRequest) -> Result<Run, Error> {
-        request.add_dirs = self.added_dirs.clone();
-        request.max_turns = self.headless.max_turns;
-        request.allowed_tools.clone_from(&self.headless.allowed_tools);
-        request.disallowed_tools.clone_from(&self.headless.disallowed_tools);
-        request.append_system.clone_from(&self.headless.append_system);
-        request.fallback_model.clone_from(&self.headless.fallback_model);
-        request.roles.clone_from(&self.roles);
-        request.fallbacks.clone_from(&self.fallbacks);
-        if request.output_style.is_none() {
-            request.output_style.clone_from(&self.output_style);
+        request.session.add_dirs = self.added_dirs.clone();
+        request.policy.max_turns = self.headless.max_turns;
+        request.policy.allowed_tools.clone_from(&self.headless.allowed_tools);
+        request.policy.disallowed_tools.clone_from(&self.headless.disallowed_tools);
+        request.session.append_system.clone_from(&self.headless.append_system);
+        request.session.fallback_model.clone_from(&self.headless.fallback_model);
+        request.session.roles.clone_from(&self.roles);
+        request.session.fallbacks.clone_from(&self.fallbacks);
+        if request.session.output_style.is_none() {
+            request.session.output_style.clone_from(&self.output_style);
         }
-        request.budget = self.spending().budget();
-        let watch = RunWatch::of(request.command, request.permission);
+        request.policy.budget = self.spending().budget();
+        let watch = RunWatch::of(request.session.command, request.policy.permission);
         let run = Run::start(&self.client, |run| ClientCommand::SubmitPrompt { run, request })?;
         Ok(run.of_session(Arc::clone(&self.carried), watch))
     }

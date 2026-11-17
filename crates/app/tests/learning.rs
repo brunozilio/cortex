@@ -33,8 +33,8 @@ fn a_lesson_is_asked_for_only_after_the_user_corrected_the_agent_enough() {
     session.send("install it").expect("run").text().expect("text");
     session.learn().expect("worth a lesson").expect("started").text().expect("text");
 
-    let learned = engine.requests().into_iter().find(|request| request.command == Some(SessionCommand::Learn));
-    let prompt = learned.map(|request| request.prompt).unwrap_or_default();
+    let learned = engine.requests().into_iter().find(|request| request.session.command == Some(SessionCommand::Learn));
+    let prompt = learned.map(|request| request.prompt.text).unwrap_or_default();
     assert!(prompt.contains("no, use pnpm") && prompt.contains("again: pnpm, not npm"), "{prompt}");
     assert!(session.learn().is_none(), "the signals were used up");
 }

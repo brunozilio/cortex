@@ -1,10 +1,9 @@
-use domain::{PromptRequest, SessionId};
+use domain::SessionId;
 
 use crate::engine::job::Job;
 use crate::engine::stop::Stop;
 use crate::meter::Metered;
 use crate::model::TurnRequest;
-use crate::prompt;
 use crate::tools::Workspace;
 use crate::tools::skill::{self, FoundSkill};
 use crate::tools::subagent_config::AgentConfig;
@@ -27,18 +26,15 @@ impl Job {
         first_prompt: bool,
     ) -> Result<Message, Stop> {
         let initial = if first_prompt { config.initial_prompt.as_deref().unwrap_or_default() } else { "" };
-        let cwd = &self.request.cwd;
+        let cwd = &self.request.session.cwd;
         let initial = skill::expand_initial(initial, skills, cwd, workspace).map_err(Stop::failed)?;
-        let typed = match skill::expand_command(&self.request.prompt, skills, cwd, workspace) {
-            Some(expanded) => {
-                let prompt = expanded.map_err(Stop::failed)?;
-                prompt::user_message(&PromptRequest { prompt, ..self.request.clone() })
-            }
-            None => prompt::user_message(&self.request),
+        let typed = match skill::expand_command(&self.request.prompt.text, skills, cwd, workspace) {
+            Some(expanded) => self.request.composed(&expanded.map_err(Stop::failed)?),
+            None => self.request.compose(),
         };
         let mut user = Message::user(format!("{}{}{}", initial, if initial.is_empty() { "" } else { "\n\n" }, typed));
-        user.blocks.splice(0..0, self.request.images.iter().cloned().map(Block::Image));
-        if let Some(reminder) = self.request.memory.as_ref().and_then(domain::MemoryBrief::edits_reminder) {
+        user.blocks.splice(0..0, self.request.prompt.images.iter().cloned().map(Block::Image));
+        if let Some(reminder) = self.request.host.memory.as_ref().and_then(domain::MemoryBrief::edits_reminder) {
             user.blocks.push(Block::Reminder(reminder));
         }
         Ok(user)
@@ -56,7 +52,7 @@ impl Job {
                 return Err(Stop::failed(blocked));
             }
             if let Some(prompt) = hook.prompt
-                && let Some(typed) = user.blocks.get_mut(self.request.images.len())
+                && let Some(typed) = user.blocks.get_mut(self.request.prompt.images.len())
             {
                 *typed = Block::Text(prompt);
             }

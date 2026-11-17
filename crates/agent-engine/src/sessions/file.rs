@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use domain::{PromptRequest, SessionId};
+use domain::SessionId;
 use platform::store::Document;
 use platform::sync::Locked;
 
@@ -41,8 +41,8 @@ impl FileSessions {
         self.counted.so_far()
     }
 
-    pub fn entries(&self, request: &PromptRequest, id: &SessionId) -> Result<Vec<Entry>, String> {
-        let id = scoped_id(request, id);
+    pub fn entries(&self, cwd: &Path, id: &SessionId) -> Result<Vec<Entry>, String> {
+        let id = scoped_id(cwd, id);
         let said = match read(&self.path(&id, CONVERSATION)?)? {
             Some(text) => log::lines(&text, Holds::Conversation)?,
             None => self.before_the_log(&id)?.into_iter().flatten().map(unnumbered).collect(),
@@ -164,58 +164,49 @@ fn read(path: &PathBuf) -> Result<Option<String>, String> {
 }
 
 impl Sessions for FileSessions {
-    fn load_worktree(
-        &self,
-        request: &PromptRequest,
-        id: &SessionId,
-    ) -> Result<Option<crate::agent_runtime::WorktreeState>, String> {
-        self.read_json(format!("worktree-{}.json", scoped_id(request, id).0))
+    fn load_worktree(&self, cwd: &Path, id: &SessionId) -> Result<Option<crate::agent_runtime::WorktreeState>, String> {
+        self.read_json(format!("worktree-{}.json", scoped_id(cwd, id).0))
     }
     fn save_worktree(
         &self,
-        request: &PromptRequest,
+        cwd: &Path,
         id: &SessionId,
         state: &crate::agent_runtime::WorktreeState,
     ) -> Result<(), String> {
-        self.write_json(format!("worktree-{}.json", scoped_id(request, id).0), state)
+        self.write_json(format!("worktree-{}.json", scoped_id(cwd, id).0), state)
     }
-    fn forget_worktree(&self, request: &PromptRequest, id: &SessionId) -> Result<(), String> {
-        let path = self.dir.join(format!("worktree-{}.json", scoped_id(request, id).0));
+    fn forget_worktree(&self, cwd: &Path, id: &SessionId) -> Result<(), String> {
+        let path = self.dir.join(format!("worktree-{}.json", scoped_id(cwd, id).0));
         match std::fs::remove_file(path) {
             Err(error) if error.kind() != ErrorKind::NotFound => Err(error.to_string()),
             _ => Ok(()),
         }
     }
-    fn load_checkpoints(&self, request: &PromptRequest, id: &SessionId) -> Result<Vec<Checkpoint>, String> {
-        Ok(self.read_json(format!("checkpoints-{}.json", scoped_id(request, id).0))?.unwrap_or_default())
+    fn load_checkpoints(&self, cwd: &Path, id: &SessionId) -> Result<Vec<Checkpoint>, String> {
+        Ok(self.read_json(format!("checkpoints-{}.json", scoped_id(cwd, id).0))?.unwrap_or_default())
     }
-    fn save_checkpoints(&self, request: &PromptRequest, id: &SessionId, all: &[Checkpoint]) -> Result<(), String> {
-        self.write_json(format!("checkpoints-{}.json", scoped_id(request, id).0), &all)
+    fn save_checkpoints(&self, cwd: &Path, id: &SessionId, all: &[Checkpoint]) -> Result<(), String> {
+        self.write_json(format!("checkpoints-{}.json", scoped_id(cwd, id).0), &all)
     }
-    fn add_checkpoint(&self, request: &PromptRequest, id: &SessionId, checkpoint: Checkpoint) -> Result<(), String> {
-        self.side_file(format!("checkpoints-{}.json", scoped_id(request, id).0))
+    fn add_checkpoint(&self, cwd: &Path, id: &SessionId, checkpoint: Checkpoint) -> Result<(), String> {
+        self.side_file(format!("checkpoints-{}.json", scoped_id(cwd, id).0))
             .update(|all: &mut Vec<Checkpoint>| {
                 all.push(checkpoint);
                 checkpoints::cap(all);
             })
             .map_err(|error| error.to_string())
     }
-    fn load_snapshot(&self, request: &PromptRequest, id: &SessionId) -> Option<crate::prompt::Snapshot> {
-        self.read_json(format!("snapshot-{}.json", scoped_id(request, id).0)).ok().flatten()
+    fn load_snapshot(&self, cwd: &Path, id: &SessionId) -> Option<crate::prompt::Snapshot> {
+        self.read_json(format!("snapshot-{}.json", scoped_id(cwd, id).0)).ok().flatten()
     }
-    fn save_snapshot(
-        &self,
-        request: &PromptRequest,
-        id: &SessionId,
-        snapshot: &crate::prompt::Snapshot,
-    ) -> Result<(), String> {
-        self.write_json(format!("snapshot-{}.json", scoped_id(request, id).0), snapshot)
+    fn save_snapshot(&self, cwd: &Path, id: &SessionId, snapshot: &crate::prompt::Snapshot) -> Result<(), String> {
+        self.write_json(format!("snapshot-{}.json", scoped_id(cwd, id).0), snapshot)
     }
-    fn load_for(&self, request: &PromptRequest, id: &SessionId) -> Option<Vec<Message>> {
-        self.load_for_checked(request, id).ok().flatten()
+    fn load_for(&self, cwd: &Path, id: &SessionId) -> Option<Vec<Message>> {
+        self.load_for_checked(cwd, id).ok().flatten()
     }
-    fn load_for_checked(&self, request: &PromptRequest, id: &SessionId) -> Result<Option<Vec<Message>>, String> {
-        self.conversation(&scoped_id(request, id))
+    fn load_for_checked(&self, cwd: &Path, id: &SessionId) -> Result<Option<Vec<Message>>, String> {
+        self.conversation(&scoped_id(cwd, id))
     }
     fn load(&self, id: &SessionId) -> Option<Vec<Message>> {
         self.conversation(id).ok().flatten()
@@ -223,28 +214,28 @@ impl Sessions for FileSessions {
     fn save(&self, id: &SessionId, history: &[Message]) -> Result<(), String> {
         self.keep(id, history, false)
     }
-    fn save_compacted(&self, request: &PromptRequest, id: &SessionId, history: &[Message]) -> Result<(), String> {
-        self.keep(&scoped_id(request, id), history, true)
+    fn save_compacted(&self, cwd: &Path, id: &SessionId, history: &[Message]) -> Result<(), String> {
+        self.keep(&scoped_id(cwd, id), history, true)
     }
-    fn record(&self, request: &PromptRequest, id: &SessionId, entry: &Entry) -> Result<(), String> {
-        let id = scoped_id(request, id);
+    fn record(&self, cwd: &Path, id: &SessionId, entry: &Entry) -> Result<(), String> {
+        let id = scoped_id(cwd, id);
         if !entry.is_conversation() {
             return self.trace(&id, entry);
         }
         self.persisted.locked().remove(&id.0);
         self.append(&id, std::slice::from_ref(entry), Tail::Unknown).map(|_| ())
     }
-    fn flush_trace(&self, request: &PromptRequest, id: &SessionId) {
-        self.traces.locked().flush(&scoped_id(request, id).0);
+    fn flush_trace(&self, cwd: &Path, id: &SessionId) {
+        self.traces.locked().flush(&scoped_id(cwd, id).0);
     }
-    fn end_trace(&self, request: &PromptRequest, id: &SessionId) {
-        self.traces.locked().close(&scoped_id(request, id).0);
+    fn end_trace(&self, cwd: &Path, id: &SessionId) {
+        self.traces.locked().close(&scoped_id(cwd, id).0);
     }
-    fn hold(&self, request: &PromptRequest, id: &SessionId) -> Result<Hold, String> {
-        super::hold::take(&self.path(&scoped_id(request, id), "lock")?)
+    fn hold(&self, cwd: &Path, id: &SessionId) -> Result<Hold, String> {
+        super::hold::take(&self.path(&scoped_id(cwd, id), "lock")?)
     }
-    fn length(&self, request: &PromptRequest, id: &SessionId) -> Result<u64, String> {
-        let id = scoped_id(request, id);
+    fn length(&self, cwd: &Path, id: &SessionId) -> Result<u64, String> {
+        let id = scoped_id(cwd, id);
         self.traces.locked().flush(&id.0);
         let mut bytes = 0;
         for file in [CONVERSATION, TRACE, EARLIER_TRACE] {

@@ -6,6 +6,7 @@ use super::shaped::shaped;
 use super::shells::Waited;
 use crate::model::ToolSpec;
 use crate::tools::{Outcome, Tool, Workspace, field, required};
+use domain::events::BackgroundChange;
 use serde_json::{Value, json};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
@@ -59,6 +60,7 @@ impl Tool for Bash {
                         "Started in the background as {id}. Read its output with BashOutput and stop it with \
                          KillShell; you will be told when it ends."
                     ))
+                    .in_the_background(BackgroundChange::Started(id))
                 }
                 Err(error) => Outcome::error(format!("Could not start the shell: {error}")),
             };
@@ -171,5 +173,18 @@ mod tests {
         let outcome = Bash.run(&json!({"command": "sleep 60", "timeout": 200}), &workspace);
         assert!(outcome.is_error && outcome.content.contains("stopped after 200 ms"), "{outcome:?}");
         assert!(started.elapsed() < Duration::from_secs(30), "the command ran on: {:?}", started.elapsed());
+    }
+
+    #[test]
+    fn a_command_started_in_the_background_says_so_beside_its_text() {
+        let mut workspace = Workspace::new(std::env::temp_dir());
+        workspace.credentials.client = 921;
+        let started = Bash.run(&json!({"command": "sleep 30", "run_in_background": true}), &workspace);
+        let Some(BackgroundChange::Started(id)) = started.background.clone() else {
+            panic!("no background start in {started:?}")
+        };
+        assert!(started.content.contains(&id), "{started:?}");
+        assert!(super::super::shells::kill(921, &id));
+        assert_eq!(Bash.run(&json!({"command": "true"}), &workspace).background, None);
     }
 }

@@ -108,8 +108,8 @@ fn flags_grant_no_permission_rule_and_no_pre_approval() {
 #[test]
 fn a_budget_is_kept_only_while_its_flag_is_on() {
     let mut request = request();
-    request.budget = Some(domain::budget::Budget { limit_usd: 2.0, spent_usd: 0.5 });
-    assert_eq!(budget(&request, &Features::default()), request.budget);
+    request.policy.budget = Some(domain::budget::Budget { limit_usd: 2.0, spent_usd: 0.5 });
+    assert_eq!(budget(&request, &Features::default()), request.policy.budget);
     assert_eq!(budget(&request, &settings(json!({ features::BUDGET: false })).features), None);
 }
 
@@ -118,9 +118,9 @@ fn rules_asked_on_the_command_line_come_after_the_settings_rules() {
     let mut settings = Settings::default();
     settings.permissions.add(RuleKind::Allow, "Read").expect("rule");
     let mut request = request();
-    request.allowed_tools = vec!["Bash(ls:*)".into()];
-    request.ask_tools = vec!["Edit".into()];
-    request.disallowed_tools = vec!["WebFetch".into()];
+    request.policy.allowed_tools = vec!["Bash(ls:*)".into()];
+    request.policy.ask_tools = vec!["Edit".into()];
+    request.policy.disallowed_tools = vec!["WebFetch".into()];
     let rules = permissions(&request, &settings).expect("rules");
     assert_eq!(
         rules.listed(),
@@ -136,7 +136,7 @@ fn rules_asked_on_the_command_line_come_after_the_settings_rules() {
 #[test]
 fn a_rule_that_does_not_parse_names_the_flags_it_came_from() {
     let mut request = request();
-    request.disallowed_tools = vec!["Bash(".into()];
+    request.policy.disallowed_tools = vec!["Bash(".into()];
     let error = permissions(&request, &Settings::default()).expect_err("unparsed");
     assert!(error.starts_with("--allowedTools/--disallowedTools: "), "{error}");
 }
@@ -144,8 +144,8 @@ fn a_rule_that_does_not_parse_names_the_flags_it_came_from() {
 #[test]
 fn nothing_is_verified_in_plan_mode() {
     let mut request = request();
-    request.verification = Some(Criteria::project("tests pass"));
-    request.permission = PermissionMode::Plan;
+    request.policy.verification = Some(Criteria::project("tests pass"));
+    request.policy.permission = PermissionMode::Plan;
     assert_eq!(verification(&request, &Settings::default(), &ModelRoles::default()), Ok(None));
 }
 
@@ -158,7 +158,7 @@ fn the_project_s_criteria_apply_only_with_their_flag_and_yield_to_the_request_s(
     let off = project(json!({ features::PROJECT_CRITERIA: false }));
     assert_eq!(verification(&request, &off, &ModelRoles::default()), Ok(None));
     let mut asking = request.clone();
-    asking.verification = Some(Criteria::project("tests pass"));
+    asking.policy.verification = Some(Criteria::project("tests pass"));
     let judged = verification(&asking, &project(json!({})), &ModelRoles::default()).expect("verification");
     assert_eq!(judged.map(|found| found.criteria.text), Some("tests pass".to_owned()));
 }
@@ -166,7 +166,7 @@ fn the_project_s_criteria_apply_only_with_their_flag_and_yield_to_the_request_s(
 #[test]
 fn the_judge_is_the_review_role_s_model_or_the_run_s_own() {
     let mut request = request();
-    request.verification = Some(Criteria::project("tests pass"));
+    request.policy.verification = Some(Criteria::project("tests pass"));
     let own = verification(&request, &Settings::default(), &ModelRoles::default()).expect("verification");
     assert_eq!(own.map(|found| found.model), Some("m".to_owned()));
     let mut roles = ModelRoles::default();
@@ -196,11 +196,11 @@ fn anchor() -> Memory {
 fn anchored_memories_need_the_brief_to_ask_and_the_flag_to_be_on() {
     let mut request = request();
     let brief = |anchors| MemoryBrief { anchors, anchored: vec![anchor()], ..MemoryBrief::default() };
-    request.memory = Some(brief(true));
+    request.host.memory = Some(brief(true));
     assert_eq!(anchored(&request, &Features::default()), [anchor()]);
     let off = settings(json!({ features::MEMORY_ANCHORS: false })).features;
     assert_eq!(anchored(&request, &off), []);
-    request.memory = Some(brief(false));
+    request.host.memory = Some(brief(false));
     assert_eq!(anchored(&request, &Features::default()), []);
 }
 

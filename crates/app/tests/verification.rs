@@ -41,8 +41,8 @@ fn a_plans_verification_is_sent_with_the_runs_that_carry_it_out() {
     session.set_permission(PermissionMode::AcceptEdits);
     session.send("do it").expect("run").text().expect("text");
     let requests = engine.requests();
-    assert_eq!(requests[0].verification, None, "the planning run itself is not judged");
-    assert_eq!(requests[1].verification, Some(Criteria::plan("cargo test passes")));
+    assert_eq!(requests[0].policy.verification, None, "the planning run itself is not judged");
+    assert_eq!(requests[1].policy.verification, Some(Criteria::plan("cargo test passes")));
 }
 
 #[test]
@@ -56,6 +56,6 @@ fn the_users_criteria_win_and_can_be_cleared() {
     session.set_verification(None);
     session.send("again").expect("run").text().expect("text");
     let requests = engine.requests();
-    assert_eq!(requests[0].verification, Some(Criteria::user("the app starts")));
-    assert_eq!(requests[1].verification, None, "a run outside planning leaves the plan's criteria as they were");
+    assert_eq!(requests[0].policy.verification, Some(Criteria::user("the app starts")));
+    assert_eq!(requests[1].policy.verification, None, "a run outside planning leaves the plan's criteria as they were");
 }

@@ -7,7 +7,7 @@ use crate::stage::Stage;
 
 fn small_window(stage: &Stage, prompt: &str) -> domain::PromptRequest {
     let mut request = stage.request(prompt);
-    request.model = ModelOption::new("claude-opus-5-5", "Opus 5.5").with_window(100_000);
+    request.session.model = ModelOption::new("claude-opus-5-5", "Opus 5.5").with_window(100_000);
     request
 }
 
@@ -101,7 +101,7 @@ fn a_nearly_full_context_window_is_compacted_mid_run_and_a_resumed_session_s_log
 
     let session = stage.play("first prompt", &small_window(&stage, "hi"));
     let mut second = small_window(&stage, "Read the notes");
-    second.resume = Some(session);
+    second.session.resume = Some(session);
     stage.play("second prompt", &second);
 
     stage.assert(
@@ -190,7 +190,7 @@ fn the_compact_command_summarises_a_kept_session_and_the_log_restarts() {
 
     let session = stage.play("first prompt", &stage.request("hi"));
     let mut compact = stage.resuming(&session, "");
-    compact.command = Some(SessionCommand::Compact);
+    compact.session.command = Some(SessionCommand::Compact);
     stage.play("compact command", &compact);
     stage.play("prompt after compaction", &stage.resuming(&session, "Still there?"));
 
@@ -271,7 +271,7 @@ fn the_compact_command_summarises_a_kept_session_and_the_log_restarts() {
 fn the_compact_command_without_a_session_fails_before_anything_starts() {
     let stage = Stage::new();
     let mut compact = stage.request("");
-    compact.command = Some(SessionCommand::Compact);
+    compact.session.command = Some(SessionCommand::Compact);
 
     stage.play("compact command", &compact);
 

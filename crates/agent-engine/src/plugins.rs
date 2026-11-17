@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use domain::PromptRequest;
+use domain::Folder;
 use serde_json::Value;
 
 const MANIFEST_DIR: &str = brand::PLUGIN_DIR;
@@ -12,8 +12,8 @@ pub struct Plugin {
     pub root: PathBuf,
 }
 
-pub fn found(request: &PromptRequest, home: Option<&Path>) -> Vec<Plugin> {
-    let hosted = request.extensions.iter().flat_map(|extensions| &extensions.plugins).map(|root| Plugin::at(root));
+pub fn found(folder: Folder<'_>, home: Option<&Path>) -> Vec<Plugin> {
+    let hosted = folder.extensions.iter().flat_map(|extensions| &extensions.plugins).map(|root| Plugin::at(root));
     let own = home
         .map(|home| subdirs(&home.join(brand::DIR).join("plugins")))
         .unwrap_or_default()
@@ -124,7 +124,7 @@ fn read_json(path: &Path) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use domain::{Extensions, ModelOption};
+    use domain::Extensions;
 
     use super::*;
 
@@ -144,10 +144,9 @@ mod tests {
         std::fs::create_dir_all(hosted.path().join(brand::PLUGIN_DIR)).expect("dir");
         std::fs::write(hosted.path().join(concat!(brand::plugin_dir!(), "/plugin.json")), r#"{"name": "beta"}"#)
             .expect("manifest");
-        let mut request = PromptRequest::plain("/repo".into(), "", ModelOption::new("", ""));
-        request.extensions = Some(Extensions { plugins: vec![hosted.path().to_path_buf()], ..Extensions::default() });
+        let extensions = Extensions { plugins: vec![hosted.path().to_path_buf()], ..Extensions::default() };
 
-        let found = found(&request, Some(home.path()));
+        let found = found(Folder::at(Path::new("/repo"), &extensions), Some(home.path()));
         let named: Vec<(&str, &Path)> = found.iter().map(|p| (p.name.as_str(), p.root.as_path())).collect();
         assert_eq!(
             named,

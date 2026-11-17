@@ -46,7 +46,7 @@ fn said(sdk: &Sdk, cwd: &Path, trust: bool) -> String {
 }
 
 fn trust_the_run_got(engine: &FakeEngine) -> Option<Trust> {
-    engine.requests().last().and_then(|request| request.extensions.as_ref().map(|extensions| extensions.trust))
+    engine.requests().last().and_then(|request| request.host.extensions.as_ref().map(|extensions| extensions.trust))
 }
 
 #[test]

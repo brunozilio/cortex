@@ -41,8 +41,8 @@ fn effort_auto_lets_each_request_pick_its_model_and_effort_until_a_level_is_set(
     let picks: Vec<bool> = engine
         .requests()
         .into_iter()
-        .filter(|request| request.command.is_none())
-        .map(|request| request.auto_pick)
+        .filter(|request| request.session.command.is_none())
+        .map(|request| request.session.auto_pick)
         .collect();
     assert_eq!(picks, [true, false]);
 }
@@ -79,7 +79,7 @@ fn skills_and_paths_still_reach_the_agent() {
         press(&mut app, KeyCode::Enter);
         until(&mut app, |app| !app.busy());
     }
-    let sent: Vec<String> = engine.requests().into_iter().map(|request| request.prompt).collect();
+    let sent: Vec<String> = engine.requests().into_iter().map(|request| request.prompt.text).collect();
     assert!(sent.iter().any(|prompt| prompt.starts_with(&format!("/{skill}"))), "{sent:?}");
     assert!(sent.iter().any(|prompt| prompt.starts_with("/etc/hosts")), "{sent:?}");
 }

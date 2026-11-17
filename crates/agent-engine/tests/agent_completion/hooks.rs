@@ -33,7 +33,10 @@ fn pre_hook_blocks_mutations_and_post_hook_receives_actual_result() {
     )
     .expect("hooks");
     workspace.hooks = hooks;
-    workspace.hooks.run("PostToolUse", "Read", json!({"tool_response":"real result"}), &workspace).expect("post hook");
+    workspace
+        .hooks
+        .run(agent_engine::hooks::HookEvent::PostToolUse, "Read", json!({"tool_response":"real result"}), &workspace)
+        .expect("post hook");
     let result = std::fs::read_to_string(dir.path().join("actual-result.json")).expect("saved");
     assert!(result.contains("real result"));
 }
@@ -42,7 +45,7 @@ fn hook_timeout_kills_a_running_process_tree() {
     let dir = tempfile::tempdir().expect("dir");
     let workspace = Workspace::new(dir.path());
     let handler = agent_engine::hooks::Handler {
-        kind: "command".into(),
+        kind: agent_engine::hooks::HandlerKind::Command,
         command: "sleep 120".into(),
         timeout: 1,
         status_message: (),
@@ -157,7 +160,9 @@ fn http_hook_receives_json_and_returns_a_blocking_decision_through_the_worker() 
     let dir = tempfile::tempdir().expect("dir");
     let workspace = Workspace::new(dir.path());
     let hooks=agent_engine::hooks::Hooks::parse(&json!({"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"http","url":format!("http://{addr}"),"headers":{"X-Fixture":"hook-value"},"timeout":5}]}]})).expect("hook");
-    let decision = hooks.run("PreToolUse", "Bash", json!({"tool_name":"Bash"}), &workspace).expect("HTTP hook");
+    let decision = hooks
+        .run(agent_engine::hooks::HookEvent::PreToolUse, "Bash", json!({"tool_name":"Bash"}), &workspace)
+        .expect("HTTP hook");
     assert_eq!(decision.blocked.as_deref(), Some("HTTP policy rejected"));
     server.join().expect("server");
 }

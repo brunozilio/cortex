@@ -30,7 +30,7 @@ fn placed(root: &std::path::Path) -> Hooks {
 
 fn reached(hooks: &Hooks, workspace: &Workspace) -> serde_json::Value {
     let input = json!({ "tool_name": "Bash", "tool_input": { "command": "ls" } });
-    let decision = hooks.run("PreToolUse", "Bash", input, workspace).expect("run");
+    let decision = hooks.run(crate::hooks::HookEvent::PreToolUse, "Bash", input, workspace).expect("run");
     serde_json::from_str(&decision.blocked.expect("reason")).expect("json")
 }
 

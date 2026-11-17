@@ -107,7 +107,7 @@ impl LiveSession {
             workspace.cwd = project;
         }
         let ended = serde_json::json!({"session_id": self.id});
-        if let Err(error) = workspace.hooks.run("SessionEnd", "", ended, &workspace) {
+        if let Err(error) = workspace.hooks.run(crate::hooks::HookEvent::SessionEnd, "", ended, &workspace) {
             tracing::warn!(%error, "a SessionEnd hook failed");
         }
     }

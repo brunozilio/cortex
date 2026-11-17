@@ -46,16 +46,16 @@ impl Sessions for DiesAfter {
         Ok(())
     }
 
-    fn record(&self, request: &PromptRequest, id: &SessionId, entry: &Entry) -> Result<(), String> {
+    fn record(&self, cwd: &std::path::Path, id: &SessionId, entry: &Entry) -> Result<(), String> {
         if self.is_dead() {
             return Ok(());
         }
-        self.kept.record(request, id, entry)
+        self.kept.record(cwd, id, entry)
     }
 
-    fn flush_trace(&self, request: &PromptRequest, id: &SessionId) {
+    fn flush_trace(&self, cwd: &std::path::Path, id: &SessionId) {
         if !self.is_dead() {
-            self.kept.flush_trace(request, id);
+            self.kept.flush_trace(cwd, id);
         }
     }
 }
@@ -97,8 +97,8 @@ fn resumed(crashed: &Crashed) -> (Vec<Message>, Vec<Message>) {
     let sessions = Arc::new(FileSessions::new(&crashed.store));
     let engine = NativeEngine::new(Arc::new(Source(Mutex::new(vec![later.clone()]))), sessions.clone());
     let mut request = PromptRequest::plain(crashed.dir.path().into(), "go on", model());
-    request.resume = Some(crashed.session.clone());
-    let on_disk = sessions.load_for_checked(&request, &crashed.session).expect("readable").expect("kept");
+    request.session.resume = Some(crashed.session.clone());
+    let on_disk = sessions.load_for_checked(&request.session.cwd, &crashed.session).expect("readable").expect("kept");
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     (on_disk, later.asked()[0].messages.clone())
@@ -164,7 +164,7 @@ fn a_conversation_resumed_after_a_crash_is_whole_on_disk_again() {
     resumed(&crashed);
     let sessions = FileSessions::new(&crashed.store);
     let request = PromptRequest::plain(crashed.dir.path().into(), "", model());
-    let kept = sessions.load_for_checked(&request, &crashed.session).expect("readable").expect("kept");
+    let kept = sessions.load_for_checked(&request.session.cwd, &crashed.session).expect("readable").expect("kept");
     assert_eq!(agent_engine::sessions::repaired(kept.clone()), kept, "no call is left without its result");
     assert_eq!(kept.last().map(|last| (last.role, last.text())), Some((Role::Assistant, "Going on.".to_owned())));
 }
@@ -185,7 +185,7 @@ fn a_run_of_many_turns_writes_each_message_once_and_never_reads_the_file_back() 
     let engine =
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![Arc::new(ScriptedModel::new(replies))]))), sessions.clone());
     let mut request = PromptRequest::plain(dir.path().into(), "read it many times", model());
-    request.max_turns = Some(100);
+    request.policy.max_turns = Some(100);
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
 

@@ -263,7 +263,7 @@ fn enter_sends_and_with_alt_shift_or_as_ctrl_j_breaks_the_line() {
     hit(&mut app, KeyCode::Enter, NONE);
     assert!(text(&app).is_empty());
     until(&mut app, |_| !engine.requests().is_empty());
-    assert_eq!(engine.requests()[0].prompt, "send me");
+    assert_eq!(engine.requests()[0].prompt.text, "send me");
 }
 
 #[test]

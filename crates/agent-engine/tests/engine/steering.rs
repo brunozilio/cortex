@@ -63,7 +63,7 @@ fn messages_taken_back_before_the_next_turn_never_reach_the_model() {
         Arc::new(InMemorySessions::default()),
     );
     let mut request = PromptRequest::plain(dir.path().into(), "say hi", model());
-    request.permission = PermissionMode::Ask;
+    request.policy.permission = PermissionMode::Ask;
     let (events, mut handle) = start_with_handle(&engine, &request);
     let ask = loop {
         match events.recv_timeout(Duration::from_secs(10)).expect("an ask") {

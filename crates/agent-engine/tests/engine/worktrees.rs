@@ -82,8 +82,8 @@ fn the_session_moves_into_a_worktree_and_back() {
         Arc::new(agent_engine::sessions::FileSessions::new(store.path())),
     );
     let mut request = PromptRequest::plain(project.clone(), "Work apart", model());
-    request.permission = PermissionMode::Bypass;
-    request.safety_check = false;
+    request.policy.permission = PermissionMode::Bypass;
+    request.policy.safety_check = false;
 
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
@@ -97,8 +97,8 @@ fn the_session_moves_into_a_worktree_and_back() {
         .iter()
         .find_map(|event| if let EngineEvent::SessionStarted(id) = event { Some(id.clone()) } else { None })
         .expect("session");
-    request.resume = Some(session);
-    request.prompt = "Go on".into();
+    request.session.resume = Some(session);
+    request.prompt.text = "Go on".into();
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let (read, failed) = result(&events, "read");
@@ -129,8 +129,8 @@ fn only_the_main_agent_outside_a_worktree_enters_one() {
         Arc::new(agent_engine::sessions::FileSessions::new(dir.path().join("sessions"))),
     );
     let mut request = PromptRequest::plain(project, "Go", model());
-    request.permission = PermissionMode::Bypass;
-    request.safety_check = false;
+    request.policy.permission = PermissionMode::Bypass;
+    request.policy.safety_check = false;
     let events = finish(&start(&engine, &request));
     let (leave, failed) = result(&events, "leave");
     assert!(failed && leave.contains("not in a worktree"), "{leave}");
@@ -154,8 +154,8 @@ fn a_worktree_entered_in_a_run_that_then_fails_is_still_the_session_s() {
         Arc::new(agent_engine::sessions::FileSessions::new(dir.path().join("sessions"))),
     );
     let mut request = PromptRequest::plain(project.clone(), "Go", model());
-    request.permission = PermissionMode::Bypass;
-    request.safety_check = false;
+    request.policy.permission = PermissionMode::Bypass;
+    request.policy.safety_check = false;
     let events = finish(&start(&engine, &request));
     let [worktree] = moved(&events).try_into().unwrap_or_else(|moves| panic!("one move: {moves:?}"));
     assert!(matches!(events.last(), Some(EngineEvent::Failed(_))), "{events:?}");
@@ -177,8 +177,8 @@ fn a_main_agent_asking_for_a_worktree_outside_a_repository_works_in_the_folder()
         Arc::new(agent_engine::sessions::FileSessions::new(store.path())),
     );
     let mut request = PromptRequest::plain(dir.path().into(), "Create work", model());
-    request.permission = PermissionMode::Bypass;
-    request.safety_check = false;
+    request.policy.permission = PermissionMode::Bypass;
+    request.policy.safety_check = false;
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     assert_eq!(std::fs::read_to_string(dir.path().join("work.txt")).expect("work"), "In the folder");

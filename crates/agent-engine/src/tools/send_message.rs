@@ -3,7 +3,7 @@ use serde_json::Value;
 use super::{Effect, Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
-pub const SEND_MESSAGE_TOOL: &str = "SendMessage";
+pub const SEND_MESSAGE_TOOL: &str = super::names::SEND_MESSAGE;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SendMessageTool;

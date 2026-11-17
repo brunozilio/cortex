@@ -3,7 +3,7 @@ use serde_json::Value;
 use super::McpSources;
 pub use super::stdio_sandbox::StdioSandbox;
 use crate::plugins::Plugin;
-use domain::PromptRequest;
+use domain::Folder;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum ServerSpec {
@@ -105,17 +105,16 @@ impl std::fmt::Debug for ServerSpec {
     }
 }
 
-pub fn servers(request: &PromptRequest, sources: &McpSources) -> Vec<ServerSpec> {
+pub fn servers(folder: Folder<'_>, sources: &McpSources) -> Vec<ServerSpec> {
     let mut servers: Vec<ServerSpec> = Vec::new();
-    if let Some(path) = request.extensions.as_ref().and_then(|e| e.mcp_config.as_ref()) {
+    if let Some(path) = folder.extensions.and_then(|e| e.mcp_config.as_ref()) {
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|text| parse_config(&text)) {
-            Ok(found) => servers.extend(
-                found.into_iter().map(|server| super::configured::settled(server, true, &request.cwd, sources)),
-            ),
+            Ok(found) => servers
+                .extend(found.into_iter().map(|server| super::configured::settled(server, true, folder.cwd, sources))),
             Err(error) => tracing::warn!(%error, "the host's MCP servers are not available to this run"),
         }
     }
-    for server in super::configured::configured(&request.cwd, sources) {
+    for server in super::configured::configured(folder.cwd, sources) {
         if !servers.iter().any(|known| known.name() == server.name()) {
             servers.push(server);
         }
@@ -182,12 +181,12 @@ pub fn parse_config(text: &str) -> Result<Vec<ServerSpec>, String> {
 
 #[cfg(test)]
 mod tests {
-    use domain::{Extensions, ModelOption};
+    use domain::Extensions;
 
     use super::*;
 
-    fn request() -> PromptRequest {
-        PromptRequest::plain("/r".into(), "hi", ModelOption::new("m", "M"))
+    fn at(extensions: &Extensions) -> Folder<'_> {
+        Folder::at(std::path::Path::new("/r"), extensions)
     }
 
     #[test]
@@ -203,9 +202,8 @@ mod tests {
         }}"#
         );
         std::fs::write(&path, config).expect("write");
-        let mut request = request();
-        request.extensions = Some(Extensions { mcp_config: Some(path), ..Extensions::default() });
-        let found = servers(&request, &McpSources::default());
+        let extensions = Extensions { mcp_config: Some(path), ..Extensions::default() };
+        let found = servers(at(&extensions), &McpSources::default());
         let names: Vec<&str> = found.iter().map(ServerSpec::name).collect();
         assert_eq!(names, ["docs"]);
         assert!(!names.contains(&domain::memory::MEMORY_SERVER));
@@ -231,12 +229,11 @@ mod tests {
         }}"#
         );
         std::fs::write(root.join(".mcp.json"), config).expect("mcp");
-        let mut request = request();
-        request.extensions = Some(Extensions { plugins: vec![root.to_path_buf()], ..Extensions::default() });
-        let plugins = crate::plugins::found(&request, None);
+        let extensions = Extensions { plugins: vec![root.to_path_buf()], ..Extensions::default() };
+        let plugins = crate::plugins::found(at(&extensions), None);
         let root = root.display().to_string();
         assert_eq!(
-            servers(&request, &McpSources { plugins, ..McpSources::default() }),
+            servers(at(&extensions), &McpSources { plugins, ..McpSources::default() }),
             vec![ServerSpec::Stdio {
                 name: "plugin_acme_jira".into(),
                 command: format!("{root}/bin/jira"),
@@ -274,9 +271,8 @@ mod tests {
             "odd": {"type": "websocket", "url": "ws://x"}
         }}"#;
         std::fs::write(&path, config).expect("write");
-        let mut request = request();
-        request.extensions = Some(Extensions { mcp_config: Some(path), ..Extensions::default() });
-        let found = servers(&request, &McpSources::default());
+        let extensions = Extensions { mcp_config: Some(path), ..Extensions::default() };
+        let found = servers(at(&extensions), &McpSources::default());
         let names: Vec<&str> = found.iter().map(ServerSpec::name).collect();
         assert_eq!(names, ["gmail-work", "linear-acme"]);
         assert_eq!(

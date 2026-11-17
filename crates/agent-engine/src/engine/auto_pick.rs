@@ -20,17 +20,17 @@ impl Job {
         models: &mut Models,
     ) {
         let small = models.small_model.clone();
-        let pick = settled(&self.request.prompt)
+        let pick = settled(&self.request.prompt.text)
             .or_else(|| self.judged(api, ledger, template, small.as_deref()))
             .unwrap_or(Pick::FALLBACK);
         if let (Tier::Small, Some(small)) = (pick.tier, small)
-            && small != self.request.model.id
+            && small != self.request.session.model.id
         {
             models.switch_to(small.clone());
-            self.request.model.id.clone_from(&small);
+            self.request.session.model.id.clone_from(&small);
             template.model = small;
         }
-        self.request.effort = pick.effort;
+        self.request.session.effort = pick.effort;
         template.effort = pick.effort;
         self.gate.emit(EngineEvent::Picked { model: template.model.clone(), effort: pick.effort });
     }
@@ -42,13 +42,13 @@ impl Job {
         template: &TurnRequest,
         small: Option<&str>,
     ) -> Option<Pick> {
-        let reader = crate::tools::builtin::web::guarded::reader(small, template, self.request.model.provider);
-        let mut model = self.request.model.clone();
+        let reader = crate::tools::builtin::web::guarded::reader(small, template, self.request.session.model.provider);
+        let mut model = self.request.session.model.clone();
         model.id.clone_from(&reader.model);
         let metered = self.metered(Arc::clone(api), ledger, model);
         let request = TurnRequest {
             system: crate::prompt::text("auto-pick"),
-            messages: vec![Message::user(format!("<request>\n{}\n</request>", self.request.prompt))],
+            messages: vec![Message::user(format!("<request>\n{}\n</request>", self.request.prompt.text))],
             effort: domain::Effort::Low,
             max_tokens: reader.max_tokens.min(PICK_TOKENS),
             ..reader

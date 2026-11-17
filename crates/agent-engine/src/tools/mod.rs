@@ -60,11 +60,22 @@ pub struct Outcome {
     pub shown: Option<String>,
     #[serde(default)]
     pub edited: Option<Box<domain::changes::Edited>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<domain::events::BackgroundChange>,
 }
 
 impl Outcome {
     pub fn ok(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: false, images: Vec::new(), shown: None, edited: None }
+        Self::new(content.into(), false, Vec::new())
+    }
+
+    fn new(content: String, is_error: bool, images: Vec<domain::Image>) -> Self {
+        Self { content, is_error, images, shown: None, edited: None, background: None }
+    }
+
+    pub fn in_the_background(mut self, change: domain::events::BackgroundChange) -> Self {
+        self.background = Some(change);
+        self
     }
 
     pub fn showing(mut self, shown: impl Into<String>) -> Self {
@@ -78,12 +89,11 @@ impl Outcome {
     }
 
     pub fn image(image: domain::Image) -> Self {
-        let content = format!("Image ({})", image.media_type);
-        Self { content, is_error: false, images: vec![image], shown: None, edited: None }
+        Self::new(format!("Image ({})", image.media_type), false, vec![image])
     }
 
     pub fn error(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: true, images: Vec::new(), shown: None, edited: None }
+        Self::new(content.into(), true, Vec::new())
     }
 }
 

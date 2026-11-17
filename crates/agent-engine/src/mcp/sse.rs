@@ -6,7 +6,7 @@ use platform::sync::Locked;
 use serde_json::{Value, json};
 
 use super::sse_listen::{Link, Listening, Waiting, open};
-use super::{ANSWER_WAIT, Transport};
+use super::{ANSWER_WAIT, McpError, Transport};
 use crate::model::CancellationToken;
 use crate::model::http::Http;
 
@@ -79,7 +79,7 @@ impl SseTransport {
         format!("{} closed its stream", self.link.name)
     }
 
-    async fn requested(&self, message: &Value, cancel: &CancellationToken) -> Result<Value, String> {
+    async fn requested(&self, message: &Value, cancel: &CancellationToken) -> Result<Value, McpError> {
         if message["method"] == "initialize" {
             *self.greeting.locked() = Some(message.clone());
         }
@@ -88,18 +88,18 @@ impl SseTransport {
         self.waiting.locked().insert(id.clone(), send);
         if self.down.load(Ordering::SeqCst) {
             self.forget(&id);
-            return Err(self.closed_its_stream());
+            return Err(self.closed_its_stream().into());
         }
         if let Err(error) = self.link.post(message, cancel).await {
             self.forget(&id);
-            return Err(format!("{}: {error}", self.link.name));
+            return Err(format!("{}: {error}", self.link.name).into());
         }
         let answered = tokio::select! {
             biased;
-            reply = receive => reply.map_err(|_| self.closed_its_stream()),
-            () = cancel.cancelled() => Err("cancelled".into()),
+            reply = receive => reply.map_err(|_| self.closed_its_stream().into()),
+            () = cancel.cancelled() => Err(McpError::Cancelled),
             () = tokio::time::sleep(self.answer_wait) => {
-                Err(format!("{} did not answer in {}s", self.link.name, self.answer_wait.as_secs()))
+                Err(format!("{} did not answer in {}s", self.link.name, self.answer_wait.as_secs()).into())
             }
         };
         if answered.is_err() {
@@ -110,23 +110,23 @@ impl SseTransport {
 }
 
 impl Transport for SseTransport {
-    fn request(&self, message: &Value) -> Result<Value, String> {
+    fn request(&self, message: &Value) -> Result<Value, McpError> {
         self.request_stopped(message, &platform::Stop::new())
     }
 
-    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, String> {
+    fn request_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<Value, McpError> {
         platform::runtime::block_on(self.requested(message, stop.token()))
-            .unwrap_or_else(|error| Err(error.to_string()))
+            .unwrap_or_else(|error| Err(error.to_string().into()))
     }
 
-    fn notify(&self, message: &Value) -> Result<(), String> {
+    fn notify(&self, message: &Value) -> Result<(), McpError> {
         self.notify_stopped(message, &platform::Stop::new())
     }
 
-    fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), String> {
+    fn notify_stopped(&self, message: &Value, stop: &platform::Stop) -> Result<(), McpError> {
         platform::runtime::block_on(self.link.post(message, stop.token()))
             .unwrap_or_else(|error| Err(error.to_string()))
-            .map_err(|error| format!("{}: {error}", self.link.name))
+            .map_err(|error| format!("{}: {error}", self.link.name).into())
     }
 
     fn close(&self) {

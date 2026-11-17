@@ -13,7 +13,7 @@ fn a_message_steered_during_a_tool_call_is_delivered_with_its_results_and_cannot
     );
     stage.model(model);
     let mut request = stage.request("Write the file");
-    request.permission = PermissionMode::Ask;
+    request.policy.permission = PermissionMode::Ask;
 
     let mut run = stage.start(&request);
     let ask = run.asked();

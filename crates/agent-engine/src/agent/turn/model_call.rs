@@ -86,7 +86,7 @@ impl Agent<'_> {
             "tried": fallback.tried(),
             "fallbacks": fallback.chain(),
         });
-        let verdict = match self.model_hook("ModelError", request, extra) {
+        let verdict = match self.model_hook(crate::hooks::HookEvent::ModelError, request, extra) {
             Some(Decision { blocked: Some(_), .. }) => Verdict::Stop,
             Some(Decision { model: Some(model), .. }) => Verdict::Forward(model),
             _ => Verdict::Pass,
@@ -94,8 +94,13 @@ impl Agent<'_> {
         fallback.next(&request.model, failure, verdict)
     }
 
-    pub(super) fn model_hook(&self, event: &str, request: &TurnRequest, extra: Value) -> Option<Decision> {
-        if !self.workspace.hooks.0.contains_key(event) {
+    pub(super) fn model_hook(
+        &self,
+        event: crate::hooks::HookEvent,
+        request: &TurnRequest,
+        extra: Value,
+    ) -> Option<Decision> {
+        if !self.workspace.hooks.listens_to(event) {
             return None;
         }
         let kind = if self.depth > 0 { "sub-agent" } else { "main" };
@@ -111,7 +116,7 @@ impl Agent<'_> {
         match self.workspace.hooks.run(event, kind, input, self.workspace) {
             Ok(decision) => Some(decision),
             Err(error) => {
-                tracing::warn!(%error, event, "a model hook failed; the model stays as it was");
+                tracing::warn!(%error, event = event.as_str(), "a model hook failed; the model stays as it was");
                 None
             }
         }

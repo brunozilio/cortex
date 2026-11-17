@@ -143,6 +143,7 @@ impl Run {
 
     pub fn text(mut self) -> Result<String, Error> {
         let mut text = String::new();
+        let mut kind = domain::FailureKind::Other;
         while let Some(event) = self.next_event() {
             match event {
                 EngineEvent::TextDelta(delta) => text.push_str(&delta),
@@ -153,7 +154,8 @@ impl Run {
                     }
                     self.answer(ask.id, Decision::Deny)?;
                 }
-                EngineEvent::Failed(message) => return Err(Error::Run(message)),
+                EngineEvent::Failure(given) => kind = given,
+                EngineEvent::Failed(message) => return Err(domain::failure::RunFailure { kind, message }.into()),
                 EngineEvent::Cancelled => return Err(Error::Run("cancelled".into())),
                 _ => {}
             }

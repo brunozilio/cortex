@@ -1,10 +1,10 @@
-use domain::{ModelOption, PromptRequest, SessionId};
+use domain::SessionId;
 
 use super::*;
 use crate::sessions::{FileSessions, Sessions};
 
-fn request(dir: &std::path::Path) -> PromptRequest {
-    PromptRequest::plain(dir.into(), "", ModelOption::new("m", "M"))
+fn request(dir: &std::path::Path) -> std::path::PathBuf {
+    dir.to_path_buf()
 }
 
 #[test]

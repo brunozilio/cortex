@@ -19,7 +19,7 @@ use domain::lsp::ServerSpec;
 use domain::lsp::answer::RequestError;
 use serde_json::Value;
 
-pub use client::LspClient;
+pub use client::{LspClient, StartError};
 pub use installer::Downloads;
 pub use installs::Installer;
 pub use pool::{IDLE, LspPool, Processes, RETRY, Starter};

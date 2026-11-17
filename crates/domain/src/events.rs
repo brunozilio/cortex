@@ -62,6 +62,12 @@ pub enum EngineEvent {
         output: String,
         failed: bool,
     },
+    BackgroundStarted {
+        id: String,
+    },
+    BackgroundEnded {
+        id: String,
+    },
     AgentSpawned {
         index: usize,
         kind: String,
@@ -128,6 +134,21 @@ pub enum EngineEvent {
     Failure(FailureKind),
     Failed(String),
     Cancelled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BackgroundChange {
+    Started(String),
+    Ended(String),
+}
+
+impl BackgroundChange {
+    pub fn event(self) -> EngineEvent {
+        match self {
+            Self::Started(id) => EngineEvent::BackgroundStarted { id },
+            Self::Ended(id) => EngineEvent::BackgroundEnded { id },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

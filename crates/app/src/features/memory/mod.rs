@@ -186,16 +186,16 @@ impl Memories {
     }
 
     pub fn brief(&self, run: RunId, request: &PromptRequest, tool: bool) -> PromptRequest {
-        let Some(brief) = &request.memory else { return request.clone() };
+        let Some(brief) = &request.host.memory else { return request.clone() };
         if brief.optimizing {
             return self.brief_optimization(run, request);
         }
         let budget = if tool { RecallBudget::WITH_TOOL } else { RecallBudget::default() };
-        let features = team::features(&self.gate(&request.cwd));
+        let features = team::features(&self.gate(&request.session.cwd));
         let anchors = features.on(domain::features::MEMORY_ANCHORS);
-        let shared = team::load_if(&request.cwd, &features);
+        let shared = team::load_if(&request.session.cwd, &features);
         let structured = features.on(domain::features::STRUCTURED_LEARNINGS);
-        if features.on(domain::features::MEMORY_SCORECARD) && self.holds_out(&request.cwd) {
+        if features.on(domain::features::MEMORY_SCORECARD) && self.holds_out(&request.session.cwd) {
             let brief = MemoryBrief {
                 output: edits_file(run),
                 origin: brief.origin.clone(),
@@ -204,16 +204,16 @@ impl Memories {
                 held_out: true,
                 ..MemoryBrief::default()
             };
-            return PromptRequest { memory: Some(brief), ..request.clone() };
+            return with_memory(request, brief);
         }
         let (recalled, tool, anchored) = {
             let mut books = self.lock();
-            let kept = self.kept(&mut books, &request.cwd);
+            let kept = self.kept(&mut books, &request.session.cwd);
             let known: Vec<Memory> = kept.book.memories.iter().cloned().chain(shared).collect();
-            let recalled = recall(&request.prompt, &known, budget, now());
+            let recalled = recall(&request.prompt.text, &known, budget, now());
             let personal: Vec<Memory> =
                 recalled.iter().filter(|memory| !domain::memory::team::is_team(memory.id)).cloned().collect();
-            self.mark_used(&request.cwd, kept, &personal);
+            self.mark_used(&request.session.cwd, kept, &personal);
             let tool = tool && kept.book.holds_more_than(&recalled);
             let anchored: Vec<Memory> = if anchors {
                 let unseen: Vec<Memory> =
@@ -235,11 +235,11 @@ impl Memories {
             structured,
             held_out: false,
         };
-        PromptRequest { memory: Some(brief), ..request.clone() }
+        with_memory(request, brief)
     }
 
     pub fn finish(&self, request: &PromptRequest, outcome: &RunOutcome) -> Option<Result<MemoryApplied, String>> {
-        let brief = request.memory.as_ref()?;
+        let brief = request.host.memory.as_ref()?;
         if !brief.optimizing {
             self.keep_score(request, brief.held_out, outcome);
         }
@@ -249,16 +249,23 @@ impl Memories {
         let edits = json.and_then(|json| domain::memory::parse_memory_edits(&json)).unwrap_or_default();
         if edits.is_empty() {
             if brief.optimizing {
-                self.set_undo_point(&request.cwd, None);
+                self.set_undo_point(&request.session.cwd, None);
             }
             return None;
         }
         let by = Provenance { author: Author::Agent, now: now(), origin: brief.origin.clone() };
-        let before = self.load(&request.cwd).memories;
-        let applied =
-            if brief.optimizing { self.apply(&request.cwd, &edits, by) } else { self.edit(&request.cwd, &edits, by) };
+        let before = self.load(&request.session.cwd).memories;
+        let applied = if brief.optimizing {
+            self.apply(&request.session.cwd, &edits, by)
+        } else {
+            self.edit(&request.session.cwd, &edits, by)
+        };
         Some(applied.map(|listing| applied_since(&before, listing, brief.optimizing)))
     }
+}
+
+fn with_memory(request: &PromptRequest, brief: MemoryBrief) -> PromptRequest {
+    request.clone().remembering(brief)
 }
 
 fn applied_since(before: &[Memory], listing: MemoryListing, optimizing: bool) -> MemoryApplied {

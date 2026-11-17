@@ -83,13 +83,13 @@ impl Stage {
     pub fn request(&self, prompt: &str) -> PromptRequest {
         let mut request =
             PromptRequest::plain(self.project.clone(), prompt, ModelOption::new("claude-opus-5-5", "Opus 5.5"));
-        request.extensions = Some(Extensions { home: Some(self.home.clone()), ..Extensions::default() });
+        request.host.extensions = Some(Extensions { home: Some(self.home.clone()), ..Extensions::default() });
         request
     }
 
     pub fn trusted(&self, prompt: &str) -> PromptRequest {
         let mut request = self.request(prompt);
-        request.extensions = Some(Extensions {
+        request.host.extensions = Some(Extensions {
             home: Some(self.home.clone()),
             trust: domain::trust::Trust::Trusted,
             ..Extensions::default()
@@ -98,7 +98,9 @@ impl Stage {
     }
 
     pub fn resuming(&self, session: &SessionId, prompt: &str) -> PromptRequest {
-        PromptRequest { resume: Some(session.clone()), ..self.request(prompt) }
+        let mut request = self.request(prompt);
+        request.session.resume = Some(session.clone());
+        request
     }
 
     pub fn settings(&self, settings: &serde_json::Value) {
@@ -138,7 +140,7 @@ impl Stage {
             })
             .expect("the preparing run starts a session");
         self.know(&session);
-        let entries = self.sessions.entries(&request, &session).expect("readable log");
+        let entries = self.sessions.entries(&request.session.cwd, &session).expect("readable log");
         self.logged.lock().expect("logged").insert(session.clone(), entries.len());
         session
     }
@@ -162,7 +164,7 @@ impl Stage {
             Order::PerLane => render::lanes(&events),
         };
         self.section(&format!("{label}: events"), lines);
-        let session = started.or_else(|| request.resume.clone()).unwrap_or_else(|| SessionId("none".into()));
+        let session = started.or_else(|| request.session.resume.clone()).unwrap_or_else(|| SessionId("none".into()));
         if session.0 != "none" {
             self.saved_ordered(label, &request, &session, order);
         }
@@ -175,14 +177,14 @@ impl Stage {
 
     fn saved_ordered(&self, label: &str, request: &PromptRequest, session: &SessionId, order: Order) {
         self.know(session);
-        let history = self.sessions.load_for_checked(request, session).expect("readable session");
+        let history = self.sessions.load_for_checked(&request.session.cwd, session).expect("readable session");
         let conversation = match &history {
             Some(history) if history.is_empty() => vec!["(empty)".to_owned()],
             Some(history) => render::conversation(history),
             None => vec!["(nothing kept)".to_owned()],
         };
         self.section(&format!("{label}: conversation"), conversation);
-        let entries = self.sessions.entries(request, session).expect("readable log");
+        let entries = self.sessions.entries(&request.session.cwd, session).expect("readable log");
         let mut logged = self.logged.lock().expect("logged");
         let before = logged.insert(session.clone(), entries.len()).unwrap_or(0);
         let fresh = &entries[before.min(entries.len())..];
@@ -199,7 +201,7 @@ impl Stage {
     }
 
     pub fn checkpoints(&self, label: &str, request: &PromptRequest, session: &SessionId) {
-        let kept = self.sessions.load_checkpoints(request, session).expect("checkpoints");
+        let kept = self.sessions.load_checkpoints(&request.session.cwd, session).expect("checkpoints");
         let lines = kept
             .iter()
             .enumerate()

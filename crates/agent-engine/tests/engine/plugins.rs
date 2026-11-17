@@ -50,7 +50,7 @@ fn a_plugin_brings_its_command_hook_and_mcp_tools_to_a_run() {
     let engine =
         NativeEngine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let mut request = PromptRequest::plain(repo.path().into(), "/acme:hello world", model());
-    request.extensions = Some(Extensions { plugins: vec![root.to_path_buf()], ..Extensions::default() });
+    request.host.extensions = Some(Extensions { plugins: vec![root.to_path_buf()], ..Extensions::default() });
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
 

@@ -37,7 +37,7 @@ fn runs_a_prompt_and_continues_the_session() {
     assert!(system.contains("Answer in one word."), "the project's instructions reach the model");
 
     let mut follow = PromptRequest::plain(dir.path().into(), "Sure?", model());
-    follow.resume = Some(session.clone());
+    follow.session.resume = Some(session.clone());
     let events = finish(&start(&engine, &follow));
     assert_eq!(events.first(), Some(&EngineEvent::SessionStarted(session)));
     let history = &second.asked()[0].messages;
@@ -65,7 +65,7 @@ fn attached_images_reach_the_model_before_the_prompt() {
     );
     let image = domain::Image::from_bytes(b"\x89PNG\r\n\x1a\n pixels").expect("ok").expect("png");
     let mut request = PromptRequest::plain(dir.path().into(), "What is this?", model());
-    request.images = vec![image.clone()];
+    request.prompt.images = vec![image.clone()];
     let events = finish(&start(&engine, &request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
     let first = &model_api.asked()[0].messages[0];

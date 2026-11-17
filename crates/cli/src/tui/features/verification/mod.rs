@@ -86,7 +86,7 @@ mod tests {
         assert!(screen(&app).contains("verify (yours)"), "{}", screen(&app));
         command(&mut app, "fix it");
         until(&mut app, |app| !app.busy());
-        assert_eq!(engine.requests()[0].verification, Some(Criteria::user("cargo test passes")));
+        assert_eq!(engine.requests()[0].policy.verification, Some(Criteria::user("cargo test passes")));
         command(&mut app, "/verification off");
         assert!(screen(&app).contains("Verification off.") && !screen(&app).contains("verify (yours)"));
     }

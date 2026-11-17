@@ -3,8 +3,8 @@ use serde_json::Value;
 use super::{Effect, Outcome, Tool, Workspace, field};
 use crate::model::ToolSpec;
 
-pub const ENTER_WORKTREE: &str = "EnterWorktree";
-pub const EXIT_WORKTREE: &str = "ExitWorktree";
+pub const ENTER_WORKTREE: &str = super::names::ENTER_WORKTREE;
+pub const EXIT_WORKTREE: &str = super::names::EXIT_WORKTREE;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EnterWorktree;

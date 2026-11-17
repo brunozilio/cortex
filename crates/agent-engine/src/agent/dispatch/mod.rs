@@ -12,9 +12,10 @@ use serde_json::{Value, json};
 use super::Agent;
 use super::run::ThisRun;
 use super::subagents::background::Spawn;
-use crate::hooks::Decision;
+use crate::hooks::{Decision, HookEvent};
 use crate::tools::{Outcome, Tool};
 use crate::transcript::{Block, Message};
+use domain::permission_rules::PermissionDecision;
 
 pub(in crate::agent) struct Calling<'c, 'env> {
     pub(in crate::agent) id: &'c str,
@@ -23,7 +24,7 @@ pub(in crate::agent) struct Calling<'c, 'env> {
     pub(in crate::agent) parent: &'c [Message],
     pub(in crate::agent) run: &'c ThisRun,
     pub(in crate::agent) spawn: Option<Spawn<'c, 'env>>,
-    pub(in crate::agent) permission: Option<&'c str>,
+    pub(in crate::agent) permission: Option<PermissionDecision>,
 }
 
 impl Agent<'_> {
@@ -54,7 +55,7 @@ impl Agent<'_> {
         let input = pre.updated_input.as_ref().unwrap_or(input);
         let rule_context = self.rules_for_changed_input(&pre, input);
         self.started(id, name, tool, input);
-        let calling = Calling { id, name, tool, parent, run, spawn, permission: pre.permission.as_deref() };
+        let calling = Calling { id, name, tool, parent, run, spawn, permission: pre.permission };
         let mut outcome = match self.refused_before_running(&calling, input, &pre, &rule_context, offered) {
             Some(refusal) => refusal,
             None => self.ran(&calling, input),
@@ -80,7 +81,7 @@ impl Agent<'_> {
         self.workspace
             .hooks
             .run_with_model(
-                "PreToolUse",
+                HookEvent::PreToolUse,
                 name,
                 json!({"tool_name":name,"tool_use_id":id,"tool_input":input}),
                 self.workspace,

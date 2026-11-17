@@ -11,7 +11,7 @@ impl Session {
 
     pub fn title(&self, prompt: &str) -> Result<Run, Error> {
         let mut request = PromptRequest::plain(self.cwd().to_owned(), prompt, self.model().clone());
-        request.command = Some(SessionCommand::Title);
+        request.session.command = Some(SessionCommand::Title);
         self.start(request)
     }
 
@@ -29,8 +29,8 @@ impl Session {
 
     fn chore(&self, command: SessionCommand, prompt: &str) -> Result<Run, Error> {
         let mut request = PromptRequest::plain(self.cwd().to_owned(), prompt, self.model().clone());
-        request.resume = Some(self.id().ok_or(Error::NothingToAsk)?);
-        request.command = Some(command);
+        request.session.resume = Some(self.id().ok_or(Error::NothingToAsk)?);
+        request.session.command = Some(command);
         self.start(request)
     }
 }
@@ -45,11 +45,13 @@ impl Run {
 
     pub fn chore_answer(mut self) -> Result<Option<ChoreAnswer>, Error> {
         let mut answer = None;
+        let mut kind = domain::FailureKind::Other;
         while let Some(event) = self.next_event() {
             match event {
                 EngineEvent::Chore(given) => answer = Some(given),
                 EngineEvent::Asked(ask) => self.answer(ask.id, Decision::Deny)?,
-                EngineEvent::Failed(message) => return Err(Error::Run(message)),
+                EngineEvent::Failure(given) => kind = given,
+                EngineEvent::Failed(message) => return Err(domain::failure::RunFailure { kind, message }.into()),
                 EngineEvent::Cancelled => return Err(Error::Run("cancelled".into())),
                 _ => {}
             }

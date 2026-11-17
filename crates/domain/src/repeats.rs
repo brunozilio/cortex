@@ -2,7 +2,19 @@ use std::collections::HashMap;
 
 pub const ALLOWED_REPEATS: u32 = 2;
 
-const WAITING_TOOLS: [&str; 6] = ["Bash", "BashOutput", "TaskOutput", "TaskList", "TaskGet", "Monitor"];
+use crate::tool_name::ToolName;
+
+fn waits_on_work(name: &str) -> bool {
+    matches!(
+        ToolName::of(name),
+        ToolName::Bash
+            | ToolName::BashOutput
+            | ToolName::TaskOutput
+            | ToolName::TaskList
+            | ToolName::TaskGet
+            | ToolName::Monitor
+    )
+}
 
 #[derive(Debug, Default)]
 pub struct Repeats {
@@ -11,7 +23,7 @@ pub struct Repeats {
 
 impl Repeats {
     pub fn admit(&mut self, name: &str, input: &str, may_change: bool) -> bool {
-        if WAITING_TOOLS.contains(&name) {
+        if waits_on_work(name) {
             return true;
         }
         if may_change {

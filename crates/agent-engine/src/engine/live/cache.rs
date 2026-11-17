@@ -21,12 +21,12 @@ pub(in crate::engine) struct FromDisk;
 
 impl Load for FromDisk {
     fn fingerprint(&self, request: &PromptRequest) -> Option<u64> {
-        super::sources::fingerprint(request)
+        super::sources::fingerprint(request.folder())
     }
 
     fn load(&self, request: &PromptRequest) -> Result<Loaded, String> {
-        let brief = Brief::load(request)?;
-        let scripts = script_tool::load(&brief.gate(&request.cwd));
+        let brief = Brief::load(request.folder())?;
+        let scripts = script_tool::load(&brief.gate(&request.session.cwd));
         Ok(Loaded { brief, scripts })
     }
 }

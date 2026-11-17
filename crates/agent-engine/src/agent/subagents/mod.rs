@@ -16,19 +16,23 @@ use super::{Agent, Ending, MAX_TURNS};
 use crate::agent_runtime::Guard;
 use crate::control::Control;
 use crate::model::{ModelError, ToolSpec, TurnRequest};
+use crate::tools::names::{self, ToolName};
 use crate::tools::subagent::{self, AgentTool, FoundAgent};
 use crate::tools::subagent_config::AgentConfig;
-use crate::tools::{Outcome, Workspace, builtin_agents, names};
+use crate::tools::{Outcome, Workspace, builtin_agents};
 use crate::transcript::{Message, Usage};
 
-const TOP_LEVEL_ONLY: [&str; 6] = [
-    names::AGENT,
-    names::SEND_MESSAGE,
-    names::EXIT_PLAN,
-    names::ENTER_PLAN,
-    names::ENTER_WORKTREE,
-    names::EXIT_WORKTREE,
-];
+fn top_level_only(name: &str) -> bool {
+    matches!(
+        ToolName::of(name),
+        ToolName::Agent
+            | ToolName::SendMessage
+            | ToolName::ExitPlanMode
+            | ToolName::EnterPlanMode
+            | ToolName::EnterWorktree
+            | ToolName::ExitWorktree
+    )
+}
 
 struct Spawning<'s> {
     input: &'s Value,
@@ -189,8 +193,8 @@ impl Agent<'_> {
         }
         child_workspace.agent_name = chosen.name().into();
         let mut scoped_hooks = config.hooks.clone();
-        if let Some(stop) = scoped_hooks.0.remove("Stop") {
-            scoped_hooks.0.entry("SubagentStop".into()).or_default().extend(stop);
+        if let Some(stop) = scoped_hooks.0.remove(&crate::hooks::HookEvent::Stop) {
+            scoped_hooks.0.entry(crate::hooks::HookEvent::SubagentStop).or_default().extend(stop);
         }
         child_workspace.hooks.extend(&scoped_hooks);
         child_workspace
@@ -295,7 +299,7 @@ impl Agent<'_> {
         self.request
             .tools
             .iter()
-            .filter(|spec| !TOP_LEVEL_ONLY.contains(&spec.name.as_str()) && config.allows(&spec.name))
+            .filter(|spec| !top_level_only(&spec.name) && config.allows(&spec.name))
             .filter(|spec| !planning || !self.refused_while_planning(&spec.name, run))
             .cloned()
             .collect()
@@ -381,7 +385,7 @@ fn started_then_run(
         Ok(Default::default())
     } else {
         let said = json!({"agent_type":lane.kind,"prompt":task});
-        child.workspace.hooks.run("SubagentStart", &lane.kind, said, child.workspace)
+        child.workspace.hooks.run(crate::hooks::HookEvent::SubagentStart, &lane.kind, said, child.workspace)
     };
     match start_hook {
         Ok(hook) if hook.blocked.is_none() => {
