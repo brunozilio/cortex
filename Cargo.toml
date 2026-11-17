@@ -3,7 +3,8 @@ resolver = "3"
 members = ["crates/*", "xtask"]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.0.1"
+license = "MIT"
 edition = "2024"
 publish = false
 authors = ["brunozilio"]
