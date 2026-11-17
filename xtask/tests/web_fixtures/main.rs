@@ -1,5 +1,6 @@
 #![allow(clippy::expect_used, reason = "a failed setup step stops the test")]
 
+mod noise;
 mod records;
 
 use std::collections::BTreeMap;
@@ -135,6 +136,7 @@ fn fixtures() -> BTreeMap<&'static str, String> {
         ("report.json", written(report())),
         ("session-update.json", written(session_update())),
         ("sessions.json", written(sessions())),
+        ("noise.json", written(noise::transcript())),
     ])
 }
 

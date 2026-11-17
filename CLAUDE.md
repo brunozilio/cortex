@@ -22,7 +22,7 @@ domain           ──► brand
 language-servers ──► platform, domain, brand
 content          ──► script, brand
 console          ──► page, tunnel, platform, brand
-relay            ──► page, tunnel
+relay            ──► page, tunnel, brand
 code-map, platform, script, brand, page, tunnel ──► no workspace crate
 ```
 

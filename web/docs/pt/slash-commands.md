@@ -76,6 +76,7 @@ O `/help` agrupa os comandos em **Conversation**, **Model and mode**, **Project*
 | `/gain` | | Quanto mais curta a saída de comandos chegou ao modelo |
 | `/features [nome on\|off]` | | Lista ou liga/desliga os recursos que podem ser desligados |
 | `/trace` | `/console` | Abre o trace ao vivo no navegador |
+| `/remote [pair\|off]` | | Controle remoto pelo celular: mostra, convida um celular ou desliga |
 | `/trust [yes\|no]` | | Mostra se esta pasta é confiável, ou muda isso |
 | `/docs [tópico]` | | Abre esta documentação no navegador, ou busca nela |
 | `/factory-reset` | | Apaga tudo o que o {{NAME}} guarda nesta máquina |
@@ -368,6 +369,10 @@ Mostra quanto mais curta a saída de comandos chegou ao modelo nesta sessão. Pr
 ### /trace
 
 Abre no navegador o trace ao vivo de todas as sessões: execuções, spans, custo, esperas e checagens. Apelido: `/console`. Veja [Console de trace](./trace-console).
+
+### /remote
+
+`/remote` mostra o relay, o id desta máquina, os celulares pareados e se este chat está conectado ao relay. `/remote pair` imprime um QR code e um link que pareiam um celular em até dez minutos, e conecta este chat ao relay. `/remote off` desliga até o próximo `/remote pair` ou a próxima abertura. Com um relay definido e um celular pareado, um chat novo se conecta sozinho; só um chat da máquina ocupa o relay por vez, e os outros avisam. Veja [`{{COMMAND}} remote`](./cli-reference#remote).
 
 ### /trust
 

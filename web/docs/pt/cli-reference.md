@@ -34,6 +34,7 @@ description: Todos os comandos, subcomandos e opções do programa {{COMMAND}}.
 | `{{COMMAND}} models` | Lista os modelos que os provedores conectados oferecem |
 | `{{COMMAND}} mcp` | Os servidores MCP que uma sessão aqui pode usar: listar, adicionar, remover, aprovar |
 | `{{COMMAND}} plugin` | Os plugins em `~/{{DIR}}/plugins`: listar, instalar, atualizar, remover |
+| `{{COMMAND}} remote` | Controle remoto pelo celular, pelo seu relay: status, relay, pair, devices, revoke |
 | `{{COMMAND}} doctor` | Confere se esta instalação funciona na pasta |
 | `{{COMMAND}} eval` | Roda os evals em `{{DIR}}/evals` e os pontua |
 | `{{COMMAND}} config` | Lê ou muda as configurações: as suas, ou as deste projeto com `--project` |
@@ -127,6 +128,30 @@ Depois de instalar, um chat novo ou `/reload` carrega o plugin.
 {{COMMAND}} plugin install https://github.com/example/{{COMMAND}}-plugin.git
 {{COMMAND}} plugin install ./my-plugin --name mine
 {{COMMAND}} plugin update mine
+```
+
+### remote
+
+```bash
+{{COMMAND}} remote [COMMAND]
+```
+
+Acompanhe e conduza as sessões desta máquina pelo celular: a mesma página do `/console` (sessões, execuções, o terminal), instalada na tela inicial do celular. O celular chega à máquina por um relay que você mesmo roda (o programa `relay` deste repositório, atrás de HTTPS); a máquina se conecta a ele e não abre porta nenhuma. Tudo entre o celular e a máquina é cifrado de ponta a ponta: o relay repassa bytes que não consegue ler. Sem comando, mostra o relay, o id desta máquina e os aparelhos pareados.
+
+| Comando | Argumentos | O que faz |
+|---|---|---|
+| `remote status` | | O relay, o id desta máquina e os aparelhos pareados |
+| `remote relay` | `<https://HOST>` | Define o relay pelo qual os celulares chegam a esta máquina |
+| `remote pair` | | Imprime um QR code e um link que pareiam um celular, em até dez minutos, uma vez |
+| `remote devices` | | Lista os aparelhos pareados |
+| `remote revoke` | `<NOME>` | Esquece um aparelho; as conexões abertas dele fecham em segundos |
+
+A máquina fica alcançável enquanto um chat está aberto com o controle remoto ligado (`/remote`); ele liga sozinho quando há um relay definido e um celular pareado. No celular, abra o link, espere a página conectar e use **Adicionar à Tela de Início**. Um celular pareado pode abrir o terminal, que roda comandos como você: revogue um celular perdido.
+
+```bash
+{{COMMAND}} remote relay https://relay.example.com
+{{COMMAND}} remote pair
+{{COMMAND}} remote revoke "iPhone"
 ```
 
 ### doctor

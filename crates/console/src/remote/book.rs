@@ -35,10 +35,14 @@ pub struct Ledger {
     devices: Vec<Device>,
     #[serde(default)]
     pending: Vec<Pending>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    relay: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum BookError {
+    #[error(transparent)]
+    Relay(#[from] super::link::RelayAddressError),
     #[error("the remote control's file could not be kept: {0}")]
     Store(String),
     #[error("the machine's key could not be made: {0}")]
@@ -148,6 +152,17 @@ impl Book {
             .update(|ledger: &mut Ledger| ledger.revoke(name))
             .map_err(stored)?
             .ok_or_else(|| BookError::NoSuchDevice(name.to_owned()))
+    }
+
+    pub fn relay(&self) -> Option<String> {
+        self.document.read_or_default::<Ledger>().relay
+    }
+
+    pub fn set_relay(&self, address: &str) -> Result<String, BookError> {
+        let address = super::link::relay_address(address)?;
+        let kept = address.clone();
+        self.document.update(|ledger: &mut Ledger| ledger.relay = Some(kept)).map_err(stored)?;
+        Ok(address)
     }
 
     pub fn anyone_to_serve(&self) -> bool {
@@ -284,6 +299,17 @@ mod tests {
         assert!(!book.knows(&[1; 32]));
         assert!(!book.anyone_to_serve());
         assert_eq!(book.revoke("phone").unwrap_err(), BookError::NoSuchDevice("phone".into()));
+    }
+
+    #[test]
+    fn the_relay_is_kept_without_its_trailing_slash_and_a_bad_one_is_refused() {
+        let folder = tempfile::tempdir().unwrap();
+        let book = book(folder.path());
+        assert_eq!(book.relay(), None);
+        assert_eq!(book.set_relay(" https://relay.example/ ").unwrap(), "https://relay.example");
+        assert_eq!(book.relay().as_deref(), Some("https://relay.example"));
+        assert!(book.set_relay("http://relay.example").is_err());
+        assert_eq!(book.relay().as_deref(), Some("https://relay.example"));
     }
 
     #[test]

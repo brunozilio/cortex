@@ -76,6 +76,7 @@ Slash commands control the chat itself: the conversation, the model, the project
 | `/gain` | | How much shorter command output reached the model |
 | `/features [name on\|off]` | | List or switch the features you can turn off |
 | `/trace` | `/console` | Open the live trace in the browser |
+| `/remote [pair\|off]` | | Remote control from a phone: show it, invite a phone, or stop it |
 | `/trust [yes\|no]` | | Show whether this folder is trusted, or change it |
 | `/docs [topic]` | | Open this documentation in the browser, or search it |
 | `/factory-reset` | | Erase everything {{NAME}} keeps on this machine |
@@ -368,6 +369,10 @@ Shows how much shorter command output reached the model this session. Needs the 
 ### /trace
 
 Opens the live trace of every session in the browser: runs, spans, cost, waits and checks. Alias: `/console`. See [Trace console](./trace-console).
+
+### /remote
+
+`/remote` shows the relay, this machine's id, the paired phones and whether this chat is connected to the relay. `/remote pair` prints a QR code and a link that pair one phone within ten minutes, and connects this chat to the relay. `/remote off` stops it until the next `/remote pair` or the next start. Once a relay is named and a phone is paired, a new chat connects by itself; only one chat on the machine holds the relay at a time, and the others say so. See [`{{COMMAND}} remote`](./cli-reference#remote).
 
 ### /trust
 

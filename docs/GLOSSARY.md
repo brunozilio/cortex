@@ -140,6 +140,20 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 **Trace / lane / span.** The trace is the record of what happened in a session's runs: prompts, events, model calls. It is written to the session's own trace file, `native-sessions/<hash>.trace.jsonl`, as the run proceeds (buffered, flushed at each transition; set aside as `<hash>.trace.1.jsonl` past 64 MiB), read back merged with the conversation log by sequence number, and projected three ways. A session written before the split has its trace inside `<hash>.jsonl`, which is still read. The first projection is a `Trace` holding a `Lane` of steps, each step a set of timed nodes. The second is a list of runs, each a tree of `Span`s (run, model call, tool, agent, task, eval, wait, event); this is what the trace page draws. The third is the report with totals and insights. Lives in `crates/domain/src/trace/`.
 
+## Remote control
+
+**Relay.** The owner's own server that phones and the machine both connect to: it serves the page and forwards encrypted frames between a phone's WebSocket and the machine's, on numbered channels, without reading them. One machine per machine id. See `decisions/0012-remote-control-through-a-blind-relay.md`. Lives in `crates/relay/`.
+
+**Machine id.** The first 16 bytes of the SHA-256 of the machine's public key, in hex: the name the relay knows the machine by. `tunnel::machine_id`.
+
+**Remote book.** The machine's record for remote control, one private document (`remote/remote.json` in the data folder): its key, the relay's address, the paired devices and the pending invitations. `console::remote::Book`; the rules are in `Ledger`.
+
+**Device.** A paired phone (or any browser), known by the public half of the key it made when it paired, and a name it gave (made unique by the machine). Revoking a device removes it from the book and cuts its open channels.
+
+**Invitation / pairing link.** A one-time code the machine records as pending for ten minutes and prints as `https://<relay>/#pair=<machine key>.<code>`; the code rides in the fragment, which browsers never send. The phone that uses it first is paired and the invitation is gone. `tunnel::PairingLink`, `Book::invite`.
+
+**Tunnel.** What runs inside a phone's channel once the Noise handshake is done: `Ask` from the phone (fetch, events, socket, send, close) and `Answer` from the machine (head, data, end), as JSON, sealed in pieces of at most one Noise message. `crates/tunnel/src/message.rs`, `transport.rs`; on the page `web/src/lib/tunnel/`.
+
 ## Names that collide
 
 The audit lists these; until they are renamed, check which one a file means.

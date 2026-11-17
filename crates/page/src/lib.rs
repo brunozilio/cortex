@@ -26,12 +26,19 @@ pub fn has_index(bundle: &[Asset]) -> bool {
     bundle.iter().any(|asset| asset.path == "index.html")
 }
 
-pub fn serve(bundle: &'static [Asset], uri: &Uri) -> Response {
+pub fn resolve<'a>(bundle: &'a [Asset], uri: &Uri) -> Option<&'a Asset> {
     let wanted = uri.path().trim_start_matches('/');
     let found = bundle.iter().find(|asset| asset.path == wanted);
-    let Some(asset) = found.or_else(|| bundle.iter().find(|asset| asset.path == "index.html")) else {
+    found.or_else(|| bundle.iter().find(|asset| asset.path == "index.html"))
+}
+
+pub fn content_type(asset: &Asset) -> String {
+    mime_guess::from_path(asset.path).first_or_octet_stream().to_string()
+}
+
+pub fn serve(bundle: &'static [Asset], uri: &Uri) -> Response {
+    let Some(asset) = resolve(bundle, uri) else {
         return (StatusCode::SERVICE_UNAVAILABLE, Html(MISSING)).into_response();
     };
-    let kind = mime_guess::from_path(asset.path).first_or_octet_stream();
-    ([(header::CONTENT_TYPE, kind.as_ref())], asset.bytes).into_response()
+    ([(header::CONTENT_TYPE, content_type(asset))], asset.bytes).into_response()
 }

@@ -29,6 +29,33 @@ impl Default for Pace {
 pub enum RelayAddressError {
     #[error("the relay's address starts with https:// (or http:// for a test relay): `{0}`")]
     Scheme(String),
+    #[error("a phone installs the page only from https://; http:// is for a relay on this computer: `{0}`")]
+    Insecure(String),
+    #[error("the relay's address is a site, with no path, query or fragment: `{0}`")]
+    Shape(String),
+}
+
+const LOOPBACK_HOSTS: [&str; 3] = ["127.0.0.1", "localhost", "[::1]"];
+
+pub fn relay_address(given: &str) -> Result<String, RelayAddressError> {
+    let given = given.trim();
+    let (secure, host) = match (given.strip_prefix("https://"), given.strip_prefix("http://")) {
+        (Some(host), _) => (true, host.trim_end_matches('/')),
+        (None, Some(host)) => (false, host.trim_end_matches('/')),
+        (None, None) => return Err(RelayAddressError::Scheme(given.to_owned())),
+    };
+    let address = format!("{}://{host}", if secure { "https" } else { "http" });
+    if host.is_empty() || host.contains(['/', '?', '#', '@']) || host.chars().any(char::is_whitespace) {
+        return Err(RelayAddressError::Shape(address));
+    }
+    let name = host
+        .rsplit_once(':')
+        .filter(|(_, port)| port.bytes().all(|b| b.is_ascii_digit()))
+        .map_or(host, |(name, _)| name);
+    if !secure && !LOOPBACK_HOSTS.contains(&name) {
+        return Err(RelayAddressError::Insecure(address));
+    }
+    Ok(address)
 }
 
 pub fn machine_socket(relay: &str, machine_id: &str) -> Result<String, RelayAddressError> {
@@ -145,6 +172,19 @@ mod tests {
         assert_eq!(machine_socket("https://relay.example/", "ab"), Ok("wss://relay.example/machine?id=ab".into()));
         assert_eq!(machine_socket("http://127.0.0.1:9/", "ab"), Ok("ws://127.0.0.1:9/machine?id=ab".into()));
         assert_eq!(machine_socket("wss://relay.example", "ab"), Ok("wss://relay.example/machine?id=ab".into()));
+    }
+
+    #[test]
+    fn a_relay_is_an_https_site_or_a_relay_on_this_computer() {
+        assert_eq!(relay_address("https://relay.example:8443/"), Ok("https://relay.example:8443".into()));
+        assert_eq!(relay_address("http://127.0.0.1:9"), Ok("http://127.0.0.1:9".into()));
+        assert_eq!(relay_address("http://localhost"), Ok("http://localhost".into()));
+        assert!(matches!(relay_address("http://relay.example"), Err(RelayAddressError::Insecure(_))));
+        assert!(matches!(relay_address("http://127.0.0.1.evil.example"), Err(RelayAddressError::Insecure(_))));
+        assert!(matches!(relay_address("relay.example"), Err(RelayAddressError::Scheme(_))));
+        for odd in ["https://", "https://relay.example/path", "https://user@relay.example", "https://relay.example?x"] {
+            assert!(matches!(relay_address(odd), Err(RelayAddressError::Shape(_))), "{odd}");
+        }
     }
 
     #[test]

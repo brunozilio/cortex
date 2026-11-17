@@ -14,7 +14,7 @@ cargo run -p xtask -- web          # bun install --frozen-lockfile, then bun run
 cargo build --release              # embeds whatever web/dist holds at that moment
 ```
 
-`xtask web` fails when Bun is missing or the build fails. `crates/console/build.rs`
+`xtask web` fails when Bun is missing or the build fails. `crates/page/build.rs`
 only reads `web/dist`: with no `web/dist/index.html` the binary carries no
 page, and the page it serves instead says to run the two commands above.
 A build that was compiled before the page existed is rebuilt by Cargo once

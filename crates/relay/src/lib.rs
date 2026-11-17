@@ -42,13 +42,27 @@ pub fn router(limits: Limits, bundle: &'static [page::Asset]) -> Router {
         .route("/machine", get(sockets::machine))
         .route("/phone", get(sockets::phone))
         .route("/relay.json", get(|| async { axum::Json(json!({ "relay": true })) }))
-        .route("/api/{*rest}", get(|| async { failure(StatusCode::NOT_FOUND, "relay", "The relay has no API; it forwards to your machine.") }))
+        .route("/manifest.webmanifest", get(|| async { web_manifest() }))
+        .route(
+            "/api/{*rest}",
+            get(|| async {
+                failure(StatusCode::NOT_FOUND, "relay", "The relay has no API; it forwards to your machine.")
+            }),
+        )
         .fallback(move |uri: Uri| async move { page_file(bundle, &uri) })
         .with_state(relay)
 }
 
+pub const MARKER: &str = "<meta name=\"remote-relay\" content=\"on\">";
+
 fn page_file(bundle: &'static [page::Asset], uri: &Uri) -> Response {
-    let mut response = page::serve(bundle, uri);
+    let mut response = match page::resolve(bundle, uri) {
+        Some(asset) if asset.path == "index.html" => {
+            let marked = String::from_utf8_lossy(asset.bytes).replacen("<head>", &format!("<head>{MARKER}"), 1);
+            ([(header::CONTENT_TYPE, page::content_type(asset))], marked).into_response()
+        }
+        _ => page::serve(bundle, uri),
+    };
     let headers = response.headers_mut();
     headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(CONTENT_SECURITY_POLICY));
     headers.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
@@ -58,6 +72,25 @@ fn page_file(bundle: &'static [page::Asset], uri: &Uri) -> Response {
     let cache = if fresh { "no-cache" } else { "public, max-age=31536000, immutable" };
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
     response
+}
+
+fn web_manifest() -> Response {
+    let manifest = json!({
+        "name": brand::NAME,
+        "short_name": brand::NAME,
+        "description": "Follow and drive your coding sessions from your phone.",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "background_color": "#0b0b0f",
+        "theme_color": "#0b0b0f",
+        "icons": [
+            { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+            { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+        ],
+    });
+    ([(header::CONTENT_TYPE, "application/manifest+json"), (header::CACHE_CONTROL, "no-cache")], manifest.to_string())
+        .into_response()
 }
 
 pub fn failure(status: StatusCode, code: &str, message: &str) -> Response {

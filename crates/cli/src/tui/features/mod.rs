@@ -9,6 +9,7 @@ mod learning;
 mod learning_check;
 mod memory;
 mod output_savings;
+mod remote;
 mod schedules;
 mod shell;
 mod suggested_rules;
@@ -95,6 +96,7 @@ fn registered() -> Vec<Feature> {
         learning_check::feature(),
         memory::feature(),
         output_savings::feature(),
+        remote::feature(),
         schedules::feature(),
         shell::feature(),
         suggested_rules::feature(),
@@ -191,6 +193,7 @@ mod tests {
                 "check",
                 "memory",
                 "gain",
+                "remote",
                 "schedules loop",
                 "bashes",
                 "rules",

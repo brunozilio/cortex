@@ -34,6 +34,7 @@ description: Every command, subcommand and option of the {{COMMAND}} program.
 | `{{COMMAND}} models` | List the models the connected providers offer |
 | `{{COMMAND}} mcp` | The MCP servers a session here can use: list, add, remove, approve |
 | `{{COMMAND}} plugin` | The plugins in `~/{{DIR}}/plugins`: list, install, update, remove |
+| `{{COMMAND}} remote` | Remote control from a phone, through your relay: status, relay, pair, devices, revoke |
 | `{{COMMAND}} doctor` | Check that this installation can work in the folder |
 | `{{COMMAND}} eval` | Run the evals in `{{DIR}}/evals` and score them |
 | `{{COMMAND}} config` | Read or change the settings: yours, or this project's with `--project` |
@@ -127,6 +128,30 @@ After an install, a new chat or `/reload` picks the plugin up.
 {{COMMAND}} plugin install https://github.com/example/{{COMMAND}}-plugin.git
 {{COMMAND}} plugin install ./my-plugin --name mine
 {{COMMAND}} plugin update mine
+```
+
+### remote
+
+```bash
+{{COMMAND}} remote [COMMAND]
+```
+
+Follow and drive this machine's sessions from a phone: the same page as `/console` (sessions, runs, the terminal), installed on the phone's home screen. The phone reaches the machine through a relay you run yourself (the `relay` program from this repository, behind HTTPS); the machine connects out to it and opens no port. Everything between the phone and the machine is end-to-end encrypted: the relay forwards bytes it cannot read. Without a command, it shows the relay, this machine's id and the paired devices.
+
+| Command | Arguments | What it does |
+|---|---|---|
+| `remote status` | | The relay, this machine's id and the paired devices |
+| `remote relay` | `<https://HOST>` | Name the relay phones reach this machine through |
+| `remote pair` | | Print a QR code and a link that pair one phone, within ten minutes, once |
+| `remote devices` | | List the paired devices |
+| `remote revoke` | `<NAME>` | Forget a device; its open connections close within seconds |
+
+The machine is reachable while a chat is open with remote control on (`/remote`); it starts by itself once a relay is named and a phone is paired. On the phone, open the link, let the page connect, then use **Add to Home Screen**. A paired phone can open the terminal, which runs commands as you: revoke a phone you lose.
+
+```bash
+{{COMMAND}} remote relay https://relay.example.com
+{{COMMAND}} remote pair
+{{COMMAND}} remote revoke "iPhone"
 ```
 
 ### doctor

@@ -10,7 +10,7 @@ use std::thread::JoinHandle;
 use tokio::sync::{oneshot, watch};
 
 pub use book::{Book, BookError, Device, PAIRING_LASTS, now};
-pub use link::{Pace, RelayAddressError, machine_socket};
+pub use link::{Pace, RelayAddressError, machine_socket, relay_address};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Status {
@@ -28,6 +28,18 @@ pub struct Options {
     pub console: SocketAddr,
     pub token: String,
     pub pace: Pace,
+}
+
+impl Options {
+    pub fn for_console_link(link: &str, relay: String, folder: PathBuf) -> Option<Self> {
+        let rest = link.strip_prefix("http://")?;
+        let (address, rest) = rest.split_once('/')?;
+        let console = address.parse().ok()?;
+        let query = rest.split_once('?').map_or("", |(_, query)| query);
+        let token = query.split('&').find_map(|pair| pair.strip_prefix("token="))?;
+        let token = token.split('#').next().filter(|token| !token.is_empty())?.to_owned();
+        Some(Self { relay, folder, console, token, pace: Pace::default() })
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -87,4 +99,26 @@ pub fn start(options: Options) -> Result<Remote, StartError> {
         })
         .map_err(StartError::Thread)?;
     Ok(Remote { status: watching, stop: Some(stop), thread: Some(thread) })
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, reason = "a failed step fails the test")]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_console_link_gives_the_address_and_token_the_tunnel_forwards_with() {
+        let options = Options::for_console_link("http://127.0.0.1:4321/?token=abc123", "https://r".into(), "/f".into()).unwrap();
+        assert_eq!(options.console, "127.0.0.1:4321".parse().unwrap());
+        assert_eq!(options.token, "abc123");
+        let deeper = Options::for_console_link("http://127.0.0.1:9/docs?x=1&token=t", "https://r".into(), "/f".into()).unwrap();
+        assert_eq!(deeper.token, "t");
+    }
+
+    #[test]
+    fn a_link_without_a_loopback_address_or_a_token_gives_nothing() {
+        for link in ["https://127.0.0.1:1/?token=a", "http://127.0.0.1:1/", "http://127.0.0.1:1/?token=", "http://host:1/?token=a"] {
+            assert!(Options::for_console_link(link, "https://r".into(), "/f".into()).is_none(), "{link}");
+        }
+    }
 }

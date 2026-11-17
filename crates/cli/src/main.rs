@@ -7,6 +7,7 @@ mod mcp;
 mod plugin;
 mod print;
 mod print_output;
+mod remote;
 mod tui;
 
 use std::path::PathBuf;
@@ -105,6 +106,11 @@ enum Action {
     Plugin {
         #[command(subcommand)]
         action: Option<plugin::PluginAction>,
+    },
+    #[command(about = "Remote control from a phone, through your relay: status, relay, pair, devices, revoke")]
+    Remote {
+        #[command(subcommand)]
+        action: Option<remote::RemoteAction>,
     },
     #[command(about = "Check that this installation can work in the folder")]
     Doctor,
@@ -229,6 +235,9 @@ fn subcommand(action: Action, sdk: &Sdk, cwd: &std::path::Path, model: Option<St
         }
         Action::Plugin { action } => {
             plugin::run(sdk, action.unwrap_or(plugin::PluginAction::List)).map(|()| ExitCode::SUCCESS)
+        }
+        Action::Remote { action } => {
+            remote::run(action.unwrap_or(remote::RemoteAction::Status)).map(|()| ExitCode::SUCCESS)
         }
         Action::Config { .. } => Ok(ExitCode::SUCCESS),
     }

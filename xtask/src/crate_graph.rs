@@ -10,7 +10,7 @@ const ALLOWED: [(&str, &[&str]); 15] = [
     ("language-servers", &["brand", "domain", "platform"]),
     ("content", &["brand", "script"]),
     ("console", &["brand", "platform", "page", "tunnel"]),
-    ("relay", &["page", "tunnel"]),
+    ("relay", &["page", "tunnel", "brand"]),
     ("page", &[]),
     ("tunnel", &[]),
     ("code-map", &[]),
