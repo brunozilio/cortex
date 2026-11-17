@@ -49,6 +49,7 @@ pub enum Effect {
     Resource { server: String, uri: String },
     Remote { server: String },
     Declared(Declared),
+    Install { server: String, what: String },
 }
 
 impl Effect {
@@ -72,6 +73,7 @@ impl Effect {
             | Self::Session { .. }
             | Self::Resource { .. }
             | Self::Remote { .. }
+            | Self::Install { .. }
             | Self::Declared(Declared::Executes) => true,
         }
     }

@@ -85,6 +85,7 @@ pub struct PolicyContext<'a> {
     pub cwd: &'a str,
     pub home: Option<&'a str>,
     pub sandboxed: bool,
+    pub sandbox_missing: Option<&'a str>,
     pub no_prompts: bool,
     pub surroundings: &'a dyn Surroundings,
 }

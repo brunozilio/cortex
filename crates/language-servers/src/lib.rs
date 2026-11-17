@@ -67,10 +67,23 @@ impl Lsp {
         self.servers.available(&self.specs)
     }
 
-    pub fn open(&self, file: &Path, cwd: &Path, stop: &AtomicBool) -> Result<(Opened, Option<String>), String> {
+    pub fn pending_install(&self, file: &Path) -> Option<String> {
+        self.servers.pending_install(file, &self.specs)
+    }
+
+    pub fn open(
+        &self,
+        file: &Path,
+        cwd: &Path,
+        stop: &AtomicBool,
+        installing: Installing,
+    ) -> Result<(Opened, Option<String>), String> {
         match self.servers.open(file, &self.specs, cwd, stop, Wait::Never) {
             Ok(opened) => Ok((opened, None)),
-            Err(_) => {
+            Err(not_yet) => {
+                if let (Installing::Refused(why), Some(pending)) = (installing, self.pending_install(file)) {
+                    return Err(format!("Would {pending}, but {why}. {not_yet}"));
+                }
                 let opened = self.servers.open(file, &self.specs, cwd, stop, Wait::ForInstall)?;
                 let installed = domain::lsp::server_for(file, &self.specs).map(|(spec, _)| spec.name.clone());
                 Ok((opened, installed))
@@ -128,6 +141,15 @@ pub trait LanguageServers: Send + Sync + std::fmt::Debug {
     ) -> Result<Opened, String>;
     fn available(&self, specs: &[ServerSpec]) -> Vec<ServerSpec>;
     fn installing(&self, file: &Path, specs: &[ServerSpec]) -> Option<String>;
+    fn pending_install(&self, _file: &Path, _specs: &[ServerSpec]) -> Option<String> {
+        None
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Installing {
+    Allowed,
+    Refused(&'static str),
 }
 
 impl LanguageServer for LspClient {

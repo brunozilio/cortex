@@ -218,6 +218,15 @@ impl LanguageServers for LspPool {
         let installs = self.inner.installs.as_ref()?;
         installs.running(&spec.name).then(|| spec.name.clone())
     }
+
+    fn pending_install(&self, file: &Path, specs: &[ServerSpec]) -> Option<String> {
+        let (spec, _) = domain::lsp::server_for(file, specs)?;
+        if self.inner.starter.find(&spec.command).is_some() {
+            return None;
+        }
+        let on_path = |command: &str| self.inner.starter.find(command).is_some();
+        self.inner.installs.as_ref()?.pending(spec, on_path)
+    }
 }
 
 impl LspPool {

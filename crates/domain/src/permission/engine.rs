@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::rules::{rule_for, suggested};
+use super::rules::{install_rule, install_ruling, rule_for, suggested};
 use super::{Call, Effect, Exec, Guard, Judgement, PolicyContext, Reason, Remembered, Standing, Verdict};
 use crate::PermissionMode;
 use crate::command_policy::{CommandClass, GitFacts, classify_command, sign_in_refused};
@@ -45,7 +45,8 @@ impl PolicyEngine {
             Verdict::Deny(reason) => Verdict::Deny(reason),
             settled => {
                 let asks = settled.asks();
-                let reason = cx.concern(call, risk(&classes), leaves_the_sandbox(call, cx)).or_else(|| {
+                let concern = cx.concern(call, risk(&classes), leaves_the_sandbox(call, cx));
+                let reason = concern.or_else(|| install_concern(call, cx)).or_else(|| {
                     asks.then(|| match (asked_by, &stood.guarded, stood.standing) {
                         (Some(rule), ..) => Reason::Rule(rule),
                         (None, Some((path, guard)), _) => Reason::Guarded { path: path.clone(), guard: *guard },
@@ -82,7 +83,45 @@ fn classes(call: &Call<'_>, cx: &PolicyContext<'_>) -> Vec<CommandClass> {
         .collect()
 }
 
+fn installs(call: &Call<'_>) -> Option<(String, String)> {
+    call.effects.iter().find_map(|effect| match effect {
+        Effect::Install { server, what } => Some((server.clone(), what.clone())),
+        _ => None,
+    })
+}
+
+fn install_refused(call: &Call<'_>, cx: &PolicyContext<'_>) -> Option<String> {
+    let (server, _) = installs(call)?;
+    if cx.mode() == PermissionMode::Plan {
+        return Some(format!(
+            "Installing the {server} language server is not available while planning: only read and search now, \
+             then present the plan."
+        ));
+    }
+    (install_ruling(call, cx) == Some(RuleKind::Deny)).then(|| {
+        format!(
+            "The permission rule {} in settings refuses installing it. Do not retry it; take another approach or \
+             ask the user.",
+            install_rule(call.tool, &server)
+        )
+    })
+}
+
+fn install_concern(call: &Call<'_>, cx: &PolicyContext<'_>) -> Option<Reason> {
+    let (server, what) = installs(call)?;
+    (install_ruling(call, cx) != Some(RuleKind::Allow))
+        .then(|| Reason::Install { what, rule: install_rule(call.tool, &server) })
+}
+
 fn forbidden(call: &Call<'_>, cx: &PolicyContext<'_>, classes: &[CommandClass]) -> Option<String> {
+    if let Some(refused) = install_refused(call, cx) {
+        return Some(refused);
+    }
+    if let Some(why) = cx.sandbox_missing
+        && execs(call).any(|exec| !exec.unsandboxed)
+    {
+        return Some(crate::sandbox::refusal(why));
+    }
     let signing_in =
         execs(call).find_map(|exec| sign_in_refused(exec.command.text(), cx.sandboxed && !exec.unsandboxed));
     signing_in.or_else(|| {
@@ -101,7 +140,7 @@ fn risk(classes: &[CommandClass]) -> Option<String> {
 }
 
 fn leaves_the_sandbox(call: &Call<'_>, cx: &PolicyContext<'_>) -> bool {
-    cx.sandboxed && execs(call).any(|exec| exec.unsandboxed)
+    (cx.sandboxed || cx.sandbox_missing.is_some()) && execs(call).any(|exec| exec.unsandboxed)
 }
 
 fn shown(path: &Path) -> String {
@@ -121,6 +160,7 @@ fn standing(call: &Call<'_>, cx: &PolicyContext<'_>, classes: &[CommandClass]) -
     let mut read_only = classes.iter().map(|class| *class == CommandClass::ReadOnly);
     let acts = call.effects.iter().any(|effect| match effect {
         Effect::Exec(_) => !read_only.next().unwrap_or(false),
+        Effect::Install { .. } => false,
         other => other.acts(),
     });
     if acts {

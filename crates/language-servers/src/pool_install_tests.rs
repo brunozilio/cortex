@@ -119,6 +119,48 @@ fn an_installer_that_crashes_fails_the_install_instead_of_hanging_it() {
 }
 
 #[test]
+fn an_install_a_call_would_start_is_named_before_it_starts_and_nothing_once_installed() {
+    let data = tempfile::tempdir().expect("data");
+    let installs = Installs::succeeding();
+    let pool = LspPool::installing(with_npm(), IDLE, data.path().into(), installs.clone());
+    let file = Path::new("/no-such-w/app.ts");
+    let pending = pool.pending_install(file, &defaults()).expect("would install");
+    assert!(pending.contains("typescript") && pending.contains("--ignore-scripts"), "{pending}");
+    assert_eq!(installs.count(), 0, "naming it installs nothing");
+    open(&pool, "/no-such-w/app.ts").expect("installed");
+    assert_eq!(pool.pending_install(file, &defaults()), None);
+    let on_path = LspPool::installing(
+        Starts { installed: vec!["typescript-language-server"], ..Default::default() },
+        IDLE,
+        data.path().join("other"),
+        Installs::succeeding(),
+    );
+    assert_eq!(on_path.pending_install(file, &defaults()), None, "a server on PATH needs no install");
+    assert_eq!(pool.pending_install(Path::new("/no-such-w/README"), &defaults()), None);
+}
+
+#[test]
+fn a_refused_install_never_starts_and_says_why() {
+    let data = tempfile::tempdir().expect("data");
+    let installs = Installs::succeeding();
+    let lsp = crate::Lsp {
+        servers: Arc::new(LspPool::installing(with_npm(), IDLE, data.path().into(), installs.clone())),
+        specs: Arc::new(defaults()),
+    };
+    let stop = AtomicBool::new(false);
+    let refused = lsp
+        .open(Path::new("/no-such-w/app.ts"), Path::new("/no-such-w"), &stop, crate::Installing::Refused("no"))
+        .expect_err("refused");
+    assert!(refused.contains("install the typescript language server") && refused.contains("but no"), "{refused}");
+    assert_eq!(installs.count(), 0);
+    let (_, installed) = lsp
+        .open(Path::new("/no-such-w/app.ts"), Path::new("/no-such-w"), &stop, crate::Installing::Allowed)
+        .expect("allowed");
+    assert_eq!(installed.as_deref(), Some("typescript"));
+    assert_eq!(installs.count(), 1);
+}
+
+#[test]
 fn a_server_is_offered_only_when_the_tool_that_installs_it_is_there() {
     let data = tempfile::tempdir().expect("data");
     let bare = LspPool::installing(Starts::default(), IDLE, data.path().into(), Installs::succeeding());

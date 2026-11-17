@@ -123,7 +123,10 @@ impl Agent<'_> {
         match (self.project_skill(tool, input), tool.script()) {
             (Some(skill), _) => self.skill_call(calling, tool, skill, &summary, input),
             (None, Some(script)) => self.script_call(calling, script, &summary, input),
-            (None, None) => self.permitted(calling.id, tool, &summary, input, calling.permission),
+            (None, None) => {
+                let shown = tool.shown(input, self.workspace);
+                self.permitted_as(calling.id, tool, &summary, shown.as_deref(), input, calling.permission)
+            }
         }
     }
 }

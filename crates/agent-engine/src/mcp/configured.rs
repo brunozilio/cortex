@@ -17,13 +17,54 @@ pub struct McpSources {
     pub scripts: crate::tools::script_tool::ScriptGrants,
     #[serde(default)]
     pub trust: domain::trust::Trust,
+    #[serde(default)]
+    pub sandbox: Option<domain::sandbox::Sandbox>,
+}
+
+fn places<'a>(sources: &'a McpSources, cwd: &'a Path, temp: &'a [PathBuf]) -> domain::sandbox::Places<'a> {
+    domain::sandbox::Places {
+        project: cwd,
+        added: &[],
+        repository: None,
+        temp,
+        home: sources.home.as_deref(),
+        settings_dir: brand::DIR,
+    }
+}
+
+fn confinement(sources: &McpSources, cwd: &Path) -> Option<platform::sandbox::Confinement> {
+    let sandbox = sources.sandbox.as_ref()?;
+    let temp = crate::tools::temp_folders();
+    Some(crate::tools::confinement_of(sandbox, &places(sources, cwd, &temp)))
+}
+
+pub(super) fn settled(server: ServerSpec, owner: bool, cwd: &Path, sources: &McpSources) -> ServerSpec {
+    settled_on(server, owner, cwd, sources, &platform::sandbox::support())
+}
+
+pub(super) fn settled_on(
+    server: ServerSpec,
+    owner: bool,
+    cwd: &Path,
+    sources: &McpSources,
+    support: &platform::sandbox::Support,
+) -> ServerSpec {
+    let ServerSpec::Stdio { name, command, args, env, sandbox } = server else { return server };
+    let temp = crate::tools::temp_folders();
+    let places = places(sources, cwd, &temp);
+    let settling = super::stdio_sandbox::Settled { sandbox: sources.sandbox.as_ref(), places: &places, support };
+    ServerSpec::Stdio { name, command, args, env, sandbox: sandbox.settled(owner, &settling) }
 }
 
 pub fn configured(cwd: &Path, sources: &McpSources) -> Vec<ServerSpec> {
+    configured_on(cwd, sources, &platform::sandbox::support())
+}
+
+fn configured_on(cwd: &Path, sources: &McpSources, support: &platform::sandbox::Support) -> Vec<ServerSpec> {
     origins(cwd, sources)
         .into_iter()
         .filter(|(origin, server)| McpState::of(origin, server.name(), &sources.approval) == McpState::Ready)
-        .map(|(_, server)| server)
+        .map(|(origin, server)| settled_on(server, origin == McpOrigin::User, cwd, sources, support))
         .collect()
 }
 
@@ -66,7 +107,12 @@ fn origins(cwd: &Path, sources: &McpSources) -> Vec<(McpOrigin, ServerSpec)> {
         if !gate.honours(&folder) {
             return Vec::new();
         }
-        super::script_server::found(&folder, cwd, sources.scripts.of(origin), origin)
+        let granted = super::script_server::Granted {
+            access: sources.scripts.of(origin),
+            origin,
+            confinement: confinement(sources, cwd),
+        };
+        super::script_server::found(&folder, cwd, &granted)
     };
     let project_scripts = scripts_in(cwd, Origin::Project);
     let user_scripts = sources.home.as_ref().map(|home| scripts_in(home, Origin::Owner)).unwrap_or_default();
@@ -134,6 +180,7 @@ mod tests {
             command: command.into(),
             args: Vec::new(),
             env: env.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect(),
+            sandbox: crate::mcp::StdioSandbox::Unconfined,
         }
     }
 
@@ -249,6 +296,55 @@ mod tests {
             servers(&request, &sources),
             [stdio("jira", "user-jira", &[]), stdio("notes", "notes-mcp", &[("KEY", "dflt")])],
             "approval alone starts nothing from a folder that is not trusted"
+        );
+    }
+
+    #[test]
+    fn stdio_servers_start_in_the_sandbox_and_only_the_user_s_own_entry_opts_one_out() {
+        use crate::mcp::StdioSandbox;
+        let home = tempfile::tempdir().expect("home");
+        let repo = tempfile::tempdir().expect("repo");
+        write(
+            home.path().join(concat!(brand::dir!(), "/mcp.json")),
+            r#"{"mcpServers": {
+                "mine": {"command": "mine-mcp", "sandbox": false},
+                "notes": {"command": "notes-mcp", "sandbox": {"writable": ["~/.local/share/notes"]}}
+            }}"#,
+        );
+        write(
+            repo.path().join(concat!(brand::dir!(), "/mcp.json")),
+            r#"{"mcpServers": {"theirs": {"command": "theirs-mcp", "sandbox": false}, "bad": {"command": "x", "sandbox": "off"}}}"#,
+        );
+        let mut sources = McpSources {
+            home: Some(home.path().to_path_buf()),
+            trust: domain::trust::Trust::Trusted,
+            sandbox: Some(domain::sandbox::Sandbox::default()),
+            ..McpSources::default()
+        };
+        sources.approval.enabled = vec!["theirs".into(), "bad".into()];
+        let settled = |sources: &McpSources, support: platform::sandbox::Support| -> Vec<(String, StdioSandbox)> {
+            configured_on(repo.path(), sources, &support)
+                .into_iter()
+                .filter_map(|server| match server {
+                    ServerSpec::Stdio { name, sandbox, .. } => Some((name, sandbox)),
+                    _ => None,
+                })
+                .collect()
+        };
+        let found = settled(&sources, platform::sandbox::Support::Available);
+        let named = |name: &str| found.iter().find(|(found, _)| found == name).map(|(_, sandbox)| sandbox.clone());
+        assert_eq!(named("bad"), None, "a sandbox entry of the wrong shape leaves the server out");
+        assert_eq!(named("mine"), Some(StdioSandbox::Unconfined), "the user's own entry may opt out");
+        assert!(matches!(named("theirs"), Some(StdioSandbox::Confined(_))), "a project's opt-out is ignored");
+        let Some(StdioSandbox::Confined(notes)) = named("notes") else { panic!("{found:?}") };
+        assert!(notes.writable.contains(&home.path().join(".local/share/notes")));
+        assert!(notes.writable.contains(&repo.path().to_path_buf()) && notes.network);
+
+        sources.sandbox = Some(domain::sandbox::Sandbox { required: true, ..Default::default() });
+        let missing = settled(&sources, platform::sandbox::Support::Missing("this kernel has no Landlock".into()));
+        assert!(
+            missing.iter().any(|(name, sandbox)| name == "theirs" && matches!(sandbox, StdioSandbox::Refused(_))),
+            "{missing:?}"
         );
     }
 

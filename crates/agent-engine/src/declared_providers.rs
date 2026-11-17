@@ -45,6 +45,11 @@ fn one(path: &Path, approved: Option<&[String]>) -> Loaded {
     if approved.is_some_and(|approved| !approved.contains(&declared.id)) {
         return Loaded::Unapproved { path: path.to_owned(), id: declared.id };
     }
+    let listed = script::exported(&shown, &source, "capabilities").ok();
+    let declaration = crate::tools::script_tool::Declaration::Nowhere("a provider");
+    if let Err(why) = crate::tools::script_tool::Capabilities::listed(listed.as_ref(), declaration) {
+        return broken(why);
+    }
     let shaper = shapes(&source).then(|| shaper(shown, source, path));
     register_shaped(declared, shaper).map_or_else(|error| broken(error.to_string()), Loaded::Ready)
 }
@@ -66,6 +71,10 @@ fn shaper(shown: String, source: String, path: &Path) -> Shaper {
             origin: crate::tools::script_tool::Origin::Project,
             confine: crate::tools::Confiner::default(),
             stop: std::sync::Arc::clone(&stop),
+            script: format!("the provider {shown}"),
+            capabilities: crate::tools::script_tool::Capabilities::none_in("a provider's shape"),
+            judge: std::sync::Arc::default(),
+            grounds: crate::tools::host_judge::Grounds::at(&cwd),
         });
         let limit = Some(std::time::Duration::from_secs(2));
         let shaped = script::run_within(
@@ -152,6 +161,29 @@ export function shape(body) { return { ...body, temperature: 0.1, model: body.mo
         let mut body = serde_json::json!({"model": "fast", "messages": []});
         provider.shape(None, &mut body, "low").expect("shaped");
         assert_eq!(body, serde_json::json!({"model": "fast-v2", "messages": [], "temperature": 0.1}));
+    }
+
+    #[test]
+    fn a_provider_has_no_host_functions_to_declare_or_call() {
+        let home = tempfile::tempdir().expect("home");
+        let folder = home.path().join(brand::DIR).join("providers");
+        std::fs::create_dir_all(&folder).expect("folder");
+        let declaring = r#"export const capabilities = ["fetch"];
+export default { id: "loaded-declaring", name: "D", wire: "chat", base: "https://d.example/v1" };"#;
+        std::fs::write(folder.join("a.js"), declaring).expect("write");
+        let calling = r#"export default { id: "loaded-calling", name: "C", wire: "chat", base: "https://c.example/v1" };
+export function shape(body, ctx) { ctx.exec("true"); return body; }"#;
+        std::fs::write(folder.join("b.js"), calling).expect("write");
+        let loaded = load(&crate::trust::untrusted(&home.path().join("elsewhere"), home.path()), &[]);
+        assert!(
+            matches!(&loaded[0], Loaded::Broken { why, .. } if why.contains("a provider cannot declare capabilities")),
+            "{loaded:?}"
+        );
+        assert_eq!(loaded[1], Loaded::Ready(ModelProvider::named("loaded-calling")));
+        let provider = crate::providers::get(ModelProvider::named("loaded-calling")).expect("found");
+        let mut body = serde_json::json!({"model": "m"});
+        let refused = provider.shape(None, &mut body, "low").expect_err("no host functions");
+        assert!(refused.to_string().contains("a provider's shape cannot call ctx.exec"), "{refused}");
     }
 
     #[test]

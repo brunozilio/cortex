@@ -6,7 +6,8 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use super::Confiner;
-use super::script_tool::{Origin, ScriptAccess};
+use super::host_judge::{Grounds, HostJudge};
+use super::script_tool::{Capabilities, Declaration, Origin, ScriptAccess};
 
 pub struct Described {
     pub name: Option<String>,
@@ -35,10 +36,16 @@ pub struct Granted {
     pub access: ScriptAccess,
     pub origin: Origin,
     pub confine: Confiner,
+    pub judge: Arc<HostJudge>,
+    pub grounds: Grounds,
 }
 
 pub fn render(path: &Path, args: &str, cwd: &Path, granted: &Granted) -> Result<String, String> {
     let source = std::fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let shown = path.display().to_string();
+    let listed = script::exported(&shown, &source, "capabilities").ok();
+    let capabilities =
+        Capabilities::listed(listed.as_ref(), Declaration::Export).map_err(|error| format!("{shown}: {error}"))?;
     let stop = Arc::new(AtomicBool::new(false));
     let host: Arc<dyn script::Host> = Arc::new(super::script_io::StandaloneHost {
         cwd: cwd.to_path_buf(),
@@ -46,9 +53,12 @@ pub fn render(path: &Path, args: &str, cwd: &Path, granted: &Granted) -> Result<
         origin: granted.origin,
         confine: granted.confine.clone(),
         stop: Arc::clone(&stop),
+        script: format!("the skill script {shown}"),
+        capabilities,
+        judge: Arc::clone(&granted.judge),
+        grounds: granted.grounds.clone(),
     });
     let data = json!({ "cwd": cwd.display().to_string(), "args": args, "base": path.parent().map(|dir| dir.display().to_string()) });
-    let shown = path.display().to_string();
     let value = script::run_within(
         &shown,
         &source,

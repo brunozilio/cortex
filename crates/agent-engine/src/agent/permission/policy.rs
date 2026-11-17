@@ -69,6 +69,7 @@ impl Agent<'_> {
         let bounds = workspace.bounds();
         let cwd = workspace.cwd.to_string_lossy();
         let home = workspace.home.as_ref().map(|home| home.to_string_lossy().into_owned());
+        let missing = workspace.sandbox_refusal();
         let context = PolicyContext {
             mode: self.control.mode(),
             ceiling: self.control.ceiling(),
@@ -78,6 +79,7 @@ impl Agent<'_> {
             cwd: &cwd,
             home: home.as_deref(),
             sandboxed: workspace.sandboxed(),
+            sandbox_missing: missing.as_deref(),
             no_prompts: self.control.no_prompts(),
             surroundings: &around,
         };

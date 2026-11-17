@@ -100,6 +100,9 @@ impl Agent<'_> {
             names::EXIT_WORKTREE,
         ];
         let Some(tool) = self.tool(run, name) else { return false };
+        if self.invalid_input(name, tool, input).is_some() {
+            return false;
+        }
         let effects = tool.effects(input, self.workspace);
         domain::permission::change_nothing(&effects)
             && !SERIAL.contains(&name)

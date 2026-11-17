@@ -55,6 +55,7 @@ pub fn ruling_in(rules: &PermissionRules, call: &Call<'_>, cwd: &str, home: Opti
             | Effect::Notify
             | Effect::Session { .. }
             | Effect::Remote { .. }
+            | Effect::Install { .. }
             | Effect::Declared(_) => {}
         }
     }
@@ -80,7 +81,36 @@ pub fn suggested(call: &Call<'_>, subject: &str, outside: bool) -> Option<String
     let from_effect = call.effects.iter().find_map(|effect| match effect {
         Effect::Exec(exec) if call.tool == "Bash" => Some(suggest("Bash", exec.command.text(), false)),
         Effect::Net { host: Some(host) } => Some(Some(format!("{}(domain:{host})", call.tool))),
+        Effect::Install { server, .. } => Some(Some(install_rule(call.tool, server))),
         _ => None,
     });
     from_effect.unwrap_or_else(|| suggest(call.tool, subject, outside))
+}
+
+pub fn install_rule(tool: &str, server: &str) -> String {
+    format!("{tool}(install:{server})")
+}
+
+pub(super) fn install_ruling(call: &Call<'_>, cx: &PolicyContext<'_>) -> Option<RuleKind> {
+    let recalled = cx.remembered.rules();
+    let rulings = call.effects.iter().filter_map(|effect| match effect {
+        Effect::Install { server, .. } => {
+            let target = format!("install:{server}");
+            let ruled = |rules: &PermissionRules| {
+                rules.naming_their_target().decide(call.tool, &Target::Other(&target), cx.cwd, cx.home)
+            };
+            Some(ruled(cx.rules).or_else(|| ruled(recalled)))
+        }
+        _ => None,
+    });
+    let rulings: Vec<Option<RuleKind>> = rulings.collect();
+    if rulings.is_empty() {
+        None
+    } else if rulings.contains(&Some(RuleKind::Deny)) {
+        Some(RuleKind::Deny)
+    } else if rulings.iter().all(|ruling| *ruling == Some(RuleKind::Allow)) {
+        Some(RuleKind::Allow)
+    } else {
+        Some(RuleKind::Ask)
+    }
 }

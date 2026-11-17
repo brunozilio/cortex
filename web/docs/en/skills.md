@@ -148,6 +148,7 @@ A skill folder can hold `SKILL.js` instead of `SKILL.md`. It runs in {{NAME}}'s 
 export const name = "changelog";
 export const description = "Show the commits since the last tag. Use before writing release notes.";
 export const modelInvocation = true;
+export const capabilities = ["exec"];
 
 export default function (args, ctx) {
   const tag = ctx.exec("git describe --tags --abbrev=0").stdout.trim();
@@ -160,9 +161,13 @@ export default function (args, ctx) {
 | `name` | The name; defaults to the folder's |
 | `description` | Like `description` in `SKILL.md` |
 | `modelInvocation` | `false` works like `disable-model-invocation: true` |
+| `capabilities` | The host functions the script calls: `readFile`, `writeFile`, `exec`, `fetch`. Empty by default. |
 | `default` | Called with the arguments (a string) and a context; returns the text. It has 60 seconds. |
 
-A `.js` file in a `commands/` folder works the same way as a command. What a script may do with files, processes and the network follows the `scripts` setting (see [Settings](./settings)). A project's `SKILL.js` is replaced by one of yours or a plugin's with the same name.
+A `.js` file in a `commands/` folder works the same way as a command. A call to a host function the script did not list in `capabilities` fails; a listed one is judged by your permissions like the matching tool (`ctx.exec` like `Bash`), asking you where they say so (see [Capabilities](./sandbox-and-safety#capabilities)). The `scripts` setting stays the outer limit (see [Settings](./settings)).
+
+> [!WARNING]
+> Breaking change: a script skill or command that calls `ctx.readFile`, `ctx.writeFile`, `ctx.exec` or `ctx.fetch` without listing it in `export const capabilities` now fails with an error saying what to add. A project's `SKILL.js` is replaced by one of yours or a plugin's with the same name.
 
 > [!IMPORTANT]
 > A project's `SKILL.js` and `.js` commands are offered only after you trust the project's folder; its Markdown skills and commands load either way. The same holds for a project's JavaScript tools in `{{DIR}}/tools/`. See [Workspace trust](./sandbox-and-safety#workspace-trust).

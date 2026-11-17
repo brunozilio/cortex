@@ -202,3 +202,31 @@ fn anchored_memories_need_the_brief_to_ask_and_the_flag_to_be_on() {
     request.memory = Some(brief(false));
     assert_eq!(anchored(&request, &Features::default()), []);
 }
+
+struct Unboxed;
+
+impl crate::tools::Launcher for Unboxed {
+    fn launch(
+        &self,
+        command: std::process::Command,
+        _: Option<&platform::sandbox::Confinement>,
+    ) -> std::process::Command {
+        command
+    }
+
+    fn support(&self) -> platform::sandbox::Support {
+        platform::sandbox::Support::Missing("this system has no sandbox".into())
+    }
+}
+
+#[test]
+fn a_sandbox_the_system_cannot_provide_is_said_once_per_process() {
+    let said = AtomicBool::new(false);
+    let mut workspace = Workspace::new("/nowhere");
+    workspace.services.launch = crate::tools::Launch(Arc::new(Unboxed));
+    assert_eq!(sandbox_notice(&workspace, &said), None, "the sandbox is off: nothing to say");
+    workspace.policy.sandbox = Some(domain::sandbox::Sandbox { required: false, ..Default::default() });
+    let notice = sandbox_notice(&workspace, &said).expect("said");
+    assert!(notice.contains("this system has no sandbox") && notice.contains("unconfined"), "{notice}");
+    assert_eq!(sandbox_notice(&workspace, &said), None, "once is enough");
+}

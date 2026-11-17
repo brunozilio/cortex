@@ -133,6 +133,9 @@ impl Agent<'_> {
                 "Tool {name} is not available to this agent (load it with ToolSearch if listed there)."
             )));
         }
+        if let Some(refusal) = tool.and_then(|tool| self.invalid_input(name, tool, input)) {
+            return Some(Outcome::error(refusal));
+        }
         if self.control.is_stopped() {
             return Some(Outcome::error(crate::tools::stopped::before_start()));
         }
@@ -145,6 +148,13 @@ impl Agent<'_> {
         }
         let watching = run.watches.still_running(self.workspace.credentials.client);
         domain::watch::while_watching(name, &watching).map(Outcome::error)
+    }
+
+    pub(in crate::agent) fn invalid_input(&self, name: &str, tool: &dyn Tool, input: &Value) -> Option<String> {
+        match self.request.tools.iter().find(|spec| spec.name == name) {
+            Some(offered) => crate::tools::checked::refusal(name, &offered.schema, input),
+            None => crate::tools::checked::refusal(name, &tool.spec().schema, input),
+        }
     }
 
     fn ran<'env>(&'env self, calling: &Calling<'_, 'env>, input: &Value) -> Outcome {

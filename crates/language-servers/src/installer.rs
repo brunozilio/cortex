@@ -55,11 +55,7 @@ fn place(staging: &Path, home: &Path, program: &Path, replaced: &Path) -> Result
 
 fn fill(fetch: &dyn Fetch, install: &Install, staging: &Path, stop: &AtomicBool) -> Result<(), String> {
     match &install.recipe {
-        Recipe::Npm { packages } => {
-            let mut command = platform::command(tool(&install.recipe)?);
-            command.arg("install").arg("--prefix").arg(staging).args(["--no-audit", "--no-fund", "--loglevel=error"]);
-            run(command.args(packages), stop)
-        }
+        Recipe::Npm { packages } => run(&mut npm_install(tool(&install.recipe)?, staging, packages), stop),
         Recipe::Go { module } => {
             let mut command = platform::command(tool(&install.recipe)?);
             run(command.arg("install").arg(module).env("GOBIN", staging.join("bin")), stop)
@@ -67,6 +63,12 @@ fn fill(fetch: &dyn Fetch, install: &Install, staging: &Path, stop: &AtomicBool)
         Recipe::Download { url, archive, sha256 } => Download { fetch, url, archive: *archive, sha256, stop }
             .unpack_into(staging, &staging.join(&install.program)),
     }
+}
+
+fn npm_install(npm: PathBuf, staging: &Path, packages: &[String]) -> Command {
+    let mut command = platform::command(npm);
+    command.arg("install").arg("--prefix").arg(staging).args(domain::lsp::install::NPM_FLAGS).args(packages);
+    command
 }
 
 fn tool(recipe: &Recipe) -> Result<PathBuf, String> {
@@ -156,6 +158,15 @@ mod tests {
         let mut slow = platform::command("/bin/sh");
         assert_eq!(run(slow.args(["-c", "sleep 60"]), &stop), Err("it was stopped".into()));
         assert!(started.elapsed() < Duration::from_secs(30), "it ran on for {:?}", started.elapsed());
+    }
+
+    #[test]
+    fn npm_installs_never_run_package_scripts() {
+        let command = npm_install(PathBuf::from("npm"), Path::new("/data/pyright"), &["pyright@1.1.414".to_owned()]);
+        let args: Vec<String> = command.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        assert_eq!(args[..3], ["install", "--prefix", "/data/pyright"]);
+        assert!(args.contains(&"--ignore-scripts".to_owned()), "{args:?}");
+        assert_eq!(args.last().map(String::as_str), Some("pyright@1.1.414"));
     }
 
     #[test]

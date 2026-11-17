@@ -25,6 +25,7 @@ fn context<'a>(
         cwd: CWD,
         home: Some("/home/ana"),
         sandboxed: false,
+        sandbox_missing: None,
         no_prompts: false,
         surroundings: &NothingAround,
     }
@@ -260,6 +261,28 @@ fn a_risky_command_or_one_leaving_the_sandbox_asks_every_time_and_secrets_are_re
 }
 
 #[test]
+fn a_required_sandbox_the_system_cannot_provide_refuses_every_confined_command() {
+    let (open, none, bounds) = (PermissionRules::default(), Remembered::default(), bounds());
+    let missing = PolicyContext {
+        sandbox_missing: Some("this kernel has no Landlock"),
+        ..context(PermissionMode::Bypass, &open, &none, &bounds)
+    };
+    let decide = |effects: &[Effect], subject| PolicyEngine::decide(&Call { tool: "Bash", subject, effects }, &missing);
+    let listing = [Effect::exec("ls", false)];
+    assert!(matches!(decide(&listing, "ls"), Verdict::Deny(why) if why.contains("this kernel has no Landlock")));
+    let reading = [Effect::ReadPath(place("/work/rocket/a.rs"))];
+    assert_eq!(
+        PolicyEngine::decide(&Call { tool: "Read", subject: "a.rs", effects: &reading }, &missing),
+        Verdict::Allow
+    );
+    let leaving = [Effect::exec("cargo install x", true)];
+    assert!(
+        matches!(decide(&leaving, "cargo install x"), Verdict::Ask { reason: Reason::LeavesTheSandbox, .. }),
+        "running outside it is still the user's call, every time"
+    );
+}
+
+#[test]
 fn always_is_remembered_by_tool_for_edits_and_by_subject_for_the_rest() {
     let (rules, bounds) = (PermissionRules::default(), bounds());
     let mut remembered = Remembered::default();
@@ -350,4 +373,52 @@ fn planning_allows_what_only_reads_or_tends_its_own_work_and_refuses_the_rest() 
         assert!(decide_one(tool, effect).denies(), "{tool}");
     }
     assert!(decide_one("Read", Effect::ReadPath(place("/etc/hosts"))).asks(), "reading outside still asks");
+}
+
+fn installing() -> [Effect; 2] {
+    [
+        Effect::ReadPath(place("/work/rocket/main.rs")),
+        Effect::Install { server: "rust-analyzer".into(), what: "download https://example.invalid/ra.gz".into() },
+    ]
+}
+
+#[test]
+fn installing_a_language_server_is_asked_in_every_mode_but_plan_which_refuses_it() {
+    let open = PermissionRules::default().with(RuleKind::Allow, "LSP");
+    for mode in [PermissionMode::Ask, PermissionMode::AcceptEdits, PermissionMode::Bypass] {
+        for rules in [&PermissionRules::default(), &open] {
+            let verdict = decide("LSP", "hover main.rs", &installing(), mode, rules);
+            assert!(
+                matches!(&verdict, Verdict::Ask { reason: Reason::Install { what, .. }, rule: Some(rule), .. }
+                    if what.contains("ra.gz") && rule == "LSP(install:rust-analyzer)"),
+                "{mode:?}: {verdict:?}"
+            );
+            assert!(verdict.asked_every_time(), "no hook answers it for the user");
+        }
+    }
+    let planning = decide("LSP", "hover main.rs", &installing(), PermissionMode::Plan, &PermissionRules::default());
+    assert!(matches!(&planning, Verdict::Deny(why) if why.contains("planning")), "{planning:?}");
+    let reading = [Effect::ReadPath(place("/work/rocket/main.rs"))];
+    assert_eq!(decide("LSP", "hover", &reading, PermissionMode::Plan, &PermissionRules::default()), Verdict::Allow);
+}
+
+#[test]
+fn an_install_nobody_can_be_asked_about_is_refused_and_says_which_rule_allows_it() {
+    let (rules, none, bounds) = (PermissionRules::default(), Remembered::default(), bounds());
+    let unattended = PolicyContext { no_prompts: true, ..context(PermissionMode::Bypass, &rules, &none, &bounds) };
+    let effects = installing();
+    let call = Call { tool: "LSP", subject: "hover main.rs", effects: &effects };
+    let settled = unattended.settled(PolicyEngine::decide(&call, &unattended), "LSP");
+    assert!(
+        matches!(&settled, Verdict::Deny(why) if why.contains("LSP(install:rust-analyzer)") && why.contains("permissions.allow")),
+        "{settled:?}"
+    );
+
+    let named = PermissionRules::default().with(RuleKind::Allow, "LSP(install:rust-analyzer)");
+    let allowed = PolicyContext { no_prompts: true, ..context(PermissionMode::Bypass, &named, &none, &bounds) };
+    assert_eq!(PolicyEngine::decide(&call, &allowed), Verdict::Allow, "the rule that names the install lets it run");
+    let other = PermissionRules::default().with(RuleKind::Allow, "LSP(install:gopls)");
+    assert!(decide("LSP", "hover main.rs", &effects, PermissionMode::Bypass, &other).asks(), "another server's rule");
+    let denied = PermissionRules::default().with(RuleKind::Deny, "LSP(install:rust-analyzer)");
+    assert!(decide("LSP", "hover main.rs", &effects, PermissionMode::Bypass, &denied).denies());
 }

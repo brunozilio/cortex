@@ -66,8 +66,20 @@ impl StdioTransport {
         env: &[(String, String)],
         listener: Option<Listener>,
     ) -> Result<Self, String> {
+        Self::spawn_in(name, command, args, env, &super::StdioSandbox::Unconfined, listener)
+    }
+
+    pub fn spawn_in(
+        name: &str,
+        command: &str,
+        args: &[String],
+        env: &[(String, String)],
+        sandbox: &super::StdioSandbox,
+        listener: Option<Listener>,
+    ) -> Result<Self, String> {
         let mut process = platform::command(command);
         process.args(args).envs(env.iter().cloned());
+        let mut process = sandbox.applied(name, process)?;
         process.stdin(Stdio::piped()).stdout(Stdio::piped());
         let child = Child::spawn_with(&mut process, Spawn { stderr: Stderr::Tail, ..Spawn::default() })
             .map_err(|error| format!("{name} could not start: {error}"))?;

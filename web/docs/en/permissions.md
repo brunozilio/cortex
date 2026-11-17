@@ -172,7 +172,7 @@ Some actions are asked about every time, whatever the mode and rules (except a d
 - `gh pr merge`, `gh release create|delete|edit`, `gh api`.
 - `docker push`, `podman push`.
 - Fetching an address that never appeared in the conversation, once the session has read content from outside (web pages, MCP tools).
-- Running a command outside the sandbox, and installing a suspicious package. See [Sandbox and safety](./sandbox-and-safety).
+- Running a command outside the sandbox, installing a suspicious package, and installing a language server (unless an allow rule such as `LSP(install:pyright)` names it). See [Sandbox and safety](./sandbox-and-safety).
 
 Commands that would print secrets (`env`, `printenv`, `cat .env`, reading SSH keys…) are refused outright.
 

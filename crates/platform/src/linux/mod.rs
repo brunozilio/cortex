@@ -4,6 +4,8 @@ use std::process::Command;
 
 pub use crate::unix::*;
 
+pub(crate) mod landlock;
+
 pub const NAME: &str = "Linux";
 
 pub fn release_target() -> Option<&'static str> {

@@ -102,6 +102,7 @@ done
         command: "sh".into(),
         args: vec!["-c".into(), script.into()],
         env: vec![("GREETING".into(), "there".into())],
+        sandbox: Default::default(),
     };
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
     let server = Arc::new(McpServer::open(&spec, &http).expect("spawn"));
@@ -111,6 +112,60 @@ done
     assert_eq!(tools[0].run(&json!({}), &Workspace::new("/")), Outcome::ok("hi there"));
 }
 
+#[cfg(unix)]
+#[test]
+fn a_stdio_server_in_the_sandbox_writes_in_the_project_and_nowhere_else() {
+    if !platform::sandbox::supported() {
+        return;
+    }
+    let project = tempfile::tempdir().expect("project");
+    let elsewhere = tempfile::tempdir().expect("elsewhere");
+    let (inside, outside) = (project.path().join("kept.txt"), elsewhere.path().join("made.txt"));
+    let script = r#"
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+  [ -z "$id" ] && continue
+  case "$line" in
+    *'"initialize"'*) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{}}" ;;
+    *'"tools/list"'*) echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"tools\":[{\"name\":\"write\",\"inputSchema\":{\"type\":\"object\"}}]}}" ;;
+    *'"tools/call"'*) echo in > "$0"; echo out > "$1" 2>/dev/null; echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"tried\"}]}}" ;;
+  esac
+done
+"#;
+    let confinement = platform::sandbox::Confinement {
+        writable: vec![project.path().to_path_buf()],
+        protected: Vec::new(),
+        network: true,
+    };
+    let spec = ServerSpec::Stdio {
+        name: "writer".into(),
+        command: "sh".into(),
+        args: vec!["-c".into(), script.into(), inside.display().to_string(), outside.display().to_string()],
+        env: vec![],
+        sandbox: StdioSandbox::Confined(confinement),
+    };
+    let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
+    let server = Arc::new(McpServer::open(&spec, &http).expect("spawn"));
+    let tools = server.tools().expect("tools");
+    assert_eq!(tools[0].run(&json!({}), &Workspace::new(project.path())), Outcome::ok("tried"));
+    assert!(inside.exists(), "the project stays writable");
+    assert!(!outside.exists(), "the sandbox kept the server's write out of other folders");
+}
+
+#[test]
+fn a_stdio_server_the_required_sandbox_cannot_hold_does_not_start() {
+    let spec = ServerSpec::Stdio {
+        name: "jira".into(),
+        command: "sh".into(),
+        args: vec![],
+        env: vec![],
+        sandbox: StdioSandbox::Refused(domain::sandbox::refusal("this kernel has no Landlock")),
+    };
+    let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
+    let error = McpServer::open(&spec, &http).expect_err("refused");
+    assert!(error.contains("jira could not start") && error.contains("sandbox.required"), "{error}");
+}
+
 #[test]
 fn a_command_that_does_not_exist_is_left_out() {
     let spec = ServerSpec::Stdio {
@@ -118,6 +173,7 @@ fn a_command_that_does_not_exist_is_left_out() {
         command: concat!(brand::command!(), "-no-such-tool").into(),
         args: vec![],
         env: vec![],
+        sandbox: Default::default(),
     };
     let http: Arc<dyn Http> = Arc::new(ScriptedHttp::new([]));
     let error = McpServer::open(&spec, &http).expect_err("missing");

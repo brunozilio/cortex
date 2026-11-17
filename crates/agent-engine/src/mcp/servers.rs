@@ -1,6 +1,7 @@
 use serde_json::Value;
 
 use super::McpSources;
+pub use super::stdio_sandbox::StdioSandbox;
 use crate::plugins::Plugin;
 use domain::PromptRequest;
 
@@ -21,6 +22,7 @@ pub enum ServerSpec {
         command: String,
         args: Vec<String>,
         env: Vec<(String, String)>,
+        sandbox: StdioSandbox,
     },
     Script {
         name: String,
@@ -28,6 +30,8 @@ pub enum ServerSpec {
         cwd: std::path::PathBuf,
         access: crate::tools::script_tool::ScriptAccess,
         origin: crate::tools::script_tool::Origin,
+        confinement: Option<platform::sandbox::Confinement>,
+        judge: crate::tools::host_judge::SharedJudge,
     },
 }
 
@@ -44,6 +48,14 @@ impl ServerSpec {
         let (Self::Http { name, .. } | Self::Sse { name, .. } | Self::Stdio { name, .. } | Self::Script { name, .. }) =
             &mut self;
         *name = plugin.server_name(name);
+        self
+    }
+
+    #[must_use]
+    pub fn judged_by(mut self, by: &std::sync::Arc<crate::tools::host_judge::HostJudge>) -> Self {
+        if let Self::Script { judge, .. } = &mut self {
+            *judge = crate::tools::host_judge::SharedJudge(std::sync::Arc::clone(by));
+        }
         self
     }
 
@@ -78,12 +90,13 @@ impl std::fmt::Debug for ServerSpec {
                 .field("url", url)
                 .field("headers", &keys(headers))
                 .finish(),
-            Self::Stdio { name, command, args, env } => f
+            Self::Stdio { name, command, args, env, sandbox } => f
                 .debug_struct("Stdio")
                 .field("name", name)
                 .field("command", command)
                 .field("args", args)
                 .field("env", &keys(env))
+                .field("sandbox", sandbox)
                 .finish(),
             Self::Script { name, path, .. } => {
                 f.debug_struct("Script").field("name", name).field("path", path).finish()
@@ -96,7 +109,9 @@ pub fn servers(request: &PromptRequest, sources: &McpSources) -> Vec<ServerSpec>
     let mut servers: Vec<ServerSpec> = Vec::new();
     if let Some(path) = request.extensions.as_ref().and_then(|e| e.mcp_config.as_ref()) {
         match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|text| parse_config(&text)) {
-            Ok(found) => servers.extend(found),
+            Ok(found) => servers.extend(
+                found.into_iter().map(|server| super::configured::settled(server, true, &request.cwd, sources)),
+            ),
             Err(error) => tracing::warn!(%error, "the host's MCP servers are not available to this run"),
         }
     }
@@ -139,17 +154,23 @@ pub fn parse_config(text: &str) -> Result<Vec<ServerSpec>, String> {
                     url: server["url"].as_str()?.to_owned(),
                     headers: pairs(&server["headers"]),
                 }),
-                Some("stdio") | None => Some(ServerSpec::Stdio {
-                    name,
-                    command: server["command"].as_str()?.to_owned(),
-                    args: server["args"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|arg| arg.as_str().map(str::to_owned))
-                        .collect(),
-                    env: pairs(&server["env"]),
-                }),
+                Some("stdio") | None => {
+                    let declared = domain::sandbox::ServerSandbox::read(&server["sandbox"])
+                        .inspect_err(|error| tracing::warn!(server = %name, %error, "an MCP server is left out"))
+                        .ok()?;
+                    Some(ServerSpec::Stdio {
+                        command: server["command"].as_str()?.to_owned(),
+                        args: server["args"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|arg| arg.as_str().map(str::to_owned))
+                            .collect(),
+                        env: pairs(&server["env"]),
+                        sandbox: StdioSandbox::Declared(declared),
+                        name,
+                    })
+                }
                 Some(other) => {
                     tracing::warn!(server = %name, kind = other, "an MCP server of an unknown type is left out");
                     None
@@ -221,6 +242,7 @@ mod tests {
                 command: format!("{root}/bin/jira"),
                 args: vec!["--root".into(), root.clone()],
                 env: Vec::new(),
+                sandbox: StdioSandbox::Unconfined,
             }],
             "namespaced, the plugin's root filled in, and it cannot pose as the app's own"
         );
@@ -264,6 +286,7 @@ mod tests {
                 command: "npx".into(),
                 args: vec!["-y".into(), "gmail-mcp".into()],
                 env: vec![("TOKEN".into(), "y".into())],
+                sandbox: StdioSandbox::Unconfined,
             }
         );
     }

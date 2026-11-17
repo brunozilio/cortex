@@ -61,6 +61,15 @@ impl Installs {
         install.recipe.tool().is_none_or(|(tool, _)| on_path(tool)) && !self.failed(&spec.name)
     }
 
+    pub(super) fn pending(&self, spec: &ServerSpec, on_path: impl Fn(&str) -> bool) -> Option<String> {
+        let install = recipe(spec)?;
+        if self.dir.join(&spec.name).join(&install.program).is_file() || self.running(&spec.name) {
+            return None;
+        }
+        let possible = install.recipe.tool().is_none_or(|(tool, _)| on_path(tool)) && !self.failed(&spec.name);
+        possible.then(|| format!("install the {} language server: {}", spec.name, install.recipe.described()))
+    }
+
     fn failed(&self, name: &str) -> bool {
         let Ok(known) = self.known.lock() else { return false };
         known.get(name).is_some_and(|installation| installation.failed_within(self.retry))

@@ -13,8 +13,25 @@ use crate::{Rig, tool_use};
 
 const SKILL: &str = r#"
 export const description = "Marks the folder.";
+export const capabilities = ["writeFile"];
 export default (args, ctx) => { ctx.writeFile("mark.txt", "marked"); return "MARKED"; };
 "#;
+
+const UNDECLARED: &str = r#"
+export const description = "Marks the folder.";
+export default (args, ctx) => { ctx.writeFile("mark.txt", "marked"); return "MARKED"; };
+"#;
+
+fn attended(rig: &mut Rig) {
+    let events = Arc::clone(&rig.events);
+    let emit: agent_engine::tools::host_judge::Emit = Arc::new(move |event| events.lock().expect("events").push(event));
+    let judge = agent_engine::tools::host_judge::HostJudge::attended(Arc::clone(&rig.control), emit);
+    rig.workspace.services.judge = Some(Arc::new(judge));
+}
+
+fn writes_allowed() -> domain::permission_rules::PermissionRules {
+    domain::permission_rules::PermissionRules::default().with(domain::permission_rules::RuleKind::Allow, "Write")
+}
 
 fn skill(root: &Path, text: &str) {
     let folder = root.join(brand::DIR).join("skills").join("mark");
@@ -83,14 +100,49 @@ fn a_project_s_script_skill_asks_before_it_runs_even_when_bypassing() {
 }
 
 #[test]
-fn the_owner_s_script_skill_runs_without_asking() {
-    let rig = Rig::new(PermissionMode::Ask);
+fn the_owner_s_script_skill_runs_without_asking_and_its_write_is_judged_by_the_mode() {
+    let mut rig = Rig::new(PermissionMode::AcceptEdits);
+    attended(&mut rig);
     let home = tempfile::tempdir().expect("home");
     skill(home.path(), SKILL);
     load_mark(&rig, found(rig.dir.path(), home.path()));
 
     assert!(asks(&rig).is_empty());
     assert_eq!(std::fs::read_to_string(rig.dir.path().join("mark.txt")).expect("mark"), "marked");
+}
+
+#[test]
+fn a_script_skill_s_write_asks_the_user_where_the_mode_asks_and_a_refusal_writes_nothing() {
+    let mut rig = Rig::new(PermissionMode::Ask);
+    attended(&mut rig);
+    let home = tempfile::tempdir().expect("home");
+    skill(home.path(), SKILL);
+    let denier = deny_the_first_ask(&rig);
+    load_mark(&rig, found(rig.dir.path(), home.path()));
+    denier.join().expect("denier");
+
+    let asks = asks(&rig);
+    assert_eq!(asks.len(), 1, "{asks:?}");
+    assert!(asks[0].contains("mark.txt") && asks[0].contains("ctx.writeFile in the skill script"), "{asks:?}");
+    assert!(!rig.dir.path().join("mark.txt").exists());
+}
+
+#[test]
+fn a_script_skill_that_did_not_declare_a_write_cannot_write() {
+    let project = tempfile::tempdir().expect("project");
+    let home = tempfile::tempdir().expect("home");
+    skill(home.path(), UNDECLARED);
+    let found = found(project.path(), home.path());
+    let mut workspace = Workspace::new(project.path());
+    workspace.policy.permissions = writes_allowed();
+    let typed = expand_command("/mark", &found, project.path(), &workspace).expect("a skill");
+    assert!(
+        typed.as_ref().is_err_and(
+            |why| why.contains("did not declare ctx.writeFile") && why.contains("export const capabilities")
+        ),
+        "{typed:?}"
+    );
+    assert!(!project.path().join("mark.txt").exists());
 }
 
 #[test]
@@ -116,6 +168,7 @@ fn only_a_command_the_user_typed_gives_a_project_s_script_its_access() {
     let mark = project.path().join("mark.txt");
 
     let mut workspace = Workspace::new(project.path());
+    workspace.policy.permissions = writes_allowed();
     let everything = ScriptAccess { files: true, processes: true, network: true };
     workspace.policy.scripts.project = everything;
     let initial = expand_initial("/mark", &found, project.path(), &workspace);

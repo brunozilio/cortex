@@ -216,3 +216,22 @@ fn only_the_owner_turns_the_sandbox_off_or_widens_it() {
     assert!(!settings.features.on(domain::features::SANDBOX));
     assert_eq!(settings.sandbox.allow_write, ["~/.cargo"]);
 }
+
+#[test]
+fn only_the_owner_stops_requiring_the_sandbox() {
+    let home = tempfile::tempdir().expect("home");
+    let repo = tempfile::tempdir().expect("repo");
+    let write = |root: std::path::PathBuf, settings: serde_json::Value| {
+        std::fs::create_dir_all(&root).expect("dir");
+        std::fs::write(root.join("settings.json"), settings.to_string()).expect("write");
+    };
+    let lifted = serde_json::json!({ "sandbox": { "required": false } });
+    let required = load(repo.path(), Some(home.path()), &[]).expect("load").sandbox.required;
+    assert_eq!(required, domain::sandbox::REQUIRED_BY_DEFAULT);
+    write(repo.path().join(brand::DIR), lifted.clone());
+    let settings = load(repo.path(), Some(home.path()), &[]).expect("load");
+    assert_eq!(settings.sandbox.required, domain::sandbox::REQUIRED_BY_DEFAULT, "a repository cannot lift it");
+    std::fs::remove_file(repo.path().join(brand::DIR).join("settings.json")).expect("remove");
+    write(home.path().join(brand::DIR), lifted);
+    assert!(!load(repo.path(), Some(home.path()), &[]).expect("load").sandbox.required, "the owner can");
+}

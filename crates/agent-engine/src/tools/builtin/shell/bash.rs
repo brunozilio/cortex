@@ -143,7 +143,7 @@ mod tests {
         assert!(!Bash.run(&grant, &workspace).is_error, "nothing confines a run without the sandbox");
         std::fs::write(&settings, "{}").expect("settings");
 
-        workspace.policy.sandbox = Some(domain::sandbox::Sandbox { allow_write: Vec::new(), network: true });
+        workspace.policy.sandbox = Some(domain::sandbox::Sandbox::default());
         let inside = Bash.run(&json!({"command": "echo kept > kept.txt && cat kept.txt"}), &workspace);
         assert_eq!(inside, Outcome::ok("kept"));
         let refused = Bash.run(&grant, &workspace);

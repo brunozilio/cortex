@@ -18,15 +18,25 @@ impl Tool for Lsp {
     }
 
     fn effects(&self, input: &Value, workspace: &Workspace) -> Vec<crate::tools::Effect> {
-        field(input, "file_path")
+        let mut effects: Vec<crate::tools::Effect> = field(input, "file_path")
             .map(|path| crate::tools::Effect::ReadPath(workspace.place(path)))
             .into_iter()
-            .collect()
+            .collect();
+        if let Some(what) = pending_install(input, workspace) {
+            let server = server_name(input, workspace).unwrap_or_default();
+            effects.push(crate::tools::Effect::Install { server, what });
+        }
+        effects
     }
 
     fn summary(&self, input: &Value) -> String {
         let operation = field(input, "operation").unwrap_or_default();
         format!("{operation} {}", field(input, "file_path").unwrap_or_default())
+    }
+
+    fn shown(&self, input: &Value, workspace: &Workspace) -> Option<String> {
+        let pending = pending_install(input, workspace)?;
+        Some(format!("First {pending}\nthen {}", self.summary(input)))
     }
 
     fn run(&self, input: &Value, workspace: &Workspace) -> Outcome {
@@ -40,13 +50,36 @@ impl Tool for Lsp {
 const OUTPUT: usize = 30_000;
 const ANSWER_WAIT: Duration = Duration::from_secs(60);
 
+fn trusted(workspace: &Workspace) -> bool {
+    workspace.policy.trust == domain::trust::Trust::Trusted
+}
+
+fn pending_install(input: &Value, workspace: &Workspace) -> Option<String> {
+    let lsp = workspace.services.lsp.as_ref().filter(|_| trusted(workspace))?;
+    lsp.pending_install(&workspace.resolve(field(input, "file_path")?))
+}
+
+fn server_name(input: &Value, workspace: &Workspace) -> Option<String> {
+    let lsp = workspace.services.lsp.as_ref()?;
+    let file = workspace.resolve(field(input, "file_path")?);
+    domain::lsp::server_for(&file, &lsp.specs).map(|(spec, _)| spec.name.clone())
+}
+
+fn installing(workspace: &Workspace) -> crate::lsp::Installing {
+    if trusted(workspace) {
+        crate::lsp::Installing::Allowed
+    } else {
+        crate::lsp::Installing::Refused("this folder is not trusted (/trust), so nothing is installed for it")
+    }
+}
+
 fn ask(input: &Value, workspace: &Workspace) -> Result<String, String> {
     let lsp = workspace.services.lsp.as_ref().ok_or("No language servers are available in this run.")?;
     let query = Query::parse(input)?;
     let file = workspace.resolve(&query.file);
     let text =
         std::fs::read_to_string(&file).map_err(|error| format!("Cannot read {}: {error}", shown(&file, workspace)))?;
-    let (opened, installed) = lsp.open(&file, &workspace.cwd, &workspace.stop)?;
+    let (opened, installed) = lsp.open(&file, &workspace.cwd, &workspace.stop, installing(workspace))?;
     let server = &opened.server;
     server.sync(&file, &opened.language, &text)?;
     let line = text.lines().nth(query.line as usize - 1).unwrap_or_default();

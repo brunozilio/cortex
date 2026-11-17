@@ -47,10 +47,15 @@ pub(crate) fn read_only_tool(arguments: &Value, workspace: &Workspace) -> Result
     let name = arguments["name"].as_str().ok_or("ctx.tool needs a tool's name")?;
     let input = &arguments["input"];
     let tools = crate::tools::standard();
-    let tool = tools
-        .iter()
-        .find(|tool| tool.spec().name == name && changes_nothing(&***tool, input, workspace))
-        .ok_or_else(|| format!("a hook may run only read-only tools such as Read, Grep and Glob, not {name}"))?;
+    let only_reads = || format!("a hook may run only read-only tools such as Read, Grep and Glob, not {name}");
+    let (tool, spec) =
+        tools.iter().map(|tool| (tool, tool.spec())).find(|(_, spec)| spec.name == name).ok_or_else(only_reads)?;
+    if let Some(refusal) = crate::tools::checked::refusal(name, &spec.schema, input) {
+        return Err(refusal);
+    }
+    if !changes_nothing(&**tool, input, workspace) {
+        return Err(only_reads());
+    }
     let outside = tool.effects(input, workspace).into_iter().find_map(|effect| match effect {
         Effect::ReadPath(place) | Effect::ReadTree(place) if !workspace.bounds().may_read(&place.real) => Some(place),
         _ => None,

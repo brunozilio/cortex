@@ -10,6 +10,7 @@ pub use super::worktree::{ENTER_WORKTREE, EXIT_WORKTREE};
 
 pub const BASH: &str = "Bash";
 pub const READ: &str = "Read";
+pub const WRITE: &str = "Write";
 pub const WEB_FETCH: &str = "WebFetch";
 pub const STRUCTURED_OUTPUT: &str = "StructuredOutput";
 pub const TASK_OUTPUT: &str = "TaskOutput";
@@ -34,7 +35,9 @@ mod tests {
     #[test]
     fn every_name_the_loop_dispatches_on_belongs_to_a_standard_tool_or_one_the_run_adds() {
         let standard: Vec<String> = crate::tools::standard().iter().map(|tool| tool.spec().name).collect();
-        for name in [ASK, ENTER_PLAN, EXIT_PLAN, ENTER_WORKTREE, EXIT_WORKTREE, WATCH, BASH, READ, WEB_FETCH, ADVISOR] {
+        for name in
+            [ASK, ENTER_PLAN, EXIT_PLAN, ENTER_WORKTREE, EXIT_WORKTREE, WATCH, BASH, READ, WRITE, WEB_FETCH, ADVISOR]
+        {
             assert!(standard.iter().any(|known| known == name), "{name} is not a standard tool");
         }
         let tasks: Vec<String> = crate::tools::task::tools().iter().map(|tool| tool.spec().name).collect();

@@ -60,7 +60,10 @@ pub struct Flag {
 }
 
 pub const KNOWN: &[Flag] = &[
-    Flag { name: SANDBOX, about: "Confine Bash and Monitor commands to the project's folders (macOS)" },
+    Flag {
+        name: SANDBOX,
+        about: "Confine Bash and Monitor commands to the project's folders (macOS; Linux with Landlock)",
+    },
     Flag {
         name: OUTPUT_CLEANUP,
         about: "Bash runs commands without colours and drops escape codes, redrawn progress and repeated lines",

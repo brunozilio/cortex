@@ -36,11 +36,15 @@ pub enum Reason {
     Address(String),
     LeavesTheSandbox,
     Package(String),
+    Install { what: String, rule: String },
 }
 
 impl Reason {
     pub fn every_time(&self) -> bool {
-        matches!(self, Self::Risky(_) | Self::Address(_) | Self::LeavesTheSandbox | Self::Package(_))
+        matches!(
+            self,
+            Self::Risky(_) | Self::Address(_) | Self::LeavesTheSandbox | Self::Package(_) | Self::Install { .. }
+        )
     }
 
     pub fn rememberable(&self) -> bool {
@@ -52,6 +56,7 @@ impl Reason {
             Self::Risky(why) | Self::Address(why) => Some(why.clone()),
             Self::LeavesTheSandbox => Some("Run OUTSIDE the sandbox (it may write anywhere):".to_owned()),
             Self::Package(concern) => Some(format!("Check the package first: {concern}")),
+            Self::Install { .. } => Some("Install software on this computer first:".to_owned()),
             Self::Mode | Self::Rule(_) | Self::Hook | Self::Outside(_) | Self::Guarded { .. } => None,
         }
     }
@@ -63,6 +68,11 @@ impl Reason {
                 "Not run: leaving the sandbox needs the user, who cannot be asked here.".to_owned()
             }
             Self::Package(concern) => format!("Not run: {concern}. Ask the user before installing it."),
+            Self::Install { what, rule } => format!(
+                "Not installed: {what} needs the user's consent, and the user cannot be asked here. To allow it \
+                 without a question, the user adds the permission rule {rule} to permissions.allow in ~/{}/settings.json.",
+                brand::DIR
+            ),
             Self::Mode | Self::Rule(_) | Self::Hook | Self::Outside(_) | Self::Guarded { .. } => {
                 format!("{tool} requires permission; dontAsk denies unapproved actions.")
             }

@@ -27,7 +27,7 @@ fn after_reading_a_page() -> Vec<Message> {
 
 fn fetch(url: &str) -> ScriptedModel {
     ScriptedModel::new([
-        ScriptedModel::reply(vec![tool_use("w1", "WebFetch", json!({ "url": url }))]),
+        ScriptedModel::reply(vec![tool_use("w1", "WebFetch", json!({ "url": url, "prompt": "what it says" }))]),
         ScriptedModel::reply(vec![Block::Text("Ok.".into())]),
     ])
 }

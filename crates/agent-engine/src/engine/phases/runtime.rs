@@ -45,6 +45,9 @@ impl Job {
             let structured = tools::structured::Structured::new(schema).map_err(Stop::failed)?;
             toolbox.tools.push(Box::new(structured));
         }
+        if let Some(judge) = &workspace.services.judge {
+            judge.settle(tools::host_judge::Grounds::of(&workspace));
+        }
         Ok(Runtime { workspace, toolbox, main, worktree })
     }
 

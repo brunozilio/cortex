@@ -92,10 +92,151 @@ impl ScriptGrants {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Capability {
+    ReadFile,
+    WriteFile,
+    Exec,
+    Fetch,
+}
+
+impl Capability {
+    pub const ALL: [Self; 4] = [Self::ReadFile, Self::WriteFile, Self::Exec, Self::Fetch];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::ReadFile => "readFile",
+            Self::WriteFile => "writeFile",
+            Self::Exec => "exec",
+            Self::Fetch => "fetch",
+        }
+    }
+
+    pub fn of(function: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|capability| capability.name() == function)
+    }
+
+    pub fn tool(self) -> &'static str {
+        match self {
+            Self::ReadFile => super::names::READ,
+            Self::WriteFile => super::names::WRITE,
+            Self::Exec => super::names::BASH,
+            Self::Fetch => super::names::WEB_FETCH,
+        }
+    }
+
+    pub fn subject(self, arguments: &Value) -> String {
+        let text = |key: &str| arguments.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
+        match self {
+            Self::ReadFile => arguments.as_str().unwrap_or_default().to_owned(),
+            Self::WriteFile => text("path"),
+            Self::Exec => text("command"),
+            Self::Fetch => text("url"),
+        }
+    }
+
+    pub fn effects(self, arguments: &Value, place: &dyn Fn(&str) -> domain::permission::Place) -> Vec<Effect> {
+        let subject = self.subject(arguments);
+        match self {
+            Self::ReadFile => vec![Effect::ReadPath(place(&subject))],
+            Self::WriteFile => vec![Effect::WritePath(place(&subject))],
+            Self::Exec => vec![Effect::exec(&subject, false)],
+            Self::Fetch => vec![Effect::Net { host: domain::permission_rules::site(&subject) }],
+        }
+    }
+
+    pub fn granted(self, access: ScriptAccess) -> Result<(), String> {
+        let (granted, setting) = match self {
+            Self::ReadFile | Self::WriteFile => {
+                (access.files, "scripts may not touch files here (settings: scripts.files)")
+            }
+            Self::Exec => (access.processes, "scripts may not start processes here (settings: scripts.processes)"),
+            Self::Fetch => (access.network, "scripts may not reach the network here (settings: scripts.network)"),
+        };
+        if granted { Ok(()) } else { Err(setting.to_owned()) }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Declaration {
+    #[default]
+    Spec,
+    Export,
+    ServerExport,
+    Nowhere(&'static str),
+}
+
+impl Declaration {
+    fn place(self) -> &'static str {
+        match self {
+            Self::Spec => "spec.capabilities",
+            Self::Export => "export const capabilities = [...]",
+            Self::ServerExport => "the capabilities list of export default { capabilities: [...], tools }",
+            Self::Nowhere(_) => "",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Capabilities {
+    listed: Vec<Capability>,
+    declared_in: Declaration,
+}
+
+impl Capabilities {
+    pub fn read(spec: &Value) -> Result<Self, String> {
+        Self::listed(spec.get("capabilities"), Declaration::Spec)
+    }
+
+    pub fn listed(listed: Option<&Value>, declared_in: Declaration) -> Result<Self, String> {
+        let place = declared_in.place();
+        let Some(listed) = listed.filter(|listed| !listed.is_null()) else {
+            return Ok(Self { listed: Vec::new(), declared_in });
+        };
+        let names = listed.as_array().ok_or_else(|| format!("{place} must be a list"))?;
+        let known = || Capability::ALL.map(Capability::name).join(", ");
+        let read = names.iter().map(|name| {
+            let name = name.as_str().unwrap_or_default();
+            Capability::of(name).ok_or_else(|| format!("{place}: {name:?} is not one of {}", known()))
+        });
+        let listed = read.collect::<Result<Vec<_>, _>>()?;
+        if let Declaration::Nowhere(what) = declared_in
+            && !listed.is_empty()
+        {
+            return Err(format!("{what} cannot declare capabilities: it has no host functions"));
+        }
+        Ok(Self { listed, declared_in })
+    }
+
+    pub fn none_in(what: &'static str) -> Self {
+        Self { listed: Vec::new(), declared_in: Declaration::Nowhere(what) }
+    }
+
+    pub fn declares(&self, capability: Capability) -> bool {
+        self.listed.contains(&capability)
+    }
+
+    pub fn allows(&self, capability: Capability, script: &str) -> Result<(), String> {
+        if self.declares(capability) {
+            return Ok(());
+        }
+        let name = capability.name();
+        if let Declaration::Nowhere(what) = self.declared_in {
+            return Err(format!("{what} cannot call ctx.{name}: it has no host functions"));
+        }
+        let place = self.declared_in.place();
+        Err(format!(
+            "{script} did not declare ctx.{name}: add \"{name}\" to {place} to use it (it is still asked about like \
+             any tool call)"
+        ))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ScriptTool {
     pub spec: ToolSpec,
     pub declared: Option<Declared>,
+    pub capabilities: Capabilities,
     pub source: String,
     pub path: PathBuf,
     pub trusted: bool,
@@ -118,7 +259,9 @@ fn parse(path: &Path, trusted: bool) -> Result<ScriptTool, String> {
         .filter(|name| !name.is_empty())
         .ok_or_else(|| format!("{shown}: spec.name is missing"))?;
     let declared = if trusted { declared_by(spec["access"].as_str()) } else { Some(Declared::Executes) };
+    let capabilities = Capabilities::read(&spec).map_err(|error| format!("{shown}: {error}"))?;
     Ok(ScriptTool {
+        capabilities,
         spec: ToolSpec {
             name: name.to_owned(),
             description: spec["description"].as_str().unwrap_or_default().to_owned(),
@@ -238,6 +381,50 @@ mod tests {
         let untrusted = load(&crate::trust::untrusted(project.path(), home.path()));
         let named: Vec<&str> = untrusted.iter().map(|tool| tool.spec.name.as_str()).collect();
         assert_eq!(named, ["Echo"], "an untrusted folder's tools are not registered");
+    }
+
+    #[test]
+    fn a_script_declares_the_host_functions_it_uses_and_nothing_else_is_allowed() {
+        let none = Capabilities::read(&serde_json::json!({ "name": "T" })).expect("read");
+        assert!(Capability::ALL.into_iter().all(|capability| !none.declares(capability)));
+        let some = Capabilities::read(&serde_json::json!({ "capabilities": ["exec", "readFile"] })).expect("read");
+        assert!(some.declares(Capability::Exec) && some.declares(Capability::ReadFile));
+        assert!(!some.declares(Capability::WriteFile) && !some.declares(Capability::Fetch));
+        let refused = some.allows(Capability::Fetch, "Runner").expect_err("undeclared");
+        assert!(refused.contains("Runner") && refused.contains("\"fetch\""), "{refused}");
+        assert!(Capabilities::read(&serde_json::json!({ "capabilities": ["root"] })).is_err());
+        assert!(Capabilities::read(&serde_json::json!({ "capabilities": "exec" })).is_err());
+        assert_eq!(Capability::of("exec"), Some(Capability::Exec));
+        assert_eq!(Capability::of("log"), None);
+    }
+
+    #[test]
+    fn each_kind_of_script_is_told_where_to_declare_what_it_uses() {
+        let exported = Capabilities::listed(Some(&serde_json::json!(["exec"])), Declaration::Export).expect("read");
+        assert!(exported.declares(Capability::Exec));
+        let refused = exported.allows(Capability::WriteFile, "the hook guard.js").expect_err("undeclared");
+        assert!(
+            refused.contains("export const capabilities = [...]") && refused.contains("\"writeFile\""),
+            "{refused}"
+        );
+        let server = Capabilities::listed(None, Declaration::ServerExport).expect("read");
+        let refused = server.allows(Capability::Fetch, "the MCP server docs").expect_err("undeclared");
+        assert!(refused.contains("export default { capabilities"), "{refused}");
+        assert!(Capabilities::listed(Some(&serde_json::json!("exec")), Declaration::Export).is_err());
+        let provider = Capabilities::none_in("a provider's shape");
+        let refused = provider.allows(Capability::Exec, "x").expect_err("nothing");
+        assert!(refused.contains("a provider's shape cannot call ctx.exec"), "{refused}");
+        let listed = Capabilities::listed(Some(&serde_json::json!(["exec"])), Declaration::Nowhere("a provider"));
+        assert!(listed.is_err_and(|why| why.contains("a provider cannot declare capabilities")));
+    }
+
+    #[test]
+    fn a_host_call_names_the_tool_it_is_judged_as_and_its_subject() {
+        let place = |path: &str| domain::permission::Place::at(path);
+        assert_eq!(Capability::Exec.tool(), "Bash");
+        assert_eq!(Capability::Fetch.subject(&serde_json::json!({ "url": "https://x.dev" })), "https://x.dev");
+        let effects = Capability::WriteFile.effects(&serde_json::json!({ "path": "/a.txt" }), &place);
+        assert_eq!(effects, [Effect::WritePath(place("/a.txt"))]);
     }
 
     #[test]

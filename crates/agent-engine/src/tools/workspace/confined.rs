@@ -12,9 +12,22 @@ pub struct Confiner {
 }
 
 impl Confiner {
+    pub fn within(confinement: Option<platform::sandbox::Confinement>) -> Self {
+        Self { launch: super::Launch::default(), confinement }
+    }
+
     pub fn confined(&self, command: Command) -> Command {
         self.launch.0.launch(command, self.confinement.as_ref())
     }
+}
+
+pub fn confinement_of(sandbox: &domain::sandbox::Sandbox, places: &Places<'_>) -> platform::sandbox::Confinement {
+    let found = sandbox.confinement(places);
+    platform::sandbox::Confinement { writable: found.writable, protected: found.protected, network: found.network }
+}
+
+pub fn temp_folders() -> [PathBuf; 2] {
+    [std::env::temp_dir(), PathBuf::from("/tmp")]
 }
 
 impl Workspace {
@@ -26,25 +39,43 @@ impl Workspace {
         self.services.launch.0.launch(command, self.confinement().as_ref())
     }
 
+    pub fn host_judge(&self) -> std::sync::Arc<crate::tools::host_judge::HostJudge> {
+        self.services.judge.clone().unwrap_or_default()
+    }
+
+    fn unavailable(&self) -> Option<String> {
+        match self.services.launch.0.support() {
+            platform::sandbox::Support::Available => None,
+            platform::sandbox::Support::Missing(why) => Some(why),
+        }
+    }
+
     pub fn sandboxed(&self) -> bool {
-        platform::sandbox::SUPPORTED && self.policy.sandbox.is_some()
+        self.policy.sandbox.is_some() && self.unavailable().is_none()
+    }
+
+    pub fn sandbox_missing(&self) -> Option<domain::sandbox::Missing> {
+        self.policy.sandbox.as_ref()?.missing(self.unavailable().as_deref())
+    }
+
+    pub fn sandbox_refusal(&self) -> Option<String> {
+        self.policy.sandbox.as_ref().filter(|sandbox| sandbox.required)?;
+        self.unavailable()
     }
 
     pub fn confinement(&self) -> Option<platform::sandbox::Confinement> {
         let sandbox = self.policy.sandbox.as_ref()?;
-        let temp = [std::env::temp_dir(), PathBuf::from("/tmp")];
-        let found = sandbox.confinement(&Places {
-            project: &self.cwd,
-            added: &self.added_dirs,
-            repository: self.worktree.as_ref().map(|worktree| worktree.root.as_path()),
-            temp: &temp,
-            home: self.home.as_deref(),
-            settings_dir: brand::DIR,
-        });
-        Some(platform::sandbox::Confinement {
-            writable: found.writable,
-            protected: found.protected,
-            network: found.network,
-        })
+        let temp = temp_folders();
+        Some(confinement_of(
+            sandbox,
+            &Places {
+                project: &self.cwd,
+                added: &self.added_dirs,
+                repository: self.worktree.as_ref().map(|worktree| worktree.root.as_path()),
+                temp: &temp,
+                home: self.home.as_deref(),
+                settings_dir: brand::DIR,
+            },
+        ))
     }
 }

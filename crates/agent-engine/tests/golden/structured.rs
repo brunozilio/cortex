@@ -155,7 +155,7 @@ fn a_structured_result_that_breaks_the_schema_is_refused_and_not_emitted() {
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         ToolStarted s1 StructuredOutput "Structured result" input="{\"result\":{\"answer\":42}}"
         ToolFinished s1
-        ToolResult s1 failed "Invalid structured result: 42 is not of type \"string\""
+        ToolResult s1 failed "Invalid input for StructuredOutput, so it did not run: /result/answer: 42 is not of type \"string\". Check the tool's parameters and call it again."
         Usage model=claude-opus-5-5 input=10 output=5 cost=none
         ToolStarted s2 StructuredOutput "Structured result" input="{\"result\":{\"answer\":\"42\"}}"
         ToolFinished s2
@@ -171,7 +171,7 @@ fn a_structured_result_that_breaks_the_schema_is_refused_and_not_emitted() {
         assistant:
           tool_use s1 StructuredOutput "{\"result\":{\"answer\":42}}"
         user:
-          tool_result s1 failed "Invalid structured result: 42 is not of type \"string\""
+          tool_result s1 failed "Invalid input for StructuredOutput, so it did not run: /result/answer: 42 is not of type \"string\". Check the tool's parameters and call it again."
         assistant:
           tool_use s2 StructuredOutput "{\"result\":{\"answer\":\"42\"}}"
         user:

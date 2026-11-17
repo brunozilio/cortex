@@ -37,6 +37,7 @@ impl Fixture {
             command: "/bin/sh".into(),
             args: vec!["-c".into(), script.into(), at("log"), at("started"), at("pid")],
             env: vec![],
+            sandbox: Default::default(),
         };
         let http: Arc<dyn Http> = Arc::new(NetHttp);
         let server = Arc::new(McpServer::open(&spec, &http).expect("open"));

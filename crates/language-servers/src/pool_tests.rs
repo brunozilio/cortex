@@ -269,7 +269,9 @@ fn an_edit_says_its_server_is_installing_and_the_tool_says_it_installed_one() {
     assert_eq!(installs.count(), 0, "an edit never starts an install");
     let asking = {
         let lsp = lsp.clone();
-        std::thread::spawn(move || lsp.open(file, cwd, &AtomicBool::new(false)).map(|(_, installed)| installed))
+        std::thread::spawn(move || {
+            lsp.open(file, cwd, &AtomicBool::new(false), crate::Installing::Allowed).map(|(_, installed)| installed)
+        })
     };
     installing::until("the install started", || installs.count() == 1);
     assert_eq!(
@@ -281,7 +283,7 @@ fn an_edit_says_its_server_is_installing_and_the_tool_says_it_installed_one() {
     installs.release();
     let installed = asking.join().expect("joined").expect("installed");
     assert_eq!(installed.as_deref(), Some("typescript"));
-    let (_, again) = lsp.open(file, cwd, &stop).expect("ready");
+    let (_, again) = lsp.open(file, cwd, &stop, crate::Installing::Allowed).expect("ready");
     assert_eq!(again, None);
     assert_eq!(lsp.problems(file, "", cwd, &stop), None);
 }

@@ -27,6 +27,7 @@ done"#,
         command: "/bin/sh".into(),
         args: vec!["-c".into(), script],
         env: vec![],
+        sandbox: Default::default(),
     };
     let http: Arc<dyn Http> = Arc::new(NetHttp);
     let server = Arc::new(McpServer::open(&spec, &http).expect("valid test fixture"));
@@ -62,6 +63,7 @@ fn planning_mode_rejects_builtin_mutations() {
         cwd: "/repo",
         home: None,
         sandboxed: false,
+        sandbox_missing: None,
         no_prompts: false,
         surroundings: &NothingAround,
     };

@@ -7,8 +7,10 @@ use serde_json::Value;
 use super::{CommandOutput, Handler};
 use crate::model::{ModelApi, TurnRequest};
 use crate::tools::Workspace;
+use crate::tools::host_judge::Grounds;
 use crate::tools::script_bridge::{Bridge, Request, ask_model, read_only_tool};
 use crate::tools::script_io::StandaloneHost;
+use crate::tools::script_tool::{Capabilities, Declaration};
 
 pub fn script(
     handler: &Handler,
@@ -24,6 +26,10 @@ pub fn script(
         data: serde_json::json!({ "cwd": workspace.cwd, "session": workspace.session_id, "agent": workspace.agent_name }),
         limit: Duration::from_secs(handler.timeout),
     };
+    let capabilities = match declared(&hook.shown, &hook.source) {
+        Ok(capabilities) => capabilities,
+        Err(error) => return Ok(CommandOutput { code: Some(1), stdout: String::new(), stderr: error }),
+    };
     let origin = crate::tools::script_tool::Origin::of_script(&handler.command, workspace.home.as_deref());
     let standalone = StandaloneHost {
         cwd: workspace.cwd.clone(),
@@ -31,6 +37,10 @@ pub fn script(
         origin,
         confine: workspace.confiner(),
         stop: Arc::clone(&workspace.stop),
+        script: format!("the hook {}", handler.command),
+        capabilities,
+        judge: workspace.host_judge(),
+        grounds: Grounds::of(workspace),
     };
     let result = match model {
         None => hook.run(Arc::new(standalone), workspace),
@@ -42,6 +52,11 @@ pub fn script(
         Ok(value) => CommandOutput { code: Some(0), stdout: value.to_string(), stderr: String::new() },
         Err(error) => CommandOutput { code: Some(1), stdout: String::new(), stderr: error },
     })
+}
+
+fn declared(shown: &str, source: &str) -> Result<Capabilities, String> {
+    let listed = script::exported(shown, source, "capabilities").ok();
+    Capabilities::listed(listed.as_ref(), Declaration::Export).map_err(|error| format!("{shown}: {error}"))
 }
 
 struct Hook {
@@ -162,6 +177,22 @@ export default function (input, ctx) {
         let blocked = decision.blocked.expect("blocked");
         assert!(blocked.contains("stays inside the project"), "{blocked}");
         assert!(blocked.contains("only read-only tools"), "{blocked}");
+    }
+
+    #[test]
+    fn every_built_in_hook_declares_the_host_functions_it_uses() {
+        for (path, source) in content::builtin_files("hooks/") {
+            let source = String::from_utf8_lossy(source);
+            let declared = declared(path, &source).expect("a valid capabilities list");
+            assert!(
+                script::exported(path, &source, "capabilities").is_ok_and(|listed| listed.is_array()),
+                "{path} says what it uses, even when it is nothing"
+            );
+            for capability in crate::tools::script_tool::Capability::ALL {
+                let named = format!("ctx.{}(", capability.name());
+                assert!(!source.contains(&named) || declared.declares(capability), "{path} uses {named}");
+            }
+        }
     }
 
     #[test]

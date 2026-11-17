@@ -78,6 +78,7 @@ O `{{DIR}}/settings.json` de um projeto vem de quem escreveu o repositório, ent
 | `features.*` | Pode desligar um recurso comum e ligar um recurso de segurança (`experimental-sandbox`, `redact-secrets`, `experimental-dependency-guard`), nunca o contrário. |
 | `sandbox.network` | Só pode desligar a rede. |
 | `sandbox.allowWrite` | Ignorada. |
+| `sandbox.required` | Só pode ligá-la. |
 | `lspServers` | `command`, `args` e `env` são descartados; o projeto só pode mapear extensões, marcadores de raiz ou desativar um servidor. |
 | Todo o resto | Respeitado como nos seus próprios arquivos. |
 
@@ -188,6 +189,8 @@ Os seus próprios arquivos são `~/{{DIR}}/settings.json`, `~/{{DIR}}/settings.l
 
 Um script barrado recebe um erro que cita a configuração, por exemplo `scripts may not touch files here (settings: scripts.files)`.
 
+Essas configurações são o limite externo. Todo script também precisa listar o que usa (`readFile`, `writeFile`, `exec`, `fetch`): uma ferramenta de script em `spec.capabilities`, um hook ou script de skill em `export const capabilities = [...]`, um servidor MCP em JavaScript no `capabilities` do seu export default. Cada chamada dessas é então julgada pelas suas regras de permissão e pelo modo, como a ferramenta correspondente, e onde ninguém pode ser consultado uma chamada que perguntaria é recusada; veja "Capacidades" em [Sandbox e segurança](./sandbox-and-safety).
+
 Para deixar os scripts do projeto em que você está trabalhando lerem arquivos e rodarem comandos, mas sem acesso à rede, coloque isto no `{{DIR}}/settings.local.json` daquele projeto, para valer só ali:
 
 ```json
@@ -209,12 +212,13 @@ Para desligar a rede de todos os scripts, inclusive os seus:
 |---|---|---|---|
 | `sandbox.network` | booleano | `true` | `false` bloqueia a rede para comandos na sandbox. Um arquivo do repositório só pode desligá-la. |
 | `sandbox.allowWrite` | lista de pastas | `[]` | Pastas extras em que comandos na sandbox podem gravar. Caminhos absolutos ou `~/…`; caminhos relativos são ignorados. Lida só dos seus próprios arquivos. |
+| `sandbox.required` | booleano | `true` no Linux e no macOS, `false` nos demais | `true` recusa os comandos, e não inicia servidores MCP que rodam como processo, quando este sistema não consegue oferecer a sandbox, em vez de rodá-los sem confinamento. Desligue nas suas próprias configurações com `{ "sandbox": { "required": false } }`. Um arquivo do repositório só pode ligá-la. |
 
 ```json
 { "sandbox": { "allowWrite": ["~/.m2", "/opt/data"], "network": true } }
 ```
 
-A sandbox é o recurso `experimental-sandbox` (macOS). Veja [Sandbox e segurança](./sandbox-and-safety).
+A sandbox é o recurso `experimental-sandbox` (macOS; Linux 5.13 ou mais novo). Servidores MCP que rodam como processo também ficam na sandbox, cada um com a sua entrada `sandbox` no `mcp.json`; veja "Servidores MCP na sandbox" em [Sandbox e segurança](./sandbox-and-safety).
 
 ### `lspServers`
 

@@ -93,8 +93,9 @@ O `mcp.json` tem um objeto `mcpServers`. Um servidor com `url` é remoto; um ser
 | `command` | O programa a iniciar (`stdio`) |
 | `args` | Os argumentos dele (`stdio`) |
 | `env` | Variáveis de ambiente acrescentadas ao processo (`stdio`) |
+| `sandbox` | Onde o processo pode gravar e se ele alcança a rede (`stdio`): `{ "writable": [...], "network": false }`, ou `false` para iniciá-lo fora da sandbox (só no seu próprio arquivo). Veja "Servidores MCP na sandbox" em [Sandbox e segurança](./sandbox-and-safety). |
 
-Um servidor de outro tipo é deixado de fora, com um aviso no log.
+Um servidor de outro tipo, ou com um valor de `sandbox` de outro formato, é deixado de fora, com um aviso no log.
 
 ### Variáveis de ambiente no arquivo
 
@@ -277,6 +278,7 @@ Um arquivo `.js` em `~/{{DIR}}/mcp/` (ou no `{{DIR}}/mcp/` da pasta de trabalho)
 
 ```javascript
 export default {
+  capabilities: ["readFile"],
   tools: {
     add: {
       description: "Soma a e b.",
@@ -291,13 +293,16 @@ export default {
 };
 ```
 
-Um `math.js` com esse conteúdo oferece `mcp__math__add` e `mcp__math__notes`. Uma ferramenta retorna texto (ou um valor, enviado como JSON); um erro lançado é uma chamada que falhou. O que o `ctx` pode fazer com arquivos, processos e rede segue a configuração `scripts` (veja [Configurações](./settings)).
+Um `math.js` com esse conteúdo oferece `mcp__math__add` e `mcp__math__notes`. Uma ferramenta retorna texto (ou um valor, enviado como JSON); um erro lançado é uma chamada que falhou. O servidor lista em `capabilities` cada função do host que suas ferramentas chamam (`readFile`, `writeFile`, `exec`, `fetch`); uma chamada não listada falha. Cada chamada listada é julgada pelas suas regras de permissão e pelo modo como a ferramenta correspondente (`ctx.readFile` como `Read`, `ctx.exec` como `Bash`), e a configuração `scripts` continua sendo o limite de fora (veja "Capacidades" em [Sandbox e segurança](./sandbox-and-safety) e [Configurações](./settings)).
+
+> [!WARNING]
+> Mudança incompatível: um servidor em JavaScript que chama `ctx.readFile`, `ctx.writeFile`, `ctx.exec` ou `ctx.fetch` sem listar em `capabilities` agora falha com um erro dizendo o que acrescentar.
 
 ## Como os servidores iniciam
 
 No início de cada prompt, o {{NAME}} inicia todo servidor `ready` e pede as ferramentas dele (versão `2025-06-18` do protocolo MCP). Um servidor que não consegue iniciar, ou listar suas ferramentas, fica fora daquela execução, com um aviso no log; a execução segue sem ele.
 
-- Um servidor local roda como processo filho com o seu ambiente mais o `env` dele. O stderr é descartado. Uma chamada pode levar até 10 minutos.
+- Um servidor local roda como processo filho com o seu ambiente mais o `env` dele, dentro da sandbox quando ela está ligada (veja "Servidores MCP na sandbox" em [Sandbox e segurança](./sandbox-and-safety)). O stderr é descartado. Uma chamada pode levar até 10 minutos.
 - Um servidor remoto mantém o id de sessão que recebe entre as chamadas de uma execução.
 
 ## Solução de problemas

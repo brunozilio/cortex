@@ -23,7 +23,22 @@ impl Recipe {
             Self::Download { .. } => None,
         }
     }
+
+    pub fn described(&self) -> String {
+        match self {
+            Self::Npm { packages } => {
+                format!("npm install --ignore-scripts {} (package scripts are not run)", packages.join(" "))
+            }
+            Self::Go { module } => format!("go install {module}"),
+            Self::Download { url, sha256, .. } => {
+                let start: String = sha256.chars().take(16).collect();
+                format!("download {url}, checked against its pinned SHA-256 {start}…")
+            }
+        }
+    }
 }
+
+pub const NPM_FLAGS: [&str; 4] = ["--ignore-scripts", "--no-audit", "--no-fund", "--loglevel=error"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Install {
@@ -222,6 +237,21 @@ mod tests {
         assert_eq!(install("pyright", "linux", "x86_64").expect("npm").recipe.tool(), Some(("npm", "Node.js")));
         assert_eq!(install("gopls", "linux", "x86_64").expect("go").recipe.tool(), Some(("go", "Go")));
         assert_eq!(install("clangd", "linux", "x86_64").expect("download").recipe.tool(), None);
+    }
+
+    #[test]
+    fn what_an_install_will_do_is_said_before_it_runs() {
+        let npm = install("typescript", "macos", "aarch64").expect("npm").recipe;
+        assert_eq!(
+            npm.described(),
+            "npm install --ignore-scripts typescript-language-server@6.0.3 typescript@6.0.3 (package scripts are not run)"
+        );
+        let go = install("gopls", "linux", "x86_64").expect("go").recipe;
+        assert_eq!(go.described(), "go install golang.org/x/tools/gopls@v0.24.0");
+        let download = install("clangd", "linux", "x86_64").expect("download").recipe;
+        let said = download.described();
+        assert!(said.starts_with("download https://") && said.contains("SHA-256 e53b1a96"), "{said}");
+        assert!(NPM_FLAGS.contains(&"--ignore-scripts"));
     }
 
     #[test]

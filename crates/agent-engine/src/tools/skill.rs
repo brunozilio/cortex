@@ -166,7 +166,13 @@ impl Tool for SkillTool {
 
 fn granted(skill: &FoundSkill, workspace: &Workspace) -> Granted {
     let origin = Origin::trusted(skill.trusted);
-    Granted { access: workspace.policy.scripts.of(origin), origin, confine: workspace.confiner() }
+    Granted {
+        access: workspace.policy.scripts.of(origin),
+        origin,
+        confine: workspace.confiner(),
+        judge: workspace.host_judge(),
+        grounds: super::host_judge::Grounds::of(workspace),
+    }
 }
 
 fn load(skill: &FoundSkill, args: &str, cwd: &Path, access: &Granted) -> Outcome {

@@ -56,17 +56,27 @@ impl Job {
         tools.push(Box::new(tools::send_message::SendMessageTool));
         tools.push(Box::new(tools::repl::Repl));
         tools.extend(tools::task::tools());
+        let main = MainAgent::chosen(brief).map_err(Stop::failed)?;
+        self.control = self.control.reconfigured(main.config.permission, main.config.dont_ask);
+        workspace.stop = self.control.shared_stop();
+        let judge = Arc::new(self.host_judge());
+        workspace.services.judge = Some(Arc::clone(&judge));
         let stop = self.control.stop_flag();
-        let servers = crate::mcp::connect_stopped(&self.request, &brief.mcp(), &self.mcp, stop);
+        let servers = crate::mcp::connect_judged(&self.request, &brief.mcp(), &self.mcp, stop, &judge);
         tools.extend(crate::mcp::tools_of(&servers, stop));
         tools::script_tool::join(&mut tools, tools::script_tool::load(&brief.gate(&self.request.cwd)));
         if let Some(expanded) = crate::mcp::extras::expand_prompt(&servers, &self.request.prompt, stop) {
             self.request.prompt = expanded.map_err(Stop::failed)?;
         }
-        let main = MainAgent::chosen(brief).map_err(Stop::failed)?;
-        self.control = self.control.reconfigured(main.config.permission, main.config.dont_ask);
-        workspace.stop = self.control.shared_stop();
         Ok(Equipped { workspace, toolbox: Toolbox { tools, _kept_connected_for_the_run: servers }, main })
+    }
+
+    fn host_judge(&self) -> tools::host_judge::HostJudge {
+        let gate = self.gate.clone();
+        let emit: tools::host_judge::Emit = Arc::new(move |event| {
+            gate.emit(event);
+        });
+        tools::host_judge::HostJudge::attended(Arc::clone(&self.control), emit)
     }
 
     fn offer_language_servers(&self, brief: &Brief, workspace: &mut Workspace, tools: &mut Vec<Box<dyn Tool>>) {

@@ -8,6 +8,7 @@ use super::super::Hooks;
 use crate::tools::{Launch, Launcher, Workspace};
 
 const REACHING: &str = r#"export const event = "PreToolUse";
+export const capabilities = ["readFile", "exec", "fetch"];
 export default function (input, ctx) {
   const tried = {};
   for (const [name, attempt] of Object.entries({
@@ -31,6 +32,11 @@ fn reached(hooks: &Hooks, workspace: &Workspace) -> serde_json::Value {
     let input = json!({ "tool_name": "Bash", "tool_input": { "command": "ls" } });
     let decision = hooks.run("PreToolUse", "Bash", input, workspace).expect("run");
     serde_json::from_str(&decision.blocked.expect("reason")).expect("json")
+}
+
+fn echo_allowed(workspace: &mut Workspace) {
+    workspace.policy.permissions = domain::permission_rules::PermissionRules::default()
+        .with(domain::permission_rules::RuleKind::Allow, "Bash(echo ran)");
 }
 
 fn project_with_notes() -> tempfile::TempDir {
@@ -62,10 +68,63 @@ fn the_user_s_own_hook_script_keeps_files_processes_and_network() {
     let hooks = placed(home.path());
     let mut workspace = Workspace::new(project.path());
     workspace.home = Some(home.path().to_path_buf());
+    echo_allowed(&mut workspace);
     let tried = reached(&hooks, &workspace);
     assert_eq!(tried["files"], "alpha");
     assert_eq!(tried["processes"], "ran");
-    assert!(tried["network"].as_str().is_some_and(|said| said.contains("not an http(s) address")), "{tried}");
+    assert!(tried["network"].as_str().is_some_and(|said| said.contains("nobody can be asked")), "{tried}");
+}
+
+fn hook_in(home: &std::path::Path, source: &str) -> Hooks {
+    let folder = home.join(brand::DIR).join("hooks");
+    std::fs::create_dir_all(&folder).expect("hooks");
+    std::fs::write(folder.join("act.js"), source).expect("hook");
+    Hooks::from_scripts(&folder)
+}
+
+const ACTING: &str = r#"export const event = "PreToolUse";
+export const capabilities = ["exec"];
+export default function (input, ctx) {
+  let said;
+  try { said = String(ctx.exec("touch made.txt").code); } catch (error) { said = `refused: ${error.message ?? error}`; }
+  let read;
+  try { read = ctx.readFile("notes.txt"); } catch (error) { read = `refused: ${error.message ?? error}`; }
+  return { decision: "block", reason: JSON.stringify({ said, read }) };
+}"#;
+
+#[test]
+fn a_hook_s_undeclared_call_fails_and_says_what_to_declare() {
+    let home = tempfile::tempdir().expect("home");
+    let project = project_with_notes();
+    let hooks = hook_in(home.path(), ACTING);
+    let mut workspace = Workspace::new(project.path());
+    workspace.home = Some(home.path().to_path_buf());
+    let tried = reached(&hooks, &workspace);
+    let read = tried["read"].as_str().unwrap_or_default();
+    assert!(read.contains("did not declare ctx.readFile") && read.contains("export const capabilities"), "{read}");
+}
+
+#[test]
+fn a_hook_s_declared_call_is_judged_by_the_policy_and_with_nobody_to_ask_a_rule_must_allow_it() {
+    let home = tempfile::tempdir().expect("home");
+    let project = project_with_notes();
+    let hooks = hook_in(home.path(), ACTING);
+    let mut workspace = Workspace::new(project.path());
+    workspace.home = Some(home.path().to_path_buf());
+    let tried = reached(&hooks, &workspace);
+    let said = tried["said"].as_str().unwrap_or_default();
+    assert!(said.contains("nobody can be asked") && said.contains("Bash(touch:*)"), "{said}");
+    assert!(!project.path().join("made.txt").exists());
+
+    workspace.policy.permissions = domain::permission_rules::PermissionRules::default()
+        .with(domain::permission_rules::RuleKind::Allow, "Bash(touch made.txt)");
+    assert_eq!(reached(&hooks, &workspace)["said"], "0");
+    assert!(project.path().join("made.txt").exists());
+
+    workspace.policy.permissions = domain::permission_rules::PermissionRules::default()
+        .with(domain::permission_rules::RuleKind::Deny, "Bash(touch:*)");
+    let denied = reached(&hooks, &workspace)["said"].as_str().unwrap_or_default().to_owned();
+    assert!(denied.contains("Bash(touch:*)"), "{denied}");
 }
 
 struct Recording(Mutex<Vec<String>>);
@@ -87,6 +146,7 @@ fn a_command_a_script_starts_goes_through_the_same_confinement_as_a_command_hook
     let mut workspace = Workspace::new(project.path());
     workspace.home = Some(home.path().to_path_buf());
     workspace.services.launch = Launch(seen.clone());
+    echo_allowed(&mut workspace);
     let tried = reached(&hooks, &workspace);
     assert_eq!(tried["processes"], "ran");
     let launched = seen.0.lock().expect("seen").clone();

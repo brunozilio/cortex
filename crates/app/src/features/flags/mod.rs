@@ -23,7 +23,7 @@ fn listed(context: &Context<'_>, cwd: &Path, home: &Path) -> Result<FlagsReply, 
     let settings = settings::load(&context.services.extensions.trusts.gate(cwd, Some(home)), &[])?;
     context.services.off.follow(&settings.features);
     let flags = settings.features.listed().into_iter().map(|flag| {
-        let available = !flag.name.eq(domain::features::SANDBOX) || platform::sandbox::SUPPORTED;
+        let available = !flag.name.eq(domain::features::SANDBOX) || platform::sandbox::supported();
         ListedFlag { flag, available }
     });
     Ok(FlagsReply { flags: flags.collect() })
@@ -54,7 +54,7 @@ mod tests {
 
         let listed = flags(FlagsRequest::List { cwd: cwd.clone() }).expect("listed").flags;
         assert_eq!((listed[0].flag.name.as_str(), listed[0].flag.on), (domain::features::SANDBOX, true));
-        assert_eq!(listed[0].available, platform::sandbox::SUPPORTED);
+        assert_eq!(listed[0].available, platform::sandbox::supported());
 
         let off = FlagsRequest::Set { cwd: cwd.clone(), name: domain::features::SANDBOX.into(), on: false };
         assert!(!flags(off).expect("turned off").flags[0].flag.on);

@@ -7,6 +7,7 @@ pub struct Services {
     pub files: Option<Arc<crate::checkpoints::FileHistory>>,
     pub deferred: Option<Arc<crate::tools::tool_search::Deferred>>,
     pub launch: super::Launch,
+    pub judge: Option<Arc<crate::tools::host_judge::HostJudge>>,
 }
 
 #[derive(Clone)]

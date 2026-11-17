@@ -172,7 +172,7 @@ Algumas ações são perguntadas toda vez, seja qual for o modo e as regras (exc
 - `gh pr merge`, `gh release create|delete|edit`, `gh api`.
 - `docker push`, `podman push`.
 - Buscar um endereço que nunca apareceu na conversa, depois que a sessão leu conteúdo de fora (páginas web, ferramentas MCP).
-- Rodar um comando fora da sandbox e instalar um pacote suspeito. Veja [Sandbox e segurança](./sandbox-and-safety).
+- Rodar um comando fora da sandbox, instalar um pacote suspeito e instalar um servidor de linguagem (a menos que uma regra allow como `LSP(install:pyright)` o nomeie). Veja [Sandbox e segurança](./sandbox-and-safety).
 
 Comandos que imprimiriam segredos (`env`, `printenv`, `cat .env`, ler chaves SSH…) são recusados de imediato.
 

@@ -1,5 +1,6 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 pub mod session;
 
@@ -41,6 +42,40 @@ globalThis.__ctx = (data) => new Proxy({
 }, { get: (target, key) => (key in target ? target[key] : (...args) => call(String(key), args.length > 1 ? args : args[0])) });
 "#;
 
+pub const MOST_BUSY: Duration = Duration::from_secs(60);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Limit {
+    Wall(Duration),
+    Busy(Duration),
+}
+
+impl Limit {
+    fn ended(self) -> String {
+        match self {
+            Self::Wall(limit) => format!("the script timed out after {limit:?}"),
+            Self::Busy(limit) => format!(
+                "the script used up its {limit:?} of running time (time waiting on the app does not count); it was stopped"
+            ),
+        }
+    }
+}
+
+struct Timed {
+    host: Arc<dyn Host>,
+    waited: Arc<AtomicU64>,
+}
+
+impl Host for Timed {
+    fn call(&self, function: &str, arguments: Value) -> Result<Value, String> {
+        let started = Instant::now();
+        let answer = self.host.call(function, arguments);
+        let spent = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        self.waited.fetch_add(spent, Ordering::Relaxed);
+        answer
+    }
+}
+
 pub fn run(
     name: &str,
     source: &str,
@@ -50,7 +85,7 @@ pub fn run(
     host: Arc<dyn Host>,
     stop: Arc<AtomicBool>,
 ) -> Result<Value, String> {
-    run_within(name, source, export, arguments, data, host, stop, None)
+    run_limited(name, source, export, arguments, data, host, stop, Limit::Busy(MOST_BUSY))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -62,15 +97,39 @@ pub fn run_within(
     data: &Value,
     host: Arc<dyn Host>,
     stop: Arc<AtomicBool>,
-    limit: Option<std::time::Duration>,
+    limit: Option<Duration>,
+) -> Result<Value, String> {
+    let limit = limit.map_or(Limit::Busy(MOST_BUSY), Limit::Wall);
+    run_limited(name, source, export, arguments, data, host, stop, limit)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_limited(
+    name: &str,
+    source: &str,
+    export: &str,
+    arguments: &[Value],
+    data: &Value,
+    host: Arc<dyn Host>,
+    stop: Arc<AtomicBool>,
+    limit: Limit,
 ) -> Result<Value, String> {
     let runtime = runtime().map_err(|error| error.to_string())?;
     let flag = Arc::clone(&stop);
     let timed_out = Arc::new(AtomicBool::new(false));
     let late = Arc::clone(&timed_out);
-    let deadline = limit.map(|limit| std::time::Instant::now() + limit);
+    let waited = Arc::new(AtomicU64::new(0));
+    let host: Arc<dyn Host> = Arc::new(Timed { host, waited: Arc::clone(&waited) });
+    let started = Instant::now();
     runtime.set_interrupt_handler(Some(Box::new(move || {
-        if deadline.is_some_and(|deadline| std::time::Instant::now() > deadline) {
+        let past = match limit {
+            Limit::Wall(limit) => started.elapsed() > limit,
+            Limit::Busy(limit) => {
+                let waited = Duration::from_nanos(waited.load(Ordering::Relaxed));
+                started.elapsed().saturating_sub(waited) > limit
+            }
+        };
+        if past {
             late.store(true, Ordering::Relaxed);
         }
         late.load(Ordering::Relaxed) || flag.load(Ordering::Relaxed)
@@ -82,7 +141,7 @@ pub fn run_within(
             return Err("cancelled".to_owned());
         }
         if timed_out.load(Ordering::Relaxed) {
-            return Err(format!("the script timed out after {:?}", limit.unwrap_or_default()));
+            return Err(limit.ended());
         }
         result.map_err(|error| describe(&ctx, error))
     })

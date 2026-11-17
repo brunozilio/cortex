@@ -148,6 +148,7 @@ Uma pasta de skill pode ter `SKILL.js` no lugar de `SKILL.md`. Ele roda no runti
 export const name = "changelog";
 export const description = "Mostra os commits desde a última tag. Use antes de escrever notas de release.";
 export const modelInvocation = true;
+export const capabilities = ["exec"];
 
 export default function (args, ctx) {
   const tag = ctx.exec("git describe --tags --abbrev=0").stdout.trim();
@@ -160,9 +161,13 @@ export default function (args, ctx) {
 | `name` | O nome; por padrão, o da pasta |
 | `description` | Como `description` no `SKILL.md` |
 | `modelInvocation` | `false` funciona como `disable-model-invocation: true` |
+| `capabilities` | As funções do host que o script chama: `readFile`, `writeFile`, `exec`, `fetch`. Vazia por padrão. |
 | `default` | Chamada com os argumentos (uma string) e um contexto; retorna o texto. Tem 60 segundos. |
 
-Um arquivo `.js` numa pasta `commands/` funciona do mesmo jeito, como comando. O que um script pode fazer com arquivos, processos e rede segue a configuração `scripts` (veja [Configurações](./settings)). Um `SKILL.js` do projeto é substituído por um seu ou de um plugin com o mesmo nome.
+Um arquivo `.js` numa pasta `commands/` funciona do mesmo jeito, como comando. Uma chamada a uma função do host que o script não listou em `capabilities` falha; uma listada é julgada pelas suas permissões como a ferramenta correspondente (`ctx.exec` como `Bash`), perguntando a você quando elas mandam (veja "Capacidades" em [Sandbox e segurança](./sandbox-and-safety)). A configuração `scripts` continua sendo o limite de fora (veja [Configurações](./settings)).
+
+> [!WARNING]
+> Mudança incompatível: uma skill ou comando em script que chama `ctx.readFile`, `ctx.writeFile`, `ctx.exec` ou `ctx.fetch` sem listar em `export const capabilities` agora falha com um erro dizendo o que acrescentar. Um `SKILL.js` do projeto é substituído por um seu ou de um plugin com o mesmo nome.
 
 > [!IMPORTANT]
 > O `SKILL.js` e os comandos `.js` de um projeto só são oferecidos depois que você confia na pasta do projeto; as skills e os comandos em Markdown carregam de qualquer forma. O mesmo vale para as ferramentas JavaScript do projeto em `{{DIR}}/tools/`. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).

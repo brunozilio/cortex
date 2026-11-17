@@ -10,10 +10,14 @@ use super::dispatch::Calling;
 use super::run::ThisRun;
 use crate::model::ToolSpec;
 use crate::tools::script_bridge::{Bridge, Request};
-use crate::tools::script_tool::{Origin, ScriptTool};
+use crate::tools::script_tool::{Capabilities, Capability, Origin, ScriptTool};
 use crate::tools::skill::FoundSkill;
 use crate::tools::{Outcome, Tool, Workspace};
 use crate::transcript::{Block, Message};
+
+mod host_calls;
+
+use host_calls::HostCall;
 
 const DEEPEST: usize = 8;
 
@@ -22,6 +26,7 @@ struct Script<'a> {
     path: &'a str,
     source: &'a str,
     origin: Origin,
+    capabilities: Capabilities,
 }
 
 #[derive(Clone, Copy)]
@@ -146,7 +151,8 @@ impl Agent<'_> {
     fn run_script(&self, within: Within<'_>, tool: &ScriptTool, input: &Value) -> Outcome {
         let path = tool.path.display().to_string();
         let origin = Origin::trusted(tool.trusted);
-        let script = Script { name: &tool.spec.name, path: &path, source: &tool.source, origin };
+        let capabilities = tool.capabilities.clone();
+        let script = Script { name: &tool.spec.name, path: &path, source: &tool.source, origin, capabilities };
         self.run_js(within, &script, input, None)
     }
 
@@ -159,7 +165,9 @@ impl Agent<'_> {
         let name = calling.name;
         let path = crate::tools::declared_path(name);
         let Some(source) = content::source(&path) else { return builtin(input) };
-        let script = Script { name, path: &path, source: &source, origin: Origin::Owner };
+        let spec = content::value(&path, "spec").unwrap_or_default();
+        let capabilities = Capabilities::read(&spec).unwrap_or_default();
+        let script = Script { name, path: &path, source: &source, origin: Origin::Owner, capabilities };
         self.run_js(Within::the_call(calling), &script, input, Some(builtin))
     }
 
@@ -191,7 +199,7 @@ impl Agent<'_> {
                         let _ = request.reply.send(answer);
                     }
                     Ok(request) => {
-                        let answer = self.serve(within, script.origin, &request.function, request.arguments);
+                        let answer = self.serve(within, script, &request.function, request.arguments);
                         let _ = request.reply.send(answer);
                     }
                     Err(RecvTimeoutError::Timeout) if !running.is_finished() => {}
@@ -205,15 +213,22 @@ impl Agent<'_> {
         reported(result, last.into_inner(), stopped, script.name)
     }
 
-    fn serve(&self, within: Within<'_>, origin: Origin, function: &str, arguments: Value) -> Result<Value, String> {
-        let access = self.workspace.policy.scripts.of(origin);
-        let text = |key: &str| arguments.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
+    fn serve(
+        &self,
+        within: Within<'_>,
+        script: &Script<'_>,
+        function: &str,
+        arguments: Value,
+    ) -> Result<Value, String> {
+        if let Some(capability) = Capability::of(function) {
+            return self.host_call(within, script, capability, &arguments);
+        }
         match function {
             "tool" => {
-                let name = text("name");
+                let name = arguments.get("name").and_then(Value::as_str).unwrap_or_default();
                 let id = format!("script-{}", self.control.next_agent());
                 let spawn = |job: Box<dyn FnOnce() + Send + '_>| job();
-                answered(self.call(&id, &name, &arguments["input"], within.run, within.parent, &spawn))
+                answered(self.call(&id, name, &arguments["input"], within.run, within.parent, &spawn))
             }
             "llm" => self.script_llm(&arguments),
             "text" => Ok(Value::String(content::text(arguments.as_str().unwrap_or_default()))),
@@ -222,29 +237,23 @@ impl Agent<'_> {
                 (self.emit)(domain::EngineEvent::ToolLog { id: within.id.to_owned(), text });
                 Ok(Value::Null)
             }
-            "readFile" if access.files => {
-                let path = self.workspace.resolve(arguments.as_str().unwrap_or_default());
-                std::fs::read_to_string(&path)
-                    .map(Value::String)
-                    .map_err(|error| format!("{}: {error}", path.display()))
-            }
-            "writeFile" if access.files => {
-                let path = self.workspace.resolve(&text("path"));
-                self.workspace.before_write(&path);
-                std::fs::write(&path, text("text"))
-                    .map(|()| Value::Null)
-                    .map_err(|error| format!("{}: {error}", path.display()))
-            }
-            "exec" if access.processes => {
-                let confine = self.workspace.confiner();
-                crate::tools::script_io::exec(&self.workspace.cwd, &arguments, &self.workspace.stop, &confine)
-            }
-            "fetch" if access.network => crate::tools::script_io::fetch(&arguments, origin),
-            "readFile" | "writeFile" => Err("scripts may not touch files here (settings: scripts.files)".into()),
-            "exec" => Err("scripts may not start processes here (settings: scripts.processes)".into()),
-            "fetch" => Err("scripts may not reach the network here (settings: scripts.network)".into()),
             other => Err(format!("ctx.{other} is not a function")),
         }
+    }
+
+    fn host_call(
+        &self,
+        within: Within<'_>,
+        script: &Script<'_>,
+        capability: Capability,
+        arguments: &Value,
+    ) -> Result<Value, String> {
+        script.capabilities.allows(capability, script.name)?;
+        capability.granted(self.workspace.policy.scripts.of(script.origin))?;
+        let call = HostCall { capability, script: script.name, origin: script.origin };
+        let id = format!("{}-{}-{}", within.id, capability.name(), self.control.next_agent());
+        let (subject, shown) = (call.subject(arguments), call.shown(arguments));
+        HostCall::answer(self.permitted_as(&id, &call, &subject, Some(&shown), arguments, None))
     }
 
     fn script_llm(&self, arguments: &Value) -> Result<Value, String> {

@@ -295,7 +295,7 @@ export default function (input, ctx) {
 | An object | Exit `0`, the object as JSON output |
 | A thrown error | A failed hook (like a non-zero exit), the error as stderr |
 
-The context gives `ctx.cwd`, `ctx.session` and `ctx.agent`, plus file, process and network helpers (`ctx.readFile`, `ctx.writeFile`, `ctx.exec`, `ctx.fetch`, `ctx.log`) limited by the `scripts` setting. While the event runs alongside the model (tool, prompt, stop and compaction events), the script can also call `ctx.llm(…)` to ask the model and `ctx.tool(name, input)` to use a read-only tool inside the project.
+The context gives `ctx.cwd`, `ctx.session` and `ctx.agent`, `ctx.log`, plus file, process and network helpers (`ctx.readFile`, `ctx.writeFile`, `ctx.exec`, `ctx.fetch`). A script lists the helpers it calls in `export const capabilities = [...]`; an unlisted call fails. Each listed call is judged by your permissions like the matching tool (`ctx.exec` like `Bash`), asking you where they say so, and the `scripts` setting stays the outer limit; see [Capabilities](./sandbox-and-safety#capabilities). While the event runs alongside the model (tool, prompt, stop and compaction events), the script can also call `ctx.llm(…)` to ask the model and `ctx.tool(name, input)` to use a read-only tool inside the project.
 
 The type definitions for every event's input and output are in {{NAME}}'s `content/types.d.ts` (`Hook<"PreToolUse">` and so on).
 
@@ -307,6 +307,7 @@ Instead of listing a script in settings, drop it in a hooks folder (`~/{{DIR}}/h
 export const event = "PostToolUse";
 export const matcher = "^(Edit|Write)$";
 export const timeout = 30;
+export const capabilities = ["exec"];
 
 export default (input, ctx) => {
   const result = ctx.exec(`npx prettier --check ${JSON.stringify(input.tool_input.file_path)}`);
@@ -321,12 +322,16 @@ export default (input, ctx) => {
 | `event` | One event name, or a list of them. Required. |
 | `matcher` | Like a settings matcher. Empty by default. |
 | `timeout` | Seconds, 1 to 600. 60 by default. |
+| `capabilities` | The host functions the hook calls: `readFile`, `writeFile`, `exec`, `fetch`. Empty by default. |
 | `default` | The hook function. A file whose default export is missing or an empty function is skipped. |
 
 {{NAME}} ships one empty template per event. A file in `~/{{DIR}}/hooks/` with the same name as a template (for example `PreToolUse.js`) takes its place.
 
 > [!NOTE]
 > A script in a project's `{{DIR}}/hooks/` cannot read or write files, start processes or reach the network (`ctx.readFile`, `ctx.exec`, `ctx.fetch`…) until one of your own settings files grants it. Scripts in `~/{{DIR}}/hooks/` can. See [`scripts`](./settings#scripts).
+
+> [!WARNING]
+> Breaking change: a hook script that calls `ctx.readFile`, `ctx.writeFile`, `ctx.exec` or `ctx.fetch` must now list it in `export const capabilities`, and the call is judged by your permissions. A hook that runs where nobody can be asked (a `-p` run) needs an allow rule for a call that would otherwise ask, for example `Bash(cargo clippy:*)`. See the migration example in [Capabilities](./sandbox-and-safety#capabilities).
 
 ### `http`
 
@@ -556,6 +561,7 @@ Input: `tool_name`, `tool_use_id`, `tool_input` and `tool_response` (the result'
 ```javascript
 export const event = "PostToolUse";
 export const matcher = "^(Edit|Write)$";
+export const capabilities = ["exec"];
 export default (input, ctx) => {
   const out = ctx.exec("cargo clippy --quiet -- -D warnings");
   if (out.code !== 0) return { decision: "block", reason: out.stderr.slice(0, 2000) };

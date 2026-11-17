@@ -209,10 +209,40 @@ type Returned<T> = T | void | Promise<T | void>;
 
 export type Hook<E extends HookEvent> = (input: HookInput<E>, ctx: HookContext) => Returned<HookResult | string>;
 
+export type Capability = "readFile" | "writeFile" | "exec" | "fetch";
+
+export type Capabilities = Capability[];
+
+export interface HookModule {
+  event: HookEvent | HookEvent[];
+  matcher?: string;
+  timeout?: number;
+  capabilities?: Capabilities;
+}
+
+export interface SkillScriptModule {
+  name?: string;
+  description?: string;
+  modelInvocation?: boolean;
+  capabilities?: Capabilities;
+}
+
+export interface McpServerTool {
+  description?: string;
+  input?: Json;
+  run(input: Record<string, Json>, ctx: ScriptContext): Returned<string | Json>;
+}
+
+export interface McpServerModule {
+  capabilities?: Capabilities;
+  tools: Record<string, McpServerTool>;
+}
+
 export interface ToolSpec<Data = Record<string, Json>> {
   name: string;
   input: Json | ((ctx: Data & { brand: Brand }) => Json);
   description: string | ((ctx: Data & { brand: Brand }) => string);
+  capabilities?: Capability[];
 }
 
 export type ScriptToolAccess = "read" | "edit" | "execute";

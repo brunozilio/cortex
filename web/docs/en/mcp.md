@@ -93,8 +93,9 @@ New servers are picked up on the next prompt. Ask the agent to use them ("find t
 | `command` | The program to start (`stdio`) |
 | `args` | Its arguments (`stdio`) |
 | `env` | Environment variables added to the process (`stdio`) |
+| `sandbox` | Where the process may write and whether it reaches the network (`stdio`): `{ "writable": [...], "network": false }`, or `false` to start it outside the sandbox (your own file only). See [MCP servers in the sandbox](./sandbox-and-safety#mcp-servers-in-the-sandbox). |
 
-A server of another type is left out with a warning in the log.
+A server of another type, or with a `sandbox` value of another shape, is left out with a warning in the log.
 
 ### Environment variables in the file
 
@@ -277,6 +278,7 @@ A `.js` file in `~/{{DIR}}/mcp/` (or in the working folder's `{{DIR}}/mcp/`) is 
 
 ```javascript
 export default {
+  capabilities: ["readFile"],
   tools: {
     add: {
       description: "Adds a and b.",
@@ -291,13 +293,16 @@ export default {
 };
 ```
 
-`math.js` with this content offers `mcp__math__add` and `mcp__math__notes`. A tool returns text (or a value, sent as JSON); a thrown error is a failed call. What `ctx` may do with files, processes and the network follows the `scripts` setting (see [Settings](./settings)).
+`math.js` with this content offers `mcp__math__add` and `mcp__math__notes`. A tool returns text (or a value, sent as JSON); a thrown error is a failed call. The server lists in `capabilities` each host function its tools call (`readFile`, `writeFile`, `exec`, `fetch`); a call it did not list fails. Each listed call is judged by your permission rules and mode like the matching tool (`ctx.readFile` like `Read`, `ctx.exec` like `Bash`), and the `scripts` setting stays the outer limit (see [Capabilities](./sandbox-and-safety#capabilities) and [Settings](./settings#scripts)).
+
+> [!WARNING]
+> Breaking change: a JavaScript server that calls `ctx.readFile`, `ctx.writeFile`, `ctx.exec` or `ctx.fetch` without listing it in `capabilities` now fails with an error saying what to add.
 
 ## How servers start
 
 At the start of each prompt, {{NAME}} starts every `ready` server and asks for its tools (MCP protocol version `2025-06-18`). A server that fails to start, or to list its tools, is left out of that run with a warning in the log; the run goes on without it.
 
-- A local server runs as a child process with your environment plus its `env`. Its stderr is discarded. A call may take up to 10 minutes.
+- A local server runs as a child process with your environment plus its `env`, inside the [sandbox](./sandbox-and-safety#mcp-servers-in-the-sandbox) when it is on. Its stderr is discarded. A call may take up to 10 minutes.
 - A remote server keeps the session id it receives across the calls of a run.
 
 ## Troubleshooting

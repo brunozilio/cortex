@@ -9,7 +9,10 @@ mod dependency_guard;
 mod egress;
 mod escalation;
 mod follow_through;
+mod input_validation;
 mod interception;
+mod lsp_install;
+mod mcp_fence;
 mod model_hooks;
 mod native_search;
 mod permission_rules;
@@ -85,17 +88,28 @@ impl Rig {
         history: &mut Vec<Message>,
         extra: Vec<Box<dyn tools::Tool>>,
     ) -> Result<(), Ending> {
+        self.run_hiding(model, history, extra, &[])
+    }
+
+    fn run_hiding(
+        &self,
+        model: &ScriptedModel,
+        history: &mut Vec<Message>,
+        extra: Vec<Box<dyn tools::Tool>>,
+        hidden: &[&str],
+    ) -> Result<(), Ending> {
         let mut tools = tools::standard();
         tools.extend(extra);
         let events = Arc::clone(&self.events);
         let emit = move |event: EngineEvent| events.lock().expect("events").push(event);
+        let offered = Agent::specs(&tools).into_iter().filter(|spec| !hidden.contains(&spec.name.as_str())).collect();
         let agent = Agent {
             api: model,
             tools: &tools,
             workspace: &self.workspace,
             control: &self.control,
             emit: &emit,
-            request: TurnRequest { tools: Agent::specs(&tools), ..request() },
+            request: TurnRequest { tools: offered, ..request() },
             agents: &[],
             depth: 0,
             turn_limit: agent_engine::agent::MAX_TURNS,

@@ -10,7 +10,7 @@ use serde_json::json;
 use crate::{Rig, tool_use};
 
 const TOOL: &str = r#"
-export const spec = { name: "Mark", description: "Writes a mark.", access: "read" };
+export const spec = { name: "Mark", description: "Writes a mark.", access: "read", capabilities: ["writeFile"] };
 export function run(input, ctx) {
   ctx.log("marking");
   ctx.writeFile("mark.txt", "marked");
@@ -71,6 +71,10 @@ fn a_project_s_tool_asks_the_first_time_even_when_bypassing_and_a_refusal_stops_
 }
 
 fn project_tool_run(rig: &Rig) -> String {
+    project_tool_run_asked(rig, 1)
+}
+
+fn project_tool_run_asked(rig: &Rig, asks: usize) -> String {
     let home = tempfile::tempdir().expect("home");
     let folder = rig.dir.path().join(brand::DIR).join("tools");
     std::fs::create_dir_all(&folder).expect("tools");
@@ -78,7 +82,7 @@ fn project_tool_run(rig: &Rig) -> String {
     let answerer = answer_every_ask(rig, Decision::Allow);
     let mut history = vec![Message::user("mark")];
     rig.run_with(&model(), &mut history, script_tools(home.path(), rig.dir.path())).expect("run");
-    assert_eq!(answerer.join().expect("answerer"), 1, "asked once");
+    assert_eq!(answerer.join().expect("answerer"), asks);
     format!("{:?}", history.iter().flat_map(|message| &message.blocks).collect::<Vec<_>>())
 }
 
@@ -94,7 +98,9 @@ fn a_project_s_tool_the_user_allowed_still_gets_no_files_by_default() {
 fn a_project_s_tool_writes_once_the_owner_s_settings_grant_files() {
     let mut rig = Rig::new(PermissionMode::Ask);
     rig.workspace.policy.scripts.project.files = true;
-    project_tool_run(&rig);
+    project_tool_run_asked(&rig, 2);
+    let asked: Vec<String> = asked_for(&rig).into_iter().map(|(tool, _)| tool).collect();
+    assert_eq!(asked, ["Mark", "Write"], "the tool, then its write, each asked in the ask mode");
     assert_eq!(std::fs::read_to_string(rig.dir.path().join("mark.txt")).expect("mark"), "marked");
 }
 
@@ -119,7 +125,7 @@ fn a_tool_that_exports_execute_runs_it_and_has_no_built_in_to_call() {
     let folder = home.path().join(brand::DIR).join("tools");
     std::fs::create_dir_all(&folder).expect("tools");
     let tool = r#"
-export const spec = { name: "Mark", description: "Writes a mark.", access: "read" };
+export const spec = { name: "Mark", description: "Writes a mark.", access: "read", capabilities: ["writeFile"] };
 export function execute(input, ctx) {
   ctx.writeFile("mark.txt", "executed");
   try { ctx.builtin(input) } catch (error) { return error.message }
@@ -203,4 +209,95 @@ export function run(input, ctx) {
     let said = results(&history);
     assert!(said[0].contains(r#""task_id":"task-1""#), "the script hands back the task it started: {said:?}");
     assert!(said[1].starts_with("REVIEWED"), "the run knows that task and collects its report: {said:?}");
+}
+
+fn runner(capabilities: &str) -> String {
+    format!(
+        r#"
+export const spec = {{ name: "Runner", description: "Runs a command.", access: "read"{capabilities} }};
+export function run(input, ctx) {{
+  try {{ return "exit " + ctx.exec("echo hi > made.txt").code }} catch (error) {{ return "refused: " + error.message }}
+}}
+"#
+    )
+}
+
+fn run_runner(rig: &Rig, capabilities: &str) -> Vec<String> {
+    let home = tempfile::tempdir().expect("home");
+    own_tool(home.path(), "runner.js", &runner(capabilities));
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use("r", "Runner", json!({}))]),
+        ScriptedModel::reply(vec![Block::Text("Ok.".into())]),
+    ]);
+    let mut history = vec![Message::user("run")];
+    rig.run_with(&model, &mut history, script_tools(home.path(), rig.dir.path())).expect("run");
+    results(&history).into_iter().map(str::to_owned).collect()
+}
+
+fn asked_for(rig: &Rig) -> Vec<(String, String)> {
+    rig.events()
+        .into_iter()
+        .filter_map(|event| match event {
+            EngineEvent::Asked(ask) => match ask.kind {
+                domain::AskKind::Permission { tool, subject, .. } => Some((tool, subject)),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_script_that_did_not_declare_exec_cannot_run_a_command() {
+    let rig = Rig::new(PermissionMode::Bypass);
+    let said = run_runner(&rig, "");
+    assert!(
+        said[0].starts_with("refused: ") && said[0].contains("capabilities") && said[0].contains("exec"),
+        "{said:?}"
+    );
+    assert!(!rig.dir.path().join("made.txt").exists());
+    assert!(asked_for(&rig).is_empty(), "refused before anyone is asked");
+}
+
+#[test]
+fn a_declared_exec_is_judged_like_a_bash_command_and_a_refusal_stops_it() {
+    let rig = Rig::new(PermissionMode::AcceptEdits);
+    let answerer = answer_every_ask(&rig, Decision::Deny);
+    let said = run_runner(&rig, r#", capabilities: ["exec"]"#);
+    answerer.join().expect("answerer");
+    let asked = asked_for(&rig);
+    assert_eq!(asked.len(), 1, "{asked:?}");
+    assert_eq!(asked[0].0, "Bash");
+    assert!(asked[0].1.contains("echo hi > made.txt") && asked[0].1.contains("Runner"), "{asked:?}");
+    assert!(said[0].starts_with("refused: "), "{said:?}");
+    assert!(!rig.dir.path().join("made.txt").exists(), "a refused command never runs");
+}
+
+#[test]
+fn a_declared_exec_the_user_allows_runs() {
+    let rig = Rig::new(PermissionMode::AcceptEdits);
+    let answerer = answer_every_ask(&rig, Decision::Allow);
+    let said = run_runner(&rig, r#", capabilities: ["exec"]"#);
+    assert_eq!(answerer.join().expect("answerer"), 1);
+    assert_eq!(said[0], "exit 0", "{said:?}");
+    assert!(rig.dir.path().join("made.txt").exists());
+}
+
+#[test]
+fn a_declared_exec_a_deny_rule_names_is_refused_without_asking() {
+    let mut rig = Rig::new(PermissionMode::AcceptEdits);
+    rig.workspace.policy.permissions = domain::permission_rules::PermissionRules::default()
+        .with(domain::permission_rules::RuleKind::Deny, "Bash(echo:*)");
+    let said = run_runner(&rig, r#", capabilities: ["exec"]"#);
+    assert!(said[0].starts_with("refused: "), "{said:?}");
+    assert!(asked_for(&rig).is_empty());
+    assert!(!rig.dir.path().join("made.txt").exists());
+}
+
+#[test]
+fn a_tool_that_declares_an_unknown_capability_does_not_load() {
+    let home = tempfile::tempdir().expect("home");
+    let project = tempfile::tempdir().expect("project");
+    own_tool(home.path(), "runner.js", &runner(r#", capabilities: ["root"]"#));
+    assert!(script_tools(home.path(), project.path()).is_empty());
 }

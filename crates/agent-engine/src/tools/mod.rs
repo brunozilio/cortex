@@ -4,6 +4,8 @@ pub mod builtin;
 pub mod builtin_agents;
 #[cfg(test)]
 mod builtin_skills;
+pub mod checked;
+pub mod host_judge;
 pub mod inbox;
 mod lsp;
 pub mod names;
@@ -43,7 +45,8 @@ pub use llm_providers::web_search::WEB_SEARCH;
 pub use lsp::Lsp;
 pub(crate) use outside::settled;
 pub use workspace::{
-    Confiner, Launch, Launcher, Models, Network, OnThisMachine, Policy, Verification, Workspace, env_secrets,
+    Confiner, Launch, Launcher, Models, Network, OnThisMachine, Policy, Verification, Workspace, confinement_of,
+    env_secrets, temp_folders,
 };
 
 use crate::model::ToolSpec;
@@ -108,6 +111,10 @@ pub trait Tool: Send + Sync {
 
     fn offered(&self, _workspace: &Workspace) -> bool {
         true
+    }
+
+    fn shown(&self, _input: &Value, _workspace: &Workspace) -> Option<String> {
+        None
     }
 
     fn serial(&self) -> bool {

@@ -136,6 +136,43 @@ fn a_function_with_an_empty_body_is_known_as_empty() {
     assert!(!empty("export const event = 'Stop';"));
 }
 
+struct Slow;
+
+impl Host for Slow {
+    fn call(&self, _function: &str, _arguments: Value) -> Result<Value, String> {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        Ok(Value::Null)
+    }
+}
+
+#[test]
+fn a_script_that_never_ends_is_stopped_by_its_running_time_even_with_nobody_to_stop_it() {
+    let stop = Arc::new(AtomicBool::new(false));
+    let busy = Limit::Busy(std::time::Duration::from_millis(100));
+    let source = "export function run() { for (;;) {} }";
+    let started = std::time::Instant::now();
+    let host = Arc::new(Recorder::default());
+    let result = run_limited("loop.js", source, "run", &[], &json!({}), host, Arc::clone(&stop), busy);
+    let error = result.expect_err("the budget ends it");
+    assert!(error.contains("running time"), "{error}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    assert!(!stop.load(Ordering::Relaxed));
+}
+
+#[test]
+fn waiting_on_the_host_does_not_count_as_running_time() {
+    let stop = Arc::new(AtomicBool::new(false));
+    let busy = Limit::Busy(std::time::Duration::from_millis(200));
+    let source = r#"export function run(_, ctx) { ctx.log("a"); ctx.log("b"); ctx.log("c"); return "done" }"#;
+    let result = run_limited("slow.js", source, "run", &[json!(null)], &json!({}), Arc::new(Slow), stop, busy);
+    assert_eq!(result, Ok(json!("done")), "450 ms waiting on the host, little of it running");
+}
+
+#[test]
+fn every_run_has_a_running_time_budget() {
+    assert!(MOST_BUSY >= std::time::Duration::from_secs(10) && MOST_BUSY <= std::time::Duration::from_secs(300));
+}
+
 #[test]
 fn a_script_past_its_time_limit_fails_without_stopping_its_caller() {
     let host = Arc::new(Recorder::default());

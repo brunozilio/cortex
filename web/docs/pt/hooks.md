@@ -295,7 +295,7 @@ export default function (input, ctx) {
 | Um objeto | Saída `0`, o objeto como saída JSON |
 | Um erro lançado | Um hook que falhou (como uma saída diferente de zero), com o erro como stderr |
 
-O contexto oferece `ctx.cwd`, `ctx.session` e `ctx.agent`, além de funções de arquivo, processo e rede (`ctx.readFile`, `ctx.writeFile`, `ctx.exec`, `ctx.fetch`, `ctx.log`) limitadas pela configuração `scripts`. Quando o evento roda junto com o modelo (eventos de ferramenta, de prompt, de parada e de compactação), o script também pode chamar `ctx.llm(…)` para perguntar ao modelo e `ctx.tool(nome, entrada)` para usar uma ferramenta somente leitura dentro do projeto.
+O contexto oferece `ctx.cwd`, `ctx.session` e `ctx.agent`, `ctx.log`, além de funções de arquivo, processo e rede (`ctx.readFile`, `ctx.writeFile`, `ctx.exec`, `ctx.fetch`). Um script lista as funções que chama em `export const capabilities = [...]`; uma chamada não listada falha. Cada chamada listada é julgada pelas suas permissões como a ferramenta correspondente (`ctx.exec` como `Bash`), perguntando a você quando elas mandam, e a configuração `scripts` continua sendo o limite de fora; veja "Capacidades" em [Sandbox e segurança](./sandbox-and-safety). Quando o evento roda junto com o modelo (eventos de ferramenta, de prompt, de parada e de compactação), o script também pode chamar `ctx.llm(…)` para perguntar ao modelo e `ctx.tool(nome, entrada)` para usar uma ferramenta somente leitura dentro do projeto.
 
 As definições de tipo da entrada e da saída de cada evento estão no `content/types.d.ts` do {{NAME}} (`Hook<"PreToolUse">` e assim por diante).
 
@@ -307,6 +307,7 @@ Em vez de listar um script nas configurações, coloque-o numa pasta de hooks (`
 export const event = "PostToolUse";
 export const matcher = "^(Edit|Write)$";
 export const timeout = 30;
+export const capabilities = ["exec"];
 
 export default (input, ctx) => {
   const result = ctx.exec(`npx prettier --check ${JSON.stringify(input.tool_input.file_path)}`);
@@ -321,12 +322,16 @@ export default (input, ctx) => {
 | `event` | Um nome de evento, ou uma lista deles. Obrigatório. |
 | `matcher` | Como um matcher das configurações. Vazio por padrão. |
 | `timeout` | Segundos, de 1 a 600. 60 por padrão. |
+| `capabilities` | As funções do host que o hook chama: `readFile`, `writeFile`, `exec`, `fetch`. Vazia por padrão. |
 | `default` | A função do hook. Um arquivo sem export padrão, ou com uma função vazia, é ignorado. |
 
 O {{NAME}} vem com um modelo vazio para cada evento. Um arquivo em `~/{{DIR}}/hooks/` com o mesmo nome de um modelo (por exemplo `PreToolUse.js`) toma o lugar dele.
 
 > [!NOTE]
 > Um script na pasta `{{DIR}}/hooks/` de um projeto não pode ler nem gravar arquivos, iniciar processos ou acessar a rede (`ctx.readFile`, `ctx.exec`, `ctx.fetch`…) enquanto um dos seus próprios arquivos de configuração não liberar. Os scripts em `~/{{DIR}}/hooks/` podem. Veja [`scripts`](./settings#scripts).
+
+> [!WARNING]
+> Mudança incompatível: um script de hook que chama `ctx.readFile`, `ctx.writeFile`, `ctx.exec` ou `ctx.fetch` agora precisa listá-la em `export const capabilities`, e a chamada é julgada pelas suas permissões. Um hook que roda onde ninguém pode ser consultado (uma execução `-p`) precisa de uma regra allow para uma chamada que perguntaria, por exemplo `Bash(cargo clippy:*)`. Veja o exemplo de migração em "Capacidades", em [Sandbox e segurança](./sandbox-and-safety).
 
 ### `http`
 
@@ -556,6 +561,7 @@ Entrada: `tool_name`, `tool_use_id`, `tool_input` e `tool_response` (o texto do 
 ```javascript
 export const event = "PostToolUse";
 export const matcher = "^(Edit|Write)$";
+export const capabilities = ["exec"];
 export default (input, ctx) => {
   const out = ctx.exec("cargo clippy --quiet -- -D warnings");
   if (out.code !== 0) return { decision: "block", reason: out.stderr.slice(0, 2000) };

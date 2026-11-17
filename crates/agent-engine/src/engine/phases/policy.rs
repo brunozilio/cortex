@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use domain::features::{self, Features};
 use domain::model_roles::{ModelRole, ModelRoles};
@@ -34,6 +35,9 @@ impl Job {
         workspace.auto_memory = settings.auto_memory;
         workspace.policy = flagged(settings, &workspace.cwd, self.request.safety_check);
         workspace.policy.trust = brief.trust;
+        if let Some(notice) = sandbox_notice(&workspace, &SANDBOX_SAID) {
+            self.gate.emit(domain::EngineEvent::Notice(notice));
+        }
         workspace.models.escalation.clone_from(&settings.escalation);
         self.request.budget = budget(&self.request, &settings.features);
         workspace.services.files = Some(Arc::default());
@@ -52,6 +56,13 @@ impl Job {
         workspace.policy.permissions = permissions(&self.request, settings).map_err(Stop::failed)?;
         Ok(Governed { workspace, toolbox, main, roles })
     }
+}
+
+static SANDBOX_SAID: AtomicBool = AtomicBool::new(false);
+
+pub(in crate::engine) fn sandbox_notice(workspace: &Workspace, said: &AtomicBool) -> Option<String> {
+    let missing = workspace.sandbox_missing()?;
+    (!said.swap(true, Ordering::Relaxed)).then_some(missing.notice)
 }
 
 pub(in crate::engine) fn flagged(settings: &Settings, cwd: &Path, safety_check: bool) -> Policy {

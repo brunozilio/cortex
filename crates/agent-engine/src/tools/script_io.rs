@@ -6,7 +6,8 @@ use platform::bounded::{Bounds, Ended};
 use serde_json::{Value, json};
 
 use super::Confiner;
-use super::script_tool::{Origin, ScriptAccess};
+use super::host_judge::{Grounds, HostAsk, HostJudge};
+use super::script_tool::{Capabilities, Capability, Origin, ScriptAccess};
 use crate::model::http::{Http, NetHttp, Response};
 use crate::tools::builtin::web::reach;
 
@@ -71,38 +72,53 @@ pub struct StandaloneHost {
     pub origin: Origin,
     pub confine: Confiner,
     pub stop: std::sync::Arc<AtomicBool>,
+    pub script: String,
+    pub capabilities: Capabilities,
+    pub judge: std::sync::Arc<HostJudge>,
+    pub grounds: Grounds,
 }
 
-impl script::Host for StandaloneHost {
-    fn call(&self, function: &str, arguments: Value) -> Result<Value, String> {
+impl StandaloneHost {
+    fn performed(&self, capability: Capability, arguments: &Value) -> Result<Value, String> {
         let text = |key: &str| arguments.get(key).and_then(Value::as_str).unwrap_or_default().to_owned();
         let resolve = |path: &str| {
             let path = std::path::Path::new(path);
             if path.is_absolute() { path.to_path_buf() } else { self.cwd.join(path) }
         };
+        match capability {
+            Capability::ReadFile => {
+                let path = resolve(arguments.as_str().unwrap_or_default());
+                std::fs::read_to_string(&path)
+                    .map(Value::String)
+                    .map_err(|error| format!("{}: {error}", path.display()))
+            }
+            Capability::WriteFile => {
+                let path = resolve(&text("path"));
+                std::fs::write(&path, text("text"))
+                    .map(|()| Value::Null)
+                    .map_err(|error| format!("{}: {error}", path.display()))
+            }
+            Capability::Exec => exec(&self.cwd, arguments, &self.stop, &self.confine),
+            Capability::Fetch => fetch(arguments, self.origin),
+        }
+    }
+}
+
+impl script::Host for StandaloneHost {
+    fn call(&self, function: &str, arguments: Value) -> Result<Value, String> {
+        if let Some(capability) = Capability::of(function) {
+            self.capabilities.allows(capability, &self.script)?;
+            capability.granted(self.access)?;
+            let ask = HostAsk { capability, script: &self.script, arguments: &arguments };
+            self.judge.judge(&ask, &self.grounds)?;
+            return self.performed(capability, &arguments);
+        }
         match function {
             "text" => Ok(Value::String(content::text(arguments.as_str().unwrap_or_default()))),
             "log" => {
                 tracing::info!(message = arguments.as_str().unwrap_or_default(), "script");
                 Ok(Value::Null)
             }
-            "readFile" if self.access.files => {
-                let path = resolve(arguments.as_str().unwrap_or_default());
-                std::fs::read_to_string(&path)
-                    .map(Value::String)
-                    .map_err(|error| format!("{}: {error}", path.display()))
-            }
-            "writeFile" if self.access.files => {
-                let path = resolve(&text("path"));
-                std::fs::write(&path, text("text"))
-                    .map(|()| Value::Null)
-                    .map_err(|error| format!("{}: {error}", path.display()))
-            }
-            "exec" if self.access.processes => exec(&self.cwd, &arguments, &self.stop, &self.confine),
-            "fetch" if self.access.network => fetch(&arguments, self.origin),
-            "readFile" | "writeFile" => Err("scripts may not touch files here (settings: scripts.files)".into()),
-            "exec" => Err("scripts may not start processes here (settings: scripts.processes)".into()),
-            "fetch" => Err("scripts may not reach the network here (settings: scripts.network)".into()),
             other => Err(format!("ctx.{other} is not available here")),
         }
     }

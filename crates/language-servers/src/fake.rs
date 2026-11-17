@@ -16,6 +16,8 @@ pub struct ScriptedServer {
     pub asked: Mutex<Vec<(String, Value)>>,
     pub synced: Mutex<Vec<(PathBuf, String, String)>>,
     pub diagnostics: Mutex<Option<Vec<Value>>>,
+    pub missing: Mutex<Option<String>>,
+    pub installs: std::sync::atomic::AtomicUsize,
 }
 
 impl ScriptedServer {
@@ -59,8 +61,23 @@ impl LanguageServer for ScriptedServer {
 struct ScriptedServers(Arc<ScriptedServer>);
 
 impl LanguageServers for ScriptedServers {
-    fn open(&self, file: &Path, specs: &[ServerSpec], cwd: &Path, _: &AtomicBool, _: Wait) -> Result<Opened, String> {
+    fn open(
+        &self,
+        file: &Path,
+        specs: &[ServerSpec],
+        cwd: &Path,
+        _: &AtomicBool,
+        wait: Wait,
+    ) -> Result<Opened, String> {
         let (_, language) = domain::lsp::server_for(file, specs).ok_or("No language server handles it.")?;
+        let mut missing = self.0.missing.lock().map_err(|_| "missing")?;
+        if missing.is_some() {
+            if wait == Wait::Never {
+                return Err("The server is not installed yet.".into());
+            }
+            *missing = None;
+            self.0.installs.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
         let server: Arc<dyn LanguageServer> = self.0.clone();
         Ok(Opened { server, language: language.to_owned(), root: cwd.to_path_buf() })
     }
@@ -71,5 +88,9 @@ impl LanguageServers for ScriptedServers {
 
     fn installing(&self, _: &Path, _: &[ServerSpec]) -> Option<String> {
         None
+    }
+
+    fn pending_install(&self, _: &Path, _: &[ServerSpec]) -> Option<String> {
+        self.0.missing.lock().ok()?.clone()
     }
 }

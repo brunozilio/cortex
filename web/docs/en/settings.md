@@ -78,6 +78,7 @@ A project's `{{DIR}}/settings.json` comes from whoever wrote the repository, so 
 | `features.*` | Can turn an ordinary feature off, and can turn a security feature (`experimental-sandbox`, `redact-secrets`, `experimental-dependency-guard`) on, never the other way round. |
 | `sandbox.network` | Can only turn the network off. |
 | `sandbox.allowWrite` | Ignored. |
+| `sandbox.required` | Can only turn it on. |
 | `lspServers` | `command`, `args` and `env` are dropped; a project can only map extensions, root markers or disable a server. |
 | Everything else | Honoured as in your own files. |
 
@@ -188,6 +189,8 @@ Your own files are `~/{{DIR}}/settings.json`, `~/{{DIR}}/settings.local.json`, `
 
 A script that is refused gets an error naming the setting, for example `scripts may not touch files here (settings: scripts.files)`.
 
+These settings are the outer limit. Every script must also list what it uses (`readFile`, `writeFile`, `exec`, `fetch`): a script tool in `spec.capabilities`, a hook or skill script in `export const capabilities = [...]`, a JavaScript MCP server in the `capabilities` of its default export. Each such call is then judged by your permission rules and mode like the matching tool, and where nobody can be asked a call that would ask is refused; see [Capabilities](./sandbox-and-safety#capabilities).
+
 Let the scripts of the project you are working in read files and run commands, but not reach the network. Put this in that project's `{{DIR}}/settings.local.json` so it applies only there:
 
 ```json
@@ -209,12 +212,13 @@ Turn the network off for every script, yours included:
 |---|---|---|---|
 | `sandbox.network` | boolean | `true` | `false` blocks the network for sandboxed commands. A checked-in file can only turn it off. |
 | `sandbox.allowWrite` | list of folders | `[]` | Extra folders sandboxed commands may write to. Absolute paths or `~/…`; relative paths are ignored. Read only from your own files. |
+| `sandbox.required` | boolean | `true` on Linux and macOS, `false` elsewhere | `true` refuses commands, and does not start MCP servers that run as a process, when this system cannot provide the sandbox, instead of running them unconfined. Turn it off in your own settings with `{ "sandbox": { "required": false } }`. A checked-in file can only turn it on. |
 
 ```json
 { "sandbox": { "allowWrite": ["~/.m2", "/opt/data"], "network": true } }
 ```
 
-The sandbox is the `experimental-sandbox` feature (macOS). See [Sandbox and safety](./sandbox-and-safety).
+The sandbox is the `experimental-sandbox` feature (macOS; Linux 5.13 or later). MCP servers that run as a process are sandboxed too, each with its own `sandbox` entry in `mcp.json`; see [MCP servers in the sandbox](./sandbox-and-safety#mcp-servers-in-the-sandbox).
 
 ### `lspServers`
 

@@ -5,6 +5,10 @@ use platform::sandbox::Confinement;
 
 pub trait Launcher: Send + Sync {
     fn launch(&self, command: Command, confinement: Option<&Confinement>) -> Command;
+
+    fn support(&self) -> platform::sandbox::Support {
+        platform::sandbox::support()
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -59,6 +63,33 @@ mod tests {
         let launched = workspace.confined(command);
         assert_eq!(launched.get_program(), "box");
         assert_eq!(launched.get_args().collect::<Vec<_>>(), ["ls", "-l"]);
+    }
+
+    struct Unboxed;
+
+    impl Launcher for Unboxed {
+        fn launch(&self, command: Command, _confinement: Option<&Confinement>) -> Command {
+            command
+        }
+
+        fn support(&self) -> platform::sandbox::Support {
+            platform::sandbox::Support::Missing("this system has no sandbox".into())
+        }
+    }
+
+    #[test]
+    fn a_sandbox_the_system_cannot_provide_is_said_and_refuses_only_when_required() {
+        let mut workspace = Workspace::new(std::env::temp_dir());
+        workspace.services.launch = Launch(Arc::new(Unboxed));
+        assert!(workspace.sandbox_missing().is_none() && workspace.sandbox_refusal().is_none(), "sandbox off");
+        workspace.policy.sandbox = Some(domain::sandbox::Sandbox { required: false, ..Default::default() });
+        assert!(!workspace.sandboxed(), "never claims to confine what it cannot");
+        let missing = workspace.sandbox_missing().expect("said");
+        assert!(!missing.refuses && missing.notice.contains("this system has no sandbox"), "{missing:?}");
+        assert_eq!(workspace.sandbox_refusal(), None);
+        workspace.policy.sandbox = Some(domain::sandbox::Sandbox { required: true, ..Default::default() });
+        assert_eq!(workspace.sandbox_refusal().as_deref(), Some("this system has no sandbox"));
+        assert!(workspace.sandbox_missing().expect("said").refuses);
     }
 
     #[test]

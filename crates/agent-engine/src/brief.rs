@@ -54,6 +54,7 @@ impl Brief {
             approval: self.settings.mcp_approval.clone(),
             scripts: self.settings.scripts,
             trust: self.trust,
+            sandbox: sandbox_of(&self.settings),
         }
     }
 
@@ -77,13 +78,19 @@ pub fn mcp_sources(request: &PromptRequest) -> Result<crate::mcp::McpSources, St
     let gate = Gate::of(request);
     let plugins = crate::plugins::found(request, gate.home());
     let settings = prompt::settings::load(&gate, &plugins)?;
+    let sandbox = sandbox_of(&settings);
     Ok(crate::mcp::McpSources {
         home: gate.home().map(PathBuf::from),
         plugins,
         approval: settings.mcp_approval,
         scripts: settings.scripts,
         trust: gate.trust(),
+        sandbox,
     })
+}
+
+fn sandbox_of(settings: &prompt::settings::Settings) -> Option<domain::sandbox::Sandbox> {
+    settings.features.on(domain::features::SANDBOX).then(|| settings.sandbox.clone())
 }
 
 pub fn permissions(request: &PromptRequest) -> Result<domain::permission_rules::PermissionsInfo, String> {
