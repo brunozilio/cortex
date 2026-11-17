@@ -23,6 +23,7 @@ pub mod evals;
 pub mod events;
 pub mod executable;
 pub mod extensions;
+pub mod factory_reset;
 pub mod failure;
 pub mod fallback;
 pub mod features;

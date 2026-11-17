@@ -144,7 +144,7 @@ impl App {
     }
 
     pub fn answer(&mut self, decision: sdk::Decision) {
-        if super::git_offer::answered(self, &decision) {
+        if super::git_offer::answered(self, &decision) || super::features::answered(self, &decision) {
             return;
         }
         let pending = self.ask.take();

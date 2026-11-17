@@ -18,6 +18,11 @@ pub struct Feature {
     pub prefix: Option<(char, Run)>,
     pub status: Option<fn(&App) -> Option<String>>,
     pub setting: Option<Setting>,
+    pub answer: Option<fn(&mut App, &sdk::Decision) -> bool>,
+}
+
+pub fn answered(app: &mut App, decision: &sdk::Decision) -> bool {
+    all().into_iter().filter_map(|feature| feature.answer).any(|answer| answer(app, decision))
 }
 
 pub struct Setting {
@@ -60,11 +65,11 @@ pub fn prefixed(text: &str) -> Option<(Run, Option<String>)> {
 }
 
 pub fn help() -> Vec<(&'static str, &'static str)> {
-    all()
-        .into_iter()
-        .flat_map(|feature| feature.commands)
-        .filter_map(|slash| slash.names.first().map(|name| (*name, slash.about)))
-        .collect()
+    commands().into_iter().filter_map(|(names, about)| names.first().map(|name| (*name, about))).collect()
+}
+
+pub fn commands() -> Vec<(&'static [&'static str], &'static str)> {
+    all().into_iter().flat_map(|feature| feature.commands).map(|slash| (slash.names, slash.about)).collect()
 }
 
 pub fn tick(app: &mut App) {

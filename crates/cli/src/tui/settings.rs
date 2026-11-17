@@ -49,31 +49,57 @@ pub fn history(settings: &serde_json::Value, cwd: &Path) -> Vec<String> {
 
 type Change = Box<dyn FnOnce(&mut serde_json::Value) + Send>;
 
+enum Job {
+    Change(Change),
+    Flush(crossbeam_channel::Sender<()>),
+}
+
+const FLUSH_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
+
 #[derive(Clone)]
-pub struct Saver(crossbeam_channel::Sender<Change>);
+pub struct Saver(crossbeam_channel::Sender<Job>);
 
 impl Saver {
     pub fn start(sdk: &Sdk) -> Self {
-        let (tx, rx) = crossbeam_channel::unbounded::<Change>();
+        let (tx, rx) = crossbeam_channel::unbounded::<Job>();
         let sdk = sdk.clone();
         std::thread::spawn(move || {
-            while let Ok(change) = rx.recv() {
-                let mut settings = sdk.settings().unwrap_or_else(|_| serde_json::json!({}));
-                if !settings.is_object() {
-                    settings = serde_json::json!({});
+            while let Ok(job) = rx.recv() {
+                let mut changes = vec![job];
+                changes.extend(rx.try_iter());
+                let (edits, flushes): (Vec<Job>, Vec<Job>) =
+                    changes.into_iter().partition(|job| matches!(job, Job::Change(_)));
+                if !edits.is_empty() {
+                    let mut settings = sdk.settings().unwrap_or_else(|_| serde_json::json!({}));
+                    if !settings.is_object() {
+                        settings = serde_json::json!({});
+                    }
+                    for job in edits {
+                        if let Job::Change(change) = job {
+                            change(&mut settings);
+                        }
+                    }
+                    let _ = sdk.save_settings(settings);
                 }
-                change(&mut settings);
-                while let Ok(more) = rx.try_recv() {
-                    more(&mut settings);
+                for job in flushes {
+                    if let Job::Flush(done) = job {
+                        let _ = done.send(());
+                    }
                 }
-                let _ = sdk.save_settings(settings);
             }
         });
         Self(tx)
     }
 
+    pub fn flush(&self) {
+        let (done, saved) = crossbeam_channel::bounded(1);
+        if self.0.send(Job::Flush(done)).is_ok() {
+            let _ = saved.recv_timeout(FLUSH_WAIT);
+        }
+    }
+
     fn change(&self, change: impl FnOnce(&mut serde_json::Value) + Send + 'static) {
-        let _ = self.0.send(Box::new(change));
+        let _ = self.0.send(Job::Change(Box::new(change)));
     }
 
     pub fn remember_value(&self, key: &str, value: serde_json::Value) {
@@ -133,6 +159,19 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn a_flush_returns_once_every_queued_change_is_saved() {
+        let data = tempfile::tempdir().expect("data");
+        let engine = agent_engine::fake::FakeEngine::new(Vec::new(), Vec::new());
+        let sdk = super::super::tests::sdk(&engine, data.path());
+        let saver = Saver::start(&sdk);
+        for at in 0..50 {
+            saver.remember("last", &at.to_string());
+        }
+        saver.flush();
+        assert_eq!(sdk.settings().expect("settings")["last"], json!("49"));
+    }
 
     #[test]
     fn saved_choices_read_back_and_unknown_ones_are_ignored() {
