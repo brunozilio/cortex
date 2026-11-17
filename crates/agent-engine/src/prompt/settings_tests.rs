@@ -99,7 +99,10 @@ fn only_the_owner_lets_the_judge_run_commands_without_asking() {
         .collect();
     assert_eq!(allowed, ["Bash(make lint)", "Bash(npm run test:*)"], "a checked-in file cannot allow commands");
     write(repo.path().join(concat!(brand::dir!(), "/settings.local.json")), r#"{"verification": {"allow": "x"}}"#);
-    assert!(load(repo.path(), Some(home.path()), &[]).is_err_and(|error| error.contains("verification.allow")));
+    let settings = load(repo.path(), Some(home.path()), &[]).expect("a wrong list is left out, not fatal");
+    assert!(settings.notices.iter().any(|notice| notice.contains("verification.allow: expected array")));
+    let allowed: Vec<String> = settings.judge_allow.listed().into_iter().map(|(_, rule)| rule).collect();
+    assert_eq!(allowed, ["Bash(make lint)"]);
 }
 
 #[test]

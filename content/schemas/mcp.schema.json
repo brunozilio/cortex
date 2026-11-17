@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "sandbox": {
+      "additionalProperties": false,
+      "description": "Where the process may write and whether it reaches the network, or false to start it outside the sandbox.",
+      "properties": {
+        "network": {
+          "type": "boolean"
+        },
+        "writable": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": [
+        "object",
+        "boolean",
+        "null"
+      ]
+    },
+    "server": {
+      "additionalProperties": false,
+      "description": "A server with a url is remote; a server with a command is a local process. Text may read ${NAME} or ${NAME:-default} from the environment.",
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "command": {
+          "description": "The program to start (stdio).",
+          "type": "string"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment variables added to the process (stdio).",
+          "type": "object"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Request headers (http and sse).",
+          "type": "object"
+        },
+        "sandbox": {
+          "$ref": "#/$defs/sandbox"
+        },
+        "type": {
+          "description": "http (Streamable HTTP), sse (HTTP + SSE) or stdio (a local process).",
+          "enum": [
+            "stdio",
+            "http",
+            "sse"
+          ]
+        },
+        "url": {
+          "description": "The server's address (http and sse).",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "An mcp.json file of the app: the MCP servers a user or a project declares.",
+  "properties": {
+    "$schema": {
+      "description": "The JSON Schema this file follows, for editors; the app ignores it.",
+      "type": "string"
+    },
+    "mcpServers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/server"
+      },
+      "description": "MCP servers by name.",
+      "type": "object"
+    }
+  },
+  "title": "MCP servers",
+  "type": "object"
+}

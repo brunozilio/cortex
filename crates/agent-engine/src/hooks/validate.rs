@@ -1,6 +1,8 @@
 use super::Handler;
 
-const EVENTS: [&str; 19] = [
+pub(crate) const KINDS: [&str; 5] = ["command", "script", "http", "prompt", "agent"];
+pub(crate) const TIMEOUT_SECONDS: std::ops::RangeInclusive<u64> = 1..=600;
+pub(crate) const EVENTS: [&str; 19] = [
     "Brief",
     "ModelRequest",
     "ModelResponse",
@@ -64,11 +66,12 @@ pub fn hook(event: &str, at: usize, hook: &Handler) -> Result<(), String> {
         "prompt" | "agent" if NO_MODEL_HOOKS.contains(&event) => {
             Some(format!("a {} hook cannot run on {event}; use a command hook", hook.kind))
         }
-        "command" | "script" | "http" | "prompt" | "agent" => None,
+        known if KINDS.contains(&known) => None,
         other => Some(format!("unknown hook type {other:?}; use command, script, http, prompt or agent")),
     };
     let why = why.or_else(|| {
-        (!(1..=600).contains(&hook.timeout)).then(|| format!("timeout {} is outside 1..600 seconds", hook.timeout))
+        (!TIMEOUT_SECONDS.contains(&hook.timeout))
+            .then(|| format!("timeout {} is outside 1..600 seconds", hook.timeout))
     });
     why.map_or(Ok(()), |why| Err(format!("{event} hook #{}: {why}", at + 1)))
 }

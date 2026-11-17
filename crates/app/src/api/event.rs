@@ -123,11 +123,11 @@ mod tests {
             Reply::McpServers {
                 path: "/repo".into(),
                 servers: Vec::new(),
-                unreadable: vec![domain::mcp_config::McpUnreadable {
-                    path: "/home/mcp.json".into(),
-                    origin: domain::mcp_config::McpOrigin::User,
-                    error: "EOF".into(),
-                }],
+                unreadable: vec![domain::mcp_config::McpUnreadable::broken(
+                    "/home/mcp.json".into(),
+                    domain::mcp_config::McpOrigin::User,
+                    "EOF".into(),
+                )],
             },
             Reply::McpServer(domain::mcp_config::McpEntry {
                 info: domain::mcp_config::McpServerInfo {

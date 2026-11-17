@@ -95,7 +95,18 @@ O `mcp.json` tem um objeto `mcpServers`. Um servidor com `url` é remoto; um ser
 | `env` | Variáveis de ambiente acrescentadas ao processo (`stdio`) |
 | `sandbox` | Onde o processo pode gravar e se ele alcança a rede (`stdio`): `{ "writable": [...], "network": false }`, ou `false` para iniciá-lo fora da sandbox. `writable` e `false` só valem no seu próprio `~/{{DIR}}/mcp.json`. Veja "Servidores MCP na sandbox" em [Sandbox e segurança](./sandbox-and-safety). |
 
-Um servidor de outro tipo, ou com um valor de `sandbox` de outro formato, é deixado de fora, com um aviso no log.
+Um servidor com um valor do tipo errado ou fora das opções aceitas (outro `type`, um `sandbox` de outro formato, `args` que não é lista) é deixado de fora; os outros servidores do arquivo continuam iniciando. Uma chave que o {{NAME}} não conhece é ignorada. Os dois casos aparecem no `{{COMMAND}} mcp list` com o arquivo e o caminho da chave, por exemplo `warning: /home/eu/{{DIR}}/mcp.json: mcpServers.docs.type: expected one of "stdio", "http", "sse", found "websocket"`.
+
+O arquivo pode indicar o JSON Schema dele, para que o editor complete as chaves e sublinhe os erros; o {{NAME}} ignora essa chave. O schema é copiado para `~/{{DIR}}/schemas/mcp.schema.json`, então o seu próprio arquivo pode usar um caminho relativo, e o de um projeto o caminho completo da sua cópia:
+
+```json
+{
+  "$schema": "./schemas/mcp.schema.json",
+  "mcpServers": {}
+}
+```
+
+Veja [JSON Schema](./settings#json-schema) para os dois schemas.
 
 ### Variáveis de ambiente no arquivo
 
@@ -165,7 +176,7 @@ Cada linha mostra o nome, a origem, o estado e o alvo (URL ou linha de comando).
 | `off` | Um servidor do projeto que você desligou |
 | `skipped: folder not trusted` | Um servidor de um projeto cuja pasta você não marcou como confiável: aparece na lista, mas nada do projeto inicia |
 
-Um arquivo de configuração que não é JSON válido aparece com o erro dele. Quando é o seu `~/{{DIR}}/mcp.json`, `{{COMMAND}} mcp list` falha (código de saída 1); um `{{DIR}}/mcp.json` quebrado do projeto vira uma linha `warning:` e a lista segue.
+Um arquivo de configuração que não é JSON válido aparece com o erro dele. Quando é o seu `~/{{DIR}}/mcp.json`, `{{COMMAND}} mcp list` falha (código de saída 1); um `{{DIR}}/mcp.json` quebrado do projeto vira uma linha `warning:` e a lista segue. Um valor deixado de fora de qualquer um dos dois (veja [Formato do arquivo](#formato-do-arquivo)) também vira uma linha `warning:`.
 
 ## No chat: `/mcp`
 

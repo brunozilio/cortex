@@ -88,6 +88,21 @@ pub fn fixtures() -> Result<(), Failure> {
     }
 }
 
+pub fn schemas() -> Result<(), Failure> {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let test = "config_schema::tests::the_published_schemas_are_what_the_loaders_check";
+    let status = Command::new(&cargo)
+        .args(["test", "-q", "-p", "agent-engine", "--lib", "--", "--exact", test])
+        .env("UPDATE_SCHEMAS", "1")
+        .status()?;
+    if status.success() {
+        println!("schemas: content/schemas written");
+        Ok(())
+    } else {
+        Err(format!("`{cargo} test -p agent-engine --lib {test}` failed ({status})").into())
+    }
+}
+
 #[cfg(test)]
 #[path = "web_tests.rs"]
 mod tests;

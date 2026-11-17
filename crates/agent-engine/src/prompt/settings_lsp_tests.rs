@@ -67,12 +67,13 @@ fn a_checked_in_setting_chooses_servers_but_only_the_owner_says_what_they_run() 
 }
 
 #[test]
-fn a_malformed_set_of_servers_is_an_error_that_names_it() {
+fn a_malformed_server_setting_is_named_and_left_out() {
     let repo = tempfile::tempdir().expect("repo");
     write(
         repo.path().join(concat!(brand::dir!(), "/settings.json")),
-        r#"{"lspServers": {"gopls": {"args": "--stdio"}}}"#,
+        r#"{"lspServers": {"gopls": {"args": "--stdio", "rootMarkers": ["go.work"]}}}"#,
     );
-    let error = load(repo.path(), None, &[]).expect_err("args must be a list");
-    assert!(error.contains("lspServers"), "{error}");
+    let settings = load(repo.path(), None, &[]).expect("the rest of the file applies");
+    assert!(settings.notices.iter().any(|notice| notice.contains("lspServers.gopls.args: expected array")));
+    assert_eq!(settings.lsp_servers[0]["gopls"].root_markers.as_deref(), Some(&["go.work".to_owned()][..]));
 }

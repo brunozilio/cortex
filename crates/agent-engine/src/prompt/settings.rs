@@ -110,8 +110,12 @@ pub fn load(gate: &Gate, plugins: &[crate::plugins::Plugin]) -> Result<Settings,
     merged.project_criteria = super::criteria_file::nearest(roots.iter().filter(|root| !is_user_root(root)));
     let mut style = String::from("Default");
     let mut replaced_opt_in = false;
+    let mut problems = Vec::new();
     for (path, users) in files(&roots, home) {
         let Some(value) = read(&path)? else { continue };
+        let checked = crate::config_schema::checked_settings(value);
+        problems.extend(checked.located(&path));
+        let value = checked.value;
         let honoured = users || gate.honours(&path);
         let owners = users || (honoured && path.file_name().is_some_and(|name| name == LOCAL));
         replaced_opt_in |= users && value.get(domain::trust::LEGACY_OPT_IN).is_some();
@@ -121,6 +125,8 @@ pub fn load(gate: &Gate, plugins: &[crate::plugins::Plugin]) -> Result<Settings,
     add_plugins(&mut merged, plugins);
     merged.notices = gate.skipped_notice().into_iter().collect();
     merged.notices.extend(replaced_opt_in.then(domain::trust::legacy_notice));
+    crate::config_schema::logged_once(&problems);
+    merged.notices.extend(problems);
     if auto_memory_disabled_by_environment() {
         merged.auto_memory = false;
     }
@@ -322,6 +328,9 @@ pub(crate) fn load_trusted(
 #[cfg(test)]
 #[path = "settings_lsp_tests.rs"]
 mod lsp_tests;
+#[cfg(test)]
+#[path = "settings_schema_tests.rs"]
+mod schema_tests;
 #[cfg(test)]
 #[path = "settings_tests.rs"]
 mod tests;

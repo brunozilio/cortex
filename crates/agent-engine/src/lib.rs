@@ -4,6 +4,7 @@ mod boundary;
 pub mod brief;
 pub mod checkpoints;
 pub mod chores;
+pub mod config_schema;
 pub mod control;
 pub mod declared_providers;
 mod engine;

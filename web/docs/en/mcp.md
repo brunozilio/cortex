@@ -95,7 +95,18 @@ New servers are picked up on the next prompt. Ask the agent to use them ("find t
 | `env` | Environment variables added to the process (`stdio`) |
 | `sandbox` | Where the process may write and whether it reaches the network (`stdio`): `{ "writable": [...], "network": false }`, or `false` to start it outside the sandbox. `writable` and `false` count only in your own `~/{{DIR}}/mcp.json`. See [MCP servers in the sandbox](./sandbox-and-safety#mcp-servers-in-the-sandbox). |
 
-A server of another type, or with a `sandbox` value of another shape, is left out with a warning in the log.
+A server with a value of the wrong type or outside its choices (another `type`, a `sandbox` of another shape, `args` that is not a list) is left out; the other servers in the file still start. A key {{NAME}} does not know is ignored. Both are named in `{{COMMAND}} mcp list` with the file and the key's path, for example `warning: /home/me/{{DIR}}/mcp.json: mcpServers.docs.type: expected one of "stdio", "http", "sse", found "websocket"`.
+
+The file may name its JSON Schema, so an editor can complete keys and underline mistakes; {{NAME}} ignores the key. The schema is copied to `~/{{DIR}}/schemas/mcp.schema.json`, so your own file can use a relative path, and a project's file the full path to your copy:
+
+```json
+{
+  "$schema": "./schemas/mcp.schema.json",
+  "mcpServers": {}
+}
+```
+
+See [JSON Schema](./settings#json-schema) for both schemas.
 
 ### Environment variables in the file
 
@@ -165,7 +176,7 @@ Each line shows the name, the origin, the state and the target (URL or command l
 | `off` | A project server you turned off |
 | `skipped: folder not trusted` | A project server in a folder you have not trusted: it is listed, but nothing of the project starts |
 
-A configuration file that is not valid JSON is named with its error. When it is your own `~/{{DIR}}/mcp.json`, `{{COMMAND}} mcp list` fails (exit code 1); a project's broken `{{DIR}}/mcp.json` is a `warning:` line and the list goes on.
+A configuration file that is not valid JSON is named with its error. When it is your own `~/{{DIR}}/mcp.json`, `{{COMMAND}} mcp list` fails (exit code 1); a project's broken `{{DIR}}/mcp.json` is a `warning:` line and the list goes on. A value left out of either file (see [File format](#file-format)) is also a `warning:` line.
 
 ## In the chat: `/mcp`
 

@@ -1,0 +1,641 @@
+{
+  "$defs": {
+    "hook": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_env_vars": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "command": {
+          "type": "string"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Request headers of an http hook.",
+          "type": "object"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status_message": {
+          "description": "Accepted; not shown."
+        },
+        "timeout": {
+          "description": "Seconds.",
+          "maximum": 600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "command",
+            "script",
+            "http",
+            "prompt",
+            "agent"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "hookGroup": {
+      "additionalProperties": false,
+      "properties": {
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/hook"
+          },
+          "type": "array"
+        },
+        "matcher": {
+          "description": "A regex over the subject; empty or * matches all.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hooks"
+      ],
+      "type": "object"
+    },
+    "languageServer": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "command": {
+          "description": "Program to start.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disabled": {
+          "description": "true removes the server.",
+          "type": "boolean"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "extensionToLanguage": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "rootMarkers": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A settings.json, settings.local.json or managed-settings.json file of the app.",
+  "properties": {
+    "$schema": {
+      "description": "The JSON Schema this file follows, for editors; the app ignores it.",
+      "type": "string"
+    },
+    "advisorModel": {
+      "description": "Model for the advisor the agent consults.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "agent": {
+      "description": "Runs the main conversation as this agent.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "autoMemoryEnabled": {
+      "description": "false turns off the persistent memory of agents that declare a memory scope.",
+      "type": "boolean"
+    },
+    "disabledMcpServers": {
+      "description": "Project MCP servers you turned off; wins over the approvals.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "enableAllProjectMcpServers": {
+      "description": "Starts every MCP server the project's mcp.json declares without asking.",
+      "type": "boolean"
+    },
+    "enabledMcpServers": {
+      "description": "Project MCP servers you approved.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "enabledProviders": {
+      "description": "Ids of providers declared by the project that you allow to load.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "escalationModel": {
+      "description": "Where a call the agent keeps failing is sent. Read only from your own files.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fallbackModel": {
+      "description": "Model, or chain of models, tried when the chosen one is unavailable.",
+      "items": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "type": [
+        "string",
+        "array",
+        "null"
+      ]
+    },
+    "features": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "description": "Turns features on or off by name.",
+      "properties": {
+        "auto-review": {
+          "description": "When a run changed files, a read-only reviewer checks the changes and the docs before it finishes",
+          "type": "boolean"
+        },
+        "branches": {
+          "description": "/branch starts a new conversation from before an earlier prompt, keeping this one",
+          "type": "boolean"
+        },
+        "budget": {
+          "description": "/budget stops a session's model calls once it has spent what you allow",
+          "type": "boolean"
+        },
+        "cache-warning": {
+          "description": "The status line counts down the prompt cache's last two minutes and says when it has gone cold",
+          "type": "boolean"
+        },
+        "channels": {
+          "description": "MCP servers that stay open for the session and send messages to the agent",
+          "type": "boolean"
+        },
+        "declared-providers": {
+          "description": "Load the model providers that files in your settings folder and the project declare",
+          "type": "boolean"
+        },
+        "destructive-snapshot": {
+          "description": "Before rm -r, git clean, git reset --hard and the like, keep untracked files so /rewind can bring them back",
+          "type": "boolean"
+        },
+        "experimental-affected-tests": {
+          "description": "After an edit, run the tests that cover the changed file in the background and tell the agent",
+          "type": "boolean"
+        },
+        "experimental-blast-radius": {
+          "description": "After an edit, tell the agent which other files call the symbols it changed (language servers)",
+          "type": "boolean"
+        },
+        "experimental-code-map": {
+          "description": "Index the project's symbols and callers with tree-sitter and point each prompt at the matching code",
+          "type": "boolean"
+        },
+        "experimental-code-mode": {
+          "description": "The REPL tool: the agent writes JavaScript that calls its tools as functions, and only what the script returns reaches the model",
+          "type": "boolean"
+        },
+        "experimental-code-mode-only": {
+          "description": "With experimental-code-mode, REPL is the agent's only tool and every other tool is called from scripts; off until you turn it on",
+          "type": "boolean"
+        },
+        "experimental-dependency-guard": {
+          "description": "Before npm, cargo or pip installs a package that is missing, brand new or a typo of a popular one, ask you",
+          "type": "boolean"
+        },
+        "experimental-escalation": {
+          "description": "When the agent fails the same call again and again, send it to the Advisor or to escalationModel",
+          "type": "boolean"
+        },
+        "experimental-follow-through": {
+          "description": "When an answer ends the turn promising more work (\"now I'll run the tests\"), a small model checks it and sends the agent back to do it, twice at most",
+          "type": "boolean"
+        },
+        "experimental-learning": {
+          "description": "After a run where you corrected the agent, offer one lesson to keep: a memory, a skill or a rule",
+          "type": "boolean"
+        },
+        "experimental-learning-check": {
+          "description": "/check has the agent compare the branch's changes with the memories about the files they touch",
+          "type": "boolean"
+        },
+        "experimental-memory-anchors": {
+          "description": "Memories name the files they are about, and the agent sees them when it reads or edits those files",
+          "type": "boolean"
+        },
+        "experimental-memory-scorecard": {
+          "description": "One request in 20 runs without recalled memory, so /memory score can show whether memory saves corrections and cost",
+          "type": "boolean"
+        },
+        "experimental-memory-seed": {
+          "description": "/memory seed offers what you asked for in two or more past sessions as memories to keep",
+          "type": "boolean"
+        },
+        "experimental-output-cleanup": {
+          "description": "Bash runs commands without colours and drops escape codes, redrawn progress and repeated lines",
+          "type": "boolean"
+        },
+        "experimental-output-filters": {
+          "description": "Bash hides passing tests, build steps and progress from cargo, git, npm, pytest and go test, keeping the whole output in a file",
+          "type": "boolean"
+        },
+        "experimental-output-savings": {
+          "description": "/gain shows how much shorter command output reached the model this session",
+          "type": "boolean"
+        },
+        "experimental-pr-follow": {
+          "description": "The follow-pr skill watches a pull request and wakes the agent on failing checks and new reviews",
+          "type": "boolean"
+        },
+        "experimental-sandbox": {
+          "description": "Confine Bash and Monitor commands to the project's folders (macOS; Linux with Landlock)",
+          "type": "boolean"
+        },
+        "experimental-session-claims": {
+          "description": "Warn the agent when another session in the same folder edited the file it is changing",
+          "type": "boolean"
+        },
+        "experimental-structured-learnings": {
+          "description": "Decisions are kept as what was decided, what was tried and ruled out, and what to watch out for",
+          "type": "boolean"
+        },
+        "experimental-web-cleanup": {
+          "description": "WebFetch drops hidden parts, buttons, links repeated on every item and long runs of menu links",
+          "type": "boolean"
+        },
+        "experimental-web-empty-page-error": {
+          "description": "WebFetch reports a page with almost no text (built by JavaScript, a login, a bot check) as an error",
+          "type": "boolean"
+        },
+        "experimental-web-formats": {
+          "description": "WebFetch asks for Markdown first and compacts JSON (one line per record) and RSS or Atom feeds",
+          "type": "boolean"
+        },
+        "experimental-web-links": {
+          "description": "WebFetch numbers a page's links and lists each address once at the end, same-site ones as paths",
+          "type": "boolean"
+        },
+        "experimental-web-main-content": {
+          "description": "WebFetch puts a page's main content first and its menus, header and footer after it",
+          "type": "boolean"
+        },
+        "experimental-web-small-pages-direct": {
+          "description": "WebFetch hands a page of 6,000 characters or less to the agent fenced, without the separate reader",
+          "type": "boolean"
+        },
+        "git-offer": {
+          "description": "Offer to initialize git on the first message in a folder that is not a repository",
+          "type": "boolean"
+        },
+        "memory": {
+          "description": "Project memory: recall what was remembered with each prompt, and /memory to see and change it",
+          "type": "boolean"
+        },
+        "memory-search": {
+          "description": "The memory_search tool the agent uses to look further into project memory",
+          "type": "boolean"
+        },
+        "plugins": {
+          "description": "Install, update, list and remove plugins",
+          "type": "boolean"
+        },
+        "project-criteria": {
+          "description": "Judge every run against the project's checked-in {{DIR}}/verification.md when you set no criteria",
+          "type": "boolean"
+        },
+        "redact-secrets": {
+          "description": "Hide tokens, keys and the project's .env values in tool output before the model and the log see them",
+          "type": "boolean"
+        },
+        "schedules": {
+          "description": "/loop and /schedules send a prompt again later or on an interval",
+          "type": "boolean"
+        },
+        "suggested-rules": {
+          "description": "/rules offers permission rules from answers you keep giving",
+          "type": "boolean"
+        },
+        "team-memory": {
+          "description": "Recall the project's checked-in memories in {{DIR}}/memory and share yours there with /memory share <id>",
+          "type": "boolean"
+        },
+        "trace": {
+          "description": "/trace and /console show what each run did, on the local web page",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "hooks": {
+      "additionalProperties": false,
+      "description": "Commands, prompts or HTTP calls that run on events.",
+      "properties": {
+        "Brief": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "ModelError": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "ModelRequest": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "ModelResponse": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "Notification": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "PermissionRequest": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "PostCompact": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "PostToolUse": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "PostToolUseFailure": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "PreCompact": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "PreToolUse": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "RunEnd": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "RunStart": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "SessionEnd": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "SessionStart": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "Stop": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "SubagentStart": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "SubagentStop": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "UserPromptSubmit": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "jsonSchema": {
+      "description": "Gives the agent a StructuredOutput tool whose result must match this JSON Schema.",
+      "type": [
+        "object",
+        "boolean",
+        "null"
+      ]
+    },
+    "judgeModel": {
+      "description": "Model for the judge that checks finished work.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lspServers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/languageServer"
+      },
+      "description": "Adds, changes or disables language servers, by name.",
+      "type": "object"
+    },
+    "outputStyle": {
+      "description": "How the agent talks: a built-in style (default, concise, proactive, explanatory, learning) or the name of a custom style in output-styles/<name>.md.",
+      "type": "string"
+    },
+    "permissions": {
+      "additionalProperties": false,
+      "description": "Allow, ask and deny rules and extra folders.",
+      "properties": {
+        "additionalDirectories": {
+          "description": "Folders the agent reads like the project. Read only from your own files.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "allow": {
+          "description": "Tool calls that run without asking. Read only from your own files.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ask": {
+          "description": "Tool calls that always ask.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "deny": {
+          "description": "Tool calls that are refused, in every mode.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "sandbox": {
+      "additionalProperties": false,
+      "description": "Where sandboxed commands may write and whether they reach the network.",
+      "properties": {
+        "allowWrite": {
+          "description": "Extra folders sandboxed commands may write to.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "network": {
+          "description": "false blocks the network for sandboxed commands.",
+          "type": "boolean"
+        },
+        "required": {
+          "description": "true refuses commands when the sandbox cannot be provided.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "scripts": {
+      "additionalProperties": false,
+      "description": "What JavaScript tools, skills, hooks and providers may do.",
+      "properties": {
+        "files": {
+          "description": "Scripts may read and write files.",
+          "type": "boolean"
+        },
+        "network": {
+          "description": "Scripts may reach the network.",
+          "type": "boolean"
+        },
+        "processes": {
+          "description": "Scripts may start processes.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "smallModel": {
+      "description": "Model for background chores: titles, effort picks, web reading.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "trustProjectHooks": {
+      "deprecated": true,
+      "description": "No longer does anything: a project's hooks run once you trust its folder.",
+      "type": "boolean"
+    },
+    "verification": {
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "description": "Rules the verification judge may run without asking.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "title": "Settings",
+  "type": "object"
+}

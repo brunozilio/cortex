@@ -52,7 +52,36 @@ Para uma execução em uma pasta, o {{NAME}} lê, nesta ordem:
 2. Para cada pasta, da raiz do sistema de arquivos até a pasta atual: `{{DIR}}/settings.json` e depois `{{DIR}}/settings.local.json`. Uma pasta alcançada duas vezes (sua pasta pessoal costuma ser também uma pasta acima do projeto) é lida uma vez só.
 3. `~/{{DIR}}/managed-settings.json`.
 
-Arquivos que não existem são ignorados. Um arquivo que não é JSON válido, ou uma chave com formato errado, interrompe a execução com um erro que cita o arquivo e a chave, por exemplo `permissions.deny: rule "Bash(rm" misses its )`.
+Arquivos que não existem são ignorados. Um arquivo que não é JSON válido interrompe a execução com um erro que cita o arquivo.
+
+Um valor do tipo errado, ou fora das opções aceitas, não interrompe a execução: esse valor é deixado de fora (numa lista, só aquele item; em `hooks`, aquele hook), o resto do arquivo continua valendo, e `/permissions` e `/hooks` mostram um aviso com o arquivo, o caminho da chave e o que era esperado:
+
+```text
+/home/eu/{{DIR}}/settings.json: permissions.deny[1]: expected string, found 5
+/home/eu/{{DIR}}/settings.json: hooks.Stop[0].hooks[0].type: expected one of "command", "script", "http", "prompt", "agent", found "shell"
+```
+
+Uma chave que o {{NAME}} não conhece é citada do mesmo jeito (`theme: unknown key, ignored`) e fora isso ignorada. Um valor do tipo certo que o {{NAME}} mesmo assim não consegue usar, como uma regra que ele não entende, um matcher de hook que não é regex ou um nome de modelo com espaços, interrompe a execução com um erro que cita o arquivo e a chave, por exemplo `permissions.deny: rule "Bash(rm" misses its )`.
+
+### JSON Schema
+
+Os arquivos de configuração e o `mcp.json` têm um JSON Schema publicado, para que o editor complete as chaves e sublinhe os erros enquanto você digita. O {{NAME}} copia os schemas para a sua pasta:
+
+| Arquivo | Schema |
+|---|---|
+| `settings.json`, `settings.local.json`, `managed-settings.json` | `~/{{DIR}}/schemas/settings.schema.json` |
+| `mcp.json` | `~/{{DIR}}/schemas/mcp.schema.json` |
+
+Aponte um arquivo para o schema dele com a chave `$schema`. O {{NAME}} ignora essa chave, e ela nunca é citada como desconhecida. Em `~/{{DIR}}/settings.json` um caminho relativo funciona:
+
+```json
+{
+  "$schema": "./schemas/settings.schema.json",
+  "outputStyle": "concise"
+}
+```
+
+O `{{DIR}}/settings.json` de um projeto fica em outro lugar, então use o caminho completo da sua cópia (por exemplo `"$schema": "/home/eu/{{DIR}}/schemas/settings.schema.json"`) ou associe o padrão de nome do arquivo ao schema nas configurações do seu editor. Os schemas correspondem à versão do {{NAME}} que os gravou e são atualizados junto com ele, a menos que você tenha editado a sua cópia. No código-fonte, eles ficam em `content/schemas/`.
 
 ### Como os valores se combinam
 
@@ -137,7 +166,7 @@ Sem opções, edita `~/{{DIR}}/settings.json`. Com `--project`, edita `{{DIR}}/s
 | `sandbox` | objeto | rede ligada | Onde comandos na sandbox podem gravar e se acessam a rede. Veja [`sandbox`](#sandbox). |
 | `features` | objeto | todos os recursos ligados, menos `experimental-code-mode-only` | Liga ou desliga recursos pelo nome. Veja [`features`](#features). |
 
-Uma chave que o {{NAME}} não conhece é ignorada. `trustProjectHooks`, que versões anteriores liam, não faz mais nada: os hooks de um projeto rodam quando você confia na pasta dele, e o chat avisa isso até você remover a chave.
+`$schema` indica o [JSON Schema](#json-schema) do arquivo. Qualquer outra chave que o {{NAME}} não conhece é ignorada com um aviso. `trustProjectHooks`, que versões anteriores liam, não faz mais nada: os hooks de um projeto rodam quando você confia na pasta dele, e o chat avisa isso até você remover a chave.
 
 > [!NOTE]
 > As definições de servidores MCP (`mcpServers`) não ficam no `settings.json`: ficam em `{{DIR}}/mcp.json` (do projeto) e `~/{{DIR}}/mcp.json` (seus). Veja [MCP](./mcp). O comando da linha de status é uma preferência do chat (veja Preferências guardadas do chat, abaixo, e [Linha de status](./statusline)).
@@ -246,7 +275,7 @@ Um mapa do nome do servidor para a sua configuração. Usar um nome embutido (`r
 
 ### `features`
 
-Todo recurso fica ligado até você desligá-lo, menos `experimental-code-mode-only`, que fica desligado até você ligá-lo. Cada chave é `features.<nome>` com `true` ou `false`; um valor que não é booleano interrompe a execução. `/features` lista todos com o estado atual, e [Recursos experimentais](./experimental-features) explica cada um.
+Todo recurso fica ligado até você desligá-lo, menos `experimental-code-mode-only`, que fica desligado até você ligá-lo. Cada chave é `features.<nome>` com `true` ou `false`; um valor que não é booleano é deixado de fora com um aviso. `/features` lista todos com o estado atual, e [Recursos experimentais](./experimental-features) explica cada um.
 
 | Chave | Padrão | O que controla |
 |---|---|---|

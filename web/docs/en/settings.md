@@ -52,7 +52,36 @@ For a run in a folder, {{NAME}} reads, in this order:
 2. For every folder from the root of the file system down to the current folder: `{{DIR}}/settings.json`, then `{{DIR}}/settings.local.json`. A folder that is reached twice (your home folder is usually also a parent of the project) is read only once.
 3. `~/{{DIR}}/managed-settings.json`.
 
-Missing files are skipped. A file that is not valid JSON, or a key with the wrong shape, stops the run with an error that names the file and the key, for example `permissions.deny: rule "Bash(rm" misses its )`.
+Missing files are skipped. A file that is not valid JSON stops the run with an error that names the file.
+
+A value of the wrong type, or outside its choices, does not stop the run: that value is left out (in a list, only that item; in `hooks`, that hook), the rest of the file still applies, and `/permissions` and `/hooks` show a notice that names the file, the key's path and what was expected:
+
+```text
+/home/me/{{DIR}}/settings.json: permissions.deny[1]: expected string, found 5
+/home/me/{{DIR}}/settings.json: hooks.Stop[0].hooks[0].type: expected one of "command", "script", "http", "prompt", "agent", found "shell"
+```
+
+A key {{NAME}} does not know is named the same way (`theme: unknown key, ignored`) and otherwise ignored. A value of the right type that {{NAME}} still cannot use, such as a rule it cannot parse, a hook matcher that is not a regex or a model name with spaces, stops the run with an error that names the file and the key, for example `permissions.deny: rule "Bash(rm" misses its )`.
+
+### JSON Schema
+
+Both settings files and `mcp.json` have a published JSON Schema, so an editor can complete keys and underline mistakes as you type. {{NAME}} copies the schemas into your own folder:
+
+| File | Schema |
+|---|---|
+| `settings.json`, `settings.local.json`, `managed-settings.json` | `~/{{DIR}}/schemas/settings.schema.json` |
+| `mcp.json` | `~/{{DIR}}/schemas/mcp.schema.json` |
+
+Point a file at its schema with a `$schema` key. {{NAME}} ignores the key, and it is never reported as unknown. In `~/{{DIR}}/settings.json` a relative path works:
+
+```json
+{
+  "$schema": "./schemas/settings.schema.json",
+  "outputStyle": "concise"
+}
+```
+
+A project's `{{DIR}}/settings.json` lives elsewhere, so use the full path to your copy (for example `"$schema": "/home/me/{{DIR}}/schemas/settings.schema.json"`) or map the file pattern to the schema in your editor's settings. The schemas match the version of {{NAME}} that wrote them and are refreshed when it updates, unless you edited your copy. In the source, they are `content/schemas/`.
 
 ### How values combine
 
@@ -137,7 +166,7 @@ Without options it edits `~/{{DIR}}/settings.json`. With `--project` it edits `{
 | `sandbox` | object | network on | Where sandboxed commands may write and whether they reach the network. See [`sandbox`](#sandbox). |
 | `features` | object | every feature on but `experimental-code-mode-only` | Turns features on or off by name. See [`features`](#features). |
 
-A key {{NAME}} does not know is ignored. `trustProjectHooks`, which earlier versions read, no longer does anything: a project's hooks run once you trust its folder, and the chat says so until you remove the key.
+`$schema` names the file's [JSON Schema](#json-schema). Any other key {{NAME}} does not know is ignored with a notice. `trustProjectHooks`, which earlier versions read, no longer does anything: a project's hooks run once you trust its folder, and the chat says so until you remove the key.
 
 > [!NOTE]
 > MCP server definitions (`mcpServers`) do not live in `settings.json`: they live in `{{DIR}}/mcp.json` (the project's) and `~/{{DIR}}/mcp.json` (yours). See [MCP](./mcp). The status line command is a chat preference (see [Remembered chat preferences](#remembered-chat-preferences) and [Status line](./statusline)).
@@ -246,7 +275,7 @@ A map from server name to its configuration. Using a built-in name (`rust-analyz
 
 ### `features`
 
-Every feature is on until you turn it off, except `experimental-code-mode-only`, which is off until you turn it on. Each key is `features.<name>` with `true` or `false`; a value that is not a boolean stops the run. `/features` lists them with their state, and [Experimental features](./experimental-features) explains each one.
+Every feature is on until you turn it off, except `experimental-code-mode-only`, which is off until you turn it on. Each key is `features.<name>` with `true` or `false`; a value that is not a boolean is left out with a notice. `/features` lists them with their state, and [Experimental features](./experimental-features) explains each one.
 
 | Key | Default | What it controls |
 |---|---|---|
