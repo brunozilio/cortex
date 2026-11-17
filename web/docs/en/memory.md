@@ -68,7 +68,7 @@ The chat answers `Remembered: …`. Memories you add this way are tagged `user`.
 
 Anything after `/memory` that is not one of these words is a search, so `/memory undo the font` searches for "undo the font".
 
-`/memory edit` opens `{{INSTRUCTIONS}}` at the project root, or `{{DIR}}/{{INSTRUCTIONS}}` when only that one exists. See [Instructions files](./instructions-files).
+`/memory edit` opens `{{INSTRUCTIONS}}` in the folder the chat runs in, or `{{DIR}}/{{INSTRUCTIONS}}` there when only that one exists. See [Instructions files](./instructions-files).
 
 ### Optimize and undo
 

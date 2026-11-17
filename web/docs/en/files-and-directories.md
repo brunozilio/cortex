@@ -10,7 +10,7 @@ description: Every file and folder {{NAME}} reads or writes, in your home folder
 | `~/{{DIR}}/` | Your settings, instructions, skills, agents, plugins and other extensions, for every project. | You (and a few commands). |
 | `{{DIR}}/` in a project | The project's settings, instructions, skills, agents and other extensions. Mostly checked in. | You and your team. |
 | The [data folder](#data-folder) | Sessions, memory, remembered choices, credentials, logs, caches. | {{NAME}} only. |
-| The [temporary folder](#temporary-files) | Long tool outputs and the prompt being edited. | {{NAME}} only. |
+| The [temporary folder](#temporary-files) | Long tool outputs, the prompt being edited and a few working files. | {{NAME}} only. |
 
 ## Your folder: `~/{{DIR}}`
 
@@ -32,7 +32,7 @@ description: Every file and folder {{NAME}} reads or writes, in your home folder
 | `providers/` | Providers you declare in JavaScript. | [Models and providers](./models-and-providers) |
 | `output-styles/` | Your custom output styles (`<name>.md`). | [Output styles](./output-styles) |
 | `plugins/` | Installed plugins, one folder each. `{{COMMAND}} plugin install <git-url>` clones here. | [Plugins](./plugins) |
-| `prompts/`, `styles/` and built-in files in `agents/`, `skills/`, `hooks/`, `tools/` | Copies of the built-in prompts, styles, agents, skills, hooks and tools. | below |
+| `prompts/`, `styles/`, `repl/`, `types.d.ts` and built-in files in `agents/`, `skills/`, `hooks/`, `tools/` | Copies of the built-in prompts, styles, agents, skills, hooks and tools, and the types scripts can use. | below |
 | `.content.json` | Fingerprints of those copies. | below |
 
 ### Built-in content copies
@@ -102,7 +102,8 @@ In the **data folder**:
 
 | Path | What it is |
 |---|---|
-| `users/<user>/settings.json` | Your [remembered chat preferences](./settings#remembered-chat-preferences): model, mode, effort, style, prompt history, last conversation per folder. At most 256 KB; a file that does not parse is moved to `settings.json.broken`. |
+| `users/<user>/settings.json` | Your [remembered chat preferences](./settings#remembered-chat-preferences): model, mode, effort, style, prompt history, last conversation per folder. At most 256 KB; a file that does not parse is moved to `settings.json.corrupt-<time>`. |
+| `users/<user>/trusted-folders.json` | The folders you trusted (see [Workspace trust](./sandbox-and-safety#workspace-trust)). |
 | `app.db` | A SQLite database: the list of your conversations and your memories for each project. Readable only by you. |
 | `app.db-wal`, `app.db-shm` | SQLite's working files for `app.db`. They exist while {{NAME}} is running; leave them beside it. |
 | `users/<user>/sessions.json.imported` | The conversation list an earlier version kept, renamed after it was imported into `app.db`. Not read any more. |
@@ -115,7 +116,7 @@ In the **local data folder**:
 
 | Path | What it is |
 |---|---|
-| `native-sessions/` | Conversations. For each one: `<session>.jsonl` (the conversation itself, saved after every step, so it survives a crash or a closed terminal), `<session>.trace.jsonl` (what `/trace` shows; when it passes 64 MB it is renamed to `<session>.trace.1.jsonl` and a new one starts, so only the latest part and the one before it are kept), `checkpoints-<session>.json` (for `/rewind`: the files of the 50 most recent prompts, up to 64 MB) and `worktree-<session>.json`. A `<session>.lock` file exists only while the conversation is answering. Deleting the trace files loses the trace, never the conversation. |
+| `native-sessions/` | Conversations. For each one: `<session>.jsonl` (the conversation itself, saved after every step, so it survives a crash or a closed terminal), `<session>.trace.jsonl` (what `/trace` shows; when it passes 64 MB it is renamed to `<session>.trace.1.jsonl` and a new one starts, so only the latest part and the one before it are kept), `checkpoints-<session>.json` (for `/rewind`: the files of the 50 most recent prompts, up to 64 MB), `snapshot-<session>.json` (the date, git state and top-level files the conversation started with, so its prompt stays the same) and `worktree-<session>.json`. A `<session>.lock` file exists only while the conversation is answering. Deleting the trace files loses the trace, never the conversation. |
 | `secrets.json` | API keys and tokens, encrypted. Readable only by you. |
 | `secrets.key` | Where the key that opens `secrets.json` is. Normally it holds only the word `keychain`: the key itself is in your system keychain (macOS Keychain, the Secret Service on Linux, Windows Credential Manager). Where no keychain answers (a server without a desktop session, CI, a container), or with `{{ENV}}_SECRETS=file`, the key is in this file. Readable only by you. Do not delete it: without it, the keys in `secrets.json` cannot be opened. |
 | `logs/{{COMMAND}}.log` | The log (level from `{{ENV}}_LOG`). Over 5 MB it is renamed to `{{COMMAND}}.log.1` and a new one starts. |
@@ -144,7 +145,9 @@ In the system temporary folder (`TMPDIR` on macOS and Linux):
 | Path | What it is |
 |---|---|
 | `{{COMMAND}}-tool-results/<session>/` | Tool outputs too long for the conversation (over 30,000 characters), and whole command outputs that were filtered, so the agent can read them in parts. A conversation's folder is removed once nothing has been written to it for 7 days. |
-| `{{COMMAND}}-prompt-<pid>.md` | The prompt while you edit it in your editor (Ctrl+G); removed afterwards. |
+| `{{COMMAND}}-prompt-<random>.md` | The prompt while you edit it in your editor (Ctrl+G); readable only by you, removed afterwards. |
+| `{{COMMAND}}-claims/<hash>.json` | Which session last edited which file, per project, for the `experimental-session-claims` warning. |
+| `{{COMMAND}}-memory/<run>.json` | The memory changes a run asks for, before {{NAME}} applies them. |
 
 ## Files {{NAME}} only reads
 

@@ -15,10 +15,10 @@ Quase tudo no {{NAME}} se configura nos [arquivos de configuração](./settings)
 
 | Variável | Valores | Padrão | Para que serve |
 |---|---|---|---|
-| `{{ENV}}_LOG` | Um filtro de log: `error`, `warn`, `info`, `debug`, `trace`, ou por módulo (`agent_engine=debug,warn`) | `warn` | Quanto vai para o arquivo de log `logs/{{COMMAND}}.log` na [pasta de dados](./files-and-directories). Um filtro vazio ou inválido volta para `warn`. |
+| `{{ENV}}_LOG` | Um filtro de log: `error`, `warn`, `info`, `debug`, `trace`, ou por módulo (`agent_engine=debug,warn`) | `warn` | Quanto vai para o arquivo de log `logs/{{COMMAND}}.log` na [pasta de dados local](./files-and-directories#pasta-de-dados). Um filtro vazio ou inválido volta para `warn`. |
 | `{{ENV}}_THEME` | `light`, `dark` (sem diferenciar maiúsculas) | detectado | Força as cores claras ou escuras do chat em vez de detectar o fundo do terminal. |
 | `{{ENV}}_REDUCED_MOTION` | Qualquer valor não vazio diferente de `0` | não definida | Desliga as animações do chat. |
-| `{{ENV}}_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | não definida | Desliga a memória automática, como `"autoMemoryEnabled": false`. Veja [Memória](./memory). |
+| `{{ENV}}_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | não definida | Como `"autoMemoryEnabled": false`: desliga a memória persistente dos agentes que declaram um escopo de `memory`. A memória do projeto não muda. Veja [Memória](./memory#desligar-a-memoria). |
 | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | não definida | O mesmo que `{{ENV}}_DISABLE_AUTO_MEMORY`, para ambientes compartilhados com o Claude Code. |
 | `{{ENV}}_CONSOLE_DIR` | Uma pasta com um `index.html` | não definida | Serve a página do [console de trace](./trace-console) a partir desta pasta em vez da cópia embutida no binário. |
 | `{{ENV}}_SECRETS` | `file` (sem diferenciar maiúsculas) | não definida: o chaveiro do sistema | Guarda a chave que abre suas chaves de API e tokens salvos em `secrets.key` em vez do chaveiro do sistema, e nunca escreve no chaveiro. Para CI, contêineres e servidores sem chaveiro. Se a chave estava no chaveiro, ela volta para o arquivo quando o chaveiro responde; quando ele não responde, uma chave nova é criada e as chaves salvas antes precisam ser informadas de novo. Veja [Arquivos e diretórios](./files-and-directories). |
@@ -37,7 +37,8 @@ Quase tudo no {{NAME}} se configura nos [arquivos de configuração](./settings)
 | `COLORFGBG` | Detecta se o fundo do terminal é claro ou escuro quando `{{ENV}}_THEME` não está definida; escuro quando falta. |
 | `COLORTERM` | `truecolor` ou `24bit` liga cores reais (true colour) no chat. |
 | `PATH` | Onde servidores de linguagem (`rust-analyzer`, `gopls`…) e outros programas são encontrados. |
-| `TMPDIR` | macOS e Linux: a pasta temporária para saídas longas de ferramentas, o prompt em edição e a permissão de gravação da sandbox. |
+| `TMPDIR` | macOS e Linux: a [pasta temporária](./files-and-directories#arquivos-temporarios) para saídas longas de ferramentas, o prompt em edição e a permissão de gravação da sandbox. |
+| `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` (ou em minúsculas) | As requisições aos provedores e às páginas web passam por esse proxy. Com uma delas definida, as requisições web do agente deixam para o proxy a verificação de que um site não está neste computador nem na sua rede privada. |
 
 As formas `${VAR}` e `${VAR:-padrão}` nos arquivos `mcp.json` são preenchidas a partir do ambiente; uma variável não definida e sem padrão fica como está escrita. Veja [MCP](./mcp).
 
@@ -56,6 +57,7 @@ As formas `${VAR}` e `${VAR:-padrão}` nos arquivos `mcp.json` são preenchidas 
 | `CARGO_TARGET_DIR` | Testes em segundo plano em projetos Rust | `<projeto>/target/agent-tests`, para não travar os seus próprios builds. Recurso `experimental-affected-tests`. |
 | `GOBIN` | Instalação de um servidor de linguagem Go | Uma pasta temporária dentro do cache de servidores de linguagem. |
 | `TERM=xterm-256color`, `COLORTERM=truecolor` | O terminal que o console de trace abre | Valores fixos. |
+| `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0` | Comandos git que o {{NAME}} roda por conta própria (status, diffs) | Para o git nunca pedir senha nem pegar um lock que faria os seus próprios comandos git esperarem. |
 | `APP_NOTIFICATION_TITLE`, `APP_NOTIFICATION_MESSAGE` | Notificações da área de trabalho no Windows | O título e o texto da notificação. |
 | Variáveis de `env` | Servidores MCP (stdio) e servidores de linguagem | O que você colocar no `env` do servidor em `mcp.json` ou `lspServers`. |
 

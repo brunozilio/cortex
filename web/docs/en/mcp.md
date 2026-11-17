@@ -93,7 +93,7 @@ New servers are picked up on the next prompt. Ask the agent to use them ("find t
 | `command` | The program to start (`stdio`) |
 | `args` | Its arguments (`stdio`) |
 | `env` | Environment variables added to the process (`stdio`) |
-| `sandbox` | Where the process may write and whether it reaches the network (`stdio`): `{ "writable": [...], "network": false }`, or `false` to start it outside the sandbox (your own file only). See [MCP servers in the sandbox](./sandbox-and-safety#mcp-servers-in-the-sandbox). |
+| `sandbox` | Where the process may write and whether it reaches the network (`stdio`): `{ "writable": [...], "network": false }`, or `false` to start it outside the sandbox. `writable` and `false` count only in your own `~/{{DIR}}/mcp.json`. See [MCP servers in the sandbox](./sandbox-and-safety#mcp-servers-in-the-sandbox). |
 
 A server of another type, or with a `sandbox` value of another shape, is left out with a warning in the log.
 
@@ -132,20 +132,20 @@ When the user's and the project's files declare the same name, an approved proje
 | Option | Meaning |
 |---|---|
 | `-e`, `--env KEY=VALUE` | An environment variable for a local server (repeatable). Quote `'${VAR}'` so the shell leaves it for {{NAME}} to read at start. |
-| `-H`, `--header "Name: value"` | A header for a remote server (repeatable) |
+| `-H`, `--header "Name: value"` | A header for a remote server (repeatable). Quote `'${VAR}'` the same way. |
 | `--transport sse` | Use the older HTTP + SSE transport for a URL (`http` by default) |
 | `--force` | Replace a server of yours that already has this name |
 
 A target starting with `https://` or `http://` makes a remote server; anything else is the command of a local server, and what follows it are its arguments. Write `--` before the server's own arguments when any of them starts with `-`: everything after `--` belongs to the server. An argument starting with `-` without a `--` before it is refused with a hint to add one.
 
 ```bash
-{{COMMAND}} mcp add -H "Authorization: Bearer ${API_TOKEN}" docs https://docs.example.com/mcp
+{{COMMAND}} mcp add -H 'Authorization: Bearer ${API_TOKEN}' docs https://docs.example.com/mcp
 {{COMMAND}} mcp add --transport sse legacy https://old.example.com/sse
 {{COMMAND}} mcp add jira jira-mcp -- --stdio
 {{COMMAND}} mcp add github -- npx -y @modelcontextprotocol/server-github
 ```
 
-`add` refuses a name with other characters, a reserved name, a server that has neither a command nor a URL, or a name you already use (unless `--force` is given; the error names the existing entry). `remove` only removes servers from your own `~/{{DIR}}/mcp.json`. `approve`, `deny` and `get` refuse a name that is not listed, and say which names are.
+`add` refuses a name with other characters, a reserved name, a server that has neither a command nor a URL, or a name you already use (unless `--force` is given; the error names the existing entry). It also refuses a secret written out: a header, environment value or argument that looks like a token, or a header or environment value whose name says it holds one (`Authorization`, `GITHUB_TOKEN`, `API_KEY`…), unless the value reads a `${VAR}`. `remove` only removes servers from your own `~/{{DIR}}/mcp.json`. `approve`, `deny` and `get` refuse a name that is not listed, and say which names are.
 
 ### The list
 
@@ -306,10 +306,12 @@ export default {
 
 ## How servers start
 
-At the start of each prompt, {{NAME}} starts every `ready` server and asks for its tools (MCP protocol version `2025-06-18`). A server that fails to start, or to list its tools, is left out of that run with a warning in the log; the run goes on without it.
+At a session's first prompt, {{NAME}} starts every `ready` server (MCP protocol version `2025-06-18`). The servers stay connected for the session's later prompts; each prompt asks them for their tools again. A server is started again only when its entry or its approval changed, or when its process has stopped; a server that is no longer `ready` is closed. When {{NAME}} lets the session go (see [`SessionEnd`](./hooks#sessionend)), its servers are closed. JavaScript servers are loaded again at every prompt.
 
-- A local server runs as a child process with your environment plus its `env`, inside the [sandbox](./sandbox-and-safety#mcp-servers-in-the-sandbox) when it is on. Its stderr is discarded. A call may take up to 10 minutes.
-- A remote server keeps the session id it receives across the calls of a run.
+A server that fails to start, or to list its tools, is left out of that run with a warning in the log; the run goes on without it.
+
+- A local server runs as a child process with your environment plus its `env`, inside the [sandbox](./sandbox-and-safety#mcp-servers-in-the-sandbox) when it is on. When it stops, the error quotes the last lines it wrote to stderr. A call may take up to 10 minutes.
+- A remote server keeps the session id it receives across its calls.
 
 ## Troubleshooting
 

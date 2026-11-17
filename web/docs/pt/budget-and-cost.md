@@ -12,8 +12,8 @@ Digite `/cost` (ou `/usage`):
 ```text
 /cost
 This session cost $0.4210.
-  claude-opus-5-5  in 12.4k · out 3.1k · cache read 210.8k (94% hit) · cache write 13.0k · $0.3900
-  claude-haiku-5-5 in 4.2k · out 600 · cache read 0 · cache write 0 · 2 web searches · $0.0310
+  claude-opus-5-5   in 12.4k · out 3.1k · cache read 210.8k (94% hit) · cache write 13.0k · $0.3900
+  claude-haiku-5-5  in 4.2k · out 600 · cache read 0 · cache write 0 · 2 web searches · $0.0310
 ```
 
 Cada modelo usado na sessão ganha uma linha:
@@ -89,10 +89,10 @@ As [flags de saída](./experimental-features#saida-de-comandos) limpam e filtram
 
 ```text
 /gain
-Command output this session: 182.4k → 41.0k characters, 77% shorter (about 35.3k tokens kept out of the conversation)
-  cargo          12 runs   150.2k → 28.1k   81%
-  git             9 runs    20.0k → 9.2k    54%
-  npm             3 runs    12.2k → 3.7k    69%
+Command output this session: 182k → 41k characters, 77% shorter (about 35.4k tokens kept out of the conversation)
+  cargo          12 runs    150k → 28.1k   81%
+  git             9 runs     20k → 9.2k    54%
+  npm             3 runs   12.2k → 3.7k    69%
 ```
 
 Os programas aparecem ordenados pelos caracteres economizados. A conta de tokens considera quatro caracteres por token. Com a flag desligada, o `/gain` responde `/gain is off. Turn it on with /features experimental-output-savings on.`

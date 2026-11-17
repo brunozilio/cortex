@@ -16,7 +16,7 @@ Quando o agente precisa da sua aprovação, o painel mostra a ferramenta, o que 
 | Yes, and don't ask again this session | `a`, `2` | Aparece quando nenhuma regra serve (edições, por exemplo). Lembra a ferramenta, no caso de edições, ou a chamada exata, nos outros casos, até a sessão terminar. |
 | No, and tell the agent what to do instead | `n`, Esc ou o número dela | Recusa. Escolhê-la pelo número ou com Enter permite digitar uma observação que o agente recebe; Esc ou `n` recusam sem observação. |
 
-A opção "don't ask again" não aparece para ações que precisam ser aprovadas toda vez (veja Ações que sempre perguntam, abaixo).
+A opção "don't ask again" não aparece para comandos arriscados (pushes, publicações…) nem para um endereço que nunca apareceu na conversa (veja [Ações que sempre perguntam](#acoes-que-sempre-perguntam)). Rodar um comando fora da sandbox e instalar um pacote suspeito ainda a oferecem: ela salva a regra do comando, mas essas duas perguntas voltam toda vez.
 
 Em uma pasta em que você não confiou, uma regra salva no `{{DIR}}/settings.local.json` vale só naquela execução; ela passa a valer nas seguintes quando você confiar na pasta, e o chat avisa disso ao salvar a regra. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
 
@@ -105,7 +105,7 @@ Uma regra é o nome de uma ferramenta, opcionalmente seguido de um especificador
 | `mcp__docs__resources(file:///a.md)` | Ler esse recurso do servidor `docs`. |
 | `Ferramenta(assunto)` | Qualquer outra ferramenta: o especificador precisa ser igual ao assunto da chamada. |
 
-#### Caminhos
+### Caminhos
 
 Especificadores de caminho funcionam como no `.gitignore`:
 
@@ -117,7 +117,7 @@ Especificadores de caminho funcionam como no `.gitignore`:
 - Regras deny e ask ignoram maiúsculas e minúsculas (`Read(.env)` também recusa `.ENV`); regras allow não.
 - Um `Glob` ou `Grep` sobre uma pasta é recusado quando uma regra deny cobre algo dentro dela.
 
-#### Comandos
+### Comandos
 
 As regras de shell leem o comando do jeito que o shell vai executá-lo. A linha é analisada em cada comando simples que ela executa, inclusive os que estão dentro de `if`, `for`, `while`, `case`, funções, subshells, `{ …; }`, `$(…)`, crases, `<(…)` e o comando que `find -exec` executa:
 
@@ -129,7 +129,7 @@ As regras de shell leem o comando do jeito que o shell vai executá-lo. A linha 
 
 Regras deny são uma lista de melhor esforço: um comando montado durante a execução (um arquivo de script, o código inline de um interpretador, o valor de uma variável) fica invisível para elas. Quem impede um comando de escrever onde não deve é o [sandbox](./sandbox-and-safety).
 
-#### Comandos somente leitura
+### Comandos somente leitura
 
 Um comando de shell roda sem perguntar, em qualquer modo, só quando a linha inteira é uma lista ou pipeline simples (sem estrutura de controle, função, subshell, grupo, `!` ou substituição) e cada comando nela:
 
@@ -139,7 +139,7 @@ Um comando de shell roda sem perguntar, em qualquer modo, só quando a linha int
 - não tem palavra que o shell mudaria: nada de `$`, crase ou barra invertida fora de aspas simples, nada de `*`, `?`, `[`, `{` ou `<` sem aspas, nem `~` que indique uma pasta pessoal. Padrões entre aspas são palavras comuns: `find . -name '*.rs'` e `grep 'a.*b' notes.txt` são somente leitura, `find . -name *.rs` não é. `git diff HEAD~1` é somente leitura;
 - não cita caminho fora do projeto (`/…`, `..`).
 
-#### Ferramentas e seus efeitos
+### Ferramentas e seus efeitos
 
 Cada ferramenta embutida diz, a partir da entrada, o que a chamada vai fazer, e a decisão é tomada a partir disso:
 
@@ -147,25 +147,28 @@ Cada ferramenta embutida diz, a partir da entrada, o que a chamada vai fazer, e 
 |---|---|
 | `Read`, `LSP` | leitura daquele arquivo (pergunta fora do projeto) |
 | `Glob`, `Grep` | leitura da pasta pesquisada |
-| `Write`, `Edit`, `NotebookEdit` | escrita naquele arquivo (pergunta fora do projeto, em `.git/` ou em `{{DIR}}/`) |
+| `Write`, `Edit`, `NotebookEdit` | escrita naquele arquivo (pergunta fora do projeto e das pastas adicionadas, em `.git/` ou em `{{DIR}}/`; ali só uma regra que nomeia o caminho, como `Edit(.git/hooks/**)`, libera, não um `Edit` sozinho) |
 | `Bash`, `Monitor` | execução do comando (comandos somente leitura rodam livres) |
 | `WebFetch`, `WebSearch` | acesso à rede (regras `WebFetch(domain:…)`) |
 | `CronCreate`, `ScheduleWakeup` | trabalho agendado: pergunta |
+| `EnterWorktree`, `ExitWorktree` | troca do checkout da sessão: pergunta (recusada no modo plan) |
 | `Agent`, `Watch`, `PushNotification`, ferramentas de tarefas e de plano | não precisam de permissão; um subagente segue o próprio modo |
+| `AskUserQuestion`, `Skill`, `ToolSearch`, `Advisor`, `BashOutput`, `CronList`, `ListSessions` | não precisam de permissão |
+| `REPL` | o script em si não precisa de permissão; cada ferramenta que ele chama é julgada como aquela ferramenta |
 | `KillShell`, `CronDelete`, `TaskStop` | não precisam de permissão para o trabalho do próprio agente; `KillShell` sobre qualquer outra coisa pergunta |
 | `SendMessage` para outra sessão | pergunta, a menos que uma regra libere `SendMessage` |
 | `ListMcpResources`, `ReadMcpResource` | seguem as regras daquele servidor (`mcp__docs`, `mcp__docs__resources(…)`) |
 | Ferramentas MCP | perguntam, a menos que uma regra libere o servidor ou a ferramenta |
 
-Suas próprias ferramentas de script em `~/{{DIR}}/tools/*.js` dizem o que fazem com `access` no `spec`: `"read"` roda livre, `"edit"` é tratada como uma edição, `"execute"` (ou sem `access`) pergunta. As ferramentas de script de um projeto sempre perguntam.
+Suas próprias ferramentas de script em `~/{{DIR}}/tools/*.js` dizem o que fazem com `access` no `spec`: `"read"` roda livre, `"edit"` é tratada como uma edição, `"execute"` (ou sem `access`) pergunta. As ferramentas de script de um projeto sempre perguntam. `access` cobre só a chamada em si: cada função do host que o script usa (`readFile`, `writeFile`, `exec`, `fetch`) também precisa estar listada em `capabilities` no `spec`, e cada uma dessas chamadas é julgada como `Read`, `Write`, `Bash` ou `WebFetch` (veja [Capacidades](./sandbox-and-safety#capacidades)).
 
-#### Regras inválidas
+### Regras inválidas
 
-Uma regra sem o `)` de fechamento, com especificador vazio (`Bash()`) ou que não começa com o nome de uma ferramenta interrompe a execução com um erro que cita a lista, por exemplo `permissions.deny: rule "Bash(rm" misses its )`.
+Uma regra sem o `)` de fechamento, com especificador vazio (`Bash()`) ou que não começa com o nome de uma ferramenta interrompe a execução com um erro que cita a lista, por exemplo ``permissions.deny: rule "Bash(rm" misses its `)` ``.
 
 ## Ações que sempre perguntam
 
-Algumas ações são perguntadas toda vez, seja qual for o modo e as regras (exceto uma regra deny, que as recusa), e não podem ser lembradas:
+Algumas ações são perguntadas toda vez, seja qual for o modo e as regras (exceto uma regra deny, que as recusa):
 
 - Push para o branch padrão, ou push forçado, que apaga ou reescreve o histórico remoto.
 - `cargo publish`, `npm publish`, `pnpm publish`, `yarn publish`.
@@ -209,7 +212,7 @@ Por padrão o agente lê livremente só dentro do projeto. Para dar acesso a out
 - `--add-dir <caminho>` ao abrir.
 - `permissions.additionalDirectories` nos seus próprios arquivos de configuração, de forma permanente. `~/` começa na sua pasta pessoal; um caminho relativo começa no projeto.
 
-Caminhos digitados em `/add-dir` e `--add-dir` precisam ser pastas existentes; `~/` é expandido e caminhos relativos começam no projeto. Uma pasta adicionada é lida como o projeto e, com a sandbox ligada, comandos na sandbox podem gravar nela.
+Caminhos digitados em `/add-dir` e `--add-dir` precisam ser pastas existentes; `~/` é expandido e caminhos relativos começam no projeto. Uma pasta adicionada é lida e editada como o projeto e, com a sandbox ligada, comandos na sandbox podem gravar nela.
 
 ## Hooks e permissões
 

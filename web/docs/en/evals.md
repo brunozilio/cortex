@@ -49,7 +49,7 @@ rename  pass    5/5  $0.14
 ## How a case runs
 
 1. The `fixture/` folder is copied into a new, empty scratch folder. Without a `fixture/`, the scratch folder stays empty. The fixture itself is never changed.
-2. The agent runs there once, in print mode, with the case's prompt and `mode`: `{{COMMAND}} -p --output-format json -C <scratch> [--mode <mode>] [--model <model>] -- <prompt>`.
+2. The agent runs there once, in print mode, with the case's prompt and `mode`: `{{COMMAND}} -p --output-format json -C <scratch> [--mode <mode>] [--model <model>] [--trust] -- <prompt>`, with `--trust` when your project's folder is trusted.
 3. Each check is scored against the agent's answer and the files left in the scratch folder.
 4. If the case has a `rubric`, a judge run grades the work against it.
 
@@ -93,7 +93,7 @@ When a case has a `rubric`, a second run of {{NAME}} acts as the judge, in plan 
 { "passed": true, "why": "Only lib.rs changed." }
 ```
 
-The rubric counts as one more check. If the judge fails, it is reported as `rubric: <why>`; if its reply has no such object, as `rubric: the judge answered out of form`.
+The rubric counts as one more check. If the judge fails, it is reported as `rubric: <why>`; if its reply has no such object, as `rubric: the judge answered out of form`; if the judge's run itself failed, as `rubric: the judge failed: <error>`.
 
 ## Scoring
 
@@ -105,6 +105,7 @@ When something goes wrong before the checks, the case scores 0/1 with a note:
 |---|---|
 | `case.json: ...` | The file is not valid JSON or does not fit the format |
 | `case.json needs a prompt` | `prompt` is empty |
+| `no scratch folder: ...` | The scratch folder could not be created |
 | `could not copy the fixture: ...` | The fixture could not be copied |
 | `the agent failed: ...` | The agent's run failed, for example no model is connected |
 

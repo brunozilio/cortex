@@ -170,7 +170,37 @@ A `.js` file in a `commands/` folder works the same way as a command. A call to 
 > Breaking change: a script skill or command that calls `ctx.readFile`, `ctx.writeFile`, `ctx.exec` or `ctx.fetch` without listing it in `export const capabilities` now fails with an error saying what to add. A project's `SKILL.js` is replaced by one of yours or a plugin's with the same name.
 
 > [!IMPORTANT]
-> A project's `SKILL.js` and `.js` commands are offered only after you trust the project's folder; its Markdown skills and commands load either way. The same holds for a project's JavaScript tools in `{{DIR}}/tools/`. See [Workspace trust](./sandbox-and-safety#workspace-trust).
+> A project's `SKILL.js` and `.js` commands are offered only after you trust the project's folder; its Markdown skills and commands load either way. The same holds for a project's script tools in `{{DIR}}/tools/`. See [Workspace trust](./sandbox-and-safety#workspace-trust).
+
+## Script tools
+
+A script tool is a new tool the agent can call, written in JavaScript. Put it in `~/{{DIR}}/tools/` (yours, every project) or in the working folder's `{{DIR}}/tools/` (the project's, once you trust the folder), as `<name>.js` or `<name>/tool.js`:
+
+```javascript
+export const spec = {
+  name: "Release",
+  description: "Tags the release. Use when the user asks to tag a version.",
+  input: { type: "object", properties: { version: { type: "string" } }, required: ["version"] },
+  access: "execute",
+  capabilities: ["exec"],
+};
+
+export function run(input, ctx) {
+  return ctx.exec(`git tag v${input.version}`).stdout;
+}
+```
+
+| `spec` field | Meaning |
+|---|---|
+| `name` | The tool's name. Required. |
+| `description` | What the agent reads to decide when to call it |
+| `input` | The JSON Schema of its input; any object when left out |
+| `access` | What a call does, for permissions: `read`, `edit` or `execute` (the default). Only your own tools set it; a project's tools always count as `execute`. See [Permissions](./permissions). |
+| `capabilities` | The host functions it calls: `readFile`, `writeFile`, `exec`, `fetch`. Empty by default. |
+
+The function `run` (or `execute`) gets the input and a context, and returns text or a value, sent as JSON; a thrown error is a failed call. A call to a host function not listed in `capabilities` fails; a listed one is judged by your permissions like the matching tool (see [Capabilities](./sandbox-and-safety#capabilities)). A script tool may run for 60 seconds.
+
+A tool of yours with the name of a built-in tool replaces it; a project's tool with a name that is already taken is left out. A file that cannot be read, or whose `spec` has no `name`, is left out with a warning in the log.
 
 ## Built-in skills
 

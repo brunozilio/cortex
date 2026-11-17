@@ -10,7 +10,7 @@ O {{NAME}} guarda coisas em quatro lugares:
 | `~/{{DIR}}/` | Suas configurações, instruções, skills, agentes, plugins e outras extensões, para todos os projetos. | Você (e alguns comandos). |
 | `{{DIR}}/` em um projeto | Configurações, instruções, skills, agentes e outras extensões do projeto. Em geral vai para o repositório. | Você e seu time. |
 | A pasta de dados | Sessões, memória, escolhas guardadas, credenciais, logs, caches. | Só o {{NAME}}. |
-| A pasta temporária | Saídas longas de ferramentas e o prompt em edição. | Só o {{NAME}}. |
+| A pasta temporária | Saídas longas de ferramentas, o prompt em edição e alguns arquivos de trabalho. | Só o {{NAME}}. |
 
 ## Sua pasta: `~/{{DIR}}`
 
@@ -32,7 +32,7 @@ O {{NAME}} guarda coisas em quatro lugares:
 | `providers/` | Provedores que você declara em JavaScript. | [Modelos e provedores](./models-and-providers) |
 | `output-styles/` | Seus estilos de resposta personalizados (`<nome>.md`). | [Estilos de resposta](./output-styles) |
 | `plugins/` | Plugins instalados, uma pasta cada. `{{COMMAND}} plugin install <git-url>` clona aqui. | [Plugins](./plugins) |
-| `prompts/`, `styles/` e os arquivos embutidos em `agents/`, `skills/`, `hooks/`, `tools/` | Cópias dos prompts, estilos, agentes, skills, hooks e ferramentas embutidos. | abaixo |
+| `prompts/`, `styles/`, `repl/`, `types.d.ts` e os arquivos embutidos em `agents/`, `skills/`, `hooks/`, `tools/` | Cópias dos prompts, estilos, agentes, skills, hooks e ferramentas embutidos, e os tipos que os scripts podem usar. | abaixo |
 | `.content.json` | As impressões digitais dessas cópias. | abaixo |
 
 ### Cópias do conteúdo embutido
@@ -102,7 +102,8 @@ Na **pasta de dados**:
 
 | Caminho | O que é |
 |---|---|
-| `users/<usuário>/settings.json` | Suas [preferências guardadas do chat](./settings): modelo, modo, esforço, estilo, histórico de prompts, última conversa por pasta. No máximo 256 KB; um arquivo que não é JSON válido é movido para `settings.json.broken`. |
+| `users/<usuário>/settings.json` | Suas [preferências guardadas do chat](./settings): modelo, modo, esforço, estilo, histórico de prompts, última conversa por pasta. No máximo 256 KB; um arquivo que não é JSON válido é movido para `settings.json.corrupt-<hora>`. |
+| `users/<usuário>/trusted-folders.json` | As pastas em que você confiou (veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta)). |
 | `app.db` | Um banco de dados SQLite: a lista das suas conversas e as suas memórias de cada projeto. Legível só por você. |
 | `app.db-wal`, `app.db-shm` | Arquivos de trabalho do SQLite para o `app.db`. Existem enquanto o {{NAME}} está aberto; deixe-os ao lado dele. |
 | `users/<usuário>/sessions.json.imported` | A lista de conversas que uma versão anterior guardava, renomeada depois de importada para o `app.db`. Não é mais lida. |
@@ -115,7 +116,7 @@ Na **pasta de dados locais**:
 
 | Caminho | O que é |
 |---|---|
-| `native-sessions/` | Conversas. Para cada uma: `<sessão>.jsonl` (a conversa em si, salva a cada passo, então ela sobrevive a uma falha ou a um terminal fechado), `<sessão>.trace.jsonl` (o que o `/trace` mostra; ao passar de 64 MB é renomeado para `<sessão>.trace.1.jsonl` e um novo começa, então só a parte mais recente e a anterior são mantidas), `checkpoints-<sessão>.json` (para o `/rewind`: os arquivos dos 50 prompts mais recentes, até 64 MB) e `worktree-<sessão>.json`. Um arquivo `<sessão>.lock` existe só enquanto a conversa está respondendo. Apagar os arquivos de trace perde o trace, nunca a conversa. |
+| `native-sessions/` | Conversas. Para cada uma: `<sessão>.jsonl` (a conversa em si, salva a cada passo, então ela sobrevive a uma falha ou a um terminal fechado), `<sessão>.trace.jsonl` (o que o `/trace` mostra; ao passar de 64 MB é renomeado para `<sessão>.trace.1.jsonl` e um novo começa, então só a parte mais recente e a anterior são mantidas), `checkpoints-<sessão>.json` (para o `/rewind`: os arquivos dos 50 prompts mais recentes, até 64 MB), `snapshot-<sessão>.json` (a data, o estado do git e os arquivos do topo com que a conversa começou, para o prompt dela não mudar) e `worktree-<sessão>.json`. Um arquivo `<sessão>.lock` existe só enquanto a conversa está respondendo. Apagar os arquivos de trace perde o trace, nunca a conversa. |
 | `secrets.json` | Chaves de API e tokens, cifrados. Legível só por você. |
 | `secrets.key` | Onde está a chave que abre o `secrets.json`. Normalmente ele contém só a palavra `keychain`: a chave em si fica no chaveiro do sistema (Keychain no macOS, Secret Service no Linux, Gerenciador de Credenciais no Windows). Onde nenhum chaveiro responde (um servidor sem sessão gráfica, CI, um contêiner), ou com `{{ENV}}_SECRETS=file`, a chave fica neste arquivo. Legível só por você. Não o apague: sem ele, as chaves do `secrets.json` não podem ser abertas. |
 | `logs/{{COMMAND}}.log` | O log (nível definido por `{{ENV}}_LOG`). Passando de 5 MB, é renomeado para `{{COMMAND}}.log.1` e um novo começa. |
@@ -144,7 +145,9 @@ Na pasta temporária do sistema (`TMPDIR` no macOS e no Linux):
 | Caminho | O que é |
 |---|---|
 | `{{COMMAND}}-tool-results/<sessão>/` | Saídas de ferramentas longas demais para a conversa (mais de 30.000 caracteres) e saídas completas de comandos que foram filtradas, para que o agente as leia em partes. A pasta de uma conversa é removida depois de 7 dias sem nada ser gravado nela. |
-| `{{COMMAND}}-prompt-<pid>.md` | O prompt enquanto você o edita no seu editor (Ctrl+G); removido depois. |
+| `{{COMMAND}}-prompt-<aleatório>.md` | O prompt enquanto você o edita no seu editor (Ctrl+G); só você pode lê-lo, e ele é removido depois. |
+| `{{COMMAND}}-claims/<hash>.json` | Qual sessão editou por último cada arquivo, por projeto, para o aviso do `experimental-session-claims`. |
+| `{{COMMAND}}-memory/<execução>.json` | As mudanças de memória que uma execução pede, antes de o {{NAME}} aplicá-las. |
 
 ## Arquivos que o {{NAME}} só lê
 

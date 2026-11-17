@@ -120,6 +120,8 @@ Você escreve migrações reversíveis...
 
 Um seletor de ferramenta só pode ter letras, dígitos, `_`, `-` e `:`, mais um `*` no fim; `Bash(git:*)` não é um seletor. Um arquivo com campo inválido continua aparecendo na lista, mas iniciá-lo falha com `Agent <nome>: <problema>`, por exemplo `Agent migrations: maxTurns must be within 1..200`.
 
+Um agente do projeto só mantém `hooks`, `mcpServers`, `permissionMode` e `initialPrompt` depois que você confia na pasta do projeto; até lá esses campos são descartados e o agente é oferecido sem eles (veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta)).
+
 ### Modelo
 
 | `model` | Resultado |

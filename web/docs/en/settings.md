@@ -56,9 +56,9 @@ Missing files are skipped. A file that is not valid JSON, or a key with the wron
 
 ### How values combine
 
-- **Single values** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `autoMemoryEnabled`): the last file read wins. In practice the folder nearest to where you work beats its parents, and `managed-settings.json` beats everything. Setting `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` or `jsonSchema` to `null` clears a value set by an earlier file.
+- **Single values** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `autoMemoryEnabled`, `enableAllProjectMcpServers`): the last file read wins. In practice the folder nearest to where you work beats its parents, and `managed-settings.json` beats everything. Setting `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` or `jsonSchema` to `null` clears a value set by an earlier file.
 - **Lists and maps add up**: permission rules, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`.
-- **Switches** (`features`, `scripts`, `sandbox.network`): each file changes only the names it mentions.
+- **Switches** (`features`, `scripts`, `sandbox.network`, `sandbox.required`): each file changes only the names it mentions.
 
 ### What a checked-in file cannot do
 
@@ -118,7 +118,7 @@ Without options it edits `~/{{DIR}}/settings.json`. With `--project` it edits `{
 |---|---|---|---|
 | `outputStyle` | string | `"default"` | How the agent talks. A built-in style (`default`, `concise`, `proactive`, `explanatory`, `learning`, any case) or the name of a custom style in `{{DIR}}/output-styles/<name>.md` (letters, digits, `-` and `_`). The style you pick with `/output-style` wins over this key. See [Output styles](./output-styles). |
 | `agent` | string or `null` | none | Runs the main conversation as this agent (a name `/agents` lists), with its instructions, tools and model. An unknown name fails the run. See [Agents](./agents). |
-| `autoMemoryEnabled` | boolean | `true` | `false` turns automatic memory off for every run. `{{ENV}}_DISABLE_AUTO_MEMORY` does the same. See [Memory](./memory). |
+| `autoMemoryEnabled` | boolean | `true` | `false` turns off the persistent memory of [agents](./agents) that declare a `memory` scope (sub-agents, and the agent chosen with `agent`). Project memory is not affected; see [Memory](./memory#turn-memory-off). `{{ENV}}_DISABLE_AUTO_MEMORY` does the same. |
 | `advisorModel` | string or `null` | none | Model for the advisor the agent consults. A model id or name, no spaces. A role set with `/model advisor <model>` wins. |
 | `judgeModel` | string or `null` | none | Model for the judge that checks finished work against verification criteria. A role set with `/model review <model>` wins. See [Verification and review](./verification-and-review). |
 | `smallModel` | string or `null` | the provider's small model | Model for background chores: titles, effort picks, web reading. A role set with `/model small <model>` wins. |
@@ -135,7 +135,9 @@ Without options it edits `~/{{DIR}}/settings.json`. With `--project` it edits `{
 | `verification` | object | `{}` | Rules for the verification judge. See [`verification`](#verification). |
 | `scripts` | object | all `true` for your scripts, all `false` for a project's | What JavaScript tools, skills, hooks and providers may do. See [`scripts`](#scripts). |
 | `sandbox` | object | network on | Where sandboxed commands may write and whether they reach the network. See [`sandbox`](#sandbox). |
-| `features` | object | every feature on | Turns features on or off by name. See [`features`](#features). |
+| `features` | object | every feature on but `experimental-code-mode-only` | Turns features on or off by name. See [`features`](#features). |
+
+A key {{NAME}} does not know is ignored. `trustProjectHooks`, which earlier versions read, no longer does anything: a project's hooks run once you trust its folder, and the chat says so until you remove the key.
 
 > [!NOTE]
 > MCP server definitions (`mcpServers`) do not live in `settings.json`: they live in `{{DIR}}/mcp.json` (the project's) and `~/{{DIR}}/mcp.json` (yours). See [MCP](./mcp). The status line command is a chat preference (see [Remembered chat preferences](#remembered-chat-preferences) and [Status line](./statusline)).
@@ -185,7 +187,7 @@ The default depends on where the script lives:
 - **Your scripts** are the ones under `~/{{DIR}}/` and the ones {{NAME}} ships. They have all three kinds of access unless a settings file turns one off.
 - **A project's scripts** are the ones under the project's `{{DIR}}/`: its tools, skills, hooks, providers and script MCP servers. They have **none** of the three until one of your own settings files grants it.
 
-Your own files are `~/{{DIR}}/settings.json`, `~/{{DIR}}/settings.local.json`, `~/{{DIR}}/managed-settings.json` and a project's `{{DIR}}/settings.local.json` that git does not track. A value set there applies to both groups: `true` grants the access to project scripts as well, `false` takes it from your scripts too. A checked-in `{{DIR}}/settings.json` can only turn access off.
+Your own files are `~/{{DIR}}/settings.json`, `~/{{DIR}}/settings.local.json`, `~/{{DIR}}/managed-settings.json` and a project's `{{DIR}}/settings.local.json` in a folder you trust. A value set there applies to both groups: `true` grants the access to project scripts as well, `false` takes it from your scripts too. A checked-in `{{DIR}}/settings.json` can only turn access off.
 
 A script that is refused gets an error naming the setting, for example `scripts may not touch files here (settings: scripts.files)`.
 
@@ -244,11 +246,11 @@ A map from server name to its configuration. Using a built-in name (`rust-analyz
 
 ### `features`
 
-Every feature is on until you turn it off. Each key is `features.<name>` with `true` or `false`; a value that is not a boolean stops the run. `/features` lists them with their state, and [Experimental features](./experimental-features) explains each one.
+Every feature is on until you turn it off, except `experimental-code-mode-only`, which is off until you turn it on. Each key is `features.<name>` with `true` or `false`; a value that is not a boolean stops the run. `/features` lists them with their state, and [Experimental features](./experimental-features) explains each one.
 
 | Key | Default | What it controls |
 |---|---|---|
-| `features.experimental-sandbox` | `true` | Confine Bash and Monitor commands to the project's folders (macOS). Security feature. |
+| `features.experimental-sandbox` | `true` | Confine Bash and Monitor commands to the project's folders (macOS; Linux with Landlock). Security feature. |
 | `features.redact-secrets` | `true` | Hide tokens, keys and the project's `.env` values in tool output. Security feature. |
 | `features.experimental-dependency-guard` | `true` | Ask before installing a package that is missing, brand new or a typo of a popular one. Security feature. |
 | `features.destructive-snapshot` | `true` | Keep untracked files before `rm`, `git clean`, `git reset --hard` and the like, for `/rewind`. |
@@ -282,6 +284,15 @@ Every feature is on until you turn it off. Each key is `features.<name>` with `t
 | `features.experimental-code-map` | `true` | Index symbols with tree-sitter and point each prompt at matching code. |
 | `features.experimental-memory-seed` | `true` | `/memory seed` offers repeated requests as memories. |
 | `features.experimental-memory-scorecard` | `true` | One request in 20 runs without recalled memory, for `/memory score`. |
+| `features.experimental-code-mode` | `true` | The REPL tool: the agent writes JavaScript that calls its tools as functions. |
+| `features.experimental-code-mode-only` | `false` | With `experimental-code-mode`, REPL is the agent's only tool. |
+| `features.memory` | `true` | Project memory: recall with each prompt, and `/memory`. |
+| `features.memory-search` | `true` | The `memory_search` tool. |
+| `features.schedules` | `true` | `/loop` and `/schedules`. |
+| `features.plugins` | `true` | Install, update, list and remove plugins. |
+| `features.trace` | `true` | `/trace` and `/console`. |
+| `features.channels` | `true` | MCP servers that stay open and send messages to the agent. |
+| `features.declared-providers` | `true` | Load the providers declared in `providers/` folders. |
 
 ```json
 { "features": { "experimental-code-map": false, "git-offer": false } }
@@ -304,9 +315,7 @@ Choices you make in the chat are not written to `settings.json`. They are rememb
 | `history` | object | sending prompts | The last 100 prompts per folder, for the prompt's history. |
 | `sessions` | object | conversations | The last conversation per folder, for `-c`. |
 | `titles` | object | conversations | The title of the last conversation per folder. |
-| `conversations` | object | conversations | Recent conversations per folder, for the conversation picker (`/resume`, `-r`), the trace console, `/rules` and `/memory seed`. |
-
-A saved `mode` or `effort` that is not a known value is ignored with a notice. If the file stops being valid JSON it is moved aside to `settings.json.broken` and a fresh one is started.
+A saved `mode` or `effort` that is not a known value is ignored with a notice. If the file stops being valid JSON it is moved aside to `settings.json.corrupt-<time>` and the chat starts with the defaults.
 
 ## Full example
 

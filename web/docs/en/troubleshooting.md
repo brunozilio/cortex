@@ -25,6 +25,7 @@ All checks passed:
   ✓ providers    Anthropic API, Grok Subscription
   ✓ models       42 available
   ✓ settings     6 permission rules, 2 hooks
+  ✓ trust        /home/ana/rocket is trusted
   ✓ mcp servers  3 configured
   ✓ declared providers none (~/{{DIR}}/providers/*.js adds one)
   ✓ sandbox      on: commands write only inside the project, added folders, temp and caches
@@ -42,6 +43,7 @@ When a check fails, the first line counts the problems (`1 problem(s):`) and the
 | `providers` | At least one provider is connected; lists them | `none connected: run {{COMMAND}} login`. See [Models and providers](./models-and-providers). |
 | `models` | The connected providers offer at least one model; shows how many | `none available: connect a provider`, or the error the provider returned |
 | `settings` | Every settings file here reads; shows the permission rules and hooks found | The file with the problem and why, then `(fix the file it names)`. See [Settings](./settings). |
+| `trust` | Whether this folder is trusted; when it is not, how many project items were skipped, and that `/trust` (or `--trust` with `--print`) trusts it | Only when the trusted folders cannot be read. See [Workspace trust](./sandbox-and-safety#workspace-trust). |
 | `mcp servers` | The MCP configuration reads; shows how many servers | The configuration error. See [MCP](./mcp). |
 | `declared providers` | Every file in `~/{{DIR}}/providers/` and `{{DIR}}/providers/` loaded | Each file that did not, and why |
 | `sandbox` | Always; says whether commands are confined | |
@@ -114,7 +116,7 @@ A model can be named by its full id (`anthropic:claude-sonnet-5-5`), the part af
 
 - If the browser does not open, copy the URL {{NAME}} prints.
 - ChatGPT Subscription waits on port 1455 and Kiro Subscription on port 49153. Close whatever else uses that port and try again.
-- Kiro accepts Google and GitHub sign-ins; organization (IAM Identity Center) and Builder ID sign-ins are refused.
+- Kiro accepts Google, GitHub, Builder ID and organization (IAM Identity Center) sign-ins. An organization sign-in fails when Kiro's portal does not say the organization's start URL (it must be `https`) or its AWS region; check the start URL and try again.
 - GitHub Copilot refuses classic `ghp_` tokens.
 
 ### The agent cannot do anything in print mode
@@ -164,7 +166,7 @@ The `settings` check names the file and the problem, for example an invalid JSON
 
 ### A project's MCP server does not start
 
-A server from a project's `.mcp.json` waits for your approval. `{{COMMAND}} mcp` lists it as `waiting for approval` and says how to approve it:
+A server from a project's `{{DIR}}/mcp.json` waits for your approval. `{{COMMAND}} mcp` lists it as `waiting for approval` and says how to approve it (in a folder you have not trusted it is listed as `skipped: folder not trusted`; trust the folder first):
 
 ```bash
 {{COMMAND}} mcp approve <name>

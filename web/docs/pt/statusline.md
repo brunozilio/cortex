@@ -43,6 +43,8 @@ O comando fica guardado junto com as preferências do próprio chat (como o mode
 - Roda de novo no máximo a cada 3 segundos enquanto o chat está aberto.
 - Até ele imprimir algo, a linha de status de sempre continua.
 - Se não puder ser iniciado, a linha mostra `status line: could not run <comando>`.
+- Se rodar por mais de 5 segundos, ele é parado e a linha mostra `status line: the command took too long (over 5s) and was stopped`.
+- No máximo 4 KB da saída dele são lidos.
 
 ## JSON de entrada
 

@@ -34,7 +34,7 @@ When a built-in server is missing, the first **LSP** question about one of its f
 | `pyright` | `npm`; needs Node.js |
 | `gopls` | `go install`; needs Go |
 
-Only the built-in servers with their built-in command are installed this way. You are asked before each install, in every mode including bypass; plan mode and folders you have not trusted never install, and where nobody can be asked the install is refused unless an allow rule such as `LSP(install:pyright)` names it (see [Language-server installs](./sandbox-and-safety#language-server-installs)). After an install fails, it is not tried again for about 10 minutes. Until a server is installed, edits are not checked with it; while it installs, the result of an edit says so:
+Only the built-in servers with their built-in command are installed this way. You are asked before each install, in every mode including bypass; plan mode and folders you have not trusted never install, and where nobody can be asked the install is refused unless an allow rule such as `LSP(install:pyright)` names it (see [Language-server installs](./sandbox-and-safety#language-server-installs)). After an install fails, it is not tried again for 30 seconds; an install that runs longer than 10 minutes is stopped. Until a server is installed, edits are not checked with it; while it installs, the result of an edit says so:
 
 ```text
 <diagnostics>

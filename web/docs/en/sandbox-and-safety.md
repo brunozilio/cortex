@@ -41,7 +41,7 @@ A project folder can bring files that run code on your computer or widen what th
 | MCP servers in `{{DIR}}/mcp.json` and `{{DIR}}/mcp/*.js` | Not started and not listed for approval |
 | Declared providers in `{{DIR}}/providers/*.js` | Not loaded |
 | Script tools in `{{DIR}}/tools/` | Not registered |
-| Skills and commands written as scripts (`skill.js`, `commands/*.js`) | Not offered. Skills and commands written in Markdown still load. |
+| Skills and commands written as scripts (`SKILL.js`, `commands/*.js`) | Not offered. Skills and commands written in Markdown still load. |
 | `hooks`, `mcpServers`, `permissionMode` and `initialPrompt` in a project agent's frontmatter | Dropped. The agent and its instructions are still offered. |
 
 These still apply in a folder you have not trusted, because they only inform the agent or restrict it: instruction files, rules in `{{DIR}}/rules/`, `deny` and `ask` permission rules, output styles and `{{DIR}}/verification.md`.
@@ -133,7 +133,7 @@ When a command fails with "operation not permitted", {{NAME}} adds a hint to its
 
 ### MCP servers in the sandbox
 
-An MCP server started as a process (a `command` in `mcp.json`) runs in the same sandbox as shell commands. It may write in the project, the temporary folders, the package caches and `sandbox.allowWrite`, and it keeps the network unless its entry says otherwise (`sandbox.network` applies to commands, not to servers). A server that needs another folder, or that should stay off the network, says so in its entry:
+An MCP server started as a process (a `command` in `mcp.json`) runs in the same sandbox as shell commands. It may write in the project, the added folders, the temporary folders, the package caches and `sandbox.allowWrite`, and it keeps the network unless its entry says otherwise (`sandbox.network` applies to commands, not to servers). A server that needs another folder, or that should stay off the network, says so in its entry:
 
 ```json
 {
@@ -149,15 +149,15 @@ An MCP server started as a process (a `command` in `mcp.json`) runs in the same 
 
 | Key in a server's entry | Default | Description |
 |---|---|---|
-| `sandbox.writable` | `[]` | Extra writable folders for this server: absolute or starting with `~/`. Read only from your own `~/{{DIR}}/mcp.json` and the `--mcp-config` file. |
+| `sandbox.writable` | `[]` | Extra writable folders for this server: absolute or starting with `~/`. Read only from your own `~/{{DIR}}/mcp.json`. |
 | `sandbox.network` | `true` | `false` keeps this server off the network. Any file may set it. |
-| `"sandbox": false` | | Starts this server outside the sandbox. Read only from your own `~/{{DIR}}/mcp.json` and the `--mcp-config` file; a project's `{{DIR}}/mcp.json` or a plugin cannot opt out. |
+| `"sandbox": false` | | Starts this server outside the sandbox. Read only from your own `~/{{DIR}}/mcp.json`; a project's `{{DIR}}/mcp.json` or a plugin cannot opt out. |
 
 A `sandbox` value of another shape leaves the server out, with a warning in the log. When the sandbox is required and this system cannot provide it, a process server is not started and the log says why. Servers reached over HTTP are not processes on this computer and are not sandboxed; JavaScript MCP servers run inside {{NAME}} under the [script limits](#script-limits).
 
 ### Running a command outside the sandbox
 
-When a command really needs to write elsewhere, the agent can ask to run it unsandboxed. You are asked every time, with "Run OUTSIDE the sandbox (it may write anywhere)", and the answer cannot be remembered. In `-p` runs, where nobody can answer, it is refused.
+When a command really needs to write elsewhere, the agent can ask to run it unsandboxed. You are asked every time, with "Run OUTSIDE the sandbox (it may write anywhere)"; even "don't ask again" does not stop the next question (it only saves the rule for the command). In `-p` runs, where nobody can answer, it is refused.
 
 ### Turning the sandbox off
 
@@ -171,7 +171,7 @@ or `{{COMMAND}} config set features.experimental-sandbox false`.
 
 With `redact-secrets` on (the default), tool output is cleaned before the model, the transcript and the logs see it. The same applies to tool inputs shown on screen, live command output and full command outputs kept in files. Each secret is replaced with `[redacted]`:
 
-- tokens with known prefixes: `sk-`, `sk_`, `ghp_`, `gho_`, `ghs_`, `ghu_`, `github_pat_`, `glpat-` (20 characters or more), `xoxb-`, `xoxp-`, `xoxa-`, `xoxs-`;
+- tokens with known prefixes: `sk-`, `sk_`, `ghp_`, `gho_`, `ghs_`, `ghu_`, `github_pat_`, `glpat-` (20 characters or more), `xoxb-`, `xoxp-`, `xoxa-`, `xoxs-` (10 or more);
 - AWS access key ids (`AKIA…`, `ASIA…`);
 - JSON Web Tokens (`eyJ…` with three parts);
 - the value in `key=value` or `key: value` when the key ends with `password`, `passwd`, `secret`, `token`, `api_key`, `apikey` or `api-key`;
@@ -234,7 +234,7 @@ A shell command runs without asking only when the parser can follow the whole li
 
 ## Actions that always ask
 
-These are asked about every time, even in bypass mode and even with an allow rule, and cannot be remembered:
+These are asked about every time, even in bypass mode and even with an allow rule, and the question does not offer "don't ask again":
 
 - `git push` to the default branch, or with `--force`, `--force-with-lease`, `--mirror`, `--delete`, `--prune`, or refspecs starting with `+` or `:`;
 - `cargo`, `npm`, `pnpm` or `yarn` `publish`;

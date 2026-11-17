@@ -10,7 +10,7 @@ cd my-project
 {{COMMAND}}
 ```
 
-Everything happens in a terminal chat: there is no GUI. The same agent can also answer once and print the result (`{{COMMAND}} -p "..."`) for scripts and CI.
+You work in a terminal chat: there is no GUI. A local page in your browser only shows the [trace](./trace-console) and these docs, and can hold a terminal attached to a session. The same agent can also answer once and print the result (`{{COMMAND}} -p "..."`) for scripts and CI.
 
 ## What you can do with it
 
@@ -50,7 +50,7 @@ The screen has four parts, from top to bottom:
 | Reference | [CLI reference](./cli-reference), [Troubleshooting](./troubleshooting). |
 
 > [!TIP]
-> Inside the chat, `/help` lists every command and key, `/help <command>` explains one, and `/docs` opens a reference of the commands, keys and command-line flags in your browser.
+> Inside the chat, `/help` lists every command and the main keys, `/help <command>` explains one, and `/docs` opens this documentation in your browser (`/docs <topic>` searches it).
 
 ## Where to go next
 

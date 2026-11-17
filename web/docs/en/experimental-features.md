@@ -17,7 +17,7 @@ Type `/features` to list every flag with its state and a one-line description:
 ```text
 Features (/features <name> on|off):
   on   experimental-sandbox
-       Confine Bash and Monitor commands to the project's folders (macOS)
+       Confine Bash and Monitor commands to the project's folders (macOS; Linux with Landlock)
   on   experimental-output-cleanup
        Bash runs commands without colours and drops escape codes, redrawn progress and repeated lines
   ...
@@ -102,7 +102,7 @@ A flag whose name starts with `experimental-` is experimental: its behaviour may
 
 | Flag | Area | Security | What it does |
 |---|---|---|---|
-| `experimental-sandbox` | Safety | Yes | Confines Bash and Monitor commands to the project's folders (macOS) |
+| `experimental-sandbox` | Safety | Yes | Confines Bash and Monitor commands to the project's folders (macOS; Linux with Landlock) |
 | `redact-secrets` | Safety | Yes | Hides tokens, keys and `.env` values in tool output |
 | `destructive-snapshot` | Safety | | Keeps files before `rm -r`, `git clean`, `git reset --hard` and the like so `/rewind` can bring them back |
 | `experimental-dependency-guard` | Safety | Yes | Asks you before installing a missing, brand-new or look-alike package |

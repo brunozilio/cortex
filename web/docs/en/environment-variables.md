@@ -15,10 +15,10 @@ Most of {{NAME}} is configured in [settings files](./settings). Environment vari
 
 | Variable | Values | Default | Purpose |
 |---|---|---|---|
-| `{{ENV}}_LOG` | A log filter: `error`, `warn`, `info`, `debug`, `trace`, or per module (`agent_engine=debug,warn`) | `warn` | How much goes to the log file `logs/{{COMMAND}}.log` in the [data folder](./files-and-directories#data-folder). An empty or invalid filter falls back to `warn`. |
+| `{{ENV}}_LOG` | A log filter: `error`, `warn`, `info`, `debug`, `trace`, or per module (`agent_engine=debug,warn`) | `warn` | How much goes to the log file `logs/{{COMMAND}}.log` in the [local data folder](./files-and-directories#data-folder). An empty or invalid filter falls back to `warn`. |
 | `{{ENV}}_THEME` | `light`, `dark` (any case) | detected | Forces the chat's light or dark colours instead of detecting the terminal's background. |
 | `{{ENV}}_REDUCED_MOTION` | Any non-empty value other than `0` | unset | Turns the chat's animations off. |
-| `{{ENV}}_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | unset | Turns automatic memory off, like `"autoMemoryEnabled": false`. See [Memory](./memory). |
+| `{{ENV}}_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | unset | Like `"autoMemoryEnabled": false`: turns off the persistent memory of agents that declare a `memory` scope. Project memory is not affected. See [Memory](./memory#turn-memory-off). |
 | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | unset | Same as `{{ENV}}_DISABLE_AUTO_MEMORY`, for setups shared with Claude Code. |
 | `{{ENV}}_CONSOLE_DIR` | A folder containing `index.html` | unset | Serves the [trace console](./trace-console) page from this folder instead of the copy built into the binary. |
 | `{{ENV}}_SECRETS` | `file` (any case) | unset: the system keychain | Keeps the key that opens your saved API keys and tokens in `secrets.key` instead of the system keychain, and never writes to the keychain. For CI, containers and servers without a keychain. If the key was in the keychain, it is moved back into the file when the keychain answers; when it does not, a new key is made and keys saved before must be entered again. See [Files and directories](./files-and-directories#data-folder). |
@@ -37,7 +37,8 @@ Most of {{NAME}} is configured in [settings files](./settings). Environment vari
 | `COLORFGBG` | Detects a light or dark terminal background when `{{ENV}}_THEME` is not set; dark when it is missing. |
 | `COLORTERM` | `truecolor` or `24bit` turns on true colour in the chat. |
 | `PATH` | Where language servers (`rust-analyzer`, `gopls`…) and other programs are found. |
-| `TMPDIR` | macOS and Linux: the temporary folder for long tool outputs, the prompt being edited and sandbox write access. |
+| `TMPDIR` | macOS and Linux: the [temporary folder](./files-and-directories#temporary-files) for long tool outputs, the prompt being edited and sandbox write access. |
+| `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` (or lower case) | Requests to providers and web pages go through this proxy. With one of them set, the agent's web requests leave to the proxy the check that a site is not on this computer or your private network. |
 
 The `${VAR}` and `${VAR:-default}` forms in `mcp.json` files are filled in from the environment; a variable that is unset and has no default is left as written. See [MCP](./mcp).
 
@@ -56,6 +57,7 @@ HTTP [hooks](./hooks) can use `$VAR` or `${VAR}` in their `headers`, but only fo
 | `CARGO_TARGET_DIR` | Background test runs in Rust projects | `<project>/target/agent-tests`, so they do not block your own builds. Feature `experimental-affected-tests`. |
 | `GOBIN` | Installing a Go language server | A staging folder inside the language server cache. |
 | `TERM=xterm-256color`, `COLORTERM=truecolor` | The terminal the trace console opens | Fixed values. |
+| `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0` | Git commands {{NAME}} runs on its own (status, diffs) | So git never asks for a password and never takes a lock your own git commands would wait on. |
 | `APP_NOTIFICATION_TITLE`, `APP_NOTIFICATION_MESSAGE` | Windows desktop notifications | The notification's title and text. |
 | Variables from `env` | MCP servers (stdio) and language servers | What you put in the server's `env` in `mcp.json` or `lspServers`. |
 

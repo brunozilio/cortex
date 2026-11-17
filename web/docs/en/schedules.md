@@ -16,9 +16,9 @@ A scheduled prompt is sent to your conversation later, as if you had typed it: e
 | Interval | Schedule |
 |---|---|
 | `<n>s` | Every `⌈n/60⌉` minutes (seconds round up to whole minutes, 1 to 59) |
-| `<n>m` | Every n minutes; 60 or more becomes hours |
-| `<n>h` | Every n hours; 24 or more becomes days |
-| `<n>d` | Every n days, up to 31 |
+| `<n>m` | Every n minutes; 60 or more becomes whole hours, rounded down (`90m` is every hour) |
+| `<n>h` | Every n hours; 24 or more becomes whole days, rounded down |
+| `<n>d` | Every n days, up to 31; a longer one is not read as an interval, so the whole text is the task |
 
 The agent creates the schedule with **CronCreate** and tells you how to stop it.
 

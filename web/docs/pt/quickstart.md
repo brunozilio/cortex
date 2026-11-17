@@ -19,7 +19,7 @@ Algumas ferramentas são usadas quando estão presentes, e nada quebra sem elas:
 |---|---|
 | `git` | `/diff`, `/diffs`, comparação com a branch e worktrees. |
 | `pdftotext` | Ler PDFs. |
-| `ripgrep` | Buscas mais rápidas; o `Grep` funciona sem ele. |
+| `ripgrep` | Comandos que o agente roda com `Bash`; o `doctor` informa se está instalado. O `Grep` embutido não precisa dele. |
 | Language servers (rust-analyzer, clangd…) | A ferramenta `LSP` e os diagnósticos depois de edições. Veja [Inteligência de código](./code-intelligence). |
 | `node` / `npx` | Só para servidores MCP que precisam deles. |
 
@@ -89,6 +89,8 @@ cd meu-projeto
 ```
 
 O chat abre em tela cheia com o nome do produto e a pasta no topo, algumas dicas (`/resume`, `/model`, `@file`, `!cmd`), o prompt e a linha de status mostrando o modelo, o modo de permissão e o esforço.
+
+Se o projeto traz coisas que rodam código ou ampliam o que o agente pode fazer (hooks, servidores MCP, ferramentas de script, permissões em `settings.local.json`…), o chat primeiro pergunta **Do you trust the files in …?**: **Trust this folder**, **Continue without trusting** ou **Exit**. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
 
 Também dá para abrir o chat já enviando um primeiro prompt:
 

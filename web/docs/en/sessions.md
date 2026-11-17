@@ -41,7 +41,7 @@ Inside the chat, `/resume` (alias `/continue`) opens **Resume a conversation**: 
 /resume login bug
 ```
 
-With words, only conversations whose title contains every one of them (in any case) are listed. The list includes conversations run in this folder by other clients, such as the browser, but leaves out the current one and archived ones. `↑`/`↓` and `Enter` pick; `Esc` closes. `/resume` is not available while the agent works.
+With words, only conversations whose title contains every one of them (in any case) are listed. The list includes conversations run in this folder by other clients, such as the browser, but leaves out the current one. `↑`/`↓` and `Enter` pick; `Esc` closes. `/resume` is not available while the agent works.
 
 ## Titles
 
@@ -124,13 +124,14 @@ Sessions live in your data folder, not in the project:
 |---|---|
 | macOS | `~/Library/Application Support/{{NAME}}` |
 | Linux | `$XDG_CONFIG_HOME/{{COMMAND}}`, by default `~/.config/{{COMMAND}}` |
-| Windows | `%LOCALAPPDATA%\{{NAME}}` for `native-sessions/`, `%APPDATA%\{{NAME}}` for `users/` |
+| Windows | `%LOCALAPPDATA%\{{NAME}}` for `native-sessions/`, `%APPDATA%\{{NAME}}` for `app.db` and `users/` |
 
 Inside it:
 
 | Path | Holds |
 |---|---|
-| `native-sessions/` | Each session's conversation and checkpoints. |
-| `users/` | Per-user settings of the chat (last model, mode, effort, prompt history, the last session per folder, titles) and the session catalog that `/resume` and the trace console list. |
+| `native-sessions/` | Each session's conversation, trace and checkpoints. |
+| `app.db` | A SQLite database with the list of conversations (folder, title, status, last use) that `/resume`, the sessions list and the trace console show, and your memories. |
+| `users/` | Per-user settings of the chat: last model, mode, effort, prompt history, the last session per folder and its title. |
 
 See [Files and directories](./files-and-directories). `/factory-reset` erases all of it.

@@ -93,7 +93,7 @@ O `mcp.json` tem um objeto `mcpServers`. Um servidor com `url` é remoto; um ser
 | `command` | O programa a iniciar (`stdio`) |
 | `args` | Os argumentos dele (`stdio`) |
 | `env` | Variáveis de ambiente acrescentadas ao processo (`stdio`) |
-| `sandbox` | Onde o processo pode gravar e se ele alcança a rede (`stdio`): `{ "writable": [...], "network": false }`, ou `false` para iniciá-lo fora da sandbox (só no seu próprio arquivo). Veja "Servidores MCP na sandbox" em [Sandbox e segurança](./sandbox-and-safety). |
+| `sandbox` | Onde o processo pode gravar e se ele alcança a rede (`stdio`): `{ "writable": [...], "network": false }`, ou `false` para iniciá-lo fora da sandbox. `writable` e `false` só valem no seu próprio `~/{{DIR}}/mcp.json`. Veja "Servidores MCP na sandbox" em [Sandbox e segurança](./sandbox-and-safety). |
 
 Um servidor de outro tipo, ou com um valor de `sandbox` de outro formato, é deixado de fora, com um aviso no log.
 
@@ -132,20 +132,20 @@ Quando o seu arquivo e o do projeto declaram o mesmo nome, um servidor do projet
 | Opção | Significado |
 |---|---|
 | `-e`, `--env CHAVE=VALOR` | Uma variável de ambiente para um servidor local (pode repetir). Use aspas simples em `'${VAR}'` para o shell deixá-la para o {{NAME}} ler ao iniciar. |
-| `-H`, `--header "Nome: valor"` | Um cabeçalho para um servidor remoto (pode repetir) |
+| `-H`, `--header "Nome: valor"` | Um cabeçalho para um servidor remoto (pode repetir). Coloque `'${VAR}'` entre aspas simples do mesmo jeito. |
 | `--transport sse` | Usa o transporte mais antigo HTTP + SSE para uma URL (`http` por padrão) |
 | `--force` | Substitui um servidor seu que já tem esse nome |
 
 Um alvo que começa com `https://` ou `http://` cria um servidor remoto; qualquer outra coisa é o comando de um servidor local, e o que vem depois são os argumentos dele. Escreva `--` antes dos argumentos do servidor quando algum deles começa com `-`: tudo depois de `--` é do servidor. Um argumento que começa com `-` sem `--` antes é recusado, com a dica de acrescentar um.
 
 ```bash
-{{COMMAND}} mcp add -H "Authorization: Bearer ${API_TOKEN}" docs https://docs.example.com/mcp
+{{COMMAND}} mcp add -H 'Authorization: Bearer ${API_TOKEN}' docs https://docs.example.com/mcp
 {{COMMAND}} mcp add --transport sse legacy https://old.example.com/sse
 {{COMMAND}} mcp add jira jira-mcp -- --stdio
 {{COMMAND}} mcp add github -- npx -y @modelcontextprotocol/server-github
 ```
 
-`add` recusa um nome com outros caracteres, um nome reservado, um servidor sem comando nem URL, ou um nome que você já usa (a não ser com `--force`; o erro mostra a entrada que existe). `remove` só remove servidores do seu próprio `~/{{DIR}}/mcp.json`. `approve`, `deny` e `get` recusam um nome que não está na lista e dizem quais estão.
+`add` recusa um nome com outros caracteres, um nome reservado, um servidor sem comando nem URL, ou um nome que você já usa (a não ser com `--force`; o erro mostra a entrada que existe). Também recusa um segredo escrito por extenso: um valor de cabeçalho, de ambiente ou um argumento que parece um token, ou um cabeçalho ou variável de ambiente cujo nome diz que guarda um (`Authorization`, `GITHUB_TOKEN`, `API_KEY`…), a não ser que o valor leia uma `${VAR}`. `remove` só remove servidores do seu próprio `~/{{DIR}}/mcp.json`. `approve`, `deny` e `get` recusam um nome que não está na lista e dizem quais estão.
 
 ### A lista
 
@@ -306,10 +306,12 @@ Um `math.js` com esse conteúdo oferece `mcp__math__add` e `mcp__math__notes`. U
 
 ## Como os servidores iniciam
 
-No início de cada prompt, o {{NAME}} inicia todo servidor `ready` e pede as ferramentas dele (versão `2025-06-18` do protocolo MCP). Um servidor que não consegue iniciar, ou listar suas ferramentas, fica fora daquela execução, com um aviso no log; a execução segue sem ele.
+No primeiro prompt de uma sessão, o {{NAME}} inicia todo servidor `ready` (versão `2025-06-18` do protocolo MCP). Os servidores continuam conectados nos prompts seguintes da sessão; cada prompt pede de novo as ferramentas deles. Um servidor só é iniciado de novo quando a entrada ou a aprovação dele mudou, ou quando o processo dele parou; um servidor que deixou de estar `ready` é fechado. Quando o {{NAME}} libera a sessão (veja [`SessionEnd`](./hooks#sessionend)), os servidores dela são fechados. Os servidores em JavaScript são carregados de novo a cada prompt.
 
-- Um servidor local roda como processo filho com o seu ambiente mais o `env` dele, dentro da sandbox quando ela está ligada (veja "Servidores MCP na sandbox" em [Sandbox e segurança](./sandbox-and-safety)). O stderr é descartado. Uma chamada pode levar até 10 minutos.
-- Um servidor remoto mantém o id de sessão que recebe entre as chamadas de uma execução.
+Um servidor que não consegue iniciar, ou listar suas ferramentas, fica fora daquela execução, com um aviso no log; a execução segue sem ele.
+
+- Um servidor local roda como processo filho com o seu ambiente mais o `env` dele, dentro da sandbox quando ela está ligada (veja "Servidores MCP na sandbox" em [Sandbox e segurança](./sandbox-and-safety)). Quando ele para, o erro cita as últimas linhas que ele escreveu no stderr. Uma chamada pode levar até 10 minutos.
+- Um servidor remoto mantém o id de sessão que recebe entre as chamadas.
 
 ## Solução de problemas
 

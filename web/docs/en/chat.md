@@ -185,7 +185,7 @@ Both need a git repository.
 
 ## Parallel sessions
 
-`←` on an empty prompt (outside shell mode) opens the **Sessions** list: the current conversation (`· here`) and any you left running, each marked `working`, `needs you`, `done` or `idle`. `n` starts a new session and leaves the current one working on its own; `↑`/`↓` move; `Esc` goes back.
+`←` on an empty prompt (outside shell mode) opens the **Sessions** list: the current conversation (`· here`) and any you left running, each marked `working`, `needs you`, `done` or `idle`, then this folder's earlier conversations with when they were last used. `/fleet` (or `/sessions`) opens it too. `↑`/`↓` move; `Enter` switches to the chosen session, or continues the chosen earlier conversation, and the one you leave keeps working; `n` starts a new session and leaves the current one working on its own; `Esc` goes back.
 
 ## Status line
 

@@ -182,7 +182,7 @@ Lê ou muda o seu arquivo de configurações, `~/{{DIR}}/settings.json`. Com `--
 | Opção | Curta | Valor | Padrão | Exige | Descrição |
 |---|---|---|---|---|---|
 | `[PROMPT]...` | | texto | | | O que perguntar. As palavras são unidas com espaços. Abre o chat com ele, a menos que `--print` seja passado. |
-| `--print` | `-p` | | desligado | | Responde uma vez, imprime a resposta e sai. Veja [Modo headless](./headless). |
+| `--print` | `-p` | | desligado | | Responde uma vez, imprime a resposta e sai. Com `--input-format text` precisa de um prompt (`--print needs a prompt`). Veja [Modo headless](./headless). |
 | `--output-format` | | `text`, `json` ou `stream-json` | `text` | `--print` | `text` transmite a resposta; `json` imprime um objeto de resultado; `stream-json` imprime cada evento como uma linha JSON, e depois o resultado |
 | `--input-format` | | `text` ou `stream-json` | `text` | `--print` | `text` pega o prompt da linha de comando; `stream-json` lê mensagens de usuário como linhas JSON na entrada padrão e responde uma de cada vez |
 | `--max-turns` | | número | 200 | `--print` | O máximo de turnos do modelo que uma execução pode usar |
@@ -234,7 +234,7 @@ Veja [Sessões](./sessions).
 |---|---|
 | `0` | Sucesso |
 | `1` | Uma falha: execução que falhou, verificação ou eval reprovado, verificação do doctor que falhou, ou um erro como uma pasta ilegível. A mensagem sai na saída de erro como `{{COMMAND}}: <mensagem>`. |
-| `2` | A linha de comando está errada: opção ou valor desconhecido, argumento faltando, ou opção usada sem aquela que ela exige |
+| `2` | A linha de comando está errada: opção ou valor desconhecido, argumento faltando, ou opção usada sem aquela que ela exige. Também quando a entrada ou a saída padrão não é um terminal e `--print` não foi dado (`no terminal: use -p for print mode`). |
 
 ## Variáveis de ambiente
 

@@ -43,6 +43,8 @@ The command is remembered with the chat's own preferences (like the model and vi
 - It runs again at most every 3 seconds while the chat is open.
 - Until it has printed something, the usual status line stays.
 - If it cannot be started, the line says `status line: could not run <command>`.
+- If it runs for more than 5 seconds it is stopped and the line says `status line: the command took too long (over 5s) and was stopped`.
+- At most 4 KB of its output is read.
 
 ## Input JSON
 

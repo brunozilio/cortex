@@ -88,7 +88,7 @@ Signs in with GitHub's device flow: you type the printed code at `github.com/log
 
 ### Kiro Subscription
 
-Signs in through the browser via `app.kiro.dev/signin`, with the callback `http://localhost:49153/oauth/callback`. Kiro accepts only that port, so it must be free while you sign in. Google and GitHub sign-ins work; organization (IAM Identity Center) and Builder ID sign-ins are refused for now. Tokens refresh on their own, also after a 401 or 403.
+Signs in through the browser via `app.kiro.dev/signin`, with the callback `http://localhost:49153/oauth/callback`. Kiro accepts only that port, so it must be free while you sign in. Google, GitHub, Builder ID and organization (IAM Identity Center) sign-ins work; an organization sign-in then continues on your organization's page and needs a Kiro profile for your account, otherwise it fails with `signed in, but this account has no Kiro profile`. Tokens refresh on their own, also after a 401 or 403.
 
 ### Grok Subscription
 

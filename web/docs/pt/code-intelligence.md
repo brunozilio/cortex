@@ -34,7 +34,7 @@ Quando falta um servidor embutido, a primeira pergunta da ferramenta **LSP** sob
 | `pyright` | `npm`; precisa de Node.js |
 | `gopls` | `go install`; precisa de Go |
 
-Só os servidores embutidos, com o comando embutido, são instalados assim. Você é consultado antes de cada instalação, em todo modo, inclusive bypass; o modo plan e as pastas em que você não confiou nunca instalam, e onde ninguém pode ser consultado a instalação é recusada, a menos que uma regra allow como `LSP(install:pyright)` a nomeie (veja [Sandbox e segurança](./sandbox-and-safety)). Depois que uma instalação falha, ela não é tentada de novo por uns 10 minutos. Até um servidor ser instalado, as edições não são conferidas por ele; enquanto ele instala, o resultado de uma edição avisa:
+Só os servidores embutidos, com o comando embutido, são instalados assim. Você é consultado antes de cada instalação, em todo modo, inclusive bypass; o modo plan e as pastas em que você não confiou nunca instalam, e onde ninguém pode ser consultado a instalação é recusada, a menos que uma regra allow como `LSP(install:pyright)` a nomeie (veja [Sandbox e segurança](./sandbox-and-safety)). Depois que uma instalação falha, ela não é tentada de novo por 30 segundos; uma instalação que passa de 10 minutos é interrompida. Até um servidor ser instalado, as edições não são conferidas por ele; enquanto ele instala, o resultado de uma edição avisa:
 
 ```text
 <diagnostics>

@@ -56,9 +56,9 @@ Arquivos que não existem são ignorados. Um arquivo que não é JSON válido, o
 
 ### Como os valores se combinam
 
-- **Valores únicos** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `autoMemoryEnabled`): vale o último arquivo lido. Na prática a pasta mais próxima de onde você trabalha vence as pastas acima dela, e `managed-settings.json` vence todas. Definir `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` ou `jsonSchema` como `null` apaga um valor definido por um arquivo anterior.
+- **Valores únicos** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `autoMemoryEnabled`, `enableAllProjectMcpServers`): vale o último arquivo lido. Na prática a pasta mais próxima de onde você trabalha vence as pastas acima dela, e `managed-settings.json` vence todas. Definir `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` ou `jsonSchema` como `null` apaga um valor definido por um arquivo anterior.
 - **Listas e mapas se somam**: regras de permissão, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`.
-- **Chaves de liga/desliga** (`features`, `scripts`, `sandbox.network`): cada arquivo muda só os nomes que menciona.
+- **Chaves de liga/desliga** (`features`, `scripts`, `sandbox.network`, `sandbox.required`): cada arquivo muda só os nomes que menciona.
 
 ### O que um arquivo do repositório não pode fazer
 
@@ -118,7 +118,7 @@ Sem opções, edita `~/{{DIR}}/settings.json`. Com `--project`, edita `{{DIR}}/s
 |---|---|---|---|
 | `outputStyle` | texto | `"default"` | Como o agente fala. Um estilo embutido (`default`, `concise`, `proactive`, `explanatory`, `learning`, sem diferenciar maiúsculas) ou o nome de um estilo próprio em `{{DIR}}/output-styles/<nome>.md` (letras, dígitos, `-` e `_`). O estilo escolhido com `/output-style` vence esta chave. Veja [Estilos de resposta](./output-styles). |
 | `agent` | texto ou `null` | nenhum | Executa a conversa principal como este agente (um nome listado em `/agents`), com as instruções, ferramentas e modelo dele. Um nome desconhecido faz a execução falhar. Veja [Agentes](./agents). |
-| `autoMemoryEnabled` | booleano | `true` | `false` desliga a memória automática em todas as execuções. `{{ENV}}_DISABLE_AUTO_MEMORY` faz o mesmo. Veja [Memória](./memory). |
+| `autoMemoryEnabled` | booleano | `true` | `false` desliga a memória persistente dos [agentes](./agents) que declaram um escopo de `memory` (subagentes e o agente escolhido com `agent`). A memória do projeto não muda; veja [Memória](./memory#desligar-a-memoria). `{{ENV}}_DISABLE_AUTO_MEMORY` faz o mesmo. |
 | `advisorModel` | texto ou `null` | nenhum | Modelo do conselheiro que o agente consulta. Um id ou nome de modelo, sem espaços. Um papel definido com `/model advisor <modelo>` vence. |
 | `judgeModel` | texto ou `null` | nenhum | Modelo do juiz que confere o trabalho terminado contra os critérios de verificação. Um papel definido com `/model review <modelo>` vence. Veja [Verificação e revisão](./verification-and-review). |
 | `smallModel` | texto ou `null` | o modelo pequeno do provedor | Modelo para tarefas de fundo: títulos, escolha de esforço, leitura da web. Um papel definido com `/model small <modelo>` vence. |
@@ -135,7 +135,9 @@ Sem opções, edita `~/{{DIR}}/settings.json`. Com `--project`, edita `{{DIR}}/s
 | `verification` | objeto | `{}` | Regras para o juiz de verificação. Veja [`verification`](#verification). |
 | `scripts` | objeto | tudo `true` para os seus scripts, tudo `false` para os de um projeto | O que ferramentas, skills, hooks e provedores em JavaScript podem fazer. Veja [`scripts`](#scripts). |
 | `sandbox` | objeto | rede ligada | Onde comandos na sandbox podem gravar e se acessam a rede. Veja [`sandbox`](#sandbox). |
-| `features` | objeto | todos os recursos ligados | Liga ou desliga recursos pelo nome. Veja [`features`](#features). |
+| `features` | objeto | todos os recursos ligados, menos `experimental-code-mode-only` | Liga ou desliga recursos pelo nome. Veja [`features`](#features). |
+
+Uma chave que o {{NAME}} não conhece é ignorada. `trustProjectHooks`, que versões anteriores liam, não faz mais nada: os hooks de um projeto rodam quando você confia na pasta dele, e o chat avisa isso até você remover a chave.
 
 > [!NOTE]
 > As definições de servidores MCP (`mcpServers`) não ficam no `settings.json`: ficam em `{{DIR}}/mcp.json` (do projeto) e `~/{{DIR}}/mcp.json` (seus). Veja [MCP](./mcp). O comando da linha de status é uma preferência do chat (veja Preferências guardadas do chat, abaixo, e [Linha de status](./statusline)).
@@ -185,7 +187,7 @@ O padrão depende de onde o script está:
 - **Os seus scripts** são os que ficam em `~/{{DIR}}/` e os que vêm com o {{NAME}}. Eles têm os três tipos de acesso, a não ser que um arquivo de configuração desligue algum.
 - **Os scripts de um projeto** são os que ficam na pasta `{{DIR}}/` do projeto: as ferramentas, skills, hooks, provedores e servidores MCP em script dele. Eles não têm **nenhum** dos três até que um dos seus próprios arquivos de configuração libere.
 
-Os seus próprios arquivos são `~/{{DIR}}/settings.json`, `~/{{DIR}}/settings.local.json`, `~/{{DIR}}/managed-settings.json` e o `{{DIR}}/settings.local.json` de um projeto, desde que o git não o rastreie. Um valor definido neles vale para os dois grupos: `true` libera o acesso também para os scripts do projeto, `false` tira o acesso também dos seus. Um `{{DIR}}/settings.json` versionado só pode desligar acessos.
+Os seus próprios arquivos são `~/{{DIR}}/settings.json`, `~/{{DIR}}/settings.local.json`, `~/{{DIR}}/managed-settings.json` e o `{{DIR}}/settings.local.json` de um projeto numa pasta em que você confia. Um valor definido neles vale para os dois grupos: `true` libera o acesso também para os scripts do projeto, `false` tira o acesso também dos seus. Um `{{DIR}}/settings.json` versionado só pode desligar acessos.
 
 Um script barrado recebe um erro que cita a configuração, por exemplo `scripts may not touch files here (settings: scripts.files)`.
 
@@ -244,11 +246,11 @@ Um mapa do nome do servidor para a sua configuração. Usar um nome embutido (`r
 
 ### `features`
 
-Todo recurso fica ligado até você desligá-lo. Cada chave é `features.<nome>` com `true` ou `false`; um valor que não é booleano interrompe a execução. `/features` lista todos com o estado atual, e [Recursos experimentais](./experimental-features) explica cada um.
+Todo recurso fica ligado até você desligá-lo, menos `experimental-code-mode-only`, que fica desligado até você ligá-lo. Cada chave é `features.<nome>` com `true` ou `false`; um valor que não é booleano interrompe a execução. `/features` lista todos com o estado atual, e [Recursos experimentais](./experimental-features) explica cada um.
 
 | Chave | Padrão | O que controla |
 |---|---|---|
-| `features.experimental-sandbox` | `true` | Confina os comandos de Bash e Monitor às pastas do projeto (macOS). Recurso de segurança. |
+| `features.experimental-sandbox` | `true` | Confina os comandos de Bash e Monitor às pastas do projeto (macOS; Linux com Landlock). Recurso de segurança. |
 | `features.redact-secrets` | `true` | Esconde tokens, chaves e os valores do `.env` do projeto na saída das ferramentas. Recurso de segurança. |
 | `features.experimental-dependency-guard` | `true` | Pergunta antes de instalar um pacote inexistente, recém-publicado ou com nome parecido com um popular. Recurso de segurança. |
 | `features.destructive-snapshot` | `true` | Guarda arquivos não versionados antes de `rm`, `git clean`, `git reset --hard` e similares, para o `/rewind`. |
@@ -282,6 +284,15 @@ Todo recurso fica ligado até você desligá-lo. Cada chave é `features.<nome>`
 | `features.experimental-code-map` | `true` | Indexa símbolos com tree-sitter e aponta cada prompt para o código relacionado. |
 | `features.experimental-memory-seed` | `true` | `/memory seed` oferece pedidos repetidos como memórias. |
 | `features.experimental-memory-scorecard` | `true` | Uma requisição a cada 20 roda sem memória recuperada, para o `/memory score`. |
+| `features.experimental-code-mode` | `true` | A ferramenta REPL: o agente escreve JavaScript que chama as ferramentas dele como funções. |
+| `features.experimental-code-mode-only` | `false` | Com `experimental-code-mode`, a REPL é a única ferramenta do agente. |
+| `features.memory` | `true` | Memória do projeto: recuperação a cada prompt, e `/memory`. |
+| `features.memory-search` | `true` | A ferramenta `memory_search`. |
+| `features.schedules` | `true` | `/loop` e `/schedules`. |
+| `features.plugins` | `true` | Instalar, atualizar, listar e remover plugins. |
+| `features.trace` | `true` | `/trace` e `/console`. |
+| `features.channels` | `true` | Servidores MCP que ficam abertos e mandam mensagens ao agente. |
+| `features.declared-providers` | `true` | Carrega os provedores declarados em pastas `providers/`. |
 
 ```json
 { "features": { "experimental-code-map": false, "git-offer": false } }
@@ -304,9 +315,7 @@ As escolhas que você faz no chat não vão para o `settings.json`. Elas ficam g
 | `history` | objeto | envio de prompts | Os últimos 100 prompts por pasta, para o histórico do prompt. |
 | `sessions` | objeto | conversas | A última conversa por pasta, para o `-c`. |
 | `titles` | objeto | conversas | O título da última conversa por pasta. |
-| `conversations` | objeto | conversas | Conversas recentes por pasta, para o seletor de conversas (`/resume`, `-r`), o console de trace, `/rules` e `/memory seed`. |
-
-Um `mode` ou `effort` guardado com valor desconhecido é ignorado com um aviso. Se o arquivo deixar de ser JSON válido, ele é movido para `settings.json.broken` e um novo é criado.
+Um `mode` ou `effort` guardado com valor desconhecido é ignorado com um aviso. Se o arquivo deixar de ser JSON válido, ele é movido para `settings.json.corrupt-<hora>` e o chat começa com os padrões.
 
 ## Exemplo completo
 

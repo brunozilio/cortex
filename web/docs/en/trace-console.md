@@ -123,4 +123,4 @@ If the server cannot start at all, the chat says `The {{NAME}} page could not st
 
 - [Budget and cost](./budget-and-cost): `/cost` in the chat.
 - [Verification and review](./verification-and-review): where the checks in the overview come from.
-- [Sessions](./sessions): resuming and archiving sessions.
+- [Sessions](./sessions): resuming sessions.

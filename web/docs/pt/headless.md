@@ -50,7 +50,7 @@ As regras são separadas por espaços ou vírgulas (fora dos parênteses), e as 
 
 ### Hooks, scripts e servidores do projeto precisam de `--trust`
 
-O modo de impressão nunca pergunta se você confia na pasta. Se a pasta ainda não é confiável, a execução não carrega nada do projeto que rode código ou conceda permissões (hooks, ferramentas de script, servidores MCP, provedores declarados, concessões do `settings.local.json`), e uma linha na saída de erro diz quantos itens foram ignorados. Passe `--trust` para carregá-los naquela chamada; nada é guardado:
+O modo de impressão nunca pergunta se você confia na pasta. Se a pasta ainda não é confiável, a execução não carrega nada do projeto que rode código ou conceda permissões (hooks, ferramentas de script, servidores MCP, provedores declarados, concessões do `settings.local.json`), e uma linha na saída de erro diz quantos itens foram ignorados. Passe `--trust` para carregá-los naquela chamada; nada é guardado. Quando a pasta não pode ser confiável (a sua pasta pessoal, por exemplo), uma linha `--trust ignored: <motivo>` avisa na saída de erro e a execução segue sem confiança:
 
 ```bash
 {{COMMAND}} -p --trust "rode as verificações de release"
@@ -164,6 +164,8 @@ Outros tipos de evento podem aparecer conforme o {{NAME}} evolui; ignore os que 
 
 No formato `text`, a resposta vai para a saída padrão e todo o resto para a saída de erro: linhas de ferramentas, notas e, quando a execução falha, `{{COMMAND}}: <erro>`.
 
+Em `json` e `stream-json`, a saída padrão sempre termina com um objeto de resultado, mesmo quando o comando não conseguiu começar (por exemplo `no model is available`): `is_error` é `true` e `error` diz o motivo. O erro também é impresso na saída de erro.
+
 ## Vários prompts pela entrada padrão
 
 `--input-format stream-json` lê os prompts da entrada padrão em vez da linha de comando, um objeto JSON por linha, e responde um de cada vez na mesma sessão:
@@ -179,8 +181,6 @@ printf '%s\n' \
 - `message.content` é uma string ou uma lista de blocos; o `text` de cada bloco é unido com quebras de linha.
 - Cada linha é respondida assim que chega, então outro programa pode escrever um prompt, ler a resposta e escrever o próximo.
 - Uma linha que não é JSON, cujo conteúdo não é texto, ou que não pode ser lida (por exemplo UTF-8 inválido) encerra o comando com `input line <n>: ...`; as linhas anteriores já foram respondidas.
-
-Toda a entrada padrão é lida antes de o primeiro prompt ser enviado.
 
 ## Limitar a execução
 
@@ -217,7 +217,7 @@ id=$({{COMMAND}} -p --output-format json "summarize the open issues in NOTES.md"
 {{COMMAND}} -p --resume "$id" "now draft a reply to the first one"
 ```
 
-No modo print, `-r` sem id começa uma conversa nova; o seletor que ele abre no chat não existe aqui.
+No modo print, `-r` sem id encerra o comando com esse erro (código 1): o seletor que ele abre no chat não existe aqui. `-c` sem conversa anterior na pasta começa uma nova.
 
 ## Outras opções
 
@@ -229,7 +229,7 @@ No modo print, `-r` sem id começa uma conversa nova; o seletor que ele abre no 
 |---|---|
 | `0` | A execução terminou e todas as verificações passaram |
 | `1` | A execução falhou ou foi cancelada, uma verificação falhou, ou o comando não conseguiu começar (por exemplo `no model is available`, `--print needs a prompt`, um `--input-format` desconhecido) |
-| `2` | A linha de comando está errada: opção desconhecida, valor faltando, opção que exige `--print` usada sem ele, `--output-format` ou `--mode` desconhecido |
+| `2` | A linha de comando está errada: opção desconhecida, valor faltando, opção que exige `--print` usada sem ele, `--output-format` ou `--mode` desconhecido. Também quando `{{COMMAND}}` é iniciado sem `-p` e a entrada ou a saída padrão não é um terminal: `no terminal: use -p for print mode` |
 
 ## Scripts e CI
 

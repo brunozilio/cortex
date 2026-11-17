@@ -49,7 +49,7 @@ rename  pass    5/5  $0.14
 ## Como um caso roda
 
 1. A pasta `fixture/` é copiada para uma pasta de rascunho nova e vazia. Sem `fixture/`, a pasta de rascunho fica vazia. A fixture em si nunca é alterada.
-2. O agente roda ali uma vez, no modo print, com o prompt e o `mode` do caso: `{{COMMAND}} -p --output-format json -C <rascunho> [--mode <modo>] [--model <modelo>] -- <prompt>`.
+2. O agente roda ali uma vez, no modo print, com o prompt e o `mode` do caso: `{{COMMAND}} -p --output-format json -C <rascunho> [--mode <modo>] [--model <modelo>] [--trust] -- <prompt>`, com `--trust` quando a pasta do seu projeto é confiável.
 3. Cada verificação é pontuada com base na resposta do agente e nos arquivos que ficaram na pasta de rascunho.
 4. Se o caso tiver uma `rubric`, uma execução juíza avalia o trabalho segundo ela.
 
@@ -93,7 +93,7 @@ Quando um caso tem `rubric`, uma segunda execução do {{NAME}} faz o papel de j
 { "passed": true, "why": "Only lib.rs changed." }
 ```
 
-A rubrica conta como mais uma verificação. Se o juiz reprovar, aparece `rubric: <motivo>`; se a resposta dele não tiver esse objeto, `rubric: the judge answered out of form`.
+A rubrica conta como mais uma verificação. Se o juiz reprovar, aparece `rubric: <motivo>`; se a resposta dele não tiver esse objeto, `rubric: the judge answered out of form`; se a própria execução do juiz falhou, `rubric: the judge failed: <erro>`.
 
 ## Pontuação
 
@@ -105,6 +105,7 @@ Quando algo dá errado antes das verificações, o caso fica com 0/1 e uma nota:
 |---|---|
 | `case.json: ...` | O arquivo não é JSON válido ou não segue o formato |
 | `case.json needs a prompt` | `prompt` está vazio |
+| `no scratch folder: ...` | Não foi possível criar a pasta de rascunho |
 | `could not copy the fixture: ...` | Não foi possível copiar a fixture |
 | `the agent failed: ...` | A execução do agente falhou, por exemplo porque nenhum modelo está conectado |
 

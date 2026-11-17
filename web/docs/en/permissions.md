@@ -16,7 +16,7 @@ When the agent needs your approval, the panel shows the tool, what it wants to d
 | Yes, and don't ask again this session | `a`, `2` | Shown when no rule fits (edits, for example). Remembers the tool for edits, or the exact call for anything else, until the session ends. |
 | No, and tell the agent what to do instead | `n`, Esc, or its number | Refuses. Picking it by number or with Enter lets you type a note the agent receives; Esc or `n` refuses without one. |
 
-The "don't ask again" choice is not offered for actions that must be approved every time (see [Always asked](#actions-that-always-ask)).
+The "don't ask again" choice is not offered for risky commands (pushes, publishes…) or for an address that never appeared in the conversation (see [Always asked](#actions-that-always-ask)). Running a command outside the sandbox and installing a flagged package still offer it: it saves the rule for the command, but those two questions come back every time.
 
 In a folder you have not trusted, a rule saved to `{{DIR}}/settings.local.json` holds for that run only; it applies to later runs once you trust the folder, and the chat says so when it saves the rule. See [Workspace trust](./sandbox-and-safety#workspace-trust).
 
@@ -105,7 +105,7 @@ A rule is a tool name, optionally followed by a specifier in parentheses: `Tool`
 | `mcp__docs__resources(file:///a.md)` | Reading that resource of the `docs` server. |
 | `Tool(subject)` | Any other tool: the specifier must equal the call's subject. |
 
-#### Paths
+### Paths
 
 Path specifiers match like `.gitignore`:
 
@@ -117,7 +117,7 @@ Path specifiers match like `.gitignore`:
 - Deny and ask rules ignore case (`Read(.env)` also refuses `.ENV`); allow rules do not.
 - A `Glob` or `Grep` over a folder is refused when a deny rule covers something inside it.
 
-#### Commands
+### Commands
 
 Shell rules read the command the way the shell will run it. The line is parsed into every simple command it runs, including those inside `if`, `for`, `while`, `case`, functions, subshells, `{ …; }`, `$(…)`, backticks, `<(…)` and the command `find -exec` runs:
 
@@ -129,7 +129,7 @@ Shell rules read the command the way the shell will run it. The line is parsed i
 
 Deny rules are a best-effort list: a command built while it runs (a script file, an interpreter's inline code, the value of a variable) is invisible to them. The [sandbox](./sandbox-and-safety) is what stops a command from writing where it should not.
 
-#### Read-only commands
+### Read-only commands
 
 A shell command runs without asking, in every mode, only when the whole line is a plain list or pipeline (no control structure, function, subshell, group, `!` or substitution) and every command in it:
 
@@ -139,7 +139,7 @@ A shell command runs without asking, in every mode, only when the whole line is 
 - has no word the shell would change: no `$`, backtick or backslash outside single quotes, no unquoted `*`, `?`, `[`, `{` or `<`, and no `~` that names a home folder. Quoted patterns are plain words: `find . -name '*.rs'` and `grep 'a.*b' notes.txt` are read-only, `find . -name *.rs` is not. `git diff HEAD~1` is read-only;
 - names no path outside the project (`/…`, `..`).
 
-#### Tools and their effects
+### Tools and their effects
 
 Each built-in tool says, from its input, what the call will do, and the decision is made from that:
 
@@ -147,25 +147,28 @@ Each built-in tool says, from its input, what the call will do, and the decision
 |---|---|
 | `Read`, `LSP` | reading that file (asks outside the project) |
 | `Glob`, `Grep` | reading the folder they search |
-| `Write`, `Edit`, `NotebookEdit` | writing that file (asks outside the project, in `.git/` or in `{{DIR}}/`) |
+| `Write`, `Edit`, `NotebookEdit` | writing that file (asks outside the project and the added folders, in `.git/` or in `{{DIR}}/`; there only a rule that names the path, such as `Edit(.git/hooks/**)`, allows it, not a bare `Edit`) |
 | `Bash`, `Monitor` | running the command (read-only commands run freely) |
 | `WebFetch`, `WebSearch` | reaching the network (`WebFetch(domain:…)` rules) |
 | `CronCreate`, `ScheduleWakeup` | starting work later: asks |
+| `EnterWorktree`, `ExitWorktree` | changing the session's checkout: asks (refused in plan mode) |
 | `Agent`, `Watch`, `PushNotification`, task and plan tools | no permission needed; a sub-agent is held to its own mode |
+| `AskUserQuestion`, `Skill`, `ToolSearch`, `Advisor`, `BashOutput`, `CronList`, `ListSessions` | no permission needed |
+| `REPL` | no permission for the script itself; each tool its script calls is judged like that tool |
 | `KillShell`, `CronDelete`, `TaskStop` | no permission needed for the agent's own work; `KillShell` on anything else asks |
 | `SendMessage` to another session | asks unless a rule allows `SendMessage` |
 | `ListMcpResources`, `ReadMcpResource` | follow that server's rules (`mcp__docs`, `mcp__docs__resources(…)`) |
 | MCP tools | asks unless a rule allows the server or the tool |
 
-Your own script tools in `~/{{DIR}}/tools/*.js` say what they do with `access` in their `spec`: `"read"` runs freely, `"edit"` is treated like an edit, `"execute"` (or no `access`) asks. A project's script tools always ask.
+Your own script tools in `~/{{DIR}}/tools/*.js` say what they do with `access` in their `spec`: `"read"` runs freely, `"edit"` is treated like an edit, `"execute"` (or no `access`) asks. A project's script tools always ask. `access` only covers the call itself: each host function the script uses (`readFile`, `writeFile`, `exec`, `fetch`) must also be listed in `capabilities` in the `spec`, and each of those calls is judged like `Read`, `Write`, `Bash` or `WebFetch` (see [Capabilities](./sandbox-and-safety#capabilities)).
 
-#### Invalid rules
+### Invalid rules
 
-A rule without its closing `)`, with an empty specifier (`Bash()`), or that does not start with a tool name stops the run with an error naming the list, for example `permissions.deny: rule "Bash(rm" misses its )`.
+A rule without its closing `)`, with an empty specifier (`Bash()`), or that does not start with a tool name stops the run with an error naming the list, for example ``permissions.deny: rule "Bash(rm" misses its `)` ``.
 
 ## Actions that always ask
 
-Some actions are asked about every time, whatever the mode and rules (except a deny rule, which refuses them), and cannot be remembered:
+Some actions are asked about every time, whatever the mode and rules (except a deny rule, which refuses them):
 
 - Pushing to the default branch, or force-pushing, deleting or rewriting remote history.
 - `cargo publish`, `npm publish`, `pnpm publish`, `yarn publish`.
@@ -209,7 +212,7 @@ By default the agent reads freely only inside the project. To give it another fo
 - `--add-dir <path>` when starting.
 - `permissions.additionalDirectories` in your own settings files, for good. `~/` starts at your home folder; a relative path starts at the project.
 
-Paths typed in `/add-dir` and `--add-dir` must be existing folders; `~/` is expanded and relative paths start at the project. An added folder is read like the project and, when the sandbox is on, sandboxed commands may write to it.
+Paths typed in `/add-dir` and `--add-dir` must be existing folders; `~/` is expanded and relative paths start at the project. An added folder is read and edited like the project and, when the sandbox is on, sandboxed commands may write to it.
 
 ## Hooks and permissions
 

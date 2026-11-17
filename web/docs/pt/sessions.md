@@ -41,7 +41,7 @@ Dentro do chat, `/resume` (apelido `/continue`) abre **Resume a conversation**: 
 /resume bug login
 ```
 
-Com palavras, só aparecem as conversas cujo título contém todas elas (sem diferenciar maiúsculas). A lista inclui conversas rodadas nesta pasta por outros clientes, como o navegador, mas deixa de fora a atual e as arquivadas. `↑`/`↓` e `Enter` escolhem; `Esc` fecha. O `/resume` fica indisponível enquanto o agente trabalha.
+Com palavras, só aparecem as conversas cujo título contém todas elas (sem diferenciar maiúsculas). A lista inclui conversas rodadas nesta pasta por outros clientes, como o navegador, mas deixa de fora a atual. `↑`/`↓` e `Enter` escolhem; `Esc` fecha. O `/resume` fica indisponível enquanto o agente trabalha.
 
 ## Títulos
 
@@ -124,13 +124,14 @@ As sessões ficam na sua pasta de dados, não no projeto:
 |---|---|
 | macOS | `~/Library/Application Support/{{NAME}}` |
 | Linux | `$XDG_CONFIG_HOME/{{COMMAND}}`, por padrão `~/.config/{{COMMAND}}` |
-| Windows | `%LOCALAPPDATA%\{{NAME}}` para `native-sessions/`, `%APPDATA%\{{NAME}}` para `users/` |
+| Windows | `%LOCALAPPDATA%\{{NAME}}` para `native-sessions/`, `%APPDATA%\{{NAME}}` para `app.db` e `users/` |
 
 Dentro dela:
 
 | Caminho | Guarda |
 |---|---|
-| `native-sessions/` | A conversa e os checkpoints de cada sessão. |
-| `users/` | As configurações do chat por usuário (último modelo, modo, esforço, histórico de prompts, a última sessão de cada pasta, títulos) e o catálogo de sessões que o `/resume` e o console de trace listam. |
+| `native-sessions/` | A conversa, o trace e os checkpoints de cada sessão. |
+| `app.db` | Um banco SQLite com a lista de conversas (pasta, título, status, último uso) que o `/resume`, a lista de sessões e o console de trace mostram, e as suas memórias. |
+| `users/` | As configurações do chat por usuário: último modelo, modo, esforço, histórico de prompts, a última sessão de cada pasta e o título dela. |
 
 Veja [Arquivos e pastas](./files-and-directories). O `/factory-reset` apaga tudo isso.

@@ -120,6 +120,8 @@ You write reversible migrations...
 
 A tool selector may contain only letters, digits, `_`, `-` and `:`, plus a final `*`; `Bash(git:*)` is not a selector. A file with an invalid field still appears in the list, but starting it fails with `Agent <name>: <problem>`, for example `Agent migrations: maxTurns must be within 1..200`.
 
+A project's agent keeps its `hooks`, `mcpServers`, `permissionMode` and `initialPrompt` only once you trust the project's folder; until then they are dropped and the agent is offered without them (see [Workspace trust](./sandbox-and-safety#workspace-trust)).
+
 ### Model
 
 | `model` | Result |

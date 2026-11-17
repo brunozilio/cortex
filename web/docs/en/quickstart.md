@@ -19,7 +19,7 @@ Some tools are used when they are present, and nothing breaks without them:
 |---|---|
 | `git` | `/diff`, `/diffs`, branch comparisons and worktrees. |
 | `pdftotext` | Reading PDFs. |
-| `ripgrep` | Faster searches; `Grep` works without it. |
+| `ripgrep` | Commands the agent runs with `Bash`; `doctor` reports it. The built-in `Grep` does not need it. |
 | Language servers (rust-analyzer, clangd…) | The `LSP` tool and diagnostics after edits. See [Code intelligence](./code-intelligence). |
 | `node` / `npx` | Only for MCP servers that need them. |
 
@@ -89,6 +89,8 @@ cd my-project
 ```
 
 The chat opens full screen with the product name and the folder at the top, a few hints (`/resume`, `/model`, `@file`, `!cmd`), the prompt, and the status line showing the model, the permission mode and the effort.
+
+If the project brings things that run code or widen what the agent may do (hooks, MCP servers, script tools, grants in `settings.local.json`…), the chat first asks **Do you trust the files in …?**: **Trust this folder**, **Continue without trusting** or **Exit**. See [Workspace trust](./sandbox-and-safety#workspace-trust).
 
 You can also open the chat with a first prompt already sent:
 

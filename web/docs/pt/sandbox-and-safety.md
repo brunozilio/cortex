@@ -41,7 +41,7 @@ A pasta de um projeto pode trazer arquivos que rodam código no seu computador o
 | Servidores MCP em `{{DIR}}/mcp.json` e `{{DIR}}/mcp/*.js` | Não são iniciados nem aparecem para aprovação |
 | Provedores declarados em `{{DIR}}/providers/*.js` | Não são carregados |
 | Ferramentas de script em `{{DIR}}/tools/` | Não são registradas |
-| Skills e comandos escritos como script (`skill.js`, `commands/*.js`) | Não são oferecidos. Skills e comandos em Markdown continuam carregando. |
+| Skills e comandos escritos como script (`SKILL.js`, `commands/*.js`) | Não são oferecidos. Skills e comandos em Markdown continuam carregando. |
 | `hooks`, `mcpServers`, `permissionMode` e `initialPrompt` no frontmatter de um agente do projeto | São descartados. O agente e as instruções dele continuam disponíveis. |
 
 Continuam valendo numa pasta em que você não confiou, porque só informam ou restringem o agente: arquivos de instruções, regras em `{{DIR}}/rules/`, regras de permissão `deny` e `ask`, estilos de saída e o `{{DIR}}/verification.md`.
@@ -133,7 +133,7 @@ Quando um comando falha com "operation not permitted", o {{NAME}} acrescenta à 
 
 ### Servidores MCP na sandbox
 
-Um servidor MCP iniciado como processo (um `command` no `mcp.json`) roda na mesma sandbox dos comandos de shell. Ele pode gravar no projeto, nas pastas temporárias, nos caches de pacotes e em `sandbox.allowWrite`, e mantém a rede, a menos que a sua entrada diga o contrário (`sandbox.network` vale para comandos, não para servidores). Um servidor que precisa de outra pasta, ou que deve ficar sem rede, diz isso na sua entrada:
+Um servidor MCP iniciado como processo (um `command` no `mcp.json`) roda na mesma sandbox dos comandos de shell. Ele pode gravar no projeto, nas pastas adicionadas, nas pastas temporárias, nos caches de pacotes e em `sandbox.allowWrite`, e mantém a rede, a menos que a sua entrada diga o contrário (`sandbox.network` vale para comandos, não para servidores). Um servidor que precisa de outra pasta, ou que deve ficar sem rede, diz isso na sua entrada:
 
 ```json
 {
@@ -149,15 +149,15 @@ Um servidor MCP iniciado como processo (um `command` no `mcp.json`) roda na mesm
 
 | Chave na entrada do servidor | Padrão | Descrição |
 |---|---|---|
-| `sandbox.writable` | `[]` | Pastas extras com gravação liberada para este servidor: absolutas ou começando com `~/`. Lida só do seu `~/{{DIR}}/mcp.json` e do arquivo de `--mcp-config`. |
+| `sandbox.writable` | `[]` | Pastas extras com gravação liberada para este servidor: absolutas ou começando com `~/`. Lida só do seu `~/{{DIR}}/mcp.json`. |
 | `sandbox.network` | `true` | `false` deixa este servidor sem rede. Qualquer arquivo pode defini-la. |
-| `"sandbox": false` | | Inicia este servidor fora da sandbox. Lida só do seu `~/{{DIR}}/mcp.json` e do arquivo de `--mcp-config`; o `{{DIR}}/mcp.json` de um projeto ou um plugin não conseguem tirá-lo da sandbox. |
+| `"sandbox": false` | | Inicia este servidor fora da sandbox. Lida só do seu `~/{{DIR}}/mcp.json`; o `{{DIR}}/mcp.json` de um projeto ou um plugin não conseguem tirá-lo da sandbox. |
 
 Um valor de `sandbox` com outro formato deixa o servidor de fora, com um aviso no log. Quando a sandbox é obrigatória e este sistema não consegue oferecê-la, um servidor de processo não é iniciado e o log diz o motivo. Servidores acessados por HTTP não são processos neste computador e não ficam na sandbox; servidores MCP em JavaScript rodam dentro do {{NAME}} sob os limites dos scripts (abaixo).
 
 ### Rodando um comando fora da sandbox
 
-Quando um comando realmente precisa gravar em outro lugar, o agente pode pedir para rodá-lo sem sandbox. Você é consultado toda vez, com "Run OUTSIDE the sandbox (it may write anywhere)", e a resposta não pode ser lembrada. Em execuções `-p`, onde ninguém pode responder, o pedido é recusado.
+Quando um comando realmente precisa gravar em outro lugar, o agente pode pedir para rodá-lo sem sandbox. Você é consultado toda vez, com "Run OUTSIDE the sandbox (it may write anywhere)"; nem "don't ask again" evita a próxima pergunta (só salva a regra do comando). Em execuções `-p`, onde ninguém pode responder, o pedido é recusado.
 
 ### Desligando a sandbox
 
@@ -171,7 +171,7 @@ ou `{{COMMAND}} config set features.experimental-sandbox false`.
 
 Com `redact-secrets` ligado (o padrão), a saída das ferramentas é limpa antes que o modelo, a transcrição e os logs a vejam. O mesmo vale para as entradas de ferramentas mostradas na tela, a saída ao vivo dos comandos e as saídas completas guardadas em arquivos. Cada segredo é trocado por `[redacted]`:
 
-- tokens com prefixos conhecidos: `sk-`, `sk_`, `ghp_`, `gho_`, `ghs_`, `ghu_`, `github_pat_`, `glpat-` (20 caracteres ou mais), `xoxb-`, `xoxp-`, `xoxa-`, `xoxs-`;
+- tokens com prefixos conhecidos: `sk-`, `sk_`, `ghp_`, `gho_`, `ghs_`, `ghu_`, `github_pat_`, `glpat-` (20 caracteres ou mais), `xoxb-`, `xoxp-`, `xoxa-`, `xoxs-` (10 ou mais);
 - ids de chave de acesso da AWS (`AKIA…`, `ASIA…`);
 - JSON Web Tokens (`eyJ…` com três partes);
 - o valor em `chave=valor` ou `chave: valor` quando a chave termina em `password`, `passwd`, `secret`, `token`, `api_key`, `apikey` ou `api-key`;
@@ -234,7 +234,7 @@ Um comando de shell roda sem perguntar só quando o analisador consegue seguir a
 
 ## Ações que sempre perguntam
 
-Estas são perguntadas toda vez, mesmo no modo bypass e mesmo com uma regra allow, e não podem ser lembradas:
+Estas são perguntadas toda vez, mesmo no modo bypass e mesmo com uma regra allow, e a pergunta não oferece "don't ask again":
 
 - `git push` para o branch padrão, ou com `--force`, `--force-with-lease`, `--mirror`, `--delete`, `--prune`, ou refspecs começando com `+` ou `:`;
 - `publish` do `cargo`, `npm`, `pnpm` ou `yarn`;

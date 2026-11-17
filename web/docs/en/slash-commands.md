@@ -77,7 +77,7 @@ Slash commands control the chat itself: the conversation, the model, the project
 | `/features [name on\|off]` | | List or switch the features you can turn off |
 | `/trace` | `/console` | Open the live trace in the browser |
 | `/trust [yes\|no]` | | Show whether this folder is trusted, or change it |
-| `/docs` | | Open the commands, keys and flags in the browser |
+| `/docs [topic]` | | Open this documentation in the browser, or search it |
 | `/factory-reset` | | Erase everything {{NAME}} keeps on this machine |
 | `/<skill> [arguments]` | | Run a skill or custom command |
 
@@ -375,7 +375,7 @@ Opens the live trace of every session in the browser: runs, spans, cost, waits a
 
 ### /docs
 
-Opens a page in the browser listing the chat's commands, your skills, the keys and the command-line flags.
+`/docs` opens this documentation in the browser, served by {{NAME}} on this machine. `/docs <topic>` opens it searching for that topic, for example `/docs hooks`. The chat prints the address it opened.
 
 ### /factory-reset
 

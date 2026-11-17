@@ -50,7 +50,7 @@ Rules are separated by spaces or commas (not inside parentheses), and both optio
 
 ### Project hooks, scripts and servers need `--trust`
 
-Print mode never asks whether you trust the folder. Unless the folder is already trusted, the run loads nothing from the project that runs code or grants permissions (hooks, script tools, MCP servers, declared providers, `settings.local.json` grants), and one line on standard error says how many items were skipped. Pass `--trust` to load them for that invocation; nothing is stored:
+Print mode never asks whether you trust the folder. Unless the folder is already trusted, the run loads nothing from the project that runs code or grants permissions (hooks, script tools, MCP servers, declared providers, `settings.local.json` grants), and one line on standard error says how many items were skipped. Pass `--trust` to load them for that invocation; nothing is stored. When the folder cannot be trusted (your home folder, for example), a line `--trust ignored: <why>` says so on standard error and the run goes on untrusted:
 
 ```bash
 {{COMMAND}} -p --trust "run the release checks"
@@ -164,6 +164,8 @@ Other event kinds can appear as {{NAME}} grows; skip the ones you do not need.
 
 In `text` format the answer goes to standard output and everything else to standard error: tool lines, notes, and, when the run fails, `{{COMMAND}}: <error>`.
 
+In `json` and `stream-json`, standard output always ends with a result object, even when the command could not start (for example `no model is available`): `is_error` is `true` and `error` says why. The error is also printed on standard error.
+
 ## Several prompts from standard input
 
 `--input-format stream-json` reads the prompts from standard input instead of the command line, one JSON object per line, and answers them in turn in the same session:
@@ -179,8 +181,6 @@ printf '%s\n' \
 - `message.content` is either a string or a list of blocks; the `text` of each block is joined with newlines.
 - Each line is answered as soon as it arrives, so another program can write a prompt, read the answer, and write the next one.
 - A line that is not JSON, whose content is not text, or that cannot be read (for example invalid UTF-8) stops the command with `input line <n>: ...`; the lines before it were already answered.
-
-All of standard input is read before the first prompt is sent.
 
 ## Limit the run
 
@@ -217,7 +217,7 @@ id=$({{COMMAND}} -p --output-format json "summarize the open issues in NOTES.md"
 {{COMMAND}} -p --resume "$id" "now draft a reply to the first one"
 ```
 
-In print mode, `-r` without an id starts a new conversation; the picker it opens in the chat is not available here.
+In print mode, `-r` without an id stops the command with that error (exit 1): the picker it opens in the chat is not available here. `-c` with no earlier conversation in the folder starts a new one.
 
 ## Other options
 
@@ -229,7 +229,7 @@ In print mode, `-r` without an id starts a new conversation; the picker it opens
 |---|---|
 | `0` | The run finished and every verification passed |
 | `1` | The run failed or was cancelled, a verification failed, or the command could not start (for example `no model is available`, `--print needs a prompt`, an unknown `--input-format`) |
-| `2` | The command line itself is wrong: an unknown option, a missing value, an option that needs `--print` used without it, an unknown `--output-format` or `--mode` |
+| `2` | The command line itself is wrong: an unknown option, a missing value, an option that needs `--print` used without it, an unknown `--output-format` or `--mode`. Also when `{{COMMAND}}` is started without `-p` and standard input or output is not a terminal: `no terminal: use -p for print mode` |
 
 ## Scripts and CI
 

@@ -77,7 +77,7 @@ O `/help` agrupa os comandos em **Conversation**, **Model and mode**, **Project*
 | `/features [nome on\|off]` | | Lista ou liga/desliga os recursos que podem ser desligados |
 | `/trace` | `/console` | Abre o trace ao vivo no navegador |
 | `/trust [yes\|no]` | | Mostra se esta pasta é confiável, ou muda isso |
-| `/docs` | | Abre os comandos, teclas e flags no navegador |
+| `/docs [tópico]` | | Abre esta documentação no navegador, ou busca nela |
 | `/factory-reset` | | Apaga tudo o que o {{NAME}} guarda nesta máquina |
 | `/<skill> [argumentos]` | | Roda uma skill ou comando personalizado |
 
@@ -375,7 +375,7 @@ Abre no navegador o trace ao vivo de todas as sessões: execuções, spans, cust
 
 ### /docs
 
-Abre no navegador uma página com os comandos do chat, as suas skills, as teclas e as flags de linha de comando.
+`/docs` abre esta documentação no navegador, servida pelo {{NAME}} nesta máquina. `/docs <tópico>` abre já buscando esse tópico, por exemplo `/docs hooks`. O chat mostra o endereço que abriu.
 
 ### /factory-reset
 

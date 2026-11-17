@@ -182,7 +182,7 @@ Reads or changes your settings file, `~/{{DIR}}/settings.json`. With `--project`
 | Option | Short | Value | Default | Requires | Description |
 |---|---|---|---|---|---|
 | `[PROMPT]...` | | text | | | What to ask. The words are joined with spaces. It opens the chat with it unless `--print` is given. |
-| `--print` | `-p` | | off | | Answer once, print the reply and exit. See [Headless mode](./headless). |
+| `--print` | `-p` | | off | | Answer once, print the reply and exit. With `--input-format text` it needs a prompt (`--print needs a prompt`). See [Headless mode](./headless). |
 | `--output-format` | | `text`, `json` or `stream-json` | `text` | `--print` | `text` streams the answer; `json` prints one result object; `stream-json` prints every event as a JSON line, then the result |
 | `--input-format` | | `text` or `stream-json` | `text` | `--print` | `text` takes the prompt from the command line; `stream-json` reads user messages as JSON lines on standard input and answers them in turn |
 | `--max-turns` | | number | 200 | `--print` | The most model turns a run may take |
@@ -234,7 +234,7 @@ See [Sessions](./sessions).
 |---|---|
 | `0` | Success |
 | `1` | A failure: a failed run, a failed verification or eval, a failed doctor check, or an error such as an unreadable folder. The message is printed on standard error as `{{COMMAND}}: <message>`. |
-| `2` | The command line is wrong: an unknown option or value, a missing argument, or an option used without the one it requires |
+| `2` | The command line is wrong: an unknown option or value, a missing argument, or an option used without the one it requires. Also when standard input or output is not a terminal and `--print` is not given (`no terminal: use -p for print mode`). |
 
 ## Environment variables
 

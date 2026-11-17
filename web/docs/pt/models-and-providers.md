@@ -88,7 +88,7 @@ Faz login com o fluxo de dispositivo do GitHub: você digita o código impresso 
 
 ### Kiro Subscription
 
-Faz login pelo navegador via `app.kiro.dev/signin`, com o callback `http://localhost:49153/oauth/callback`. O Kiro aceita só essa porta, então ela precisa estar livre durante o login. Logins com Google e GitHub funcionam; logins de organização (IAM Identity Center) e Builder ID são recusados por enquanto. Os tokens são renovados sozinhos, também depois de um 401 ou 403.
+Faz login pelo navegador via `app.kiro.dev/signin`, com o callback `http://localhost:49153/oauth/callback`. O Kiro aceita só essa porta, então ela precisa estar livre durante o login. Logins com Google, GitHub, Builder ID e de organização (IAM Identity Center) funcionam; um login de organização continua na página da sua organização e precisa de um perfil Kiro para a sua conta, senão falha com `signed in, but this account has no Kiro profile`. Os tokens são renovados sozinhos, também depois de um 401 ou 403.
 
 ### Grok Subscription
 

@@ -170,7 +170,37 @@ Um arquivo `.js` numa pasta `commands/` funciona do mesmo jeito, como comando. U
 > Mudança incompatível: uma skill ou comando em script que chama `ctx.readFile`, `ctx.writeFile`, `ctx.exec` ou `ctx.fetch` sem listar em `export const capabilities` agora falha com um erro dizendo o que acrescentar. Um `SKILL.js` do projeto é substituído por um seu ou de um plugin com o mesmo nome.
 
 > [!IMPORTANT]
-> O `SKILL.js` e os comandos `.js` de um projeto só são oferecidos depois que você confia na pasta do projeto; as skills e os comandos em Markdown carregam de qualquer forma. O mesmo vale para as ferramentas JavaScript do projeto em `{{DIR}}/tools/`. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
+> O `SKILL.js` e os comandos `.js` de um projeto só são oferecidos depois que você confia na pasta do projeto; as skills e os comandos em Markdown carregam de qualquer forma. O mesmo vale para as ferramentas em script do projeto em `{{DIR}}/tools/`. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
+
+## Ferramentas em script
+
+Uma ferramenta em script é uma ferramenta nova que o agente pode chamar, escrita em JavaScript. Coloque-a em `~/{{DIR}}/tools/` (sua, em todo projeto) ou no `{{DIR}}/tools/` da pasta de trabalho (do projeto, depois que você confia na pasta), como `<nome>.js` ou `<nome>/tool.js`:
+
+```javascript
+export const spec = {
+  name: "Release",
+  description: "Tags the release. Use when the user asks to tag a version.",
+  input: { type: "object", properties: { version: { type: "string" } }, required: ["version"] },
+  access: "execute",
+  capabilities: ["exec"],
+};
+
+export function run(input, ctx) {
+  return ctx.exec(`git tag v${input.version}`).stdout;
+}
+```
+
+| Campo do `spec` | Significado |
+|---|---|
+| `name` | O nome da ferramenta. Obrigatório. |
+| `description` | O que o agente lê para decidir quando chamá-la |
+| `input` | O JSON Schema da entrada; qualquer objeto quando omitido |
+| `access` | O que uma chamada faz, para as permissões: `read`, `edit` ou `execute` (o padrão). Só as suas ferramentas definem isso; as de um projeto sempre contam como `execute`. Veja [Permissões](./permissions). |
+| `capabilities` | As funções do host que ela chama: `readFile`, `writeFile`, `exec`, `fetch`. Vazia por padrão. |
+
+A função `run` (ou `execute`) recebe a entrada e um contexto, e devolve um texto ou um valor, enviado como JSON; um erro lançado é uma chamada que falhou. Uma chamada a uma função do host que não está em `capabilities` falha; uma listada é julgada pelas suas permissões como a ferramenta correspondente (veja [Capacidades](./sandbox-and-safety#capacidades)). Uma ferramenta em script pode rodar por 60 segundos.
+
+Uma ferramenta sua com o nome de uma ferramenta embutida a substitui; uma ferramenta do projeto com um nome já usado fica de fora. Um arquivo que não pode ser lido, ou cujo `spec` não tem `name`, fica de fora com um aviso no log.
 
 ## Skills embutidas
 

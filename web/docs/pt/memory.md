@@ -68,7 +68,7 @@ O chat responde `Remembered: …`. Memórias adicionadas assim recebem a tag `us
 
 Qualquer coisa depois de `/memory` que não seja uma dessas palavras é uma busca; então `/memory undo the font` busca por "undo the font".
 
-O `/memory edit` abre o `{{INSTRUCTIONS}}` na raiz do projeto, ou o `{{DIR}}/{{INSTRUCTIONS}}` quando só ele existe. Veja [Arquivos de instruções](./instructions-files).
+O `/memory edit` abre o `{{INSTRUCTIONS}}` da pasta em que o chat roda, ou o `{{DIR}}/{{INSTRUCTIONS}}` dela quando só ele existe. Veja [Arquivos de instruções](./instructions-files).
 
 ### Otimizar e desfazer
 

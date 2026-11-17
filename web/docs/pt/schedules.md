@@ -16,9 +16,9 @@ O `/loop` roda a tarefa agora e depois pede ao agente para agendá-la de novo no
 | Intervalo | Agenda |
 |---|---|
 | `<n>s` | A cada `⌈n/60⌉` minutos (segundos arredondam para cima em minutos inteiros, de 1 a 59) |
-| `<n>m` | A cada n minutos; 60 ou mais vira horas |
-| `<n>h` | A cada n horas; 24 ou mais vira dias |
-| `<n>d` | A cada n dias, até 31 |
+| `<n>m` | A cada n minutos; 60 ou mais vira horas inteiras, arredondadas para baixo (`90m` é a cada hora) |
+| `<n>h` | A cada n horas; 24 ou mais vira dias inteiros, arredondados para baixo |
+| `<n>d` | A cada n dias, até 31; um valor maior não é lido como intervalo, e o texto inteiro vira a tarefa |
 
 O agente cria o agendamento com **CronCreate** e diz como pará-lo.
 

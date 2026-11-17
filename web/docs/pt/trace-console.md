@@ -123,4 +123,4 @@ Se o servidor nem conseguir iniciar, o chat diz `The {{NAME}} page could not sta
 
 - [Orçamento e custo](./budget-and-cost): o `/cost` no chat.
 - [Verificação e revisão](./verification-and-review): de onde vêm as checagens do overview.
-- [Sessões](./sessions): retomar e arquivar sessões.
+- [Sessões](./sessions): retomar sessões.

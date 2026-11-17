@@ -10,7 +10,7 @@ cd meu-projeto
 {{COMMAND}}
 ```
 
-Tudo acontece num chat no terminal: não há interface gráfica. O mesmo agente também pode responder uma única vez e imprimir o resultado (`{{COMMAND}} -p "..."`), para scripts e CI.
+Você trabalha num chat no terminal: não há interface gráfica. Uma página local no navegador só mostra o [trace](./trace-console) e esta documentação, e pode conter um terminal ligado a uma sessão. O mesmo agente também pode responder uma única vez e imprimir o resultado (`{{COMMAND}} -p "..."`), para scripts e CI.
 
 ## O que dá para fazer
 
@@ -50,7 +50,7 @@ A tela tem quatro partes, de cima para baixo:
 | Referência | [Referência da CLI](./cli-reference), [Solução de problemas](./troubleshooting). |
 
 > [!TIP]
-> Dentro do chat, `/help` lista todos os comandos e teclas, `/help <comando>` explica um deles, e `/docs` abre no navegador uma referência dos comandos, teclas e flags de linha de comando.
+> Dentro do chat, `/help` lista todos os comandos e as teclas principais, `/help <comando>` explica um deles, e `/docs` abre esta documentação no navegador (`/docs <assunto>` busca nela).
 
 ## Por onde seguir
 

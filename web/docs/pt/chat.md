@@ -185,7 +185,7 @@ Os dois precisam de um repositório git.
 
 ## Sessões em paralelo
 
-`←` com o prompt vazio (fora do modo shell) abre a lista **Sessions**: a conversa atual (`· here`) e as que você deixou rodando, cada uma marcada `working`, `needs you`, `done` ou `idle`. `n` começa uma sessão nova e deixa a atual trabalhando sozinha; `↑`/`↓` movem; `Esc` volta.
+`←` com o prompt vazio (fora do modo shell) abre a lista **Sessions**: a conversa atual (`· here`) e as que você deixou rodando, cada uma marcada `working`, `needs you`, `done` ou `idle`, e depois as conversas anteriores desta pasta, com quando foram usadas pela última vez. O `/fleet` (ou `/sessions`) também a abre. `↑`/`↓` movem; `Enter` troca para a sessão escolhida, ou continua a conversa anterior escolhida, e a que você deixa continua trabalhando; `n` começa uma sessão nova e deixa a atual trabalhando sozinha; `Esc` volta.
 
 ## Linha de status
 
