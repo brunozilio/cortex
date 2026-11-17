@@ -93,6 +93,21 @@ fn paired() -> Value {
     })
 }
 
+fn proof() -> Value {
+    let machine = key(5);
+    let ephemeral = [6; 32];
+    let challenge = tunnel::proof::Challenge::fixed_for_testing_only(&ephemeral, [8; 32]).expect("challenge");
+    let proof = tunnel::proof::answer(&machine, &challenge.text()).expect("proof");
+    assert_eq!(challenge.check(&machine.machine_id(), &proof), Ok(()));
+    json!({
+        "machine_id": machine.machine_id(),
+        "ephemeral_private": hex(&ephemeral),
+        "nonce": hex(&[8; 32]),
+        "challenge": challenge.text(),
+        "proof": proof,
+    })
+}
+
 pub fn transcript() -> Value {
-    json!({ "pairing": pairing(), "paired": paired() })
+    json!({ "pairing": pairing(), "paired": paired(), "proof": proof() })
 }

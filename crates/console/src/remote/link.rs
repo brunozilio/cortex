@@ -4,12 +4,14 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio_tungstenite::tungstenite::{Error, Message};
-use tunnel::Frame;
+use tunnel::proof::{PROVEN, TAKEN_CLOSE};
+use tunnel::{Frame, StaticKey};
 
 use super::Status;
 use super::channel::{self, Place};
 
 const QUEUED: usize = 64;
+const PROOF_WAIT: Duration = Duration::from_secs(10);
 pub const MOST_CHANNELS: usize = 32;
 const PING: Duration = Duration::from_secs(25);
 
@@ -97,9 +99,23 @@ async fn attempt(place: &Place, socket: &str, pace: &Pace, status: &watch::Sende
     }
     status.send_replace(Status::Connecting);
     match tokio_tungstenite::connect_async(socket).await {
-        Ok((connection, _)) => {
+        Ok((mut connection, _)) => {
+            match prove(&mut connection, &place.machine).await {
+                Ok(Proof::Accepted) => {}
+                Ok(Proof::Taken) => {
+                    status.send_replace(Status::Taken);
+                    return pace.taken;
+                }
+                Err(why) => {
+                    status.send_replace(Status::Failed(why));
+                    return pace.retry;
+                }
+            }
             status.send_replace(Status::Connected);
-            relay(place, connection).await;
+            if relay(place, connection).await == Ended::Taken {
+                status.send_replace(Status::Taken);
+                return pace.taken;
+            }
             status.send_replace(Status::Connecting);
             pace.retry
         }
@@ -116,7 +132,49 @@ async fn attempt(place: &Place, socket: &str, pace: &Pace, status: &watch::Sende
 
 type Connection = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
-async fn relay(place: &Place, connection: Connection) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Ended {
+    Taken,
+    Lost,
+}
+
+async fn prove(connection: &mut Connection, machine: &StaticKey) -> Result<Proof, String> {
+    let asked = async {
+        loop {
+            match connection.next().await {
+                Some(Ok(Message::Text(text))) => return Some(text.to_string()),
+                Some(Ok(Message::Ping(_) | Message::Pong(_))) => {}
+                _ => return None,
+            }
+        }
+    };
+    let challenge = tokio::time::timeout(PROOF_WAIT, asked)
+        .await
+        .ok()
+        .flatten()
+        .ok_or_else(|| "the relay did not ask this machine to prove its key".to_owned())?;
+    let proof =
+        tunnel::proof::answer(machine, &challenge).map_err(|error| format!("the relay's challenge: {error}"))?;
+    connection.send(Message::Text(proof.into())).await.map_err(|error| error.to_string())?;
+    loop {
+        match tokio::time::timeout(PROOF_WAIT, connection.next()).await {
+            Ok(Some(Ok(Message::Text(text)))) if text.as_str() == PROVEN => return Ok(Proof::Accepted),
+            Ok(Some(Ok(Message::Close(Some(frame))))) if u16::from(frame.code) == TAKEN_CLOSE => {
+                return Ok(Proof::Taken);
+            }
+            Ok(Some(Ok(Message::Ping(_) | Message::Pong(_)))) => {}
+            _ => return Err("the relay did not accept this machine's proof".to_owned()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Proof {
+    Accepted,
+    Taken,
+}
+
+async fn relay(place: &Place, connection: Connection) -> Ended {
     let (mut sink, mut stream) = connection.split();
     let (out, mut outgoing) = mpsc::channel::<Frame>(QUEUED);
     let mut channels: HashMap<u32, mpsc::Sender<Vec<u8>>> = HashMap::new();
@@ -126,6 +184,7 @@ async fn relay(place: &Place, connection: Connection) {
             message = stream.next() => {
                 let bytes = match message {
                     Some(Ok(Message::Binary(bytes))) => bytes,
+                    Some(Ok(Message::Close(Some(frame)))) if u16::from(frame.code) == TAKEN_CLOSE => return Ended::Taken,
                     Some(Ok(Message::Close(_)) | Err(_)) | None => break,
                     Some(Ok(_)) => continue,
                 };
@@ -167,6 +226,7 @@ async fn relay(place: &Place, connection: Connection) {
             }
         }
     }
+    Ended::Lost
 }
 
 #[cfg(test)]

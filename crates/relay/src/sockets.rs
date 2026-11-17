@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -8,11 +8,13 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tunnel::Frame;
 use tunnel::frame::MOST_PAYLOAD_BYTES;
+use tunnel::proof::{Challenge, PROVEN, TAKEN_CLOSE, UNPROVEN_CLOSE};
 
 use crate::rooms::{Claim, Refused, Seat, valid_machine_id};
 use crate::{Relay, failure};
 
 const FRAME_HEADER_BYTES: usize = 5;
+const PROOF_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
 fn refused(refused: Refused) -> Response {
     match refused {
@@ -36,12 +38,48 @@ pub async fn machine(
     upgrade: WebSocketUpgrade,
 ) -> Response {
     let Some(id) = asked_id(&query, "id") else { return malformed_id() };
+    if relay.rooms.holds(&id) {
+        return refused(Refused::Taken);
+    }
+    upgrade
+        .max_message_size(MOST_PAYLOAD_BYTES + FRAME_HEADER_BYTES)
+        .on_upgrade(move |socket| prove_then_serve(socket, relay, id))
+}
+
+async fn proven(socket: &mut WebSocket, id: &str) -> bool {
+    let Ok(challenge) = Challenge::new() else { return false };
+    if socket.send(Message::Text(challenge.text().into())).await.is_err() {
+        return false;
+    }
+    let answered = async {
+        loop {
+            match socket.recv().await {
+                Some(Ok(Message::Text(text))) => return challenge.check(id, text.as_str()).is_ok(),
+                Some(Ok(Message::Ping(_) | Message::Pong(_))) => {}
+                _ => return false,
+            }
+        }
+    };
+    tokio::time::timeout(PROOF_WAIT, answered).await.unwrap_or(false)
+}
+
+async fn closing(mut socket: WebSocket, code: u16, reason: &'static str) {
+    let _ = socket.send(Message::Close(Some(CloseFrame { code, reason: reason.into() }))).await;
+}
+
+async fn prove_then_serve(mut socket: WebSocket, relay: Relay, id: String) {
+    if !proven(&mut socket, &id).await {
+        return closing(socket, UNPROVEN_CLOSE, "the machine did not prove its key").await;
+    }
     let (to_machine, frames) = mpsc::channel(relay.limits.queued);
     match relay.rooms.claim(&id, to_machine, &relay.limits) {
-        Ok(claim) => upgrade
-            .max_message_size(MOST_PAYLOAD_BYTES + FRAME_HEADER_BYTES)
-            .on_upgrade(move |socket| serve_machine(socket, relay, claim, id, frames)),
-        Err(why) => refused(why),
+        Ok(claim) => {
+            if socket.send(Message::Text(PROVEN.into())).await.is_ok() {
+                serve_machine(socket, relay, claim, id, frames).await;
+            }
+        }
+        Err(Refused::Taken) => closing(socket, TAKEN_CLOSE, "taken").await,
+        Err(_) => closing(socket, 1013, "full").await,
     }
 }
 

@@ -57,6 +57,10 @@ impl Rooms {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    pub fn holds(&self, id: &str) -> bool {
+        self.hall().rooms.contains_key(id)
+    }
+
     pub fn claim(&self, id: &str, machine: ToMachine, limits: &Limits) -> Result<Claim, Refused> {
         let mut hall = self.hall();
         if hall.rooms.contains_key(id) {

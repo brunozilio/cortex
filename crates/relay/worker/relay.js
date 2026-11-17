@@ -6,6 +6,11 @@ const MOST_PAYLOAD = 65535
 const MOST_PHONES = 8
 const MACHINE_ID = /^[0-9a-f]{32}$/
 const SOCKET_OPEN = 1
+const MOST_ASKING = 4
+const PROOF_WAIT_MS = 10_000
+const UNPROVEN_CLOSE = 4003
+const TAKEN_CLOSE = 4009
+const LABEL = new TextEncoder().encode('relay-machine-proof')
 const TYPES = {
   html: 'text/html; charset=utf-8',
   js: 'text/javascript; charset=utf-8',
@@ -33,6 +38,55 @@ function frame(kind, channel, payload) {
   return out
 }
 
+function hex(bytes) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function unhex(text) {
+  if (typeof text !== 'string' || text.length % 2 !== 0 || !/^[0-9a-f]*$/.test(text)) return null
+  return Uint8Array.from(text.match(/../g) ?? [], (pair) => parseInt(pair, 16))
+}
+
+function joined(...parts) {
+  const out = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
+  let at = 0
+  for (const part of parts) {
+    out.set(part, at)
+    at += part.length
+  }
+  return out
+}
+
+async function sha256(bytes) {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+}
+
+async function challenge() {
+  const pair = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits'])
+  const ephemeral = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey))
+  const secret = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey))
+  const nonce = crypto.getRandomValues(new Uint8Array(32))
+  return { text: `challenge ${hex(ephemeral)} ${hex(nonce)}`, secret: hex(secret), nonce: hex(nonce) }
+}
+
+export async function proves(asked, id, answer) {
+  const words = typeof answer === 'string' ? answer.split(' ') : []
+  if (words.length !== 3 || words[0] !== 'proof') return false
+  const machine = unhex(words[1])
+  const given = unhex(words[2])
+  if (!machine || machine.length !== 32 || !given || given.length !== 32) return false
+  if (hex((await sha256(machine)).subarray(0, 16)) !== id) return false
+  try {
+    const secret = await crypto.subtle.importKey('pkcs8', unhex(asked.secret), { name: 'X25519' }, false, ['deriveBits'])
+    const theirs = await crypto.subtle.importKey('raw', machine, { name: 'X25519' }, false, [])
+    const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: 'X25519', public: theirs }, secret, 256))
+    const wanted = await sha256(joined(LABEL, shared, unhex(asked.nonce), new TextEncoder().encode(id)))
+    return wanted.reduce((differ, byte, at) => differ | (byte ^ given[at]), 0) === 0
+  } catch {
+    return false
+  }
+}
+
 function open(sockets) {
   return sockets.filter((socket) => socket.readyState === SOCKET_OPEN)
 }
@@ -52,7 +106,11 @@ export class Relay {
   }
 
   machine() {
-    return open(this.ctx.getWebSockets('machine'))[0]
+    return open(this.ctx.getWebSockets('machine')).find((socket) => socket.deserializeAttachment()?.proven)
+  }
+
+  asking() {
+    return open(this.ctx.getWebSockets('machine')).filter((socket) => !socket.deserializeAttachment()?.proven)
   }
 
   phone(channel) {
@@ -61,11 +119,18 @@ export class Relay {
 
   async fetch(request) {
     if (request.headers.get('upgrade') !== 'websocket') return failure(426, 'upgrade', 'This address takes a WebSocket.')
-    const role = new URL(request.url).searchParams.get('role')
+    const asked = new URL(request.url).searchParams
+    const role = asked.get('role')
     const [client, server] = Object.values(new WebSocketPair())
     if (role === 'machine') {
       if (this.machine()) return failure(409, 'taken', 'Another machine is connected under that id.')
+      if (this.asking().length >= MOST_ASKING) return failure(429, 'full', 'Too many machines are proving this id.')
+      const id = asked.get('id') ?? ''
+      const sent = await challenge()
       this.ctx.acceptWebSocket(server, ['machine'])
+      server.serializeAttachment({ proven: false, id, secret: sent.secret, nonce: sent.nonce, until: Date.now() + PROOF_WAIT_MS })
+      server.send(sent.text)
+      await this.ctx.storage?.setAlarm?.(Date.now() + PROOF_WAIT_MS)
       return new Response(null, { status: 101, webSocket: client })
     }
     const machine = this.machine()
@@ -79,13 +144,30 @@ export class Relay {
     return new Response(null, { status: 101, webSocket: client })
   }
 
-  webSocketMessage(socket, message) {
+  async webSocketMessage(socket, message) {
+    const sentByMachine = this.ctx.getTags(socket).includes('machine')
+    const state = sentByMachine ? socket.deserializeAttachment() : null
+    if (sentByMachine && !state?.proven) return this.proving(socket, state, message)
     if (typeof message === 'string') return quietly(() => socket.close(1003, 'binary frames only'))
-    if (this.ctx.getTags(socket).includes('machine')) return this.fromMachine(socket, message)
+    if (sentByMachine) return this.fromMachine(socket, message)
     if (message.byteLength > MOST_PAYLOAD) return quietly(() => socket.close(1009, 'too large'))
     const machine = this.machine()
     if (!machine) return quietly(() => socket.close(1011, 'the machine left'))
     machine.send(frame(DATA, socket.deserializeAttachment().channel, message))
+  }
+
+  async proving(socket, state, message) {
+    if (!state || !(await proves(state, state.id, message))) return quietly(() => socket.close(UNPROVEN_CLOSE, 'the machine did not prove its key'))
+    if (this.machine()) return quietly(() => socket.close(TAKEN_CLOSE, 'taken'))
+    socket.serializeAttachment({ proven: true })
+    socket.send('proven')
+  }
+
+  alarm() {
+    const now = Date.now()
+    for (const socket of this.asking()) {
+      if ((socket.deserializeAttachment()?.until ?? 0) <= now) quietly(() => socket.close(UNPROVEN_CLOSE, 'the machine did not prove its key'))
+    }
   }
 
   fromMachine(socket, message) {
@@ -109,6 +191,7 @@ export class Relay {
 
   left(socket) {
     if (this.ctx.getTags(socket).includes('machine')) {
+      if (!socket.deserializeAttachment()?.proven) return
       for (const phone of open(this.ctx.getWebSockets('phone'))) quietly(() => phone.close(1001, 'the machine left'))
       return
     }
@@ -142,7 +225,7 @@ export function makeWorker({ page, headers, manifest }) {
         const id = url.searchParams.get(role === 'machine' ? 'id' : 'machine') ?? ''
         if (!MACHINE_ID.test(id)) return failure(400, 'validation', 'A machine id is 32 lowercase hex digits.')
         const forwarded = new URL(request.url)
-        forwarded.search = `?role=${role}`
+        forwarded.search = `?role=${role}&id=${id}`
         return env.RELAY.get(env.RELAY.idFromName(id)).fetch(new Request(forwarded, request))
       }
       if (url.pathname === '/relay.json') return Response.json({ relay: true })

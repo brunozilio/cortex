@@ -3,6 +3,7 @@ pub mod handshake;
 pub mod keys;
 pub mod link;
 pub mod message;
+pub mod proof;
 pub mod transport;
 
 pub use frame::{Frame, FrameError};

@@ -223,6 +223,12 @@ async fn a_relay_cannot_open_more_channels_than_the_machine_serves_at_once() {
     let _remote = remote::start(options).unwrap();
     let (tcp, _) = tokio::time::timeout(WAIT, listener.accept()).await.unwrap().unwrap();
     let mut machine = tokio_tungstenite::accept_async(tcp).await.unwrap();
+    let challenge = tunnel::proof::Challenge::new().unwrap();
+    machine.send(Message::Text(challenge.text().into())).await.unwrap();
+    let Some(Ok(Message::Text(proof))) = machine.next().await else { panic!("no proof") };
+    let id = Book::in_folder(folder.path()).machine().unwrap().machine_id();
+    assert_eq!(challenge.check(&id, proof.as_str()), Ok(()), "the machine proves the key behind its id");
+    machine.send(Message::Text(tunnel::proof::PROVEN.into())).await.unwrap();
     let extra = 5;
     let opened = u32::try_from(remote::MOST_CHANNELS + extra).unwrap();
     for channel in 1..=opened {
@@ -230,7 +236,11 @@ async fn a_relay_cannot_open_more_channels_than_the_machine_serves_at_once() {
     }
     let mut closed = Vec::new();
     while closed.len() < extra {
-        let Ok(Some(Ok(Message::Binary(bytes)))) = tokio::time::timeout(WAIT, machine.next()).await else { break };
+        let bytes = match tokio::time::timeout(WAIT, machine.next()).await {
+            Ok(Some(Ok(Message::Binary(bytes)))) => bytes,
+            Ok(Some(Ok(_))) => continue,
+            _ => break,
+        };
         if let Ok(tunnel::Frame::Close(channel)) = tunnel::Frame::decode(&bytes) {
             closed.push(channel);
         }

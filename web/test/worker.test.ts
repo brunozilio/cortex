@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { Relay, makeWorker } from '../../crates/relay/worker/relay.js'
+import transcript from './fixtures/noise.json'
+import { fromHex, toHex } from '../src/lib/tunnel/bytes'
+import { Relay, makeWorker, proves } from '../../crates/relay/worker/relay.js'
 
 class FakeSocket {
   readyState = 1
@@ -63,7 +65,35 @@ beforeAll(() => {
   scope.WebSocketRequestResponsePair = function () {}
 })
 
-const upgrade = (role: string) => new Request(`https://relay.example/x?role=${role}`, { headers: { upgrade: 'websocket' } })
+const upgrade = (role: string, id = '') => new Request(`https://relay.example/x?role=${role}&id=${id}`, { headers: { upgrade: 'websocket' } })
+
+const LABEL = new TextEncoder().encode('relay-machine-proof')
+const PKCS8_X25519 = '302e020100300506032b656e04220420'
+
+async function machineKey() {
+  const pair = (await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits'])) as CryptoKeyPair
+  const ours = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey))
+  const id = toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', ours)).subarray(0, 16))
+  const answer = async (challenge: string) => {
+    const [, ephemeral, nonce] = challenge.split(' ')
+    const theirs = await crypto.subtle.importKey('raw', fromHex(ephemeral), { name: 'X25519' }, false, [])
+    const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: 'X25519', public: theirs }, pair.privateKey, 256))
+    const parts = [LABEL, shared, fromHex(nonce), new TextEncoder().encode(id)]
+    const all = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
+    parts.reduce((at, part) => (all.set(part, at), at + part.length), 0)
+    return `proof ${toHex(ours)} ${toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', all)))}`
+  }
+  return { id, answer }
+}
+
+async function proven(relay: Relay, ctx: FakeContext, key: Awaited<ReturnType<typeof machineKey>>) {
+  const answer = (await relay.fetch(upgrade('machine', key.id))) as unknown as FakeResponse
+  const machine = ctx.getWebSockets('machine').at(-1) as FakeSocket
+  await relay.webSocketMessage(machine, await key.answer(machine.sent[0] as string))
+  expect(machine.sent[1]).toBe('proven')
+  machine.sent.length = 0
+  return { machine, answer }
+}
 
 function frame(kind: number, channel: number, payload: number[] = []) {
   const out = new Uint8Array(5 + payload.length)
@@ -80,8 +110,7 @@ function decode(bytes: Uint8Array) {
 async function room() {
   const ctx = new FakeContext()
   const relay = new Relay(ctx)
-  const machineAnswer = (await relay.fetch(upgrade('machine'))) as unknown as FakeResponse
-  const machine = ctx.getWebSockets('machine')[0]
+  const { machine, answer: machineAnswer } = await proven(relay, ctx, await machineKey())
   return { ctx, relay, machine, machineAnswer }
 }
 
@@ -89,9 +118,36 @@ describe('the relay Worker pairs a phone with its machine as the Rust relay does
   test('one machine per id; a phone needs its machine', async () => {
     const ctx = new FakeContext()
     const relay = new Relay(ctx)
+    const key = await machineKey()
     expect(((await relay.fetch(upgrade('phone'))) as unknown as FakeResponse).status).toBe(404)
-    expect(((await relay.fetch(upgrade('machine'))) as unknown as FakeResponse).status).toBe(101)
-    expect(((await relay.fetch(upgrade('machine'))) as unknown as FakeResponse).status).toBe(409)
+    expect((await proven(relay, ctx, key)).answer.status).toBe(101)
+    expect(((await relay.fetch(upgrade('machine', key.id))) as unknown as FakeResponse).status).toBe(409)
+  })
+
+  test('a machine that cannot prove the key behind its id never takes its place', async () => {
+    const ctx = new FakeContext()
+    const relay = new Relay(ctx)
+    const owner = await machineKey()
+    const impostor = await machineKey()
+    await relay.fetch(upgrade('machine', owner.id))
+    const asking = ctx.getWebSockets('machine')[0]
+    expect(((await relay.fetch(upgrade('phone'))) as unknown as FakeResponse).status).toBe(404)
+    await relay.webSocketMessage(asking, await impostor.answer(asking.sent[0] as string))
+    expect(asking.closed).toBe(4003)
+    await relay.fetch(upgrade('machine', owner.id))
+    const binary = ctx.getWebSockets('machine')[1]
+    await relay.webSocketMessage(binary, frame(2, 1).buffer)
+    expect(binary.closed).toBe(4003)
+    await proven(relay, ctx, owner)
+    expect(((await relay.fetch(upgrade('phone'))) as unknown as FakeResponse).status).toBe(101)
+  })
+
+  test('the Worker accepts exactly the proof the Rust machine writes', async () => {
+    const proof = transcript.proof
+    const asked = { secret: PKCS8_X25519 + proof.ephemeral_private, nonce: proof.nonce }
+    expect(await proves(asked, proof.machine_id, proof.proof)).toBe(true)
+    expect(await proves(asked, proof.machine_id.replace(/^./, '0'), proof.proof)).toBe(false)
+    expect(await proves({ ...asked, nonce: '00'.repeat(32) }, proof.machine_id, proof.proof)).toBe(false)
   })
 
   test('a phone gets a channel; bytes flow both ways in frames; closes reach the other side', async () => {
@@ -158,7 +214,7 @@ describe('the Worker routes sockets to the machine\'s object and serves the page
   test('a socket reaches the object named after the machine, with its role fixed by the path', async () => {
     await worker.fetch(new Request(`https://r.example/phone?machine=${id}&role=machine`), env)
     await worker.fetch(new Request(`https://r.example/machine?id=${id}`), env)
-    expect(routed).toEqual([`${id} ?role=phone`, `${id} ?role=machine`])
+    expect(routed).toEqual([`${id} ?role=phone&id=${id}`, `${id} ?role=machine&id=${id}`])
     const bad = (await worker.fetch(new Request('https://r.example/phone?machine=nope'), env)) as unknown as FakeResponse
     expect(bad.status).toBe(400)
   })
