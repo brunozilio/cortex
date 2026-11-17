@@ -1,0 +1,1 @@
+{"$schema": "x", "permissions": {"allow": ["Bash(git status:*)"], "deny": ["Bash(rm:*)"], "ask": []}, "model": "m", "hooks": {}}

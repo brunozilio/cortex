@@ -27,7 +27,8 @@ pub use self::local::LocalTransport;
 pub use self::pool::McpPool;
 pub use self::servers::{ServerSpec, StdioSandbox, parse_config, servers};
 pub use self::stdio::StdioTransport;
-use self::tool::outcome;
+#[doc(hidden)]
+pub use self::tool::outcome;
 pub use self::tool::{McpTool, remote_effects};
 use crate::model::ToolSpec;
 use crate::model::http::Http;

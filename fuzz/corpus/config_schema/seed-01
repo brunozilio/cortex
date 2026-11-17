@@ -1,0 +1,1 @@
+{"mcpServers": {"a": {"command": "node", "args": ["s.js"], "env": {"K": "v"}}, "b": {"type": "http", "url": "https://e.test/mcp", "headers": {"A": "b"}}, "c": {"type": "sse", "url": "https://e.test/sse"}, "d": {"type": "stdio", "command": 3}}}

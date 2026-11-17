@@ -1,0 +1,105 @@
+[package]
+name = "fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "MIT"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+arbitrary = "1.5"
+serde = "1"
+serde_json = "1"
+tempfile = "3"
+domain = { path = "../crates/domain" }
+agent-engine = { path = "../crates/agent-engine" }
+llm-providers = { path = "../crates/llm-providers" }
+code-map = { path = "../crates/code-map" }
+platform = { path = "../crates/platform" }
+tunnel = { path = "../crates/tunnel" }
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "shell_parse"
+path = "fuzz_targets/shell_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shell_deny"
+path = "fuzz_targets/shell_deny.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wildcards"
+path = "fuzz_targets/wildcards.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "web_page"
+path = "fuzz_targets/web_page.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "code_map"
+path = "fuzz_targets/code_map.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "session_log"
+path = "fuzz_targets/session_log.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sse_stream"
+path = "fuzz_targets/sse_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_messages"
+path = "fuzz_targets/mcp_messages.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "config_schema"
+path = "fuzz_targets/config_schema.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tunnel_frame"
+path = "fuzz_targets/tunnel_frame.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tunnel_handshake"
+path = "fuzz_targets/tunnel_handshake.rs"
+test = false
+doc = false
+bench = false

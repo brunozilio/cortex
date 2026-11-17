@@ -1,0 +1,2 @@
+export function App() { return <div onClick={() => go()}>hi</div>; }
+const go = () => console.log(1);

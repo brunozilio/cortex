@@ -8,6 +8,9 @@ mod links;
 mod main_content;
 mod page;
 pub mod reach;
+
+#[doc(hidden)]
+pub use page::{Unreadable, read as read_page};
 mod runs;
 mod search;
 mod tree;

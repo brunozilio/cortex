@@ -6,7 +6,7 @@ use super::McpServer;
 use crate::model::ToolSpec;
 use crate::tools::{Effect, Outcome, Tool, Workspace, field};
 
-pub(super) fn outcome(result: &Value) -> Outcome {
+pub fn outcome(result: &Value) -> Outcome {
     let mut text = Vec::new();
     let mut images = Vec::new();
     let mut problems = Vec::new();

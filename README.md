@@ -155,6 +155,48 @@ cargo run -p xtask -- web-fixtures    # after changing a trace type: rewrites we
 `cargo build` embeds `web/dist` when it exists and nothing when it does
 not; it never starts Bun or touches the network for the page.
 
+## Fuzzing
+
+`fuzz/` holds [cargo-fuzz](https://rust-fuzz.github.io/book/cargo-fuzz.html)
+targets (libFuzzer) for the parsers that read outside input. It is a
+workspace of its own, left out of the main one, so the gate never builds
+it. Each target fails on a panic and, where one holds, on a broken
+property:
+
+| Target | Reads | Property beyond "no panic" |
+|---|---|---|
+| shell_parse | any shell line through the parser and the permission rules | a line allowed under a `Bash(rm:*)` deny has no part that runs `rm` |
+| shell_deny | generated lines with `rm` as a real command behind separators, groups, wrappers and spellings | never reaches Allow while `Bash(rm:*)` is denied |
+| wildcards | rule and path wildcards | command and path matching agree with a reference matcher; a word could share a file with itself |
+| web_page | a fetched page as HTML, feed, JSON or text | |
+| code_map | Rust, TypeScript, TSX, JavaScript, Python and Go sources | symbols and calls fall within the file's lines |
+| session_log | a saved conversation's bytes | the whole lines before a cut last line are kept |
+| sse_stream | provider streams: lines, server-sent events, the three wires and the Kiro event stream | the lines read do not depend on how the stream arrives in pieces; caps hold |
+| mcp_messages | an MCP server's answers: `initialize`, `tools/list`, tool results | listed tool names are prefixed and unique |
+| config_schema | `settings.json` and `mcp.json` | a file without problems is kept as it is; checking twice changes nothing more |
+| tunnel_frame | relay frames, a phone's requests and answers, pairing links | what reads back encodes back to the same bytes |
+| tunnel_handshake | a phone's first handshake message, sealed messages, machine proofs | only a known or pairing device is let in; nothing forged opens or proves |
+
+It needs a nightly toolchain (CI pins `nightly-2026-11-01`) and
+`cargo install cargo-fuzz --locked`. To run one target for a minute:
+
+```sh
+cd fuzz
+cargo +nightly-2026-11-01 fuzz run --sanitizer none shell_deny -- -max_total_time=60
+```
+
+`fuzz/corpus/<target>` holds small seeds taken from the tests' fixtures;
+pass a scratch folder first (`fuzz run shell_deny /tmp/work corpus/shell_deny`)
+to keep what the run finds out of the repository. A crash is written to
+`fuzz/artifacts/<target>/`; replay it with `fuzz run <target> <file>`, then
+add it as a unit test in the crate that owns the parser before fixing it.
+The `fuzz` job in CI runs every target for 30 seconds on each push to
+`main`, for 10 minutes every night, and for as long as asked when started
+by hand; it uploads what crashed. The sanitizer is off: the targets are
+safe Rust, and the C parsers behind them (tree-sitter, QuickJS) are built
+by `cc` with the system compiler, whose AddressSanitizer runtime does not
+link with the toolchain's on macOS.
+
 ## Supply chain
 
 `deny.toml` configures [cargo-deny](https://embarkstudios.github.io/cargo-deny/);

@@ -74,6 +74,22 @@ fn a_call_with_broken_json_is_refused() {
 }
 
 #[test]
+fn a_block_that_is_not_an_object_is_kept_as_sent_rather_than_crashing_the_run() {
+    for block in ["7", "\"text\"", "[1]", "true"] {
+        let started = format!(r#"{{"type":"content_block_start","index":0,"content_block":{block}}}"#);
+        let (reply, _) = fold(&[
+            &started,
+            r#"{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}}"#,
+            r#"{"type":"content_block_stop","index":0}"#,
+            r#"{"type":"message_stop"}"#,
+        ]);
+        let reply = reply.expect("reply");
+        let Block::Native { item, .. } = &reply.message.blocks[0] else { panic!("{:?}", reply.message.blocks) };
+        assert_eq!(item.to_string(), block);
+    }
+}
+
+#[test]
 fn a_server_search_is_kept_whole_and_shown_as_a_search() {
     let lines = [
         r#"{"type":"message_start","message":{"usage":{"input_tokens":10,"output_tokens":1}}}"#,

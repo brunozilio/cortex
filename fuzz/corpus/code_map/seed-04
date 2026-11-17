@@ -1,0 +1,7 @@
+import os
+class A:
+    def m(self):
+        return os.path.join('a', 'b')
+
+def f():
+    A().m()

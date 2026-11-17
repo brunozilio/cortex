@@ -4,9 +4,16 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to fuzz each target
+        default: "600"
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -80,3 +87,51 @@ jobs:
         run: bun test
       - name: release check
         run: cargo run -q -p xtask -- check-release
+
+  fuzz:
+    name: fuzz (${{ matrix.target }})
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - shell_parse
+          - shell_deny
+          - wildcards
+          - web_page
+          - code_map
+          - session_log
+          - sse_stream
+          - mcp_messages
+          - config_schema
+          - tunnel_frame
+          - tunnel_handshake
+    env:
+      NIGHTLY: nightly-2026-11-01
+      FUZZ_SECONDS: ${{ github.event_name == 'push' && '30' || inputs.seconds || '600' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-11-01
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz@0.13.2
+      - name: fuzz
+        working-directory: fuzz
+        run: |
+          mkdir -p "work/${{ matrix.target }}"
+          cargo "+$NIGHTLY" fuzz run --sanitizer none "${{ matrix.target }}" "work/${{ matrix.target }}" "corpus/${{ matrix.target }}" -- \
+            -max_total_time="$FUZZ_SECONDS" -rss_limit_mb=4096 -timeout=10
+      - name: upload crashes
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore

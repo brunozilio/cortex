@@ -108,8 +108,8 @@ impl Folder {
                 Block::ToolUse { id, name, input }
             }
             Open::Server { mut block, json } => {
-                if let Ok(input) = serde_json::from_str::<Value>(&json) {
-                    block["input"] = input;
+                if let (Ok(input), Some(fields)) = (serde_json::from_str::<Value>(&json), block.as_object_mut()) {
+                    fields.insert("input".to_owned(), input);
                 }
                 if let Some(seen) = searching(&block) {
                     on(seen);

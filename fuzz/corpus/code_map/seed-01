@@ -1,0 +1,3 @@
+export interface I { x: number }
+export class C implements I { x = 1; m(): void { f(this.x); } }
+function f(n: number) { return n }

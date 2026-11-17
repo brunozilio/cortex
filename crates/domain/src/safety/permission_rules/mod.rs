@@ -4,6 +4,8 @@ mod pattern;
 mod site;
 mod unwrapped;
 
+#[doc(hidden)]
+pub use pattern::{command_matches, path_matches};
 pub use pattern::{hides_more, normalized, split_command, without_harmless_redirects};
 pub use site::{is_private, is_private_address, site};
 

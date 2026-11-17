@@ -6,6 +6,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub use body::body;
+#[doc(hidden)]
+pub use frames::{Frame, next as next_frame};
 pub use stream::Folder;
 
 use crate::model::http::Http;

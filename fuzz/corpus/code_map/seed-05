@@ -1,0 +1,7 @@
+package main
+
+type T struct{ X int }
+
+func (t T) M() int { return t.X }
+
+func main() { println(T{}.M()) }

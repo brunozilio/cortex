@@ -1,0 +1,1 @@
+?<html><head><title>T</title><style>p{}</style></head><body><nav>menu</nav><main><h1>Hi</h1><p>Some <b>text</b> &amp; <a href='/x'>a link</a></p><pre><code>let x = 1;</code></pre><table><tr><td>1</td></tr></table></main></body></html>
