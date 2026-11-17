@@ -1,16 +1,18 @@
 mod auto_pick;
-mod converse;
 pub(crate) mod date;
 mod job;
 mod moved;
+mod phases;
 mod record;
-mod report;
 mod rewind;
 pub(crate) mod roles;
 mod sent;
 mod session;
 mod small_model;
 mod snapshot;
+mod stop;
+#[cfg(test)]
+mod tests;
 
 use std::sync::Arc;
 
@@ -78,7 +80,6 @@ impl AgentEngine for NativeEngine {
     ) -> Result<Box<dyn RunHandle>, EngineError> {
         let mut workspace = Workspace::for_request(request);
         workspace.services.launch = self.launch.clone();
-        let workspace = Arc::new(workspace);
         let control = Arc::new(Control::new(request.permission, workspace.stop.clone()));
         let detach = Arc::clone(&workspace.detach);
         let gate = RunGate::new(run, sink);
@@ -88,7 +89,6 @@ impl AgentEngine for NativeEngine {
             mcp: Arc::clone(&self.mcp),
             lsp: Arc::clone(&self.lsp),
             request: request.clone(),
-            workspace,
             control: Arc::clone(&control),
             gate: gate.clone(),
             recorder: None,
@@ -99,7 +99,7 @@ impl AgentEngine for NativeEngine {
         std::thread::Builder::new()
             .name("agent-engine-run".into())
             .spawn(move || {
-                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job.run())).is_err() {
+                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job.run(workspace))).is_err() {
                     panic_control.cancel();
                     panic_gate.emit(EngineEvent::Failure(FailureKind::Other));
                     panic_gate.emit(EngineEvent::Failed("The native engine stopped unexpectedly.".into()));

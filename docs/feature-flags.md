@@ -259,7 +259,7 @@ behaviour for someone relying on today's defaults.
 After every finished run the terminal (`App::after_run` in
 `crates/cli/src/tui/chores.rs`) starts background runs through
 `crates/app/src/client/chores.rs` and `crates/app/src/client/session.rs`. The engine handles
-them in `Job::chore` (`crates/agent-engine/src/engine/report.rs`), which
+them in `Job::chore` (`crates/agent-engine/src/engine/phases/load_session.rs`), which
 dispatches to `crates/agent-engine/src/chores/`.
 
 Facts that hold for all of them, from `Job::chore`:

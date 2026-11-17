@@ -18,15 +18,12 @@ impl Move<'_> {
     pub(super) fn to(
         &self,
         relocation: Relocation,
-        workspace: Option<&mut Workspace>,
+        workspace: &mut Workspace,
         guard: &mut Guard,
     ) -> Result<Moved, String> {
         let Relocation { setup, remove } = relocation;
         let entered = setup.worktree_root.is_some().then(|| setup.clone());
-        let moved = match workspace {
-            Some(workspace) => self.switch(setup, workspace, guard),
-            None => Err("the workspace is shared".into()),
-        };
+        let moved = self.switch(setup, workspace, guard);
         if moved.is_err()
             && let Some(entered) = entered
         {

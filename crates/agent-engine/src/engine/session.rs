@@ -1,13 +1,15 @@
 use std::sync::Arc;
 
 use domain::trace::RunInfo;
-use domain::{EngineEvent, SessionCommand, SessionId};
+use domain::{EngineEvent, ModelOption, SessionId};
 use platform::sync::Locked;
 
 use super::job::Job;
 use super::record::{Recorder, Session};
+use super::stop::Stop;
 use crate::boundary::Observer;
-use crate::model::{ModelApi, ModelError};
+use crate::meter::{Ledger, Metered};
+use crate::model::ModelApi;
 use crate::prompt::GitSnapshot;
 use crate::sessions::Hold;
 use crate::transcript::Message;
@@ -48,15 +50,24 @@ impl Job {
         }
     }
 
-    pub(super) fn signed_in(&self) -> Result<Option<Arc<dyn ModelApi>>, ModelError> {
-        if self.request.command == Some(SessionCommand::MeasureContext) {
-            return Ok(None);
-        }
-        let api = self.source.api(&self.request)?;
+    pub(super) fn signed_in(&self) -> Result<Arc<dyn ModelApi>, Stop> {
+        let api = self.source.api(&self.request).map_err(Stop::Model)?;
         if let Some(recorder) = &self.recorder {
             recorder.announce(&self.gate);
         }
-        Ok(Some(api))
+        Ok(api)
+    }
+
+    pub(super) fn metered(&self, api: Arc<dyn ModelApi>, ledger: &Arc<Ledger>, model: ModelOption) -> Metered {
+        Metered {
+            api,
+            ledger: Arc::clone(ledger),
+            provider: self.request.model.provider,
+            gate: self.gate.clone(),
+            model,
+            calls: self.recorder.as_ref().map(|recorder| recorder.calls()),
+            budget: self.request.budget,
+        }
     }
 
     pub(super) fn save(&self, session: &SessionId, history: &[Message]) -> Result<(), String> {
@@ -70,13 +81,13 @@ impl Job {
         self.sessions.save_for(&self.request, session, history)
     }
 
-    pub(super) fn run_info(&self, git: Option<&GitSnapshot>) -> RunInfo {
+    pub(super) fn run_info(&self, cwd: &std::path::Path, git: Option<&GitSnapshot>) -> RunInfo {
         RunInfo {
             model: self.request.model.id.clone(),
             provider: format!("{:?}", self.request.model.provider),
             permission: format!("{:?}", self.request.permission),
             effort: format!("{:?}", self.request.effort),
-            cwd: self.workspace.cwd.display().to_string(),
+            cwd: cwd.display().to_string(),
             branch: git.map(|git| git.branch.clone()),
             recent: git.map(|git| git.recent.clone()),
             status: git.map(|git| git.status.clone()),

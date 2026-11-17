@@ -1,10 +1,11 @@
-use std::time::Instant;
-
-use domain::{EngineEvent, FailureKind, Rewound, SessionId};
+use domain::{EngineEvent, Rewound, SessionId};
 
 use super::job::Job;
+use super::phases::load_session::LoadedSession;
 use super::record::Session;
+use super::stop::Stop;
 use crate::checkpoints::{self, Checkpoint};
+use crate::tools::Workspace;
 use crate::transcript::Message;
 
 impl Job {
@@ -14,8 +15,8 @@ impl Job {
         Checkpoint::open(&self.request.prompt, history)
     }
 
-    pub(super) fn keep_checkpoint(&self, session: &SessionId, mut checkpoint: Checkpoint) {
-        checkpoint.files = self.workspace.services.files.as_ref().map(|files| files.take()).unwrap_or_default();
+    pub(super) fn keep_checkpoint(&self, session: &SessionId, mut checkpoint: Checkpoint, workspace: &Workspace) {
+        checkpoint.files = workspace.services.files.as_ref().map(|files| files.take()).unwrap_or_default();
         let saved = self.sessions.load_checkpoints(&self.request, session).and_then(|mut all| {
             all.push(checkpoint);
             self.sessions.save_checkpoints(&self.request, session, &all)
@@ -25,10 +26,10 @@ impl Job {
         }
     }
 
-    pub(super) fn branch(&mut self, session: &SessionId, history: &[Message], index: u32, started: Instant) {
+    pub(super) fn branch(&mut self, session: &LoadedSession, index: u32) -> Stop {
         let branched = SessionId(uuid::Uuid::new_v4().to_string());
-        let made = self.sessions.load_checkpoints(&self.request, session).and_then(|all| {
-            let (prompt, kept, carried) = checkpoints::branch(&all, index as usize, history)?;
+        let made = self.sessions.load_checkpoints(&self.request, &session.id).and_then(|all| {
+            let (prompt, kept, carried) = checkpoints::branch(&all, index as usize, &session.history)?;
             self.sessions.save_for(&self.request, &branched, &kept)?;
             self.sessions.save_checkpoints(&self.request, &branched, &carried)?;
             Ok(prompt)
@@ -37,30 +38,31 @@ impl Job {
             Ok(prompt) => {
                 let recorder = self.record(&branched, Session::Kept);
                 self.gate.emit(EngineEvent::SessionStarted(branched.clone()));
-                recorder.opened(self.run_info(None));
-                self.gate.emit(EngineEvent::Branched { from: session.clone(), checkpoint: index, prompt });
-                self.completed(started, None);
+                recorder.opened(self.run_info(&self.request.cwd, None));
+                self.gate.emit(EngineEvent::Branched { from: session.id.clone(), checkpoint: index, prompt });
+                Stop::completed(None)
             }
-            Err(error) => self.fail(&format!("Could not branch: {error}"), FailureKind::Other),
+            Err(error) => Stop::failed(format!("Could not branch: {error}")),
         }
     }
 
-    pub(super) fn rewind(&mut self, session: &SessionId, mut history: Vec<Message>, index: u32, started: Instant) {
-        self.record(session, Session::Kept).opened(self.run_info(None));
-        let rewound = self.sessions.load_checkpoints(&self.request, session).and_then(|mut all| {
+    pub(super) fn rewind(&mut self, session: LoadedSession, index: u32) -> Stop {
+        let LoadedSession { id, mut history } = session;
+        self.record(&id, Session::Kept).opened(self.run_info(&self.request.cwd, None));
+        let rewound = self.sessions.load_checkpoints(&self.request, &id).and_then(|mut all| {
             let (target, restored, conversation) = checkpoints::rewind(&mut all, index as usize, &mut history)?;
-            self.sessions.save_checkpoints(&self.request, session, &all)?;
+            self.sessions.save_checkpoints(&self.request, &id, &all)?;
             if conversation {
-                self.sessions.save_for(&self.request, session, &history)?;
+                self.sessions.save_for(&self.request, &id, &history)?;
             }
             Ok(Rewound { checkpoint: index, prompt: target.prompt, restored, conversation })
         });
         match rewound {
             Ok(rewound) => {
                 self.gate.emit(EngineEvent::Rewound(rewound));
-                self.completed(started, None);
+                Stop::completed(None)
             }
-            Err(error) => self.fail(&format!("Could not rewind: {error}"), FailureKind::Other),
+            Err(error) => Stop::failed(format!("Could not rewind: {error}")),
         }
     }
 }

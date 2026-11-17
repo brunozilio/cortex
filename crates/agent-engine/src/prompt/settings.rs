@@ -1,3 +1,4 @@
+use super::project_trust::ProjectTrust;
 use crate::frontmatter::parse as parse_frontmatter;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -98,32 +99,31 @@ fn model_names(value: &Value, key: &str) -> Result<Vec<String>, String> {
         None => Ok(model_name(value, key)?.into_iter().collect()),
     }
 }
-#[allow(
-    clippy::too_many_lines,
-    clippy::cognitive_complexity,
-    reason = "split planned: one pass reads every settings key, to become a reader per key group"
-)]
+
 pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin]) -> Result<Settings, String> {
-    let mut selected = String::from("Default");
-    let mut schema = None;
-    let mut agent = None;
-    let mut auto_memory = true;
-    let mut advisor = None;
-    let mut judge = None;
-    let mut escalation = None;
-    let mut fallbacks = Vec::new();
-    let mut small_model = None;
-    let mut enabled_providers = Vec::new();
-    let mut hooks = crate::hooks::Hooks::default();
-    let mut mcp_approval = domain::mcp_config::McpApproval::default();
-    let mut lsp_servers = Vec::new();
-    let mut permissions = domain::permission_rules::PermissionRules::default();
-    let mut judge_allow = domain::permission_rules::PermissionRules::default();
-    let mut added_dirs = Vec::new();
-    let mut scripts = crate::tools::script_tool::ScriptGrants::default();
-    let mut features = domain::features::Features::default();
-    let mut sandbox = domain::sandbox::Sandbox::default();
+    let roots = roots(cwd, home);
+    let trust = ProjectTrust::of(home);
     let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(brand::DIR));
+    let mut merged = Settings::default();
+    merged.hooks.extend(&crate::hooks::Hooks::gathered(home, &roots, &|file| trust.runs_hooks_of(file)));
+    merged.project_criteria = super::criteria_file::nearest(roots.iter().filter(|root| !is_user_root(root)));
+    let mut style = String::from("Default");
+    for (path, owners) in files(&roots, home) {
+        let Some(value) = read(&path)? else { continue };
+        let owners = owners && trust.local_is_the_owner_s(&path);
+        let layer = Layer { path: &path, value: &value, owners, trust: &trust };
+        layer.merge_into(&mut merged, &mut style)?;
+    }
+    add_plugins(&mut merged, plugins);
+    merged.notices = trust.notices();
+    if auto_memory_disabled_by_environment() {
+        merged.auto_memory = false;
+    }
+    merged.style = style_named(style, &roots)?;
+    Ok(merged)
+}
+
+fn roots(cwd: &Path, home: Option<&Path>) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Some(home) = home {
         roots.push(home.join(brand::DIR));
@@ -135,9 +135,11 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
     }
     let mut seen = std::collections::HashSet::new();
     roots.retain(|root| seen.insert(root.canonicalize().unwrap_or_else(|_| root.clone())));
-    let trust = super::project_trust::ProjectTrust::of(home);
-    hooks.extend(&crate::hooks::Hooks::gathered(home, &roots, &|file| trust.runs_hooks_of(file)));
-    let project_criteria = super::criteria_file::nearest(roots.iter().filter(|root| !is_user_root(root)));
+    roots
+}
+
+fn files(roots: &[PathBuf], home: Option<&Path>) -> Vec<(PathBuf, bool)> {
+    let is_user_root = |root: &Path| home.is_some_and(|home| root == home.join(brand::DIR));
     let mut files: Vec<(PathBuf, bool)> = roots
         .iter()
         .flat_map(|root| {
@@ -146,161 +148,166 @@ pub fn load(cwd: &Path, home: Option<&Path>, plugins: &[crate::plugins::Plugin])
         })
         .collect();
     files.extend(home.map(|home| (home.join(brand::DIR).join(MANAGED), true)));
-    for (path, owners) in files {
-        let text = match std::fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(format!("{}: {e}", path.display())),
-        };
-        let settings: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-        let owners = owners && trust.local_is_the_owner_s(&path);
-        if owners {
-            mcp_approval.read(&settings);
-            let named = settings["enabledProviders"].as_array().into_iter().flatten();
-            enabled_providers.extend(named.filter_map(|id| id.as_str().map(str::to_owned)));
+    files
+}
+
+fn read(path: &Path) -> Result<Option<Value>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    serde_json::from_str(&text).map(Some).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+struct Layer<'a> {
+    path: &'a Path,
+    value: &'a Value,
+    owners: bool,
+    trust: &'a ProjectTrust,
+}
+
+impl Layer<'_> {
+    fn merge_into(&self, merged: &mut Settings, style: &mut String) -> Result<(), String> {
+        self.merge_access(merged)?;
+        self.merge_agent(merged)?;
+        self.merge_models(merged)?;
+        self.merge_extensions(merged)?;
+        if let Some(name) = self.value["outputStyle"].as_str() {
+            name.clone_into(style);
         }
-        super::permissions::read(&settings, owners, &mut permissions, &mut added_dirs)
-            .map_err(|e| format!("{}: {e}", path.display()))?;
-        if owners {
-            super::permissions::read_judge(&settings, &mut judge_allow)
-                .map_err(|e| format!("{}: {e}", path.display()))?;
+        if let Some(value) = self.value.get("jsonSchema") {
+            merged.schema = (!value.is_null()).then(|| value.clone());
+        }
+        Ok(())
+    }
+
+    fn located(&self, error: impl std::fmt::Display) -> String {
+        format!("{}: {error}", self.path.display())
+    }
+
+    fn merge_access(&self, merged: &mut Settings) -> Result<(), String> {
+        let settings = self.value;
+        if self.owners {
+            merged.mcp_approval.read(settings);
+            let named = settings["enabledProviders"].as_array().into_iter().flatten();
+            merged.enabled_providers.extend(named.filter_map(|id| id.as_str().map(str::to_owned)));
+        }
+        super::permissions::read(settings, self.owners, &mut merged.permissions, &mut merged.added_dirs)
+            .map_err(|e| self.located(e))?;
+        if self.owners {
+            super::permissions::read_judge(settings, &mut merged.judge_allow).map_err(|e| self.located(e))?;
         }
         if let Some(value) = settings.get("scripts") {
-            scripts = scripts.layered(value, owners)?;
+            merged.scripts = merged.scripts.layered(value, self.owners)?;
         }
         if let Some(value) = settings.get("features") {
-            features = features.layered(value, owners).map_err(|e| format!("{}: {e}", path.display()))?;
+            let features = std::mem::take(&mut merged.features);
+            merged.features = features.layered(value, self.owners).map_err(|e| self.located(e))?;
         }
         if let Some(value) = settings.get("sandbox") {
-            sandbox = sandbox.layered(value, owners).map_err(|e| format!("{}: {e}", path.display()))?;
+            let sandbox = std::mem::take(&mut merged.sandbox);
+            merged.sandbox = sandbox.layered(value, self.owners).map_err(|e| self.located(e))?;
         }
-        if let Some(value) = settings.get("autoMemoryEnabled") {
-            auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;
+        Ok(())
+    }
+
+    fn merge_agent(&self, merged: &mut Settings) -> Result<(), String> {
+        if let Some(value) = self.value.get("autoMemoryEnabled") {
+            merged.auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;
         }
-        if let Some(value) = settings.get("agent") {
-            agent = if value.is_null() {
+        if let Some(value) = self.value.get("agent") {
+            merged.agent = if value.is_null() {
                 None
             } else {
                 Some(value.as_str().ok_or("agent setting must be a name")?.to_owned())
             };
         }
+        Ok(())
+    }
+
+    fn merge_models(&self, merged: &mut Settings) -> Result<(), String> {
+        let settings = self.value;
         if let Some(value) = settings.get("advisorModel") {
-            advisor = model_name(value, "advisorModel")?;
+            merged.advisor = model_name(value, "advisorModel")?;
         }
         if let Some(value) = settings.get("judgeModel") {
-            judge = model_name(value, "judgeModel")?;
+            merged.judge = model_name(value, "judgeModel")?;
         }
-        if owners && let Some(value) = settings.get("escalationModel") {
-            escalation = model_name(value, "escalationModel")?;
+        if self.owners
+            && let Some(value) = settings.get("escalationModel")
+        {
+            merged.escalation = model_name(value, "escalationModel")?;
         }
         if let Some(value) = settings.get("fallbackModel") {
-            fallbacks = model_names(value, "fallbackModel")?;
+            merged.fallbacks = model_names(value, "fallbackModel")?;
         }
         if let Some(value) = settings.get("smallModel") {
-            small_model = model_name(value, "smallModel")?;
+            merged.small_model = model_name(value, "smallModel")?;
         }
-        if let Some(value) = settings.get("hooks").filter(|_| trust.runs_hooks_of(&path)) {
-            hooks.extend(&crate::hooks::Hooks::parse(value).map_err(|e| format!("{}: hooks: {e}", path.display()))?);
+        Ok(())
+    }
+
+    fn merge_extensions(&self, merged: &mut Settings) -> Result<(), String> {
+        if let Some(value) = self.value.get("hooks").filter(|_| self.trust.runs_hooks_of(self.path)) {
+            let hooks = crate::hooks::Hooks::parse(value).map_err(|e| self.located(format!("hooks: {e}")))?;
+            merged.hooks.extend(&hooks);
         }
-        if let Some(value) = settings.get("lspServers") {
+        if let Some(value) = self.value.get("lspServers") {
             let layer: LspLayer =
-                serde_json::from_value(value.clone()).map_err(|e| format!("{}: lspServers: {e}", path.display()))?;
-            lsp_servers.push(if owners {
+                serde_json::from_value(value.clone()).map_err(|e| self.located(format!("lspServers: {e}")))?;
+            merged.lsp_servers.push(if self.owners {
                 layer
             } else {
                 layer.into_iter().map(|(server, config)| (server, config.without_commands())).collect()
             });
         }
-        if let Some(style) = settings["outputStyle"].as_str() {
-            selected = style.to_owned();
-        }
-        if let Some(value) = settings.get("jsonSchema") {
-            schema = (!value.is_null()).then(|| value.clone());
-        }
+        Ok(())
     }
+}
+
+fn add_plugins(merged: &mut Settings, plugins: &[crate::plugins::Plugin]) {
     for plugin in plugins {
         match plugin.hooks().and_then(|events| events.map(|events| crate::hooks::Hooks::parse(&events)).transpose()) {
-            Ok(Some(found)) => hooks.extend(&found),
+            Ok(Some(found)) => merged.hooks.extend(&found),
             Ok(None) => {}
             Err(error) => tracing::warn!(%error, plugin = %plugin.name, "a plugin's hooks are left out"),
         }
     }
-    lsp_servers.extend(crate::plugins::lsp_layers(plugins));
-    let notices = trust.notices();
-    if ["CLAUDE_CODE_DISABLE_AUTO_MEMORY", concat!(brand::env_prefix!(), "_DISABLE_AUTO_MEMORY")]
+    merged.lsp_servers.extend(crate::plugins::lsp_layers(plugins));
+}
+
+fn auto_memory_disabled_by_environment() -> bool {
+    ["CLAUDE_CODE_DISABLE_AUTO_MEMORY", concat!(brand::env_prefix!(), "_DISABLE_AUTO_MEMORY")]
         .iter()
         .any(|key| std::env::var(key).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes")))
-    {
-        auto_memory = false;
-    }
-    let style = match selected.to_ascii_lowercase().as_str() {
-        "default" => None,
-        name if super::styles::builtin(name).is_some() => super::styles::builtin(name).map(|style| style.style()),
-        _ => {
-            if selected.is_empty() || !selected.chars().all(|c| c.is_ascii_alphanumeric() || "-_".contains(c)) {
-                return Err("invalid outputStyle name".into());
-            }
-            let path = roots
-                .iter()
-                .rev()
-                .map(|r| r.join("output-styles").join(format!("{selected}.md")))
-                .find(|p| p.is_file())
-                .ok_or_else(|| format!("output style {selected} was not found"))?;
-            let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-            let (front, body) = parse_frontmatter(&text);
-            return Ok(Settings {
-                style: Some(Style {
-                    name: selected,
-                    instructions: body.trim().into(),
-                    keep_coding: front.get("keep-coding-instructions").is_some_and(|v| v == "true"),
-                    reminder: front.get("turn-reminder").map(|text| text.trim().to_owned()).filter(|t| !t.is_empty()),
-                }),
-                schema,
-                agent,
-                hooks,
-                auto_memory,
-                advisor,
-                judge,
-                escalation,
-                project_criteria,
-                fallbacks,
-                small_model,
-                enabled_providers,
-                mcp_approval,
-                lsp_servers,
-                permissions,
-                judge_allow,
-                added_dirs,
-                scripts,
-                features,
-                sandbox,
-                notices,
-            });
+}
+
+fn style_named(selected: String, roots: &[PathBuf]) -> Result<Option<Style>, String> {
+    match selected.to_ascii_lowercase().as_str() {
+        "default" => return Ok(None),
+        name if super::styles::builtin(name).is_some() => {
+            return Ok(super::styles::builtin(name).map(|style| style.style()));
         }
-    };
-    Ok(Settings {
-        style,
-        schema,
-        agent,
-        hooks,
-        auto_memory,
-        advisor,
-        judge,
-        escalation,
-        project_criteria,
-        fallbacks,
-        small_model,
-        enabled_providers,
-        mcp_approval,
-        lsp_servers,
-        permissions,
-        judge_allow,
-        added_dirs,
-        scripts,
-        features,
-        sandbox,
-        notices,
-    })
+        _ => {}
+    }
+    if selected.is_empty() || !selected.chars().all(|c| c.is_ascii_alphanumeric() || "-_".contains(c)) {
+        return Err("invalid outputStyle name".into());
+    }
+    let path = roots
+        .iter()
+        .rev()
+        .map(|r| r.join("output-styles").join(format!("{selected}.md")))
+        .find(|p| p.is_file())
+        .ok_or_else(|| format!("output style {selected} was not found"))?;
+    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let (front, body) = parse_frontmatter(&text);
+    Ok(Some(Style {
+        name: selected,
+        instructions: body.trim().into(),
+        keep_coding: front.get("keep-coding-instructions").is_some_and(|v| v == "true"),
+        reminder: front.get("turn-reminder").map(|text| text.trim().to_owned()).filter(|t| !t.is_empty()),
+    }))
 }
 #[cfg(test)]
 #[path = "settings_lsp_tests.rs"]

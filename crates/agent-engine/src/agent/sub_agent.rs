@@ -90,10 +90,7 @@ impl Agent<'_> {
             .as_ref()
             .map(|deferred| std::sync::Arc::new(deferred.only(|name| config.allows(name))));
         if model != self.request.model {
-            let child_model = &mut child_workspace.models.model;
-            child_model.id = model.clone();
-            child_model.window = None;
-            child_model.capabilities = None;
+            child_workspace.models.switch_to(model.clone());
         }
         if let Some(window) = config.compact_window {
             let measured = crate::upkeep::window(&child_workspace.models.model);

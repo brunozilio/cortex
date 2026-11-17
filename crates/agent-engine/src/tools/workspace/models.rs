@@ -19,6 +19,12 @@ impl Models {
             roles: Default::default(),
         }
     }
+
+    pub fn switch_to(&mut self, id: String) {
+        self.model.id = id;
+        self.model.capabilities = None;
+        self.model.window = None;
+    }
 }
 
 impl Default for Models {
