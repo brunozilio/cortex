@@ -1,0 +1,18 @@
+[package]
+name = "tunnel"
+description = "The remote control's wire: relay frames, device and machine keys, pairing links, the Noise handshake and the requests a phone sends through it."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+base64.workspace = true
+sha2.workspace = true
+snow = "0.10"
+
+[lints]
+workspace = true

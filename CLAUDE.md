@@ -21,8 +21,9 @@ llm-providers    ──► platform, domain, brand
 domain           ──► brand
 language-servers ──► platform, domain, brand
 content          ──► script, brand
-console          ──► platform, brand
-code-map, platform, script, brand ──► no workspace crate
+console          ──► page, platform, brand
+relay            ──► page, tunnel
+code-map, platform, script, brand, page, tunnel ──► no workspace crate
 ```
 
 `xtask lint` checks crate edges: a manifest edge missing from the table in
@@ -31,7 +32,7 @@ that table and this diagram in the same commit as the `Cargo.toml`.
 
 `web/` is the page `/trace`, `/console` and `/docs` open (Bun + Vite +
 React + Tailwind). Cargo never runs Bun: `cargo run -p xtask -- web` builds
-the page into `web/dist`, and `console`'s `build.rs` only embeds what is
+the page into `web/dist`, and `page`'s `build.rs` only embeds what is
 there (nothing when it is absent; the gate needs neither Bun nor a page).
 `cargo run -p xtask -- check-release` fails on a missing or stale
 `web/dist`. The page's types mirror `domain::trace` by hand; the fixtures in
@@ -48,7 +49,7 @@ is (`xtask lint` checks it lists every crate).
 - `docs/vision.md`: the problem, who it is for, scope, non-goals, open decisions.
 - `docs/GLOSSARY.md`: the project's vocabulary and where each term lives.
 - `docs/architecture.md`: crate map, request path, data on disk, threading.
-- `docs/decisions/`: one record per decision (`0001`…`0011`), with context and costs.
+- `docs/decisions/`: one record per decision (`0001`…`0012`), with context and costs.
 - `docs/threat-model.md`: assets, actors, trust boundaries, known gaps.
 
 Files under `docs/` must not spell the product's name, command or env

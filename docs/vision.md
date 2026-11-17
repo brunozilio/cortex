@@ -39,6 +39,7 @@ Core:
 - Providers: connect by API key or sign-in, model catalog, model roles, fallback chain, several accounts.
 - Extension points: instruction files, rules, hooks, skills, custom agents, script tools, plugins, MCP servers (HTTP and stdio).
 - The local web page: trace of runs, console, user documentation, a terminal attached to a session.
+- Remote control: the same page installed on a phone as a progressive web app, through a self-hosted relay (`decisions/0012-remote-control-through-a-blind-relay.md`).
 - Subcommands: `login`, `logout`, `models`, `mcp`, `plugin`, `config`, `doctor`, `eval`.
 
 Experimental or undecided (to be classified in phase 2.5):
@@ -52,7 +53,7 @@ Experimental or undecided (to be classified in phase 2.5):
 1. Not a multi-user or hosted service. One user, one machine. There is no account system, no organisation, no remote server (see `decisions/0008-single-user-local-product.md`).
 2. Not an embeddable SDK. The client code between the terminal and the engine is internal; no API is offered for building other products on top of the agent (see `decisions/0005-typed-application-api.md`).
 3. Not an IDE or a GUI editor. The local web page is for observing runs and reading documentation; code is edited through the agent and the user's own editor.
-4. Not a network-reachable surface. The web page binds to loopback with a per-process token and is not meant to be exposed beyond the machine. Remote control of a session over a network is out of scope.
+4. Not a network-reachable surface. The web page binds to loopback with a per-process token and accepts no connection from the network. Remote control reaches a session only through a relay the owner runs, to which the machine connects out, and only from paired devices, end to end encrypted (see `decisions/0012-remote-control-through-a-blind-relay.md`).
 5. Not breadth for its own sake. A feature without an owner and a user is removed, and an experimental feature starts off. The audit's finding that "nothing was refused" in the first eight days is the reason this is written down.
 
 ## Open decisions

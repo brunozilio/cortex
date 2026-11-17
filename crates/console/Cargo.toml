@@ -16,7 +16,7 @@ portable-pty = "0.9"
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "sync", "macros", "time"] }
 tower-http = { version = "0.6", features = ["fs"] }
 getrandom.workspace = true
-mime_guess = "2"
+page.workspace = true
 futures-util = { version = "0.3", default-features = false, features = ["std", "sink"] }
 
 [dev-dependencies]
