@@ -121,7 +121,8 @@ fn a_turn_still_going_elsewhere_stays_open_while_followed() {
 #[test]
 fn what_the_user_saw_waits_for_its_prompt_before_it_is_followed() {
     let shown = Record::Shown { text: "read @notes.txt".into(), attached: Vec::new() };
-    let prompted = Record::Prompted { at_ms: 1, prompt: "read @notes.txt\n\n<file path=\"notes.txt\">\nalpha\n</file>".into() };
+    let prompted =
+        Record::Prompted { at_ms: 1, prompt: "read @notes.txt\n\n<file path=\"notes.txt\">\nalpha\n</file>".into() };
     let mut transcript = Transcript::default();
 
     assert_eq!(transcript.follow(std::slice::from_ref(&shown)), 0, "kept for the next look");

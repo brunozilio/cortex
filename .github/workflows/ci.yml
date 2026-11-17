@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CONSOLE_SKIP_WEB: "1"
+
+jobs:
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: format
+        run: cargo fmt --all -- --check
+      - name: tests
+        run: cargo nextest run --workspace
+      - name: doctests
+        run: cargo test --doc --workspace
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: lint
+        run: cargo run -q -p xtask -- lint
+
+  windows:
+    name: build (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: check
+        run: cargo check --workspace --all-targets
+
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: install
+        run: bun install --frozen-lockfile
+      - name: test
+        run: bun test
+      - name: build
+        run: bun run build

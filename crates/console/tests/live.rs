@@ -14,7 +14,10 @@ use tower::ServiceExt;
 const COOKIE: &str = "console_token=t";
 
 fn app(live: &Live) -> axum::Router {
-    console::router(Settings { token: "t".into(), assets: Assets::Missing, terminal: console::Launch::this_program() }, live.clone())
+    console::router(
+        Settings { token: "t".into(), assets: Assets::Missing, terminal: console::Launch::this_program() },
+        live.clone(),
+    )
 }
 
 async fn call(live: &Live, method: &str, path: &str, body: Option<Value>) -> (StatusCode, String) {
