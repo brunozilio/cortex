@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import transcript from './fixtures/noise.json'
 import { fromHex, toHex } from '../src/lib/tunnel/bytes'
 import type { Answer } from '../src/lib/tunnel/messages'
-import { keyFrom } from '../src/lib/tunnel/noise'
+import { keyFrom, type Initiator, type Transport } from '../src/lib/tunnel/noise'
 import { pairedInitiator } from '../src/lib/tunnel/link'
-import { RelayChannel, type SocketLike } from '../src/lib/tunnel/relay'
+import { CONFIRMATION, RelayChannel, type SocketLike } from '../src/lib/tunnel/relay'
 
 class FakeSocket implements SocketLike {
   binaryType: BinaryType = 'blob'
@@ -52,6 +52,27 @@ function channel() {
 }
 
 describe('the relay channel', () => {
+  test('a pairing phone proves it holds the code with a first sealed message, before anything else', async () => {
+    const clear: Transport = { seal: (bytes: Uint8Array) => [bytes], open: () => null } as unknown as Transport
+    const initiator = { hello: () => new Uint8Array([2]), finish: () => clear } as unknown as Initiator
+    const sockets: FakeSocket[] = []
+    const relay = new RelayChannel({
+      socketUrl: 'wss://relay.example/phone?machine=x',
+      greet: () => ({ initiator, payload: new Uint8Array(0), confirms: true }),
+      open: (url) => {
+        const socket = new FakeSocket(url)
+        sockets.push(socket)
+        return socket
+      },
+    })
+    relay.send({ type: 'close', id: 5 })
+    sockets[0].opened()
+    sockets[0].receive('00')
+    await Promise.resolve()
+    const sent = sockets[0].sent.slice(1).map((hex) => JSON.parse(new TextDecoder().decode(fromHex(hex))))
+    expect(sent).toEqual([CONFIRMATION, { type: 'close', id: 5 }])
+  })
+
   test('greets the machine, sends what was asked meanwhile, sealed, and hands over what the machine answers', async () => {
     const { relay, sockets } = channel()
     const answers: Answer[] = []

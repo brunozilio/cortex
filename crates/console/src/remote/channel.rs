@@ -3,12 +3,14 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tunnel::handshake::Joined;
 use tunnel::{Admission, Answer, Ask, Frame, Key, Payload, StaticKey, Transport, accept};
 
 use super::book::Book;
 use super::forward::Local;
 
 pub const REVOCATION_CHECK: Duration = Duration::from_secs(3);
+pub const HELLO_WAIT: Duration = Duration::from_secs(10);
 const QUEUED: usize = 64;
 const MOST_STREAMS: usize = 16;
 
@@ -25,8 +27,8 @@ struct Stream {
 }
 
 pub async fn serve(place: Place, channel: u32, mut incoming: mpsc::Receiver<Vec<u8>>, out: mpsc::Sender<Frame>) {
-    if let Some((transport, device)) = greet(&place, channel, &mut incoming, &out).await {
-        talk(&place, channel, transport, device, incoming, &out).await;
+    if let Some((transport, device, joining)) = greet(&place, channel, &mut incoming, &out).await {
+        talk(&place, channel, Peer { transport, device, joining }, incoming, &out).await;
     }
     let _ = out.send(Frame::Close(channel)).await;
 }
@@ -36,44 +38,56 @@ async fn greet(
     channel: u32,
     incoming: &mut mpsc::Receiver<Vec<u8>>,
     out: &mpsc::Sender<Frame>,
-) -> Option<(Transport, Key)> {
-    let hello = incoming.recv().await?;
+) -> Option<(Transport, Key, Option<Joined>)> {
+    let hello = tokio::time::timeout(HELLO_WAIT, incoming.recv()).await.ok()??;
     let book = place.book.clone();
     let machine = place.machine.clone();
     let accepted = tokio::task::spawn_blocking(move || accept(&machine, &hello, &book)).await.ok()?.ok()?;
-    if let Some(joined) = &accepted.joined {
-        let book = place.book.clone();
-        let (pairing, name, device) = (joined.pairing, joined.name.clone(), accepted.device);
-        tokio::task::spawn_blocking(move || book.join(&pairing, &name, device)).await.ok()?.ok()??;
-    }
     out.send(Frame::Data(channel, accepted.reply)).await.ok()?;
-    Some((accepted.transport, accepted.device))
+    Some((accepted.transport, accepted.device, accepted.joined))
+}
+
+struct Peer {
+    transport: Transport,
+    device: Key,
+    joining: Option<Joined>,
+}
+
+async fn join(place: &Place, joined: Joined, device: Key) -> bool {
+    let book = place.book.clone();
+    let recorded = tokio::task::spawn_blocking(move || book.join(&joined.pairing, &joined.name, device)).await;
+    matches!(recorded, Ok(Ok(Some(_))))
 }
 
 async fn talk(
     place: &Place,
     channel: u32,
-    mut transport: Transport,
-    device: Key,
+    peer: Peer,
     mut incoming: mpsc::Receiver<Vec<u8>>,
     out: &mpsc::Sender<Frame>,
 ) {
+    let Peer { mut transport, device, mut joining } = peer;
     let (answers, mut answered) = mpsc::channel::<Answer>(QUEUED);
     let mut streams: HashMap<u32, Stream> = HashMap::new();
     let mut check = tokio::time::interval(REVOCATION_CHECK);
+    let unproven = tokio::time::sleep(HELLO_WAIT);
+    tokio::pin!(unproven);
     loop {
         tokio::select! {
             sealed = incoming.recv() => {
                 let Some(sealed) = sealed else { break };
-                match transport.open(&sealed) {
-                    Ok(Some(plain)) => match serde_json::from_slice::<Ask>(&plain) {
+                let Ok(opened) = transport.open(&sealed) else { break };
+                if let Some(joined) = joining.take() && !join(place, joined, device).await {
+                    break;
+                }
+                if let Some(plain) = opened {
+                    match serde_json::from_slice::<Ask>(&plain) {
                         Ok(ask) => take(place, ask, &answers, &mut streams),
                         Err(_) => break,
-                    },
-                    Ok(None) => {}
-                    Err(_) => break,
+                    }
                 }
             }
+            () = &mut unproven, if joining.is_some() => break,
             answer = answered.recv() => {
                 let Some(answer) = answer else { break };
                 if let Answer::End { id, .. } = &answer {
@@ -83,7 +97,7 @@ async fn talk(
                     break;
                 }
             }
-            _ = check.tick() => {
+            _ = check.tick(), if joining.is_none() => {
                 let book = place.book.clone();
                 if !tokio::task::spawn_blocking(move || book.knows(&device)).await.unwrap_or(false) {
                     break;

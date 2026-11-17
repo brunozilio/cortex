@@ -15,6 +15,7 @@ export interface SocketLike {
 export interface Greeting {
   initiator: Initiator
   payload: Uint8Array
+  confirms?: boolean
 }
 
 export interface RelayOptions {
@@ -26,6 +27,7 @@ export interface RelayOptions {
 
 const OPEN = 1
 export const KEEPALIVE_MS = 25_000
+export const CONFIRMATION: Ask = { type: 'close', id: 0 }
 
 export class RelayChannel implements AnswerChannel {
   onAnswer: (answer: Answer) => void = () => undefined
@@ -45,7 +47,7 @@ export class RelayChannel implements AnswerChannel {
   }
 
   private dial(): Promise<void> {
-    const { initiator, payload } = this.options.greet()
+    const { initiator, payload, confirms } = this.options.greet()
     const open = this.options.open ?? ((url: string) => new WebSocket(url) as SocketLike)
     const socket = open(this.options.socketUrl)
     socket.binaryType = 'arraybuffer'
@@ -67,6 +69,7 @@ export class RelayChannel implements AnswerChannel {
             socket.close()
             return reject(error)
           }
+          if (confirms) this.queued.unshift(CONFIRMATION)
           this.options.onUp?.()
           resolve()
           return this.flush()

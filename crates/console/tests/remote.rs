@@ -76,7 +76,15 @@ impl World {
         let mut initiator = Initiator::pairing(device, link).unwrap();
         socket.send(Message::Binary(initiator.hello(name.as_bytes()).unwrap().into())).await.unwrap();
         let reply = next_binary(&mut socket).await?;
-        Some(Phone { socket, transport: initiator.finish(&reply).ok()? })
+        let mut phone = Phone { socket, transport: initiator.finish(&reply).ok()? };
+        phone.ask(&Ask::Close { id: 0 }).await;
+        for _ in 0..200 {
+            if self.book().devices().iter().any(|device| device.name == name) {
+                return Some(phone);
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        None
     }
 
     async fn connect(&self, device: &StaticKey) -> Option<Phone> {
@@ -156,6 +164,46 @@ async fn a_paired_phone_comes_back_without_a_new_invitation_and_a_stranger_does_
     let mut again = world.connect(&device).await.expect("known device");
     assert_eq!(again.fetch(1, "/api/health").await.0, 200);
     assert!(world.connect(&StaticKey::generate().unwrap()).await.is_none());
+}
+
+#[tokio::test]
+async fn a_device_that_saw_the_pairing_id_but_not_the_code_is_never_paired() {
+    use sha2::Digest;
+    let world = world(shell("sleep 5")).await;
+    let link = world.book().invite().unwrap();
+    let mut header = vec![2u8];
+    header.extend_from_slice(&link.pairing_id());
+    let guessed: [u8; 32] = sha2::Sha256::digest(b"not the code").into();
+    let intruder = StaticKey::generate().unwrap();
+    let mut state = snow::Builder::new("Noise_IKpsk2_25519_ChaChaPoly_SHA256".parse().unwrap())
+        .local_private_key(intruder.private())
+        .unwrap()
+        .remote_public_key(&link.machine)
+        .unwrap()
+        .prologue(&header)
+        .unwrap()
+        .psk(2, &guessed)
+        .unwrap()
+        .build_initiator()
+        .unwrap();
+    let mut message = vec![0; 1024];
+    let written = state.write_message(b"intruder", &mut message).unwrap();
+    let mut hello = header.clone();
+    hello.extend_from_slice(&message[..written]);
+    let mut socket = world.dial().await;
+    socket.send(Message::Binary(hello.into())).await.unwrap();
+    if let Some(reply) = next_binary(&mut socket).await {
+        assert!(state.read_message(&reply, &mut vec![0; 1024]).is_err(), "the reply needs the code");
+    }
+    let forged = [0u8; 64];
+    let _ = socket.send(Message::Binary(forged.to_vec().into())).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(world.book().devices().is_empty(), "the intruder was recorded as a device");
+    assert!(world.connect(&intruder).await.is_none(), "the intruder got in as a paired device");
+    assert!(
+        world.pair(&StaticKey::generate().unwrap(), &link, "owner").await.is_some(),
+        "the invitation was not spent"
+    );
 }
 
 #[tokio::test]

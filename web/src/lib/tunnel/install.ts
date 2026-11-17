@@ -68,7 +68,7 @@ function greeter(device: StaticKey, machine: Uint8Array, pairing: PairingLink | 
   return () => {
     const link = first
     first = null
-    if (link) return { initiator: pairingInitiator(device, link), payload: utf8(name) }
+    if (link) return { initiator: pairingInitiator(device, link), payload: utf8(name), confirms: true }
     return { initiator: pairedInitiator(device, machine), payload: new Uint8Array(0) }
   }
 }

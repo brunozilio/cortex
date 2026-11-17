@@ -27,6 +27,8 @@ crossbeam-channel.workspace = true
 
 [dev-dependencies]
 relay.workspace = true
+snow = "0.10"
+sha2.workspace = true
 tempfile.workspace = true
 tower = { workspace = true, features = ["util"] }
 http-body-util.workspace = true
