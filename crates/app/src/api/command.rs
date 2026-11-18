@@ -89,6 +89,10 @@ pub enum ClientCommand {
     TakeNotices {
         for_agent: bool,
     },
+    AnswerTeammate {
+        ask: domain::team::TeammateAsk,
+        decision: domain::Decision,
+    },
     Feature(FeatureRequest),
     ListPermissions {
         path: PathBuf,
@@ -164,6 +168,7 @@ impl ClientCommand {
             Self::ListMcpServers { .. } => "list_mcp_servers",
             Self::ListPermissions { .. } => "list_permissions",
             Self::TakeNotices { .. } => "take_notices",
+            Self::AnswerTeammate { .. } => "answer_teammate",
             Self::Feature(_) => "feature",
             Self::ApproveMcpServer { .. } => "approve_mcp_server",
             Self::AddMcpServer { .. } => "add_mcp_server",
@@ -223,6 +228,16 @@ mod tests {
             ClientCommand::ListMcpServers { path: "/repo".into() },
             ClientCommand::ListPermissions { path: "/repo".into() },
             ClientCommand::TakeNotices { for_agent: true },
+            ClientCommand::AnswerTeammate {
+                ask: domain::team::TeammateAsk {
+                    team: "team-1".into(),
+                    teammate: "tester".into(),
+                    request_id: "p1".into(),
+                    tool_name: "Bash".into(),
+                    description: "npm test".into(),
+                },
+                decision: domain::Decision::Allow,
+            },
             ClientCommand::Feature(FeatureRequest::Schedules(SchedulesRequest::Delete { id: "cron_1".into() })),
             ClientCommand::Feature(FeatureRequest::OutputSavings),
             ClientCommand::ApproveMcpServer { path: "/repo".into(), name: "jira".into(), approve: true },

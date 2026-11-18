@@ -23,6 +23,6 @@ The app had decided earlier not to be compatible with the reference agent's file
 - A channel that takes permission prompts can allow any call but its own tools; the request id is a hash, not a secret.
 - MCP server instructions are third-party text in the system prompt, cut to 2,048 characters.
 - A watched turn ends only once its observers have answered, so each observer adds a model call's wait and cost to every turn.
-- A teammate cannot ask the user: a call that would ask is refused, until its prompts are forwarded to the lead. The team has no shared task list with owners yet, and no `TeammateIdle`, `TaskCreated` or `TaskCompleted` hooks.
+- A teammate's permission prompt waits, in its own process, until the user answers it in the lead's chat; a teammate whose lead is closed waits until its team is gone. Always-allow and plan approval are not forwarded.
 - Each idle notification wakes the lead for a turn, as in the reference agent, which costs a model call per teammate answer.
 - The reference agent's behaviour moves between releases; the app follows the version that was read (2.1.327), not later ones.

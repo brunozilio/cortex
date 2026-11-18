@@ -139,6 +139,9 @@ impl CommandHandler {
             ClientCommand::SetProviderBalance { provider, balance } => providers.set_balance(provider, balance),
             ClientCommand::ListMcpServers { path } => self.mcp_servers(&path, Ok(())),
             ClientCommand::TakeNotices { for_agent } => Reply::Notices(self.notices(for_agent)),
+            ClientCommand::AnswerTeammate { ask, decision } => {
+                Reply::done_or(agent_engine::team::lead_inbox::answer(self.client, &ask, &decision))
+            }
             ClientCommand::Feature(request) => {
                 match self.with_context(|context| crate::features::handle(context, request)) {
                     Ok(reply) => Reply::Feature(reply),
@@ -187,7 +190,11 @@ impl CommandHandler {
         let unkept_keys = self.services.providers.unkept_notice();
         let unkept_database = self.services.database.told_once(crate::degraded::database_notice);
         let arrived = if for_agent { agent_engine::tools::inbox::take(self.client) } else { Vec::new() };
-        Notices { for_user: unkept_keys.into_iter().chain(unkept_database).collect(), for_agent: arrived }
+        Notices {
+            for_user: unkept_keys.into_iter().chain(unkept_database).collect(),
+            for_agent: arrived,
+            teammate_asks: agent_engine::team::lead_inbox::take_asks(self.client),
+        }
     }
 
     fn mcp_servers(&self, path: &std::path::Path, changed: Result<(), String>) -> Reply {

@@ -290,6 +290,7 @@ fn print_the_answers(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
         resume,
         fork: cli.fork_session,
         trust: cli.trust,
+        asked: None,
     };
     print::print_all(&client, cwd, wanted, prompts)
 }
@@ -298,6 +299,8 @@ fn be_a_teammate(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
     let home = std::env::home_dir().ok_or("a teammate needs a home folder")?;
     let me = app::team::Me::from_env(&home).ok_or("a teammate is started by its lead, with its team and name")?;
     let Launch { client, cwd, add_dirs, headless, .. } = launch;
+    let asker = teammate::Mailbox::new(me.clone());
+    let forward = |ask: &app::AgentAsk| asker.forward(ask);
     let wanted = print::Wanted {
         model: cli.model.as_deref(),
         mode: cli.mode,
@@ -308,6 +311,7 @@ fn be_a_teammate(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
         resume: None,
         fork: false,
         trust: false,
+        asked: Some(&forward),
     };
     print::print_all(&client, cwd, wanted, teammate::Mailbox::new(me))
 }

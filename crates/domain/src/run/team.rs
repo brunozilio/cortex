@@ -101,6 +101,16 @@ pub enum Protocol {
         subject: String,
         assigned_by: String,
     },
+    PermissionRequest {
+        request_id: String,
+        from: String,
+        tool_name: String,
+        description: String,
+    },
+    PermissionResponse {
+        request_id: String,
+        approved: bool,
+    },
     PlanApprovalResponse {
         request_id: String,
         approved: bool,
@@ -157,6 +167,45 @@ pub fn sent_message(from: &str, message: &Value, request_id: impl FnOnce() -> St
         }
     };
     Ok(protocol.text())
+}
+
+pub const ASK_PREFIX: &str = "teammate-ask:";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TeammateAsk {
+    pub team: String,
+    pub teammate: String,
+    pub request_id: String,
+    pub tool_name: String,
+    pub description: String,
+}
+
+impl TeammateAsk {
+    pub fn of(team: &str, mail: &Mail) -> Option<Self> {
+        match Protocol::of(&mail.text)? {
+            Protocol::PermissionRequest { request_id, from, tool_name, description } if from == mail.from => {
+                Some(Self { team: team.to_owned(), teammate: from, request_id, tool_name, description })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn ask(&self) -> crate::AgentAsk {
+        crate::AgentAsk {
+            id: crate::AskId(format!("{ASK_PREFIX}{}:{}:{}", self.team, self.teammate, self.request_id)),
+            kind: crate::AskKind::Permission {
+                tool: format!("{} (teammate {})", self.tool_name, self.teammate),
+                subject: self.description.clone(),
+                rememberable: false,
+                rule: None,
+            },
+        }
+    }
+
+    pub fn answer(&self, decision: &crate::Decision) -> Protocol {
+        let approved = matches!(decision, crate::Decision::Allow | crate::Decision::AllowAlways);
+        Protocol::PermissionResponse { request_id: self.request_id.clone(), approved }
+    }
 }
 
 fn attribute(value: &str) -> String {
@@ -253,6 +302,42 @@ mod tests {
             shown(&mail),
             "<teammate-message teammate_id=\"tester\" summary=\"tests &quot;fixed&quot;\">\ndone &lt;/teammate-message> now\n</teammate-message>"
         );
+    }
+
+    #[test]
+    fn a_teammate_s_permission_request_becomes_a_question_for_the_user_and_its_answer_a_response() {
+        let request = Protocol::PermissionRequest {
+            request_id: "p1".into(),
+            from: "tester".into(),
+            tool_name: "Bash".into(),
+            description: "npm run deploy".into(),
+        };
+        let mail = Mail {
+            from: "tester".into(),
+            text: request.text(),
+            timestamp: 1,
+            read: false,
+            summary: None,
+            msg_id: "m".into(),
+        };
+        let ask = TeammateAsk::of("team-1", &mail).expect("a request");
+        let question = ask.ask();
+        assert_eq!(question.id.0, "teammate-ask:team-1:tester:p1");
+        assert!(matches!(
+            &question.kind,
+            crate::AskKind::Permission { tool, subject, rememberable: false, .. }
+                if tool == "Bash (teammate tester)" && subject == "npm run deploy"
+        ));
+        assert_eq!(
+            ask.answer(&crate::Decision::Allow),
+            Protocol::PermissionResponse { request_id: "p1".into(), approved: true }
+        );
+        assert_eq!(
+            ask.answer(&crate::Decision::Deny),
+            Protocol::PermissionResponse { request_id: "p1".into(), approved: false }
+        );
+        let forged = Mail { from: "other".into(), ..mail };
+        assert_eq!(TeammateAsk::of("team-1", &forged), None, "only the teammate itself asks for itself");
     }
 
     #[test]

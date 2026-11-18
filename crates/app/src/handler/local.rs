@@ -103,6 +103,7 @@ fn is_query(command: &ClientCommand) -> bool {
             | ClientCommand::ListPermissions { .. }
             | ClientCommand::TrustState { .. }
             | ClientCommand::TakeNotices { .. }
+            | ClientCommand::AnswerTeammate { .. }
             | ClientCommand::Feature(_)
             | ClientCommand::ApproveMcpServer { .. }
             | ClientCommand::AddMcpServer { .. }

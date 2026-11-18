@@ -89,7 +89,11 @@ impl PlanTool {
     }
 
     fn told(workspace: &Workspace, assigned: domain::task_board::Assigned, by: &str) {
-        let Some(me) = crate::team::current(workspace.home.as_deref(), &workspace.session_id, workspace.teammate.as_ref()) else { return };
+        let Some(me) =
+            crate::team::current(workspace.home.as_deref(), &workspace.session_id, workspace.teammate.as_ref())
+        else {
+            return;
+        };
         if !me.team.knows(&assigned.owner) {
             return;
         }

@@ -54,11 +54,13 @@ pub enum Reply {
 pub struct Notices {
     pub for_user: Vec<String>,
     pub for_agent: Vec<domain::inbox::Notice>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub teammate_asks: Vec<domain::team::TeammateAsk>,
 }
 
 impl Notices {
     pub fn is_empty(&self) -> bool {
-        self.for_user.is_empty() && self.for_agent.is_empty()
+        self.for_user.is_empty() && self.for_agent.is_empty() && self.teammate_asks.is_empty()
     }
 }
 
@@ -143,6 +145,13 @@ mod tests {
             Reply::Notices(Notices {
                 for_user: vec!["keys cannot be kept".into()],
                 for_agent: vec![domain::inbox::Notice::new("monitor bash_1", "ready")],
+                teammate_asks: vec![domain::team::TeammateAsk {
+                    team: "team-1".into(),
+                    teammate: "tester".into(),
+                    request_id: "p1".into(),
+                    tool_name: "Bash".into(),
+                    description: "npm test".into(),
+                }],
             }),
             Reply::Feature(FeatureReply::Sessions(crate::api::features::sessions::SessionsReply::Length(7))),
             Reply::Feature(FeatureReply::Trace(crate::api::features::trace::TraceReply::Report(

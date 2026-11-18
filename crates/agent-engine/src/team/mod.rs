@@ -172,6 +172,24 @@ pub fn task_list(home: Option<&Path>, session: &str, teammate: Option<&Me>) -> O
 }
 
 impl Team {
+    pub fn take_answer(&self, agent: &str, request_id: &str) -> Option<bool> {
+        let answered = |mail: &Mail| match domain::team::Protocol::of(&mail.text) {
+            Some(domain::team::Protocol::PermissionResponse { request_id: id, approved })
+                if mail.from == LEAD && id == request_id =>
+            {
+                Some(approved)
+            }
+            _ => None,
+        };
+        self.mailbox(agent)
+            .update(|mails: &mut Vec<Mail>| {
+                let at = mails.iter().position(|mail| answered(mail).is_some())?;
+                answered(&mails.remove(at))
+            })
+            .ok()
+            .flatten()
+    }
+
     pub fn home(&self) -> Option<&Path> {
         self.dir.parent()?.parent()?.parent()
     }

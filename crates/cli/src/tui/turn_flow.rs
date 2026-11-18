@@ -234,7 +234,10 @@ impl App {
     }
 
     pub fn answer(&mut self, decision: app::Decision) {
-        if super::git_offer::answered(self, &decision) || super::features::answered(self, &decision) {
+        if super::git_offer::answered(self, &decision)
+            || super::features::answered(self, &decision)
+            || super::teammate_asks::answered(self, &decision)
+        {
             return;
         }
         let pending = self.ask.take();
@@ -251,5 +254,6 @@ impl App {
         if let Some(watch) = &mut self.turn.started {
             watch.resume(Instant::now());
         }
+        super::teammate_asks::show_next(self);
     }
 }

@@ -80,6 +80,14 @@ impl Client {
         })
     }
 
+    pub fn answer_teammate(&self, ask: domain::team::TeammateAsk, decision: domain::Decision) -> Result<(), Error> {
+        self.dispatcher.call(ClientCommand::AnswerTeammate { ask, decision }, |reply| match reply {
+            Reply::Done => Some(Ok(())),
+            Reply::Error { message } => Some(Err(message)),
+            _ => None,
+        })
+    }
+
     pub fn trust_state(&self, cwd: &Path) -> Result<domain::trust::TrustReport, Error> {
         self.dispatcher.call(ClientCommand::TrustState { path: cwd.to_path_buf() }, trust_report)
     }

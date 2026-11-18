@@ -14,7 +14,12 @@ impl Agent<'_> {
     }
 
     fn sender(&self) -> Option<(Team, String)> {
-        crate::team::current(self.workspace.home.as_deref(), &self.workspace.session_id, self.workspace.teammate.as_ref()).map(|me| (me.team, me.name))
+        crate::team::current(
+            self.workspace.home.as_deref(),
+            &self.workspace.session_id,
+            self.workspace.teammate.as_ref(),
+        )
+        .map(|me| (me.team, me.name))
     }
 
     pub(super) fn teammate(&self, input: &Value) -> Option<Outcome> {

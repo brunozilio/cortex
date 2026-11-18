@@ -33,7 +33,7 @@ fn a_harness_notice_is_shown_to_the_user_and_never_sent_to_the_agent() {
     let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let told = "keys cannot be kept on this machine: no data folder".to_owned();
-    app.message(Msg::Notices(Notices { for_user: vec![told], for_agent: Vec::new() }));
+    app.message(Msg::Notices(Notices { for_user: vec![told], ..Notices::default() }));
     settle(&mut app);
     assert!(prompts(&engine).is_empty(), "the model was told: {:?}", prompts(&engine));
     assert!(!app.busy(), "and no run was started for it");
@@ -85,7 +85,7 @@ fn a_channel_message_is_shown_whole_as_inbound_from_its_sender_and_reaches_the_a
     until(&mut app, |app| app.session.is_some());
     let params = serde_json::json!({ "content": "deploy please\nand tell me", "meta": { "user": "ana" } });
     let notice = domain::inbox::channel_notice("tg", domain::inbox::CHANNEL_METHOD, &params).expect("notice").notice;
-    app.message(Msg::Notices(Notices { for_user: Vec::new(), for_agent: vec![notice] }));
+    app.message(Msg::Notices(Notices { for_agent: vec![notice], ..Notices::default() }));
     until(&mut app, |app| !app.busy() && !prompts(&engine).is_empty());
     let sent = &prompts(&engine)[0];
     assert!(sent.starts_with("<channel source=\"tg\" user=\"ana\">\ndeploy please\nand tell me\n</channel>"), "{sent}");
@@ -101,9 +101,38 @@ fn events_that_reached_the_inbox_are_sent_as_a_turn_when_idle() {
     let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
     until(&mut app, |app| app.session.is_some());
     let notice = domain::inbox::Notice::new("monitor bash_4", "ERROR: disk full");
-    app.message(Msg::Notices(Notices { for_user: Vec::new(), for_agent: vec![notice] }));
+    app.message(Msg::Notices(Notices { for_agent: vec![notice], ..Notices::default() }));
     until(&mut app, |app| !app.busy() && !prompts(&engine).is_empty());
     let sent = &prompts(&engine)[0];
     assert!(sent.contains("<event source=\"monitor bash_4\">") && sent.contains("ERROR: disk full"), "{sent}");
     assert!(screen(&app).contains("[monitor bash_4] ERROR: disk full"), "{}", screen(&app));
+}
+
+fn teammate_ask(request_id: &str) -> domain::team::TeammateAsk {
+    domain::team::TeammateAsk {
+        team: "team-1".into(),
+        teammate: "tester".into(),
+        request_id: request_id.into(),
+        tool_name: "Bash".into(),
+        description: format!("npm run deploy {request_id}"),
+    }
+}
+
+#[test]
+fn a_teammate_s_permission_prompts_are_asked_here_one_after_another() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    let asks = vec![teammate_ask("p1"), teammate_ask("p2")];
+    app.message(Msg::Notices(Notices { teammate_asks: asks, ..Notices::default() }));
+
+    assert!(app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == "teammate-ask:team-1:tester:p1"));
+    assert!(screen(&app).contains("Bash (teammate tester)"), "{}", screen(&app));
+    app.answer(app::Decision::Allow);
+    assert!(app.ask.as_ref().is_some_and(|pending| pending.ask.id.0 == "teammate-ask:team-1:tester:p2"));
+    app.message(Msg::Notices(Notices { teammate_asks: vec![teammate_ask("p2")], ..Notices::default() }));
+    app.answer(app::Decision::Deny);
+    assert!(app.ask.is_none(), "an ask already on screen is not asked twice");
+    assert!(prompts(&engine).is_empty(), "nothing reached the lead's model");
 }

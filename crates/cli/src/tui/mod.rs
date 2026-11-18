@@ -65,6 +65,7 @@ mod statusline;
 mod stopwatch;
 mod store;
 mod submit;
+mod teammate_asks;
 mod terminal_setup;
 mod theme;
 mod toggles;

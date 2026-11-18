@@ -100,10 +100,8 @@ fn a_named_agent_is_a_teammate_and_a_bad_name_starts_nothing() {
 fn a_teammate_idle_hook_can_keep_a_teammate_working_and_never_runs_for_the_lead() {
     let (mut rig, home, team) = lead_with_a_teammate();
     let marker = home.path().join("asked-once");
-    let command = format!(
-        "[ -e '{0}' ] && exit 0; touch '{0}'; printf 'check the lint too' >&2; exit 2",
-        marker.display()
-    );
+    let command =
+        format!("[ -e '{0}' ] && exit 0; touch '{0}'; printf 'check the lint too' >&2; exit 2", marker.display());
     let groups = json!({ "TeammateIdle": [{"hooks": [{"type": "command", "command": command}]}] });
     rig.workspace.hooks = agent_engine::hooks::Hooks::parse(&groups).expect("hooks");
     let lead = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Led.".into())])]);

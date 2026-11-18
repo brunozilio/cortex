@@ -23,6 +23,7 @@ fn shown(notice: &domain::inbox::Notice) -> String {
 
 pub(super) fn arrived(app: &mut App, notices: Notices) {
     app.notices.landed();
+    super::teammate_asks::arrived(app, notices.teammate_asks);
     for text in notices.for_user {
         app.transcript.notice(text);
     }

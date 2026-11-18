@@ -16,7 +16,10 @@ pub struct Wanted<'a> {
     pub resume: Option<app::SessionId>,
     pub fork: bool,
     pub trust: bool,
+    pub asked: Option<Answer<'a>>,
 }
+
+pub type Answer<'a> = &'a (dyn Fn(&app::AgentAsk) -> Option<Decision> + 'a);
 
 pub fn resumed(
     picked: Option<&str>,
@@ -54,7 +57,8 @@ fn answer_all(
     prompts: impl IntoIterator<Item = Result<String, String>>,
     output: &mut Output<impl std::io::Write>,
 ) -> Result<bool, String> {
-    let Wanted { model: wanted, mode, verification, add_dirs, headless, format: _, resume, fork, trust } = wanted;
+    let Wanted { model: wanted, mode, verification, add_dirs, headless, format: _, resume, fork, trust, asked } =
+        wanted;
     let models = client.models().map_err(|e| e.to_string())?;
     let remembered = client.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
     let model = domain::model::choose_model(&models, wanted.or(remembered.as_deref())).ok_or(concat!(
@@ -99,8 +103,11 @@ fn answer_all(
                     run.answer(id, Decision::Deny).map_err(|e| e.to_string())?;
                 }
                 EngineEvent::Asked(ask) => {
-                    output.note("denied: the agent asked for permission (use --mode or --allowedTools)");
-                    run.answer(ask.id, Decision::Deny).map_err(|e| e.to_string())?;
+                    let decision = asked.and_then(|answer| answer(&ask)).unwrap_or_else(|| {
+                        output.note("denied: the agent asked for permission (use --mode or --allowedTools)");
+                        Decision::Deny
+                    });
+                    run.answer(ask.id, decision).map_err(|e| e.to_string())?;
                 }
                 EngineEvent::Verified(verdict) => {
                     output.note(&domain::conversation::verdict::line(&verdict));

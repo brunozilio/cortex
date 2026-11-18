@@ -24,6 +24,30 @@ impl Mailbox {
         }
     }
 
+    pub fn forward(&self, ask: &app::AgentAsk) -> Option<app::Decision> {
+        let app::AskKind::Permission { tool, subject, .. } = &ask.kind else { return None };
+        let nanos =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |since| since.as_nanos());
+        let request_id = format!("{}-{nanos:x}", self.me.name);
+        let request = Protocol::PermissionRequest {
+            request_id: request_id.clone(),
+            from: self.me.name.clone(),
+            tool_name: tool.clone(),
+            description: subject.clone(),
+        };
+        let summary = format!("may I use {tool}?");
+        self.me.team.send(LEAD, &self.me.name, &request.text(), Some(&summary)).ok()?;
+        loop {
+            if let Some(approved) = self.me.team.take_answer(&self.me.name, &request_id) {
+                return Some(if approved { app::Decision::Allow } else { app::Decision::Deny });
+            }
+            if !self.me.team.exists() {
+                return None;
+            }
+            std::thread::sleep(self.poll);
+        }
+    }
+
     fn shut_down(&self, request_id: String) {
         let approved = Protocol::ShutdownApproved { request_id, from: self.me.name.clone() };
         let _ = self.me.team.send(LEAD, &self.me.name, &approved.text(), Some("shutting down"));
@@ -92,6 +116,42 @@ mod tests {
         assert!(
             matches!(Protocol::of(&told[0].text), Some(Protocol::IdleNotification { from, .. }) if from == "tester")
         );
+    }
+
+    #[test]
+    fn a_permission_prompt_goes_to_the_lead_and_the_lead_s_answer_settles_it() {
+        let (_home, team, mailbox) = rig();
+        let ask = app::AgentAsk {
+            id: app::AskId("ask-1".into()),
+            kind: app::AskKind::Permission {
+                tool: "Bash".into(),
+                subject: "npm run deploy".into(),
+                rememberable: true,
+                rule: None,
+            },
+        };
+        let lead = team.clone();
+        let answering = std::thread::spawn(move || {
+            for _ in 0..400 {
+                let waiting = lead.unread(LEAD);
+                if let Some(Protocol::PermissionRequest { request_id, tool_name, .. }) =
+                    waiting.first().and_then(|mail| Protocol::of(&mail.text))
+                {
+                    assert_eq!(tool_name, "Bash");
+                    let approved = Protocol::PermissionResponse { request_id, approved: true };
+                    lead.send("tester", LEAD, &approved.text(), None).expect("answer");
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        });
+
+        let decision = mailbox.forward(&ask);
+
+        answering.join().expect("lead");
+        assert_eq!(decision, Some(app::Decision::Allow));
+        let plan = app::AgentAsk { kind: app::AskKind::Plan { plan: "p".into() }, ..ask };
+        assert_eq!(mailbox.forward(&plan), None, "only permission prompts go to the lead");
     }
 
     #[test]
