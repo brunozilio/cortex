@@ -128,7 +128,7 @@ function ChatList({ api, words, go, listen }: { api: ChatApi; words: ChatWords; 
                   <div className="min-w-0 flex-1 border-b pb-3">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate font-medium">{title}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{ago(card.updated, now, words)}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{ago(card.updated * 1000, now, words)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm text-muted-foreground">{folderName(card.folder)}</span>
@@ -159,7 +159,7 @@ function ChatList({ api, words, go, listen }: { api: ChatApi; words: ChatWords; 
 
 function Markdown({ text }: { text: string }) {
   return (
-    <div className="break-words leading-snug [&_a]:underline [&_code]:font-mono [&_code]:text-[13px] [&_h1]:my-1 [&_h1]:font-semibold [&_h2]:my-1 [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:font-semibold [&_li]:my-0.5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-black/5 [&_pre]:p-2 dark:[&_pre]:bg-white/10 [&_table]:block [&_table]:overflow-x-auto [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5">
+    <div className="break-words leading-snug [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_a]:underline [&_code]:font-mono [&_code]:text-[13px] [&_h1]:my-1 [&_h1]:font-semibold [&_h2]:my-1 [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:font-semibold [&_li]:my-0.5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-black/5 [&_pre]:p-2 dark:[&_pre]:bg-white/10 [&_table]:block [&_table]:overflow-x-auto [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
     </div>
   )
