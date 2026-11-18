@@ -84,6 +84,15 @@ pub fn launch(launching: &Launching<'_>) -> Result<(), String> {
         .spawn(move || {
             let _ = child.wait();
             team.left(&name);
+            let released = team.release_tasks(&name);
+            if !released.is_empty() {
+                let note = format!(
+                    "{name} has stopped. Its open tasks ({}) are back in the list without an owner: give them to \
+                     another teammate with TaskUpdate.",
+                    released.join(", ")
+                );
+                let _ = team.send(LEAD, &name, &note, Some("stopped with open tasks"));
+            }
         })
         .map_err(|error| error.to_string())?;
     Ok(())

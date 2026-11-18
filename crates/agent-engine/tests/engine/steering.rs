@@ -38,7 +38,7 @@ fn the_task_list_is_shown_whenever_the_agent_changes_it() {
         })
         .collect();
     let task = |status: &str| domain::events::TaskItem {
-        id: "plan-1".into(),
+        id: "1".into(),
         subject: "Write the tests".into(),
         status: status.into(),
     };

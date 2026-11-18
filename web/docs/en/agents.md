@@ -231,7 +231,7 @@ A sub-agent works once and reports. A **teammate** keeps working: it runs in its
 - **Idle and shutdown.** After each answer a teammate tells the lead it is idle (`idle_notification`). The lead ends a teammate with `SendMessage` and `message: {"type": "shutdown_request", "reason": "…"}`; the teammate answers `shutdown_approved` and exits. `shutdown_response` (with `request_id` and `approve`) and `plan_approval_response` are the other structured messages.
 - **Who can do what.** Only the lead starts teammates; a teammate, or a sub-agent, cannot. A teammate reports with `SendMessage` to `team-lead`: what it prints is not read by anyone but its log.
 
-Not yet there: teammates in terminal panes, a teammate's permission prompts forwarded to the lead (a teammate cannot ask, so a call that would ask is refused), a task list shared by the team with owners, and the `TeammateIdle`, `TaskCreated` and `TaskCompleted` hooks.
+- **Shared tasks.** `TaskCreate`, `TaskUpdate`, `TaskGet` and `TaskList` work on one list per lead session, in `~/{{DIR}}/tasks/<session>/tasks.json`, shared by the lead and every teammate and kept across turns. Ids are `1`, `2`…; each task shows its `owner`, what it waits for (`blocked_by`) and what it blocks. `TaskUpdate` with `owner` claims a task; a task someone else holds cannot be claimed (the lead can reassign it), a task cannot start or end while one it waits for is open, and giving a task to a teammate sends them a `task_assignment` message. A teammate that stops hands its open tasks back, and the lead is told which.
 
 ## Listing agents
 

@@ -96,6 +96,11 @@ pub enum Protocol {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         summary: Option<String>,
     },
+    TaskAssignment {
+        task_id: String,
+        subject: String,
+        assigned_by: String,
+    },
     PlanApprovalResponse {
         request_id: String,
         approved: bool,

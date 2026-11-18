@@ -4,6 +4,10 @@ export const spec = {
   input: {
     "additionalProperties": false,
     "properties": {
+      "activeForm": {
+        "description": "The subject as an ongoing action, shown while it is in progress, e.g. \"Running the tests\".",
+        "type": "string"
+      },
       "description": {
         "type": "string"
       },
@@ -16,7 +20,7 @@ export const spec = {
     ],
     "type": "object"
   },
-  description: `Create a planning task with a subject and description. Returns a run-local task_id.`,
+  description: `Create a task with a subject and description. Returns its task_id. The list belongs to the session and lasts across its turns; in a team, the lead and every teammate share it.`,
 };
 
 /**

@@ -7,7 +7,7 @@ export const spec = {
     "required": [],
     "type": "object"
   },
-  description: `List planning tasks and background agents for this run.`,
+  description: `List the session's tasks (shared by the team, with owners and what blocks what) and the background agents of this run.`,
 };
 
 /**

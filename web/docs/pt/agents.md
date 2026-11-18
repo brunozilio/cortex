@@ -231,7 +231,7 @@ Um sub-agente trabalha uma vez e relata. Um **teammate** continua trabalhando: r
 - **Ociosidade e encerramento.** Depois de cada resposta, o teammate avisa o líder que está ocioso (`idle_notification`). O líder encerra um teammate com `SendMessage` e `message: {"type": "shutdown_request", "reason": "…"}`; o teammate responde `shutdown_approved` e termina. `shutdown_response` (com `request_id` e `approve`) e `plan_approval_response` são as outras mensagens estruturadas.
 - **Quem pode o quê.** Só o líder inicia teammates; um teammate, ou um sub-agente, não. Um teammate relata com `SendMessage` para `team-lead`: o que ele imprime ninguém lê além do log.
 
-Ainda não existe: teammates em painéis de terminal, pedidos de permissão de um teammate repassados ao líder (um teammate não pode perguntar, então uma chamada que perguntaria é recusada), uma lista de tarefas compartilhada pela equipe com responsáveis, e os hooks `TeammateIdle`, `TaskCreated` e `TaskCompleted`.
+- **Tarefas compartilhadas.** `TaskCreate`, `TaskUpdate`, `TaskGet` e `TaskList` usam uma lista por sessão do líder, em `~/{{DIR}}/tasks/<sessão>/tasks.json`, compartilhada pelo líder e por todos os teammates e mantida entre os turnos. Os ids são `1`, `2`…; cada tarefa mostra o `owner`, do que depende (`blocked_by`) e o que bloqueia. `TaskUpdate` com `owner` reivindica uma tarefa; uma tarefa de outro não pode ser reivindicada (o líder pode reatribuí-la), uma tarefa não começa nem termina enquanto uma de que depende está aberta, e dar uma tarefa a um teammate manda a ele uma mensagem `task_assignment`. Um teammate que termina devolve as tarefas abertas, e o líder é avisado de quais.
 
 ## Listar agentes
 

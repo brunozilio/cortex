@@ -17,6 +17,7 @@ pub mod request;
 pub mod review;
 pub mod session_run;
 pub mod stuck;
+pub mod task_board;
 pub mod team;
 pub mod verification;
 pub mod watchdog;

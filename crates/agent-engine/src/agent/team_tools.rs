@@ -10,16 +10,11 @@ use crate::tools::Outcome;
 
 impl Agent<'_> {
     fn home(&self) -> Option<PathBuf> {
-        self.workspace.home.clone().or_else(std::env::home_dir)
+        self.workspace.home.clone()
     }
 
     fn sender(&self) -> Option<(Team, String)> {
-        let home = self.home()?;
-        if let Some(me) = Me::from_env(&home) {
-            return Some((me.team, me.name));
-        }
-        let team = Team::of_session(&home, &self.workspace.session_id);
-        team.exists().then(|| (team, LEAD.to_owned()))
+        crate::team::current(self.workspace.home.as_deref(), &self.workspace.session_id).map(|me| (me.team, me.name))
     }
 
     pub(super) fn teammate(&self, input: &Value) -> Option<Outcome> {
@@ -91,7 +86,7 @@ impl Agent<'_> {
         }
         let summary = input["summary"].as_str().map(str::trim).filter(|summary| !summary.is_empty());
         let sent = sent_message(&me, &input["message"], || uuid::Uuid::new_v4().to_string())
-            .and_then(|text| team.send(to, &me, &text, summary));
+            .and_then(|text| team.send(to, &me, &text, summary).map_err(String::from));
         Some(match sent {
             Ok(()) => Outcome::ok(format!("Sent to {to}.")),
             Err(problem) => Outcome::error(format!("The message was not sent: {problem}.")),

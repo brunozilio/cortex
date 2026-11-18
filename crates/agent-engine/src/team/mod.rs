@@ -14,6 +14,22 @@ pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| u64::try_from(since.as_millis()).unwrap_or(u64::MAX))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum TeamError {
+    #[error("team {0} is gone")]
+    Gone(String),
+    #[error("{0}")]
+    Name(String),
+    #[error("{0}")]
+    Unsaved(String),
+}
+
+impl From<TeamError> for String {
+    fn from(error: TeamError) -> Self {
+        error.to_string()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Team {
     pub name: String,
@@ -56,8 +72,8 @@ impl Team {
         self.config_path().is_file()
     }
 
-    pub fn open(&self, lead_session: &str) -> Result<TeamConfig, String> {
-        std::fs::create_dir_all(self.dir.join("inboxes")).map_err(|error| error.to_string())?;
+    pub fn open(&self, lead_session: &str) -> Result<TeamConfig, TeamError> {
+        std::fs::create_dir_all(self.dir.join("inboxes")).map_err(|error| TeamError::Unsaved(error.to_string()))?;
         self.config()
             .update(|config: &mut TeamConfig| {
                 if config.name.is_empty() {
@@ -67,20 +83,20 @@ impl Team {
                 }
                 config.clone()
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error| TeamError::Unsaved(error.to_string()))
     }
 
-    pub fn join(&self, wanted: &str, mut member: Member) -> Result<String, String> {
+    pub fn join(&self, wanted: &str, mut member: Member) -> Result<String, TeamError> {
         self.config()
             .try_update(|config: &mut TeamConfig| {
-                let name = domain::team::free_name(wanted, &config.names())?;
+                let name = domain::team::free_name(wanted, &config.names()).map_err(TeamError::Name)?;
                 member.name.clone_from(&name);
                 member.joined_at = now_ms();
                 member.active = true;
                 config.members.push(member);
                 Ok(name)
             })
-            .map_err(|error| error.to_string())?
+            .map_err(|error| TeamError::Unsaved(error.to_string()))?
     }
 
     pub fn left(&self, name: &str) {
@@ -99,9 +115,9 @@ impl Team {
         agent == LEAD || self.read().is_some_and(|config| config.members.iter().any(|member| member.name == agent))
     }
 
-    pub fn send(&self, to: &str, from: &str, text: &str, summary: Option<&str>) -> Result<(), String> {
+    pub fn send(&self, to: &str, from: &str, text: &str, summary: Option<&str>) -> Result<(), TeamError> {
         if !self.exists() {
-            return Err(format!("team {} is gone", self.name));
+            return Err(TeamError::Gone(self.name.clone()));
         }
         let mail = Mail {
             from: from.to_owned(),
@@ -111,7 +127,9 @@ impl Team {
             summary: summary.map(str::to_owned),
             msg_id: uuid::Uuid::new_v4().to_string(),
         };
-        self.mailbox(to).update(|mails: &mut Vec<Mail>| mails.push(mail)).map_err(|error| error.to_string())
+        self.mailbox(to)
+            .update(|mails: &mut Vec<Mail>| mails.push(mail))
+            .map_err(|error| TeamError::Unsaved(error.to_string()))
     }
 
     pub fn unread(&self, agent: &str) -> Vec<Mail> {
@@ -130,6 +148,40 @@ impl Me {
         let team = std::env::var(TEAM_VARIABLE).ok().filter(|name| !name.is_empty())?;
         let name = std::env::var(AGENT_VARIABLE).ok().filter(|name| !name.is_empty())?;
         Some(Self { team: Team::named(home, &team), name })
+    }
+}
+
+pub fn tasks_file(home: &Path, lead_session: &str) -> PathBuf {
+    home.join(brand::DIR).join("tasks").join(file_name(lead_session)).join("tasks.json")
+}
+
+pub fn current(home: Option<&Path>, session: &str) -> Option<Me> {
+    let home = home?;
+    if let Some(me) = Me::from_env(home) {
+        return Some(me);
+    }
+    let team = Team::of_session(home, session);
+    team.exists().then(|| Me { team, name: LEAD.to_owned() })
+}
+
+pub fn task_list(home: Option<&Path>, session: &str) -> Option<PathBuf> {
+    let home = home?;
+    match Me::from_env(home) {
+        Some(me) => me.team.read().map(|config| tasks_file(home, &config.lead_session_id)),
+        None => Some(tasks_file(home, session)),
+    }
+}
+
+impl Team {
+    pub fn home(&self) -> Option<&Path> {
+        self.dir.parent()?.parent()?.parent()
+    }
+
+    pub fn release_tasks(&self, owner: &str) -> Vec<String> {
+        let (Some(home), Some(config)) = (self.home(), self.read()) else { return Vec::new() };
+        Document::at(tasks_file(home, &config.lead_session_id))
+            .update(|board: &mut domain::task_board::Board| board.release(owner))
+            .unwrap_or_default()
     }
 }
 
@@ -170,5 +222,29 @@ mod tests {
         assert_eq!(unread[1].summary.as_deref(), Some("two"));
         assert!(team.unread("tester").is_empty(), "read once");
         assert!(team.unread(LEAD).is_empty());
+    }
+
+    #[test]
+    fn a_teammate_that_leaves_gives_its_open_tasks_back_to_the_team_s_list() {
+        let home = tempfile::tempdir().expect("home");
+        let team = Team::of_session(home.path(), "lead-1");
+        team.open("lead-1").expect("open");
+        assert_eq!(team.home(), Some(home.path()));
+        let list = Document::at(tasks_file(home.path(), "lead-1"));
+        list.update(|board: &mut domain::task_board::Board| {
+            board.create("Fix", "", None).expect("task");
+            let claimed = domain::task_board::Change { owner: Some("tester".into()), ..Default::default() };
+            board.update("1", claimed, "tester").expect("claim");
+        })
+        .expect("list");
+
+        assert_eq!(team.release_tasks("tester"), ["1"]);
+
+        let board: domain::task_board::Board = list.read().expect("read").expect("board");
+        assert_eq!(board.listed()[0]["owner"], serde_json::Value::Null);
+        assert_eq!(task_list(Some(home.path()), "lead-1"), Some(tasks_file(home.path(), "lead-1")));
+        assert_eq!(current(Some(home.path()), "lead-1").map(|me| me.name), Some(LEAD.to_owned()));
+        assert!(current(Some(home.path()), "someone-else").is_none());
+        assert!(task_list(None, "lead-1").is_none());
     }
 }

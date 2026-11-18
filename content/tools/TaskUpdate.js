@@ -13,6 +13,10 @@ export const spec = {
       "description": {
         "type": "string"
       },
+      "owner": {
+        "description": "Who works on it: your own name to claim it, a teammate's name to give it to them (they are told), or empty to hand it back.",
+        "type": "string"
+      },
       "status": {
         "enum": [
           "pending",
@@ -29,7 +33,7 @@ export const spec = {
     ],
     "type": "object"
   },
-  description: `Update a planning task. Status is pending, in_progress or completed. blocked_by contains task_ids that must be completed first.`,
+  description: `Update a task. Status is pending, in_progress or completed; a task cannot start or end while a task in its blocked_by is open. blocked_by lists the task_ids that must be completed first (each task shows the ones it blocks). owner claims a task: a task someone else holds cannot be claimed, except by the lead, and a teammate that stops hands its open tasks back.`,
 };
 
 /**
