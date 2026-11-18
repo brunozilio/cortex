@@ -116,6 +116,7 @@ The parsers that read outside input are fuzzed with cargo-fuzz (libFuzzer) from 
 ## Not yet covered
 
 - The web terminal (a WebSocket to a pseudo-terminal running the app's own binary): it has had no security review of its own as of 2026-11-17. It is also reachable from a paired phone through the relay, on by default by the owner's decision (`decisions/0012-remote-control-through-a-blind-relay.md`).
+- The page's chat (`/api/chats`, 2026-11-18): it gives the page, and so a paired phone, what the terminal already gave, without a pseudo-terminal: start a chat in the console's folder, send prompts to any listed session, answer its permission prompts (allow, always allow, deny, approve a plan) and stop it. Session ids are checked as the terminal checks them, a chat busy anywhere takes no prompt, and a message is at most 32 KiB. Pinned by `crates/console/tests/chats.rs`, `crates/domain/src/session/chat.rs`, `crates/cli/src/tui/features/trace/chats_tests.rs`.
 - Files in the shared temporary directory (per-run MCP configuration, memory edits, large tool results), some of which are not private today.
 - Plugins: installed by `git clone` into the user folder and loaded as user-level content.
 - MCP server metadata as an injection channel: tool descriptions and schemas reach the model's tool list unfenced, and a server's `initialize` instructions (cut to 2,048 characters) reach the system prompt under *MCP server instructions* (2026-11-17, for channel parity).

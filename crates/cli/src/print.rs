@@ -59,21 +59,7 @@ fn answer_all(
 ) -> Result<bool, String> {
     let Wanted { model: wanted, mode, verification, add_dirs, headless, format: _, resume, fork, trust, asked } =
         wanted;
-    let models = client.models().map_err(|e| e.to_string())?;
-    let remembered = client.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
-    let model = domain::model::choose_model(&models, wanted.or(remembered.as_deref())).ok_or(concat!(
-        "no model is available: run `",
-        brand::command!(),
-        " login` first"
-    ))?;
-    if let Some(wanted) = wanted
-        && !model.is_named(wanted)
-    {
-        return Err(format!(
-            "no model named {wanted}: `{brand_command} models` lists them",
-            brand_command = brand::COMMAND
-        ));
-    }
+    let model = chosen_model(client, wanted)?;
     settle_trust(client, &cwd, trust, &mut std::io::stderr().lock())?;
     warn_of_what_is_not_kept(client, &mut std::io::stderr().lock());
     let mut session = client.session(cwd, model);
@@ -123,6 +109,25 @@ fn answer_all(
         }
     }
     Ok(output.finish(failed_verification))
+}
+
+pub fn chosen_model(client: &Client, wanted: Option<&str>) -> Result<app::Model, String> {
+    let models = client.models().map_err(|e| e.to_string())?;
+    let remembered = client.settings().ok().and_then(|s| s["model"].as_str().map(str::to_owned));
+    let model = domain::model::choose_model(&models, wanted.or(remembered.as_deref())).ok_or(concat!(
+        "no model is available: run `",
+        brand::command!(),
+        " login` first"
+    ))?;
+    if let Some(wanted) = wanted
+        && !model.is_named(wanted)
+    {
+        return Err(format!(
+            "no model named {wanted}: `{brand_command} models` lists them",
+            brand_command = brand::COMMAND
+        ));
+    }
+    Ok(model)
 }
 
 fn settle_trust(

@@ -1,4 +1,5 @@
 mod board;
+mod chats;
 pub(crate) mod follow;
 mod refresh;
 

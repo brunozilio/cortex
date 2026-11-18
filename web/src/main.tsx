@@ -2,6 +2,7 @@ import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { prepareAccess } from './lib/access'
+import { placeOf } from './lib/chats'
 import { onRelay } from './lib/tunnel/install'
 import { STRINGS } from './lib/i18n'
 import { preferredLang } from './lib/lang'
@@ -9,10 +10,14 @@ import { loadReport } from './lib/report'
 import { LoadFailed } from './shell/LoadFailed'
 import './index.css'
 
+const ChatApp = lazy(() => import('./views/chat/ChatApp').then((module) => ({ default: module.ChatApp })))
 const DocsView = lazy(() => import('./views/docs/DocsView').then((module) => ({ default: module.DocsView })))
 const onDocs = window.location.pathname === '/docs' || window.location.pathname.startsWith('/docs/')
+if (onRelay(document) && window.location.pathname === '/') history.replaceState(null, '', '/chat')
+const onChat = placeOf(window.location.pathname) !== null
 
 function start() {
+  if (onChat) return renderChat()
   if (!onDocs) {
     void fetch('/api/instance')
       .then((response) => (response.ok ? response.json() : null))
@@ -22,6 +27,18 @@ function start() {
       .catch(() => undefined)
   }
   render()
+}
+
+function renderChat() {
+  const root = document.getElementById('root')
+  if (!root) return
+  createRoot(root).render(
+    <StrictMode>
+      <Suspense fallback={null}>
+        <ChatApp />
+      </Suspense>
+    </StrictMode>,
+  )
 }
 
 function render() {

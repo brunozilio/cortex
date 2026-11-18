@@ -45,6 +45,7 @@ pub fn router(settings: Settings, live: Live) -> Router {
         .route("/api/instance", get(|| async { axum::Json(json!({ "name": brand::NAME })) }))
         .merge(crate::live::routes())
         .merge(crate::terminal::routes())
+        .merge(crate::chats::routes())
         .route("/api/{*rest}", any(|| async { failure(StatusCode::NOT_FOUND, "not_found", "No such endpoint.") }));
     let app = match settings.assets {
         Assets::Folder(dist) => {

@@ -45,10 +45,13 @@ fn options(project: &std::path::Path) -> console::Options {
 
 fn running(app: &mut App) -> Option<&console::Running> {
     let project = app.cwd.clone();
+    let client = app.client.clone();
     let follow = app.features.get::<Follow>(NAME)?;
     if follow.served.is_none() {
         match console::start(options(&project)) {
             Ok(served) => {
+                let chats = super::chats::PhoneChats::new(client, project, served.live());
+                served.live().desk().open(std::sync::Arc::new(chats));
                 follow.served = Some(served);
                 follow.refresh.changed();
             }

@@ -190,6 +190,8 @@ The product is written as "the app", its binary as `<command>`, its project fold
 
 **Tunnel.** What runs inside a phone's channel once the Noise handshake is done: `Ask` from the phone (fetch, events, socket, send, close) and `Answer` from the machine (head, data, end), as JSON, sealed in pieces of at most one Noise message. `crates/tunnel/src/message.rs`, `transport.rs`; on the page `web/src/lib/tunnel/`.
 
+**Chat (the page's).** The page's messaging view of sessions, at `/chat` and first on a phone: a list of chats, each a session shown as bubbles, with its waiting question as buttons and a box to send the next prompt or start a new chat. The console serves it through the `Chats` trait (`crates/console/src/chats.rs`); the TUI answers it with its own client (`crates/cli/src/tui/features/trace/chats.rs`); `domain::chat` says what is shown and allowed; the page is `web/src/views/chat/`.
+
 ## Names that collide
 
 The audit listed these. Renamed on 2026-11-17: the background agent struct (`BackgroundAgent`, was `Task`), the worktree's cleanup (`WorktreeLease` in `agent_runtime/worktree_lease.rs`, was `Guard` in `guard.rs`), a hook's result (`HookOutcome`, was `hooks::Decision`), a memory's decided/ruled-out/watch-out note (`DecisionNote` in `knowledge/memory/decision_note.rs`, was `Decision`), what a hook says about the fallback chain (`FallbackChoice`, was `fallback::Verdict`), the router of the tools the loop handles itself (`agent/dispatch/in_loop.rs`, was `native.rs`), and the client (`app::Client`, was `Sdk`). What is left, and why it stays:

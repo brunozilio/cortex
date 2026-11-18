@@ -15,6 +15,7 @@ use futures_util::stream::{self, Stream, StreamExt};
 use serde_json::Value;
 use tokio::sync::{OwnedSemaphorePermit, broadcast};
 
+use crate::chats::Desk;
 use crate::mirror::Mirror;
 use crate::routes::{Shared, failure};
 
@@ -35,6 +36,7 @@ struct Board {
 enum Update {
     Session(String),
     Report,
+    Chat(String),
     Resync,
 }
 
@@ -43,6 +45,7 @@ impl Update {
         match self {
             Self::Session(line) => Event::default().data(line),
             Self::Report => Event::default().event("report").data("changed"),
+            Self::Chat(session) => Event::default().event("chat").data(session),
             Self::Resync => Event::default().event("resync").data("missed"),
         }
     }
@@ -53,11 +56,17 @@ pub struct Live {
     board: Arc<Mutex<Board>>,
     updates: broadcast::Sender<Update>,
     mirror: Mirror,
+    desk: Desk,
 }
 
 impl Default for Live {
     fn default() -> Self {
-        Self { board: Arc::default(), updates: broadcast::channel(KEPT_UPDATES).0, mirror: Mirror::default() }
+        Self {
+            board: Arc::default(),
+            updates: broadcast::channel(KEPT_UPDATES).0,
+            mirror: Mirror::default(),
+            desk: Desk::default(),
+        }
     }
 }
 
@@ -73,6 +82,14 @@ impl Live {
     pub fn show(&self, report: String) {
         self.board().report = Some(report);
         let _ = self.updates.send(Update::Report);
+    }
+
+    pub fn desk(&self) -> &Desk {
+        &self.desk
+    }
+
+    pub fn chat_changed(&self, session: &str) {
+        let _ = self.updates.send(Update::Chat(session.to_owned()));
     }
 
     pub fn report(&self) -> Option<String> {
