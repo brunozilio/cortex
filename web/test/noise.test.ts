@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import transcript from './fixtures/noise.json'
 import { fromHex, toHex, utf8 } from '../src/lib/tunnel/bytes'
 import { keyFrom, type Transport } from '../src/lib/tunnel/noise'
-import { machineId, pairedInitiator, pairingInitiator, parsePairing } from '../src/lib/tunnel/link'
+import { machineId, pairedInitiator, pairingInitiator, parsePairing, pastedPairing } from '../src/lib/tunnel/link'
 
 type Exchange = { plain: string; sealed: string[] }
 
@@ -62,5 +62,13 @@ describe('the page speaks the same Noise as the machine', () => {
     expect(parsePairing('#other=1')).toBeNull()
     expect(parsePairing('#pair=AAAA.AAAA')).toBeNull()
     expect(parsePairing('#pair=abc')).toBeNull()
+  })
+
+  test('a pasted pairing link, whole or only its fragment, gives the fragment to pair with', () => {
+    const fragment = `#${transcript.pairing.fragment.replace(/^#/, "")}`
+    expect(pastedPairing(`  https://relay.example/${fragment}\n`)).toBe(fragment)
+    expect(pastedPairing(fragment.slice(1))).toBe(fragment)
+    expect(pastedPairing('https://relay.example/')).toBeNull()
+    expect(pastedPairing('hello')).toBeNull()
   })
 })

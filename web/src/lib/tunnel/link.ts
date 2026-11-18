@@ -24,6 +24,13 @@ export function parsePairing(fragment: string): PairingLink | null {
   }
 }
 
+export function pastedPairing(pasted: string): string | null {
+  const text = pasted.trim()
+  const at = text.indexOf('#')
+  const fragment = at >= 0 ? text.slice(at) : `#${text}`
+  return parsePairing(fragment) ? fragment : null
+}
+
 export function pairingId(code: Uint8Array): Uint8Array {
   return sha256(concat(utf8('pairing-id'), code)).subarray(0, 8)
 }

@@ -99,6 +99,7 @@ async function prepare(show: (state: RemoteState) => void, open: (url: string) =
   }
   if (pairing) {
     await keepMachine({ machine, machineId: id, deviceSecret: device.secret, name, pairedAt: Date.now() }).catch(() => undefined)
+    await navigator.storage?.persist?.().catch(() => false)
     history.replaceState(null, '', window.location.pathname + window.location.search)
   }
   const lost = channel.onDown

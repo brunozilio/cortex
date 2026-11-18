@@ -110,7 +110,7 @@ fn pair(book: &Book) -> Result<String, String> {
     let link = book.invite().map_err(|error| error.to_string())?.url(&relay);
     let minutes = PAIRING_LASTS.as_secs() / 60;
     Ok(format!(
-        "{}\n{link}\n\nScan the code or open the link on the phone, then add the page to the home screen.\n\
+        "{}\n{link}\n\nScan the code or open the link on the phone. A page on an iPhone's home screen keeps its own pairing: open it from there and paste this link.\n\
          It works for one phone within {minutes} minutes, while a chat with remote control is open on this machine.",
         qr(&link)?
     ))

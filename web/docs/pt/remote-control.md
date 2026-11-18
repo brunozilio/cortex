@@ -21,7 +21,11 @@ Depois, num chat:
 /remote pair
 ```
 
-Escaneie o QR code (ou abra o link) no celular, deixe a página conectar e use **Adicionar à tela de início**. Um link de pareamento vale para um celular, uma vez, em até dez minutos.
+Escaneie o QR code (ou abra o link) no celular e deixe a página conectar. Um link de pareamento vale para um celular, uma vez, em até dez minutos.
+
+No iPhone, a página adicionada à tela de início guarda seus dados à parte do Safari, então o pareamento feito no Safari não chega até ela. Adicione a página à tela de início, abra-a por ali e cole o link de pareamento no campo que ela mostra enquanto não está pareada.
+
+A página abre nas **Conversas**: a lista de sessões, cada uma como um chat. Toque numa para ler e responder, aprove ou negue o que o agente pede pelos botões, e use **+** para uma conversa nova na pasta onde o chat da máquina está aberto. **Trace**, no topo, leva ao trace e ao terminal.
 
 A máquina fica alcançável enquanto um chat estiver aberto com o controle remoto ligado. Com um relay definido e um celular pareado, todo chat novo se conecta sozinho; só um chat da máquina segura o relay por vez, e os outros avisam.
 

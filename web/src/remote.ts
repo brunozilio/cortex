@@ -1,4 +1,5 @@
 import { installTunnel, onRelay, type RemoteState } from './lib/tunnel/install'
+import { pastedPairing } from './lib/tunnel/link'
 
 const BAR_ID = 'remote-status'
 
@@ -9,12 +10,43 @@ function words(state: RemoteState): { text: string; tone: 'quiet' | 'warn' } {
     case 'connected':
       return { text: `Connected as ${state.name}`, tone: 'quiet' }
     case 'unpaired':
-      return { text: 'This page is not paired. On the machine run `remote pair` and open the link it prints.', tone: 'warn' }
+      return { text: 'This page is not paired. On the machine run `remote pair`, then open the link it prints or paste it below.', tone: 'warn' }
     case 'refused':
       return { text: `Not let in: ${state.reason}. Pair again from the machine.`, tone: 'warn' }
     case 'down':
       return { text: `Connection lost (${state.reason}); retrying on the next request.`, tone: 'warn' }
   }
+}
+
+const PASTE = navigator.language.toLowerCase().startsWith('pt')
+  ? { hint: 'Cole aqui o link de pareamento', pair: 'Parear', wrong: 'Isso não é um link de pareamento.' }
+  : { hint: 'Paste the pairing link here', pair: 'Pair', wrong: 'That is not a pairing link.' }
+
+function pasteForm(bar: HTMLElement) {
+  const form = document.createElement('form')
+  form.className = 'mt-2 flex gap-2'
+  const input = document.createElement('input')
+  input.type = 'url'
+  input.placeholder = PASTE.hint
+  input.autocomplete = 'off'
+  input.className = 'min-w-0 flex-1 rounded-md bg-white px-2 py-1.5 text-[16px] text-black'
+  const button = document.createElement('button')
+  button.type = 'submit'
+  button.textContent = PASTE.pair
+  button.className = 'rounded-md bg-black px-3 py-1.5 font-medium text-white'
+  form.append(input, button)
+  form.addEventListener('submit', (event) => {
+    event.preventDefault()
+    const fragment = pastedPairing(input.value)
+    if (!fragment) {
+      input.value = ''
+      input.placeholder = PASTE.wrong
+      return
+    }
+    history.replaceState(null, '', `/${fragment}`)
+    location.reload()
+  })
+  bar.appendChild(form)
 }
 
 function show(state: RemoteState) {
@@ -32,6 +64,7 @@ function show(state: RemoteState) {
     tone === 'warn' ? 'bg-amber-500 text-black' : 'bg-zinc-900/90 text-zinc-100',
   ].join(' ')
   bar.textContent = text
+  if (state.kind === 'unpaired' || state.kind === 'refused') pasteForm(bar)
   if (state.kind === 'connected') setTimeout(() => bar?.remove(), 2_500)
 }
 

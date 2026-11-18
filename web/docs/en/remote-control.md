@@ -21,7 +21,11 @@ Then, in a chat:
 /remote pair
 ```
 
-Scan the QR code (or open the link) on the phone, let the page connect, then use **Add to Home Screen**. A pairing link works for one phone, once, within ten minutes.
+Scan the QR code (or open the link) on the phone and let the page connect. A pairing link works for one phone, once, within ten minutes.
+
+On an iPhone, a page added to the home screen keeps its data apart from Safari, so a pairing made in Safari does not reach it. Add the page to the home screen, open it from there and paste the pairing link into the field it shows while it is not paired.
+
+The page opens on **Chats**: the sessions, each as a chat. Tap one to read and answer it, allow or deny what the agent asks with the buttons, and use **+** for a new chat in the folder where the machine's chat is open. **Trace**, at the top, leads to the trace and the terminal.
 
 The machine is reachable while a chat is open with remote control on. Once a relay is named and a phone is paired, every new chat connects by itself; only one chat on the machine holds the relay at a time, and the others say so.
 
