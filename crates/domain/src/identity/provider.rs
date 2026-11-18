@@ -78,9 +78,14 @@ pub fn key_hint(key: &str) -> String {
     format!("…{tail}")
 }
 
+pub type RefreshHold = Box<dyn Send>;
+
 pub trait ProviderKeyStore: Send + Sync {
     fn load(&self) -> Result<String, String>;
     fn save(&self, value: &str) -> Result<(), String>;
+    fn hold_for_refresh(&self) -> Result<Option<RefreshHold>, String> {
+        Ok(None)
+    }
 }
 
 #[derive(Clone)]
@@ -112,6 +117,10 @@ impl ProviderKey {
 
     pub fn replace(&self, value: &str) -> Result<(), String> {
         self.1.as_ref().map_or(Ok(()), |store| store.save(value))
+    }
+
+    pub fn hold_for_refresh(&self) -> Result<Option<RefreshHold>, String> {
+        self.1.as_ref().map_or(Ok(None), |store| store.hold_for_refresh())
     }
 
     pub fn secret(&self) -> &str {

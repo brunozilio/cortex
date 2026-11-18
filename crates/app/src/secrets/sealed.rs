@@ -2,8 +2,11 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Mutex;
 
+use platform::file_lock::{Exclusive, Kept};
 use platform::store::{Document, Error};
 use platform::sync::Locked;
+
+const REFRESH_WAIT: std::time::Duration = std::time::Duration::from_secs(60);
 
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
@@ -130,6 +133,16 @@ impl SecretStore for SealedSecretStore {
 
     fn unkept(&self) -> Option<String> {
         self.unreadable.locked().clone()
+    }
+
+    fn hold_for_refresh(&self, connection: SecretId) -> Result<Option<domain::provider::RefreshHold>, String> {
+        let beside = self.vault.path().with_file_name(format!("refresh-{connection}"));
+        let held = Exclusive::within(&beside, REFRESH_WAIT, Kept::OnlyWhileHeld)
+            .map_err(|error| format!("the sign-in refresh could not be locked: {error}"))?
+            .ok_or_else(|| {
+                format!("another process has been refreshing this sign-in for over {} s", REFRESH_WAIT.as_secs())
+            })?;
+        Ok(Some(Box::new(held)))
     }
 
     fn delete(&self, connection: SecretId) {

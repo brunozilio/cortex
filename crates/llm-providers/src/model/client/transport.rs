@@ -33,17 +33,45 @@ impl Transport {
             () = cancel.cancelled() => return Err(ModelError::Cancelled),
             held = self.cached.lock() => held,
         };
-        let mut config = match cached.as_ref() {
+        let config = match cached.as_ref() {
             Some((old, config)) if old == raw => config.clone(),
             _ => Config::parse(self.provider, raw)?,
         };
-        if config.needs_refresh(self.provider, force)
-            && let Some(previous) = config.auth.as_ref()
-        {
-            config.auth = Some(oauth::refresh(self.http.as_ref(), self.provider, previous, cancel).await?);
-            self.keys.replace(&serde_json::to_string(&config).map_err(|e| ModelError::Provider(e.to_string()))?)?;
-        }
+        let config = if config.needs_refresh(self.provider, force) && config.auth.is_some() {
+            self.refreshed(raw, config, cancel).await?
+        } else {
+            config
+        };
         *cached = Some((raw.to_owned(), config.clone()));
+        Ok(config)
+    }
+
+    async fn refreshed(
+        &self,
+        seen: &str,
+        mut config: Config,
+        cancel: &CancellationToken,
+    ) -> Result<Config, ModelError> {
+        let keys = Arc::clone(&self.keys);
+        let held = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Err(ModelError::Cancelled),
+            held = tokio::task::spawn_blocking(move || keys.hold_for_refresh()) => {
+                held.map_err(|error| ModelError::Network(error.to_string()))??
+            }
+        };
+        let latest = self.keys.key()?;
+        if latest.secret() != seen {
+            let theirs = Config::parse(self.provider, latest.secret())?;
+            if !theirs.needs_refresh(self.provider, false) {
+                return Ok(theirs);
+            }
+            config = theirs;
+        }
+        let previous = config.auth.as_ref().ok_or_else(|| ModelError::Unauthorized("no tokens to refresh".into()))?;
+        config.auth = Some(oauth::refresh(self.http.as_ref(), self.provider, previous, cancel).await?);
+        self.keys.replace(&serde_json::to_string(&config).map_err(|e| ModelError::Provider(e.to_string()))?)?;
+        drop(held);
         Ok(config)
     }
 

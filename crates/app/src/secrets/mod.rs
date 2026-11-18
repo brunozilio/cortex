@@ -31,6 +31,10 @@ pub trait SecretStore: Send + Sync {
     fn unkept(&self) -> Option<String> {
         None
     }
+
+    fn hold_for_refresh(&self, _connection: SecretId) -> Result<Option<domain::provider::RefreshHold>, String> {
+        Ok(None)
+    }
 }
 
 pub fn system_secrets() -> Arc<dyn SecretStore> {

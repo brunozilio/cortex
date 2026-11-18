@@ -156,11 +156,19 @@ impl ProviderKeyStore for AccountStore {
         secrets.insert(CONFIG.into(), value.to_owned());
         self.secrets.set(self.slot, &secrets)
     }
+
+    fn hold_for_refresh(&self) -> Result<Option<domain::provider::RefreshHold>, String> {
+        self.secrets.hold_for_refresh(self.slot)
+    }
 }
 
 pub(crate) fn secrets(config: &Config) -> Result<Secrets, String> {
     Ok(Secrets::from([(CONFIG.to_owned(), serde_json::to_string(config).map_err(|e| e.to_string())?)]))
 }
+
+#[cfg(test)]
+#[path = "refresh_tests.rs"]
+mod refresh_tests;
 
 #[cfg(test)]
 mod tests {

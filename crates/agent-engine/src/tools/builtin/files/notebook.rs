@@ -125,7 +125,8 @@ fn edit(text: &str, input: &Value) -> Result<String, String> {
         }
         other => return Err(format!("unknown edit_mode {other}")),
     }
-    serde_json::to_string_pretty(&notebook).map(|text| text + "\n").map_err(|e| e.to_string())
+    let rewritten = serde_json::to_string_pretty(&notebook).map_err(|e| e.to_string())?;
+    Ok(domain::changes::line_endings::shaped_like(text, &(rewritten + "\n")))
 }
 
 #[cfg(test)]
@@ -159,5 +160,16 @@ mod tests {
         let deleted = edit(NOTEBOOK, &json!({"edit_mode": "delete", "cell_number": 0})).expect("delete");
         assert!(render(&deleted).expect("read").starts_with("<cell 0 id=b code>"));
         assert!(edit(NOTEBOOK, &json!({"edit_mode": "delete", "cell_number": 9})).is_err());
+    }
+
+    #[test]
+    fn an_edited_notebook_keeps_its_line_endings_and_trailing_newline_state() {
+        let crlf = NOTEBOOK.replace('\n', "\r\n") + "\r\n";
+        let edited = edit(&crlf, &json!({"cell_number": 1, "new_source": "print(3)\nprint(4)"})).expect("replace");
+        assert!(edited.ends_with("}\r\n"), "{edited:?}");
+        assert_eq!(edited.matches('\n').count(), edited.matches("\r\n").count(), "every line ends with CRLF");
+        assert!(render(&edited).expect("read").contains("print(3)\nprint(4)"), "the cell's own text is unchanged");
+        let bare = edit(NOTEBOOK, &json!({"cell_number": 1, "new_source": "print(3)"})).expect("replace");
+        assert!(bare.ends_with('}') && !bare.contains('\r'), "{bare:?}");
     }
 }

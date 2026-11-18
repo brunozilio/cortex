@@ -132,11 +132,17 @@ pub trait KeySource: Send + Sync {
     fn replace(&self, _value: &str) -> Result<(), ModelError> {
         Ok(())
     }
+    fn hold_for_refresh(&self) -> Result<Option<domain::provider::RefreshHold>, ModelError> {
+        Ok(None)
+    }
 }
 
 impl KeySource for ProviderKey {
     fn replace(&self, value: &str) -> Result<(), ModelError> {
         ProviderKey::replace(self, value).map_err(ModelError::Provider)
+    }
+    fn hold_for_refresh(&self) -> Result<Option<domain::provider::RefreshHold>, ModelError> {
+        ProviderKey::hold_for_refresh(self).map_err(ModelError::Network)
     }
     fn key(&self) -> Result<ProviderKey, ModelError> {
         self.current().map_err(ModelError::Unauthorized)

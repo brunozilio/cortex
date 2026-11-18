@@ -45,6 +45,11 @@ impl Tool for Edit {
             Ok(text) => text,
             Err(error) => return Outcome::error(format!("Could not read {name}: {error}")),
         };
+        let replacement = domain::changes::line_endings::replacement_in(&text, old, new);
+        let (old, new) = (replacement.old.as_str(), replacement.new.as_str());
+        if old == new {
+            return Outcome::error("`old_string` and `new_string` differ only in line endings; nothing to change.");
+        }
         let count = text.matches(old).count();
         let changed = match (count, all) {
             (0, _) => {
@@ -108,6 +113,27 @@ mod tests {
         let outcome = Edit.run(&json!({"file_path": "f.rs", "old_string": "b = 2", "new_string": "b = 3"}), &workspace);
         assert_eq!(outcome.content, "Edited f.rs.");
         assert_eq!(content(&dir), "let a = 1;\nlet b = 3;\n");
+    }
+
+    #[test]
+    fn an_edit_written_with_lf_lines_matches_a_crlf_file_and_keeps_it_crlf() {
+        let (dir, workspace) = setup("fn a() {\r\n    1\r\n}\r\n");
+        let edit = json!({"file_path": "f.rs", "old_string": "{\n    1\n}", "new_string": "{\n    2\n    3\n}"});
+        let outcome = Edit.run(&edit, &workspace);
+        assert_eq!(outcome.content, "Edited f.rs.");
+        assert_eq!(content(&dir), "fn a() {\r\n    2\r\n    3\r\n}\r\n");
+        let crlf_only =
+            Edit.run(&json!({"file_path": "f.rs", "old_string": "3\n}", "new_string": "3\r\n}"}), &workspace);
+        assert!(crlf_only.is_error && crlf_only.content.contains("line endings"), "{crlf_only:?}");
+        assert_eq!(content(&dir), "fn a() {\r\n    2\r\n    3\r\n}\r\n");
+    }
+
+    #[test]
+    fn an_lf_file_and_one_without_a_trailing_newline_stay_as_they_were() {
+        let (dir, workspace) = setup("a\nb");
+        let outcome = Edit.run(&json!({"file_path": "f.rs", "old_string": "a\nb", "new_string": "c\nd"}), &workspace);
+        assert!(!outcome.is_error, "{outcome:?}");
+        assert_eq!(content(&dir), "c\nd");
     }
 
     #[test]

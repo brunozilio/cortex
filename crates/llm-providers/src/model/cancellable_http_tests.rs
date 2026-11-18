@@ -158,3 +158,47 @@ fn a_server_that_never_answers_runs_into_the_idle_deadline() {
     let fetched = platform::runtime::block_on(fetch(ask, &CancellationToken::new())).expect("runtime");
     assert!(matches!(fetched, Err(ModelError::Stalled(_))), "{fetched:?}");
 }
+
+#[test]
+fn only_a_plain_http_request_without_a_proxy_skips_loading_the_system_s_root_certificates() {
+    assert_eq!(roots_for("http://127.0.0.1:4318/v1/traces", false), Roots::Skipped);
+    assert_eq!(roots_for("HTTP://localhost/", false), Roots::Skipped);
+    assert_eq!(roots_for("https://api.example/", false), Roots::Loaded);
+    assert_eq!(roots_for("http://127.0.0.1:4318/", true), Roots::Loaded, "the proxy may itself be HTTPS");
+    assert_eq!(roots_for("httpx://odd", false), Roots::Loaded);
+}
+
+fn answering(answers: Vec<String>) -> String {
+    use std::io::{BufRead, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let address = format!("http://{}", listener.local_addr().expect("address"));
+    std::thread::spawn(move || {
+        for (stream, answer) in listener.incoming().zip(answers) {
+            let Ok(mut stream) = stream else { return };
+            let mut reader = std::io::BufReader::new(stream.try_clone().expect("clone"));
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 && line != "\r\n" {
+                line.clear();
+            }
+            let _ = stream.write_all(answer.as_bytes());
+        }
+    });
+    address
+}
+
+fn moved_to(location: &str) -> String {
+    format!("HTTP/1.1 302 Found\r\nlocation: {location}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+}
+
+#[test]
+fn a_plain_request_follows_plain_redirects_and_hands_one_to_https_to_the_client_that_has_the_roots() {
+    let ok = "HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\nok".to_owned();
+    let plain = answering(vec![moved_to("/next"), ok]);
+    let never = CancellationToken::new();
+    let followed = got(&format!("{plain}/first")).expect("followed");
+    assert_eq!(platform::runtime::block_on(followed.text(&never)).expect("runtime").expect("body"), "ok");
+
+    let secure = answering(vec![moved_to("https://127.0.0.1:1/"), moved_to("https://127.0.0.1:1/")]);
+    let handed = got(&format!("{secure}/first")).expect_err("the https target refuses");
+    assert!(handed.to_string().contains("connect"), "the https hop was taken, not returned as a 302: {handed}");
+}

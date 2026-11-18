@@ -9,9 +9,9 @@ pub fn proxied() -> bool {
     PROXY_VARIABLES.iter().any(|key| std::env::var_os(key).is_some_and(|value| !value.is_empty()))
 }
 
-pub fn client() -> reqwest::Result<reqwest::Client> {
+pub fn builder() -> reqwest::ClientBuilder {
     let builder = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none());
-    if proxied() { builder.build() } else { builder.dns_resolver(Arc::new(PublicOnly)).build() }
+    if proxied() { builder } else { builder.dns_resolver(Arc::new(PublicOnly)) }
 }
 
 pub fn private_among(host: &str, addresses: &[IpAddr]) -> Option<String> {
