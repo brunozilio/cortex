@@ -19,7 +19,7 @@ A local process that runs with the user's privileges, takes instructions from a 
 | Model accounts | The provider accounts the app is connected to | Cost, quota, and the standing of the account with the provider |
 | Session data | Transcripts, trace, memory, checkpoints in the data folder | May contain source code, secrets pasted or printed, and prompts |
 | The local web page | A loopback HTTP server with a per-process token | Shows session data and can attach a terminal to a session |
-| The machine's remote key and paired devices | `remote/` in the data folder, readable only by the user; each phone's key in its page's IndexedDB | The machine key answers for the machine to every phone; a device key opens the console from anywhere the relay is reachable, terminal included |
+| The machine's remote key and paired devices | `remote/` in the data folder, readable only by the user; each phone's key in its page's IndexedDB, with a copy in the page's local storage so a pairing survives a database the browser lost or cannot open | The machine key answers for the machine to every phone; a device key opens the console from anywhere the relay is reachable, terminal included |
 
 ## Actors
 

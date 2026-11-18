@@ -3,6 +3,24 @@ import { pastedPairing } from './lib/tunnel/link'
 
 const BAR_ID = 'remote-status'
 
+const PASTE = navigator.language.toLowerCase().startsWith('pt')
+  ? {
+      hint: 'Cole aqui o link de pareamento',
+      pair: 'Parear',
+      wrong: 'Isso não é um link de pareamento.',
+      unpaired: 'Esta página não está pareada. Na máquina rode `remote pair` e abra o link, ou cole-o abaixo.',
+      installed:
+        'Este app da tela de início ainda não está pareado: ele guarda o pareamento à parte do navegador. Na máquina rode `remote pair` e cole o link abaixo; depois disso ele fica pareado.',
+    }
+  : {
+      hint: 'Paste the pairing link here',
+      pair: 'Pair',
+      wrong: 'That is not a pairing link.',
+      unpaired: 'This page is not paired. On the machine run `remote pair`, then open the link it prints or paste it below.',
+      installed:
+        'This home-screen app is not paired yet: it keeps its pairing apart from the browser. On the machine run `remote pair` and paste the link below; it stays paired after that.',
+    }
+
 function words(state: RemoteState): { text: string; tone: 'quiet' | 'warn' } {
   switch (state.kind) {
     case 'connecting':
@@ -10,7 +28,7 @@ function words(state: RemoteState): { text: string; tone: 'quiet' | 'warn' } {
     case 'connected':
       return { text: `Connected as ${state.name}`, tone: 'quiet' }
     case 'unpaired':
-      return { text: 'This page is not paired. On the machine run `remote pair`, then open the link it prints or paste it below.', tone: 'warn' }
+      return { text: installed() ? PASTE.installed : PASTE.unpaired, tone: 'warn' }
     case 'refused':
       return { text: `Not let in: ${state.reason}. Pair again from the machine.`, tone: 'warn' }
     case 'down':
@@ -18,9 +36,10 @@ function words(state: RemoteState): { text: string; tone: 'quiet' | 'warn' } {
   }
 }
 
-const PASTE = navigator.language.toLowerCase().startsWith('pt')
-  ? { hint: 'Cole aqui o link de pareamento', pair: 'Parear', wrong: 'Isso não é um link de pareamento.' }
-  : { hint: 'Paste the pairing link here', pair: 'Pair', wrong: 'That is not a pairing link.' }
+function installed(): boolean {
+  const standalone = (navigator as Navigator & { standalone?: boolean }).standalone === true
+  return standalone || window.matchMedia?.('(display-mode: standalone)').matches === true
+}
 
 function pasteForm(bar: HTMLElement) {
   const form = document.createElement('form')
