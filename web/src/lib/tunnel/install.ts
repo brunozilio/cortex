@@ -2,7 +2,7 @@ import { generateKey, keyFrom, type StaticKey } from './noise'
 import { machineId, pairedInitiator, pairingInitiator, parsePairing, type PairingLink } from './link'
 import type { Answer, AnswerChannel, Ask } from './messages'
 import { Tunnel } from './mux'
-import { RelayChannel, type Greeting } from './relay'
+import { RelayChannel, type Greeting, type SocketLike } from './relay'
 import { keepMachine, loadMachine, type PairedMachine } from './store'
 import { utf8 } from './bytes'
 
@@ -73,7 +73,7 @@ function greeter(device: StaticKey, machine: Uint8Array, pairing: PairingLink | 
   }
 }
 
-async function prepare(show: (state: RemoteState) => void): Promise<RelayChannel | null> {
+async function prepare(show: (state: RemoteState) => void, open: (url: string) => SocketLike): Promise<RelayChannel | null> {
   const pairing = parsePairing(window.location.hash)
   const stored = await loadMachine().catch(() => undefined)
   if (!pairing && !stored) {
@@ -86,6 +86,7 @@ async function prepare(show: (state: RemoteState) => void): Promise<RelayChannel
   const id = machineId(machine)
   show({ kind: 'connecting', name })
   const channel = new RelayChannel({
+    open,
     socketUrl: socketUrl(window.location, id),
     greet: greeter(device, machine, pairing, name),
     onUp: () => show({ kind: 'connected', name }),
@@ -111,7 +112,8 @@ async function prepare(show: (state: RemoteState) => void): Promise<RelayChannel
 export function installTunnel(show: (state: RemoteState) => void): Tunnel {
   const deferred = new Deferred()
   const tunnel = new Tunnel(deferred)
-  void prepare(show).then(
+  const Native = globalThis.WebSocket
+  void prepare(show, (url) => new Native(url) as SocketLike).then(
     (channel) => deferred.settle(channel, 'this page is not paired with a machine'),
     (error: unknown) => deferred.settle(null, String(error)),
   )
