@@ -498,6 +498,24 @@
           },
           "type": "array"
         },
+        "TaskCompleted": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "TaskCreated": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
+        "TeammateIdle": {
+          "items": {
+            "$ref": "#/$defs/hookGroup"
+          },
+          "type": "array"
+        },
         "UserPromptSubmit": {
           "items": {
             "$ref": "#/$defs/hookGroup"

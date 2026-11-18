@@ -149,6 +149,7 @@ Um arquivo de configurações com evento desconhecido, tipo de handler desconhec
 | `PreCompact`, `PostCompact` | `manual` ou `auto` |
 | `Notification` | O tipo da notificação |
 | `ModelRequest`, `ModelResponse`, `ModelError` | `main` ou `sub-agent` |
+| `TeammateIdle`, `TaskCreated`, `TaskCompleted` | Um texto vazio: deixe o matcher vazio |
 | `UserPromptSubmit`, `SessionEnd`, `RunEnd`, `Brief` | Uma string vazia: deixe o matcher vazio |
 
 Os grupos rodam em ordem; dentro de um grupo, os handlers rodam em ordem. Assim que um bloqueia, os demais são pulados.
@@ -172,6 +173,9 @@ Os grupos rodam em ordem; dentro de um grupo, os handlers rodam em ordem. Assim 
 | [`SubagentStart`](#subagentstart) | Quando um subagente começa | Sim: o subagente falha |
 | [`SubagentStop`](#subagentstop) | Quando um subagente quer terminar | Sim: ele continua trabalhando |
 | [`Stop`](#stop) | Quando o agente principal quer terminar | Sim: ele continua trabalhando |
+| [`TeammateIdle`](#teammateidle) | Quando um teammate vai ficar ocioso, depois do `Stop` | Sim: ele continua trabalhando |
+| [`TaskCreated`](#taskcreated) | Antes de uma tarefa entrar na lista | Sim: a tarefa não é criada |
+| [`TaskCompleted`](#taskcompleted) | Antes de uma tarefa ser marcada como concluída | Sim: ela continua aberta |
 | [`PreCompact`](#precompact) | Antes de a conversa ser resumida | Sim: a compactação é cancelada |
 | [`PostCompact`](#postcompact) | Depois de a conversa ser resumida | Não |
 | [`RunEnd`](#runend) | No fim de cada execução | Não |
@@ -256,7 +260,8 @@ Quando um hook não consegue rodar, estoura o tempo ou é cancelado:
 | `PreToolUse` | A chamada é recusada: `Hook blocked <ferramenta>: hook cancelled or timed out` |
 | `PostToolUse`, `PostToolUseFailure` | O resultado é marcado como falho, com `Hook failed: …` acrescentado |
 | `PermissionRequest` | A chamada falha com o erro |
-| `SessionStart`, `RunStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `Brief` | A execução para com o erro |
+| `SessionStart`, `RunStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `TeammateIdle`, `Brief` | A execução para com o erro |
+| `TaskCreated`, `TaskCompleted` | A ferramenta de tarefas falha com o erro, e a lista fica como estava |
 | `SubagentStart` | O subagente falha |
 | `PreCompact`, `PostCompact` | A compactação falha |
 | `ModelRequest`, `ModelResponse`, `ModelError` | Vai para o log; a chamada segue como se não houvesse hook |
@@ -600,6 +605,18 @@ Dispara quando o {{NAME}} precisa de você. A saída é ignorada, o que o torna 
   }
 }
 ```
+
+### TeammateIdle
+
+Dispara num teammate (veja [Equipes de agentes](./agents#equipes-de-agentes)) quando ele vai ficar ocioso e avisar o líder, depois que os hooks `Stop` o deixam terminar. Mesma entrada do [`Stop`](#stop), mais `teammate_name` e `team_name`. Um bloqueio mantém o teammate trabalhando, com o motivo como próxima mensagem, como o `Stop`.
+
+### TaskCreated
+
+Dispara antes de `TaskCreate` acrescentar uma tarefa. `task` traz o `subject` e a `description` propostos; `teammate_name` é quem a cria (`team-lead` para o líder). Um bloqueio recusa a tarefa, e o agente lê o motivo.
+
+### TaskCompleted
+
+Dispara antes de `TaskUpdate` marcar uma tarefa como `completed`. `task` traz a tarefa inteira, com responsável e bloqueios; `teammate_name` é quem a conclui. Um bloqueio deixa a tarefa aberta, e o agente lê o motivo, por exemplo *rode os testes antes*.
 
 ### SubagentStart
 

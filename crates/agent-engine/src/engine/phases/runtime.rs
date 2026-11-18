@@ -33,6 +33,7 @@ impl Job {
     ) -> Result<Runtime, Stop> {
         let Governed { mut workspace, mut toolbox, main, roles } = governed;
         workspace.home = crate::brief::home(self.request.folder());
+        workspace.teammate = workspace.home.as_deref().and_then(crate::team::Me::from_env);
         workspace.models.fallbacks = roles::fallbacks(&self.request.session, &settings.fallbacks);
         workspace.models.small_model = self.small_model(&roles);
         workspace.models.roles = roles;

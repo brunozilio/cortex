@@ -24,10 +24,13 @@ pub enum HookEvent {
     RunEnd,
     PermissionRequest,
     Notification,
+    TeammateIdle,
+    TaskCreated,
+    TaskCompleted,
 }
 
 impl HookEvent {
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 22] = [
         Self::Brief,
         Self::ModelRequest,
         Self::ModelResponse,
@@ -47,6 +50,9 @@ impl HookEvent {
         Self::RunEnd,
         Self::PermissionRequest,
         Self::Notification,
+        Self::TeammateIdle,
+        Self::TaskCreated,
+        Self::TaskCompleted,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -70,6 +76,9 @@ impl HookEvent {
             Self::RunEnd => "RunEnd",
             Self::PermissionRequest => "PermissionRequest",
             Self::Notification => "Notification",
+            Self::TeammateIdle => "TeammateIdle",
+            Self::TaskCreated => "TaskCreated",
+            Self::TaskCompleted => "TaskCompleted",
         }
     }
 
@@ -205,9 +214,13 @@ mod tests {
                 "SubagentStop",
                 "UserPromptSubmit",
                 "PermissionRequest",
-                "Notification"
+                "Notification",
+                "TeammateIdle",
+                "TaskCreated",
+                "TaskCompleted"
             ]
         );
+        assert_eq!(HookEvent::named("TeammateIdle"), Some(HookEvent::TeammateIdle));
     }
 
     #[test]

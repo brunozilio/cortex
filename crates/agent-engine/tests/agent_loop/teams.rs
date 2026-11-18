@@ -94,3 +94,30 @@ fn a_named_agent_is_a_teammate_and_a_bad_name_starts_nothing() {
     assert!(results[1].contains("prompt"), "a teammate needs its task: {}", results[1]);
     assert_eq!(team.read().expect("team").names(), ["tester"], "nobody joined");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_teammate_idle_hook_can_keep_a_teammate_working_and_never_runs_for_the_lead() {
+    let (mut rig, home, team) = lead_with_a_teammate();
+    let marker = home.path().join("asked-once");
+    let command = format!(
+        "[ -e '{0}' ] && exit 0; touch '{0}'; printf 'check the lint too' >&2; exit 2",
+        marker.display()
+    );
+    let groups = json!({ "TeammateIdle": [{"hooks": [{"type": "command", "command": command}]}] });
+    rig.workspace.hooks = agent_engine::hooks::Hooks::parse(&groups).expect("hooks");
+    let lead = ScriptedModel::new([ScriptedModel::reply(vec![Block::Text("Led.".into())])]);
+    rig.run(&lead, &mut vec![Message::user("lead")]).expect("lead run");
+    assert!(!marker.exists(), "the lead is no teammate");
+
+    rig.workspace.teammate = Some(agent_engine::team::Me { team, name: "tester".into() });
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![Block::Text("Done.".into())]),
+        ScriptedModel::reply(vec![Block::Text("Lint is clean too.".into())]),
+    ]);
+    rig.run(&model, &mut vec![Message::user("fix the tests")]).expect("teammate run");
+
+    let asked = model.asked();
+    assert_eq!(asked.len(), 2, "the hook sent it back once");
+    assert!(format!("{:?}", asked[1].messages).contains("check the lint too"));
+}

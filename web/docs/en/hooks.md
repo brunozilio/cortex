@@ -149,6 +149,7 @@ A settings file with an unknown event, an unknown handler type, a matcher that i
 | `PreCompact`, `PostCompact` | `manual` or `auto` |
 | `Notification` | The notification type |
 | `ModelRequest`, `ModelResponse`, `ModelError` | `main` or `sub-agent` |
+| `TeammateIdle`, `TaskCreated`, `TaskCompleted` | An empty string: leave the matcher empty |
 | `UserPromptSubmit`, `SessionEnd`, `RunEnd`, `Brief` | An empty string: leave the matcher empty |
 
 Groups run in order; inside a group, handlers run in order. As soon as one blocks, the rest are skipped.
@@ -172,6 +173,9 @@ Groups run in order; inside a group, handlers run in order. As soon as one block
 | [`SubagentStart`](#subagentstart) | When a sub-agent starts | Yes: the sub-agent fails |
 | [`SubagentStop`](#subagentstop) | When a sub-agent wants to finish | Yes: it keeps working |
 | [`Stop`](#stop) | When the main agent wants to finish | Yes: it keeps working |
+| [`TeammateIdle`](#teammateidle) | When a teammate is about to go idle, after `Stop` | Yes: it keeps working |
+| [`TaskCreated`](#taskcreated) | Before a task is added to the list | Yes: the task is not created |
+| [`TaskCompleted`](#taskcompleted) | Before a task is marked completed | Yes: it stays open |
 | [`PreCompact`](#precompact) | Before the conversation is summarised | Yes: compaction is cancelled |
 | [`PostCompact`](#postcompact) | After the conversation is summarised | No |
 | [`RunEnd`](#runend) | At the end of each run | No |
@@ -256,7 +260,8 @@ When a hook cannot run, times out or is cancelled:
 | `PreToolUse` | The tool call is refused: `Hook blocked <tool>: hook cancelled or timed out` |
 | `PostToolUse`, `PostToolUseFailure` | The result is marked failed, with `Hook failed: …` added |
 | `PermissionRequest` | The tool call fails with the error |
-| `SessionStart`, `RunStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `Brief` | The run stops with the error |
+| `SessionStart`, `RunStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `TeammateIdle`, `Brief` | The run stops with the error |
+| `TaskCreated`, `TaskCompleted` | The task tool fails with the error, and the list is left as it was |
 | `SubagentStart` | The sub-agent fails |
 | `PreCompact`, `PostCompact` | Compaction fails |
 | `ModelRequest`, `ModelResponse`, `ModelError` | Logged; the call goes on as if there were no hook |
@@ -600,6 +605,18 @@ Fires when {{NAME}} needs you. Its output is ignored, which makes it a good plac
   }
 }
 ```
+
+### TeammateIdle
+
+Fires in a teammate (see [Agent teams](./agents#agent-teams)) when it is about to go idle and tell its lead so, after its `Stop` hooks let it finish. Same input as [`Stop`](#stop), plus `teammate_name` and `team_name`. A block keeps the teammate working, with the reason as its next message, as `Stop` does.
+
+### TaskCreated
+
+Fires before `TaskCreate` adds a task. `task` holds the proposed `subject` and `description`; `teammate_name` is who creates it (`team-lead` for the lead). A block refuses the task, and the agent reads the reason.
+
+### TaskCompleted
+
+Fires before `TaskUpdate` marks a task `completed`. `task` holds the whole task, owner and blockers included; `teammate_name` is who completes it. A block leaves the task open, and the agent reads the reason, for example *run the tests first*.
 
 ### SubagentStart
 

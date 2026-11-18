@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use super::Agent;
 use crate::team::launch::{Launching, launch};
-use crate::team::{Me, Team, lead_inbox};
+use crate::team::{Team, lead_inbox};
 use crate::tools::Outcome;
 
 impl Agent<'_> {
@@ -14,7 +14,7 @@ impl Agent<'_> {
     }
 
     fn sender(&self) -> Option<(Team, String)> {
-        crate::team::current(self.workspace.home.as_deref(), &self.workspace.session_id).map(|me| (me.team, me.name))
+        crate::team::current(self.workspace.home.as_deref(), &self.workspace.session_id, self.workspace.teammate.as_ref()).map(|me| (me.team, me.name))
     }
 
     pub(super) fn teammate(&self, input: &Value) -> Option<Outcome> {
@@ -24,7 +24,7 @@ impl Agent<'_> {
 
     fn start_teammate(&self, wanted: &str, input: &Value) -> Result<Outcome, String> {
         let home = self.home().ok_or("teammates need a home folder to keep their team in")?;
-        if self.depth > 0 || Me::from_env(&home).is_some() {
+        if self.depth > 0 || self.workspace.teammate.is_some() {
             return Err(
                 "Only the lead starts teammates; ask the lead (SendMessage to team-lead) if you need help.".into()
             );

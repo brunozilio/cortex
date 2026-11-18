@@ -155,18 +155,17 @@ pub fn tasks_file(home: &Path, lead_session: &str) -> PathBuf {
     home.join(brand::DIR).join("tasks").join(file_name(lead_session)).join("tasks.json")
 }
 
-pub fn current(home: Option<&Path>, session: &str) -> Option<Me> {
-    let home = home?;
-    if let Some(me) = Me::from_env(home) {
-        return Some(me);
+pub fn current(home: Option<&Path>, session: &str, teammate: Option<&Me>) -> Option<Me> {
+    if let Some(me) = teammate {
+        return Some(me.clone());
     }
-    let team = Team::of_session(home, session);
+    let team = Team::of_session(home?, session);
     team.exists().then(|| Me { team, name: LEAD.to_owned() })
 }
 
-pub fn task_list(home: Option<&Path>, session: &str) -> Option<PathBuf> {
+pub fn task_list(home: Option<&Path>, session: &str, teammate: Option<&Me>) -> Option<PathBuf> {
     let home = home?;
-    match Me::from_env(home) {
+    match teammate {
         Some(me) => me.team.read().map(|config| tasks_file(home, &config.lead_session_id)),
         None => Some(tasks_file(home, session)),
     }
@@ -242,9 +241,9 @@ mod tests {
 
         let board: domain::task_board::Board = list.read().expect("read").expect("board");
         assert_eq!(board.listed()[0]["owner"], serde_json::Value::Null);
-        assert_eq!(task_list(Some(home.path()), "lead-1"), Some(tasks_file(home.path(), "lead-1")));
-        assert_eq!(current(Some(home.path()), "lead-1").map(|me| me.name), Some(LEAD.to_owned()));
-        assert!(current(Some(home.path()), "someone-else").is_none());
-        assert!(task_list(None, "lead-1").is_none());
+        assert_eq!(task_list(Some(home.path()), "lead-1", None), Some(tasks_file(home.path(), "lead-1")));
+        assert_eq!(current(Some(home.path()), "lead-1", None).map(|me| me.name), Some(LEAD.to_owned()));
+        assert!(current(Some(home.path()), "someone-else", None).is_none());
+        assert!(task_list(None, "lead-1", None).is_none());
     }
 }

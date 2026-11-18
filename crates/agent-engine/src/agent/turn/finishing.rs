@@ -51,25 +51,34 @@ impl Agent<'_> {
         if self.tool(run, names::STRUCTURED_OUTPUT).is_some() && !turn.structured {
             return turn.cutoffs.structured_nudge().map(Some);
         }
-        if let Some(blocked) = self.stop_hook(turn, said)? {
+        if let Some(blocked) = self.stop_hook(turn, said, crate::hooks::HookEvent::at_the_end(self.depth > 0))? {
+            return Ok(Some(blocked));
+        }
+        if self.depth == 0
+            && self.workspace.teammate.is_some()
+            && let Some(blocked) = self.stop_hook(turn, said, crate::hooks::HookEvent::TeammateIdle)?
+        {
             return Ok(Some(blocked));
         }
         self.reviewed(turn.prompt.run(turn.history), &mut turn.review_attempts)
     }
 
-    fn stop_hook(&self, turn: &mut TurnState<'_>, said: bool) -> Result<Option<Message>, Ending> {
-        let event = crate::hooks::HookEvent::at_the_end(self.depth > 0);
+    fn stop_hook(
+        &self,
+        turn: &mut TurnState<'_>,
+        said: bool,
+        event: crate::hooks::HookEvent,
+    ) -> Result<Option<Message>, Ending> {
         let last = turn.history.last().filter(|_| said).map(Message::text);
+        let mut input = json!({ "last_assistant_message": last, "stop_hook_active": turn.stop_hook_active });
+        if let Some(me) = &self.workspace.teammate {
+            input["teammate_name"] = json!(me.name);
+            input["team_name"] = json!(me.team.name);
+        }
         let hook = self
             .workspace
             .hooks
-            .run_with_model(
-                event,
-                &self.workspace.agent_name,
-                json!({"last_assistant_message":last,"stop_hook_active":turn.stop_hook_active}),
-                self.workspace,
-                Some((self.api, &self.request)),
-            )
+            .run_with_model(event, &self.workspace.agent_name, input, self.workspace, Some((self.api, &self.request)))
             .map_err(|error| Ending::Failed(ModelError::Provider(error)))?;
         match hook.blocked.map(|reason| turn.cutoffs.stop_blocked(event.as_str(), &reason, &hook.context)) {
             Some(Ok(blocked)) => {

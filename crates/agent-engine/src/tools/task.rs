@@ -46,11 +46,11 @@ struct PlanTool {
 }
 
 fn shared(workspace: &Workspace) -> Option<PathBuf> {
-    crate::team::task_list(workspace.home.as_deref(), &workspace.session_id)
+    crate::team::task_list(workspace.home.as_deref(), &workspace.session_id, workspace.teammate.as_ref())
 }
 
 fn me(workspace: &Workspace) -> String {
-    crate::team::current(workspace.home.as_deref(), &workspace.session_id)
+    crate::team::current(workspace.home.as_deref(), &workspace.session_id, workspace.teammate.as_ref())
         .map_or_else(|| domain::team::LEAD.to_owned(), |me| me.name)
 }
 
@@ -89,7 +89,7 @@ impl PlanTool {
     }
 
     fn told(workspace: &Workspace, assigned: domain::task_board::Assigned, by: &str) {
-        let Some(me) = crate::team::current(workspace.home.as_deref(), &workspace.session_id) else { return };
+        let Some(me) = crate::team::current(workspace.home.as_deref(), &workspace.session_id, workspace.teammate.as_ref()) else { return };
         if !me.team.knows(&assigned.owner) {
             return;
         }
@@ -101,7 +101,29 @@ impl PlanTool {
         let _ = me.team.send(&assigned.owner, by, &message.text(), Some(&format!("task: {}", assigned.subject)));
     }
 
+    fn hooked(workspace: &Workspace, event: crate::hooks::HookEvent, task: Value) -> Result<(), String> {
+        let input = json!({ "task": task, "teammate_name": me(workspace) });
+        let ran = workspace.hooks.run(event, "", input, workspace)?;
+        match ran.blocked {
+            Some(reason) => Err(format!("A {} hook refused it: {reason}", event.as_str())),
+            None => Ok(()),
+        }
+    }
+
     fn answered(&self, input: &Value, workspace: &Workspace) -> Result<Value, String> {
+        let completing = input["status"].as_str() == Some("completed");
+        match self.name {
+            ToolName::TaskCreate => {
+                let proposed = json!({ "subject": input["subject"], "description": input["description"] });
+                Self::hooked(workspace, crate::hooks::HookEvent::TaskCreated, proposed)?;
+            }
+            ToolName::TaskUpdate if completing => {
+                let id = input["task_id"].as_str().unwrap_or_default();
+                let task = self.on_board(workspace, |board| board.get(id))?;
+                Self::hooked(workspace, crate::hooks::HookEvent::TaskCompleted, task)?;
+            }
+            _ => {}
+        }
         match self.name {
             ToolName::TaskList => self.on_board(workspace, |board| Ok(json!(board.listed()))),
             ToolName::TaskCreate => self.on_board(workspace, |board| {
@@ -167,6 +189,30 @@ mod tests {
         assert!(run("TaskUpdate", json!({"task_id":"2","status":"completed"})).is_error);
         assert!(!run("TaskUpdate", json!({"task_id":"1","status":"completed"})).is_error);
         assert!(!run("TaskUpdate", json!({"task_id":"2","status":"completed"})).is_error);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_task_hook_can_refuse_a_new_task_or_its_completion_and_says_why() {
+        let dir = tempfile::tempdir().expect("dir");
+        let mut workspace = Workspace::new(dir.path());
+        let groups = json!({
+            "TaskCreated": [{"hooks": [{"type": "command", "command": "grep -q forbidden && { printf 'no forbidden tasks' >&2; exit 2; }; exit 0"}]}],
+            "TaskCompleted": [{"hooks": [{"type": "command", "command": "printf 'run the tests first' >&2; exit 2"}]}]
+        });
+        workspace.hooks = crate::hooks::Hooks::parse(&groups).expect("hooks");
+        let run = runner(&workspace);
+
+        let refused = run("TaskCreate", json!({"subject":"a forbidden thing"}));
+        let made = run("TaskCreate", json!({"subject":"Build"}));
+        let unfinished = run("TaskUpdate", json!({"task_id":"1","status":"completed"}));
+        let started = run("TaskUpdate", json!({"task_id":"1","status":"in_progress"}));
+
+        assert!(refused.is_error && refused.content.contains("no forbidden tasks"), "{}", refused.content);
+        assert!(!made.is_error && made.content.contains("\"task_id\":\"1\""), "{}", made.content);
+        assert!(unfinished.is_error && unfinished.content.contains("run the tests first"), "{}", unfinished.content);
+        assert!(!started.is_error, "only completing is hooked: {}", started.content);
+        assert!(run("TaskList", json!({})).content.contains("\"status\":\"in_progress\""));
     }
 
     #[test]
