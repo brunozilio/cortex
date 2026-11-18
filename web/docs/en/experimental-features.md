@@ -6,7 +6,7 @@ description: Every feature flag {{NAME}} knows, what each one changes, and how t
 {{NAME}} ships a set of named features that you can switch on or off one by one: safety guards, ways of shaping command and web output, reviewers that check the agent's work, memory helpers and more. Each one is a **feature flag** with a fixed name such as `budget` or `experimental-sandbox`.
 
 > [!IMPORTANT]
-> Every flag is **on** until you turn it off, including the ones whose name starts with `experimental-`. A flag you never touched is on. The one exception is [`experimental-code-mode`](#experimental-code-mode), which is off because it makes REPL the agent's only tool.
+> Every flag is **on** until you turn it off, including the ones whose name starts with `experimental-`. A flag you never touched is on, [`experimental-code-mode`](#experimental-code-mode) included, which makes REPL the agent's only tool.
 
 ## Turn a flag on or off
 
@@ -98,8 +98,7 @@ Files are read in order and a later file you own wins. `/features` writes `~/{{D
 
 A flag whose name starts with `experimental-` is experimental: its behaviour may still change or be removed. The other flags are stable. Both kinds start on.
 
-Experimental features ship on so that they get used. Each one is on its way to one of two ends: once it has run in daily use without a reported problem it becomes a permanent part of {{NAME}} (its flag goes away, or it turns into an ordinary setting), or it is removed. Until then you can turn any of them off with `/features <name> off`. `experimental-code-mode` is the only one that starts off: it does not add something beside the other tools, it replaces them with REPL, so you turn it on yourself.
-
+Experimental features ship on so that they get used. Each one is on its way to one of two ends: once it has run in daily use without a reported problem it becomes a permanent part of {{NAME}} (its flag goes away, or it turns into an ordinary setting), or it is removed. Until then you can turn any of them off with `/features <name> off`.
 ## Flags at a glance
 
 | Flag | Area | Security | What it does |
@@ -129,7 +128,7 @@ Experimental features ship on so that they get used. Each one is on its way to o
 | `experimental-follow-through` | Review | | Sends the agent back when it ends promising more work |
 | `experimental-affected-tests` | Review | | Runs the tests covering an edited file in the background |
 | `experimental-escalation` | Review | | Sends a stuck agent to the Advisor or to `escalationModel` |
-| `experimental-code-mode` | Tools | | Off until you turn it on: REPL becomes the agent's only tool, and it scripts every other tool in JavaScript |
+| `experimental-code-mode` | Tools | | REPL becomes the agent's only tool, and it scripts every other tool in JavaScript |
 | `experimental-load-on-call` | Tools | | A tool held back for search that the agent calls by name is loaded and run |
 | `experimental-learning` | Learning and memory | | Offers one lesson to keep after a run where you corrected the agent |
 | `team-memory` | Learning and memory | | Recalls memories checked into `{{DIR}}/memory` |
@@ -409,7 +408,7 @@ When the agent keeps failing the same call, it is told to ask the Advisor (when 
 ### `experimental-code-mode`
 
 > [!EXPERIMENTAL]
-> Default: off. Unlike the other flags, it stays off until you turn it on in your own settings (`/features experimental-code-mode on`); a project's settings cannot turn it on.
+> Default: on. Turn it off with `/features experimental-code-mode off` to give the agent its tools back.
 
 Makes **REPL** the agent's only tool, besides the plan-mode and worktree switches; every other tool, asking you questions included, is described inside REPL's description as a typed function and is called from scripts. Tools held back for search (with many MCP tools) are found from a script with `searchTools("words")`, and `describeTool(name)` gives one tool's declaration. Instead of calling tools one turn at a time, the agent writes a JavaScript script in which every other tool is a function (`await Grep({ pattern: "TODO" })`), loops and filters in code, and reads only what the script returns. Searching many files or making the same edit in many places then takes one turn, and the files it only needed to filter never enter the conversation.
 

@@ -66,7 +66,7 @@ fn a_run_keeps_its_prompt_and_every_event_in_the_session_file() {
         calls[1].system.is_none() && calls[1].system_id == calls[0].system_id,
         "an unchanged one is only referred to"
     );
-    assert!(calls[0].tools.as_ref().is_some_and(|tools| tools.to_string().contains("\"Read\"")));
+    assert!(calls[0].tools.as_ref().is_some_and(|tools| tools.to_string().contains("Read(")));
     let times: Vec<u64> =
         entries.iter().filter_map(|e| if let Entry::Event { at_ms, .. } = e { Some(*at_ms) } else { None }).collect();
     assert!(times.windows(2).all(|pair| pair[0] <= pair[1]) && times[0] > 0, "{times:?}");

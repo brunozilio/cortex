@@ -21,7 +21,7 @@ fn engine(models: Vec<Arc<ScriptedModel>>) -> Engine {
 }
 
 fn offered(model: &ScriptedModel) -> Vec<String> {
-    model.asked()[0].tools.iter().map(|tool| tool.name.clone()).collect()
+    agent_engine::tools::repl::within_reach(&model.asked()[0].tools)
 }
 
 fn results(model: &ScriptedModel) -> String {

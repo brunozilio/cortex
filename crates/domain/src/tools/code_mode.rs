@@ -352,11 +352,11 @@ mod tests {
     }
 
     #[test]
-    fn code_mode_is_off_until_turned_on_and_then_the_repl_is_the_only_tool() {
+    fn code_mode_is_on_until_turned_off_and_on_the_repl_is_the_only_tool() {
         let flags = |value: serde_json::Value| Features::default().layered(&value, true).expect("flags");
 
-        assert_eq!(Mode::of(&Features::default()), Mode::Off);
-        assert_eq!(Mode::of(&flags(serde_json::json!({ CODE_MODE: true }))), Mode::Only);
+        assert_eq!(Mode::of(&Features::default()), Mode::Only);
+        assert_eq!(Mode::of(&flags(serde_json::json!({ CODE_MODE: false }))), Mode::Off);
     }
 
     #[test]

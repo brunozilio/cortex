@@ -19,7 +19,7 @@ fn offered_to(request: &PromptRequest) -> Vec<String> {
         Engine::new(Arc::new(Source(Mutex::new(vec![model_api.clone()]))), Arc::new(InMemorySessions::default()));
     let events = finish(&start(&engine, request));
     assert!(matches!(events.last(), Some(EngineEvent::Completed { .. })), "{events:?}");
-    model_api.asked()[0].tools.iter().map(|tool| tool.name.clone()).collect()
+    agent_engine::tools::repl::within_reach(&model_api.asked()[0].tools)
 }
 
 #[test]

@@ -56,7 +56,7 @@ fn a_plugin_brings_its_command_hook_and_mcp_tools_to_a_run() {
 
     let asked = &model_api.asked()[0];
     assert!(asked.messages.last().expect("user").text().contains("PLUGIN_COMMAND_SENTINEL world"));
-    let tools: Vec<&str> = asked.tools.iter().map(|tool| tool.name.as_str()).collect();
-    assert!(tools.contains(&"mcp__plugin_acme_tools__ping"), "{tools:?}");
+    let tools = agent_engine::tools::repl::within_reach(&asked.tools);
+    assert!(tools.iter().any(|tool| tool == "mcp__plugin_acme_tools__ping"), "{tools:?}");
     assert!(root.join("fired").exists(), "the plugin's hook ran");
 }

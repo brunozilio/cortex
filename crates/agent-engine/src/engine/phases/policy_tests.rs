@@ -21,7 +21,7 @@ fn request() -> PromptRequest {
 
 type Reads = fn(&Policy) -> bool;
 
-const SWITCHES: [(&str, Reads); 19] = [
+const SWITCHES: [(&str, Reads); 20] = [
     (features::WEB_LINKS, |policy| policy.web.links),
     (features::WEB_SMALL_PAGES_DIRECT, |policy| policy.web.small_pages_direct),
     (features::WEB_FORMATS, |policy| policy.web.formats),
@@ -36,6 +36,7 @@ const SWITCHES: [(&str, Reads); 19] = [
     (features::AFFECTED_TESTS, |policy| policy.affected_tests),
     (features::SESSION_CLAIMS, |policy| policy.session_claims),
     (features::LOAD_ON_CALL, |policy| policy.load_on_call),
+    (features::CODE_MODE, |policy| policy.code_mode != Mode::Off),
     (features::WEB_MAIN_CONTENT, |policy| policy.web.main_content),
     (features::WEB_CLEANUP, |policy| policy.web.cleanup),
     (features::OUTPUT_CLEANUP, |policy| policy.output.cleanup),
@@ -44,12 +45,12 @@ const SWITCHES: [(&str, Reads); 19] = [
 ];
 
 #[test]
-fn with_no_flag_set_every_switch_is_on_and_code_mode_is_off() {
+fn with_no_flag_set_every_switch_is_on_and_the_repl_is_the_only_tool() {
     let policy = policy(json!({}));
     for (flag, reads) in SWITCHES {
         assert!(reads(&policy), "{flag} is on until it is turned off");
     }
-    assert_eq!(policy.code_mode, Mode::Off);
+    assert_eq!(policy.code_mode, Mode::Only);
     assert_eq!(policy.web, domain::web_reading::WebReading::from(&Features::default()));
 }
 
@@ -72,8 +73,8 @@ fn the_sandbox_is_the_one_the_settings_describe() {
 }
 
 #[test]
-fn turning_code_mode_on_makes_the_repl_the_only_tool() {
-    assert_eq!(policy(json!({ features::CODE_MODE: true })).code_mode, Mode::Only);
+fn turning_code_mode_off_gives_the_agent_its_tools_back() {
+    assert_eq!(policy(json!({ features::CODE_MODE: false })).code_mode, Mode::Off);
 }
 
 #[test]

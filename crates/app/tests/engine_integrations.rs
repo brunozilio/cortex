@@ -52,13 +52,10 @@ impl Model {
         }
         let call = |id: &str, suffix: &str, input| Block::ToolUse {
             id: id.into(),
-            name: request
-                .tools
-                .iter()
-                .find(|t| t.name.ends_with(suffix))
-                .unwrap_or_else(|| panic!("missing tool {suffix}"))
-                .name
-                .clone(),
+            name: agent_engine::tools::repl::within_reach(&request.tools)
+                .into_iter()
+                .find(|name| name.ends_with(suffix))
+                .unwrap_or_else(|| panic!("missing tool {suffix}")),
             input,
         };
         match self.turn.fetch_add(1, Ordering::Relaxed) {

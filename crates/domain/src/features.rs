@@ -41,8 +41,6 @@ pub const WEB_FORMATS: &str = "experimental-web-formats";
 pub const WEB_EMPTY_PAGE_ERROR: &str = "experimental-web-empty-page-error";
 pub const CODE_MODE: &str = "experimental-code-mode";
 
-const OPT_IN: &[&str] = &[CODE_MODE];
-
 pub fn skill_flag(skill: &str) -> Option<&'static str> {
     (skill == "follow-pr").then_some(PR_FOLLOW)
 }
@@ -154,7 +152,7 @@ pub const KNOWN: &[Flag] = &[
     },
     Flag {
         name: CODE_MODE,
-        about: "REPL becomes the agent's only tool: it writes JavaScript that calls every other tool as a function, and only what the script returns reaches the model; off until you turn it on",
+        about: "REPL becomes the agent's only tool: it writes JavaScript that calls every other tool as a function, and only what the script returns reaches the model",
     },
     Flag {
         name: AUTO_REVIEW,
@@ -216,7 +214,7 @@ pub struct Features {
 
 impl Features {
     pub fn on(&self, feature: &str) -> bool {
-        self.set.get(feature).copied().unwrap_or(!OPT_IN.contains(&feature))
+        self.set.get(feature).copied().unwrap_or(true)
     }
 
     pub fn listed(&self) -> Vec<Listed> {
@@ -263,13 +261,13 @@ mod tests {
     }
 
     #[test]
-    fn an_opt_in_flag_is_off_until_turned_on() {
+    fn every_flag_code_mode_included_is_on_until_turned_off() {
         let features = Features::default();
-        assert!(features.on(SANDBOX) && !features.on(CODE_MODE));
-
-        let features = features.layered(&json!({ CODE_MODE: true }), true).expect("flags");
+        assert!(features.listed().iter().all(|flag| flag.on), "no flag starts off");
         assert!(features.on(CODE_MODE));
-        assert!(features.listed().iter().any(|flag| flag.name == CODE_MODE && flag.on));
+
+        let features = features.layered(&json!({ CODE_MODE: false }), true).expect("flags");
+        assert!(!features.on(CODE_MODE));
         assert!(known("experimental-code-mode-only").is_none(), "merged into experimental-code-mode");
     }
 

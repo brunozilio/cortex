@@ -88,6 +88,18 @@ pub fn reachable(name: &str) -> bool {
     !OUT_OF_REACH.contains(&name)
 }
 
+pub fn within_reach(offered: &[ToolSpec]) -> Vec<String> {
+    let mut names: Vec<String> = offered.iter().map(|spec| spec.name.clone()).collect();
+    for spec in offered.iter().filter(|spec| spec.name == REPL_TOOL) {
+        for line in spec.description.lines() {
+            let declared = line.strip_prefix("declare function ").and_then(|rest| rest.split('(').next());
+            let declared = declared.map(|name| name.trim_start_matches("tools[\"").trim_end_matches("\"]"));
+            names.extend(declared.map(str::to_owned));
+        }
+    }
+    names
+}
+
 pub fn only(offered: Vec<ToolSpec>, more_to_find: bool) -> Vec<ToolSpec> {
     if !offered.iter().any(|spec| spec.name == REPL_TOOL) {
         return offered;
@@ -171,6 +183,19 @@ mod tests {
         assert!(repl.contains("declare function AskUserQuestion("), "{repl}");
         assert!(!repl.contains("searchTools"), "nothing more to find: {repl}");
         assert!(only(vec![spec("Read"), spec(REPL_TOOL)], true)[0].description.contains("searchTools"));
+    }
+
+    #[test]
+    fn the_tools_a_model_can_reach_are_its_own_and_those_its_repl_declares() {
+        let offered = vec![spec("Read"), spec(REPL_TOOL), spec("has-dash"), spec("mcp__jira__ping")];
+        let shown = only(offered, false);
+
+        let reached = within_reach(&shown);
+
+        for name in [REPL_TOOL, "Read", "has-dash", "mcp__jira__ping"] {
+            assert!(reached.contains(&name.to_owned()), "{name} in {reached:?}");
+        }
+        assert_eq!(within_reach(&[spec("Bash")]), ["Bash"]);
     }
 
     #[test]

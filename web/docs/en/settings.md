@@ -166,7 +166,7 @@ Without options it edits `~/{{DIR}}/settings.json`. With `--project` it edits `{
 | `verification` | object | `{}` | Rules for the verification judge. See [`verification`](#verification). |
 | `scripts` | object | all `true` for your scripts, all `false` for a project's | What JavaScript tools, skills, hooks and providers may do. See [`scripts`](#scripts). |
 | `sandbox` | object | network on | Where sandboxed commands may write and whether they reach the network. See [`sandbox`](#sandbox). |
-| `features` | object | every feature on but `experimental-code-mode` | Turns features on or off by name. See [`features`](#features). |
+| `features` | object | every feature on | Turns features on or off by name. See [`features`](#features). |
 
 `$schema` names the file's [JSON Schema](#json-schema). Any other key {{NAME}} does not know is ignored with a notice. `trustProjectHooks`, which earlier versions read, no longer does anything: a project's hooks run once you trust its folder, and the chat says so until you remove the key.
 
@@ -279,7 +279,7 @@ A map from server name to its configuration. Using a built-in name (`rust-analyz
 
 ### `features`
 
-Every feature is on until you turn it off, except `experimental-code-mode`, which is off until you turn it on. Each key is `features.<name>` with `true` or `false`; a value that is not a boolean is left out with a notice. `/features` lists them with their state, and [Experimental features](./experimental-features) explains each one.
+Every feature is on until you turn it off. Each key is `features.<name>` with `true` or `false`; a value that is not a boolean is left out with a notice. `/features` lists them with their state, and [Experimental features](./experimental-features) explains each one.
 
 | Key | Default | What it controls |
 |---|---|---|
@@ -318,7 +318,7 @@ Every feature is on until you turn it off, except `experimental-code-mode`, whic
 | `features.experimental-memory-seed` | `true` | `/memory seed` offers repeated requests as memories. |
 | `features.experimental-memory-scorecard` | `true` | One request in 20 runs without recalled memory, for `/memory score`. |
 | `features.experimental-load-on-call` | `true` | A tool waiting behind ToolSearch that the agent calls by name is loaded and run, not refused. |
-| `features.experimental-code-mode` | `false` | REPL becomes the agent's only tool: it writes JavaScript that calls every other tool as a function. |
+| `features.experimental-code-mode` | `true` | REPL becomes the agent's only tool: it writes JavaScript that calls every other tool as a function. |
 | `features.memory-search` | `true` | The `memory_search` tool. |
 | `features.schedules` | `true` | `/loop` and `/schedules`. |
 | `features.plugins` | `true` | Install, update, list and remove plugins. |

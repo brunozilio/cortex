@@ -166,7 +166,7 @@ Sem opções, edita `~/{{DIR}}/settings.json`. Com `--project`, edita `{{DIR}}/s
 | `verification` | objeto | `{}` | Regras para o juiz de verificação. Veja [`verification`](#verification). |
 | `scripts` | objeto | tudo `true` para os seus scripts, tudo `false` para os de um projeto | O que ferramentas, skills, hooks e provedores em JavaScript podem fazer. Veja [`scripts`](#scripts). |
 | `sandbox` | objeto | rede ligada | Onde comandos na sandbox podem gravar e se acessam a rede. Veja [`sandbox`](#sandbox). |
-| `features` | objeto | todos os recursos ligados, menos `experimental-code-mode` | Liga ou desliga recursos pelo nome. Veja [`features`](#features). |
+| `features` | objeto | todos os recursos ligados | Liga ou desliga recursos pelo nome. Veja [`features`](#features). |
 
 `$schema` indica o [JSON Schema](#json-schema) do arquivo. Qualquer outra chave que o {{NAME}} não conhece é ignorada com um aviso. `trustProjectHooks`, que versões anteriores liam, não faz mais nada: os hooks de um projeto rodam quando você confia na pasta dele, e o chat avisa isso até você remover a chave.
 
@@ -279,7 +279,7 @@ Um mapa do nome do servidor para a sua configuração. Usar um nome embutido (`r
 
 ### `features`
 
-Todo recurso fica ligado até você desligá-lo, menos `experimental-code-mode`, que fica desligado até você ligá-lo. Cada chave é `features.<nome>` com `true` ou `false`; um valor que não é booleano é deixado de fora com um aviso. `/features` lista todos com o estado atual, e [Recursos experimentais](./experimental-features) explica cada um.
+Todo recurso fica ligado até você desligá-lo. Cada chave é `features.<nome>` com `true` ou `false`; um valor que não é booleano é deixado de fora com um aviso. `/features` lista todos com o estado atual, e [Recursos experimentais](./experimental-features) explica cada um.
 
 | Chave | Padrão | O que controla |
 |---|---|---|
@@ -318,7 +318,7 @@ Todo recurso fica ligado até você desligá-lo, menos `experimental-code-mode`,
 | `features.experimental-memory-seed` | `true` | `/memory seed` oferece pedidos repetidos como memórias. |
 | `features.experimental-memory-scorecard` | `true` | Uma requisição a cada 20 roda sem memória recuperada, para o `/memory score`. |
 | `features.experimental-load-on-call` | `true` | Uma ferramenta que espera atrás do ToolSearch e que o agente chama pelo nome é carregada e executada, em vez de recusada. |
-| `features.experimental-code-mode` | `false` | A REPL vira a única ferramenta do agente: ele escreve JavaScript que chama todas as outras ferramentas como funções. |
+| `features.experimental-code-mode` | `true` | A REPL vira a única ferramenta do agente: ele escreve JavaScript que chama todas as outras ferramentas como funções. |
 | `features.memory-search` | `true` | A ferramenta `memory_search`. |
 | `features.schedules` | `true` | `/loop` e `/schedules`. |
 | `features.plugins` | `true` | Instalar, atualizar, listar e remover plugins. |

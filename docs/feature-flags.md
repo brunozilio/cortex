@@ -8,12 +8,10 @@ off or promotes it to permanent; no experimental feature waits, off, for
 someone to find it. This is what the code does: `Features::on` returns `true`
 for any flag nothing turned off.
 
-The one exception is `experimental-code-mode`. It stays off (`OPT_IN` in
-`crates/domain/src/features.rs`) because turning it on makes REPL the agent's
-only tool: every other tool is then reachable only from a script, which changes
-how the agent works rather than adding something beside it. Only the user's own
-settings can turn it on. On 2026-11-17 the owner merged `experimental-code-mode-only`
-into it, so code mode works as in the reference agent: off, or REPL only
+There is no exception. `experimental-code-mode` was the last opt-in flag; on
+2026-11-17 the owner merged `experimental-code-mode-only` into it and turned it
+on by default, so the agent's only tool is REPL unless the flag is turned off,
+and the `OPT_IN` list is gone
 (`decisions/0015-behave-like-the-reference-agent-under-our-own-names.md`).
 
 "The owner" in this document is the project's author, named as `author` in
@@ -56,8 +54,7 @@ below count the rows of each section; `xtask lint` keeps them equal.
 ### Default
 
 `Features::on(name)` returns the stored value, or, when nothing is stored,
-`true` unless the name is in `OPT_IN`. `OPT_IN` holds one name,
-`experimental-code-mode`. So every other flag is on from the first run,
+`true`. So every flag is on from the first run,
 including every flag whose name starts with `experimental-`. That is the rule
 the owner decided on 2026-11-17 (see the top of this document), not an
 accident to correct.
@@ -250,8 +247,7 @@ with a documented default, not entries in an experiment list.
 Each of these adds work the user did not ask for on every edit, prompt or
 request, or changes how the agent uses its tools. None has a measurement in
 the repository showing it pays for itself. This section first proposed making
-them default-off; under the 2026-11-17 rule they stay on (except
-`experimental-code-mode`, off), and the owner decides each one
+them default-off; under the 2026-11-17 rule they stay on, and the owner decides each one
 from daily use or an evaluation (`crates/domain/src/run/evals` exists; it was
 not checked whether any of these flags has an eval). Owner and exit criterion:
 "Owners and exit criteria" below.
@@ -262,7 +258,7 @@ not checked whether any of these flags has an eval). Owner and exit criterion:
 | `experimental-affected-tests` | After an edit, starts the tests covering the changed file in the background | `job.rs`; `tools/builtin/shell/affected.rs`, from `edit.rs` and `write.rs` | No background tests | A test process per edit to a file `domain::affected::tests_for` can map; the previous run with the same label is killed first. Its result is delivered to the agent later, adding context | Partial (policy only; `affected.rs` has three ON tests) | Starts processes nobody asked for; on a large project each edit can start a long test run. Area: tools |
 | `experimental-blast-radius` | After an edit, tells the agent which files call the changed symbols | `job.rs`; `tools/workspace/blast.rs`, from `edit.rs` and `write.rs` | No caller list | Language-server requests inside the edit call (the test scripts a symbols answer and a references answer), so the edit waits for the server. Needs a language server to be available | Partial (`blast.rs` has one test of both field values; none names the flag) | Latency on every edit, and value depends on a server being installed. Area: language-servers |
 | `experimental-code-map` | Indexes symbols with tree-sitter and adds pointers to matching code to each prompt | `crates/app/src/features/code_map/mod.rs` (reloads settings itself), run from `code_map/run.rs` | No pointers | On every prompt in a git project: a settings reload, a stat of the project's files against a cache, extraction for changed files, and up to 12 files of pointers added to the request. Index time on a large repository was not measured | Yes (`code_map/mod.rs` tests the flag off, `run.rs` the ON path) | Adds tokens to every prompt with no measure of whether they help. Area: code-map |
-| `experimental-code-mode` | Off by default. On, REPL is the agent's only tool: it writes JavaScript that calls every other tool as a function | `crates/domain/src/tools/code_mode.rs` (`Mode::of`); `tools/repl.rs`, `agent/turn/model_call.rs`, `agent/repl.rs` | The agent calls its tools directly | Replaces the tool list with REPL, whose description declares every other tool; scripts run in the `script` crate's runtime, up to ten minutes each | Yes for the mapping (`code_mode_is_off_until_turned_on_and_then_the_repl_is_the_only_tool`); policy in `tests/agent_loop/repl.rs` | It changes how the agent works, so it is the one flag that starts off. Merged with `experimental-code-mode-only` on 2026-11-17. Area: agent-engine |
+| `experimental-code-mode` | REPL is the agent's only tool: it writes JavaScript that calls every other tool as a function | `crates/domain/src/tools/code_mode.rs` (`Mode::of`); `tools/repl.rs`, `agent/turn/model_call.rs`, `agent/repl.rs` | The agent calls its tools directly | Replaces the tool list with REPL, whose description declares every other tool; scripts run in the `script` crate's runtime, up to ten minutes each | Yes for the mapping (`code_mode_is_on_until_turned_off_and_on_the_repl_is_the_only_tool`); policy in `tests/agent_loop/repl.rs` | It changes how the agent works rather than adding something beside it. Merged with `experimental-code-mode-only` and on by default since 2026-11-17. Area: agent-engine |
 | `experimental-output-filters` | Bash hides passing tests, build steps and progress from cargo, git, npm, pytest and go test, keeping the whole output in a file | `crates/domain/src/tools/output/mod.rs`; `tools/builtin/shell/shaped.rs` | The model sees the full output | A file written per filtered command; fewer tokens to the model | Yes (`each_step_follows_its_own_flag`; `shaped.rs`) | It decides what the model does not see. A filter that hides the line that mattered costs more than it saves, and there is no measurement of that. Area: tools |
 | `experimental-output-savings` | Records how much shorter each command's output became, for `/gain` | `output/mod.rs`; `shaped.rs`; `crates/cli/src/tui/features/output_savings/mod.rs` | `/gain` prints "off"; nothing is recorded | A counter per command | Partial (the OFF notice text is tested, not the gate) | It is the instrument for judging the filters. Keep or drop it together with them |
 | `experimental-pr-follow` | Whether the `follow-pr` skill is listed | `crates/agent-engine/src/brief.rs` through `skill_flag` | The skill is hidden | The skill's entry in the skill list | Yes (`brief.rs` tests the flag off) | Not determined: the skill and its watcher were not read, so its maturity is unknown. It is the only skill with a flag, through a one-line special case. If the watcher works, make it permanent and delete `skill_flag` |
@@ -278,8 +274,8 @@ not checked whether any of these flags has an eval). Owner and exit criterion:
 **Default for experimental flags: on (decided 2026-11-17).** This document
 first proposed "experimental means off until turned on". The owner decided the
 opposite: an experimental feature ships on, with an owner and an exit
-criterion, and is turned off or promoted from there. `OPT_IN` stays, holding
-only `experimental-code-mode`. What remains of this recommendation is the
+criterion, and is turned off or promoted from there. The `OPT_IN` list is gone
+since `experimental-code-mode` turned on by default. What remains of this recommendation is the
 exit criteria below: "experimental" should be a short stay, not a label.
 
 **Reject unknown names.** `Features::layered` should return an error naming
@@ -332,7 +328,7 @@ Steps 1 to 6 each delete code and tests; none of the steps changes a default.
 ## Owners and exit criteria (26)
 
 Every flag whose name starts with `experimental-`, as the code has them today.
-Each ships on except `experimental-code-mode`. Owner: the owner, for all
+Each ships on. Owner: the owner, for all
 of them (see the top of this document). The default exit criterion is:
 promote to permanent or remove after it has run in daily use without a
 reported problem, and review by 2027-02-17 (each row starts with that date).
@@ -359,7 +355,7 @@ says so.
 | `experimental-web-small-pages-direct` | On | The owner | Review by 2027-02-17. Promote to permanent or remove after it has run in daily use without a reported problem |
 | `experimental-web-formats` | On | The owner | Review by 2027-02-17. Promote to permanent or remove after it has run in daily use without a reported problem |
 | `experimental-web-empty-page-error` | On | The owner | Review by 2027-02-17. Promote to permanent or remove after it has run in daily use without a reported problem |
-| `experimental-code-mode` | Off | The owner | Review by 2027-02-17. Promote to a permanent setting or remove after it has run in daily use without a reported problem (merged with `experimental-code-mode-only` on 2026-11-17) |
+| `experimental-code-mode` | On | The owner | Review by 2027-02-17. Promote to a permanent setting or remove after it has run in daily use without a reported problem (merged with `experimental-code-mode-only` on 2026-11-17) |
 | `experimental-memory-anchors` | On | The owner | Review by 2027-02-17. Promote to permanent or remove, together with `experimental-structured-learnings` (one memory format), after it has run in daily use without a reported problem |
 | `experimental-structured-learnings` | On | The owner | Review by 2027-02-17. Promote to permanent or remove, together with `experimental-memory-anchors` |
 | `experimental-learning-check` | On | The owner | Review by 2027-02-17. Promote to permanent or remove after it has run in daily use without a reported problem |

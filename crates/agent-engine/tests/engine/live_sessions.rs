@@ -185,7 +185,7 @@ fn running(pid: &str) -> bool {
 }
 
 fn offered(model: &ScriptedModel) -> bool {
-    model.asked()[0].tools.iter().any(|tool| tool.name == "mcp__jira__ping")
+    agent_engine::tools::repl::within_reach(&model.asked()[0].tools).iter().any(|tool| tool == "mcp__jira__ping")
 }
 
 #[test]

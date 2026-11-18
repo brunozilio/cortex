@@ -256,7 +256,7 @@
           "type": "boolean"
         },
         "experimental-code-mode": {
-          "description": "REPL becomes the agent's only tool: it writes JavaScript that calls every other tool as a function, and only what the script returns reaches the model; off until you turn it on",
+          "description": "REPL becomes the agent's only tool: it writes JavaScript that calls every other tool as a function, and only what the script returns reaches the model",
           "type": "boolean"
         },
         "experimental-dependency-guard": {

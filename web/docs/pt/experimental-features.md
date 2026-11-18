@@ -6,7 +6,7 @@ description: Todas as feature flags que o {{NAME}} conhece, o que cada uma muda 
 O {{NAME}} traz um conjunto de funcionalidades com nome que você pode ligar ou desligar uma a uma: proteções de segurança, formas de enxugar a saída de comandos e de páginas web, revisores que conferem o trabalho do agente, ajudas de memória e mais. Cada uma é uma **feature flag** com um nome fixo, como `budget` ou `experimental-sandbox`.
 
 > [!IMPORTANT]
-> Toda flag fica **ligada** até você desligá-la, inclusive as que começam com `experimental-`. Uma flag que você nunca mexeu está ligada. A única exceção é a [`experimental-code-mode`](#experimental-code-mode), que vem desligada porque faz da REPL a única ferramenta do agente.
+> Toda flag fica **ligada** até você desligá-la, inclusive as que começam com `experimental-`. Uma flag que você nunca mexeu está ligada, inclusive a [`experimental-code-mode`](#experimental-code-mode), que faz da REPL a única ferramenta do agente.
 
 ## Ligar ou desligar uma flag
 
@@ -98,8 +98,7 @@ Os arquivos são lidos em ordem, e um arquivo seu lido depois prevalece. O `/fea
 
 Uma flag cujo nome começa com `experimental-` é experimental: o comportamento ainda pode mudar ou ser removido. As outras são estáveis. Os dois tipos começam ligados.
 
-As funcionalidades experimentais já vêm ligadas para que sejam usadas. Cada uma caminha para um de dois fins: depois de rodar no uso diário sem nenhum problema relatado, vira parte permanente do {{NAME}} (a flag some, ou vira uma configuração comum), ou é removida. Até lá, você pode desligar qualquer uma com `/features <nome> off`. A `experimental-code-mode` é a única que começa desligada: ela não acrescenta nada ao lado das outras ferramentas, ela as substitui pela REPL, então quem liga é você.
-
+As funcionalidades experimentais já vêm ligadas para que sejam usadas. Cada uma caminha para um de dois fins: depois de rodar no uso diário sem nenhum problema relatado, vira parte permanente do {{NAME}} (a flag some, ou vira uma configuração comum), ou é removida. Até lá, você pode desligar qualquer uma com `/features <nome> off`.
 ## Visão geral das flags
 
 | Flag | Área | Segurança | O que faz |
@@ -129,7 +128,7 @@ As funcionalidades experimentais já vêm ligadas para que sejam usadas. Cada um
 | `experimental-follow-through` | Revisão | | Manda o agente de volta quando ele termina prometendo mais trabalho |
 | `experimental-affected-tests` | Revisão | | Roda em segundo plano os testes que cobrem um arquivo editado |
 | `experimental-escalation` | Revisão | | Manda um agente empacado para o Advisor ou para o `escalationModel` |
-| `experimental-code-mode` | Ferramentas | | Desligada até você ligar: a REPL vira a única ferramenta do agente, que programa todas as outras em JavaScript |
+| `experimental-code-mode` | Ferramentas | | A REPL vira a única ferramenta do agente, que programa todas as outras em JavaScript |
 | `experimental-load-on-call` | Ferramentas | | Uma ferramenta guardada para busca que o agente chama pelo nome é carregada e executada |
 | `experimental-learning` | Aprendizado e memória | | Oferece uma lição para guardar depois de uma execução em que você corrigiu o agente |
 | `team-memory` | Aprendizado e memória | | Lembra as memórias versionadas em `{{DIR}}/memory` |
@@ -409,7 +408,7 @@ Quando o agente falha a mesma chamada repetidas vezes, ele é orientado a consul
 ### `experimental-code-mode`
 
 > [!EXPERIMENTAL]
-> Padrão: desligada. Ao contrário das outras flags, ela fica desligada até você ligar nas suas próprias configurações (`/features experimental-code-mode on`); as configurações de um projeto não podem ligá-la.
+> Padrão: ligada. Desligue com `/features experimental-code-mode off` para devolver as ferramentas ao agente.
 
 Faz da **REPL** a única ferramenta do agente, além das chaves de plan mode e de worktree; todas as outras ferramentas, inclusive a de fazer perguntas a você, aparecem na descrição da REPL como funções tipadas e são chamadas de dentro dos scripts. As ferramentas guardadas para busca (quando há muitas ferramentas MCP) são encontradas num script com `searchTools("palavras")`, e `describeTool(nome)` dá a declaração de uma ferramenta. Em vez de chamar uma ferramenta por turno, o agente escreve um script em JavaScript em que cada uma das outras ferramentas é uma função (`await Grep({ pattern: "TODO" })`), faz laços e filtros no código e lê só o que o script devolve. Buscar em muitos arquivos ou fazer a mesma edição em muitos lugares passa a custar um turno, e os arquivos que ele só precisava filtrar nunca entram na conversa.
 

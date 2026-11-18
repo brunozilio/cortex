@@ -62,5 +62,5 @@ fn a_javascript_tool_reads_through_another_tool_and_asks_the_model() {
     assert_eq!(result["refused"], true, "an unknown tool is an error the script can catch");
     let asked = model_api.asked();
     assert_eq!(asked[1].messages[0].text(), "has the codename", "the script's own model call");
-    assert!(asked[0].tools.iter().any(|tool| tool.name == "Summarize"), "the model is offered the script tool");
+    assert!(agent_engine::tools::repl::within_reach(&asked[0].tools).iter().any(|tool| tool == "Summarize"), "the model is offered the script tool");
 }
