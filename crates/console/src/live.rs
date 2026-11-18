@@ -75,6 +75,10 @@ impl Live {
         let _ = self.updates.send(Update::Report);
     }
 
+    pub fn report(&self) -> Option<String> {
+        self.board().report.clone()
+    }
+
     pub fn document(&self, docs: String) {
         self.board().docs = Some(docs);
     }

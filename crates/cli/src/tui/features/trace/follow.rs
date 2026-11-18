@@ -48,7 +48,10 @@ fn running(app: &mut App) -> Option<&console::Running> {
     let follow = app.features.get::<Follow>(NAME)?;
     if follow.served.is_none() {
         match console::start(options(&project)) {
-            Ok(served) => follow.served = Some(served),
+            Ok(served) => {
+                follow.served = Some(served);
+                follow.refresh.changed();
+            }
             Err(error) => {
                 app.transcript.notice(format!("The {} page could not start: {error}", brand::NAME));
                 return None;
@@ -170,5 +173,26 @@ mod tests {
     fn the_page_s_terminal_is_started_in_the_project_folder() {
         let project = std::path::Path::new("/work/project");
         assert_eq!(super::options(project).folder, project);
+    }
+
+    #[test]
+    fn a_page_started_for_remote_control_gets_the_report_without_the_trace_being_opened() {
+        let data = tempfile::tempdir().expect("data");
+        let engine =
+            agent_engine::fake::FakeEngine::new(vec![app::Model::new("keyed:scripted", "Scripted")], Vec::new());
+        let mut app =
+            crate::tui::app::App::new(crate::tui::tests::client(&engine, data.path()), data.path().into(), None, None);
+        let started = super::remote_options(&mut app, "https://relay.example".to_owned(), data.path().join("remote"));
+        assert!(started.is_some(), "the page started");
+        let (_, live) = super::served(&mut app, "/").expect("served");
+
+        let deadline = std::time::Instant::now() + crate::tui::tests::SETTLES_WITHIN;
+        while live.report().is_none() {
+            assert!(std::time::Instant::now() < deadline, "the phone would wait forever for /api/report");
+            super::tick(&mut app);
+            if let Ok(message) = app.rx.recv_timeout(std::time::Duration::from_millis(50)) {
+                app.message(message);
+            }
+        }
     }
 }
