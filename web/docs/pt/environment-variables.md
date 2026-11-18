@@ -24,6 +24,13 @@ Quase tudo no {{NAME}} se configura nos [arquivos de configuração](./settings)
 | `{{ENV}}_OTLP_HEADERS` | Pares `nome=valor` separados por vírgulas | não definida | Cabeçalhos acrescentados a cada pedido de exportação, como uma chave de API. Lidos só quando `{{ENV}}_OTLP_ENDPOINT` está definida. |
 | `{{ENV}}_SECRETS` | `keychain` (sem diferenciar maiúsculas) | não definida: a chave fica em `secrets.key` | Com `keychain`, a chave que abre suas chaves de API e tokens salvos passa de `secrets.key` para o chaveiro do sistema. Sem a variável (ou com qualquer outro valor), ela fica no arquivo e o chaveiro nunca é escrito; um binário recompilado ou reinstalado tem uma assinatura nova, e o macOS pediria a senha do chaveiro a cada início. Se uma versão anterior moveu a chave para o chaveiro, ela volta para o arquivo uma vez (o macOS pergunta uma vez); se o chaveiro não responder nessa hora, uma chave nova é criada e as chaves salvas antes precisam ser informadas de novo. Com `keychain`, um chaveiro que deixa de responder é um erro, não uma chave nova; defina `{{ENV}}_SECRETS=file` para sair dele. Veja [Arquivos e diretórios](./files-and-directories). |
 
+## Variáveis do controle remoto
+
+| Variável | Lida por | Para que serve |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | `{{COMMAND}} remote up` | Um API token com a permissão **Account · Workers Scripts · Edit**, usado no lugar do login da Cloudflare pelo navegador (para uma máquina sem navegador). Veja [Controle remoto](./remote-control). |
+| `RELAY_LISTEN` | o programa `relay` | O endereço e a porta em que ele escuta, como `127.0.0.1:8080`; `relay --listen` faz o mesmo. O padrão é `0.0.0.0:8080`. Veja [Rodar seu próprio relay](./remote-control#rodar-seu-proprio-relay). |
+
 ## Variáveis padrão que ele respeita
 
 | Variável | Usada para |

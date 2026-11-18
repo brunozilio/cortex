@@ -35,6 +35,7 @@ export const SIDEBAR: Category[] = [
       'schedules',
       'code-intelligence',
       'trace-console',
+      'remote-control',
     ],
   },
   { label: { en: 'Automation', pt: 'Automação' }, slugs: ['headless', 'evals'] },

@@ -24,6 +24,7 @@ Você trabalha num chat no terminal: não há interface gráfica. Uma página lo
 - **Conferir o trabalho.** [Verificação e revisão](./verification-and-review) julga as execuções contra critérios; [orçamentos](./budget-and-cost) limitam o gasto.
 - **Automatizar.** Rode sem interface com `-p` ([Headless](./headless)), agende prompts ([Agendamentos](./schedules)) e avalie o agente nos seus próprios casos ([Evals](./evals)).
 - **Ver o agente trabalhando.** O [console de trace](./trace-console) mostra ao vivo, no navegador, as execuções, spans, custo e esperas de cada sessão.
+- **Levar com você.** O [controle remoto](./remote-control) coloca o console e um terminal no seu celular, através de um relay seu, com criptografia ponta a ponta.
 
 ## Como o chat é
 
@@ -45,7 +46,7 @@ A tela tem quatro partes, de cima para baixo:
 | Modelos e contas | [Modelos e provedores](./models-and-providers), [Contas](./accounts). |
 | Configuração | [Configurações](./settings), [Permissões](./permissions), [Sandbox e segurança](./sandbox-and-safety), [Variáveis de ambiente](./environment-variables), [Arquivos e pastas](./files-and-directories), [Arquivos de instruções](./instructions-files). |
 | Extensões | [Skills](./skills), [Agentes](./agents), [Hooks](./hooks), [MCP](./mcp), [Canais](./channels), [Plugins](./plugins), [Linha de status](./statusline). |
-| Recursos | [Recursos experimentais](./experimental-features), [Memória](./memory), [Orçamento e custo](./budget-and-cost), [Branches e git](./branches-and-git), [Verificação e revisão](./verification-and-review), [Aprendizado](./learning), [Agendamentos](./schedules), [Inteligência de código](./code-intelligence), [Console de trace](./trace-console). |
+| Recursos | [Recursos experimentais](./experimental-features), [Memória](./memory), [Orçamento e custo](./budget-and-cost), [Branches e git](./branches-and-git), [Verificação e revisão](./verification-and-review), [Aprendizado](./learning), [Agendamentos](./schedules), [Inteligência de código](./code-intelligence), [Console de trace](./trace-console), [Controle remoto](./remote-control). |
 | Automação | [Headless](./headless), [Evals](./evals). |
 | Referência | [Referência da CLI](./cli-reference), [Solução de problemas](./troubleshooting). |
 

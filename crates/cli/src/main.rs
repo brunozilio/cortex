@@ -107,7 +107,7 @@ enum Action {
         #[command(subcommand)]
         action: Option<plugin::PluginAction>,
     },
-    #[command(about = "Remote control from a phone, through your relay: status, relay, pair, devices, revoke")]
+    #[command(about = "Remote control from a phone, through your relay: status, up, logout, relay, pair, devices, revoke")]
     Remote {
         #[command(subcommand)]
         action: Option<remote::RemoteAction>,

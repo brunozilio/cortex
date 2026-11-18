@@ -24,6 +24,7 @@ You work in a terminal chat: there is no GUI. A local page in your browser only 
 - **Check its work.** [Verification and review](./verification-and-review) judges runs against criteria; [budgets](./budget-and-cost) cap spending.
 - **Automate.** Run headless with `-p` ([Headless](./headless)), schedule prompts ([Schedules](./schedules)), score the agent on your own cases ([Evals](./evals)).
 - **Watch it work.** The [trace console](./trace-console) shows every session's runs, spans, cost and waits live in the browser.
+- **Take it with you.** [Remote control](./remote-control) puts the console and a terminal on your phone, through a relay you own, end-to-end encrypted.
 
 ## How the chat looks
 
@@ -45,7 +46,7 @@ The screen has four parts, from top to bottom:
 | Models and accounts | [Models and providers](./models-and-providers), [Accounts](./accounts). |
 | Configuration | [Settings](./settings), [Permissions](./permissions), [Sandbox and safety](./sandbox-and-safety), [Environment variables](./environment-variables), [Files and directories](./files-and-directories), [Instructions files](./instructions-files). |
 | Extending | [Skills](./skills), [Agents](./agents), [Hooks](./hooks), [MCP](./mcp), [Channels](./channels), [Plugins](./plugins), [Status line](./statusline). |
-| Features | [Experimental features](./experimental-features), [Memory](./memory), [Budget and cost](./budget-and-cost), [Branches and git](./branches-and-git), [Verification and review](./verification-and-review), [Learning](./learning), [Schedules](./schedules), [Code intelligence](./code-intelligence), [Trace console](./trace-console). |
+| Features | [Experimental features](./experimental-features), [Memory](./memory), [Budget and cost](./budget-and-cost), [Branches and git](./branches-and-git), [Verification and review](./verification-and-review), [Learning](./learning), [Schedules](./schedules), [Code intelligence](./code-intelligence), [Trace console](./trace-console), [Remote control](./remote-control). |
 | Automation | [Headless](./headless), [Evals](./evals). |
 | Reference | [CLI reference](./cli-reference), [Troubleshooting](./troubleshooting). |
 

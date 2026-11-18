@@ -24,6 +24,13 @@ Most of {{NAME}} is configured in [settings files](./settings). Environment vari
 | `{{ENV}}_OTLP_HEADERS` | `name=value` pairs separated by commas | unset | Headers added to each export request, such as an API key. Read only when `{{ENV}}_OTLP_ENDPOINT` is set. |
 | `{{ENV}}_SECRETS` | `keychain` (any case) | unset: the key stays in `secrets.key` | With `keychain`, the key that opens your saved API keys and tokens moves from `secrets.key` into the system keychain. Unset (or any other value), it stays in the file and the keychain is never written; a rebuilt or reinstalled binary has a new signature, and macOS would ask for the keychain password at every start. If an earlier version moved the key into the keychain, it is taken back into the file once (macOS asks once); if the keychain does not answer then, a new key is made and keys saved before must be entered again. With `keychain`, a keychain that stops answering is an error, not a new key; set `{{ENV}}_SECRETS=file` to leave it. See [Files and directories](./files-and-directories#data-folder). |
 
+## Remote control variables
+
+| Variable | Read by | Purpose |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | `{{COMMAND}} remote up` | An API token with the permission **Account · Workers Scripts · Edit**, used instead of signing in to Cloudflare in the browser (for a machine without one). See [Remote control](./remote-control). |
+| `RELAY_LISTEN` | the `relay` program | The address and port it listens on, such as `127.0.0.1:8080`; `relay --listen` does the same. The default is `0.0.0.0:8080`. See [Run your own relay](./remote-control#run-your-own-relay). |
+
 ## Standard variables it honours
 
 | Variable | Used for |
