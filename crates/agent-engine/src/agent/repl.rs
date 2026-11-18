@@ -150,7 +150,7 @@ impl Agent<'_> {
             let id = format!("repl-{}", self.control.next_agent());
             let spawn = |job: Box<dyn FnOnce() + Send + '_>| job();
             let block = raw_text::reading(|| self.call(&id, "Read", &input, tasks, parent, &spawn));
-            return answered(block, "Read");
+            return answered(block, "Read", &input);
         }
         if !reachable(function) {
             return Err(format!("{function} cannot be called from a {REPL_TOOL} script; call it directly"));
@@ -163,7 +163,7 @@ impl Agent<'_> {
             let room = domain::code_mode::IMAGES.saturating_sub(kept.len());
             kept.extend(shown.iter().take(room).cloned());
         }
-        answered(block, function)
+        answered(block, function, input)
     }
 
     fn describe_tool(&self, input: &Value) -> Result<Value, String> {
@@ -359,10 +359,10 @@ fn earlier_scripts(history: &[Message], current: &str) -> usize {
         .count()
 }
 
-fn answered(block: Block, tool: &str) -> Result<Value, String> {
+fn answered(block: Block, tool: &str, input: &Value) -> Result<Value, String> {
     match block {
         Block::ToolResult { content, is_error: false, .. } | Block::ToolResultRich { content, is_error: false, .. } => {
-            Ok(domain::code_mode::script_value(tool, content))
+            Ok(domain::code_mode::script_value(tool, input, content))
         }
         Block::ToolResult { content, .. } | Block::ToolResultRich { content, .. }
             if domain::code_mode::throws_on_failure(tool) =>

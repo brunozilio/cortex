@@ -110,7 +110,7 @@ pub fn only(offered: Vec<ToolSpec>, more_to_find: bool) -> Vec<ToolSpec> {
         .iter()
         .map(|spec| Declared { name: &spec.name, description: &spec.description, schema: &spec.schema })
         .collect();
-    let catalog = domain::code_mode::declarations(&declared);
+    let catalog = format!("{}\n\n{}", domain::code_mode::RESULT_TYPES, domain::code_mode::declarations(&declared));
     let introduction = content::text("repl/only.md");
     let finding = if more_to_find { format!("\n\n{}", content::text("repl/search.md")) } else { String::new() };
     kept.into_iter()

@@ -25,14 +25,50 @@ pub fn answers_in_json(tool: &str) -> bool {
     crate::tool_name::ToolName::of(tool).plans_tasks()
 }
 
-pub fn script_value(tool: &str, text: String) -> Value {
+pub fn script_value(tool: &str, input: &Value, text: String) -> Value {
     if answers_in_json(tool)
         && let Ok(parsed) = serde_json::from_str::<Value>(&text)
         && (parsed.is_object() || parsed.is_array())
     {
         return parsed;
     }
-    Value::String(text)
+    match (tool, input["output_mode"].as_str()) {
+        ("Glob", _) | ("Grep", None | Some("files_with_matches")) => found_files(&text, false),
+        ("Grep", Some("count")) => found_files(&text, true),
+        _ => Value::String(text),
+    }
+}
+
+fn more_of(line: &str) -> Option<u64> {
+    let rest = line.strip_prefix('…')?.trim_start().trim_start_matches("and ").trim_start_matches('[');
+    rest.split_whitespace().next()?.parse().ok()
+}
+
+fn found_files(text: &str, counted: bool) -> Value {
+    let mut more = 0;
+    let mut filenames = Vec::new();
+    let mut counts = serde_json::Map::new();
+    for line in text.lines().filter(|line| !line.trim().is_empty()) {
+        if matches!(line, "No files found." | "No matches found.") {
+            continue;
+        }
+        if let Some(hidden) = more_of(line) {
+            more = hidden;
+            continue;
+        }
+        match line.rsplit_once(':').and_then(|(path, count)| Some((path, count.parse::<u64>().ok()?))) {
+            Some((path, count)) if counted => {
+                counts.insert(path.to_owned(), Value::from(count));
+            }
+            _ => filenames.push(Value::String(line.to_owned())),
+        }
+    }
+    if counted {
+        let found = counts.len();
+        return serde_json::json!({ "counts": counts, "numFiles": found, "more": more });
+    }
+    let found = filenames.len();
+    serde_json::json!({ "filenames": filenames, "numFiles": found, "more": more })
 }
 
 pub fn throws_on_failure(tool: &str) -> bool {
@@ -71,13 +107,31 @@ pub fn declarations(tools: &[Declared<'_>]) -> String {
     sorted.iter().map(|tool| declaration(tool)).collect::<Vec<_>>().join("\n\n")
 }
 
+pub const RESULT_TYPES: &str = "type Found = { filenames: string[]; numFiles: number; more: number };\n\
+                                type Counted = { counts: Record<string, number>; numFiles: number; more: number };";
+
+fn resolves_to(tool: &str) -> &'static str {
+    match tool {
+        "Glob" => "Found",
+        "Grep" => "Found | Counted | string",
+        "TaskList" => "Record<string, unknown>[]",
+        _ if answers_in_json(tool) => "Record<string, unknown>",
+        _ => "string",
+    }
+}
+
 pub fn declaration(tool: &Declared<'_>) -> String {
     let callee = if is_identifier(tool.name) {
         format!("function {}", tool.name)
     } else {
         format!("function tools[{:?}]", tool.name)
     };
-    format!("{}declare {callee}(input: {}): Promise<string>;", doc(tool.description, ""), type_of(tool.schema, ""))
+    format!(
+        "{}declare {callee}(input: {}): Promise<{}>;",
+        doc(tool.description, ""),
+        type_of(tool.schema, ""),
+        resolves_to(tool.name)
+    )
 }
 
 fn doc(text: &str, indent: &str) -> String {
@@ -262,15 +316,44 @@ mod tests {
 
     #[test]
     fn task_tools_hand_a_script_objects_and_every_other_tool_its_text() {
-        assert_eq!(script_value("TaskCreate", "{\"task_id\":\"1\"}".into()), serde_json::json!({ "task_id": "1" }));
-        assert_eq!(script_value("TaskList", "[]".into()), serde_json::json!([]));
+        let none = serde_json::json!({});
         assert_eq!(
-            script_value("Bash", "{\"a\":1}".into()),
+            script_value("TaskCreate", &none, "{\"task_id\":\"1\"}".into()),
+            serde_json::json!({ "task_id": "1" })
+        );
+        assert_eq!(script_value("TaskList", &none, "[]".into()), serde_json::json!([]));
+        assert_eq!(
+            script_value("Bash", &none, "{\"a\":1}".into()),
             serde_json::json!("{\"a\":1}"),
             "a command's JSON stays text"
         );
-        assert_eq!(script_value("TaskGet", "not json".into()), serde_json::json!("not json"));
-        assert_eq!(script_value("TaskOutput", "{}".into()), serde_json::json!("{}"));
+        assert_eq!(script_value("TaskGet", &none, "not json".into()), serde_json::json!("not json"));
+        assert_eq!(script_value("TaskOutput", &none, "{}".into()), serde_json::json!("{}"));
+    }
+
+    #[test]
+    fn glob_and_grep_hand_a_script_the_files_they_found() {
+        let none = serde_json::json!({});
+        assert_eq!(
+            script_value("Glob", &none, "src/a.rs\nsrc/b.rs\n… and 3 more; narrow the pattern.".into()),
+            serde_json::json!({ "filenames": ["src/a.rs", "src/b.rs"], "numFiles": 2, "more": 3 })
+        );
+        assert_eq!(
+            script_value("Glob", &none, "No files found.".into()),
+            serde_json::json!({ "filenames": [], "numFiles": 0, "more": 0 })
+        );
+        assert_eq!(
+            script_value("Grep", &none, "a.rs\n… [4 more results; narrow the search or raise head_limit]".into()),
+            serde_json::json!({ "filenames": ["a.rs"], "numFiles": 1, "more": 4 })
+        );
+        let counting = serde_json::json!({ "output_mode": "count" });
+        assert_eq!(
+            script_value("Grep", &counting, "a.rs:3\nb/c.rs:1".into()),
+            serde_json::json!({ "counts": { "a.rs": 3, "b/c.rs": 1 }, "numFiles": 2, "more": 0 })
+        );
+        assert_eq!(script_value("Grep", &counting, "No matches found.".into())["numFiles"], 0);
+        let content = serde_json::json!({ "output_mode": "content" });
+        assert_eq!(script_value("Grep", &content, "a.rs:1:x".into()), serde_json::json!("a.rs:1:x"), "lines stay text");
     }
 
     #[test]
@@ -408,8 +491,14 @@ mod tests {
             text,
             "/**\n * Search files.\n * Fast.\n */\ndeclare function Grep(input: {\n  \"-i\"?: boolean;\n  limit?: number | null;\n  \
              output_mode?: \"content\" | \"count\";\n  paths?: string[];\n  /**\n   * The regular expression.\n   */\n  pattern: string;\n\
-             }): Promise<string>;"
+             }): Promise<Found | Counted | string>;"
         );
+        let empty = serde_json::json!({ "type": "object" });
+        let glob = declaration(&Declared { name: "Glob", description: "", schema: &empty });
+        assert!(glob.ends_with("): Promise<Found>;"), "{glob}");
+        let task = declaration(&Declared { name: "TaskGet", description: "", schema: &empty });
+        assert!(task.ends_with("): Promise<Record<string, unknown>>;"), "{task}");
+        assert!(RESULT_TYPES.contains("type Found = { filenames: string[]; numFiles: number; more: number };"));
     }
 
     #[test]

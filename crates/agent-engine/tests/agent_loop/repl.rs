@@ -83,7 +83,7 @@ fn a_script_calls_tools_and_only_what_it_returns_reaches_the_model() {
     let code = "const [text, found] = await Promise.all([Read({ file_path: 'notes.txt' }), \
                 Grep({ pattern: 'beta', path: '.', output_mode: 'files_with_matches' })]);\n\
                 self.log('read', text.length > 0);\n\
-                ({ lines: text.includes('alpha'), grep: found.includes('notes.txt') })";
+                ({ lines: text.includes('alpha'), grep: found.filenames.some((name) => name.endsWith('notes.txt')) })";
 
     let history = scripts(&rig, &[code]);
 
