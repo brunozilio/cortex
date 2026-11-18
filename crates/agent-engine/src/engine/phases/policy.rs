@@ -79,6 +79,7 @@ pub(in crate::engine) fn flagged(settings: &Settings, cwd: &Path, safety_check: 
         session_claims: on(features::SESSION_CLAIMS),
         load_on_call: on(features::LOAD_ON_CALL),
         code_mode: domain::code_mode::Mode::of(&settings.features),
+        teammate_mode: settings.teammate_mode,
         web: domain::web_reading::WebReading::from(&settings.features),
         output: domain::output::Shaping::from(&settings.features),
         bash_output: settings.bash_output,

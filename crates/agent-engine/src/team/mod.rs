@@ -172,6 +172,19 @@ pub fn task_list(home: Option<&Path>, session: &str, teammate: Option<&Me>) -> O
 }
 
 impl Team {
+    pub fn departed(&self, name: &str) {
+        self.left(name);
+        let released = self.release_tasks(name);
+        if !released.is_empty() {
+            let note = format!(
+                "{name} has stopped. Its open tasks ({}) are back in the list without an owner: give them to another \
+                 teammate with TaskUpdate.",
+                released.join(", ")
+            );
+            let _ = self.send(LEAD, name, &note, Some("stopped with open tasks"));
+        }
+    }
+
     pub fn take_answer(&self, agent: &str, request_id: &str) -> Option<bool> {
         let answered = |mail: &Mail| match domain::team::Protocol::of(&mail.text) {
             Some(domain::team::Protocol::PermissionResponse { request_id: id, approved })

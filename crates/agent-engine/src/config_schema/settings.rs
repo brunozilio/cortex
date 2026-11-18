@@ -46,6 +46,11 @@ fn properties() -> Value {
         "advisorModel": model("Model for the advisor the agent consults."),
         "judgeModel": model("Model for the judge that checks finished work."),
         "smallModel": model("Model for background chores: titles, effort picks, web reading."),
+        "teammateMode": {
+            "enum": ["process", "tmux", "auto"],
+            "default": "process",
+            "description": "Where a lead starts its teammates: process (in the background, printing to a log), tmux (in a new tmux pane of the window the lead runs in) or auto (tmux when the lead runs inside tmux)."
+        },
         "escalationModel": model("Where a call the agent keeps failing is sent. Read only from your own files."),
         "fallbackModel": {
             "type": ["string", "array", "null"],

@@ -32,6 +32,7 @@ fn a_forked_policy_keeps_permissions_and_scripts_but_clears_pre_approved() {
         session_claims: true,
         load_on_call: true,
         code_mode: domain::code_mode::Mode::Only,
+        teammate_mode: domain::team::TeammateMode::Tmux,
         code_mode_detach: Some(std::time::Duration::from_secs(5)),
         web: domain::web_reading::WebReading::none(),
         output: domain::output::Shaping { cleanup: true, filters: false, savings: true },

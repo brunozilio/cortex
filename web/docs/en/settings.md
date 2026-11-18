@@ -85,7 +85,7 @@ A project's `{{DIR}}/settings.json` lives elsewhere, so use the full path to you
 
 ### How values combine
 
-- **Single values** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `bashOutputLimit`, `enableAllProjectMcpServers`): the last file read wins. In practice the folder nearest to where you work beats its parents, and `managed-settings.json` beats everything. Setting `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` or `jsonSchema` to `null` clears a value set by an earlier file.
+- **Single values** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `teammateMode`, `jsonSchema`, `bashOutputLimit`, `enableAllProjectMcpServers`): the last file read wins. In practice the folder nearest to where you work beats its parents, and `managed-settings.json` beats everything. Setting `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` or `jsonSchema` to `null` clears a value set by an earlier file.
 - **Lists and maps add up**: permission rules, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`, `sandbox.allowUnixSockets`, `sandbox.allowRead`.
 - **Switches** (`features`, `scripts`, `sandbox.network`, `sandbox.required`): each file changes only the names it mentions.
 
@@ -153,6 +153,7 @@ Without options it edits `~/{{DIR}}/settings.json`. With `--project` it edits `{
 | `advisorModel` | string or `null` | none | Model for the advisor the agent consults. A model id or name, no spaces. A role set with `/model advisor <model>` wins. |
 | `judgeModel` | string or `null` | none | Model for the judge that checks finished work against verification criteria. A role set with `/model review <model>` wins. See [Verification and review](./verification-and-review). |
 | `smallModel` | string or `null` | the provider's small model | Model for background chores: titles, effort picks, web reading. A role set with `/model small <model>` wins. |
+| `teammateMode` | `process`, `tmux` or `auto` | `process` | Where a lead starts its teammates: in the background, printing to a log (`process`), in a new pane of the tmux window the lead runs in (`tmux`), or in tmux when the lead runs inside it (`auto`). See [Agent teams](./agents#agent-teams). |
 | `escalationModel` | string or `null` | none | Where a call the agent keeps failing is sent when the `experimental-escalation` feature is on (otherwise the Advisor). Read only from your own files. |
 | `fallbackModel` | string or list of strings | none | Model, or chain of models, tried when the chosen one is busy, signed out or unreachable. `--fallback-model` and `/model fallbacks` win over it. See [Models and providers](./models-and-providers). |
 | `jsonSchema` | JSON Schema object or `null` | none | Gives the agent a `StructuredOutput` tool whose `result` must match this schema. Useful with `-p`; see [Headless](./headless). An invalid schema fails the run. |

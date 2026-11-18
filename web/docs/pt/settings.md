@@ -85,7 +85,7 @@ O `{{DIR}}/settings.json` de um projeto fica em outro lugar, então use o caminh
 
 ### Como os valores se combinam
 
-- **Valores únicos** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `bashOutputLimit`, `enableAllProjectMcpServers`): vale o último arquivo lido. Na prática a pasta mais próxima de onde você trabalha vence as pastas acima dela, e `managed-settings.json` vence todas. Definir `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` ou `jsonSchema` como `null` apaga um valor definido por um arquivo anterior.
+- **Valores únicos** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `teammateMode`, `jsonSchema`, `bashOutputLimit`, `enableAllProjectMcpServers`): vale o último arquivo lido. Na prática a pasta mais próxima de onde você trabalha vence as pastas acima dela, e `managed-settings.json` vence todas. Definir `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` ou `jsonSchema` como `null` apaga um valor definido por um arquivo anterior.
 - **Listas e mapas se somam**: regras de permissão, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`, `sandbox.allowUnixSockets`, `sandbox.allowRead`.
 - **Chaves de liga/desliga** (`features`, `scripts`, `sandbox.network`, `sandbox.required`): cada arquivo muda só os nomes que menciona.
 
@@ -153,6 +153,7 @@ Sem opções, edita `~/{{DIR}}/settings.json`. Com `--project`, edita `{{DIR}}/s
 | `advisorModel` | texto ou `null` | nenhum | Modelo do conselheiro que o agente consulta. Um id ou nome de modelo, sem espaços. Um papel definido com `/model advisor <modelo>` vence. |
 | `judgeModel` | texto ou `null` | nenhum | Modelo do juiz que confere o trabalho terminado contra os critérios de verificação. Um papel definido com `/model review <modelo>` vence. Veja [Verificação e revisão](./verification-and-review). |
 | `smallModel` | texto ou `null` | o modelo pequeno do provedor | Modelo para tarefas de fundo: títulos, escolha de esforço, leitura da web. Um papel definido com `/model small <modelo>` vence. |
+| `teammateMode` | `process`, `tmux` ou `auto` | `process` | Onde o líder inicia os teammates: em segundo plano, imprimindo num log (`process`), num painel novo da janela do tmux em que o líder roda (`tmux`), ou no tmux quando o líder roda dentro dele (`auto`). Veja [Equipes de agentes](./agents#equipes-de-agentes). |
 | `escalationModel` | texto ou `null` | nenhum | Para onde vai uma chamada em que o agente falha repetidamente quando o recurso `experimental-escalation` está ligado (senão, vai para o Advisor). Lido só dos seus próprios arquivos. |
 | `fallbackModel` | texto ou lista de textos | nenhum | Modelo, ou cadeia de modelos, tentado quando o escolhido está ocupado, desconectado ou inacessível. `--fallback-model` e `/model fallbacks` vencem esta chave. Veja [Modelos e provedores](./models-and-providers). |
 | `jsonSchema` | objeto JSON Schema ou `null` | nenhum | Dá ao agente uma ferramenta `StructuredOutput` cujo `result` precisa seguir este schema. Útil com `-p`; veja [Modo headless](./headless). Um schema inválido faz a execução falhar. |

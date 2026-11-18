@@ -169,6 +169,34 @@ pub fn sent_message(from: &str, message: &Value, request_id: impl FnOnce() -> St
     Ok(protocol.text())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TeammateMode {
+    #[default]
+    Process,
+    Tmux,
+    Auto,
+}
+
+impl TeammateMode {
+    pub fn named(name: &str) -> Option<Self> {
+        match name {
+            "process" => Some(Self::Process),
+            "tmux" => Some(Self::Tmux),
+            "auto" => Some(Self::Auto),
+            _ => None,
+        }
+    }
+
+    pub fn resolved(self, inside_tmux: bool) -> Self {
+        match self {
+            Self::Auto if inside_tmux => Self::Tmux,
+            Self::Auto => Self::Process,
+            chosen => chosen,
+        }
+    }
+}
+
 pub const ASK_PREFIX: &str = "teammate-ask:";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -338,6 +366,15 @@ mod tests {
         );
         let forged = Mail { from: "other".into(), ..mail };
         assert_eq!(TeammateAsk::of("team-1", &forged), None, "only the teammate itself asks for itself");
+    }
+
+    #[test]
+    fn auto_puts_teammates_in_tmux_panes_only_inside_tmux() {
+        assert_eq!(TeammateMode::named("auto").map(|mode| mode.resolved(true)), Some(TeammateMode::Tmux));
+        assert_eq!(TeammateMode::Auto.resolved(false), TeammateMode::Process);
+        assert_eq!(TeammateMode::Tmux.resolved(false), TeammateMode::Tmux, "asked for, even outside tmux");
+        assert_eq!(TeammateMode::named("iterm2"), None);
+        assert_eq!(TeammateMode::default(), TeammateMode::Process);
     }
 
     #[test]

@@ -313,7 +313,10 @@ fn be_a_teammate(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
         trust: false,
         asked: Some(&forward),
     };
-    print::print_all(&client, cwd, wanted, teammate::Mailbox::new(me))
+    let (team, name) = (me.team.clone(), me.name.clone());
+    let ended = print::print_all(&client, cwd, wanted, teammate::Mailbox::new(me));
+    team.departed(&name);
+    ended
 }
 
 fn chat(cli: Cli, launch: Launch) -> Result<ExitCode, String> {

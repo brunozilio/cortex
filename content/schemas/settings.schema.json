@@ -648,6 +648,15 @@
         "null"
       ]
     },
+    "teammateMode": {
+      "default": "process",
+      "description": "Where a lead starts its teammates: process (in the background, printing to a log), tmux (in a new tmux pane of the window the lead runs in) or auto (tmux when the lead runs inside tmux).",
+      "enum": [
+        "process",
+        "tmux",
+        "auto"
+      ]
+    },
     "trustProjectHooks": {
       "deprecated": true,
       "description": "No longer does anything: a project's hooks run once you trust its folder.",
