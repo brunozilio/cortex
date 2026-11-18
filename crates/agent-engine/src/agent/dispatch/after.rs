@@ -23,7 +23,9 @@ impl Agent<'_> {
         self.after_hook(calling, input, raw, outcome);
         self.made_safe_to_read(raw, outcome);
         let to_the_model = !raw && !from_a_script(calling.id);
-        if let Some(source) = domain::untrusted::mcp_source(calling.name).filter(|_| to_the_model) {
+        let source =
+            domain::untrusted::mcp_source(calling.name).or_else(|| outcome.carried_from.take().map(|from| *from));
+        if let Some(source) = source.filter(|_| to_the_model) {
             outcome.content = domain::untrusted::fenced(&outcome.content, &source);
         }
         self.read_as_its_tool_asks(calling, input, outcome);
@@ -94,7 +96,7 @@ impl Agent<'_> {
             (self.emit)(EngineEvent::Edited(*edited));
         }
         if let Some(change) = outcome.background.take() {
-            (self.emit)(change.event());
+            (self.emit)((*change).event());
         }
         (self.emit)(EngineEvent::ToolFinished { id: id.to_owned() });
         (self.emit)(EngineEvent::ToolResult {

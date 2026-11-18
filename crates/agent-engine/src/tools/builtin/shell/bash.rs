@@ -253,7 +253,7 @@ mod tests {
         let mut workspace = Workspace::new(std::env::temp_dir());
         workspace.credentials.client = 921;
         let started = Bash.run(&json!({"command": "sleep 30", "run_in_background": true}), &workspace);
-        let Some(BackgroundChange::Started(id)) = started.background.clone() else {
+        let Some(BackgroundChange::Started(id)) = started.background.as_deref().cloned() else {
             panic!("no background start in {started:?}")
         };
         assert!(started.content.contains(&id), "{started:?}");

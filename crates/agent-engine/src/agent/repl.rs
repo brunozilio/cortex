@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use super::Agent;
 use super::run::ThisRun as Tasks;
 use crate::control::Control;
-use crate::tools::repl::{READ_TEXT, REPL_TOOL, Repl, SEARCH_TOOLS, reachable, session};
+use crate::tools::repl::{DESCRIBE_TOOL, READ_TEXT, REPL_TOOL, Repl, SEARCH_TOOLS, reachable, session};
 use crate::tools::{Outcome, Tool, Workspace, raw_text};
 use crate::transcript::{Block, Message};
 
@@ -20,7 +20,7 @@ const POLL: Duration = Duration::from_millis(25);
 pub(super) struct ScriptRun {
     number: u64,
     messages: mpsc::Receiver<Sent>,
-    stop: Arc<AtomicBool>,
+    guarded: Guarded,
     refused: Mutex<Vec<Refused>>,
     lane: OnceLock<usize>,
     started: Instant,
@@ -46,14 +46,18 @@ impl Agent<'_> {
         let context = session(&owner);
         let functions: Vec<String> =
             self.request.tools.iter().map(|spec| spec.name.clone()).filter(|name| reachable(name)).collect();
-        let limits = Limits { total: domain::code_mode::total_limit(input["timeout"].as_u64()), ..Limits::default() };
+        let limits = Limits {
+            running: domain::code_mode::running_limit(input["timeout"].as_u64()),
+            total: domain::code_mode::WALL,
+            ..Limits::default()
+        };
         let stop = Arc::new(AtomicBool::new(false));
         let submitted =
             context.session.submit(Evaluate { code: code.to_owned(), functions, limits, stop: Arc::clone(&stop) });
         let run = ScriptRun {
             number: submitted.number,
             messages: submitted.messages,
-            stop,
+            guarded: Guarded { stop, stopped_by: Mutex::default(), carried: Mutex::default() },
             refused: Mutex::default(),
             lane: OnceLock::new(),
             started: Instant::now(),
@@ -86,6 +90,9 @@ impl Agent<'_> {
             let evaluation = agent.serving(&run, &Tasks::default(), &[], None).unwrap_or_else(|| gone(number));
             let mut outcome = run.report(&agent, evaluation);
             outcome.content = format!("Script #{number} ended.\n{}", outcome.content);
+            if let Some(from) = outcome.carried_from.take() {
+                outcome.content = domain::untrusted::fenced(&outcome.content, &from);
+            }
             outcome
         };
         match self.in_background(tasks, "script", Box::new(job), spawn) {
@@ -120,26 +127,46 @@ impl Agent<'_> {
         index
     }
 
-    fn answer(&self, call: HostCall, tasks: &Tasks, parent: &[Message]) {
-        if call.function == SEARCH_TOOLS {
-            let found = self.search_tools(&call.input);
-            return call.reply.send(found);
+    fn answer(&self, function: &str, input: &Value, tasks: &Tasks, parent: &[Message]) -> Result<Value, String> {
+        if function == SEARCH_TOOLS {
+            return self.search_tools(input);
         }
-        if call.function == READ_TEXT {
-            let input = json!({ "file_path": call.input["path"] });
+        if function == DESCRIBE_TOOL {
+            return self.describe_tool(input);
+        }
+        if function == READ_TEXT {
+            let input = json!({ "file_path": input["path"] });
             let id = format!("repl-{}", self.control.next_agent());
             let spawn = |job: Box<dyn FnOnce() + Send + '_>| job();
             let block = raw_text::reading(|| self.call(&id, "Read", &input, tasks, parent, &spawn));
-            return call.reply.send(answered(block, "Read"));
+            return answered(block, "Read");
         }
-        if !reachable(&call.function) {
-            let refusal = format!("{} cannot be called from a {REPL_TOOL} script; call it directly", call.function);
-            return call.reply.send(Err(refusal));
+        if !reachable(function) {
+            return Err(format!("{function} cannot be called from a {REPL_TOOL} script; call it directly"));
         }
         let id = format!("repl-{}", self.control.next_agent());
         let spawn = |job: Box<dyn FnOnce() + Send + '_>| job();
-        let block = self.call(&id, &call.function, &call.input, tasks, parent, &spawn);
-        call.reply.send(answered(block, &call.function));
+        let block = self.call(&id, function, input, tasks, parent, &spawn);
+        answered(block, function)
+    }
+
+    fn describe_tool(&self, input: &Value) -> Result<Value, String> {
+        let name = input["name"].as_str().map(str::trim).unwrap_or_default();
+        let deferred =
+            self.workspace.services.deferred.as_ref().map(|deferred| deferred.search(&format!("select:{name}")));
+        let spec = self
+            .request
+            .tools
+            .iter()
+            .chain(deferred.iter().flatten())
+            .find(|spec| spec.name == name && reachable(&spec.name));
+        let Some(spec) = spec else {
+            return Ok(Value::String(format!(
+                "No tool is named {name}; searchTools(words) finds tools by what they do."
+            )));
+        };
+        let declared = Declared { name: &spec.name, description: &spec.description, schema: &spec.schema };
+        Ok(Value::String(domain::code_mode::declaration(&declared)))
     }
 
     fn search_tools(&self, input: &Value) -> Result<Value, String> {
@@ -169,10 +196,13 @@ impl ScriptRun {
         until: Option<Instant>,
     ) -> Option<Evaluation> {
         let (refused, lane, summary, code) = (&self.refused, &self.lane, &self.summary, &self.code);
+        let guarded = &self.guarded;
+        let asking: Mutex<Vec<(domain::AskId, String)>> = Mutex::default();
         let watch = |event: EngineEvent| {
             if let EngineEvent::Refused { tool, reason } = &event {
                 refused.locked().push(Refused { tool: tool.clone(), reason: reason.clone() });
             }
+            guarded.watch_prompts(&event, &asking);
             if !nested(&event) {
                 return (agent.emit)(event);
             }
@@ -186,7 +216,7 @@ impl ScriptRun {
         std::thread::scope(|scope| {
             loop {
                 if agent.control.is_stopped() {
-                    self.stop.store(true, Ordering::Relaxed);
+                    self.guarded.stop.store(true, Ordering::Relaxed);
                 }
                 let wait = match until {
                     Some(until) if Instant::now() >= until => return None,
@@ -196,9 +226,13 @@ impl ScriptRun {
                 match self.messages.recv_timeout(wait) {
                     Ok(Sent::Done(evaluation)) => return Some(evaluation),
                     Ok(Sent::Call(call)) if watching.concurrent(tasks, &call.function, &call.input) => {
-                        scope.spawn(move || watching.answer(call, tasks, &[]));
+                        scope.spawn(move || {
+                            guarded.settle(call, |function, input| watching.answer(function, input, tasks, &[]));
+                        });
                     }
-                    Ok(Sent::Call(call)) => watching.answer(call, tasks, parent),
+                    Ok(Sent::Call(call)) => {
+                        guarded.settle(call, |function, input| watching.answer(function, input, tasks, parent));
+                    }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                     Err(mpsc::RecvTimeoutError::Disconnected) => return Some(gone(self.number)),
                 }
@@ -207,24 +241,77 @@ impl ScriptRun {
     }
 
     fn report(&self, agent: &Agent<'_>, evaluation: Evaluation) -> Outcome {
+        let stopped_by = self.guarded.stopped_by.locked().clone();
+        let outcome = match (evaluation.outcome, &stopped_by) {
+            (Ok(_), Some(tool)) => Err(format!("Stopped: the user refused {tool} at a permission prompt.")),
+            (outcome, _) => outcome,
+        };
         let report = Report {
             fresh: self.fresh,
             logs: evaluation.logs,
             refused: std::mem::take(&mut *self.refused.locked()),
-            outcome: evaluation.outcome,
+            outcome,
+            stopped_by,
+            carried: std::mem::take(&mut *self.guarded.carried.locked()),
         };
+        self.reported(agent, &report)
+    }
+}
+
+#[derive(Debug)]
+struct Guarded {
+    stop: Arc<AtomicBool>,
+    stopped_by: Mutex<Option<String>>,
+    carried: Mutex<Vec<String>>,
+}
+
+impl Guarded {
+    fn settle(&self, call: HostCall, answer: impl FnOnce(&str, &Value) -> Result<Value, String>) {
+        let HostCall { function, input, reply } = call;
+        if let Some(source) = domain::untrusted::mcp_source(&function) {
+            self.carried.locked().push(source);
+        }
+        let answered = answer(&function, &input);
+        match self.stopped_by.locked().as_ref() {
+            Some(tool) => reply.send(Err(format!("the user refused {tool} at a permission prompt; the script stops"))),
+            None => reply.send(answered),
+        }
+    }
+
+    fn watch_prompts(&self, event: &EngineEvent, asking: &Mutex<Vec<(domain::AskId, String)>>) {
+        match event {
+            EngineEvent::Asked(domain::AgentAsk { id, kind: domain::AskKind::Permission { tool, .. } }) => {
+                asking.locked().push((id.clone(), tool.clone()));
+            }
+            EngineEvent::Answered { ask, decision: domain::Decision::Deny | domain::Decision::DenyWith(_) } => {
+                let tool = asking.locked().iter().find(|(id, _)| id == ask).map(|(_, tool)| tool.clone());
+                if let Some(tool) = tool {
+                    self.stopped_by.locked().get_or_insert(tool);
+                    self.stop.store(true, Ordering::Relaxed);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl ScriptRun {
+    fn reported(&self, agent: &Agent<'_>, report: &Report) -> Outcome {
         if let Some(&index) = self.lane.get() {
             let status = match &report.outcome {
                 Ok(_) => {
                     AgentStatus::Done { seconds: u32::try_from(self.started.elapsed().as_secs()).unwrap_or(u32::MAX) }
                 }
-                Err(_) if agent.control.is_stopped() || self.stop.load(Ordering::Relaxed) => AgentStatus::Cancelled,
+                Err(_) if agent.control.is_stopped() || self.guarded.stop.load(Ordering::Relaxed) => {
+                    AgentStatus::Cancelled
+                }
                 Err(_) => AgentStatus::Failed,
             };
             (agent.emit)(EngineEvent::AgentUpdate { index, status, summary: None });
         }
-        let text = domain::code_mode::reported(&report, domain::code_mode::PART);
-        if report.outcome.is_ok() { Outcome::ok(text) } else { Outcome::error(text) }
+        let text = domain::code_mode::reported(report, domain::code_mode::PART);
+        let outcome = if report.outcome.is_ok() { Outcome::ok(text) } else { Outcome::error(text) };
+        outcome.carried_from(domain::code_mode::carried_from(report))
     }
 }
 

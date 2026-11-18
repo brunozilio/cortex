@@ -75,4 +75,5 @@
     ),
   );
   __define("searchTools", (query) => tools.searchTools({ query: String(query) }));
+  __define("describeTool", (name) => tools.describeTool({ name: String(name) }));
 })();

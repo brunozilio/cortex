@@ -65,7 +65,7 @@ fn a_background_command_is_read_incrementally_and_stopped() {
     assert_eq!(list(901), [(id.clone(), "server".to_owned(), true)]);
     let stopped = KillShell.run(&json!({ "shell_id": id }), &workspace(901));
     assert!(stopped.content.starts_with("Stopped"), "{stopped:?}");
-    assert_eq!(stopped.background, Some(domain::events::BackgroundChange::Ended(id.clone())));
+    assert_eq!(stopped.background.as_deref(), Some(&domain::events::BackgroundChange::Ended(id.clone())));
     assert!(list(901).is_empty());
 }
 

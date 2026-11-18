@@ -62,7 +62,9 @@ pub struct Outcome {
     #[serde(default)]
     pub edited: Option<Box<domain::changes::Edited>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub background: Option<domain::events::BackgroundChange>,
+    pub background: Option<Box<domain::events::BackgroundChange>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carried_from: Option<Box<String>>,
 }
 
 impl Outcome {
@@ -71,11 +73,16 @@ impl Outcome {
     }
 
     fn new(content: String, is_error: bool, images: Vec<domain::Image>) -> Self {
-        Self { content, is_error, images, shown: None, edited: None, background: None }
+        Self { content, is_error, images, shown: None, edited: None, background: None, carried_from: None }
+    }
+
+    pub fn carried_from(mut self, sources: Option<String>) -> Self {
+        self.carried_from = sources.map(Box::new);
+        self
     }
 
     pub fn in_the_background(mut self, change: domain::events::BackgroundChange) -> Self {
-        self.background = Some(change);
+        self.background = Some(Box::new(change));
         self
     }
 

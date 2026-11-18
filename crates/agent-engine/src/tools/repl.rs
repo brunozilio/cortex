@@ -8,7 +8,7 @@ use serde_json::Value;
 use super::{Outcome, Tool, Workspace};
 use crate::model::ToolSpec;
 
-pub use domain::code_mode::{READ_TEXT, SEARCH as SEARCH_TOOLS, TOOL as REPL_TOOL};
+pub use domain::code_mode::{DESCRIBE as DESCRIBE_TOOL, READ_TEXT, SEARCH as SEARCH_TOOLS, TOOL as REPL_TOOL};
 
 const KEPT: usize = 8;
 const IDLE: Duration = Duration::from_secs(600);
@@ -16,8 +16,7 @@ const HELPERS: &str = "repl/helpers.js";
 
 pub const OUT_OF_REACH: [&str; 5] = [REPL_TOOL, "EnterPlanMode", "ExitPlanMode", "EnterWorktree", "ExitWorktree"];
 
-pub const TOP_LEVEL: [&str; 6] =
-    [REPL_TOOL, "AskUserQuestion", "EnterPlanMode", "ExitPlanMode", "EnterWorktree", "ExitWorktree"];
+pub const TOP_LEVEL: [&str; 5] = [REPL_TOOL, "EnterPlanMode", "ExitPlanMode", "EnterWorktree", "ExitWorktree"];
 
 #[derive(Debug)]
 pub struct Repl;
@@ -165,11 +164,11 @@ mod tests {
         let shown = only(offered, false);
 
         let names: Vec<&str> = shown.iter().map(|spec| spec.name.as_str()).collect();
-        assert_eq!(names, [REPL_TOOL, "AskUserQuestion"]);
+        assert_eq!(names, [REPL_TOOL]);
         let repl = &shown[0].description;
         assert!(repl.starts_with("REPL does things."), "{repl}");
         assert!(repl.contains("declare function Bash(") && repl.contains("declare function Read("), "{repl}");
-        assert!(!repl.contains("declare function AskUserQuestion("), "{repl}");
+        assert!(repl.contains("declare function AskUserQuestion("), "{repl}");
         assert!(!repl.contains("searchTools"), "nothing more to find: {repl}");
         assert!(only(vec![spec("Read"), spec(REPL_TOOL)], true)[0].description.contains("searchTools"));
     }

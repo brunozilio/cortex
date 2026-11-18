@@ -13,7 +13,7 @@ export const spec = {
         "type": "string"
       },
       "timeout": {
-        "description": "Stop the script this many milliseconds after it starts, tool calls included (at most 600000, the default).",
+        "description": "Stop the script once its own JavaScript has run this many milliseconds without a break; time spent waiting on tool calls does not count (30000 by default, at most 600000).",
         "type": "integer"
       }
     },
@@ -29,7 +29,7 @@ Helpers for the common cases, each going through the matching tool (and its perm
 - \`await write(path, text)\` writes a file; \`await edit(path, oldText, newText, { all: true })\` replaces text that must match exactly once, or every match with \`all\`.
 - \`\` await $\`git log -5\` \`\` runs a shell command through Bash (values written as \`\${...}\` are quoted for the shell) and throws when it exits with an error; \`\` (await $\`cmd\`.nothrow()).exitCode \`\` checks it instead.
 
-What comes back to you is the value of the script's last expression (strings as they are, anything else as JSON, with the promises in a returned object's keys awaited) and the lines it passed to \`self.log(...)\`. Everything else stays in the script: read files, search, filter and count there, and return only what you need to read. Each part is cut to about 20,000 characters, keeping its start and its end; \`preview(value, n)\` returns the first n characters of a long value with its size. \`console.log\` goes to a ring of the last lines, read back with \`console.tail(n)\`, never to you. Calls refused while a script ran are listed after its output.
+What comes back to you, inside \`<repl-output>\`, is the value of the script's last expression in \`<result>\` (strings as they are, anything else as JSON, with the promises in a returned object's keys awaited), or the error that stopped it in \`<error>\`, after the lines it passed to \`self.log(...)\` in \`<log>\`; \`&\`, \`<\` and \`>\` in them are escaped. Everything else stays in the script: read files, search, filter and count there, and return only what you need to read. Each part is cut to about 30,000 characters, keeping its start and its end; \`preview(value, n)\` returns the first n characters of a long value with its size. \`console.log\` goes to a ring of the last lines, read back with \`console.tail(n)\`, never to you. Calls refused while a script ran are listed after its output. When the user answers No at a permission prompt a call raised, the script is stopped there and the output says so: ask the user before trying again. Output a script carried from an MCP server comes back marked as untrusted. \`await describeTool(name)\` returns a tool's whole declaration, \`await searchTools(words)\` finds tools by what they do.
 
 Calls to read-only tools (Read, Grep, Glob, ...) started together with \`Promise.all\` run at the same time; edits, commands and anything that asks permission run one after another. Every call goes through the same permission rules, hooks and prompts as when you call the tool yourself.
 
@@ -37,7 +37,7 @@ The context persists: variables and functions a script declares stay for the nex
 
 A script that is still running after about 30 seconds is dispatched: the call returns \`(dispatched #N)\` with a task id, and the script goes on beside the scripts you send next, which share its variables. Its output comes back through TaskOutput, or by itself before your turn ends, so put the work that waits (a build, a test suite) in one script and go on with other things; send a script that depends on a dispatched one's result only after that result is back.
 
-Limits: the script's own JavaScript may run for 30 seconds without a break (time waiting on tools does not count), the whole script stops after \`timeout\` (10 minutes at most), and one script makes at most 1,000 tool calls.
+Limits: the script's own JavaScript may run for \`timeout\` without a break (30 seconds unless you ask for more; time waiting on tools does not count), the whole script stops after 10 minutes, tool calls included, and one script makes at most 1,000 tool calls.
 
 Use REPL for work that would take many tool calls or that reads more than you need to see: searching across many files, applying the same edit in many places, collecting facts and returning a summary. A single call to one tool is simpler made directly.`,
 };
