@@ -89,6 +89,13 @@ impl Job {
                 self.request.session.output_style.as_deref(),
                 brief.settings.style.clone(),
             ),
+            mcp_instructions: toolbox
+                .servers
+                .iter()
+                .filter_map(|server| {
+                    server.instructions().map(|text| prompt::McpInstructions::of(server.name(), &text))
+                })
+                .collect(),
         }
     }
 

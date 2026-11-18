@@ -67,6 +67,26 @@ pub struct Environment {
     pub tools: Vec<String>,
     pub skills: String,
     pub output_style: Option<settings::Style>,
+    pub mcp_instructions: Vec<McpInstructions>,
+}
+
+pub const MCP_INSTRUCTIONS: usize = 2_048;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpInstructions {
+    pub server: String,
+    pub text: String,
+}
+
+impl McpInstructions {
+    pub fn of(server: &str, text: &str) -> Self {
+        let text = text.trim();
+        let text = match text.char_indices().nth(MCP_INSTRUCTIONS) {
+            Some((at, _)) => format!("{}… [cut]", &text[..at]),
+            None => text.to_owned(),
+        };
+        Self { server: server.to_owned(), text }
+    }
 }
 
 impl Environment {
@@ -94,6 +114,9 @@ impl Environment {
             "output_style": self.output_style.as_ref().map(|style| serde_json::json!({
                 "name": style.name, "instructions": style.instructions, "keep_coding": style.keep_coding,
             })),
+            "mcp_instructions": self.mcp_instructions.iter().map(|served| {
+                serde_json::json!({ "server": served.server, "text": McpInstructions::of(&served.server, &served.text).text })
+            }).collect::<Vec<_>>(),
             "contract": CONTRACT_VERSION,
             "brand": content::brand(),
         })

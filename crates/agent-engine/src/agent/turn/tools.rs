@@ -99,7 +99,7 @@ impl Agent<'_> {
         let (notices, held) = domain::inbox::admitted(crate::tools::inbox::take(client), self.control.mode());
         if !held.is_empty() {
             (self.emit)(EngineEvent::Notice(format!(
-                "{} message(s) from channels or other sessions are held: bypass mode never lets them in.",
+                "{} message(s) from other sessions are held: bypass mode never lets them in.",
                 held.len()
             )));
         }

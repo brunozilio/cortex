@@ -1,4 +1,7 @@
 pub mod channel;
+pub mod channel_relay;
+#[cfg(all(test, unix))]
+mod channel_relay_tests;
 mod configured;
 mod error;
 pub mod extras;
@@ -67,6 +70,7 @@ pub struct McpServer {
     transport: Box<dyn Transport>,
     next: AtomicU64,
     capabilities: std::sync::Mutex<Value>,
+    instructions: std::sync::Mutex<Option<String>>,
 }
 
 impl std::fmt::Debug for McpServer {
@@ -77,7 +81,13 @@ impl std::fmt::Debug for McpServer {
 
 impl McpServer {
     pub fn new(name: impl Into<String>, transport: Box<dyn Transport>) -> Self {
-        Self { name: name.into(), transport, next: AtomicU64::new(1), capabilities: std::sync::Mutex::default() }
+        Self {
+            name: name.into(),
+            transport,
+            next: AtomicU64::new(1),
+            capabilities: std::sync::Mutex::default(),
+            instructions: std::sync::Mutex::default(),
+        }
     }
 
     pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>) -> Result<Self, McpError> {
@@ -148,6 +158,9 @@ impl McpServer {
         if let Ok(mut capabilities) = self.capabilities.lock() {
             *capabilities = answer["capabilities"].clone();
         }
+        if let Ok(mut instructions) = self.instructions.lock() {
+            *instructions = answer["instructions"].as_str().filter(|text| !text.trim().is_empty()).map(str::to_owned);
+        }
         self.transport.notify_stopped(&json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), stop)?;
         self.transport.listen();
         Ok(())
@@ -167,6 +180,14 @@ impl McpServer {
 
     pub fn capabilities(&self) -> Value {
         self.capabilities.lock().map(|capabilities| capabilities.clone()).unwrap_or_default()
+    }
+
+    pub fn instructions(&self) -> Option<String> {
+        self.instructions.lock().ok().and_then(|instructions| instructions.clone())
+    }
+
+    pub fn notify(&self, message: &Value) -> Result<(), McpError> {
+        self.transport.notify(message)
     }
 
     pub fn offers(&self, capability: &str) -> bool {

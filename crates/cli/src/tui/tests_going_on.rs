@@ -161,6 +161,15 @@ fn the_working_clock_runs_again_when_the_question_is_withdrawn() {
 }
 
 #[test]
+fn a_question_answered_elsewhere_closes_here() {
+    let data = tempfile::tempdir().expect("data");
+    let answered = EngineEvent::Answered { ask: AskId("q".into()), decision: Decision::Allow };
+    let mut app = asked_app(asking_script(answered), data.path());
+    until(&mut app, |app| app.ask.is_none());
+    assert!(app.turn.started.is_some_and(|watch| !watch.is_paused()));
+}
+
+#[test]
 fn a_waiting_question_shows_the_keys_that_answer_it() {
     let data = tempfile::tempdir().expect("data");
     let app = asked_app(asking_script(EngineEvent::TextDelta("thanks".into())), data.path());

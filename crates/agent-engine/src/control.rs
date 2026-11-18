@@ -14,6 +14,21 @@ use crate::model::CancellationToken;
 
 use domain::permission::Remembered;
 
+type Asks = Arc<Mutex<HashMap<AskId, oneshot::Sender<Decision>>>>;
+
+#[derive(Debug, Clone)]
+pub struct Answerer {
+    asks: Asks,
+    id: AskId,
+}
+
+impl Answerer {
+    pub fn answer(&self, decision: Decision) -> bool {
+        let sender = self.asks.locked().remove(&self.id);
+        sender.is_some_and(|sender| sender.send(decision).is_ok())
+    }
+}
+
 #[derive(Debug)]
 pub struct Control {
     stop: Arc<Stop>,
@@ -21,7 +36,7 @@ pub struct Control {
     ceiling: Option<PermissionMode>,
     no_prompts: bool,
     remembered: Mutex<Remembered>,
-    asks: Mutex<HashMap<AskId, oneshot::Sender<Decision>>>,
+    asks: Asks,
     steered: Arc<Mutex<Vec<String>>>,
     moving: Mutex<Option<crate::agent_runtime::Relocation>>,
     spawned: AtomicUsize,
@@ -36,7 +51,7 @@ impl Control {
             ceiling: None,
             no_prompts: false,
             remembered: Mutex::default(),
-            asks: Mutex::default(),
+            asks: Arc::default(),
             steered: Arc::default(),
             moving: Mutex::default(),
             spawned: AtomicUsize::new(0),
@@ -165,6 +180,10 @@ impl Control {
         }
         asks.insert(id, send);
         awaited
+    }
+
+    pub fn answerer(&self, id: &AskId) -> Answerer {
+        Answerer { asks: Arc::clone(&self.asks), id: id.clone() }
     }
 
     pub fn answer(&self, id: &AskId, decision: Decision) {

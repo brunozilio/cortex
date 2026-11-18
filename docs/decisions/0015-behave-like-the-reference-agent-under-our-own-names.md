@@ -1,0 +1,23 @@
+# 0015 Channels, code mode, observers and teams behave like the reference coding agent, under the app's own names
+
+Status: Accepted, 2026-11-17
+
+## Context
+
+The owner asked for four features to work the way they do in the most widely used terminal coding agent (the reference agent below): channels, code mode, observer agents, and agent teams (a lead, teammates, a mailbox, shared tasks). The app already had parts of the first two. Their behaviour was read from the reference agent's released binary: tool names, input schemas, message formats, file layouts and limits. No code or prompt text was copied; the app reimplements the behaviour in its own crates.
+
+The app had decided earlier not to be compatible with the reference agent's files (its memory switch and its folder names were removed). Behaving the same way and reading the same files are different things, so the owner decided each point where they meet.
+
+## Decision
+
+- **Names.** Every folder, file and environment variable is the app's own: `.<command>/teams/`, `.<command>/tasks/`, `<PREFIX>_…`. Protocol names that servers and models see (`notifications/claude/channel`, `claude/channel/permission`, tool names such as `SendMessage`) keep the reference spelling, so a server written for the reference agent works here unchanged.
+- **Channels.** Each message reaches the agent as its own `<channel source=… key="value">` tag; meta keys must be identifiers, and dropped keys are logged. A server's `initialize` instructions reach the system prompt. A channel that declares `claude/channel/permission` gets each permission prompt and may answer it; the first answer wins, and a channel cannot allow its own tools. Channel messages are delivered in bypass mode too, as the reference agent does; messages from other sessions stay held there.
+- **Code mode.** Turning code mode on makes the REPL the agent's only tool, as in the reference agent.
+- **Order.** Channels, then code mode, then observers, then teams, one commit each. Teams start with in-process teammates; terminal panes (tmux, iTerm2) come after.
+
+## Costs
+
+- In bypass mode, whoever can post to an open channel steers an agent that does not ask (`docs/threat-model.md`).
+- A channel that takes permission prompts can allow any call but its own tools; the request id is a hash, not a secret.
+- MCP server instructions are third-party text in the system prompt, cut to 2,048 characters.
+- The reference agent's behaviour moves between releases; the app follows the version that was read (2.1.327), not later ones.

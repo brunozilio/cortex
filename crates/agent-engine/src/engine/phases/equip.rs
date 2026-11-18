@@ -10,7 +10,7 @@ use crate::tools::{self, Tool, Workspace};
 
 pub(in crate::engine) struct Toolbox {
     pub(in crate::engine) tools: Vec<Box<dyn Tool>>,
-    _kept_connected_for_the_run: Vec<Arc<McpServer>>,
+    pub(in crate::engine) servers: Vec<Arc<McpServer>>,
 }
 
 pub(in crate::engine) struct MainAgent {
@@ -65,7 +65,7 @@ impl Job {
         if let Some(expanded) = crate::mcp::extras::expand_prompt(&servers, &self.request.prompt.text, stop) {
             self.request.prompt.text = expanded.map_err(Stop::failed)?;
         }
-        Ok(Equipped { workspace, toolbox: Toolbox { tools, _kept_connected_for_the_run: servers }, main })
+        Ok(Equipped { workspace, toolbox: Toolbox { tools, servers }, main })
     }
 
     fn host_judge(&self) -> tools::host_judge::HostJudge {

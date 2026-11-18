@@ -30,6 +30,13 @@ export default function system(ctx) {
       prompt += `\n\nContents of ${file.path} (${scopes[file.scope]}):\n\n${file.text.trim()}`;
     }
   }
+  if (ctx.mcp_instructions.length > 0) {
+    prompt +=
+      "\n\n# MCP server instructions\n\nThe connected MCP servers below describe how to use their tools and what they send you.";
+    for (const served of ctx.mcp_instructions) {
+      prompt += `\n\n## ${served.server}\n${served.text}`;
+    }
+  }
   prompt += "\n\n# Environment\n";
   prompt += `- Working directory: ${ctx.cwd}\n`;
   if (ctx.added_dirs.length > 0) {

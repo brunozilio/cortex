@@ -35,7 +35,11 @@ impl App {
     fn before_shown(&mut self, event: &EngineEvent) {
         match event {
             EngineEvent::Asked(ask) => self.asked(ask),
-            EngineEvent::AskWithdrawn(id) if self.ask.as_ref().is_some_and(|p| &p.ask.id == id) => self.ask_closed(),
+            EngineEvent::AskWithdrawn(id) | EngineEvent::Answered { ask: id, .. }
+                if self.ask.as_ref().is_some_and(|p| &p.ask.id == id) =>
+            {
+                self.ask_closed();
+            }
             EngineEvent::SessionStarted(id) => self.saver.remember_session(&self.cwd, id),
             EngineEvent::Checkpoint(index) => self.checkpointed(*index),
             EngineEvent::Rewound(rewound) => self.turn.rewound = Some(rewound.clone()),

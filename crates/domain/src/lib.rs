@@ -22,7 +22,7 @@ pub use safety::{
 };
 pub use session::{catalog, conversation, repeats, usage};
 pub use tools::{
-    agents, brief_edits, code_mode, executable, extensions, hooks, inbox, looping, lsp, mcp, mcp_config, mcp_oauth,
+    agents, brief_edits, channel_relay, code_mode, executable, extensions, hooks, inbox, looping, lsp, mcp, mcp_config, mcp_oauth,
     output, schedule, skill, tool_name, watch, web_reading,
 };
 

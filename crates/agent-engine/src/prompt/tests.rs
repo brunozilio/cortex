@@ -254,3 +254,21 @@ fn names_the_language_servers_so_the_agent_reaches_for_the_lsp_tool() {
         "- Model: Qwen3.8 27B 8-bit\n- Language servers (the LSP tool; prefer it to Grep for definitions, references, callers and symbols, and its documentSymbol outline to reading a long file whole): rust-analyzer (.rs), typescript (.js, .ts)\n"
     ));
 }
+
+#[test]
+fn passes_on_what_connected_servers_say_about_their_tools() {
+    assert!(!system(&environment()).contains("# MCP server instructions"));
+    let mut served = environment();
+    served.mcp_instructions = vec![
+        McpInstructions {
+            server: "chat".into(),
+            text: "Events arrive as <channel>. Reply with the reply tool.".into(),
+        },
+        McpInstructions { server: "docs".into(), text: format!("{}END", "x".repeat(MCP_INSTRUCTIONS + 10)) },
+    ];
+    let prompt = system(&served);
+    let section = prompt.split("# MCP server instructions").nth(1).unwrap_or_else(|| panic!("the section: {prompt}"));
+    assert!(section.contains("## chat\nEvents arrive as <channel>. Reply with the reply tool."), "{section}");
+    assert!(section.contains("## docs\n"), "{section}");
+    assert!(!section.contains("END"), "long instructions are cut");
+}

@@ -47,7 +47,7 @@ impl Agent<'_> {
         );
         let kind =
             AskKind::Permission { tool: name.to_owned(), subject: shown.to_owned(), rememberable, rule: rule.clone() };
-        match self.asked(id, kind) {
+        match self.asked_relaying(id, kind, Some(input)) {
             Ok(Decision::Allow | Decision::Answer(_) | Decision::Approve(_)) => self.went_ahead(id, tool, input),
             Ok(Decision::AllowAlways) => {
                 self.remember_allowed(asking, rule);
@@ -94,9 +94,21 @@ impl Agent<'_> {
     }
 
     pub(in crate::agent) fn asked(&self, call: &str, kind: AskKind) -> Result<Decision, RecvError> {
+        self.asked_relaying(call, kind, None)
+    }
+
+    fn asked_relaying(&self, call: &str, kind: AskKind, input: Option<&Value>) -> Result<Decision, RecvError> {
         let ask = AskId(format!("ask-{}-{call}", uuid::Uuid::new_v4()));
         let mut answer = self.control.open(ask.clone());
+        let relayed = match (&kind, input) {
+            (AskKind::Permission { tool, subject, .. }, Some(input)) => Some((tool.clone(), subject.clone(), input)),
+            _ => None,
+        };
         (self.emit)(EngineEvent::Asked(AgentAsk { id: ask.clone(), kind }));
+        let _relay = relayed.and_then(|(tool, subject, input)| {
+            let client = self.workspace.credentials.client;
+            crate::mcp::channel_relay::ask(client, call, &tool, &subject, input, self.control.answerer(&ask))
+        });
         let answer = answer.recv();
         if let Ok(decision) = &answer {
             (self.emit)(EngineEvent::Answered { ask, decision: decision.clone() });

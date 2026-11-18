@@ -78,6 +78,23 @@ fn a_database_that_cannot_be_opened_is_said_once_on_screen_even_while_a_run_goes
 }
 
 #[test]
+fn a_channel_message_is_shown_whole_as_inbound_from_its_sender_and_reaches_the_agent_tagged() {
+    let data = tempfile::tempdir().expect("data");
+    let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());
+    let mut app = App::new(client(&engine, data.path()), data.path().into(), None, None);
+    until(&mut app, |app| app.session.is_some());
+    let params = serde_json::json!({ "content": "deploy please\nand tell me", "meta": { "user": "ana" } });
+    let notice = domain::inbox::channel_notice("tg", domain::inbox::CHANNEL_METHOD, &params).expect("notice").notice;
+    app.message(Msg::Notices(Notices { for_user: Vec::new(), for_agent: vec![notice] }));
+    until(&mut app, |app| !app.busy() && !prompts(&engine).is_empty());
+    let sent = &prompts(&engine)[0];
+    assert!(sent.starts_with("<channel source=\"tg\" user=\"ana\">\ndeploy please\nand tell me\n</channel>"), "{sent}");
+    let shown = screen(&app);
+    assert!(shown.contains("inbound tg · ana: deploy please"), "{shown}");
+    assert!(shown.contains("and tell me"), "the whole message is shown: {shown}");
+}
+
+#[test]
 fn events_that_reached_the_inbox_are_sent_as_a_turn_when_idle() {
     let data = tempfile::tempdir().expect("data");
     let engine = FakeEngine::new(vec![Model::new("keyed:scripted", "Scripted")], script());

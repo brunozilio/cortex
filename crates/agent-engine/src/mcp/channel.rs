@@ -2,7 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use domain::inbox::{CHANNEL_CAPABILITY, channel_notice};
+use domain::channel_relay::permission_answer;
+use domain::inbox::{CHANNEL_CAPABILITY, Channeled, channel_notice};
 use domain::mcp::{LocalMcp, McpEndpoint};
 use serde_json::{Value, json};
 
@@ -15,8 +16,13 @@ const OPEN_WAIT: Duration = Duration::from_secs(30);
 pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>, client: u64) -> Result<Arc<McpServer>, String> {
     let name = spec.name().to_owned();
     let listener: Listener = Arc::new(move |method, params| {
-        if let Some(notice) = channel_notice(&name, method, params) {
+        if let Some(Channeled { notice, dropped }) = channel_notice(&name, method, params) {
+            if !dropped.is_empty() {
+                tracing::warn!(channel = %name, ?dropped, "[channel] meta keys must be identifiers; these were left out");
+            }
             inbox::push(client, notice);
+        } else if let Some(relayed) = permission_answer(method, params) {
+            super::channel_relay::answered(client, &name, relayed);
         }
     });
     let given_up = platform::Stop::new();
@@ -44,7 +50,9 @@ pub fn open(spec: &ServerSpec, http: &Arc<dyn Http>, client: u64) -> Result<Arc<
     if !declared {
         return Err(format!("{} is not a channel (it does not declare {CHANNEL_CAPABILITY})", spec.name()));
     }
-    Ok(Arc::new(server))
+    let server = Arc::new(server);
+    super::channel_relay::register(client, &server);
+    Ok(server)
 }
 
 #[derive(Debug)]
@@ -59,7 +67,12 @@ impl Bridge {
         let id = message.get("id")?.clone();
         let method = message["method"].as_str().unwrap_or_default();
         let answer = if method == "initialize" {
-            Ok(json!({ "protocolVersion": super::PROTOCOL_VERSION, "capabilities": self.0.capabilities() }))
+            let mut hello =
+                json!({ "protocolVersion": super::PROTOCOL_VERSION, "capabilities": self.0.capabilities() });
+            if let Some(instructions) = self.0.instructions() {
+                hello["instructions"] = Value::String(instructions);
+            }
+            Ok(hello)
         } else {
             self.0.ask(method, message["params"].clone(), stop)
         };
@@ -121,7 +134,8 @@ done
             }
             std::thread::sleep(Duration::from_millis(20));
         };
-        assert_eq!(notices, [domain::inbox::Notice::new("channel chat", "[chat_id=7]\ndeploy please")]);
+        assert_eq!(notices.len(), 1);
+        assert_eq!((notices[0].text.as_str(), notices[0].meta("chat_id")), ("deploy please", Some("7")));
 
         let bridge = Bridge(Arc::clone(&server));
         let hello = bridge.handle(&json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }));
