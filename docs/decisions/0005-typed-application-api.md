@@ -1,6 +1,6 @@
 # 0005 A typed application API crate replacing sdk, protocol and backend
 
-Status: Accepted, 2026-11-16
+Status: Implemented, 2026-11-17 (accepted 2026-11-16)
 
 ## Context
 

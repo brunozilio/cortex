@@ -97,7 +97,7 @@ enum Action {
     Logout,
     #[command(about = "List the models the connected providers offer")]
     Models,
-    #[command(about = "The MCP servers a session here can use: list, add, remove, approve")]
+    #[command(about = "The MCP servers a session here can use: list, get, add, remove, approve, deny, login, logout")]
     Mcp {
         #[command(subcommand)]
         action: Option<mcp::McpAction>,
@@ -107,7 +107,9 @@ enum Action {
         #[command(subcommand)]
         action: Option<plugin::PluginAction>,
     },
-    #[command(about = "Remote control from a phone, through your relay: status, up, logout, relay, pair, devices, revoke")]
+    #[command(
+        about = "Remote control from a phone, through your relay: status, up, logout, relay, pair, devices, revoke"
+    )]
     Remote {
         #[command(subcommand)]
         action: Option<remote::RemoteAction>,

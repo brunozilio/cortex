@@ -1,6 +1,6 @@
 # 0006 One persistence pattern
 
-Status: Accepted, 2026-11-16. The SQLite part (session catalog and project memory) is implemented, 2026-11-17; see "Implemented: the database" below. The transcript part (conversation split from the trace, saved at every transition) is implemented, 2026-11-17; see "Implemented: the transcript" below. The keychain part is implemented, 2026-11-17; see "Implemented: the secrets key in the keychain" below.
+Status: Implemented, 2026-11-17 (accepted 2026-11-16). The SQLite part (session catalog and project memory) is implemented, 2026-11-17; see "Implemented: the database" below. The transcript part (conversation split from the trace, saved at every transition) is implemented, 2026-11-17; see "Implemented: the transcript" below. The keychain part is implemented, 2026-11-17; see "Implemented: the secrets key in the keychain" below.
 
 ## Context
 
@@ -22,7 +22,7 @@ Atomic replace with fsync and private permissions is the common write path (`cra
 - The transcript is saved at every transition of the turn state machine (`0002-agent-loop-state-machine.md`). Loading tolerates a truncated last line and repairs a tool use left without a result.
 - Old files keep loading: a session file that mixes conversation and trace is still readable.
 - UI state stays a file, written per key under the lock.
-- Secrets go to the operating system's keychain, with today's encrypted file as the fallback.
+- Secrets go to the operating system's keychain, with today's encrypted file as the fallback. Amended 2026-11-17: the keychain is opt-in (`<PREFIX>_SECRETS=keychain`) and the file is the default; see "Implemented: the secrets key in the keychain".
 
 The audit proposed SQLite for trace and UI state as well; this decision narrows it to catalog and memory.
 
@@ -82,6 +82,8 @@ Consequences that are now real:
 - A checkpoint whose files were dropped cannot be rewound to. An older binary does not know the marker and would rewind to it without restoring files.
 
 ## Implemented: the secrets key in the keychain (2026-11-17)
+
+Amended 2026-11-17: the keychain is opt-in, with `<PREFIX>_SECRETS=keychain`; without it the key stays in the `secrets.key` file, which is the default (`crates/app/src/secrets/key.rs`, `Keeper::chosen`). The Decision's line "Secrets go to the operating system's keychain, with today's encrypted file as the fallback" and the lines below that describe the keychain as the default (a first start making the key there, `<PREFIX>_SECRETS=file` as the way out) are history: they describe what happens once the keychain is chosen.
 
 Only the vault's 32-byte key moved to the operating system's keychain (macOS Keychain, the Secret Service over D-Bus on Linux, Windows Credential Manager); the entries stay sealed in `secrets.json` as before (`crates/app/src/secrets/key.rs`, `crates/platform/src/keychain.rs`). The alternative, one keychain item per secret, was set aside: it changes the data format and needs a migration of every entry, macOS asks once per item when a rebuilt binary first reads it, and an MCP server's or a subscription's tokens are rewritten on every refresh, which would be a keychain write each time. With one item, the vault, its locking and its tests are unchanged and the keychain is touched once per process.
 

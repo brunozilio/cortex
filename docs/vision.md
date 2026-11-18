@@ -49,7 +49,7 @@ Core:
 Experimental:
 
 - Every flag whose name starts with `experimental-`, among them the write sandbox, the dependency guard, pull-request follow and the tree-sitter code map. They ship on (see non-goal 5); `feature-flags.md` gives each one an owner and an exit criterion.
-- Scope the audit listed without a cut criterion, now under the same rule: project memory with scorecard, seeds and optimisation; learning; schedules and loops; fleet (several live sessions in one terminal); MCP channels; the verification judge.
+- Not experimental: the rest of the scope the audit listed without a cut criterion (project memory with seeds and optimisation, schedules and loops, fleet with several live sessions in one terminal, MCP channels, the verification judge) is stable scope under this vision, not flagged experiments with an exit criterion. Where a part of it is gated, the gate is named in `feature-flags.md`: the memory scorecard, seeds, learning and the learning check are `experimental-` flags; schedules, MCP channels and memory are backend feature switches (`schedules`, `channels`, `memory`) a user can turn off; the verification judge on checked-in criteria is `project-criteria`.
 - Platforms: macOS and Linux are the tested targets. Windows is compiled but several platform functions are stubs.
 
 ## Non-goals
@@ -63,7 +63,7 @@ Experimental:
 
 ## Open decisions
 
-Owned by the tech lead. This document does not take a position on them.
+None is open. Closed:
 
-- Subscription providers' client identity.
-- License.
+- Subscription providers' client identity: out of scope by the owner's decision (legal and provider-identity points are excluded from this work); the providers keep their upstream client identity. It is not an open decision for engineering.
+- License: MIT, in `LICENSE` and declared in `Cargo.toml`.

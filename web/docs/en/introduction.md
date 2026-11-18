@@ -3,7 +3,7 @@ title: Introduction
 description: What {{NAME}} is, what it can do, and how this documentation is organised.
 ---
 
-{{NAME}} is a coding agent you talk to in the terminal. You run `{{COMMAND}}` in a project folder, describe what you want in plain words, and the agent reads the code, edits files, runs commands and reports back, asking you before it does anything you have not allowed.
+{{NAME}} is one terminal coding agent for several model providers, with a trust boundary that holds when the input is hostile: the same chat, rules and sessions whichever model runs, and a clear line on what the agent may do without asking. It is for one developer, on their own machine and their own phone; it is not a hosted or multi-user service, an embeddable SDK or an editor. You run `{{COMMAND}}` in a project folder, describe what you want in plain words, and the agent reads the code, edits files, runs commands and reports back, asking you before it does anything you have not allowed.
 
 ```bash
 cd my-project

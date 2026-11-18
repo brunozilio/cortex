@@ -3,7 +3,7 @@ title: Introdução
 description: O que é o {{NAME}}, o que ele faz e como esta documentação está organizada.
 ---
 
-O {{NAME}} é um agente de programação com quem você conversa no terminal. Você roda `{{COMMAND}}` na pasta de um projeto, descreve o que quer em palavras simples, e o agente lê o código, edita arquivos, roda comandos e te conta o que fez, pedindo sua autorização antes de qualquer coisa que você ainda não liberou.
+O {{NAME}} é um único agente de programação no terminal para vários provedores de modelos, com uma fronteira de confiança que se mantém quando a entrada é hostil: o mesmo chat, as mesmas regras e as mesmas sessões, qualquer que seja o modelo, e uma linha clara do que o agente pode fazer sem perguntar. É para um desenvolvedor, na sua própria máquina e no seu próprio celular; não é um serviço hospedado ou multiusuário, nem um SDK embutível, nem um editor. Você roda `{{COMMAND}}` na pasta de um projeto, descreve o que quer em palavras simples, e o agente lê o código, edita arquivos, roda comandos e te conta o que fez, pedindo sua autorização antes de qualquer coisa que você ainda não liberou.
 
 ```bash
 cd meu-projeto

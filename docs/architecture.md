@@ -26,7 +26,7 @@ The main line is `cli -> app -> agent-engine -> llm-providers -> domain`.
 | `cli` | The binary: argument parsing, the terminal chat (TUI), print mode, subcommands |
 | `app` | The application API, in process. `client/`: the terminal's client (sessions, runs, calls to the handler). `api/`: `ClientCommand`, `ServerEvent`, `Envelope`, the typed feature requests and replies. `handler/`: command handler, run table, outbox. `features/`: the feature folders. Beside them: provider accounts, secrets, MCP sign-in, session catalog, settings |
 | `agent-engine` | The agent loop, tools, permissions, hooks, sub-agents, MCP, sessions, compaction, usage metering, loading declared providers. It re-exports `llm-providers`' `model`, `providers` and `transcript` under its own name |
-| `llm-providers` | Talking to a model: the `Provider` trait, one folder per provider, the model client (HTTP, streaming, retries), wires, the transcript types, credentials, OAuth, catalogs, declared providers, vendors. The five subscription providers are behind the Cargo feature `subscription-providers`, on by default |
+| `llm-providers` | Talking to a model: the `Provider` trait, one folder per provider, the model client (HTTP, streaming, retries), wires, the transcript types, credentials, OAuth, catalogs, declared providers, vendors. The subscription providers (antigravity, chatgpt, claude, copilot, grok, kiro) are behind the Cargo feature `subscription-providers`, on by default |
 | `domain` | Types and rules with no IO, grouped into areas (below): requests, events, permission rules, command classification, transcript, memory, trace |
 | `language-servers` | Language-server client, pool and first-use installs, with the pinned install recipes (`install.rs`) |
 | `content` | Embeds `content/` (prompts, tool descriptions, hooks, skills) and renders it |
@@ -123,7 +123,7 @@ The session catalog and the project memory are rows in `app.db` (`crates/app/src
 
 Not persisted, lost on exit: schedules, background shells, open MCP channels, the inbox, the account rotation counter, the model catalog cache.
 
-A session's file name is a hash of the owner tag, the canonical project path and the session id. Its conversation and its trace are two append-only files (`crates/agent-engine/src/sessions/`), and every line written since the split carries a `seq` number that grows across both.
+A session's file name is the SHA-256 of the fixed legacy tag `LocalOwner` (`LEGACY_OWNER_TAG` in `crates/domain/src/identity/legacy.rs`, kept so files saved before the owner was removed keep their names), the canonical project path and the session id. Its conversation and its trace are two append-only files (`crates/agent-engine/src/sessions/`), and every line written since the split carries a `seq` number that grows across both.
 
 - Resuming reads only `<hash>.jsonl`, backwards to the last restart marker, and replays from there. It never opens the trace, so a trace that is missing or does not parse cannot stop a conversation from resuming; a trace line that does not parse inside an old mixed file is skipped with a warning, and a last line cut mid-write is dropped. A conversation line that does not parse still fails the load.
 - The conversation is saved at every transition of the turn (`agent/turn/mod.rs`, through `Agent::run_keeping`): before each model call (so the prompt is on disk before the first one), after each reply is recorded, after each batch of tool results, and once more in `close`, which normally finds nothing left to write. Each save is one `write` of the new lines followed by `sync_data`. Sub-agents' conversations are not saved.
@@ -171,11 +171,11 @@ Status as of 2026-11-17. Every record in `decisions/` has a row here (`xtask lin
 | `sdk`, `protocol` and `backend` merged into one typed `app` crate with correlation ids (done) | `decisions/0005-typed-application-api.md` |
 | One document helper, SQLite for catalog and memory, transcript split from trace and saved per transition, the secrets key in the keychain (done) | `decisions/0006-one-persistence-pattern.md` |
 | One Tokio runtime in the engine with structured cancellation (stages 1 and 2 done, stage 3 in part) | `decisions/0007-one-async-runtime.md` |
-| The owner concept is removed; on-disk names stay as they are | `decisions/0008-single-user-local-product.md` |
+| The owner concept is removed; on-disk names stay as they are (done) | `decisions/0008-single-user-local-product.md` |
 | Function-size lint instead of a file-length limit; `impl` blocks regrouped | `decisions/0009-function-size-lint.md` |
 | Rationale lives in `docs/` | `decisions/0010-comments-stay-out-of-code.md` |
 | Code mode: the agent scripts its tools through a REPL (behind `experimental-code-mode`) | `decisions/0011-code-mode.md` |
-| Remote control: the console on a phone through a blind relay (`tunnel`, `relay`, `page`; in progress) | `decisions/0012-remote-control-through-a-blind-relay.md` |
+| Remote control: the console on a phone through a blind relay (`tunnel`, `relay`, `page`; accepted) | `decisions/0012-remote-control-through-a-blind-relay.md` |
 | Absolute paths, reads outside the project and MCP tools marked read-only stop asking | `decisions/0013-reads-that-do-not-ask.md` |
 | A hand-written OTLP/HTTP JSON exporter sends each finished run's trace | `decisions/0014-hand-written-otlp-export.md` |
 

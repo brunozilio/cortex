@@ -1,7 +1,14 @@
 # Cortex
 
-A coding agent you talk to in the terminal: a chat (CLI/TUI) with agents,
-commands, skills, memory, plugins and MCP servers (HTTP and stdio).
+One terminal coding agent for several model providers, with a trust
+boundary that holds when the input is hostile: the same chat, rules and
+sessions whichever model runs, and a clear line on what the agent may do
+without asking. It is for one developer, on their own machine and their own
+phone. It is not a hosted or multi-user service, an embeddable SDK or an
+editor.
+
+It is a chat (CLI/TUI) with agents, commands, skills, memory, plugins and
+MCP servers (HTTP and stdio).
 
 ## Installing
 
@@ -35,7 +42,7 @@ cortex logout                            # forget a provider
 cortex                                   # chat in the current project
 cortex -p "explain src/main.rs"          # one answer, printed
 cortex models                            # what the connected providers offer
-cortex mcp                               # MCP servers: list, add, remove, approve, deny, login, logout
+cortex mcp                               # MCP servers: list, get, add, remove, approve, deny, login, logout
 cortex plugin                            # plugins: list, install, update, remove
 cortex config                            # read or change the settings: list, get, set, unset
 cortex doctor                            # check this installation in this folder
@@ -144,7 +151,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo run -q -p xtask -- lint
 ```
 
-None of these needs Bun or a built page. The web page in `web/` is built
+With `SKIP_WEB_BUILD=1` none of these needs Bun or a built page. The web page in `web/` is built
 and checked by its own steps ([web/README.md](web/README.md) has the
 details):
 
@@ -154,9 +161,6 @@ cargo run -p xtask -- check-release   # before a release: fails if web/dist is m
 cargo run -p xtask -- web-fixtures    # after changing a trace type: rewrites web/test/fixtures from the Rust types
 (cd web && bun test)                  # the page's tests, including the fixtures against its types
 ```
-
-`cargo build` embeds `web/dist` when it exists and nothing when it does
-not; it never starts Bun or touches the network for the page.
 
 ## Fuzzing
 

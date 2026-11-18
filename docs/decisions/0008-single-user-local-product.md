@@ -1,6 +1,6 @@
 # 0008 Single-user local product: remove the multi-user seam
 
-Status: Accepted, 2026-11-16
+Status: Implemented, 2026-11-17 (accepted 2026-11-16)
 
 ## Context
 

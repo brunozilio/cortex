@@ -32,7 +32,7 @@ description: Every command, subcommand and option of the {{COMMAND}} program.
 | `{{COMMAND}} login` | Connect an LLM provider with an API key or a subscription; it lists the providers to pick from |
 | `{{COMMAND}} logout` | Forget a provider's credentials |
 | `{{COMMAND}} models` | List the models the connected providers offer |
-| `{{COMMAND}} mcp` | The MCP servers a session here can use: list, add, remove, approve |
+| `{{COMMAND}} mcp` | The MCP servers a session here can use: list, get, add, remove, approve, deny, login, logout |
 | `{{COMMAND}} plugin` | The plugins in `~/{{DIR}}/plugins`: list, install, update, remove |
 | `{{COMMAND}} remote` | Remote control from a phone, through your relay: status, relay, pair, devices, revoke |
 | `{{COMMAND}} doctor` | Check that this installation can work in the folder |
@@ -80,8 +80,8 @@ Without a command, it lists the servers. Every command prints the server list af
 | `mcp get` | `<NAME>` | Show one server's entry, with its secrets hidden |
 | `mcp add` | `<NAME> <TARGET> [ARGS]...` | Add one of your own servers: a URL (HTTP) or a command and its arguments |
 | `mcp remove` | `<NAME>` | Remove one of your own servers |
-| `mcp approve` | `<NAME>` | Let a server of this project's `.mcp.json` start |
-| `mcp deny` | `<NAME>` | Turn a server of this project's `.mcp.json` off |
+| `mcp approve` | `<NAME>` | Let a server of this project's `{{DIR}}/mcp.json` start |
+| `mcp deny` | `<NAME>` | Turn a server of this project's `{{DIR}}/mcp.json` off |
 | `mcp login` | `<NAME>` | Sign in to a remote server in the browser (OAuth) |
 | `mcp logout` | `<NAME>` | Forget the sign-in to a remote server |
 
