@@ -76,15 +76,15 @@ fn configured_on(cwd: &Path, sources: &McpSources, support: &platform::sandbox::
         .collect()
 }
 
-pub fn sources(folder: Folder<'_>) -> Result<McpSources, String> {
+pub fn sources(folder: Folder<'_>) -> Result<McpSources, crate::brief::BriefError> {
     crate::brief::mcp_sources(folder)
 }
 
-pub fn list(folder: Folder<'_>) -> Result<Vec<McpServerInfo>, String> {
+pub fn list(folder: Folder<'_>) -> Result<Vec<McpServerInfo>, crate::brief::BriefError> {
     listing(folder).map(|listing| listing.servers)
 }
 
-pub fn listing(folder: Folder<'_>) -> Result<McpListing, String> {
+pub fn listing(folder: Folder<'_>) -> Result<McpListing, crate::brief::BriefError> {
     let sources = crate::brief::mcp_sources(folder)?;
     let cwd = folder.cwd;
     let home = sources.home.as_deref();

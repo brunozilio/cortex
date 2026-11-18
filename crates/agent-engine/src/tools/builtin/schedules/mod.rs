@@ -38,12 +38,26 @@ fn moment_in(zone: &TimeZone, secs: i64) -> Option<Moment> {
     })
 }
 
-pub fn add(client: u64, prompt: &str, when: When, now: i64) -> Result<Scheduled, String> {
-    let next = when.first(now, moment)?;
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ScheduleError {
+    #[error("{0}")]
+    When(String),
+    #[error("At most {MOST} prompts can be scheduled; delete some with CronDelete.")]
+    Full,
+}
+
+impl From<ScheduleError> for String {
+    fn from(error: ScheduleError) -> Self {
+        error.to_string()
+    }
+}
+
+pub fn add(client: u64, prompt: &str, when: When, now: i64) -> Result<Scheduled, ScheduleError> {
+    let next = when.first(now, moment).map_err(ScheduleError::When)?;
     let mut all = lock();
     let mine = all.entry(client).or_default();
     if mine.len() >= MOST {
-        return Err(format!("At most {MOST} prompts can be scheduled; delete some with CronDelete."));
+        return Err(ScheduleError::Full);
     }
     static NEXT: AtomicU64 = AtomicU64::new(1);
     let id = format!("cron_{}", NEXT.fetch_add(1, Ordering::Relaxed));

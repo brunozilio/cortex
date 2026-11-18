@@ -55,7 +55,7 @@ pub use handler::CommandHandler;
 pub use handler::local::LocalBackend;
 pub use handler::outbox::{Outbox, Replies};
 pub use homes::{Homes, OwnerHome};
-pub use mcp_auth::McpAuth;
+pub use mcp_auth::{McpAuth, McpAuthError};
 pub use providers::{InMemoryProviderStore, ModelCatalog, ModelProviders, ProviderStore};
 pub use secrets::{InMemorySecretStore, SecretStore, Secrets};
 
@@ -63,6 +63,6 @@ pub mod team {
     pub use agent_engine::team::{Me, Team};
 }
 pub use services::LocalServices;
-pub use settings::{SettingsChange, SettingsStore};
-pub use trust::{InMemoryTrustStore, TrustStore, Trusts};
+pub use settings::{SettingsChange, SettingsError, SettingsStore};
+pub use trust::{InMemoryTrustStore, TrustError, TrustStore, Trusts};
 pub use turned_off::TurnedOff;

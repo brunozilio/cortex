@@ -43,15 +43,23 @@ pub fn open() -> Vec<Peer> {
     lock().values().cloned().collect()
 }
 
-pub fn send(client: u64, to: &str, message: &str) -> Result<String, String> {
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum PeerError {
+    #[error("No session {to}. Open now: {}", if open.is_empty() { "none".to_owned() } else { open.join(", ") })]
+    NoSuchSession { to: String, open: Vec<String> },
+    #[error("That is this session.")]
+    ThisSession,
+}
+
+pub fn send(client: u64, to: &str, message: &str) -> Result<String, PeerError> {
     let sessions = open();
     let from = sessions.iter().find(|peer| peer.client == client).map_or("another session", |peer| &peer.name);
-    let target = sessions.iter().find(|peer| peer.name == to).ok_or_else(|| {
-        let names: Vec<&str> = sessions.iter().filter(|p| p.client != client).map(|p| p.name.as_str()).collect();
-        format!("No session {to}. Open now: {}", if names.is_empty() { "none".into() } else { names.join(", ") })
+    let target = sessions.iter().find(|peer| peer.name == to).ok_or_else(|| PeerError::NoSuchSession {
+        to: to.to_owned(),
+        open: sessions.iter().filter(|p| p.client != client).map(|p| p.name.clone()).collect(),
     })?;
     if target.client == client {
-        return Err("That is this session.".into());
+        return Err(PeerError::ThisSession);
     }
     super::inbox::push(target.client, Notice::new(format!("session {from}"), message));
     Ok(target.name.clone())
@@ -80,7 +88,7 @@ impl Tool for SessionMessage {
         }
         match send(workspace.credentials.client, to.trim(), message) {
             Ok(name) => Outcome::ok(format!("Sent to session {name}; its answer, if any, reaches you as an event.")),
-            Err(error) => Outcome::error(error),
+            Err(error) => Outcome::error(error.to_string()),
         }
     }
 }
@@ -131,8 +139,13 @@ mod tests {
 
         assert_eq!(send(9401, "web-9402", "is the API up?"), Ok("web-9402".into()));
         assert_eq!(super::super::inbox::take(9402), [Notice::new("session api-9401", "is the API up?")]);
-        assert!(send(9401, "gone-9403", "hi").is_err(), "a session that is not open is out of reach");
-        assert!(send(9401, "api-9401", "me").is_err());
+        let gone = send(9401, "gone-9403", "hi").expect_err("a session that is not open is out of reach");
+        assert!(gone.to_string().starts_with("No session gone-9403. Open now: "), "{gone}");
+        assert!(gone.to_string().contains("web-9402") && !gone.to_string().contains("api-9401"), "{gone}");
+        assert_eq!(send(9401, "api-9401", "me"), Err(PeerError::ThisSession));
+        assert_eq!(PeerError::ThisSession.to_string(), "That is this session.");
+        let alone = PeerError::NoSuchSession { to: "web-1".into(), open: Vec::new() };
+        assert_eq!(alone.to_string(), "No session web-1. Open now: none");
         assert!(open().iter().any(|peer| peer.client == 9402));
         let mut workspace = Workspace::new("/work/api");
         workspace.credentials.client = 9401;

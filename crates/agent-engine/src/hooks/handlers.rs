@@ -6,27 +6,54 @@ use super::{CommandOutput, Handler};
 use crate::model::ModelError;
 use crate::tools::Workspace;
 
-pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, String> {
-    let mut cmd = workspace.confined(platform::script_shell(&handler.command));
-    cmd.env(concat!(brand::env_prefix!(), "_PROJECT_DIR"), &workspace.cwd);
-    cmd.current_dir(&workspace.cwd);
-    let input = Some(serde_json::to_vec(input).map_err(|e| e.to_string())?);
-    let limits = Limits { timeout: Duration::from_secs(handler.timeout), max_output: 64 * 1024, input };
-    let done =
-        platform::bounded::run_cancellable(&mut cmd, limits, workspace.stop.token()).map_err(|e| e.to_string())?;
-    match done.ended {
-        Ended::Exited(status) => Ok(CommandOutput { code: status.code(), stdout: done.stdout, stderr: done.stderr }),
-        Ended::Stopped | Ended::TimedOut => Err("hook cancelled or timed out".into()),
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum HookRunError {
+    #[error("hook cancelled or timed out")]
+    EndedEarly,
+    #[error("hook worker stopped")]
+    WorkerStopped,
+    #[error("HTTP hook requires url")]
+    NoUrl,
+    #[error("HTTP hook output exceeds 64 KiB")]
+    OutputTooLong,
+    #[error("HTTP hook returned non UTF-8 output")]
+    NotText,
+    #[error("{0}")]
+    Failed(String),
+}
+
+impl From<HookRunError> for String {
+    fn from(error: HookRunError) -> Self {
+        error.to_string()
     }
 }
 
-const ENDED_EARLY: &str = "hook cancelled or timed out";
+fn failed(error: impl std::fmt::Display) -> HookRunError {
+    HookRunError::Failed(error.to_string())
+}
 
-async fn within<T>(timeout: u64, run: &Stop, work: impl Future<Output = Result<T, String>>) -> Result<T, String> {
+pub fn command(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, HookRunError> {
+    let mut cmd = workspace.confined(platform::script_shell(&handler.command));
+    cmd.env(concat!(brand::env_prefix!(), "_PROJECT_DIR"), &workspace.cwd);
+    cmd.current_dir(&workspace.cwd);
+    let input = Some(serde_json::to_vec(input).map_err(failed)?);
+    let limits = Limits { timeout: Duration::from_secs(handler.timeout), max_output: 64 * 1024, input };
+    let done = platform::bounded::run_cancellable(&mut cmd, limits, workspace.stop.token()).map_err(failed)?;
+    match done.ended {
+        Ended::Exited(status) => Ok(CommandOutput { code: status.code(), stdout: done.stdout, stderr: done.stderr }),
+        Ended::Stopped | Ended::TimedOut => Err(HookRunError::EndedEarly),
+    }
+}
+
+async fn within<T>(
+    timeout: u64,
+    run: &Stop,
+    work: impl Future<Output = Result<T, HookRunError>>,
+) -> Result<T, HookRunError> {
     tokio::select! {
         biased;
-        () = run.wait() => Err(ENDED_EARLY.into()),
-        () = tokio::time::sleep(Duration::from_secs(timeout)) => Err(ENDED_EARLY.into()),
+        () = run.wait() => Err(HookRunError::EndedEarly),
+        () = tokio::time::sleep(Duration::from_secs(timeout)) => Err(HookRunError::EndedEarly),
         done = work => done,
     }
 }
@@ -34,16 +61,16 @@ async fn within<T>(timeout: u64, run: &Stop, work: impl Future<Output = Result<T
 fn waited<T: Send>(
     timeout: u64,
     run: &Stop,
-    work: impl Future<Output = Result<T, String>> + Send,
-) -> Result<T, String> {
-    platform::runtime::block_on(within(timeout, run, work)).unwrap_or_else(|error| Err(error.to_string()))
+    work: impl Future<Output = Result<T, HookRunError>> + Send,
+) -> Result<T, HookRunError> {
+    platform::runtime::block_on(within(timeout, run, work)).unwrap_or_else(|error| Err(failed(error)))
 }
 
 pub(super) fn bounded<T: Send>(
     timeout: u64,
     workspace: &Workspace,
     work: impl FnOnce(Arc<Stop>) -> Result<T, String> + Send,
-) -> Result<T, String> {
+) -> Result<T, HookRunError> {
     let own = Arc::new(Stop::new());
     let (send, receive) = tokio::sync::oneshot::channel();
     let handed = Arc::clone(&own);
@@ -51,7 +78,9 @@ pub(super) fn bounded<T: Send>(
         scope.spawn(move || {
             let _ = send.send(work(handed));
         });
-        let done = async { receive.await.unwrap_or_else(|_| Err("hook worker stopped".into())) };
+        let done = async {
+            receive.await.map_err(|_| HookRunError::WorkerStopped).and_then(|done| done.map_err(HookRunError::Failed))
+        };
         let outcome = waited(timeout, &workspace.stop, done);
         if outcome.is_err() {
             own.cancel();
@@ -60,12 +89,11 @@ pub(super) fn bounded<T: Send>(
     })
 }
 
-pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, String> {
+pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<CommandOutput, HookRunError> {
     use crate::model::http::{Http, NetHttp};
-    let url = handler.url.as_deref().ok_or("HTTP hook requires url")?;
+    let url = handler.url.as_deref().ok_or(HookRunError::NoUrl)?;
     let mut headers = Vec::new();
-    let variables =
-        regex::Regex::new(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)").map_err(|e| e.to_string())?;
+    let variables = regex::Regex::new(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)").map_err(failed)?;
     for (name, value) in &handler.headers {
         let value = variables
             .replace_all(value, |captures: &regex::Captures<'_>| {
@@ -82,12 +110,12 @@ pub fn http(handler: &Handler, input: &Value, workspace: &Workspace) -> Result<C
     let body = input.to_string();
     let hook = workspace.stop.token().child_token();
     let asked = async {
-        let response = NetHttp.post_streaming(url, &headers, &body, &hook).await.map_err(|e| e.to_string())?;
+        let response = NetHttp.post_streaming(url, &headers, &body, &hook).await.map_err(failed)?;
         let status = response.status;
         let text = response.body.text(&hook, HTTP_OUTPUT_AT_MOST).await.map_err(|error| match error {
-            ModelError::Provider(_) => "HTTP hook output exceeds 64 KiB".to_owned(),
-            ModelError::Network(why) if why.contains("UTF-8") => "HTTP hook returned non UTF-8 output".to_owned(),
-            error => error.to_string(),
+            ModelError::Provider(_) => HookRunError::OutputTooLong,
+            ModelError::Network(why) if why.contains("UTF-8") => HookRunError::NotText,
+            error => failed(error),
         })?;
         let ok = (200..300).contains(&status);
         Ok(CommandOutput {
@@ -168,7 +196,8 @@ mod scoped {
         let (handler, _listener) = silent_hook(1);
         let workspace = Workspace::new("/tmp");
         let started = Instant::now();
-        assert_eq!(http(&handler, &serde_json::json!({}), &workspace).map(|_| ()), Err(ENDED_EARLY.into()));
+        assert_eq!(http(&handler, &serde_json::json!({}), &workspace).map(|_| ()), Err(HookRunError::EndedEarly));
+        assert_eq!(String::from(HookRunError::EndedEarly), "hook cancelled or timed out");
         assert!(started.elapsed() < Duration::from_secs(10), "{:?}", started.elapsed());
         assert!(!workspace.stop.is_stopped(), "only the hook was ended");
     }
@@ -214,7 +243,7 @@ mod scoped {
         let ended = Instant::now();
         let took = ended.saturating_duration_since(cancelled_at.join().expect("cancelled"));
         eprintln!("cancel latency, a command hook: {took:?}");
-        assert_eq!(ran.map(|_| ()), Err(ENDED_EARLY.into()));
+        assert_eq!(ran.map(|_| ()), Err(HookRunError::EndedEarly));
         assert!(took < Duration::from_secs(1), "{took:?}");
     }
 
@@ -225,7 +254,18 @@ mod scoped {
             platform::runtime::block_on(async { own.wait().await }).map_err(|error| error.to_string())?;
             Ok(own.is_stopped())
         });
-        assert_eq!(ended, Err(ENDED_EARLY.into()));
+        assert_eq!(ended, Err(HookRunError::EndedEarly));
         assert!(!workspace.stop.is_stopped());
+    }
+
+    #[test]
+    fn an_http_hook_without_a_url_says_so_in_the_words_it_always_used() {
+        let handler: Handler = serde_json::from_value(serde_json::json!({ "type": "http" })).expect("handler");
+        let refused = http(&handler, &serde_json::json!({}), &Workspace::new("/tmp")).map(|_| ());
+        assert_eq!(refused, Err(HookRunError::NoUrl));
+        assert_eq!(HookRunError::NoUrl.to_string(), "HTTP hook requires url");
+        assert_eq!(HookRunError::OutputTooLong.to_string(), "HTTP hook output exceeds 64 KiB");
+        assert_eq!(HookRunError::NotText.to_string(), "HTTP hook returned non UTF-8 output");
+        assert_eq!(HookRunError::WorkerStopped.to_string(), "hook worker stopped");
     }
 }

@@ -29,6 +29,21 @@ fn a_recurring_prompt_fires_at_each_match_and_a_one_shot_once() {
 }
 
 #[test]
+fn a_full_schedule_refuses_one_more_with_the_text_it_always_had() {
+    let client = 7103;
+    let start = minute_start();
+    for at in 0..MOST {
+        add(client, "wake up", When::At(start + 90 + i64::try_from(at).expect("small")), start).expect("room");
+    }
+    let refused = add(client, "one more", When::At(start + 90), start).expect_err("full");
+    assert_eq!(refused, ScheduleError::Full);
+    assert_eq!(String::from(refused), format!("At most {MOST} prompts can be scheduled; delete some with CronDelete."));
+    let odd = add(client, "odd", When::Cron { expr: "not a cron".into(), recurring: true }, start);
+    assert!(matches!(odd, Err(ScheduleError::When(_))), "{odd:?}");
+    forget_client(client);
+}
+
+#[test]
 fn a_recurring_prompt_expires_after_a_week() {
     let client = 7102;
     let start = minute_start();

@@ -31,9 +31,10 @@ fn settings_are_kept_and_a_save_too_large_is_refused() {
     store.save(&json!({"theme": "dark"})).expect("save");
     assert_eq!(store.load(), Some(json!({"theme": "dark"})));
     let huge = json!({ "x": "a".repeat(AT_MOST) });
-    assert!(store.save(&huge).is_err());
+    assert_eq!(store.save(&huge), Err(SettingsError::TooLarge));
     let grown = store.change(&[SettingsChange::set(["x"], json!("a".repeat(AT_MOST)))]);
-    assert_eq!(grown, Err("these settings are too large to keep".to_owned()));
+    assert_eq!(grown, Err(SettingsError::TooLarge));
+    assert_eq!(SettingsError::TooLarge.to_string(), "these settings are too large to keep");
     assert_eq!(store.load(), Some(json!({"theme": "dark"})), "a refused save keeps the last");
 }
 

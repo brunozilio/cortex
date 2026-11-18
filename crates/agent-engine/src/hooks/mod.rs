@@ -7,7 +7,7 @@ mod scripts;
 mod validate;
 
 pub use self::brief::Briefed;
-pub use self::handlers::{command, http};
+pub use self::handlers::{HookRunError, command, http};
 pub use self::script_hook::script;
 pub use self::scripts::BUILTIN as BUILTIN_SCRIPT;
 pub(crate) use self::validate::TIMEOUT_SECONDS;
@@ -108,9 +108,9 @@ impl Group {
 impl Handler {
     fn runs(&self, input: &Value, workspace: &Workspace, model: Model<'_>) -> Result<CommandOutput, String> {
         match self.kind {
-            HandlerKind::Http => http(self, input, workspace),
+            HandlerKind::Http => http(self, input, workspace).map_err(String::from),
             HandlerKind::Script => script(self, input, workspace, model),
-            HandlerKind::Command => command(self, input, workspace),
+            HandlerKind::Command => command(self, input, workspace).map_err(String::from),
             HandlerKind::Prompt | HandlerKind::Agent => self.judged(input, workspace, model),
         }
     }

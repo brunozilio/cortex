@@ -76,8 +76,11 @@ impl LocalServices {
         self.extensions.trusts.gate(cwd, self.home().as_deref())
     }
 
-    pub fn project_settings(&self, cwd: &Path) -> Result<agent_engine::prompt::settings::Settings, String> {
-        agent_engine::prompt::settings::load(&self.gate(cwd), &[])
+    pub fn project_settings(
+        &self,
+        cwd: &Path,
+    ) -> Result<agent_engine::prompt::settings::Settings, crate::settings::SettingsError> {
+        agent_engine::prompt::settings::load(&self.gate(cwd), &[]).map_err(crate::settings::SettingsError::Unreadable)
     }
 
     pub fn with_engine(engine: Arc<dyn AgentEngine>) -> Self {

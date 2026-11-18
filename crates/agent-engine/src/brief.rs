@@ -4,6 +4,25 @@ use crate::trust::Gate;
 use crate::{prompt, tools};
 use domain::Folder;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum BriefError {
+    #[error("{0}")]
+    Settings(String),
+    #[error("a Brief hook stopped the session: {0}")]
+    StoppedByHook(String),
+    #[error("a Brief hook: {0}")]
+    EditedBadly(String),
+    #[error("{0}")]
+    Hook(String),
+}
+
+impl From<BriefError> for String {
+    fn from(error: BriefError) -> Self {
+        error.to_string()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Brief {
     pub skills: Vec<tools::skill::FoundSkill>,
@@ -20,11 +39,11 @@ pub struct Brief {
     pub trust: domain::trust::Trust,
 }
 impl Brief {
-    pub fn load(folder: Folder<'_>) -> Result<Self, String> {
+    pub fn load(folder: Folder<'_>) -> Result<Self, BriefError> {
         let gate = Gate::of(folder);
         let home = gate.home();
         let plugins = crate::plugins::found(folder, home);
-        let settings = prompt::settings::load(&gate, &plugins)?;
+        let settings = prompt::settings::load(&gate, &plugins).map_err(BriefError::Settings)?;
         let mut skills = tools::skill::discover(folder, home);
         skills.retain(|skill| domain::features::skill_flag(&skill.name).is_none_or(|flag| settings.features.on(flag)));
         let found = crate::hooks::Briefed {
@@ -74,10 +93,10 @@ fn hook_workspace(
     workspace
 }
 
-pub fn mcp_sources(folder: Folder<'_>) -> Result<crate::mcp::McpSources, String> {
+pub fn mcp_sources(folder: Folder<'_>) -> Result<crate::mcp::McpSources, BriefError> {
     let gate = Gate::of(folder);
     let plugins = crate::plugins::found(folder, gate.home());
-    let settings = prompt::settings::load(&gate, &plugins)?;
+    let settings = prompt::settings::load(&gate, &plugins).map_err(BriefError::Settings)?;
     let sandbox = sandbox_of(&settings);
     Ok(crate::mcp::McpSources {
         home: gate.home().map(PathBuf::from),
@@ -93,10 +112,10 @@ fn sandbox_of(settings: &prompt::settings::Settings) -> Option<domain::sandbox::
     settings.features.on(domain::features::SANDBOX).then(|| settings.sandbox.clone())
 }
 
-pub fn permissions(folder: Folder<'_>) -> Result<domain::permission_rules::PermissionsInfo, String> {
+pub fn permissions(folder: Folder<'_>) -> Result<domain::permission_rules::PermissionsInfo, BriefError> {
     let gate = Gate::of(folder);
     let plugins = crate::plugins::found(folder, gate.home());
-    let settings = prompt::settings::load(&gate, &plugins)?;
+    let settings = prompt::settings::load(&gate, &plugins).map_err(BriefError::Settings)?;
     Ok(domain::permission_rules::PermissionsInfo {
         rules: settings.permissions.listed(),
         added_dirs: settings.added_dirs,
@@ -293,6 +312,18 @@ export default () => ({ agents: [
 
         let error = super::Brief::load(request.folder()).map(|_| ()).expect_err("twice");
 
-        assert_eq!(error, "a Brief hook: the hook listed the agent \"a\" twice");
+        assert_eq!(error, super::BriefError::EditedBadly("the hook listed the agent \"a\" twice".into()));
+        assert_eq!(String::from(error), "a Brief hook: the hook listed the agent \"a\" twice");
+    }
+
+    #[test]
+    fn each_brief_failure_reads_as_the_text_it_always_had() {
+        use super::BriefError;
+        assert_eq!(BriefError::Settings("settings.json: bad".into()).to_string(), "settings.json: bad");
+        assert_eq!(
+            BriefError::StoppedByHook("not today".into()).to_string(),
+            "a Brief hook stopped the session: not today"
+        );
+        assert_eq!(BriefError::Hook("hook worker stopped".into()).to_string(), "hook worker stopped");
     }
 }

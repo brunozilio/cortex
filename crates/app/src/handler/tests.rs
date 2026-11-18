@@ -104,8 +104,8 @@ impl crate::settings::SettingsStore for ReadOnly {
         None
     }
 
-    fn save(&self, _settings: &serde_json::Value) -> Result<(), String> {
-        Err("the disk is read-only".into())
+    fn save(&self, _settings: &serde_json::Value) -> Result<(), crate::settings::SettingsError> {
+        Err(crate::settings::SettingsError::Unwritten("the disk is read-only".into()))
     }
 }
 

@@ -11,9 +11,29 @@ pub const FILE: &str = "trusted-folders.json";
 
 type Change<'a> = &'a dyn Fn(&mut TrustedFolders) -> Result<(), Refusal>;
 
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum TrustError {
+    #[error("{0}")]
+    Refused(Refusal),
+    #[error("{0}")]
+    Unsaved(String),
+}
+
+impl From<Refusal> for TrustError {
+    fn from(refusal: Refusal) -> Self {
+        Self::Refused(refusal)
+    }
+}
+
+impl From<TrustError> for String {
+    fn from(error: TrustError) -> Self {
+        error.to_string()
+    }
+}
+
 pub trait TrustStore: Send + Sync {
     fn folders(&self) -> TrustedFolders;
-    fn change(&self, change: Change<'_>) -> Result<(), String>;
+    fn change(&self, change: Change<'_>) -> Result<(), TrustError>;
 }
 
 #[derive(Debug, Clone)]
@@ -38,9 +58,9 @@ impl TrustStore for FileTrustStore {
         }
     }
 
-    fn change(&self, change: Change<'_>) -> Result<(), String> {
+    fn change(&self, change: Change<'_>) -> Result<(), TrustError> {
         let changed = self.kept.try_update(|folders: &mut TrustedFolders| change(folders));
-        changed.map_err(|error| error.to_string())?.map_err(|refusal| refusal.to_string())
+        Ok(changed.map_err(|error| TrustError::Unsaved(error.to_string()))??)
     }
 }
 
@@ -54,8 +74,8 @@ impl TrustStore for InMemoryTrustStore {
         self.kept.locked().clone()
     }
 
-    fn change(&self, change: Change<'_>) -> Result<(), String> {
-        change(&mut self.kept.locked()).map_err(|refusal| refusal.to_string())
+    fn change(&self, change: Change<'_>) -> Result<(), TrustError> {
+        Ok(change(&mut self.kept.locked())?)
     }
 }
 
@@ -106,7 +126,7 @@ impl Trusts {
         agent_engine::trust::report(cwd, home, self.of(cwd, home))
     }
 
-    pub fn set(&self, cwd: &Path, home: Option<&Path>, trusted: bool) -> Result<TrustReport, String> {
+    pub fn set(&self, cwd: &Path, home: Option<&Path>, trusted: bool) -> Result<TrustReport, TrustError> {
         let root = agent_engine::trust::root_of(cwd, home);
         let home_folder = home.map(agent_engine::trust::canonical);
         if trusted {
@@ -121,10 +141,10 @@ impl Trusts {
         Ok(self.report(cwd, home))
     }
 
-    pub fn only_for_this_process(&self, cwd: &Path, home: Option<&Path>) -> Result<TrustReport, String> {
+    pub fn only_for_this_process(&self, cwd: &Path, home: Option<&Path>) -> Result<TrustReport, TrustError> {
         let root = agent_engine::trust::root_of(cwd, home);
         if let Some(refusal) = domain::trust::refusal(&root, home.map(agent_engine::trust::canonical).as_deref()) {
-            return Err(refusal.to_string());
+            return Err(TrustError::Refused(refusal));
         }
         let mut trusted = self.for_this_process.locked();
         if !trusted.contains(&root) {
@@ -155,7 +175,7 @@ pub(crate) fn answer(services: &crate::LocalServices, path: &Path, asked: Asked)
             services.follow_project(path);
             crate::api::Reply::Trust(report)
         }
-        Err(refused) => crate::api::Reply::error(refused),
+        Err(refused) => crate::api::Reply::error(refused.to_string()),
     }
 }
 

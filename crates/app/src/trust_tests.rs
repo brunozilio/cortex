@@ -89,3 +89,14 @@ fn a_file_that_does_not_parse_trusts_nothing() {
 
     assert_eq!(trusts.of(work.path(), None), Trust::Untrusted);
 }
+
+#[test]
+fn the_home_folder_is_refused_by_kind_with_the_text_it_always_had() {
+    let home = tempfile::tempdir().expect("home");
+    let trusts = Trusts::default();
+    let kept = trusts.set(home.path(), Some(home.path()), true).expect_err("home");
+    let once = trusts.only_for_this_process(home.path(), Some(home.path())).expect_err("home");
+    assert_eq!(kept, TrustError::Refused(Refusal::Home));
+    assert_eq!(once, TrustError::Refused(Refusal::Home));
+    assert_eq!(String::from(kept), Refusal::Home.to_string());
+}

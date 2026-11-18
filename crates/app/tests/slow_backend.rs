@@ -21,7 +21,7 @@ impl SettingsStore for Stuck {
         None
     }
 
-    fn save(&self, _settings: &serde_json::Value) -> Result<(), String> {
+    fn save(&self, _settings: &serde_json::Value) -> Result<(), app::SettingsError> {
         Ok(())
     }
 }

@@ -40,7 +40,7 @@ pub(crate) fn sign_in(services: &LocalServices, path: PathBuf, name: String, rep
 }
 
 pub(crate) fn sign_out(services: &LocalServices, path: &Path, name: &str) -> Reply {
-    let result = url_of(services, path, name).and_then(|url| services.mcp_auth.sign_out(&url));
+    let result = url_of(services, path, name).and_then(|url| services.mcp_auth.sign_out(&url).map_err(String::from));
     match result {
         Ok(true) => crate::mcp_admin::list(path, &services.extensions, services.home().as_deref()),
         Ok(false) => Reply::error(format!("You were not signed in to {name}")),

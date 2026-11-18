@@ -84,9 +84,17 @@ fn a_server_that_does_not_let_brand_register_says_so() {
     ]));
     let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
     let error = auth.sign_in(SERVER, &Arc::default(), &mut |_| {}).expect_err("no registration");
-    assert!(error.contains("register"), "{error}");
+    assert_eq!(error, McpAuthError::NoRegistration { server: SERVER.to_owned() });
     let with_a_token = format!("{} mcp add -H 'Authorization: Bearer ${{TOKEN}}' <name> {SERVER}", brand::COMMAND);
-    assert!(error.contains(&with_a_token), "says how to use a token instead: {error}");
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "this server does not let applications register themselves, so {} cannot sign in. Use a token the \
+             service issues instead, kept in the environment: `{with_a_token}`",
+            brand::NAME
+        ),
+        "says how to use a token instead"
+    );
 }
 
 #[test]
@@ -100,7 +108,12 @@ fn an_unsafe_sign_in_address_is_refused_before_the_browser_opens() {
     let auth = McpAuth::new(Arc::new(InMemorySecretStore::default()), http);
     let mut opened = false;
     let error = auth.sign_in(SERVER, &Arc::default(), &mut |_| opened = true).expect_err("refused");
-    assert!(error.contains("file:///Applications/Calculator.app") && !opened, "{error}");
+    assert_eq!(error, McpAuthError::UnsafeAddress("file:///Applications/Calculator.app".into()));
+    assert_eq!(
+        error.to_string(),
+        "file:///Applications/Calculator.app is not a safe address to sign in with (https, or http to this computer)"
+    );
+    assert!(!opened);
     let plain = McpAuth::new(Arc::new(InMemorySecretStore::default()), Arc::new(ScriptedHttp::new([])));
     assert!(plain.sign_in("http://mcp.test/mcp", &Arc::default(), &mut |_| {}).is_err(), "http elsewhere");
 }
@@ -126,7 +139,11 @@ fn a_sign_in_that_could_not_be_kept_stops_before_the_browser_opens() {
     let mut opened = false;
     let error = auth.sign_in(SERVER, &Arc::default(), &mut |_| opened = true).expect_err("cannot keep it");
     assert!(!opened, "the user is not sent to approve a sign-in that would be lost");
-    assert!(error.contains("Operation not permitted") && error.contains("saved"), "{error}");
+    assert_eq!(
+        error.to_string(),
+        "a sign-in could not be saved here (Operation not permitted (os error 1)), so the browser was not opened"
+    );
+    assert!(matches!(error, McpAuthError::CannotKeep(_)), "{error:?}");
     assert!(http.sent().is_empty(), "nothing is asked of the server either");
 }
 
@@ -222,7 +239,7 @@ fn a_cancelled_sign_in_stops_waiting_for_the_browser_and_frees_its_port() {
             stop.store(true, std::sync::atomic::Ordering::SeqCst);
         })
         .expect_err("cancelled");
-    assert!(error.contains("cancelled"), "{error}");
+    assert!(error.to_string().contains("cancelled"), "{error}");
     assert!(asked.elapsed() < std::time::Duration::from_secs(5), "it did not wait for the browser");
     let port: u16 = redirect.rsplit(':').next().and_then(|rest| rest.split('/').next()?.parse().ok()).expect("port");
     let freed = std::time::Instant::now();
@@ -230,4 +247,98 @@ fn a_cancelled_sign_in_stops_waiting_for_the_browser_and_frees_its_port() {
         assert!(freed.elapsed() < std::time::Duration::from_secs(5), "the port is still held: {error:?}");
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
+}
+
+#[derive(Debug)]
+struct SingleUseRefreshTokens {
+    valid: Mutex<String>,
+    issued: std::sync::atomic::AtomicUsize,
+    refused: std::sync::atomic::AtomicUsize,
+}
+
+impl Http for SingleUseRefreshTokens {
+    fn post(
+        &self,
+        _url: &str,
+        _headers: &[(String, String)],
+        body: &str,
+    ) -> Result<agent_engine::model::http::Response, String> {
+        use std::sync::atomic::Ordering;
+        let presented =
+            body.split('&').find_map(|pair| pair.strip_prefix("refresh_token=")).unwrap_or_default().to_owned();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let mut valid = self.valid.lock().expect("valid token");
+        let (status, answer) = if presented == *valid {
+            let next = self.issued.fetch_add(1, Ordering::SeqCst) + 2;
+            *valid = format!("r-{next}");
+            (200, json!({ "access_token": format!("a-{next}"), "refresh_token": *valid, "expires_in": 3600 }))
+        } else {
+            self.refused.fetch_add(1, Ordering::SeqCst);
+            (400, json!({ "error": "invalid_grant" }))
+        };
+        Ok(agent_engine::model::http::Response {
+            status,
+            headers: Vec::new(),
+            body: agent_engine::model::http::Body::from(answer.to_string()),
+        })
+    }
+
+    fn get(&self, _url: &str, _headers: &[(String, String)]) -> Result<agent_engine::model::http::Response, String> {
+        Err("not used".to_owned())
+    }
+}
+
+#[test]
+fn two_processes_with_a_stale_mcp_sign_in_refresh_it_once_and_both_get_a_token() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let dir = tempfile::tempdir().expect("dir");
+    let stale = McpTokens {
+        access_token: "a-1".to_owned(),
+        refresh_token: Some("r-1".to_owned()),
+        expires_at: Some(1_000),
+        client_id: "c-1".to_owned(),
+        client_secret: None,
+        token_endpoint: "https://auth.test/token".to_owned(),
+        resource: SERVER.to_owned(),
+    };
+    let endpoint = Arc::new(SingleUseRefreshTokens {
+        valid: Mutex::new("r-1".to_owned()),
+        issued: AtomicUsize::new(0),
+        refused: AtomicUsize::new(0),
+    });
+    McpAuth::new(crate::secrets::secrets_in(Some(dir.path())), endpoint.clone())
+        .save(SERVER, Some(&stale))
+        .expect("signed in");
+    let start = Arc::new(std::sync::Barrier::new(2));
+
+    let processes: Vec<_> = (0..2)
+        .map(|_| {
+            let auth = McpAuth::new(crate::secrets::secrets_in(Some(dir.path())), endpoint.clone()).at(5_000);
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                start.wait();
+                auth.token(SERVER)
+            })
+        })
+        .collect();
+    let tokens: Vec<_> = processes.into_iter().map(|process| process.join().expect("process")).collect();
+
+    assert_eq!(tokens, [Some("a-2".to_owned()), Some("a-2".to_owned())], "neither process lost the sign-in");
+    assert_eq!(endpoint.refused.load(Ordering::SeqCst), 0, "no refresh token was presented twice");
+    assert_eq!(endpoint.issued.load(Ordering::SeqCst), 1, "the second process used the first one's new token");
+    let kept = McpAuth::new(crate::secrets::secrets_in(Some(dir.path())), endpoint.clone()).load(SERVER);
+    assert_eq!(kept.and_then(|tokens| tokens.refresh_token).as_deref(), Some("r-2"));
+    let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+        .expect("dir")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains("refresh"))
+        .collect();
+    assert!(leftovers.is_empty(), "the refresh lock leaves nothing behind: {leftovers:?}");
+}
+
+#[test]
+fn each_server_refreshes_under_its_own_lock() {
+    assert_ne!(refresh_slot(SERVER), refresh_slot("https://other.test/mcp"));
+    assert_eq!(refresh_slot(SERVER), refresh_slot(SERVER));
 }

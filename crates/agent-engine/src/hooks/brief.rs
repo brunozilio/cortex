@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::{HookEvent, Hooks};
+use crate::brief::BriefError;
 use crate::prompt::Instructions;
 use crate::prompt::rules::Rule;
 use crate::tools::Workspace;
@@ -21,15 +22,16 @@ pub struct Briefed {
 }
 
 impl Hooks {
-    pub fn edit_brief(&self, mut briefed: Briefed, workspace: &Workspace) -> Result<Briefed, String> {
+    pub fn edit_brief(&self, mut briefed: Briefed, workspace: &Workspace) -> Result<Briefed, BriefError> {
         for group in self.0.get(&HookEvent::Brief).into_iter().flatten() {
             let one = Hooks([(HookEvent::Brief, vec![group.clone()])].into());
-            let decision = one.run(HookEvent::Brief, "", briefed.shown()?, workspace)?;
+            let shown = briefed.shown().map_err(BriefError::Hook)?;
+            let decision = one.run(HookEvent::Brief, "", shown, workspace).map_err(BriefError::Hook)?;
             if let Some(reason) = decision.blocked {
-                return Err(format!("a Brief hook stopped the session: {reason}"));
+                return Err(BriefError::StoppedByHook(reason));
             }
             if let Some(returned) = decision.brief {
-                briefed = briefed.edited(&returned).map_err(|error| format!("a Brief hook: {error}"))?;
+                briefed = briefed.edited(&returned).map_err(BriefError::EditedBadly)?;
             }
         }
         Ok(briefed)

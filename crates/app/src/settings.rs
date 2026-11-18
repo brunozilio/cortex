@@ -76,19 +76,35 @@ fn remove(settings: &mut Value, path: &[String]) {
     }
 }
 
-fn fits(settings: &Value) -> Result<(), String> {
-    let json = serde_json::to_vec_pretty(settings).map_err(|error| error.to_string())?;
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum SettingsError {
+    #[error("these settings are too large to keep")]
+    TooLarge,
+    #[error("{0}")]
+    Unwritten(String),
+    #[error("{0}")]
+    Unreadable(String),
+}
+
+impl From<SettingsError> for String {
+    fn from(error: SettingsError) -> Self {
+        error.to_string()
+    }
+}
+
+fn fits(settings: &Value) -> Result<(), SettingsError> {
+    let json = serde_json::to_vec_pretty(settings).map_err(|error| SettingsError::Unwritten(error.to_string()))?;
     if json.len() > AT_MOST {
-        return Err("these settings are too large to keep".to_owned());
+        return Err(SettingsError::TooLarge);
     }
     Ok(())
 }
 
 pub trait SettingsStore: Send + Sync {
     fn load(&self) -> Option<Value>;
-    fn save(&self, settings: &Value) -> Result<(), String>;
+    fn save(&self, settings: &Value) -> Result<(), SettingsError>;
 
-    fn change(&self, changes: &[SettingsChange]) -> Result<(), String> {
+    fn change(&self, changes: &[SettingsChange]) -> Result<(), SettingsError> {
         let mut settings = self.load().unwrap_or_default();
         apply(&mut settings, changes);
         self.save(&settings)
@@ -117,17 +133,17 @@ impl SettingsStore for FileSettingsStore {
         }
     }
 
-    fn save(&self, settings: &Value) -> Result<(), String> {
+    fn save(&self, settings: &Value) -> Result<(), SettingsError> {
         fits(settings)?;
-        self.kept.write(settings).map_err(|error| error.to_string())
+        self.kept.write(settings).map_err(|error| SettingsError::Unwritten(error.to_string()))
     }
 
-    fn change(&self, changes: &[SettingsChange]) -> Result<(), String> {
+    fn change(&self, changes: &[SettingsChange]) -> Result<(), SettingsError> {
         let changed = self.kept.try_update(|settings: &mut Value| {
             apply(settings, changes);
             fits(settings)
         });
-        changed.map_err(|error| error.to_string())?
+        changed.map_err(|error| SettingsError::Unwritten(error.to_string()))?
     }
 }
 
@@ -141,12 +157,12 @@ impl SettingsStore for InMemorySettingsStore {
         self.kept.locked().clone()
     }
 
-    fn save(&self, settings: &Value) -> Result<(), String> {
+    fn save(&self, settings: &Value) -> Result<(), SettingsError> {
         *self.kept.locked() = Some(settings.clone());
         Ok(())
     }
 
-    fn change(&self, changes: &[SettingsChange]) -> Result<(), String> {
+    fn change(&self, changes: &[SettingsChange]) -> Result<(), SettingsError> {
         apply(self.kept.locked().get_or_insert_default(), changes);
         Ok(())
     }

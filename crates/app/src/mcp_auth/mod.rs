@@ -1,5 +1,7 @@
 use std::sync::{Arc, Mutex};
 
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use platform::sync::Locked;
 
 use agent_engine::model::http::Http;
@@ -14,6 +16,40 @@ use llm_providers::oauth::challenge;
 
 const SLOT: SecretId = SecretId::from_uuid(uuid::Uuid::from_u128(0x6d63_705f_6f61_7574_6800_0000_0000_0001));
 const FORM: &str = "application/x-www-form-urlencoded";
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum McpAuthError {
+    #[error("a sign-in could not be saved here ({0}), so the browser was not opened")]
+    CannotKeep(String),
+    #[error("{0} is not a safe address to sign in with (https, or http to this computer)")]
+    UnsafeAddress(String),
+    #[error("{0} is not a web address")]
+    NotAWebAddress(String),
+    #[error("{0} does not describe how to sign in (no OAuth metadata)")]
+    NoMetadata(String),
+    #[error(
+        "this server does not let applications register themselves, so {name} cannot sign in. \
+         Use a token the service issues instead, kept in the environment: \
+         `{cmd} mcp add -H 'Authorization: Bearer ${{TOKEN}}' <name> {server}`",
+        name = brand::NAME,
+        cmd = brand::COMMAND,
+    )]
+    NoRegistration { server: String },
+    #[error("{0}")]
+    Failed(String),
+}
+
+impl From<String> for McpAuthError {
+    fn from(message: String) -> Self {
+        Self::Failed(message)
+    }
+}
+
+impl From<McpAuthError> for String {
+    fn from(error: McpAuthError) -> Self {
+        error.to_string()
+    }
+}
 
 #[derive(Clone)]
 pub struct McpAuth {
@@ -59,7 +95,7 @@ impl McpAuth {
         server: &str,
         stop: &Arc<std::sync::atomic::AtomicBool>,
         open: &mut dyn FnMut(&str),
-    ) -> Result<(), String> {
+    ) -> Result<(), McpAuthError> {
         self.can_keep()?;
         let auth = self.auth_server(server)?;
         let loopback =
@@ -103,10 +139,10 @@ impl McpAuth {
         };
         let tokens = blank.answered(&answer, (self.clock)())?;
         let _guard = self.lock.locked();
-        self.save(server, Some(&tokens))
+        Ok(self.save(server, Some(&tokens))?)
     }
 
-    pub fn sign_out(&self, server: &str) -> Result<bool, String> {
+    pub fn sign_out(&self, server: &str) -> Result<bool, McpAuthError> {
         let _guard = self.lock.locked();
         let had = self.load(server).is_some();
         self.save(server, None)?;
@@ -119,6 +155,18 @@ impl McpAuth {
             self.load(server)?
         };
         let now = (self.clock)();
+        if tokens.fresh(now) {
+            return Some(tokens.access_token);
+        }
+        let _held = self
+            .secrets
+            .hold_for_refresh(refresh_slot(server))
+            .inspect_err(|error| tracing::warn!(%error, server, "an MCP sign-in could not be refreshed"))
+            .ok()?;
+        let tokens = {
+            let _guard = self.lock.locked();
+            self.load(server)?
+        };
         if tokens.fresh(now) {
             return Some(tokens.access_token);
         }
@@ -150,16 +198,13 @@ impl McpAuth {
         }
     }
 
-    fn can_keep(&self) -> Result<(), String> {
+    fn can_keep(&self) -> Result<(), McpAuthError> {
         let _guard = self.lock.locked();
-        self.secrets
-            .update(SLOT, &mut |_| {})
-            .map_err(|error| format!("a sign-in could not be saved here ({error}), so the browser was not opened"))
+        self.secrets.update(SLOT, &mut |_| {}).map_err(McpAuthError::CannotKeep)
     }
 
-    fn auth_server(&self, server: &str) -> Result<AuthServer, String> {
-        let refuse =
-            |url: &str| format!("{url} is not a safe address to sign in with (https, or http to this computer)");
+    fn auth_server(&self, server: &str) -> Result<AuthServer, McpAuthError> {
+        let refuse = |url: &str| McpAuthError::UnsafeAddress(url.to_owned());
         if !mcp_oauth::endpoint_ok(server) {
             return Err(refuse(server));
         }
@@ -175,14 +220,14 @@ impl McpAuth {
                     format!("{scheme}://{}", rest.split(['/', '?', '#']).next().unwrap_or_default())
                 })
             })
-            .ok_or_else(|| format!("{server} is not a web address"))?;
+            .ok_or_else(|| McpAuthError::NotAWebAddress(server.to_owned()))?;
         if !mcp_oauth::endpoint_ok(&issuer) {
             return Err(refuse(&issuer));
         }
         let mut auth: AuthServer = mcp_oauth::auth_server_metadata_urls(&issuer)
             .iter()
             .find_map(|url| serde_json::from_value(self.get_json(url)?).ok())
-            .ok_or_else(|| format!("{issuer} does not describe how to sign in (no OAuth metadata)"))?;
+            .ok_or_else(|| McpAuthError::NoMetadata(issuer.clone()))?;
         auth.resource_scopes = resource.as_ref().map(mcp_oauth::resource_scopes).unwrap_or_default();
         let endpoints =
             [Some(&auth.authorization_endpoint), Some(&auth.token_endpoint), auth.registration_endpoint.as_ref()];
@@ -192,16 +237,16 @@ impl McpAuth {
         Ok(auth)
     }
 
-    fn register(&self, auth: &AuthServer, server: &str, redirect: &str) -> Result<(String, Option<String>), String> {
-        let endpoint = auth.registration_endpoint.as_deref().ok_or_else(|| {
-            format!(
-                "this server does not let applications register themselves, so {name} cannot sign in. \
-                 Use a token the service issues instead, kept in the environment: \
-                 `{cmd} mcp add -H 'Authorization: Bearer ${{TOKEN}}' <name> {server}`",
-                name = brand::NAME,
-                cmd = brand::COMMAND,
-            )
-        })?;
+    fn register(
+        &self,
+        auth: &AuthServer,
+        server: &str,
+        redirect: &str,
+    ) -> Result<(String, Option<String>), McpAuthError> {
+        let endpoint = auth
+            .registration_endpoint
+            .as_deref()
+            .ok_or_else(|| McpAuthError::NoRegistration { server: server.to_owned() })?;
         let body = json!({
             "client_name": brand::NAME,
             "redirect_uris": [redirect],
@@ -211,7 +256,9 @@ impl McpAuth {
         });
         let headers = [("content-type".to_owned(), "application/json".to_owned())];
         let answer = self.read(self.http.post(endpoint, &headers, &body.to_string()))?;
-        let id = answer["client_id"].as_str().ok_or("the registration gave no client id")?;
+        let id = answer["client_id"]
+            .as_str()
+            .ok_or_else(|| McpAuthError::Failed("the registration gave no client id".to_owned()))?;
         Ok((id.to_owned(), answer["client_secret"].as_str().map(str::to_owned)))
     }
 
@@ -255,6 +302,15 @@ impl McpAuth {
             }
         })
     }
+}
+
+fn refresh_slot(server: &str) -> SecretId {
+    let digest = URL_SAFE_NO_PAD.decode(challenge(server)).unwrap_or_default();
+    let mut bytes = [0u8; 16];
+    for (slot, byte) in bytes.iter_mut().zip(digest) {
+        *slot = byte;
+    }
+    SecretId::from_uuid(uuid::Uuid::from_bytes(bytes))
 }
 
 struct RunTokens {
