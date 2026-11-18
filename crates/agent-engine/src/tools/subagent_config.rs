@@ -25,6 +25,12 @@ pub struct AgentConfig {
     pub worktree: bool,
     #[serde(default)]
     pub hooks: crate::hooks::Hooks,
+    #[serde(default)]
+    pub observers: Vec<String>,
+    #[serde(default)]
+    pub observer_message: Option<String>,
+    #[serde(default)]
+    pub unobserved_subagents: bool,
     pub error: Option<String>,
 }
 impl AgentConfig {
@@ -116,7 +122,38 @@ impl AgentConfig {
         if let Some(background) = value.get("background") {
             config.background = background.as_bool().ok_or("background must be boolean")?;
         }
+        config.observe(value)?;
         Ok(config)
+    }
+
+    fn observe(&mut self, value: &Value) -> Result<(), String> {
+        if let Some(named) = crate::prompt::markdown::list(&value["observer"]).map_err(|e| format!("observer: {e}"))? {
+            let (kept, dropped) = domain::observer::observers(&named.join(","));
+            if !dropped.is_empty() {
+                tracing::warn!(
+                    ?dropped,
+                    "an agent has at most {} observers; these are left out",
+                    domain::observer::MOST
+                );
+            }
+            self.observers = kept;
+        }
+        if let Some(message) = value.get("observerMessage") {
+            self.observer_message = Some(message.as_str().ok_or("observerMessage must be a string")?.to_owned());
+        }
+        if let Some(subagents) = value.get("observeSubagents") {
+            self.unobserved_subagents = !subagents.as_bool().ok_or("observeSubagents must be boolean")?;
+        }
+        Ok(())
+    }
+
+    pub fn observing(&self) -> Option<domain::observer::Observing> {
+        (!self.observers.is_empty()).then(|| domain::observer::Observing {
+            observers: self.observers.clone(),
+            message: self.observer_message.clone(),
+            subagents: !self.unobserved_subagents,
+            depth: 0,
+        })
     }
     pub fn allows(&self, name: &str) -> bool {
         let matches =
@@ -191,5 +228,23 @@ mod tests {
         }
         assert_eq!(mode("dontAsk"), (Some(PermissionMode::Ask), true));
         assert!(AgentConfig::parse(&json!({ "permissionMode": 3 })).is_err());
+    }
+
+    #[test]
+    fn an_agent_names_its_observers_what_to_tell_them_and_whether_its_subagents_are_watched_too() {
+        let config = AgentConfig::parse(&json!({
+            "observer": "critic, auditor",
+            "observerMessage": "Watch for unsafe code.",
+            "observeSubagents": false
+        }))
+        .expect("config");
+        let observing = config.observing().expect("observed");
+        assert_eq!(observing.observers, ["critic", "auditor"]);
+        assert_eq!(observing.message.as_deref(), Some("Watch for unsafe code."));
+        assert!(!observing.subagents);
+        let listed = AgentConfig::parse(&json!({ "observer": ["critic"] })).expect("a list works too");
+        assert!(listed.observing().is_some_and(|observing| observing.subagents), "subagents are watched by default");
+        assert!(AgentConfig::default().observing().is_none());
+        assert!(AgentConfig::parse(&json!({ "observeSubagents": "yes" })).is_err());
     }
 }

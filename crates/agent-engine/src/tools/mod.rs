@@ -9,6 +9,7 @@ pub mod host_judge;
 pub mod inbox;
 mod lsp;
 pub mod names;
+pub mod observer_report;
 mod outside;
 pub mod peers;
 pub mod persisted;

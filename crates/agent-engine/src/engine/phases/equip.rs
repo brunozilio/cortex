@@ -56,6 +56,7 @@ impl Job {
         let main = MainAgent::chosen(brief).map_err(Stop::failed)?;
         self.control = self.control.reconfigured(main.config.permission, main.config.dont_ask);
         workspace.stop = self.control.shared_stop();
+        workspace.observing = main.config.observing();
         let judge = Arc::new(self.host_judge());
         workspace.services.judge = Some(Arc::clone(&judge));
         let stop = self.control.stop_flag();

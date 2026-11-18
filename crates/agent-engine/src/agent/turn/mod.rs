@@ -84,12 +84,25 @@ impl Agent<'_> {
         spawn: Spawn<'_, 'env>,
     ) -> Result<Usage, Ending> {
         let limit = self.turn_limit.min(MAX_TURNS);
+        let began = history.len().saturating_sub(1);
+        let mut observed = false;
         let mut turn = TurnState::starting(history, self.workspace.models.fallbacks.clone());
         let mut next = Next::AskModel;
         loop {
             let kept_before_the_call = matches!(next, Next::AskModel);
             let step = match next {
-                Next::Done(outcome) => return outcome,
+                Next::Done(outcome) if observed => return outcome,
+                Next::Done(outcome) => {
+                    observed = true;
+                    let reports = self.observe(turn.history.get(began..).unwrap_or_default(), &outcome);
+                    match self.heard(reports, outcome.is_ok()) {
+                        Some(said) => {
+                            crate::transcript::told(turn.history, said);
+                            Ok(Next::AskModel)
+                        }
+                        None => return outcome,
+                    }
+                }
                 Next::AskModel if turn.asked == limit => Err(Ending::TooManyTurns),
                 Next::AskModel => {
                     turn.asked += 1;

@@ -189,6 +189,9 @@ impl Agent<'_> {
                 Some(caps.auto_compact_token_limit.unwrap_or(measured * 9 / 10).min(window));
         }
         child_workspace.agent_name = chosen.name().into();
+        if let Some(own) = config.observing() {
+            child_workspace.observing = Some(own);
+        }
         let mut scoped_hooks = config.hooks.clone();
         if let Some(stop) = scoped_hooks.0.remove(&crate::hooks::HookEvent::Stop) {
             scoped_hooks.0.entry(crate::hooks::HookEvent::SubagentStop).or_default().extend(stop);

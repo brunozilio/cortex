@@ -1,5 +1,6 @@
 pub mod current;
 mod dispatch;
+mod observers;
 mod permission;
 mod repl;
 mod run;

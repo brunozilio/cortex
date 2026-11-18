@@ -117,6 +117,9 @@ Você escreve migrações reversíveis...
 | `hooks` | Como `"hooks"` nas configurações | Hooks que só valem enquanto ele roda |
 | `initialPrompt` | Texto | Usado quando ele é o agente principal (veja abaixo) |
 | `autoCompactWindow` | 100000 a 1000000 | Compacta a conversa dele quando ela chega a esse número de tokens |
+| `observer` | Nomes de agentes, até 4 | Agentes que observam os turnos deste (veja [Observadores](#observadores)) |
+| `observerMessage` | Texto | Acrescentado ao fim de cada resumo que os observadores dele recebem |
+| `observeSubagents` | `true` (padrão) ou `false` | Se os sub-agentes dele são observados pelos mesmos observadores |
 
 Um seletor de ferramenta só pode ter letras, dígitos, `_`, `-` e `:`, mais um `*` no fim; `Bash(git:*)` não é um seletor. Um arquivo com campo inválido continua aparecendo na lista, mas iniciá-lo falha com `Agent <nome>: <problema>`, por exemplo `Agent migrations: maxTurns must be within 1..200`.
 
@@ -187,6 +190,26 @@ Esses hooks só rodam enquanto este agente trabalha. Um hook `Stop` aqui roda co
 ### Agentes de plugins
 
 Agentes de um plugin se chamam `<plugin>:<nome>`. Por segurança, os campos `hooks`, `mcpServers`, `permissionMode` e `initialPrompt` deles são ignorados.
+
+### Observadores
+
+Um observador é um agente que acompanha o trabalho de outro e só se manifesta quando vale a pena. Nomeie-o no campo `observer` do agente observado (ou no do agente principal, veja abaixo):
+
+```markdown
+---
+name: migrations
+description: Escreve migrações de banco
+observer: reviewer
+observerMessage: Aponte qualquer migração que apague uma coluna.
+---
+```
+
+- Quando o agente observado termina um turno, cada observador recebe um resumo desse turno: o pedido, as chamadas de ferramenta e seus resultados, o que o agente disse e como o turno terminou. O resumo vem dentro de uma tag com um nonce novo e é apresentado ao observador como dado, não como instrução. Cada item é cortado em 2.000 caracteres (o pedido em 16.000), e um resumo guarda no máximo cerca de 64.000 caracteres, descartando primeiro os itens mais antigos.
+- O observador roda com as instruções e o modelo da própria definição, com uma única ferramenta, `ObserverReport`. Ele mantém a conversa entre os turnos da mesma sessão, para acompanhar o trabalho.
+- Um relatório chega ao agente observado como conselho do observador, nunca como palavras suas ou consentimento. No agente principal, um relatório faz ele continuar uma vez no mesmo turno para pesá-lo; relatórios de observadores de um sub-agente chegam ao agente principal entre os passos dele.
+- Os observadores são chamados uma vez por turno; um turno que você interrompe não é observado. O turno termina quando os observadores respondem.
+- Sub-agentes herdam os observadores do pai, até dois níveis abaixo, a menos que `observeSubagents: false`. Um sub-agente que nomeia os próprios observadores usa esses. Um observador nunca é observado.
+- Um nome de observador que não corresponde a nenhum agente é ignorado e registrado no log; além de quatro nomes, os demais ficam de fora.
 
 ## Rodar a conversa como um agente
 

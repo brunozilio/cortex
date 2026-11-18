@@ -13,6 +13,7 @@ The app had decided earlier not to be compatible with the reference agent's file
 - **Names.** Every folder, file and environment variable is the app's own: `.<command>/teams/`, `.<command>/tasks/`, `<PREFIX>_…`. Protocol names that servers and models see (`notifications/claude/channel`, `claude/channel/permission`, tool names such as `SendMessage`) keep the reference spelling, so a server written for the reference agent works here unchanged.
 - **Channels.** Each message reaches the agent as its own `<channel source=… key="value">` tag; meta keys must be identifiers, and dropped keys are logged. A server's `initialize` instructions reach the system prompt. A channel that declares `claude/channel/permission` gets each permission prompt and may answer it; the first answer wins, and a channel cannot allow its own tools. Channel messages are delivered in bypass mode too, as the reference agent does; messages from other sessions stay held there.
 - **Code mode.** Turning code mode on makes the REPL the agent's only tool, as in the reference agent.
+- **Observers.** An agent's frontmatter names up to four observers. Each gets a digest of the watched agent's turn when it ends and answers only through `ObserverReport`. Where the reference agent keeps observers running beside the agent and queues their reports, the app runs them when the turn ends and, for the main agent, lets it go on once with their reports in the same turn: a report that arrived after the turn would start a new turn on its own, which an observer could then report on again. Declaring an observer is the opt-in, so there is no flag.
 - **Order.** Channels, then code mode, then observers, then teams, one commit each. Teams start with in-process teammates; terminal panes (tmux, iTerm2) come after.
 
 ## Costs
@@ -20,4 +21,5 @@ The app had decided earlier not to be compatible with the reference agent's file
 - In bypass mode, whoever can post to an open channel steers an agent that does not ask (`docs/threat-model.md`).
 - A channel that takes permission prompts can allow any call but its own tools; the request id is a hash, not a secret.
 - MCP server instructions are third-party text in the system prompt, cut to 2,048 characters.
+- A watched turn ends only once its observers have answered, so each observer adds a model call's wait and cost to every turn.
 - The reference agent's behaviour moves between releases; the app follows the version that was read (2.1.327), not later ones.

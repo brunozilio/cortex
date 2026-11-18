@@ -14,7 +14,7 @@ pub use knowledge::{learning, memory};
 pub use models::{auto_pick, billing, cache_window, fallback, model, model_roles, routing, small_model};
 pub use run::{
     affected, approval, budget, changes, claims, engines, evals, events, factory_reset, failure, follow_through,
-    git_offer, image, interception, request, review, session_run, stuck, verification, watchdog,
+    git_offer, image, interception, observer, request, review, session_run, stuck, verification, watchdog,
 };
 pub use safety::{
     command_policy, dependencies, destructive, egress, permission, permission_rules, redact, sandbox, shell,
@@ -22,8 +22,8 @@ pub use safety::{
 };
 pub use session::{catalog, conversation, repeats, usage};
 pub use tools::{
-    agents, brief_edits, channel_relay, code_mode, executable, extensions, hooks, inbox, looping, lsp, mcp, mcp_config, mcp_oauth,
-    output, schedule, skill, tool_name, watch, web_reading,
+    agents, brief_edits, channel_relay, code_mode, executable, extensions, hooks, inbox, looping, lsp, mcp, mcp_config,
+    mcp_oauth, output, schedule, skill, tool_name, watch, web_reading,
 };
 
 pub use command::Command;

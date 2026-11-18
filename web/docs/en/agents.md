@@ -117,6 +117,9 @@ You write reversible migrations...
 | `hooks` | Like `"hooks"` in settings | Hooks that apply only while it runs |
 | `initialPrompt` | Text | Used when it is the main agent (see below) |
 | `autoCompactWindow` | 100000 to 1000000 | Compacts its conversation once it reaches this many tokens |
+| `observer` | Agent names, up to 4 | Agents that watch this one's turns (see [Observers](#observers)) |
+| `observerMessage` | Text | Added at the end of every digest its observers get |
+| `observeSubagents` | `true` (default) or `false` | Whether its sub-agents are watched by the same observers |
 
 A tool selector may contain only letters, digits, `_`, `-` and `:`, plus a final `*`; `Bash(git:*)` is not a selector. A file with an invalid field still appears in the list, but starting it fails with `Agent <name>: <problem>`, for example `Agent migrations: maxTurns must be within 1..200`.
 
@@ -187,6 +190,26 @@ These hooks run only while this agent works. A `Stop` hook here runs as `Subagen
 ### Plugin agents
 
 Agents from a plugin are named `<plugin>:<name>`. For safety, their `hooks`, `mcpServers`, `permissionMode` and `initialPrompt` fields are ignored.
+
+### Observers
+
+An observer is an agent that watches another one's work and speaks up only when something is worth it. Name it in the watched agent's `observer` field (or in the main agent's, see below):
+
+```markdown
+---
+name: migrations
+description: Writes database migrations
+observer: reviewer
+observerMessage: Flag any migration that drops a column.
+---
+```
+
+- When the watched agent ends a turn, each observer gets a digest of that turn: the request, the tool calls and their results, what the agent said, and how the turn ended. The digest is wrapped in a tag with a fresh nonce and told to the observer as data, not instructions. Each item is cut to 2,000 characters (the request to 16,000), and a digest keeps at most about 64,000 characters, dropping the oldest items first.
+- The observer runs on its own definition's instructions and model, with one tool, `ObserverReport`. It keeps its conversation across turns of the same session, so it can follow the work.
+- A report reaches the watched agent as advice from its observer, never as your words or consent. For the main agent, a report makes it go on once in the same turn to weigh it; a sub-agent's observer reports reach the main agent between its steps.
+- Observers are asked once per turn; a turn you stop is not observed. The turn ends once its observers have answered.
+- Sub-agents inherit their parent's observers, two levels down, unless `observeSubagents: false`. A sub-agent that names its own observers uses those instead. An observer is never observed itself.
+- An observer name that matches no agent is skipped and logged; past four names, the rest are left out.
 
 ## Running the conversation as an agent
 

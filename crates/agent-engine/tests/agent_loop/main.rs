@@ -15,6 +15,7 @@ mod lsp_install;
 mod mcp_fence;
 mod model_hooks;
 mod native_search;
+mod observers;
 mod permission_rules;
 mod permissions;
 mod plan_mode;
