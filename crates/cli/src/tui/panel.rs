@@ -18,12 +18,20 @@ pub fn panel(app: &App, width: u16) -> Vec<Line<'static>> {
         asking(pending, width, &mut lines);
     } else if let Some(picker) = &app.overlays.picker {
         lines.push(Line::from(picker.title.clone()).bold());
-        for (i, (name, about)) in picker.items.iter().enumerate() {
+        let window = picker.window();
+        let total = picker.items.len();
+        for (i, (name, about)) in picker.items.iter().enumerate().skip(window.start).take(window.len()) {
             let marker = if i == picker.cursor { "❯ " } else { "  " };
             let style = if i == picker.cursor { Style::new().fg(Color::Cyan) } else { Style::new() };
             lines.push(Line::from(vec![Span::styled(format!("{marker}{name}"), style), format!("  {about}").dim()]));
         }
-        lines.push(Line::from("↑↓ Enter picks · esc closes").dim());
+        if window.len() < total {
+            lines.push(
+                Line::from(format!("{} of {total} · ↑↓ more · Enter picks · esc closes", picker.cursor + 1)).dim(),
+            );
+        } else {
+            lines.push(Line::from("↑↓ Enter picks · esc closes").dim());
+        }
     } else if let Some(side) = &app.overlays.side {
         super::side::lines(side, app.busy(), width, &mut lines);
     } else if !files.is_empty() {
