@@ -563,3 +563,81 @@ fn the_timeout_counts_the_script_s_own_running_not_its_waits_on_tools() {
     assert_eq!(waited, ("<repl-output>\n<result>\nwaited\n</result>\n</repl-output>".to_owned(), false));
     assert!(spun.1 && !spun.0.contains("<result>"), "{spun:?}");
 }
+
+#[derive(Debug)]
+struct Snap;
+
+impl agent_engine::tools::Tool for Snap {
+    fn spec(&self) -> agent_engine::model::ToolSpec {
+        agent_engine::model::ToolSpec {
+            name: "Snap".into(),
+            description: "Takes a screenshot".into(),
+            schema: json!({ "type": "object" }),
+        }
+    }
+
+    fn effects(
+        &self,
+        _input: &serde_json::Value,
+        _workspace: &agent_engine::tools::Workspace,
+    ) -> Vec<agent_engine::tools::Effect> {
+        Vec::new()
+    }
+
+    fn summary(&self, _input: &serde_json::Value) -> String {
+        String::new()
+    }
+
+    fn run(
+        &self,
+        _input: &serde_json::Value,
+        _workspace: &agent_engine::tools::Workspace,
+    ) -> agent_engine::tools::Outcome {
+        agent_engine::tools::Outcome::image(domain::Image {
+            media_type: "image/png".into(),
+            data: "iVBORw0KGgo=".into(),
+        })
+    }
+}
+
+#[test]
+fn an_image_a_script_s_call_returned_reaches_the_model_beside_the_script_s_output() {
+    let rig = code_mode(PermissionMode::AcceptEdits);
+    let model = ScriptedModel::new([
+        ScriptedModel::reply(vec![tool_use(
+            "r0",
+            "REPL",
+            json!({ "code": "const shot = await Snap({}); typeof shot" }),
+        )]),
+        ScriptedModel::reply(vec![Block::Text("Seen.".into())]),
+    ]);
+    let mut history = vec![Message::user("go")];
+    let tools: Vec<Box<dyn agent_engine::tools::Tool>> =
+        vec![Box::new(agent_engine::tools::repl::Repl), Box::new(Snap)];
+
+    rig.run_with(&model, &mut history, tools).expect("run");
+
+    let images: Vec<&domain::Image> = history
+        .iter()
+        .flat_map(|message| message.blocks.iter())
+        .filter_map(|block| match block {
+            Block::ToolResultRich { id, images, .. } if id == "r0" => Some(images),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    assert_eq!(images.len(), 1, "{history:?}");
+    assert_eq!(images[0].media_type, "image/png");
+}
+
+#[test]
+fn a_tool_that_answers_in_json_gives_the_script_an_object() {
+    let rig = code_mode(PermissionMode::AcceptEdits);
+    let code = "const made = await TaskCreate({ subject: 'Build' }); [typeof made, made.task_id, made.subject]";
+    let mut tools: Vec<Box<dyn agent_engine::tools::Tool>> = vec![Box::new(agent_engine::tools::repl::Repl)];
+    tools.extend(agent_engine::tools::task::tools());
+
+    let (content, failed) = &run_tools(&rig, json!({ "code": code }), tools);
+    assert!(!failed, "{content}");
+    assert!(content.contains("\"object\"") && content.contains("\"1\"") && content.contains("\"Build\""), "{content}");
+}

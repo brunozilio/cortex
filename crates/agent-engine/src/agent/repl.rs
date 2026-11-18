@@ -57,7 +57,12 @@ impl Agent<'_> {
         let run = ScriptRun {
             number: submitted.number,
             messages: submitted.messages,
-            guarded: Guarded { stop, stopped_by: Mutex::default(), carried: Mutex::default() },
+            guarded: Guarded {
+                stop,
+                stopped_by: Mutex::default(),
+                carried: Mutex::default(),
+                images: Mutex::default(),
+            },
             refused: Mutex::default(),
             lane: OnceLock::new(),
             started: Instant::now(),
@@ -127,7 +132,13 @@ impl Agent<'_> {
         index
     }
 
-    fn answer(&self, function: &str, input: &Value, tasks: &Tasks, parent: &[Message]) -> Result<Value, String> {
+    fn answer(
+        &self,
+        function: &str,
+        input: &Value,
+        (tasks, parent): (&Tasks, &[Message]),
+        images: &Mutex<Vec<domain::Image>>,
+    ) -> Result<Value, String> {
         if function == SEARCH_TOOLS {
             return self.search_tools(input);
         }
@@ -147,6 +158,11 @@ impl Agent<'_> {
         let id = format!("repl-{}", self.control.next_agent());
         let spawn = |job: Box<dyn FnOnce() + Send + '_>| job();
         let block = self.call(&id, function, input, tasks, parent, &spawn);
+        if let Block::ToolResultRich { images: shown, .. } = &block {
+            let mut kept = images.locked();
+            let room = domain::code_mode::IMAGES.saturating_sub(kept.len());
+            kept.extend(shown.iter().take(room).cloned());
+        }
         answered(block, function)
     }
 
@@ -227,11 +243,15 @@ impl ScriptRun {
                     Ok(Sent::Done(evaluation)) => return Some(evaluation),
                     Ok(Sent::Call(call)) if watching.concurrent(tasks, &call.function, &call.input) => {
                         scope.spawn(move || {
-                            guarded.settle(call, |function, input| watching.answer(function, input, tasks, &[]));
+                            guarded.settle(call, |function, input| {
+                                watching.answer(function, input, (tasks, &[]), &guarded.images)
+                            });
                         });
                     }
                     Ok(Sent::Call(call)) => {
-                        guarded.settle(call, |function, input| watching.answer(function, input, tasks, parent));
+                        guarded.settle(call, |function, input| {
+                            watching.answer(function, input, (tasks, parent), &guarded.images)
+                        });
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                     Err(mpsc::RecvTimeoutError::Disconnected) => return Some(gone(self.number)),
@@ -263,6 +283,7 @@ struct Guarded {
     stop: Arc<AtomicBool>,
     stopped_by: Mutex<Option<String>>,
     carried: Mutex<Vec<String>>,
+    images: Mutex<Vec<domain::Image>>,
 }
 
 impl Guarded {
@@ -310,7 +331,8 @@ impl ScriptRun {
             (agent.emit)(EngineEvent::AgentUpdate { index, status, summary: None });
         }
         let text = domain::code_mode::reported(report, domain::code_mode::PART);
-        let outcome = if report.outcome.is_ok() { Outcome::ok(text) } else { Outcome::error(text) };
+        let mut outcome = if report.outcome.is_ok() { Outcome::ok(text) } else { Outcome::error(text) };
+        outcome.images = std::mem::take(&mut *self.guarded.images.locked());
         outcome.carried_from(domain::code_mode::carried_from(report))
     }
 }
@@ -340,7 +362,7 @@ fn earlier_scripts(history: &[Message], current: &str) -> usize {
 fn answered(block: Block, tool: &str) -> Result<Value, String> {
     match block {
         Block::ToolResult { content, is_error: false, .. } | Block::ToolResultRich { content, is_error: false, .. } => {
-            Ok(Value::String(content))
+            Ok(domain::code_mode::script_value(tool, content))
         }
         Block::ToolResult { content, .. } | Block::ToolResultRich { content, .. }
             if domain::code_mode::throws_on_failure(tool) =>

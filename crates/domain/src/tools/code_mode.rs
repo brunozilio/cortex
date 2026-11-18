@@ -19,6 +19,22 @@ pub fn dispatched(number: u64, task: &str, after: Duration) -> String {
     )
 }
 
+pub const IMAGES: usize = 8;
+
+pub fn answers_in_json(tool: &str) -> bool {
+    crate::tool_name::ToolName::of(tool).plans_tasks()
+}
+
+pub fn script_value(tool: &str, text: String) -> Value {
+    if answers_in_json(tool)
+        && let Ok(parsed) = serde_json::from_str::<Value>(&text)
+        && (parsed.is_object() || parsed.is_array())
+    {
+        return parsed;
+    }
+    Value::String(text)
+}
+
 pub fn throws_on_failure(tool: &str) -> bool {
     matches!(crate::tool_name::ToolName::of(tool), crate::tool_name::ToolName::Mcp(_))
 }
@@ -243,6 +259,19 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+
+    #[test]
+    fn task_tools_hand_a_script_objects_and_every_other_tool_its_text() {
+        assert_eq!(script_value("TaskCreate", "{\"task_id\":\"1\"}".into()), serde_json::json!({ "task_id": "1" }));
+        assert_eq!(script_value("TaskList", "[]".into()), serde_json::json!([]));
+        assert_eq!(
+            script_value("Bash", "{\"a\":1}".into()),
+            serde_json::json!("{\"a\":1}"),
+            "a command's JSON stays text"
+        );
+        assert_eq!(script_value("TaskGet", "not json".into()), serde_json::json!("not json"));
+        assert_eq!(script_value("TaskOutput", "{}".into()), serde_json::json!("{}"));
+    }
 
     #[test]
     fn a_short_text_is_kept_whole_and_a_long_one_keeps_its_head_and_tail() {
