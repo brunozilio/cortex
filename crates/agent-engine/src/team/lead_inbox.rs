@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
 
@@ -45,11 +45,34 @@ pub fn answer(client: u64, ask: &TeammateAsk, decision: &domain::Decision) -> Re
     team.send(&ask.teammate, LEAD, &ask.answer(decision).text(), Some("permission answer")).map_err(String::from)
 }
 
+fn watched() -> MutexGuard<'static, HashMap<u64, Vec<Team>>> {
+    static WATCHED: OnceLock<Mutex<HashMap<u64, Vec<Team>>>> = OnceLock::new();
+    WATCHED.get_or_init(Mutex::default).locked()
+}
+
+pub fn closing(client: u64) {
+    asks().remove(&client);
+    for team in watched().remove(&client).unwrap_or_default() {
+        let Some(config) = team.read() else { continue };
+        for member in config.members.iter().filter(|member| member.active) {
+            let asked = domain::team::Protocol::ShutdownRequest {
+                request_id: format!("lead-closed-{}", member.name),
+                from: LEAD.to_owned(),
+                reason: Some("the lead's session closed".to_owned()),
+            };
+            let _ = team.send(&member.name, LEAD, &asked.text(), Some("the lead closed"));
+        }
+    }
+}
+
 pub fn watch(team: &Team, client: u64) {
-    static WATCHED: OnceLock<Mutex<HashSet<(String, u64)>>> = OnceLock::new();
-    let first = WATCHED.get_or_init(Mutex::default).locked().insert((team.name.clone(), client));
-    if !first {
-        return;
+    {
+        let mut watched = watched();
+        let teams = watched.entry(client).or_default();
+        if teams.iter().any(|known| known.name == team.name) {
+            return;
+        }
+        teams.push(team.clone());
     }
     let team = team.clone();
     let started = std::thread::Builder::new().name(format!("lead-inbox-{}", team.name)).spawn(move || {
@@ -86,6 +109,23 @@ mod tests {
     }
 
     #[test]
+    fn when_the_lead_closes_every_active_teammate_is_asked_to_shut_down() {
+        let home = tempfile::tempdir().expect("home");
+        let team = Team::named(home.path(), "t3");
+        team.open("s").expect("open");
+        for name in ["tester", "gone"] {
+            team.join(name, domain::team::Member::default()).expect("join");
+        }
+        team.left("gone");
+        watch(&team, 96_003);
+
+        closing(96_003);
+
+        assert!(team.shutting_down("tester"));
+        assert!(!team.shutting_down("gone"), "a teammate that already left is not asked");
+    }
+
+    #[test]
     fn a_teammate_s_permission_request_waits_for_the_user_and_the_answer_reaches_only_that_teammate() {
         let home = tempfile::tempdir().expect("home");
         let team = Team::named(home.path(), "t2");
@@ -95,6 +135,8 @@ mod tests {
             from: "tester".into(),
             tool_name: "Bash".into(),
             description: "npm run deploy".into(),
+            rememberable: false,
+            rule: None,
         };
         team.send(LEAD, "tester", &request.text(), None).expect("send");
         team.send("tester", LEAD, "unrelated work", None).expect("send");
@@ -107,7 +149,7 @@ mod tests {
         assert_eq!(team.take_answer("tester", "p1"), None, "nobody answered yet");
         answer(96_002, &waiting[0], &domain::Decision::Allow).expect("answered");
         assert!(take_asks(96_002).is_empty());
-        assert_eq!(team.take_answer("tester", "p1"), Some(true));
+        assert_eq!(team.take_answer("tester", "p1"), Some(domain::Decision::Allow));
         assert_eq!(team.unread("tester").len(), 1, "the teammate's other mail stays");
         assert!(answer(96_002, &waiting[0], &domain::Decision::Deny).is_err(), "answered once");
     }

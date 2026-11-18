@@ -47,9 +47,9 @@ fn properties() -> Value {
         "judgeModel": model("Model for the judge that checks finished work."),
         "smallModel": model("Model for background chores: titles, effort picks, web reading."),
         "teammateMode": {
-            "enum": ["process", "tmux", "auto"],
+            "enum": ["process", "tmux", "iterm2", "auto"],
             "default": "process",
-            "description": "Where a lead starts its teammates: process (in the background, printing to a log), tmux (in a new tmux pane of the window the lead runs in) or auto (tmux when the lead runs inside tmux)."
+            "description": "Where a lead starts its teammates: process (in the background, printing to a log), tmux (in a new tmux pane of the window the lead runs in), iterm2 (in a new iTerm2 pane beside the lead) or auto (tmux inside tmux, else iTerm2 inside iTerm2, else process)."
         },
         "escalationModel": model("Where a call the agent keeps failing is sent. Read only from your own files."),
         "fallbackModel": {

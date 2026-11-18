@@ -97,6 +97,11 @@ fn answer_all(
         while let Some(event) = run.next_event() {
             output.event(&event);
             match event {
+                EngineEvent::Asked(ask @ app::AgentAsk { kind: app::AskKind::Plan { .. }, .. })
+                    if let Some(decision) = asked.and_then(|answer| answer(&ask)) =>
+                {
+                    run.answer(ask.id, decision).map_err(|e| e.to_string())?;
+                }
                 EngineEvent::Asked(app::AgentAsk { id, kind: app::AskKind::Plan { plan } }) => {
                     output.push_text(&plan);
                     output.note("plan not carried out: run again with --mode edits to implement it");

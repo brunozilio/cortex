@@ -42,8 +42,8 @@ pub(super) fn answered(app: &mut App, decision: &app::Decision) -> bool {
     let shown = app.features.get::<Waiting>(KEY).and_then(|waiting| waiting.shown.take());
     if let Some(ask) = shown {
         let decision = decision.clone();
-        let allowed = matches!(decision, app::Decision::Allow | app::Decision::AllowAlways);
-        let told = format!("{} {} {}.", if allowed { "Allowed" } else { "Refused" }, ask.teammate, ask.tool_name);
+        let allowed = matches!(decision, app::Decision::Allow | app::Decision::AllowAlways | app::Decision::Approve(_));
+        let told = format!("{} {} {}.", if allowed { "Allowed" } else { "Refused" }, ask.teammate, ask.tool());
         app.spawn(move |client| match client.answer_teammate(ask, decision) {
             Ok(()) => Msg::Notice(told),
             Err(error) => Msg::Error(format!("The teammate could not be answered: {error}")),

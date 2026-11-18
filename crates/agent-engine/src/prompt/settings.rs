@@ -254,7 +254,7 @@ impl Layer<'_> {
             merged.teammate_mode = value
                 .as_str()
                 .and_then(domain::team::TeammateMode::named)
-                .ok_or("teammateMode must be process, tmux or auto")?;
+                .ok_or("teammateMode must be process, tmux, iterm2 or auto")?;
         }
         Ok(())
     }

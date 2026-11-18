@@ -67,7 +67,7 @@ impl Agent<'_> {
             instructions: &instructions,
             model: &model,
             mode: self.control.mode(),
-            placed: self.workspace.policy.teammate_mode.resolved(crate::team::launch::inside_tmux()),
+            placed: self.workspace.policy.teammate_mode.resolved(crate::team::launch::terminal()),
         };
         if let Err(error) = launch(&launching) {
             team.left(&name);

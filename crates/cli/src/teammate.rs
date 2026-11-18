@@ -5,6 +5,18 @@ use domain::team::{LEAD, Protocol, shown};
 
 const POLL: Duration = Duration::from_millis(500);
 
+pub fn spec_of(cli: &mut crate::Cli) -> Result<Option<domain::team::TeammateSpec>, String> {
+    let Some(crate::Action::Teammate { spec: Some(path) }) = &cli.command else { return Ok(None) };
+    let text = std::fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let spec: domain::team::TeammateSpec =
+        serde_json::from_str(&text).map_err(|error| format!("{}: {error}", path.display()))?;
+    cli.cwd = Some(spec.cwd.clone().into());
+    cli.model = Some(spec.model.clone());
+    cli.mode = Some(domain::command::mode_named(&spec.mode).ok_or_else(|| format!("unknown mode {}", spec.mode))?);
+    cli.append_system_prompt = Some(spec.instructions.clone());
+    Ok(Some(spec))
+}
+
 pub struct Mailbox {
     me: Me,
     answered_once: bool,
@@ -25,24 +37,35 @@ impl Mailbox {
     }
 
     pub fn forward(&self, ask: &app::AgentAsk) -> Option<app::Decision> {
-        let app::AskKind::Permission { tool, subject, .. } = &ask.kind else { return None };
         let nanos =
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |since| since.as_nanos());
         let request_id = format!("{}-{nanos:x}", self.me.name);
-        let request = Protocol::PermissionRequest {
-            request_id: request_id.clone(),
-            from: self.me.name.clone(),
-            tool_name: tool.clone(),
-            description: subject.clone(),
+        let from = self.me.name.clone();
+        let (request, summary) = match &ask.kind {
+            app::AskKind::Permission { tool, subject, rememberable, rule } => (
+                Protocol::PermissionRequest {
+                    request_id: request_id.clone(),
+                    from,
+                    tool_name: tool.clone(),
+                    description: subject.clone(),
+                    rememberable: *rememberable,
+                    rule: rule.clone(),
+                },
+                format!("may I use {tool}?"),
+            ),
+            app::AskKind::Plan { plan } => (
+                Protocol::PlanApprovalRequest { request_id: request_id.clone(), from, plan: plan.clone() },
+                "plan ready for approval".to_owned(),
+            ),
+            app::AskKind::Questions(_) => return None,
         };
-        let summary = format!("may I use {tool}?");
         self.me.team.send(LEAD, &self.me.name, &request.text(), Some(&summary)).ok()?;
         loop {
-            if let Some(approved) = self.me.team.take_answer(&self.me.name, &request_id) {
-                return Some(if approved { app::Decision::Allow } else { app::Decision::Deny });
+            if let Some(decision) = self.me.team.take_answer(&self.me.name, &request_id) {
+                return Some(decision);
             }
-            if !self.me.team.exists() {
-                return None;
+            if !self.me.team.exists() || self.me.team.shutting_down(&self.me.name) {
+                return Some(app::Decision::Deny);
             }
             std::thread::sleep(self.poll);
         }
@@ -130,28 +153,74 @@ mod tests {
                 rule: None,
             },
         };
-        let lead = team.clone();
-        let answering = std::thread::spawn(move || {
-            for _ in 0..400 {
-                let waiting = lead.unread(LEAD);
-                if let Some(Protocol::PermissionRequest { request_id, tool_name, .. }) =
-                    waiting.first().and_then(|mail| Protocol::of(&mail.text))
-                {
-                    assert_eq!(tool_name, "Bash");
-                    let approved = Protocol::PermissionResponse { request_id, approved: true };
-                    lead.send("tester", LEAD, &approved.text(), None).expect("answer");
-                    return;
+        let answered = |decision: app::Decision| {
+            let lead = team.clone();
+            std::thread::spawn(move || {
+                for _ in 0..400 {
+                    let waiting = lead.unread(LEAD);
+                    if let Some(asked) = waiting.first().and_then(|mail| domain::team::TeammateAsk::of("t", mail)) {
+                        lead.send("tester", LEAD, &asked.answer(&decision).text(), None).expect("answer");
+                        return asked;
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
                 }
-                std::thread::sleep(Duration::from_millis(5));
-            }
-        });
+                panic!("nothing was asked")
+            })
+        };
 
-        let decision = mailbox.forward(&ask);
+        let lead = answered(app::Decision::AllowAlways);
+        assert_eq!(mailbox.forward(&ask), Some(app::Decision::AllowAlways), "always reaches the teammate");
+        assert!(matches!(lead.join().expect("lead").asked, domain::team::Asked::Permission { rememberable: true, .. }));
 
-        answering.join().expect("lead");
-        assert_eq!(decision, Some(app::Decision::Allow));
-        let plan = app::AgentAsk { kind: app::AskKind::Plan { plan: "p".into() }, ..ask };
-        assert_eq!(mailbox.forward(&plan), None, "only permission prompts go to the lead");
+        let approved = app::Decision::Approve(app::PermissionMode::AcceptEdits);
+        let lead = answered(approved.clone());
+        let plan = app::AgentAsk { kind: app::AskKind::Plan { plan: "1. edit".into() }, ..ask.clone() };
+        assert_eq!(mailbox.forward(&plan), Some(approved), "a plan is approved by the lead's user");
+        assert!(matches!(lead.join().expect("lead").asked, domain::team::Asked::Plan { .. }));
+    }
+
+    #[test]
+    fn a_teammate_asked_to_shut_down_stops_waiting_for_an_answer() {
+        let (_home, team, mailbox) = rig();
+        let asked = Protocol::ShutdownRequest { request_id: "r1".into(), from: LEAD.into(), reason: None };
+        team.send("tester", LEAD, &asked.text(), None).expect("send");
+        let ask = app::AgentAsk {
+            id: app::AskId("ask-1".into()),
+            kind: app::AskKind::Permission {
+                tool: "Bash".into(),
+                subject: "x".into(),
+                rememberable: false,
+                rule: None,
+            },
+        };
+
+        assert_eq!(mailbox.forward(&ask), Some(app::Decision::Deny));
+        assert!(team.shutting_down("tester"), "the request is left for the mailbox to act on");
+    }
+
+    #[test]
+    fn a_spec_file_gives_a_pane_s_teammate_its_folder_model_mode_and_instructions() {
+        use clap::Parser;
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("tester.json");
+        let spec = domain::team::TeammateSpec {
+            team: "team-1".into(),
+            name: "tester".into(),
+            cwd: "/work".into(),
+            model: "m1".into(),
+            mode: "edits".into(),
+            instructions: "# Team coordination".into(),
+        };
+        std::fs::write(&path, serde_json::to_string(&spec).expect("json")).expect("write");
+        let mut cli = crate::Cli::parse_from([brand::COMMAND, "teammate", "--spec", &path.display().to_string()]);
+
+        assert_eq!(spec_of(&mut cli), Ok(Some(spec)));
+
+        assert_eq!(cli.cwd, Some("/work".into()));
+        assert_eq!((cli.model.as_deref(), cli.mode), (Some("m1"), Some(app::PermissionMode::AcceptEdits)));
+        assert_eq!(cli.append_system_prompt.as_deref(), Some("# Team coordination"));
+        let mut plain = crate::Cli::parse_from([brand::COMMAND, "teammate"]);
+        assert_eq!(spec_of(&mut plain), Ok(None));
     }
 
     #[test]

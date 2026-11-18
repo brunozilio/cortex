@@ -106,16 +106,31 @@ pub enum Protocol {
         from: String,
         tool_name: String,
         description: String,
+        #[serde(default)]
+        rememberable: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rule: Option<String>,
     },
     PermissionResponse {
         request_id: String,
         approved: bool,
+        #[serde(default)]
+        always: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        feedback: Option<String>,
+    },
+    PlanApprovalRequest {
+        request_id: String,
+        from: String,
+        plan: String,
     },
     PlanApprovalResponse {
         request_id: String,
         approved: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         feedback: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", rename = "permissionMode")]
+        mode: Option<String>,
     },
 }
 
@@ -158,6 +173,7 @@ pub fn sent_message(from: &str, message: &Value, request_id: impl FnOnce() -> St
             request_id: request()?,
             approved: message["approve"].as_bool().ok_or("approve must be true or false")?,
             feedback: message["feedback"].as_str().map(str::to_owned),
+            mode: None,
         },
         _ => {
             return Err(
@@ -175,7 +191,14 @@ pub enum TeammateMode {
     #[default]
     Process,
     Tmux,
+    Iterm2,
     Auto,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Terminal {
+    pub inside_tmux: bool,
+    pub in_iterm2: bool,
 }
 
 impl TeammateMode {
@@ -183,57 +206,141 @@ impl TeammateMode {
         match name {
             "process" => Some(Self::Process),
             "tmux" => Some(Self::Tmux),
+            "iterm2" => Some(Self::Iterm2),
             "auto" => Some(Self::Auto),
             _ => None,
         }
     }
 
-    pub fn resolved(self, inside_tmux: bool) -> Self {
+    pub fn resolved(self, terminal: Terminal) -> Self {
         match self {
-            Self::Auto if inside_tmux => Self::Tmux,
+            Self::Auto if terminal.inside_tmux => Self::Tmux,
+            Self::Auto if terminal.in_iterm2 => Self::Iterm2,
             Self::Auto => Self::Process,
             chosen => chosen,
         }
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TeammateSpec {
+    pub team: String,
+    pub name: String,
+    pub cwd: String,
+    pub model: String,
+    pub mode: String,
+    pub instructions: String,
+}
+
+pub fn safe_in_a_terminal_command(path: &str) -> bool {
+    !path.is_empty() && path.chars().all(|c| c.is_ascii_alphanumeric() || "/._-".contains(c))
+}
+
 pub const ASK_PREFIX: &str = "teammate-ask:";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Asked {
+    Permission {
+        tool_name: String,
+        description: String,
+        #[serde(default)]
+        rememberable: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rule: Option<String>,
+    },
+    Plan {
+        plan: String,
+    },
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TeammateAsk {
     pub team: String,
     pub teammate: String,
     pub request_id: String,
-    pub tool_name: String,
-    pub description: String,
+    pub asked: Asked,
 }
 
 impl TeammateAsk {
     pub fn of(team: &str, mail: &Mail) -> Option<Self> {
-        match Protocol::of(&mail.text)? {
-            Protocol::PermissionRequest { request_id, from, tool_name, description } if from == mail.from => {
-                Some(Self { team: team.to_owned(), teammate: from, request_id, tool_name, description })
+        let (request_id, from, asked) = match Protocol::of(&mail.text)? {
+            Protocol::PermissionRequest { request_id, from, tool_name, description, rememberable, rule } => {
+                (request_id, from, Asked::Permission { tool_name, description, rememberable, rule })
             }
-            _ => None,
+            Protocol::PlanApprovalRequest { request_id, from, plan } => (request_id, from, Asked::Plan { plan }),
+            _ => return None,
+        };
+        (from == mail.from).then(|| Self { team: team.to_owned(), teammate: from, request_id, asked })
+    }
+
+    pub fn tool(&self) -> &str {
+        match &self.asked {
+            Asked::Permission { tool_name, .. } => tool_name,
+            Asked::Plan { .. } => "its plan",
         }
     }
 
     pub fn ask(&self) -> crate::AgentAsk {
+        let kind = match &self.asked {
+            Asked::Permission { tool_name, description, rememberable, rule } => crate::AskKind::Permission {
+                tool: format!("{tool_name} (teammate {})", self.teammate),
+                subject: description.clone(),
+                rememberable: *rememberable,
+                rule: rule.clone(),
+            },
+            Asked::Plan { plan } => {
+                crate::AskKind::Plan { plan: format!("Plan from teammate {}:\n\n{plan}", self.teammate) }
+            }
+        };
         crate::AgentAsk {
             id: crate::AskId(format!("{ASK_PREFIX}{}:{}:{}", self.team, self.teammate, self.request_id)),
-            kind: crate::AskKind::Permission {
-                tool: format!("{} (teammate {})", self.tool_name, self.teammate),
-                subject: self.description.clone(),
-                rememberable: false,
-                rule: None,
-            },
+            kind,
         }
     }
 
     pub fn answer(&self, decision: &crate::Decision) -> Protocol {
-        let approved = matches!(decision, crate::Decision::Allow | crate::Decision::AllowAlways);
-        Protocol::PermissionResponse { request_id: self.request_id.clone(), approved }
+        let request_id = self.request_id.clone();
+        let feedback = match decision {
+            crate::Decision::DenyWith(note) => Some(note.clone()),
+            _ => None,
+        };
+        match &self.asked {
+            Asked::Permission { .. } => Protocol::PermissionResponse {
+                request_id,
+                approved: matches!(decision, crate::Decision::Allow | crate::Decision::AllowAlways),
+                always: matches!(decision, crate::Decision::AllowAlways),
+                feedback,
+            },
+            Asked::Plan { .. } => {
+                let mode = match decision {
+                    crate::Decision::Approve(mode) => Some(crate::command::mode_label(*mode).to_owned()),
+                    _ => None,
+                };
+                Protocol::PlanApprovalResponse { request_id, approved: mode.is_some(), feedback, mode }
+            }
+        }
     }
+}
+
+pub fn decided(answer: &Protocol) -> Option<crate::Decision> {
+    match answer {
+        Protocol::PermissionResponse { approved: true, always: true, .. } => Some(crate::Decision::AllowAlways),
+        Protocol::PermissionResponse { approved: true, .. } => Some(crate::Decision::Allow),
+        Protocol::PlanApprovalResponse { approved: true, mode, .. } => Some(crate::Decision::Approve(
+            mode.as_deref().and_then(crate::command::mode_named).unwrap_or(crate::PermissionMode::AcceptEdits),
+        )),
+        Protocol::PermissionResponse { feedback: Some(note), .. }
+        | Protocol::PlanApprovalResponse { feedback: Some(note), .. } => Some(crate::Decision::DenyWith(note.clone())),
+        Protocol::PermissionResponse { .. } | Protocol::PlanApprovalResponse { .. } => Some(crate::Decision::Deny),
+        _ => None,
+    }
+}
+
+pub fn answers(answer: &Protocol, request: &str) -> bool {
+    matches!(answer,
+        Protocol::PermissionResponse { request_id, .. } | Protocol::PlanApprovalResponse { request_id, .. }
+            if request_id == request)
 }
 
 fn attribute(value: &str) -> String {
@@ -339,42 +446,70 @@ mod tests {
             from: "tester".into(),
             tool_name: "Bash".into(),
             description: "npm run deploy".into(),
+            rememberable: true,
+            rule: Some("Bash(npm run:*)".into()),
         };
-        let mail = Mail {
-            from: "tester".into(),
-            text: request.text(),
-            timestamp: 1,
-            read: false,
-            summary: None,
-            msg_id: "m".into(),
-        };
+        let mail = mailed("tester", &request);
         let ask = TeammateAsk::of("team-1", &mail).expect("a request");
         let question = ask.ask();
         assert_eq!(question.id.0, "teammate-ask:team-1:tester:p1");
         assert!(matches!(
             &question.kind,
-            crate::AskKind::Permission { tool, subject, rememberable: false, .. }
-                if tool == "Bash (teammate tester)" && subject == "npm run deploy"
+            crate::AskKind::Permission { tool, subject, rememberable: true, rule: Some(rule) }
+                if tool == "Bash (teammate tester)" && subject == "npm run deploy" && rule == "Bash(npm run:*)"
         ));
-        assert_eq!(
-            ask.answer(&crate::Decision::Allow),
-            Protocol::PermissionResponse { request_id: "p1".into(), approved: true }
-        );
-        assert_eq!(
-            ask.answer(&crate::Decision::Deny),
-            Protocol::PermissionResponse { request_id: "p1".into(), approved: false }
+        for decision in [
+            crate::Decision::Allow,
+            crate::Decision::AllowAlways,
+            crate::Decision::Deny,
+            crate::Decision::DenyWith("use make".into()),
+        ] {
+            assert_eq!(decided(&ask.answer(&decision)), Some(decision.clone()), "{decision:?} reaches the teammate");
+        }
+        assert!(
+            answers(&ask.answer(&crate::Decision::Allow), "p1") && !answers(&ask.answer(&crate::Decision::Allow), "p2")
         );
         let forged = Mail { from: "other".into(), ..mail };
         assert_eq!(TeammateAsk::of("team-1", &forged), None, "only the teammate itself asks for itself");
     }
 
+    fn mailed(from: &str, protocol: &Protocol) -> Mail {
+        Mail { from: from.into(), text: protocol.text(), timestamp: 1, read: false, summary: None, msg_id: "m".into() }
+    }
+
     #[test]
-    fn auto_puts_teammates_in_tmux_panes_only_inside_tmux() {
-        assert_eq!(TeammateMode::named("auto").map(|mode| mode.resolved(true)), Some(TeammateMode::Tmux));
-        assert_eq!(TeammateMode::Auto.resolved(false), TeammateMode::Process);
-        assert_eq!(TeammateMode::Tmux.resolved(false), TeammateMode::Tmux, "asked for, even outside tmux");
-        assert_eq!(TeammateMode::named("iterm2"), None);
+    fn a_teammate_s_plan_is_approved_by_the_user_with_the_mode_to_carry_it_out_in() {
+        let request =
+            Protocol::PlanApprovalRequest { request_id: "q1".into(), from: "tester".into(), plan: "1. edit".into() };
+        let ask = TeammateAsk::of("team-1", &mailed("tester", &request)).expect("a plan");
+        assert!(
+            matches!(&ask.ask().kind, crate::AskKind::Plan { plan } if plan.contains("teammate tester") && plan.contains("1. edit"))
+        );
+        let approved = crate::Decision::Approve(crate::PermissionMode::AcceptEdits);
+        assert_eq!(decided(&ask.answer(&approved)), Some(approved));
+        assert_eq!(
+            decided(&ask.answer(&crate::Decision::DenyWith("smaller".into()))),
+            Some(crate::Decision::DenyWith("smaller".into()))
+        );
+        assert_eq!(decided(&ask.answer(&crate::Decision::Deny)), Some(crate::Decision::Deny));
+    }
+
+    #[test]
+    fn auto_picks_tmux_inside_tmux_then_iterm2_then_a_background_process() {
+        let tmux = Terminal { inside_tmux: true, in_iterm2: true };
+        let iterm2 = Terminal { inside_tmux: false, in_iterm2: true };
+        assert_eq!(TeammateMode::named("auto").map(|mode| mode.resolved(tmux)), Some(TeammateMode::Tmux));
+        assert_eq!(TeammateMode::Auto.resolved(iterm2), TeammateMode::Iterm2);
+        assert_eq!(TeammateMode::Auto.resolved(Terminal::default()), TeammateMode::Process);
+        assert_eq!(
+            TeammateMode::Tmux.resolved(Terminal::default()),
+            TeammateMode::Tmux,
+            "asked for, even outside tmux"
+        );
+        assert_eq!(TeammateMode::named("iterm2"), Some(TeammateMode::Iterm2));
         assert_eq!(TeammateMode::default(), TeammateMode::Process);
+        assert!(safe_in_a_terminal_command("/Users/me/.local/bin/app-1.2"));
+        assert!(!safe_in_a_terminal_command("/Users/me/My Apps/app") && !safe_in_a_terminal_command("/a/\"b"));
     }
 
     #[test]

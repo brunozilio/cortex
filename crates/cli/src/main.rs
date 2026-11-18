@@ -131,7 +131,13 @@ enum Action {
         json: bool,
     },
     #[command(hide = true, about = "Run as a teammate of a lead's team (started by the lead)")]
-    Teammate,
+    Teammate {
+        #[arg(
+            long,
+            help = "The file the lead wrote with this teammate's team, name, folder, model, mode and instructions"
+        )]
+        spec: Option<PathBuf>,
+    },
     #[command(about = "Read or change the settings: the user's, or this project's with --project")]
     Config {
         #[command(subcommand)]
@@ -171,6 +177,7 @@ struct Launch {
 }
 
 fn run(mut cli: Cli) -> Result<ExitCode, String> {
+    let spec = teammate::spec_of(&mut cli)?;
     let cwd = match cli.cwd.take() {
         Some(dir) => dir,
         None => std::env::current_dir().map_err(|e| e.to_string())?,
@@ -183,7 +190,7 @@ fn run(mut cli: Cli) -> Result<ExitCode, String> {
     let client = Client::builder().cwd(&cwd).build().map_err(|e| e.to_string())?;
     let launch = launch(&cli, client, cwd)?;
     match cli.command.take() {
-        Some(Action::Teammate) => be_a_teammate(cli, launch),
+        Some(Action::Teammate { .. }) => be_a_teammate(cli, launch, spec),
         Some(action) => subcommand(action, &launch.client, &launch.cwd, cli.model),
         None if cli.print => print_the_answers(cli, launch),
         None if !on_a_terminal() => {
@@ -250,7 +257,7 @@ fn subcommand(
         Action::Remote { action } => {
             remote::run(action.unwrap_or(remote::RemoteAction::Status)).map(|()| ExitCode::SUCCESS)
         }
-        Action::Config { .. } | Action::Teammate => Ok(ExitCode::SUCCESS),
+        Action::Config { .. } | Action::Teammate { .. } => Ok(ExitCode::SUCCESS),
     }
 }
 
@@ -295,9 +302,12 @@ fn print_the_answers(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
     print::print_all(&client, cwd, wanted, prompts)
 }
 
-fn be_a_teammate(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
+fn be_a_teammate(cli: Cli, launch: Launch, spec: Option<domain::team::TeammateSpec>) -> Result<ExitCode, String> {
     let home = std::env::home_dir().ok_or("a teammate needs a home folder")?;
-    let me = app::team::Me::from_env(&home).ok_or("a teammate is started by its lead, with its team and name")?;
+    let me = match spec {
+        Some(spec) => app::team::Me { team: app::team::Team::named(&home, &spec.team), name: spec.name },
+        None => app::team::Me::from_env(&home).ok_or("a teammate is started by its lead, with its team and name")?,
+    };
     let Launch { client, cwd, add_dirs, headless, .. } = launch;
     let asker = teammate::Mailbox::new(me.clone());
     let forward = |ask: &app::AgentAsk| asker.forward(ask);

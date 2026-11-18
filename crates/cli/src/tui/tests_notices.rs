@@ -113,8 +113,12 @@ fn teammate_ask(request_id: &str) -> domain::team::TeammateAsk {
         team: "team-1".into(),
         teammate: "tester".into(),
         request_id: request_id.into(),
-        tool_name: "Bash".into(),
-        description: format!("npm run deploy {request_id}"),
+        asked: domain::team::Asked::Permission {
+            tool_name: "Bash".into(),
+            description: format!("npm run deploy {request_id}"),
+            rememberable: false,
+            rule: None,
+        },
     }
 }
 

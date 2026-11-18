@@ -261,7 +261,7 @@ fn teammate_mode_says_where_teammates_start_and_an_unknown_one_is_named_and_left
         load(repo.path(), Some(home.path()), &[]).expect("settings").teammate_mode,
         domain::team::TeammateMode::Auto
     );
-    std::fs::write(user.join("settings.json"), r#"{"teammateMode":"iterm2"}"#).expect("write");
+    std::fs::write(user.join("settings.json"), r#"{"teammateMode":"kitty"}"#).expect("write");
     let refused = load(repo.path(), Some(home.path()), &[]).expect("settings");
     assert_eq!(refused.teammate_mode, domain::team::TeammateMode::Process, "an unknown mode is not used");
     assert!(refused.notices.iter().any(|notice| notice.contains("teammateMode")), "{:?}", refused.notices);

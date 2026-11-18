@@ -185,14 +185,25 @@ impl Team {
         }
     }
 
-    pub fn take_answer(&self, agent: &str, request_id: &str) -> Option<bool> {
-        let answered = |mail: &Mail| match domain::team::Protocol::of(&mail.text) {
-            Some(domain::team::Protocol::PermissionResponse { request_id: id, approved })
-                if mail.from == LEAD && id == request_id =>
-            {
-                Some(approved)
-            }
-            _ => None,
+    pub fn shutting_down(&self, agent: &str) -> bool {
+        let asked = |mail: &Mail| {
+            mail.from == LEAD
+                && matches!(
+                    domain::team::Protocol::of(&mail.text),
+                    Some(domain::team::Protocol::ShutdownRequest { .. })
+                )
+        };
+        self.mailbox(agent)
+            .read::<Vec<Mail>>()
+            .ok()
+            .flatten()
+            .is_some_and(|mails| mails.iter().any(|mail| !mail.read && asked(mail)))
+    }
+
+    pub fn take_answer(&self, agent: &str, request_id: &str) -> Option<domain::Decision> {
+        let answered = |mail: &Mail| {
+            let answer = domain::team::Protocol::of(&mail.text).filter(|_| mail.from == LEAD)?;
+            domain::team::answers(&answer, request_id).then(|| domain::team::decided(&answer)).flatten()
         };
         self.mailbox(agent)
             .update(|mails: &mut Vec<Mail>| {

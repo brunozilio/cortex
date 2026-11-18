@@ -29,6 +29,42 @@ pub struct Planned {
     pub args: Vec<OsString>,
     pub env: Vec<(String, String)>,
     pub log: Option<PathBuf>,
+    pub spec: Option<(PathBuf, domain::team::TeammateSpec)>,
+}
+
+const OSASCRIPT: &str = "osascript";
+
+fn in_iterm2(launching: &Launching<'_>, program: &Path) -> Result<Planned, String> {
+    let spec_path = launching.team.dir.join("spawn").join(format!("{}.json", file_name(launching.name)));
+    let shown =
+        |path: &Path| path.to_str().filter(|path| domain::team::safe_in_a_terminal_command(path)).map(str::to_owned);
+    let (Some(program), Some(spec)) = (shown(program), shown(&spec_path)) else {
+        return Err(format!(
+            "an iTerm2 pane runs the teammate through a command line, which takes only paths of letters, digits and \
+             /._- ({} or {} has others); set teammateMode to tmux or process",
+            program.display(),
+            spec_path.display()
+        ));
+    };
+    let script = format!(
+        "tell application \"iTerm2\"\n  tell current session of current window\n    split vertically with default \
+         profile command \"{program} {SUBCOMMAND} --spec {spec}\"\n  end tell\nend tell"
+    );
+    let details = domain::team::TeammateSpec {
+        team: launching.team.name.clone(),
+        name: launching.name.to_owned(),
+        cwd: launching.cwd.display().to_string(),
+        model: launching.model.to_owned(),
+        mode: domain::command::mode_label(launching.mode).to_owned(),
+        instructions: launching.instructions.to_owned(),
+    };
+    Ok(Planned {
+        program: PathBuf::from(OSASCRIPT),
+        args: vec!["-e".into(), script.into()],
+        env: Vec::new(),
+        log: None,
+        spec: Some((spec_path, details)),
+    })
 }
 
 fn teammate_args(launching: &Launching<'_>) -> Vec<OsString> {
@@ -45,11 +81,14 @@ fn teammate_args(launching: &Launching<'_>) -> Vec<OsString> {
     ]
 }
 
-pub fn planned(launching: &Launching<'_>, program: PathBuf) -> Planned {
+pub fn planned(launching: &Launching<'_>, program: PathBuf) -> Result<Planned, String> {
     let env = vec![
         (TEAM_VARIABLE.to_owned(), launching.team.name.clone()),
         (AGENT_VARIABLE.to_owned(), launching.name.to_owned()),
     ];
+    if launching.placed == TeammateMode::Iterm2 {
+        return in_iterm2(launching, &program);
+    }
     if launching.placed == TeammateMode::Tmux {
         let mut args: Vec<OsString> =
             vec!["split-window".into(), "-d".into(), "-h".into(), "-c".into(), launching.cwd.as_os_str().to_owned()];
@@ -59,14 +98,15 @@ pub fn planned(launching: &Launching<'_>, program: PathBuf) -> Planned {
         }
         args.push(program.into_os_string());
         args.extend(teammate_args(launching));
-        return Planned { program: PathBuf::from(TMUX), args, env: Vec::new(), log: None };
+        return Ok(Planned { program: PathBuf::from(TMUX), args, env: Vec::new(), log: None, spec: None });
     }
-    Planned {
+    Ok(Planned {
         program,
         args: teammate_args(launching),
         env,
         log: Some(launching.team.dir.join("logs").join(format!("{}.log", file_name(launching.name)))),
-    }
+        spec: None,
+    })
 }
 
 fn program() -> Result<PathBuf, String> {
@@ -76,13 +116,19 @@ fn program() -> Result<PathBuf, String> {
     }
 }
 
-pub fn inside_tmux() -> bool {
-    std::env::var_os("TMUX").is_some_and(|session| !session.is_empty())
+pub fn terminal() -> domain::team::Terminal {
+    domain::team::Terminal {
+        inside_tmux: std::env::var_os("TMUX").is_some_and(|session| !session.is_empty()),
+        in_iterm2: std::env::var("TERM_PROGRAM").is_ok_and(|program| program == "iTerm.app"),
+    }
 }
 
 pub fn launch(launching: &Launching<'_>) -> Result<(), String> {
     launching.team.send(launching.name, LEAD, launching.prompt, None)?;
-    let planned = planned(launching, program()?);
+    let planned = planned(launching, program()?)?;
+    if let Some((path, spec)) = &planned.spec {
+        platform::store::Document::at(path).write(spec).map_err(|error| error.to_string())?;
+    }
     let mut command = Command::new(&planned.program);
     command
         .args(&planned.args)
@@ -90,10 +136,11 @@ pub fn launch(launching: &Launching<'_>) -> Result<(), String> {
         .current_dir(launching.cwd)
         .stdin(Stdio::null());
     let Some(log) = &planned.log else {
-        let placed = command.output().map_err(|error| format!("tmux could not be started: {error}"))?;
+        let opener = planned.program.display();
+        let placed = command.output().map_err(|error| format!("{opener} could not be started: {error}"))?;
         if !placed.status.success() {
             return Err(format!(
-                "tmux could not open a pane for the teammate: {}",
+                "{opener} could not open a pane for the teammate: {}",
                 String::from_utf8_lossy(&placed.stderr).trim()
             ));
         }
@@ -143,7 +190,7 @@ mod tests {
     fn a_teammate_runs_the_app_s_own_program_in_its_team_with_its_name_mode_and_instructions() {
         let team = Team::named(Path::new("/home/me"), "team-1");
 
-        let planned = planned(&launching(&team, TeammateMode::Process), PathBuf::from("/bin/app"));
+        let planned = planned(&launching(&team, TeammateMode::Process), PathBuf::from("/bin/app")).expect("planned");
 
         let args = strings(&planned.args);
         assert_eq!(
@@ -170,7 +217,7 @@ mod tests {
     fn in_tmux_a_teammate_opens_in_a_pane_beside_the_lead_with_no_shell_in_between() {
         let team = Team::named(Path::new("/home/me"), "team-1");
 
-        let planned = planned(&launching(&team, TeammateMode::Tmux), PathBuf::from("/bin/app"));
+        let planned = planned(&launching(&team, TeammateMode::Tmux), PathBuf::from("/bin/app")).expect("planned");
 
         assert_eq!(planned.program, PathBuf::from("tmux"));
         let args = strings(&planned.args);
@@ -182,5 +229,25 @@ mod tests {
         assert_eq!(args[at + 1..].last().map(String::as_str), Some("teammate"));
         assert_eq!(args[at + 1..].len(), 9, "each of the app's arguments stays its own argument");
         assert_eq!(planned.log, None, "the pane shows what it prints");
+    }
+
+    #[test]
+    fn in_iterm2_a_pane_runs_the_teammate_from_a_spec_file_and_unsafe_paths_are_refused() {
+        let team = Team::named(Path::new("/home/me"), "team-1");
+
+        let planned = planned(&launching(&team, TeammateMode::Iterm2), PathBuf::from("/bin/app")).expect("planned");
+
+        assert_eq!(planned.program, PathBuf::from("osascript"));
+        let script = strings(&planned.args).join(" ");
+        assert!(script.contains("split vertically"), "{script}");
+        let spec_file = format!("/home/me/{}/teams/team-1/spawn/tester.json", brand::DIR);
+        assert!(script.contains(&format!("command \"/bin/app teammate --spec {spec_file}\"")), "{script}");
+        assert!(!script.contains("Team coordination") && !script.contains("fix the tests"), "nothing else is typed");
+        let (path, spec) = planned.spec.expect("a spec");
+        assert!(path.ends_with("spawn/tester.json"));
+        assert_eq!((spec.team.as_str(), spec.name.as_str(), spec.cwd.as_str()), ("team-1", "tester", "/work"));
+        assert_eq!(spec.instructions, "# Team coordination");
+        let spaced = super::planned(&launching(&team, TeammateMode::Iterm2), PathBuf::from("/My Apps/app"));
+        assert!(spaced.is_err_and(|error| error.contains("tmux or process")));
     }
 }
