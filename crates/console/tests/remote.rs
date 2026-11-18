@@ -62,7 +62,8 @@ impl World {
 
     async fn dial(&self) -> Socket {
         let url = format!("ws://{}/phone?machine={}", self.relay, self.machine_id);
-        for _ in 0..200 {
+        let deadline = tokio::time::Instant::now() + WAIT;
+        while tokio::time::Instant::now() < deadline {
             if let Ok((socket, _)) = tokio_tungstenite::connect_async(&url).await {
                 return socket;
             }
@@ -368,7 +369,8 @@ async fn the_machine_waits_off_the_relay_until_someone_can_be_served() {
     assert!(tokio_tungstenite::connect_async(&url).await.is_err());
     world.book().invite().unwrap();
     drop(world.dial().await);
-    assert_eq!(world._remote.status(), Status::Connected);
+    let mut watch = world._remote.watch();
+    assert!(tokio::time::timeout(WAIT, watch.wait_for(|status| *status == Status::Connected)).await.is_ok());
 }
 
 #[test]

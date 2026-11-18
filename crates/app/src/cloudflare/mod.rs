@@ -105,6 +105,15 @@ impl CloudflareSignIn {
         if tokens.fresh(now) {
             return Some(tokens.access_token);
         }
+        let _held = self
+            .secrets
+            .hold_for_refresh(SLOT)
+            .inspect_err(|error| tracing::warn!(%error, "the Cloudflare sign-in could not be refreshed"))
+            .ok()?;
+        let tokens = self.load()?;
+        if tokens.fresh(now) {
+            return Some(tokens.access_token);
+        }
         let form = [
             ("grant_type", "refresh_token".to_owned()),
             ("refresh_token", tokens.refresh_token.clone()?),
