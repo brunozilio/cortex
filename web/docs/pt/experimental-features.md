@@ -141,7 +141,6 @@ As funcionalidades experimentais já vêm ligadas para que sejam usadas. Cada um
 | `experimental-memory-scorecard` | Aprendizado e memória | | Uma em cada 20 requisições roda sem memória, para o `/memory score` |
 | `experimental-code-map` | Inteligência de código | | Aponta cada prompt para o código correspondente a partir de um índice tree-sitter |
 | `experimental-blast-radius` | Inteligência de código | | Diz ao agente quais outros arquivos usam o que uma edição mudou |
-| `memory` | Funcionalidades internas | | A memória do projeto: lembrança a cada prompt, gravação, `/memory` |
 | `memory-search` | Funcionalidades internas | | A ferramenta `memory_search` que o agente usa para buscar na memória |
 | `schedules` | Funcionalidades internas | | `/schedules`, `/loop` e os prompts agendados |
 | `plugins` | Funcionalidades internas | | Instalar, atualizar, listar e remover plugins |
@@ -504,7 +503,6 @@ Algumas flags desligam uma funcionalidade interna inteira, e não um comportamen
 
 | Flag | O que desliga |
 |---|---|
-| `memory` | A memória do projeto: lembrança a cada prompt, gravação, `/memory` |
 | `memory-search` | A ferramenta `memory_search` que o agente usa para buscar na memória; a lembrança a cada prompt continua |
 | `schedules` | `/schedules`, `/loop` e o disparo dos prompts agendados |
 | `plugins` | Instalar, atualizar, listar e remover plugins |
@@ -515,9 +513,9 @@ Algumas flags desligam uma funcionalidade interna inteira, e não um comportamen
 | `experimental-code-map` | O mapa de código |
 | `experimental-output-savings` | `/gain` |
 
-Uma requisição a uma funcionalidade desligada responde com o nome dela e o comando que a religa, por exemplo `memory is turned off (/features memory on)`.
+Uma requisição a uma funcionalidade desligada responde com o nome dela e o comando que a religa, por exemplo `trace is turned off (/features trace on)`.
 
-Só esses nomes desligam uma funcionalidade. Um nome que o `/features` não lista não faz nada no objeto `features`, por mais parecido que seja: `"code_map": false`, `"output-savings": false` ou uma flag escrita errado não desligam nada. Quatro funcionalidades internas não podem ser desligadas, porque o {{NAME}} não funciona sem elas: as próprias feature flags (`/features`), a lista de sessões, os comandos em segundo plano e o workspace (a oferta de git, as menções de arquivo com `@` e as listas de mudanças). Para parar só a oferta de git, desligue a [`git-offer`](#git-offer).
+Só esses nomes desligam uma funcionalidade. Um nome que o `/features` não lista não faz nada no objeto `features`, por mais parecido que seja: `"code_map": false`, `"output-savings": false` ou uma flag escrita errado não desligam nada. Cinco funcionalidades internas não podem ser desligadas, porque o {{NAME}} não funciona sem elas: as próprias feature flags (`/features`), a memória do projeto, a lista de sessões, os comandos em segundo plano e o workspace (a oferta de git, as menções de arquivo com `@` e as listas de mudanças). Para parar só a oferta de git, desligue a [`git-offer`](#git-offer).
 
 > [!NOTE]
 > Versões anteriores aceitavam aqui o nome da pasta de qualquer funcionalidade interna, com hífens ou sublinhados, inclusive `workspace`, `sessions`, `shell` e `flags`. Esses quatro agora são ignorados; `code-map` e `output-savings` se escrevem `experimental-code-map` e `experimental-output-savings`.

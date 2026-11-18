@@ -37,7 +37,7 @@ The inventory below covers every flag constant in
 `crates/domain/src/features.rs` and
 `crates/domain/src/features/learnings.rs`. Since 2026-11-17 there are more,
 in `crates/domain/src/features/backend.rs`: the declared switches of whole
-backend features (`memory`, `memory-search`, `schedules`, `plugins`, `trace`,
+backend features (`memory-search`, `schedules`, `plugins`, `trace`,
 `channels`, `declared-providers`). They are described in "Backend feature
 switches" below and are not part of the recommendations table. The numbers
 below count the rows of each section; `xtask lint` keeps them equal.
@@ -91,13 +91,12 @@ A backend feature is now turned off only through a declared, known flag:
   | `channels` | `channels` |
   | `code_map` | `experimental-code-map` |
   | `declared_providers` | `declared-providers` |
-  | `memory` | `memory` |
   | `output_savings` | `experimental-output-savings` |
   | `plugins` | `plugins` |
   | `schedules` | `schedules` |
   | `suggested_rules` | `suggested-rules` |
   | `trace` | `trace` |
-  | `flags`, `sessions`, `shell`, `workspace` | none: always on |
+  | `flags`, `memory`, `sessions`, `shell`, `workspace` | none: always on |
 
 - `TurnedOff::follow` (`crates/app/src/turned_off.rs`) keeps only the names
   `domain::features::known` finds, as written. There is no
@@ -111,7 +110,10 @@ A backend feature is now turned off only through a declared, known flag:
 - `FeatureError::FeatureOff` prints `<folder> is turned off (/features
   <switch> on)`. Tests in `crates/app/src/features/switch_tests.rs` type the
   command each refusal names and check the feature answers again, and that
-  the four always-on folders ignore every name.
+  the five always-on folders ignore every name.
+- Project memory has had no switch since 2026-11-17: the owner decided it is
+  always on. `"memory": false` left in a settings file is an unknown name and
+  is ignored like any other.
 - `memory-search` used to be the program-only name `memory_search`, reachable
   from a settings file through the underscore copy. It is a declared flag now;
   tests turn it off by that name.

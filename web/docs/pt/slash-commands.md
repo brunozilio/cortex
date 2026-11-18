@@ -94,7 +94,7 @@ Limpa a conversa e começa uma nova com o mesmo modelo: somem a transcrição, a
 
 ### /resume
 
-`/resume` abre um seletor das conversas anteriores desta pasta, da mais recente para a mais antiga, cada uma com o título (ou `Untitled`) e há quanto tempo foi usada (`2h ago`). `/resume <palavras>` mantém só as conversas cujo título contém todas as palavras, sem diferenciar maiúsculas. A conversa atual e as arquivadas não aparecem. Escolher uma a continua e mostra um resumo `Where you left off:`. Indisponível enquanto o agente trabalha. Apelido: `/continue`. Veja [Sessões](./sessions#retomar-uma-conversa).
+`/resume` abre um seletor das conversas anteriores desta pasta, da mais recente para a mais antiga, cada uma com o título (ou `Untitled`) e há quanto tempo foi usada (`2h ago`). `/resume <palavras>` mantém só as conversas cujo título contém todas as palavras, sem diferenciar maiúsculas. A conversa atual não aparece. Escolher uma a continua e mostra um resumo `Where you left off:`. Indisponível enquanto o agente trabalha. Apelido: `/continue`. Veja [Sessões](./sessions#retomar-uma-conversa).
 
 ### /fleet
 

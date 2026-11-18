@@ -57,9 +57,11 @@ mod tests {
     #[test]
     fn only_a_declared_flag_turns_anything_off_from_the_settings() {
         let off = TurnedOff::default();
-        off.follow(&features(json!({ "sessions": false, "suggested_rules": false, "typo": false, "memory": false })));
-        assert!(off.contains("memory"));
-        for unknown in ["sessions", "suggested_rules", "suggested-rules", "typo"] {
+        off.follow(&features(
+            json!({ "sessions": false, "suggested_rules": false, "typo": false, "memory": false, "trace": false }),
+        ));
+        assert!(off.contains("trace"));
+        for unknown in ["sessions", "suggested_rules", "suggested-rules", "typo", "memory"] {
             assert!(!off.contains(unknown), "{unknown} is not a flag /features knows");
         }
     }

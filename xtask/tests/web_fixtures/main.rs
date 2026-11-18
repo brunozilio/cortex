@@ -115,7 +115,6 @@ fn sessions() -> Value {
             created: NOW_MS / 1_000 - 600,
             updated: NOW_MS / 1_000 - index as u64,
             status,
-            archived: false,
             unread: false,
         };
         json!({

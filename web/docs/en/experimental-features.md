@@ -141,7 +141,6 @@ Experimental features ship on so that they get used. Each one is on its way to o
 | `experimental-memory-scorecard` | Learning and memory | | One request in 20 runs without memory, for `/memory score` |
 | `experimental-code-map` | Code intelligence | | Points each prompt at the matching code from a tree-sitter index |
 | `experimental-blast-radius` | Code intelligence | | Tells the agent which other files call what an edit changed |
-| `memory` | Built-in features | | Project memory: recall with each prompt, saving, `/memory` |
 | `memory-search` | Built-in features | | The `memory_search` tool the agent uses to search memory |
 | `schedules` | Built-in features | | `/schedules`, `/loop` and scheduled prompts |
 | `plugins` | Built-in features | | Installing, updating, listing and removing plugins |
@@ -504,7 +503,6 @@ Some flags switch a whole built-in feature rather than one behaviour of it. They
 
 | Flag | What it turns off |
 |---|---|
-| `memory` | Project memory: recall with each prompt, saving, `/memory` |
 | `memory-search` | The `memory_search` tool the agent uses to search memory; recall with each prompt stays |
 | `schedules` | `/schedules`, `/loop` and scheduled prompts firing |
 | `plugins` | Installing, updating, listing and removing plugins |
@@ -515,9 +513,9 @@ Some flags switch a whole built-in feature rather than one behaviour of it. They
 | `experimental-code-map` | The code map |
 | `experimental-output-savings` | `/gain` |
 
-A request to a feature that is off answers with its name and the command that turns it back on, for example `memory is turned off (/features memory on)`.
+A request to a feature that is off answers with its name and the command that turns it back on, for example `trace is turned off (/features trace on)`.
 
-Only these names switch a feature. A name `/features` does not list does nothing in the `features` object, whatever it resembles: `"code_map": false`, `"output-savings": false` or a misspelled flag turn nothing off. Four built-in features cannot be turned off at all, because {{NAME}} does not work without them: the feature flags themselves (`/features`), the session list, background commands, and the workspace (the git offer, `@` file mentions and change listings). To stop only the git offer, turn off [`git-offer`](#git-offer).
+Only these names switch a feature. A name `/features` does not list does nothing in the `features` object, whatever it resembles: `"code_map": false`, `"output-savings": false` or a misspelled flag turn nothing off. Five built-in features cannot be turned off at all, because {{NAME}} does not work without them: the feature flags themselves (`/features`), project memory, the session list, background commands, and the workspace (the git offer, `@` file mentions and change listings). To stop only the git offer, turn off [`git-offer`](#git-offer).
 
 > [!NOTE]
 > Earlier versions accepted any built-in feature's folder name here, with hyphens or underscores, including `workspace`, `sessions`, `shell` and `flags`. Those four are now ignored; `code-map` and `output-savings` are spelled `experimental-code-map` and `experimental-output-savings`.

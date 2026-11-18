@@ -98,8 +98,6 @@ fn a_run_lists_its_session_and_how_it_ended() {
     let row = listed(&backend, &woke).remove(0);
     assert_eq!((row.title.as_deref(), row.unread), (Some("Greeting"), false));
 
-    sessions(&backend, &woke, SessionsRequest::Archive { session: s1(), archived: true });
-    assert!(listed(&backend, &woke)[0].archived);
     sessions(&backend, &woke, SessionsRequest::Delete { session: s1() });
     assert!(listed(&backend, &woke).is_empty());
 }

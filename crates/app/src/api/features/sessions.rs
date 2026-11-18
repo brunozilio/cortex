@@ -12,7 +12,6 @@ pub enum SessionsRequest {
     History { session: SessionId, cwd: PathBuf },
     Length { session: SessionId, cwd: PathBuf },
     Rename { session: SessionId, title: String },
-    Archive { session: SessionId, archived: bool },
     Delete { session: SessionId },
     Seen { session: SessionId },
 }

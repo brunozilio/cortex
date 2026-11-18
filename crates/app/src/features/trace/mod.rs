@@ -20,12 +20,8 @@ pub fn handle(context: &Context<'_>, request: TraceRequest) -> Result<TraceReply
     let report = match request {
         TraceRequest::EverySession => {
             let catalog = context.services.catalog.read();
-            let listed: Vec<(SessionId, PathBuf)> = catalog
-                .listed()
-                .iter()
-                .filter(|entry| !entry.archived)
-                .map(|entry| (entry.session.clone(), entry.cwd.clone()))
-                .collect();
+            let listed: Vec<(SessionId, PathBuf)> =
+                catalog.listed().iter().map(|entry| (entry.session.clone(), entry.cwd.clone())).collect();
             everything(store, &listed, now_ms())
         }
         TraceRequest::Session { session, cwd } => {

@@ -32,7 +32,6 @@ fn what_a_user_does() -> Vec<Change> {
         started("c", "/w", 3),
         status("a", SessionStatus::NeedsYou, 4),
         Box::new(|catalog| catalog.rename(&id("b"), "Named by hand")),
-        Box::new(|catalog| catalog.archive(&id("c"), true)),
         Box::new(|catalog| catalog.seen(&id("a"))),
         started("tie-1", "/w", 9),
         started("tie-2", "/w", 9),
@@ -109,6 +108,21 @@ fn sessions_are_kept_between_runs_of_the_program() {
 }
 
 #[test]
+fn a_session_an_earlier_version_archived_is_listed_and_kept() {
+    let dir = tempfile::tempdir().expect("dir");
+    let file = dir.path().join("app.db");
+    let kept = SqliteSessionCatalog::new(Db::open(&file).expect("open"));
+    kept.update(&mut |catalog| catalog.started(&id("shelved"), Path::new("/w"), 1));
+    let earlier = Db::open(&file).expect("earlier");
+    earlier.write(|transaction| transaction.execute("UPDATE sessions SET archived = 1", [])).expect("archived");
+
+    assert_eq!(kept.read().listed().iter().map(|row| row.session.0.as_str()).collect::<Vec<_>>(), ["shelved"]);
+    kept.update(&mut |catalog| catalog.rename(&id("shelved"), "Still here"));
+    let row = kept.read().find(&id("shelved")).cloned().expect("row");
+    assert_eq!(row.title.as_deref(), Some("Still here"));
+}
+
+#[test]
 fn a_change_writes_only_the_rows_it_changed() {
     let db = Db::in_memory().expect("db");
     let kept = SqliteSessionCatalog::new(db.clone());
@@ -169,7 +183,6 @@ fn legacy_fixture(data: &Path) -> Catalog {
         catalog.started(&id("third"), Path::new("/w"), 2);
         catalog.status(&id("first"), SessionStatus::NeedsYou, 3);
         catalog.rename(&id("second"), "Named");
-        catalog.archive(&id("third"), true);
     });
     assert!(data.join("users/local/sessions.json").is_file());
     legacy.read()

@@ -45,16 +45,12 @@ fn a_session_that_ended_or_asks_is_unread_until_seen() {
 }
 
 #[test]
-fn a_session_is_renamed_archived_and_deleted() {
+fn a_session_is_renamed_and_deleted() {
     let mut catalog = Catalog::default();
     catalog.started(&id("a"), Path::new("/w"), 1);
     catalog.started(&id("b"), Path::new("/w"), 2);
     catalog.rename(&id("a"), "Churn report");
     assert_eq!(catalog.find(&id("a")).and_then(|row| row.title.as_deref()), Some("Churn report"));
-    catalog.archive(&id("a"), true);
-    assert!(catalog.find(&id("a")).expect("row").archived);
-    catalog.archive(&id("a"), false);
-    assert!(!catalog.find(&id("a")).expect("row").archived);
     catalog.delete(&id("b"));
     assert_eq!(ids(&catalog), ["a"]);
     catalog.rename(&id("gone"), "x");

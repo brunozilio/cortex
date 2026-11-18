@@ -214,7 +214,7 @@ mod tests {
         let home = tempfile::tempdir().expect("home");
         let repo = tempfile::tempdir().expect("repo");
         std::fs::create_dir_all(home.path().join(brand::DIR)).expect("dir");
-        let settings = serde_json::json!({ "features": { "workspace": false, "trace": false, "memory": true, "suggested-rules": false } });
+        let settings = serde_json::json!({ "features": { "workspace": false, "trace": false, "memory": false, "suggested-rules": false } });
         std::fs::write(home.path().join(brand::DIR).join("settings.json"), settings.to_string()).expect("write");
         let mut services = LocalServices::with_engine(engine());
         services.homes = Arc::new(crate::OwnerHome::at(home.path()));
@@ -222,7 +222,7 @@ mod tests {
         let services = services.turned_off_in(repo.path());
 
         assert!(services.off.contains(domain::features::TRACE));
-        assert!(!services.off.contains(domain::features::MEMORY));
+        assert!(!services.off.contains("memory"), "memory is always on");
         assert!(services.off.contains(domain::features::SUGGESTED_RULES));
         assert!(!services.off.contains("workspace"), "not a flag: the program cannot work without it");
         assert!(!services.off.contains("suggested_rules"), "a folder's name is not a switch, its flag is");

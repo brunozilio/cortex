@@ -104,7 +104,7 @@ fn resume_picks_an_earlier_conversation_of_the_folder() {
 }
 
 #[test]
-fn resume_offers_a_session_another_client_ran_in_the_folder_but_not_an_archived_one() {
+fn resume_offers_a_session_another_client_ran_in_the_folder() {
     let data = tempfile::tempdir().expect("data");
     let project = tempfile::tempdir().expect("project");
     let script = vec![
@@ -125,13 +125,6 @@ fn resume_offers_a_session_another_client_ran_in_the_folder_but_not_an_archived_
     press(&mut app, KeyCode::Enter);
     until(&mut app, |app| app.overlays.picker.is_some());
     assert!(screen(&app).contains("From the browser"), "{}", screen(&app));
-    press(&mut app, KeyCode::Esc);
-
-    elsewhere.archive_session(&id, true).expect("archived");
-    type_text(&mut app, "/resume");
-    press(&mut app, KeyCode::Enter);
-    until(&mut app, |app| screen(app).contains("No earlier conversation"));
-    assert!(app.overlays.picker.is_none());
 }
 
 #[test]

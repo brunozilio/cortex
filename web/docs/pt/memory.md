@@ -181,7 +181,7 @@ Desligue a flag se não quiser que nenhuma requisição rode sem memória.
 
 ## Desligar a memória
 
-- Defina `"memory": false` sob `features` para parar a memória do projeto de vez (veja [Feature flags](./experimental-features#desligar-uma-funcionalidade-interna-inteira)), ou `"memory-search": false` para manter a lembrança mas tirar a ferramenta `memory_search`.
+- A memória do projeto fica sempre ligada. Defina `"memory-search": false` sob `features` para manter a lembrança mas tirar a ferramenta `memory_search` (veja [Feature flags](./experimental-features#desligar-uma-funcionalidade-interna-inteira)).
 - A memória persistente dos [agentes](./agents) que declaram um escopo `memory` (subagentes e o agente escolhido com a configuração `agent`) fica sempre ligada. Para um agente não guardar memória, deixe `memory` fora da definição dele.
 
 ## Relacionados

@@ -320,7 +320,6 @@ Todo recurso fica ligado até você desligá-lo, menos `experimental-code-mode-o
 | `features.experimental-load-on-call` | `true` | Uma ferramenta que espera atrás do ToolSearch e que o agente chama pelo nome é carregada e executada, em vez de recusada. |
 | `features.experimental-code-mode` | `true` | A ferramenta REPL: o agente escreve JavaScript que chama as ferramentas dele como funções. |
 | `features.experimental-code-mode-only` | `false` | Com `experimental-code-mode`, a REPL é a única ferramenta do agente. |
-| `features.memory` | `true` | Memória do projeto: recuperação a cada prompt, e `/memory`. |
 | `features.memory-search` | `true` | A ferramenta `memory_search`. |
 | `features.schedules` | `true` | `/loop` e `/schedules`. |
 | `features.plugins` | `true` | Instalar, atualizar, listar e remover plugins. |

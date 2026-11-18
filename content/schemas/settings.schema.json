@@ -355,10 +355,6 @@
           "description": "Offer to initialize git on the first message in a folder that is not a repository",
           "type": "boolean"
         },
-        "memory": {
-          "description": "Project memory: recall what was remembered with each prompt, and /memory to see and change it",
-          "type": "boolean"
-        },
         "memory-search": {
           "description": "The memory_search tool the agent uses to look further into project memory",
           "type": "boolean"

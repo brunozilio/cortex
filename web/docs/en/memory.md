@@ -181,7 +181,7 @@ Turn the flag off if you never want a request to run without memory.
 
 ## Turn memory off
 
-- Set `"memory": false` under `features` to stop project memory altogether (see [Feature flags](./experimental-features#turning-off-a-whole-built-in-feature)), or `"memory-search": false` to keep recall but drop the `memory_search` tool.
+- Project memory is always on. Set `"memory-search": false` under `features` to keep recall but drop the `memory_search` tool (see [Feature flags](./experimental-features#turning-off-a-whole-built-in-feature)).
 - The persistent memory of [agents](./agents) that declare a `memory` scope (sub-agents, and the agent chosen with the `agent` setting) is always on. To keep an agent from remembering, leave `memory` out of its definition.
 
 ## Related

@@ -320,7 +320,6 @@ Every feature is on until you turn it off, except `experimental-code-mode-only`,
 | `features.experimental-load-on-call` | `true` | A tool waiting behind ToolSearch that the agent calls by name is loaded and run, not refused. |
 | `features.experimental-code-mode` | `true` | The REPL tool: the agent writes JavaScript that calls its tools as functions. |
 | `features.experimental-code-mode-only` | `false` | With `experimental-code-mode`, REPL is the agent's only tool. |
-| `features.memory` | `true` | Project memory: recall with each prompt, and `/memory`. |
 | `features.memory-search` | `true` | The `memory_search` tool. |
 | `features.schedules` | `true` | `/loop` and `/schedules`. |
 | `features.plugins` | `true` | Install, update, list and remove plugins. |

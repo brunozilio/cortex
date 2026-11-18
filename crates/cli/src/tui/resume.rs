@@ -20,7 +20,7 @@ pub fn here(client: &app::Client, cwd: &std::path::Path) -> Result<Vec<Conversat
     let real = |path: &std::path::Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let folder = real(cwd);
     let listed = client.sessions()?;
-    let here = listed.into_iter().filter(|row| !row.archived && real(&row.cwd) == folder);
+    let here = listed.into_iter().filter(|row| real(&row.cwd) == folder);
     Ok(here.map(|row| Conversation { session: row.session, title: row.title, at: row.updated }).collect())
 }
 

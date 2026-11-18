@@ -1,6 +1,5 @@
 use super::Flag;
 
-pub const MEMORY: &str = "memory";
 pub const MEMORY_SEARCH: &str = "memory-search";
 pub const SCHEDULES: &str = "schedules";
 pub const PLUGINS: &str = "plugins";
@@ -9,10 +8,6 @@ pub const CHANNELS: &str = "channels";
 pub const DECLARED_PROVIDERS: &str = "declared-providers";
 
 pub const KNOWN: &[Flag] = &[
-    Flag {
-        name: MEMORY,
-        about: "Project memory: recall what was remembered with each prompt, and /memory to see and change it",
-    },
     Flag { name: MEMORY_SEARCH, about: "The memory_search tool the agent uses to look further into project memory" },
     Flag { name: SCHEDULES, about: "/loop and /schedules send a prompt again later or on an interval" },
     Flag { name: PLUGINS, about: "Install, update, list and remove plugins" },
@@ -38,7 +33,14 @@ mod tests {
             let shown = listed.iter().find(|listed| listed.name == flag.name).expect("listed");
             assert!(shown.on && !shown.experimental && !shown.security, "{}", flag.name);
         }
-        let off = Features::default().layered(&serde_json::json!({ MEMORY: false }), true).expect("flags");
-        assert!(!off.on(MEMORY) && off.on(TRACE));
+        let off = Features::default().layered(&serde_json::json!({ TRACE: false }), true).expect("flags");
+        assert!(!off.on(TRACE) && off.on(PLUGINS));
+    }
+
+    #[test]
+    fn memory_has_no_switch_and_an_old_setting_that_turned_it_off_still_loads() {
+        assert!(known("memory").is_none());
+        let old = Features::default().layered(&serde_json::json!({ "memory": false }), true).expect("flags");
+        assert!(old.listed().iter().all(|flag| flag.on || flag.name == super::super::CODE_MODE_ONLY));
     }
 }

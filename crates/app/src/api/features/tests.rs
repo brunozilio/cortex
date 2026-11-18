@@ -44,9 +44,9 @@ fn every_feature_has_a_name_in_one_fixed_order() {
 #[test]
 fn a_request_names_its_feature_on_the_wire() {
     let request =
-        FeatureRequest::Sessions(SessionsRequest::Archive { session: domain::SessionId("s".into()), archived: false });
+        FeatureRequest::Sessions(SessionsRequest::Rename { session: domain::SessionId("s".into()), title: "t".into() });
     let json = serde_json::to_value(&request).expect("json");
-    assert_eq!(json, json!({ "feature": "sessions", "request": { "archive": { "session": "s", "archived": false } } }));
+    assert_eq!(json, json!({ "feature": "sessions", "request": { "rename": { "session": "s", "title": "t" } } }));
     assert_eq!(request.feature(), FeatureName::Sessions);
     assert_eq!(
         serde_json::to_value(FeatureRequest::OutputSavings).expect("json"),
@@ -57,8 +57,8 @@ fn a_request_names_its_feature_on_the_wire() {
 
 #[test]
 fn what_used_to_take_a_silent_default_is_refused_when_it_is_missing() {
-    assert!(refused::<SessionsRequest>(json!({ "archive": { "session": "s" } })), "archived is required");
-    assert!(refused::<SessionsRequest>(json!({ "archvie": { "session": "s", "archived": true } })));
+    assert!(refused::<SessionsRequest>(json!({ "rename": { "session": "s" } })), "the title is required");
+    assert!(refused::<SessionsRequest>(json!({ "archive": { "session": "s", "archived": true } })));
     assert!(refused::<MemoryRequest>(json!({ "path": "/repo" })), "the op is required");
     assert!(refused::<MemoryRequest>(json!({ "path": "/repo", "op": { "search": {} } })), "the query is required");
     assert!(refused::<MemoryRequest>(json!({ "path": "/repo", "op": "list", "pth": "/x" })), "an unknown field");

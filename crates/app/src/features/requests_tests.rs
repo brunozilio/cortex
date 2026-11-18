@@ -26,7 +26,7 @@ fn prompted(services: &LocalServices, cwd: &Path, id: &str) -> SessionId {
 }
 
 #[test]
-fn sessions_are_listed_read_and_tidied_and_archiving_says_which_way() {
+fn sessions_are_listed_read_and_tidied() {
     let services = testing::services(None);
     let id = SessionId("s1".into());
     services.catalog.update(&mut |catalog| catalog.started(&id, Path::new("/repo"), 1));
@@ -34,20 +34,14 @@ fn sessions_are_listed_read_and_tidied_and_archiving_says_which_way() {
         Ok(FeatureReply::Sessions(reply)) => reply,
         other => panic!("{other:?}"),
     };
-    let archived = || match sessions(SessionsRequest::List) {
-        SessionsReply::Listed(listed) => listed[0].archived,
-        other => panic!("{other:?}"),
-    };
     let (session, cwd) = (id.clone(), std::path::PathBuf::from("/repo"));
 
     assert_eq!(sessions(SessionsRequest::Length { session: id.clone(), cwd: cwd.clone() }), SessionsReply::Length(0));
     assert_eq!(sessions(SessionsRequest::History { session: id.clone(), cwd }), SessionsReply::History(Vec::new()));
-    assert!(!archived());
-    assert_eq!(sessions(SessionsRequest::Archive { session: id.clone(), archived: true }), SessionsReply::Changed);
-    assert!(archived());
-    sessions(SessionsRequest::Archive { session: id.clone(), archived: false });
-    assert!(!archived());
-    sessions(SessionsRequest::Rename { session: id.clone(), title: "Greeting".into() });
+    assert_eq!(
+        sessions(SessionsRequest::Rename { session: id.clone(), title: "Greeting".into() }),
+        SessionsReply::Changed
+    );
     sessions(SessionsRequest::Seen { session: id });
     let SessionsReply::Listed(listed) = sessions(SessionsRequest::List) else { panic!("listed") };
     assert_eq!((listed[0].title.as_deref(), listed[0].unread), (Some("Greeting"), false));

@@ -87,13 +87,12 @@ impl FeatureName {
             Self::Channels => Some(flags::CHANNELS),
             Self::CodeMap => Some(flags::CODE_MAP),
             Self::DeclaredProviders => Some(flags::DECLARED_PROVIDERS),
-            Self::Memory => Some(flags::MEMORY),
             Self::OutputSavings => Some(flags::OUTPUT_SAVINGS),
             Self::Plugins => Some(flags::PLUGINS),
             Self::Schedules => Some(flags::SCHEDULES),
             Self::SuggestedRules => Some(flags::SUGGESTED_RULES),
             Self::Trace => Some(flags::TRACE),
-            Self::Flags | Self::Sessions | Self::Shell | Self::Workspace => None,
+            Self::Flags | Self::Memory | Self::Sessions | Self::Shell | Self::Workspace => None,
         }
     }
 }

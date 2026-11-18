@@ -107,7 +107,10 @@ fn every_declared_switch_turns_its_feature_off_and_no_other() {
     let (home, repo) = (tempfile::tempdir().expect("home"), tempfile::tempdir().expect("repo"));
     let services = at_home(home.path(), &serde_json::json!({}));
     let always: Vec<FeatureName> = FeatureName::ALL.into_iter().filter(|feature| feature.switch().is_none()).collect();
-    assert_eq!(always, [FeatureName::Flags, FeatureName::Sessions, FeatureName::Shell, FeatureName::Workspace]);
+    assert_eq!(
+        always,
+        [FeatureName::Flags, FeatureName::Memory, FeatureName::Sessions, FeatureName::Shell, FeatureName::Workspace]
+    );
 
     for feature in FeatureName::ALL {
         let Some(switch) = feature.switch() else { continue };

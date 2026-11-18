@@ -9,11 +9,11 @@ use super::SessionCatalog;
 use crate::db::Db;
 use crate::db::codec::{counted, name, named, stored};
 
-const COLUMNS: &str = "session, cwd, title, created, updated, status, archived, unread, tie";
-const UPSERT: &str = "INSERT INTO sessions (session, cwd, title, created, updated, status, archived, unread, tie) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
+const COLUMNS: &str = "session, cwd, title, created, updated, status, unread, tie";
+const UPSERT: &str = "INSERT INTO sessions (session, cwd, title, created, updated, status, unread, tie) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
      ON CONFLICT (session) DO UPDATE SET cwd = excluded.cwd, title = excluded.title, created = excluded.created, \
-     updated = excluded.updated, status = excluded.status, archived = excluded.archived, unread = excluded.unread, \
+     updated = excluded.updated, status = excluded.status, unread = excluded.unread, \
      tie = excluded.tie";
 
 #[derive(Debug, Clone)]
@@ -93,10 +93,9 @@ fn rows(connection: &Connection) -> rusqlite::Result<Vec<Row>> {
                 created: counted(row.get(3)?),
                 updated: counted(row.get(4)?),
                 status: named(5, row.get(5)?)?,
-                archived: row.get(6)?,
-                unread: row.get(7)?,
+                unread: row.get(6)?,
             },
-            tie: row.get(8)?,
+            tie: row.get(7)?,
         })
     })?;
     rows.collect()
@@ -127,7 +126,7 @@ pub(super) fn keep(connection: &Connection, before: &[Row], catalog: &Catalog) -
     let listed: HashSet<&str> = wanted.iter().map(|row| row.listed.session.0.as_str()).collect();
     let mut upsert = connection.prepare(UPSERT)?;
     for row in wanted.iter().filter(|row| had.get(row.listed.session.0.as_str()).copied() != Some(*row)) {
-        let Listed { session, cwd, title, created, updated, status, archived, unread } = &row.listed;
+        let Listed { session, cwd, title, created, updated, status, unread } = &row.listed;
         upsert.execute(params![
             session.0,
             text(cwd),
@@ -135,7 +134,6 @@ pub(super) fn keep(connection: &Connection, before: &[Row], catalog: &Catalog) -
             stored(*created),
             stored(*updated),
             name(status)?,
-            archived,
             unread,
             row.tie
         ])?;

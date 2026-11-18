@@ -72,9 +72,8 @@ fn every_client_sees_the_sessions_the_others_ran_and_can_tidy_them() {
 
     second.rename_session(&id, "Greeting").expect("rename");
     second.seen_session(&id).expect("seen");
-    second.archive_session(&id, true).expect("archive");
     let row = first.sessions().expect("sessions").remove(0);
-    assert_eq!((row.title.as_deref(), row.unread, row.archived), (Some("Greeting"), false, true));
+    assert_eq!((row.title.as_deref(), row.unread), (Some("Greeting"), false));
 
     assert!(first.history(&id, data.path()).expect("history").is_empty(), "the scripted engine keeps no log");
     assert_eq!(first.session_length(&id, data.path()).expect("length"), 0, "nor any length");

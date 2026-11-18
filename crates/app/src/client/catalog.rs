@@ -34,10 +34,6 @@ impl Client {
         self.change(SessionsRequest::Rename { session: session.clone(), title: title.to_owned() })
     }
 
-    pub fn archive_session(&self, session: &SessionId, archived: bool) -> Result<(), Error> {
-        self.change(SessionsRequest::Archive { session: session.clone(), archived })
-    }
-
     pub fn seen_session(&self, session: &SessionId) -> Result<(), Error> {
         self.change(SessionsRequest::Seen { session: session.clone() })
     }

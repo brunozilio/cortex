@@ -17,7 +17,6 @@ pub fn handle(context: &Context<'_>, request: SessionsRequest) -> Result<Session
         }
         SessionsRequest::Length { session, cwd } => return length(store, &cwd, &session).map(SessionsReply::Length),
         SessionsRequest::Rename { session, title } => Box::new(move |catalog| catalog.rename(&session, &title)),
-        SessionsRequest::Archive { session, archived } => Box::new(move |catalog| catalog.archive(&session, archived)),
         SessionsRequest::Delete { session } => Box::new(move |catalog| catalog.delete(&session)),
         SessionsRequest::Seen { session } => Box::new(move |catalog| catalog.seen(&session)),
     };

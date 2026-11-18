@@ -17,8 +17,6 @@ pub struct Listed {
     pub updated: u64,
     pub status: SessionStatus,
     #[serde(default)]
-    pub archived: bool,
-    #[serde(default)]
     pub unread: bool,
 }
 
@@ -52,7 +50,6 @@ impl Catalog {
                 created: now,
                 updated: now,
                 status: SessionStatus::Running,
-                archived: false,
                 unread: false,
             }),
         }
@@ -80,12 +77,6 @@ impl Catalog {
         }
     }
 
-    pub fn archive(&mut self, session: &SessionId, archived: bool) {
-        if let Some(row) = self.row(session) {
-            row.archived = archived;
-        }
-    }
-
     pub fn delete(&mut self, session: &SessionId) {
         self.rows.retain(|row| row.session != *session);
     }
@@ -108,7 +99,6 @@ impl Catalog {
                     created: at,
                     updated: at,
                     status: SessionStatus::Done,
-                    archived: false,
                     unread: false,
                 });
             }

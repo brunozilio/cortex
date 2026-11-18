@@ -94,7 +94,7 @@ Clears the conversation and starts a fresh one with the same model: the transcri
 
 ### /resume
 
-`/resume` opens a picker of earlier conversations in this folder, newest first, each with its title (or `Untitled`) and how long ago it was used (`2h ago`). `/resume <words>` keeps only conversations whose title contains every word, in any case. The current conversation and archived ones are not offered. Picking one continues it and shows a `Where you left off:` recap. Not available while the agent works. Alias: `/continue`. See [Sessions](./sessions#resume-a-conversation).
+`/resume` opens a picker of earlier conversations in this folder, newest first, each with its title (or `Untitled`) and how long ago it was used (`2h ago`). `/resume <words>` keeps only conversations whose title contains every word, in any case. The current conversation is not offered. Picking one continues it and shows a `Where you left off:` recap. Not available while the agent works. Alias: `/continue`. See [Sessions](./sessions#resume-a-conversation).
 
 ### /fleet
 

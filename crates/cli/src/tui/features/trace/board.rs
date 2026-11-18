@@ -5,8 +5,7 @@ use serde_json::{Value, json};
 
 pub fn shown(listed: &[Listed], current: Option<&SessionId>) -> Value {
     let own = |entry: &&Listed| current == Some(&entry.session);
-    let mut kept: Vec<&Listed> =
-        listed.iter().filter(|entry| !entry.archived && (own(entry) || is_active(entry))).collect();
+    let mut kept: Vec<&Listed> = listed.iter().filter(|entry| own(entry) || is_active(entry)).collect();
     kept.sort_by_key(|entry| std::cmp::Reverse(entry.updated));
     let cards = kept.into_iter().map(|entry| {
         json!({
@@ -43,21 +42,17 @@ mod tests {
             created: 1,
             updated,
             status,
-            archived: false,
             unread: false,
         }
     }
 
     #[test]
     fn the_board_shows_the_terminal_s_session_and_the_active_ones_newest_first() {
-        let mut shelved = listed("old", "/app", 9, SessionStatus::Running);
-        shelved.archived = true;
         let all = [
             listed("a", "/app", 1, SessionStatus::Done),
             listed("b", "/app", 5, SessionStatus::NeedsYou),
             listed("c", "/other", 7, SessionStatus::Running),
             listed("finished", "/app", 8, SessionStatus::Done),
-            shelved,
         ];
         let board = shown(&all, Some(&SessionId("a".into())));
         assert_eq!(
