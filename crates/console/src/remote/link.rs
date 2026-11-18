@@ -12,6 +12,11 @@ use super::channel::{self, Place};
 
 const QUEUED: usize = 64;
 const PROOF_WAIT: Duration = Duration::from_secs(10);
+pub const OUTDATED_RELAY: &str = concat!(
+    "the relay runs an older version than this program (it did not ask this machine to prove its key); update it with `",
+    brand::command!(),
+    " remote update`"
+);
 pub const MOST_CHANNELS: usize = 32;
 const PING: Duration = Duration::from_secs(25);
 
@@ -148,11 +153,8 @@ async fn prove(connection: &mut Connection, machine: &StaticKey) -> Result<Proof
             }
         }
     };
-    let challenge = tokio::time::timeout(PROOF_WAIT, asked)
-        .await
-        .ok()
-        .flatten()
-        .ok_or_else(|| "the relay did not ask this machine to prove its key".to_owned())?;
+    let challenge =
+        tokio::time::timeout(PROOF_WAIT, asked).await.ok().flatten().ok_or_else(|| OUTDATED_RELAY.to_owned())?;
     let proof =
         tunnel::proof::answer(machine, &challenge).map_err(|error| format!("the relay's challenge: {error}"))?;
     connection.send(Message::Text(proof.into())).await.map_err(|error| error.to_string())?;

@@ -250,6 +250,31 @@ async fn a_relay_cannot_open_more_channels_than_the_machine_serves_at_once() {
 }
 
 #[tokio::test]
+async fn a_relay_older_than_the_machine_is_reported_with_how_to_update_it() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let folder = tempfile::tempdir().unwrap();
+    Book::in_folder(folder.path()).invite().unwrap();
+    let pace = Pace { idle: Duration::from_millis(50), retry: Duration::from_secs(60), taken: Duration::from_secs(60) };
+    let options = remote::Options {
+        relay: format!("http://{address}"),
+        folder: folder.path().to_owned(),
+        console: "127.0.0.1:9".parse().unwrap(),
+        token: "t".into(),
+        pace,
+    };
+    let remote = remote::start(options).unwrap();
+    let (tcp, _) = tokio::time::timeout(WAIT, listener.accept()).await.unwrap().unwrap();
+    let mut old = tokio_tungstenite::accept_async(tcp).await.unwrap();
+    old.send(Message::Binary(tunnel::Frame::Open(1).encode().into())).await.unwrap();
+    let mut watch = remote.watch();
+    let failed = tokio::time::timeout(WAIT, watch.wait_for(|status| matches!(status, Status::Failed(_)))).await;
+    let Ok(Ok(status)) = failed else { panic!("no failure reported") };
+    assert_eq!(*status, Status::Failed(remote::OUTDATED_RELAY.to_owned()));
+    assert!(remote::OUTDATED_RELAY.contains("remote update"));
+}
+
+#[tokio::test]
 async fn an_invitation_is_used_once() {
     let world = world(shell("sleep 5")).await;
     let link = world.book().invite().unwrap();

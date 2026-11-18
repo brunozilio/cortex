@@ -10,7 +10,7 @@ use std::thread::JoinHandle;
 use tokio::sync::{oneshot, watch};
 
 pub use book::{Book, BookError, Device, PAIRING_LASTS, now};
-pub use link::{MOST_CHANNELS, Pace, RelayAddressError, machine_socket, relay_address};
+pub use link::{MOST_CHANNELS, OUTDATED_RELAY, Pace, RelayAddressError, machine_socket, relay_address};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Status {

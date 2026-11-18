@@ -10,7 +10,8 @@ pub enum RemoteAction {
     #[command(about = "Show the relay, this machine's id and the paired devices")]
     Status,
     #[command(
-        about = "Publish the relay as a Worker on your Cloudflare account (workers.dev) and use it; signs in to Cloudflare in the browser"
+        visible_alias = "update",
+        about = "Publish or update the relay as a Worker on your Cloudflare account (workers.dev) and use it; signs in to Cloudflare in the browser"
     )]
     Up {
         #[arg(long, help = "The Cloudflare account id, when the sign-in reaches more than one")]
@@ -150,6 +151,17 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let book = Book::in_folder(folder.path());
         (folder, book)
+    }
+
+    #[test]
+    fn update_is_another_name_for_up() {
+        #[derive(clap::Parser)]
+        struct Remote {
+            #[command(subcommand)]
+            action: RemoteAction,
+        }
+        let parsed = <Remote as clap::Parser>::try_parse_from(["remote", "update", "--account", "abc"]).unwrap();
+        assert!(matches!(parsed.action, RemoteAction::Up { account: Some(account) } if account == "abc"));
     }
 
     #[test]
