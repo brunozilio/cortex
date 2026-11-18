@@ -256,11 +256,7 @@
           "type": "boolean"
         },
         "experimental-code-mode": {
-          "description": "The REPL tool: the agent writes JavaScript that calls its tools as functions, and only what the script returns reaches the model",
-          "type": "boolean"
-        },
-        "experimental-code-mode-only": {
-          "description": "With experimental-code-mode, REPL is the agent's only tool and every other tool is called from scripts; off until you turn it on",
+          "description": "REPL becomes the agent's only tool: it writes JavaScript that calls every other tool as a function, and only what the script returns reaches the model; off until you turn it on",
           "type": "boolean"
         },
         "experimental-dependency-guard": {

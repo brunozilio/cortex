@@ -41,6 +41,6 @@ mod tests {
     fn memory_has_no_switch_and_an_old_setting_that_turned_it_off_still_loads() {
         assert!(known("memory").is_none());
         let old = Features::default().layered(&serde_json::json!({ "memory": false }), true).expect("flags");
-        assert!(old.listed().iter().all(|flag| flag.on || flag.name == super::super::CODE_MODE_ONLY));
+        assert!(old.listed().iter().all(|flag| flag.on || flag.name == super::super::CODE_MODE));
     }
 }

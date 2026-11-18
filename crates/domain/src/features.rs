@@ -40,9 +40,8 @@ pub const WEB_SMALL_PAGES_DIRECT: &str = "experimental-web-small-pages-direct";
 pub const WEB_FORMATS: &str = "experimental-web-formats";
 pub const WEB_EMPTY_PAGE_ERROR: &str = "experimental-web-empty-page-error";
 pub const CODE_MODE: &str = "experimental-code-mode";
-pub const CODE_MODE_ONLY: &str = "experimental-code-mode-only";
 
-const OPT_IN: &[&str] = &[CODE_MODE_ONLY];
+const OPT_IN: &[&str] = &[CODE_MODE];
 
 pub fn skill_flag(skill: &str) -> Option<&'static str> {
     (skill == "follow-pr").then_some(PR_FOLLOW)
@@ -155,11 +154,7 @@ pub const KNOWN: &[Flag] = &[
     },
     Flag {
         name: CODE_MODE,
-        about: "The REPL tool: the agent writes JavaScript that calls its tools as functions, and only what the script returns reaches the model",
-    },
-    Flag {
-        name: CODE_MODE_ONLY,
-        about: "With experimental-code-mode, REPL is the agent's only tool and every other tool is called from scripts; off until you turn it on",
+        about: "REPL becomes the agent's only tool: it writes JavaScript that calls every other tool as a function, and only what the script returns reaches the model; off until you turn it on",
     },
     Flag {
         name: AUTO_REVIEW,
@@ -270,11 +265,12 @@ mod tests {
     #[test]
     fn an_opt_in_flag_is_off_until_turned_on() {
         let features = Features::default();
-        assert!(features.on(CODE_MODE) && !features.on(CODE_MODE_ONLY));
+        assert!(features.on(SANDBOX) && !features.on(CODE_MODE));
 
-        let features = features.layered(&json!({ CODE_MODE_ONLY: true }), true).expect("flags");
-        assert!(features.on(CODE_MODE_ONLY));
-        assert!(features.listed().iter().any(|flag| flag.name == CODE_MODE_ONLY && flag.on));
+        let features = features.layered(&json!({ CODE_MODE: true }), true).expect("flags");
+        assert!(features.on(CODE_MODE));
+        assert!(features.listed().iter().any(|flag| flag.name == CODE_MODE && flag.on));
+        assert!(known("experimental-code-mode-only").is_none(), "merged into experimental-code-mode");
     }
 
     #[test]

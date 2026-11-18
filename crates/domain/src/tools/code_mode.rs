@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::features::{CODE_MODE, CODE_MODE_ONLY, Features};
+use crate::features::{CODE_MODE, Features};
 
 pub const TOOL: &str = crate::tool_name::ToolName::Repl.as_str();
 pub const SEARCH: &str = "searchTools";
@@ -27,17 +27,12 @@ pub fn throws_on_failure(tool: &str) -> bool {
 pub enum Mode {
     #[default]
     Off,
-    Beside,
     Only,
 }
 
 impl Mode {
     pub fn of(features: &Features) -> Self {
-        match (features.on(CODE_MODE), features.on(CODE_MODE_ONLY)) {
-            (false, _) => Self::Off,
-            (true, false) => Self::Beside,
-            (true, true) => Self::Only,
-        }
+        if features.on(CODE_MODE) { Self::Only } else { Self::Off }
     }
 }
 
@@ -357,12 +352,11 @@ mod tests {
     }
 
     #[test]
-    fn the_flags_choose_off_beside_or_only() {
+    fn code_mode_is_off_until_turned_on_and_then_the_repl_is_the_only_tool() {
         let flags = |value: serde_json::Value| Features::default().layered(&value, true).expect("flags");
 
-        assert_eq!(Mode::of(&Features::default()), Mode::Beside);
-        assert_eq!(Mode::of(&flags(serde_json::json!({ CODE_MODE_ONLY: true }))), Mode::Only);
-        assert_eq!(Mode::of(&flags(serde_json::json!({ CODE_MODE: false, CODE_MODE_ONLY: true }))), Mode::Off);
+        assert_eq!(Mode::of(&Features::default()), Mode::Off);
+        assert_eq!(Mode::of(&flags(serde_json::json!({ CODE_MODE: true }))), Mode::Only);
     }
 
     #[test]

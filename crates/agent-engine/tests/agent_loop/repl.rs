@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::{Rig, tool_use};
 
 fn code_mode(mode: PermissionMode) -> Rig {
-    code_mode_as(mode, domain::code_mode::Mode::Beside)
+    code_mode_as(mode, domain::code_mode::Mode::Only)
 }
 
 fn only_shipped_content() {
