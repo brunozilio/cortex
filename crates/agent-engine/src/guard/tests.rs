@@ -94,3 +94,16 @@ fn the_rules_speak_of_brand() {
         assert!(!rules.contains(other), "{other}");
     }
 }
+
+#[test]
+fn the_rules_name_only_the_app_s_own_files_and_modes() {
+    let built_in = content::render_in(None, "prompts/classifier.js", &content::with_brand(&Value::Null));
+    let rules = built_in.to_lowercase();
+    assert!(rules.contains("<severity>"));
+    for foreign in ["claude", "auto mode", "auto-mode", "automode", "routines"] {
+        assert!(!rules.contains(foreign), "{foreign}");
+    }
+    for own in [brand::INSTRUCTIONS, brand::DIR, "agents.md", "bypass"] {
+        assert!(rules.contains(&own.to_lowercase()), "{own}");
+    }
+}

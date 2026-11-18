@@ -13,7 +13,7 @@ pub struct Style {
     #[serde(default)]
     pub reminder: Option<String>,
 }
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
     pub style: Option<Style>,
     pub schema: Option<Value>,
@@ -21,8 +21,6 @@ pub struct Settings {
     pub agent: Option<String>,
     #[serde(default)]
     pub hooks: crate::hooks::Hooks,
-    #[serde(default = "enabled")]
-    pub auto_memory: bool,
     #[serde(default)]
     pub advisor: Option<String>,
     #[serde(default)]
@@ -61,38 +59,6 @@ pub struct Settings {
 }
 
 pub type LspLayer = std::collections::BTreeMap<String, domain::lsp::ServerConfig>;
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            style: None,
-            schema: None,
-            agent: None,
-            hooks: Default::default(),
-            auto_memory: true,
-            advisor: None,
-            judge: None,
-            escalation: None,
-            project_criteria: None,
-            fallbacks: Vec::new(),
-            small_model: None,
-            enabled_providers: Vec::new(),
-            mcp_approval: Default::default(),
-            lsp_servers: Vec::new(),
-            permissions: Default::default(),
-            judge_allow: Default::default(),
-            added_dirs: Vec::new(),
-            scripts: Default::default(),
-            features: Default::default(),
-            sandbox: Default::default(),
-            notices: Vec::new(),
-            skipped_files: Vec::new(),
-            bash_output: Default::default(),
-        }
-    }
-}
-fn enabled() -> bool {
-    true
-}
 fn model_name(value: &Value, key: &str) -> Result<Option<String>, String> {
     if value.is_null() {
         return Ok(None);
@@ -152,9 +118,6 @@ pub fn load(gate: &Gate, plugins: &[crate::plugins::Plugin]) -> Result<Settings,
     merged.notices.extend(replaced_opt_in.then(domain::trust::legacy_notice));
     crate::config_schema::logged_once(&problems);
     merged.notices.extend(problems);
-    if auto_memory_disabled_by_environment() {
-        merged.auto_memory = false;
-    }
     merged.style = style_named(style, &roots)?;
     Ok(merged)
 }
@@ -252,9 +215,6 @@ impl Layer<'_> {
     }
 
     fn merge_agent(&self, merged: &mut Settings) -> Result<(), String> {
-        if let Some(value) = self.value.get("autoMemoryEnabled") {
-            merged.auto_memory = value.as_bool().ok_or("autoMemoryEnabled must be boolean")?;
-        }
         if let Some(value) = self.value.get("bashOutputLimit") {
             let characters = value.as_u64().ok_or("bashOutputLimit must be a whole number of characters")?;
             merged.bash_output = domain::output::OutputLimit::of(characters);
@@ -318,12 +278,6 @@ fn add_plugins(merged: &mut Settings, plugins: &[crate::plugins::Plugin]) {
         }
     }
     merged.lsp_servers.extend(crate::plugins::lsp_layers(plugins));
-}
-
-fn auto_memory_disabled_by_environment() -> bool {
-    ["CLAUDE_CODE_DISABLE_AUTO_MEMORY", concat!(brand::env_prefix!(), "_DISABLE_AUTO_MEMORY")]
-        .iter()
-        .any(|key| std::env::var(key).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes")))
 }
 
 fn style_named(selected: String, roots: &[PathBuf]) -> Result<Option<Style>, String> {

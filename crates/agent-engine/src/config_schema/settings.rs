@@ -35,7 +35,6 @@ fn properties() -> Value {
                             or the name of a custom style in output-styles/<name>.md."
         },
         "agent": { "type": ["string", "null"], "description": "Runs the main conversation as this agent." },
-        "autoMemoryEnabled": switch("false turns off the persistent memory of agents that declare a memory scope."),
         "bashOutputLimit": {
             "type": "integer",
             "minimum": domain::output::SMALLEST_LIMIT,

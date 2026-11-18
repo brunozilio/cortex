@@ -85,7 +85,7 @@ O `{{DIR}}/settings.json` de um projeto fica em outro lugar, então use o caminh
 
 ### Como os valores se combinam
 
-- **Valores únicos** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `autoMemoryEnabled`, `bashOutputLimit`, `enableAllProjectMcpServers`): vale o último arquivo lido. Na prática a pasta mais próxima de onde você trabalha vence as pastas acima dela, e `managed-settings.json` vence todas. Definir `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` ou `jsonSchema` como `null` apaga um valor definido por um arquivo anterior.
+- **Valores únicos** (`outputStyle`, `agent`, `advisorModel`, `judgeModel`, `escalationModel`, `fallbackModel`, `smallModel`, `jsonSchema`, `bashOutputLimit`, `enableAllProjectMcpServers`): vale o último arquivo lido. Na prática a pasta mais próxima de onde você trabalha vence as pastas acima dela, e `managed-settings.json` vence todas. Definir `advisorModel`, `judgeModel`, `smallModel`, `escalationModel`, `fallbackModel`, `agent` ou `jsonSchema` como `null` apaga um valor definido por um arquivo anterior.
 - **Listas e mapas se somam**: regras de permissão, `verification.allow`, `permissions.additionalDirectories`, `hooks`, `lspServers`, `enabledProviders`, `enabledMcpServers`, `disabledMcpServers`, `sandbox.allowWrite`, `sandbox.allowUnixSockets`, `sandbox.allowRead`.
 - **Chaves de liga/desliga** (`features`, `scripts`, `sandbox.network`, `sandbox.required`): cada arquivo muda só os nomes que menciona.
 
@@ -149,7 +149,6 @@ Sem opções, edita `~/{{DIR}}/settings.json`. Com `--project`, edita `{{DIR}}/s
 |---|---|---|---|
 | `outputStyle` | texto | `"default"` | Como o agente fala. Um estilo embutido (`default`, `concise`, `proactive`, `explanatory`, `learning`, sem diferenciar maiúsculas) ou o nome de um estilo próprio em `{{DIR}}/output-styles/<nome>.md` (letras, dígitos, `-` e `_`). O estilo escolhido com `/output-style` vence esta chave. Veja [Estilos de resposta](./output-styles). |
 | `agent` | texto ou `null` | nenhum | Executa a conversa principal como este agente (um nome listado em `/agents`), com as instruções, ferramentas e modelo dele. Um nome desconhecido faz a execução falhar. Veja [Agentes](./agents). |
-| `autoMemoryEnabled` | booleano | `true` | `false` desliga a memória persistente dos [agentes](./agents) que declaram um escopo de `memory` (subagentes e o agente escolhido com `agent`). A memória do projeto não muda; veja [Memória](./memory#desligar-a-memoria). `{{ENV}}_DISABLE_AUTO_MEMORY` faz o mesmo. |
 | `bashOutputLimit` | inteiro, de 1000 a 1000000 | `30000` | Caracteres da saída de um comando Bash que o agente vê. Acima disso, o agente recebe o começo e o fim da saída sob uma primeira linha como `[Output cut: 81234 characters in 2010 lines, over the limit of 30000; the first 15000 and the last 15000 are shown. The full output is in /tmp/…/bash-123-4.txt: Read or Grep it for the rest.]`, e a saída inteira é salva nesse arquivo. O chat mostra a mesma linha acima da saída dobrada. Um valor fora do intervalo vai para o extremo mais próximo. |
 | `advisorModel` | texto ou `null` | nenhum | Modelo do conselheiro que o agente consulta. Um id ou nome de modelo, sem espaços. Um papel definido com `/model advisor <modelo>` vence. |
 | `judgeModel` | texto ou `null` | nenhum | Modelo do juiz que confere o trabalho terminado contra os critérios de verificação. Um papel definido com `/model review <modelo>` vence. Veja [Verificação e revisão](./verification-and-review). |
@@ -359,7 +358,6 @@ Um `mode` ou `effort` guardado com valor desconhecido é ignorado com um aviso. 
 ```json
 {
   "outputStyle": "explanatory",
-  "autoMemoryEnabled": true,
   "advisorModel": "opus",
   "judgeModel": "sonnet",
   "smallModel": "haiku",

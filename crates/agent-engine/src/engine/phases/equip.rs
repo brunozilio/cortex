@@ -26,10 +26,7 @@ impl MainAgent {
             }
             None => None,
         };
-        let mut config = found.as_ref().map(|agent| agent.config.clone()).unwrap_or_default();
-        if !brief.settings.auto_memory {
-            config.memory = None;
-        }
+        let config = found.as_ref().map(|agent| agent.config.clone()).unwrap_or_default();
         Ok(Self { found, config })
     }
 

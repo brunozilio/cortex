@@ -162,7 +162,7 @@ O cache de prompt do provedor expira depois de uns cinco minutos sem chamadas, e
 
 ### Um arquivo de configuração tem erro
 
-A verificação `settings` mostra o arquivo e o problema, por exemplo um valor JSON inválido ou `autoMemoryEnabled must be boolean`. Corrija esse arquivo, ou inspecione-o com `{{COMMAND}} config list` (`--project` para o do projeto). No chat, um `mode` ou `effort` salvo que não é conhecido aparece como `The saved effort "..." is not low, medium, high, xhigh, max or auto; using the default.`
+A verificação `settings` mostra o arquivo e o problema, por exemplo um valor JSON inválido ou `bashOutputLimit must be a whole number of characters`. Corrija esse arquivo, ou inspecione-o com `{{COMMAND}} config list` (`--project` para o do projeto). No chat, um `mode` ou `effort` salvo que não é conhecido aparece como `The saved effort "..." is not low, medium, high, xhigh, max or auto; using the default.`
 
 ### Um servidor MCP do projeto não inicia
 

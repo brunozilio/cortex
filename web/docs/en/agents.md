@@ -157,7 +157,7 @@ The app's own names (`ask`, `edits`, `plan`, `bypass`) and the other spellings l
 | `project` | `<repository>/{{DIR}}/agent-memory/…` |
 | `local` | `<repository>/{{DIR}}/agent-memory-local/…` (keep it out of git) |
 
-Each agent gets its own subfolder. The first 200 lines (at most 25 KB) of its `MEMORY.md` are added to its system prompt, and it is told to keep that index short and to store details in other files. Memory is off when auto memory is turned off (see [Memory](./memory)).
+Each agent gets its own subfolder. The first 200 lines (at most 25 KB) of its `MEMORY.md` are added to its system prompt, and it is told to keep that index short and to store details in other files. This memory is always on for an agent that declares a `memory` scope; leave `memory` out to keep an agent from remembering (see [Memory](./memory)).
 
 ### Worktree isolation
 

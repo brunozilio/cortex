@@ -149,9 +149,6 @@ impl Agent<'_> {
     fn planned(&self, chosen: &Chosen, spawning: &Spawning<'_>) -> Result<Planned, Outcome> {
         let (input, workspace) = (spawning.input, spawning.workspace);
         let mut config = chosen.agent.as_ref().map(|agent| agent.config.clone()).unwrap_or_default();
-        if !workspace.auto_memory {
-            config.memory = None;
-        }
         let kind = chosen.agent.as_ref().map_or("", |agent| agent.name.as_str());
         let picked = model::choose(kind, config.model.take(), input, &self.request.model, workspace);
         config.model = picked.model;

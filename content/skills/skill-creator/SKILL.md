@@ -52,7 +52,7 @@ Start by understanding the user's intent. The current conversation might already
 2. When should this skill trigger? (what user phrases/contexts)
 3. What's the expected output format?
 4. Should we set up test cases to verify the skill works? Skills with objectively verifiable outputs (file transforms, data extraction, code generation, fixed workflow steps) benefit from test cases. Skills with subjective outputs (writing style, art) often don't need them. Suggest the appropriate default based on the skill type, but let the user decide.
-5. Where should it live? A project skill goes in `{{DIR}}/skills/<name>/` at the repository root, shared with everyone who works on the project; a personal one in `~/{{DIR}}/skills/<name>/`, available in every project. {{NAME}} also reads a project's `.claude/skills/`, so a skill already kept there works as it is.
+5. Where should it live? A project skill goes in `{{DIR}}/skills/<name>/` at the repository root, shared with everyone who works on the project; a personal one in `~/{{DIR}}/skills/<name>/`, available in every project. {{NAME}} reads skills only from these folders (and from plugins); a skill kept in another tool's folder has to be moved here.
 
 ### Interview and Research
 

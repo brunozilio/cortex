@@ -54,7 +54,7 @@ impl Reason {
     }
 
     pub fn rememberable(&self) -> bool {
-        !matches!(self, Self::Risky(_) | Self::Hidden(_) | Self::Address(_))
+        matches!(self, Self::Mode | Self::Outside(_) | Self::Guarded { .. } | Self::Install { .. })
     }
 
     pub fn heading(&self) -> Option<String> {

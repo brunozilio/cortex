@@ -32,7 +32,6 @@ impl Job {
     ) -> Result<Governed, Stop> {
         let settings = &brief.settings;
         let Equipped { mut workspace, mut toolbox, main } = equipped;
-        workspace.auto_memory = settings.auto_memory;
         workspace.policy = flagged(settings, &workspace.cwd, self.request.policy.safety_check);
         workspace.policy.trust = brief.trust;
         if let Some(notice) = sandbox_notice(&workspace, &SANDBOX_SAID) {

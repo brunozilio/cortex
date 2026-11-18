@@ -8,7 +8,7 @@ Quase tudo no {{NAME}} se configura nos [arquivos de configuração](./settings)
 ```bash
 {{ENV}}_LOG=debug {{COMMAND}}
 {{ENV}}_THEME=light {{ENV}}_REDUCED_MOTION=1 {{COMMAND}}
-{{ENV}}_DISABLE_AUTO_MEMORY=1 {{COMMAND}} -p "resuma os TODOs em aberto"
+{{ENV}}_STREAM_IDLE_SECONDS=600 {{COMMAND}} -p "resuma os TODOs em aberto"
 ```
 
 ## Variáveis do {{NAME}}
@@ -18,8 +18,6 @@ Quase tudo no {{NAME}} se configura nos [arquivos de configuração](./settings)
 | `{{ENV}}_LOG` | Um filtro de log: `error`, `warn`, `info`, `debug`, `trace`, ou por módulo (`agent_engine=debug,warn`) | `warn` | Quanto vai para o arquivo de log `logs/{{COMMAND}}.log` na [pasta de dados local](./files-and-directories#pasta-de-dados). Um filtro vazio ou inválido volta para `warn`. |
 | `{{ENV}}_THEME` | `light`, `dark` (sem diferenciar maiúsculas) | detectado | Força as cores claras ou escuras do chat em vez de detectar o fundo do terminal. |
 | `{{ENV}}_REDUCED_MOTION` | Qualquer valor não vazio diferente de `0` | não definida | Desliga as animações do chat. |
-| `{{ENV}}_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | não definida | Como `"autoMemoryEnabled": false`: desliga a memória persistente dos agentes que declaram um escopo de `memory`. A memória do projeto não muda. Veja [Memória](./memory#desligar-a-memoria). |
-| `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | não definida | O mesmo que `{{ENV}}_DISABLE_AUTO_MEMORY`, para ambientes compartilhados com o Claude Code. |
 | `{{ENV}}_CONSOLE_DIR` | Uma pasta com um `index.html` | não definida | Serve a página do [console de trace](./trace-console) a partir desta pasta em vez da cópia embutida no binário. |
 | `{{ENV}}_STREAM_IDLE_SECONDS` | Um número inteiro de segundos acima de zero | `300` | Quanto tempo a resposta de um modelo pode ficar em silêncio no meio do stream antes de o pedido ser abandonado e tratado como falha. Qualquer outro valor volta ao padrão. |
 | `{{ENV}}_OTLP_ENDPOINT` | Uma URL `http://` ou `https://`, como `http://localhost:4318` | não definida: nada é exportado | Manda cada run terminado a este coletor OpenTelemetry como OTLP/HTTP JSON, em `<endpoint>/v1/traces`. Veja [Exportar para o OpenTelemetry](./trace-console#exportar-para-o-opentelemetry). |

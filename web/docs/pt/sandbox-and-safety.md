@@ -164,7 +164,7 @@ Um valor de `sandbox` com outro formato deixa o servidor de fora, com um aviso n
 
 ### Rodando um comando fora da sandbox
 
-Quando um comando realmente precisa gravar em outro lugar, o agente pode pedir para rodá-lo sem sandbox. Você é consultado toda vez, com "Run OUTSIDE the sandbox (it may write anywhere)"; nem "don't ask again" evita a próxima pergunta (só salva a regra do comando). Em execuções `-p`, onde ninguém pode responder, o pedido é recusado.
+Quando um comando realmente precisa gravar em outro lugar, o agente pode pedir para rodá-lo sem sandbox. Você é consultado toda vez, com "Run OUTSIDE the sandbox (it may write anywhere)", e a pergunta não oferece "don't ask again". Em execuções `-p`, onde ninguém pode responder, o pedido é recusado.
 
 ### Desligando a sandbox
 

@@ -39,7 +39,7 @@ Core:
 - Permission modes (ask, edits, plan, bypass) and allow/ask/deny rules.
 - Sessions: resume, fork, rewind and branch from checkpoints, compaction.
 - Providers: connect by API key or sign-in, model catalog, model roles, fallback chain, several accounts.
-- Extension points: instruction files, rules, hooks, skills, custom agents, script tools, plugins, MCP servers (HTTP and stdio).
+- Extension points: instruction files, rules, hooks, skills, custom agents, script tools, plugins, MCP servers (HTTP and stdio). The app reads only its own files: its instruction files, `AGENTS.md` and the `.<command>/` folders (see non-goal 6).
 - The local web page: trace of runs, console, user documentation, a terminal attached to a session.
 - Trace export to an OpenTelemetry collector (OTLP over HTTP, opt-in through an environment variable).
 - Evals: cases in a folder, run and scored by `<command> eval`.
@@ -59,6 +59,7 @@ Experimental:
 3. Not an IDE or a GUI editor. The web page observes runs, documents the app and, from the owner's paired devices, drives the owner's sessions (the console and the terminal attached to a session); code is edited through the agent and the user's own editor.
 4. Not a network-reachable surface. The web page binds to loopback with a per-process token and accepts no connection from the network. Remote control reaches a session only through a relay the owner runs, to which the machine connects out, and only from paired devices, end to end encrypted (see `decisions/0012-remote-control-through-a-blind-relay.md`).
 5. Not breadth for its own sake. A feature without an owner and a user is removed. An experimental feature ships on, with an owner and an exit criterion; the owner turns it off or promotes it to permanent. The audit's finding that "nothing was refused" in the first eight days is the reason this is written down.
+6. No Claude Code compatibility. The app reads only its own files; another tool's folders, files and environment variables (`.claude/`, `CLAUDE.md`, `CLAUDE_*`) are ignored, and a test keeps them out of a run.
 
 ## Open decisions
 

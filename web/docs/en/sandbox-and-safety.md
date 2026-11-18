@@ -164,7 +164,7 @@ A `sandbox` value of another shape leaves the server out, with a warning in the 
 
 ### Running a command outside the sandbox
 
-When a command really needs to write elsewhere, the agent can ask to run it unsandboxed. You are asked every time, with "Run OUTSIDE the sandbox (it may write anywhere)"; even "don't ask again" does not stop the next question (it only saves the rule for the command). In `-p` runs, where nobody can answer, it is refused.
+When a command really needs to write elsewhere, the agent can ask to run it unsandboxed. You are asked every time, with "Run OUTSIDE the sandbox (it may write anywhere)", and the question does not offer "don't ask again". In `-p` runs, where nobody can answer, it is refused.
 
 ### Turning the sandbox off
 

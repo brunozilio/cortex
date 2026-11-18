@@ -162,7 +162,7 @@ The provider's prompt cache expires after about five minutes without a call, so 
 
 ### A settings file has an error
 
-The `settings` check names the file and the problem, for example an invalid JSON value or `autoMemoryEnabled must be boolean`. Fix that file, or inspect it with `{{COMMAND}} config list` (`--project` for the project's). In the chat, a saved `mode` or `effort` that is not known is reported as `The saved effort "..." is not low, medium, high, xhigh, max or auto; using the default.`
+The `settings` check names the file and the problem, for example an invalid JSON value or `bashOutputLimit must be a whole number of characters`. Fix that file, or inspect it with `{{COMMAND}} config list` (`--project` for the project's). In the chat, a saved `mode` or `effort` that is not known is reported as `The saved effort "..." is not low, medium, high, xhigh, max or auto; using the default.`
 
 ### A project's MCP server does not start
 

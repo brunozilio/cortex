@@ -253,7 +253,7 @@ fn a_risky_command_or_one_leaving_the_sandbox_asks_every_time_and_secrets_are_re
     let call = Call { tool: "Bash", subject: "cargo install x", effects: &leaving };
     assert!(matches!(
         PolicyEngine::decide(&call, &sandboxed),
-        Verdict::Ask { reason: Reason::LeavesTheSandbox, rememberable: true, .. }
+        Verdict::Ask { reason: Reason::LeavesTheSandbox, rememberable: false, .. }
     ));
     let unattended = PolicyContext { no_prompts: true, ..sandboxed };
     let settled = unattended.settled(PolicyEngine::decide(&call, &unattended), "Bash");

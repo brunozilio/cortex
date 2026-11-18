@@ -16,7 +16,7 @@ Quando o agente precisa da sua aprovação, o painel mostra a ferramenta, o que 
 | Yes, and don't ask again this session | `a`, `2` | Aparece quando nenhuma regra serve (edições, por exemplo). Lembra a ferramenta, no caso de edições, ou a chamada exata, nos outros casos, até a sessão terminar. |
 | No, and tell the agent what to do instead | `n`, Esc ou o número dela | Recusa. Escolhê-la pelo número ou com Enter permite digitar uma observação que o agente recebe; Esc ou `n` recusam sem observação. |
 
-A opção "don't ask again" não aparece para comandos arriscados (pushes, publicações…) nem para um endereço que nunca apareceu na conversa (veja [Ações que sempre perguntam](#acoes-que-sempre-perguntam)). Rodar um comando fora da sandbox e instalar um pacote suspeito ainda a oferecem: ela salva a regra do comando, mas essas duas perguntas voltam toda vez.
+A opção "don't ask again" só aparece quando a sua resposta evita a próxima pergunta. Ela não aparece para perguntas que voltam toda vez de qualquer jeito: comandos arriscados (pushes, publicações…), um endereço que nunca apareceu na conversa (veja [Ações que sempre perguntam](#acoes-que-sempre-perguntam)), rodar um comando fora da sandbox, instalar um pacote suspeito, uma chamada que casou com uma regra `ask` e uma chamada sobre a qual um hook pediu para perguntar.
 
 Em uma pasta em que você não confiou, uma regra salva no `{{DIR}}/settings.local.json` vale só naquela execução; ela passa a valer nas seguintes quando você confiar na pasta, e o chat avisa disso ao salvar a regra. Veja [Confiança na pasta](./sandbox-and-safety#confianca-na-pasta).
 

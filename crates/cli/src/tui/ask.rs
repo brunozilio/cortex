@@ -228,6 +228,39 @@ mod tests {
     }
 
     #[test]
+    fn a_question_that_comes_back_every_time_offers_no_always() {
+        use domain::permission::{Judgement, Reason, Standing, Verdict};
+        let judgement = Judgement {
+            verdict: Verdict::Allow,
+            standing: Standing::Acts,
+            subject: "npm install left-pad".into(),
+            guarded: None,
+            rule: Some("Bash(npm install:*)".into()),
+        };
+        let dialog = |reason: Reason| {
+            let Verdict::Ask { rememberable, rule, .. } = judgement.asking(reason) else {
+                panic!("not an ask");
+            };
+            let kind = AskKind::Permission { tool: "Bash".into(), subject: "npm install".into(), rememberable, rule };
+            Pending::new(AgentAsk { id: AskId("a".into()), kind })
+        };
+        let every_time = [
+            Reason::LeavesTheSandbox,
+            Reason::Package("left-pad was published yesterday".into()),
+            Reason::Rule("Bash(npm:*)".into()),
+            Reason::Hook,
+        ];
+        for reason in every_time {
+            let mut ask = dialog(reason.clone());
+            assert_eq!(ask.choices(), ["Yes", "No, and tell the agent what to do instead"], "{reason:?}");
+            assert_eq!(ask.key(Key::Char('a')), None, "{reason:?}");
+        }
+        let mut normal = dialog(Reason::Mode);
+        assert_eq!(normal.choices()[1], "Yes, and don't ask again for Bash(npm install:*) in this project");
+        assert_eq!(normal.key(Key::Char('a')), Some(Decision::AllowAlways));
+    }
+
+    #[test]
     fn a_plan_is_approved_in_a_mode_or_kept_planning() {
         let plan = || Pending::new(AgentAsk { id: AskId("p".into()), kind: AskKind::Plan { plan: "## Plan".into() } });
         assert_eq!(plan().choices().len(), 3);

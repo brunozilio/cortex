@@ -6,6 +6,8 @@ mod rules;
 mod verdict;
 
 #[cfg(test)]
+mod always_tests;
+#[cfg(test)]
 mod hidden_tests;
 #[cfg(test)]
 mod tests;

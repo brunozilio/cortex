@@ -82,7 +82,7 @@ fn an_untrusted_folder_s_agent_keeps_its_instructions_and_loses_its_first_prompt
 }
 
 #[test]
-fn disabling_auto_memory_prevents_configured_agent_memory_setup() {
+fn a_leftover_auto_memory_switch_leaves_agent_memory_on() {
     let dir = tempfile::tempdir().expect("dir");
     let root = dir.path().join(brand::DIR);
     std::fs::create_dir_all(root.join("agents")).expect("agents");
@@ -99,10 +99,9 @@ fn disabling_auto_memory_prevents_configured_agent_memory_setup() {
         finish(&start(&engine, &PromptRequest::plain(dir.path().into(), "Review", model()))).last(),
         Some(EngineEvent::Completed { .. })
     ));
-    assert!(!root.join("agent-memory").exists());
+    assert!(root.join("agent-memory").exists());
     let asked = model_api.asked();
-    assert!(!asked[0].system.contains("Persistent agent memory"));
-    assert_eq!(asked[0].tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["Read"]);
+    assert!(asked[0].system.contains("Persistent agent memory"));
 }
 
 #[test]

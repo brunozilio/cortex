@@ -16,7 +16,7 @@ When the agent needs your approval, the panel shows the tool, what it wants to d
 | Yes, and don't ask again this session | `a`, `2` | Shown when no rule fits (edits, for example). Remembers the tool for edits, or the exact call for anything else, until the session ends. |
 | No, and tell the agent what to do instead | `n`, Esc, or its number | Refuses. Picking it by number or with Enter lets you type a note the agent receives; Esc or `n` refuses without one. |
 
-The "don't ask again" choice is not offered for risky commands (pushes, publishes…) or for an address that never appeared in the conversation (see [Always asked](#actions-that-always-ask)). Running a command outside the sandbox and installing a flagged package still offer it: it saves the rule for the command, but those two questions come back every time.
+The "don't ask again" choice is offered only when your answer stops the next question. It is not offered for questions that come back every time anyway: risky commands (pushes, publishes…), an address that never appeared in the conversation (see [Always asked](#actions-that-always-ask)), running a command outside the sandbox, installing a flagged package, a call an `ask` rule matched, and a call a hook asked about.
 
 In a folder you have not trusted, a rule saved to `{{DIR}}/settings.local.json` holds for that run only; it applies to later runs once you trust the folder, and the chat says so when it saves the rule. See [Workspace trust](./sandbox-and-safety#workspace-trust).
 

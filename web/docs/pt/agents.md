@@ -157,7 +157,7 @@ Os nomes do próprio app (`ask`, `edits`, `plan`, `bypass`) e as outras grafias 
 | `project` | `<repositório>/{{DIR}}/agent-memory/…` |
 | `local` | `<repositório>/{{DIR}}/agent-memory-local/…` (deixe fora do git) |
 
-Cada agente tem a própria subpasta. As primeiras 200 linhas (no máximo 25 KB) do `MEMORY.md` dele entram no prompt de sistema, e ele é instruído a manter esse índice curto e guardar os detalhes em outros arquivos. A memória fica desligada quando a memória automática está desligada (veja [Memória](./memory)).
+Cada agente tem a própria subpasta. As primeiras 200 linhas (no máximo 25 KB) do `MEMORY.md` dele entram no prompt de sistema, e ele é instruído a manter esse índice curto e guardar os detalhes em outros arquivos. Essa memória fica sempre ligada para um agente que declara um escopo `memory`; deixe `memory` de fora para um agente não guardar memória (veja [Memória](./memory)).
 
 ### Isolamento em worktree
 

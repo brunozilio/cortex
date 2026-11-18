@@ -66,7 +66,6 @@ lists what was found.
 - `CORTEX_THEME`: `light` or `dark`; overrides the background detected from `COLORFGBG`.
 - `CORTEX_REDUCED_MOTION`: any value other than empty or `0` turns the animations off.
 - `CORTEX_CONSOLE_DIR`: a folder holding an already built web page (with an `index.html`) to serve instead of the embedded one.
-- `CORTEX_DISABLE_AUTO_MEMORY`: `1`, `true` or `yes` turns off the persistent memory of custom agents.
 - `CORTEX_SECRETS`: `keychain` (any case) moves the key of `secrets.json` from `secrets.key` into the system keychain; unset, it stays in the file (a rebuilt binary has a new signature, and macOS would ask for the keychain password at every start).
 - `CORTEX_STREAM_IDLE_SECONDS`: how many seconds a model's stream may stay silent before the request is given up; the default is 300.
 - `CORTEX_OTLP_ENDPOINT`: an OpenTelemetry collector (`http://localhost:4318`) each finished run is sent to as OTLP/HTTP JSON; unset, nothing is exported.

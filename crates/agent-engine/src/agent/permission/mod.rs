@@ -180,7 +180,7 @@ fn after_the_tool_hook(
     match (original, hook_permission) {
         (Verdict::Deny(reason), _) => Verdict::Deny(reason),
         (Verdict::Allow, Some(RuleKind::Ask)) => judgement.asking(Reason::Hook),
-        (asking, Some(RuleKind::Ask)) => asking,
+        (Verdict::Ask { reason, rule, .. }, Some(RuleKind::Ask)) => Verdict::Ask { reason, rememberable: false, rule },
         (_, Some(RuleKind::Deny)) => Verdict::Deny("Hook denied the tool call".into()),
         (verdict, Some(RuleKind::Allow)) if rule_asks => verdict,
         (_, Some(RuleKind::Allow)) => Verdict::Allow,
@@ -215,6 +215,13 @@ mod tests {
         assert_eq!(after(asked(), Some(RuleKind::Allow), false), Verdict::Allow);
         assert_eq!(after(by_rule(), Some(RuleKind::Allow), true), by_rule(), "the rule still asks");
         assert_eq!(after(Verdict::Allow, Some(RuleKind::Ask), false), judgement.asking(Reason::Hook));
+        assert!(
+            matches!(
+                after(asked(), Some(RuleKind::Ask), false),
+                Verdict::Ask { reason: Reason::Mode, rememberable: false, .. }
+            ),
+            "the hook asks again next time, so always is not offered"
+        );
         assert!(after(Verdict::Allow, Some(RuleKind::Deny), false).denies());
         assert_eq!(after(Verdict::Allow, None, false), Verdict::Allow);
         assert_eq!(after(by_rule(), None, true), by_rule());

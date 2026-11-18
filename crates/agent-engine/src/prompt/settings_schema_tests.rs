@@ -21,7 +21,7 @@ fn a_key_of_the_wrong_type_is_reported_and_the_rest_of_the_file_still_applies() 
         repo.path(),
         "settings.json",
         &json!({
-            "autoMemoryEnabled": "no",
+            "enableAllProjectMcpServers": "no",
             "outputStyle": "Concise",
             "permissions": { "deny": ["Bash(rm:*)", 5] }
         }),
@@ -31,12 +31,12 @@ fn a_key_of_the_wrong_type_is_reported_and_the_rest_of_the_file_still_applies() 
 
     let shown = path.display().to_string();
     assert!(
-        settings.notices.contains(&format!("{shown}: autoMemoryEnabled: expected boolean, found \"no\"")),
+        settings.notices.contains(&format!("{shown}: enableAllProjectMcpServers: expected boolean, found \"no\"")),
         "{:?}",
         settings.notices
     );
     assert!(settings.notices.contains(&format!("{shown}: permissions.deny[1]: expected string, found 5")));
-    assert!(settings.auto_memory || super::auto_memory_disabled_by_environment(), "the wrong value is left out");
+    assert!(!settings.mcp_approval.all, "the wrong value is left out");
     assert_eq!(settings.style.map(|style| style.name), Some("Concise".into()));
     let cwd = repo.path().to_string_lossy().into_owned();
     let target = domain::permission_rules::Target::Command("rm -rf x");
@@ -85,6 +85,20 @@ fn an_unknown_key_is_named_once_and_ignored() {
 }
 
 #[test]
+fn a_leftover_auto_memory_switch_is_named_once_and_ignored() {
+    let (home, repo) = folders();
+    let path = write(repo.path(), "settings.json", &json!({ "autoMemoryEnabled": false, "outputStyle": "Concise" }));
+
+    let settings = load(repo.path(), Some(home.path()), &[]).expect("the file still loads");
+
+    let about = settings.notices.iter().filter(|notice| notice.contains("autoMemoryEnabled")).count();
+    assert_eq!(about, 1, "{:?}", settings.notices);
+    assert!(settings.notices.contains(&format!("{}: autoMemoryEnabled: unknown key, ignored", path.display())));
+    assert!(settings.skipped_files.is_empty(), "{:?}", settings.skipped_files);
+    assert_eq!(settings.style.map(|style| style.name), Some("Concise".into()));
+}
+
+#[test]
 fn an_unknown_hook_event_is_named_and_the_other_hooks_still_run() {
     let (home, repo) = folders();
     let hooks = json!({ "hooks": {
@@ -128,7 +142,6 @@ fn the_documented_full_example_reads_without_a_notice() {
     let (home, repo) = folders();
     let example = json!({
         "outputStyle": "explanatory",
-        "autoMemoryEnabled": true,
         "advisorModel": "opus",
         "judgeModel": "sonnet",
         "smallModel": "haiku",
@@ -179,7 +192,6 @@ fn one_value_per_published_key() -> Vec<(&'static str, Value)> {
     vec![
         ("outputStyle", json!("concise")),
         ("agent", json!("reviewer")),
-        ("autoMemoryEnabled", json!(false)),
         ("bashOutputLimit", json!(4_000)),
         ("advisorModel", json!("a")),
         ("judgeModel", json!("j")),
@@ -220,8 +232,7 @@ fn every_key_the_schema_publishes_changes_what_the_loader_reads() {
 
     let (home, repo) = folders();
     let unset = format!("{:?}", load(repo.path(), Some(home.path()), &[]).expect("settings"));
-    let observable = |key: &str| key != "autoMemoryEnabled" || !super::auto_memory_disabled_by_environment();
-    for (key, value) in samples.into_iter().filter(|(key, _)| observable(key)) {
+    for (key, value) in samples {
         write(home.path(), "settings.json", &json!({ key: value }));
         let read = load(repo.path(), Some(home.path()), &[]).expect("settings");
         assert!(!read.notices.iter().any(|notice| notice.contains(key) && notice.contains("ignored")), "{key}");

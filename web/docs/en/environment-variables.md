@@ -8,7 +8,7 @@ Most of {{NAME}} is configured in [settings files](./settings). Environment vari
 ```bash
 {{ENV}}_LOG=debug {{COMMAND}}
 {{ENV}}_THEME=light {{ENV}}_REDUCED_MOTION=1 {{COMMAND}}
-{{ENV}}_DISABLE_AUTO_MEMORY=1 {{COMMAND}} -p "summarise the open TODOs"
+{{ENV}}_STREAM_IDLE_SECONDS=600 {{COMMAND}} -p "summarise the open TODOs"
 ```
 
 ## {{NAME}} variables
@@ -18,8 +18,6 @@ Most of {{NAME}} is configured in [settings files](./settings). Environment vari
 | `{{ENV}}_LOG` | A log filter: `error`, `warn`, `info`, `debug`, `trace`, or per module (`agent_engine=debug,warn`) | `warn` | How much goes to the log file `logs/{{COMMAND}}.log` in the [local data folder](./files-and-directories#data-folder). An empty or invalid filter falls back to `warn`. |
 | `{{ENV}}_THEME` | `light`, `dark` (any case) | detected | Forces the chat's light or dark colours instead of detecting the terminal's background. |
 | `{{ENV}}_REDUCED_MOTION` | Any non-empty value other than `0` | unset | Turns the chat's animations off. |
-| `{{ENV}}_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | unset | Like `"autoMemoryEnabled": false`: turns off the persistent memory of agents that declare a `memory` scope. Project memory is not affected. See [Memory](./memory#turn-memory-off). |
-| `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1`, `true`, `yes` | unset | Same as `{{ENV}}_DISABLE_AUTO_MEMORY`, for setups shared with Claude Code. |
 | `{{ENV}}_CONSOLE_DIR` | A folder containing `index.html` | unset | Serves the [trace console](./trace-console) page from this folder instead of the copy built into the binary. |
 | `{{ENV}}_STREAM_IDLE_SECONDS` | A whole number of seconds above zero | `300` | How long a model's answer may stay silent mid-stream before the request is given up and treated as failed. Anything else falls back to the default. |
 | `{{ENV}}_OTLP_ENDPOINT` | An `http://` or `https://` URL, such as `http://localhost:4318` | unset: nothing is exported | Sends each finished run to this OpenTelemetry collector as OTLP/HTTP JSON, at `<endpoint>/v1/traces`. See [Export to OpenTelemetry](./trace-console#export-to-opentelemetry). |
