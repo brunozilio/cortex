@@ -6,7 +6,7 @@ pub const ITEM: usize = 2_000;
 pub const USER_MESSAGE: usize = 16_000;
 pub const DELIVERY: usize = 64_000;
 pub const REPORT_TOOL: &str = "ObserverReport";
-const SOURCE: &str = "observer ";
+pub const SOURCE: &str = "observer ";
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Observing {

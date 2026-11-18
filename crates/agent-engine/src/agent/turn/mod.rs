@@ -94,7 +94,7 @@ impl Agent<'_> {
                 Next::Done(outcome) if observed => return outcome,
                 Next::Done(outcome) => {
                     observed = true;
-                    let reports = self.observe(turn.history.get(began..).unwrap_or_default(), &outcome);
+                    let reports = self.observe(turn.history.get(began..).unwrap_or_default(), &outcome, &run.watching);
                     match self.heard(reports, outcome.is_ok()) {
                         Some(said) => {
                             crate::transcript::told(turn.history, said);
@@ -109,7 +109,11 @@ impl Agent<'_> {
                     self.ask_model(&mut turn, run)
                 }
                 Next::Replied(exchange) => self.take_reply(&mut turn, *exchange),
-                Next::RunTools(calls) => self.run_tools(&mut turn, &calls, run, spawn),
+                Next::RunTools(calls) => {
+                    let ran = self.run_tools(&mut turn, &calls, run, spawn);
+                    self.observe_meanwhile(turn.history.get(began..).unwrap_or_default(), &run.watching, spawn);
+                    ran
+                }
                 Next::Finishing { said } => self.finish(&mut turn, run, said),
             };
             next = step.unwrap_or_else(|ending| Next::Done(Err(ending)));

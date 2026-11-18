@@ -19,6 +19,7 @@ pub(in crate::agent) struct ThisRun {
     pub(in crate::agent) watches: Watches,
     pub(in crate::agent) stuck: StuckWatch,
     pub(in crate::agent) keep: Option<super::Keep>,
+    pub(in crate::agent) watching: std::sync::Arc<super::observers::Watching>,
 }
 
 impl ThisRun {

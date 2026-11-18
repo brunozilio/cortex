@@ -204,10 +204,10 @@ observerMessage: Flag any migration that drops a column.
 ---
 ```
 
-- When the watched agent ends a turn, each observer gets a digest of that turn: the request, the tool calls and their results, what the agent said, and how the turn ended. The digest is wrapped in a tag with a fresh nonce and told to the observer as data, not instructions. Each item is cut to 2,000 characters (the request to 16,000), and a digest keeps at most about 64,000 characters, dropping the oldest items first.
+- While the watched agent works, each observer gets a digest of what happened since its last one: the request, the tool calls and their results, what the agent said, and, at the end, how the turn ended. A digest goes out after each step that ran tools, in the background, so the agent does not wait; an observer still reading the last one gets the next items later, together. The digest is wrapped in a tag with a fresh nonce and told to the observer as data, not instructions. Each item is cut to 2,000 characters (the request to 16,000), and a digest keeps at most about 64,000 characters, dropping the oldest items first.
 - The observer runs on its own definition's instructions and model, with one tool, `ObserverReport`. It keeps its conversation across turns of the same session, so it can follow the work.
-- A report reaches the watched agent as advice from its observer, never as your words or consent. For the main agent, a report makes it go on once in the same turn to weigh it; a sub-agent's observer reports reach the main agent between its steps.
-- Observers are asked once per turn; a turn you stop is not observed. The turn ends once its observers have answered.
+- A report reaches the watched agent as advice from its observer, never as your words or consent. It reaches the agent between its steps, while it works. A report that is still unread when the turn ends makes the main agent go on once in the same turn to weigh it, instead of starting a turn of its own; a sub-agent's observer reports reach the main agent between its steps.
+- When the turn ends, it waits for digests still being read and sends the last items with how the turn ended. A turn you stop is not observed further.
 - Sub-agents inherit their parent's observers, two levels down, unless `observeSubagents: false`. A sub-agent that names its own observers uses those instead. An observer is never observed itself.
 - An observer name that matches no agent is skipped and logged; past four names, the rest are left out.
 

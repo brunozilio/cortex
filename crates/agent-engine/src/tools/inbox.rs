@@ -18,6 +18,15 @@ pub fn take(client: u64) -> Vec<Notice> {
     lock().remove(&client).unwrap_or_default()
 }
 
+pub fn take_where(client: u64, wanted: impl Fn(&Notice) -> bool) -> Vec<Notice> {
+    let mut all = lock();
+    let Some(notices) = all.get_mut(&client) else { return Vec::new() };
+    let (taken, left): (Vec<Notice>, Vec<Notice>) =
+        std::mem::take(notices).into_iter().partition(|notice| wanted(notice));
+    *notices = left;
+    taken
+}
+
 pub fn withdraw(client: u64, source: &str) {
     if let Some(notices) = lock().get_mut(&client) {
         notices.retain(|notice| notice.source != source);
@@ -40,6 +49,15 @@ mod tests {
         assert!(take(8801).is_empty());
         forget_client(8802);
         assert!(take(8802).is_empty());
+    }
+
+    #[test]
+    fn some_notices_can_be_taken_and_the_rest_wait() {
+        push(8804, Notice::new("observer critic", "careful"));
+        push(8804, Notice::new("monitor bash_1", "up"));
+        let taken = take_where(8804, |notice| notice.source.starts_with("observer "));
+        assert_eq!(taken, [Notice::new("observer critic", "careful")]);
+        assert_eq!(take(8804), [Notice::new("monitor bash_1", "up")]);
     }
 
     #[test]

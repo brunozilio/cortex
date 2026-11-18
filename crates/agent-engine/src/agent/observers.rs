@@ -1,10 +1,12 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
+use std::time::Duration;
 
 use domain::inbox::Notice;
 use domain::observer::{Item, Observing};
 use platform::sync::Locked;
 
+use super::subagents::background::Spawn;
 use super::{Agent, Ending};
 use crate::model::TurnRequest;
 use crate::tools::Tool;
@@ -29,7 +31,59 @@ fn ended(outcome: &Result<crate::transcript::Usage, Ending>) -> Option<&'static 
     }
 }
 
-pub(in crate::agent) fn items(turn: &[Message], reason: &str) -> Vec<Item> {
+#[derive(Default)]
+pub(in crate::agent) struct Watching {
+    seen: Mutex<usize>,
+    pending: Mutex<HashMap<String, Vec<Item>>>,
+    busy: Mutex<HashSet<String>>,
+    settled: Condvar,
+}
+
+impl Watching {
+    fn gather(&self, turn: &[Message], observers: &[String], end: Option<&str>) {
+        let mut seen = self.seen.locked();
+        let mut fresh = items_of(turn.get(*seen..).unwrap_or_default());
+        *seen = turn.len();
+        if let Some(reason) = end {
+            fresh.push(Item::TurnEnded(reason.to_owned()));
+        }
+        let mut pending = self.pending.locked();
+        for name in observers {
+            pending.entry(name.clone()).or_default().extend(fresh.iter().cloned());
+        }
+    }
+
+    fn take_if_free(&self, name: &str) -> Option<Vec<Item>> {
+        let mut busy = self.busy.locked();
+        if busy.contains(name) {
+            return None;
+        }
+        let waiting = self.pending.locked().remove(name).filter(|items| !items.is_empty())?;
+        busy.insert(name.to_owned());
+        Some(waiting)
+    }
+
+    fn take(&self, name: &str) -> Vec<Item> {
+        self.pending.locked().remove(name).unwrap_or_default()
+    }
+
+    fn free(&self, name: &str) {
+        self.busy.locked().remove(name);
+        self.settled.notify_all();
+    }
+
+    fn wait_until_free(&self, stopped: impl Fn() -> bool) {
+        let mut busy = self.busy.locked();
+        while !busy.is_empty() && !stopped() {
+            busy = match self.settled.wait_timeout(busy, Duration::from_millis(50)) {
+                Ok((busy, _)) => busy,
+                Err(poisoned) => poisoned.into_inner().0,
+            };
+        }
+    }
+}
+
+fn items_of(turn: &[Message]) -> Vec<Item> {
     let mut items = Vec::new();
     for message in turn {
         for block in &message.blocks {
@@ -48,34 +102,80 @@ pub(in crate::agent) fn items(turn: &[Message], reason: &str) -> Vec<Item> {
             }
         }
     }
-    items.push(Item::TurnEnded(reason.to_owned()));
     items
 }
 
-impl Agent<'_> {
+fn is_report(notice: &Notice) -> bool {
+    notice.source.starts_with(domain::observer::SOURCE)
+}
+
+impl<'env> Agent<'env> {
+    fn observer(&self, name: &str) -> Option<&'env FoundAgent> {
+        let found = self.agents.iter().find(|agent| agent.name == name);
+        if found.is_none() {
+            tracing::warn!(observer = %name, "no agent of this type; it cannot observe");
+        }
+        found
+    }
+
+    fn digest(&self, observing: &Observing, items: &[Item]) -> String {
+        let nonce = uuid::Uuid::new_v4().simple().to_string();
+        domain::observer::digest(&self.workspace.agent_name, &nonce, items, observing.message.as_deref())
+    }
+
+    pub(in crate::agent) fn observe_meanwhile<'s>(
+        &'s self,
+        turn: &[Message],
+        watching: &Arc<Watching>,
+        spawn: Spawn<'_, 's>,
+    ) {
+        let Some(observing) = self.workspace.observing.as_ref().filter(|_| !self.control.is_stopped()) else {
+            return;
+        };
+        watching.gather(turn, &observing.observers, None);
+        for name in &observing.observers {
+            let Some(found) = self.observer(name) else { continue };
+            let Some(items) = watching.take_if_free(name) else { continue };
+            let digest = self.digest(observing, &items);
+            let watching = Arc::clone(watching);
+            spawn(Box::new(move || {
+                let reports = Reports::default();
+                self.deliver(found, observing, digest, Arc::clone(&reports));
+                let client = self.workspace.credentials.client;
+                for report in std::mem::take(&mut *reports.locked()) {
+                    crate::tools::inbox::push(client, report);
+                }
+                watching.free(&found.name);
+            }));
+        }
+    }
+
     pub(in crate::agent) fn observe(
         &self,
         turn: &[Message],
         outcome: &Result<crate::transcript::Usage, Ending>,
+        watching: &Watching,
     ) -> Vec<Notice> {
         let Some(observing) = &self.workspace.observing else { return Vec::new() };
+        watching.wait_until_free(|| self.control.is_stopped());
         let Some(reason) = ended(outcome).filter(|_| !self.control.is_stopped()) else { return Vec::new() };
-        let items = items(turn, reason);
+        watching.gather(turn, &observing.observers, Some(reason));
         let reports = Reports::default();
         std::thread::scope(|scope| {
             for name in &observing.observers {
-                let Some(found) = self.agents.iter().find(|agent| &agent.name == name) else {
-                    tracing::warn!(observer = %name, "no agent of this type; it cannot observe");
+                let Some(found) = self.observer(name) else { continue };
+                let items = watching.take(name);
+                if items.is_empty() {
                     continue;
-                };
-                let nonce = uuid::Uuid::new_v4().simple().to_string();
-                let digest =
-                    domain::observer::digest(&self.workspace.agent_name, &nonce, &items, observing.message.as_deref());
+                }
+                let digest = self.digest(observing, &items);
                 let reports = Arc::clone(&reports);
                 scope.spawn(move || self.deliver(found, observing, digest, reports));
             }
         });
-        std::mem::take(&mut *reports.locked())
+        let mut heard = crate::tools::inbox::take_where(self.workspace.credentials.client, is_report);
+        heard.extend(std::mem::take(&mut *reports.locked()));
+        heard
     }
 
     pub(in crate::agent) fn heard(&self, reports: Vec<Notice>, went_well: bool) -> Option<Message> {
@@ -147,17 +247,27 @@ mod tests {
             },
         ];
 
-        let items = items(&turn, "done");
+        let watching = Watching::default();
+        let observers = ["critic".to_owned()];
+        watching.gather(&turn[..2], &observers, None);
+        let first = watching.take_if_free("critic").expect("items to deliver");
+        assert!(watching.take_if_free("critic").is_none(), "one delivery at a time");
+        watching.gather(&turn, &observers, Some("done"));
+        watching.free("critic");
+        let second = watching.take_if_free("critic").expect("what came since");
 
         assert_eq!(
-            items,
+            first,
             [
                 Item::UserMessage("fix it".into()),
                 Item::Said("Looking.".into()),
                 Item::ToolCall { name: "Read".into(), input: "{\"file_path\":\"a\"}".into() },
-                Item::ToolResult { text: "text".into(), failed: false },
-                Item::TurnEnded("done".into()),
             ]
+        );
+        assert_eq!(
+            second,
+            [Item::ToolResult { text: "text".into(), failed: false }, Item::TurnEnded("done".into())],
+            "each item once, in order"
         );
     }
 }
