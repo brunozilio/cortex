@@ -22,6 +22,14 @@ export const spec = {
         "description": "A model for this agent: an id or short name your own provider serves. One it does not serve is ignored and the agent's own or yours is used, as when left out.",
         "type": "string"
       },
+      "name": {
+        "description": "Start a teammate under this name instead of a one-off sub-agent: it runs on its own in your team, keeps working across your turns, reports to you with SendMessage and waits idle for your next message. Letters, digits, `_` and `-`.",
+        "type": "string"
+      },
+      "team_name": {
+        "description": "Ignored: your session has one team.",
+        "type": "string"
+      },
       "prompt": {
         "description": "The task for the agent to carry out.",
         "type": "string"

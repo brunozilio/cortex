@@ -6,6 +6,7 @@ mod repl;
 mod run;
 mod scripts;
 mod subagents;
+mod team_tools;
 mod turn;
 
 use domain::EngineEvent;

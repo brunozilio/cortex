@@ -31,6 +31,7 @@ mod sub_agent_asks;
 mod sub_agent_endings;
 mod sub_agent_fallbacks;
 mod sub_agents;
+mod teams;
 mod turns;
 mod unsandboxed;
 mod watch;

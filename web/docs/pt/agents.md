@@ -221,6 +221,18 @@ A configuração `agent` faz a própria conversa principal rodar como um dos seu
 
 As instruções do agente entram no prompt de sistema sob `# Agent instructions (<nome>)`, e `tools`, `disallowedTools`, `mcpServers`, `model`, `effort`, `permissionMode`, `skills`, `memory`, `isolation` e `hooks` dele valem para a conversa. O `initialPrompt` vai antes da sua primeira mensagem numa conversa nova; um `initialPrompt` que começa com `/` roda essa skill ou comando.
 
+## Equipes de agentes
+
+Um sub-agente trabalha uma vez e relata. Um **teammate** continua trabalhando: roda no próprio processo, recebe mensagens enquanto vive e espera ocioso entre tarefas. O agente com quem você conversa é o **líder** da equipe (`team-lead`); ele inicia os teammates e os coordena.
+
+- **Iniciar um.** O líder chama `Agent` com um `name` (letras, dígitos, `_`, `-`) e a tarefa em `prompt`, opcionalmente um `subagent_type` e um `model`. Um nome já usado na equipe ganha `-2`, `-3`…; `main`, `team-lead` e `user` são reservados. O teammate roda `{{COMMAND}} teammate` na mesma pasta, com o modelo do líder (a menos que outro seja pedido), o modo de permissão do líder e as instruções da definição de agente.
+- **A equipe.** Cada sessão tem uma equipe, criada com o primeiro teammate, em `~/{{DIR}}/teams/team-<sessão>/`: `config.json` lista os membros, `inboxes/<nome>.json` guarda as mensagens de cada um e `logs/<nome>.log` o que cada teammate imprimiu. Um teammate que termina é marcado como inativo.
+- **Mensagens.** `SendMessage` recebe o nome de um teammate (ou `team-lead`, também escrito `main`, a partir de um teammate), uma `message` e um `summary` curto. As mensagens chegam ao líder entre os passos dele, ou como um turno próprio quando o chat está ocioso, como `<teammate-message teammate_id="…" summary="…">`. Um teammate lê as mensagens quando está ocioso; a tarefa do líder chega como a primeira mensagem.
+- **Ociosidade e encerramento.** Depois de cada resposta, o teammate avisa o líder que está ocioso (`idle_notification`). O líder encerra um teammate com `SendMessage` e `message: {"type": "shutdown_request", "reason": "…"}`; o teammate responde `shutdown_approved` e termina. `shutdown_response` (com `request_id` e `approve`) e `plan_approval_response` são as outras mensagens estruturadas.
+- **Quem pode o quê.** Só o líder inicia teammates; um teammate, ou um sub-agente, não. Um teammate relata com `SendMessage` para `team-lead`: o que ele imprime ninguém lê além do log.
+
+Ainda não existe: teammates em painéis de terminal, pedidos de permissão de um teammate repassados ao líder (um teammate não pode perguntar, então uma chamada que perguntaria é recusada), uma lista de tarefas compartilhada pela equipe com responsáveis, e os hooks `TeammateIdle`, `TaskCreated` e `TaskCompleted`.
+
 ## Listar agentes
 
 `/agents` lista todos os agentes disponíveis aqui (os seus, os do projeto, os dos plugins e os embutidos) com a descrição. `/reload` os relê e mostra quantos foram encontrados.

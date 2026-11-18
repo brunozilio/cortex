@@ -21,6 +21,7 @@ pub mod meter;
 pub mod plugins;
 pub mod prompt;
 pub mod sessions;
+pub mod team;
 pub mod tools;
 pub mod trust;
 pub mod upkeep;

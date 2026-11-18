@@ -37,6 +37,7 @@ description: Todos os comandos, subcomandos e opções do programa {{COMMAND}}.
 | `{{COMMAND}} remote` | Controle remoto pelo celular, pelo seu relay: status, relay, pair, devices, revoke |
 | `{{COMMAND}} doctor` | Confere se esta instalação funciona na pasta |
 | `{{COMMAND}} eval` | Roda os evals em `{{DIR}}/evals` e os pontua |
+| `{{COMMAND}} teammate` | Trabalha como teammate da equipe de um líder, a partir da caixa de entrada; iniciado pelo líder, não à mão (veja [Equipes de agentes](./agents#equipes-de-agentes)) |
 | `{{COMMAND}} config` | Lê ou muda as configurações: as suas, ou as deste projeto com `--project` |
 | `{{COMMAND}} help` | Imprime a ajuda, ou a ajuda de um subcomando |
 

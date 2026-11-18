@@ -178,7 +178,7 @@ Status as of 2026-11-17. Every record in `decisions/` has a row here (`xtask lin
 | Remote control: the console on a phone through a blind relay (`tunnel`, `relay`, `page`; accepted) | `decisions/0012-remote-control-through-a-blind-relay.md` |
 | Absolute paths, reads outside the project and MCP tools marked read-only stop asking | `decisions/0013-reads-that-do-not-ask.md` |
 | A hand-written OTLP/HTTP JSON exporter sends each finished run's trace | `decisions/0014-hand-written-otlp-export.md` |
-| Channels, code mode, observers and teams behave like the reference agent, under the app's own names (channels and observers done, code mode but its flags) | `decisions/0015-behave-like-the-reference-agent-under-our-own-names.md` |
+| Channels, code mode, observers and teams behave like the reference agent, under the app's own names (channels, observers and teams' first stage done, code mode but its flags) | `decisions/0015-behave-like-the-reference-agent-under-our-own-names.md` |
 
 Provider folders, the model client, wires and the transcript types have moved from `agent-engine` to `llm-providers` (done).
 

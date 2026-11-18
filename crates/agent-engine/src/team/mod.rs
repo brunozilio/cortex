@@ -1,0 +1,174 @@
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use domain::team::{LEAD, Mail, Member, TeamConfig, file_name};
+use platform::store::Document;
+
+pub mod launch;
+pub mod lead_inbox;
+
+pub const TEAM_VARIABLE: &str = concat!(brand::env_prefix!(), "_TEAM_NAME");
+pub const AGENT_VARIABLE: &str = concat!(brand::env_prefix!(), "_AGENT_NAME");
+
+pub fn now_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| u64::try_from(since.as_millis()).unwrap_or(u64::MAX))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Team {
+    pub name: String,
+    pub dir: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Me {
+    pub team: Team,
+    pub name: String,
+}
+
+impl Team {
+    pub fn root(home: &Path) -> PathBuf {
+        home.join(brand::DIR).join("teams")
+    }
+
+    pub fn named(home: &Path, name: &str) -> Self {
+        Self { name: name.to_owned(), dir: Self::root(home).join(file_name(name)) }
+    }
+
+    pub fn of_session(home: &Path, session: &str) -> Self {
+        let short: String = session.chars().filter(char::is_ascii_alphanumeric).take(8).collect();
+        Self::named(home, &format!("team-{short}"))
+    }
+
+    pub fn config_path(&self) -> PathBuf {
+        self.dir.join("config.json")
+    }
+
+    fn config(&self) -> Document {
+        Document::at(self.config_path())
+    }
+
+    pub fn read(&self) -> Option<TeamConfig> {
+        self.config().read().ok().flatten()
+    }
+
+    pub fn exists(&self) -> bool {
+        self.config_path().is_file()
+    }
+
+    pub fn open(&self, lead_session: &str) -> Result<TeamConfig, String> {
+        std::fs::create_dir_all(self.dir.join("inboxes")).map_err(|error| error.to_string())?;
+        self.config()
+            .update(|config: &mut TeamConfig| {
+                if config.name.is_empty() {
+                    config.name.clone_from(&self.name);
+                    config.created_at = now_ms();
+                    lead_session.clone_into(&mut config.lead_session_id);
+                }
+                config.clone()
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn join(&self, wanted: &str, mut member: Member) -> Result<String, String> {
+        self.config()
+            .try_update(|config: &mut TeamConfig| {
+                let name = domain::team::free_name(wanted, &config.names())?;
+                member.name.clone_from(&name);
+                member.joined_at = now_ms();
+                member.active = true;
+                config.members.push(member);
+                Ok(name)
+            })
+            .map_err(|error| error.to_string())?
+    }
+
+    pub fn left(&self, name: &str) {
+        let _ = self.config().update(|config: &mut TeamConfig| {
+            for member in config.members.iter_mut().filter(|member| member.name == name) {
+                member.active = false;
+            }
+        });
+    }
+
+    fn mailbox(&self, agent: &str) -> Document {
+        Document::at(self.dir.join("inboxes").join(format!("{}.json", file_name(agent))))
+    }
+
+    pub fn knows(&self, agent: &str) -> bool {
+        agent == LEAD || self.read().is_some_and(|config| config.members.iter().any(|member| member.name == agent))
+    }
+
+    pub fn send(&self, to: &str, from: &str, text: &str, summary: Option<&str>) -> Result<(), String> {
+        if !self.exists() {
+            return Err(format!("team {} is gone", self.name));
+        }
+        let mail = Mail {
+            from: from.to_owned(),
+            text: text.to_owned(),
+            timestamp: now_ms(),
+            read: false,
+            summary: summary.map(str::to_owned),
+            msg_id: uuid::Uuid::new_v4().to_string(),
+        };
+        self.mailbox(to).update(|mails: &mut Vec<Mail>| mails.push(mail)).map_err(|error| error.to_string())
+    }
+
+    pub fn unread(&self, agent: &str) -> Vec<Mail> {
+        self.mailbox(agent)
+            .update(|mails: &mut Vec<Mail>| {
+                let fresh: Vec<Mail> = mails.iter().filter(|mail| !mail.read).cloned().collect();
+                mails.iter_mut().for_each(|mail| mail.read = true);
+                fresh
+            })
+            .unwrap_or_default()
+    }
+}
+
+impl Me {
+    pub fn from_env(home: &Path) -> Option<Self> {
+        let team = std::env::var(TEAM_VARIABLE).ok().filter(|name| !name.is_empty())?;
+        let name = std::env::var(AGENT_VARIABLE).ok().filter(|name| !name.is_empty())?;
+        Some(Self { team: Team::named(home, &team), name })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn member(agent_type: &str) -> Member {
+        Member { agent_type: agent_type.into(), cwd: "/work".into(), ..Member::default() }
+    }
+
+    #[test]
+    fn a_team_is_opened_once_and_teammates_join_under_unique_names() {
+        let home = tempfile::tempdir().expect("home");
+        let team = Team::of_session(home.path(), "4f1c-9a2b-77");
+        assert_eq!(team.name, "team-4f1c9a2b");
+        let opened = team.open("4f1c-9a2b-77").expect("open");
+        assert_eq!(opened.lead_session_id, "4f1c-9a2b-77");
+        assert_eq!(team.open("other").expect("again").lead_session_id, "4f1c-9a2b-77", "opened once");
+        assert_eq!(team.join("tester", member("general")), Ok("tester".into()));
+        assert_eq!(team.join("tester", member("general")), Ok("tester-2".into()));
+        assert!(team.knows("tester-2") && team.knows(LEAD) && !team.knows("ghost"));
+        team.left("tester");
+        let config = team.read().expect("config");
+        assert_eq!(config.members.iter().filter(|member| member.active).count(), 1);
+    }
+
+    #[test]
+    fn mail_is_read_once_in_the_order_it_was_sent() {
+        let home = tempfile::tempdir().expect("home");
+        let team = Team::named(home.path(), "t");
+        assert!(team.send("tester", LEAD, "first", None).is_err(), "no team, no mail");
+        team.open("s").expect("open");
+        team.send("tester", LEAD, "first", None).expect("send");
+        team.send("tester", "other", "second", Some("two")).expect("send");
+        let unread = team.unread("tester");
+        assert_eq!(unread.iter().map(|mail| mail.text.as_str()).collect::<Vec<_>>(), ["first", "second"]);
+        assert_eq!(unread[1].summary.as_deref(), Some("two"));
+        assert!(team.unread("tester").is_empty(), "read once");
+        assert!(team.unread(LEAD).is_empty());
+    }
+}

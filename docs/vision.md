@@ -44,7 +44,7 @@ Core:
 - Trace export to an OpenTelemetry collector (OTLP over HTTP, opt-in through an environment variable).
 - Evals: cases in a folder, run and scored by `<command> eval`.
 - Remote control: the same page installed on a phone as a progressive web app, through a self-hosted relay, with the terminal on by default for paired devices (`decisions/0012-remote-control-through-a-blind-relay.md`).
-- Subcommands: `login`, `logout`, `models`, `mcp`, `plugin`, `remote`, `config`, `doctor`, `eval`.
+- Subcommands: `login`, `logout`, `models`, `mcp`, `plugin`, `remote`, `config`, `doctor`, `eval`, `teammate` (started by a lead, not by hand).
 
 Experimental:
 

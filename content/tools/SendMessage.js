@@ -4,11 +4,31 @@ export const spec = {
   input: {
     "properties": {
       "message": {
-        "description": "What to tell or ask the agent.",
+        "anyOf": [
+          {
+            "description": "What to tell or ask the agent.",
+            "type": "string"
+          },
+          {
+            "description": "A team protocol message: {type: \"shutdown_request\", reason?}, {type: \"shutdown_response\", request_id, approve, reason?} or {type: \"plan_approval_response\", request_id, approve, feedback?}.",
+            "properties": {
+              "approve": { "type": "boolean" },
+              "feedback": { "type": "string" },
+              "reason": { "type": "string" },
+              "request_id": { "type": "string" },
+              "type": { "enum": ["shutdown_request", "shutdown_response", "plan_approval_response"] }
+            },
+            "required": ["type"],
+            "type": "object"
+          }
+        ]
+      },
+      "summary": {
+        "description": "For a teammate: what the message is about in 5 to 10 words, shown before it is read.",
         "type": "string"
       },
       "to": {
-        "description": "The agent_id an Agent report gave (agent-1), or another session's name (ListSessions).",
+        "description": "The agent_id an Agent report gave (agent-1), a teammate's name, team-lead (or main) from a teammate, or another session's name (ListSessions).",
         "type": "string"
       }
     },

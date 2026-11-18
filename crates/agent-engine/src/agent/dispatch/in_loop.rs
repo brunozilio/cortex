@@ -105,6 +105,9 @@ impl Agent<'_> {
 
     fn agent_tool<'env>(&'env self, calling: &Calling<'_, 'env>, input: &Value) -> Outcome {
         let Calling { name, run, parent, .. } = *calling;
+        if let Some(started) = self.teammate(input) {
+            return started;
+        }
         if !(AgentTool { agents: self.agents.to_vec() }).background(input) {
             return self.sub_agent_with(input, self.control, self.workspace, parent, &run.conversations, None);
         }
@@ -115,6 +118,9 @@ impl Agent<'_> {
     }
 
     fn message(&self, calling: &Calling<'_, '_>, tool: &dyn Tool, input: &Value) -> Outcome {
+        if let Some(sent) = self.team_message(input) {
+            return sent;
+        }
         let conversations = &calling.run.conversations;
         if !self.to_session(input, conversations) {
             return self.send_message(input, conversations);

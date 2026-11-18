@@ -8,6 +8,7 @@ mod plugin;
 mod print;
 mod print_output;
 mod remote;
+mod teammate;
 mod tui;
 
 use std::path::PathBuf;
@@ -129,6 +130,8 @@ enum Action {
         #[arg(long, help = "Print the scores as JSON")]
         json: bool,
     },
+    #[command(hide = true, about = "Run as a teammate of a lead's team (started by the lead)")]
+    Teammate,
     #[command(about = "Read or change the settings: the user's, or this project's with --project")]
     Config {
         #[command(subcommand)]
@@ -180,6 +183,7 @@ fn run(mut cli: Cli) -> Result<ExitCode, String> {
     let client = Client::builder().cwd(&cwd).build().map_err(|e| e.to_string())?;
     let launch = launch(&cli, client, cwd)?;
     match cli.command.take() {
+        Some(Action::Teammate) => be_a_teammate(cli, launch),
         Some(action) => subcommand(action, &launch.client, &launch.cwd, cli.model),
         None if cli.print => print_the_answers(cli, launch),
         None if !on_a_terminal() => {
@@ -246,7 +250,7 @@ fn subcommand(
         Action::Remote { action } => {
             remote::run(action.unwrap_or(remote::RemoteAction::Status)).map(|()| ExitCode::SUCCESS)
         }
-        Action::Config { .. } => Ok(ExitCode::SUCCESS),
+        Action::Config { .. } | Action::Teammate => Ok(ExitCode::SUCCESS),
     }
 }
 
@@ -288,6 +292,24 @@ fn print_the_answers(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
         trust: cli.trust,
     };
     print::print_all(&client, cwd, wanted, prompts)
+}
+
+fn be_a_teammate(cli: Cli, launch: Launch) -> Result<ExitCode, String> {
+    let home = std::env::home_dir().ok_or("a teammate needs a home folder")?;
+    let me = app::team::Me::from_env(&home).ok_or("a teammate is started by its lead, with its team and name")?;
+    let Launch { client, cwd, add_dirs, headless, .. } = launch;
+    let wanted = print::Wanted {
+        model: cli.model.as_deref(),
+        mode: cli.mode,
+        verification: None,
+        add_dirs,
+        headless,
+        format: cli.output_format,
+        resume: None,
+        fork: false,
+        trust: false,
+    };
+    print::print_all(&client, cwd, wanted, teammate::Mailbox::new(me))
 }
 
 fn chat(cli: Cli, launch: Launch) -> Result<ExitCode, String> {

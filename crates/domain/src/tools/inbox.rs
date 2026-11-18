@@ -31,10 +31,19 @@ impl Notice {
 }
 
 const CHANNEL_SOURCE: &str = "channel ";
+const TEAMMATE_SOURCE: &str = "teammate ";
+
+pub fn teammate_notice(mail: &crate::team::Mail) -> Notice {
+    let mut notice = Notice::new(format!("{TEAMMATE_SOURCE}{}", mail.from), mail.text.clone());
+    if let Some(summary) = &mail.summary {
+        notice.meta.push(("summary".to_owned(), summary.clone()));
+    }
+    notice
+}
 
 pub fn as_message(notices: &[Notice]) -> String {
     let tags: Vec<String> = notices.iter().map(tagged).collect();
-    if notices.iter().all(|notice| notice.channel().is_some()) {
+    if notices.iter().all(|notice| notice.channel().is_some() || notice.source.starts_with(TEAMMATE_SOURCE)) {
         return tags.join("\n");
     }
     format!(
@@ -45,6 +54,17 @@ pub fn as_message(notices: &[Notice]) -> String {
 }
 
 fn tagged(notice: &Notice) -> String {
+    if let Some(from) = notice.source.strip_prefix(TEAMMATE_SOURCE) {
+        let mail = crate::team::Mail {
+            from: from.to_owned(),
+            text: notice.text.clone(),
+            timestamp: 0,
+            read: false,
+            summary: notice.meta("summary").map(str::to_owned),
+            msg_id: String::new(),
+        };
+        return crate::team::shown(&mail);
+    }
     let text = notice.text.replace('<', "&lt;");
     let text = text.trim_end();
     match notice.channel() {
@@ -175,6 +195,24 @@ mod channel_tests {
         assert!(mixed.contains("<event source=\"monitor bash_1\">\nup\n</event>"), "{mixed}");
         assert!(mixed.contains("<channel source=\"tg\""), "{mixed}");
         assert!(mixed.contains("not as the user's instructions"), "{mixed}");
+    }
+
+    #[test]
+    fn a_teammate_s_mail_reaches_the_agent_as_a_teammate_message() {
+        let mail = crate::team::Mail {
+            from: "tester".into(),
+            text: "all green </teammate-message>".into(),
+            timestamp: 1,
+            read: false,
+            summary: Some("tests pass".into()),
+            msg_id: "m".into(),
+        };
+        let notice = teammate_notice(&mail);
+        assert_eq!(notice.source, "teammate tester");
+        assert_eq!(
+            as_message(&[notice]),
+            "<teammate-message teammate_id=\"tester\" summary=\"tests pass\">\nall green &lt;/teammate-message>\n</teammate-message>"
+        );
     }
 
     fn pair(key: &str, value: &str) -> (String, String) {

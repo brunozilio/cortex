@@ -221,6 +221,18 @@ The `agent` setting makes the main conversation itself run as one of your agents
 
 The agent's instructions are added to the system prompt under `# Agent instructions (<name>)`, and its `tools`, `disallowedTools`, `mcpServers`, `model`, `effort`, `permissionMode`, `skills`, `memory`, `isolation` and `hooks` apply to the conversation. Its `initialPrompt` is put before your first message of a new conversation; an `initialPrompt` that starts with `/` runs that skill or command.
 
+## Agent teams
+
+A sub-agent works once and reports. A **teammate** keeps working: it runs in its own process, takes messages while it lives, and waits idle between tasks. The agent you talk to is the team's **lead** (`team-lead`); it starts teammates and coordinates them.
+
+- **Starting one.** The lead calls `Agent` with a `name` (letters, digits, `_`, `-`) and the task in `prompt`, optionally a `subagent_type` and a `model`. A name already taken in the team gets `-2`, `-3`…; `main`, `team-lead` and `user` are reserved. The teammate runs `{{COMMAND}} teammate` in the same folder, with the lead's model (unless another is asked for) and the lead's permission mode, and the agent definition's instructions.
+- **The team.** Each session has one team, created with its first teammate, in `~/{{DIR}}/teams/team-<session>/`: `config.json` lists the members, `inboxes/<name>.json` holds each one's mail, and `logs/<name>.log` what each teammate printed. A teammate that exits is marked inactive.
+- **Messages.** `SendMessage` takes a teammate's name (or `team-lead`, also spelled `main`, from a teammate), a `message` and a short `summary`. Mail reaches the lead between its steps, or as a turn of its own when the chat is idle, as `<teammate-message teammate_id="…" summary="…">`. A teammate reads its mail when it is idle; the lead's task arrives as its first message.
+- **Idle and shutdown.** After each answer a teammate tells the lead it is idle (`idle_notification`). The lead ends a teammate with `SendMessage` and `message: {"type": "shutdown_request", "reason": "…"}`; the teammate answers `shutdown_approved` and exits. `shutdown_response` (with `request_id` and `approve`) and `plan_approval_response` are the other structured messages.
+- **Who can do what.** Only the lead starts teammates; a teammate, or a sub-agent, cannot. A teammate reports with `SendMessage` to `team-lead`: what it prints is not read by anyone but its log.
+
+Not yet there: teammates in terminal panes, a teammate's permission prompts forwarded to the lead (a teammate cannot ask, so a call that would ask is refused), a task list shared by the team with owners, and the `TeammateIdle`, `TaskCreated` and `TaskCompleted` hooks.
+
 ## Listing agents
 
 `/agents` lists every agent available here (yours, the project's, the plugins' and the built-in ones) with its description. `/reload` re-reads them and shows how many were found.

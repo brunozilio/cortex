@@ -37,6 +37,7 @@ description: Every command, subcommand and option of the {{COMMAND}} program.
 | `{{COMMAND}} remote` | Remote control from a phone, through your relay: status, relay, pair, devices, revoke |
 | `{{COMMAND}} doctor` | Check that this installation can work in the folder |
 | `{{COMMAND}} eval` | Run the evals in `{{DIR}}/evals` and score them |
+| `{{COMMAND}} teammate` | Work as a teammate of a lead's team, from its mailbox; started by the lead, not by hand (see [Agent teams](./agents#agent-teams)) |
 | `{{COMMAND}} config` | Read or change the settings: yours, or this project's with `--project` |
 | `{{COMMAND}} help` | Print the help, or a subcommand's help |
 

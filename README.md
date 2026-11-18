@@ -48,6 +48,7 @@ cortex config                            # read or change the settings: list, ge
 cortex doctor                            # check this installation in this folder
 cortex eval                              # run .cortex/evals/<name>/case.json and score them
 cortex remote                            # remote control from a phone: status, up, relay, pair, devices, revoke
+cortex teammate                          # (started by a lead) work as a teammate of its team, from its mailbox
 ```
 
 In the chat: Enter sends, Alt+Enter (or Ctrl+J) adds a line, Esc
@@ -77,6 +78,8 @@ lists what was found.
 - `CORTEX_STREAM_IDLE_SECONDS`: how many seconds a model's stream may stay silent before the request is given up; the default is 300.
 - `CORTEX_OTLP_ENDPOINT`: an OpenTelemetry collector (`http://localhost:4318`) each finished run is sent to as OTLP/HTTP JSON; unset, nothing is exported.
 - `CORTEX_OTLP_HEADERS`: `name=value` pairs, separated by commas, added to each export request.
+- `CORTEX_TEAM_NAME` and `CORTEX_AGENT_NAME`: set by a lead on each teammate it starts (`cortex teammate`): the team and the teammate's name; not meant to be set by hand.
+- `CORTEX_TEAMMATE_COMMAND`: the program a lead starts teammates with; unset, the running `cortex` binary.
 - `CLOUDFLARE_API_TOKEN`: an API token with Account · Workers Scripts · Edit that `cortex remote up` uses instead of signing in to Cloudflare in the browser.
 - `RELAY_LISTEN`: the address and port the `relay` program listens on (`relay --listen` does the same); the default is `0.0.0.0:8080`.
 - `SKIP_WEB_BUILD`: when building, any value keeps Cargo from rebuilding the web page with Bun.
