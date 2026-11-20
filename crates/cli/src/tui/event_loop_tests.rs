@@ -70,3 +70,16 @@ fn a_key_that_needs_the_terminal_ends_the_burst() {
     assert!(app.ui.redraw);
     assert_eq!(events.0.len(), 2);
 }
+
+#[test]
+fn a_frame_is_laid_out_before_the_watchdog_hears_it_is_written_to_the_terminal() {
+    let data = tempfile::tempdir().expect("data");
+    let mut app = app(data.path());
+    let mut terminal = ratatui::Terminal::new(crate::tui::mirror::Tee::new(ratatui::backend::TestBackend::new(40, 10)))
+        .expect("terminal");
+    let dog = crate::tui::watchdog::Dog::start();
+    dog.enter(super::LAYING_OUT);
+    let stall = super::draw_watched(&mut terminal, None, &dog, &mut app).expect("drawn");
+    assert_eq!(stall, None);
+    assert_eq!(dog.step(), super::WRITING, "the flush runs under its own step");
+}

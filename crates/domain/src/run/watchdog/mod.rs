@@ -30,6 +30,10 @@ impl Watchdog {
         froze
     }
 
+    pub fn step(&self) -> &str {
+        &self.step
+    }
+
     pub fn pause(&mut self) {
         self.step.clear();
     }

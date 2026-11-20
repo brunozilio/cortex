@@ -34,6 +34,11 @@ impl Dog {
         self.state.locked().enter(self.now(), step)
     }
 
+    #[cfg(test)]
+    pub fn step(&self) -> String {
+        self.state.locked().step().to_owned()
+    }
+
     pub fn pause(&self) {
         self.state.locked().pause();
     }

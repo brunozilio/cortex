@@ -6,14 +6,20 @@ use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::SetTitle;
 
 use super::app::App;
+use super::mirror::Tee;
 use super::watchdog::Dog;
 use console::Mirror;
+use domain::watchdog::Stall;
+use ratatui::Terminal;
+use ratatui::backend::Backend;
 
 use super::{
     Screen, Tty, auto_retry, editor, features, inline, keys, notices, resume, selection, statusline, unsolicited,
 };
 use super::{mirror, mirror_keys, view, watchdog};
 
+const LAYING_OUT: &str = "laying out the screen";
+const WRITING: &str = "writing to the terminal";
 const FRAME: Duration = Duration::from_millis(80);
 const ANIMATING: Duration = Duration::from_millis(33);
 pub(super) const BURST: usize = 256;
@@ -90,9 +96,10 @@ impl Seat<'_> {
         self.mark(app, "checking features and notices");
         tick(app);
         inline::flush(self.terminal, app)?;
-        self.mark(app, "drawing the screen");
+        self.mark(app, LAYING_OUT);
         self.mirror = features::trace::follow::mirror(app);
-        self.draw(app)?;
+        let stall = draw_watched(self.terminal, self.mirror.as_ref(), &self.dog, app)?;
+        tell(app, stall);
         self.mark(app, "handling what the page typed");
         let watched = self.typed_in_the_page(app);
         let wait = if watched || app.ui.motion.borrow().animating() { ANIMATING } else { FRAME };
@@ -105,9 +112,7 @@ impl Seat<'_> {
     }
 
     fn mark(&self, app: &mut App, step: &str) {
-        if let Some(stall) = self.dog.enter(step) {
-            app.transcript.notice(format!("{} Details are in the log.", stall.describe()));
-        }
+        tell(app, self.dog.enter(step));
     }
 
     fn name_the_window(&mut self, app: &App) {
@@ -122,16 +127,6 @@ impl Seat<'_> {
 
     fn open(&mut self, app: &mut App) {
         self.opening.step(app);
-    }
-
-    fn draw(&mut self, app: &mut App) -> std::io::Result<()> {
-        let mut selected = None;
-        mirror::draw(self.terminal, self.mirror.as_ref(), |frame| {
-            view::draw(frame, app);
-            selected = selection::show(frame.buffer_mut(), &app.ui.selection);
-        })?;
-        selection::copied(app, selected);
-        Ok(())
     }
 
     fn typed_in_the_page(&self, app: &mut App) -> bool {
@@ -186,6 +181,28 @@ impl Seat<'_> {
         *self.screen = Some(Screen::enter(!inline));
         done
     }
+}
+
+fn tell(app: &mut App, stall: Option<Stall>) {
+    if let Some(stall) = stall {
+        app.transcript.notice(format!("{} Details are in the log.", stall.describe()));
+    }
+}
+
+fn draw_watched<B: Backend>(
+    terminal: &mut Terminal<Tee<B>>,
+    mirror: Option<&Mirror>,
+    dog: &Dog,
+    app: &mut App,
+) -> Result<Option<Stall>, B::Error> {
+    let (mut selected, mut stall) = (None, None);
+    mirror::draw(terminal, mirror, |frame| {
+        view::draw(frame, app);
+        selected = selection::show(frame.buffer_mut(), &app.ui.selection);
+        stall = dog.enter(WRITING);
+    })?;
+    selection::copied(app, selected);
+    Ok(stall)
 }
 
 fn handle_messages(app: &mut App) {

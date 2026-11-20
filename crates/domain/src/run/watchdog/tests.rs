@@ -43,3 +43,11 @@ fn a_short_pause_is_not_called_a_freeze() {
     dog.enter(0, "draw");
     assert_eq!(dog.enter(STALL_MS - 1, "draw"), None);
 }
+
+#[test]
+fn the_dog_names_the_step_it_is_in() {
+    let mut dog = Watchdog::default();
+    assert_eq!(dog.step(), "");
+    dog.enter(0, "draw");
+    assert_eq!(dog.step(), "draw");
+}

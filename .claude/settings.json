@@ -43,6 +43,8 @@
       "Bash(gh run watch *)",
       "Bash(rg *)",
       "Bash(grep *)",
+      "Bash(/usr/bin/grep *)",
+      "Bash(export CARGO_TARGET_DIR=*)",
       "Bash(sed -n *)",
       "Bash(ls *)",
       "Bash(wc *)",
